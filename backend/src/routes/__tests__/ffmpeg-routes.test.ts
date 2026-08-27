@@ -69,6 +69,7 @@ import { resizeVideoRoutes } from "../resize-video.js"
 import { speedRampRoutes } from "../speed-ramp.js"
 import { fadeVideoRoutes } from "../fade-video.js"
 import { loopVideoRoutes } from "../loop-video.js"
+import { gifToVideoRoutes } from "../gif-to-video.js"
 import { mergeVideoAudioRoutes } from "../merge-video-audio.js"
 import { trimAudioRoutes } from "../trim-audio.js"
 import { mixAudioRoutes } from "../mix-audio.js"
@@ -182,6 +183,18 @@ const FFMPEG_ROUTES: FFmpegRouteConfig[] = [
       repeatCount: 3,
     },
     queueJobType: "loop-video",
+  },
+  {
+    name: "gif-to-video",
+    path: "/v1/gif-to-video",
+    routeFn: gifToVideoRoutes,
+    requiredField: "gifUrl",
+    invalidPayload: { userId: VALID_UUID, loopToMinimum: true },
+    validPayload: {
+      userId: VALID_UUID,
+      gifUrl: "https://example.com/animation.gif",
+    },
+    queueJobType: "gif-to-video",
   },
   {
     name: "merge-video-audio",

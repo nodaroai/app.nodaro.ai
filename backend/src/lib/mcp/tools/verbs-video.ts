@@ -2139,6 +2139,94 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
     },
   )
 
+  // ── gif_to_video ──
+  // Animated GIF → H.264 MP4, FFmpeg-only, ZERO credits. Bridges a GIF into
+  // the video pipeline so it can be used as a motion reference for models that
+  // reject GIF in the video slot (Seedance et al.).
+  server.registerTool(
+    "gif_to_video",
+    {
+      title: "GIF to Video",
+      description:
+        "Convert an animated GIF into a widely-compatible H.264 MP4 — locally " +
+        "rendered (FFmpeg), no AI model, ZERO credits.\n\n" +
+        "Use this to feed a GIF as a MOTION REFERENCE to video models that " +
+        "reject GIF in the video-reference slot (e.g. Seedance): convert " +
+        "first, then pass the returned MP4 as the reference.\n\n" +
+        "**Input:** `gif_url` OR `gif_asset_id`.\n\n" +
+        "**Levers:**\n" +
+        "  • `loop_to_minimum` (default true) — extend a short GIF by looping " +
+        "up to `target_duration` (2-8s, default 3). Seam-aware: a non-seamless " +
+        "GIF ping-pongs so a hard repeat's jump-cut isn't reproduced as motion. " +
+        "A GIF below the ~2s reference floor is looped regardless.\n" +
+        "  • `interpolate` (default true) — synthesize frames for smooth 24fps " +
+        "motion; false preserves the GIF's original stepped timing.\n" +
+        "  • `alpha_background` — white (default) / black, for transparent GIFs " +
+        "(MP4 can't carry alpha).\n\n" +
+        "A single-frame GIF becomes a short static clip. Returns a job_id; " +
+        "widget renders the video.",
+      inputSchema: {
+        gif_url: z.string().url().optional(),
+        gif_asset_id: z.string().optional(),
+        loop_to_minimum: z.boolean().optional(),
+        target_duration: z.number().min(2).max(8).optional().describe("Loop target seconds 2-8 (default 3). Only used when loop_to_minimum."),
+        interpolate: z.boolean().optional(),
+        alpha_background: z.enum(["white", "black"]).optional(),
+      },
+      outputSchema: {
+        jobId: z.string(),
+        prompt: z.string().optional(),
+        model: z.string().optional(),
+        outputUrl: z.string().optional(),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: true,
+      },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v4/job-video",
+        ui: {
+          resourceUri: "ui://nodaro/widget/v4/job-video",
+          visibility: ["model", "app"],
+        },
+      },
+    },
+    async (args) => {
+      const gifUrl =
+        args.gif_url ??
+        (args.gif_asset_id
+          ? await resolveAssetId({
+              assetId: args.gif_asset_id,
+              userId: session.userId,
+              expectedKind: "image",
+            })
+          : null)
+      if (!gifUrl) {
+        return {
+          content: [{ type: "text", text: "Pass gif_url or gif_asset_id." }],
+          isError: true,
+        }
+      }
+      const payload: Record<string, unknown> = {
+        gifUrl,
+        ...(args.loop_to_minimum !== undefined ? { loopToMinimum: args.loop_to_minimum } : {}),
+        ...(args.target_duration !== undefined ? { targetDuration: args.target_duration } : {}),
+        ...(args.interpolate !== undefined ? { interpolate: args.interpolate } : {}),
+        ...(args.alpha_background !== undefined ? { alphaBackground: args.alpha_background } : {}),
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      return dispatchJob(fastify, session, {
+        url: "/v1/gif-to-video",
+        payload,
+        label: "gif to video",
+        widgetKind: "video",
+        widgetData: { prompt: "(gif to video)", model: "gif-to-video" },
+      })
+    },
+  )
+
   // ── slideshow ──
   // N stills over one optional audio track → MP4, FFmpeg-only, ZERO credits.
   // The N-image companion of still_to_video: use THAT for exactly one image.

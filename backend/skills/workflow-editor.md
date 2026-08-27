@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-08-23T15:11:14.030Z
-generated_from: cdef4ed88
+generated_at: 2026-08-27T21:15:55.365Z
+generated_from: 2266777f4
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -128,6 +128,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `generate-video` — Generate Video
 - `generate-video-pro` — Generate Video Pro
 - `generative-pipeline` — Story → Video
+- `gif-to-video` — Gif to Video
 - `group` — Group
 - `held-prop` — Held Prop
 - `image-collage` — Image Collage

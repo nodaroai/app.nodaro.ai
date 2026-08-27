@@ -95,6 +95,7 @@ const NODE_TYPE_TO_TOOL: Record<string, string> = {
   "video-upscale": "video_upscale",
   "extend-video": "extend_video",
   "loop-video": "loop_video",
+  "gif-to-video": "gif_to_video",
   "motion-transfer": "motion_transfer",
   "face-swap": "face_swap",
   "speech-to-video": "speech_to_video",

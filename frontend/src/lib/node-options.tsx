@@ -1089,6 +1089,14 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     group: "video-format-export",
   },
   {
+    type: "gif-to-video",
+    label: "Gif to Video",
+    icon: <Film className="h-4 w-4" />,
+    category: "Processing",
+    group: "video-format-export",
+    keywords: ["gif", "mp4", "convert", "animated", "reference", "seedance", "motion"],
+  },
+  {
     type: "social-media-format",
     label: "Social Media Format",
     icon: <Share2 className="h-4 w-4" />,

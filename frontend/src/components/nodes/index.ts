@@ -139,6 +139,7 @@ import { SpeedRampNode } from "./speed-ramp-node";
 import { LoopVideoNode } from "./loop-video-node";
 import { FadeVideoNode } from "./fade-video-node";
 import { StillToVideoNode } from "./still-to-video-node";
+import { GifToVideoNode } from "./gif-to-video-node";
 import { SlideshowNode } from "./slideshow-node";
 import { TranscodeVideoNode } from "./transcode-video-node";
 import { ManualEditNode } from "./manual-edit-node";
@@ -332,6 +333,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "loop-video": LoopVideoNode,
   "fade-video": FadeVideoNode,
   "still-to-video": StillToVideoNode,
+  "gif-to-video": GifToVideoNode,
   "slideshow": SlideshowNode,
   "transcode-video": TranscodeVideoNode,
   "manual-edit": ManualEditNode,

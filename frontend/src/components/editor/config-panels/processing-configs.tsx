@@ -32,6 +32,7 @@ import type {
   ExtractFrameData,
   SpeedRampData,
   LoopVideoData,
+  GifToVideoData,
   FadeVideoData,
   TranscodeVideoData,
   ManualEditData,
@@ -1227,6 +1228,76 @@ export function LoopVideoConfig({ data, onUpdate }: ConfigProps<LoopVideoData>) 
             />
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+export function GifToVideoConfig({ data, onUpdate }: ConfigProps<GifToVideoData>) {
+  const loopToMinimum = data.loopToMinimum ?? true
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-2 px-1">
+        <input
+          type="checkbox"
+          id="gif-loop-to-minimum"
+          checked={loopToMinimum}
+          onChange={(e) => onUpdate({ loopToMinimum: e.target.checked })}
+          className="rounded border-muted-foreground/40"
+        />
+        <label htmlFor="gif-loop-to-minimum" className="text-xs">Extend short GIFs to a target length</label>
+      </div>
+      <p className="text-[10px] text-muted-foreground px-1 leading-snug">
+        Most GIFs are shorter than the ~2s a motion reference needs. When on, the clip is looped up to the target duration (seam-aware — a non-seamless GIF ping-pongs so a hard repeat's jump-cut isn&apos;t reproduced as motion). A GIF already too short is looped regardless.
+      </p>
+
+      {loopToMinimum && (
+        <div>
+          <Label htmlFor="gif-target-duration">Target Duration: {data.targetDuration ?? 3}s</Label>
+          <input
+            id="gif-target-duration"
+            type="range"
+            min={2}
+            max={8}
+            step={1}
+            value={data.targetDuration ?? 3}
+            onChange={(e) => onUpdate({ targetDuration: parseInt(e.target.value, 10) })}
+            className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#ff0073] bg-[#F8FAFC] dark:bg-[#121212]"
+          />
+          <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+            <span>2s</span>
+            <span>5s</span>
+            <span>8s</span>
+          </div>
+        </div>
+      )}
+
+      <div>
+        <Label>Motion smoothing</Label>
+        <Select value={(data.interpolate ?? true) ? "smooth" : "stepped"} onValueChange={(v) => onUpdate({ interpolate: v === "smooth" })}>
+          <SelectTrigger aria-label="Motion smoothing"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="smooth">Smooth (interpolate to 24fps)</SelectItem>
+            <SelectItem value="stepped">Preserve original timing</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-[10px] text-muted-foreground mt-1 leading-snug">
+          Smooth synthesises in-between frames for realistic footage; preserve keeps the GIF&apos;s stepped, choppy character (better for graphic animation).
+        </p>
+      </div>
+
+      <div>
+        <Label>Transparent background</Label>
+        <Select value={data.alphaBackground ?? "white"} onValueChange={(v) => onUpdate({ alphaBackground: v as GifToVideoData["alphaBackground"] })}>
+          <SelectTrigger aria-label="Transparent background"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="white">White</SelectItem>
+            <SelectItem value="black">Black</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-[10px] text-muted-foreground mt-1 leading-snug">
+          MP4 can&apos;t carry transparency — a GIF with an alpha channel is flattened onto this colour.
+        </p>
       </div>
     </div>
   )

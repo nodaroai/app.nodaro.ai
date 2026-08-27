@@ -158,6 +158,7 @@ import {
   ExtractFrameConfig,
   SpeedRampConfig,
   LoopVideoConfig,
+  GifToVideoConfig,
   FadeVideoConfig,
   StillToVideoConfig,
   SlideshowConfig,
@@ -352,6 +353,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "extract-frame": "Extract Frame",
   "speed-ramp": "Adjust Speed",
   "loop-video": "Loop Video",
+  "gif-to-video": "Gif to Video",
   "fade-video": "Fade In/Out",
   "still-to-video": "Still to Video",
   "slideshow": "Slideshow",
@@ -428,7 +430,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "component",
   // FFmpeg processing (tiered credits)
   "merge-video-audio", "still-to-video", "slideshow", "combine-videos", "assemble-narrated-video", "image-collage", "trim-audio", "split-media", "extract-audio", "remove-audio", "trim-video", "extract-frame",
-  "speed-ramp", "loop-video", "fade-video", "transcode-video", "resize-video", "social-media-format", "adjust-volume", "audio-fx",
+  "speed-ramp", "loop-video", "gif-to-video", "fade-video", "transcode-video", "resize-video", "social-media-format", "adjust-volume", "audio-fx",
   "add-captions", "mix-audio", "combine-audio",
 ])
 
@@ -653,6 +655,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "render-video": return <RenderVideoConfig {...configProps} />
     case "speed-ramp": return <SpeedRampConfig {...configProps} />
     case "loop-video": return <LoopVideoConfig {...configProps} />
+    case "gif-to-video": return <GifToVideoConfig {...configProps} />
     case "fade-video": return <FadeVideoConfig {...configProps} />
     case "still-to-video": return <StillToVideoConfig {...configProps} />
     case "slideshow": return <SlideshowConfig {...configProps} />

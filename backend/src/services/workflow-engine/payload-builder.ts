@@ -4793,6 +4793,19 @@ export function buildPayload(
         usageLogId,
       })
 
+    case "gif-to-video":
+      // Zero-credit local ffmpeg conversion — the GIF arrives as an image
+      // input (an uploaded .gif) or from the node's own upload (data.gifUrl).
+      return ffmpegResult("gif-to-video", {
+        jobId,
+        gifUrl: resolvedInputs.imageUrl || data.gifUrl,
+        loopToMinimum: data.loopToMinimum ?? true,
+        targetDuration: data.targetDuration ?? 3,
+        interpolate: data.interpolate ?? true,
+        alphaBackground: data.alphaBackground ?? "white",
+        usageLogId,
+      })
+
     case "transcode-video":
       return ffmpegResult("transcode-video", {
         jobId,

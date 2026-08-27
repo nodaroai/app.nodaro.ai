@@ -2,7 +2,8 @@ import { dirname, join } from "node:path"
 import { promises as fs } from "node:fs"
 import type { Job } from "bullmq"
 import type { Caption } from "@remotion/captions"
-import { uploadFileToR2 } from "../../lib/storage.js"
+import { createHash } from "node:crypto"
+import { uploadFileToR2, uploadFileWithKeyToR2, getR2ObjectSize, r2Url } from "../../lib/storage.js"
 import { renderQueue } from "../../lib/render-queue.js"
 import { supabase } from "../../lib/supabase.js"
 import { cleanupWorkDir, createWorkDir, downloadFile, runFfmpeg, BROWSER_SAFE_VIDEO_ARGS, probeVideoSource } from "../../providers/video/ffmpeg-utils.js"
@@ -28,6 +29,7 @@ import { speedRamp } from "../../providers/video/speed-ramp.js"
 import { loopVideo } from "../../providers/video/loop-video.js"
 import { fadeVideo } from "../../providers/video/fade-video.js"
 import { stillToVideo } from "../../providers/video/still-to-video.js"
+import { gifToVideo } from "../../providers/video/gif-to-video.js"
 import { slideshow } from "../../providers/video/slideshow.js"
 import { transcribe, type TranscribeProvider } from "../../providers/audio/transcribe.js"
 import { syntheticCaptionsFromText } from "../../providers/audio/captions-mappers.js"
@@ -340,6 +342,80 @@ const handleResizeVideo: HandlerFn = async function handleResizeVideo(job, ctx) 
   const outputPath = await resizeVideo({ videoUrl, targetAspect, method, padColor })
   await setJobProgress(job, ctx.jobId, 80)
   await completeFfmpegVideoJob(outputPath, ctx)
+}
+
+const handleGifToVideo: HandlerFn = async function handleGifToVideo(job, ctx) {
+  const { gifUrl, loopToMinimum, targetDuration, interpolate, alphaBackground } = job.data as {
+    jobId: string
+    gifUrl: string
+    loopToMinimum?: boolean
+    targetDuration?: number
+    interpolate?: boolean
+    alphaBackground?: "white" | "black"
+  }
+  console.log(`[worker] gif-to-video ${ctx.jobId}: loop=${loopToMinimum} target=${targetDuration}s interp=${interpolate} bg=${alphaBackground}`)
+  await setJobProgress(job, ctx.jobId, 3)
+
+  const workDir = await createWorkDir("gif-to-video")
+  try {
+    const gifPath = join(workDir, "input.gif")
+    await downloadFile(gifUrl, gifPath)
+    await setJobProgress(job, ctx.jobId, 20)
+
+    // Content-addressed cache: the same reference GIF is reused across many
+    // generations, and minterpolate is expensive enough that recomputing it
+    // per run is noticeable. Key by the GIF bytes + the conversion params so a
+    // settings change misses the cache. On a hit we reuse the already-encoded
+    // MP4 and skip conversion entirely.
+    const gifBytes = await fs.readFile(gifPath)
+    // `v` salts the cache: bump it whenever the conversion pipeline changes so
+    // pre-change cached MP4s aren't served (content-addressed caching pins the
+    // exact output bytes, bugs included). v2: real GIF-cadence minterpolate.
+    const paramsSig = JSON.stringify({ v: 2, loopToMinimum, targetDuration, interpolate, alphaBackground })
+    const hash = createHash("sha256").update(gifBytes).update(paramsSig).digest("hex")
+    const cacheKey = `videos/gif2mp4/${hash}.mp4`
+
+    let videoUrl: string
+    let cached = false
+    let meta: Record<string, unknown> = {}
+    if (await getR2ObjectSize(cacheKey) > 0) {
+      videoUrl = r2Url(cacheKey)
+      cached = true
+      console.log(`[worker] gif-to-video ${ctx.jobId}: cache hit ${cacheKey}`)
+    } else {
+      const result = await gifToVideo({
+        gifPath, workDir, loopToMinimum, targetDuration, interpolate, alphaBackground,
+      })
+      await setJobProgress(job, ctx.jobId, 80)
+      videoUrl = await uploadFileWithKeyToR2(result.outputPath, cacheKey, "video/mp4", ctx.jobUserId)
+      meta = {
+        gifSourceFrames: result.sourceFrames,
+        gifSourceDuration: result.sourceDurationSeconds,
+        outputDuration: result.outputDurationSeconds,
+        loopStrategy: result.loopStrategy,
+        loops: result.loops,
+        seamless: result.seamless,
+        interpolated: result.interpolated,
+        ...(result.warning ? { warning: result.warning } : {}),
+      }
+    }
+
+    await cleanupWorkDir(workDir)
+    await setJobProgress(job, ctx.jobId, 90)
+    const thumbUrl = await generateAndUploadThumbnail(videoUrl, ctx.jobId, ctx.jobUserId)
+    await setJobProgress(job, ctx.jobId, 100)
+
+    if (!await shouldSaveJobResult(ctx.jobId)) return
+    const ok = await markJobCompleted(ctx.jobId, {
+      output_data: { videoUrl, thumbnailUrl: thumbUrl, cached, ...meta },
+    })
+    if (!ok) return
+    await commitJobCredits(ctx.usageLogId, ctx.jobId)
+    console.log(`[worker] Job ${ctx.jobId} completed: ${videoUrl}${cached ? " (cached)" : ""}`)
+  } catch (err) {
+    await cleanupWorkDir(workDir)
+    throw err
+  }
 }
 
 const handleAdjustVolume: HandlerFn = async function handleAdjustVolume(job, ctx) {
@@ -886,6 +962,7 @@ export const ffmpegHandlers: Record<string, HandlerFn> = {
   "loop-video": handleLoopVideo,
   "fade-video": handleFadeVideo,
   "still-to-video": handleStillToVideo,
+  "gif-to-video": handleGifToVideo,
   "slideshow": handleSlideshow,
   "resize-video": handleResizeVideo,
   "adjust-volume": handleAdjustVolume,
