@@ -31,11 +31,29 @@ jobs:
           set -euo pipefail
           VER=8.30.1
           # Pin + verify the gitleaks release artifact (supply-chain integrity):
-          # sha256 from the official gitleaks_${VER}_checksums.txt. `set -e` fails
-          # the step if the download is tampered/corrupted before it is ever run.
+          # sha256 from the official gitleaks_${VER}_checksums.txt. A mismatch
+          # fails the step — but the pinned artifact is immutable, so an occasional
+          # mismatch is a corrupted download in transit, not a tamper. Retry the
+          # download+verify up to 3× so one flaky fetch can't fail the secret gate
+          # and — because this run is a required check on main — silently make
+          # Railway SKIP the production deploy (happened 2026-08-27, PR #1010).
           SHA256=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
-          curl -sSL -o gitleaks.tar.gz "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_linux_x64.tar.gz"
-          echo "${SHA256}  gitleaks.tar.gz" | sha256sum -c -
+          URL="https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_linux_x64.tar.gz"
+          for attempt in 1 2 3; do
+            curl -sSL -o gitleaks.tar.gz "$URL" || true
+            # `if` condition is exempt from `set -e`, so a mismatch retries here
+            # rather than aborting the step; the SHA is re-checked every attempt.
+            if echo "${SHA256}  gitleaks.tar.gz" | sha256sum -c -; then
+              break
+            fi
+            rm -f gitleaks.tar.gz
+            if [ "$attempt" = 3 ]; then
+              echo "gitleaks download failed checksum after 3 attempts" >&2
+              exit 1
+            fi
+            echo "gitleaks download failed checksum (attempt ${attempt}/3); retrying…" >&2
+            sleep $((attempt * 3))
+          done
           tar -xzf gitleaks.tar.gz gitleaks
           sudo mv gitleaks /usr/local/bin/gitleaks
       - name: gate + mirror main and dev
