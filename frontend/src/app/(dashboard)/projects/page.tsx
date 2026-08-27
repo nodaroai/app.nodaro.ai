@@ -9,12 +9,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { useWorkflowSearch } from "@/hooks/use-workflow-search"
 import { useProjects, useAllProjects } from "@/hooks/queries/use-projects-queries"
@@ -337,6 +331,30 @@ export default function ProjectsPage() {
     ? workspaceTab
     : (workspaceTabDefs[0]?.id ?? "studio")
 
+  // The create button lives with the list it creates into: it follows the ACTIVE
+  // workspace tab (New Workflow on the flat list, New Project on the project
+  // grid). Keyed off effectiveWorkspaceTab — never the raw stored/URL tab — so a
+  // tab a surface profile has hidden can't render a button for a list that isn't
+  // shown. Studio is a read-only view with no create action, so it offers none.
+  const workspaceCreateAction =
+    effectiveWorkspaceTab === "workflows"
+      ? {
+          label: isCreating ? t("dash.creating") : t("dash.newWorkflow"),
+          icon: <Plus className="h-4 w-4 sm:me-1" />,
+          onClick: handleCreateWorkflow,
+          disabled: isCreating,
+          busy: isCreating,
+        }
+      : effectiveWorkspaceTab === "projects"
+        ? {
+            label: t("dash.newProject"),
+            icon: <FolderPlus className="h-4 w-4 sm:me-1" />,
+            onClick: handleCreateProject,
+            disabled: false,
+            busy: false,
+          }
+        : null
+
   const [search, setSearch] = useState("")
 
   const filteredProjects = useMemo(() => {
@@ -529,56 +547,22 @@ export default function ProjectsPage() {
         <h1 className="text-2xl font-semibold tracking-tight">
           {greeting}{displayName ? `, ${displayName}` : ""}
         </h1>
-        <div className="flex items-center gap-3">
-          {isAdmin && (
-            <div className="flex items-center gap-2">
-              <Switch
-                id="view-all-projects"
-                checked={viewAll}
-                onCheckedChange={handleViewAllChange}
-              />
-              <Label htmlFor="view-all-projects" className="text-sm text-muted-foreground cursor-pointer whitespace-nowrap">
-                {t("exec.allUsers")}
-              </Label>
-            </div>
-          )}
-          <div className="flex items-center">
-            <Button
-              size="sm"
-              className="sm:size-default rounded-r-none"
-              onClick={handleCreateWorkflow}
-              disabled={isCreating}
-            >
-              {isCreating ? (
-                <Loader2 className="h-4 w-4 me-1 animate-spin" />
-              ) : (
-                <Plus className="h-4 w-4 me-1" />
-              )}
-              <span className="hidden sm:inline">
-                {isCreating ? t("dash.creating") : t("dash.newWorkflow")}
-              </span>
-              <span className="sm:hidden">{isCreating ? t("dash.creatingShort") : t("dash.newShort")}</span>
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  size="sm"
-                  className="sm:size-default rounded-l-none border-l border-l-background/30 px-2"
-                  aria-label={t("dash.moreCreateOptions")}
-                  disabled={isCreating}
-                >
-                  <ChevronDown className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={handleCreateProject}>
-                  <FolderPlus className="h-3.5 w-3.5 me-2" />
-                  {t("dash.newProject")}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+        {/* The create action moved down to the workspace tab strip, where it sits
+            directly above the list it creates into and switches label by tab
+            (New Workflow / New Project). Only the admin "All users" toggle stays
+            in the header. */}
+        {isAdmin && (
+          <div className="flex items-center gap-2">
+            <Switch
+              id="view-all-projects"
+              checked={viewAll}
+              onCheckedChange={handleViewAllChange}
+            />
+            <Label htmlFor="view-all-projects" className="text-sm text-muted-foreground cursor-pointer whitespace-nowrap">
+              {t("exec.allUsers")}
+            </Label>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Unified container with pill tabs inside. Hidden entirely (not just
@@ -737,23 +721,44 @@ export default function ProjectsPage() {
       </div>
       )}
 
-      {/* Workspace tab strip — flat workflow list (default) vs. project organization */}
-      <div className="flex items-center gap-1 mb-3 border-b border-border">
-        {workspaceTabDefs.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setWorkspaceTab(tab.id)}
-            className={cn(
-              "px-3 py-2 text-sm font-medium -mb-px border-b-2 transition-colors",
-              effectiveWorkspaceTab === tab.id
-                ? "border-foreground text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground",
-            )}
+      {/* Workspace tab strip — flat workflow list (default) vs. project
+          organization. The create button is right-aligned in this same row so it
+          sits directly above the list it creates into, and its label follows the
+          active tab (workspaceCreateAction). */}
+      <div className="flex items-center justify-between gap-2 mb-3 border-b border-border">
+        <div className="flex items-center gap-1">
+          {workspaceTabDefs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setWorkspaceTab(tab.id)}
+              className={cn(
+                "px-3 py-2 text-sm font-medium -mb-px border-b-2 transition-colors",
+                effectiveWorkspaceTab === tab.id
+                  ? "border-foreground text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        {workspaceCreateAction && (
+          <Button
+            size="sm"
+            className="mb-2"
+            onClick={workspaceCreateAction.onClick}
+            disabled={workspaceCreateAction.disabled}
+            aria-label={workspaceCreateAction.label}
           >
-            {tab.label}
-          </button>
-        ))}
+            {workspaceCreateAction.busy ? (
+              <Loader2 className="h-4 w-4 sm:me-1 animate-spin" />
+            ) : (
+              workspaceCreateAction.icon
+            )}
+            <span className="hidden sm:inline">{workspaceCreateAction.label}</span>
+          </Button>
+        )}
       </div>
 
       {effectiveWorkspaceTab === "workflows" && (
