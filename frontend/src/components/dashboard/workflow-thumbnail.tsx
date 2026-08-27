@@ -32,7 +32,12 @@ export function WorkflowThumbnail({ thumbnailUrl, nodeTypes, priority }: Workflo
             alt=""
             className="w-full h-full object-cover"
             thumbnail
-            thumbnailWidth={320}
+            // The card grids render each tile ~250–320px CSS-wide. optimizedImageUrl
+            // requests a Cloudflare width in CSS pixels with NO devicePixelRatio
+            // multiplier, so a 2× (retina) display upscales the source ~2× and the
+            // cover looks soft. 640 = the widest tile (~320px) at DPR 2, crisp on
+            // retina across every workflow-card grid while staying one cached variant.
+            thumbnailWidth={640}
             priority={priority}
           />
         )
