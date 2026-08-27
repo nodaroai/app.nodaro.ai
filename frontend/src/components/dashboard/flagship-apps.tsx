@@ -2,7 +2,6 @@ import type { CSSProperties } from "react"
 import { Layers, AudioWaveform, ExternalLink, Bell, Film, Image as ImageIcon } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { toast } from "sonner"
-import { cn } from "@/lib/utils"
 import { useT, type MessageKey } from "@/lib/i18n"
 import { CachedImage } from "@/components/ui/cached-image"
 import { PreviewVideo } from "@/components/ui/preview-video"
@@ -149,14 +148,14 @@ function FlagshipCard({ app }: { readonly app: FlagshipApp }) {
           </div>
         </div>
         <p className="max-w-[46ch] text-sm leading-relaxed text-white/80">{taglineKey ? t(taglineKey) : app.tagline}</p>
-        <span
-          className={cn(
-            "mt-4 inline-flex items-center gap-1.5 rounded-md px-3.5 py-2 text-[13px] font-semibold transition-colors",
-            app.status === "live"
-              ? "bg-primary text-white group-hover:bg-primary/90"
-              : "border border-white/25 bg-white/10 text-white backdrop-blur-sm group-hover:bg-white/20",
-          )}
-        >
+        {/* De-emphasized ghost "chip". The WHOLE card is the click target (the
+            <a>/<button> wrapper below), so this is a visual affordance, not the
+            real button — going ghost costs no click affordance. Ghost (vs a solid
+            pink fill) keeps the page's actual primary, the New Workflow button,
+            the single dominant CTA, and reads cleanly on both the pink (Studio)
+            and violet (VCP) card signatures. Live vs coming-soon is carried by
+            the top-right status badge plus the icon/label below. */}
+        <span className="mt-4 inline-flex items-center gap-1.5 rounded-md border border-white/25 bg-white/10 px-3.5 py-2 text-[13px] font-semibold text-white backdrop-blur-sm transition-colors group-hover:bg-white/20">
           {app.status === "live" ? (
             <>
               <ExternalLink className="h-3.5 w-3.5" aria-hidden />
