@@ -1,6 +1,7 @@
 import { useContext, useState } from "react"
 import { Link as LinkIcon, Maximize2 } from "lucide-react"
 import { PLACEHOLDER_CHARACTER_NAME } from "@nodaro/shared"
+import { DEFAULT_IDENTITY_LOCK } from "@nodaro/prompts"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { copyToClipboard } from "@/lib/utils"
 import { optimizedImageUrl } from "@/lib/image"
@@ -115,7 +116,7 @@ export function ProfilePage({ state }: StudioPageProps<CharacterStudioState, Cha
           className="block w-full max-w-sm text-[11px] bg-[#13161f] border border-[#334155] rounded px-2 py-1 text-slate-200"
         />
         <select
-          value={s.identityLock ?? "strict"}
+          value={s.identityLock ?? DEFAULT_IDENTITY_LOCK}
           onChange={(e) => state.patch({ identityLock: e.target.value as "off" | "soft" | "strict" })}
           title="How strongly to preserve this character's face when generating Studio assets"
           className="block w-full max-w-sm text-[11px] bg-[#13161f] border border-[#334155] rounded px-2 py-1 text-slate-200"
