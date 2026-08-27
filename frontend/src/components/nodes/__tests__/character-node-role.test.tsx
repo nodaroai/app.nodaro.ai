@@ -184,10 +184,10 @@ describe("hybrid: role dropdown (full pill parity)", () => {
 })
 
 describe("hybrid: identity-lock sub-row", () => {
-  it("renders with the runtime default 'soft' and off/soft/strict options", () => {
+  it("renders with the runtime default 'off' and off/soft/strict options", () => {
     renderCharacterNode()
     expect(screen.getByText("Identity lock")).toBeInTheDocument()
-    expect(document.querySelector('[data-select-value="soft"]')).not.toBeNull()
+    expect(document.querySelector('[data-select-value="off"]')).not.toBeNull()
     for (const label of ["Off", "Soft", "Strict"]) {
       expect(screen.getByText(label)).toBeInTheDocument()
     }
