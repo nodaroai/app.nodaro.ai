@@ -3,6 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { CHARACTER_MOTION_PROVIDERS } from "@nodaro/shared"
+import { DEFAULT_IDENTITY_LOCK } from "@nodaro/prompts"
 import type { McpSession } from "../session.js"
 import { mcpInject } from "../internal-request.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
@@ -395,7 +396,7 @@ function registerWriteTools(opts: RegisterCharacterToolsOpts): void {
         identity_lock: z
           .enum(["off", "soft", "strict"])
           .optional()
-          .describe("Identity-lock strength for Character Studio asset generation: off / soft / strict (default strict)."),
+          .describe("Identity-lock strength for Character Studio asset generation: off / soft / strict (default off)."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
@@ -409,7 +410,7 @@ function registerWriteTools(opts: RegisterCharacterToolsOpts): void {
         style: args.style ?? null,
         base_outfit: args.base_outfit ?? null,
         seed_prompt: args.seed_prompt ?? null,
-        identity_lock: args.identity_lock ?? "strict",
+        identity_lock: args.identity_lock ?? DEFAULT_IDENTITY_LOCK,
         expressions: [],
         poses: [],
         lighting_variations: [],

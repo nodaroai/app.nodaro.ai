@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { USAGE_MODES, DEFAULT_USAGE_MODE, usageModeLabel, type UsageMode, CHARACTER_FACETS, DEFAULT_CHARACTER_FACET, REFERENCE_ROLE_PRESETS, resolveDefaultRole, sanitizeRole } from "@nodaro/shared"
+import { DEFAULT_IDENTITY_LOCK } from "@nodaro/prompts"
 import { IMAGE_REFERENCE_FORMAT } from "@/lib/image-reference-format"
 import type { CharacterNodeData } from "@/types/nodes"
 
@@ -483,7 +484,7 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
         <div className="px-2.5 pt-1 flex items-center gap-1.5 min-w-0">
           <span className="flex-1 min-w-0 text-[9px] text-slate-500 truncate">Identity lock</span>
           <Select
-            value={nodeData.identityLock ?? "soft"}
+            value={nodeData.identityLock ?? DEFAULT_IDENTITY_LOCK}
             onValueChange={(v) =>
               updateNodeData(id, { identityLock: v as NonNullable<CharacterNodeData["identityLock"]> })
             }

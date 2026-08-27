@@ -27,6 +27,7 @@ import type {
   GeneratedScriptResult,
 } from "@/types/nodes"
 import { ANIMALS } from "@nodaro/shared"
+import { DEFAULT_IDENTITY_LOCK } from "@nodaro/prompts"
 import {
   LocationAssetButton,
   LocationAssetGrid,
@@ -82,7 +83,7 @@ export function CharacterConfig({ data, onUpdate, sources, fieldMappings, onMapF
         <div>
           <Label htmlFor="char-identity-lock">Identity Lock</Label>
           <Select
-            value={data.identityLock ?? "soft"}
+            value={data.identityLock ?? DEFAULT_IDENTITY_LOCK}
             onValueChange={(v) => onUpdate({ identityLock: v as NonNullable<CharacterNodeData["identityLock"]> })}
           >
             <SelectTrigger id="char-identity-lock"><SelectValue /></SelectTrigger>

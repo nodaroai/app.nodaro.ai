@@ -11,7 +11,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { llmComplete } from "../lib/llm-client.js"
 import { CHARACTER_ASPECT_OPTIONS, resolveCharacterAspectRatio, type CharacterAssetTypeForAspect, PLACEHOLDER_CHARACTER_NAME, CHARACTER_ASSET_TYPES, CHARACTER_ASSET_VARIANTS, CHARACTER_ATTACH_COLUMNS } from "@nodaro/shared"
-import { type WardrobeValue, type PersonValue, characterLockToRefLock, toIdentityLockMode, type IdentityLockMode } from "@nodaro/prompts"
+import { type WardrobeValue, type PersonValue, characterLockToRefLock, toIdentityLockMode, DEFAULT_IDENTITY_LOCK, type IdentityLockMode } from "@nodaro/prompts"
 import { buildEntityHints, CLOTHED_DEFAULT, CLOTHED_MATCH_REFERENCES } from "../lib/character-prompts.js"
 import {
   assembleCharacterReferenceSet,
@@ -136,14 +136,14 @@ function buildVariantPrompt(
   }
   // Identity-lock reinforcement — only when the generation actually has
   // reference images to lock onto (a lock clause with no ref is noise for a
-  // text-to-image render). Strength comes from the character's setting; default
-  // 'strict' preserves the shipped behavior and `"off"` emits no clause. The
+  // text-to-image render). Strength comes from the character's setting; when
+  // unset it follows DEFAULT_IDENTITY_LOCK (now 'off', which emits no clause). The
   // wording is the shared {ref}-BOUND ladder bound to "reference image A" — the
   // portrait anchor is always first in the assembled reference set, so the
   // clause names the image the provider must lock onto instead of a vague
   // "the reference photo" (which reads ambiguous with multiple refs attached).
   if (!hasReferences) return withHints
-  const lock = characterLockToRefLock(identityLockMode ?? "strict")
+  const lock = characterLockToRefLock(identityLockMode ?? DEFAULT_IDENTITY_LOCK)
   if (!lock.enabled || !lock.text) return withHints
   return `${withHints} ${lock.text.replaceAll("{ref}", "reference image A")}`
 

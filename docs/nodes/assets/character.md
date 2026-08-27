@@ -36,7 +36,7 @@ The config panel (right side, when a Character node is selected) is intentionall
 | Summary | read-only | Character name and style at a glance. |
 | Open Character Studio | button | Opens the full-screen Character Studio (same modal as the node's **⬡ Studio** button). |
 | Choose from Library / Gallery | button (row) | Opens the **Asset Picker** to bind the node to an existing character. Becomes **Replace from Library / Gallery** once a character is bound — use it to swap in a different one. |
-| Identity Lock | dropdown | Controls how strictly downstream nodes preserve the character's face/identity (**Off / Soft / Strict**, default Soft). The same field as the canvas node's **Identity lock** row — see [Default Role & Identity Lock](#default-role--identity-lock). |
+| Identity Lock | dropdown | Controls how strictly downstream nodes preserve the character's face/identity (**Off / Soft / Strict**, default Off). The same field as the canvas node's **Identity lock** row — see [Default Role & Identity Lock](#default-role--identity-lock). |
 | Field Mappings | section | Map upstream node outputs to the character's inputs — `{characterName}` injection still works. |
 
 ### Character Data

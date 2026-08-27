@@ -48,8 +48,9 @@ describe("characterLockToRefLock", () => {
     expect(lock.text).toContain("must match exactly")
   })
 
-  it("coerces undefined -> soft (DEFAULT_IDENTITY_LOCK, the accepted back-compat behavior)", () => {
-    expect(characterLockToRefLock(undefined)).toEqual(characterLockToRefLock("soft"))
+  it("coerces undefined -> off (DEFAULT_IDENTITY_LOCK: characters default to no lock)", () => {
+    expect(characterLockToRefLock(undefined)).toEqual(characterLockToRefLock("off"))
+    expect(characterLockToRefLock(undefined)).toEqual({ enabled: false })
   })
 
   it("soft and strict escalate like getIdentityLockClause but stay reference-bound", () => {
