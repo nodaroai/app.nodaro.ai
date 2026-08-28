@@ -73,7 +73,7 @@ import { INSTRUMENTS, PRODUCTION_STYLES, VOCAL_PRESENCE, SINGING_STYLES } from "
 import { VOICE_AGES, VOICE_GENDERS, VOICE_LANGUAGES, VOICE_ACCENTS, VOICE_TIMBRES } from "./voice-character.js"
 import { VOICE_PACES, VOICE_EMOTIONS, VOICE_ARCHETYPES } from "./voice-delivery.js"
 import { composePickerCatalogs, getRegisteredCatalogPacks, catalogPacksVersion } from "./catalog-packs.js"
-import { resolveTerm } from "./term.js"
+import { deriveTerm, resolveTerm } from "./term.js"
 
 export interface PickerOption {
   readonly id: string
@@ -197,11 +197,15 @@ function objectOptions(
     promptHint: phrase(e.label.toLowerCase(), e.description),
     // Object entities have no `promptHint` field of their own (it is
     // synthesized above), so the term cannot come from `resolveTerm`'s
-    // empty-hint rule: an authored `term` wins, and otherwise the lowercased
-    // label IS the professional term for a concrete object ("golden
-    // retriever", "katana"). The authored escape hatch covers the UI compounds
-    // ("Airship / Dirigible" -> "airship").
-    term: e.term ?? e.label.toLowerCase(),
+    // empty-hint rule: an authored `term` wins, and otherwise the label IS the
+    // professional term for a concrete object ("golden retriever", "katana").
+    // The fallback goes through `deriveTerm` — NOT a bare `toLowerCase()` — so
+    // a parenthetical label ("Rifle (bolt-action)") is stripped the same way
+    // every other catalog strips it. That also keeps the guard test honest:
+    // it treats `term !== deriveTerm(label)` as proof a human authored the
+    // term, so a fallback that diverges from `deriveTerm` would make a mangled
+    // value look authored and ship it.
+    term: e.term ?? deriveTerm(e.label),
   }))
 }
 

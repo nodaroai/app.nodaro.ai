@@ -20,9 +20,12 @@ describe("transitions catalog", () => {
     for (const t of TRANSITIONS) {
       counts[t.category] = (counts[t.category] ?? 0) + 1
     }
+    // `snap-to-black` is filed under STANDARD, beside `fade-to-black`: it is a
+    // cut, and the catalog groups by editing technique, not by what the frame
+    // happens to do (which would have put it in LIGHT next to `white-flash`).
     expect(counts).toEqual({
-      standard: 13, time: 8, element: 14, morph: 9,
-      portal: 12, physics: 10, light: 9, glitch: 7,
+      standard: 14, time: 8, element: 14, morph: 9,
+      portal: 12, physics: 10, light: 8, glitch: 7,
     })
   })
 

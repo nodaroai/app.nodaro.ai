@@ -7,6 +7,7 @@ const map: LocaleCatalogMap = {
   "cross-dissolve": { label: "크로스 디졸브", description: "샷 간의 점진적인 블렌드" },
   "fade-to-black": { label: "페이드 투 블랙", description: "화면이 어두워지고 두 번째 장면이 등장" },
   "fade-to-white": { label: "페이드 투 화이트", description: "화면이 밝아지고 두 번째 장면이 등장" },
+  "snap-to-black": { label: "블랙 스냅 컷", description: "즉시 완전한 검은 화면으로 끊었다가 다음 샷으로 전환" },
   "match-cut": { label: "매치 컷", description: "샷 간 형태나 동작의 시각적 운율" },
   "smash-cut": { label: "스매시 컷", description: "대조적인 샷 사이의 충격적인 급전환" },
   "iris": { label: "아이리스", description: "원형 조리개가 닫히고 두 번째 장면에서 열림" },
@@ -77,7 +78,7 @@ const map: LocaleCatalogMap = {
   "vehicle-explosion": { label: "차량 폭발", description: "전경의 차량이 폭발하고 연기 걷히면 새 장면" },
   "jump-match": { label: "점프 매치", description: "피사체가 점프하고 착지가 새 장면과 연결" },
   "hand-swipe": { label: "손 스와이프", description: "손이 렌즈를 가리는 사이 장면이 전환됨" },
-  "action-relay": { label: "액션 릴레이 컷", description: "피사체가 동작 중 프레임을 벗어나 새 장면에서 그 동작을 이어감" },
+  "action-relay": { label: "액션 매치 컷", description: "피사체가 동작 중 프레임을 벗어나 새 장면에서 그 동작을 이어감" },
 
   // ── Light ──
   "white-flash": { label: "화이트 플래시", description: "화면이 순백으로 빛남" },
@@ -88,7 +89,6 @@ const map: LocaleCatalogMap = {
   "lens-crack": { label: "렌즈 균열", description: "렌즈가 갈라지고 균열된 유리 너머로 새 장면" },
   "dirty-lens-wipe": { label: "오염 렌즈 닦기", description: "렌즈 오염이 닦이며 장면이 전환됨" },
   "eye-light-burst": { label: "눈빛 폭발", description: "피사체의 눈에서 강렬한 빔이 뿜어져 화면 화이트아웃" },
-  "snap-to-black": { label: "블랙 스냅 컷", description: "즉시 완전한 검은 화면으로 끊었다가 다음 샷으로 전환" },
 
   // ── Glitch ──
   "digital-glitch": { label: "디지털 글리치", description: "RGB 분리+스캔라인+데이터모시 글리치" },

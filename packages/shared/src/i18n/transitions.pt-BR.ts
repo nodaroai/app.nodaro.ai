@@ -7,6 +7,7 @@ const map: LocaleCatalogMap = {
   "cross-dissolve": { label: "Fusão Cruzada", description: "Mistura gradual entre cenas" },
   "fade-to-black": { label: "Fade para Preto", description: "Escurece ao preto, segunda cena emerge" },
   "fade-to-white": { label: "Fade para Branco", description: "Clareia ao branco, segunda cena emerge" },
+  "snap-to-black": { label: "Corte Seco para Preto", description: "Corte instantâneo ao preto por um instante, depois a próxima cena" },
   "match-cut": { label: "Corte de Raccord", description: "Correspondência de forma ou movimento entre cenas" },
   "smash-cut": { label: "Corte Brusco", description: "Corte abrupto entre cenas visualmente contrastantes" },
   "iris": { label: "Íris", description: "Íris circular fecha e abre na segunda cena" },
@@ -77,7 +78,7 @@ const map: LocaleCatalogMap = {
   "vehicle-explosion": { label: "Explosão de Veículo", description: "Veículo explode em primeiro plano, cena muda" },
   "jump-match": { label: "Salto Combinado", description: "Sujeito pula, aterrissagem combina com nova cena" },
   "hand-swipe": { label: "Varredura de Mão", description: "Mão passa pela lente, cena muda durante a oclusão" },
-  "action-relay": { label: "Revezamento de Ação", description: "Sujeito sai de quadro numa ação e continua o movimento na nova cena" },
+  "action-relay": { label: "Corte na Ação", description: "Sujeito sai de quadro numa ação e continua o movimento na nova cena" },
 
   // ── Light ──
   "white-flash": { label: "Flash Branco", description: "Quadro clareia ao branco" },
@@ -88,7 +89,6 @@ const map: LocaleCatalogMap = {
   "lens-crack": { label: "Rachadura de Lente", description: "Lente racha, cena vista pelo vidro fraturado" },
   "dirty-lens-wipe": { label: "Limpeza de Lente Suja", description: "Sujeira da lente é limpa, cena muda" },
   "eye-light-burst": { label: "Feixe dos Olhos", description: "Feixe brilhante dos olhos branqueia o quadro" },
-  "snap-to-black": { label: "Corte Seco para Preto", description: "Corte instantâneo ao preto por um instante, depois a próxima cena" },
 
   // ── Glitch ──
   "digital-glitch": { label: "Glitch Digital", description: "Corrupção RGB + scanline + datamosh" },

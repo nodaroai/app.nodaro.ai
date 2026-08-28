@@ -7,6 +7,7 @@ const map: LocaleCatalogMap = {
   "cross-dissolve": { label: "Перекрёстный наплыв", description: "Плавное смешение двух сцен" },
   "fade-to-black": { label: "Затемнение", description: "Постепенное затемнение, затем новая сцена" },
   "fade-to-white": { label: "Засветка", description: "Осветление до белого, затем новая сцена" },
+  "snap-to-black": { label: "Резкий уход в чёрное", description: "Мгновенный переход в чёрное на удар, затем следующий кадр" },
   "match-cut": { label: "Монтаж по форме", description: "Совпадение формы или движения между сценами" },
   "smash-cut": { label: "Резкий монтаж", description: "Резкий переход между контрастными сценами" },
   "iris": { label: "Ирис", description: "Круг закрывается, затем открывается на новой сцене" },
@@ -88,7 +89,6 @@ const map: LocaleCatalogMap = {
   "lens-crack": { label: "Трещина объектива", description: "Объектив трескается, новая сцена видна сквозь трещины" },
   "dirty-lens-wipe": { label: "Протирка грязного объектива", description: "Объектив вытирается, открывая новую сцену" },
   "eye-light-burst": { label: "Световой луч из глаз", description: "Луч из глаз персонажа заливает кадр" },
-  "snap-to-black": { label: "Резкий уход в чёрное", description: "Мгновенный переход в чёрное на удар, затем следующий кадр" },
 
   // ── Glitch ──
   "digital-glitch": { label: "Цифровой глитч", description: "RGB-расщепление, строчные артефакты, датамош" },

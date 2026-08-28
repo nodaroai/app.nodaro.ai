@@ -7,6 +7,7 @@ const map: LocaleCatalogMap = {
   "cross-dissolve": { label: "交叉溶解", description: "两个镜头间的渐进融合" },
   "fade-to-black": { label: "淡出至黑", description: "画面变暗至全黑，第二幕浮现" },
   "fade-to-white": { label: "淡出至白", description: "画面泛白，第二幕从白光中显现" },
+  "snap-to-black": { label: "瞬切黑场", description: "瞬间切入全黑停顿一拍，随后切入下一镜头" },
   "match-cut": { label: "匹配剪辑", description: "镜头间形状或动作的视觉呼应" },
   "smash-cut": { label: "撞击剪辑", description: "对比强烈的镜头间的突兀硬切" },
   "iris": { label: "虹膜转场", description: "圆形虹膜收缩后展开至第二幕" },
@@ -88,7 +89,6 @@ const map: LocaleCatalogMap = {
   "lens-crack": { label: "镜头裂痕", description: "镜头开裂，透过裂纹看到新场景" },
   "dirty-lens-wipe": { label: "镜头污渍擦拭", description: "镜头污渍被擦净，场景随之更换" },
   "eye-light-burst": { label: "眼部光束爆发", description: "主体眼睛射出强光，画面白屏后新场景" },
-  "snap-to-black": { label: "瞬切黑场", description: "瞬间切入全黑停顿一拍，随后切入下一镜头" },
 
   // ── Glitch ──
   "digital-glitch": { label: "数字故障", description: "RGB分离+扫描线+数据溶解故障" },

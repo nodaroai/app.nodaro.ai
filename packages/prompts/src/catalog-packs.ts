@@ -1,6 +1,23 @@
 import type { PickerCatalog, PickerOption, PickerDimension } from "./picker-catalogs.js"
 import type { LocaleId, LocaleCatalogMap } from "@nodaro/shared"
 import { registerCatalogSidecars, resetCatalogSidecars } from "@nodaro/shared"
+import { resolveTerm } from "./term.js"
+
+/**
+ * Every option that leaves this module carries a RESOLVED `term`, exactly like
+ * the base registry's own options do.
+ *
+ * `PickerOption.term` is required at the type level, but a pack arrives from a
+ * separately-compiled bundle that may have been built against a `@nodaro/prompts`
+ * where the field did not exist yet — so at runtime a pack option can simply
+ * not have one. Resolving at COMPOSITION (rather than at each read) is what
+ * keeps the `/v1/catalogs` projection, the compact-hint read path and the
+ * `replace`-mode packs agreeing; a pack-added value would otherwise inject its
+ * full hint in full mode and NOTHING in compact.
+ */
+function withTerm(o: PickerOption): PickerOption {
+  return { ...o, term: resolveTerm(o) }
+}
 
 export type CatalogPackMode = "replace" | "extend" | "deny"
 
@@ -47,22 +64,23 @@ export function catalogPacksVersion(): number { return version }
 function cloneCatalog(c: PickerCatalog): PickerCatalog {
   return {
     ...c,
-    options: c.options ? c.options.map((o) => ({ ...o })) : undefined,
+    options: c.options ? c.options.map(withTerm) : undefined,
     dimensions: c.dimensions
-      ? c.dimensions.map((d) => ({ ...d, options: d.options.map((o) => ({ ...o })) }))
+      ? c.dimensions.map((d) => ({ ...d, options: d.options.map(withTerm) }))
       : undefined,
   }
 }
 
 function applyExtend(c: PickerCatalog, pack: CatalogPack): PickerCatalog {
   if (c.kind === "single") {
-    return { ...c, options: [...(c.options ?? []), ...(pack.options ?? []).map((o) => ({ ...o }))] }
+    return { ...c, options: [...(c.options ?? []), ...(pack.options ?? []).map(withTerm)] }
   }
   const byField = new Map((c.dimensions ?? []).map((d) => [d.field, { ...d, options: [...d.options] }]))
   for (const dim of pack.dimensions ?? []) {
+    const added = dim.options.map(withTerm)
     const existing = byField.get(dim.field)
-    if (existing) existing.options = [...existing.options, ...dim.options]
-    else byField.set(dim.field, { ...dim, options: [...dim.options] })
+    if (existing) existing.options = [...existing.options, ...added]
+    else byField.set(dim.field, { ...dim, options: added })
   }
   const dims = [...byField.values()]
   return { ...c, dimensions: dims, fields: dims.map((d) => d.field) }

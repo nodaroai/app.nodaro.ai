@@ -295,13 +295,19 @@ const INTENSITY_CLAUSES: Record<Exclude<CharacterFxIntensity, "auto">, string> =
  *
  * Substitution: each base hint has every `"the subject"` occurrence
  * rewritten to the target name BEFORE the join. Empty targetHints leaves
- * "the subject" intact in the prompt.
+ * "the subject" intact in the prompt. In compact hint mode the base is a bare
+ * `term` with no "the subject" to rewrite, so the target is named by an
+ * explicit `"{target}: {effects}"` prefix instead — the character is named in
+ * both modes.
  *
  * @param mode `"compact"` builds the base from each effect's short
- *   professional `term` instead of its full shot description. The target
- *   substitution, the ", and " multi-pick join and the position/duration/
- *   intensity clauses are emitted identically in both modes (a term rarely
- *   contains "the subject", so the substitution is simply a no-op there).
+ *   professional `term` instead of its full shot description. The ", and "
+ *   multi-pick join and the position/duration/intensity clauses are emitted
+ *   identically in both modes. The TARGET is not: no `term` contains the
+ *   words "the subject" (a term names the effect, not a sentence about a
+ *   subject), so compact mode names the target with an explicit
+ *   `"{target}: {effects}"` prefix instead of substituting into the base.
+ *   Either way the wired character is always named.
  */
 export function composeCharacterFxHintFromConnections(
   effectId: string | ReadonlyArray<string> | undefined,
@@ -312,18 +318,25 @@ export function composeCharacterFxHintFromConnections(
   const ids = Array.isArray(effectId)
     ? Array.from(new Set(effectId)).slice(0, 2)
     : effectId ? [effectId] : []
-  // ONLY the base fragment swaps in compact mode — the target substitution,
-  // the multi-pick join and the timing clauses below are identical either way.
+  // The base fragment swaps in compact mode; the multi-pick join and the
+  // timing clauses below are identical either way. The TARGET has to be
+  // carried differently per mode: the full hints are sentences built around
+  // the words "the subject", so a name substitutes INTO them, while a term is
+  // a bare effect name with nothing to substitute into — naming the target
+  // there means prefixing it. Skipping that is how the wired character's name
+  // silently disappeared from every compact fragment.
   const resolveBase = mode === "compact" ? getCharacterFxTerm : getCharacterFxPromptHint
   const baseHints = ids.map(resolveBase).filter((h) => h.length > 0)
   if (baseHints.length === 0) return ""
 
   const targetClause = targetHints.filter((h) => h && h.length > 0).join(" and ")
-  const substituted = targetClause
+  const substituted = targetClause && mode !== "compact"
     ? baseHints.map((b) => b.replace(/\bthe subject\b/g, targetClause))
     : baseHints
 
-  const combinedBase = substituted.join(", and ")
+  const joined = substituted.join(", and ")
+  const combinedBase =
+    targetClause && mode === "compact" ? `${targetClause}: ${joined}` : joined
   const parts: string[] = [combinedBase]
 
   if (timing?.position  && timing.position  !== "auto") parts.push(POSITION_CLAUSES [timing.position])

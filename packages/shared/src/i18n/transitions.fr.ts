@@ -7,6 +7,7 @@ const map: LocaleCatalogMap = {
   "cross-dissolve":         { label: "Fondu Enchaîné",           description: "Mélange progressif entre les plans" },
   "fade-to-black":          { label: "Fondu au Noir",            description: "S'assombrit, le second plan émerge du noir" },
   "fade-to-white":          { label: "Fondu au Blanc",           description: "Sature de blanc, le second plan en émerge" },
+  "snap-to-black":          { label: "Coupe au Noir",           description: "Coupe instantanée au noir pendant un temps, puis le plan suivant" },
   "match-cut":              { label: "Coupe sur Raccord",        description: "Correspondance de forme ou mouvement entre plans" },
   "smash-cut":              { label: "Coupe Violente",           description: "Coupe abrupte entre plans contrastés" },
   "iris":                   { label: "Cache Iris",               description: "L'iris ferme puis ouvre sur le second plan" },
@@ -77,7 +78,7 @@ const map: LocaleCatalogMap = {
   "vehicle-explosion":      { label: "Explosion de Véhicule",   description: "Le véhicule explose au premier plan, la scène change" },
   "jump-match":             { label: "Raccord de Saut",         description: "Le sujet saute, l'atterrissage enchaîne sur la nouvelle scène" },
   "hand-swipe":             { label: "Balayage de Main",        description: "Une main balaie l'objectif, la scène change en se dégageant" },
-  "action-relay":           { label: "Relais d'Action",         description: "Le sujet sort du cadre sur une action et la poursuit dans la nouvelle scène" },
+  "action-relay":           { label: "Raccord dans le Mouvement", description: "Le sujet sort du cadre sur une action et la poursuit dans la nouvelle scène" },
 
   // ── Light ──
   "white-flash":            { label: "Flash Blanc",             description: "Le cadre sature en blanc pur" },
@@ -88,7 +89,6 @@ const map: LocaleCatalogMap = {
   "lens-crack":             { label: "Fissure d'Objectif",      description: "L'objectif se fissure, la scène à travers le verre brisé" },
   "dirty-lens-wipe":        { label: "Nettoyage d'Objectif",    description: "L'objectif sale est essuyé, révélant la nouvelle scène" },
   "eye-light-burst":        { label: "Éclat Oculaire",          description: "Un faisceau brillant depuis les yeux du sujet sature le cadre" },
-  "snap-to-black":          { label: "Coupe au Noir",           description: "Coupe instantanée au noir pendant un temps, puis le plan suivant" },
 
   // ── Glitch ──
   "digital-glitch":         { label: "Glitch Numérique",        description: "Corruption RGB + scanlines + datamosh" },

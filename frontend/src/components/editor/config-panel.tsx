@@ -28,6 +28,7 @@ import {
 import { PresentationDisplayConfig } from "./config-panels/presentation-display-config"
 import { PresetDropdown } from "./config-panels/node-preset-dropdown"
 import { PromptInjectionSection } from "./config-panels/prompt-injection-section"
+import { ParameterPreviewContext } from "./config-panels/parameter-preview-context"
 // Phase 1B.2: SceneConfig now ships from `./config-panels/scene-configs`.
 // Legacy `./scene-config` + `./scene-editor-modal` are dead code pending cleanup.
 import { IterationResultsPanel } from "./iteration-results-panel"
@@ -1162,8 +1163,28 @@ export function ConfigPanel() {
             disabled={isNodeRunning || isReadOnly}
             className="border-0 p-0 m-0 min-w-0 disabled:opacity-70 disabled:pointer-events-none"
           >
-            {isExpanded ? (
-              <TileCommitContext.Provider value={{ commit: closeFullscreenSettings }}>
+            {/* The node + graph the panel is editing, for any config-panel
+                descendant that must compose EXACTLY what the node injects
+                downstream. PromptInjectionPreview reads it to run the node
+                through `getParameterPromptHint` (the DAG/orchestrator's own
+                function) instead of re-deriving the fragment from a bare
+                catalog id — which ignored `data.hintMode` — and to render the
+                shared Full / Compact lever. Provided once here so every picker
+                panel, present and future, is covered with no per-panel work. */}
+            <ParameterPreviewContext.Provider value={{ node: selectedNode, nodes, edges }}>
+              {isExpanded ? (
+                <TileCommitContext.Provider value={{ commit: closeFullscreenSettings }}>
+                  <NodeTypeConfig
+                    nodeType={nodeType}
+                    nodeData={nodeData}
+                    configProps={configProps}
+                    updateNodeData={updateNodeData}
+                    onExpandDirector={() => setExpandDirectorOpen(true)}
+                    update={update}
+                    selectedNodeId={selectedNodeId ?? undefined}
+                  />
+                </TileCommitContext.Provider>
+              ) : (
                 <NodeTypeConfig
                   nodeType={nodeType}
                   nodeData={nodeData}
@@ -1173,18 +1194,8 @@ export function ConfigPanel() {
                   update={update}
                   selectedNodeId={selectedNodeId ?? undefined}
                 />
-              </TileCommitContext.Provider>
-            ) : (
-              <NodeTypeConfig
-                nodeType={nodeType}
-                nodeData={nodeData}
-                configProps={configProps}
-                updateNodeData={updateNodeData}
-                onExpandDirector={() => setExpandDirectorOpen(true)}
-                update={update}
-                selectedNodeId={selectedNodeId ?? undefined}
-              />
-            )}
+              )}
+            </ParameterPreviewContext.Provider>
             {/* Prompt Injection — opt out of auto-injecting Look / Elements.
                Renders only for nodes with a look/cinematography or elements
                handle (gated inside the component). */}

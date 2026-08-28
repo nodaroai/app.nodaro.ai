@@ -7,6 +7,7 @@ const map: LocaleCatalogMap = {
   "cross-dissolve":         { label: "Überblendung",             description: "Allmähliche Mischung zwischen den Einstellungen" },
   "fade-to-black":          { label: "Abblende auf Schwarz",     description: "Dunkelt auf Schwarz ab, zweite Einstellung erscheint" },
   "fade-to-white":          { label: "Abblende auf Weiß",        description: "Erstrahlt in Weiß, zweite Einstellung erscheint" },
+  "snap-to-black":          { label: "Harter Schnitt auf Schwarz", description: "Sofortiger Schnitt auf volles Schwarz für einen Moment, dann die nächste Einstellung" },
   "match-cut":              { label: "Match Cut",                description: "Form- oder Bewegungsübereinstimmung zwischen Einstellungen" },
   "smash-cut":              { label: "Smash Cut",                description: "Abrupter Schnitt zwischen kontrastierenden Einstellungen" },
   "iris":                   { label: "Irisblende",               description: "Iris schließt und öffnet sich zur zweiten Einstellung" },
@@ -77,7 +78,7 @@ const map: LocaleCatalogMap = {
   "vehicle-explosion":      { label: "Fahrzeugexplosion",       description: "Das Fahrzeug explodiert im Vordergrund, die Szene wechselt" },
   "jump-match":             { label: "Sprung-Schnitt",          description: "Das Sujet springt, die Landung verbindet mit der neuen Szene" },
   "hand-swipe":             { label: "Hand-Wisch",              description: "Eine Hand wischt über das Objektiv, die Szene wechselt dahinter" },
-  "action-relay":           { label: "Bewegungsstaffel",        description: "Das Sujet verlässt das Bild in einer Bewegung und setzt sie in der neuen Szene fort" },
+  "action-relay":           { label: "Schnitt auf Bewegung",    description: "Das Sujet verlässt das Bild in einer Bewegung und setzt sie in der neuen Szene fort" },
 
   // ── Light ──
   "white-flash":            { label: "Weißblitz",               description: "Der Rahmen erstrahlt in reinem Weiß" },
@@ -88,7 +89,6 @@ const map: LocaleCatalogMap = {
   "lens-crack":             { label: "Objektivriss",            description: "Das Objektiv reißt, Szene durch das gebrochene Glas" },
   "dirty-lens-wipe":        { label: "Objektivreinigung",       description: "Das schmutzige Objektiv wird gewischt, neue Szene erscheint" },
   "eye-light-burst":        { label: "Augenlichtausbruch",      description: "Ein heller Strahl aus den Augen des Sujets überstrahlt den Rahmen" },
-  "snap-to-black":          { label: "Harter Schnitt auf Schwarz", description: "Sofortiger Schnitt auf volles Schwarz für einen Moment, dann die nächste Einstellung" },
 
   // ── Glitch ──
   "digital-glitch":         { label: "Digitaler Glitch",        description: "RGB-Split + Scanlines + Datamosh" },

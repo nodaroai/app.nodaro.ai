@@ -7,6 +7,7 @@ const map: LocaleCatalogMap = {
   "cross-dissolve": { label: "クロスディゾルブ", description: "ショット間の緩やかなブレンド" },
   "fade-to-black": { label: "暗転", description: "暗転後、次のシーンが浮かび上がる" },
   "fade-to-white": { label: "ホワイトアウト", description: "白飛び後、次のシーンが現れる" },
+  "snap-to-black": { label: "黒への瞬間カット", description: "一瞬で真っ黒になり、間を置いて次のショットへ" },
   "match-cut": { label: "マッチカット", description: "形や動きを合わせたカット" },
   "smash-cut": { label: "スマッシュカット", description: "対照的なシーン間の衝撃的な急転" },
   "iris": { label: "アイリス", description: "円形のアイリスが閉じ、次のシーンで開く" },
@@ -88,7 +89,6 @@ const map: LocaleCatalogMap = {
   "lens-crack": { label: "レンズクラック", description: "レンズにひびが入り、割れたガラス越しに新シーン" },
   "dirty-lens-wipe": { label: "汚れたレンズ拭き", description: "レンズの汚れが拭われ、シーンが変わる" },
   "eye-light-burst": { label: "眼光", description: "被写体の瞳から白光が放たれ、フレームが白飛び" },
-  "snap-to-black": { label: "黒への瞬間カット", description: "一瞬で真っ黒になり、間を置いて次のショットへ" },
 
   // ── Glitch ──
   "digital-glitch": { label: "デジタルグリッチ", description: "RGB分離+スキャンライン+データモッシュ" },

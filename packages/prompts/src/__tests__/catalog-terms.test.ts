@@ -2,6 +2,19 @@ import { describe, it, expect } from "vitest"
 import { PICKER_CATALOGS, type PickerOption } from "../picker-catalogs.js"
 import { TERM_MAX_CHARS, deriveTerm, isSuspiciousDerivedTerm } from "../term.js"
 
+/** A term is a phrase, not a sentence (see the convention in `term.ts`). */
+const TERM_MAX_WORDS = 8
+
+/**
+ * Two ids in one catalog may share a term ONLY where they are deliberately the
+ * same thing filed twice. `music-genre` cross-lists Amapiano under both the
+ * electronic and the global groupings, so both ids legitimately inject
+ * "amapiano". Anything else is a copy-paste that makes two picks
+ * indistinguishable downstream — widen this set only for another deliberate
+ * cross-listing, never to silence a collision.
+ */
+const DUPLICATE_TERM_EXCEPTIONS: ReadonlySet<string> = new Set(["music-genre • amapiano"])
+
 /**
  * The compact-term guard.
  *
@@ -33,9 +46,12 @@ import { TERM_MAX_CHARS, deriveTerm, isSuspiciousDerivedTerm } from "../term.js"
  *  - `color-look` — "Warm"/"Cool"/"Faded"/"Vibrant" are grade adjectives; the
  *                   term a colorist writes is "warm grade", "cool grade".
  *  - `mood`       — the labels are bare emotion adjectives ("Happy", "Sad",
- *                   "Tense"). Injected alone they read as a description of the
- *                   SUBJECT rather than the scene's mood, which is a different
- *                   instruction; "melancholic mood" is the term.
+ *                   "Tense"). Injected alone a bare adjective has nothing to
+ *                   attach to; the catalog describes the SUBJECT's emotional
+ *                   state, so the term names the expression or demeanor the
+ *                   hint spells out — "melancholic expression", "cocky
+ *                   smirk". ("melancholic mood" would be the wrong register:
+ *                   it points the model at the scene, not the face.)
  *
  * Deliberately NOT in the set:
  *  - `tone` is free text, not a catalog at all.
@@ -111,7 +127,36 @@ describe("catalog compact terms", () => {
       if (term === "" && option.promptHint !== "") {
         bad.push(`${where} → empty term on an entry that DOES inject a hint`)
       }
+      const words = term.trim().split(/\s+/).filter(Boolean)
+      if (words.length > TERM_MAX_WORDS) {
+        bad.push(`${where} → ${words.length} words, over the ${TERM_MAX_WORDS} cap: "${term}"`)
+      }
     }
     expect(bad, `${bad.length} malformed terms:\n${bad.join("\n")}`).toEqual([])
+  })
+
+  it("no two ids in a catalog resolve to the same term", () => {
+    const byCatalog = new Map<string, Map<string, string[]>>()
+    for (const { catalogId, option } of ROWS) {
+      if (!option.term) continue // no-op "auto"/"none" entries all inject nothing
+      let terms = byCatalog.get(catalogId)
+      if (!terms) byCatalog.set(catalogId, (terms = new Map()))
+      const ids = terms.get(option.term)
+      if (ids) ids.push(option.id)
+      else terms.set(option.term, [option.id])
+    }
+    const collisions: string[] = []
+    for (const [catalogId, terms] of byCatalog) {
+      for (const [term, ids] of terms) {
+        const unique = [...new Set(ids)]
+        if (unique.length < 2) continue
+        if (DUPLICATE_TERM_EXCEPTIONS.has(`${catalogId} • ${term}`)) continue
+        collisions.push(`${catalogId} • "${term}" ← ${unique.join(", ")}`)
+      }
+    }
+    expect(
+      collisions,
+      `${collisions.length} terms are shared by two ids, so the two picks inject the same fragment:\n${collisions.join("\n")}`,
+    ).toEqual([])
   })
 })

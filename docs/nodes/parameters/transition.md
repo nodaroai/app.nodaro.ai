@@ -26,13 +26,13 @@ All four enum fields default to `auto`, which contributes no prompt text. Settin
 
 | Category | Examples | Theme |
 |---|---|---|
-| **Standard** (13) | cross-dissolve, fade-to-black, match-cut, smash-cut, jump-cut, whip-pan, iris, wipe, roll, seamless-match | Classical editing transitions described frame-by-frame for AI rendering |
+| **Standard** (14) | cross-dissolve, fade-to-black, fade-to-white, snap-to-black, match-cut, smash-cut, jump-cut, whip-pan, iris, wipe, roll, seamless-match | Classical editing transitions described frame-by-frame for AI rendering |
 | **Time & Temporal** (8) | fast-forward (day→night, night→day), seasonal-shift, aging, rewind, weather-shift, flashback | Compressed-time shifts; same scene at different times |
 | **Element & Teleport** (14) | dissolve-to-mist, water-splash, sand-storm, fire-burnup, smoke-puff, lightning-flash, ink-splash, sakura-petals, aurora-sweep, magic-sparkles, paint-splash, powder-burst, garden-bloom | Subject dissolves into a natural element and reforms |
 | **Morph & Shape-shift** (9) | liquid-morph, pixelate-reform, shatter-glass, origami-fold, vortex-swirl, dream-ripple, wireframe-morph, polygon-shatter, melt-down | Continuous deformation of subject A into subject B |
 | **Portal & Inside** (12) | zoom-into-eye, zoom-into-mirror, zoom-into-screen, zoom-into-book, zoom-through, walk-through-door, mask-transition, fall-into-hole, pull-out-reveal, zoom-into-mouth, push-through-glass, soul-jump | Camera pushes into a feature of the subject and emerges in a new world |
 | **Physics & Force** (10) | explosion-blast, shockwave, punch-into-camera, debris-shower, gravity-flip, building-explosion, vehicle-explosion, jump-match, action-relay, hand-swipe | Impact-driven scene changes |
-| **Light & Flash** (9) | white-flash, snap-to-black, lens-flare-swipe, light-streak, color-invert, sun-glare, lens-crack, dirty-lens-wipe, eye-light-burst | Flash and lens FX |
+| **Light & Flash** (8) | white-flash, lens-flare-swipe, light-streak, color-invert, sun-glare, lens-crack, dirty-lens-wipe, eye-light-burst | Flash and lens FX |
 | **Glitch & Digital** (7) | digital-glitch, vhs-rewind, datamosh, channel-flip, hologram-flicker, display-wipe, double-exposure | Digital corruption transitions |
 
 Two defaults round out the catalog: `auto` (let the model choose) and `none` (hard cut).

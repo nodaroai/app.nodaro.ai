@@ -58,7 +58,7 @@ import { buildInstrumentationHints } from "./instrumentation.js"
 import { buildVoiceCharacterHints } from "./voice-character.js"
 import { buildVoiceDeliveryHints } from "./voice-delivery.js"
 import { getPickerCatalog } from "./picker-catalogs.js"
-import type { PickerHintMode } from "./term.js"
+import { deriveTerm, resolveTerm, type PickerHintMode } from "./term.js"
 
 
 function asStr(v: unknown): string {
@@ -113,16 +113,22 @@ function byMode<T>(mode: PickerHintMode, full: T, compact: T): T {
  * The compact fragment for an OBJECT-entity entry (animal / vehicle / weapon /
  * furniture). Those catalogs carry no `promptHint` of their own — the full
  * fragment is synthesized as "featuring a {label}, {description}" — so the
- * compact form is the authored `term` when there is one and the lowercased
- * label otherwise (a concrete object's label IS its trade term). The framing
- * verb ("featuring a", "with a") belongs to the HINT; a term drops bare into
- * whatever sentence the consumer is building.
+ * compact form is the authored `term` when there is one and the derived label
+ * otherwise (a concrete object's label IS its trade term). The framing verb
+ * ("featuring a", "with a") belongs to the HINT; a term drops bare into
+ * whatever sentence the consumer is building, and "the object is in the scene"
+ * is precisely what these four nodes mean.
+ *
+ * The fallback MUST be `deriveTerm` and not a bare `toLowerCase()`: it is the
+ * same fallback `objectOptions` uses to build the `/v1/catalogs` projection,
+ * so a parenthetical label ("Rifle (bolt-action)") must strip identically here
+ * or the injected fragment and the projected term would disagree.
  *
  * `term` is read structurally because it is being added to the shared entity
  * interfaces separately; this stays correct before and after that lands.
  */
 function objectEntityTerm(entry: { readonly label: string }): string {
-  return (entry as { term?: string }).term ?? entry.label.toLowerCase()
+  return (entry as { term?: string }).term ?? deriveTerm(entry.label)
 }
 
 /**
@@ -241,13 +247,15 @@ function resolveParameterHint(
   if (base) return base
   // Pack-extend fallback: a single-dim pack entry the per-catalog getter (which
   // reads the frozen base array) can't resolve. Resolve it against the
-  // registered (pack-composed) catalog's options. `PickerOption.term` is
-  // pre-resolved, so compact mode reads it directly.
+  // registered (pack-composed) catalog's options. Composition already resolved
+  // `PickerOption.term`; `resolveTerm` is idempotent over a resolved option and
+  // is called anyway so a pack option that reached this array by some other
+  // route still injects SOMETHING in compact mode rather than `undefined`.
   const cat = getPickerCatalog(node.type)
   if (cat?.kind === "single" && cat.valueField) {
     const id = typeof data[cat.valueField] === "string" ? (data[cat.valueField] as string) : ""
     const opt = cat.options?.find((o) => o.id === id)
-    if (opt) return byMode(mode, opt.promptHint, opt.term)
+    if (opt) return byMode(mode, opt.promptHint, resolveTerm(opt))
   }
   return base
 }

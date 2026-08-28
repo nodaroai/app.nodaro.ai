@@ -12,10 +12,20 @@ import type { HintGraphContext, HintNodeLike } from "@nodaro/shared"
  * Two properties are load-bearing and tested here:
  *
  *  (a) FULL IS BYTE-IDENTICAL. `hintMode` absent — and `hintMode: "full"` —
- *      must reproduce the golden fixture exactly. The fixture was generated
- *      from the pre-compact-mode implementation
- *      (`scripts/gen-parameter-hint-golden.ts`), so a diff means verbose
+ *      must reproduce the golden fixture exactly, so a diff here means verbose
  *      prompt text moved for real users.
+ *
+ *      What the fixture IS: the byte-exact output of
+ *      `getParameterPromptHint` at the moment it was captured by
+ *      `scripts/gen-parameter-hint-golden.ts`, which ran AFTER the catalogs
+ *      grew their `term` fields. It therefore pins full mode against
+ *      regressions from here on; it is not by itself evidence that full mode
+ *      still matches the pre-compact-mode implementation. That equivalence was
+ *      verified separately, by replaying every pinned case against the
+ *      pre-change `parameter-prompt-hint.ts` on `origin/dev` (0 mismatches),
+ *      and it holds because compact mode only ever ADDS a branch: `term` is a
+ *      new field, and every `promptHint` that predates this branch is
+ *      untouched.
  *
  *  (b) COMPACT SWAPS ONLY THE BASE FRAGMENT. Every catalog injects its term
  *      and not its paragraph; pre/post free text, timing clauses, multi-pick
@@ -182,6 +192,41 @@ describe("hint mode: compact preserves everything but the base fragment", () => 
     expect(compact).toContain("the effect occurs at the opening of the clip")
     expect(compact).toContain("manifesting over approximately 2 seconds")
     expect(compact).toContain("with extreme exaggerated energy, wild flourishes, and dramatic distortion")
+  })
+
+  it("the wired character is NAMED in both modes", () => {
+    // Regression: compact mode used to run the full mode's substitution — a
+    // regex replace of "the subject" — over a `term` that never contains those
+    // words, so the target silently vanished from every compact character-fx
+    // fragment while full mode named it.
+    const fx = firstInjectingId("character-fx")
+    const ctx: HintGraphContext = {
+      nodes: [{ id: "c1", type: "character-ref", data: { characterName: "Mira" } }],
+      edges: [{ source: "c1", target: "n1", targetHandle: "target" }],
+    }
+    const node: HintNodeLike = { id: "n1", type: "character-fx", data: { characterFx: fx } }
+    const full = getParameterPromptHint(node, ctx)
+    const compact = getParameterPromptHint(withMode(node, "compact"), ctx)
+
+    expect(full).toContain("Mira")
+    expect(full).not.toContain("the subject")
+    expect(compact).toContain("Mira")
+    // ...and compact is still the term, not the paragraph.
+    const term = optionFor("character-fx", "characterFx", fx).term
+    expect(compact).toContain(term)
+    expect(compact.length).toBeLessThan(full.length)
+  })
+
+  it("an unwired character-fx names no target in either mode", () => {
+    const fx = firstInjectingId("character-fx")
+    const term = optionFor("character-fx", "characterFx", fx).term
+    const compact = getParameterPromptHint({
+      id: "n1",
+      type: "character-fx",
+      data: { characterFx: fx, hintMode: "compact" },
+    })
+    // No target wired ⇒ no prefix at all, just the term.
+    expect(compact).toBe(term)
   })
 
   it("multi-pick joins the TERMS with the same ', and ' separator", () => {

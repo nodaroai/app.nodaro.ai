@@ -54,7 +54,7 @@ export interface TransitionTiming {
 
 export const TRANSITIONS: ReadonlyArray<Transition> = [
   // ============================================================================
-  // STANDARD — 13 entries — classical editing transitions
+  // STANDARD — 14 entries — classical editing transitions
   // ============================================================================
   { id: "auto",              label: "Auto",              category: "standard", description: "Let the model choose", promptHint: "" },
   { id: "none",              label: "None / Hard Cut",   category: "standard", description: "Instantaneous switch, no transition",
@@ -65,6 +65,8 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
     promptHint: "fade to black: the first shot gradually darkens to full black, holds briefly, then the second shot fades up from black" },
   { id: "fade-to-white",     label: "Fade to White",     category: "standard", description: "Blooms to white, second emerges",
     promptHint: "fade to white: the first shot brightens until the frame is pure white, then the second shot resolves out of the white" },
+  { id: "snap-to-black",     label: "Snap to Black",     category: "standard", description: "Instant cut to full black for a beat, then the next shot",
+    promptHint: "snap to black: the first shot cuts instantly to full black with no fade, the frame holds pure black for a single beat, then the second shot cuts in at full brightness", term: "snap to black" },
   { id: "match-cut",         label: "Match Cut",         category: "standard", description: "Shape or motion match across shots",
     promptHint: "match cut: the final composition of the first shot matches the opening composition of the second shot in shape, color, and motion, so the cut feels like a visual rhyme" },
   { id: "smash-cut",         label: "Smash Cut",         category: "standard", description: "Jarring abrupt cut between contrasting shots",
@@ -205,11 +207,11 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
     promptHint: "the subject jumps upward and out of frame at the end of the first shot, with matched velocity the camera follows the arc, and on landing the subject is in a new location seamlessly continuing the same jump", term: "match cut on a jump" },
   { id: "hand-swipe",        label: "Hand Swipe",         category: "physics", description: "Hand swipes across lens, scene changes during occlusion",
     promptHint: "a hand sweeps across the camera lens at close range, fully occluding the frame in motion blur for a single beat, and as the hand exits the opposite side the scene has changed to the new setting" },
-  { id: "action-relay",      label: "Action Relay",      category: "physics", description: "Subject exits on an action and lands in the new scene mid-move",
-    promptHint: "action relay cut: the subject exits the frame on a committed action — a stride, a throw, a turn — and enters the new scene on the same beat continuing that movement at matched speed and direction, so the action carries unbroken across the cut", term: "action relay cut" },
+  { id: "action-relay",      label: "Action Match",      category: "physics", description: "Subject exits on an action and lands in the new scene mid-move",
+    promptHint: "match cut on action: the subject exits the frame on a committed action — a stride, a throw, a turn — and enters the new scene on the same beat continuing that movement at matched speed and direction, so the action carries unbroken across the cut", term: "match cut on action" },
 
   // ============================================================================
-  // LIGHT — 9 entries — flash and lens FX
+  // LIGHT — 8 entries — flash and lens FX
   // ============================================================================
   { id: "white-flash",       label: "White Flash",        category: "light", description: "Frame blooms to white",
     promptHint: "a bright camera-flash bloom fills the frame with pure white, holds for a fraction of a second, then resolves into the new scene" },
@@ -227,8 +229,6 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
     promptHint: "the camera lens is suddenly streaked with dust, water beads, and grime that swirl across the front element, a wiping motion sweeps the lens clean from one side to the other, revealing the new scene in crisp focus" },
   { id: "eye-light-burst",   label: "Eye Light Burst",    category: "light", description: "Bright beam from subject's eyes whites out frame",
     promptHint: "the subject's eyes ignite with a brilliant white beam of light that overpowers the frame in bloom and lens flares, the radiance fills the image entirely, and as the glow recedes the new scene is revealed" },
-  { id: "snap-to-black",     label: "Snap to Black",     category: "light", description: "Instant cut to full black for a beat, then the next shot",
-    promptHint: "snap to black: the first shot cuts instantly to full black with no fade, the frame holds pure black for a single beat, then the second shot cuts in at full brightness", term: "snap to black" },
 
   // ============================================================================
   // GLITCH — 7 entries — digital corruption transitions

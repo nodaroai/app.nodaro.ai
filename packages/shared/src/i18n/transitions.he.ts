@@ -7,6 +7,7 @@ const map: LocaleCatalogMap = {
   "cross-dissolve": { label: "דיסולב הצלבה", description: "מיזוג הדרגתי בין שתי הסצנות" },
   "fade-to-black": { label: "דהייה לשחור", description: "חשיכה הדרגתית ואז הסצנה הבאה" },
   "fade-to-white": { label: "דהייה ללבן", description: "הבהרה עד לבן ואז הסצנה הבאה" },
+  "snap-to-black": { label: "חיתוך לשחור", description: "חיתוך מיידי לשחור מלא לרגע, ואז השוט הבא" },
   "match-cut": { label: "חיתוך התאמה", description: "התאמת צורה או תנועה בין הסצנות" },
   "smash-cut": { label: "חיתוך חד", description: "חיתוך מפתיע בין סצנות מנוגדות" },
   "iris": { label: "אירוס", description: "עיגול נסגר ונפתח על הסצנה החדשה" },
@@ -88,7 +89,6 @@ const map: LocaleCatalogMap = {
   "lens-crack": { label: "סדק בעדשה", description: "העדשה מסתדקת והסצנה החדשה נראית דרכה" },
   "dirty-lens-wipe": { label: "ניגוב עדשה מלוכלכת", description: "ניגוב מנקה את העדשה וחושף את הסצנה החדשה" },
   "eye-light-burst": { label: "פרץ אור מהעיניים", description: "קרן עוצמתית מעיני הדמות מציפה את הפריים" },
-  "snap-to-black": { label: "חיתוך לשחור", description: "חיתוך מיידי לשחור מלא לרגע, ואז השוט הבא" },
 
   // ── Glitch ──
   "digital-glitch": { label: "גליץ' דיגיטלי", description: "שיבוש דיגיטלי: פיצול RGB, קריעת שורות, דאטאמוש" },

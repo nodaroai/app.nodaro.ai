@@ -7,6 +7,7 @@ const map: LocaleCatalogMap = {
   "cross-dissolve": { label: "تلاشٍ متقاطع", description: "مزج تدريجي بين اللقطتين" },
   "fade-to-black": { label: "تلاشٍ إلى الأسود", description: "تظلم تدريجي ثم تظهر اللقطة التالية" },
   "fade-to-white": { label: "تلاشٍ إلى الأبيض", description: "توهج حتى الأبيض ثم تظهر اللقطة" },
+  "snap-to-black": { label: "قطع فوري إلى السواد", description: "قطع فوري إلى سواد كامل للحظة، ثم تدخل اللقطة التالية" },
   "match-cut": { label: "قطع متطابق", description: "تطابق الشكل أو الحركة بين اللقطتين" },
   "smash-cut": { label: "قطع مفاجئ", description: "قطع مفاجئ صارخ بين لقطتين متباينتين" },
   "iris": { label: "انتقال القزحية", description: "دائرة تنغلق ثم تنفتح على اللقطة الجديدة" },
@@ -88,7 +89,6 @@ const map: LocaleCatalogMap = {
   "lens-crack": { label: "تشقق العدسة", description: "العدسة تتشقق والمشهد الجديد يظهر خلفها" },
   "dirty-lens-wipe": { label: "مسح العدسة الملوثة", description: "العدسة يُنظّفها مسح ويكشف المشهد الجديد" },
   "eye-light-burst": { label: "شعاع عين مضيء", description: "شعاع ساطع من عيني الشخص يغطي الإطار" },
-  "snap-to-black": { label: "قطع فوري إلى السواد", description: "قطع فوري إلى سواد كامل للحظة، ثم تدخل اللقطة التالية" },
 
   // ── Glitch ──
   "digital-glitch": { label: "خلل رقمي", description: "تشويه رقمي: فصل RGB وتمزق سطور وداتاموش" },

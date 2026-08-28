@@ -7,6 +7,7 @@ const map: LocaleCatalogMap = {
   "cross-dissolve":         { label: "Disolvencia Cruzada",      description: "Mezcla gradual entre planos" },
   "fade-to-black":          { label: "Fundido a Negro",          description: "Oscurece a negro, emerge el segundo plano" },
   "fade-to-white":          { label: "Fundido a Blanco",         description: "Estalla en blanco, emerge el segundo plano" },
+  "snap-to-black":          { label: "Corte a Negro",           description: "Corte instantáneo a negro por un instante, luego el siguiente plano" },
   "match-cut":              { label: "Corte de Raccord",         description: "Coincidencia de forma o movimiento entre planos" },
   "smash-cut":              { label: "Corte Brusco",             description: "Corte abrupto entre planos contrastados" },
   "iris":                   { label: "Iris",                     description: "Iris circular cierra y abre en el segundo plano" },
@@ -77,7 +78,7 @@ const map: LocaleCatalogMap = {
   "vehicle-explosion":      { label: "Explosión de Vehículo",   description: "Vehículo explota en primer plano, la escena cambia" },
   "jump-match":             { label: "Salto Raccord",            description: "El sujeto salta, el aterrizaje enlaza con la nueva escena" },
   "hand-swipe":             { label: "Barrido de Mano",         description: "Una mano barre la lente, la escena cambia al descubrirse" },
-  "action-relay":           { label: "Relevo de Acción",        description: "El sujeto sale de cuadro en una acción y la continúa en la nueva escena" },
+  "action-relay":           { label: "Corte por Acción",        description: "El sujeto sale de cuadro en una acción y la continúa en la nueva escena" },
 
   // ── Light ──
   "white-flash":            { label: "Destello Blanco",         description: "El cuadro estalla en blanco puro" },
@@ -88,7 +89,6 @@ const map: LocaleCatalogMap = {
   "lens-crack":             { label: "Grieta en el Objetivo",   description: "El objetivo se agrieta, la escena a través del cristal" },
   "dirty-lens-wipe":        { label: "Limpieza de Objetivo",    description: "El objetivo sucio se limpia revelando la nueva escena" },
   "eye-light-burst":        { label: "Destello Ocular",         description: "Haz brillante desde los ojos del sujeto satura el cuadro" },
-  "snap-to-black":          { label: "Corte a Negro",           description: "Corte instantáneo a negro por un instante, luego el siguiente plano" },
 
   // ── Glitch ──
   "digital-glitch":         { label: "Glitch Digital",          description: "Corrupción RGB + scanlines + datamosh" },

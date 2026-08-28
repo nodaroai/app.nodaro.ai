@@ -58,11 +58,20 @@ export const TERM_MAX_CHARS = 60
  *                  existed).
  *  - `"compact"` — the short professional `term` instead.
  *
- * ONLY the base catalog fragment swaps. Everything wrapped around it is
- * mode-independent: the user's `preText` / `postText` free text, the
- * transition / camera-motion / character-fx timing and start-state/end-state
- * clauses, multi-pick joining, and multi-dimension composition all apply
- * exactly the same in both modes.
+ * ONLY the base catalog fragment swaps. The user's `preText` / `postText`
+ * free text, the transition / camera-motion / character-fx timing and
+ * start-state/end-state clauses, multi-pick joining, and multi-dimension
+ * composition all apply exactly the same in both modes.
+ *
+ * "The same" means the same MEANING, not always the same string. Where a
+ * wrapper is grammatically fused to the long hint it cannot simply be reused:
+ * the character-fx composer names its target by rewriting the words "the
+ * subject" inside a full hint, and a bare term has no such words, so compact
+ * mode names the target with an explicit `"{target}: {effect}"` prefix. When a
+ * catalog's grammar IS its meaning — Material's `"made of ..."`, Held Prop's
+ * `"holding a ..."` — that grammar is authored into the term itself rather
+ * than left for a consumer to re-add, because a projected `term` is injected
+ * standalone by thin clients that have no composer at all.
  *
  * A picker node selects the mode via an optional `hintMode` field on its node
  * data; absent (or any unrecognized value) means `"full"`.

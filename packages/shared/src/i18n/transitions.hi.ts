@@ -7,6 +7,7 @@ const map: LocaleCatalogMap = {
   "cross-dissolve": { label: "क्रॉस-डिसॉल्व", description: "दोनों दृश्यों के बीच क्रमिक मिश्रण" },
   "fade-to-black": { label: "काले में फ़ेड", description: "धीरे-धीरे काला होकर नया दृश्य उभरता है" },
   "fade-to-white": { label: "सफ़ेद में फ़ेड", description: "पूरी तरह सफ़ेद होकर नया दृश्य उभरता है" },
+  "snap-to-black": { label: "तुरंत ब्लैक", description: "एक पल के लिए पूरी तरह काला, फिर अगला शॉट" },
   "match-cut": { label: "मैच कट", description: "दोनों दृश्यों में आकार या गति का मिलान" },
   "smash-cut": { label: "स्मैश कट", description: "विपरीत दृश्यों के बीच अचानक कट" },
   "iris": { label: "आइरिस", description: "गोल वृत्त बंद होकर नए दृश्य पर खुलता है" },
@@ -77,7 +78,7 @@ const map: LocaleCatalogMap = {
   "vehicle-explosion": { label: "वाहन विस्फोट", description: "वाहन फटता है, आग छाती है फ्रेम पर, नया दृश्य दिखता है" },
   "jump-match": { label: "जंप मैच", description: "पात्र कूदता है, उतरने पर नए दृश्य में होता है" },
   "hand-swipe": { label: "हाथ का झटका", description: "हाथ लेंस पर झटका देता है, दृश्य बदलता है" },
-  "action-relay": { label: "एक्शन रिले", description: "विषय गति में फ्रेम से बाहर जाता है और नए दृश्य में वही गति जारी रखता है" },
+  "action-relay": { label: "एक्शन मैच कट", description: "विषय गति में फ्रेम से बाहर जाता है और नए दृश्य में वही गति जारी रखता है" },
 
   // ── Light ──
   "white-flash": { label: "सफ़ेद फ़्लैश", description: "फ्रेम सफ़ेद होता है, नया दृश्य उभरता है" },
@@ -88,7 +89,6 @@ const map: LocaleCatalogMap = {
   "lens-crack": { label: "लेंस में दरार", description: "लेंस में दरार पड़ती है, नया दृश्य उससे दिखता है" },
   "dirty-lens-wipe": { label: "गंदे लेंस की सफ़ाई", description: "लेंस साफ़ होता है, नया दृश्य उभरता है" },
   "eye-light-burst": { label: "आँखों से प्रकाश विस्फोट", description: "पात्र की आँखों से किरण निकलकर फ्रेम ढकती है" },
-  "snap-to-black": { label: "तुरंत ब्लैक", description: "एक पल के लिए पूरी तरह काला, फिर अगला शॉट" },
 
   // ── Glitch ──
   "digital-glitch": { label: "डिजिटल ग्लिच", description: "RGB स्प्लिट, स्कैनलाइन, डेटामोश का घालमेल" },
