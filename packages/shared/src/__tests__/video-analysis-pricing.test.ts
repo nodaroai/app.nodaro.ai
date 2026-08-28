@@ -178,12 +178,12 @@ describe("video-audit-pricing", () => {
   })
 
   it("videoAuditCreditsForBucket: table lookup by resolved bucket + family, snapping a raw duration onto the ladder", () => {
-    expect(videoAuditCreditsForBucket(60, false)).toBe(213)
-    expect(videoAuditCreditsForBucket(60, true)).toBe(393)
+    expect(videoAuditCreditsForBucket(60, false)).toBe(214)
+    expect(videoAuditCreditsForBucket(60, true)).toBe(394)
     expect(videoAuditCreditsForBucket(180, false)).toBe(289)
-    expect(videoAuditCreditsForBucket(360, false)).toBe(659)
-    expect(videoAuditCreditsForBucket(600, false)).toBe(1066)
-    expect(videoAuditCreditsForBucket(600, true)).toBe(1912)
+    expect(videoAuditCreditsForBucket(360, false)).toBe(660)
+    expect(videoAuditCreditsForBucket(600, false)).toBe(1068)
+    expect(videoAuditCreditsForBucket(600, true)).toBe(1915)
     // Not just exact ladder values — a raw duration snaps up to its bucket.
     expect(videoAuditCreditsForBucket(70, false)).toBe(VIDEO_AUDIT_BUCKET_CREDITS["video-audit:180s"])
     expect(videoAuditCreditsForBucket(9999, true)).toBe(VIDEO_AUDIT_BUCKET_CREDITS["video-audit:auto:600s"])
@@ -224,8 +224,8 @@ describe("video-audit-pricing", () => {
     // 600s bucket here, same convention as VIDEO_ANALYSIS_BUCKET_CREDITS).
     expect(Object.keys(VIDEO_AUDIT_BUCKET_CREDITS)).toHaveLength(8)
     // Bare-id values quoted in the task/catalog must equal each family's 600s ceiling.
-    expect(VIDEO_AUDIT_BUCKET_CREDITS["video-audit:600s"]).toBe(1066)
-    expect(VIDEO_AUDIT_BUCKET_CREDITS["video-audit:auto:600s"]).toBe(1912)
+    expect(VIDEO_AUDIT_BUCKET_CREDITS["video-audit:600s"]).toBe(1068)
+    expect(VIDEO_AUDIT_BUCKET_CREDITS["video-audit:auto:600s"]).toBe(1915)
   })
 
   it("auto family = base family + the gemini-3-flash (legacy fast tier) row at the same bucket, exactly — single-source, never hand-added", () => {
