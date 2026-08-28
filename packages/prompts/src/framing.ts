@@ -426,15 +426,15 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     label: "Magazine Spread",
     category: "composition",
     description: "Two-page magazine layout with typography",
-    promptHint: "magazine spread layout, two-page editorial composition with bold display typography overlaid on the image, headline and pull quotes integrated with the photograph, visible page gutter down the middle",
+    promptHint: "magazine spread layout, two-page editorial composition with a visible page gutter down the middle",
   },
   {
     id: "cutaway-cross-section",
     label: "Cutaway / Cross-Section",
     category: "composition",
     description: "Architectural cross-section with walls peeled away",
-    promptHint: "cutaway cross-section composition, the building's near wall peeled away to reveal the interior in dollhouse fashion, multiple rooms visible at once with floors and furnishings exposed in clean architectural section, the subject inhabiting one of the rooms",
-    term: "cutaway cross-section, near wall removed",
+    promptHint: "cutaway cross-section composition, the near surface peeled away to reveal the interior in clean cross-section, the inner layers and hidden structure exposed at once",
+    term: "cutaway cross-section, near surface removed",
   },
   {
     id: "golden-spiral",
