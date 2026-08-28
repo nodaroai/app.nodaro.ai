@@ -182,6 +182,8 @@ interface ObjectCatalogEntry {
   readonly label: string
   readonly subcategory: string
   readonly description: string
+  /** Optional authored compact term (see `term.ts` for the convention). */
+  readonly term?: string
 }
 function objectOptions(
   arr: ReadonlyArray<ObjectCatalogEntry>,
@@ -194,9 +196,12 @@ function objectOptions(
     category: e.subcategory,
     promptHint: phrase(e.label.toLowerCase(), e.description),
     // Object entities have no `promptHint` field of their own (it is
-    // synthesized above); the lowercased label IS the professional term for a
-    // concrete object ("golden retriever", "katana").
-    term: e.label.toLowerCase(),
+    // synthesized above), so the term cannot come from `resolveTerm`'s
+    // empty-hint rule: an authored `term` wins, and otherwise the lowercased
+    // label IS the professional term for a concrete object ("golden
+    // retriever", "katana"). The authored escape hatch covers the UI compounds
+    // ("Airship / Dirigible" -> "airship").
+    term: e.term ?? e.label.toLowerCase(),
   }))
 }
 

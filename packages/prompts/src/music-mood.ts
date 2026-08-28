@@ -5,7 +5,7 @@
 
 import { pickIds } from "@nodaro/shared"
 
-import { resolveTerm } from "./term.js"
+import { resolveTerm, type PickerHintMode } from "./term.js"
 
 export interface MusicMoodEntry {
   readonly id: string
@@ -186,7 +186,8 @@ function composeMusicMood(
   return fragments.join(", ")
 }
 
-export function buildMusicMoodHints(data: MusicMoodData): string {
+export function buildMusicMoodHints(data: MusicMoodData, mode: PickerHintMode = "full"): string {
+  if (mode === "compact") return buildMusicMoodTerms(data)
   return composeMusicMood(data, (entry) => entry.promptHint)
 }
 

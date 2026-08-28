@@ -377,6 +377,23 @@ export function parseDataInterface(
   const project = new Project({ skipAddingFilesFromTsConfig: true })
   const sourceFile = project.addSourceFileAtPath(filePath)
 
+  // An interface may mix fields in through `extends` (PickerConsumerData,
+  // PickerHintModeFields, …). Resolve those here: own members win on a name
+  // collision and keep their declaration order, then anything inherited is
+  // appended. Without this a field declared ONLY on a shared mixin was
+  // invisible to every generated skill doc for interface-shaped node data —
+  // it already worked for the `type X = { … } & Mixin` alias form, so the
+  // two spellings documented different shapes for the same node.
+  const iface = sourceFile.getInterface(interfaceName)
+  if (iface) {
+    const own = membersToFields(iface.getMembers())
+    const merged = new Map<string, InterfaceField>(own.map((f) => [f.name, f]))
+    for (const f of resolveHeritageFields(sourceFile, iface, new Set([interfaceName]))) {
+      if (!merged.has(f.name)) merged.set(f.name, f)
+    }
+    return { name: interfaceName, fields: [...merged.values()] }
+  }
+
   // nodes.ts mixes `interface Foo { ... }` and `type Foo = { ... }`. Both
   // produce a member-bearing node: the InterfaceDeclaration itself, or the
   // TypeLiteralNode inside the alias's type. Fall back from interface →
@@ -492,6 +509,27 @@ function resolveTypeNodeFields(
   return undefined
 }
 
+/**
+ * Fields an interface picks up through its `extends` clauses.
+ *
+ * A heritage clause is an `ExpressionWithTypeArguments`, NOT a `TypeReference`
+ * — so it cannot be handed to `resolveTypeNodeFields`, which is where an
+ * earlier version silently dropped every inherited field. Resolve the base by
+ * NAME instead, which also gets `extends A, B` and multi-level chains right.
+ */
+function resolveHeritageFields(
+  sourceFile: import("ts-morph").SourceFile,
+  iface: import("ts-morph").InterfaceDeclaration,
+  seen: Set<string>,
+): InterfaceField[] {
+  const out: InterfaceField[] = []
+  for (const ext of iface.getExtends()) {
+    const baseName = ext.getExpression().getText()
+    for (const f of resolveNamedTypeFields(sourceFile, baseName, seen) ?? []) out.push(f)
+  }
+  return out
+}
+
 function resolveNamedTypeFields(
   sourceFile: import("ts-morph").SourceFile,
   name: string,
@@ -504,9 +542,7 @@ function resolveNamedTypeFields(
   if (iface) {
     // Own members first; follow `extends` clauses so derived interfaces resolve fully.
     const fields = new Map<string, InterfaceField>()
-    for (const ext of iface.getExtends()) {
-      for (const f of resolveTypeNodeFields(sourceFile, ext, seen) ?? []) fields.set(f.name, f)
-    }
+    for (const f of resolveHeritageFields(sourceFile, iface, seen)) fields.set(f.name, f)
     for (const f of membersToFields(iface.getMembers())) fields.set(f.name, f)
     return [...fields.values()]
   }

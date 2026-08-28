@@ -31,6 +31,16 @@ export interface Vehicle {
   readonly label: string
   readonly subcategory: VehicleSubcategory
   readonly description: string
+  /**
+   * Optional authored compact term — the short phrase a professional would
+   * write in a prompt, as opposed to the user-facing `label` (see the `term`
+   * convention in `@nodaro/prompts`'s `term.ts`). Authored ONLY where the
+   * lowercased label is not that phrase — a UI compound naming two things at
+   * once ("Airship / Dirigible" -> "airship", "Plasma Sword / Lightsaber" ->
+   * "plasma sword"). Everywhere else the lowercased label IS the term for a
+   * concrete object ("golden retriever", "katana"), so nothing is authored.
+   */
+  readonly term?: string
 }
 
 export const VEHICLES: ReadonlyArray<Vehicle> = [
@@ -117,7 +127,7 @@ export const VEHICLES: ReadonlyArray<Vehicle> = [
   { id: "seaplane",              label: "Seaplane",              subcategory: "aircraft", description: "Seaplane with twin pontoon floats instead of wheels, high wings and a propeller, resting on calm water" },
   { id: "hot-air-balloon",       label: "Hot Air Balloon",       subcategory: "aircraft", description: "Giant hot-air balloon with a colorful rainbow-striped fabric envelope, a roaring flame burner flaring upward into the mouth and a wicker passenger basket suspended below by braided cables" },
   { id: "blimp",                 label: "Blimp",                 subcategory: "aircraft", description: "Sausage-shaped blimp airship with a sleek silver envelope, small rear fins and a slung gondola beneath" },
-  { id: "airship",               label: "Airship / Dirigible",   subcategory: "aircraft", description: "Massive rigid lighter-than-air dirigible with a long cigar-shaped fabric-covered metal frame, large rear stabilizer fins, multiple slung engine gondolas and a long passenger cabin running underneath the hull" },
+  { id: "airship",               label: "Airship / Dirigible",   subcategory: "aircraft", description: "Massive rigid lighter-than-air dirigible with a long cigar-shaped fabric-covered metal frame, large rear stabilizer fins, multiple slung engine gondolas and a long passenger cabin running underneath the hull", term: "airship" },
   { id: "glider",                label: "Glider",                subcategory: "aircraft", description: "Elegant sailplane glider with ultra-long narrow wings, no engine and a teardrop cockpit pod" },
   { id: "paraglider",            label: "Paraglider",            subcategory: "aircraft", description: "Foot-launched paraglider with a wide elliptical soft-fabric ram-air wing arched overhead, dozens of slender suspension lines converging into a tandem harness with a seated pilot" },
   { id: "microlight",            label: "Microlight Aircraft",   subcategory: "aircraft", description: "Lightweight single-pilot microlight aircraft with an exposed tubular metal frame, fabric-covered high wings, a small pusher propeller engine behind the open seat and tricycle landing gear" },

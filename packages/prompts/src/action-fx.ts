@@ -17,7 +17,7 @@
  * frontend DAG executor + backend orchestrator.
  */
 
-import { resolveTerm } from "./term.js"
+import { resolveTerm, type PickerHintMode } from "./term.js"
 
 export type ActionFxCategory =
   | "disaster"
@@ -281,7 +281,8 @@ function pickActionFxIds(value: unknown): string[] {
  * cap, but the cap here keeps the contract robust against stale workflow
  * data. Duplicate ids are deduplicated before the cap is applied.
  */
-export function buildActionFxHints(value: unknown): string[] {
+export function buildActionFxHints(value: unknown, mode: PickerHintMode = "full"): string[] {
+  if (mode === "compact") return buildActionFxTerms(value)
   const hints: string[] = []
   for (const id of pickActionFxIds(value)) {
     const hint = getActionFxPromptHint(id)

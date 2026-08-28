@@ -11,7 +11,7 @@
  * frontend DAG executor and the backend orchestrator.
  */
 
-import { resolveTerm } from "./term.js"
+import { resolveTerm, type PickerHintMode } from "./term.js"
 
 export interface Atmosphere {
   readonly id: string
@@ -103,7 +103,8 @@ export function getAtmosphereTerm(id: string | undefined | null): string {
  * are particle-effect descriptions that compose naturally
  * ("fog drifting in soft cool clouds, with golden god-rays cutting through").
  */
-export function buildAtmosphereHints(value: unknown): string[] {
+export function buildAtmosphereHints(value: unknown, mode: PickerHintMode = "full"): string[] {
+  if (mode === "compact") return buildAtmosphereTerms(value)
   const ids: string[] = []
   if (typeof value === "string" && value) ids.push(value)
   else if (Array.isArray(value)) {

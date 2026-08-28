@@ -495,6 +495,10 @@ export const he: ChromeDict = {
   "node.modePicks": "בחירות",
   "node.modeBoth": "שניהם",
   "node.promptPreviewEmpty": "(אין פרומפט — יש לבחור משהו תחילה)",
+  "node.hintMode": "רמז לפרומפט",
+  "node.hintModeFull": "מלא",
+  "node.hintModeCompact": "מקוצר",
+  "node.hintModeSwitch": "רמז לפרומפט: {label}",
 
   // Config panel (shared chrome)
   "configPanel.nodeSettingsTitle": "הגדרות הרכיב · {name}",

@@ -13,6 +13,7 @@ The Held Prop parameter node names a non-weapon object the subject carries or in
 | heldProp  | string | `"smartphone"` | Catalog entry id (e.g. `"umbrella"`, `"bouquet"`).     |
 | Pre Text  | text   | empty          | Free-form text prepended to the composed hint.         |
 | Post Text | text   | empty          | Free-form text appended to the composed hint.          |
+| Hint mode   | select   | `full`           | Which fragment this picker injects downstream — `full` = the long descriptive hint, `compact` = the short professional term. See [Prompt hint mode](./README.md#prompt-hint-mode). |
 
 ## Catalog (59 entries across categories)
 

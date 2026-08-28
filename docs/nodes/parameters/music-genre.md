@@ -11,6 +11,7 @@ The picker shows a horizontal tab row across genre categories (Hip Hop / R&B, El
 | genre    | string \| string[]            | Top-level genre id, or up to 3 ids for fusion (e.g. `["rock","jazz"]`).                      |
 | subgenre | string                        | Optional. Subgenre id within the chosen genre. Ignored when `genre` is an array.             |
 | era      | string                        | Optional. Era id (`1920s` … `2010s` … `modern`, `futurist`).                                 |
+| Hint mode  | select                          | Which fragment this picker injects downstream — `full` (default) = the long descriptive hint, `compact` = the short professional term. See [Prompt hint mode](./README.md#prompt-hint-mode). |
 
 ## Output
 

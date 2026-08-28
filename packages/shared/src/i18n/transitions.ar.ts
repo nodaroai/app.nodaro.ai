@@ -13,6 +13,8 @@ const map: LocaleCatalogMap = {
   "wipe": { label: "مسح خطي", description: "خط يجتاح الإطار ليكشف اللقطة الجديدة" },
   "roll-transition": { label: "دوران", description: "الإطار يدور 90-180 درجة للانتقال" },
   "seamless-match": { label: "تطابق سلس", description: "قطع خفي يُموَّه بتطابق الحركة واللون" },
+  "whip-pan": { label: "بان سريع", description: "الكاميرا تنعطف جانبًا بسرعة مع ضبابية، واللقطة التالية تتابع الاتجاه نفسه" },
+  "jump-cut": { label: "قطع قافز", description: "الإطار نفسه، والزمن يقفز إلى الأمام" },
 
   // ── Time ──
   "fast-forward-day-night": { label: "تسريع (نهار ← ليل)", description: "مرور الزمن من النهار إلى الليل في نفس المشهد" },
@@ -62,6 +64,8 @@ const map: LocaleCatalogMap = {
   "zoom-into-mouth": { label: "تكبير في الفم", description: "الكاميرا تدخل الفم لتظهر في عالم جديد" },
   "push-through-glass": { label: "اختراق الزجاج", description: "الكاميرا تخترق لوح زجاج لعالم آخر" },
   "soul-jump": { label: "قفزة الروح", description: "روح شفافة تخرج وتدخل جسداً جديداً" },
+  "mask-transition": { label: "انتقال بالقناع", description: "جسم في المقدمة يحجب الإطار، والكاميرا تعبر العتمة إلى المشهد الجديد" },
+  "zoom-through": { label: "تقريب عبر التفصيل", description: "الكاميرا تكبّر تفصيلاً واحدًا حتى ينكشف المشهد الجديد داخله" },
 
   // ── Physics ──
   "explosion-blast": { label: "موجة انفجار", description: "انفجار يجتاح الإطار ويكشف المشهد الجديد" },
@@ -73,6 +77,7 @@ const map: LocaleCatalogMap = {
   "vehicle-explosion": { label: "انفجار مركبة", description: "مركبة تنفجر واللهب يغطي الإطار ثم يُكشف المشهد" },
   "jump-match": { label: "قفزة متطابقة", description: "الشخص يقفز وعند الهبوط يكون في مشهد جديد" },
   "hand-swipe": { label: "مسح اليد", description: "يد تمر أمام العدسة ويتغير المشهد" },
+  "action-relay": { label: "قطع على الحركة", description: "الشخصية تغادر الإطار وسط حركة وتكملها في المشهد الجديد" },
 
   // ── Light ──
   "white-flash": { label: "وميض أبيض", description: "الإطار يتوهج أبيض ثم يظهر المشهد الجديد" },
@@ -83,6 +88,7 @@ const map: LocaleCatalogMap = {
   "lens-crack": { label: "تشقق العدسة", description: "العدسة تتشقق والمشهد الجديد يظهر خلفها" },
   "dirty-lens-wipe": { label: "مسح العدسة الملوثة", description: "العدسة يُنظّفها مسح ويكشف المشهد الجديد" },
   "eye-light-burst": { label: "شعاع عين مضيء", description: "شعاع ساطع من عيني الشخص يغطي الإطار" },
+  "snap-to-black": { label: "قطع فوري إلى السواد", description: "قطع فوري إلى سواد كامل للحظة، ثم تدخل اللقطة التالية" },
 
   // ── Glitch ──
   "digital-glitch": { label: "خلل رقمي", description: "تشويه رقمي: فصل RGB وتمزق سطور وداتاموش" },

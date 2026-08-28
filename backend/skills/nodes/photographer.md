@@ -1,7 +1,7 @@
 ---
 node_type: photographer
-generated_at: 2026-08-15T21:55:06.125Z
-generated_from: 150c80ac9
+generated_at: 2026-08-28T10:30:57.502Z
+generated_from: ae8d76277
 ---
 
 # Photographer / Artist Style
@@ -20,6 +20,7 @@ generated_from: 150c80ac9
 **Optional data fields:**
 - `preText?: string`
 - `postText?: string`
+- `hintMode?: "full" | "compact"`
 
 **Valid values:** call `get_picker_catalog("photographer")` (MCP) or `GET /v1/picker-catalogs/photographer` for the catalog of valid ids.
 

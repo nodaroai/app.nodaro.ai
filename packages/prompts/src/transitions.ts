@@ -12,7 +12,7 @@
  * "starting from <X>, ending at <Y>".
  */
 
-import { resolveTerm } from "./term.js"
+import { resolveTerm, type PickerHintMode } from "./term.js"
 
 export type TransitionCategory =
   | "standard"
@@ -54,7 +54,7 @@ export interface TransitionTiming {
 
 export const TRANSITIONS: ReadonlyArray<Transition> = [
   // ============================================================================
-  // STANDARD — 11 entries — classical editing transitions
+  // STANDARD — 13 entries — classical editing transitions
   // ============================================================================
   { id: "auto",              label: "Auto",              category: "standard", description: "Let the model choose", promptHint: "" },
   { id: "none",              label: "None / Hard Cut",   category: "standard", description: "Instantaneous switch, no transition",
@@ -77,6 +77,10 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
     promptHint: "the frame rolls along the camera axis with a smooth 90 to 180 degree rotation, motion-blurred during the roll, and as the rotation completes the new shot is upright and stable in frame", term: "camera roll transition" },
   { id: "seamless-match",    label: "Seamless Match",    category: "standard", description: "Hidden cut disguised by matched motion and color",
     promptHint: "hidden seamless transition: the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take", term: "invisible cut" },
+  { id: "whip-pan",          label: "Whip Pan",          category: "standard", description: "Camera whips sideways into blur, next shot rides the same direction",
+    promptHint: "whip pan transition: the camera whips sideways at high speed, smearing the frame into heavy horizontal motion blur, and the second shot enters already travelling in the same direction before it settles into its framing", term: "whip pan" },
+  { id: "jump-cut",          label: "Jump Cut",          category: "standard", description: "Same framing, time skips forward",
+    promptHint: "jump cut: the framing, lens, and camera position stay identical across the cut while time skips abruptly forward, so the subject snaps to a new position inside what still reads as one continuous shot", term: "jump cut" },
 
   // ============================================================================
   // TIME — 8 entries — temporal shifts (same or related scene, different time, or memory)
@@ -153,7 +157,7 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
     promptHint: "the first subject's form softens and melts downward like wax, collapsing into a glossy puddle on the ground, the puddle then surges upward and re-solidifies into the new subject standing in the new scene", term: "melt into a puddle and reform" },
 
   // ============================================================================
-  // PORTAL — 10 entries — zoom-into-object world-jumps
+  // PORTAL — 12 entries — zoom-into-object world-jumps
   // ============================================================================
   { id: "zoom-into-eye",     label: "Zoom Into Eye",        category: "portal", description: "Push into pupil, new world inside",
     promptHint: "the camera pushes into a tight macro of the subject's eye, the pupil dilates and fills the frame, and the new scene materialises from within the pupil as if the pupil itself were a portal" },
@@ -175,9 +179,13 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
     promptHint: "the camera pushes toward a pane of glass in the scene, the surface ripples like liquid as the camera passes through with a faint refraction, and the space on the other side resolves as the new scene" },
   { id: "soul-jump",         label: "Soul Jump",            category: "portal", description: "Translucent soul leaves body, enters new body",
     promptHint: "a translucent luminous form rises out of the first subject's body and shoots forward through the frame as a ghost-like soul, then dives into a new body in the new scene where the second subject animates to life", term: "soul leaves body and enters another" },
+  { id: "mask-transition",   label: "Mask Transition",   category: "portal", description: "Foreground object blacks out the frame, camera pulls through",
+    promptHint: "mask transition: a foreground object or a passer-by sweeps across the lens and fills the frame with darkness, the camera keeps travelling forward through the black, then pulls out of the darkness into the new scene", term: "mask transition" },
+  { id: "zoom-through",      label: "Zoom Through",      category: "portal", description: "Camera magnifies one detail until the new scene unfolds inside it",
+    promptHint: "zoom-through transition: the camera magnifies one small detail of the frame further and further until the detail loses its texture and fills the image entirely, and the new scene unfolds from within it", term: "zoom-through transition" },
 
   // ============================================================================
-  // PHYSICS — 9 entries — force-driven transitions
+  // PHYSICS — 10 entries — force-driven transitions
   // ============================================================================
   { id: "explosion-blast",   label: "Explosion Blast",    category: "physics", description: "Explosion wipes frame, new scene emerges",
     promptHint: "an explosion erupts from the center of the frame with a bright fireball that expands to fill the frame, and as the fireball dissipates the new scene is revealed" },
@@ -197,9 +205,11 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
     promptHint: "the subject jumps upward and out of frame at the end of the first shot, with matched velocity the camera follows the arc, and on landing the subject is in a new location seamlessly continuing the same jump", term: "match cut on a jump" },
   { id: "hand-swipe",        label: "Hand Swipe",         category: "physics", description: "Hand swipes across lens, scene changes during occlusion",
     promptHint: "a hand sweeps across the camera lens at close range, fully occluding the frame in motion blur for a single beat, and as the hand exits the opposite side the scene has changed to the new setting" },
+  { id: "action-relay",      label: "Action Relay",      category: "physics", description: "Subject exits on an action and lands in the new scene mid-move",
+    promptHint: "action relay cut: the subject exits the frame on a committed action — a stride, a throw, a turn — and enters the new scene on the same beat continuing that movement at matched speed and direction, so the action carries unbroken across the cut", term: "action relay cut" },
 
   // ============================================================================
-  // LIGHT — 8 entries — flash and lens FX
+  // LIGHT — 9 entries — flash and lens FX
   // ============================================================================
   { id: "white-flash",       label: "White Flash",        category: "light", description: "Frame blooms to white",
     promptHint: "a bright camera-flash bloom fills the frame with pure white, holds for a fraction of a second, then resolves into the new scene" },
@@ -217,6 +227,8 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
     promptHint: "the camera lens is suddenly streaked with dust, water beads, and grime that swirl across the front element, a wiping motion sweeps the lens clean from one side to the other, revealing the new scene in crisp focus" },
   { id: "eye-light-burst",   label: "Eye Light Burst",    category: "light", description: "Bright beam from subject's eyes whites out frame",
     promptHint: "the subject's eyes ignite with a brilliant white beam of light that overpowers the frame in bloom and lens flares, the radiance fills the image entirely, and as the glow recedes the new scene is revealed" },
+  { id: "snap-to-black",     label: "Snap to Black",     category: "light", description: "Instant cut to full black for a beat, then the next shot",
+    promptHint: "snap to black: the first shot cuts instantly to full black with no fade, the frame holds pure black for a single beat, then the second shot cuts in at full brightness", term: "snap to black" },
 
   // ============================================================================
   // GLITCH — 7 entries — digital corruption transitions
@@ -323,17 +335,27 @@ const INTENSITY_CLAUSES: Record<Exclude<TransitionIntensity, "auto">, string> = 
  * - n base hints joined with ", and "
  * - Timing/start/end clauses apply ONCE at the outer layer, not per-id
  * - null input is treated like undefined (falsy short-circuit → returns "")
+ *
+ * @param mode `"compact"` builds the base from each transition's short
+ *   professional `term` ("hard cut") instead of its full mechanism paragraph.
+ *   Everything else — the ", and " multi-pick join, the position/duration/
+ *   intensity clauses, and the "starting from"/"ending at" clauses — is
+ *   emitted identically in both modes.
  */
 export function composeTransitionHintFromConnections(
   transitionId: string | ReadonlyArray<string> | undefined,
   startHints: ReadonlyArray<string>,
   endHints: ReadonlyArray<string>,
   timing?: TransitionTiming,
+  mode: PickerHintMode = "full",
 ): string {
   const ids = Array.isArray(transitionId)
     ? Array.from(new Set(transitionId)).slice(0, 2)
     : transitionId ? [transitionId] : []
-  const baseHints = ids.map(getTransitionPromptHint).filter((h) => h.length > 0)
+  // ONLY the base fragment swaps in compact mode — the multi-pick join, the
+  // timing clauses and the start/end clauses below are identical either way.
+  const resolveBase = mode === "compact" ? getTransitionTerm : getTransitionPromptHint
+  const baseHints = ids.map(resolveBase).filter((h) => h.length > 0)
   if (baseHints.length === 0) return ""
 
   const combinedBase = baseHints.join(", and ")

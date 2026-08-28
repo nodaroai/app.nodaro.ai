@@ -13,6 +13,8 @@ const map: LocaleCatalogMap = {
   "wipe":                   { label: "Balayage",                 description: "Balayage linéaire remplace le premier plan" },
   "roll-transition":        { label: "Rotation",                 description: "Le cadre pivote 90-180°, second plan à l'arrivée" },
   "seamless-match":         { label: "Coupe Invisible",          description: "Coupe masquée par mouvement et couleur synchronisés" },
+  "whip-pan":               { label: "Filé Panoramique",         description: "La caméra file latéralement en flou, le plan suivant garde la direction" },
+  "jump-cut":               { label: "Jump Cut",                 description: "Même cadrage, le temps saute en avant" },
 
   // ── Time ──
   "fast-forward-day-night": { label: "Accéléré Jour → Nuit",    description: "Accéléré de jour à nuit sur la même scène" },
@@ -62,6 +64,8 @@ const map: LocaleCatalogMap = {
   "zoom-into-mouth":        { label: "Zoom dans la Bouche",     description: "La caméra pénètre la bouche ouverte vers le nouveau monde" },
   "push-through-glass":     { label: "Traversée du Verre",      description: "La caméra traverse le verre vers le nouveau monde" },
   "soul-jump":              { label: "Saut d'Âme",              description: "Une âme translucide quitte le corps et entre dans le nouveau" },
+  "mask-transition":        { label: "Transition Masquée",      description: "Un objet au premier plan masque le cadre, la caméra le traverse" },
+  "zoom-through":           { label: "Zoom Traversant",         description: "La caméra grossit un détail jusqu'à ce que la nouvelle scène s'y déploie" },
 
   // ── Physics ──
   "explosion-blast":        { label: "Souffle d'Explosion",     description: "L'explosion balaie le cadre, la nouvelle scène émerge" },
@@ -73,6 +77,7 @@ const map: LocaleCatalogMap = {
   "vehicle-explosion":      { label: "Explosion de Véhicule",   description: "Le véhicule explose au premier plan, la scène change" },
   "jump-match":             { label: "Raccord de Saut",         description: "Le sujet saute, l'atterrissage enchaîne sur la nouvelle scène" },
   "hand-swipe":             { label: "Balayage de Main",        description: "Une main balaie l'objectif, la scène change en se dégageant" },
+  "action-relay":           { label: "Relais d'Action",         description: "Le sujet sort du cadre sur une action et la poursuit dans la nouvelle scène" },
 
   // ── Light ──
   "white-flash":            { label: "Flash Blanc",             description: "Le cadre sature en blanc pur" },
@@ -83,6 +88,7 @@ const map: LocaleCatalogMap = {
   "lens-crack":             { label: "Fissure d'Objectif",      description: "L'objectif se fissure, la scène à travers le verre brisé" },
   "dirty-lens-wipe":        { label: "Nettoyage d'Objectif",    description: "L'objectif sale est essuyé, révélant la nouvelle scène" },
   "eye-light-burst":        { label: "Éclat Oculaire",          description: "Un faisceau brillant depuis les yeux du sujet sature le cadre" },
+  "snap-to-black":          { label: "Coupe au Noir",           description: "Coupe instantanée au noir pendant un temps, puis le plan suivant" },
 
   // ── Glitch ──
   "digital-glitch":         { label: "Glitch Numérique",        description: "Corruption RGB + scanlines + datamosh" },

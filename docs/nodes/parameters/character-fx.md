@@ -18,6 +18,7 @@ The distinguishing feature from other parameter pickers: when a character/face/o
 | Intensity | select | `"auto"` | Energy/character of the effect: `auto` / `subtle` / `natural` / `dynamic` / `crazy`. |
 | Pre Text | text | empty | Free-form text prepended to the composed hint. |
 | Post Text | text | empty | Free-form text appended to the composed hint. |
+| Hint mode    | select       | `full`    | Which fragment this picker injects downstream — `full` = the long descriptive hint, `compact` = the short professional term. See [Prompt hint mode](./README.md#prompt-hint-mode). |
 
 All four enum fields default to `auto`, which contributes no prompt text.
 

@@ -1,7 +1,7 @@
 ---
 node_type: material
-generated_at: 2026-08-15T21:55:06.187Z
-generated_from: 150c80ac9
+generated_at: 2026-08-28T10:30:57.540Z
+generated_from: ae8d76277
 ---
 
 # Material
@@ -20,6 +20,7 @@ generated_from: 150c80ac9
 **Optional data fields:**
 - `preText?: string`
 - `postText?: string`
+- `hintMode?: "full" | "compact"`
 
 **Valid values:** call `get_picker_catalog("material")` (MCP) or `GET /v1/picker-catalogs/material` for the catalog of valid ids.
 

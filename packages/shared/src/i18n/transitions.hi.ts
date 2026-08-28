@@ -13,6 +13,8 @@ const map: LocaleCatalogMap = {
   "wipe": { label: "वाइप", description: "रेखा फ्रेम पार करके नया दृश्य दिखाती है" },
   "roll-transition": { label: "रोल", description: "फ्रेम 90-180° घूमकर नए दृश्य पर रुकता है" },
   "seamless-match": { label: "सीमलेस मैच", description: "मिलान गति-रंग से छिपाया गया कट" },
+  "whip-pan": { label: "व्हिप पैन", description: "कैमरा तेज़ी से बगल घूमता है और अगला शॉट उसी दिशा में चलता है" },
+  "jump-cut": { label: "जंप कट", description: "वही फ्रेमिंग, समय आगे छलांग लगाता है" },
 
   // ── Time ──
   "fast-forward-day-night": { label: "फ़ास्ट-फ़ॉरवर्ड (दिन → रात)", description: "उसी दृश्य में दिन से रात का टाइम-लैप्स" },
@@ -62,6 +64,8 @@ const map: LocaleCatalogMap = {
   "zoom-into-mouth": { label: "मुँह में ज़ूम", description: "कैमरा मुँह में जाकर नई दुनिया में निकलता है" },
   "push-through-glass": { label: "काँच से गुज़रना", description: "कैमरा काँच से गुज़रकर नई दुनिया में जाता है" },
   "soul-jump": { label: "आत्मा की छलाँग", description: "आत्मा एक शरीर से निकलकर दूसरे में जाती है" },
+  "mask-transition": { label: "मास्क ट्रांज़िशन", description: "अग्रभूमि की वस्तु फ्रेम को ढक देती है, कैमरा अंधेरे से होकर निकलता है" },
+  "zoom-through": { label: "ज़ूम थ्रू", description: "कैमरा एक विवरण को बड़ा करता है और नया दृश्य उसी के भीतर खुलता है" },
 
   // ── Physics ──
   "explosion-blast": { label: "विस्फोट की लहर", description: "विस्फोट फ्रेम पार करता है, नया दृश्य उभरता है" },
@@ -73,6 +77,7 @@ const map: LocaleCatalogMap = {
   "vehicle-explosion": { label: "वाहन विस्फोट", description: "वाहन फटता है, आग छाती है फ्रेम पर, नया दृश्य दिखता है" },
   "jump-match": { label: "जंप मैच", description: "पात्र कूदता है, उतरने पर नए दृश्य में होता है" },
   "hand-swipe": { label: "हाथ का झटका", description: "हाथ लेंस पर झटका देता है, दृश्य बदलता है" },
+  "action-relay": { label: "एक्शन रिले", description: "विषय गति में फ्रेम से बाहर जाता है और नए दृश्य में वही गति जारी रखता है" },
 
   // ── Light ──
   "white-flash": { label: "सफ़ेद फ़्लैश", description: "फ्रेम सफ़ेद होता है, नया दृश्य उभरता है" },
@@ -83,6 +88,7 @@ const map: LocaleCatalogMap = {
   "lens-crack": { label: "लेंस में दरार", description: "लेंस में दरार पड़ती है, नया दृश्य उससे दिखता है" },
   "dirty-lens-wipe": { label: "गंदे लेंस की सफ़ाई", description: "लेंस साफ़ होता है, नया दृश्य उभरता है" },
   "eye-light-burst": { label: "आँखों से प्रकाश विस्फोट", description: "पात्र की आँखों से किरण निकलकर फ्रेम ढकती है" },
+  "snap-to-black": { label: "तुरंत ब्लैक", description: "एक पल के लिए पूरी तरह काला, फिर अगला शॉट" },
 
   // ── Glitch ──
   "digital-glitch": { label: "डिजिटल ग्लिच", description: "RGB स्प्लिट, स्कैनलाइन, डेटामोश का घालमेल" },

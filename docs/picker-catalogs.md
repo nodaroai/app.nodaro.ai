@@ -29,6 +29,7 @@ interface PickerOption {
   description?: string
   category?: string         // group id (matches categoryOrder / categoryLabels)
   promptHint: string        // the clause this option contributes ("" for no-op options like "auto")
+  term: string              // the short professional term compact hint mode injects ("" for no-op options); `label` is for display
   icon?: string             // reserved; previews are app-side — render your own (see Visual)
 }
 
@@ -148,7 +149,7 @@ const { jobIds } = await client.nodes.run("generate-image", { prompt, model: "gp
 
 ## Localization
 
-Catalog labels are English. Localized strings for **12 locales** (`en, es, fr, de, pt-BR, ru, hi, ja, ko, zh-CN, he, ar`) ship in `@nodaro/shared`, keyed by each catalog's `catalogId`. `promptHint` clauses stay English (they feed the model).
+Catalog labels are English. Localized strings for **12 locales** (`en, es, fr, de, pt-BR, ru, hi, ja, ko, zh-CN, he, ar`) ship in `@nodaro/shared`, keyed by each catalog's `catalogId`. `promptHint` clauses and `term` values stay English (they feed the model).
 
 English needs no setup. For other locales, register the per-locale "sidecar" bundles once at startup, then resolve labels synchronously (with English fallback):
 

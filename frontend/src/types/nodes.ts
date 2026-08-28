@@ -19,6 +19,15 @@ export interface PickerConsumerData {
   lastAppliedPickerJson?: Record<string, unknown>
 }
 
+/** Hint-mode lever shared by every parameter picker (the registry set in
+ *  `frontend/src/lib/parameter-picker-types.ts`). Absent = `"full"`, so
+ *  existing workflows keep the long-form behaviour they were authored with. */
+export interface PickerHintModeFields {
+  /** Which fragment this picker injects downstream: full = the long
+   *  promptHint (default), compact = the short professional term. */
+  hintMode?: "full" | "compact"
+}
+
 export interface FieldMapping {
   readonly sourceNodeId: string
 }
@@ -467,7 +476,7 @@ export type CameraMotionData = {
   preText?: string
   /** Free-text appended after the structured hint. */
   postText?: string
-}
+} & PickerHintModeFields
 
 export type FramingData = {
   [key: string]: unknown
@@ -488,10 +497,10 @@ export type FramingData = {
   preText?: string
   /** Free-text appended after the structured hint. */
   postText?: string
-} & PickerConsumerData
+} & PickerConsumerData & PickerHintModeFields
 
 /** Standalone Lens parameter node data. */
-export interface LensData extends PickerConsumerData {
+export interface LensData extends PickerConsumerData, PickerHintModeFields {
   [key: string]: unknown
   label: string
   /** Lens id from LENSES catalog (packages/shared/src/lens.ts). */
@@ -503,7 +512,7 @@ export interface LensData extends PickerConsumerData {
 }
 
 /** Standalone Camera / Film Stock parameter node data. */
-export interface CameraFormatData extends PickerConsumerData {
+export interface CameraFormatData extends PickerConsumerData, PickerHintModeFields {
   [key: string]: unknown
   label: string
   /** Camera-format id from CAMERA_FORMATS catalog (packages/shared/src/camera-format.ts). */
@@ -515,7 +524,7 @@ export interface CameraFormatData extends PickerConsumerData {
 }
 
 /** Standalone Lighting parameter node data. */
-export interface LightingData {
+export interface LightingData extends PickerHintModeFields {
   [key: string]: unknown
   label: string
   /** Per-category lighting selections (multi-category model). One id per
@@ -539,7 +548,7 @@ export interface LightingData {
 }
 
 /** Standalone Color/Look parameter node data. */
-export interface ColorLookData {
+export interface ColorLookData extends PickerHintModeFields {
   [key: string]: unknown
   label: string
   /** Color/Look id from COLOR_LOOKS catalog (packages/shared/src/color-look.ts). */
@@ -551,7 +560,7 @@ export interface ColorLookData {
 }
 
 /** Standalone Atmosphere parameter node data. */
-export interface AtmosphereData {
+export interface AtmosphereData extends PickerHintModeFields {
   [key: string]: unknown
   label: string
   /** Atmosphere id from ATMOSPHERES catalog. Single id or up to 2 for layered
@@ -566,7 +575,7 @@ export interface AtmosphereData {
 
 /** Standalone Action FX parameter node data. Multi-pick 1–2 ids — string for
  *  single pick, ReadonlyArray<string> for two picks (mirrors AtmosphereData). */
-export interface ActionFxData {
+export interface ActionFxData extends PickerHintModeFields {
   [key: string]: unknown
   label: string
   /** Action FX id from ACTION_FX catalog. Single id or up to 2 for layered
@@ -580,7 +589,7 @@ export interface ActionFxData {
 }
 
 /** Standalone Style parameter node data. */
-export interface StyleData {
+export interface StyleData extends PickerHintModeFields {
   [key: string]: unknown
   label: string
   /** Style id from STYLES catalog (packages/shared/src/style.ts). The inline
@@ -598,7 +607,7 @@ export interface StyleData {
  * to downstream gen prompts (coffee shop, forest clearing, cyberpunk alley).
  * Distinct from the Location entity node — Setting is pure prompt text,
  * Location entity generates a reference image. */
-export interface SettingData {
+export interface SettingData extends PickerHintModeFields {
   [key: string]: unknown
   label: string
   /** Setting id from SETTINGS catalog (packages/shared/src/setting.ts). */
@@ -614,7 +623,7 @@ export interface SettingData {
  * with same start/end frame + seal phrase). Output is a curated subject
  * prompt — wires into a Generate Image node's prompt input via the
  * existing FieldMappings system. */
-export interface LoopSubjectData {
+export interface LoopSubjectData extends PickerHintModeFields {
   [key: string]: unknown
   label: string
   /** Subject id from LOOP_SUBJECTS catalog (packages/shared/src/loop-subject.ts). */
@@ -641,7 +650,7 @@ export type MusicGenreData = {
   genre?: string | ReadonlyArray<string>
   subgenre?: string
   era?: string
-}
+} & PickerHintModeFields
 
 /** Standalone Music Mood parameter node data. Energy + emotion + vibe picks
  *  from `packages/shared/src/music-mood.ts`. Emits a music-prompt hint
@@ -656,7 +665,7 @@ export type MusicMoodData = {
   energy?: string
   emotion?: string | ReadonlyArray<string>
   vibe?: string | ReadonlyArray<string>
-}
+} & PickerHintModeFields
 
 /** Standalone Instrumentation parameter node data. Multi-pick instruments +
  *  production style + vocal-presence + singing-style picks from
@@ -674,7 +683,7 @@ export type InstrumentationData = {
   production?: string
   vocalPresence?: string | ReadonlyArray<string>
   singingStyle?: string | ReadonlyArray<string>
-}
+} & PickerHintModeFields
 
 /** Standalone Voice Character parameter node data. Age + gender + language +
  *  accent + timbre picks from `packages/shared/src/voice-character.ts`. Emits a
@@ -692,7 +701,7 @@ export type VoiceCharacterData = {
   language?: string | ReadonlyArray<string>
   accent?: string
   timbre?: string
-}
+} & PickerHintModeFields
 
 /** Standalone Voice Delivery parameter node data. Pace + emotion + archetype
  *  picks from `packages/shared/src/voice-delivery.ts`. Pairs with Voice
@@ -707,7 +716,7 @@ export type VoiceDeliveryData = {
   pace?: string
   emotion?: string
   archetype?: string
-}
+} & PickerHintModeFields
 
 /** Standalone Person parameter node data. Subject-appearance compound hint
  * appended to downstream gen prompts. Multi-dimension: each orthogonal field
@@ -715,7 +724,7 @@ export type VoiceDeliveryData = {
  * ("a beautiful woman, in their 30s, East Asian, Parisienne aesthetic, slim
  * build, long wavy hair, brown hair, fair skin, green eyes"). Applies to
  * both image and video consumers. See `packages/shared/src/person.ts`. */
-export interface PersonData extends PickerConsumerData {
+export interface PersonData extends PickerConsumerData, PickerHintModeFields {
   [key: string]: unknown
   label: string
   /** Primary subject descriptor (Man, Beautiful Woman, Rugged Man, etc.). */
@@ -822,7 +831,7 @@ export interface PersonData extends PickerConsumerData {
  * paint, outfit (complete-look override), top, bottom, outerwear, legwear,
  * footwear, fabric, and wardrobe-state. Applies to both image and video
  * consumers. See `packages/shared/src/styling.ts`. */
-export interface StylingData extends PickerConsumerData {
+export interface StylingData extends PickerConsumerData, PickerHintModeFields {
   [key: string]: unknown
   label: string
   makeup?: string
@@ -874,7 +883,7 @@ export interface StylingData extends PickerConsumerData {
 /** Standalone Mood parameter node data. Emotional-state hint appended to
  * downstream gen prompts ("happy", "melancholy", "fierce"). Single-pick
  * with optional pre/post free-text fields. See `packages/shared/src/mood.ts`. */
-export interface MoodData {
+export interface MoodData extends PickerHintModeFields {
   [key: string]: unknown
   label: string
   /** Mood id from MOODS catalog. Single id or up to 2 ids for blended mood
@@ -890,7 +899,7 @@ export interface MoodData {
 /** Standalone Photographer parameter node data. Picks ONE photographer or
  * artist whose visual signature drives the look. See
  * `packages/shared/src/photographer.ts`. */
-export interface PhotographerData {
+export interface PhotographerData extends PickerHintModeFields {
   [key: string]: unknown
   label: string
   /** Photographer id from PHOTOGRAPHERS catalog. Single id or up to 2 for
@@ -906,7 +915,7 @@ export interface PhotographerData {
 /** Standalone Aesthetic / Microtrend parameter node data. Picks ONE
  * microtrend bundle (Y2K, dark academia, cottagecore, gorpcore, etc.). See
  * `packages/shared/src/aesthetic.ts`. */
-export interface AestheticData {
+export interface AestheticData extends PickerHintModeFields {
   [key: string]: unknown
   label: string
   /** Aesthetic id from AESTHETICS catalog. Single id or up to 2 ids for an
@@ -922,7 +931,7 @@ export interface AestheticData {
 /** Standalone Era / Period parameter node data. Picks ONE historical era or
  * speculative period that bundles wardrobe + environment + photographic
  * treatment. See `packages/shared/src/era.ts`. */
-export interface EraData {
+export interface EraData extends PickerHintModeFields {
   [key: string]: unknown
   label: string
   /** Era id from ERAS catalog. */
@@ -938,7 +947,7 @@ export interface EraData {
  * Multi-dimensional: pose plus orthogonal sub-pickers (hand position / body
  * lean / head tilt) plus optional pre/post free-text fields. See
  * `packages/shared/src/pose.ts`. */
-export interface PoseData {
+export interface PoseData extends PickerHintModeFields {
   [key: string]: unknown
   label: string
   /** Pose id from POSES catalog. */
@@ -962,7 +971,7 @@ export interface PoseData {
  * made of" hint using `"made of X"` grammar — works on subjects, objects, or
  * surfaces. See `packages/shared/src/materials.ts`. Part of the Object
  * category along with Animal / Vehicle / Weapon. */
-export interface MaterialData {
+export interface MaterialData extends PickerHintModeFields {
   [key: string]: unknown
   label: string
   /** Material id from MATERIALS catalog. Single id or up to 2 for composites
@@ -979,7 +988,7 @@ export interface MaterialData {
  * Object entity's Animal sub-category. Emits a descriptive hint for
  * downstream gen prompts ("featuring a golden retriever…"). See
  * `packages/shared/src/animals.ts`. */
-export interface AnimalData {
+export interface AnimalData extends PickerHintModeFields {
   [key: string]: unknown
   label: string
   /** Animal id from ANIMALS catalog. */
@@ -994,7 +1003,7 @@ export interface AnimalData {
  * Object entity's Vehicle sub-category. Emits a descriptive hint for
  * downstream gen prompts ("featuring a muscle car…"). See
  * `packages/shared/src/vehicles.ts`. */
-export interface VehicleData {
+export interface VehicleData extends PickerHintModeFields {
   [key: string]: unknown
   label: string
   /** Vehicle id from VEHICLES catalog. */
@@ -1009,7 +1018,7 @@ export interface VehicleData {
  * Object entity's Weapon sub-category. Emits a descriptive hint for
  * downstream gen prompts ("with a katana…"). See
  * `packages/shared/src/weapons.ts`. */
-export interface WeaponData {
+export interface WeaponData extends PickerHintModeFields {
   [key: string]: unknown
   label: string
   /** Weapon id from WEAPONS catalog. */
@@ -1024,7 +1033,7 @@ export interface WeaponData {
  * Object entity's Furniture sub-category. Emits a descriptive hint for
  * downstream gen prompts ("featuring a sofa…"). See
  * `packages/shared/src/furniture.ts`. */
-export interface FurnitureData {
+export interface FurnitureData extends PickerHintModeFields {
   [key: string]: unknown
   label: string
   /** Furniture id from FURNITURE catalog. */
@@ -1039,7 +1048,7 @@ export interface FurnitureData {
  * bundling lighting/framing/wardrobe/grade conventions of a recognizable
  * photographic genre (paparazzi, vogue editorial, gym mirror selfie,
  * mugshot, etc.). See `packages/shared/src/photo-genre.ts`. */
-export interface PhotoGenreData {
+export interface PhotoGenreData extends PickerHintModeFields {
   [key: string]: unknown
   label: string
   /** Photo genre id from PHOTO_GENRES catalog. */
@@ -1054,7 +1063,7 @@ export interface PhotoGenreData {
  * studio backdrop / wall / surface immediately behind the subject —
  * distinct from Setting, which describes a full environment. See
  * `packages/shared/src/backdrop.ts`. */
-export interface BackdropData {
+export interface BackdropData extends PickerHintModeFields {
   [key: string]: unknown
   label: string
   /** Backdrop id from BACKDROPS catalog. */
@@ -1070,7 +1079,7 @@ export interface BackdropData {
  * cigarette, coffee cup, microphone, bouquet, instrument). Distinct from
  * the Object node, which describes a separate scene object. See
  * `packages/shared/src/held-prop.ts`. */
-export interface HeldPropData {
+export interface HeldPropData extends PickerHintModeFields {
   [key: string]: unknown
   label: string
   /** Held prop id from HELD_PROPS catalog. Single id or up to 2 for combos
@@ -1086,7 +1095,7 @@ export interface HeldPropData {
 /** Standalone Exposure Settings parameter node data. Multi-category: aperture
  * (depth of field), shutter speed (motion treatment), and ISO (grain). Each
  * field optional. See `packages/shared/src/exposure-settings.ts`. */
-export interface ExposureSettingsData {
+export interface ExposureSettingsData extends PickerHintModeFields {
   [key: string]: unknown
   label: string
   /** Aperture id (f/1.2 → f/16). */
@@ -1106,7 +1115,7 @@ export interface ExposureSettingsData {
 /** Standalone Render Quality parameter node data. Single-pick technical
  * stamp — engine name, render-quality keyword, resolution stamp, or style
  * stamp. See `packages/shared/src/render-quality.ts`. */
-export interface RenderQualityData {
+export interface RenderQualityData extends PickerHintModeFields {
   [key: string]: unknown
   label: string
   /** Render-quality id from RENDER_QUALITIES catalog. */
@@ -1120,7 +1129,7 @@ export interface RenderQualityData {
 /** Standalone Composition Effects parameter node data. Single-pick subject /
  * frame compositional trick (bursting through frame, smoke sculpture,
  * exploding particles, …). See `packages/shared/src/composition-effects.ts`. */
-export interface CompositionEffectsData {
+export interface CompositionEffectsData extends PickerHintModeFields {
   [key: string]: unknown
   label: string
   /** Composition-effect id from COMPOSITION_EFFECTS catalog. */
@@ -1134,7 +1143,7 @@ export interface CompositionEffectsData {
 /** Standalone Post-Process Effects parameter node data. Single-pick image-
  * level grade / processing pass (vignette, grain, halation, bloom, light
  * leak, …). See `packages/shared/src/post-process-effects.ts`. */
-export interface PostProcessEffectsData {
+export interface PostProcessEffectsData extends PickerHintModeFields {
   [key: string]: unknown
   label: string
   /** Post-process id from POST_PROCESS_EFFECTS catalog. Single id or up to 2
@@ -1151,7 +1160,7 @@ export interface PostProcessEffectsData {
 export type { TransitionPosition, TransitionDuration, TransitionIntensity }
 export type { CharacterFxPosition, CharacterFxDuration, CharacterFxIntensity }
 
-export interface TransitionData {
+export interface TransitionData extends PickerHintModeFields {
   label: string
   transition: string | string[]            // catalog id OR array of 1-2 ids (multi-pick)
   position?: TransitionPosition
@@ -1162,7 +1171,7 @@ export interface TransitionData {
   [key: string]: unknown
 }
 
-export interface CharacterFxData {
+export interface CharacterFxData extends PickerHintModeFields {
   label: string
   characterFx: string | string[]
   position?:  CharacterFxPosition
@@ -1205,7 +1214,7 @@ export type ReferenceSheetData = {
 }
 
 /** Standalone Temporal parameter node data. */
-export interface TemporalData {
+export interface TemporalData extends PickerHintModeFields {
   [key: string]: unknown
   label: string
   /** Per-category temporal selections (multi-category model). One id per

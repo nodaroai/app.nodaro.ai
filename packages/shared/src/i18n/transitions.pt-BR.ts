@@ -13,6 +13,8 @@ const map: LocaleCatalogMap = {
   "wipe": { label: "Varredura", description: "Varredura linear substitui a primeira cena" },
   "roll-transition": { label: "Rolagem", description: "Quadro gira 90–180°, segunda cena estável" },
   "seamless-match": { label: "Corte Invisível", description: "Corte oculto disfarçado por movimento e cor" },
+  "whip-pan": { label: "Chicote de Câmera", description: "Câmera varre de lado com borrão, a próxima cena segue a mesma direção" },
+  "jump-cut": { label: "Jump Cut", description: "Mesmo enquadramento, o tempo salta adiante" },
 
   // ── Time ──
   "fast-forward-day-night": { label: "Dia → Noite (Time-lapse)", description: "Time-lapse do dia para a noite na mesma cena" },
@@ -62,6 +64,8 @@ const map: LocaleCatalogMap = {
   "zoom-into-mouth": { label: "Zoom na Boca", description: "Push na boca aberta, emerge em novo mundo" },
   "push-through-glass": { label: "Atravessar o Vidro", description: "Câmera atravessa vidro com refração para nova cena" },
   "soul-jump": { label: "Salto de Alma", description: "Alma translúcida sai do corpo, entra em novo corpo" },
+  "mask-transition": { label: "Transição de Máscara", description: "Objeto em primeiro plano cobre o quadro, câmera atravessa o escuro" },
+  "zoom-through": { label: "Zoom Atravessado", description: "Câmera amplia um detalhe até a nova cena surgir dentro dele" },
 
   // ── Physics ──
   "explosion-blast": { label: "Explosão", description: "Explosão limpa o quadro, nova cena emerge" },
@@ -73,6 +77,7 @@ const map: LocaleCatalogMap = {
   "vehicle-explosion": { label: "Explosão de Veículo", description: "Veículo explode em primeiro plano, cena muda" },
   "jump-match": { label: "Salto Combinado", description: "Sujeito pula, aterrissagem combina com nova cena" },
   "hand-swipe": { label: "Varredura de Mão", description: "Mão passa pela lente, cena muda durante a oclusão" },
+  "action-relay": { label: "Revezamento de Ação", description: "Sujeito sai de quadro numa ação e continua o movimento na nova cena" },
 
   // ── Light ──
   "white-flash": { label: "Flash Branco", description: "Quadro clareia ao branco" },
@@ -83,6 +88,7 @@ const map: LocaleCatalogMap = {
   "lens-crack": { label: "Rachadura de Lente", description: "Lente racha, cena vista pelo vidro fraturado" },
   "dirty-lens-wipe": { label: "Limpeza de Lente Suja", description: "Sujeira da lente é limpa, cena muda" },
   "eye-light-burst": { label: "Feixe dos Olhos", description: "Feixe brilhante dos olhos branqueia o quadro" },
+  "snap-to-black": { label: "Corte Seco para Preto", description: "Corte instantâneo ao preto por um instante, depois a próxima cena" },
 
   // ── Glitch ──
   "digital-glitch": { label: "Glitch Digital", description: "Corrupção RGB + scanline + datamosh" },

@@ -9,7 +9,7 @@
  * frontend DAG executor and the backend orchestrator.
  */
 
-import { resolveTerm } from "./term.js"
+import { resolveTerm, type PickerHintMode } from "./term.js"
 
 export type FramingCategory =
   | "shot-size"
@@ -672,7 +672,9 @@ export function buildFramingHints(
     vantage?: unknown
   },
   skipVantage = false,
+  mode: PickerHintMode = "full",
 ): string[] {
+  if (mode === "compact") return buildFramingTerms(data, skipVantage)
   const hints: string[] = []
   for (const category of FRAMING_CATEGORY_ORDER) {
     if (category === "vantage" && skipVantage) continue

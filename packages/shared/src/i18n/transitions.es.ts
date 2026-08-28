@@ -13,6 +13,8 @@ const map: LocaleCatalogMap = {
   "wipe":                   { label: "Barrido",                  description: "Barrido lineal reemplaza el primer plano" },
   "roll-transition":        { label: "Rotación",                 description: "Cuadro gira 90-180°, segundo plano al aterrizar" },
   "seamless-match":         { label: "Corte Invisible",          description: "Corte oculto por movimiento y color sincronizados" },
+  "whip-pan":               { label: "Barrido Rápido",           description: "La cámara barre de lado con desenfoque, el siguiente plano sigue esa dirección" },
+  "jump-cut":               { label: "Corte de Salto",           description: "Mismo encuadre, el tiempo salta hacia adelante" },
 
   // ── Time ──
   "fast-forward-day-night": { label: "Time-lapse Día → Noche",   description: "Time-lapse de día a noche en la misma escena" },
@@ -62,6 +64,8 @@ const map: LocaleCatalogMap = {
   "zoom-into-mouth":        { label: "Zoom a la Boca",          description: "La cámara entra en la boca abierta hacia el nuevo mundo" },
   "push-through-glass":     { label: "Atravesar el Cristal",    description: "La cámara atraviesa el cristal hacia el nuevo mundo" },
   "soul-jump":              { label: "Salto del Alma",          description: "Un alma translúcida sale del cuerpo y entra en el nuevo" },
+  "mask-transition":        { label: "Transición de Máscara",   description: "Un objeto en primer plano tapa el cuadro y la cámara lo atraviesa" },
+  "zoom-through":           { label: "Zoom Atravesado",         description: "La cámara amplía un detalle hasta que la nueva escena surge dentro" },
 
   // ── Physics ──
   "explosion-blast":        { label: "Explosión",               description: "Explosión barre el cuadro, emerge la nueva escena" },
@@ -73,6 +77,7 @@ const map: LocaleCatalogMap = {
   "vehicle-explosion":      { label: "Explosión de Vehículo",   description: "Vehículo explota en primer plano, la escena cambia" },
   "jump-match":             { label: "Salto Raccord",            description: "El sujeto salta, el aterrizaje enlaza con la nueva escena" },
   "hand-swipe":             { label: "Barrido de Mano",         description: "Una mano barre la lente, la escena cambia al descubrirse" },
+  "action-relay":           { label: "Relevo de Acción",        description: "El sujeto sale de cuadro en una acción y la continúa en la nueva escena" },
 
   // ── Light ──
   "white-flash":            { label: "Destello Blanco",         description: "El cuadro estalla en blanco puro" },
@@ -83,6 +88,7 @@ const map: LocaleCatalogMap = {
   "lens-crack":             { label: "Grieta en el Objetivo",   description: "El objetivo se agrieta, la escena a través del cristal" },
   "dirty-lens-wipe":        { label: "Limpieza de Objetivo",    description: "El objetivo sucio se limpia revelando la nueva escena" },
   "eye-light-burst":        { label: "Destello Ocular",         description: "Haz brillante desde los ojos del sujeto satura el cuadro" },
+  "snap-to-black":          { label: "Corte a Negro",           description: "Corte instantáneo a negro por un instante, luego el siguiente plano" },
 
   // ── Glitch ──
   "digital-glitch":         { label: "Glitch Digital",          description: "Corrupción RGB + scanlines + datamosh" },

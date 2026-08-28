@@ -51,6 +51,25 @@
 export const TERM_MAX_CHARS = 60
 
 /**
+ * How verbose a picker node's injected fragment is.
+ *
+ *  - `"full"`    — the long `promptHint` (the historical, and still default,
+ *                  behavior; output is byte-identical to before hint modes
+ *                  existed).
+ *  - `"compact"` — the short professional `term` instead.
+ *
+ * ONLY the base catalog fragment swaps. Everything wrapped around it is
+ * mode-independent: the user's `preText` / `postText` free text, the
+ * transition / camera-motion / character-fx timing and start-state/end-state
+ * clauses, multi-pick joining, and multi-dimension composition all apply
+ * exactly the same in both modes.
+ *
+ * A picker node selects the mode via an optional `hintMode` field on its node
+ * data; absent (or any unrecognized value) means `"full"`.
+ */
+export type PickerHintMode = "full" | "compact"
+
+/**
  * The minimal shape of a catalog entry that can resolve a term: an id, the
  * user-facing label, the long hint (whose emptiness marks a no-op entry), and
  * the optional authored short term.

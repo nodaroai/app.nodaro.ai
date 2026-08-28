@@ -8,8 +8,11 @@ export interface CatalogMergePlan {
   sidecarsCarried: Record<string, string[]>
   nextBaseline: CatalogSnapshot
 }
+// Everything a vendored pack can meaningfully diverge on. `term` is part of the
+// identity: it is what compact hint mode injects, so a term-only upstream edit
+// is a real content change, not a cosmetic one.
 const key = (e: CatalogSnapshotEntry) =>
-  JSON.stringify({ l: e.label, d: e.description, c: e.category, p: e.promptHint })
+  JSON.stringify({ l: e.label, d: e.description, c: e.category, p: e.promptHint, t: e.term })
 const index = (s: CatalogSnapshot) => new Map(s.entries.map((e) => [e.id, e]))
 
 export function threeWayMergeCatalog(

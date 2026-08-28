@@ -13,6 +13,8 @@ const map: LocaleCatalogMap = {
   "wipe": { label: "와이프", description: "직선 와이프로 첫 번째 샷을 대체" },
   "roll-transition": { label: "롤", description: "프레임이 90–180° 회전 후 두 번째 샷이 안정됨" },
   "seamless-match": { label: "심리스 매치", description: "동작과 색상으로 위장한 보이지 않는 컷" },
+  "whip-pan": { label: "휩 팬", description: "카메라가 옆으로 휘몰아치며 흐려지고 다음 샷도 같은 방향으로 이어짐" },
+  "jump-cut": { label: "점프 컷", description: "같은 프레이밍에서 시간만 앞으로 건너뜀" },
 
   // ── Time ──
   "fast-forward-day-night": { label: "낮→밤 타임랩스", description: "같은 장면에서 낮에서 밤으로의 타임랩스" },
@@ -62,6 +64,8 @@ const map: LocaleCatalogMap = {
   "zoom-into-mouth": { label: "입 속으로 줌", description: "열린 입 속으로 밀어 들어가 새 세계로" },
   "push-through-glass": { label: "유리를 통과", description: "카메라가 유리 면을 굴절하며 통과해 새 세계로" },
   "soul-jump": { label: "영혼 점프", description: "반투명한 영혼이 몸을 떠나 새 몸으로 들어감" },
+  "mask-transition": { label: "마스크 트랜지션", description: "전경의 물체가 화면을 가리고 카메라가 그 어둠을 통과함" },
+  "zoom-through": { label: "줌 스루", description: "카메라가 한 디테일을 확대해 그 안에서 새 장면이 펼쳐짐" },
 
   // ── Physics ──
   "explosion-blast": { label: "폭발", description: "폭발이 화면을 쓸어내고 새 장면이 드러남" },
@@ -73,6 +77,7 @@ const map: LocaleCatalogMap = {
   "vehicle-explosion": { label: "차량 폭발", description: "전경의 차량이 폭발하고 연기 걷히면 새 장면" },
   "jump-match": { label: "점프 매치", description: "피사체가 점프하고 착지가 새 장면과 연결" },
   "hand-swipe": { label: "손 스와이프", description: "손이 렌즈를 가리는 사이 장면이 전환됨" },
+  "action-relay": { label: "액션 릴레이 컷", description: "피사체가 동작 중 프레임을 벗어나 새 장면에서 그 동작을 이어감" },
 
   // ── Light ──
   "white-flash": { label: "화이트 플래시", description: "화면이 순백으로 빛남" },
@@ -83,6 +88,7 @@ const map: LocaleCatalogMap = {
   "lens-crack": { label: "렌즈 균열", description: "렌즈가 갈라지고 균열된 유리 너머로 새 장면" },
   "dirty-lens-wipe": { label: "오염 렌즈 닦기", description: "렌즈 오염이 닦이며 장면이 전환됨" },
   "eye-light-burst": { label: "눈빛 폭발", description: "피사체의 눈에서 강렬한 빔이 뿜어져 화면 화이트아웃" },
+  "snap-to-black": { label: "블랙 스냅 컷", description: "즉시 완전한 검은 화면으로 끊었다가 다음 샷으로 전환" },
 
   // ── Glitch ──
   "digital-glitch": { label: "디지털 글리치", description: "RGB 분리+스캔라인+데이터모시 글리치" },

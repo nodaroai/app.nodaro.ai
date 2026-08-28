@@ -22,7 +22,7 @@
  * and the backend orchestrator.
  */
 
-import { resolveTerm } from "./term.js"
+import { resolveTerm, type PickerHintMode } from "./term.js"
 
 export type HeldPropCategory =
   | "device"
@@ -178,7 +178,8 @@ export function getHeldPropTerm(id: string | undefined | null): string {
  * grammar). Two → emit independently, joined by buildPersonHints-style
  * comma-join. Common combos: book + coffee, cigarette + drink, phone + bag.
  */
-export function buildHeldPropHints(value: unknown): string[] {
+export function buildHeldPropHints(value: unknown, mode: PickerHintMode = "full"): string[] {
+  if (mode === "compact") return buildHeldPropTerms(value)
   const out: string[] = []
   for (const id of pickHeldPropIds(value)) {
     const hint = getHeldPropPromptHint(id)

@@ -124,6 +124,36 @@ describe("parseDataInterface edge cases", () => {
     expect(iface!.fields.length).toBeGreaterThan(5)
   })
 
+  it("follows `extends` clauses so mixin fields are documented (LensData)", () => {
+    // LensData is `interface LensData extends PickerConsumerData,
+    // PickerHintModeFields { ... }`. A heritage clause is an
+    // ExpressionWithTypeArguments, not a TypeReference — handing it to the
+    // type-node resolver silently yielded nothing, so every field a picker
+    // inherits from a shared mixin was missing from its generated skill doc
+    // (while the equivalent `type X = { … } & Mixin` alias documented them).
+    // This pins that both spellings now document the same shape.
+    const iface = parseDataInterface(NODES_TS, "LensData")
+    expect(iface).toBeDefined()
+    const names = iface!.fields.map((f) => f.name)
+    // Own members come first, in declaration order.
+    expect(names.slice(0, 2)).toEqual(["label", "lens"])
+    // Inherited from PickerHintModeFields / PickerConsumerData.
+    expect(names).toContain("hintMode")
+    expect(names).toContain("applyMode")
+    const hintMode = iface!.fields.find((f) => f.name === "hintMode")
+    expect(hintMode?.optional).toBe(true)
+    expect(hintMode?.type).toBe('"full" | "compact"')
+  })
+
+  it("documents the same hintMode field for the alias-shaped pickers (FramingData)", () => {
+    // FramingData is the `type X = { … } & PickerConsumerData &
+    // PickerHintModeFields` spelling — the intersection path. Interface and
+    // alias pickers must not drift.
+    const iface = parseDataInterface(NODES_TS, "FramingData")
+    expect(iface).toBeDefined()
+    expect(iface!.fields.map((f) => f.name)).toContain("hintMode")
+  })
+
   it("returns { name, fields: [] } for union-type aliases (e.g., SceneNodeData)", () => {
     // SceneNodeData is a union of many *Data types — not a TypeLiteral.
     // collectInterfaceMembers' final `return []` branch handles this:

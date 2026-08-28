@@ -8,7 +8,7 @@
  */
 
 import { pickIds } from "@nodaro/shared"
-import { resolveTerm } from "./term.js"
+import { resolveTerm, type PickerHintMode } from "./term.js"
 
 export interface VoiceCharacterEntry {
   readonly id: string
@@ -286,7 +286,8 @@ function composeVoiceCharacter(data: VoiceCharacterFieldSource, mode: VoiceChara
  * `language` is multi-pick — multiple languages emit "English / Spanish"
  * for codeswitching / multilingual voices.
  */
-export function buildVoiceCharacterHints(data: VoiceCharacterFieldSource): string {
+export function buildVoiceCharacterHints(data: VoiceCharacterFieldSource, mode: PickerHintMode = "full"): string {
+  if (mode === "compact") return buildVoiceCharacterTerms(data)
   return composeVoiceCharacter(data, {
     of: (entry) => entry?.promptHint ?? "",
     trait: (fragment, noun) => `${fragment} ${noun}`,

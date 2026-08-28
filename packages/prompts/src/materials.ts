@@ -20,7 +20,7 @@
  * backend orchestrator.
  */
 
-import { resolveTerm } from "./term.js"
+import { resolveTerm, type PickerHintMode } from "./term.js"
 
 export type MaterialCategory =
   | "fabric"
@@ -163,8 +163,12 @@ export function getMaterialTerm(id: string | undefined | null): string {
  * Multi-pick: 1-2 material ids → composite material clause. Single → entry's
  * own promptHint. Two → "made of {A} and {B}" using lowercased entry labels.
  * Covers leather+brass handbag, wood+steel chair, glass+chrome lamp, etc.
+ *
+ * @param mode `"compact"` emits the bare material term(s) instead (delegates
+ *   to `buildMaterialTerms`).
  */
-export function buildMaterialHints(value: unknown): string {
+export function buildMaterialHints(value: unknown, mode: PickerHintMode = "full"): string {
+  if (mode === "compact") return buildMaterialTerms(value)
   const ids: string[] = []
   if (typeof value === "string" && value) ids.push(value)
   else if (Array.isArray(value)) {
@@ -180,6 +184,27 @@ export function buildMaterialHints(value: unknown): string {
     .filter((s): s is string => Boolean(s))
   if (labels.length < 2) return getMaterialPromptHint(ids[0])
   return `made of ${labels[0]} and ${labels[1]}`
+}
+
+/**
+ * Compact counterpart of `buildMaterialHints`: the bare material noun phrase,
+ * or two joined with " and " ("brushed stainless steel and walnut"). The
+ * "made of" grammar belongs to the HINT — a term drops into whatever sentence
+ * the consumer is building — so compact mode omits it at both arities.
+ */
+export function buildMaterialTerms(value: unknown): string {
+  const ids: string[] = []
+  if (typeof value === "string" && value) ids.push(value)
+  else if (Array.isArray(value)) {
+    for (const v of value) {
+      if (typeof v === "string" && v && !ids.includes(v)) ids.push(v)
+    }
+  }
+  const terms = ids
+    .slice(0, 2)
+    .map((id) => getMaterialTerm(id))
+    .filter((t) => t.length > 0)
+  return terms.join(" and ")
 }
 
 export const MATERIAL_IDS: ReadonlyArray<string> = MATERIALS.map((m) => m.id)

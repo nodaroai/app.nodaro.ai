@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest"
 import { TRANSITIONS, TRANSITION_IDS, TRANSITION_CATEGORY_ORDER, TRANSITION_CATEGORY_LABELS, composeTransitionHintFromConnections, getTransition, getTransitionLabel, getTransitionPromptHint } from "../transitions.js"
 
 describe("transitions catalog", () => {
-  it("ships 76 unique entries", () => {
-    expect(TRANSITIONS).toHaveLength(76)
-    expect(new Set(TRANSITION_IDS).size).toBe(76)
+  it("ships 82 unique entries", () => {
+    expect(TRANSITIONS).toHaveLength(82)
+    expect(new Set(TRANSITION_IDS).size).toBe(82)
   })
 
   it("every entry has a non-empty id, label, and description", () => {
@@ -21,8 +21,8 @@ describe("transitions catalog", () => {
       counts[t.category] = (counts[t.category] ?? 0) + 1
     }
     expect(counts).toEqual({
-      standard: 11, time: 8, element: 14, morph: 9,
-      portal: 10, physics: 9, light: 8, glitch: 7,
+      standard: 13, time: 8, element: 14, morph: 9,
+      portal: 12, physics: 10, light: 9, glitch: 7,
     })
   })
 

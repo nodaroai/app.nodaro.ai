@@ -15,7 +15,7 @@
  * frontend DAG executor and the backend orchestrator.
  */
 
-import { resolveTerm } from "./term.js"
+import { resolveTerm, type PickerHintMode } from "./term.js"
 
 export type TemporalCategory = "speed" | "freeze" | "direction" | "shutter"
 
@@ -189,7 +189,9 @@ export function buildTemporalHints(
     temporalDirection?: unknown
     temporalShutter?: unknown
   },
+  mode: PickerHintMode = "full",
 ): string[] {
+  if (mode === "compact") return buildTemporalTerms(data)
   return collectTemporalFragments(data, getTemporalPromptHint)
 }
 

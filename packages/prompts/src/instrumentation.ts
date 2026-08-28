@@ -11,7 +11,7 @@
  * Synth / Guitar / Bass / Brass / Woodwinds / Strings / World.
  */
 
-import { resolveTerm } from "./term.js"
+import { resolveTerm, type PickerHintMode } from "./term.js"
 
 export type InstrumentCategory =
   | "drums"
@@ -307,14 +307,18 @@ export function getSingingStyleTerm(id: string | undefined | null): string {
 
 import { pickIds } from "@nodaro/shared"
 
-export function buildInstrumentationHints(data: {
-  readonly preText?: string
-  readonly postText?: string
-  readonly instruments?: ReadonlyArray<string>
-  readonly production?: string
-  readonly vocalPresence?: string | ReadonlyArray<string>
-  readonly singingStyle?: string | ReadonlyArray<string>
-}): string {
+export function buildInstrumentationHints(
+  data: {
+    readonly preText?: string
+    readonly postText?: string
+    readonly instruments?: ReadonlyArray<string>
+    readonly production?: string
+    readonly vocalPresence?: string | ReadonlyArray<string>
+    readonly singingStyle?: string | ReadonlyArray<string>
+  },
+  mode: PickerHintMode = "full",
+): string {
+  if (mode === "compact") return buildInstrumentationTerms(data)
   const fragments: string[] = []
   const pre = typeof data.preText === "string" ? data.preText.trim() : ""
   if (pre) fragments.push(pre)

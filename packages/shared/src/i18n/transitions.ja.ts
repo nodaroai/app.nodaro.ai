@@ -13,6 +13,8 @@ const map: LocaleCatalogMap = {
   "wipe": { label: "ワイプ", description: "直線的なワイプで次のシーンへ" },
   "roll-transition": { label: "ロール", description: "フレームが90〜180°回転して次のシーンへ" },
   "seamless-match": { label: "シームレスカット", description: "動きと色で隠された完全なシームレスカット" },
+  "whip-pan": { label: "ホイップパン", description: "カメラが横に振り切れてブレ、次のショットも同じ方向に流れる" },
+  "jump-cut": { label: "ジャンプカット", description: "同じ画角のまま時間が前に飛ぶ" },
 
   // ── Time ──
   "fast-forward-day-night": { label: "日中→夜 早送り", description: "同じ場面の昼から夜へのタイムラプス" },
@@ -62,6 +64,8 @@ const map: LocaleCatalogMap = {
   "zoom-into-mouth": { label: "口へのズーム", description: "開いた口へ接近し、内側に新しい世界が" },
   "push-through-glass": { label: "ガラスをすり抜ける", description: "ガラス面をカメラが屈折しながら通り抜ける" },
   "soul-jump": { label: "魂の跳躍", description: "半透明の魂が体を出て新しい体へ入る" },
+  "mask-transition": { label: "マスクトランジション", description: "手前の物体が画面を覆い、その暗闇をカメラが抜けて新しい場面へ" },
+  "zoom-through": { label: "ズームスルー", description: "細部を拡大し続け、その中から新しい場面が広がる" },
 
   // ── Physics ──
   "explosion-blast": { label: "爆発", description: "爆発がフレームを吹き飛ばし、新シーンへ" },
@@ -73,6 +77,7 @@ const map: LocaleCatalogMap = {
   "vehicle-explosion": { label: "車両爆発", description: "前景の車両が爆発し、煙が晴れると新シーン" },
   "jump-match": { label: "ジャンプマッチ", description: "被写体が跳び、着地が新しいシーンに合致" },
   "hand-swipe": { label: "手のスワイプ", description: "手がレンズを横切り、遮蔽中にシーン転換" },
+  "action-relay": { label: "アクションつなぎ", description: "動作の途中でフレームから出て、新しい場面で同じ動きを続ける" },
 
   // ── Light ──
   "white-flash": { label: "ホワイトフラッシュ", description: "フレームが純白に膨らむ" },
@@ -83,6 +88,7 @@ const map: LocaleCatalogMap = {
   "lens-crack": { label: "レンズクラック", description: "レンズにひびが入り、割れたガラス越しに新シーン" },
   "dirty-lens-wipe": { label: "汚れたレンズ拭き", description: "レンズの汚れが拭われ、シーンが変わる" },
   "eye-light-burst": { label: "眼光", description: "被写体の瞳から白光が放たれ、フレームが白飛び" },
+  "snap-to-black": { label: "黒への瞬間カット", description: "一瞬で真っ黒になり、間を置いて次のショットへ" },
 
   // ── Glitch ──
   "digital-glitch": { label: "デジタルグリッチ", description: "RGB分離+スキャンライン+データモッシュ" },

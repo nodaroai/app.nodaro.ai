@@ -1,7 +1,7 @@
 ---
 node_type: aesthetic
-generated_at: 2026-08-15T21:55:06.136Z
-generated_from: 150c80ac9
+generated_at: 2026-08-28T10:30:57.509Z
+generated_from: ae8d76277
 ---
 
 # Aesthetic / Microtrend
@@ -20,6 +20,7 @@ generated_from: 150c80ac9
 **Optional data fields:**
 - `preText?: string`
 - `postText?: string`
+- `hintMode?: "full" | "compact"`
 
 **Valid values:** call `get_picker_catalog("aesthetic")` (MCP) or `GET /v1/picker-catalogs/aesthetic` for the catalog of valid ids.
 

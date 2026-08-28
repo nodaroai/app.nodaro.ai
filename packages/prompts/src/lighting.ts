@@ -10,7 +10,7 @@
  * frontend DAG executor and the backend orchestrator.
  */
 
-import { resolveTerm } from "./term.js"
+import { resolveTerm, type PickerHintMode } from "./term.js"
 
 export type LightingCategory =
   | "time-of-day"
@@ -228,7 +228,9 @@ export function buildLightingHints(
     lightingRatio?: unknown
     colorTemperature?: unknown
   },
+  mode: PickerHintMode = "full",
 ): string[] {
+  if (mode === "compact") return buildLightingTerms(data)
   const hints: string[] = []
   for (const category of LIGHTING_CATEGORY_ORDER) {
     const field = LIGHTING_FIELD_BY_CATEGORY[category]

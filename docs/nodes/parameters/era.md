@@ -13,6 +13,7 @@ The Era / Period parameter node sets the historical or chronological frame of a 
 | era       | string | `"1990s-mall"`   | Catalog entry id (e.g. `"ancient-rome"`, `"victorian"`).        |
 | Pre Text  | text   | empty            | Free-form text prepended to the composed hint.                  |
 | Post Text | text   | empty            | Free-form text appended to the composed hint.                   |
+| Hint mode   | select   | `full`             | Which fragment this picker injects downstream — `full` = the long descriptive hint, `compact` = the short professional term. See [Prompt hint mode](./README.md#prompt-hint-mode). |
 
 ## Catalog (32 entries across 3 categories)
 

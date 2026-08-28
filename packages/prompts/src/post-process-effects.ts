@@ -21,7 +21,7 @@
  * executor and the backend orchestrator.
  */
 
-import { resolveTerm } from "./term.js"
+import { resolveTerm, type PickerHintMode } from "./term.js"
 
 export interface PostProcessEffect {
   readonly id: string
@@ -95,7 +95,8 @@ export function getPostProcessEffectTerm(id: string | undefined | null): string 
  * chromatic-aberration. Each entry already describes a complete grading
  * pass, so we emit independently and let the comma-join compose them.
  */
-export function buildPostProcessHints(value: unknown): string[] {
+export function buildPostProcessHints(value: unknown, mode: PickerHintMode = "full"): string[] {
+  if (mode === "compact") return buildPostProcessTerms(value)
   const ids: string[] = []
   if (typeof value === "string" && value) ids.push(value)
   else if (Array.isArray(value)) {

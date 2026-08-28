@@ -14,7 +14,7 @@
 
 import { pickIds } from "@nodaro/shared"
 
-import { resolveTerm } from "./term.js"
+import { resolveTerm, type PickerHintMode } from "./term.js"
 
 export type MusicGenreCategory =
   | "hip-hop-rnb"
@@ -669,13 +669,17 @@ export function getMusicEraTerm(id: string | undefined | null): string {
  * — subgenre is ignored in multi-mode (subgenre is meaningful only against
  * a single chosen genre).
  */
-export function buildMusicGenreHints(data: {
-  readonly preText?: string
-  readonly postText?: string
-  readonly genre?: string | ReadonlyArray<string>
-  readonly subgenre?: string
-  readonly era?: string
-}): string {
+export function buildMusicGenreHints(
+  data: {
+    readonly preText?: string
+    readonly postText?: string
+    readonly genre?: string | ReadonlyArray<string>
+    readonly subgenre?: string
+    readonly era?: string
+  },
+  mode: PickerHintMode = "full",
+): string {
+  if (mode === "compact") return buildMusicGenreTerms(data)
   const fragments: string[] = []
 
   const pre = typeof data.preText === "string" ? data.preText.trim() : ""

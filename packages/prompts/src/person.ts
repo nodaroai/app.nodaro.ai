@@ -36,7 +36,7 @@ import {
   getRegisteredPersonFieldByDimension,
   personPacksVersion,
 } from "./person-packs.js"
-import { resolveTerm } from "./term.js"
+import { resolveTerm, type PickerHintMode } from "./term.js"
 
 export type PersonDimension =
   | "type"
@@ -1408,7 +1408,9 @@ function collectPersonFragments(
 
 export function buildPersonHints(
   data: Record<string, unknown> & PersonValue,
+  mode: PickerHintMode = "full",
 ): string[] {
+  if (mode === "compact") return buildPersonTerms(data)
   return collectPersonFragments(data, getPersonPromptHint)
 }
 

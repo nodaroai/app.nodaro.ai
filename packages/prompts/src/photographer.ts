@@ -19,7 +19,7 @@
  * backend orchestrator.
  */
 
-import { resolveTerm } from "./term.js"
+import { resolveTerm, type PickerHintMode } from "./term.js"
 
 export type PhotographerCategory =
   | "editorial"
@@ -670,7 +670,8 @@ export function getPhotographerTerm(id: string | undefined | null): string {
  * own promptHint. Two → "shot in the blended language of {A} and {B}" — the
  * model interprets this as referencing both creators' visual signatures.
  */
-export function buildPhotographerHints(value: unknown): string {
+export function buildPhotographerHints(value: unknown, mode: PickerHintMode = "full"): string {
+  if (mode === "compact") return buildPhotographerTerms(value)
   const ids: string[] = []
   if (typeof value === "string" && value) ids.push(value)
   else if (Array.isArray(value)) {

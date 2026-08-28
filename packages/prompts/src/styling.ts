@@ -46,7 +46,7 @@
  * fields for specifics the catalog can't express.
  */
 
-import { resolveTerm } from "./term.js"
+import { resolveTerm, type PickerHintMode } from "./term.js"
 
 export type StylingDimension =
   | "makeup"
@@ -645,7 +645,9 @@ function collectStylingFragments(
 
 export function buildStylingHints(
   data: Record<string, unknown> & StylingValue,
+  mode: PickerHintMode = "full",
 ): string[] {
+  if (mode === "compact") return buildStylingTerms(data)
   return collectStylingFragments(data, getStylingPromptHint)
 }
 

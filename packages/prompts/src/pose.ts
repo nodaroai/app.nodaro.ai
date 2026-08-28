@@ -20,7 +20,7 @@
  * backend orchestrator.
  */
 
-import { resolveTerm } from "./term.js"
+import { resolveTerm, type PickerHintMode } from "./term.js"
 
 export type PoseCategory =
   | "standing"
@@ -233,7 +233,9 @@ export interface PoseValue {
  */
 export function buildPoseHints(
   data: Record<string, unknown> & PoseValue,
+  mode: PickerHintMode = "full",
 ): string[] {
+  if (mode === "compact") return buildPoseTerms(data)
   const hints: string[] = []
 
   const pre = typeof data.preText === "string" ? data.preText.trim() : ""

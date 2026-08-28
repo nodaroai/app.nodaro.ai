@@ -25,6 +25,7 @@ The chosen mode is a **per-device preference** (persisted in `localStorage`, def
 | **Brows / Skin** | `eyebrows`, `skinTone`, `skinTexture` |
 | **Other** | `facialHair`, `distinctiveFeature` |
 | **Free text** | `preText`, `postText` |
+| **Prompt hint**    | `hintMode` |
 
 Each sub-field has its own catalog of options. Example values:
 - `type`: `stylish-influencer`, `business-executive`, `artist`, `athlete`, `farmer`, `nurse`, `teacher`, `child`, `elder`

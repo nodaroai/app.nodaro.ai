@@ -9,6 +9,7 @@ A parameter-picker that emits a music-mood prompt-hint to feed Suno Generate, Ge
 | energy  | string                            | Optional. Energy level id (e.g. `low-energy`, `mid-energy`, `high-energy`). Single-select.             |
 | emotion | string \| string[] (up to 3)      | Optional. One or more emotion ids (e.g. `triumphant`, `melancholic`, `reassuring`, `playful`).         |
 | vibe    | string \| string[] (up to 3)      | Optional. One or more vibe ids (e.g. `cinematic`, `dreamy`, `aggressive`, `nostalgic`, `suspenseful`, `espionage`, `cold`, `clandestine`). |
+| Hint mode | select                              | Which fragment this picker injects downstream — `full` (default) = the long descriptive hint, `compact` = the short professional term. See [Prompt hint mode](./README.md#prompt-hint-mode). |
 
 `emotion` and `vibe` support multi-select (up to 3 choices each). Multiple selections are comma-joined in the emitted hint.
 

@@ -19,7 +19,7 @@
  * backend orchestrator.
  */
 
-import { resolveTerm } from "./term.js"
+import { resolveTerm, type PickerHintMode } from "./term.js"
 
 export type AestheticCategory = "mainstream" | "niche" | "era" | "mood"
 
@@ -436,7 +436,8 @@ function aestheticIds(value: unknown): string[] {
  * own promptHint. Two → "styled in a {A} + {B} aesthetic blend" with
  * canonical entry labels (Y2K, dark academia, etc. stay as written).
  */
-export function buildAestheticHints(value: unknown): string {
+export function buildAestheticHints(value: unknown, mode: PickerHintMode = "full"): string {
+  if (mode === "compact") return buildAestheticTerms(value)
   const ids = aestheticIds(value)
   if (ids.length === 0) return ""
   if (ids.length === 1) return getAestheticPromptHint(ids[0])

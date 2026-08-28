@@ -19,7 +19,7 @@
  * the backend orchestrator.
  */
 
-import { resolveTerm } from "./term.js"
+import { resolveTerm, type PickerHintMode } from "./term.js"
 
 export type ExposureCategory = "aperture" | "shutter-speed" | "iso"
 
@@ -164,7 +164,9 @@ export function buildExposureHints(
     shutterSpeed?: unknown
     isoValue?: unknown
   },
+  mode: PickerHintMode = "full",
 ): string[] {
+  if (mode === "compact") return buildExposureTerms(data)
   const hints: string[] = []
   for (const [field] of EXPOSURE_FIELDS_IN_ORDER) {
     const id = data[field]

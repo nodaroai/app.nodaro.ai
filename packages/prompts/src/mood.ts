@@ -23,7 +23,7 @@
  * backend orchestrator.
  */
 
-import { resolveTerm } from "./term.js"
+import { resolveTerm, type PickerHintMode } from "./term.js"
 
 export type MoodCategory = "positive" | "negative" | "neutral" | "intense"
 
@@ -177,13 +177,41 @@ function buildMoodHint(value: unknown): string {
 }
 
 /**
+ * Combine 1-2 mood ids into a single COMPACT clause: the entry's short
+ * professional term, or the two terms joined with " and " for a mixed mood
+ * ("cocky smirk and aloof, detached mood"). The full-mode weave rebuilds the
+ * "with a ... expression" template from labels; a term already carries its own
+ * grammar, so compact just joins.
+ */
+function buildMoodTerm(value: unknown): string {
+  const ids: string[] = []
+  if (typeof value === "string" && value) ids.push(value)
+  else if (Array.isArray(value)) {
+    for (const v of value) {
+      if (typeof v === "string" && v && !ids.includes(v)) ids.push(v)
+    }
+  }
+  const terms = ids
+    .slice(0, 2)
+    .map((id) => getMoodTerm(id))
+    .filter((t) => t.length > 0)
+  return terms.join(" and ")
+}
+
+/**
  * Build prompt hints from MoodData: optional pre-text, the selected mood's
  * hint (single or mixed), optional post-text. Returns array — caller joins
  * with ", ".
+ *
+ * @param mode `"compact"` swaps the mood fragment for its short professional
+ *   term (delegates to `buildMoodTerms`); pre/post free text is unaffected.
  */
 export function buildMoodHints(
   data: Record<string, unknown> & MoodValue,
+  mode: PickerHintMode = "full",
 ): string[] {
+  if (mode === "compact") return buildMoodTerms(data)
+
   const hints: string[] = []
 
   const pre = typeof data.preText === "string" ? data.preText.trim() : ""
@@ -196,4 +224,27 @@ export function buildMoodHints(
   if (post) hints.push(post)
 
   return hints
+}
+
+/**
+ * Compact counterpart of `buildMoodHints`: the same pre-text → mood →
+ * post-text order, emitting the mood's short professional term ("melancholic
+ * mood", "cocky smirk") instead of the full expression clause. Free-text
+ * pre/post fields are user prose and pass through unchanged in both modes.
+ */
+export function buildMoodTerms(
+  data: Record<string, unknown> & MoodValue,
+): string[] {
+  const terms: string[] = []
+
+  const pre = typeof data.preText === "string" ? data.preText.trim() : ""
+  if (pre) terms.push(pre)
+
+  const moodTerm = buildMoodTerm(data.mood)
+  if (moodTerm) terms.push(moodTerm)
+
+  const post = typeof data.postText === "string" ? data.postText.trim() : ""
+  if (post) terms.push(post)
+
+  return terms
 }

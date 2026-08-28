@@ -1,7 +1,7 @@
 ---
 node_type: instrumentation
-generated_at: 2026-08-15T21:55:06.065Z
-generated_from: 150c80ac9
+generated_at: 2026-08-28T10:28:28.341Z
+generated_from: ae8d76277
 ---
 
 # Instrumentation
@@ -23,6 +23,7 @@ generated_from: 150c80ac9
 - `production?: string`
 - `vocalPresence?: string | ReadonlyArray<string>`
 - `singingStyle?: string | ReadonlyArray<string>`
+- `hintMode?: "full" | "compact"`
 
 **Valid values:** call `get_picker_catalog("instrumentation")` (MCP) or `GET /v1/picker-catalogs/instrumentation` for the catalog of valid ids.
 

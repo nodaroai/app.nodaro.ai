@@ -7,7 +7,7 @@
  * motion enabled.
  */
 
-import { resolveTerm } from "./term.js"
+import { resolveTerm, type PickerHintMode } from "./term.js"
 
 export type CameraMotionCategory =
   | "default"
@@ -653,12 +653,21 @@ export const CAMERA_MOTION_IDS: ReadonlyArray<string> = CAMERA_MOTIONS.map((m) =
  * Hints within each side are joined with " and " for grammatical flow.
  * If multiple nodes are connected (e.g. Framing + Lighting + Tone), all
  * three contribute their hint to the clause.
+ *
+ * @param mode `"compact"` delegates to `composeCameraMotionTermFromConnections`
+ *   — the same start/end structure built from the motion's short professional
+ *   `term`. The caller is expected to have resolved the connected nodes to
+ *   THEIR terms too, so the whole fragment stays at one level of detail.
  */
 export function composeCameraMotionHintFromConnections(
   motionId: string | undefined,
   startHints: ReadonlyArray<string>,
   endHints: ReadonlyArray<string>,
+  mode: PickerHintMode = "full",
 ): string {
+  if (mode === "compact") {
+    return composeCameraMotionTermFromConnections(motionId, startHints, endHints)
+  }
   const base = getCameraMotionPromptHint(motionId)
   if (!base) return ""
   const parts: string[] = [base]

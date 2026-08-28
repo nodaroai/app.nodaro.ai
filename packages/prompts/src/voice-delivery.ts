@@ -3,7 +3,7 @@
  * Voice Design's voiceDescription via the Sound aggregator.
  */
 
-import { resolveTerm } from "./term.js"
+import { resolveTerm, type PickerHintMode } from "./term.js"
 
 export interface VoiceDeliveryEntry {
   readonly id: string
@@ -131,13 +131,17 @@ export function getVoiceArchetypeTerm(id: string | undefined | null): string {
  *   { emotion }                  → "reassuring tone"
  *   { pace }                     → "measured pace"
  */
-export function buildVoiceDeliveryHints(data: {
-  readonly preText?: string
-  readonly postText?: string
-  readonly pace?: string
-  readonly emotion?: string
-  readonly archetype?: string
-}): string {
+export function buildVoiceDeliveryHints(
+  data: {
+    readonly preText?: string
+    readonly postText?: string
+    readonly pace?: string
+    readonly emotion?: string
+    readonly archetype?: string
+  },
+  mode: PickerHintMode = "full",
+): string {
+  if (mode === "compact") return buildVoiceDeliveryTerms(data)
   const fragments: string[] = []
   const pre = typeof data.preText === "string" ? data.preText.trim() : ""
   if (pre) fragments.push(pre)

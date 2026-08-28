@@ -18,7 +18,7 @@
  * null input is treated like undefined (falsy short-circuit → returns "")
  */
 
-import { resolveTerm } from "./term.js"
+import { resolveTerm, type PickerHintMode } from "./term.js"
 
 export type CharacterFxCategory =
   | "transformation"
@@ -296,16 +296,26 @@ const INTENSITY_CLAUSES: Record<Exclude<CharacterFxIntensity, "auto">, string> =
  * Substitution: each base hint has every `"the subject"` occurrence
  * rewritten to the target name BEFORE the join. Empty targetHints leaves
  * "the subject" intact in the prompt.
+ *
+ * @param mode `"compact"` builds the base from each effect's short
+ *   professional `term` instead of its full shot description. The target
+ *   substitution, the ", and " multi-pick join and the position/duration/
+ *   intensity clauses are emitted identically in both modes (a term rarely
+ *   contains "the subject", so the substitution is simply a no-op there).
  */
 export function composeCharacterFxHintFromConnections(
   effectId: string | ReadonlyArray<string> | undefined,
   targetHints: ReadonlyArray<string>,
   timing?: CharacterFxTiming,
+  mode: PickerHintMode = "full",
 ): string {
   const ids = Array.isArray(effectId)
     ? Array.from(new Set(effectId)).slice(0, 2)
     : effectId ? [effectId] : []
-  const baseHints = ids.map(getCharacterFxPromptHint).filter((h) => h.length > 0)
+  // ONLY the base fragment swaps in compact mode — the target substitution,
+  // the multi-pick join and the timing clauses below are identical either way.
+  const resolveBase = mode === "compact" ? getCharacterFxTerm : getCharacterFxPromptHint
+  const baseHints = ids.map(resolveBase).filter((h) => h.length > 0)
   if (baseHints.length === 0) return ""
 
   const targetClause = targetHints.filter((h) => h && h.length > 0).join(" and ")

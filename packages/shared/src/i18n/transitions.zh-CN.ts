@@ -13,6 +13,8 @@ const map: LocaleCatalogMap = {
   "wipe": { label: "划像", description: "直线划过替换第一个镜头" },
   "roll-transition": { label: "滚动转场", description: "画面旋转90–180°，第二幕正立落定" },
   "seamless-match": { label: "无缝匹配", description: "以运动与色调伪装的隐形剪辑" },
+  "whip-pan": { label: "甩镜", description: "镜头横向急甩带出模糊，下一镜头顺着同一方向接上" },
+  "jump-cut": { label: "跳切", description: "同一构图，时间向前跳跃" },
 
   // ── Time ──
   "fast-forward-day-night": { label: "快进（日→夜）", description: "同一场景日转夜的延时摄影" },
@@ -62,6 +64,8 @@ const map: LocaleCatalogMap = {
   "zoom-into-mouth": { label: "推入口腔", description: "推入张开的嘴，进入内部新世界" },
   "push-through-glass": { label: "穿越玻璃", description: "镜头推过玻璃折射进入新世界" },
   "soul-jump": { label: "灵魂跃迁", description: "半透明灵魂离体，跃入新身体" },
+  "mask-transition": { label: "遮罩转场", description: "前景物体遮黑画面，镜头穿过黑暗进入新场景" },
+  "zoom-through": { label: "推进穿越", description: "镜头不断放大一处细节，新场景在其中展开" },
 
   // ── Physics ──
   "explosion-blast": { label: "爆炸", description: "爆炸席卷画面，新场景从烟尘中浮现" },
@@ -73,6 +77,7 @@ const map: LocaleCatalogMap = {
   "vehicle-explosion": { label: "车辆爆炸", description: "前景车辆爆炸，火焰散去后新场景" },
   "jump-match": { label: "跳跃匹配", description: "主体起跳，落地衔接新场景" },
   "hand-swipe": { label: "手掌划过", description: "手掌扫过镜头，遮挡间场景切换" },
+  "action-relay": { label: "动作接力剪辑", description: "主体带着动作出画，在新场景中延续同一动作" },
 
   // ── Light ──
   "white-flash": { label: "白色闪光", description: "画面泛出纯白" },
@@ -83,6 +88,7 @@ const map: LocaleCatalogMap = {
   "lens-crack": { label: "镜头裂痕", description: "镜头开裂，透过裂纹看到新场景" },
   "dirty-lens-wipe": { label: "镜头污渍擦拭", description: "镜头污渍被擦净，场景随之更换" },
   "eye-light-burst": { label: "眼部光束爆发", description: "主体眼睛射出强光，画面白屏后新场景" },
+  "snap-to-black": { label: "瞬切黑场", description: "瞬间切入全黑停顿一拍，随后切入下一镜头" },
 
   // ── Glitch ──
   "digital-glitch": { label: "数字故障", description: "RGB分离+扫描线+数据溶解故障" },

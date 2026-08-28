@@ -170,6 +170,8 @@ Configure shared settings that feed into multiple downstream nodes. These contro
 
 Parameter picker nodes have a typed colored output pip — click it to see which downstream nodes are connected to this picker, manage connections (disconnect, focus, connect to a new consumer), and drag-reorder where applicable.
 
+Fields every picker shares — the `preText` / `postText` free-text fragments and the **Prompt hint mode** (`full` / `compact`) lever — are documented once in [Parameter nodes — shared behaviour](./parameters/README.md).
+
 ### Generation parameters
 
 Free-form or enum settings that feed AI / video / audio generation nodes via FieldMappings or direct text wiring.

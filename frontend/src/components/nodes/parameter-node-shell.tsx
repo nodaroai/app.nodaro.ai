@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, type ReactNode } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
-import { Eye, FileText, Layers as LayersIcon } from "lucide-react"
+import { Eye, FileText, Layers as LayersIcon, AlignLeft, Tag } from "lucide-react"
 import { useShallow } from "zustand/react/shallow"
 import { getParameterPromptHint } from "@nodaro/prompts"
 import { useT } from "@/lib/i18n"
@@ -15,10 +15,15 @@ import { useAutoMeasureForZoom } from "./use-auto-measure-for-zoom"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { cn } from "@/lib/utils"
 import { getPickerOutputMeta } from "@/lib/picker-handles"
+import { isParameterPickerNode } from "@/lib/parameter-picker-types"
 import {
   setStickyParameterDisplayMode,
   type ParameterDisplayMode as DisplayMode,
 } from "@/lib/parameter-node-prefs"
+
+/** Which fragment the picker injects downstream. Mirrors
+ *  `PickerHintModeFields["hintMode"]` in `@/types/nodes`; absent = "full". */
+type HintMode = "full" | "compact"
 
 interface ParameterNodeShellProps {
   readonly id: string
@@ -108,6 +113,21 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
   // Existing nodes keep whatever mode they were saved with; the localStorage
   // preference only seeds NEW nodes (handled in store `addNode`).
   const displayMode: DisplayMode = (data.displayMode as DisplayMode) || "picks"
+
+  // Which fragment this picker injects downstream. Absent = "full", so every
+  // workflow authored before the lever existed keeps the long promptHint it
+  // was built with. Only catalog-backed pickers carry a compact `term`, so
+  // the control is gated on the picker registry — free-text parameter nodes
+  // (tone, style-guide, text-prompt) and pure-runtime ones (duration,
+  // aspect-ratio, scene-count, motion) have no term to switch to.
+  const hintMode: HintMode = (data.hintMode as HintMode) === "compact" ? "compact" : "full"
+  const showHintModeToggle = isParameterPickerNode(node?.type)
+  const setHintMode = (mode: HintMode) => {
+    // The composed fragment gets shorter/longer, so let the node re-fit its
+    // height the same way a display-mode switch does.
+    updateNode(id, { height: undefined })
+    updateNodeData(id, { hintMode: mode })
+  }
   const setDisplayMode = (mode: DisplayMode) => {
     // Clear height to auto-fit the new mode's content. Width is preserved:
     // the picks layout is ALWAYS in the DOM (visually hidden in prompt-only
@@ -133,7 +153,7 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
   const updateNodeInternals = useUpdateNodeInternals()
   useEffect(() => {
     updateNodeInternals(id)
-  }, [id, displayMode, sourceIsExternal, updateNodeInternals])
+  }, [id, displayMode, hintMode, sourceIsExternal, updateNodeInternals])
 
   // When zoom != 1, React Flow's native auto-measure reads the wrapper's
   // CSS box at *logical* size — but visual = logical × zoom. The hook
@@ -152,7 +172,7 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
     zoom: ((data.zoom as number | undefined) ?? 1.0),
     visualHeight,
     onMeasured: (visualH) => updateNode(id, { height: visualH }),
-    triggerKey: `${displayMode}|${(data.zoom as number | undefined) ?? 1.0}`,
+    triggerKey: `${displayMode}|${hintMode}|${(data.zoom as number | undefined) ?? 1.0}`,
   })
 
   // ResizeObserver on the natural content wrapper (no h-full) — when picks
@@ -257,11 +277,22 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
             // `relative top-[2px]` shifts the toggle visually down 2px
             // without taking extra layout space, so the picks/prompt
             // content below stays exactly where it was.
+            //
+            // `width: 0; min-width: 100%` (same idiom as the prompt preview
+            // below): the row spans the node but contributes NOTHING to
+            // intrinsic width, so adding the hint-mode control here can
+            // never widen a 220px picker. Display mode stays right-aligned;
+            // the hint-mode control takes the freed left edge.
             className={cn(
-              "nopan toggle-row relative top-[4px] flex justify-end mb-0 transition-opacity",
+              "nopan toggle-row relative top-[4px] flex flex-wrap items-center gap-1 mb-0 transition-opacity",
+              // Display mode is always right-aligned; the hint-mode control,
+              // when present, takes the freed left edge.
+              showHintModeToggle ? "justify-between" : "justify-end",
               selected ? "opacity-100" : "opacity-0 group-hover:opacity-100",
             )}
+            style={{ width: 0, minWidth: "100%" }}
           >
+            {showHintModeToggle && <HintModeToggle mode={hintMode} onChange={setHintMode} />}
             <DisplayModeToggle mode={displayMode} onChange={setDisplayMode} />
           </div>
           {/* Wrapper around the actual content children. ResizeObserver
@@ -351,6 +382,83 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
       )}
       {extraHandleIcons}
     </div>
+  )
+}
+
+/**
+ * The ONE hint-mode lever for every parameter picker. It lives in the shared
+ * shell (not in the 38 per-type config panels) so a new picker gets it for
+ * free, and the preview directly below it is `getParameterPromptHint(node)` —
+ * the same function the DAG executor and the backend orchestrator call — so
+ * what the user reads here is literally what gets injected downstream.
+ *
+ * Icon-only by design: the row also carries the 3-button display-mode pill,
+ * and text labels for both would not fit a 220px picker. The localized
+ * "Full" / "Compact" names ride on `aria-label` + `title`.
+ */
+function HintModeToggle({
+  mode,
+  onChange,
+}: {
+  readonly mode: HintMode
+  readonly onChange: (mode: HintMode) => void
+}) {
+  const t = useT()
+  return (
+    <div
+      className="nopan flex gap-0 rounded-md border border-gray-200 dark:border-[#2D2D2D] bg-gray-50/95 dark:bg-[#161616]/95 backdrop-blur-sm overflow-hidden shadow-sm"
+      role="tablist"
+      aria-label={t("node.hintMode")}
+    >
+      <HintModeButton
+        active={mode === "full"}
+        onClick={() => onChange("full")}
+        label={t("node.hintModeFull")}
+        icon={<AlignLeft className="size-3" />}
+      />
+      <HintModeButton
+        active={mode === "compact"}
+        onClick={() => onChange("compact")}
+        label={t("node.hintModeCompact")}
+        icon={<Tag className="size-3" />}
+      />
+    </div>
+  )
+}
+
+function HintModeButton({
+  active,
+  onClick,
+  label,
+  icon,
+}: {
+  readonly active: boolean
+  readonly onClick: () => void
+  readonly label: string
+  readonly icon: ReactNode
+}) {
+  const t = useT()
+  const title = t("node.hintModeSwitch", { label })
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      aria-label={title}
+      onClick={(e) => {
+        e.stopPropagation()
+        onClick()
+      }}
+      className={cn(
+        "flex items-center px-1.5 py-0.5 text-[10px] font-medium transition-colors",
+        active
+          ? "bg-[#ff0073]/15 text-[#ff0073]"
+          : "text-muted-foreground hover:text-foreground hover:bg-gray-100 dark:hover:bg-[#1a1a1a]",
+      )}
+      title={title}
+    >
+      {icon}
+    </button>
   )
 }
 

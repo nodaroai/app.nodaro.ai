@@ -13,6 +13,8 @@ const map: LocaleCatalogMap = {
   "wipe":                   { label: "Wischblende",              description: "Linearer Wisch ersetzt die erste Einstellung" },
   "roll-transition":        { label: "Drehübergang",             description: "Bild dreht 90-180°, zweite Einstellung am Ende" },
   "seamless-match":         { label: "Nahtloser Schnitt",        description: "Versteckter Schnitt durch angeglichene Bewegung und Farbe" },
+  "whip-pan":               { label: "Whip Pan",                 description: "Die Kamera reißt seitwärts in Bewegungsunschärfe, die zweite Einstellung folgt derselben Richtung" },
+  "jump-cut":               { label: "Jump Cut",                 description: "Gleiche Einstellung, die Zeit springt vorwärts" },
 
   // ── Time ──
   "fast-forward-day-night": { label: "Zeitraffer Tag → Nacht",  description: "Zeitraffer von Tag zu Nacht in derselben Szene" },
@@ -62,6 +64,8 @@ const map: LocaleCatalogMap = {
   "zoom-into-mouth":        { label: "Zoom in den Mund",        description: "Die Kamera tritt durch den geöffneten Mund in die neue Welt" },
   "push-through-glass":     { label: "Durch das Glas",          description: "Die Kamera durchquert das Glas in die neue Welt" },
   "soul-jump":              { label: "Seelensprung",            description: "Eine transluzente Seele verlässt den Körper und betritt den neuen" },
+  "mask-transition":        { label: "Maskenübergang",          description: "Ein Objekt im Vordergrund verdunkelt das Bild, die Kamera fährt hindurch" },
+  "zoom-through":           { label: "Zoom Hindurch",           description: "Die Kamera vergrößert ein Detail, bis die neue Szene darin entsteht" },
 
   // ── Physics ──
   "explosion-blast":        { label: "Explosionsdruckwelle",    description: "Die Explosion fegt den Rahmen frei, neue Szene erscheint" },
@@ -73,6 +77,7 @@ const map: LocaleCatalogMap = {
   "vehicle-explosion":      { label: "Fahrzeugexplosion",       description: "Das Fahrzeug explodiert im Vordergrund, die Szene wechselt" },
   "jump-match":             { label: "Sprung-Schnitt",          description: "Das Sujet springt, die Landung verbindet mit der neuen Szene" },
   "hand-swipe":             { label: "Hand-Wisch",              description: "Eine Hand wischt über das Objektiv, die Szene wechselt dahinter" },
+  "action-relay":           { label: "Bewegungsstaffel",        description: "Das Sujet verlässt das Bild in einer Bewegung und setzt sie in der neuen Szene fort" },
 
   // ── Light ──
   "white-flash":            { label: "Weißblitz",               description: "Der Rahmen erstrahlt in reinem Weiß" },
@@ -83,6 +88,7 @@ const map: LocaleCatalogMap = {
   "lens-crack":             { label: "Objektivriss",            description: "Das Objektiv reißt, Szene durch das gebrochene Glas" },
   "dirty-lens-wipe":        { label: "Objektivreinigung",       description: "Das schmutzige Objektiv wird gewischt, neue Szene erscheint" },
   "eye-light-burst":        { label: "Augenlichtausbruch",      description: "Ein heller Strahl aus den Augen des Sujets überstrahlt den Rahmen" },
+  "snap-to-black":          { label: "Harter Schnitt auf Schwarz", description: "Sofortiger Schnitt auf volles Schwarz für einen Moment, dann die nächste Einstellung" },
 
   // ── Glitch ──
   "digital-glitch":         { label: "Digitaler Glitch",        description: "RGB-Split + Scanlines + Datamosh" },
