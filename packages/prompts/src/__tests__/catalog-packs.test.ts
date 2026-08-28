@@ -101,7 +101,7 @@ describe("pack options resolve a term at composition", () => {
   })
 
   it("replace: a term-less vendored catalog gets terms too", () => {
-    const vendored: PickerCatalog = {
+    const vendored: PickerCatalogInput = {
       nodeType: "setting", label: "Setting", catalogId: "setting", kind: "single", valueField: "setting",
       options: [
         legacyOption({ id: "shtiebel", label: "Shtiebel (Small Shul)", promptHint: "in a small prayer room" }),
