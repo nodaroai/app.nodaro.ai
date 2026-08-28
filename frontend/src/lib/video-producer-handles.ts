@@ -140,6 +140,22 @@ export function isValidStillToVideoConnection(
   }
 }
 
+// ─── gif-to-video ──────────────────────────────────────────────────────
+// GIF in → MP4 out. The GIF arrives as any image producer (an uploaded .gif
+// flows in as `upload-image`); the node also has its own upload dropzone, so
+// the edge is optional.
+export function isValidGifToVideoConnection(
+  targetHandleId: string,
+  sourceType: string,
+): boolean {
+  switch (targetHandleId) {
+    case "image":
+      return ACCEPTS_IMAGE_OR_DYN(sourceType)
+    default:
+      return false
+  }
+}
+
 // ─── slideshow ─────────────────────────────────────────────────────────
 // Inputs: images (ordered set — image producers, lists via the Bundle edge,
 // group/collect image lanes), audio (optional, sets the length), transition

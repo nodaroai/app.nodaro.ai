@@ -85,6 +85,10 @@ export const VIDEO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   // Slideshow: 2-100 stills + one optional audio track → MP4 (local FFmpeg,
   // no provider). Same contract; images arrive via the image-collage lane.
   "slideshow",
+  // GIF to Video: animated GIF → H.264 MP4 (local FFmpeg, no provider).
+  // Emits generatedVideoUrl so it connects to any downstream video consumer
+  // (e.g. a Seedance video-reference input) by an ordinary edge.
+  "gif-to-video",
 ])
 
 /**

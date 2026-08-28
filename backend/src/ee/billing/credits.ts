@@ -1291,6 +1291,10 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // into the video pipeline. The 0-cost reservation path still creates a
   // usage log; the guard still enforces storage/kill-switch/dedup.
   "still-to-video": 0,
+  // GIF to Video — animated GIF → H.264 MP4 via local ffmpeg (no provider
+  // cost). Zero credits, same rationale as still-to-video: a free bridge that
+  // lets a GIF be used as a motion reference for models that reject GIF input.
+  "gif-to-video": 0,
   // Slideshow — N stills + one optional audio track → MP4 via local ffmpeg
   // (no provider cost). Zero credits, same rationale and guard behavior as
   // still-to-video.

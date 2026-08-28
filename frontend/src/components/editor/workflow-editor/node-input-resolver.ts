@@ -1854,7 +1854,7 @@ export function resolveNodeInputs(
       // The character node's "image" handle emits a PLAIN portrait — no entity
       // id and no identity injection. Both guards below skip it.
       const isPlainImageHandle = srcEdge?.sourceHandle === "image";
-      if (node.type === "lip-sync" || node.type === "speech-to-video" || node.type === "motion-transfer" || node.type === "ai-avatar" || node.type === "still-to-video") {
+      if (node.type === "lip-sync" || node.type === "speech-to-video" || node.type === "motion-transfer" || node.type === "ai-avatar" || node.type === "still-to-video" || node.type === "gif-to-video") {
         inputs.imageUrl = output;
       } else {
         inputs.referenceImageUrls = [
@@ -1910,7 +1910,7 @@ export function resolveNodeInputs(
       // consumer can field-map a specific variant via a `"bucket[idx]"`
       // string in its `fieldMappings`; otherwise the helper falls back to
       // the anchor image. See `injectLocationContext` above for details.
-      if (node.type === "lip-sync" || node.type === "speech-to-video" || node.type === "motion-transfer" || node.type === "ai-avatar" || node.type === "still-to-video") {
+      if (node.type === "lip-sync" || node.type === "speech-to-video" || node.type === "motion-transfer" || node.type === "ai-avatar" || node.type === "still-to-video" || node.type === "gif-to-video") {
         inputs.imageUrl = output;
       } else if (isPlainImageHandle) {
         inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output];

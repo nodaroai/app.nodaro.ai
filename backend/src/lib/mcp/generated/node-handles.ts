@@ -63,6 +63,7 @@ export const NODE_HANDLES: Readonly<Record<string, NodeHandleSpec>> = {
   "generate-video": { inputs: ["prompt", "negative", "startFrame", "endFrame", "imageReferences", "videoReferences", "audio", "audioReferences", "assets", "elements", "look"], outputs: ["video"] },
   "generate-video-pro": { inputs: ["prompt", "negative", "startFrame", "endFrame", "imageReferences", "videoReferences", "audio", "audioReferences", "assets", "elements", "look"], outputs: ["video"] },
   "generative-pipeline": { inputs: ["story_prompt"], outputs: [] },
+  "gif-to-video": { inputs: ["image"], outputs: ["video"] },
   "group": { inputs: [], outputs: [] },
   "held-prop": { inputs: ["in"], outputs: ["out"] },
   "image-collage": { inputs: ["in"], outputs: ["image"] },

@@ -69,6 +69,7 @@ import { speedRampRoutes } from "./routes/speed-ramp.js"
 import { loopVideoRoutes } from "./routes/loop-video.js"
 import { fadeVideoRoutes } from "./routes/fade-video.js"
 import { stillToVideoRoutes } from "./routes/still-to-video.js"
+import { gifToVideoRoutes } from "./routes/gif-to-video.js"
 import { slideshowRoutes } from "./routes/slideshow.js"
 import { transcodeVideoRoutes } from "./routes/transcode-video.js"
 import { addCaptionsRoutes } from "./routes/add-captions.js"
@@ -431,6 +432,7 @@ export async function buildApp() {
   await app.register(loopVideoRoutes)
   await app.register(fadeVideoRoutes)
   await app.register(stillToVideoRoutes)
+  await app.register(gifToVideoRoutes)
   await app.register(slideshowRoutes)
   await app.register(transcodeVideoRoutes)
   await app.register(addCaptionsRoutes)

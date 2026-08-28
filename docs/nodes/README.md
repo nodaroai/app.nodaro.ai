@@ -52,7 +52,7 @@ the foot of the list.
 | **Cut & Assemble** | Trim Video · Combine Videos · Assemble Narrated Video · Adjust Speed · Loop Video · Fade In/Out · Composite · Compose Video · Split into Chunks · Manual Edit |
 | **Sound for Video** | Video SFX · Merge Video & Audio · Extract Audio · Remove Audio |
 | **Titles, Graphics & Captions** | 3D Title · Motion Graphics · After Effects · Lottie Overlay · Add Captions · Render Video |
-| **Format & Export** | Resize Video · Social Media Format · Upscale Video · Transcode Video |
+| **Format & Export** | Resize Video · Social Media Format · Upscale Video · Transcode Video · Gif to Video |
 | **Analyze** | Video Analysis · AI Audit |
 
 ### Audio
@@ -375,6 +375,7 @@ FFmpeg-based video manipulation.
 | [Still to Video](./processing-video/still-to-video.md) | One still image + one audio track → MP4, zero credits | Animate a still with zoom / pan / Ken Burns (or none) for exactly the audio's length — narrated slides, visualizers, photo moments |
 | [Slideshow](./processing-video/slideshow.md) | 2–100 images over one optional audio track → MP4, zero credits | Ordered stills with per-slide motion + transitions; audio-anchored timing (equal split / pinned rows / disclosed proportional scale), silent without audio |
 | [Resize Video](./processing-video/resize-video.md) | Crop, pad, or stretch to target aspect ratio | Reformat video dimensions for different platforms |
+| [Gif to Video](./processing-video/gif-to-video.md) | Convert an animated GIF to MP4, zero credits | Turn a GIF into an MP4 motion reference for video models that reject GIF input (local FFmpeg) |
 | [Social Media Format](./processing-video/social-media-format.md) | Auto-format for platform specifications | Prepare video for Instagram, TikTok, YouTube, etc. |
 | [Trim Video](./processing-video/trim-video.md) | Cut video to start/end times | Extract specific sections from longer video |
 | [Extract Frame](./processing-video/extract-frame.md) | Pull a single still frame as a PNG | Capture last frame for i2v chaining, thumbnails, or reference stills |
