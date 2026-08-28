@@ -7,6 +7,8 @@
  * motion enabled.
  */
 
+import { resolveTerm } from "./term.js"
+
 export type CameraMotionCategory =
   | "default"
   | "pan"
@@ -27,6 +29,12 @@ export interface CameraMotion {
   readonly category: CameraMotionCategory
   readonly description: string
   readonly promptHint: string
+  /**
+   * Compact professional term for this move ("whip pan left", "push-pull
+   * swing") — authored only where the lowercased label is not what a
+   * cinematographer would write in a prompt. See `term.ts`.
+   */
+  readonly term?: string
 }
 
 export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
@@ -44,6 +52,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "default",
     description: "Fixed camera, no movement",
     promptHint: "locked off static camera, no camera movement",
+    term: "locked-off static camera",
   },
   {
     id: "handheld",
@@ -51,6 +60,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "default",
     description: "Natural handheld shake",
     promptHint: "handheld camera with subtle natural shake and micro movements",
+    term: "handheld camera",
   },
   {
     id: "steadicam",
@@ -58,6 +68,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "default",
     description: "Smooth stabilized walking shot",
     promptHint: "smooth steadicam shot, gliding stabilized movement through the scene",
+    term: "smooth steadicam shot",
   },
 
   // Pan — rotation on vertical axis
@@ -164,6 +175,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "dolly",
     description: "Slow subtle push toward subject",
     promptHint: "slow push in, gentle forward movement toward the subject",
+    term: "slow push-in",
   },
   {
     id: "pull-out",
@@ -171,6 +183,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "dolly",
     description: "Slow subtle pull back from subject",
     promptHint: "slow pull out, gentle backward movement away from the subject",
+    term: "slow pull-out",
   },
   {
     id: "breathing",
@@ -185,6 +198,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "dolly",
     description: "Camera swings toward subject then away",
     promptHint: "push-pull swing, the camera moves toward the subject then back away in a single move, a swinging approach-and-retreat that creates emphasis or hesitation",
+    term: "push-pull swing",
   },
   {
     id: "creep-in",
@@ -192,6 +206,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "dolly",
     description: "Imperceptibly slow push-in over time",
     promptHint: "creep-in, imperceptibly slow push-in over many seconds, building dread or tension",
+    term: "slow creeping push-in",
   },
   {
     id: "creep-out",
@@ -199,6 +214,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "dolly",
     description: "Imperceptibly slow pull-out over time",
     promptHint: "creep-out, imperceptibly slow pull-out over many seconds, isolating the subject in space",
+    term: "slow creeping pull-out",
   },
 
   // Truck — lateral slide
@@ -261,6 +277,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "roll",
     description: "Camera rotates a full 360° on its axis",
     promptHint: "full 360 degree spin, the camera rotates a complete revolution on its own lens axis",
+    term: "full 360 degree camera roll",
   },
 
   // Orbit / Arc
@@ -298,6 +315,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "orbit",
     description: "Full circular arc around subject",
     promptHint: "full 360 degree orbit, the camera arcs a complete revolution around the subject",
+    term: "full 360 degree orbit",
   },
 
   // Crane / Jib
@@ -344,6 +362,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "tracking",
     description: "Follow subject from behind",
     promptHint: "follow shot, camera trails the subject from behind at a constant distance",
+    term: "follow shot from behind",
   },
   {
     id: "lead",
@@ -351,6 +370,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "tracking",
     description: "Move ahead of advancing subject",
     promptHint: "lead shot, camera moves backward ahead of the advancing subject",
+    term: "leading tracking shot",
   },
   {
     id: "drone-follow",
@@ -358,6 +378,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "tracking",
     description: "Elevated drone tracking subject",
     promptHint: "aerial drone follow shot, elevated camera smoothly tracking the subject from above and behind",
+    term: "aerial drone follow shot",
   },
   {
     id: "dolly-track",
@@ -365,6 +386,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "tracking",
     description: "Dolly on parallel track alongside subject",
     promptHint: "dolly on a parallel track alongside the subject, smooth lateral tracking with strong foreground parallax",
+    term: "parallel dolly tracking shot",
   },
   {
     id: "gimbal-walk",
@@ -372,6 +394,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "tracking",
     description: "Smooth walking shot on a 3-axis gimbal",
     promptHint: "gimbal walk, smooth walking shot on a 3-axis gimbal with floating steady forward motion",
+    term: "smooth gimbal walking shot",
   },
   {
     id: "ronin-glide",
@@ -379,6 +402,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "tracking",
     description: "Slow gliding move on a Ronin/Movi gimbal",
     promptHint: "ronin glide, slow gliding move on a Ronin or Movi gimbal, cinematic float without any shake",
+    term: "slow gliding gimbal move",
   },
   {
     id: "serpentine",
@@ -386,6 +410,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "tracking",
     description: "Camera weaves through obstacles in S-curves",
     promptHint: "serpentine track, the camera weaves through obstacles in S-curves, snaking forward along a winding path",
+    term: "serpentine tracking shot",
   },
 
   // Special angles / rigs
@@ -395,6 +420,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "special",
     description: "First person point of view",
     promptHint: "POV shot, first person perspective as seen through the subject's eyes",
+    term: "first person pov shot",
   },
   {
     id: "over-the-shoulder",
@@ -402,6 +428,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "special",
     description: "Frame past a character's shoulder",
     promptHint: "over the shoulder shot, framing past one character's shoulder onto another",
+    term: "over-the-shoulder shot",
   },
   {
     id: "birds-eye",
@@ -409,6 +436,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "special",
     description: "Direct top-down overhead view",
     promptHint: "bird's eye view, direct overhead top-down shot looking straight down",
+    term: "bird's eye view",
   },
   {
     id: "worms-eye",
@@ -416,6 +444,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "special",
     description: "Extreme low angle looking up",
     promptHint: "worm's eye view, extreme low angle looking up at the subject",
+    term: "worm's eye view",
   },
   {
     id: "aerial",
@@ -423,6 +452,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "special",
     description: "High altitude drone-style shot",
     promptHint: "aerial drone shot, high altitude slow forward movement over the landscape",
+    term: "high altitude aerial drone shot",
   },
   {
     id: "helicopter",
@@ -430,6 +460,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "special",
     description: "Wide high-altitude sweeping aerial",
     promptHint: "helicopter shot, high altitude wide sweeping aerial pass with strong lateral movement",
+    term: "sweeping helicopter aerial shot",
   },
   {
     id: "fly-over",
@@ -437,6 +468,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "special",
     description: "Low fast aerial pass over the scene",
     promptHint: "fly over shot, low altitude drone passing quickly over the scene with strong forward motion",
+    term: "low aerial fly-over pass",
   },
   {
     id: "flythrough",
@@ -444,6 +476,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "special",
     description: "Camera flies through space",
     promptHint: "flythrough shot, camera moving forward through the environment, weaving through obstacles",
+    term: "flythrough shot",
   },
   {
     id: "reveal",
@@ -451,6 +484,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "special",
     description: "Gradually reveal wider scene",
     promptHint: "reveal shot, camera rises and tilts to gradually reveal the subject and wider scene",
+    term: "rising reveal shot",
   },
   {
     id: "snorricam",
@@ -458,6 +492,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "special",
     description: "Body-mounted camera (subject locked to frame)",
     promptHint: "snorricam body-mounted shot, subject locked in frame while the world moves around them",
+    term: "body-mounted snorricam shot",
   },
   {
     id: "rack-focus",
@@ -474,6 +509,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "default",
     description: "Casual vlog-style handheld",
     promptHint: "casual handheld vlog-style camera, slight wandering and natural shake, talking-to-camera framing",
+    term: "handheld vlog-style camera",
   },
   {
     id: "pov-walk",
@@ -481,6 +517,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "tracking",
     description: "First-person walking POV",
     promptHint: "first-person POV walking camera, GoPro-style head-mounted perspective with natural footstep movement",
+    term: "first person walking pov",
   },
   {
     id: "velocity-edit",
@@ -488,6 +525,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "special",
     description: "TikTok speed-ramp pacing",
     promptHint: "rapid speed-ramped camera move with characteristic TikTok velocity-edit pacing, dynamic acceleration into and out of the shot",
+    term: "rapid speed-ramped camera move",
   },
   {
     id: "match-cut-zoom",
@@ -495,6 +533,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "zoom",
     description: "Beat-timed zoom for cuts",
     promptHint: "rapid zoom timed to a beat, suggesting a match cut to the next shot",
+    term: "rapid beat-timed zoom",
   },
   {
     id: "screen-tap",
@@ -502,6 +541,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "special",
     description: "On-screen finger-tap transition",
     promptHint: "camera transition triggered by an on-screen finger tap, TikTok-native pacing with snap to the next subject",
+    term: "on-screen finger-tap transition",
   },
   {
     id: "phone-flip",
@@ -509,6 +549,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "special",
     description: "Front/rear camera flip",
     promptHint: "camera-flip transition where the phone visibly rotates between the front and rear sensors, brief blur during the swap",
+    term: "front-to-rear phone camera flip",
   },
   {
     id: "gentle-drift",
@@ -516,6 +557,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "default",
     description: "Slow ambient floating motion",
     promptHint: "gentle camera drift, a slow ambient floating motion with no specific direction, the camera barely moves but never sits perfectly still, evocative of contemplative atmospheric shots",
+    term: "slow gentle camera drift",
   },
   {
     id: "parallax",
@@ -523,6 +565,7 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     category: "default",
     description: "Lateral motion with foreground/background depth separation",
     promptHint: "parallax camera motion, lateral movement that emphasizes the depth separation between foreground and background elements, foreground objects appearing to move faster than distant ones",
+    term: "lateral parallax camera move",
   },
 ]
 
@@ -578,6 +621,18 @@ export function getCameraMotionPromptHint(id: string | undefined | null): string
   return getCameraMotion(id)?.promptHint ?? ""
 }
 
+/**
+ * Compact counterpart of `getCameraMotionPromptHint`: the short professional
+ * term a cinematographer would write for this move ("whip pan left",
+ * "push-pull swing") where the hint is the full mechanism sentence. Same
+ * lookup and same empty-string-on-miss behavior, so the two getters can never
+ * disagree about which motion they describe; "auto" (which injects nothing)
+ * resolves to "" here too.
+ */
+export function getCameraMotionTerm(id: string | undefined | null): string {
+  return resolveTerm(getCameraMotion(id))
+}
+
 export const CAMERA_MOTION_IDS: ReadonlyArray<string> = CAMERA_MOTIONS.map((m) => m.id)
 
 // ---------------------------------------------------------------------------
@@ -609,6 +664,31 @@ export function composeCameraMotionHintFromConnections(
   const parts: string[] = [base]
   const startClause = startHints.filter((h) => h && h.length > 0).join(" and ")
   const endClause = endHints.filter((h) => h && h.length > 0).join(" and ")
+  if (startClause) parts.push(`beginning with ${startClause}`)
+  if (endClause) parts.push(`ending with ${endClause}`)
+  return parts.join(", ")
+}
+
+/**
+ * Compact-mode mirror of `composeCameraMotionHintFromConnections`: the same
+ * start/end structure, built from the motion's short `term` and the connected
+ * parameter nodes' terms instead of their full promptHints
+ * ("dolly in, beginning with wide shot, ending with medium close-up").
+ *
+ * Same shape in every respect — empty base (an "auto" or unknown motion) still
+ * yields "", each side is joined with " and ", and the clauses are appended in
+ * start-then-end order.
+ */
+export function composeCameraMotionTermFromConnections(
+  motionId: string | undefined,
+  startTerms: ReadonlyArray<string>,
+  endTerms: ReadonlyArray<string>,
+): string {
+  const base = getCameraMotionTerm(motionId)
+  if (!base) return ""
+  const parts: string[] = [base]
+  const startClause = startTerms.filter((t) => t && t.length > 0).join(" and ")
+  const endClause = endTerms.filter((t) => t && t.length > 0).join(" and ")
   if (startClause) parts.push(`beginning with ${startClause}`)
   if (endClause) parts.push(`ending with ${endClause}`)
   return parts.join(", ")

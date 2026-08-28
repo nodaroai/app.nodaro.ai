@@ -12,6 +12,8 @@
  * "starting from <X>, ending at <Y>".
  */
 
+import { resolveTerm } from "./term.js"
+
 export type TransitionCategory =
   | "standard"
   | "time"
@@ -28,6 +30,16 @@ export interface Transition {
   readonly category: TransitionCategory
   readonly description: string
   readonly promptHint: string
+  /**
+   * Optional authored compact term (see `term.ts`). Authored where the
+   * lowercased label is not what an editor would write in a prompt — a UI
+   * compound ("None / Hard Cut" → "hard cut"), an annotation the derivation
+   * drops ("Fast-Forward (Day → Night)" → "day-to-night time-lapse"), a bare
+   * word that collides with another meaning ("Melt Down", "Channel Flip",
+   * "Roll"), or a coinage that is not the trade term ("Seamless Match" →
+   * "invisible cut"). Everywhere else the label IS the term.
+   */
+  readonly term?: string
 }
 
 export type TransitionPosition = "auto" | "start" | "middle" | "end" | "full"
@@ -46,7 +58,7 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
   // ============================================================================
   { id: "auto",              label: "Auto",              category: "standard", description: "Let the model choose", promptHint: "" },
   { id: "none",              label: "None / Hard Cut",   category: "standard", description: "Instantaneous switch, no transition",
-    promptHint: "no transition, hard cut, instantaneous switch from first shot to second shot" },
+    promptHint: "no transition, hard cut, instantaneous switch from first shot to second shot", term: "hard cut" },
   { id: "cross-dissolve",    label: "Cross-Dissolve",    category: "standard", description: "Gradual blend between shots",
     promptHint: "smooth cross-dissolve transition where the first shot gradually fades out as the second shot fades in" },
   { id: "fade-to-black",     label: "Fade to Black",     category: "standard", description: "Darkens to black, second emerges",
@@ -58,31 +70,31 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
   { id: "smash-cut",         label: "Smash Cut",         category: "standard", description: "Jarring abrupt cut between contrasting shots",
     promptHint: "smash cut: an abrupt jarring transition between two visually or tonally contrasting shots with no fade, on a beat" },
   { id: "iris",              label: "Iris",              category: "standard", description: "Circular iris closes, then opens on second",
-    promptHint: "iris transition: a circular vignette closes inward over the first shot until the frame is black, then opens outward to reveal the second shot" },
+    promptHint: "iris transition: a circular vignette closes inward over the first shot until the frame is black, then opens outward to reveal the second shot", term: "iris wipe" },
   { id: "wipe",              label: "Wipe",              category: "standard", description: "Linear wipe replaces first shot",
-    promptHint: "linear wipe transition: a clean diagonal line sweeps across the frame, revealing the second shot behind it" },
+    promptHint: "linear wipe transition: a clean diagonal line sweeps across the frame, revealing the second shot behind it", term: "linear wipe" },
   { id: "roll-transition",   label: "Roll",              category: "standard", description: "Frame rolls 90-180°, second shot upright on landing",
-    promptHint: "the frame rolls along the camera axis with a smooth 90 to 180 degree rotation, motion-blurred during the roll, and as the rotation completes the new shot is upright and stable in frame" },
+    promptHint: "the frame rolls along the camera axis with a smooth 90 to 180 degree rotation, motion-blurred during the roll, and as the rotation completes the new shot is upright and stable in frame", term: "camera roll transition" },
   { id: "seamless-match",    label: "Seamless Match",    category: "standard", description: "Hidden cut disguised by matched motion and color",
-    promptHint: "hidden seamless transition: the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take" },
+    promptHint: "hidden seamless transition: the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take", term: "invisible cut" },
 
   // ============================================================================
   // TIME — 8 entries — temporal shifts (same or related scene, different time, or memory)
   // ============================================================================
   { id: "fast-forward-day-night",  label: "Fast-Forward (Day → Night)", category: "time", description: "Time-lapse day to night same scene",
-    promptHint: "fast-forward time-lapse transition: the sun visibly arcs across the sky, shadows sweep, clouds streak, sky shifts from daylight blue through golden hour to deep night, stars emerge, all while framing and camera position remain locked on the same scene" },
+    promptHint: "fast-forward time-lapse transition: the sun visibly arcs across the sky, shadows sweep, clouds streak, sky shifts from daylight blue through golden hour to deep night, stars emerge, all while framing and camera position remain locked on the same scene", term: "day-to-night time-lapse" },
   { id: "fast-forward-night-day",  label: "Fast-Forward (Night → Day)", category: "time", description: "Time-lapse night to dawn same scene",
-    promptHint: "fast-forward time-lapse transition: stars fade, the sky shifts from deep night through pre-dawn blue to golden sunrise, shadows sweep in reverse, all while framing and camera position remain locked on the same scene" },
+    promptHint: "fast-forward time-lapse transition: stars fade, the sky shifts from deep night through pre-dawn blue to golden sunrise, shadows sweep in reverse, all while framing and camera position remain locked on the same scene", term: "night-to-day time-lapse" },
   { id: "seasonal-shift",          label: "Seasonal Shift",             category: "time", description: "Same scene through changing seasons",
-    promptHint: "accelerated seasonal time-lapse: foliage transitions from spring green to summer lushness to autumn red-gold to winter bare, leaves fall and regrow, snow accumulates and melts, all within the same locked framing" },
+    promptHint: "accelerated seasonal time-lapse: foliage transitions from spring green to summer lushness to autumn red-gold to winter bare, leaves fall and regrow, snow accumulates and melts, all within the same locked framing", term: "seasonal time-lapse" },
   { id: "aging",                   label: "Aging",                      category: "time", description: "Subject visibly ages forward in time",
-    promptHint: "accelerated aging transition: the subject visibly ages forward — skin develops fine lines then deeper wrinkles, hair lightens to silver, posture shifts subtly, while the framing holds steady on the face" },
+    promptHint: "accelerated aging transition: the subject visibly ages forward — skin develops fine lines then deeper wrinkles, hair lightens to silver, posture shifts subtly, while the framing holds steady on the face", term: "accelerated aging" },
   { id: "rewind",                  label: "Rewind",                     category: "time", description: "Time reverses, motion plays backward",
-    promptHint: "rewind transition: time reverses and all motion plays smoothly backward, water flows up, debris reassembles, the subject's recent actions undo, with a faint VHS-rewind tracking distortion at the edges" },
+    promptHint: "rewind transition: time reverses and all motion plays smoothly backward, water flows up, debris reassembles, the subject's recent actions undo, with a faint VHS-rewind tracking distortion at the edges", term: "reverse-motion rewind" },
   { id: "freeze-frame-jump",       label: "Freeze-Frame Jump",          category: "time", description: "Action freezes, jumps forward in time",
-    promptHint: "freeze-frame transition: motion arrests mid-action, the frame holds frozen for a beat, then snaps to a new moment hours or days later in the same scene with subjects in different positions" },
+    promptHint: "freeze-frame transition: motion arrests mid-action, the frame holds frozen for a beat, then snaps to a new moment hours or days later in the same scene with subjects in different positions", term: "freeze-frame time jump" },
   { id: "weather-shift",           label: "Weather Shift",              category: "time", description: "Same scene through changing weather",
-    promptHint: "accelerated weather transition: same scene, framing locked — clear sky darkens to storm clouds, rain begins and intensifies then clears, sun returns through breaking clouds" },
+    promptHint: "accelerated weather transition: same scene, framing locked — clear sky darkens to storm clouds, rain begins and intensifies then clears, sun returns through breaking clouds", term: "weather time-lapse" },
   { id: "flashback",               label: "Flashback",                  category: "time", description: "Memory-flashback into a past moment of the subject",
     promptHint: "brief flashback transition: the frame washes with a soft warm or desaturated tint, faint ripple distortion crosses the image as the present scene fades, and a remembered earlier moment resolves into focus on the same subject" },
 
@@ -96,7 +108,7 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
   { id: "sand-scatter",      label: "Sand Scatter",       category: "element", description: "Subject becomes sand, blown away, reforms",
     promptHint: "the subject crumbles into fine sand that is swept away by a gust of wind in a swirling vortex, then the sand particles converge and re-form into the new subject" },
   { id: "fire-burnup",       label: "Burn-Up",            category: "element", description: "Subject burns to embers, embers reform",
-    promptHint: "the subject ignites and burns from edges inward into glowing embers and ash, the embers swirl through the frame and re-ignite into the new subject" },
+    promptHint: "the subject ignites and burns from edges inward into glowing embers and ash, the embers swirl through the frame and re-ignite into the new subject", term: "burn to embers and reform" },
   { id: "smoke-puff",        label: "Smoke Puff",         category: "element", description: "Subject vanishes in smoke, reappears",
     promptHint: "the subject vanishes in a soft puff of smoke that billows outward and fills the frame, the smoke then clears to reveal the new subject in the new scene" },
   { id: "magic-sparkles",    label: "Magic Sparkles",     category: "element", description: "Particle dissolve à la Avengers / apparition",
@@ -112,7 +124,7 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
   { id: "aurora-sweep",      label: "Aurora Sweep",       category: "element", description: "Aurora curtain sweeps across, scene changes behind",
     promptHint: "a luminous green and violet aurora curtain ripples across the entire frame, the bright bands obscure the first scene, and as the aurora dissipates the second scene resolves in the clear sky" },
   { id: "sakura-petals",     label: "Sakura Storm",       category: "element", description: "Cherry blossom petals storm across the frame",
-    promptHint: "a dense storm of cherry blossom petals swirls in from one side and fills the frame in soft pink motion, the petals cluster to fully veil the image, then drift past to reveal the new scene" },
+    promptHint: "a dense storm of cherry blossom petals swirls in from one side and fills the frame in soft pink motion, the petals cluster to fully veil the image, then drift past to reveal the new scene", term: "cherry blossom petal storm" },
   { id: "garden-bloom",      label: "Garden Bloom",       category: "element", description: "Flowers bloom outward, parting to reveal new scene",
     promptHint: "lush flowers and vines rapidly grow and bloom outward from the edges of the frame, the foliage spreads to overtake the entire image, then parts open like curtains to reveal the new scene behind" },
   { id: "powder-burst",      label: "Powder Burst",       category: "element", description: "Colored powder bursts across frame and clears",
@@ -124,9 +136,9 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
   { id: "liquid-morph",      label: "Liquid Morph",       category: "morph", description: "Subject melts and reforms as new subject",
     promptHint: "smooth liquid morph: the first subject's surface becomes fluid and continuously deforms, flowing without breaks into the silhouette and details of the second subject" },
   { id: "pixelate-reform",   label: "Pixelate & Reform",  category: "morph", description: "Pixelates, scatters, reforms as new",
-    promptHint: "the first subject pixelates into large mosaic blocks that scatter outward across the frame, then the blocks converge and resolve into the new subject" },
+    promptHint: "the first subject pixelates into large mosaic blocks that scatter outward across the frame, then the blocks converge and resolve into the new subject", term: "pixelate and reform" },
   { id: "shatter-glass",     label: "Shatter & Reform",   category: "morph", description: "Subject shatters like glass, reforms",
-    promptHint: "the first subject shatters like glass into hundreds of shards that fly outward, then the shards reverse direction in reverse time and reassemble into the new subject" },
+    promptHint: "the first subject shatters like glass into hundreds of shards that fly outward, then the shards reverse direction in reverse time and reassemble into the new subject", term: "shatter like glass and reform" },
   { id: "origami-fold",      label: "Origami Fold",       category: "morph", description: "Subject folds like paper into new subject",
     promptHint: "the first subject creases and folds like sheets of origami paper, the folds rotate and re-arrange in elegant geometric steps, and the final fold reveals the new subject" },
   { id: "vortex-swirl",      label: "Vortex Swirl",       category: "morph", description: "Subject swirls into vortex, unwinds as new",
@@ -138,7 +150,7 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
   { id: "polygon-shatter",   label: "Polygon Shatter",    category: "morph", description: "Subject fragments into low-poly chunks, reassembles",
     promptHint: "the first subject fractures into low-polygon faceted chunks that explode outward in slow motion, the polygons then reverse course and re-assemble in clean geometric flight paths into the silhouette of the new subject" },
   { id: "melt-down",         label: "Melt Down",          category: "morph", description: "Subject melts into puddle, reforms as new",
-    promptHint: "the first subject's form softens and melts downward like wax, collapsing into a glossy puddle on the ground, the puddle then surges upward and re-solidifies into the new subject standing in the new scene" },
+    promptHint: "the first subject's form softens and melts downward like wax, collapsing into a glossy puddle on the ground, the puddle then surges upward and re-solidifies into the new subject standing in the new scene", term: "melt into a puddle and reform" },
 
   // ============================================================================
   // PORTAL — 10 entries — zoom-into-object world-jumps
@@ -156,13 +168,13 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
   { id: "fall-into-hole",    label: "Fall Into Hole",       category: "portal", description: "Camera falls through opening",
     promptHint: "the floor or ground opens beneath the camera and the camera falls downward through the opening, tumbling, and emerges into the new scene below" },
   { id: "pull-out-reveal",   label: "Pull-Out Reveal",      category: "portal", description: "Reveals scene was a picture in larger context",
-    promptHint: "the camera pulls back rapidly and reveals that the entire first scene was actually contained within a picture, painting, screen, or window in a larger second scene" },
+    promptHint: "the camera pulls back rapidly and reveals that the entire first scene was actually contained within a picture, painting, screen, or window in a larger second scene", term: "pull-back reveal" },
   { id: "zoom-into-mouth",   label: "Zoom Into Mouth",      category: "portal", description: "Push into open mouth, emerges in new world inside",
     promptHint: "the camera pushes into the subject's open mouth, the dark interior fills the frame, and the camera passes through the throat into the new scene which materialises as if emerging from inside the body" },
   { id: "push-through-glass", label: "Push Through Glass",   category: "portal", description: "Camera pushes through pane of glass into new world",
     promptHint: "the camera pushes toward a pane of glass in the scene, the surface ripples like liquid as the camera passes through with a faint refraction, and the space on the other side resolves as the new scene" },
   { id: "soul-jump",         label: "Soul Jump",            category: "portal", description: "Translucent soul leaves body, enters new body",
-    promptHint: "a translucent luminous form rises out of the first subject's body and shoots forward through the frame as a ghost-like soul, then dives into a new body in the new scene where the second subject animates to life" },
+    promptHint: "a translucent luminous form rises out of the first subject's body and shoots forward through the frame as a ghost-like soul, then dives into a new body in the new scene where the second subject animates to life", term: "soul leaves body and enters another" },
 
   // ============================================================================
   // PHYSICS — 9 entries — force-driven transitions
@@ -182,7 +194,7 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
   { id: "vehicle-explosion", label: "Vehicle Explosion",  category: "physics", description: "Vehicle detonates in foreground, scene changes behind",
     promptHint: "a vehicle in the foreground erupts in a violent explosion of fire and twisted metal, the fireball expands toward the camera and washes the frame in orange flame, and as the smoke parts the second scene resolves" },
   { id: "jump-match",        label: "Jump Match",         category: "physics", description: "Subject jumps, landing matches into new scene",
-    promptHint: "the subject jumps upward and out of frame at the end of the first shot, with matched velocity the camera follows the arc, and on landing the subject is in a new location seamlessly continuing the same jump" },
+    promptHint: "the subject jumps upward and out of frame at the end of the first shot, with matched velocity the camera follows the arc, and on landing the subject is in a new location seamlessly continuing the same jump", term: "match cut on a jump" },
   { id: "hand-swipe",        label: "Hand Swipe",         category: "physics", description: "Hand swipes across lens, scene changes during occlusion",
     promptHint: "a hand sweeps across the camera lens at close range, fully occluding the frame in motion blur for a single beat, and as the hand exits the opposite side the scene has changed to the new setting" },
 
@@ -216,11 +228,11 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
   { id: "datamosh",          label: "Datamosh",           category: "glitch", description: "Motion-vector smear bleeds scenes",
     promptHint: "datamosh transition: the motion vectors of the first scene continue smearing into the pixels of the second scene, creating a fluid pixel-bleed handoff" },
   { id: "channel-flip",      label: "Channel Flip",       category: "glitch", description: "TV channel flip with static",
-    promptHint: "a brief burst of TV static and channel-flip artifacts sweeps the frame, and the new scene resolves as if changing channels on an old television" },
+    promptHint: "a brief burst of TV static and channel-flip artifacts sweeps the frame, and the new scene resolves as if changing channels on an old television", term: "tv channel flip with static" },
   { id: "hologram-flicker",  label: "Hologram Flicker",   category: "glitch", description: "Hologram-style flicker materialises new scene",
     promptHint: "a hologram-style flicker with horizontal interference bands and chromatic aberration overtakes the frame for a beat, and resolves into the new scene as if it materialised from a projection" },
   { id: "display-wipe",      label: "Display Wipe",       category: "glitch", description: "Scene compresses into display, expands to new scene",
-    promptHint: "the first scene compresses into a small floating display screen at the center of the frame with a CRT power-on/off animation and scanline flicker, the display then expands outward and unfolds into the new scene full-frame" },
+    promptHint: "the first scene compresses into a small floating display screen at the center of the frame with a CRT power-on/off animation and scanline flicker, the display then expands outward and unfolds into the new scene full-frame", term: "compress into a screen and expand out" },
   { id: "double-exposure",   label: "Double Exposure",    category: "glitch", description: "Two scenes overlay translucent, first fades to second",
     promptHint: "the first and second scenes blend as a translucent double exposure where both images coexist semi-transparently on the frame, the first image then gradually fades out leaving the second image fully resolved" },
 ]
@@ -258,6 +270,19 @@ export function getTransitionLabel(id: string | undefined | null, fallback?: str
 
 export function getTransitionPromptHint(id: string | undefined | null): string {
   return getTransition(id)?.promptHint ?? ""
+}
+
+/**
+ * Compact professional TERM for an id — the short phrase an editor would write
+ * in a prompt ("hard cut", "invisible cut", "day-to-night time-lapse"), as
+ * opposed to the paragraph-length `promptHint`.
+ *
+ * Same lookup and same empty-string-on-miss behavior as
+ * `getTransitionPromptHint`, so the two can never disagree about which entry
+ * they describe. The no-op "Auto" entry resolves to `""` in both.
+ */
+export function getTransitionTerm(id: string | undefined | null): string {
+  return resolveTerm(getTransition(id))
 }
 
 export const TRANSITION_IDS: ReadonlyArray<string> = TRANSITIONS.map((t) => t.id)

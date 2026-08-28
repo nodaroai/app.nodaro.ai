@@ -73,6 +73,7 @@ import { INSTRUMENTS, PRODUCTION_STYLES, VOCAL_PRESENCE, SINGING_STYLES } from "
 import { VOICE_AGES, VOICE_GENDERS, VOICE_LANGUAGES, VOICE_ACCENTS, VOICE_TIMBRES } from "./voice-character.js"
 import { VOICE_PACES, VOICE_EMOTIONS, VOICE_ARCHETYPES } from "./voice-delivery.js"
 import { composePickerCatalogs, getRegisteredCatalogPacks, catalogPacksVersion } from "./catalog-packs.js"
+import { resolveTerm } from "./term.js"
 
 export interface PickerOption {
   readonly id: string
@@ -81,6 +82,15 @@ export interface PickerOption {
   /** The group id (matches `categoryOrder` / `categoryLabels`). */
   readonly category?: string
   readonly promptHint: string
+  /**
+   * The short professional term this id injects in COMPACT hint mode ("whip
+   * pan left" where `promptHint` is the full mechanism sentence). Always
+   * present and already RESOLVED via `resolveTerm` — an authored `term` when
+   * the catalog entry carries one, the derived label otherwise, and `""` for
+   * a no-op ("auto"/"none") entry that injects nothing. Consumers render
+   * `label` and inject `term`; they never derive it themselves.
+   */
+  readonly term: string
   /** Only present if the source catalog entry already carries a data icon/emoji/thumbnail field. */
   readonly icon?: string
 }
@@ -127,6 +137,8 @@ interface BaseCatalogEntry {
   readonly label: string
   readonly description: string
   readonly promptHint: string
+  /** Optional authored compact term (see `term.ts` for the convention). */
+  readonly term?: string
 }
 
 /**
@@ -147,6 +159,10 @@ function toOptions<T extends BaseCatalogEntry>(
       id: e.id,
       label: e.label,
       promptHint: e.promptHint,
+      // Resolved here — never at the consumer — so an authored `term` on the
+      // catalog entry flows through automatically and a no-op entry resolves
+      // to "".
+      term: resolveTerm(e),
     }
     if (e.description) opt.description = e.description
     if (categoryField) opt.category = e[categoryField] as unknown as string
@@ -177,6 +193,10 @@ function objectOptions(
     description: e.description,
     category: e.subcategory,
     promptHint: phrase(e.label.toLowerCase(), e.description),
+    // Object entities have no `promptHint` field of their own (it is
+    // synthesized above); the lowercased label IS the professional term for a
+    // concrete object ("golden retriever", "katana").
+    term: e.label.toLowerCase(),
   }))
 }
 
@@ -281,11 +301,11 @@ function perFieldDims(
  */
 function musicGenreDims(fields: ReadonlyArray<string>): ReadonlyArray<PickerDimension> {
   const optionsByField: Record<string, ReadonlyArray<PickerOption>> = {
-    genre: MUSIC_GENRES.map((g) => ({ id: g.id, label: g.label, description: g.description, category: g.category, promptHint: g.promptHint })),
+    genre: MUSIC_GENRES.map((g) => ({ id: g.id, label: g.label, description: g.description, category: g.category, promptHint: g.promptHint, term: resolveTerm(g) })),
     subgenre: MUSIC_GENRES.flatMap((g) =>
-      g.subgenres.map((s) => ({ id: s.id, label: s.label, promptHint: s.promptHint })),
+      g.subgenres.map((s) => ({ id: s.id, label: s.label, promptHint: s.promptHint, term: resolveTerm(s) })),
     ),
-    era: MUSIC_ERAS.map((e) => ({ id: e.id, label: e.label, description: e.description, promptHint: e.promptHint })),
+    era: MUSIC_ERAS.map((e) => ({ id: e.id, label: e.label, description: e.description, promptHint: e.promptHint, term: resolveTerm(e) })),
   }
   return fields.map((field) => {
     const options = optionsByField[field]
@@ -814,6 +834,9 @@ export type ProjectedPickerDimension = ProjectedCatalogDimension
 export type ProjectedPickerCatalog = ProjectedCatalog
 
 function projectOption(o: PickerOption, detail: PickerCatalogDetail): ProjectedPickerOption {
+  // `term` rides at BOTH detail levels: a thin client renders `label` and
+  // injects `term`, so compact must carry it — it is what makes compact hint
+  // mode possible without a second round-trip for the full payload.
   return detail === "full"
     ? {
         id: o.id,
@@ -821,9 +844,10 @@ function projectOption(o: PickerOption, detail: PickerCatalogDetail): ProjectedP
         description: o.description,
         category: o.category,
         promptHint: o.promptHint,
+        term: o.term,
         icon: o.icon,
       }
-    : { id: o.id, label: o.label, category: o.category, icon: o.icon }
+    : { id: o.id, label: o.label, category: o.category, term: o.term, icon: o.icon }
 }
 
 /** Project a catalog to the wire shape: compact by default, optional category/field filter. */

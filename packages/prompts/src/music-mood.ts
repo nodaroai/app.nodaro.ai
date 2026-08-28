@@ -5,22 +5,34 @@
 
 import { pickIds } from "@nodaro/shared"
 
+import { resolveTerm } from "./term.js"
+
 export interface MusicMoodEntry {
   readonly id: string
   readonly label: string
   readonly description: string
   readonly promptHint: string
+  /**
+   * Compact professional term injected in compact hint mode (see `term.ts`).
+   *
+   * Authored only where the lowercased label is NOT the phrase a music
+   * supervisor would write — the bare-degree energies ("Low"/"Moderate"/
+   * "High" mean nothing without "energy" attached) and the noun-shaped
+   * "Awe". Everywhere else the label already IS the trade descriptor and
+   * `resolveTerm` derives it.
+   */
+  readonly term?: string
 }
 
 export const MUSIC_ENERGIES: ReadonlyArray<MusicMoodEntry> = [
-  { id: "low",          label: "Low",          description: "Calm, slow",                 promptHint: "low-energy" },
+  { id: "low",          label: "Low",          description: "Calm, slow",                 promptHint: "low-energy", term: "low-energy" },
   { id: "mellow",       label: "Mellow",       description: "Relaxed, laid-back",         promptHint: "mellow" },
   { id: "gentle",       label: "Gentle",       description: "Soft, tender",               promptHint: "gentle" },
-  { id: "moderate",     label: "Moderate",     description: "Balanced, steady",           promptHint: "moderate-energy" },
-  { id: "building",     label: "Building",     description: "Slowly intensifying",        promptHint: "building energy" },
+  { id: "moderate",     label: "Moderate",     description: "Balanced, steady",           promptHint: "moderate-energy", term: "moderate-energy" },
+  { id: "building",     label: "Building",     description: "Slowly intensifying",        promptHint: "building energy", term: "building energy" },
   { id: "upbeat",       label: "Upbeat",       description: "Lively, optimistic",         promptHint: "upbeat" },
   { id: "driving",      label: "Driving",      description: "Forward-pushing momentum",   promptHint: "driving" },
-  { id: "high",         label: "High",         description: "Energetic, intense",         promptHint: "high-energy" },
+  { id: "high",         label: "High",         description: "Energetic, intense",         promptHint: "high-energy", term: "high-energy" },
   { id: "explosive",    label: "Explosive",    description: "Bursting, wild",             promptHint: "explosive" },
   { id: "frenetic",     label: "Frenetic",     description: "Intense, rapid",             promptHint: "frenetic" },
   { id: "pulsing",      label: "Pulsing",      description: "Rhythmic, beat-driven",      promptHint: "pulsing" },
@@ -57,7 +69,7 @@ export const MUSIC_EMOTIONS: ReadonlyArray<MusicMoodEntry> = [
   { id: "peaceful",     label: "Peaceful",     description: "Serene, restful",            promptHint: "peaceful" },
   { id: "contemplative",label: "Contemplative",description: "Reflective, thoughtful",     promptHint: "contemplative" },
   { id: "ethereal",     label: "Ethereal",     description: "Otherworldly, floating",     promptHint: "ethereal" },
-  { id: "awe",          label: "Awe",          description: "Wonder, vastness",           promptHint: "awe-inspiring" },
+  { id: "awe",          label: "Awe",          description: "Wonder, vastness",           promptHint: "awe-inspiring", term: "awe-inspiring" },
 ] as const
 
 export const MUSIC_VIBES: ReadonlyArray<MusicMoodEntry> = [
@@ -99,30 +111,72 @@ export function getMusicVibe(id: string | undefined): MusicMoodEntry | undefined
   return id ? VIBE_BY_ID.get(id) : undefined
 }
 
-export function buildMusicMoodHints(data: {
+/**
+ * The COMPACT counterparts of the `promptHint` lookups: the short professional
+ * term a consumer injects instead of the entry's full fragment ("low-energy",
+ * "building energy", "awe-inspiring"). Same lookup as the getters above, same
+ * empty-string-on-miss behavior, so hint mode and term mode can never disagree
+ * about WHICH entry they are describing.
+ */
+export function getMusicEnergyTerm(id: string | undefined | null): string {
+  return resolveTerm(id ? getMusicEnergy(id) : undefined)
+}
+export function getMusicEmotionTerm(id: string | undefined | null): string {
+  return resolveTerm(id ? getMusicEmotion(id) : undefined)
+}
+export function getMusicVibeTerm(id: string | undefined | null): string {
+  return resolveTerm(id ? getMusicVibe(id) : undefined)
+}
+
+export interface MusicMoodData {
   readonly preText?: string
   readonly postText?: string
   readonly energy?: string
   readonly emotion?: string | ReadonlyArray<string>
   readonly vibe?: string | ReadonlyArray<string>
-}): string {
+}
+
+/** Resolve one multi-pick field's ids into non-empty fragments, in pick order. */
+function musicMoodFragments(
+  value: string | ReadonlyArray<string> | undefined,
+  lookup: (id: string) => MusicMoodEntry | undefined,
+  fragmentFor: (entry: MusicMoodEntry) => string,
+): string[] {
+  return pickIds(value)
+    .map((id) => {
+      const entry = lookup(id)
+      return entry ? fragmentFor(entry) : ""
+    })
+    .filter((f) => f.length > 0)
+}
+
+/**
+ * The one walk over the energy / emotion / vibe fields, parameterized by how a
+ * single selected entry turns into a fragment. `buildMusicMoodHints` (verbose)
+ * and `buildMusicMoodTerms` (compact) both delegate here, so the two can never
+ * disagree about WHICH ids contribute or in what order — only about how each
+ * one is phrased. Free-text pre/post is user wording and passes through both.
+ */
+function composeMusicMood(
+  data: MusicMoodData,
+  fragmentFor: (entry: MusicMoodEntry) => string,
+): string {
   const fragments: string[] = []
   const pre = typeof data.preText === "string" ? data.preText.trim() : ""
   if (pre) fragments.push(pre)
 
   const parts: string[] = []
-  const e = getMusicEnergy(data.energy)
-  if (e) parts.push(e.promptHint)
+  const energy = getMusicEnergy(data.energy)
+  if (energy) {
+    const energyFragment = fragmentFor(energy)
+    if (energyFragment) parts.push(energyFragment)
+  }
 
-  const emotionHints = pickIds(data.emotion)
-    .map((id) => getMusicEmotion(id)?.promptHint)
-    .filter((h): h is string => !!h)
-  if (emotionHints.length > 0) parts.push(emotionHints.join(", "))
+  const emotionFragments = musicMoodFragments(data.emotion, getMusicEmotion, fragmentFor)
+  if (emotionFragments.length > 0) parts.push(emotionFragments.join(", "))
 
-  const vibeHints = pickIds(data.vibe)
-    .map((id) => getMusicVibe(id)?.promptHint)
-    .filter((h): h is string => !!h)
-  if (vibeHints.length > 0) parts.push(vibeHints.join(", "))
+  const vibeFragments = musicMoodFragments(data.vibe, getMusicVibe, fragmentFor)
+  if (vibeFragments.length > 0) parts.push(vibeFragments.join(", "))
 
   if (parts.length > 0) fragments.push(parts.join(" "))
 
@@ -130,6 +184,19 @@ export function buildMusicMoodHints(data: {
   if (post) fragments.push(post)
 
   return fragments.join(", ")
+}
+
+export function buildMusicMoodHints(data: MusicMoodData): string {
+  return composeMusicMood(data, (entry) => entry.promptHint)
+}
+
+/**
+ * The COMPACT counterpart of `buildMusicMoodHints`: the same field walk in the
+ * same canonical order, emitting each selection's short professional term
+ * instead of its full prompt fragment.
+ */
+export function buildMusicMoodTerms(data: MusicMoodData): string {
+  return composeMusicMood(data, resolveTerm)
 }
 
 export const MUSIC_MOOD_DEFAULT_DATA: {

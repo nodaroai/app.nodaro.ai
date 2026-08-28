@@ -11,6 +11,8 @@
  * Synth / Guitar / Bass / Brass / Woodwinds / Strings / World.
  */
 
+import { resolveTerm } from "./term.js"
+
 export type InstrumentCategory =
   | "drums"
   | "percussion"
@@ -48,8 +50,19 @@ export interface InstrumentationEntry {
   readonly label: string
   readonly description: string
   readonly promptHint: string
+  /**
+   * Optional authored compact term (see `term.ts` for the convention).
+   * Authored only where the lowercased label is NOT what a producer would
+   * write in a prompt — bare modifiers whose trade term carries a category
+   * noun ("Stab" → "synth stab", "Polished" → "polished production"), bare
+   * genre words in the singing-style slot ("Pop" → "pop singing"), and
+   * annotated labels ("Trap (Melodic)" → "melodic trap singing"). Everywhere
+   * else the lowercased label IS the term and nothing is authored.
+   */
+  readonly term?: string
 }
 
+/** Inherits the optional `term` from `InstrumentationEntry`. */
 export interface CategorizedInstrument extends InstrumentationEntry {
   readonly category: InstrumentCategory
 }
@@ -58,7 +71,7 @@ export const INSTRUMENTS: ReadonlyArray<CategorizedInstrument> = [
   // -------- Drums --------
   { id: "drums",           label: "Drums",           description: "Acoustic drum kit",         promptHint: "drums",                category: "drums" },
   { id: "drum-machine",    label: "Drum Machine",    description: "Programmed beats",          promptHint: "drum machine",         category: "drums" },
-  { id: "808",             label: "808",             description: "Roland TR-808 bass + kit",  promptHint: "808 drums",            category: "drums" },
+  { id: "808",             label: "808",             description: "Roland TR-808 bass + kit",  promptHint: "808 drums",            category: "drums", term: "808 drums" },
   { id: "live-drums",      label: "Live Drums",      description: "Recorded acoustic kit",     promptHint: "live drums",           category: "drums" },
   { id: "breakbeats",      label: "Breakbeats",      description: "Sampled drum loops",        promptHint: "breakbeats",           category: "drums" },
   { id: "trap-drums",      label: "Trap Drums",      description: "Hi-hat rolls + 808",        promptHint: "trap drums",           category: "drums" },
@@ -86,11 +99,11 @@ export const INSTRUMENTS: ReadonlyArray<CategorizedInstrument> = [
   // -------- Keys --------
   { id: "piano",           label: "Piano",           description: "Acoustic grand or upright", promptHint: "piano",                category: "keys" },
   { id: "electric-piano",  label: "Electric Piano",  description: "Rhodes / Wurlitzer-style",  promptHint: "electric piano",       category: "keys" },
-  { id: "wurlitzer",       label: "Wurlitzer",       description: "Vintage Wurlitzer EP",      promptHint: "Wurlitzer electric piano", category: "keys" },
-  { id: "rhodes",          label: "Rhodes",          description: "Vintage Rhodes EP",         promptHint: "Rhodes electric piano",category: "keys" },
+  { id: "wurlitzer",       label: "Wurlitzer",       description: "Vintage Wurlitzer EP",      promptHint: "Wurlitzer electric piano", category: "keys", term: "wurlitzer electric piano" },
+  { id: "rhodes",          label: "Rhodes",          description: "Vintage Rhodes EP",         promptHint: "Rhodes electric piano",category: "keys", term: "rhodes electric piano" },
   { id: "clavinet",        label: "Clavinet",        description: "Funky Hohner D6",           promptHint: "clavinet",             category: "keys" },
   { id: "organ",           label: "Organ",           description: "Hammond or pipe organ",     promptHint: "organ",                category: "keys" },
-  { id: "hammond-organ",   label: "Hammond B3",      description: "Soul / rock B3 organ",      promptHint: "Hammond B3 organ",     category: "keys" },
+  { id: "hammond-organ",   label: "Hammond B3",      description: "Soul / rock B3 organ",      promptHint: "Hammond B3 organ",     category: "keys", term: "hammond b3 organ" },
   { id: "pipe-organ",      label: "Pipe Organ",      description: "Cathedral / church",        promptHint: "pipe organ",           category: "keys" },
   { id: "accordion",       label: "Accordion",       description: "Bellows-driven reed",       promptHint: "accordion",            category: "keys" },
   { id: "mellotron",       label: "Mellotron",       description: "Tape-loop keyboard",        promptHint: "mellotron",            category: "keys" },
@@ -102,19 +115,19 @@ export const INSTRUMENTS: ReadonlyArray<CategorizedInstrument> = [
   { id: "lead-synth",      label: "Lead Synth",      description: "Cutting melodic synth",     promptHint: "lead synth",           category: "synth" },
   { id: "pluck-synth",     label: "Pluck Synth",     description: "Short, plucked timbre",     promptHint: "pluck synth",          category: "synth" },
   { id: "pads",            label: "Synth Pads",      description: "Sustained synth textures",  promptHint: "synth pads",           category: "synth" },
-  { id: "arpeggiator",     label: "Arpeggiator",     description: "Sequenced arp patterns",    promptHint: "arpeggiated synth",    category: "synth" },
+  { id: "arpeggiator",     label: "Arpeggiator",     description: "Sequenced arp patterns",    promptHint: "arpeggiated synth",    category: "synth", term: "arpeggiated synth" },
   { id: "vocoder",          label: "Vocoder",          description: "Voice-modulated synth",   promptHint: "vocoder",              category: "synth" },
   { id: "talkbox",         label: "Talkbox",         description: "Mouth-shaped synth",        promptHint: "talkbox",              category: "synth" },
-  { id: "modular-synth",   label: "Modular",         description: "Patchable analog synth",    promptHint: "modular synth",        category: "synth" },
+  { id: "modular-synth",   label: "Modular",         description: "Patchable analog synth",    promptHint: "modular synth",        category: "synth", term: "modular synth" },
   { id: "fm-synth",        label: "FM Synth",        description: "Frequency-modulation synth",promptHint: "FM synth",             category: "synth" },
-  { id: "wavetable-synth", label: "Wavetable",       description: "Wavetable-scanning synth",  promptHint: "wavetable synth",      category: "synth" },
-  { id: "stab-synth",      label: "Stab",            description: "Short, percussive chord",   promptHint: "synth stab",           category: "synth" },
+  { id: "wavetable-synth", label: "Wavetable",       description: "Wavetable-scanning synth",  promptHint: "wavetable synth",      category: "synth", term: "wavetable synth" },
+  { id: "stab-synth",      label: "Stab",            description: "Short, percussive chord",   promptHint: "synth stab",           category: "synth", term: "synth stab" },
 
   // -------- Guitar --------
   { id: "acoustic-guitar", label: "Acoustic Guitar", description: "Steel- or nylon-strung",    promptHint: "acoustic guitar",      category: "guitar" },
   { id: "electric-guitar", label: "Electric Guitar", description: "Solid-body, often distorted", promptHint: "electric guitar",    category: "guitar" },
   { id: "classical-guitar",label: "Classical Guitar",description: "Nylon-string, fingerstyle", promptHint: "classical guitar",     category: "guitar" },
-  { id: "12-string-guitar",label: "12-String",       description: "Doubled-course strum",      promptHint: "12-string guitar",     category: "guitar" },
+  { id: "12-string-guitar",label: "12-String",       description: "Doubled-course strum",      promptHint: "12-string guitar",     category: "guitar", term: "12-string guitar" },
   { id: "pedal-steel",     label: "Pedal Steel",     description: "Country sliding steel",     promptHint: "pedal steel",          category: "guitar" },
   { id: "lap-steel",       label: "Lap Steel",       description: "Hawaiian lap-played steel", promptHint: "lap steel",            category: "guitar" },
   { id: "dobro",           label: "Dobro",           description: "Resonator guitar",          promptHint: "dobro resonator",      category: "guitar" },
@@ -162,8 +175,8 @@ export const INSTRUMENTS: ReadonlyArray<CategorizedInstrument> = [
   { id: "cello",           label: "Cello",           description: "Solo cello",                promptHint: "cello",                category: "strings" },
   { id: "double-bass",     label: "Double Bass",     description: "Orchestral upright bass",   promptHint: "double bass",          category: "strings" },
   { id: "harp",            label: "Harp",            description: "Concert or folk harp",      promptHint: "harp",                 category: "strings" },
-  { id: "pizzicato-strings",label: "Pizzicato",      description: "Plucked strings",           promptHint: "pizzicato strings",    category: "strings" },
-  { id: "staccato-strings",label: "Staccato",        description: "Short, punchy strings",     promptHint: "staccato strings",     category: "strings" },
+  { id: "pizzicato-strings",label: "Pizzicato",      description: "Plucked strings",           promptHint: "pizzicato strings",    category: "strings", term: "pizzicato strings" },
+  { id: "staccato-strings",label: "Staccato",        description: "Short, punchy strings",     promptHint: "staccato strings",     category: "strings", term: "staccato strings" },
   { id: "fiddle",          label: "Fiddle",          description: "Folk-style violin",         promptHint: "fiddle",               category: "strings" },
 
   // -------- World --------
@@ -186,40 +199,40 @@ export const INSTRUMENTS: ReadonlyArray<CategorizedInstrument> = [
 
   // -------- Middle Eastern --------
   { id: "kamancheh",       label: "Kamancheh",       description: "Persian bowed spike fiddle", promptHint: "kamancheh",           category: "middle-eastern" },
-  { id: "ney",             label: "Ney",             description: "Persian/Arabic end-blown reed flute", promptHint: "ney flute", category: "middle-eastern" },
+  { id: "ney",             label: "Ney",             description: "Persian/Arabic end-blown reed flute", promptHint: "ney flute", category: "middle-eastern", term: "ney flute" },
   { id: "santur",          label: "Santur",          description: "Persian hammered dulcimer",  promptHint: "santur",              category: "middle-eastern" },
 ] as const
 
 export const PRODUCTION_STYLES: ReadonlyArray<InstrumentationEntry> = [
-  { id: "polished",        label: "Polished",        description: "Pristine, mainstream production", promptHint: "polished production" },
-  { id: "lo-fi",           label: "Lo-fi",           description: "Warm tape hiss, imperfect",       promptHint: "lo-fi production" },
-  { id: "raw",             label: "Raw",             description: "Unfiltered, live feel",           promptHint: "raw production" },
-  { id: "vintage",         label: "Vintage",         description: "Analog warmth",                   promptHint: "vintage production" },
-  { id: "modern",          label: "Modern",          description: "Contemporary digital",            promptHint: "modern production" },
-  { id: "minimalist",      label: "Minimalist",      description: "Sparse, restrained",              promptHint: "minimalist production" },
-  { id: "wall-of-sound",   label: "Wall of Sound",   description: "Dense, layered",                  promptHint: "wall-of-sound production" },
-  { id: "ambient",         label: "Ambient",         description: "Atmospheric, reverbed",           promptHint: "ambient production" },
-  { id: "garage-band",     label: "Garage Band",     description: "DIY, basement-tracked",           promptHint: "garage band production" },
-  { id: "live-recording",  label: "Live",            description: "Live concert / room sound",       promptHint: "live recording" },
-  { id: "demo-quality",    label: "Demo",            description: "Rough demo aesthetic",            promptHint: "demo quality" },
-  { id: "studio-pristine", label: "Studio Pristine", description: "Hi-fi reference quality",         promptHint: "pristine studio production" },
-  { id: "tape-saturated",  label: "Tape Saturated",  description: "Analog tape warmth + drive",      promptHint: "tape-saturated" },
-  { id: "8-bit-retro",     label: "8-bit Retro",     description: "Lo-bitrate retro game audio",     promptHint: "8-bit retro production" },
+  { id: "polished",        label: "Polished",        description: "Pristine, mainstream production", promptHint: "polished production", term: "polished production" },
+  { id: "lo-fi",           label: "Lo-fi",           description: "Warm tape hiss, imperfect",       promptHint: "lo-fi production", term: "lo-fi production" },
+  { id: "raw",             label: "Raw",             description: "Unfiltered, live feel",           promptHint: "raw production", term: "raw production" },
+  { id: "vintage",         label: "Vintage",         description: "Analog warmth",                   promptHint: "vintage production", term: "vintage production" },
+  { id: "modern",          label: "Modern",          description: "Contemporary digital",            promptHint: "modern production", term: "modern production" },
+  { id: "minimalist",      label: "Minimalist",      description: "Sparse, restrained",              promptHint: "minimalist production", term: "minimalist production" },
+  { id: "wall-of-sound",   label: "Wall of Sound",   description: "Dense, layered",                  promptHint: "wall-of-sound production", term: "wall-of-sound production" },
+  { id: "ambient",         label: "Ambient",         description: "Atmospheric, reverbed",           promptHint: "ambient production", term: "ambient production" },
+  { id: "garage-band",     label: "Garage Band",     description: "DIY, basement-tracked",           promptHint: "garage band production", term: "garage band production" },
+  { id: "live-recording",  label: "Live",            description: "Live concert / room sound",       promptHint: "live recording", term: "live recording" },
+  { id: "demo-quality",    label: "Demo",            description: "Rough demo aesthetic",            promptHint: "demo quality", term: "demo quality" },
+  { id: "studio-pristine", label: "Studio Pristine", description: "Hi-fi reference quality",         promptHint: "pristine studio production", term: "pristine studio production" },
+  { id: "tape-saturated",  label: "Tape Saturated",  description: "Analog tape warmth + drive",      promptHint: "tape-saturated", term: "tape-saturated production" },
+  { id: "8-bit-retro",     label: "8-bit Retro",     description: "Lo-bitrate retro game audio",     promptHint: "8-bit retro production", term: "8-bit retro production" },
 ] as const
 
 export const VOCAL_PRESENCE: ReadonlyArray<InstrumentationEntry> = [
-  { id: "instrumental",    label: "Instrumental",    description: "No vocals (exclusive)",            promptHint: "instrumental, no vocals" },
-  { id: "male-lead",       label: "Male Lead",       description: "Male lead vocal",                  promptHint: "male lead vocals" },
-  { id: "female-lead",     label: "Female Lead",     description: "Female lead vocal",                promptHint: "female lead vocals" },
-  { id: "androgynous-lead",label: "Androgynous",     description: "Gender-neutral lead",              promptHint: "androgynous lead vocals" },
-  { id: "duet",            label: "Duet",            description: "Two lead vocalists",               promptHint: "duet lead vocals" },
+  { id: "instrumental",    label: "Instrumental",    description: "No vocals (exclusive)",            promptHint: "instrumental, no vocals", term: "instrumental, no vocals" },
+  { id: "male-lead",       label: "Male Lead",       description: "Male lead vocal",                  promptHint: "male lead vocals", term: "male lead vocals" },
+  { id: "female-lead",     label: "Female Lead",     description: "Female lead vocal",                promptHint: "female lead vocals", term: "female lead vocals" },
+  { id: "androgynous-lead",label: "Androgynous",     description: "Gender-neutral lead",              promptHint: "androgynous lead vocals", term: "androgynous lead vocals" },
+  { id: "duet",            label: "Duet",            description: "Two lead vocalists",               promptHint: "duet lead vocals", term: "duet lead vocals" },
   { id: "choir",           label: "Choir",           description: "Choral / ensemble vocals",         promptHint: "choir vocals" },
   { id: "gospel-choir",    label: "Gospel Choir",    description: "Gospel-style choir backing",       promptHint: "gospel choir" },
-  { id: "harmony-stack",   label: "Harmony Stack",   description: "Stacked vocal harmonies",          promptHint: "stacked vocal harmonies" },
-  { id: "rapper-lead",     label: "Rapper",          description: "Rap lead",                         promptHint: "rap lead vocals" },
+  { id: "harmony-stack",   label: "Harmony Stack",   description: "Stacked vocal harmonies",          promptHint: "stacked vocal harmonies", term: "stacked vocal harmonies" },
+  { id: "rapper-lead",     label: "Rapper",          description: "Rap lead",                         promptHint: "rap lead vocals", term: "rap lead vocals" },
   { id: "spoken-word",     label: "Spoken Word",     description: "Spoken / poetry over music",       promptHint: "spoken word" },
   { id: "vocal-chops",     label: "Vocal Chops",     description: "Sliced sample vocals",             promptHint: "vocal chops" },
-  { id: "mixed",           label: "Mixed",           description: "Multiple lead vocalists",          promptHint: "mixed lead vocals" },
+  { id: "mixed",           label: "Mixed",           description: "Multiple lead vocalists",          promptHint: "mixed lead vocals", term: "mixed lead vocals" },
 ] as const
 
 /** "instrumental" is mutually exclusive with any other vocal presence —
@@ -228,30 +241,30 @@ export const VOCAL_PRESENCE: ReadonlyArray<InstrumentationEntry> = [
 export const VOCAL_PRESENCE_INSTRUMENTAL_ID = "instrumental"
 
 export const SINGING_STYLES: ReadonlyArray<InstrumentationEntry> = [
-  { id: "pop-singing",      label: "Pop",             description: "Mainstream lead style",          promptHint: "pop singing" },
-  { id: "rock-singing",     label: "Rock",            description: "Rock-style vocal delivery",      promptHint: "rock singing" },
-  { id: "operatic",         label: "Operatic",        description: "Classical opera technique",      promptHint: "operatic singing" },
-  { id: "classical-vocals", label: "Classical",       description: "Trained classical voice",        promptHint: "classical vocals" },
+  { id: "pop-singing",      label: "Pop",             description: "Mainstream lead style",          promptHint: "pop singing", term: "pop singing" },
+  { id: "rock-singing",     label: "Rock",            description: "Rock-style vocal delivery",      promptHint: "rock singing", term: "rock singing" },
+  { id: "operatic",         label: "Operatic",        description: "Classical opera technique",      promptHint: "operatic singing", term: "operatic singing" },
+  { id: "classical-vocals", label: "Classical",       description: "Trained classical voice",        promptHint: "classical vocals", term: "classical vocals" },
   { id: "rap",              label: "Rap",             description: "Rhythmic spoken delivery",       promptHint: "rap" },
-  { id: "trap-melodic",     label: "Trap (Melodic)",  description: "Melodic trap, autotuned",        promptHint: "melodic trap singing" },
-  { id: "growl",            label: "Growl",           description: "Death-metal-style growl",        promptHint: "growled vocals" },
-  { id: "scream",           label: "Scream",          description: "Hardcore / screamed",            promptHint: "screamed vocals" },
-  { id: "shout",            label: "Shout",           description: "Punk / chanted shout",           promptHint: "shouted vocals" },
+  { id: "trap-melodic",     label: "Trap (Melodic)",  description: "Melodic trap, autotuned",        promptHint: "melodic trap singing", term: "melodic trap singing" },
+  { id: "growl",            label: "Growl",           description: "Death-metal-style growl",        promptHint: "growled vocals", term: "growled vocals" },
+  { id: "scream",           label: "Scream",          description: "Hardcore / screamed",            promptHint: "screamed vocals", term: "screamed vocals" },
+  { id: "shout",            label: "Shout",           description: "Punk / chanted shout",           promptHint: "shouted vocals", term: "shouted vocals" },
   { id: "falsetto",         label: "Falsetto",        description: "High register, light",           promptHint: "falsetto" },
   { id: "head-voice",       label: "Head Voice",      description: "Resonant high register",         promptHint: "head voice" },
   { id: "chest-voice",      label: "Chest Voice",     description: "Strong, low register",           promptHint: "chest voice" },
   { id: "belting",          label: "Belting",         description: "Powerful sustained high",        promptHint: "belting" },
   { id: "crooning",         label: "Crooning",        description: "Smooth vintage romantic",        promptHint: "crooning" },
-  { id: "scat",             label: "Scat",            description: "Improvised jazz syllables",      promptHint: "scat singing" },
+  { id: "scat",             label: "Scat",            description: "Improvised jazz syllables",      promptHint: "scat singing", term: "scat singing" },
   { id: "yodeling",         label: "Yodeling",        description: "Alpine register-flip",           promptHint: "yodeling" },
   { id: "throat-singing",   label: "Throat Singing",  description: "Mongolian / Tuvan overtone",     promptHint: "throat singing" },
   { id: "melismatic",       label: "Melismatic",      description: "Multi-note runs per syllable",   promptHint: "melismatic" },
-  { id: "autotuned",        label: "Autotuned",       description: "Pitch-corrected, processed",     promptHint: "autotuned vocals" },
-  { id: "vocoded",          label: "Vocoded",         description: "Vocoder-processed vocals",       promptHint: "vocoded vocals" },
-  { id: "whisper-singing",  label: "Whisper Sing",    description: "Hushed, intimate singing",       promptHint: "whisper-singing" },
-  { id: "breathy-singing",  label: "Breathy",         description: "Airy, intimate singing",         promptHint: "breathy singing" },
-  { id: "harmonized",       label: "Harmonized",      description: "Multi-voice harmonies",          promptHint: "harmonized vocals" },
-  { id: "chant",            label: "Chant",           description: "Liturgical / monk chanting",     promptHint: "chanted vocals" },
+  { id: "autotuned",        label: "Autotuned",       description: "Pitch-corrected, processed",     promptHint: "autotuned vocals", term: "autotuned vocals" },
+  { id: "vocoded",          label: "Vocoded",         description: "Vocoder-processed vocals",       promptHint: "vocoded vocals", term: "vocoded vocals" },
+  { id: "whisper-singing",  label: "Whisper Sing",    description: "Hushed, intimate singing",       promptHint: "whisper-singing", term: "whisper-singing" },
+  { id: "breathy-singing",  label: "Breathy",         description: "Airy, intimate singing",         promptHint: "breathy singing", term: "breathy singing" },
+  { id: "harmonized",       label: "Harmonized",      description: "Multi-voice harmonies",          promptHint: "harmonized vocals", term: "harmonized vocals" },
+  { id: "chant",            label: "Chant",           description: "Liturgical / monk chanting",     promptHint: "chanted vocals", term: "chanted vocals" },
 ] as const
 
 const INSTRUMENT_BY_ID = new Map(INSTRUMENTS.map((x) => [x.id, x]))
@@ -270,6 +283,26 @@ export function getVocalPresence(id: string | undefined): InstrumentationEntry |
 }
 export function getSingingStyle(id: string | undefined): InstrumentationEntry | undefined {
   return id ? SINGING_STYLE_BY_ID.get(id) : undefined
+}
+
+/**
+ * The COMPACT counterparts of the `promptHint` lookups: the short professional
+ * term a consumer injects instead of the entry's full fragment ("synth stab",
+ * "pristine studio production", "melodic trap singing"). Same lookup as the
+ * getters above, same empty-string-on-miss behavior, so hint mode and term
+ * mode can never disagree about WHICH entry they are describing.
+ */
+export function getInstrumentTerm(id: string | undefined | null): string {
+  return resolveTerm(id ? getInstrument(id) : undefined)
+}
+export function getProductionStyleTerm(id: string | undefined | null): string {
+  return resolveTerm(id ? getProductionStyle(id) : undefined)
+}
+export function getVocalPresenceTerm(id: string | undefined | null): string {
+  return resolveTerm(id ? getVocalPresence(id) : undefined)
+}
+export function getSingingStyleTerm(id: string | undefined | null): string {
+  return resolveTerm(id ? getSingingStyle(id) : undefined)
 }
 
 import { pickIds } from "@nodaro/shared"
@@ -306,6 +339,60 @@ export function buildInstrumentationHints(data: {
     .map((id) => getSingingStyle(id)?.promptHint)
     .filter((h): h is string => !!h)
   const styleClause = styleHints.join(", ")
+
+  const result: string[] = []
+  if (segments.length > 0) result.push(segments.join(" "))
+  if (vocalClause) {
+    result.push(result.length > 0 ? `with ${vocalClause}` : vocalClause)
+  }
+  if (styleClause) {
+    result.push(result.length > 0 ? `in ${styleClause} style` : `${styleClause} style`)
+  }
+  if (result.length > 0) fragments.push(result.join(" "))
+
+  const post = typeof data.postText === "string" ? data.postText.trim() : ""
+  if (post) fragments.push(post)
+
+  return fragments.join(", ")
+}
+
+/**
+ * Compact-mode mirror of `buildInstrumentationHints`: the same preText /
+ * [production] [instruments] / "with <vocals>" / "in <style> style" / postText
+ * structure, in the same canonical field order, built from each entry's short
+ * `term` instead of its full `promptHint`. preText / postText are user free
+ * text rather than catalog copy, so they pass through untouched in both modes.
+ */
+export function buildInstrumentationTerms(data: {
+  readonly preText?: string
+  readonly postText?: string
+  readonly instruments?: ReadonlyArray<string>
+  readonly production?: string
+  readonly vocalPresence?: string | ReadonlyArray<string>
+  readonly singingStyle?: string | ReadonlyArray<string>
+}): string {
+  const fragments: string[] = []
+  const pre = typeof data.preText === "string" ? data.preText.trim() : ""
+  if (pre) fragments.push(pre)
+
+  const segments: string[] = []
+  const prod = getProductionStyleTerm(data.production)
+  if (prod) segments.push(prod)
+
+  const instTerms = (data.instruments ?? [])
+    .map((id) => getInstrumentTerm(id))
+    .filter((t) => t.length > 0)
+  if (instTerms.length > 0) segments.push(instTerms.join(", "))
+
+  const vocalClause = pickIds(data.vocalPresence)
+    .map((id) => getVocalPresenceTerm(id))
+    .filter((t) => t.length > 0)
+    .join(", ")
+
+  const styleClause = pickIds(data.singingStyle)
+    .map((id) => getSingingStyleTerm(id))
+    .filter((t) => t.length > 0)
+    .join(", ")
 
   const result: string[] = []
   if (segments.length > 0) result.push(segments.join(" "))

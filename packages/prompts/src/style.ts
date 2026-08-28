@@ -20,51 +20,64 @@
  * at execution time.
  */
 
+import { resolveTerm } from "./term.js"
+
 export interface Style {
   readonly id: string
   readonly label: string
   readonly description: string
   readonly promptHint: string
+  /**
+   * Compact professional term (see `term.ts`). Authored only where the
+   * lowercased label is not what an art director would write in a prompt —
+   * a UI compound ("Retro / Vintage"), a bare noun that reads as a SUBJECT
+   * rather than a medium ("Blueprint", "Chalkboard", "Graffiti"), a material
+   * where the trade term names the artwork ("Acrylic Paint" → "acrylic
+   * painting"), or a word that is ambiguous on its own ("Pastel" — the
+   * medium, not the color range). Everywhere else the lowercased label IS
+   * the term ("anime", "ukiyo-e", "cyberpunk") and nothing is authored.
+   */
+  readonly term?: string
 }
 
 export const STYLES: ReadonlyArray<Style> = [
   { id: "3d-render",       label: "3D Render",        description: "Modern CGI render with clean shading",     promptHint: "3D rendered style, modern CGI aesthetic with clean shading, subtle ambient occlusion and crisp materials" },
   { id: "anime",           label: "Anime",            description: "Japanese animation look",                  promptHint: "anime style, Japanese animation aesthetic with bold cel-shaded lines, expressive eyes and saturated colors" },
-  { id: "children-book",   label: "Children's Book",  description: "Warm illustrated storybook",               promptHint: "children's book illustration style, warm hand-drawn storybook look with soft shapes, friendly characters and inviting colors" },
+  { id: "children-book",   label: "Children's Book",  description: "Warm illustrated storybook",               promptHint: "children's book illustration style, warm hand-drawn storybook look with soft shapes, friendly characters and inviting colors", term: "children's book illustration" },
   { id: "cinematic",       label: "Cinematic",        description: "Film-grade dramatic image",                promptHint: "cinematic film style, dramatic lighting with cinematic color grading, widescreen aesthetic and film-like depth of field" },
-  { id: "comic-book",      label: "Comic Book",       description: "Inked panels with flat color",             promptHint: "comic book style, bold inked outlines, halftone shading and flat saturated comic panel colors" },
+  { id: "comic-book",      label: "Comic Book",       description: "Inked panels with flat color",             promptHint: "comic book style, bold inked outlines, halftone shading and flat saturated comic panel colors", term: "comic book art" },
   { id: "digital-art",     label: "Digital Art",      description: "Polished digital illustration",            promptHint: "digital art style, polished digital painting with smooth brushwork, vibrant colors and clean rendering" },
-  { id: "fantasy",         label: "Fantasy",          description: "Epic high-fantasy illustration",           promptHint: "fantasy art style, epic high-fantasy illustration with painterly detail, magical atmosphere and rich lore-driven mood" },
+  { id: "fantasy",         label: "Fantasy",          description: "Epic high-fantasy illustration",           promptHint: "fantasy art style, epic high-fantasy illustration with painterly detail, magical atmosphere and rich lore-driven mood", term: "fantasy art" },
   { id: "minimalist",      label: "Minimalist",       description: "Simple shapes, lots of whitespace",        promptHint: "minimalist style, reduced composition with simple shapes, limited palette and generous negative space" },
-  { id: "noir",            label: "Noir",             description: "High-contrast B&W film noir",              promptHint: "film noir style, high-contrast black-and-white imagery, deep shadows, venetian-blind lighting and moody 1940s cinema feel" },
+  { id: "noir",            label: "Noir",             description: "High-contrast B&W film noir",              promptHint: "film noir style, high-contrast black-and-white imagery, deep shadows, venetian-blind lighting and moody 1940s cinema feel", term: "film noir" },
   { id: "oil-painting",    label: "Oil Painting",     description: "Thick brush strokes, classical canvas",    promptHint: "oil painting style, visible thick brush strokes on canvas with rich pigment, classical painterly texture and warm tonal blending" },
   { id: "pencil-sketch",   label: "Pencil Sketch",    description: "Hand-drawn graphite drawing",              promptHint: "pencil sketch style, hand-drawn graphite drawing with visible hatching, soft smudges and raw paper texture" },
   { id: "photorealistic",  label: "Photorealistic",   description: "Indistinguishable from a photograph",      promptHint: "photorealistic style, high-fidelity photographic realism with natural lighting, accurate materials and DSLR-grade detail" },
   { id: "pixel-art",       label: "Pixel Art",        description: "Retro game-style pixel grid",              promptHint: "pixel art style, retro low-resolution pixel grid aesthetic with limited palette and hard-edged chunky sprites" },
   { id: "pop-art",         label: "Pop Art",          description: "Bold colors, Warhol/Lichtenstein",         promptHint: "pop art style, bold saturated colors, Ben-Day dots and high-contrast Warhol/Lichtenstein-inspired graphic look" },
-  { id: "retro-vintage",   label: "Retro / Vintage",  description: "Faded nostalgic film look",                promptHint: "retro vintage style, faded nostalgic film look with muted colors, subtle grain and old-photograph warmth" },
+  { id: "retro-vintage",   label: "Retro / Vintage",  description: "Faded nostalgic film look",                promptHint: "retro vintage style, faded nostalgic film look with muted colors, subtle grain and old-photograph warmth", term: "retro vintage film look" },
   { id: "watercolor",      label: "Watercolor",       description: "Soft transparent washes",                  promptHint: "watercolor style, soft transparent washes with bleeding edges, paper grain and delicate pigment pooling" },
   { id: "concept-art",     label: "Concept Art",      description: "Film/game pre-production painting",        promptHint: "concept art style, painterly film and game pre-production illustration with dramatic lighting, moody atmosphere and loose brushwork emphasizing scale and storytelling" },
-  { id: "impressionism",   label: "Impressionism",    description: "Monet-style dabbed brushwork",             promptHint: "impressionist style, Monet-inspired visible dabbed brush strokes, soft natural light, pastel palette and loose color mixing that captures atmosphere over detail" },
-  { id: "surrealism",      label: "Surrealism",       description: "Dreamlike Dalí-inspired",                  promptHint: "surrealist style, Dalí-inspired dreamlike imagery with impossible geometry, melting forms, floating elements and uncanny color combinations" },
+  { id: "impressionism",   label: "Impressionism",    description: "Monet-style dabbed brushwork",             promptHint: "impressionist style, Monet-inspired visible dabbed brush strokes, soft natural light, pastel palette and loose color mixing that captures atmosphere over detail", term: "impressionist painting" },
+  { id: "surrealism",      label: "Surrealism",       description: "Dreamlike Dalí-inspired",                  promptHint: "surrealist style, Dalí-inspired dreamlike imagery with impossible geometry, melting forms, floating elements and uncanny color combinations", term: "surrealist painting" },
   { id: "cyberpunk",       label: "Cyberpunk",        description: "Neon-lit dystopian future",                promptHint: "cyberpunk style, neon-lit dystopian future aesthetic with magenta and cyan glow, rain-slick reflections, high-tech low-life mood and dense urban detail" },
   { id: "steampunk",       label: "Steampunk",        description: "Victorian brass + machinery",              promptHint: "steampunk style, Victorian-era brass and copper machinery, exposed gears and pipes, sepia tones and retrofuturistic mechanical detail" },
   { id: "vaporwave",       label: "Vaporwave",        description: "80s pastel digital retro",                 promptHint: "vaporwave style, 1980s digital retro aesthetic with pastel pink and teal palette, chrome text, glitch artifacts, palm silhouettes and dreamlike sunset grids" },
   { id: "low-poly",        label: "Low Poly",         description: "Faceted geometric 3D",                     promptHint: "low poly style, faceted geometric 3D aesthetic with visible flat triangular faces, simplified forms and crisp shadow edges between facets" },
-  { id: "ink-wash",        label: "Ink Wash",         description: "East-Asian sumi-e brush",                  promptHint: "ink wash sumi-e style, East-Asian brush painting on rice paper with bold gestural black brush strokes, soft ink bleeding and generous negative space" },
+  { id: "ink-wash",        label: "Ink Wash",         description: "East-Asian sumi-e brush",                  promptHint: "ink wash sumi-e style, East-Asian brush painting on rice paper with bold gestural black brush strokes, soft ink bleeding and generous negative space", term: "sumi-e ink wash painting" },
   { id: "isometric",       label: "Isometric",        description: "3/4 axonometric view",                     promptHint: "isometric style, 3/4 axonometric projection with clean geometric forms, bright saturated flat colors and uniform lighting like a tile-based game or architectural diagram" },
-  { id: "flat-vector",     label: "Flat Vector",      description: "Modern flat illustration",                 promptHint: "flat vector illustration style, modern SaaS-style flat shapes with bright solid colors, no gradients or shadows, clean geometry and friendly simplified forms" },
+  { id: "flat-vector",     label: "Flat Vector",      description: "Modern flat illustration",                 promptHint: "flat vector illustration style, modern SaaS-style flat shapes with bright solid colors, no gradients or shadows, clean geometry and friendly simplified forms", term: "flat vector illustration" },
   { id: "ukiyo-e",         label: "Ukiyo-e",          description: "Japanese woodblock print",                 promptHint: "ukiyo-e style, traditional Japanese woodblock print with bold outlined flat color planes, Hokusai-inspired palette and stylized natural elements" },
-  { id: "graffiti",        label: "Graffiti",         description: "Street-art spray paint",                   promptHint: "graffiti street art style, vivid urban spray-paint aesthetic with bold tag lettering, drip textures, stencil edges and gritty wall surfaces" },
+  { id: "graffiti",        label: "Graffiti",         description: "Street-art spray paint",                   promptHint: "graffiti street art style, vivid urban spray-paint aesthetic with bold tag lettering, drip textures, stencil edges and gritty wall surfaces", term: "graffiti street art" },
   { id: "claymation",      label: "Claymation",       description: "Tactile stop-motion clay",                 promptHint: "claymation stop-motion style, tactile handcrafted clay figures with visible fingerprints, rounded plasticine forms and warm diorama lighting reminiscent of Aardman productions" },
   { id: "glitch-art",      label: "Glitch Art",       description: "Digital corruption + datamosh",            promptHint: "glitch art style, digital corruption aesthetic with chromatic aberration, RGB channel shifts, horizontal scanline tearing, pixel sorting and datamoshed compression artifacts" },
   { id: "ascii-art",       label: "ASCII Art",        description: "Monochrome terminal characters",           promptHint: "ASCII art style, monochrome terminal aesthetic built from text characters (@ # %, . :) forming the image, green-on-black old-computer vibe, monospace typography and character-grid rendering" },
-  { id: "blueprint",       label: "Blueprint",        description: "Technical drawing on blue",                promptHint: "blueprint technical drawing style, white line work on deep cyan-blue paper with dimension lines, annotations, orthographic projections and engineering-schematic precision" },
+  { id: "blueprint",       label: "Blueprint",        description: "Technical drawing on blue",                promptHint: "blueprint technical drawing style, white line work on deep cyan-blue paper with dimension lines, annotations, orthographic projections and engineering-schematic precision", term: "blueprint technical drawing" },
   { id: "stained-glass",   label: "Stained Glass",    description: "Leaded colored glass mosaic",              promptHint: "stained glass window style, tessellated colored glass panels separated by thick black lead lines, luminous backlit jewel tones and church-window composition" },
-  { id: "chalkboard",      label: "Chalkboard",       description: "White chalk on slate",                     promptHint: "chalkboard style, white and pastel chalk on dark slate with smudged edges, visible chalk dust, hand-drawn marks and classroom-lecture feel" },
+  { id: "chalkboard",      label: "Chalkboard",       description: "White chalk on slate",                     promptHint: "chalkboard style, white and pastel chalk on dark slate with smudged edges, visible chalk dust, hand-drawn marks and classroom-lecture feel", term: "chalk drawing on blackboard" },
   { id: "paper-cutout",    label: "Paper Cutout",     description: "Layered cut paper + shadows",              promptHint: "paper cutout papercraft style, Matisse-inspired layered cut paper shapes with visible paper texture, clean scissor edges and soft drop shadows between layered planes" },
   { id: "illuminated",     label: "Illuminated Manuscript", description: "Gold leaf + calligraphy",            promptHint: "illuminated manuscript style, medieval parchment with gold leaf accents, ornate decorative borders with vines and creatures, calligraphic script and jewel-toned miniature paintings" },
-  { id: "pixar-3d",        label: "Pixar 3D",         description: "Polished character animation CG",          promptHint: "Pixar-style 3D character animation, polished CG with appealing rounded character design, soft subsurface skin shading, cinematic key lighting and expressive animated feature-film quality" },
+  { id: "pixar-3d",        label: "Pixar 3D",         description: "Polished character animation CG",          promptHint: "Pixar-style 3D character animation, polished CG with appealing rounded character design, soft subsurface skin shading, cinematic key lighting and expressive animated feature-film quality", term: "pixar-style 3d animation" },
   { id: "caricature",      label: "Caricature",       description: "Exaggerated stylized portrait",            promptHint: "caricature illustration style, an exaggerated stylized portrait with a comically oversized head on a small body, amplified signature features — large nose, wide grin, oversized eyes — drawn with confident ink lines and watery color washes in the tradition of street-fair sketch artists" },
   { id: "fresco",          label: "Fresco",           description: "Renaissance plaster wall painting",        promptHint: "rendered as a fresco painting in the style of a Renaissance ceiling, mineral pigments soaked into wet lime plaster with a chalky matte surface, softly weathered tonal range, faint craquelure and warm earthen palette reminiscent of Michelangelo's Sistine Chapel" },
   { id: "mosaic",          label: "Mosaic",           description: "Byzantine tessera tile composition",       promptHint: "rendered as a mosaic composed of small hand-cut tesserae in stone, ceramic and gilded glass, visible grout lines between every tile, faceted highlights catching the light and a Byzantine / ancient-Roman aesthetic with stylized figures on a shimmering gold ground" },
@@ -72,8 +85,8 @@ export const STYLES: ReadonlyArray<Style> = [
   { id: "etching",         label: "Etching",          description: "Rembrandt-style intaglio print",          promptHint: "rendered as an intaglio etching, dense fine cross-hatched lines bitten into a copper plate, rich velvety blacks against warm cream paper, delicate tonal gradations and the introspective chiaroscuro of a Rembrandt print" },
   { id: "lithograph",      label: "Lithograph",       description: "Toulouse-Lautrec stone-printed poster",    promptHint: "rendered as a stone lithograph, soft graphite-like tonal range with grainy crayon textures, flat areas of limited spot color, slightly off-register edges and the bold poster-art sensibility of a Toulouse-Lautrec belle-époque print" },
   { id: "charcoal",        label: "Charcoal Drawing", description: "Smudgeable black tonal study",            promptHint: "rendered as a charcoal drawing on toothy paper, soft black and grey tonal masses with smudged blended midtones, sharp accented darks, expressive gestural strokes and the raw immediacy of a fine-art figure study" },
-  { id: "pastel",          label: "Pastel",           description: "Degas-era soft chalk pastel",              promptHint: "rendered as a soft chalk pastel drawing, dry powdery pigment laid in feathered strokes on tinted paper with luminous dusty colors, gently blended edges and the dreamy Degas-era atmosphere of dancers in stage light" },
-  { id: "acrylic-paint",   label: "Acrylic Paint",    description: "Fast-drying opaque acrylic on canvas",     promptHint: "rendered as an acrylic painting on canvas, fast-drying opaque pigment with crisp sharp edges, confident quick brush strokes, high-key saturated color and a flatter more graphic finish than traditional oil paint" },
+  { id: "pastel",          label: "Pastel",           description: "Degas-era soft chalk pastel",              promptHint: "rendered as a soft chalk pastel drawing, dry powdery pigment laid in feathered strokes on tinted paper with luminous dusty colors, gently blended edges and the dreamy Degas-era atmosphere of dancers in stage light", term: "soft pastel drawing" },
+  { id: "acrylic-paint",   label: "Acrylic Paint",    description: "Fast-drying opaque acrylic on canvas",     promptHint: "rendered as an acrylic painting on canvas, fast-drying opaque pigment with crisp sharp edges, confident quick brush strokes, high-key saturated color and a flatter more graphic finish than traditional oil paint", term: "acrylic painting" },
   { id: "mixed-media",     label: "Mixed Media",      description: "Collage + paint + ink hybrid",            promptHint: "rendered as a mixed-media artwork combining torn paper collage, acrylic paint, ink and graphite on a layered substrate, heterogeneous textures, visible tape and stitching, and an exuberant hand-assembled studio-art quality" },
   { id: "manga",           label: "Manga",            description: "Inked B&W Japanese comic panel",          promptHint: "rendered as inked manga panel art, crisp black ink on white with confident line weight variation, screen-tone dot patterns for shading, dramatic speed lines and the distinctly Japanese black-and-white comic aesthetic — separate from full-color anime" },
 ] as const
@@ -94,6 +107,11 @@ export function getStyleLabel(id: string | undefined | null, fallback?: string):
 
 export function getStylePromptHint(id: string | undefined | null): string {
   return getStyle(id)?.promptHint ?? ""
+}
+
+/** Compact counterpart of `getStylePromptHint` — see `term.ts`. */
+export function getStyleTerm(id: string | undefined | null): string {
+  return resolveTerm(getStyle(id))
 }
 
 export const STYLE_IDS: ReadonlyArray<string> = STYLES.map((s) => s.id)

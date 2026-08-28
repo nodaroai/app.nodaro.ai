@@ -9,6 +9,8 @@
  * frontend DAG executor and the backend orchestrator.
  */
 
+import { resolveTerm } from "./term.js"
+
 export type FramingCategory =
   | "shot-size"
   | "angle"
@@ -22,6 +24,18 @@ export interface Framing {
   readonly category: FramingCategory
   readonly description: string
   readonly promptHint: string
+  /**
+   * Optional authored compact term (see `term.ts`). Authored only where the
+   * lowercased label is not the phrase a cinematographer would write in a
+   * prompt — a UI compound ("Golden Spiral / Fibonacci"), an annotation
+   * ("ECU: Eye"), a reversed pair ("Headroom Tight" → "tight headroom"), a
+   * bare word that needs its shot noun ("Insert" → "insert shot"), or a trade
+   * phrase whose bare form reads as something else entirely once the trade
+   * context is stripped ("Choker" the neckwear, "Dirty Single" the grime,
+   * "Single" the continuous take). Everywhere else the label IS the term and
+   * nothing is authored.
+   */
+  readonly term?: string
 }
 
 export const FRAMINGS: ReadonlyArray<Framing> = [
@@ -46,6 +60,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "shot-size",
     description: "Subject from the knees up",
     promptHint: "medium wide shot, subject framed from the knees up",
+    term: "medium wide shot",
   },
   {
     id: "medium-shot",
@@ -81,6 +96,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "shot-size",
     description: "Sergio Leone-style ECU on a single eye",
     promptHint: "Sergio Leone-style extreme close-up tight on a single eye, iris filling the frame, every eyelash and reflection visible",
+    term: "extreme close-up on a single eye",
   },
   {
     id: "ecu-mouth",
@@ -88,6 +104,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "shot-size",
     description: "ECU tight on the mouth",
     promptHint: "extreme close-up tight on the mouth, lips and teeth filling the frame, breath visible",
+    term: "extreme close-up on the lips and mouth",
   },
   {
     id: "ecu-hands",
@@ -95,6 +112,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "shot-size",
     description: "ECU tight on the hands",
     promptHint: "extreme close-up tight on the hands, every finger and crease visible",
+    term: "extreme close-up on the hands",
   },
   {
     id: "big-close-up",
@@ -102,6 +120,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "shot-size",
     description: "Tighter than CU: chin to forehead, no headroom",
     promptHint: "big close-up, tighter than a standard close-up with just the face from chin to forehead, no headroom",
+    term: "big close-up, chin to forehead",
   },
   {
     id: "choker",
@@ -109,6 +128,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "shot-size",
     description: "Head and neck only, intimate intensity",
     promptHint: "choker shot, framed at the throat with head and neck only, intimate intensity",
+    term: "choker shot, head and neck only",
   },
   {
     id: "italian-shot",
@@ -116,6 +136,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "shot-size",
     description: "Sergio Leone Western: ECU at the eyes alone",
     promptHint: "Italian shot, Sergio Leone Western trope, extreme close-up cropping at the eyes alone leaving the rest of the face out of frame",
+    term: "extreme close-up cropped at the eyes",
   },
   {
     id: "insert",
@@ -123,6 +144,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "shot-size",
     description: "Detail shot of an object",
     promptHint: "insert shot, tight on a specific object or detail relevant to the scene",
+    term: "insert shot",
   },
   {
     id: "macro",
@@ -130,6 +152,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "shot-size",
     description: "Extreme close detail of a small subject",
     promptHint: "macro shot, extreme close-up of fine detail filling the frame, magnifying small subject features",
+    term: "macro shot",
   },
   {
     id: "full-shot",
@@ -151,6 +174,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "shot-size",
     description: "From head down to the knees",
     promptHint: "head-to-knees framing, subject visible from the top of the head down to just above the knees",
+    term: "head-to-knees framing",
   },
   {
     id: "head-to-hip",
@@ -158,6 +182,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "shot-size",
     description: "From head down to the hips",
     promptHint: "head-to-hip framing, subject visible from the top of the head down to the hipline, slightly tighter than waist-up",
+    term: "head-to-hip framing",
   },
   {
     id: "half-body",
@@ -165,6 +190,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "shot-size",
     description: "Clean waist-up portrait",
     promptHint: "half body portrait, subject framed from the waist up with clean portrait composition",
+    term: "half-body portrait",
   },
 
   // Angle (camera height / orientation)
@@ -195,6 +221,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "angle",
     description: "Direct top-down god's eye view",
     promptHint: "overhead shot, direct top-down god's eye view looking straight down at the scene",
+    term: "overhead shot, looking straight down",
   },
   {
     id: "worms-eye-angle",
@@ -202,6 +229,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "angle",
     description: "Extreme low angle from the ground",
     promptHint: "worm's eye view, extreme low angle from ground level looking up",
+    term: "worm's eye view",
   },
   {
     id: "dutch-angle",
@@ -216,6 +244,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "angle",
     description: "High aerial overhead view",
     promptHint: "bird's eye view, high aerial perspective looking down on the scene from far above",
+    term: "bird's eye view",
   },
   {
     id: "slightly-downward",
@@ -223,6 +252,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "angle",
     description: "Gentle tilt from above, selfie-style",
     promptHint: "slightly downward angle, camera tilted gently down toward the subject from just above their eyeline, the natural angle of a held-out phone",
+    term: "slightly downward angle, just above the eyeline",
   },
 
   // Coverage (dialog / multi-subject framing)
@@ -232,6 +262,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "coverage",
     description: "Clean shot of one subject",
     promptHint: "single shot, clean framing of one subject with nothing else in frame",
+    term: "clean single, one subject in frame",
   },
   {
     id: "two-shot",
@@ -253,6 +284,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "coverage",
     description: "Past one subject's shoulder onto another",
     promptHint: "over the shoulder framing, camera looks past one character's shoulder onto the subject opposite them",
+    term: "over-the-shoulder shot",
   },
   {
     id: "reverse-shot",
@@ -267,6 +299,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "coverage",
     description: "Through subject's eyes",
     promptHint: "POV framing, scene viewed through the subject's own eyes, first person perspective",
+    term: "pov shot, first-person perspective",
   },
   {
     id: "selfie-framing",
@@ -274,6 +307,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "coverage",
     description: "Arm's-length self-portrait",
     promptHint: "selfie framing, subject holding the camera at arm's length to frame themselves, slightly high angle from above, phone-camera perspective with the subject's face and upper body dominant in frame, arm or phone edge sometimes visible",
+    term: "arm's-length selfie framing",
   },
   {
     id: "mirror-selfie",
@@ -295,6 +329,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "coverage",
     description: "Framed through a foreground glass pane",
     promptHint: "shot through a foreground pane of glass, subject seen with subtle optical refraction, reflections, and surface distortions across the image, glass texture frames the composition",
+    term: "shot through a pane of glass",
   },
   {
     id: "top-down-flat-lay",
@@ -316,6 +351,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "coverage",
     description: "Single with another character at the edge",
     promptHint: "dirty single framing, the shot is on one character but a slice of another character — a shoulder, ear, or back of head — intrudes into the foreground edge of frame",
+    term: "dirty single, foreground shoulder in frame",
   },
 
   // Composition (where the subject sits in the frame)
@@ -332,6 +368,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "composition",
     description: "Subject dead center, symmetrical",
     promptHint: "centered composition, subject positioned exactly in the middle of the frame, symmetrical",
+    term: "centered composition",
   },
   {
     id: "headroom-tight",
@@ -339,6 +376,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "composition",
     description: "Subject's head near top of frame",
     promptHint: "tight headroom, subject's head positioned near the top of the frame with little space above",
+    term: "tight headroom",
   },
   {
     id: "negative-space",
@@ -360,6 +398,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "composition",
     description: "Subject in a 3×3 grid of variations",
     promptHint: "3 by 3 grid collage layout, nine equal-sized panels arranged in a three-by-three grid, each cell shows the same subject in a different pose, expression, or outfit, clean white gutters between panels",
+    term: "3x3 grid collage, nine equal panels",
   },
   {
     id: "diptych",
@@ -381,6 +420,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "composition",
     description: "Face built from a mosaic of small tiles",
     promptHint: "multi-frame mosaic, the subject's face assembled from many small photographic tiles arranged in a grid, each tile a tiny image that combines from a distance into the larger portrait",
+    term: "photo mosaic built from small image tiles",
   },
   {
     id: "contact-sheet",
@@ -402,6 +442,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "composition",
     description: "Architectural cross-section with walls peeled away",
     promptHint: "cutaway cross-section composition, the building's near wall peeled away to reveal the interior in dollhouse fashion, multiple rooms visible at once with floors and furnishings exposed in clean architectural section, the subject inhabiting one of the rooms",
+    term: "cutaway cross-section, near wall removed",
   },
   {
     id: "golden-spiral",
@@ -409,6 +450,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "composition",
     description: "Composition on the Fibonacci spiral",
     promptHint: "composed on the golden spiral / Fibonacci ratio, the eye guided through a nested logarithmic curve from the focal subject outward through progressively larger arcs",
+    term: "golden spiral composition",
   },
   {
     id: "frame-within-frame",
@@ -423,6 +465,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "composition",
     description: "Sinuous diagonal flow through the frame",
     promptHint: "S-curve serpentine composition, a sinuous diagonal flow winds through the frame, the eye guided along the curve from foreground to background",
+    term: "s-curve composition",
   },
   {
     id: "diagonal-composition",
@@ -444,6 +487,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "composition",
     description: "Exact left-right symmetry",
     promptHint: "symmetrical mirror composition, exact left-right symmetry across a central vertical axis, both halves of the frame mirror each other in shape, mass, and tone",
+    term: "symmetrical mirrored composition",
   },
   {
     id: "vignette-composition",
@@ -460,6 +504,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "vantage",
     description: "Subject facing camera",
     promptHint: "front-on shot, subject facing the camera directly",
+    term: "front-on view, subject facing camera",
   },
   {
     id: "three-quarter-front",
@@ -467,6 +512,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "vantage",
     description: "Slightly off-axis from front",
     promptHint: "three-quarter view of the subject, camera slightly off-axis from the front",
+    term: "three-quarter front view",
   },
   {
     id: "profile-left",
@@ -474,6 +520,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "vantage",
     description: "Side view, subject's left",
     promptHint: "profile shot from the subject's left side",
+    term: "left profile view",
   },
   {
     id: "profile-right",
@@ -481,6 +528,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "vantage",
     description: "Side view, subject's right",
     promptHint: "profile shot from the subject's right side",
+    term: "right profile view",
   },
   {
     id: "three-quarter-back",
@@ -488,6 +536,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "vantage",
     description: "Off-axis from behind",
     promptHint: "three-quarter view from behind, camera angled off-axis from the rear",
+    term: "three-quarter rear view",
   },
   {
     id: "behind",
@@ -495,6 +544,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "vantage",
     description: "Direct rear view",
     promptHint: "shot from directly behind the subject, looking at their back",
+    term: "rear view from behind the subject",
   },
   {
     id: "side-back-angle",
@@ -502,6 +552,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     category: "vantage",
     description: "3/4 view from behind one shoulder",
     promptHint: "side-back angle, three-quarter view from behind one shoulder of the subject, partial face visible in profile, the back and shoulder line dominate the framing",
+    term: "three-quarter view from behind one shoulder",
   },
 ]
 
@@ -537,6 +588,16 @@ export function getFramingLabel(id: string | undefined | null, fallback?: string
 
 export function getFramingPromptHint(id: string | undefined | null): string {
   return getFraming(id)?.promptHint ?? ""
+}
+
+/**
+ * The compact professional term for a framing id (see `term.ts`): the short
+ * phrase this framing injects in compact hint mode ("tight headroom" where the
+ * hint is the full clause). Empty string for an unknown id and for any entry
+ * that injects no hint at all.
+ */
+export function getFramingTerm(id: string | undefined | null): string {
+  return resolveTerm(getFraming(id))
 }
 
 export const FRAMING_IDS: ReadonlyArray<string> = FRAMINGS.map((f) => f.id)
@@ -631,4 +692,41 @@ export function buildFramingHints(
     }
   }
   return hints
+}
+
+/**
+ * Compact counterpart of `buildFramingHints`: the same per-category walk in the
+ * same canonical order and with the same `skipVantage` gate, emitted as short
+ * professional terms instead of full mechanism clauses ("medium close-up",
+ * "tight headroom"). Entries that inject no hint contribute no term either.
+ */
+export function buildFramingTerms(
+  data: Record<string, unknown> & {
+    shotSize?: unknown
+    angle?: unknown
+    coverage?: unknown
+    composition?: unknown
+    vantage?: unknown
+  },
+  skipVantage = false,
+): string[] {
+  const terms: string[] = []
+  for (const category of FRAMING_CATEGORY_ORDER) {
+    if (category === "vantage" && skipVantage) continue
+    const field = FRAMING_FIELD_BY_CATEGORY[category]
+    const raw = data[field]
+    // composition accepts string | string[] (multi-pick max 2). Other
+    // categories are single-pick; arrays are tolerated defensively.
+    if (typeof raw === "string" && raw.length > 0) {
+      const term = getFramingTerm(raw)
+      if (term) terms.push(term)
+    } else if (Array.isArray(raw)) {
+      for (const item of raw) {
+        if (typeof item !== "string" || item.length === 0) continue
+        const term = getFramingTerm(item)
+        if (term) terms.push(term)
+      }
+    }
+  }
+  return terms
 }

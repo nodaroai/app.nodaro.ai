@@ -17,6 +17,8 @@
  * frontend DAG executor + backend orchestrator.
  */
 
+import { resolveTerm } from "./term.js"
+
 export type ActionFxCategory =
   | "disaster"
   | "fire-blasts"
@@ -31,6 +33,8 @@ export interface ActionFx {
   readonly category: ActionFxCategory
   readonly description: string
   readonly promptHint: string
+  /** Optional authored compact term (see `term.ts` for the convention). */
+  readonly term?: string
 }
 
 export const ACTION_FX_CATEGORY_ORDER: ReadonlyArray<ActionFxCategory> = [
@@ -70,7 +74,8 @@ export const ACTION_FX: ReadonlyArray<ActionFx> = [
   { id: "sandstorm",            category: "disaster", label: "Sandstorm",            description: "Wall of orange dust engulfing scene",
     promptHint: "a towering sandstorm wall of orange-brown dust engulfing the scene, swirling fine particles reducing visibility to feet and burying surfaces under shifting waves of grit" },
   { id: "dust-storm-haboob",    category: "disaster", label: "Dust Storm (Haboob)",  description: "Towering desert dust front",
-    promptHint: "a towering haboob dust storm rolling across the scene, mountainous wall of dense ochre dust front billowing forward and swallowing the horizon in a dramatic monolithic curtain" },
+    promptHint: "a towering haboob dust storm rolling across the scene, mountainous wall of dense ochre dust front billowing forward and swallowing the horizon in a dramatic monolithic curtain",
+    term: "haboob dust storm" },
   { id: "wildfire-distant",     category: "disaster", label: "Distant Wildfire",     description: "Orange glow + smoke on horizon",
     promptHint: "a distant wildfire raging on the horizon, orange-red glow lighting up dark plumes of smoke billowing into a hazy sky with embers visible at the treeline" },
   { id: "wildfire-engulfing",   category: "disaster", label: "Engulfing Wildfire",   description: "Flames closing in, intense heat shimmer",
@@ -80,7 +85,8 @@ export const ACTION_FX: ReadonlyArray<ActionFx> = [
   { id: "lava-flow",            category: "disaster", label: "Lava Flow",            description: "Glowing molten river creeping across ground",
     promptHint: "a glowing molten lava flow creeping across the ground, bright orange-red rivers of fire snaking through cooled black crust with shimmering heat distortion above and wisps of sulfurous smoke" },
   { id: "ash-rain",             category: "disaster", label: "Falling Ash Rain",     description: "Apocalyptic grey ash falling like snow",
-    promptHint: "thick grey volcanic ash falling like dirty snow across the scene, apocalyptic post-eruption atmosphere with fine flakes settling on every surface and a hazy desaturated sky" },
+    promptHint: "thick grey volcanic ash falling like dirty snow across the scene, apocalyptic post-eruption atmosphere with fine flakes settling on every surface and a hazy desaturated sky",
+    term: "falling volcanic ash" },
   { id: "avalanche",            category: "disaster", label: "Avalanche",            description: "Wall of snow tumbling down mountainside",
     promptHint: "a massive avalanche tumbling down a mountainside, wall of churning snow and ice cascading at speed with a billowing powder cloud rolling forward and crushing everything in its path" },
   { id: "hailstorm",            category: "disaster", label: "Hailstorm",            description: "Large hailstones bouncing off surfaces",
@@ -139,15 +145,18 @@ export const ACTION_FX: ReadonlyArray<ActionFx> = [
   { id: "bullet-trail",         category: "combat", label: "Bullet Trail",         description: "Visible bullet streak through air",
     promptHint: "a streaking bullet trail cutting through the air, thin bright tracer line accompanied by faint vapor wake suggesting hypersonic velocity and a sense of forward motion through the frame" },
   { id: "sword-spark",          category: "combat", label: "Sword Spark",          description: "Macro shower of metal-on-metal friction sparks",
-    promptHint: "a macro close-up of bright sparks at the moment of metal-on-metal friction, white-hot incandescent flecks scattering radially with brief streaks of friction-light, captured at extreme close range with no swords or blades visible in the frame" },
+    promptHint: "a macro close-up of bright sparks at the moment of metal-on-metal friction, white-hot incandescent flecks scattering radially with brief streaks of friction-light, captured at extreme close range with no swords or blades visible in the frame",
+    term: "metal-on-metal friction sparks" },
   { id: "blade-clash",          category: "combat", label: "Blade Clash",          description: "Two blades meeting with impact wave",
     promptHint: "two blades clashing together at the moment of impact, sparks flying outward from the contact line and a brief shockwave of displaced air rippling around the steel edges" },
   { id: "ricochet-spark",       category: "combat", label: "Ricochet Spark",       description: "Bullet bouncing off metal with sparks",
     promptHint: "a bullet ricocheting off a metal surface, sharp burst of orange-white sparks at the deflection point with the bullet visibly trailing off at a new angle and a thin streak of vapor in its wake" },
   { id: "debris-field",         category: "combat", label: "Debris Field",         description: "Frozen mid-air shrapnel scattering",
-    promptHint: "a debris field frozen in mid-air, fragments of wood, metal, and concrete scattering outward in a radial pattern from a central impact point with dust and smoke swirling among the larger pieces" },
+    promptHint: "a debris field frozen in mid-air, fragments of wood, metal, and concrete scattering outward in a radial pattern from a central impact point with dust and smoke swirling among the larger pieces",
+    term: "debris frozen in mid-air" },
   { id: "glass-shatter-airborne", category: "combat", label: "Airborne Glass Shatter", description: "Glass exploding outward in mid-air shards",
-    promptHint: "a window or glass surface shattering outward in mid-air, hundreds of jagged crystalline shards exploding into the scene catching the light and tumbling in suspended chaos at the moment of impact" },
+    promptHint: "a window or glass surface shattering outward in mid-air, hundreds of jagged crystalline shards exploding into the scene catching the light and tumbling in suspended chaos at the moment of impact",
+    term: "glass shattering in mid-air" },
   { id: "shockwave-ground",     category: "combat", label: "Ground Shockwave",     description: "Visible expanding ring at ground level",
     promptHint: "a visible shockwave expanding at ground level, dust and small debris pushed outward in a clear radial ring from the impact origin with a momentary distortion in the air above" },
   { id: "sonic-boom",           category: "combat", label: "Sonic Boom",           description: "Cone of compressed air at supersonic speed",
@@ -159,7 +168,8 @@ export const ACTION_FX: ReadonlyArray<ActionFx> = [
   { id: "blood-spray",          category: "combat", label: "Blood Spray",          description: "Cinematic arc of blood droplets",
     promptHint: "a cinematic arc of blood droplets spraying outward in slow-motion, suspended red flecks tracing a curved path through the air with the dramatic stylized aesthetic of action cinema" },
   { id: "arrow-hit-spark",      category: "combat", label: "Arrow Hit Spark",      description: "Arrow striking with small sparks at impact",
-    promptHint: "an arrow striking a surface with a small burst of sparks at the impact point, shaft quivering on contact and tiny incandescent flecks scattering outward from the arrowhead" },
+    promptHint: "an arrow striking a surface with a small burst of sparks at the impact point, shaft quivering on contact and tiny incandescent flecks scattering outward from the arrowhead",
+    term: "arrow impact sparks" },
   // ── Sci-Fi ──
   { id: "laser-blast",          category: "sci-fi", label: "Laser Blast",          description: "Bright coherent beam of energy",
     promptHint: "a bright coherent laser blast cutting through the scene, vivid red or green beam of focused energy with a glowing core and a halo of scattered light along its path" },
@@ -172,9 +182,11 @@ export const ACTION_FX: ReadonlyArray<ActionFx> = [
   { id: "force-field-impact",   category: "sci-fi", label: "Force Field Impact",   description: "Visible ripple where projectile hits shield",
     promptHint: "a force field absorbing an impact, visible ripple spreading outward from the strike point with hexagonal energy panels glowing brightly at the contact site and discharge arcs branching across the surface" },
   { id: "portal-opening",       category: "sci-fi", label: "Portal Opening",       description: "Swirling vortex of energy tearing open in space",
-    promptHint: "a sci-fi portal tearing open in space, swirling vortex of bluish energy with edges flickering between dimensions and a glowing event horizon framing a glimpse of the destination beyond" },
+    promptHint: "a sci-fi portal tearing open in space, swirling vortex of bluish energy with edges flickering between dimensions and a glowing event horizon framing a glimpse of the destination beyond",
+    term: "sci-fi portal opening" },
   { id: "warp-distortion",      category: "sci-fi", label: "Warp Distortion",      description: "Spacetime bending around an object",
-    promptHint: "a spacetime warp distortion bending the air around an object, light streaks curving inward and the background visibly stretched and refracted in the gravitational well of the effect" },
+    promptHint: "a spacetime warp distortion bending the air around an object, light streaks curving inward and the background visibly stretched and refracted in the gravitational well of the effect",
+    term: "spacetime warp distortion" },
   { id: "hologram-flicker",     category: "sci-fi", label: "Hologram Flicker",     description: "Translucent projection glitching",
     promptHint: "a translucent holographic projection flickering and glitching in the scene, scanlines and chromatic noise distorting the cyan-blue figure with brief signal dropouts revealing the air behind it" },
   { id: "ion-storm",            category: "sci-fi", label: "Ion Storm",            description: "Crackling field of charged particles against a cosmic backdrop",
@@ -202,7 +214,8 @@ export const ACTION_FX: ReadonlyArray<ActionFx> = [
   { id: "dark-vortex",          category: "magic", label: "Dark Vortex",          description: "Ominous black-purple swirling void",
     promptHint: "an ominous dark vortex swirling in the scene, churning black-and-purple void with tendrils of shadow energy reaching outward and a sense of consuming power drawing light into its center" },
   { id: "light-explosion",      category: "magic", label: "Light Explosion",      description: "Burst of pure white-gold radiance",
-    promptHint: "a brilliant explosion of pure white-gold radiance, divine burst of light radiating outward with rays of beam-light fanning across the scene and motes of golden particles suspended in the afterglow" },
+    promptHint: "a brilliant explosion of pure white-gold radiance, divine burst of light radiating outward with rays of beam-light fanning across the scene and motes of golden particles suspended in the afterglow",
+    term: "explosion of white-gold light" },
 ] as const
 
 export const ACTION_FX_IDS: ReadonlyArray<string> = ACTION_FX.map((fx) => fx.id)
@@ -226,15 +239,25 @@ export function getActionFxPromptHint(id: string | undefined | null): string {
 }
 
 /**
- * Multi-pick: 1–2 ids → composite FX clause.
+ * Compact professional TERM for an id — the short phrase a VFX supervisor
+ * would write in a prompt ("haboob dust storm", "metal-on-metal friction
+ * sparks"), as opposed to the paragraph-length `promptHint`.
  *
- * Single id → entry's own promptHint as a single-element array.
- * Two ids → emit each independently and let the comma-join compose them.
- * Caps at 2 ids (silently drops the rest); the picker UI also enforces this
- * cap, but the cap here keeps the contract robust against stale workflow
- * data. Duplicate ids are deduplicated before the cap is applied.
+ * Same lookup and same empty-string-on-miss behavior as
+ * `getActionFxPromptHint`, so the two can never disagree about which entry
+ * they describe.
  */
-export function buildActionFxHints(value: unknown): string[] {
+export function getActionFxTerm(id: string | undefined | null): string {
+  return resolveTerm(getActionFx(id))
+}
+
+/**
+ * The multi-pick id list both builders below read: a lone string, or the first
+ * 2 distinct strings of an array (silently dropping the rest). The picker UI
+ * enforces the same cap; keeping it here too holds the contract against stale
+ * workflow data.
+ */
+function pickActionFxIds(value: unknown): string[] {
   const ids: string[] = []
   if (typeof value === "string" && value) {
     ids.push(value)
@@ -246,10 +269,36 @@ export function buildActionFxHints(value: unknown): string[] {
       }
     }
   }
+  return ids
+}
+
+/**
+ * Multi-pick: 1–2 ids → composite FX clause.
+ *
+ * Single id → entry's own promptHint as a single-element array.
+ * Two ids → emit each independently and let the comma-join compose them.
+ * Caps at 2 ids (silently drops the rest); the picker UI also enforces this
+ * cap, but the cap here keeps the contract robust against stale workflow
+ * data. Duplicate ids are deduplicated before the cap is applied.
+ */
+export function buildActionFxHints(value: unknown): string[] {
   const hints: string[] = []
-  for (const id of ids) {
+  for (const id of pickActionFxIds(value)) {
     const hint = getActionFxPromptHint(id)
     if (hint) hints.push(hint)
   }
   return hints
+}
+
+/**
+ * Compact-mode mirror of `buildActionFxHints`: the same 1–2 ids, resolved to
+ * their short professional terms instead of their paragraph-length hints.
+ */
+export function buildActionFxTerms(value: unknown): string[] {
+  const terms: string[] = []
+  for (const id of pickActionFxIds(value)) {
+    const term = getActionFxTerm(id)
+    if (term) terms.push(term)
+  }
+  return terms
 }

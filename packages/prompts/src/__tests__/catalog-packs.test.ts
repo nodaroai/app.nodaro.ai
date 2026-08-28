@@ -9,8 +9,8 @@ import {
 const base: readonly PickerCatalog[] = [
   { nodeType: "setting", label: "Setting", catalogId: "setting", kind: "single", valueField: "setting",
     options: [
-      { id: "forest", label: "Forest", promptHint: "in a forest" },
-      { id: "beach", label: "Beach", promptHint: "on a beach" },
+      { id: "forest", label: "Forest", promptHint: "in a forest", term: "forest" },
+      { id: "beach", label: "Beach", promptHint: "on a beach", term: "beach" },
     ] },
 ]
 
@@ -32,13 +32,13 @@ describe("composePickerCatalogs — pure", () => {
 
   it("extend appends single-dim options", () => {
     const out = composePickerCatalogs(base, [{ id: "p", catalogId: "setting", mode: "extend",
-      options: [{ id: "shul", label: "Shul", promptHint: "in a synagogue" }] }])
+      options: [{ id: "shul", label: "Shul", promptHint: "in a synagogue", term: "shul" }] }])
     expect(out[0].options!.map((o: PickerOption) => o.id)).toEqual(["forest", "beach", "shul"])
   })
 
   it("replace swaps the catalog wholesale for its catalogId", () => {
     const vendored: PickerCatalog = { nodeType: "setting", label: "Setting", catalogId: "setting", kind: "single",
-      valueField: "setting", options: [{ id: "forest", label: "Forest", promptHint: "in a forest" }] }
+      valueField: "setting", options: [{ id: "forest", label: "Forest", promptHint: "in a forest", term: "forest" }] }
     const out = composePickerCatalogs(base, [{ id: "p", catalogId: "setting", mode: "replace", catalog: vendored }])
     expect(out[0].options!.map((o: PickerOption) => o.id)).toEqual(["forest"])
   })

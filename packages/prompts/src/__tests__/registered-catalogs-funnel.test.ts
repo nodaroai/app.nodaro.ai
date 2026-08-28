@@ -15,7 +15,7 @@ describe("registered read funnel", () => {
   it("late registration is reflected after the memo invalidates by version", () => {
     const before = getPickerCatalog("setting")!.options!.map((o) => o.id)
     registerCatalogPack({ id: "sai/setting-extend", catalogId: "setting", mode: "extend",
-      options: [{ id: "shul-hall", label: "Shul Hall", promptHint: "in a synagogue hall" }] })
+      options: [{ id: "shul-hall", label: "Shul Hall", promptHint: "in a synagogue hall", term: "shul hall" }] })
     const after = getPickerCatalog("setting")!.options!.map((o) => o.id)
     expect(after).toEqual([...before, "shul-hall"])
     // base is untouched

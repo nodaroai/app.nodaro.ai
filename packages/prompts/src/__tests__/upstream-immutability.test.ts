@@ -16,7 +16,7 @@ describe("packs never edit upstream in place", () => {
       id: "y",
       catalogId: "mood",
       mode: "extend",
-      options: [{ id: "z", label: "Z", promptHint: "z" }],
+      options: [{ id: "z", label: "Z", promptHint: "z", term: "z" }],
     })
     expect(JSON.stringify(PICKER_CATALOGS)).toBe(snapshot)
   })

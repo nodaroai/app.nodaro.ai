@@ -20,6 +20,8 @@
  * backend orchestrator.
  */
 
+import { resolveTerm } from "./term.js"
+
 export type MaterialCategory =
   | "fabric"
   | "metal"
@@ -35,6 +37,14 @@ export interface Material {
   readonly category: MaterialCategory
   readonly description: string
   readonly promptHint: string
+  /**
+   * Optional compact professional term (see `term.ts`). Authored only where
+   * the lowercased label is not what a professional would write for the
+   * material itself — bare "gold"/"silver" read as COLORS in a prompt, bare
+   * "mesh" as 3D geometry, "Subsurface Glow" is a UI label for subsurface
+   * scattering. Everywhere else the label already IS the trade term.
+   */
+  readonly term?: string
 }
 
 export const MATERIALS: ReadonlyArray<Material> = [
@@ -53,20 +63,20 @@ export const MATERIALS: ReadonlyArray<Material> = [
   { id: "chiffon",   label: "Chiffon",   category: "fabric", description: "Sheer flowing chiffon",      promptHint: "made of sheer chiffon with a lightweight floating drape, soft translucent layers and a gentle shimmer" },
   { id: "fur",       label: "Fur",       category: "fabric", description: "Thick plush fur",            promptHint: "made of thick plush fur with long dense strands, natural variation and a soft directional flow" },
   { id: "suede",     label: "Suede",     category: "fabric", description: "Soft napped suede",          promptHint: "made of soft napped suede with a matte velvety surface, fine fuzzy texture and a warm leather feel" },
-  { id: "mesh",      label: "Mesh",      category: "fabric", description: "See-through net mesh",       promptHint: "made of see-through net mesh with an open woven grid, sheer transparency and an athletic technical feel" },
+  { id: "mesh",      label: "Mesh",      category: "fabric", description: "See-through net mesh",       promptHint: "made of see-through net mesh with an open woven grid, sheer transparency and an athletic technical feel", term: "sheer mesh fabric" },
   { id: "patent-leather", label: "Patent Leather", category: "fabric", description: "High-gloss patent leather", promptHint: "made of high-gloss patent leather with a mirror-bright reflective surface, deep saturated color and a slick lacquered finish" },
 
   // -------------------- Metal --------------------
-  { id: "gold",      label: "Gold",      category: "metal",  description: "Polished gold",              promptHint: "made of polished gold with a warm yellow metallic sheen and rich mirror-like reflections" },
-  { id: "silver",    label: "Silver",    category: "metal",  description: "Polished silver",            promptHint: "made of polished silver with a cool bright metallic sheen and clean mirror-like reflections" },
-  { id: "bronze",    label: "Bronze",    category: "metal",  description: "Patinaed cast bronze",       promptHint: "made of cast bronze with a warm brown-gold metallic surface and a mottled greenish patina in the recesses" },
-  { id: "chrome",    label: "Chrome",    category: "metal",  description: "Hyper-reflective chrome",    promptHint: "made of hyper-reflective polished chrome with liquid mirror surfaces and sharp environmental reflections" },
-  { id: "copper",    label: "Copper",    category: "metal",  description: "Warm copper with patina",    promptHint: "made of warm copper with a rich rose-orange metallic gleam and touches of blue-green oxidation" },
-  { id: "brass",     label: "Brass",     category: "metal",  description: "Antique brass",              promptHint: "made of antique brass with a warm yellow-gold hue, brushed texture and slight tarnish in the crevices" },
-  { id: "steel",     label: "Steel",     category: "metal",  description: "Brushed stainless steel",    promptHint: "made of brushed stainless steel with fine directional grain and cool soft reflections" },
-  { id: "iron",      label: "Iron",      category: "metal",  description: "Rough wrought iron",         promptHint: "made of rough wrought iron with a dark matte surface, hammered texture and traces of rust" },
-  { id: "platinum",  label: "Platinum",  category: "metal",  description: "Lustrous platinum",          promptHint: "made of lustrous platinum with a cool white-grey metallic sheen and premium polished finish" },
-  { id: "titanium",  label: "Titanium",  category: "metal",  description: "Matte industrial titanium",  promptHint: "made of matte titanium with a cool silvery-grey surface, subtle anodized tints and an industrial precision finish" },
+  { id: "gold",      label: "Gold",      category: "metal",  description: "Polished gold",              promptHint: "made of polished gold with a warm yellow metallic sheen and rich mirror-like reflections", term: "polished gold" },
+  { id: "silver",    label: "Silver",    category: "metal",  description: "Polished silver",            promptHint: "made of polished silver with a cool bright metallic sheen and clean mirror-like reflections", term: "polished silver" },
+  { id: "bronze",    label: "Bronze",    category: "metal",  description: "Patinaed cast bronze",       promptHint: "made of cast bronze with a warm brown-gold metallic surface and a mottled greenish patina in the recesses", term: "patinated cast bronze" },
+  { id: "chrome",    label: "Chrome",    category: "metal",  description: "Hyper-reflective chrome",    promptHint: "made of hyper-reflective polished chrome with liquid mirror surfaces and sharp environmental reflections", term: "polished chrome" },
+  { id: "copper",    label: "Copper",    category: "metal",  description: "Warm copper with patina",    promptHint: "made of warm copper with a rich rose-orange metallic gleam and touches of blue-green oxidation", term: "patinated copper" },
+  { id: "brass",     label: "Brass",     category: "metal",  description: "Antique brass",              promptHint: "made of antique brass with a warm yellow-gold hue, brushed texture and slight tarnish in the crevices", term: "antique brass" },
+  { id: "steel",     label: "Steel",     category: "metal",  description: "Brushed stainless steel",    promptHint: "made of brushed stainless steel with fine directional grain and cool soft reflections", term: "brushed stainless steel" },
+  { id: "iron",      label: "Iron",      category: "metal",  description: "Rough wrought iron",         promptHint: "made of rough wrought iron with a dark matte surface, hammered texture and traces of rust", term: "wrought iron" },
+  { id: "platinum",  label: "Platinum",  category: "metal",  description: "Lustrous platinum",          promptHint: "made of lustrous platinum with a cool white-grey metallic sheen and premium polished finish", term: "polished platinum" },
+  { id: "titanium",  label: "Titanium",  category: "metal",  description: "Matte industrial titanium",  promptHint: "made of matte titanium with a cool silvery-grey surface, subtle anodized tints and an industrial precision finish", term: "matte titanium" },
 
   // -------------------- Stone --------------------
   { id: "marble",        label: "Marble",        category: "stone", description: "White marble with veins",  promptHint: "made of polished white marble with grey-blue veining, a smooth glossy surface and classical elegance" },
@@ -76,7 +86,7 @@ export const MATERIALS: ReadonlyArray<Material> = [
   { id: "slate",         label: "Slate",         category: "stone", description: "Dark flat slate",          promptHint: "made of dark slate with flat matte grey-blue surfaces, subtle cleavage lines and a cool sedimentary texture" },
   { id: "jade",          label: "Jade",          category: "stone", description: "Translucent green jade",   promptHint: "made of polished jade with a translucent green glow, fine internal veining and a smooth waxy surface" },
   { id: "onyx",          label: "Onyx",          category: "stone", description: "Banded polished onyx",     promptHint: "made of polished onyx with dramatic black-and-white banding, translucent depth and a glossy finish" },
-  { id: "concrete",      label: "Concrete",      category: "stone", description: "Cast industrial concrete", promptHint: "made of cast concrete with a rough grey surface, visible formwork lines, scattered aggregate and an industrial brutalist feel" },
+  { id: "concrete",      label: "Concrete",      category: "stone", description: "Cast industrial concrete", promptHint: "made of cast concrete with a rough grey surface, visible formwork lines, scattered aggregate and an industrial brutalist feel", term: "cast concrete" },
   { id: "terrazzo",      label: "Terrazzo",      category: "stone", description: "Composite terrazzo with chips", promptHint: "made of polished terrazzo with embedded marble and glass chips suspended in a smooth cement matrix, a mid-century speckled surface and a glossy finish" },
 
   // -------------------- Wood --------------------
@@ -102,19 +112,19 @@ export const MATERIALS: ReadonlyArray<Material> = [
   { id: "smoke",      label: "Smoke",      category: "natural", description: "Drifting ethereal smoke",      promptHint: "made of drifting ethereal smoke with soft volumetric wisps, translucent layers and a slow hypnotic flow" },
   { id: "sand",       label: "Sand",       category: "natural", description: "Fine granular sand",           promptHint: "made of fine granular sand with a soft golden matte surface, subtle grain texture and gentle shifting edges" },
   { id: "moss",       label: "Moss",       category: "natural", description: "Lush living moss",             promptHint: "made of lush living moss with a soft velvety green surface, fine plant texture and an organic overgrown feel" },
-  { id: "leaves",     label: "Leaves",     category: "natural", description: "Layered plant leaves",         promptHint: "made of layered plant leaves with overlapping green foliage, visible veining and a natural dappled texture" },
+  { id: "leaves",     label: "Leaves",     category: "natural", description: "Layered plant leaves",         promptHint: "made of layered plant leaves with overlapping green foliage, visible veining and a natural dappled texture", term: "layered plant leaves" },
 
   // -------------------- Exotic / Futuristic --------------------
-  { id: "holographic",   label: "Holographic",      category: "exotic", description: "Iridescent hologram",          promptHint: "made of holographic iridescent material with shifting rainbow sheen, prismatic highlights and a futuristic shimmer" },
+  { id: "holographic",   label: "Holographic",      category: "exotic", description: "Iridescent hologram",          promptHint: "made of holographic iridescent material with shifting rainbow sheen, prismatic highlights and a futuristic shimmer", term: "holographic iridescent material" },
   { id: "liquid-metal",  label: "Liquid Metal",     category: "exotic", description: "Reflective liquid chrome",    promptHint: "made of reflective liquid metal with a flowing mercury-like chrome surface, seamless reflections and metallic pooling highlights" },
-  { id: "neon",          label: "Neon Glow",        category: "exotic", description: "Glowing neon tubing",         promptHint: "made of glowing neon tubing with saturated magenta and cyan light, a soft halo glow and a cybernetic futuristic feel" },
+  { id: "neon",          label: "Neon Glow",        category: "exotic", description: "Glowing neon tubing",         promptHint: "made of glowing neon tubing with saturated magenta and cyan light, a soft halo glow and a cybernetic futuristic feel", term: "glowing neon tubing" },
   { id: "translucent",   label: "Translucent Resin", category: "exotic", description: "Frosted glowing resin",      promptHint: "made of frosted translucent resin with soft internal glow, milky subsurface scattering and a smooth cast finish" },
-  { id: "subsurface",    label: "Subsurface Glow",   category: "exotic", description: "Light glows beneath the surface", promptHint: "made of a soft translucent material with pronounced subsurface scattering, light penetrating beneath the surface and glowing warmly from within" },
-  { id: "mirror",        label: "Mirror",           category: "exotic", description: "Perfect mirror surface",      promptHint: "made of perfect mirror surface with flawless reflections, no tint and razor-sharp reflected detail" },
-  { id: "plasma",        label: "Plasma",           category: "exotic", description: "Glowing electric plasma",     promptHint: "made of glowing electric plasma with arcing internal bolts, a radiant violet-pink core and a haze of ionized energy" },
+  { id: "subsurface",    label: "Subsurface Glow",   category: "exotic", description: "Light glows beneath the surface", promptHint: "made of a soft translucent material with pronounced subsurface scattering, light penetrating beneath the surface and glowing warmly from within", term: "translucent subsurface scattering" },
+  { id: "mirror",        label: "Mirror",           category: "exotic", description: "Perfect mirror surface",      promptHint: "made of perfect mirror surface with flawless reflections, no tint and razor-sharp reflected detail", term: "mirror finish" },
+  { id: "plasma",        label: "Plasma",           category: "exotic", description: "Glowing electric plasma",     promptHint: "made of glowing electric plasma with arcing internal bolts, a radiant violet-pink core and a haze of ionized energy", term: "glowing electric plasma" },
   { id: "crystal-shard", label: "Crystal Shards",   category: "exotic", description: "Shattered glowing crystal",   promptHint: "made of fractured glowing crystal shards with sharp prismatic facets, internal luminescence and dynamic rainbow refraction" },
   { id: "obsidian-glass", label: "Obsidian Glass",  category: "exotic", description: "Dark volcanic glass",         promptHint: "made of dark obsidian volcanic glass with a glossy black surface, razor-sharp edges and subtle iridescent highlights" },
-  { id: "iridescent",     label: "Iridescent",      category: "exotic", description: "Color-shifting iridescent surface", promptHint: "made of iridescent rainbow-shifting surface, the kind of color play seen on oil slicks, butterfly wings and mother-of-pearl, with hues that shift as the angle changes" },
+  { id: "iridescent",     label: "Iridescent",      category: "exotic", description: "Color-shifting iridescent surface", promptHint: "made of iridescent rainbow-shifting surface, the kind of color play seen on oil slicks, butterfly wings and mother-of-pearl, with hues that shift as the angle changes", term: "iridescent color-shifting surface" },
   { id: "mother-of-pearl", label: "Mother-of-Pearl", category: "exotic", description: "Pearlescent inner shell layer", promptHint: "made of mother-of-pearl with a pearlescent cream surface, soft iridescent shimmer and the layered nacre depth seen in inlay work and fine jewelry" },
   { id: "carbon-fiber",   label: "Carbon Fiber",    category: "exotic", description: "Woven black carbon-fiber composite", promptHint: "made of woven carbon-fiber composite with a glossy black checkered weave pattern, a hi-tech aerospace feel and subtle directional sheen" },
   { id: "holographic-film", label: "Holographic Film", category: "exotic", description: "Light-refracting holographic film", promptHint: "made of light-refracting holographic film with a thin reflective sheet surface, prismatic rainbow shimmer and shifting spectral highlights as the angle changes" },
@@ -136,6 +146,17 @@ export function getMaterialLabel(id: string | undefined | null, fallback?: strin
 
 export function getMaterialPromptHint(id: string | undefined | null): string {
   return getMaterial(id)?.promptHint ?? ""
+}
+
+/**
+ * Compact counterpart of `getMaterialPromptHint`: the short professional term
+ * this material injects in compact hint mode ("brushed stainless steel" where
+ * the hint is the full "made of ..." sentence). The `"made of"` grammar belongs
+ * to the HINT — a term is the bare material noun phrase, so a consumer can drop
+ * it into whatever sentence it is building. Empty string for an unknown id.
+ */
+export function getMaterialTerm(id: string | undefined | null): string {
+  return resolveTerm(getMaterial(id))
 }
 
 /**

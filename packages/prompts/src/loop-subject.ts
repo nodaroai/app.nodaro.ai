@@ -18,6 +18,8 @@
  * and lets us refine each library independently.
  */
 
+import { resolveTerm } from "./term.js"
+
 export type LoopSubjectCategory = "realistic" | "abstract"
 
 export interface LoopSubject {
@@ -28,6 +30,11 @@ export interface LoopSubject {
   /** Drop-in prompt text for Generate Image. Wired into the prompt input
    *  via FieldMappings, same as Setting / Motion / Mood Parameter nodes. */
   readonly promptHint: string
+  /** Compact professional term for hint-compact mode (see `term.ts`). Authored
+   *  only where the lowercased label is not what a professional would write —
+   *  the "Tunnel — Exciting" style UI compounds and the generic subject
+   *  labels ("Galaxy", "Underwater Light") that need their trade wording. */
+  readonly term?: string
 }
 
 export const LOOP_SUBJECT_CATEGORY_ORDER: ReadonlyArray<LoopSubjectCategory> = [
@@ -48,6 +55,7 @@ export const LOOP_SUBJECTS: ReadonlyArray<LoopSubject> = [
     category: "realistic",
     description: "Aurora borealis ribbons over a horizon",
     promptHint: "aurora borealis ribbons in green and violet over a snowy mountain horizon, wide centered framing, low ambient starlight, deep cosmic backdrop, no foreground subject",
+    term: "aurora borealis",
   },
   {
     id: "clouds",
@@ -104,6 +112,7 @@ export const LOOP_SUBJECTS: ReadonlyArray<LoopSubject> = [
     category: "realistic",
     description: "Spiral galaxy in deep space",
     promptHint: "spiral galaxy with swirling arms of stars and luminous gas, dust lanes radiating from a bright core, centered radial composition, deep cosmic black background, no perspective depth",
+    term: "spiral galaxy",
   },
   {
     id: "nebula",
@@ -118,6 +127,7 @@ export const LOOP_SUBJECTS: ReadonlyArray<LoopSubject> = [
     category: "realistic",
     description: "Light rays through forest canopy",
     promptHint: "golden sunbeams cutting through a tall forest canopy with floating dust motes catching the light, centered vertical composition, deep green ambient tone, no human figures, no foreground subject",
+    term: "sunbeams through forest canopy",
   },
   {
     id: "cherry-blossoms",
@@ -132,6 +142,7 @@ export const LOOP_SUBJECTS: ReadonlyArray<LoopSubject> = [
     category: "realistic",
     description: "Sunbeams and bubbles below water",
     promptHint: "sunbeams cutting down through deep blue ocean water with rising silver air bubbles and floating particulate, centered cathedral-light composition, no surface horizon visible, no foreground subject",
+    term: "underwater god rays",
   },
   {
     id: "embers",
@@ -148,6 +159,7 @@ export const LOOP_SUBJECTS: ReadonlyArray<LoopSubject> = [
     category: "abstract",
     description: "Fractal neon tunnel with depth",
     promptHint: "infinite fractal tunnel of glowing neon ribbons receding into a vanishing point, centered symmetric composition, deep volumetric light, no foreground subject",
+    term: "infinite fractal neon tunnel",
   },
   {
     id: "tunnel-clean",
@@ -155,6 +167,7 @@ export const LOOP_SUBJECTS: ReadonlyArray<LoopSubject> = [
     category: "abstract",
     description: "Periodic tunnel of geometric filaments",
     promptHint: "infinite fractal tunnel of glowing neon geometric filaments, self-similar repeating depth that recurses to infinity, centered symmetric composition, deep volumetric light, dark void background, no foreground subject",
+    term: "self-similar geometric neon tunnel",
   },
   {
     id: "kaleidoscope",
@@ -204,6 +217,7 @@ export const LOOP_SUBJECTS: ReadonlyArray<LoopSubject> = [
     category: "abstract",
     description: "Pulsing audio visualizer",
     promptHint: "vertical audio equalizer bars in vibrant neon gradient pulsing at different heights, centered symmetric composition, dark backdrop with soft glow, repeating periodic structure, no foreground subject",
+    term: "audio equalizer bars",
   },
   {
     id: "dna-helix",
@@ -211,6 +225,7 @@ export const LOOP_SUBJECTS: ReadonlyArray<LoopSubject> = [
     category: "abstract",
     description: "Rotating double helix",
     promptHint: "glowing neon DNA double helix structure with periodic identical rungs, centered vertical symmetric composition, electric cyan and magenta strands, dark void background, fractal repeating geometry, no foreground subject",
+    term: "dna double helix",
   },
   {
     id: "liquid-chrome",
@@ -260,10 +275,11 @@ export const LOOP_SUBJECTS: ReadonlyArray<LoopSubject> = [
     category: "abstract",
     description: "Shifting platonic solids",
     promptHint: "abstract array of glowing neon platonic solid wireframes morphing through self-similar fractal subdivisions, centered radial symmetric composition, deep dark backdrop, electric rim lighting, no foreground subject",
+    term: "morphing platonic solid wireframes",
   },
 ]
 
-export function getLoopSubject(id: string): LoopSubject | undefined {
+export function getLoopSubject(id: string | undefined | null): LoopSubject | undefined {
   return LOOP_SUBJECTS.find((s) => s.id === id)
 }
 
@@ -273,4 +289,14 @@ export function getLoopSubjectLabel(id: string): string {
 
 export function getLoopSubjectPromptHint(id: string): string {
   return getLoopSubject(id)?.promptHint ?? ""
+}
+
+/**
+ * Compact professional term for the subject — the short phrase a VJ or
+ * cinematographer would write when the consumer wants a term instead of the
+ * full scene paragraph. Mirrors `getLoopSubjectPromptHint`'s lookup so the two
+ * can never describe different entries.
+ */
+export function getLoopSubjectTerm(id: string | undefined | null): string {
+  return resolveTerm(getLoopSubject(id))
 }
