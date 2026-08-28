@@ -15,6 +15,8 @@
  * frontend DAG executor and the backend orchestrator.
  */
 
+import { resolveTerm, type PickerHintMode } from "./term.js"
+
 export type TemporalCategory = "speed" | "freeze" | "direction" | "shutter"
 
 export interface Temporal {
@@ -23,33 +25,43 @@ export interface Temporal {
   readonly category: TemporalCategory
   readonly description: string
   readonly promptHint: string
+  /**
+   * Compact professional term injected in compact hint mode (see `term.ts`).
+   *
+   * Authored where the picker label is a UI compound ("Reverse / Rewind",
+   * "Loop / Boomerang") or a bare word that reads as something else entirely
+   * inside a prompt — "Forward" as a camera move rather than playback
+   * direction, "Moving Subject" as a plain description of the action rather
+   * than the frozen-world effect it selects here.
+   */
+  readonly term?: string
 }
 
 export const TEMPORALS: ReadonlyArray<Temporal> = [
   // Speed (6)
-  { id: "real-time",      label: "Real-time",         category: "speed",     description: "Normal playback speed",                   promptHint: "real-time playback, normal speed" },
+  { id: "real-time",      label: "Real-time",         category: "speed",     description: "Normal playback speed",                   promptHint: "real-time playback, normal speed", term: "real-time playback" },
   { id: "slow-motion",    label: "Slow Motion",       category: "speed",     description: "Moderately slowed footage",               promptHint: "slow motion, footage slowed down with smooth deliberate movement" },
-  { id: "super-slow-mo",  label: "Super Slow-mo",     category: "speed",     description: "Extremely slow footage",                  promptHint: "super slow motion, extreme high-speed slow-mo capturing motion at a fraction of real time" },
+  { id: "super-slow-mo",  label: "Super Slow-mo",     category: "speed",     description: "Extremely slow footage",                  promptHint: "super slow motion, extreme high-speed slow-mo capturing motion at a fraction of real time", term: "super slow motion" },
   { id: "time-lapse",     label: "Time-lapse",        category: "speed",     description: "Compressed time, fast passage",           promptHint: "time-lapse, highly compressed time showing hours or days passing in seconds" },
   { id: "hyper-lapse",    label: "Hyper-lapse",       category: "speed",     description: "Moving time-lapse",                       promptHint: "hyper-lapse, time-lapse combined with forward camera motion, accelerated movement through space" },
   { id: "speed-ramp",     label: "Speed Ramp",        category: "speed",     description: "Dynamic speed change mid-shot",           promptHint: "speed ramp, dynamic speed change within the shot from slow motion to real-time or faster" },
 
   // Freeze (4)
-  { id: "full-freeze",    label: "Full Freeze-frame", category: "freeze",    description: "All motion frozen",                       promptHint: "full freeze-frame, all motion in the scene completely frozen like a photograph" },
+  { id: "full-freeze",    label: "Full Freeze-frame", category: "freeze",    description: "All motion frozen",                       promptHint: "full freeze-frame, all motion in the scene completely frozen like a photograph", term: "freeze frame" },
   { id: "bullet-time",    label: "Bullet Time",       category: "freeze",    description: "Subject frozen, camera orbits",           promptHint: "bullet time effect, subject completely frozen mid-motion while camera orbits around them, Matrix-style" },
-  { id: "frozen-subject", label: "Frozen Subject",    category: "freeze",    description: "Subject frozen, world moves",             promptHint: "frozen subject with moving world, subject remains completely still while the environment continues in motion" },
-  { id: "moving-subject", label: "Moving Subject",    category: "freeze",    description: "Subject moves, world frozen",             promptHint: "moving subject with frozen world, subject continues in motion while everything else in the scene is completely frozen" },
+  { id: "frozen-subject", label: "Frozen Subject",    category: "freeze",    description: "Subject frozen, world moves",             promptHint: "frozen subject with moving world, subject remains completely still while the environment continues in motion", term: "frozen subject, world in motion" },
+  { id: "moving-subject", label: "Moving Subject",    category: "freeze",    description: "Subject moves, world frozen",             promptHint: "moving subject with frozen world, subject continues in motion while everything else in the scene is completely frozen", term: "moving subject, frozen world" },
 
   // Direction (3)
-  { id: "forward",        label: "Forward",           category: "direction", description: "Normal forward playback",                 promptHint: "forward playback, time moving forward in the natural direction" },
-  { id: "reverse",        label: "Reverse / Rewind",  category: "direction", description: "Time plays backwards",                    promptHint: "reverse playback, time and motion running backwards" },
-  { id: "loop-boomerang", label: "Loop / Boomerang",  category: "direction", description: "Forward then reverse",                    promptHint: "boomerang loop, playing forward then reversing back, creating a looping motion" },
+  { id: "forward",        label: "Forward",           category: "direction", description: "Normal forward playback",                 promptHint: "forward playback, time moving forward in the natural direction", term: "forward playback" },
+  { id: "reverse",        label: "Reverse / Rewind",  category: "direction", description: "Time plays backwards",                    promptHint: "reverse playback, time and motion running backwards", term: "reverse playback" },
+  { id: "loop-boomerang", label: "Loop / Boomerang",  category: "direction", description: "Forward then reverse",                    promptHint: "boomerang loop, playing forward then reversing back, creating a looping motion", term: "boomerang loop" },
 
   // Shutter (5)
   { id: "long-exposure",  label: "Long Exposure",     category: "shutter",   description: "Motion trails and streaks",               promptHint: "long exposure effect, motion trails and light streaks from slow shutter speed" },
-  { id: "crisp-shutter",  label: "Crisp Shutter",     category: "shutter",   description: "Sharp motion, no blur",                   promptHint: "crisp shutter, sharp motion captured with fast shutter speed and no motion blur" },
+  { id: "crisp-shutter",  label: "Crisp Shutter",     category: "shutter",   description: "Sharp motion, no blur",                   promptHint: "crisp shutter, sharp motion captured with fast shutter speed and no motion blur", term: "fast shutter, sharp motion" },
   { id: "motion-blur",    label: "Motion Blur",       category: "shutter",   description: "Pronounced directional blur",             promptHint: "pronounced motion blur, moving subjects blur directionally from slower-than-normal shutter speed" },
-  { id: "stutter-strobe", label: "Stutter / Strobe",  category: "shutter",   description: "Strobe-effect jerky motion",              promptHint: "stutter or strobe effect, jerky discontinuous motion with visible frame steps" },
+  { id: "stutter-strobe", label: "Stutter / Strobe",  category: "shutter",   description: "Strobe-effect jerky motion",              promptHint: "stutter or strobe effect, jerky discontinuous motion with visible frame steps", term: "strobe stutter effect" },
   { id: "stop-motion",    label: "Stop-motion",       category: "shutter",   description: "Stepped frame-by-frame motion",           promptHint: "stop-motion animation style, stepped frame-by-frame motion with characteristic discrete movement" },
 ] as const
 
@@ -83,6 +95,16 @@ export function getTemporalLabel(id: string | undefined | null, fallback?: strin
 
 export function getTemporalPromptHint(id: string | undefined | null): string {
   return getTemporal(id)?.promptHint ?? ""
+}
+
+/**
+ * The COMPACT counterpart of `getTemporalPromptHint`: the short professional
+ * term ("super slow motion", "reverse playback", "boomerang loop") a consumer
+ * injects instead of the full mechanism description. Same lookup, same
+ * empty-string-on-miss behavior.
+ */
+export function getTemporalTerm(id: string | undefined | null): string {
+  return resolveTerm(getTemporal(id))
 }
 
 export const TEMPORAL_IDS: ReadonlyArray<string> = TEMPORALS.map((t) => t.id)
@@ -121,6 +143,34 @@ export interface TemporalValue {
 const TEMPORAL_FIELDS_IN_ORDER: ReadonlyArray<readonly [keyof TemporalValue, TemporalCategory]> =
   TEMPORAL_CATEGORY_ORDER.map((cat) => [TEMPORAL_FIELD_BY_CATEGORY[cat], cat] as const)
 
+type TemporalHintData = Record<string, unknown> & {
+  temporalSpeed?: unknown
+  temporalFreeze?: unknown
+  temporalDirection?: unknown
+  temporalShutter?: unknown
+}
+
+/**
+ * The one walk over the per-category temporal fields, parameterized by how a
+ * single selected id turns into a fragment. `buildTemporalHints` (verbose) and
+ * `buildTemporalTerms` (compact) both delegate here, so the two can never
+ * disagree about WHICH ids contribute or in what order — only about how each
+ * one is phrased.
+ */
+function collectTemporalFragments(
+  data: TemporalHintData,
+  fragmentFor: (id: string) => string,
+): string[] {
+  const out: string[] = []
+  for (const [field] of TEMPORAL_FIELDS_IN_ORDER) {
+    const id = data[field]
+    if (typeof id !== "string" || id.length === 0) continue
+    const fragment = fragmentFor(id)
+    if (fragment) out.push(fragment)
+  }
+  return out
+}
+
 /**
  * Aggregate all enabled per-category temporal prompt hints from a consumer's
  * data, in canonical category order (speed, freeze, direction, shutter).
@@ -139,13 +189,25 @@ export function buildTemporalHints(
     temporalDirection?: unknown
     temporalShutter?: unknown
   },
+  mode: PickerHintMode = "full",
 ): string[] {
-  const hints: string[] = []
-  for (const [field] of TEMPORAL_FIELDS_IN_ORDER) {
-    const id = data[field]
-    if (typeof id !== "string" || id.length === 0) continue
-    const hint = getTemporalPromptHint(id)
-    if (hint) hints.push(hint)
-  }
-  return hints
+  if (mode === "compact") return buildTemporalTerms(data)
+  return collectTemporalFragments(data, getTemporalPromptHint)
+}
+
+/**
+ * The COMPACT counterpart of `buildTemporalHints`: the same per-category walk
+ * in the same canonical order, emitting each selection's short professional
+ * term ("super slow motion", "bullet time", "reverse playback") instead of its
+ * full mechanism description.
+ */
+export function buildTemporalTerms(
+  data: Record<string, unknown> & {
+    temporalSpeed?: unknown
+    temporalFreeze?: unknown
+    temporalDirection?: unknown
+    temporalShutter?: unknown
+  },
+): string[] {
+  return collectTemporalFragments(data, getTemporalTerm)
 }

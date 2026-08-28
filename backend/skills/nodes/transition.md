@@ -1,7 +1,7 @@
 ---
 node_type: transition
-generated_at: 2026-08-15T21:55:05.888Z
-generated_from: 150c80ac9
+generated_at: 2026-08-28T10:30:57.356Z
+generated_from: ae8d76277
 ---
 
 # Transition
@@ -23,6 +23,7 @@ generated_from: 150c80ac9
 - `intensity?: TransitionIntensity`
 - `preText?: string`
 - `postText?: string`
+- `hintMode?: "full" | "compact"`
 
 **Valid values:** call `get_picker_catalog("transition")` (MCP) or `GET /v1/picker-catalogs/transition` for the catalog of valid ids.
 

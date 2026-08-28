@@ -10,32 +10,43 @@
  * frontend DAG executor and the backend orchestrator.
  */
 
+import { resolveTerm } from "./term.js"
+
 export interface Lens {
   readonly id: string
   readonly label: string
   readonly description: string
   readonly promptHint: string
+  /**
+   * Optional authored compact term (see `term.ts`). Authored where the
+   * lowercased label is not what a cinematographer would write in a prompt —
+   * the focal length lives in a parenthetical the derivation drops
+   * ("Wide (24mm)" → "wide"), or the bare optic name needs its category noun
+   * ("Macro" → "macro lens", "Shallow DOF" → "shallow depth of field").
+   * Everywhere else the label IS the term.
+   */
+  readonly term?: string
 }
 
 export const LENSES: ReadonlyArray<Lens> = [
-  { id: "ultra-wide-14mm",       label: "Ultra-wide (14mm)",       description: "Extreme wide angle, exaggerated perspective", promptHint: "shot on ultra-wide 14mm lens, exaggerated perspective with strong barrel distortion" },
-  { id: "wide-24mm",             label: "Wide (24mm)",             description: "Wide field of view, environmental",           promptHint: "shot on wide 24mm lens, expansive environmental field of view" },
-  { id: "standard-35mm",         label: "Standard (35mm)",         description: "Natural perspective, documentary feel",       promptHint: "shot on standard 35mm lens, natural perspective with documentary feel" },
-  { id: "normal-50mm",           label: "Normal (50mm)",           description: "Closest to human eye perception",             promptHint: "shot on normal 50mm lens, perspective closest to natural human vision" },
-  { id: "portrait-85mm",         label: "Portrait (85mm)",         description: "Flattering compression, creamy bokeh",        promptHint: "shot on 85mm portrait lens, flattering facial compression with creamy background bokeh" },
-  { id: "telephoto-135mm",       label: "Telephoto (135mm)",       description: "Compressed depth, isolated subject",          promptHint: "shot on 135mm telephoto lens, compressed depth with subject isolated from background" },
-  { id: "super-telephoto-400mm", label: "Super Telephoto (400mm)", description: "Extreme compression, distant subject",        promptHint: "shot on super-telephoto 400mm lens, extreme depth compression with subject pulled forward" },
-  { id: "fisheye",               label: "Fisheye",                 description: "Hemispherical 180° distortion",          promptHint: "shot on fisheye lens, extreme 180-degree hemispherical distortion with curved horizon" },
-  { id: "anamorphic",            label: "Anamorphic",              description: "Cinematic widescreen, oval bokeh",            promptHint: "anamorphic lens look, cinematic widescreen feel with characteristic oval bokeh and horizontal lens flares" },
-  { id: "macro",                 label: "Macro",                   description: "Extreme close-up of small detail",            promptHint: "macro lens, extreme close-up revealing fine detail with shallow depth of field" },
+  { id: "ultra-wide-14mm",       label: "Ultra-wide (14mm)",       description: "Extreme wide angle, exaggerated perspective", promptHint: "shot on ultra-wide 14mm lens, exaggerated perspective with strong barrel distortion", term: "14mm ultra-wide lens" },
+  { id: "wide-24mm",             label: "Wide (24mm)",             description: "Wide field of view, environmental",           promptHint: "shot on wide 24mm lens, expansive environmental field of view", term: "24mm wide-angle lens" },
+  { id: "standard-35mm",         label: "Standard (35mm)",         description: "Natural perspective, documentary feel",       promptHint: "shot on standard 35mm lens, natural perspective with documentary feel", term: "35mm standard lens" },
+  { id: "normal-50mm",           label: "Normal (50mm)",           description: "Closest to human eye perception",             promptHint: "shot on normal 50mm lens, perspective closest to natural human vision", term: "50mm normal lens" },
+  { id: "portrait-85mm",         label: "Portrait (85mm)",         description: "Flattering compression, creamy bokeh",        promptHint: "shot on 85mm portrait lens, flattering facial compression with creamy background bokeh", term: "85mm portrait lens" },
+  { id: "telephoto-135mm",       label: "Telephoto (135mm)",       description: "Compressed depth, isolated subject",          promptHint: "shot on 135mm telephoto lens, compressed depth with subject isolated from background", term: "135mm telephoto lens" },
+  { id: "super-telephoto-400mm", label: "Super Telephoto (400mm)", description: "Extreme compression, distant subject",        promptHint: "shot on super-telephoto 400mm lens, extreme depth compression with subject pulled forward", term: "400mm super-telephoto lens" },
+  { id: "fisheye",               label: "Fisheye",                 description: "Hemispherical 180° distortion",          promptHint: "shot on fisheye lens, extreme 180-degree hemispherical distortion with curved horizon", term: "fisheye lens" },
+  { id: "anamorphic",            label: "Anamorphic",              description: "Cinematic widescreen, oval bokeh",            promptHint: "anamorphic lens look, cinematic widescreen feel with characteristic oval bokeh and horizontal lens flares", term: "anamorphic lens" },
+  { id: "macro",                 label: "Macro",                   description: "Extreme close-up of small detail",            promptHint: "macro lens, extreme close-up revealing fine detail with shallow depth of field", term: "macro lens" },
   { id: "probe",                 label: "Probe Lens",              description: "Tube macro — through holes and tight spaces", promptHint: "probe lens shot, tube-lens macro perspective gliding through impossibly tight spaces with extreme close-up depth" },
-  { id: "cctv",                  label: "CCTV",                    description: "Security-camera surveillance look",           promptHint: "CCTV security camera footage look, high-angle fixed surveillance framing, mild wide-angle distortion, washed contrast and visible video grain" },
-  { id: "tilt-shift",            label: "Tilt-shift",              description: "Selective focus, miniature effect",           promptHint: "tilt-shift lens, selective plane of focus producing a miniature-diorama effect" },
-  { id: "shallow-dof",           label: "Shallow DOF",             description: "Razor-thin focus, dreamy bokeh",              promptHint: "extremely shallow depth of field, razor-thin focal plane with dreamy out-of-focus bokeh" },
+  { id: "cctv",                  label: "CCTV",                    description: "Security-camera surveillance look",           promptHint: "CCTV security camera footage look, high-angle fixed surveillance framing, mild wide-angle distortion, washed contrast and visible video grain", term: "cctv surveillance camera look" },
+  { id: "tilt-shift",            label: "Tilt-shift",              description: "Selective focus, miniature effect",           promptHint: "tilt-shift lens, selective plane of focus producing a miniature-diorama effect", term: "tilt-shift lens" },
+  { id: "shallow-dof",           label: "Shallow DOF",             description: "Razor-thin focus, dreamy bokeh",              promptHint: "extremely shallow depth of field, razor-thin focal plane with dreamy out-of-focus bokeh", term: "shallow depth of field" },
   { id: "canon-k35",             label: "Canon K35 Prime",         description: "Vintage cinematic, warm gentle skin",         promptHint: "shot on a vintage Canon K35 cinema prime, warm gentle skin rendition, low-contrast highlight roll-off, soft dreamy falloff into the bokeh and the unmistakable seventies-era cinematic patina" },
   { id: "cooke-s4",              label: "Cooke S4 Prime",          description: "The Cooke look — creamy painterly skin",      promptHint: "shot on a Cooke S4 cinema prime, the signature \"Cooke look\" with creamy painterly bokeh, gently rounded out-of-focus highlights and a flattering filmic skin rendition" },
-  { id: "helios-44",             label: "Helios 44",               description: "Vintage Soviet swirly bokeh",                 promptHint: "shot on a vintage Soviet Helios 44 lens, the legendary swirly bokeh circling the subject, soft low contrast in the corners and a dreamlike vintage aberration character" },
-  { id: "petzval",               label: "Petzval Portrait",        description: "Ultra-vintage swirl, dramatic falloff",       promptHint: "shot on an ultra-vintage Petzval portrait lens, sharp central focus that falls off rapidly into a swirling, painterly bokeh, dramatic vignetting and a 19th-century daguerreotype-era softness at the edges" },
+  { id: "helios-44",             label: "Helios 44",               description: "Vintage Soviet swirly bokeh",                 promptHint: "shot on a vintage Soviet Helios 44 lens, the legendary swirly bokeh circling the subject, soft low contrast in the corners and a dreamlike vintage aberration character", term: "vintage helios 44 lens, swirly bokeh" },
+  { id: "petzval",               label: "Petzval Portrait",        description: "Ultra-vintage swirl, dramatic falloff",       promptHint: "shot on an ultra-vintage Petzval portrait lens, sharp central focus that falls off rapidly into a swirling, painterly bokeh, dramatic vignetting and a 19th-century daguerreotype-era softness at the edges", term: "petzval portrait lens, swirling bokeh" },
 ] as const
 
 const lensById = new Map<string, Lens>(LENSES.map((l) => [l.id, l]))
@@ -54,6 +65,11 @@ export function getLensLabel(id: string | undefined | null, fallback?: string): 
 
 export function getLensPromptHint(id: string | undefined | null): string {
   return getLens(id)?.promptHint ?? ""
+}
+
+/** The compact professional term for a lens (see `term.ts`). */
+export function getLensTerm(id: string | undefined | null): string {
+  return resolveTerm(getLens(id))
 }
 
 export const LENS_IDS: ReadonlyArray<string> = LENSES.map((l) => l.id)

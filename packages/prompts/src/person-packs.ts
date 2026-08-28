@@ -7,6 +7,7 @@ import {
 } from "./person.js"
 import { registerCatalogPack, getRegisteredCatalogPacks } from "./catalog-packs.js"
 import type { PickerDimension, PickerOption } from "./picker-catalogs.js"
+import { resolveTerm } from "./term.js"
 import { setRegisteredPersonPackFields } from "@nodaro/shared"
 
 /**
@@ -62,6 +63,7 @@ export function registerPersonPack(pack: PersonPack): void {
       description: e.description,
       category: e.group,
       promptHint: e.promptHint,
+      term: resolveTerm(e),
     }
     const existing = byField.get(dim.field)
     if (existing) existing.options.push(opt)

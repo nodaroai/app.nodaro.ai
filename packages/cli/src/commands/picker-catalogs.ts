@@ -81,7 +81,7 @@ Examples:
   cmd
     .command("get <nodeType>")
     .description("show one picker's catalog of valid values")
-    .option("--full", "include description + the prompt fragment each id injects")
+    .option("--full", "add description + the prompt fragment each id injects (compact already carries each id's `term`)")
     .option("--category <name>", "single-dim pickers: filter to one category")
     .option("--field <name>", "multi-dim pickers (person/styling/framing): only this dimension")
     .option("--profile <name>")

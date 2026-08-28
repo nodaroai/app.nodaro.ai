@@ -941,12 +941,16 @@ returns 400 `validation_error`):
 
 | Param | Values | Purpose |
 |---|---|---|
-| `detail` | `compact` (default) / `full` | `compact`: `id`, `label`, `category`, `icon`. `full`: additionally includes each option's `description` and `promptHint` (the prompt fragment it injects). |
+| `detail` | `compact` (default) / `full` | `compact`: `id`, `label`, `category`, `term`, `icon`. `full`: additionally includes each option's `description` and `promptHint` (the prompt fragment it injects). |
 | `category` | string | Single-dim pickers: filter options to one category. |
 | `field` | string | Multi-dim pickers (person / styling / framing): return only this dimension's field. |
 
 A single-dim catalog carries `options`; a multi-dim catalog carries
-`dimensions` (one `{ field, label, options }` per field). These are the same
+`dimensions` (one `{ field, label, options }` per field). Every option carries a
+`term` at **both** detail levels — the short professional phrase to inject into
+a prompt when you want a compact instruction (`"whip pan left"`), where `label`
+is display-only and `promptHint` is the full mechanism sentence. It is `""` for
+a no-op (`auto` / `none`) option that injects nothing. These are the same
 catalogs that ship as pure data in [`@nodaro/shared`](https://www.npmjs.com/package/@nodaro/shared)
 — prefer importing the package when you can bundle it (see
 [Parameter Picker Catalogs](picker-catalogs.md)); the REST endpoints exist for
@@ -971,9 +975,9 @@ Query param (a bad value returns 400 `validation_error`):
 
 | Param | Values | Purpose |
 |---|---|---|
-| `detail` | `compact` (default) / `full` | `compact`: `id`, `label`, `category`, `icon`. `full`: additionally includes each option's `description` and `promptHint`. |
+| `detail` | `compact` (default) / `full` | `compact`: `id`, `label`, `category`, `term`, `icon`. `full`: additionally includes each option's `description` and `promptHint`. |
 
-Each `ProjectedCatalog` is `{ nodeType, label, catalogId, kind, valueField?, defaultValue?, categoryOrder?, categoryLabels?, detail, options?, fields?, dimensions? }` — single-dim catalogs carry `options`; multi-dim catalogs carry `dimensions` (one `{ field, label, options }` per field). The shape is deliberately tag/policy-free.
+Each `ProjectedCatalog` is `{ nodeType, label, catalogId, kind, valueField?, defaultValue?, categoryOrder?, categoryLabels?, detail, options?, fields?, dimensions? }` — single-dim catalogs carry `options`; multi-dim catalogs carry `dimensions` (one `{ field, label, options }` per field). Each option is `{ id, label, category?, term, icon?, description?, promptHint? }`; `term` rides at **both** detail levels so a thin client can render `label` and inject the compact professional term without a second `detail=full` fetch. The shape is deliberately tag/policy-free.
 
 ### Text → pickers (AI Fill)
 

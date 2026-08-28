@@ -9,6 +9,7 @@ A parameter-picker that emits a voice-delivery prompt-hint to feed ElevenLabs Vo
 | pace      | string | Optional. Pace id (e.g. `slow`, `measured`, `conversational`, `fast`, `rapid-fire`).                                     |
 | emotion   | string | Optional. Emotional tone id (e.g. `reassuring`, `urgent`, `excited`, `somber`, `playful`).                               |
 | archetype | string | Optional. Voice-acting archetype id (e.g. `documentary-narrator`, `audiobook-reader`, `news-anchor`, `commercial-vo`).   |
+| Hint mode   | select   | Which fragment this picker injects downstream — `full` (default) = the long descriptive hint, `compact` = the short professional term. See [Prompt hint mode](./README.md#prompt-hint-mode). |
 
 ## Output
 

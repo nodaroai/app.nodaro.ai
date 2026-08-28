@@ -4,6 +4,13 @@ export interface CatalogSnapshotEntry {
   description?: string
   category?: string
   promptHint?: string
+  /**
+   * The short professional term the entry injects in compact hint mode
+   * (`label` is display-only). Rides at both `/v1/catalogs` detail levels, so
+   * a snapshot built from a compact projection still carries it — and
+   * `diff-upstream` treats a term-only upstream edit as a real change.
+   */
+  term?: string
 }
 export interface CatalogSnapshot {
   catalogId: string

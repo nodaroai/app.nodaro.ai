@@ -1,7 +1,7 @@
 ---
 node_type: composition-effects
-generated_at: 2026-08-15T21:55:06.327Z
-generated_from: 150c80ac9
+generated_at: 2026-08-28T10:30:57.622Z
+generated_from: ae8d76277
 ---
 
 # Composition Effects
@@ -20,6 +20,7 @@ generated_from: 150c80ac9
 **Optional data fields:**
 - `preText?: string`
 - `postText?: string`
+- `hintMode?: "full" | "compact"`
 
 **Valid values:** call `get_picker_catalog("composition-effects")` (MCP) or `GET /v1/picker-catalogs/composition-effects` for the catalog of valid ids.
 

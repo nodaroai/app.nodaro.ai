@@ -13,6 +13,7 @@ The Action FX parameter node describes environmental events that happen WITHIN a
 | actionFx  | multi-select | `auto`  | Catalog entry id(s) — up to 5 entries for compound effects.                                        |
 | Pre Text  | text         | empty   | Free-form text prepended to the composed hint.                                                     |
 | Post Text | text         | empty   | Free-form text appended to the composed hint.                                                      |
+| Hint mode   | select         | `full`    | Which fragment this picker injects downstream — `full` = the long descriptive hint, `compact` = the short professional term. See [Prompt hint mode](./README.md#prompt-hint-mode). |
 
 ## Catalog (72 entries)
 

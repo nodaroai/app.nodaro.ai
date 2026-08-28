@@ -13,6 +13,7 @@ The Aesthetic / Microtrend parameter node taps into named visual subcultures and
 | aesthetic | string | `"y2k"` | Catalog entry id (e.g. `"cottagecore"`, `"vaporwave"`).  |
 | Pre Text  | text   | empty   | Free-form text prepended to the composed hint.           |
 | Post Text | text   | empty   | Free-form text appended to the composed hint.            |
+| Hint mode   | select   | `full`    | Which fragment this picker injects downstream — `full` = the long descriptive hint, `compact` = the short professional term. See [Prompt hint mode](./README.md#prompt-hint-mode). |
 
 ## Catalog (46 entries across 4 categories)
 

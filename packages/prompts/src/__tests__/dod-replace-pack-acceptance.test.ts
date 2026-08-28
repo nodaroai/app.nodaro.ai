@@ -23,7 +23,7 @@ describe("DoD — adopt a vendored replacement pack by registration", () => {
     const vendored: PickerCatalog = {
       ...upstreamMood,
       options: [
-        { id: "calm", label: "Calm", promptHint: "with a calm mood", category: upstreamMood.options![0].category },
+        { id: "calm", label: "Calm", promptHint: "with a calm mood", term: "calm", category: upstreamMood.options![0].category },
       ],
     }
     registerCatalogPack({ id: "sai/mood", catalogId: "mood", mode: "replace", catalog: vendored })

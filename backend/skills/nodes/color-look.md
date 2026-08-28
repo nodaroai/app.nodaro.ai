@@ -1,7 +1,7 @@
 ---
 node_type: color-look
-generated_at: 2026-08-15T21:55:05.958Z
-generated_from: 150c80ac9
+generated_at: 2026-08-28T10:30:57.401Z
+generated_from: ae8d76277
 ---
 
 # Color / Look
@@ -20,6 +20,7 @@ generated_from: 150c80ac9
 **Optional data fields:**
 - `preText?: string`
 - `postText?: string`
+- `hintMode?: "full" | "compact"`
 
 **Valid values:** call `get_picker_catalog("color-look")` (MCP) or `GET /v1/picker-catalogs/color-look` for the catalog of valid ids.
 

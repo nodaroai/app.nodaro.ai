@@ -1,7 +1,7 @@
 ---
 node_type: music-genre
-generated_at: 2026-08-15T21:55:06.038Z
-generated_from: 150c80ac9
+generated_at: 2026-08-28T10:28:28.326Z
+generated_from: ae8d76277
 ---
 
 # Music Genre
@@ -22,6 +22,7 @@ generated_from: 150c80ac9
 - `genre?: string | ReadonlyArray<string>`
 - `subgenre?: string`
 - `era?: string`
+- `hintMode?: "full" | "compact"`
 
 **Valid values:** call `get_picker_catalog("music-genre")` (MCP) or `GET /v1/picker-catalogs/music-genre` for the catalog of valid ids.
 

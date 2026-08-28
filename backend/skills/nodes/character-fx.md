@@ -1,7 +1,7 @@
 ---
 node_type: character-fx
-generated_at: 2026-08-15T21:55:05.899Z
-generated_from: 150c80ac9
+generated_at: 2026-08-28T10:30:57.363Z
+generated_from: ae8d76277
 ---
 
 # Character FX
@@ -23,6 +23,7 @@ generated_from: 150c80ac9
 - `intensity?: CharacterFxIntensity`
 - `preText?: string`
 - `postText?: string`
+- `hintMode?: "full" | "compact"`
 
 **Valid values:** call `get_picker_catalog("character-fx")` (MCP) or `GET /v1/picker-catalogs/character-fx` for the catalog of valid ids.
 

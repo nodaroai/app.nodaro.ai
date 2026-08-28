@@ -12,6 +12,7 @@ The Instruments section shows a horizontal tab row across instrument families (D
 | production     | string                | Optional. Production-style id (e.g. `polished`, `lo-fi`, `live`, `analog`, `stripped-back`).                      |
 | vocalPresence  | string \| string[]    | Optional. Multi-pick up to 3 (e.g. `["male-lead","choir"]`). `instrumental` is mutually exclusive — picking it clears any other; picking another clears `instrumental`. |
 | singingStyle   | string \| string[]    | Optional. Multi-pick up to 3 singing-style ids (e.g. `operatic`, `pop-singing`, `rock-singing`, `growl`, `rap`, `falsetto`, `belting`, `crooning`, `scat`, `yodeling`, `throat-singing`, `autotuned`). |
+| Hint mode        | select                  | Which fragment this picker injects downstream — `full` (default) = the long descriptive hint, `compact` = the short professional term. See [Prompt hint mode](./README.md#prompt-hint-mode). |
 
 ## Output
 

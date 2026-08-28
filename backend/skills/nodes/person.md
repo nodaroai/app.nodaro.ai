@@ -1,7 +1,7 @@
 ---
 node_type: person
-generated_at: 2026-08-15T21:55:06.100Z
-generated_from: 150c80ac9
+generated_at: 2026-08-28T10:30:57.487Z
+generated_from: ae8d76277
 ---
 
 # Person
@@ -55,6 +55,10 @@ generated_from: 150c80ac9
 - `preText?: string`
 - `postText?: string`
 - `maxItemsPerRow?: number`
+- `applyMode?: PickerApplyMode`
+- `autoApplyInjected?: boolean`
+- `lastAppliedPickerJson?: Record<string, unknown>`
+- `hintMode?: "full" | "compact"`
 
 **Valid values:** call `get_picker_catalog("person")` (MCP) or `GET /v1/picker-catalogs/person` for the catalog of valid ids.
 

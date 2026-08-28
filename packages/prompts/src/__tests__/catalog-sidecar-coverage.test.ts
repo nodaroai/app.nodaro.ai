@@ -4,7 +4,7 @@ import type { CatalogPack } from "../catalog-packs.js"
 
 const pack: CatalogPack = {
   id: "sai/setting", catalogId: "setting", mode: "extend",
-  options: [{ id: "shul-hall", label: "Shul Hall", promptHint: "in a synagogue hall" }],
+  options: [{ id: "shul-hall", label: "Shul Hall", promptHint: "in a synagogue hall", term: "shul hall" }],
   sidecars: { he: { "shul-hall": { label: "אולם בית כנסת" } } },      // he present
   exemptSidecarLocales: ["hi", "ja", "ko", "zh-CN", "ru", "ar"],       // declared exemption
 }

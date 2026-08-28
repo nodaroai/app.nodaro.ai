@@ -14,6 +14,8 @@
 
 import { pickIds } from "@nodaro/shared"
 
+import { resolveTerm, type PickerHintMode } from "./term.js"
+
 export type MusicGenreCategory =
   | "hip-hop-rnb"
   | "electronic"
@@ -47,6 +49,16 @@ export interface MusicSubgenre {
   readonly id: string
   readonly label: string
   readonly promptHint: string
+  /**
+   * Compact professional form injected in COMPACT hint mode (see `term.ts`).
+   * Authored where the lowercased label is not the genre name a producer would
+   * write — the picker drops the parent genre from the label to keep the tile
+   * short ("Conscious" → "conscious hip hop", "Beats" → "lo-fi beats"), the
+   * label is a UI compound the derivation mangles ("Drum & Bass",
+   * "Trap (EDM)"), or the bare word means something else entirely outside
+   * music ("Dub", "Swing", "Romantic"). Everywhere else the label IS the term.
+   */
+  readonly term?: string
 }
 
 export interface MusicGenre {
@@ -54,6 +66,12 @@ export interface MusicGenre {
   readonly label: string
   readonly description: string
   readonly promptHint: string
+  /**
+   * Compact professional form (see `term.ts`), authored where the lowercased
+   * label does not read as a music genre on its own — "World" → "world music",
+   * "R&B" → "rhythm and blues". Everywhere else the label IS the term.
+   */
+  readonly term?: string
   readonly category: MusicGenreCategory
   readonly subgenres: ReadonlyArray<MusicSubgenre>
 }
@@ -63,6 +81,12 @@ export interface MusicEra {
   readonly label: string
   readonly description: string
   readonly promptHint: string
+  /**
+   * Compact professional form (see `term.ts`). The decade labels already ARE
+   * the term; authored only for the named eras whose label is not what a
+   * producer writes ("Futurist" → "futuristic").
+   */
+  readonly term?: string
 }
 
 // Sourced from frontend/src/lib/suno-tags.ts SUNO_TAGS Genre + Subgenre buckets.
@@ -81,8 +105,8 @@ export const MUSIC_GENRES: ReadonlyArray<MusicGenre> = [
       { id: "drill",            label: "Drill",            promptHint: "drill" },
       { id: "uk-drill",         label: "UK Drill",         promptHint: "UK drill" },
       { id: "cloud-rap",        label: "Cloud Rap",        promptHint: "cloud rap" },
-      { id: "conscious-rap",    label: "Conscious",        promptHint: "conscious hip hop" },
-      { id: "gangsta-rap",      label: "Gangsta",          promptHint: "gangsta rap" },
+      { id: "conscious-rap",    label: "Conscious",        promptHint: "conscious hip hop", term: "conscious hip hop" },
+      { id: "gangsta-rap",      label: "Gangsta",          promptHint: "gangsta rap", term: "gangsta rap" },
       { id: "jazz-rap",         label: "Jazz Rap",         promptHint: "jazz rap" },
       { id: "alt-hip-hop",      label: "Alt Hip Hop",      promptHint: "alternative hip hop" },
       { id: "phonk",            label: "Phonk",            promptHint: "phonk" },
@@ -90,7 +114,7 @@ export const MUSIC_GENRES: ReadonlyArray<MusicGenre> = [
       { id: "uk-hip-hop",       label: "UK Hip Hop",       promptHint: "UK hip hop" },
       { id: "grime",            label: "Grime",            promptHint: "grime" },
       { id: "pluggnb",          label: "PluggnB",          promptHint: "pluggnb" },
-      { id: "rage",             label: "Rage",             promptHint: "rage hip hop" },
+      { id: "rage",             label: "Rage",             promptHint: "rage hip hop", term: "rage hip hop" },
       { id: "jersey-club",      label: "Jersey Club",      promptHint: "Jersey club" },
       { id: "brazilian-funk",   label: "Brazilian Funk",   promptHint: "Brazilian funk" },
       { id: "moombahton",       label: "Moombahton",       promptHint: "moombahton" },
@@ -102,12 +126,13 @@ export const MUSIC_GENRES: ReadonlyArray<MusicGenre> = [
     label: "R&B",
     description: "Smooth vocals, soul-influenced",
     promptHint: "R&B",
+    term: "rhythm and blues",
     category: "hip-hop-rnb",
     subgenres: [
       { id: "neo-soul",            label: "Neo-Soul",            promptHint: "neo-soul" },
-      { id: "contemporary-rnb",    label: "Contemporary R&B",    promptHint: "contemporary R&B" },
-      { id: "alt-rnb",             label: "Alt R&B",             promptHint: "alternative R&B" },
-      { id: "neo-rnb",             label: "Neo R&B",             promptHint: "modern R&B" },
+      { id: "contemporary-rnb",    label: "Contemporary R&B",    promptHint: "contemporary R&B", term: "contemporary rhythm and blues" },
+      { id: "alt-rnb",             label: "Alt R&B",             promptHint: "alternative R&B", term: "alternative rhythm and blues" },
+      { id: "neo-rnb",             label: "Neo R&B",             promptHint: "modern R&B", term: "modern rhythm and blues" },
       { id: "quiet-storm",         label: "Quiet Storm",         promptHint: "quiet storm" },
       { id: "new-jack-swing",      label: "New Jack Swing",      promptHint: "new jack swing" },
       { id: "future-soul",         label: "Future Soul",         promptHint: "future soul" },
@@ -146,8 +171,8 @@ export const MUSIC_GENRES: ReadonlyArray<MusicGenre> = [
     promptHint: "lo-fi",
     category: "hip-hop-rnb",
     subgenres: [
-      { id: "lofi-beats",       label: "Beats",            promptHint: "lo-fi beats" },
-      { id: "lofi-jazz",        label: "Jazz",             promptHint: "lo-fi jazz" },
+      { id: "lofi-beats",       label: "Beats",            promptHint: "lo-fi beats", term: "lo-fi beats" },
+      { id: "lofi-jazz",        label: "Jazz",             promptHint: "lo-fi jazz", term: "lo-fi jazz" },
       { id: "chillhop",         label: "Chillhop",         promptHint: "chillhop" },
     ],
   },
@@ -168,18 +193,18 @@ export const MUSIC_GENRES: ReadonlyArray<MusicGenre> = [
       { id: "techno",           label: "Techno",           promptHint: "techno" },
       { id: "minimal-techno",   label: "Minimal Techno",   promptHint: "minimal techno" },
       { id: "melodic-techno",   label: "Melodic Techno",   promptHint: "melodic techno" },
-      { id: "drum-and-bass",    label: "Drum & Bass",      promptHint: "drum and bass" },
+      { id: "drum-and-bass",    label: "Drum & Bass",      promptHint: "drum and bass", term: "drum and bass" },
       { id: "jungle",           label: "Jungle",           promptHint: "jungle" },
       { id: "dubstep",          label: "Dubstep",          promptHint: "dubstep" },
       { id: "future-bass",      label: "Future Bass",      promptHint: "future bass" },
-      { id: "trap-edm",         label: "Trap (EDM)",       promptHint: "trap EDM" },
+      { id: "trap-edm",         label: "Trap (EDM)",       promptHint: "trap EDM", term: "trap edm" },
       { id: "synthwave",        label: "Synthwave",        promptHint: "synthwave" },
-      { id: "outrun",           label: "Outrun",           promptHint: "outrun synthwave" },
+      { id: "outrun",           label: "Outrun",           promptHint: "outrun synthwave", term: "outrun synthwave" },
       { id: "vaporwave",        label: "Vaporwave",        promptHint: "vaporwave" },
       { id: "trance",           label: "Trance",           promptHint: "trance" },
       { id: "psytrance",        label: "Psytrance",        promptHint: "psytrance" },
-      { id: "ambient",          label: "Ambient",          promptHint: "ambient electronic" },
-      { id: "idm",              label: "IDM",              promptHint: "intelligent dance music" },
+      { id: "ambient",          label: "Ambient",          promptHint: "ambient electronic", term: "ambient electronic" },
+      { id: "idm",              label: "IDM",              promptHint: "intelligent dance music", term: "intelligent dance music" },
       { id: "breakbeat",        label: "Breakbeat",        promptHint: "breakbeat" },
       { id: "garage-uk",        label: "UK Garage",        promptHint: "UK garage" },
       { id: "hardstyle",        label: "Hardstyle",        promptHint: "hardstyle" },
@@ -194,9 +219,9 @@ export const MUSIC_GENRES: ReadonlyArray<MusicGenre> = [
     promptHint: "industrial",
     category: "electronic",
     subgenres: [
-      { id: "ebm",              label: "EBM",              promptHint: "electronic body music" },
+      { id: "ebm",              label: "EBM",              promptHint: "electronic body music", term: "electronic body music" },
       { id: "industrial-metal", label: "Industrial Metal", promptHint: "industrial metal" },
-      { id: "noise",            label: "Noise",            promptHint: "noise industrial" },
+      { id: "noise",            label: "Noise",            promptHint: "noise industrial", term: "industrial noise" },
     ],
   },
   {
@@ -208,8 +233,8 @@ export const MUSIC_GENRES: ReadonlyArray<MusicGenre> = [
     subgenres: [
       { id: "dark-ambient",     label: "Dark Ambient",     promptHint: "dark ambient" },
       { id: "drone",            label: "Drone",            promptHint: "drone" },
-      { id: "new-age",          label: "New Age",          promptHint: "new age ambient" },
-      { id: "space-music",      label: "Space",            promptHint: "space ambient" },
+      { id: "new-age",          label: "New Age",          promptHint: "new age ambient", term: "new age ambient" },
+      { id: "space-music",      label: "Space",            promptHint: "space ambient", term: "space ambient" },
     ],
   },
   {
@@ -220,8 +245,8 @@ export const MUSIC_GENRES: ReadonlyArray<MusicGenre> = [
     category: "electronic",
     subgenres: [
       { id: "musique-concrete", label: "Musique Concrète", promptHint: "musique concrète" },
-      { id: "noise-music",      label: "Noise",            promptHint: "noise music" },
-      { id: "free-improv",      label: "Free Improv",      promptHint: "free improvisation" },
+      { id: "noise-music",      label: "Noise",            promptHint: "noise music", term: "noise music" },
+      { id: "free-improv",      label: "Free Improv",      promptHint: "free improvisation", term: "free improvisation" },
       { id: "sound-art",        label: "Sound Art",        promptHint: "sound art" },
     ],
   },
@@ -265,8 +290,8 @@ export const MUSIC_GENRES: ReadonlyArray<MusicGenre> = [
       { id: "k-pop",            label: "K-Pop",            promptHint: "k-pop" },
       { id: "j-pop",            label: "J-Pop",            promptHint: "j-pop" },
       { id: "art-pop",          label: "Art Pop",          promptHint: "art pop" },
-      { id: "bubblegum-pop",    label: "Bubblegum",        promptHint: "bubblegum pop" },
-      { id: "chamber-pop",      label: "Chamber",          promptHint: "chamber pop" },
+      { id: "bubblegum-pop",    label: "Bubblegum",        promptHint: "bubblegum pop", term: "bubblegum pop" },
+      { id: "chamber-pop",      label: "Chamber",          promptHint: "chamber pop", term: "chamber pop" },
       { id: "electro-pop",      label: "Electro Pop",      promptHint: "electro pop" },
       { id: "hyperpop",         label: "Hyperpop",         promptHint: "hyperpop" },
       { id: "power-pop",        label: "Power Pop",        promptHint: "power pop" },
@@ -278,9 +303,10 @@ export const MUSIC_GENRES: ReadonlyArray<MusicGenre> = [
     label: "Anime / J-Rock",
     description: "Japanese animation soundtrack and J-Rock",
     promptHint: "anime",
+    term: "anime music",
     category: "pop",
     subgenres: [
-      { id: "anime-opening",    label: "Opening",          promptHint: "anime opening" },
+      { id: "anime-opening",    label: "Opening",          promptHint: "anime opening", term: "anime opening" },
       { id: "j-rock",           label: "J-Rock",           promptHint: "J-rock" },
       { id: "city-pop",         label: "City Pop",         promptHint: "city pop" },
     ],
@@ -298,15 +324,15 @@ export const MUSIC_GENRES: ReadonlyArray<MusicGenre> = [
       { id: "hard-rock",        label: "Hard Rock",        promptHint: "hard rock" },
       { id: "indie-rock",       label: "Indie Rock",       promptHint: "indie rock" },
       { id: "punk-rock",        label: "Punk Rock",        promptHint: "punk rock" },
-      { id: "alt-rock",         label: "Alternative",      promptHint: "alternative rock" },
-      { id: "psychedelic-rock", label: "Psychedelic",      promptHint: "psychedelic rock" },
-      { id: "garage-rock",      label: "Garage",           promptHint: "garage rock" },
-      { id: "surf-rock",        label: "Surf",             promptHint: "surf rock" },
-      { id: "prog-rock",        label: "Progressive",      promptHint: "progressive rock" },
+      { id: "alt-rock",         label: "Alternative",      promptHint: "alternative rock", term: "alternative rock" },
+      { id: "psychedelic-rock", label: "Psychedelic",      promptHint: "psychedelic rock", term: "psychedelic rock" },
+      { id: "garage-rock",      label: "Garage",           promptHint: "garage rock", term: "garage rock" },
+      { id: "surf-rock",        label: "Surf",             promptHint: "surf rock", term: "surf rock" },
+      { id: "prog-rock",        label: "Progressive",      promptHint: "progressive rock", term: "progressive rock" },
       { id: "post-rock",        label: "Post-Rock",        promptHint: "post-rock" },
       { id: "shoegaze",         label: "Shoegaze",         promptHint: "shoegaze" },
       { id: "math-rock",        label: "Math Rock",        promptHint: "math rock" },
-      { id: "stoner-rock",      label: "Stoner",           promptHint: "stoner rock" },
+      { id: "stoner-rock",      label: "Stoner",           promptHint: "stoner rock", term: "stoner rock" },
       { id: "emo",              label: "Emo",              promptHint: "emo" },
     ],
   },
@@ -317,11 +343,11 @@ export const MUSIC_GENRES: ReadonlyArray<MusicGenre> = [
     promptHint: "punk",
     category: "rock-metal",
     subgenres: [
-      { id: "hardcore-punk",    label: "Hardcore",         promptHint: "hardcore punk" },
+      { id: "hardcore-punk",    label: "Hardcore",         promptHint: "hardcore punk", term: "hardcore punk" },
       { id: "post-punk",        label: "Post-Punk",        promptHint: "post-punk" },
       { id: "pop-punk",         label: "Pop Punk",         promptHint: "pop punk" },
       { id: "skate-punk",       label: "Skate Punk",       promptHint: "skate punk" },
-      { id: "anarcho-punk",     label: "Anarcho",          promptHint: "anarcho-punk" },
+      { id: "anarcho-punk",     label: "Anarcho",          promptHint: "anarcho-punk", term: "anarcho-punk" },
     ],
   },
   {
@@ -334,15 +360,15 @@ export const MUSIC_GENRES: ReadonlyArray<MusicGenre> = [
       { id: "heavy-metal",      label: "Heavy Metal",      promptHint: "heavy metal" },
       { id: "death-metal",      label: "Death Metal",      promptHint: "death metal" },
       { id: "black-metal",      label: "Black Metal",      promptHint: "black metal" },
-      { id: "thrash-metal",     label: "Thrash",           promptHint: "thrash metal" },
-      { id: "doom-metal",       label: "Doom",             promptHint: "doom metal" },
-      { id: "power-metal",      label: "Power",            promptHint: "power metal" },
-      { id: "prog-metal",       label: "Progressive",      promptHint: "progressive metal" },
+      { id: "thrash-metal",     label: "Thrash",           promptHint: "thrash metal", term: "thrash metal" },
+      { id: "doom-metal",       label: "Doom",             promptHint: "doom metal", term: "doom metal" },
+      { id: "power-metal",      label: "Power",            promptHint: "power metal", term: "power metal" },
+      { id: "prog-metal",       label: "Progressive",      promptHint: "progressive metal", term: "progressive metal" },
       { id: "metalcore",        label: "Metalcore",        promptHint: "metalcore" },
       { id: "deathcore",        label: "Deathcore",        promptHint: "deathcore" },
       { id: "nu-metal",         label: "Nu-Metal",         promptHint: "nu-metal" },
-      { id: "sludge-metal",     label: "Sludge",           promptHint: "sludge metal" },
-      { id: "symphonic-metal",  label: "Symphonic",        promptHint: "symphonic metal" },
+      { id: "sludge-metal",     label: "Sludge",           promptHint: "sludge metal", term: "sludge metal" },
+      { id: "symphonic-metal",  label: "Symphonic",        promptHint: "symphonic metal", term: "symphonic metal" },
     ],
   },
 
@@ -356,10 +382,10 @@ export const MUSIC_GENRES: ReadonlyArray<MusicGenre> = [
     subgenres: [
       { id: "bebop",            label: "Bebop",            promptHint: "bebop" },
       { id: "smooth-jazz",      label: "Smooth Jazz",      promptHint: "smooth jazz" },
-      { id: "fusion",           label: "Fusion",           promptHint: "jazz fusion" },
+      { id: "fusion",           label: "Fusion",           promptHint: "jazz fusion", term: "jazz fusion" },
       { id: "cool-jazz",        label: "Cool Jazz",        promptHint: "cool jazz" },
       { id: "free-jazz",        label: "Free Jazz",        promptHint: "free jazz" },
-      { id: "swing",            label: "Swing",            promptHint: "swing jazz" },
+      { id: "swing",            label: "Swing",            promptHint: "swing jazz", term: "swing jazz" },
       { id: "big-band",         label: "Big Band",         promptHint: "big band jazz" },
       { id: "dixieland",        label: "Dixieland",        promptHint: "dixieland jazz" },
       { id: "latin-jazz",       label: "Latin Jazz",       promptHint: "latin jazz" },
@@ -405,8 +431,8 @@ export const MUSIC_GENRES: ReadonlyArray<MusicGenre> = [
     category: "acoustic",
     subgenres: [
       { id: "indie-folk",       label: "Indie Folk",       promptHint: "indie folk" },
-      { id: "traditional-folk", label: "Traditional",      promptHint: "traditional folk" },
-      { id: "celtic-folk",      label: "Celtic",           promptHint: "Celtic folk" },
+      { id: "traditional-folk", label: "Traditional",      promptHint: "traditional folk", term: "traditional folk" },
+      { id: "celtic-folk",      label: "Celtic",           promptHint: "Celtic folk", term: "celtic folk" },
       { id: "freak-folk",       label: "Freak Folk",       promptHint: "freak folk" },
       { id: "folk-rock",        label: "Folk Rock",        promptHint: "folk rock" },
       { id: "anti-folk",        label: "Anti-Folk",        promptHint: "anti-folk" },
@@ -419,9 +445,9 @@ export const MUSIC_GENRES: ReadonlyArray<MusicGenre> = [
     promptHint: "gospel",
     category: "acoustic",
     subgenres: [
-      { id: "traditional-gospel", label: "Traditional",    promptHint: "traditional gospel" },
-      { id: "contemporary-gospel",label: "Contemporary",   promptHint: "contemporary gospel" },
-      { id: "urban-gospel",       label: "Urban",          promptHint: "urban gospel" },
+      { id: "traditional-gospel", label: "Traditional",    promptHint: "traditional gospel", term: "traditional gospel" },
+      { id: "contemporary-gospel",label: "Contemporary",   promptHint: "contemporary gospel", term: "contemporary gospel" },
+      { id: "urban-gospel",       label: "Urban",          promptHint: "urban gospel", term: "urban gospel" },
     ],
   },
 
@@ -433,8 +459,8 @@ export const MUSIC_GENRES: ReadonlyArray<MusicGenre> = [
     promptHint: "reggae",
     category: "global",
     subgenres: [
-      { id: "roots-reggae",     label: "Roots",            promptHint: "roots reggae" },
-      { id: "dub",              label: "Dub",              promptHint: "dub reggae" },
+      { id: "roots-reggae",     label: "Roots",            promptHint: "roots reggae", term: "roots reggae" },
+      { id: "dub",              label: "Dub",              promptHint: "dub reggae", term: "dub reggae" },
       { id: "dancehall",        label: "Dancehall",        promptHint: "dancehall" },
       { id: "ska",              label: "Ska",              promptHint: "ska" },
       { id: "rocksteady",       label: "Rocksteady",       promptHint: "rocksteady" },
@@ -466,6 +492,7 @@ export const MUSIC_GENRES: ReadonlyArray<MusicGenre> = [
     label: "World",
     description: "Non-Western musical traditions",
     promptHint: "world music",
+    term: "world music",
     category: "global",
     subgenres: [
       { id: "afrobeat",         label: "Afrobeat",         promptHint: "afrobeat" },
@@ -493,11 +520,11 @@ export const MUSIC_GENRES: ReadonlyArray<MusicGenre> = [
     category: "cinematic",
     subgenres: [
       { id: "baroque",             label: "Baroque",             promptHint: "baroque classical" },
-      { id: "romantic",            label: "Romantic",            promptHint: "romantic-era classical" },
+      { id: "romantic",            label: "Romantic",            promptHint: "romantic-era classical", term: "romantic-era classical" },
       { id: "modern-classical",    label: "Modern Classical",    promptHint: "modern classical" },
-      { id: "minimalist-classical",label: "Minimalist",          promptHint: "minimalist classical" },
+      { id: "minimalist-classical",label: "Minimalist",          promptHint: "minimalist classical", term: "minimalist classical" },
       { id: "choral",              label: "Choral",              promptHint: "choral classical" },
-      { id: "chamber-music",       label: "Chamber",             promptHint: "chamber music" },
+      { id: "chamber-music",       label: "Chamber",             promptHint: "chamber music", term: "chamber music" },
       { id: "opera",               label: "Opera",               promptHint: "operatic" },
       { id: "early-music",         label: "Early Music",         promptHint: "early music" },
     ],
@@ -511,14 +538,14 @@ export const MUSIC_GENRES: ReadonlyArray<MusicGenre> = [
     subgenres: [
       { id: "epic-orchestral",     label: "Epic Orchestral",     promptHint: "epic orchestral cinematic" },
       { id: "minimalist-score",    label: "Minimalist Score",    promptHint: "minimalist cinematic score" },
-      { id: "trailer-music",       label: "Trailer",             promptHint: "trailer cinematic music" },
-      { id: "score-action",        label: "Action",              promptHint: "action film score" },
-      { id: "score-horror",        label: "Horror",              promptHint: "horror film score" },
-      { id: "score-romance",       label: "Romance",             promptHint: "romantic film score" },
-      { id: "score-sci-fi",        label: "Sci-Fi",              promptHint: "sci-fi film score" },
-      { id: "score-fantasy",       label: "Fantasy",             promptHint: "fantasy film score" },
-      { id: "score-noir",          label: "Noir",                promptHint: "noir cinematic" },
-      { id: "score-documentary",   label: "Documentary",         promptHint: "documentary score" },
+      { id: "trailer-music",       label: "Trailer",             promptHint: "trailer cinematic music", term: "trailer music" },
+      { id: "score-action",        label: "Action",              promptHint: "action film score", term: "action film score" },
+      { id: "score-horror",        label: "Horror",              promptHint: "horror film score", term: "horror film score" },
+      { id: "score-romance",       label: "Romance",             promptHint: "romantic film score", term: "romantic film score" },
+      { id: "score-sci-fi",        label: "Sci-Fi",              promptHint: "sci-fi film score", term: "sci-fi film score" },
+      { id: "score-fantasy",       label: "Fantasy",             promptHint: "fantasy film score", term: "fantasy film score" },
+      { id: "score-noir",          label: "Noir",                promptHint: "noir cinematic", term: "noir film score" },
+      { id: "score-documentary",   label: "Documentary",         promptHint: "documentary score", term: "documentary score" },
     ],
   },
   {
@@ -526,13 +553,14 @@ export const MUSIC_GENRES: ReadonlyArray<MusicGenre> = [
     label: "Video Game",
     description: "Game-score-style — chiptune, orchestral, electronic",
     promptHint: "video game music",
+    term: "video game music",
     category: "cinematic",
     subgenres: [
       { id: "chiptune",         label: "Chiptune",         promptHint: "chiptune" },
       { id: "8bit",             label: "8-bit",            promptHint: "8-bit" },
       { id: "16bit",            label: "16-bit",           promptHint: "16-bit" },
-      { id: "vgm-orchestral",   label: "Orchestral VGM",   promptHint: "orchestral video game" },
-      { id: "vgm-synth",        label: "Synth VGM",        promptHint: "synth video game" },
+      { id: "vgm-orchestral",   label: "Orchestral VGM",   promptHint: "orchestral video game", term: "orchestral video game score" },
+      { id: "vgm-synth",        label: "Synth VGM",        promptHint: "synth video game", term: "synth video game score" },
     ],
   },
   {
@@ -543,7 +571,7 @@ export const MUSIC_GENRES: ReadonlyArray<MusicGenre> = [
     category: "cinematic",
     subgenres: [
       { id: "christmas",        label: "Christmas",        promptHint: "Christmas" },
-      { id: "winter",           label: "Winter",           promptHint: "winter holiday" },
+      { id: "winter",           label: "Winter",           promptHint: "winter holiday", term: "winter holiday" },
       { id: "festive",          label: "Festive",          promptHint: "festive" },
     ],
   },
@@ -552,6 +580,7 @@ export const MUSIC_GENRES: ReadonlyArray<MusicGenre> = [
     label: "Children's",
     description: "Kids music — sing-alongs, lullabies, educational",
     promptHint: "children's music",
+    term: "children's music",
     category: "cinematic",
     subgenres: [
       { id: "lullaby",          label: "Lullaby",          promptHint: "lullaby" },
@@ -573,7 +602,7 @@ export const MUSIC_ERAS: ReadonlyArray<MusicEra> = [
   { id: "2000s", label: "2000s", description: "Pop-punk, R&B revival", promptHint: "early 2000s" },
   { id: "2010s", label: "2010s", description: "EDM mainstream, streaming era", promptHint: "2010s" },
   { id: "modern", label: "Modern", description: "2020s+ contemporary", promptHint: "modern" },
-  { id: "futurist", label: "Futurist", description: "Sci-fi, otherworldly", promptHint: "futuristic" },
+  { id: "futurist", label: "Futurist", description: "Sci-fi, otherworldly", promptHint: "futuristic", term: "futuristic" },
 ] as const
 
 const GENRE_BY_ID = new Map(MUSIC_GENRES.map((g) => [g.id, g]))
@@ -604,6 +633,33 @@ export function getMusicEra(id: string | undefined): MusicEra | undefined {
 }
 
 /**
+ * Compact counterpart of a genre's `promptHint`: the short genre name a
+ * producer would write ("rhythm and blues", "world music"). Same lookup and
+ * same empty-string-on-miss behavior as `getMusicGenre`, so hint mode and
+ * compact mode can never disagree about which genre they describe.
+ */
+export function getMusicGenreTerm(id: string | undefined | null): string {
+  return resolveTerm(getMusicGenre(id ?? undefined))
+}
+
+/**
+ * Compact counterpart for a subgenre. Keeps `getMusicSubgenre`'s two-argument
+ * lookup — a subgenre id is unique only within its parent genre, so a
+ * single-id term getter could not resolve one.
+ */
+export function getMusicSubgenreTerm(
+  genreId: string | undefined | null,
+  subgenreId: string | undefined | null,
+): string {
+  return resolveTerm(getMusicSubgenre(genreId ?? undefined, subgenreId ?? undefined))
+}
+
+/** Compact counterpart of an era's `promptHint` — the short period name. */
+export function getMusicEraTerm(id: string | undefined | null): string {
+  return resolveTerm(getMusicEra(id ?? undefined))
+}
+
+/**
  * Compose hints from MusicGenreData: optional preText, structured
  * [era] [subgenre|genre] (or " / "-joined genres for multi), optional
  * postText. Returns array — caller joins with ", " (matches buildMoodHints
@@ -613,13 +669,17 @@ export function getMusicEra(id: string | undefined): MusicEra | undefined {
  * — subgenre is ignored in multi-mode (subgenre is meaningful only against
  * a single chosen genre).
  */
-export function buildMusicGenreHints(data: {
-  readonly preText?: string
-  readonly postText?: string
-  readonly genre?: string | ReadonlyArray<string>
-  readonly subgenre?: string
-  readonly era?: string
-}): string {
+export function buildMusicGenreHints(
+  data: {
+    readonly preText?: string
+    readonly postText?: string
+    readonly genre?: string | ReadonlyArray<string>
+    readonly subgenre?: string
+    readonly era?: string
+  },
+  mode: PickerHintMode = "full",
+): string {
+  if (mode === "compact") return buildMusicGenreTerms(data)
   const fragments: string[] = []
 
   const pre = typeof data.preText === "string" ? data.preText.trim() : ""
@@ -642,6 +702,50 @@ export function buildMusicGenreHints(data: {
     } else {
       const genre = getMusicGenre(genreIds[0])
       if (genre) parts.push(genre.promptHint)
+    }
+  }
+  if (parts.length > 0) fragments.push(parts.join(" "))
+
+  const post = typeof data.postText === "string" ? data.postText.trim() : ""
+  if (post) fragments.push(post)
+
+  return fragments.join(", ")
+}
+
+/**
+ * Compact-mode mirror of `buildMusicGenreHints`: the same preText / [era]
+ * [subgenre|genre] / postText structure, built from each entry's short `term`
+ * instead of its `promptHint` ("1980s synth pop"). Multi-genre still joins
+ * with " / " and still ignores the subgenre, and preText / postText — user
+ * free text, not catalog copy — pass through untouched.
+ */
+export function buildMusicGenreTerms(data: {
+  readonly preText?: string
+  readonly postText?: string
+  readonly genre?: string | ReadonlyArray<string>
+  readonly subgenre?: string
+  readonly era?: string
+}): string {
+  const fragments: string[] = []
+
+  const pre = typeof data.preText === "string" ? data.preText.trim() : ""
+  if (pre) fragments.push(pre)
+
+  const parts: string[] = []
+  const era = getMusicEraTerm(data.era)
+  if (era) parts.push(era)
+
+  const genreIds = pickIds(data.genre)
+  if (genreIds.length > 1) {
+    const genreTerms = genreIds.map((id) => getMusicGenreTerm(id)).filter((t) => t.length > 0)
+    if (genreTerms.length > 0) parts.push(genreTerms.join(" / "))
+  } else if (genreIds.length === 1) {
+    const sub = getMusicSubgenreTerm(genreIds[0], data.subgenre)
+    if (sub) {
+      parts.push(sub)
+    } else {
+      const genre = getMusicGenreTerm(genreIds[0])
+      if (genre) parts.push(genre)
     }
   }
   if (parts.length > 0) fragments.push(parts.join(" "))

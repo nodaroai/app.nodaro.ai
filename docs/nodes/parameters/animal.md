@@ -13,6 +13,7 @@ The Animal parameter node adds a specific animal as a featured element of a gene
 | animal    | string | `"dog-golden-retriever"` | Catalog entry id (e.g. `"lion"`, `"eagle"`).          |
 | Pre Text  | text   | empty                    | Free-form text prepended to the composed hint.        |
 | Post Text | text   | empty                    | Free-form text appended to the composed hint.         |
+| Hint mode   | select   | `full`                     | Which fragment this picker injects downstream — `full` = the long descriptive hint, `compact` = the short professional term. See [Prompt hint mode](./README.md#prompt-hint-mode). |
 
 ## Catalog (126 entries across subcategories)
 

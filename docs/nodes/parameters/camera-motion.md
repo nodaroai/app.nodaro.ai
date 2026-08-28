@@ -10,6 +10,7 @@ The Camera Motion parameter node defines the type of camera movement to apply in
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | Camera Motion | select | `"static"` | Camera movement type: `static`, `pan-left`, `pan-right`, `zoom-in`, `zoom-out` |
+| Hint mode     | select | `full`     | Which fragment this picker injects downstream — `full` = the long descriptive hint, `compact` = the short professional term. See [Prompt hint mode](./README.md#prompt-hint-mode). |
 
 ### Camera Motion Types
 

@@ -3,17 +3,27 @@
  * Voice Design's voiceDescription via the Sound aggregator.
  */
 
+import { resolveTerm, type PickerHintMode } from "./term.js"
+
 export interface VoiceDeliveryEntry {
   readonly id: string
   readonly label: string
   readonly description: string
   readonly promptHint: string
+  /**
+   * The COMPACT professional term this entry injects (see `./term.js`).
+   * Authored only where the lowercased label is not what a voice director
+   * would actually write — "drawled" not "drawl", "robotic" not "robot",
+   * "nature documentary narrator" not "nature narrator". Everywhere else the
+   * derived label already IS the term and nothing is stored.
+   */
+  readonly term?: string
 }
 
 export const VOICE_PACES: ReadonlyArray<VoiceDeliveryEntry> = [
   { id: "very-slow",   label: "Very Slow",  description: "Deliberate, ponderous",          promptHint: "very slow" },
   { id: "slow",        label: "Slow",       description: "Measured",                       promptHint: "slow" },
-  { id: "drawl",       label: "Drawl",      description: "Drawn-out, lazy",                promptHint: "drawled" },
+  { id: "drawl",       label: "Drawl",      description: "Drawn-out, lazy",                promptHint: "drawled", term: "drawled" },
   { id: "measured",    label: "Measured",   description: "Steady, intentional",            promptHint: "measured" },
   { id: "moderate",    label: "Moderate",   description: "Conversational pace",            promptHint: "moderate" },
   { id: "punchy",      label: "Punchy",     description: "Clipped, emphatic",              promptHint: "punchy" },
@@ -55,7 +65,7 @@ export const VOICE_ARCHETYPES: ReadonlyArray<VoiceDeliveryEntry> = [
   { id: "newscaster",            label: "Newscaster",            description: "Authoritative news delivery",     promptHint: "newscaster" },
   { id: "anchor",                label: "TV Anchor",             description: "Polished broadcast",              promptHint: "TV anchor" },
   { id: "documentary-narrator",  label: "Documentary Narrator",  description: "Informative, measured",           promptHint: "documentary narrator" },
-  { id: "nature-narrator",       label: "Nature Narrator",       description: "Soft-spoken Attenborough-style",  promptHint: "nature documentary narrator" },
+  { id: "nature-narrator",       label: "Nature Narrator",       description: "Soft-spoken Attenborough-style",  promptHint: "nature documentary narrator", term: "nature documentary narrator" },
   { id: "fairy-tale-narrator",   label: "Fairy-Tale Narrator",   description: "Storyteller for children",        promptHint: "fairy-tale narrator" },
   { id: "audiobook-narrator",    label: "Audiobook Narrator",    description: "Long-form fiction reading",       promptHint: "audiobook narrator" },
   { id: "podcaster",             label: "Podcaster",             description: "Conversational",                  promptHint: "podcaster" },
@@ -74,16 +84,16 @@ export const VOICE_ARCHETYPES: ReadonlyArray<VoiceDeliveryEntry> = [
   { id: "drag-queen",            label: "Drag Queen",            description: "Theatrical, fierce",              promptHint: "drag queen" },
   // Character archetypes
   { id: "villain",               label: "Villain",               description: "Sinister, scheming",              promptHint: "villain" },
-  { id: "hero",                  label: "Hero",                  description: "Earnest, courageous",             promptHint: "heroic" },
+  { id: "hero",                  label: "Hero",                  description: "Earnest, courageous",             promptHint: "heroic", term: "heroic" },
   { id: "mentor",                label: "Mentor",                description: "Wise, guiding",                   promptHint: "mentor" },
-  { id: "comedian",              label: "Comedian",              description: "Comedic timing",                  promptHint: "comedic" },
+  { id: "comedian",              label: "Comedian",              description: "Comedic timing",                  promptHint: "comedic", term: "comedic" },
   { id: "stand-up-comic",        label: "Stand-up Comic",        description: "Punchline-driven",                promptHint: "stand-up comic" },
   { id: "drill-sergeant",        label: "Drill Sergeant",        description: "Barking commands",                promptHint: "drill sergeant" },
   { id: "meditation-guide",      label: "Meditation Guide",      description: "Soft, slow guidance",             promptHint: "meditation guide" },
   { id: "yoga-instructor",       label: "Yoga Instructor",       description: "Calm, grounding cues",            promptHint: "yoga instructor" },
   { id: "noir-detective",        label: "Noir Detective",        description: "Hard-boiled, brooding",           promptHint: "noir detective" },
   { id: "wizard",                label: "Wizard",                description: "Mystic, ancient",                 promptHint: "wizard" },
-  { id: "robot",                 label: "Robot",                 description: "Synthetic, mechanical",           promptHint: "robotic" },
+  { id: "robot",                 label: "Robot",                 description: "Synthetic, mechanical",           promptHint: "robotic", term: "robotic" },
   { id: "ai-assistant",          label: "AI Assistant",          description: "Polished synthetic helper",       promptHint: "AI assistant" },
   { id: "siri-style",            label: "Virtual Assistant",     description: "Siri/Alexa-style helper",         promptHint: "virtual assistant" },
 ] as const
@@ -97,6 +107,23 @@ export function getVoiceEmotion(id: string | undefined) { return id ? EMOTION_BY
 export function getVoiceArchetype(id: string | undefined) { return id ? ARCHETYPE_BY_ID.get(id) : undefined }
 
 /**
+ * The COMPACT counterparts of the three lookups above: the short professional
+ * term a consumer injects instead of the full prompt fragment ("drawled",
+ * "reassuring", "nature documentary narrator"). Same lookup, same
+ * empty-string-on-miss behavior as the hint side, so the two can never
+ * disagree about which entry they describe.
+ */
+export function getVoicePaceTerm(id: string | undefined | null): string {
+  return resolveTerm(getVoicePace(id ?? undefined))
+}
+export function getVoiceEmotionTerm(id: string | undefined | null): string {
+  return resolveTerm(getVoiceEmotion(id ?? undefined))
+}
+export function getVoiceArchetypeTerm(id: string | undefined | null): string {
+  return resolveTerm(getVoiceArchetype(id ?? undefined))
+}
+
+/**
  * Compose a delivery clause.
  * Examples:
  *   { pace, archetype, emotion } → "measured documentary-narrator-style delivery, reassuring tone"
@@ -104,13 +131,17 @@ export function getVoiceArchetype(id: string | undefined) { return id ? ARCHETYP
  *   { emotion }                  → "reassuring tone"
  *   { pace }                     → "measured pace"
  */
-export function buildVoiceDeliveryHints(data: {
-  readonly preText?: string
-  readonly postText?: string
-  readonly pace?: string
-  readonly emotion?: string
-  readonly archetype?: string
-}): string {
+export function buildVoiceDeliveryHints(
+  data: {
+    readonly preText?: string
+    readonly postText?: string
+    readonly pace?: string
+    readonly emotion?: string
+    readonly archetype?: string
+  },
+  mode: PickerHintMode = "full",
+): string {
+  if (mode === "compact") return buildVoiceDeliveryTerms(data)
   const fragments: string[] = []
   const pre = typeof data.preText === "string" ? data.preText.trim() : ""
   if (pre) fragments.push(pre)
@@ -125,6 +156,46 @@ export function buildVoiceDeliveryHints(data: {
   else if (pace)        deliveryClause = `${pace.promptHint} pace`
 
   const emotionClause = emotion ? `${emotion.promptHint} tone` : ""
+
+  let main = ""
+  if (deliveryClause && emotionClause) main = `${deliveryClause}, ${emotionClause}`
+  else main = deliveryClause || emotionClause
+  if (main) fragments.push(main)
+
+  const post = typeof data.postText === "string" ? data.postText.trim() : ""
+  if (post) fragments.push(post)
+
+  return fragments.join(", ")
+}
+
+/**
+ * Compact-mode mirror of `buildVoiceDeliveryHints`: the same preText /
+ * [pace] [archetype]-style delivery / [emotion] tone / postText structure,
+ * built from each selection's short `term` instead of its `promptHint`
+ * ("drawled noir-detective-style delivery, menacing tone"). preText and
+ * postText — user free text, not catalog copy — pass through untouched.
+ */
+export function buildVoiceDeliveryTerms(data: {
+  readonly preText?: string
+  readonly postText?: string
+  readonly pace?: string
+  readonly emotion?: string
+  readonly archetype?: string
+}): string {
+  const fragments: string[] = []
+  const pre = typeof data.preText === "string" ? data.preText.trim() : ""
+  if (pre) fragments.push(pre)
+
+  const pace = getVoicePaceTerm(data.pace)
+  const emotion = getVoiceEmotionTerm(data.emotion)
+  const archetype = getVoiceArchetypeTerm(data.archetype)
+
+  let deliveryClause = ""
+  if (pace && archetype) deliveryClause = `${pace} ${archetype}-style delivery`
+  else if (archetype)   deliveryClause = `${archetype}-style delivery`
+  else if (pace)        deliveryClause = `${pace} pace`
+
+  const emotionClause = emotion ? `${emotion} tone` : ""
 
   let main = ""
   if (deliveryClause && emotionClause) main = `${deliveryClause}, ${emotionClause}`

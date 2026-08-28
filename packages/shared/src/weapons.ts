@@ -30,6 +30,16 @@ export interface Weapon {
   readonly label: string
   readonly subcategory: WeaponSubcategory
   readonly description: string
+  /**
+   * Optional authored compact term — the short phrase a professional would
+   * write in a prompt, as opposed to the user-facing `label` (see the `term`
+   * convention in `@nodaro/prompts`'s `term.ts`). Authored ONLY where the
+   * lowercased label is not that phrase — a UI compound naming two things at
+   * once ("Airship / Dirigible" -> "airship", "Plasma Sword / Lightsaber" ->
+   * "plasma sword"). Everywhere else the lowercased label IS the term for a
+   * concrete object ("golden retriever", "katana"), so nothing is authored.
+   */
+  readonly term?: string
 }
 
 export const WEAPONS: ReadonlyArray<Weapon> = [
@@ -131,7 +141,7 @@ export const WEAPONS: ReadonlyArray<Weapon> = [
   { id: "phaser",               label: "Phaser",              subcategory: "sci-fi", description: "Sleek sci-fi phaser with a minimalist curved grip, glowing emitter tip and a smooth panel controlling intensity" },
   { id: "rail-gun",             label: "Rail Gun",            subcategory: "sci-fi", description: "Heavy electromagnetic rail gun with parallel metal rails, massive capacitors along the body and a glowing projectile chamber" },
   { id: "emp-grenade",          label: "EMP Grenade",         subcategory: "sci-fi", description: "Spherical electromagnetic pulse grenade with exposed coils, glowing blue indicator lights and a holographic arming dial" },
-  { id: "plasma-sword",         label: "Plasma Sword / Lightsaber", subcategory: "sci-fi", description: "Sci-fi energy blade with a metallic ridged hilt projecting a tall column of saturated plasma energy, surrounded by a bright halo of glowing light, casting colored reflections on the wielder and humming softly with contained power" },
+  { id: "plasma-sword",         label: "Plasma Sword / Lightsaber", subcategory: "sci-fi", description: "Sci-fi energy blade with a metallic ridged hilt projecting a tall column of saturated plasma energy, surrounded by a bright halo of glowing light, casting colored reflections on the wielder and humming softly with contained power", term: "plasma sword" },
   { id: "gravity-gun",          label: "Gravity Gun",         subcategory: "sci-fi", description: "Sci-fi physics-manipulating ranged weapon with a chunky metallic body, three articulated prongs at the muzzle that crackle with blue gravitational energy, exposed power conduits along the barrel and a heavy two-handed grip with a glowing trigger assembly" },
 
   // -------------------- Fantasy / Magical --------------------

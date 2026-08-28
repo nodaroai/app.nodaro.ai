@@ -11,6 +11,7 @@ A parameter-picker that emits a voice-character prompt-hint to feed ElevenLabs V
 | language | string \| string[]    | Optional. Language id, or up to 3 ids for multilingual / codeswitching voices (e.g. `["english","spanish"]`). 33 languages — English / Spanish / French / German / Mandarin / Japanese / Hindi / Arabic / Hebrew / etc. Distinct from accent — language is WHAT'S being spoken, accent is HOW it sounds. |
 | accent   | string                | Optional. Accent id (e.g. `british-rp`, `general-american`, `southern-us`, `australian`, `irish`, `scouse`). 44 accents covering North America, British Isles, Continental Europe, Latin America, Asia, MENA, Africa. |
 | timbre   | string                | Optional. Timbre descriptor id (e.g. `warm`, `gravelly`, `bright`, `breathy`, `nasal`, `silky`, `velvety`, `husky`, `sultry`).  |
+| Hint mode  | select                  | Which fragment this picker injects downstream — `full` (default) = the long descriptive hint, `compact` = the short professional term. See [Prompt hint mode](./README.md#prompt-hint-mode). |
 
 ## Output
 

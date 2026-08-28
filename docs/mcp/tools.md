@@ -1664,9 +1664,15 @@ in `update_workflow_json` so you set a real catalog id instead of guessing.
 | Field | Type | Notes |
 |-------|------|-------|
 | `node_type` | string | Picker node type, e.g. `"setting"` (kebab-case, from `start_workflow_editor`'s catalog). Omit to list every picker. |
-| `detail` | enum `compact` / `full` | `compact` (default): `id`, `label`, `category`, `icon`. `full`: additionally includes each option's `description` and `promptHint` (the prompt fragment it injects). |
+| `detail` | enum `compact` / `full` | `compact` (default): `id`, `label`, `category`, `term`, `icon`. `full`: additionally includes each option's `description` and `promptHint` (the prompt fragment it injects). |
 | `category` | string | Single-dim pickers: filter options to one category. |
 | `field` | string | Multi-dim pickers (person / styling / framing): return only this dimension's field. |
+
+Every option carries a **`term`** at *both* detail levels: the short
+professional phrase to write into a prompt when you want a compact instruction
+(`"whip pan left"`), where `label` is display-only and `promptHint` is the full
+mechanism sentence. It is `""` for a no-op (`auto` / `none`) option that injects
+nothing — so compact prompt assembly needs no `detail: "full"` round-trip.
 
 See [Parameter Picker Catalogs](../picker-catalogs.md) for the underlying
 `@nodaro/shared` data and the prompt-fragment helpers.

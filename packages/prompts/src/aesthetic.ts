@@ -19,6 +19,8 @@
  * backend orchestrator.
  */
 
+import { resolveTerm, type PickerHintMode } from "./term.js"
+
 export type AestheticCategory = "mainstream" | "niche" | "era" | "mood"
 
 export interface Aesthetic {
@@ -27,6 +29,13 @@ export interface Aesthetic {
   readonly category: AestheticCategory
   readonly description: string
   readonly promptHint: string
+  /**
+   * Compact professional term (see `term.ts`). Authored only where the
+   * lowercased label is not the phrase a stylist would write in a prompt —
+   * UI compounds ("Techwear / Gorpcore") and the fashion-era labels whose
+   * bare nouns name an art movement rather than the look.
+   */
+  readonly term?: string
 }
 
 export const AESTHETICS: ReadonlyArray<Aesthetic> = [
@@ -70,6 +79,7 @@ export const AESTHETICS: ReadonlyArray<Aesthetic> = [
     description: "Tactical urban performance gear",
     promptHint:
       "in the techwear-gorpcore aesthetic — black tactical shells, MOLLE webbing, cargo pants and chunky trail runners in a rain-slick neon city, with cold cyan-magenta color",
+    term: "techwear gorpcore",
   },
   {
     id: "old-money",
@@ -78,6 +88,7 @@ export const AESTHETICS: ReadonlyArray<Aesthetic> = [
     description: "Quiet-luxury heritage prep",
     promptHint:
       "in the old-money preppy aesthetic — cashmere sweaters, polo shirts, pearl strands and tailored linen on yacht decks and clay courts, with crisp, sun-bleached Mediterranean color",
+    term: "old money preppy",
   },
   {
     id: "streetwear",
@@ -280,6 +291,7 @@ export const AESTHETICS: ReadonlyArray<Aesthetic> = [
     description: "Grunge-meets-emo internet alt",
     promptHint:
       "in the alt-girl aesthetic — alternative subculture mix of grunge, scene, emo and e-girl with dyed split hair, layered chains, fishnets, oversized band tees and smudged dark eyeliner, lit with cool moody color",
+    term: "alt-girl",
   },
   {
     id: "blokecore",
@@ -296,6 +308,7 @@ export const AESTHETICS: ReadonlyArray<Aesthetic> = [
     description: "Neon Japanese decora rave kid",
     promptHint:
       "in the Y2K-rave decora club-kid aesthetic — fluorescent layered tops, plastic-charm bracelets, kawaii hair clips, leg warmers and platform sneakers under blacklight and neon strobes, with hyper-saturated electric color",
+    term: "y2k rave decora club-kid",
   },
 
   // -------------------- Fashion eras --------------------
@@ -306,6 +319,7 @@ export const AESTHETICS: ReadonlyArray<Aesthetic> = [
     description: "Pared-down quiet-luxury restraint",
     promptHint:
       "in the minimalist aesthetic — clean monochrome tailoring, structured silhouettes and empty white-stone spaces, with restrained neutral color and even soft light",
+    term: "minimalist fashion",
   },
   {
     id: "maximalism",
@@ -314,6 +328,7 @@ export const AESTHETICS: ReadonlyArray<Aesthetic> = [
     description: "More-is-more clashing pattern",
     promptHint:
       "in the maximalist aesthetic — clashing prints, layered jewelry, velvet, sequins and floral wallpaper in densely styled rooms, with rich saturated color",
+    term: "maximalist fashion",
   },
   {
     id: "avant-garde",
@@ -322,6 +337,7 @@ export const AESTHETICS: ReadonlyArray<Aesthetic> = [
     description: "Conceptual sculptural fashion",
     promptHint:
       "in the avant-garde aesthetic — sculptural deconstructed silhouettes, exaggerated proportions and architectural draping in stark gallery-white spaces, with cold minimal color",
+    term: "avant-garde fashion",
   },
   {
     id: "old-hollywood-glam",
@@ -330,6 +346,7 @@ export const AESTHETICS: ReadonlyArray<Aesthetic> = [
     description: "Silver-screen 1940s glamour",
     promptHint:
       "in the old-Hollywood-glam aesthetic — satin gowns, fur stoles, finger waves and red lipstick under sculpted studio key light, with silvery monochrome and high-contrast tonality",
+    term: "old hollywood glamour",
   },
 
   // -------------------- Mood bundles --------------------
@@ -348,6 +365,7 @@ export const AESTHETICS: ReadonlyArray<Aesthetic> = [
     description: "Gentle, low-effort warm calm",
     promptHint:
       "in a soft easygoing mood — relaxed knits, oversized layers and easy posture in softly lit rooms, with hazy natural light and creamy gentle color",
+    term: "soft easygoing mood",
   },
   {
     id: "casual-lived-in",
@@ -356,6 +374,7 @@ export const AESTHETICS: ReadonlyArray<Aesthetic> = [
     description: "Worn-in, unstyled everyday",
     promptHint:
       "in a casual lived-in mood — worn jeans, faded tees and rumpled hair in everyday domestic settings, with flat naturalistic light and unpolished snapshot color",
+    term: "casual lived-in mood",
   },
   {
     id: "effortless-cool",
@@ -395,12 +414,13 @@ export function getAestheticPromptHint(id: string | undefined | null): string {
   return getAesthetic(id)?.promptHint ?? ""
 }
 
-/**
- * Multi-pick variant: 1-2 aesthetic ids → blended hint. Single → entry's
- * own promptHint. Two → "styled in a {A} + {B} aesthetic blend" with
- * canonical entry labels (Y2K, dark academia, etc. stay as written).
- */
-export function buildAestheticHints(value: unknown): string {
+/** Compact-mode sibling of `getAestheticPromptHint` (see `term.ts`). */
+export function getAestheticTerm(id: string | undefined | null): string {
+  return resolveTerm(getAesthetic(id))
+}
+
+/** The 1-2 distinct ids a multi-pick aesthetic value carries, in order. */
+function aestheticIds(value: unknown): string[] {
   const ids: string[] = []
   if (typeof value === "string" && value) ids.push(value)
   else if (Array.isArray(value)) {
@@ -408,6 +428,17 @@ export function buildAestheticHints(value: unknown): string {
       if (typeof v === "string" && v && !ids.includes(v)) ids.push(v)
     }
   }
+  return ids
+}
+
+/**
+ * Multi-pick variant: 1-2 aesthetic ids → blended hint. Single → entry's
+ * own promptHint. Two → "styled in a {A} + {B} aesthetic blend" with
+ * canonical entry labels (Y2K, dark academia, etc. stay as written).
+ */
+export function buildAestheticHints(value: unknown, mode: PickerHintMode = "full"): string {
+  if (mode === "compact") return buildAestheticTerms(value)
+  const ids = aestheticIds(value)
   if (ids.length === 0) return ""
   if (ids.length === 1) return getAestheticPromptHint(ids[0])
   const labels = ids
@@ -416,6 +447,23 @@ export function buildAestheticHints(value: unknown): string {
     .filter((s): s is string => Boolean(s))
   if (labels.length < 2) return getAestheticPromptHint(ids[0])
   return `styled in a ${labels[0]} + ${labels[1]} aesthetic blend`
+}
+
+/**
+ * Compact-mode sibling of `buildAestheticHints`: same 1-2 id shape, same
+ * blend structure, but composed from the entries' short terms instead of
+ * their paragraph-length hints.
+ */
+export function buildAestheticTerms(value: unknown): string {
+  const ids = aestheticIds(value)
+  if (ids.length === 0) return ""
+  if (ids.length === 1) return getAestheticTerm(ids[0])
+  const terms = ids
+    .slice(0, 2)
+    .map((id) => getAestheticTerm(id))
+    .filter((t) => t.length > 0)
+  if (terms.length < 2) return getAestheticTerm(ids[0])
+  return `${terms[0]} + ${terms[1]} aesthetic blend`
 }
 
 export const AESTHETIC_IDS: ReadonlyArray<string> = AESTHETICS.map((a) => a.id)

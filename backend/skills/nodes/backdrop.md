@@ -1,7 +1,7 @@
 ---
 node_type: backdrop
-generated_at: 2026-08-15T21:55:06.266Z
-generated_from: 150c80ac9
+generated_at: 2026-08-28T10:30:57.584Z
+generated_from: ae8d76277
 ---
 
 # Backdrop
@@ -20,6 +20,7 @@ generated_from: 150c80ac9
 **Optional data fields:**
 - `preText?: string`
 - `postText?: string`
+- `hintMode?: "full" | "compact"`
 
 **Valid values:** call `get_picker_catalog("backdrop")` (MCP) or `GET /v1/picker-catalogs/backdrop` for the catalog of valid ids.
 

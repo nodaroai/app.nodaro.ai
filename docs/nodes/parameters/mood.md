@@ -13,6 +13,7 @@ The Mood parameter node anchors the emotional register of a generated image or v
 | mood      | string | `"calm"` | Catalog entry id (e.g. `"tense"`, `"melancholic"`).    |
 | Pre Text  | text   | empty    | Free-form text prepended to the composed hint.         |
 | Post Text | text   | empty    | Free-form text appended to the composed hint.          |
+| Hint mode   | select   | `full`     | Which fragment this picker injects downstream — `full` = the long descriptive hint, `compact` = the short professional term. See [Prompt hint mode](./README.md#prompt-hint-mode). |
 
 ## Catalog (50 entries)
 

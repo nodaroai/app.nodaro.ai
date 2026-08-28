@@ -21,32 +21,42 @@
  * executor and the backend orchestrator.
  */
 
+import { resolveTerm, type PickerHintMode } from "./term.js"
+
 export interface PostProcessEffect {
   readonly id: string
   readonly label: string
   readonly description: string
   readonly promptHint: string
+  /**
+   * Optional authored compact term (see `term.ts`). Authored only where the
+   * lowercased label is not the phrase a colorist / retoucher would write in a
+   * prompt — "Bloom Glow" and "Color Fringe" are UI compounds, the trade terms
+   * are "highlight bloom" and "color fringing". Everywhere else the label IS
+   * the term.
+   */
+  readonly term?: string
 }
 
 export const POST_PROCESS_EFFECTS: ReadonlyArray<PostProcessEffect> = [
   { id: "vignette-soft",        label: "Soft Vignette",          description: "Gentle corner darkening",          promptHint: "soft dark vignette gently darkening the corners of the frame, drawing the eye toward the center without calling attention to itself" },
   { id: "vignette-heavy",       label: "Heavy Vignette",         description: "Dramatic black corners",            promptHint: "heavy black vignette circumscribing the subject in a dramatic dark oval, deep falloff at the edges that nearly crushes to black" },
-  { id: "dodge-and-burn",       label: "Dodge & Burn",           description: "Sculpted highlight/shadow",         promptHint: "aggressive dodge-and-burn shaping with sculpted highlight and shadow chiaroscuro, hand-painted-style local contrast carving form into the subject" },
+  { id: "dodge-and-burn",       label: "Dodge & Burn",           description: "Sculpted highlight/shadow",         promptHint: "aggressive dodge-and-burn shaping with sculpted highlight and shadow chiaroscuro, hand-painted-style local contrast carving form into the subject", term: "dodge and burn" },
   { id: "film-grain-fine",      label: "Fine Film Grain",        description: "Subtle 35mm-style grain",           promptHint: "fine film grain overlay across the entire image, classic 35mm character with delicate organic noise that softens digital edges" },
   { id: "film-grain-heavy",     label: "Heavy Film Grain",       description: "Coarse push-processed grain",       promptHint: "heavy coarse grain like push-processed high-ISO film, gritty texture across midtones and dense noise in the shadows" },
-  { id: "halation-glow",        label: "Halation Glow",          description: "Cinestill red-halo bloom",          promptHint: "warm halation glow blooming around bright highlights, signature cinestill-style red halo bleeding from light sources and tungsten practicals" },
-  { id: "bloom-glow",           label: "Bloom Glow",             description: "Romantic dreamy highlight bloom",   promptHint: "dreamy soft-focus bloom on highlights, romantic glow that wraps around bright areas and lifts the overall mood with a hazy halo" },
+  { id: "halation-glow",        label: "Halation Glow",          description: "Cinestill red-halo bloom",          promptHint: "warm halation glow blooming around bright highlights, signature cinestill-style red halo bleeding from light sources and tungsten practicals", term: "warm halation glow" },
+  { id: "bloom-glow",           label: "Bloom Glow",             description: "Romantic dreamy highlight bloom",   promptHint: "dreamy soft-focus bloom on highlights, romantic glow that wraps around bright areas and lifts the overall mood with a hazy halo", term: "highlight bloom" },
   { id: "chromatic-aberration", label: "Chromatic Aberration",   description: "Red/cyan fringe on edges",          promptHint: "visible chromatic aberration with red and cyan fringing on contrast edges, lens-imperfection look that reads as authentic optical character" },
   { id: "light-leak",           label: "Light Leak",             description: "Warm streak across the frame",      promptHint: "warm orange light leak streaking across one edge of the frame, fogged film aesthetic with a soft amber wash bleeding into the image" },
   { id: "film-burn",            label: "Film Burn",              description: "Vintage Super-8 corner flare",      promptHint: "film burn flare in the corner with a vintage Super-8 aesthetic, charred edge bleeding orange and white light into the frame" },
-  { id: "scratched-emulsion",   label: "Scratched Emulsion",     description: "Aged film scratches + dust",        promptHint: "vertical scratches and dust marks like aged film emulsion, hairline streaks running through the frame and scattered dust specks across the image" },
-  { id: "color-fringe",         label: "Color Fringe",           description: "Subtle high-contrast fringing",     promptHint: "subtle color fringing on high-contrast edges, gentle prismatic shimmer that adds optical authenticity without overwhelming the image" },
+  { id: "scratched-emulsion",   label: "Scratched Emulsion",     description: "Aged film scratches + dust",        promptHint: "vertical scratches and dust marks like aged film emulsion, hairline streaks running through the frame and scattered dust specks across the image", term: "scratched, dusty film emulsion" },
+  { id: "color-fringe",         label: "Color Fringe",           description: "Subtle high-contrast fringing",     promptHint: "subtle color fringing on high-contrast edges, gentle prismatic shimmer that adds optical authenticity without overwhelming the image", term: "subtle color fringing" },
   { id: "soft-focus-diffusion", label: "Soft-Focus Diffusion",   description: "Hazy dreamy highlight bloom",       promptHint: "soft-focus diffusion filter — slightly hazy dreamy bloom on highlights, glowing skin tones and a romantic veil across the entire image" },
   { id: "contrast-boost",       label: "Contrast Boost",         description: "Crushed shadows + pushed highlights", promptHint: "aggressive contrast boost, deepened shadows crushing toward black and pushed highlights, punchy editorial-grade tonal separation" },
   { id: "sharpening",           label: "Heavy Sharpening",       description: "Aggressive edge-sharpening pass, crisp micro-detail", promptHint: "aggressive edge-sharpening pass with crisp micro-detail emphasized, hardened edges and pronounced texture acutance across the entire image" },
   { id: "clarity-boost",        label: "Clarity Boost",          description: "Mid-tone clarity enhancement, increased local contrast", promptHint: "mid-tone clarity enhancement with increased local contrast, deepened textural definition and punchy structural detail without crushing shadows or highlights" },
-  { id: "dehaze",               label: "Dehaze",                 description: "Atmospheric dehaze applied, removing softness and lifting contrast through fog", promptHint: "atmospheric dehaze applied across the frame, removing veiling softness and lifting contrast through haze and fog with restored color saturation in distant tones" },
-  { id: "lift-gamma-gain",      label: "Lift-Gamma-Gain Grade",  description: "Three-way color grading wheels — shadow lift, midtone gamma, highlight gain", promptHint: "three-way color grading with lift-gamma-gain wheels shaping shadow lift, midtone gamma and highlight gain independently, professional colorist-grade tonal sculpting" },
+  { id: "dehaze",               label: "Dehaze",                 description: "Atmospheric dehaze applied, removing softness and lifting contrast through fog", promptHint: "atmospheric dehaze applied across the frame, removing veiling softness and lifting contrast through haze and fog with restored color saturation in distant tones", term: "atmospheric dehaze" },
+  { id: "lift-gamma-gain",      label: "Lift-Gamma-Gain Grade",  description: "Three-way color grading wheels — shadow lift, midtone gamma, highlight gain", promptHint: "three-way color grading with lift-gamma-gain wheels shaping shadow lift, midtone gamma and highlight gain independently, professional colorist-grade tonal sculpting", term: "three-way lift gamma gain grade" },
 ] as const
 
 const postProcessById = new Map<string, PostProcessEffect>(
@@ -70,12 +80,23 @@ export function getPostProcessEffectPromptHint(id: string | undefined | null): s
 }
 
 /**
+ * Compact counterpart of `getPostProcessEffectPromptHint`: the short
+ * professional term this pass injects in compact hint mode ("dodge and burn"
+ * where the hint is the full mechanism sentence). Empty string for an unknown
+ * id and for any entry that injects no hint at all.
+ */
+export function getPostProcessEffectTerm(id: string | undefined | null): string {
+  return resolveTerm(getPostProcessEffect(id))
+}
+
+/**
  * Multi-pick: 1-2 post-process effect ids → composite grading clause.
  * Common pairs: vignette + film-grain, halation + bloom, dodge-burn +
  * chromatic-aberration. Each entry already describes a complete grading
  * pass, so we emit independently and let the comma-join compose them.
  */
-export function buildPostProcessHints(value: unknown): string[] {
+export function buildPostProcessHints(value: unknown, mode: PickerHintMode = "full"): string[] {
+  if (mode === "compact") return buildPostProcessTerms(value)
   const ids: string[] = []
   if (typeof value === "string" && value) ids.push(value)
   else if (Array.isArray(value)) {
@@ -87,6 +108,28 @@ export function buildPostProcessHints(value: unknown): string[] {
   for (const id of ids) {
     const hint = getPostProcessEffectPromptHint(id)
     if (hint) out.push(hint)
+  }
+  return out
+}
+
+/**
+ * Compact counterpart of `buildPostProcessHints`: the same 1-2 id multi-pick,
+ * emitted as short professional terms instead of full mechanism sentences
+ * ("soft vignette", "fine film grain"). Same collection order, same
+ * skip-the-no-ops behavior.
+ */
+export function buildPostProcessTerms(value: unknown): string[] {
+  const ids: string[] = []
+  if (typeof value === "string" && value) ids.push(value)
+  else if (Array.isArray(value)) {
+    for (const v of value) {
+      if (typeof v === "string" && v && !ids.includes(v)) ids.push(v)
+    }
+  }
+  const out: string[] = []
+  for (const id of ids) {
+    const term = getPostProcessEffectTerm(id)
+    if (term) out.push(term)
   }
   return out
 }

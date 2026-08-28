@@ -13,6 +13,7 @@ The Style parameter node sets the overarching visual treatment of a generated im
 | style     | string | `"cinematic"` | Catalog entry id (e.g. `"anime"`, `"oil-painting"`).       |
 | Pre Text  | text   | empty         | Free-form text prepended to the composed hint.             |
 | Post Text | text   | empty         | Free-form text appended to the composed hint.              |
+| Hint mode   | select   | `full`          | Which fragment this picker injects downstream — `full` = the long descriptive hint, `compact` = the short professional term. See [Prompt hint mode](./README.md#prompt-hint-mode). |
 
 ## Catalog (48 entries)
 

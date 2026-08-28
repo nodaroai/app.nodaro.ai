@@ -7,12 +7,15 @@ const map: LocaleCatalogMap = {
   "cross-dissolve":         { label: "Fondu Enchaîné",           description: "Mélange progressif entre les plans" },
   "fade-to-black":          { label: "Fondu au Noir",            description: "S'assombrit, le second plan émerge du noir" },
   "fade-to-white":          { label: "Fondu au Blanc",           description: "Sature de blanc, le second plan en émerge" },
+  "snap-to-black":          { label: "Coupe au Noir",           description: "Coupe instantanée au noir pendant un temps, puis le plan suivant" },
   "match-cut":              { label: "Coupe sur Raccord",        description: "Correspondance de forme ou mouvement entre plans" },
   "smash-cut":              { label: "Coupe Violente",           description: "Coupe abrupte entre plans contrastés" },
   "iris":                   { label: "Cache Iris",               description: "L'iris ferme puis ouvre sur le second plan" },
   "wipe":                   { label: "Balayage",                 description: "Balayage linéaire remplace le premier plan" },
   "roll-transition":        { label: "Rotation",                 description: "Le cadre pivote 90-180°, second plan à l'arrivée" },
   "seamless-match":         { label: "Coupe Invisible",          description: "Coupe masquée par mouvement et couleur synchronisés" },
+  "whip-pan":               { label: "Filé Panoramique",         description: "La caméra file latéralement en flou, le plan suivant garde la direction" },
+  "jump-cut":               { label: "Jump Cut",                 description: "Même cadrage, le temps saute en avant" },
 
   // ── Time ──
   "fast-forward-day-night": { label: "Accéléré Jour → Nuit",    description: "Accéléré de jour à nuit sur la même scène" },
@@ -62,6 +65,8 @@ const map: LocaleCatalogMap = {
   "zoom-into-mouth":        { label: "Zoom dans la Bouche",     description: "La caméra pénètre la bouche ouverte vers le nouveau monde" },
   "push-through-glass":     { label: "Traversée du Verre",      description: "La caméra traverse le verre vers le nouveau monde" },
   "soul-jump":              { label: "Saut d'Âme",              description: "Une âme translucide quitte le corps et entre dans le nouveau" },
+  "mask-transition":        { label: "Transition Masquée",      description: "Un objet au premier plan masque le cadre, la caméra le traverse" },
+  "zoom-through":           { label: "Zoom Traversant",         description: "La caméra grossit un détail jusqu'à ce que la nouvelle scène s'y déploie" },
 
   // ── Physics ──
   "explosion-blast":        { label: "Souffle d'Explosion",     description: "L'explosion balaie le cadre, la nouvelle scène émerge" },
@@ -73,6 +78,7 @@ const map: LocaleCatalogMap = {
   "vehicle-explosion":      { label: "Explosion de Véhicule",   description: "Le véhicule explose au premier plan, la scène change" },
   "jump-match":             { label: "Raccord de Saut",         description: "Le sujet saute, l'atterrissage enchaîne sur la nouvelle scène" },
   "hand-swipe":             { label: "Balayage de Main",        description: "Une main balaie l'objectif, la scène change en se dégageant" },
+  "action-relay":           { label: "Raccord dans le Mouvement", description: "Le sujet sort du cadre sur une action et la poursuit dans la nouvelle scène" },
 
   // ── Light ──
   "white-flash":            { label: "Flash Blanc",             description: "Le cadre sature en blanc pur" },

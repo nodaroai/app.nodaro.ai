@@ -1,7 +1,7 @@
 ---
 node_type: camera-format
-generated_at: 2026-08-15T21:55:05.935Z
-generated_from: 150c80ac9
+generated_at: 2026-08-28T10:30:57.387Z
+generated_from: ae8d76277
 ---
 
 # Camera / Film Stock
@@ -20,6 +20,10 @@ generated_from: 150c80ac9
 **Optional data fields:**
 - `preText?: string`
 - `postText?: string`
+- `applyMode?: PickerApplyMode`
+- `autoApplyInjected?: boolean`
+- `lastAppliedPickerJson?: Record<string, unknown>`
+- `hintMode?: "full" | "compact"`
 
 **Valid values:** call `get_picker_catalog("camera-format")` (MCP) or `GET /v1/picker-catalogs/camera-format` for the catalog of valid ids.
 
