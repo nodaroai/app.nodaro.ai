@@ -1,5 +1,21 @@
 # @nodaro/prompts
 
+## 1.8.1
+
+### Patch Changes
+
+- f0d39b9: fix(catalogs): stop four prompt hints from injecting content outside their own dimension (same class as the earlier cowboy-shot holster).
+
+  - `framing/composition/magazine-spread`: drop the fabricated typography ("bold display typography… headline and pull quotes integrated with the photograph") — a composition picker arranges the frame, it shouldn't invent headlines and quotes in a language the user never chose. The two-page layout + gutter remain.
+  - `framing/composition/cutaway-cross-section`: reworded from a building-specific hint ("the building's near wall peeled away… the subject inhabiting one of the rooms") to a generic cross-section, so it no longer conjures a building for portrait/desert/space shots.
+  - `lens/macro` vs `framing/shot-size/macro` were the same instruction twice. `lens/macro` now describes the OPTICS only (close focus, life-size magnification, shallow DOF); `framing/macro` keeps the magnification/framing. Picking both no longer duplicates.
+  - `lens/anamorphic`: dropped the "cinematic widescreen feel" format claim (overlaps `camera-film/anamorphic-scope`'s 2.39:1); the lens hint now describes optics only (oval bokeh, horizontal flares).
+
+- c089b33: fix(framing): drop the "holster visible" wardrobe clause from the `cowboy-shot` prompt hint (Shot Size must describe the frame only), and remove the `head-to-knees` entry — a duplicate crop of `medium-wide-shot` with no way for a user to tell them apart. `head-to-knees` is dropped from the framing catalog (`@nodaro/prompts`) and all 11 i18n locales (`@nodaro/shared`); `medium-wide-shot` stays as the canonical term.
+- 5f67ce2: Published manifest now declares `@nodaro/shared` as a real semver range (`^2.11.0`) instead of the workspace wildcard `*`. With `*`, a consumer's lockfile kept whatever older `@nodaro/shared` it already had and `@nodaro/prompts` 1.8.0 failed at import time (`does not provide an export named registerCatalogSidecars`); npm now resolves the matching `@nodaro/shared` automatically. A repo guard (`tools/check-published-manifests.mjs`) runs in CI and in the pre-publish gate so no published package can regress to a wildcard.
+- Updated dependencies [c089b33]
+  - @nodaro/shared@2.12.1
+
 ## 1.8.0
 
 ### Minor Changes

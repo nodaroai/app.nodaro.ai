@@ -19,7 +19,6 @@ const map: LocaleCatalogMap = {
   "macro":             { label: "微距",           description: "对小型主体的极近距细节" },
   "full-shot":         { label: "全身镜头",       description: "全身入画" },
   "cowboy-shot":       { label: "牛仔镜头",       description: "大腿中部以上,经典西部片取景" },
-  "head-to-knees":     { label: "头到膝盖",       description: "从头部到膝盖" },
   "head-to-hip":       { label: "头到髋",         description: "从头部到髋部" },
   "half-body":         { label: "半身像",         description: "干净的腰部以上人像" },
 

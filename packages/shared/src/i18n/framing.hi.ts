@@ -19,7 +19,6 @@ const map: LocaleCatalogMap = {
   "macro": { label: "Macro", description: "छोटे subject का अत्यधिक नज़दीकी detail" },
   "full-shot": { label: "Full Shot", description: "Frame में सिर-से-पैर तक पूरा बदन" },
   "cowboy-shot": { label: "Cowboy Shot", description: "जाँघ के बीच से ऊपर, क्लासिक Western framing" },
-  "head-to-knees": { label: "सिर से घुटनों तक", description: "सिर से लेकर घुटनों तक" },
   "head-to-hip": { label: "सिर से कूल्हे तक", description: "सिर से लेकर कूल्हे तक" },
   "half-body": { label: "आधा बदन", description: "साफ़ कमर-से-ऊपर portrait" },
 

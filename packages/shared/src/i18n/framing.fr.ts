@@ -19,7 +19,6 @@ const map: LocaleCatalogMap = {
   "macro": { description: "Détail extrêmement rapproché d'un petit sujet" },
   "full-shot": { label: "Plan en pied", description: "Corps entier de la tête aux pieds dans le cadre" },
   "cowboy-shot": { description: "Du milieu des cuisses, cadrage western classique" },
-  "head-to-knees": { label: "De la tête aux genoux", description: "De la tête jusqu'aux genoux" },
   "head-to-hip": { label: "De la tête à la hanche", description: "De la tête jusqu'aux hanches" },
   "half-body": { label: "Demi-corps", description: "Portrait propre à partir de la taille" },
   // Angle

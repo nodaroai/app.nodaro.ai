@@ -48,4 +48,22 @@ describe("PROVIDER_PROMPT_DOCTRINES", () => {
     // no native negative-prompt param
     expect(d.doctrine).toMatch(/negative/i)
   })
+
+  it("splits the timestamp + multi-view rules by version: 2.0 SKUs no, seedance-2-5 yes (official 2.5 guide)", () => {
+    // Official "Dreamina Seedance 2.5 prompt guide" → Differences from Seedance 2.0:
+    // 2.0 does not respond to timestamps (shot numbers only) and multi-view
+    // subject images are not recommended; 2.5 supports integer-second
+    // timestamps and multi-view references. The doctrine is one group for the
+    // whole family, so BOTH halves must be stated — a rewrite that drops
+    // either side re-applies a 2.0 rule to 2.5 (or vice versa).
+    const d = getPromptDoctrine("seedance-2-5")!
+    expect(d.providers).toContain("seedance-2")
+    expect(d.doctrine).toMatch(/2\.0[^.]*(ignore|do not respond to|respond to shot numbers only)[^.]*timestamps|timestamps[^.]*2\.0/i)
+    expect(d.doctrine).toMatch(/seedance-2-5[^.]*integer-second timestamps|integer-second timestamps[^.]*2\.5/i)
+    expect(d.doctrine).toMatch(/At the 5-second mark/)
+    expect(d.doctrine).toMatch(/2\.5 accepts multi-view|supported on 2\.5/i)
+    const tips = getPromptTips("seedance-2-5").join(" ")
+    expect(tips).toMatch(/2\.0 SKUs ignore timestamps/)
+    expect(tips).toMatch(/seedance-2-5 honours integer-second timestamps/)
+  })
 })

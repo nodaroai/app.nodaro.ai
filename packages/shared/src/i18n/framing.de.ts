@@ -18,7 +18,6 @@ const map: LocaleCatalogMap = {
   "macro": { label: "Makro", description: "Extremes Nahdetail eines kleinen Motivs" },
   "full-shot": { label: "Ganzkörper-Aufnahme", description: "Ganzer Körper von Kopf bis Fuß im Bild" },
   "cowboy-shot": { label: "Cowboy Shot", description: "Ab Mitte Oberschenkel, klassische Western-Einstellung" },
-  "head-to-knees": { label: "Kopf bis Knie", description: "Vom Kopf bis zu den Knien" },
   "head-to-hip": { label: "Kopf bis Hüfte", description: "Vom Kopf bis zur Hüftlinie" },
   "half-body": { label: "Halbporträt", description: "Sauberes Porträt ab der Hüfte aufwärts" },
   "eye-level": { label: "Augenhöhe", description: "Kamera auf Augenhöhe des Motivs" },

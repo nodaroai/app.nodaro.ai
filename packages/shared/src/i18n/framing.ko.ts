@@ -19,7 +19,6 @@ const map: LocaleCatalogMap = {
   "macro": { label: "매크로", description: "작은 피사체의 극단적인 클로즈 디테일입니다" },
   "full-shot": { label: "풀 샷", description: "머리부터 발끝까지 전신이 프레임에 들어갑니다" },
   "cowboy-shot": { label: "카우보이 샷", description: "허벅지 중간부터 위로, 클래식한 서부극 프레이밍입니다" },
-  "head-to-knees": { label: "머리부터 무릎까지", description: "머리부터 무릎까지의 프레이밍입니다" },
   "head-to-hip": { label: "머리부터 엉덩이까지", description: "머리부터 엉덩이까지의 프레이밍입니다" },
   "half-body": { label: "반신", description: "허리 위의 깔끔한 인물 사진입니다" },
 
