@@ -10,6 +10,10 @@
  *   Seedance 2.0:
  *   - Official BytePlus ModelArk "Dreamina Seedance 2.0 series prompt guide"
  *     https://docs.byteplus.com/en/docs/ModelArk/2222480
+ *   - Official BytePlus ModelArk "Dreamina Seedance 2.5 prompt guide"
+ *     https://docs.byteplus.com/en/docs/ModelArk/2607689 — its "Differences
+ *     from Seedance 2.0" section is the authority for every 2.0-vs-2.5 split
+ *     below (timestamps, multi-view references, aspect ratios, MOV output).
  *   - Official launch post https://seed.bytedance.com/en/blog/official-launch-of-seedance-2-0
  *   - KIE API docs https://docs.kie.ai/market/bytedance/seedance-2
  *   Kling:
@@ -41,19 +45,19 @@ const SEEDANCE_2_DOCTRINE: ProviderPromptDoctrine = {
   providers: ["seedance-2", "seedance-2-fast", "seedance-2-mini", "seedance-2-5"],
   heading: "Seedance 2 (seedance-2, seedance-2-fast, seedance-2-mini, seedance-2-5)",
   tips: [
-    "Storyboard complex videos as 'Shot 1: … Shot 2: …' WITHOUT timestamps — timed shots like '(0-3s)' are officially unstable and can break generation.",
+    "Storyboard as 'Shot 1: … Shot 2: …'. The 2.0 SKUs ignore timestamps and '(0-3s)' shots are officially unstable there; seedance-2-5 honours integer-second timestamps ('0-3s: …', 'at the 5-second mark').",
     "One camera movement per shot; describe actions per body part with degree ('slowly raises a hand'); express emotion as physical detail, never abstract words.",
     "Native multi-track audio — cue it inline: （background music）, <sound effects>, and quoted dialogue.",
-    "References go by ordinal (@Image 1, Video 2) in attachment order; earlier = higher priority. Identity = ONE headshot + ONE full-body (multi-view sheets cause ID drift). 4-5 assets total beats maxing the 9/3/3 caps.",
+    "References go by ordinal (@Image 1, Video 2) in attachment order; earlier = higher priority. Identity = ONE headshot + ONE full-body (multi-view sheets drift on 2.0; 2.5 accepts them). 4-5 assets beats maxing 9/3/3.",
     "No negative-prompt parameter — put constraints in the prompt: 'keep it subtitle-free, do not generate a watermark, do not generate a logo'.",
-    "seedance-2-5 only: one shot runs to 30s (the 2.0 SKUs stop at 15s), so storyboard a whole beat instead of planning a stitch. Ref caps are wider (30/10/10), but 4-5 assets still gives the best identity fidelity.",
+    "seedance-2-5 only: one shot runs to 30s (2.0 stops at 15s) — storyboard a whole beat, not a stitch; timestamps work (gap-free, 1s units, don't overpack); refs 30/10/10 but 4-5 assets still gives the best identity.",
     "Auto-path formula: Subject → Action → Environment → Camera → Style → Constraints in 60-100 words; ONE camera instruction (chain with 'then'); separate camera motion from subject motion; always add one lighting phrase.",
   ],
   doctrine: `Prompt structure (front-load what matters most):
 precise subject → action details → scene/environment → lighting & color tone → camera movement → visual style → image quality → constraints.
 
 **Shots & pacing**
-- Storyboard complex videos as "Shot 1: … Shot 2: … Shot 3: …" in event order. Do NOT attach timestamps (e.g. "(0-3s)") — precise-timing support is officially unstable and forcing durations can break generation; let the model pace naturally.
+- Storyboard complex videos as "Shot 1: … Shot 2: … Shot 3: …" in event order. TIMESTAMPS ARE VERSION-SPLIT: the 2.0 SKUs (seedance-2 / -fast / -mini) respond to shot numbers only — do NOT attach timestamps there (e.g. "(0-3s)"; precise timing is officially unstable on 2.0 and forcing durations can break generation, so let the model pace). seedance-2-5 honours integer-second timestamps — the forms and limits are under "Generation differences" below.
 - Per shot cover, in order: camera move or transition, subject action + expression, spatial/position change, audio for that shot.
 - One camera movement type per shot — never ask for push + pan + orbit at once (image instability).
 - Prefer slow, gentle, continuous movements over high-burst action (sprints, big jumps, violent rolls morph). Describe actions per body part with quantified degree: "slowly raises a hand", "pushes hard off the ground". Chain actions with inertia: "uses the momentum of the turn to naturally raise an arm".
@@ -64,11 +68,14 @@ precise subject → action details → scene/environment → lighting & color to
 - 2.5 also takes far more reference material (30 images / 10 videos / 10 audio vs 9/3/3). Treat that as room for COVERAGE — more distinct characters, locations and props in one shot — not as licence to pile refs onto one identity. The "ONE headshot + ONE full-body, 4-5 assets total" rule above still produces the best likeness on 2.5.
 - 2.5 renders at 480p/720p/1080p (1080p since 2026-08-17): there is no 4K tier, so route a job that needs 4K to seedance-2 (which has it) or upscale afterwards.
 - With a start frame, 2.5 always derives the output aspect from that frame — an explicit aspect ratio is rejected outright, so compose the frame at the ratio you want.
+- Timestamps (official 2.5 guide, "Differences from Seedance 2.0"): 2.0 does not respond to them; 2.5 supports integer-second timestamps in three forms — gap-free intervals ("0-3s: … 3-7s: … 7-15s: …" or "[1s-4s] … [4s-8s] …"; never leave a hole like "0-3s … 5-6s"), time-point control ("At the 5-second mark, …"), and relative time ("After 3 seconds, …"). Use 1-second units. Too little content in a range lets the model improvise; too much packs in extra cuts or drops beats — budget the seconds. Never use timestamps to drive high-frequency actions ("shake three times per second").
+- Multi-view subject images: not recommended on 2.0 (the views read as separate people → twins); supported on 2.5. ONE headshot + ONE full-body remains the safest default on both.
+- Transitions and camera terms on 2.5: state a transition's trigger point AND method in one sentence — "At the 5-second mark, the camera quickly transitions leftward using a left wipe combined with a natural dissolve." Basic shot and camera terms are written directly (push in / pull out / pan / track / orbit / dolly zoom / whip pan / hard cut / dissolve / one-shot / speed ramp); only niche terms need [term + descriptive explanation] — which is exactly what the pickers' compact hint mode emits versus their long hints.
 
 **References (when reference media is attached)**
 - Refer to assets by ordinal in attachment order: "@Image 1", "Video 2", "Audio 1". Asset ORDER is priority — put the most identity-critical asset first. (In the editor, the \`{image:N:label}\` / \`{video:N}\` / \`{audio:N}\` prompt tokens auto-emit this binding — \`{image:1:person}\` resolves to "the person from @image_1" — so a wired reference and its mention stay in sync.)
 - Define each subject once, then reuse the label consistently: 'Define the woman in the red dress in Image 1 as the courier' … 'the courier opens the door'. In multi-character scenes bind every character to its image ("the man from Image 1 hands the box to the woman from Image 2") and append: "do not generate duplicate copies of the same character".
-- Character identity: ONE close-up headshot + ONE full-body image is ideal. Do NOT attach multi-view/three-view character sheets — the model reads the views as separate people, causing identity drift and twin duplicates.
+- Character identity: ONE close-up headshot + ONE full-body image is ideal. On the 2.0 SKUs do NOT attach multi-view/three-view character sheets — the model reads the views as separate people, causing identity drift and twin duplicates; 2.5 accepts multi-view images (see "Generation differences").
 - 4-5 assets total works best (1-2 character images + 1 scene image + 1 camera-movement video + 1 audio clip). Maxing out the 9-image/3-video/3-audio limits degrades feature priority and adherence.
 - Editing/extension instructions name clips directly: "Extend Video 1 backward…", "Remove the chair from Video 1". Saying "reference Video 1" flips the model into reference mode and breaks the edit. Track completion: "Video 1 + [transition description] + followed by Video 2" (≤3 clips, ≤15s total).
 

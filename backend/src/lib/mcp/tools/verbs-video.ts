@@ -85,8 +85,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "`pricing` array of the chosen model so cost matches what the user " +
         "expects.\n\n" +
         "**Seedance prompting (the default model family)**: storyboard " +
-        "multi-moment videos as `Shot 1: … Shot 2: …` WITHOUT timestamps " +
-        "(timed shots like '(0-3s)' destabilize generation). One camera move " +
+        "multi-moment videos as `Shot 1: … Shot 2: …`. On the 2.0 SKUs do NOT " +
+        "add timestamps (timed shots like '(0-3s)' destabilize generation); " +
+        "seedance-2-5 honours integer-second timestamps. One camera move " +
         "per shot. Cue native audio inline: （background music）, <sound " +
         "effects>, quoted dialogue. End with: 'HD, rich details, stable " +
         "picture, keep it subtitle-free, do not generate a watermark.' " +

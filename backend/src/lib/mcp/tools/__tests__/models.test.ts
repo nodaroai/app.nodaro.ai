@@ -100,7 +100,7 @@ describe("list_models tool (always available)", () => {
     expect(result.isError).toBeUndefined()
     const text = result.content[0]?.text ?? ""
     expect(text).toContain("\"promptTips\"")
-    expect(text).toContain("WITHOUT timestamps") // distinctive seedance tip
+    expect(text).toContain("integer-second timestamps") // distinctive seedance tip (2.0-vs-2.5 split)
   })
 
   it("serves per-variant credit pricing on the cloud edition", async () => {
