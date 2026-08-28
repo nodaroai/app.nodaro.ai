@@ -115,7 +115,7 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   // Kept equal to VIDEO_ANALYSIS_BUCKET_CREDITS' table-wide ceiling
   // (smart:600s) so this rare-path fallback never under-quotes; re-sync by
   // hand whenever that table reprices (last: 2026-08-03, task A3).
-  "video-analysis": 2064,
+  "video-analysis": 2068,
   // Like video-analysis above, the real per-run cost is bucketed — here by
   // FAMILY × duration (see estimateNodeCredits + the node's live badge). This
   // key is the bare `video-audit` model id, so it carries that id's catalog
@@ -124,7 +124,7 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   // a SEPARATE catalog id (`video-audit:auto`, 1912) — so treat this purely as
   // a last-resort floor: every real quoting path (node badge, canvas total,
   // run-confirm, precheck) resolves a bucketed composite first.
-  "video-audit": 1066,
+  "video-audit": 1068,
 };
 
 /** Motion-transfer composite credit costs (mirrors STATIC_CREDIT_COSTS in backend) */
