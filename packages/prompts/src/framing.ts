@@ -166,15 +166,7 @@ export const FRAMINGS: ReadonlyArray<Framing> = [
     label: "Cowboy Shot",
     category: "shot-size",
     description: "Mid-thigh up, classic Western framing",
-    promptHint: "cowboy shot, subject framed from mid-thigh up, classic Western framing that leaves the holster visible",
-  },
-  {
-    id: "head-to-knees",
-    label: "Head to Knees",
-    category: "shot-size",
-    description: "From head down to the knees",
-    promptHint: "head-to-knees framing, subject visible from the top of the head down to just above the knees",
-    term: "head-to-knees framing",
+    promptHint: "cowboy shot, subject framed from mid-thigh up, classic Western framing",
   },
   {
     id: "head-to-hip",

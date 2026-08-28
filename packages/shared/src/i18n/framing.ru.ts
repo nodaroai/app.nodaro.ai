@@ -19,7 +19,6 @@ const map: LocaleCatalogMap = {
   "macro": { label: "Макро", description: "Сверхблизкая деталь маленького объекта" },
   "full-shot": { label: "Полный план", description: "Всё тело с головы до пят в кадре" },
   "cowboy-shot": { label: "Ковбойский план", description: "От середины бедра, классическое вестерн-кадрирование" },
-  "head-to-knees": { label: "Голова до колен", description: "От головы до колен" },
   "head-to-hip": { label: "Голова до бёдер", description: "От головы до бёдер" },
   "half-body": { label: "Поясной портрет", description: "Чистый поясной портрет" },
 

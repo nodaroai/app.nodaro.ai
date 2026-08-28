@@ -19,7 +19,6 @@ const map: LocaleCatalogMap = {
   "macro": { label: "マクロ", description: "小さな被写体の極端な拡大" },
   "full-shot": { label: "フルショット", description: "頭からつま先まで全身がフレーム内に収まる" },
   "cowboy-shot": { label: "カウボーイショット", description: "太もも中央から上、クラシックな西部劇のフレーミング" },
-  "head-to-knees": { label: "頭から膝まで", description: "頭から膝までを写す" },
   "head-to-hip": { label: "頭から腰まで", description: "頭から腰までを写す" },
   "half-body": { label: "ハーフボディ", description: "クリーンな腰上のポートレート" },
 

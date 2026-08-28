@@ -18,7 +18,6 @@ const map: LocaleCatalogMap = {
   "macro": { label: "Macro", description: "פרט קרוב קיצוני של סובייקט קטן" },
   "full-shot": { label: "Full Shot", description: "כל הגוף מראש עד רגליים בפריים" },
   "cowboy-shot": { label: "Cowboy Shot", description: "מאמצע הירך ומעלה, מסגור Western קלאסי" },
-  "head-to-knees": { label: "ראש עד ברכיים", description: "מהראש למטה עד הברכיים" },
   "head-to-hip": { label: "ראש עד מותן", description: "מהראש למטה עד המותניים" },
   "half-body": { label: "חצי גוף", description: "פורטרט נקי מהמותניים ומעלה" },
 

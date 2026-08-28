@@ -19,7 +19,6 @@ const map: LocaleCatalogMap = {
   "macro": { description: "Detalhe extremo de um pequeno sujeito" },
   "full-shot": { label: "Plano Inteiro", description: "Corpo inteiro da cabeça aos pés no quadro" },
   "cowboy-shot": { description: "Da metade da coxa para cima, enquadramento clássico de Western" },
-  "head-to-knees": { label: "Da Cabeça aos Joelhos", description: "Da cabeça até os joelhos" },
   "head-to-hip": { label: "Da Cabeça ao Quadril", description: "Da cabeça até o quadril" },
   "half-body": { label: "Meio Corpo", description: "Retrato limpo da cintura para cima" },
 

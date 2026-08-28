@@ -18,7 +18,6 @@ const map: LocaleCatalogMap = {
   "macro": { label: "ماكرو", description: "تفصيل قريب جدا لموضوع صغير" },
   "full-shot": { label: "لقطة كاملة", description: "الجسم بالكامل من الرأس إلى القدم في الإطار" },
   "cowboy-shot": { label: "لقطة Cowboy", description: "من منتصف الفخذ فأعلى، تأطير غربي كلاسيكي" },
-  "head-to-knees": { label: "من الرأس للركبتين", description: "من الرأس نزولا للركبتين" },
   "head-to-hip": { label: "من الرأس للخصر", description: "من الرأس نزولا للوركين" },
   "half-body": { label: "نصف جسم", description: "بورتريه نظيف من الخصر فأعلى" },
 
