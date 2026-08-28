@@ -109,6 +109,7 @@ jobs:
           node tools/check-private-leaks.mjs
           node tools/check-pricing-leaks.mjs
           node tools/check-ee-imports.mjs
+          node tools/check-published-manifests.mjs
           VER=8.30.1
           # Pin + verify the gitleaks release artifact (supply-chain integrity):
           # sha256 from the official gitleaks_${VER}_checksums.txt. `set -e` fails
