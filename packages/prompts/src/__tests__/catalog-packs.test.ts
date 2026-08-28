@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest"
 import type { PickerCatalog, PickerOption } from "../picker-catalogs.js"
+import type { PickerOptionInput, PickerCatalogInput } from "../catalog-packs.js"
 import {
   registerCatalogPack, getRegisteredCatalogPacks, resetCatalogPacks,
   catalogPacksVersion, composePickerCatalogs,
@@ -40,7 +41,7 @@ describe("composePickerCatalogs — pure", () => {
   })
 
   it("replace swaps the catalog wholesale for its catalogId", () => {
-    const vendored: PickerCatalog = { nodeType: "setting", label: "Setting", catalogId: "setting", kind: "single",
+    const vendored: PickerCatalogInput = { nodeType: "setting", label: "Setting", catalogId: "setting", kind: "single",
       valueField: "setting", options: [{ id: "forest", label: "Forest", promptHint: "in a forest", term: "forest" }] }
     const out = composePickerCatalogs(base, [{ id: "p", catalogId: "setting", mode: "replace", catalog: vendored }])
     expect(out[0].options!.map((o: PickerOption) => o.id)).toEqual(["forest"])
@@ -82,7 +83,11 @@ describe("registry + version", () => {
  * reproduces that exactly; without composition-time resolution the option would
  * inject its full hint in full mode and `undefined` (i.e. nothing) in compact.
  */
-function legacyOption(o: Omit<PickerOption, "term">): PickerOption {
+// A pack literal WITHOUT `term` must type-check against the pack input
+// types (`PickerOptionInput`) — `term` is author-optional and resolved at
+// composition. The helper is deliberately an identity on the INPUT type, not a
+// cast to the registry's output type.
+function legacyOption(o: Omit<PickerOption, "term">): PickerOptionInput {
   return o as PickerOption
 }
 

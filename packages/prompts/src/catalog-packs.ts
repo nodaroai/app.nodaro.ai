@@ -15,7 +15,19 @@ import { resolveTerm } from "./term.js"
  * `replace`-mode packs agreeing; a pack-added value would otherwise inject its
  * full hint in full mode and NOTHING in compact.
  */
-function withTerm(o: PickerOption): PickerOption {
+/** Pack-author input shapes: identical to the registry's own types except that
+ *  `term` is OPTIONAL — a vendored pack may predate the field, and a new
+ *  required field on a published input type would be a breaking change. The
+ *  composition root resolves it (`withTerm`), so everything that LEAVES this
+ *  module still satisfies `PickerOption` with a resolved `term`. */
+export type PickerOptionInput = Omit<PickerOption, "term"> & { readonly term?: string }
+export type PickerDimensionInput = Omit<PickerDimension, "options"> & { readonly options: readonly PickerOptionInput[] }
+export type PickerCatalogInput = Omit<PickerCatalog, "options" | "dimensions"> & {
+  readonly options?: readonly PickerOptionInput[]
+  readonly dimensions?: readonly PickerDimensionInput[]
+}
+
+function withTerm(o: PickerOptionInput): PickerOption {
   return { ...o, term: resolveTerm(o) }
 }
 
@@ -35,9 +47,9 @@ export interface CatalogPack {
   readonly id: string
   readonly catalogId: string
   readonly mode: CatalogPackMode
-  readonly catalog?: PickerCatalog
-  readonly options?: readonly PickerOption[]
-  readonly dimensions?: readonly PickerDimension[]
+  readonly catalog?: PickerCatalogInput
+  readonly options?: readonly PickerOptionInput[]
+  readonly dimensions?: readonly PickerDimensionInput[]
   readonly denyIds?: readonly string[]
   /** Localized strings for this pack's added option ids, keyed by locale → id. */
   readonly sidecars?: Partial<Record<LocaleId, LocaleCatalogMap>>
@@ -61,7 +73,7 @@ export function getRegisteredCatalogPacks(): readonly CatalogPack[] { return pac
 export function resetCatalogPacks(): void { packs = []; version++; resetCatalogSidecars() }
 export function catalogPacksVersion(): number { return version }
 
-function cloneCatalog(c: PickerCatalog): PickerCatalog {
+function cloneCatalog(c: PickerCatalogInput): PickerCatalog {
   return {
     ...c,
     options: c.options ? c.options.map(withTerm) : undefined,
