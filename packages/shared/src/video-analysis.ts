@@ -89,6 +89,21 @@ export const VIDEO_ANALYSIS_TRANSITIONS = ["cut", "fade", "dissolve", "wipe", "w
 export type VideoAnalysisTransition = (typeof VIDEO_ANALYSIS_TRANSITIONS)[number]
 
 /**
+ * What burned-in text IS (2026-08-28, recast shot craft). Decides render-vs-omit
+ * downstream: a `subtitle` is a transcription of the piece's own speech — a
+ * recreation re-speaks it and must not render it — while a `title`, `caption`,
+ * `lower-third` or `logo` is picture content. Absent when a scene carries no
+ * text. A new KEY on the scene: strip-mode readers drop it harmlessly.
+ */
+export const VIDEO_ANALYSIS_TEXT_KINDS = ["title", "caption", "lower-third", "subtitle", "logo", "other"] as const
+export type VideoAnalysisTextKind = (typeof VIDEO_ANALYSIS_TEXT_KINDS)[number]
+
+/** How the CLIP opens (clip-level, not per scene — a window's first scene is
+ *  not the clip's). Absent ⇒ a hard open. Only `fade` today. */
+export const VIDEO_ANALYSIS_CLIP_TRANSITIONS_IN = ["fade"] as const
+export type VideoAnalysisClipTransitionIn = (typeof VIDEO_ANALYSIS_CLIP_TRANSITIONS_IN)[number]
+
+/**
  * Time manipulation — slow motion, ramps, timelapse, freeze, reverse.
  *
  * Previously unrepresentable anywhere in the schema, so a recreation rendered
@@ -302,6 +317,8 @@ const windowSceneBase = z.object({
    * earlier scene's speech means the shot is replayed footage under a voice-over.
    */
   onScreenText: z.string().optional(),
+  /** What the on-screen text IS. Meaningful only when `onScreenText` is non-empty. */
+  onScreenTextKind: z.enum(VIDEO_ANALYSIS_TEXT_KINDS).optional(),
   /** Effects on this shot's PICTURE. Absent ⇒ a clean image. */
   effects: z.array(z.enum(VIDEO_ANALYSIS_VISUAL_EFFECTS)).optional(),
   transitionOut: z.enum(VIDEO_ANALYSIS_TRANSITIONS).optional(),
@@ -323,6 +340,8 @@ export const windowAnalysisSchema = z.object({
   /** The clip-level look as read from THIS window. Merge folds the windows
    *  field-by-field (first non-empty wins), like `language`. */
   look: clipLookSchema.optional(),
+  /** The clip opens with a fade-in. Folded from window 0 only. */
+  transitionIn: z.enum(VIDEO_ANALYSIS_CLIP_TRANSITIONS_IN).optional(),
   slots: z.array(entitySlotSchema),
   scenes: z.array(windowSceneSchema),
 })
@@ -349,6 +368,8 @@ export const videoAnalysisResultSchema = z.object({
    *  rather than a member: `meta` is probed fact (ffprobe dimensions, probed
    *  duration), while this is the model's reading of the photography. */
   look: clipLookSchema.optional(),
+  /** The clip opens with a fade-in. Folded from window 0 only. */
+  transitionIn: z.enum(VIDEO_ANALYSIS_CLIP_TRANSITIONS_IN).optional(),
   slots: z.array(entitySlotSchema),
   scenes: z.array(analyzedSceneSchema).min(1),
   /** CAST VARIATIONS (§4 cap handling): looks the analyzer's merge FOLDED into
