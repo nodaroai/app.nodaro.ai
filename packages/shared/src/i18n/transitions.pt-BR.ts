@@ -7,12 +7,15 @@ const map: LocaleCatalogMap = {
   "cross-dissolve": { label: "Fusão Cruzada", description: "Mistura gradual entre cenas" },
   "fade-to-black": { label: "Fade para Preto", description: "Escurece ao preto, segunda cena emerge" },
   "fade-to-white": { label: "Fade para Branco", description: "Clareia ao branco, segunda cena emerge" },
+  "snap-to-black": { label: "Corte Seco para Preto", description: "Corte instantâneo ao preto por um instante, depois a próxima cena" },
   "match-cut": { label: "Corte de Raccord", description: "Correspondência de forma ou movimento entre cenas" },
   "smash-cut": { label: "Corte Brusco", description: "Corte abrupto entre cenas visualmente contrastantes" },
   "iris": { label: "Íris", description: "Íris circular fecha e abre na segunda cena" },
   "wipe": { label: "Varredura", description: "Varredura linear substitui a primeira cena" },
   "roll-transition": { label: "Rolagem", description: "Quadro gira 90–180°, segunda cena estável" },
   "seamless-match": { label: "Corte Invisível", description: "Corte oculto disfarçado por movimento e cor" },
+  "whip-pan": { label: "Chicote de Câmera", description: "Câmera varre de lado com borrão, a próxima cena segue a mesma direção" },
+  "jump-cut": { label: "Jump Cut", description: "Mesmo enquadramento, o tempo salta adiante" },
 
   // ── Time ──
   "fast-forward-day-night": { label: "Dia → Noite (Time-lapse)", description: "Time-lapse do dia para a noite na mesma cena" },
@@ -62,6 +65,8 @@ const map: LocaleCatalogMap = {
   "zoom-into-mouth": { label: "Zoom na Boca", description: "Push na boca aberta, emerge em novo mundo" },
   "push-through-glass": { label: "Atravessar o Vidro", description: "Câmera atravessa vidro com refração para nova cena" },
   "soul-jump": { label: "Salto de Alma", description: "Alma translúcida sai do corpo, entra em novo corpo" },
+  "mask-transition": { label: "Transição de Máscara", description: "Objeto em primeiro plano cobre o quadro, câmera atravessa o escuro" },
+  "zoom-through": { label: "Zoom Atravessado", description: "Câmera amplia um detalhe até a nova cena surgir dentro dele" },
 
   // ── Physics ──
   "explosion-blast": { label: "Explosão", description: "Explosão limpa o quadro, nova cena emerge" },
@@ -73,6 +78,7 @@ const map: LocaleCatalogMap = {
   "vehicle-explosion": { label: "Explosão de Veículo", description: "Veículo explode em primeiro plano, cena muda" },
   "jump-match": { label: "Salto Combinado", description: "Sujeito pula, aterrissagem combina com nova cena" },
   "hand-swipe": { label: "Varredura de Mão", description: "Mão passa pela lente, cena muda durante a oclusão" },
+  "action-relay": { label: "Corte na Ação", description: "Sujeito sai de quadro numa ação e continua o movimento na nova cena" },
 
   // ── Light ──
   "white-flash": { label: "Flash Branco", description: "Quadro clareia ao branco" },

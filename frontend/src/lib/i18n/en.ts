@@ -500,6 +500,10 @@ export const en = {
   "node.modePicks": "Picks",
   "node.modeBoth": "Both",
   "node.promptPreviewEmpty": "(no prompt — pick something first)",
+  "node.hintMode": "Prompt hint",
+  "node.hintModeFull": "Full",
+  "node.hintModeCompact": "Compact",
+  "node.hintModeSwitch": "Prompt hint: {label}",
 
   // ── Config panel (shared chrome for the selected node) ──────────────────
   "configPanel.nodeSettingsTitle": "{name} Node Settings",

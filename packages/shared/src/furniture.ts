@@ -26,6 +26,16 @@ export interface Furniture {
   readonly label: string
   readonly subcategory: FurnitureSubcategory
   readonly description: string
+  /**
+   * Optional authored compact term — the short phrase a professional would
+   * write in a prompt, as opposed to the user-facing `label` (see the `term`
+   * convention in `@nodaro/prompts`'s `term.ts`). Authored ONLY where the
+   * lowercased label is not that phrase — a UI compound naming two things at
+   * once ("Airship / Dirigible" -> "airship", "Plasma Sword / Lightsaber" ->
+   * "plasma sword"). Everywhere else the lowercased label IS the term for a
+   * concrete object ("golden retriever", "katana"), so nothing is authored.
+   */
+  readonly term?: string
 }
 
 export const FURNITURE: ReadonlyArray<Furniture> = [

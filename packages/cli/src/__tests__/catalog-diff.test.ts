@@ -38,6 +38,30 @@ describe("threeWayMergeCatalog", () => {
     expect(plan.carried.map((e) => e.id)).not.toContain("desert")
   })
 
+  it("treats a term-only upstream edit as a real change (carried when unmodified)", () => {
+    const entry = (term: string) => ({
+      catalogId: "setting",
+      kind: "single" as const,
+      entries: [{ id: "forest", label: "Forest", promptHint: "in a forest", term }],
+      sidecars: {},
+    })
+    const plan = threeWayMergeCatalog(entry("forest"), entry("dense forest"), entry("forest"))
+    expect(plan.carried.map((e) => e.term)).toEqual(["dense forest"])
+    expect(plan.conflicts).toEqual([])
+  })
+
+  it("conflicts when BOTH the pack and upstream changed only the term", () => {
+    const entry = (term: string) => ({
+      catalogId: "setting",
+      kind: "single" as const,
+      entries: [{ id: "forest", label: "Forest", promptHint: "in a forest", term }],
+      sidecars: {},
+    })
+    const plan = threeWayMergeCatalog(entry("forest"), entry("dense forest"), entry("enchanted forest"))
+    expect(plan.conflicts.map((c) => c.id)).toEqual(["forest"])
+    expect(plan.carried).toEqual([])
+  })
+
   it("reports upstream removals without touching the pack", () => {
     const baseline = snap([["forest", "in a forest"], ["swamp", "in a swamp"]])
     const upstream = snap([["forest", "in a forest"]])

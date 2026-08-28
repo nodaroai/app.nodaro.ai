@@ -17,6 +17,7 @@ The Framing parameter node composes a full framing descriptor by combining five 
 | vantage       | string | Viewpoint character — `objective`, `subjective-pov`, `voyeuristic`, `intimate`, `surveillance`.                                   |
 | Pre Text      | text   | Free-form text prepended to the composed hint.                                                                                    |
 | Post Text     | text   | Free-form text appended to the composed hint.                                                                                     |
+| Hint mode       | select   | Which fragment this picker injects downstream — `full` (default) = the long descriptive hint, `compact` = the short professional term. See [Prompt hint mode](./README.md#prompt-hint-mode). |
 
 ## Catalog (72 catalog options)
 

@@ -1,7 +1,7 @@
 ---
 node_type: voice-character
-generated_at: 2026-08-15T21:55:06.078Z
-generated_from: 150c80ac9
+generated_at: 2026-08-28T10:28:28.348Z
+generated_from: ae8d76277
 ---
 
 # Voice Character
@@ -24,6 +24,7 @@ generated_from: 150c80ac9
 - `language?: string | ReadonlyArray<string>`
 - `accent?: string`
 - `timbre?: string`
+- `hintMode?: "full" | "compact"`
 
 **Valid values:** call `get_picker_catalog("voice-character")` (MCP) or `GET /v1/picker-catalogs/voice-character` for the catalog of valid ids.
 

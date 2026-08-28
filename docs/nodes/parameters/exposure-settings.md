@@ -15,6 +15,7 @@ The Exposure Settings parameter node specifies the photographic exposure triangl
 | isoValue      | string | `iso-100` (clean), `iso-400` (slight grain), `iso-1600` (noticeable grain), `iso-6400` (heavy grain).                                    |
 | Pre Text      | text   | Free-form text prepended to the composed hint.                                                                                           |
 | Post Text     | text   | Free-form text appended to the composed hint.                                                                                            |
+| Hint mode       | select   | Which fragment this picker injects downstream — `full` (default) = the long descriptive hint, `compact` = the short professional term. See [Prompt hint mode](./README.md#prompt-hint-mode). |
 
 ## Catalog (20 catalog options across 3 fields)
 

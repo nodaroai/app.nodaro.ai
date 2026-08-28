@@ -17,6 +17,7 @@ The Styling parameter node composes a full styling/wardrobe descriptor — what 
 | **Accessories** | `jewelry`, `nails` |
 | **Wardrobe** | `fabric` |
 | **Free text** | `preText`, `postText` |
+| **Prompt hint** | `hintMode` |
 
 Example values:
 - `makeup`: `natural`, `glam`, `editorial`, `goth`, `clean-girl`, `90s-grunge`

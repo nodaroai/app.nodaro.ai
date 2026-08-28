@@ -1,7 +1,7 @@
 ---
 node_type: camera-motion
-generated_at: 2026-08-15T21:55:05.878Z
-generated_from: 150c80ac9
+generated_at: 2026-08-28T10:28:28.223Z
+generated_from: ae8d76277
 ---
 
 # Camera Motion
@@ -20,6 +20,7 @@ generated_from: 150c80ac9
 **Optional data fields:**
 - `preText?: string`
 - `postText?: string`
+- `hintMode?: "full" | "compact"`
 
 **Valid values:** call `get_picker_catalog("camera-motion")` (MCP) or `GET /v1/picker-catalogs/camera-motion` for the catalog of valid ids.
 

@@ -13,6 +13,7 @@ The Loop Subject parameter node names the focal element of a looped video clip â
 | loopSubject  | string | `"tunnel"` | Catalog entry id (e.g. `"kaleidoscope"`, `"vortex"`).    |
 | Pre Text     | text   | empty      | Free-form text prepended to the composed hint.           |
 | Post Text    | text   | empty      | Free-form text appended to the composed hint.            |
+| Hint mode      | select   | `full`       | Which fragment this picker injects downstream â€” `full` = the long descriptive hint, `compact` = the short professional term. See [Prompt hint mode](./README.md#prompt-hint-mode). |
 
 ## Catalog (35 entries across 2 categories)
 

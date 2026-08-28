@@ -13,6 +13,7 @@ The Backdrop parameter node describes the background surface behind a subject in
 | backdrop  | string | `"white-seamless"`| Catalog entry id (e.g. `"cyc-wall"`, `"gradient"`).          |
 | Pre Text  | text   | empty             | Free-form text prepended to the composed hint.               |
 | Post Text | text   | empty             | Free-form text appended to the composed hint.                |
+| Hint mode   | select   | `full`              | Which fragment this picker injects downstream — `full` = the long descriptive hint, `compact` = the short professional term. See [Prompt hint mode](./README.md#prompt-hint-mode). |
 
 ## Catalog (40 entries)
 

@@ -1,7 +1,7 @@
 ---
 node_type: era
-generated_at: 2026-08-15T21:55:06.152Z
-generated_from: 150c80ac9
+generated_at: 2026-08-28T10:30:57.517Z
+generated_from: ae8d76277
 ---
 
 # Era / Period
@@ -20,6 +20,7 @@ generated_from: 150c80ac9
 **Optional data fields:**
 - `preText?: string`
 - `postText?: string`
+- `hintMode?: "full" | "compact"`
 
 **Valid values:** call `get_picker_catalog("era")` (MCP) or `GET /v1/picker-catalogs/era` for the catalog of valid ids.
 

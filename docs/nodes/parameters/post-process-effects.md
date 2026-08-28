@@ -13,6 +13,7 @@ The Post-Process Effect parameter node adds finishing-pass aesthetics to a gener
 | postProcess  | string | `"vignette-soft"`| Catalog entry id (e.g. `"film-grain"`, `"light-leak"`).    |
 | Pre Text     | text   | empty            | Free-form text prepended to the composed hint.             |
 | Post Text    | text   | empty            | Free-form text appended to the composed hint.              |
+| Hint mode      | select   | `full`             | Which fragment this picker injects downstream — `full` = the long descriptive hint, `compact` = the short professional term. See [Prompt hint mode](./README.md#prompt-hint-mode). |
 
 ## Catalog (18 entries)
 

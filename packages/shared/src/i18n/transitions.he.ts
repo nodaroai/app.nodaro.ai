@@ -7,12 +7,15 @@ const map: LocaleCatalogMap = {
   "cross-dissolve": { label: "דיסולב הצלבה", description: "מיזוג הדרגתי בין שתי הסצנות" },
   "fade-to-black": { label: "דהייה לשחור", description: "חשיכה הדרגתית ואז הסצנה הבאה" },
   "fade-to-white": { label: "דהייה ללבן", description: "הבהרה עד לבן ואז הסצנה הבאה" },
+  "snap-to-black": { label: "חיתוך לשחור", description: "חיתוך מיידי לשחור מלא לרגע, ואז השוט הבא" },
   "match-cut": { label: "חיתוך התאמה", description: "התאמת צורה או תנועה בין הסצנות" },
   "smash-cut": { label: "חיתוך חד", description: "חיתוך מפתיע בין סצנות מנוגדות" },
   "iris": { label: "אירוס", description: "עיגול נסגר ונפתח על הסצנה החדשה" },
   "wipe": { label: "מחיקה", description: "קו סורק את הפריים וחושף את הסצנה" },
   "roll-transition": { label: "סיבוב", description: "הפריים מסתובב 90-180 מעלות" },
   "seamless-match": { label: "התאמה חלקה", description: "חיתוך נסתר בתנועה וצבע תואמים" },
+  "whip-pan": { label: "פאן מהיר", description: "המצלמה מסתובבת הצידה במהירות לכדי טשטוש, והשוט הבא ממשיך באותו כיוון" },
+  "jump-cut": { label: "ג'אמפ קאט", description: "אותו קאדר, הזמן מדלג קדימה" },
 
   // ── Time ──
   "fast-forward-day-night": { label: "הרצה מהירה (יום ← לילה)", description: "מעבר זמן מהיום ללילה באותה סצנה" },
@@ -62,6 +65,8 @@ const map: LocaleCatalogMap = {
   "zoom-into-mouth": { label: "זום לתוך פה", description: "המצלמה נכנסת לפה ומגיחה לעולם חדש" },
   "push-through-glass": { label: "דחיפה דרך זכוכית", description: "המצלמה חודרת לוח זכוכית לעולם אחר" },
   "soul-jump": { label: "קפיצת נשמה", description: "נשמה שקופה עוזבת גוף אחד ונכנסת לאחר" },
+  "mask-transition": { label: "מעבר מסכה", description: "עצם בחזית מכסה את הפריים והמצלמה חוצה את החושך אל הסצנה החדשה" },
+  "zoom-through": { label: "זום אל תוך פרט", description: "המצלמה מגדילה פרט אחד עד שהסצנה החדשה נפרשת בתוכו" },
 
   // ── Physics ──
   "explosion-blast": { label: "גל פיצוץ", description: "פיצוץ סורק את הפריים וחושף את הסצנה החדשה" },
@@ -73,6 +78,7 @@ const map: LocaleCatalogMap = {
   "vehicle-explosion": { label: "פיצוץ רכב", description: "רכב מתפוצץ, להבות מכסות את הפריים, והסצנה מתחלפת" },
   "jump-match": { label: "קפיצה תואמת", description: "הדמות קופצת ונוחתת בסצנה חדשה" },
   "hand-swipe": { label: "מחיקת יד", description: "יד עוברת מול העדשה והסצנה משתנה" },
+  "action-relay": { label: "חיתוך על תנועה", description: "הדמות יוצאת מהפריים בתנועה וממשיכה אותה בסצנה החדשה" },
 
   // ── Light ──
   "white-flash": { label: "הבזק לבן", description: "הפריים מתמלא לבן ואז מגיחה הסצנה החדשה" },

@@ -11,10 +11,12 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { HandleWithPopover } from "./handle-with-popover"
 import { RunNodeButton } from "./run-node-button"
+import { HintModeToggle, readHintMode, useHintModeSetter, type HintMode } from "./hint-mode-toggle"
 import { useAutoMeasureForZoom } from "./use-auto-measure-for-zoom"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { cn } from "@/lib/utils"
 import { getPickerOutputMeta } from "@/lib/picker-handles"
+import { isParameterPickerNode } from "@/lib/parameter-picker-types"
 import {
   setStickyParameterDisplayMode,
   type ParameterDisplayMode as DisplayMode,
@@ -108,6 +110,19 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
   // Existing nodes keep whatever mode they were saved with; the localStorage
   // preference only seeds NEW nodes (handled in store `addNode`).
   const displayMode: DisplayMode = (data.displayMode as DisplayMode) || "picks"
+
+  // Which fragment this picker injects downstream. Absent = "full", so every
+  // workflow authored before the lever existed keeps the long promptHint it
+  // was built with. Only catalog-backed pickers carry a compact `term`, so
+  // the control is gated on the picker registry — free-text parameter nodes
+  // (tone, style-guide, text-prompt) and pure-runtime ones (duration,
+  // aspect-ratio, scene-count, motion) have no term to switch to.
+  const hintMode: HintMode = readHintMode(data)
+  const showHintModeToggle = isParameterPickerNode(node?.type)
+  // Shared writer — it also clears the node height so the card re-fits the
+  // shorter/longer fragment, whether the toggle was clicked here or in the
+  // config panel.
+  const setHintMode = useHintModeSetter()
   const setDisplayMode = (mode: DisplayMode) => {
     // Clear height to auto-fit the new mode's content. Width is preserved:
     // the picks layout is ALWAYS in the DOM (visually hidden in prompt-only
@@ -133,7 +148,7 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
   const updateNodeInternals = useUpdateNodeInternals()
   useEffect(() => {
     updateNodeInternals(id)
-  }, [id, displayMode, sourceIsExternal, updateNodeInternals])
+  }, [id, displayMode, hintMode, sourceIsExternal, updateNodeInternals])
 
   // When zoom != 1, React Flow's native auto-measure reads the wrapper's
   // CSS box at *logical* size — but visual = logical × zoom. The hook
@@ -152,7 +167,7 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
     zoom: ((data.zoom as number | undefined) ?? 1.0),
     visualHeight,
     onMeasured: (visualH) => updateNode(id, { height: visualH }),
-    triggerKey: `${displayMode}|${(data.zoom as number | undefined) ?? 1.0}`,
+    triggerKey: `${displayMode}|${hintMode}|${(data.zoom as number | undefined) ?? 1.0}`,
   })
 
   // ResizeObserver on the natural content wrapper (no h-full) — when picks
@@ -257,11 +272,22 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
             // `relative top-[2px]` shifts the toggle visually down 2px
             // without taking extra layout space, so the picks/prompt
             // content below stays exactly where it was.
+            //
+            // `width: 0; min-width: 100%` (same idiom as the prompt preview
+            // below): the row spans the node but contributes NOTHING to
+            // intrinsic width, so adding the hint-mode control here can
+            // never widen a 220px picker. Display mode stays right-aligned;
+            // the hint-mode control takes the freed left edge.
             className={cn(
-              "nopan toggle-row relative top-[4px] flex justify-end mb-0 transition-opacity",
+              "nopan toggle-row relative top-[4px] flex flex-wrap items-center gap-1 mb-0 transition-opacity",
+              // Display mode is always right-aligned; the hint-mode control,
+              // when present, takes the freed left edge.
+              showHintModeToggle ? "justify-between" : "justify-end",
               selected ? "opacity-100" : "opacity-0 group-hover:opacity-100",
             )}
+            style={{ width: 0, minWidth: "100%" }}
           >
+            {showHintModeToggle && <HintModeToggle mode={hintMode} onChange={(m) => setHintMode(id, m)} />}
             <DisplayModeToggle mode={displayMode} onChange={setDisplayMode} />
           </div>
           {/* Wrapper around the actual content children. ResizeObserver

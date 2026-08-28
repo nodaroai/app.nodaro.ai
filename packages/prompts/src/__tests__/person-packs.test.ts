@@ -93,7 +93,7 @@ describe("getRegisteredPeople honors deny/replace CatalogPacks on person", () =>
         kind: "multi",
         fields: ["type"],
         dimensions: [
-          { field: "type", label: "Type", options: [{ id: "man", label: "Man", promptHint: "a man", category: "Realistic" }] },
+          { field: "type", label: "Type", options: [{ id: "man", label: "Man", promptHint: "a man", term: "man", category: "Realistic" }] },
         ],
       },
     })

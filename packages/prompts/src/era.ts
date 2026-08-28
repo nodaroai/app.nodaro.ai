@@ -17,6 +17,8 @@
  * orchestrator.
  */
 
+import { resolveTerm } from "./term.js"
+
 export type EraCategory = "decade-20c" | "pre-modern" | "speculative"
 
 export interface Era {
@@ -25,6 +27,16 @@ export interface Era {
   readonly category: EraCategory
   readonly description: string
   readonly promptHint: string
+  /**
+   * Compact period name for prompt injection, authored only where the
+   * lowercased label is not what a period stylist would write: UI compounds
+   * ("1950s Diner / Pin-up"), annotated labels ("Fin-de-siècle (1895-1905)"),
+   * and decade names whose word order reads as a menu entry rather than an era
+   * ("Atomic Age 50s", "Pre-War Roaring"). Proper era names — medieval,
+   * renaissance, victorian, dieselpunk — need nothing; the label already IS
+   * the term.
+   */
+  readonly term?: string
 }
 
 export const ERAS: ReadonlyArray<Era> = [
@@ -58,6 +70,7 @@ export const ERAS: ReadonlyArray<Era> = [
     label: "1950s Diner / Pin-up",
     category: "decade-20c",
     description: "Chrome diners and bouffant pin-ups",
+    term: "1950s diner pin-up",
     promptHint:
       "set in the 1950s diner pin-up era — full circle skirts, cropped denim, leather jackets and bouffant hair in chrome diners and drive-ins, with saturated Kodachrome reds and turquoise",
   },
@@ -66,6 +79,7 @@ export const ERAS: ReadonlyArray<Era> = [
     label: "Atomic Age 50s",
     category: "decade-20c",
     description: "1950s sci-fi futurism and Cold War anxiety",
+    term: "1950s atomic age",
     promptHint:
       "set in the 1950s atomic-age era — ranch-style suburban homes, atomic starburst ornaments, finned appliances, B-movie sci-fi posters and Cold War civil-defense propaganda, with bright pulpy Technicolor saturation and hard mid-century optimism shot through with quiet nuclear dread",
   },
@@ -98,6 +112,7 @@ export const ERAS: ReadonlyArray<Era> = [
     label: "1990s Mall",
     category: "decade-20c",
     description: "Mall-rat grunge-and-pop nineties",
+    term: "1990s mall culture",
     promptHint:
       "set in the 1990s mall era — denim and crop tops, slip dresses, chokers and platform sneakers under fluorescent food-court lighting, with slight VHS-grain and a warm disposable-camera flash cast",
   },
@@ -106,6 +121,7 @@ export const ERAS: ReadonlyArray<Era> = [
     label: "2000s Tabloid / Y2K",
     category: "decade-20c",
     description: "Paparazzi-flash low-rise tabloid",
+    term: "2000s tabloid y2k",
     promptHint:
       "set in the 2000s tabloid Y2K era — low-rise jeans, butterfly tops, trucker hats and chrome flip phones outside celebrity nightclubs, with harsh paparazzi flash, deep blacks and faint chromatic gloss",
   },
@@ -114,6 +130,7 @@ export const ERAS: ReadonlyArray<Era> = [
     label: "Gen Z 2020s",
     category: "decade-20c",
     description: "Phone-first TikTok-coded current era",
+    term: "2020s gen z",
     promptHint:
       "set in the Gen Z 2020s era — phone-first vertical composition, TikTok-coded styling with baggy denim, Y2K nostalgia revivals, claw clips and oversized headphones, micro-trend churn and the saturated front-camera glow of contemporary social-media aesthetics",
   },
@@ -188,6 +205,7 @@ export const ERAS: ReadonlyArray<Era> = [
     label: "Fin-de-siècle (1895-1905)",
     category: "pre-modern",
     description: "Turn-of-century Belle Epoque elegance",
+    term: "fin-de-siècle 1900s",
     promptHint:
       "set in the fin-de-siècle turn-of-century era — art-nouveau curves, gaslight glow, corseted high-collared gowns, top hats and cane-and-cloak in proto-modern Belle Epoque Paris and Vienna, with warm gas-flame amber color and soft sepia halation",
   },
@@ -196,6 +214,7 @@ export const ERAS: ReadonlyArray<Era> = [
     label: "Pre-War Roaring",
     category: "pre-modern",
     description: "Late-1910s art-nouveau cusp",
+    term: "late-1910s pre-war",
     promptHint:
       "set in the late-1910s pre-war era — art-nouveau drapery, chignon hair, lace collars and cane-and-cloak in gas-lit Paris cafes, with sepia-bronze monochrome and soft halation",
   },
@@ -275,6 +294,11 @@ export function getEraLabel(id: string | undefined | null, fallback?: string): s
 
 export function getEraPromptHint(id: string | undefined | null): string {
   return getEra(id)?.promptHint ?? ""
+}
+
+/** Compact counterpart of `getEraPromptHint` — the short period name. */
+export function getEraTerm(id: string | undefined | null): string {
+  return resolveTerm(getEra(id))
 }
 
 export const ERA_IDS: ReadonlyArray<string> = ERAS.map((e) => e.id)

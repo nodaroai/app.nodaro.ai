@@ -3548,7 +3548,7 @@ dim pickers carry `options`; multi-dim pickers carry `dimensions` (one
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `detail` | `"compact"` \| `"full"` | `"compact"` (default): `id`, `label`, `category`, `icon`. `"full"`: additionally includes each option's `description` and `promptHint` (the prompt fragment it injects). |
+| `detail` | `"compact"` \| `"full"` | `"compact"` (default): `id`, `label`, `category`, `term`, `icon`. `"full"`: additionally includes each option's `description` and `promptHint` (the prompt fragment it injects). |
 | `category` | `string` | Single-dim pickers: filter options to one category. |
 | `field` | `string` | Multi-dim pickers (person / styling / framing): return only this dimension's field. |
 
@@ -3556,7 +3556,14 @@ dim pickers carry `options`; multi-dim pickers carry `dimensions` (one
 const { data } = await client.pickerCatalogs.get("mood", { detail: "full" })
 const serene = data.options?.find((o) => o.id === "serene")
 console.log(serene?.promptHint) // the clause this option injects downstream
+console.log(serene?.term) // the compact form — "serene mood"; `label` stays display-only
 ```
+
+Every option also carries **`term`** at *both* detail levels — the short
+professional phrase to inject when you want a compact instruction instead of the
+full `promptHint` sentence. Render `label`, inject `term`; never derive one from
+the other. A no-op option (`auto` / `none`) has `term: ""` because it injects
+nothing.
 
 #### `analyzeText`
 
@@ -3607,16 +3614,21 @@ list(opts?: { detail?: "compact" | "full" }): Promise<{ data: ProjectedCatalog[]
 ```
 
 `GET /v1/catalogs` → every registered catalog projected to one flat shape.
-`detail: "compact"` (default) carries `id`, `label`, `category`, `icon`;
+`detail: "compact"` (default) carries `id`, `label`, `category`, `term`, `icon`;
 `detail: "full"` additionally carries each option's `description` and
 `promptHint`. A single-dim catalog carries `options`; a multi-dim catalog
 carries `dimensions` (one `{ field, label, options }` per field). The shape is
 tag/policy-free.
 
+`term` rides at **both** detail levels on purpose: a thin client that renders
+its own pickers can display `label` and inject the short professional `term`
+without a second, heavier `detail: "full"` fetch.
+
 ```ts
 const { data } = await client.catalogs.list({ detail: "full" })
 const setting = data.find((c) => c.catalogId === "setting")
-console.log(setting?.options?.[0]?.promptHint)
+console.log(setting?.options?.[0]?.promptHint) // full mechanism sentence
+console.log(setting?.options?.[0]?.term) // compact professional term
 ```
 
 ---
@@ -4119,7 +4131,7 @@ not two.
 
 - `PickerCatalogSummary` — one row of `pickerCatalogs.list()`: `{ nodeType, label, catalogId, kind, valueField?, fields?, optionCount }`
 - `PickerCatalog` — full catalog from `pickerCatalogs.get()`: single-dim carries `options`, multi-dim carries `dimensions`
-- `PickerOption` — one selectable id: `{ id, label, description?, category?, promptHint?, icon? }` (`promptHint` present only with `detail: "full"`)
+- `PickerOption` — one selectable id: `{ id, label, description?, category?, promptHint?, term?, icon? }` (`promptHint` present only with `detail: "full"`; `term` — the short professional term to inject, `label` being display-only — present at both detail levels)
 - `PickerDimension` — a multi-dim field: `{ field, label, options }`
 - `GetPickerCatalogOptions` — `get()` options: `{ detail?, category?, field? }`
 

@@ -14,7 +14,7 @@ describe("pack-extend promptHint fallback (single-dim)", () => {
 
   it("a pack-added single-dim id resolves to the pack option promptHint", () => {
     registerCatalogPack({ id: "sai/setting", catalogId: "setting", mode: "extend",
-      options: [{ id: "shul-hall", label: "Shul Hall", promptHint: "in a synagogue hall" }] })
+      options: [{ id: "shul-hall", label: "Shul Hall", promptHint: "in a synagogue hall", term: "shul hall" }] })
     expect(getParameterPromptHint({ id: "n1", type: "setting", data: { setting: "shul-hall" } }))
       .toBe("in a synagogue hall")
   })

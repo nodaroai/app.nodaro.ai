@@ -13,6 +13,13 @@ export interface ProjectedCatalogOption {
   category?: string
   /** The prompt fragment this id injects downstream. Present only when detail="full". */
   promptHint?: string
+  /**
+   * Short professional term injected by compact hint mode; `label` is for
+   * display. Present at BOTH detail levels — a thin client renders `label`
+   * and injects `term`. Empty for a no-op ("auto"/"none") entry that injects
+   * nothing.
+   */
+  term?: string
   icon?: string
 }
 
