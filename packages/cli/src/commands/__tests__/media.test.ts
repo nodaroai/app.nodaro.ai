@@ -283,6 +283,43 @@ describe("media collage command", () => {
     ).rejects.toThrow("process.exit(1)")
     expect(mocks.imageCollage).not.toHaveBeenCalled()
   })
+
+  it("maps --numbered and repeatable --label into numbered + index-aligned imageLabels", async () => {
+    mocks.imageCollage.mockResolvedValueOnce({ jobId: "j-storyboard" })
+    await runCmd(
+      "media", "collage", "https://x/a.png", "https://x/b.png", "https://x/c.png",
+      "--numbered", "--label", "Wide", "--label", "", "--label", "Close-up", "--json",
+    )
+    expect(mocks.imageCollage).toHaveBeenCalledWith({
+      imageUrls: ["https://x/a.png", "https://x/b.png", "https://x/c.png"],
+      numbered: true,
+      imageLabels: ["Wide", null, "Close-up"],
+    })
+  })
+
+  it("omits imageLabels when every --label is blank", async () => {
+    mocks.imageCollage.mockResolvedValueOnce({ jobId: "j-nolabels" })
+    await runCmd("media", "collage", "https://x/a.png", "https://x/b.png", "--label", "  ", "--json")
+    expect(mocks.imageCollage).toHaveBeenCalledWith({
+      imageUrls: ["https://x/a.png", "https://x/b.png"],
+    })
+  })
+
+  it("errors on more --label values than images", async () => {
+    await expect(
+      runCmd("media", "collage", "https://x/a.png", "https://x/b.png", "--label", "A", "--label", "B", "--label", "C"),
+    ).rejects.toThrow("process.exit(1)")
+    expect(vi.mocked(warn)).toHaveBeenCalledWith(expect.stringContaining("Too many --label"))
+    expect(mocks.imageCollage).not.toHaveBeenCalled()
+  })
+
+  it("errors on a --label longer than 80 characters", async () => {
+    await expect(
+      runCmd("media", "collage", "https://x/a.png", "https://x/b.png", "--label", "x".repeat(81)),
+    ).rejects.toThrow("process.exit(1)")
+    expect(vi.mocked(warn)).toHaveBeenCalledWith(expect.stringContaining("80 characters"))
+    expect(mocks.imageCollage).not.toHaveBeenCalled()
+  })
 })
 
 describe("media save command", () => {

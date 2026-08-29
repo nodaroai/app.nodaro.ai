@@ -83,3 +83,50 @@ describe("buildPayload — image-collage ordering + size hints", () => {
     expect(misaligned.payload.imageUrls).toEqual([A1, B1])
   })
 })
+
+describe("buildPayload — image-collage storyboard badges (numbered + labels)", () => {
+  it("omits numbered unless explicitly true", () => {
+    expect(buildPayload(node("c1"), "job1", { ...WIRE }, "usage1").payload.numbered).toBeUndefined()
+    expect(
+      buildPayload(node("c1", { numbered: false }), "job1", { ...WIRE }, "usage1").payload.numbered,
+    ).toBeUndefined()
+    expect(
+      buildPayload(node("c1", { numbered: true }), "job1", { ...WIRE }, "usage1").payload.numbered,
+    ).toBe(true)
+  })
+
+  it("labels follow their source through the reorder (List label duplicates onto both entries)", () => {
+    const n = node("c1", {
+      imageOrder: ["list", "srcA", "srcB"],
+      imageLabelBySource: { srcA: "Alpha", list: "Loop", srcB: "Bravo" },
+    })
+    const result = buildPayload(n, "job1", { ...WIRE }, "usage1")
+    expect(result.payload.imageUrls).toEqual([L1, L2, A1, B1])
+    // List's "Loop" duplicates onto BOTH of its images.
+    expect(result.payload.imageLabels).toEqual(["Loop", "Loop", "Alpha", "Bravo"])
+  })
+
+  it("trims, caps at 80 chars, and maps empty/whitespace to null", () => {
+    const n = node("c1", {
+      imageLabelBySource: { srcA: "  Spaced  ", list: "y".repeat(100), srcB: "   " },
+    })
+    const result = buildPayload(n, "job1", { ...WIRE }, "usage1")
+    const labels = result.payload.imageLabels as (string | null)[]
+    expect(labels[0]).toBe("Spaced")
+    expect(labels[1]).toBe("y".repeat(80))
+    expect(labels[2]).toBe("y".repeat(80))
+    expect(labels[3]).toBeNull() // srcB whitespace-only → null
+  })
+
+  it("uses the raw index-aligned data.imageLabels path when there is no bySource map", () => {
+    const n = node("c1", { imageLabels: ["A", "", "C", null] })
+    const result = buildPayload(n, "job1", { ...WIRE }, "usage1")
+    expect(result.payload.imageLabels).toEqual(["A", null, "C", null])
+  })
+
+  it("omits imageLabels entirely when every entry is empty/null", () => {
+    const n = node("c1", { imageLabelBySource: { srcA: "", list: "   ", srcB: "" } })
+    const result = buildPayload(n, "job1", { ...WIRE }, "usage1")
+    expect(result.payload.imageLabels).toBeUndefined()
+  })
+})

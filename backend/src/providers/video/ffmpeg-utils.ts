@@ -62,6 +62,25 @@ function acquireFfmpegSlot(): Promise<() => void> {
   })
 }
 
+/**
+ * Run `fn` while holding one FIFO ffmpeg slot, releasing it afterwards.
+ *
+ * WHY exported: a few CPU/memory-bound steps are NOT ffmpeg spawns (so they
+ * can't go through `runFfmpeg`) yet must share the same low concurrency cap —
+ * e.g. the collage badge overlay is a sharp 4K re-encode running on a worker at
+ * concurrency 50. Gating it on the same semaphore keeps fan-out from launching
+ * dozens of heavy raster jobs at once. `acquireFfmpegSlot` stays private; this
+ * is the only sanctioned way for a non-`runFfmpeg` caller to borrow a slot.
+ */
+export async function withFfmpegSlot<T>(fn: () => Promise<T>): Promise<T> {
+  const release = await acquireFfmpegSlot()
+  try {
+    return await fn()
+  } finally {
+    release()
+  }
+}
+
 // Hard ceiling so a hung ffmpeg can't hold its slot forever and starve the
 // FIFO queue. Must stay below the BullMQ lockDuration (15 min) to avoid
 // re-dispatches piling on the same slot.

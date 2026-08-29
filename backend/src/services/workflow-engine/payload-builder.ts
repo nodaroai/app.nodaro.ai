@@ -4,6 +4,7 @@
  */
 
 import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState, WorkflowNodeData } from "./types.js"
+import { normalizeCollageLabels } from "../../providers/image/collage-badges.js"
 
 // Shared logic from packages/shared — single source of truth
 import { resolveSlideshowTransition, collectAncestorRefs as sharedCollectAncestorRefs, applyDefaultVideoSelection, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionableAssetArrays, buildCreditModelIdentifier, resolveImageGenCreditIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, resolveVideoModeForInputs, videoProviderRequiresImage, isVeoProvider, buildLipSyncCreditId, isPerSecondLipSyncProvider, resolveAiAvatarCreditId, resolveSwitchXCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, buildVideoAuditCreditId, resolveVideoAnalysisModel, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName, validateAiAvatarPayload, validateCinematicAvatarPayload, resolveNodeRefs, resolveEffectiveSourceType, PARAMETER_NODE_TYPES, characterMentionSlug, expandExtraRefsToConnectedReferences, PLATFORM_SPECS, isSeedance2Provider, isMinimaxH3Provider, supportsExtendRender, MODEL_CATALOG, hasFeature, referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality, COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS, buildLlmCreditIdentifier, motionGraphicsFeature, FLUX_LORA_CHARACTER_MODEL_ID, extractCharacterLoraFields, clampSmartCutWindow, resolveGvpAnchorWire, normalizeModelInput } from "@nodaro/shared"
@@ -4542,12 +4543,34 @@ export function buildPayload(
       if (collageImageSizes && collageImageSizes.every((s) => s === 0)) {
         collageImageSizes = undefined
       }
+      // Storyboard mode: 1-based sequence numbers stamped in the FINAL wire
+      // order. Only forwarded when explicitly on (a stamped `false` would
+      // surface as a real "Numbered: off" setting downstream).
+      const numbered = data.numbered === true
+      // Per-image captions — the EXACT mirror of the size-hint dual path above,
+      // aligned to the SAME post-`imageOrder` `withSourceIds` so a label follows
+      // its source through the reorder and a List source's label duplicates onto
+      // every image it contributes. Editor workflows key by SOURCE NODE ID
+      // (data.imageLabelBySource); API-authored workflows carry a raw
+      // index-aligned data.imageLabels. Both go through the SAME sanitizer the
+      // HTTP route uses (trim, control/bidi strip, 80-code-point cap, "" → null;
+      // all-empty → undefined so the key is omitted) — this path bypasses route
+      // Zod, and the result lands in jobs.input_data (JSONB rejects a NUL).
+      const labelBySource = data.imageLabelBySource as Record<string, string> | undefined
+      let collageImageLabels: (string | null)[] | undefined
+      if (labelBySource && withSourceIds && withSourceIds.length === collageImageUrls.length) {
+        collageImageLabels = normalizeCollageLabels(withSourceIds.map((e) => labelBySource[e.nodeId]))
+      } else if (Array.isArray(data.imageLabels)) {
+        collageImageLabels = normalizeCollageLabels(data.imageLabels as unknown[], collageImageUrls.length)
+      }
       return ffmpegResult(
         "image-collage",
         {
           jobId,
           imageUrls: collageImageUrls,
           ...(collageImageSizes ? { imageSizes: collageImageSizes } : {}),
+          ...(numbered ? { numbered: true } : {}),
+          ...(collageImageLabels ? { imageLabels: collageImageLabels } : {}),
           layout: (data.layout as string | undefined) ?? "smart",
           resolution,
           aspectRatio: (data.aspectRatio as string | undefined) ?? "1:1",

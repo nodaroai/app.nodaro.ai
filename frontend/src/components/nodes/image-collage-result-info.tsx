@@ -36,12 +36,21 @@ export function ImageCollageResultInfo({ nodeId, result, data }: ImageCollageRes
   const aspect = settings?.aspectRatio ?? data.aspectRatio
   const resolution = settings?.resolution ?? data.resolution
   const layout = layoutRaw ? (LAYOUT_LABEL[layoutRaw] ?? layoutRaw) : undefined
-  const summary = [layout, aspect, resolution].filter(Boolean).join(" · ")
+  // `numbered` is only PERSISTED when it was on (the route omits it when off),
+  // so an absent key on a real job means "not numbered" — never fall through to
+  // the node's live toggle for it, or an old un-numbered result would show a
+  // "Numbered" token the moment the switch is flipped. The node-config fallback
+  // is reserved for legacy/purged jobs with no settings at all.
+  const numbered = settings ? settings.numbered === true : data.numbered === true
+  const summary = [layout, aspect, resolution, numbered ? "Numbered" : undefined]
+    .filter(Boolean)
+    .join(" · ")
 
   const rows: ResultSummaryRow[] = []
   if (layout) rows.push({ label: "Layout", value: layout })
   if (aspect) rows.push({ label: "Aspect", value: aspect })
   if (resolution) rows.push({ label: "Resolution", value: resolution })
+  if (numbered) rows.push({ label: "Numbered", value: "On" })
 
   return (
     <ResultSettingsInfo
@@ -57,6 +66,7 @@ export function ImageCollageResultInfo({ nodeId, result, data }: ImageCollageRes
         if (settings.layout !== undefined) patch.layout = settings.layout
         if (settings.aspectRatio !== undefined) patch.aspectRatio = settings.aspectRatio
         if (settings.resolution !== undefined) patch.resolution = settings.resolution
+        if (settings.numbered !== undefined) patch.numbered = settings.numbered
         updateNodeData(nodeId, patch)
         toast.success("Applied settings")
       }}

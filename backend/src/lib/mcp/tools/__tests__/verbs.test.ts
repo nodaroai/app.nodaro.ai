@@ -1388,3 +1388,40 @@ describe("video_audit verb", () => {
     expect(tools.map((t) => t.name)).not.toContain("video_audit")
   })
 })
+
+describe("image_collage verb", () => {
+  it("forwards per-image labels + numbered as index-aligned imageLabels + numbered to /v1/image-collage", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/image-collage", { jobId: "j-collage" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "image_collage", {
+      images: [
+        { url: "https://x/a.png", label: "Wide" },
+        { url: "https://x/b.png" },
+        { url: "https://x/c.png", label: "  Close-up  " },
+      ],
+      numbered: true,
+    })
+
+    expect(result.isError).toBeUndefined()
+    // Labels align by position (trimmed); a blank/absent label becomes null.
+    expect(received.body?.imageLabels).toEqual(["Wide", null, "Close-up"])
+    expect(received.body?.numbered).toBe(true)
+    expect(received.body?.imageUrls).toEqual(["https://x/a.png", "https://x/b.png", "https://x/c.png"])
+  })
+
+  it("omits imageLabels + numbered when no label is given and numbered is off", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/image-collage", { jobId: "j-collage2" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "image_collage", {
+      images: [{ url: "https://x/a.png" }, { url: "https://x/b.png", label: "   " }],
+    })
+
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.imageLabels).toBeUndefined()
+    expect(received.body?.numbered).toBeUndefined()
+  })
+})

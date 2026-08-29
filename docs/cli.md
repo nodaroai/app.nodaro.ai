@@ -279,9 +279,11 @@ nodaro media still-to-video --image <url> --audio <url> [--motion none|zoom-in|z
 nodaro media slideshow --images <url...> [--audio <url>] [--durations "10,auto,auto"] [--per-image <sec>] [--transition <id>] [--transition-duration <sec>] [--motion none|zoom-in|zoom-out|ken-burns|alternate] [--intensity <1-10>] [--resolution 720p|1080p|4K] [--aspect-ratio <W:H>] [--fps 24|30] [--fit cover|contain] [--pad-color <hex>] [--watch] [--json]
                                                          # 2-100 images + optional audio → MP4 slideshow, 0 credits. Audio wired = it sets the
                                                          # length (pins scale proportionally, disclosed); no audio = silent, N × per-image.
-nodaro media collage <imageUrls...> [--sizes <0-3,...>] [--layout smart|grid] [--resolution 2K|4K] [--aspect-ratio <W:H>] [--gap <px>] [--background-color <hex>] [--watch] [--poll-interval <ms>] [--json]
+nodaro media collage <imageUrls...> [--sizes <0-3,...>] [--numbered] [--label <text>...] [--layout smart|grid] [--resolution 2K|4K] [--aspect-ratio <W:H>] [--gap <px>] [--background-color <hex>] [--watch] [--poll-interval <ms>] [--json]
                                                          # composite 2–30 images into one large image. --sizes gives per-image RELATIVE size
                                                          # hints aligned by position (0 auto, 1 big ≈2× linear, 2 medium, 3 small ≈½ — smart layout only).
+                                                         # --numbered stamps 1-based sequence numbers at each image's top-right (storyboard mode).
+                                                         # --label sets a per-image caption shown after the number; repeat once per image, in order ("" skips one, aligned with the image args).
 nodaro media save <url> [--filename <name>] [--type image|video|audio] [--watch] [--poll-interval <ms>] [--json]
 
 # Audio — the primitives Voice Changer Pro composes, standalone
