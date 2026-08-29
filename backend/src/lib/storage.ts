@@ -129,6 +129,36 @@ type MediaType = "image" | "video" | "audio"
 const MEDIA_EXT: Record<MediaType, string> = { video: "mp4", audio: "wav", image: "png" }
 const MEDIA_MIME: Record<MediaType, string> = { video: "video/mp4", audio: "audio/wav", image: "image/png" }
 
+/**
+ * Video containers a writer may KEEP instead of the default mp4 stamp.
+ *
+ * `mov` exists for Seedance 2.5's `output_format: "mov"` (H.264 yuv444p +
+ * PCM): re-fed as the reference on the next extension it roughly halves the
+ * colour drift at the join, which only works if the bytes survive un-
+ * transcoded AND are served with an honest content type. Opt-in per call —
+ * `mp4`/`video/mp4` stays the default for every existing caller, and the
+ * browser-safe deliverable paths (`uploadVideoMaybeWatermark`,
+ * `watermarkLocalVideoAndUpload`) never pass it.
+ */
+const VIDEO_EXT_MIME = { mp4: "video/mp4", mov: "video/quicktime" } as const
+export type VideoContainerExt = keyof typeof VIDEO_EXT_MIME
+
+/**
+ * Resolve `{ key, contentType }` for one produced-media upload. Without
+ * `ext` — or for a non-video type, which has its own single container — this
+ * is exactly `r2Key(jobId, type)` + `MEDIA_MIME[type]`.
+ */
+function mediaTarget(
+  jobId: string,
+  type: MediaType,
+  ext?: VideoContainerExt,
+): { key: string; contentType: string } {
+  if (type === "video" && ext && ext !== "mp4") {
+    return { key: mediaObjectKey(jobId, type, ext), contentType: VIDEO_EXT_MIME[ext] }
+  }
+  return { key: r2Key(jobId, type), contentType: MEDIA_MIME[type] }
+}
+
 // Immutable assets keyed by job ID — cache for 1 year
 const R2_CACHE_CONTROL = "public, max-age=31536000, immutable"
 
@@ -183,6 +213,9 @@ export function r2Url(key: string): string {
  *  suffix — hence this dedicated recast copier. */
 const RECAST_COPY_EXT_TO_MIME: Record<string, string> = {
   mp4: "video/mp4",
+  // Seedance 2.5 raw-extension objects (`output_format: "mov"`), which a fork
+  // must carry across intact — the mov IS the next extension's reference.
+  mov: "video/quicktime",
   webm: "video/webm",
   wav: "audio/wav",
   mp3: "audio/mpeg",
@@ -309,7 +342,7 @@ export async function uploadToR2(
   jobId: string,
   type: MediaType = "image",
   trackUserId?: string,
-  opts: { remainingQuotaBytes?: number; reserveQuota?: boolean } = {},
+  opts: { remainingQuotaBytes?: number; reserveQuota?: boolean; ext?: VideoContainerExt } = {},
 ): Promise<string> {
   // safeFetch: validate DNS resolution against private/reserved IP ranges at
   // connection time. Without this, a user-supplied sourceUrl resolving to an
@@ -344,7 +377,7 @@ export async function uploadToR2(
     }
   }
 
-  const key = r2Key(jobId, type)
+  const { key, contentType } = mediaTarget(jobId, type, opts.ext)
   const source = Readable.fromWeb(response.body as import("stream/web").ReadableStream)
   const counter = new SizeLimitedStream(effectiveCap)
 
@@ -359,7 +392,7 @@ export async function uploadToR2(
   source.pipe(counter)
 
   try {
-    await streamToR2(key, counter, MEDIA_MIME[type])
+    await streamToR2(key, counter, contentType)
   } catch (err) {
     // Release the quota reservation before surfacing the error, otherwise a
     // failed upload permanently holds the user's quota.
@@ -426,11 +459,12 @@ export async function uploadFileToR2(
   jobId: string,
   type: MediaType = "video",
   trackUserId?: string,
+  opts: { ext?: VideoContainerExt } = {},
 ): Promise<string> {
   const fileStat = await stat(filePath)
-  const key = r2Key(jobId, type)
+  const { key, contentType } = mediaTarget(jobId, type, opts.ext)
 
-  await streamToR2(key, createReadStream(filePath), MEDIA_MIME[type])
+  await streamToR2(key, createReadStream(filePath), contentType)
 
   trackStorage(trackUserId, fileStat.size)
 
