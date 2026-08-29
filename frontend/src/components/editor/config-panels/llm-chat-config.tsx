@@ -116,6 +116,7 @@ export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapFie
   const userInputMode = usePromptFieldMode(nodeId ?? "", "userInput")
   const finalSystemPrompt = useFinalPromptSegments({
     userPrompt: data.systemPrompt,
+    promptField: "systemPrompt",
     consumerNodeId: selectedNodeId ?? undefined,
     nodes: allNodes,
     edges: allEdges,
@@ -123,6 +124,7 @@ export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapFie
   })
   const finalUserInput = useFinalPromptSegments({
     userPrompt: data.userInput,
+    promptField: "userInput",
     consumerNodeId: selectedNodeId ?? undefined,
     nodes: allNodes,
     edges: allEdges,

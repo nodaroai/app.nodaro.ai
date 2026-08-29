@@ -16,7 +16,8 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { modelIdsByKindMode, VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, ALL_CAPTION_STYLES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_TIER, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId } from "@nodaro/shared"
+import { modelIdsByKindMode, VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, ALL_CAPTION_STYLES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_TIER, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, readPromptAffixes } from "@nodaro/shared"
+import { applyPromptAffixes } from "@nodaro/prompts"
 
 // Map list_models catalog/display ids → /v1/motion-transfer route providers.
 // The catalog advertises `motion-transfer` / `kling-3.0-motion` (the credit/
@@ -108,7 +109,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             "Apply a built-in/custom preset by id from list_node_presets; " +
-            "explicit fields below override it.",
+            "explicit fields below override it. A preset's promptPrefix/promptSuffix " +
+            "wrap your prompt.",
           ),
         // Schemas are permissive — handler normalizes to closest valid value.
         // Description carries the recommended set for Claude's guidance.
@@ -236,6 +238,14 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           Object.entries(args).filter(([, v]) => v !== undefined),
         )
         effective = { ...presetParams, ...callerProvided }
+        // Pre/post text shipped by the preset wraps WHICHEVER prompt won above
+        // (the caller's, or the preset's own). No graph here → empty refMap, so
+        // a `{Label}` in an affix stays verbatim. Runs BEFORE the "prompt is
+        // required" guard so an affixes-only preset is a valid prompt.
+        const presetAffixes = readPromptAffixes(d)
+        if (presetAffixes.prefix || presetAffixes.suffix) {
+          effective.prompt = applyPromptAffixes(effective.prompt as string | undefined, presetAffixes, new Map())
+        }
       }
       // `presetId` is a control field — never submit it to the provider.
       delete effective.presetId

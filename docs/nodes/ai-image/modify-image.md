@@ -60,3 +60,7 @@ Credits depend on the selected provider, and several providers cost more at high
 | Flux 2 Max | ~7 credits at default (2 MP, 0 refs); ranges ~2–62 depending on resolution and reference count |
 
 The exact credit cost for the selected provider and settings is shown on the node's Run button before you generate.
+
+## Pre & post text
+
+This node supports `promptPrefix` / `promptSuffix` — optional text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md).

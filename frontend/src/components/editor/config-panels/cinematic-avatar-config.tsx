@@ -68,6 +68,7 @@ export function CinematicAvatarConfig({
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
   const finalPrompt = useFinalPromptSegments({
     userPrompt: data.prompt,
+    promptField: "prompt",
     consumerNodeId: nodeId,
     nodes,
     edges: edges ?? [],

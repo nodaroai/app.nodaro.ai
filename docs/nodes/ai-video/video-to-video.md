@@ -12,6 +12,7 @@ The Video to Video node applies AI-powered transformations to an existing video 
 |-------|------|---------|-------------|
 | Provider | Select | wan | AI model for transformation |
 | Prompt | Textarea | — | Description of the desired transformation |
+| `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ### Wan 2.7 VideoEdit — additional fields
 

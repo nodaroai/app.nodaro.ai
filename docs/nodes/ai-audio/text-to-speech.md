@@ -19,6 +19,7 @@ The Text to Speech node generates spoken audio from text input using ElevenLabs 
 | Similarity Boost | `number` (0-1) | voice's own | How closely output matches the target voice timbre. v2 models only |
 | Style Exaggeration | `number` (0-1) | voice's own | Amplifies the style of the original voice. v2 models only |
 | Speed | `number` (0.7-1.2) | voice's own | Playback speed multiplier. v2 models only |
+| `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ### Voice settings & preview fidelity
 

@@ -1,7 +1,7 @@
 ---
 node_type: lip-sync
-generated_at: 2026-08-15T21:55:08.252Z
-generated_from: 150c80ac9
+generated_at: 2026-08-29T19:02:39.224Z
+generated_from: 7dbf4818b
 ---
 
 # Lip Sync
@@ -21,6 +21,8 @@ generated_from: 150c80ac9
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
+- `promptPrefix?: string`
+- `promptSuffix?: string`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `currentJobProgress?: number`
 - `errorMessage?: string`

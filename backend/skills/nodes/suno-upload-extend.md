@@ -1,7 +1,7 @@
 ---
 node_type: suno-upload-extend
-generated_at: 2026-08-15T21:55:07.147Z
-generated_from: 150c80ac9
+generated_at: 2026-08-29T19:02:38.766Z
+generated_from: 7dbf4818b
 ---
 
 # Suno Upload Extend
@@ -26,6 +26,8 @@ generated_from: 150c80ac9
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
+- `promptPrefix?: string`
+- `promptSuffix?: string`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `generatedAudioUrl?: string`

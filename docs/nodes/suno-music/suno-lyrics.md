@@ -10,6 +10,7 @@ Suno Lyrics generates structured song lyrics from a descriptive prompt. The outp
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | Prompt | string (max 1000) | `""` | Description of the desired lyrics (theme, mood, topic, style). Supports style tag autocomplete. |
+| `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ## Inputs & Outputs
 

@@ -1437,7 +1437,21 @@ export interface GeneratedScriptResult {
   readonly jobId: string
 }
 
-export type GenerateScriptData = {
+/**
+ * Prompt pre/post text — wire contract mirrored from `@nodaro/shared`'s
+ * `PromptAffixFields` (structurally identical; declared here rather than
+ * imported because `gen:skills` resolves node-data mixins from THIS file's AST
+ * only). Wrapped around the node's prompt at run time; settings-only, never
+ * on the node face; captured by presets. See docs/prompt-pre-post-text.md.
+ */
+export interface PromptAffixFields {
+  /** Text placed BEFORE the node's prompt at run time. Supports {Node Label} refs. */
+  readonly promptPrefix?: string
+  /** Text placed AFTER the node's prompt at run time. Supports {Node Label} refs. */
+  readonly promptSuffix?: string
+}
+
+export type GenerateScriptData = PromptAffixFields & {
   [key: string]: unknown
   label: string
   provider: ScriptProvider
@@ -1469,7 +1483,7 @@ export type GenerateScriptData = {
 // All image providers (gen + i2i) — derived from shared single source of truth
 export type ImageProvider = ImageGenProvider | ImageI2IProvider
 
-export type GenerateImageData = {
+export type GenerateImageData = PromptAffixFields & {
   [key: string]: unknown
   label: string
   prompt: string
@@ -1635,7 +1649,7 @@ export type ImageToImageData = {
 }
 
 // Modify Image providers (I2I + nano-banana-edit)
-export type ModifyImageData = {
+export type ModifyImageData = PromptAffixFields & {
   [key: string]: unknown
   label: string
   prompt: string
@@ -1701,7 +1715,7 @@ export type RemoveBackgroundData = {
 }
 
 /** @deprecated Use GenerateVideoNodeData. Kept for backward-compat aliases. */
-export type ImageToVideoData = {
+export type ImageToVideoData = PromptAffixFields & {
   [key: string]: unknown
   label: string
   provider: ImageToVideoProvider
@@ -1789,7 +1803,7 @@ export type ImageToVideoData = {
   pausedAtTime?: number
 }
 
-export type TextToSpeechData = {
+export type TextToSpeechData = PromptAffixFields & {
   currentJobProgress?: number
   [key: string]: unknown
   label: string
@@ -1815,7 +1829,7 @@ export type TextToSpeechData = {
 }
 
 /** @deprecated Use GenerateVideoNodeData. Kept for backward-compat aliases. */
-export type TextToVideoData = {
+export type TextToVideoData = PromptAffixFields & {
   [key: string]: unknown
   label: string
   prompt: string
@@ -1882,6 +1896,7 @@ export type GenerateVideoNodeData =
      *  Replaces the legacy `connectedRefImageOrder` field (migrated on load). */
     referenceImageOrder?: readonly string[]
   }
+  & PromptAffixFields
 
 /** Content-policy rewrite disclosure entry (Task A4, 2026-08-03). Mirrors the
  *  plugin repo's `ContentPolicyRewriteEntry` shape byte-for-byte
@@ -1901,7 +1916,7 @@ export type ContentPolicyRewriteEntry = { segment: number; original: string; rew
  * frame / video refs / audio refs / negative prompt / pickers cluster (see
  * `generate-video-pro-handles.ts`).
  */
-export interface GenerateVideoProNodeData {
+export interface GenerateVideoProNodeData extends PromptAffixFields {
   [key: string]: unknown
   label: string
   /** One of `GVP_SUPPORTED_PROVIDERS` (@nodaro/shared) — DERIVED from catalog
@@ -2052,7 +2067,7 @@ export interface GenerateVideoProNodeData {
  * `video` (the required source to edit) replaces the optional startFrame (see
  * `edit-video-pro-handles.ts`).
  */
-export interface EditVideoProNodeData {
+export interface EditVideoProNodeData extends PromptAffixFields {
   [key: string]: unknown
   label: string
   provider: string // seedance-2 | seedance-2-fast (the supported pro SKUs)
@@ -2095,7 +2110,7 @@ export interface EditVideoProNodeData {
  *
  *  No upstream `provider` choice — `replicate-mmaudio` is the only model.
  */
-export interface VideoSfxNodeData {
+export interface VideoSfxNodeData extends PromptAffixFields {
   [key: string]: unknown
   label: string
   /** Fixed to `"replicate-mmaudio"` (only supported model). Reserved as a field
@@ -2132,7 +2147,7 @@ export interface VideoSfxNodeData {
   pausedAtTime?: number
 }
 
-export type VideoToVideoData = {
+export type VideoToVideoData = PromptAffixFields & {
   [key: string]: unknown
   label: string
   prompt: string
@@ -2174,7 +2189,7 @@ export type VideoToVideoData = {
   pausedAtTime?: number
 }
 
-export type SwitchXData = {
+export type SwitchXData = PromptAffixFields & {
   [key: string]: unknown
   label: string
   prompt: string
@@ -2211,7 +2226,7 @@ export type SwitchXData = {
   pausedAtTime?: number
 }
 
-export type VideoRetakeData = {
+export type VideoRetakeData = PromptAffixFields & {
   [key: string]: unknown
   label: string
   provider: "ltx-2.3-pro"
@@ -2238,7 +2253,7 @@ export type VideoRetakeData = {
   errorMessage?: string
 }
 
-export type LipSyncData = {
+export type LipSyncData = PromptAffixFields & {
   [key: string]: unknown
   label: string
   provider: LipSyncProvider
@@ -2302,7 +2317,7 @@ export type LipSyncData = {
   pausedAtTime?: number
 }
 
-export type SpeechToVideoData = {
+export type SpeechToVideoData = PromptAffixFields & {
   [key: string]: unknown
   label: string
   prompt: string
@@ -2410,7 +2425,7 @@ export type AiAvatarData = {
 // a prompt + 1–3 avatar look ids (NO script/voice/audio/engine). Unlike ai-avatar's
 // verbatim `script`, `prompt` is a true generative prompt, so it MAY use the
 // prompt-wizard + FieldMappings.
-export type CinematicAvatarData = {
+export type CinematicAvatarData = PromptAffixFields & {
   [key: string]: unknown
   label: string
   provider: "heygen"
@@ -2436,7 +2451,7 @@ export type CinematicAvatarData = {
 
 // Motion Transfer: Apply motion from video to image character
 // KIE.ai models: kling-2.6/motion-control, kling-3.0/motion-control
-export type MotionTransferData = {
+export type MotionTransferData = PromptAffixFields & {
   [key: string]: unknown
   label: string
   prompt: string // Optional, max 2500 chars
@@ -2482,7 +2497,7 @@ export type VideoUpscaleData = {
 }
 
 // Extend Video: Continue a VEO or Runway video with a new prompt
-export type ExtendVideoData = {
+export type ExtendVideoData = PromptAffixFields & {
   [key: string]: unknown
   label: string
   provider: ExtendVideoProvider
@@ -2534,7 +2549,7 @@ export type FaceSwapData = {
 // Produces a binary mask PNG isolating the subject described by `prompt`,
 // while passing through the original image so a downstream Mask Painter /
 // inpainting node can consume the image + mask pair together.
-export type GenerateMaskData = {
+export type GenerateMaskData = PromptAffixFields & {
   [key: string]: unknown
   label: string
   prompt: string
@@ -2592,7 +2607,7 @@ export type QACheckData = {
   reason?: string
 }
 
-export type ImageCriticData = {
+export type ImageCriticData = PromptAffixFields & {
   [key: string]: unknown
   label: string
   mode: ImageCriticMode
@@ -2622,7 +2637,7 @@ export type ImageCriticData = {
   }
 }
 
-export type GenerateMusicData = {
+export type GenerateMusicData = PromptAffixFields & {
   currentJobProgress?: number
   [key: string]: unknown
   label: string
@@ -2645,7 +2660,7 @@ export type GenerateMusicData = {
   activeResultIndex?: number
 }
 
-export type TextToAudioData = {
+export type TextToAudioData = PromptAffixFields & {
   currentJobProgress?: number
   [key: string]: unknown
   label: string
@@ -2715,7 +2730,7 @@ export type SunoVoiceData = {
   generateKieTaskId?: string
 }
 
-export type SunoGenerateData = {
+export type SunoGenerateData = PromptAffixFields & {
   currentJobProgress?: number
   [key: string]: unknown
   label: string
@@ -2744,7 +2759,7 @@ export type SunoGenerateData = {
   activeResultIndex?: number
 }
 
-export type SunoCoverData = {
+export type SunoCoverData = PromptAffixFields & {
   currentJobProgress?: number
   [key: string]: unknown
   label: string
@@ -2768,7 +2783,7 @@ export type SunoCoverData = {
   activeResultIndex?: number
 }
 
-export type SunoExtendData = {
+export type SunoExtendData = PromptAffixFields & {
   [key: string]: unknown
   label: string
   audioId: string
@@ -2796,7 +2811,7 @@ export type SunoExtendData = {
   fieldMappings?: FieldMappings
 }
 
-export type SunoLyricsData = {
+export type SunoLyricsData = PromptAffixFields & {
   [key: string]: unknown
   label: string
   prompt: string
@@ -2886,7 +2901,7 @@ export type SunoMashupData = {
   currentJobProgress?: number
 }
 
-export type SunoReplaceSectionData = {
+export type SunoReplaceSectionData = PromptAffixFields & {
   [key: string]: unknown
   label: string
   /** Manual Suno task ID (auto-filled from a connected Suno node when wired) */
@@ -2912,7 +2927,7 @@ export type SunoReplaceSectionData = {
   currentJobProgress?: number
 }
 
-export type SunoStyleBoostData = {
+export type SunoStyleBoostData = PromptAffixFields & {
   currentJobProgress?: number
   [key: string]: unknown
   label: string
@@ -2978,7 +2993,7 @@ export type SunoConvertWavData = {
   currentJobProgress?: number
 }
 
-export type SunoUploadExtendData = {
+export type SunoUploadExtendData = PromptAffixFields & {
   [key: string]: unknown
   label: string
   prompt: string
@@ -3179,7 +3194,7 @@ export type DubbingData = {
   currentJobProgress?: number
 }
 
-export type VoiceRemixData = {
+export type VoiceRemixData = PromptAffixFields & {
   [key: string]: unknown
   label: string
   text: string
@@ -3194,7 +3209,7 @@ export type VoiceRemixData = {
   currentJobProgress?: number
 }
 
-export type VoiceDesignData = {
+export type VoiceDesignData = PromptAffixFields & {
   [key: string]: unknown
   label: string
   text: string
@@ -3216,7 +3231,7 @@ export type VoiceDesignData = {
   currentJobProgress?: number
 }
 
-export type ForcedAlignmentData = {
+export type ForcedAlignmentData = PromptAffixFields & {
   [key: string]: unknown
   label: string
   transcript: string
@@ -3228,7 +3243,7 @@ export type ForcedAlignmentData = {
   currentJobProgress?: number
 }
 
-export type ImageToTextData = {
+export type ImageToTextData = PromptAffixFields & {
   [key: string]: unknown
   label: string
   detailLevel: "brief" | "detailed" | "structured"
@@ -3780,7 +3795,7 @@ export type LottieOverlayData = {
   errorMessage?: string
 }
 
-export type ThreeDTitleData = {
+export type ThreeDTitleData = PromptAffixFields & {
   [key: string]: unknown
   label: string
   titlePrompt: string
@@ -3805,7 +3820,7 @@ export type ThreeDTitleData = {
   errorMessage?: string
 }
 
-export type MotionGraphicsData = {
+export type MotionGraphicsData = PromptAffixFields & {
   [key: string]: unknown
   label: string
   motionPrompt: string
@@ -4686,7 +4701,7 @@ export type FaceNodeData = {
 
 // --- LLM Chat Node Data ---
 
-export type LLMChatData = {
+export type LLMChatData = PromptAffixFields & {
   [key: string]: unknown
   label: string
   systemPrompt: string
@@ -4760,7 +4775,7 @@ export type WebScrapeNodeData = {
 
 // --- Video Analysis Node Data ---
 
-export type VideoAnalysisNodeData = {
+export type VideoAnalysisNodeData = PromptAffixFields & {
   [key: string]: unknown
   label: string
   // Source: an uploaded/wired video URL OR a YouTube URL (mutually exclusive at run).

@@ -2487,18 +2487,30 @@ in) and `outputs` mapping.
 const { data: app } = await client.apps.get("pro-headshot")
 ```
 
-#### `run(slug, inputs?)`
+#### `run(slug, inputs?, opts?)`
 
 ```ts
-run(slug: string, inputs?: Record<string, unknown>): Promise<AppRunResult>
+run(slug: string, inputs?: Record<string, unknown>, opts?: RunAppOptions): Promise<AppRunResult>
 ```
 
 Triggers an app run. `inputs` keys must match the app's input-schema field
 names. Returns `{ executionId, status, runId? }` — poll via
 `client.executions.get(executionId)`.
 
+`opts.inputOverrides` is the advanced escape hatch: nested
+`{ nodeId: { field: value } }` raw node data for THIS run, which reaches fields
+the app does not expose to its end users — such as
+[`promptPrefix` / `promptSuffix`](./prompt-pre-post-text.md).
+
 ```ts
 const { executionId } = await client.apps.run("pro-headshot", { photo: url })
+
+// Wrap the app's prompt with hidden text for one run
+await client.apps.run(
+  "pro-headshot",
+  { photo: url },
+  { inputOverrides: { n1: { promptPrefix: "Studio portrait of" } } },
+)
 ```
 
 #### `listRuns(slug, params?)` / `getRun(slug, runId)`
@@ -3987,6 +3999,7 @@ not two.
 - `NodeCategory` — union of category slugs
 - `OutputType` — `"text" | "image" | "video" | "audio" | "data" | "none"`
 - `NodeInputField`, `NodeInputSchema` — input-schema shapes
+- `PromptAffixFields` — the `{ promptPrefix?, promptSuffix? }` node-data contract for [pre & post text](./prompt-pre-post-text.md); `PROMPT_PREFIX_KEY` / `PROMPT_SUFFIX_KEY` are the matching key constants (value exports, not types)
 - `RunNodeResult` — `{ jobId: string; ... } | Record<string, unknown>` (discriminated on presence of `jobId`)
 - `NodeJobOutput` — typed `output_data` shape: `{ audioUrl?, videoUrl?, imageUrl?, thumbnailUrl?, [k]: unknown }`
 - `RunAndWaitOptions` — `{ signal?, onProgress?, pollMs?, maxMs? }`
@@ -4123,6 +4136,7 @@ not two.
 - `ListAppsParams` — query params for `list()`
 - `ListAppsResult` — paginated `list()` response
 - `AppRunResult` — response from running an app
+- `RunAppOptions` — third argument to `run()`: `{ inputOverrides?: Record<string, Record<string, unknown>> }`
 - `AppRun` — a single app-run record
 - `ListAppRunsParams` — query params for `listRuns()`
 - `DeleteAppRunResult` — `{ success }`-style delete response

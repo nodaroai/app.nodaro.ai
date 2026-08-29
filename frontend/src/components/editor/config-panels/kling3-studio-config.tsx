@@ -44,6 +44,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "motionPrompt")
   const finalPrompt = useFinalPromptSegments({
     userPrompt: (data.motionPrompt as string) || "",
+    promptField: "motionPrompt",
     negativePrompt: data.negativePrompt,
     consumerNodeId: nodeId,
     nodes,

@@ -36,6 +36,7 @@ They read like lightweight RFDs (cf. [Oxide's RFDs](https://rfd.shared.oxide.com
 |-----|----------------|
 | [prompt-wizard](./prompt-wizard.md) | A wizard that structures prompt *output*, not content; reference-role weaving |
 | [prompt-snippets](./prompt-snippets.md) | Reusable inline prompt fragments — data model, API, pill display layer |
+| [prompt-pre-post-text](./prompt-pre-post-text.md) | Pre/post text wrapped around a node's prompt after precedence, before assembly — join rule, engine parity guard, presets and hidden per-run overrides |
 
 ## Characters, entities & references
 

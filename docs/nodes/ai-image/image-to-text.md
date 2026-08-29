@@ -14,6 +14,7 @@ Describe Image (internally `image-to-text`) analyzes an input image using Claude
 | Model | select | Gemini 3.6 Flash | Any vision-capable LLM. Drives capability and credit tier. |
 | Effort | select | `Auto` | Reasoning effort for models that support it. |
 | Advanced mode | boolean | `false` | Gemini models only. Runs the model on the provider's own API so **Temperature** and **Max Tokens** actually apply. Bills one credit tier up; disabled with an inline reason on other models. |
+| `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ## Inputs & Outputs
 

@@ -23,3 +23,7 @@ All text-to-video pricing examples (VEO 3.x, Kling, Seedance 2, Hailuo Standard,
 - [Generate Video](./generate-video.md) — the unified replacement node.
 - [Image to Video (legacy)](./image-to-video.md) — same migration applies.
 - [Video to Video](./video-to-video.md) — for modifying existing videos (separate node).
+
+## Pre & post text
+
+This node supports `promptPrefix` / `promptSuffix` — optional text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md).

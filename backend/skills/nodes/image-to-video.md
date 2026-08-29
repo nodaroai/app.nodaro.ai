@@ -1,7 +1,7 @@
 ---
 node_type: image-to-video
-generated_at: 2026-08-28T14:27:47.625Z
-generated_from: fedb0677f
+generated_at: 2026-08-29T19:02:38.467Z
+generated_from: 7dbf4818b
 ---
 
 # image-to-video
@@ -21,6 +21,8 @@ generated_from: fedb0677f
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
+- `promptPrefix?: string`
+- `promptSuffix?: string`
 - `motion?: "subtle" | "moderate" | "dynamic"`
 - `motionEnabled?: boolean`
 - `prompt?: string`

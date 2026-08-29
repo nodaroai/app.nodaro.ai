@@ -94,8 +94,8 @@ import {
 import { applyWebScrapeFailure, applyWebScrapeResult, webScrapeRunStartPatch } from "@/components/nodes/web-scrape-run-state";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
 import {
-  resolveSlideshowTransition, ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, supportsExtendRender, isMinimaxH3Provider, isVeoProvider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS, resolveVideoProviderForMode, resolveVideoModeForInputs, VIDEO_REF_LIMITS_BY_PROVIDER, resolveEffectiveSourceType, sourceRefKey, hasFeature, countRefModalityEdges, type ReferenceModality, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionSlug, characterMentionableAssetArrays, selectLoraRoutingForMentions, expandExtraRefsToConnectedReferences, resolveSeparator, evaluateJsonPath, stringifyPathResults, spreadJsonArrayIfSingleton, zipMergeLists, evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, tryParseJson, evaluateCondition, evaluateConditionGroup, resolveConditionValue, sortListItems, runSelector, resolveSelectorRefs, buildConditionVariables, VARIABLES_HANDLE_ID, clampSmartCutWindow, resolveGvpAnchorWire } from "@nodaro/shared"
-import { composeNegative, computeNodePrompt, computeLlmChatFields, pickerFanoutTargets, buildImagePrompt, assembleImageInput, collectIdentityLockClause, characterLockToRefLock, assembleSunoInput, type AssembleSunoResult } from "@nodaro/prompts"
+  readPromptAffixes, resolveSlideshowTransition, ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, supportsExtendRender, isMinimaxH3Provider, isVeoProvider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS, resolveVideoProviderForMode, resolveVideoModeForInputs, VIDEO_REF_LIMITS_BY_PROVIDER, resolveEffectiveSourceType, sourceRefKey, hasFeature, countRefModalityEdges, type ReferenceModality, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionSlug, characterMentionableAssetArrays, selectLoraRoutingForMentions, expandExtraRefsToConnectedReferences, resolveSeparator, evaluateJsonPath, stringifyPathResults, spreadJsonArrayIfSingleton, zipMergeLists, evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, tryParseJson, evaluateCondition, evaluateConditionGroup, resolveConditionValue, sortListItems, runSelector, resolveSelectorRefs, buildConditionVariables, VARIABLES_HANDLE_ID, clampSmartCutWindow, resolveGvpAnchorWire } from "@nodaro/shared"
+import { applyPromptAffixes, composeNegative, computeNodePrompt, computeLlmChatFields, pickerFanoutTargets, buildImagePrompt, assembleImageInput, collectIdentityLockClause, characterLockToRefLock, assembleSunoInput, type AssembleSunoResult } from "@nodaro/prompts"
 import type { CharacterDef, ConnectedReference, ReferenceSource, ExtraRefCharacterContext } from "@nodaro/shared"
 import { ANALYZABLE_PICKER_HINT } from "@/lib/picker-labels";
 import { getGenerateTextTemplate } from "@/lib/generate-text-templates";
@@ -907,7 +907,7 @@ export function executeNode(
   }
 
   if (node.type === "generate-script") {
-    const prompt = overridePrompt ?? inputs.prompt ?? "";
+    const prompt = applyPromptAffixes(overridePrompt ?? inputs.prompt, readPromptAffixes(node.data as Record<string, unknown>), refMap) ?? "";
     if (!prompt) {
       toast.error(
         `Node "${(node.data as GenerateScriptData).label}": no prompt found`,
@@ -1683,7 +1683,7 @@ export function executeNode(
     // fallback), @-mention, cinematography hint, or style node can fill the
     // assembled prompt entirely. We defer the empty-prompt check until AFTER
     // `buildImagePrompt` so empty user input + wired identity still runs.
-    let rawPrompt: string | undefined = modData.prompt;
+    let rawPrompt: string | undefined = applyPromptAffixes(modData.prompt, readPromptAffixes(modData), refMap);
     const provider = modData.provider || "nano-banana";
 
     {
@@ -3217,7 +3217,7 @@ export function executeNode(
     // BEFORE the description-required check so upstream voice pickers can
     // supply the description entirely.
     const audioStyle = collectAudioStyleHints(node, "voice-remix", nodes, edges);
-    const userVoiceDesc = d.voiceDescription?.trim() ?? "";
+    const userVoiceDesc = (applyPromptAffixes(d.voiceDescription, readPromptAffixes(d), refMap) ?? "").trim();
     if (!userVoiceDesc && !audioStyle.text) {
       toast.error(`Node "${d.label}": no voice description provided`);
       return Promise.reject(new Error("No voice description"));
@@ -3255,7 +3255,7 @@ export function executeNode(
     // BEFORE the description-required check so upstream voice-character /
     // voice-delivery pickers can supply the description entirely.
     const audioStyle = collectAudioStyleHints(node, "voice-design", nodes, edges);
-    const userVoiceDesc = d.voiceDescription?.trim() ?? "";
+    const userVoiceDesc = (applyPromptAffixes(d.voiceDescription, readPromptAffixes(d), refMap) ?? "").trim();
     if (!userVoiceDesc && !audioStyle.text) {
       toast.error(`Node "${d.label}": no voice description provided`);
       return Promise.reject(new Error("No voice description"));
@@ -3299,7 +3299,7 @@ export function executeNode(
       toast.error(`Node "${d.label}": no audio input found`);
       return Promise.reject(new Error("No audio input"));
     }
-    const alignTranscript = inputs.prompt || d.transcript;
+    const alignTranscript = applyPromptAffixes(inputs.prompt || d.transcript, readPromptAffixes(d), refMap);
     if (!alignTranscript?.trim()) {
       toast.error(`Node "${d.label}": no transcript provided`);
       return Promise.reject(new Error("No transcript"));
@@ -3440,7 +3440,7 @@ export function executeNode(
         // truthy value in saved node data can't send anything but a boolean.
         translateSpeechToEnglish: d.translateSpeechToEnglish === true ? true : undefined,
         translateOnScreenTextToEnglish: d.translateOnScreenTextToEnglish === true ? true : undefined,
-        analysisFocus: d.analysisFocus,
+        analysisFocus: applyPromptAffixes(d.analysisFocus, readPromptAffixes(d), refMap),
         userId: ctx.userId,
       })
         .then(({ jobId }) => {
@@ -3678,7 +3678,7 @@ export function executeNode(
     // FE run, BE run, and editor preview all emit ONE identical payload.
     // `assembleSunoInput` throws on an empty prompt+hint (throwOnEmpty) —
     // caught below to preserve the existing toast + rejection.
-    const userPrompt = overridePrompt ?? inputs.prompt ?? resolveTextRefs(d.prompt?.trim(), refMap);
+    const userPrompt = applyPromptAffixes(overridePrompt ?? inputs.prompt ?? resolveTextRefs(d.prompt?.trim(), refMap), readPromptAffixes(d), refMap);
     const lyrics = resolveTextRefs(d.lyrics, refMap);
     let result: AssembleSunoResult;
     try {
@@ -3707,7 +3707,7 @@ export function executeNode(
 
   if (node.type === "suno-cover") {
     const d = node.data as SunoCoverData;
-    const prompt = inputs.prompt ?? resolveTextRefs(d.prompt?.trim(), refMap);
+    const prompt = applyPromptAffixes(inputs.prompt ?? resolveTextRefs(d.prompt?.trim(), refMap), readPromptAffixes(d), refMap);
     if (!prompt) {
       toast.error(`Node "${d.label}": no prompt found`);
       return Promise.reject(new Error("No prompt"));
@@ -3760,7 +3760,7 @@ export function executeNode(
         sunoExtendApi({
           audioId,
           defaultParamFlag: d.defaultParamFlag ?? true,
-          prompt: d.prompt?.trim() || undefined,
+          prompt: applyPromptAffixes(d.prompt?.trim(), readPromptAffixes(d), refMap) || undefined,
           model: d.model || undefined,
           style: d.style || undefined,
           title: d.title || undefined,
@@ -3782,7 +3782,7 @@ export function executeNode(
 
   if (node.type === "suno-lyrics") {
     const d = node.data as SunoLyricsData;
-    const prompt = inputs.prompt ?? resolveTextRefs(d.prompt?.trim(), refMap);
+    const prompt = applyPromptAffixes(inputs.prompt ?? resolveTextRefs(d.prompt?.trim(), refMap), readPromptAffixes(d), refMap);
     if (!prompt) {
       toast.error(`Node "${d.label}": no prompt found`);
       return Promise.reject(new Error("No prompt"));
@@ -4035,7 +4035,7 @@ export function executeNode(
 
   if (node.type === "suno-style-boost") {
     const d = node.data as SunoStyleBoostData;
-    const content = inputs.prompt ?? d.content?.trim();
+    const content = applyPromptAffixes(inputs.prompt ?? d.content?.trim(), readPromptAffixes(d), refMap);
     if (!content) {
       toast.error(`Node "${d.label}": no content provided`);
       return Promise.reject(new Error("No content"));
@@ -4159,7 +4159,7 @@ export function executeNode(
           uploadUrl: audioUrl,
           // Route requires a numeric continueAt; default to 0 (extend from start).
           continueAt: d.continueAt ?? 0,
-          prompt: d.prompt?.trim() || undefined,
+          prompt: applyPromptAffixes(d.prompt?.trim(), readPromptAffixes(d), refMap) || undefined,
           model: d.model || undefined,
           style: inputs.prompt || d.style || undefined,
           title: d.title || undefined,
@@ -4393,7 +4393,7 @@ export function executeNode(
     return imageToTextApi(
       imageUrl,
       itData.detailLevel || "detailed",
-      inputs.prompt || itData.customPrompt || undefined,
+      applyPromptAffixes(inputs.prompt || itData.customPrompt, readPromptAffixes(itData), refMap) || undefined,
       ctx.userId,
       itData.llmModel,
       itData.reasoningEffort,
@@ -4762,7 +4762,7 @@ export function executeNode(
         return lipSyncApi(
           needsVideo ? undefined : (imageUrl || undefined),
           audioUrl!,
-          lsData.prompt || "A person talking naturally",
+          applyPromptAffixes(lsData.prompt, readPromptAffixes(lsData), refMap) || "A person talking naturally",
           lsData.provider || undefined,
           lsData.resolution || undefined,
           ctx.userId,
@@ -5084,7 +5084,7 @@ export function executeNode(
         motionTransferApi(
           imageUrl!,
           videoUrl!,
-          inputs.prompt || mtData.prompt || undefined,
+          applyPromptAffixes(inputs.prompt || mtData.prompt, readPromptAffixes(mtData), refMap) || undefined,
           mtData.characterOrientation || undefined,
           mtData.resolution || undefined,
           ctx.userId,
@@ -5410,7 +5410,7 @@ export function executeNode(
     // Prompt + negative resolution: upstream-wired handles win; otherwise fall
     // back to node-config text. Mirrors the backend payload-builder for
     // video-sfx (see backend/src/services/workflow-engine/payload-builder.ts).
-    const prompt = (inputs.prompt as string | undefined)?.trim() || (sfxData.prompt ?? "").trim();
+    const prompt = applyPromptAffixes((inputs.prompt as string | undefined)?.trim() || (sfxData.prompt ?? "").trim(), readPromptAffixes(sfxData), refMap);
     const negativePrompt =
       (inputs.negativePrompt as string | undefined)?.trim()
       || (sfxData.negativePrompt ?? "").trim()
@@ -5632,7 +5632,7 @@ export function executeNode(
   if (node.type === "generate-mask") {
     const maskData = node.data as GenerateMaskData;
     const imageUrl = inputs.imageUrl as string | undefined;
-    const prompt = (maskData.prompt ?? "").trim();
+    const prompt = (applyPromptAffixes(maskData.prompt, readPromptAffixes(maskData), refMap) ?? "").trim();
     if (!imageUrl) {
       toast.error(`Node "${maskData.label}": no image connected. Wire an image into the left handle.`);
       return Promise.reject(new Error("No image"));
@@ -6909,7 +6909,7 @@ export function executeNode(
 
   if (node.type === "3d-title") {
     const d = node.data as ThreeDTitleData;
-    const tdPrompt = inputs.prompt || d.titlePrompt;
+    const tdPrompt = applyPromptAffixes(inputs.prompt || d.titlePrompt, readPromptAffixes(d), refMap);
     if (!tdPrompt?.trim()) {
       toast.error(`Node "${d.label}": no title prompt set`);
       return Promise.reject(new Error("No title prompt"));
@@ -6985,7 +6985,7 @@ export function executeNode(
           ? Object.keys(((d.motionPlan as Record<string, unknown>).slots as Record<string, unknown>) ?? {})
           : undefined;
       return runLottiePlanGeneration(node.id, {
-        prompt: inputs.prompt || d.motionPrompt,
+        prompt: applyPromptAffixes(inputs.prompt || d.motionPrompt, readPromptAffixes(d), refMap),
         fps: d.fps,
         aspectRatio: d.aspectRatio,
         width: dims.width,
@@ -7005,7 +7005,7 @@ export function executeNode(
       errorMessage: undefined,
     });
     return generateMotionGraphics({
-      prompt: inputs.prompt || d.motionPrompt,
+      prompt: applyPromptAffixes(inputs.prompt || d.motionPrompt, readPromptAffixes(d), refMap),
       fps: d.fps,
       aspectRatio: d.aspectRatio,
       width: dims.width,
@@ -8122,7 +8122,7 @@ export function executeNode(
     }
 
     const usesPrompt = d.mode === "prompt-adherence" || d.mode === "all";
-    const resolvedPrompt = inputs.prompt ?? d.prompt;
+    const resolvedPrompt = applyPromptAffixes(inputs.prompt ?? d.prompt, readPromptAffixes(d), refMap);
 
     if (usesPrompt && resolvedPrompt && resolvedPrompt.trim().length > 0) {
       setUserPromptTemplate(resolvedPrompt);

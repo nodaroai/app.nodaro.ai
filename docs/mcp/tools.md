@@ -327,6 +327,10 @@ Updates a workflow in the mcp project: its node graph (`nodes` + `edges`), its
 only `thumbnail_url`, for example, to set the preview image without re-sending
 the graph.
 
+Any AI prompt node's `data` may carry `promptPrefix` / `promptSuffix` — pre/post
+text wrapped around that node's prompt at run time (settings-only; see
+[Prompt pre & post text](../prompt-pre-post-text.md)).
+
 **Scope:** `workflows:write`
 
 **Input:**
@@ -535,7 +539,7 @@ prompt with no questions round-trip.
 
 | Tool | Description |
 |------|-------------|
-| `generate_image` | Text-to-image generation. Accepts `prompt`, `model`, `aspect_ratio`, `resolution`, `quality`, `negative_prompt`, `reference_image_urls` (up to 14 URLs or asset ids for identity/style/composition guidance — the response text confirms how many were attached), and optional `structured` fields. Advanced callers can also pass `connected_references` (the editor's structured wired-reference shape) + `reference_order` — labeled/ordered references the route assembles into `@image_N` directives and `{image:N}` token resolution. Also accepts `presetId` (from `list_node_presets`) to apply a built-in or saved preset's config server-side; any explicit field above overrides the preset, and `prompt` may be omitted when the preset supplies one. |
+| `generate_image` | Text-to-image generation. Accepts `prompt`, `model`, `aspect_ratio`, `resolution`, `quality`, `negative_prompt`, `reference_image_urls` (up to 14 URLs or asset ids for identity/style/composition guidance — the response text confirms how many were attached), and optional `structured` fields. Advanced callers can also pass `connected_references` (the editor's structured wired-reference shape) + `reference_order` — labeled/ordered references the route assembles into `@image_N` directives and `{image:N}` token resolution. Also accepts `presetId` (from `list_node_presets`) to apply a built-in or saved preset's config server-side; any explicit field above overrides the preset, and `prompt` may be omitted when the preset supplies one. A preset's `promptPrefix` / `promptSuffix` wrap your `prompt`. |
 | `modify_image` | Image-to-image transformation — apply a style, change colors, swap backgrounds. Accepts `image_url`, `prompt`, and strength controls. |
 | `image_to_image` | Structural image-to-image (i2i) using a dedicated i2i model. Distinct from `modify_image` in that it uses models optimized for structural transfer. Supports multi-reference composition via `reference_image_urls` (up to 13). |
 | `edit_image` | Targeted edits: remove background, upscale, inpaint (nano-banana-edit), or Grok task-chained ops — free segment maps (`grok-2-segment`) and region-targeted edits (`grok-2-edit`) of a prior grok-2 generation. |
@@ -553,7 +557,7 @@ prompt with no questions round-trip.
 
 | Tool | Description |
 |------|-------------|
-| `generate_video` | Text-to-video generation. Accepts `prompt`, `model`, `duration`, `aspect_ratio`, `resolution`, `sound`, `negative_prompt`, `seed`, and optional `structured` fields. Advanced callers can also pass `connected_references` + `reference_order` (structured wired-reference shape) for labeled/ordered references on reference-capable models (Seedance 2, Gemini Omni, VEO 3.x, Kling 3 Omni, Grok i2v, HappyHorse Ref2V). Also accepts `presetId` (from `list_node_presets { nodeType: "generate-video" }`) to apply a built-in or saved preset's config server-side; any explicit field above overrides the preset, and `prompt` may be omitted when the preset supplies one. To animate from a still or use start/end frames, use `animate_image`. |
+| `generate_video` | Text-to-video generation. Accepts `prompt`, `model`, `duration`, `aspect_ratio`, `resolution`, `sound`, `negative_prompt`, `seed`, and optional `structured` fields. Advanced callers can also pass `connected_references` + `reference_order` (structured wired-reference shape) for labeled/ordered references on reference-capable models (Seedance 2, Gemini Omni, VEO 3.x, Kling 3 Omni, Grok i2v, HappyHorse Ref2V). Also accepts `presetId` (from `list_node_presets { nodeType: "generate-video" }`) to apply a built-in or saved preset's config server-side; any explicit field above overrides the preset, and `prompt` may be omitted when the preset supplies one. To animate from a still or use start/end frames, use `animate_image`. A preset's `promptPrefix` / `promptSuffix` wrap your `prompt`. |
 | `animate_image` | Image-to-video animation — bring a still image to life. Accepts `image_url` / `image_asset_id`, optional `prompt`, `model`, `duration`, `aspect_ratio`, `sound`, and `end_frame_url` (start/end-frame animation). Advanced callers can also pass `connected_references` + `reference_order` for labeled/ordered identity references. |
 | `extend_video` | Extend an existing video clip forward in time. Accepts `video_url`, `prompt`, `model`, `duration`, and (seedance-2-extend only) `reference_image_urls` — up to 8 reference images, mentioned as `@image_1…@image_N` in the prompt; one Seedance reference seat is reserved for the continuation anchor. |
 | `loop_video` | Create a seamless looping clip from a short video segment. Accepts `video_url` and optional loop-trim parameters. |
@@ -678,9 +682,9 @@ hand-maintained; if the two ever disagree, the tool description is right.
 
 | Tool | Description |
 |------|-------------|
-| `generate_music` | Text-to-music generation (Suno v4/v5 via KIE). Accepts `prompt`, `genre`, `mood`, `duration`, `model`. Also accepts `presetId` (from `list_node_presets { nodeType: "generate-music" }`) to apply a built-in or saved preset's config server-side; any explicit field above overrides the preset, and `prompt` may be omitted when the preset supplies one. |
-| `generate_speech` | Text-to-speech. Accepts `text`, `voice_id`, `model`. Supports ElevenLabs v3 (default) and KIE v2 models. Also accepts `presetId` (from `list_node_presets { nodeType: "text-to-speech" }`) to apply a built-in delivery preset (speed/stability/style) server-side; explicit fields override it, and `text` is always required (presets tune delivery, not content). |
-| `text_to_audio` | Text-to-sound-effect (ElevenLabs SFX). Accepts `prompt` and optional `duration`. Also accepts `presetId` (from `list_node_presets { nodeType: "text-to-audio" }`) to apply a built-in or saved preset's config server-side; any explicit field overrides the preset, and `prompt` may be omitted when the preset supplies one. |
+| `generate_music` | Text-to-music generation (Suno v4/v5 via KIE). Accepts `prompt`, `genre`, `mood`, `duration`, `model`. Also accepts `presetId` (from `list_node_presets { nodeType: "generate-music" }`) to apply a built-in or saved preset's config server-side; any explicit field above overrides the preset, and `prompt` may be omitted when the preset supplies one. A preset's `promptPrefix` / `promptSuffix` wrap your `prompt`. |
+| `generate_speech` | Text-to-speech. Accepts `text`, `voice_id`, `model`. Supports ElevenLabs v3 (default) and KIE v2 models. Also accepts `presetId` (from `list_node_presets { nodeType: "text-to-speech" }`) to apply a built-in delivery preset (speed/stability/style) server-side; explicit fields override it, and `text` is always required (presets tune delivery; a preset's `promptPrefix` / `promptSuffix` wrap your `text`). |
+| `text_to_audio` | Text-to-sound-effect (ElevenLabs SFX). Accepts `prompt` and optional `duration`. Also accepts `presetId` (from `list_node_presets { nodeType: "text-to-audio" }`) to apply a built-in or saved preset's config server-side; any explicit field overrides the preset, and `prompt` may be omitted when the preset supplies one. A preset's `promptPrefix` / `promptSuffix` wrap your `prompt`. |
 | `list_voices` | List the available premade voices (id + name, plus any gender/accent/description metadata) so you can pick a `voice_id` for `generate_speech`, `voice_changer`, or `voice_changer_pro` — all of which require a voice id. Read-only; returns the catalog as JSON. |
 | `voice_clone` | Instant voice clone from a reference audio clip (ElevenLabs). Returns a `voice_id` for use with `generate_speech`. |
 | `voice_design` | Design a new synthetic voice from text descriptors (ElevenLabs `/v1/text-to-voice/design`). Accepts `text`, `voice_description`, `model` (default `eleven_ttv_v3`; `eleven_multilingual_ttv_v2` is the legacy model), `loudness`, `guidance_scale`, `seed`, `quality`, `should_enhance`. Returns a `voice_id`. |
@@ -1215,8 +1219,10 @@ available input keys and their types.
 
 Run a published app by slug. `inputs` is a FLAT object keyed by the schema
 input keys (from `get_app_inputs`). Returns an `execution_id`.
+`inputOverrides` (advanced) sets raw node fields such as `promptPrefix` /
+`promptSuffix` per run.
 
-**Input:** `slug`, `inputs?`
+**Input:** `slug`, `inputs?`, `inputOverrides?`
 
 ---
 

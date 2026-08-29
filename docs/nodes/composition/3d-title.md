@@ -17,6 +17,7 @@ Reasoning-capable models additionally show an **Effort** selector next to the mo
 | Duration | number (seconds) | `10` | Duration of the output. Range: 1--60 seconds (hard maximum). |
 | Aspect Ratio | enum | `"16:9"` | Output aspect ratio. Options: `16:9`, `9:16`, `1:1`, `4:5`. |
 | Background Color | hex string | `"#000000"` | Scene background color. |
+| `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ## Inputs & Outputs
 

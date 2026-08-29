@@ -153,6 +153,7 @@ origin:
 | Sky&nbsp;blue | **Variable** | A resolved `{Node Label}` value pulled from an upstream node. |
 | Indigo | **Picker** | A cinematography / parameter-picker fragment from a connected node (e.g. a Setting or Camera Motion node). |
 | Amber | **Snippet** | An inserted snippet's text (matched back to your snippet pool). |
+| Teal | **Pre/post text** | The node's `promptPrefix` / `promptSuffix` wrapped around the prompt (see [Prompt pre & post text](./prompt-pre-post-text.md)). |
 | Violet | **References** | The identity / reference directive block added for connected character or reference images. |
 | Grey | **Style** | The auto-appended `Style: …` suffix. |
 | Rose | **Negative** | The negative-prompt content — either its own field, or an `Avoid: …` suffix folded into the prompt for providers that have no separate negative field. |
@@ -166,7 +167,8 @@ node, and the ⌘E modal for a provider-less node) the final view shows the same
 read-only assembled text with **fewer provenance colors**: your `{variables}`
 resolve to their upstream values (sky blue), inserted snippets are highlighted
 (amber), any connected cinematography / parameter-picker fragments are tinted
-(indigo), a wired identity-lock clause reads as a **References** span (violet),
+(indigo), the node's pre/post text is tinted (teal), a wired identity-lock clause
+reads as a **References** span (violet),
 and an appended `Style: …` suffix is greyed — exactly as on the provider-aware
 surfaces, for whichever of those are actually present. What these nodes don't
 show is the full reference-directive block (the "Use these characters:" wrap)

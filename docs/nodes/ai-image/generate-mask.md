@@ -13,6 +13,7 @@ There is no provider selection -- the node uses Grounded SAM (`schananas/grounde
 |-------|------|---------|-------------|
 | Prompt | text | `""` | Text description of the subject to segment. Examples: `"the left girl's hair"`, `"the red car"`, `"the background"`. Required. Max 500 characters. |
 | Threshold | slider | `0.3` | Detection confidence in `0.05`-`0.95` (step 0.05). **Note:** the current pinned model has no box-threshold input -- its only mask lever is erosion/dilation -- so moving this slider may not visibly change the result. |
+| `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ## Inputs & Outputs
 

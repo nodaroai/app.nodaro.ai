@@ -338,6 +338,7 @@ Common fields:
 | Generate Audio | Checkbox | Provider-specific | VEO 3.x default on |
 | Loop Trim | Group | off | Enable + framesToTest + quality |
 | Inject Character Context | Checkbox | off | When an upstream Character has identity-injection on |
+| `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ## Migration from legacy nodes
 

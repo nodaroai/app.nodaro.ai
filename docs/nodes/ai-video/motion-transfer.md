@@ -15,6 +15,7 @@ The Motion Transfer node takes motion from a reference video and applies it to a
 | Character Orientation | Select | image | Kling only: image or video mode |
 | Background Source | Select | input_video | Kling 3.0 only: input_video or input_image |
 | Resolution | Select | 720p | Provider-specific options |
+| `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ## Inputs & Outputs
 

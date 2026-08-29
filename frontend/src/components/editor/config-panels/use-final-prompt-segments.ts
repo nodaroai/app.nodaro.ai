@@ -7,8 +7,8 @@ import { IMAGE_REFERENCE_FORMAT } from "@/lib/image-reference-format"
 import { buildNodeRefMap, resolveTextRefs, resolveTextRefsSegments, collectWiredPromptContribution } from "@/lib/node-refs"
 import { matchSnippetRanges } from "@/lib/snippet-matching"
 import type { SnippetPoolItem } from "@/lib/snippet-pool"
-import { getStylePromptHint, composeNegative, assembleImageInput, buildIdentityDirectives, collectIdentityLockClause } from "@nodaro/prompts"
-import { applyVideoNegativePrompt } from "@nodaro/shared"
+import { getStylePromptHint, composeNegative, assembleImageInput, buildIdentityDirectives, collectIdentityLockClause, applyPromptAffixes, promptPartSeparator } from "@nodaro/prompts"
+import { applyVideoNegativePrompt, readPromptAffixes } from "@nodaro/shared"
 import type { CharacterDef, ConnectedReference, IdentityMeta } from "@nodaro/shared"
 import type { SoundConsumerType } from "@nodaro/prompts"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -16,7 +16,7 @@ import { buildImageAssembleInput } from "./build-image-assemble-input"
 import { assembleVideoPrompt } from "@/lib/video-prompt-assembly"
 import { assembleAudioPrompt, AUDIO_PROMPT_NODE_TYPES, AUDIO_STYLE_FOLD_TYPES } from "@/lib/audio-prompt-assembly"
 import { collectAudioStyleHints } from "@/lib/audio-style-hints"
-import { getSnippetMedia } from "@/lib/prompt-fields"
+import { getSnippetMedia, promptFieldCarriesAffixes } from "@/lib/prompt-fields"
 import { tagPromptProvenance, type ProvenanceFragment } from "@/lib/prompt-provenance"
 import type { DisplaySegment } from "./prompt-field-final-view"
 
@@ -138,6 +138,17 @@ export function negativeRoutingCaption(routing: NegativeRouting): string | undef
 export interface UseFinalPromptSegmentsArgs {
   /** User's prompt text (from `data.prompt` or equivalent). */
   readonly userPrompt: string | undefined
+  /**
+   * The node-data key being previewed; affixes apply only when it is the node's
+   * run-time affix core — omit for the node's primary prompt field.
+   *
+   * A node's pre/post text wraps ONE field at run time, so a panel that previews
+   * a SIBLING field (llm-chat's `systemPrompt`, generate-script's `styleGuide`)
+   * must not render a wrap the run never performs. Pass the key you read into
+   * `userPrompt`; `promptFieldCarriesAffixes` decides (registry core + spec §7
+   * overrides + run-time fallback candidates), never a hand-list here.
+   */
+  readonly promptField?: string
   /** Style text appended to the prompt (e.g. "cinematic, film grain"). */
   readonly style?: string
   /** Negative prompt. */
@@ -219,6 +230,7 @@ export interface UseFinalPromptSegmentsResult {
 export function useFinalPromptSegments(args: UseFinalPromptSegmentsArgs): UseFinalPromptSegmentsResult {
   const {
     userPrompt,
+    promptField,
     style,
     negativePrompt,
     consumerNodeId,
@@ -252,6 +264,23 @@ export function useFinalPromptSegments(args: UseFinalPromptSegmentsArgs): UseFin
     // step in execute-node.ts before the prompt enters buildImagePrompt.
     const refMap = consumerNodeId ? buildNodeRefMap(consumerNodeId, nodes, edges) : new Map<string, string>()
     const consumerType = consumerNodeId ? nodes.find((n) => n.id === consumerNodeId)?.type : undefined
+    // Pre/post text (spec §4): read off the CONSUMER node, {Label}-resolved with
+    // the same refMap the run uses. Applied to the user core BEFORE hints /
+    // identity / references, exactly where resolvePrompt applies it.
+    const consumerData = (consumerNodeId ? nodes.find((n) => n.id === consumerNodeId)?.data : undefined) as
+      | Record<string, unknown>
+      | undefined
+    // ONE gate for the whole hook: unless the previewed field is what the run
+    // actually wraps, `affixes` stays empty — so neither the wrap (line below,
+    // via applyPromptAffixes) nor the teal `origin: "affix"` fragments appear.
+    // Also covers a non-affix node (e.g. `text-prompt`) that carries stale
+    // promptPrefix/promptSuffix in workflow JSON.
+    const affixes =
+      consumerData && promptFieldCarriesAffixes(consumerType, promptField)
+        ? readPromptAffixes(consumerData)
+        : {}
+    const affixPrefix = affixes.prefix ? (resolveTextRefs(affixes.prefix, refMap) ?? affixes.prefix) : ""
+    const affixSuffix = affixes.suffix ? (resolveTextRefs(affixes.suffix, refMap) ?? affixes.suffix) : ""
     const rawUser = (userPrompt ?? "").trim()
     const resolvedUser = (resolveTextRefs(rawUser, refMap) ?? rawUser).trim()
     const rawNeg = (negativePrompt ?? "").trim()
@@ -286,6 +315,8 @@ export function useFinalPromptSegments(args: UseFinalPromptSegmentsArgs): UseFin
       const rp = wiredP ? (resolveTextRefs(wiredP, refMap) ?? wiredP).trim() : ""
       if (rp) preBuildPrompt = preBuildPrompt ? `${preBuildPrompt}. ${rp}` : rp
     }
+    // Affixes wrap the (typed [+ wired]) core — mirrors resolvePrompt(appendWired).
+    preBuildPrompt = applyPromptAffixes(preBuildPrompt, affixes, refMap)
     if (hints.length > 0) {
       const joined = hints.join(", ")
       preBuildPrompt = preBuildPrompt ? `${preBuildPrompt}. ${joined}` : joined
@@ -367,6 +398,9 @@ export function useFinalPromptSegments(args: UseFinalPromptSegmentsArgs): UseFin
         if (result.nativeNegativePrompt == null && resolvedNeg) {
           fragments.push({ text: `\nAvoid: ${resolvedNeg}`, origin: "negative" })
         }
+        // Pre/post text wrapped around the user core (spec §4).
+        if (affixPrefix) fragments.push({ text: affixPrefix, origin: "affix" })
+        if (affixSuffix) fragments.push({ text: affixSuffix, origin: "affix" })
         // Variables resolved from {Node Label} refs in the user prose.
         for (const s of resolveTextRefsSegments(rawUser, refMap)) {
           if (s.origin === "variable" && s.text) fragments.push({ text: s.text, origin: "variable" })
@@ -470,6 +504,9 @@ export function useFinalPromptSegments(args: UseFinalPromptSegmentsArgs): UseFin
       const fragments: ProvenanceFragment[] = []
       // Folded audio-style hint text reads as a "picker" (parameter-picker) tint.
       if (audioStyleText) fragments.push({ text: audioStyleText, origin: "picker" })
+      // Pre/post text wrapped around the user core (spec §4).
+      if (affixPrefix) fragments.push({ text: affixPrefix, origin: "affix" })
+      if (affixSuffix) fragments.push({ text: affixSuffix, origin: "affix" })
       // Variables resolved from {Node Label} refs in the user prose.
       for (const s of resolveTextRefsSegments(rawUser, refMap)) {
         if (s.origin === "variable" && s.text) fragments.push({ text: s.text, origin: "variable" })
@@ -544,6 +581,9 @@ export function useFinalPromptSegments(args: UseFinalPromptSegmentsArgs): UseFin
         if (negResult.nativeNegativePrompt == null && resolvedNeg) {
           fragments.push({ text: `\nAvoid: ${resolvedNeg}`, origin: "negative" })
         }
+        // Pre/post text wrapped around the user core (spec §4).
+        if (affixPrefix) fragments.push({ text: affixPrefix, origin: "affix" })
+        if (affixSuffix) fragments.push({ text: affixSuffix, origin: "affix" })
         // Variables resolved from {Node Label} refs in the user prose.
         for (const s of resolveTextRefsSegments(rawUser, refMap)) {
           if (s.origin === "variable" && s.text) fragments.push({ text: s.text, origin: "variable" })
@@ -604,10 +644,25 @@ export function useFinalPromptSegments(args: UseFinalPromptSegmentsArgs): UseFin
     // origins as the provider path's `bodySegs` ("." . " " ", " joiners; hints →
     // "picker", identity clause → "mention"), so their join equals
     // `preBuildPrompt` — the body half of `promptText`.
-    const userSegsFlat = resolveTextRefsSegments(rawUser, refMap) as DisplaySegment[]
+    // Structural mirror of applyPromptAffixes → joinPromptParts: affix spans +
+    // the ONE separator rule, so the segments reconstruct preBuildPrompt exactly.
+    const userSegsFlat: DisplaySegment[] = []
+    const pushPart = (segs: DisplaySegment[]) => {
+      const partText = segs.map((s) => s.text).join("")
+      if (!partText.trim()) return
+      const before = userSegsFlat.map((s) => s.text).join("")
+      if (before) {
+        const sep = promptPartSeparator(before, partText)
+        if (sep) userSegsFlat.push({ text: sep, origin: "user" })
+      }
+      userSegsFlat.push(...segs)
+    }
+    pushPart(affixPrefix ? [{ text: affixPrefix, origin: "affix" }] : [])
+    pushPart(resolveTextRefsSegments(rawUser, refMap) as DisplaySegment[])
+    pushPart(affixSuffix ? [{ text: affixSuffix, origin: "affix" }] : [])
     const bodySegsFlat: DisplaySegment[] = [...userSegsFlat]
     if (hints.length > 0) {
-      if (resolvedUser) bodySegsFlat.push({ text: ". ", origin: "user" })
+      if (userSegsFlat.length > 0) bodySegsFlat.push({ text: ". ", origin: "user" })
       hints.forEach((h, i) => {
         if (i > 0) bodySegsFlat.push({ text: ", ", origin: "user" })
         bodySegsFlat.push({ text: h, origin: "picker" })
@@ -724,5 +779,5 @@ export function useFinalPromptSegments(args: UseFinalPromptSegmentsArgs): UseFin
       // → stays null (no native/append routing concept).
       negativeRouting,
     }
-  }, [userPrompt, style, negativePrompt, consumerNodeId, nodes, edges, provider, videoProvider, connectedReferences, identityMeta, characterDefs, promptSnippets, negSnippets, userPromptTemplates, flowPromptTemplates, characterDefinitions])
+  }, [userPrompt, promptField, style, negativePrompt, consumerNodeId, nodes, edges, provider, videoProvider, connectedReferences, identityMeta, characterDefs, promptSnippets, negSnippets, userPromptTemplates, flowPromptTemplates, characterDefinitions])
 }

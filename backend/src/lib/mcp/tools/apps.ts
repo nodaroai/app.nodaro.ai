@@ -9,6 +9,7 @@ import { appBaseUrl } from "../../deployment-urls.js"
 import {
   extractAppInputSchema,
   flatInputsToOverrides,
+  mergeInputOverrides,
 } from "../extract-app-inputs.js"
 import { cardResultText } from "./_verb-helpers.js"
 
@@ -200,7 +201,7 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
       {
         title: "Run App",
         description:
-          "Run a published app by slug. The caller pays for credits. `inputs` is a FLAT object keyed by the schema's input keys (call `get_app_inputs` first to learn them). Returns an execution_id.",
+          "Run a published app by slug. The caller pays for credits. `inputs` is a FLAT object keyed by the schema's input keys (call `get_app_inputs` first to learn them). Returns an execution_id. `inputOverrides` (advanced) sets raw node fields such as promptPrefix/promptSuffix.",
         inputSchema: {
           slug: z.string().min(1).describe("App slug, e.g. 'photo-restoration'"),
           inputs: z
@@ -208,6 +209,13 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
             .optional()
             .describe(
               "Flat input map keyed by schema key (from get_app_inputs). Omit to use defaults.",
+            ),
+          inputOverrides: z
+            .record(z.string(), z.record(z.string(), z.unknown()))
+            .optional()
+            .describe(
+              "Advanced: raw node-data overrides keyed by node id → field → value, merged over `inputs`. " +
+                "Reaches fields not exposed as app inputs, e.g. { \"n1\": { \"promptPrefix\": \"…\" } } to wrap the prompt with hidden text.",
             ),
         },
         outputSchema: {
@@ -254,6 +262,10 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
           })
           inputOverrides = flatInputsToOverrides(args.inputs, schema.keyMap)
         }
+        // Raw node-data overrides merge OVER the translated flat inputs — per node,
+        // per field. Same shared helper `/v1/app/:slug/run` uses, so both surfaces
+        // resolve an `inputs` + `inputOverrides` pair identically.
+        inputOverrides = mergeInputOverrides(inputOverrides, args.inputOverrides)
 
         const payload = {
           inputOverrides,

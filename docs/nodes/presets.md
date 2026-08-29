@@ -248,6 +248,11 @@ settings (such as sticky notes) and asset nodes (Character/Location/Object) don'
 favorites collect in a band at the top of the dropdown, hidden until you have at least one, so the
 presets you reach for most are always one click away.
 
+**Keep your prompt, keep the preset's text.** Put a preset's reusable wording in its *Pre & post
+text* rather than in *Prompt*: applying the preset then leaves the prompt field free for your
+subject, and the preset's text still wraps it at run time. See
+[Prompt pre & post text](../prompt-pre-post-text.md).
+
 ## Organizing presets
 
 Click **Manage presets…** in the dropdown to open the management dialog, where you can organize your
@@ -273,7 +278,8 @@ filtered list.
 ## What a preset captures
 
 A preset stores the node's **reusable configuration** — prompt, model, provider, aspect ratio,
-resolution, quality, seed, voice, style, numeric parameters, and so on.
+resolution, quality, seed, voice, style, numeric parameters, and the node's **pre & post text**
+(`promptPrefix` / `promptSuffix`).
 
 It deliberately does **not** store:
 

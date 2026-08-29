@@ -26,6 +26,7 @@ Generate Image is the primary text-to-image node. It accepts a text prompt (with
 | Guidance Scale | slider | varies | Prompt-adherence guidance. Shown only for providers that support it (`qwen-i2i`, `qwen-edit`). |
 | `baseImageUrl` | image url | -- | Inpaint / refine base image. Set automatically from the node's own current result at run time (or a connected image). See [Inpainting & Refine](#inpainting--refine). |
 | `maskUrl` | mask url | -- | Inpaint mask (white = edit, black = keep). Produced by the in-panel Mask Painter or a [Generate Mask](./generate-mask.md) node. |
+| `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ## Inputs & Outputs
 

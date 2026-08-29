@@ -23,6 +23,7 @@ The config panel includes the same searchable avatar picker used by AI Avatar, f
 | Aspect Ratio | Select | `16:9` | `16:9` (landscape), `9:16` (portrait / vertical), or `1:1` (square) |
 | Resolution | Select | `720p` | Output resolution: `720p` or `1080p` |
 | Enhance Prompt | Toggle | off | Ask HeyGen to enhance your prompt before generation |
+| `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ## Inputs & Outputs
 

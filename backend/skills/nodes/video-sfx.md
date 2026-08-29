@@ -1,7 +1,7 @@
 ---
 node_type: video-sfx
-generated_at: 2026-08-15T21:55:06.601Z
-generated_from: 150c80ac9
+generated_at: 2026-08-29T19:02:38.540Z
+generated_from: 7dbf4818b
 ---
 
 # Video SFX
@@ -35,6 +35,8 @@ generated_from: 150c80ac9
 - `currentJobProgress?: number`
 - `videoPlayState?: "loop" | "paused" | "stopped"`
 - `pausedAtTime?: number`
+- `promptPrefix?: string`
+- `promptSuffix?: string`
 
 **Default data:**
 ```json

@@ -51,6 +51,7 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "styleGuide")
   const finalPrompt = useFinalPromptSegments({
     userPrompt: data.styleGuide,
+    promptField: "styleGuide",
     consumerNodeId: nodeId,
     nodes,
     edges: edges ?? [],
@@ -333,6 +334,7 @@ export function ImageCriticConfig({ data, onUpdate, nodes, edges, nodeRefs, refM
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
   const finalPrompt = useFinalPromptSegments({
     userPrompt: data.prompt,
+    promptField: "prompt",
     consumerNodeId: nodeId,
     nodes,
     edges: edges ?? [],
@@ -449,6 +451,7 @@ export function ImageToTextConfig({ data, onUpdate, sources, fieldMappings, onMa
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "customPrompt")
   const finalPrompt = useFinalPromptSegments({
     userPrompt: data.customPrompt,
+    promptField: "customPrompt",
     consumerNodeId: nodeId,
     nodes,
     edges: edges ?? [],

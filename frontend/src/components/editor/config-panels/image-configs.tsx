@@ -359,6 +359,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
   const negativeFieldMode = usePromptFieldMode(nodeId ?? "", "negativePrompt")
   const finalPrompt = useFinalPromptSegments({
     userPrompt: data.prompt,
+    promptField: "prompt",
     style: data.style,
     negativePrompt: data.negativePrompt,
     consumerNodeId: nodeId,
@@ -1263,6 +1264,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
   const negativeFieldMode = usePromptFieldMode(nodeId ?? "", "negativePrompt")
   const finalPrompt = useFinalPromptSegments({
     userPrompt: data.prompt,
+    promptField: "prompt",
     style: data.style,
     negativePrompt: data.negativePrompt,
     consumerNodeId: nodeId,
@@ -1871,6 +1873,7 @@ export function GenerateMaskConfig({ data, onUpdate, nodes, edges, nodeId }: Con
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
   const finalPrompt = useFinalPromptSegments({
     userPrompt: data.prompt,
+    promptField: "prompt",
     consumerNodeId: nodeId,
     nodes,
     edges: edges ?? [],

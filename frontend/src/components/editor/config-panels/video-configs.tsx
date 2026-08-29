@@ -367,6 +367,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
   const negativeFieldMode = usePromptFieldMode(nodeId ?? "", "negativePrompt")
   const finalPrompt = useFinalPromptSegments({
     userPrompt: data.prompt,
+    promptField: "prompt",
     negativePrompt: data.negativePrompt,
     consumerNodeId: nodeId,
     nodes,
@@ -1257,6 +1258,7 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
   const negativeFieldMode = usePromptFieldMode(nodeId ?? "", "negativePrompt")
   const finalPrompt = useFinalPromptSegments({
     userPrompt: data.prompt,
+    promptField: "prompt",
     negativePrompt: data.negativePrompt,
     consumerNodeId: nodeId,
     nodes,
@@ -1590,6 +1592,7 @@ function SwitchXConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField,
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
   const finalPrompt = useFinalPromptSegments({
     userPrompt: data.prompt,
+    promptField: "prompt",
     consumerNodeId: nodeId,
     nodes,
     edges: edges ?? [],
@@ -1719,6 +1722,7 @@ function MotionTransferConfigImpl({ data, onUpdate, sources, fieldMappings, onMa
   const negativeFieldMode = usePromptFieldMode(nodeId ?? "", "negativePrompt")
   const finalPrompt = useFinalPromptSegments({
     userPrompt: data.prompt,
+    promptField: "prompt",
     negativePrompt: data.negativePrompt,
     consumerNodeId: nodeId,
     nodes,
@@ -2007,6 +2011,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
   const negativeFieldMode = usePromptFieldMode(nodeId ?? "", "negativePrompt")
   const finalPrompt = useFinalPromptSegments({
     userPrompt: data.prompt,
+    promptField: "prompt",
     negativePrompt: data.negativePrompt,
     consumerNodeId: nodeId,
     nodes,
@@ -2501,6 +2506,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
   const negativeFieldMode = usePromptFieldMode(nodeId ?? "", "negativePrompt")
   const finalPrompt = useFinalPromptSegments({
     userPrompt: data.prompt,
+    promptField: "prompt",
     negativePrompt: data.negativePrompt,
     consumerNodeId: nodeId,
     nodes,
@@ -4354,6 +4360,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
   const finalPrompt = useFinalPromptSegments({
     userPrompt: data.prompt,
+    promptField: "prompt",
     negativePrompt: data.negativePrompt,
     consumerNodeId: nodeId,
     nodes,
@@ -4591,6 +4598,7 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
   const negativeFieldMode = usePromptFieldMode(nodeId ?? "", "negativePrompt")
   const finalPrompt = useFinalPromptSegments({
     userPrompt: data.prompt,
+    promptField: "prompt",
     negativePrompt: data.negativePrompt,
     consumerNodeId: nodeId,
     nodes,
@@ -4875,6 +4883,7 @@ function VideoRetakeConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
   const finalPrompt = useFinalPromptSegments({
     userPrompt: data.prompt,
+    promptField: "prompt",
     consumerNodeId: nodeId,
     nodes,
     edges: edges ?? [],

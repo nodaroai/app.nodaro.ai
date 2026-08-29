@@ -71,6 +71,13 @@ workflows by ID with input overrides — they live under `/v1/api/` and
 predate the published-app system. Most new integrations should prefer
 `/v1/app/:slug/run` instead, but these remain supported.
 
+`POST /v1/app/:slug/run` takes the app's exposed fields as flat `inputs`, plus an
+optional `inputOverrides` — nested `{ nodeId: { field: value } }` raw node
+overrides for THIS run. The two are merged, not either/or: the nested overrides
+are applied OVER the flat `inputs`, per node and per field, so `inputOverrides`
+wins on any field both set and reaches fields no app input exposes (such as
+`promptPrefix`; see [Prompt pre & post text](./prompt-pre-post-text.md)).
+
 | Method | Path | Purpose |
 |---|---|---|
 | `GET`  | `/v1/api/workflows` | List workflows your token can run. Supports `?limit=` and `?cursor=` pagination. |
@@ -794,6 +801,9 @@ Video Pro: the deployed engine accepts the original-audio `soundtrack`
 input). The exact shape grows over time — treat unknown fields as
 forward-compatible.
 
+Every AI prompt node also lists `promptPrefix` and `promptSuffix` (`text`) in
+`inputSchema` — see [Prompt pre & post text](./prompt-pre-post-text.md).
+
 Neither endpoint requires authentication; they expose only static
 registry metadata. No scopes required.
 
@@ -1326,6 +1336,10 @@ captured node config; merge it into a node's data when you build a workflow to
 | `GET` | `/v1/node-presets/factory` | `nodeType` (**required**) | The built-in catalog for a node type. |
 
 A custom preset has `{ id, nodeType, name, description?, data, groupId?, tags, sortOrder, createdAt, updatedAt }`. The factory response is `{ data: FactoryPreset[] }`, where each entry has `{ id, name, description?, group?, groupKind?, data }`.
+
+A preset may carry `promptPrefix` / `promptSuffix`; the MCP generation verbs wrap
+the caller's prompt with them when `presetId` is passed (see
+[Prompt pre & post text](./prompt-pre-post-text.md)).
 
 **Auth/scope:** same bearer-token auth as every other endpoint
 (`ndr_…` / `ndr_app_…` / Supabase JWT). OAuth app tokens additionally need the

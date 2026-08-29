@@ -15,6 +15,7 @@ Unlike a normal video generator, **Relight & Switch** is driven by your **source
 | Keyframe index | Number | 0 | *Select mode only* — 0-based frame your mask describes; the AI propagates it across the clip |
 | Resolution | Select | 1080p | 720p or 1080p output |
 | Seed | Number | — | Reproducibility seed (0–4,294,967,295); leave empty for random |
+| `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ### Alpha modes
 

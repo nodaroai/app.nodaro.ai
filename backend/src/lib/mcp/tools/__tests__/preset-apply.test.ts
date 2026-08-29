@@ -527,3 +527,52 @@ describe("Task 5 verb→nodeType factory-preset coverage", () => {
     expect(getFactoryPresets(nodeType).length).toBeGreaterThan(0)
   })
 })
+
+/**
+ * Task 9: a preset's pre/post text (`promptPrefix` / `promptSuffix`) composes
+ * around whichever prompt won the caller-vs-preset merge, BEFORE the "prompt is
+ * required" guard — so an affixes-only preset is itself a valid prompt (the
+ * empty-core rule, spec §4.1/§7). No graph here → empty refMap, so a `{Label}`
+ * inside an affix stays verbatim.
+ */
+describe("generate_image preset pre/post text", () => {
+  it("wraps the CALLER's prompt with the preset's promptPrefix/promptSuffix", async () => {
+    customPresetRow.value = { id: "p-affix", name: "Wrap", description: null, data: { promptPrefix: "Cinematic still of", promptSuffix: ", golden hour" } }
+    const { result, body } = await runGenerateImage({ presetId: "p-affix", prompt: "a cat" })
+    expect(result.isError).toBeUndefined()
+    expect(body?.prompt).toBe("Cinematic still of a cat, golden hour")
+  })
+  it("an affixes-only preset satisfies the 'prompt required' guard (empty-core rule)", async () => {
+    customPresetRow.value = { id: "p-only", name: "Only", description: null, data: { promptPrefix: "PRE", promptSuffix: "POST" } }
+    const { result, body } = await runGenerateImage({ presetId: "p-only" })
+    expect(result.isError).toBeUndefined()
+    expect(body?.prompt).toBe("PRE POST")
+  })
+  it("caller prompt still beats a preset prompt, and is then wrapped", async () => {
+    customPresetRow.value = { id: "p-both", name: "Both", description: null, data: { prompt: "preset prompt", promptSuffix: "POST" } }
+    const { body } = await runGenerateImage({ presetId: "p-both", prompt: "mine" })
+    expect(body?.prompt).toBe("mine POST")
+  })
+})
+
+/**
+ * generate_speech's content param is `text` (the node's prompt field is
+ * `directText`), so a text-to-speech preset's affixes wrap the SPOKEN TEXT —
+ * parity with the DAG engine, where `computeNodePrompt("text-to-speech", …)`
+ * wraps `directText`. Guards the one place this task's composition targets a
+ * param other than `prompt`.
+ */
+describe("generate_speech preset pre/post text", () => {
+  it("wraps the caller's text with the preset's promptPrefix/promptSuffix", async () => {
+    customPresetRow.value = { id: "tts-affix", name: "Wrap", description: null, data: { promptSuffix: "Thanks for listening." } }
+    const { result, body } = await runGenerateSpeech({ presetId: "tts-affix", text: "Hello there." })
+    expect(result.isError).toBeUndefined()
+    expect(body?.text).toBe("Hello there. Thanks for listening.")
+  })
+  it("leaves the text untouched for a preset with no affixes", async () => {
+    customPresetRow.value = { id: "tts-plain", name: "Plain", description: null, data: { speed: 1.1 } }
+    const { body } = await runGenerateSpeech({ presetId: "tts-plain", text: "Hello there." })
+    expect(body?.text).toBe("Hello there.")
+    expect(body?.speed).toBe(1.1)
+  })
+})

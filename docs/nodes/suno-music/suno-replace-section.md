@@ -18,6 +18,7 @@ Suno Replace Section targets a precise time range within an existing Suno track 
 | Negative Tags | string (max 500) | `""` | Styles to exclude from the replacement segment (e.g. "rock"). |
 | Task ID | string | `""` | Suno task ID — auto-filled from a connected Suno node, or paste one manually to edit a track from an earlier session. |
 | Audio ID | string | `""` | Suno audio ID — auto-filled from a connected Suno node, or paste one manually. |
+| `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ## Inputs & Outputs
 

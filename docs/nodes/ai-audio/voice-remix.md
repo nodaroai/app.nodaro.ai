@@ -11,6 +11,7 @@ The Voice Remix node uses ElevenLabs Text-to-Voice to create a new voice based o
 |-------|------|---------|-------------|
 | Voice Description | `string` (textarea) | `""` | Natural language description of the desired voice (e.g., "A warm, deep male voice with a slight British accent and calm delivery") |
 | Preview Text | `string` (textarea) | `""` | The text the generated voice will speak in the preview output |
+| `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ## Inputs & Outputs
 

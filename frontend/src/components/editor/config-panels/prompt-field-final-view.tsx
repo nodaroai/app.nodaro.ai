@@ -13,7 +13,7 @@ import type { PromptSegmentOrigin } from "@nodaro/prompts"
  * Lives here (the view layer); the assembly hook imports it so the origin
  * vocabulary has a single home.
  */
-export type DisplayOrigin = PromptSegmentOrigin | "snippet"
+export type DisplayOrigin = PromptSegmentOrigin | "snippet" | "affix"
 
 export interface DisplaySegment {
   readonly text: string
@@ -27,6 +27,7 @@ export const ORIGIN_CLASS: Record<DisplayOrigin, string> = {
   variable: "bg-sky-500/15 text-sky-800 dark:text-sky-200 rounded-sm",
   picker: "bg-indigo-500/15 text-indigo-800 dark:text-indigo-200 rounded-sm",
   snippet: "bg-amber-500/15 text-amber-800 dark:text-amber-200 rounded-sm",
+  affix: "bg-teal-500/15 text-teal-800 dark:text-teal-200 rounded-sm",
   mention: "bg-violet-500/10 text-violet-800 dark:text-violet-300 rounded-sm",
   style: "bg-muted text-muted-foreground rounded-sm",
   negative: "bg-rose-500/10 text-rose-800 dark:text-rose-300 rounded-sm",
@@ -38,6 +39,7 @@ export const LEGEND_META: ReadonlyArray<{ origin: Exclude<DisplayOrigin, "user">
   { origin: "variable", label: "Variable", dot: "bg-sky-500" },
   { origin: "picker", label: "Picker", dot: "bg-indigo-500" },
   { origin: "snippet", label: "Snippet", dot: "bg-amber-500" },
+  { origin: "affix", label: "Pre/post text", dot: "bg-teal-500" },
   { origin: "mention", label: "References", dot: "bg-violet-500" },
   { origin: "style", label: "Style", dot: "bg-muted-foreground" },
   { origin: "negative", label: "Negative", dot: "bg-rose-500" },

@@ -1067,3 +1067,102 @@ describe("useFinalPromptSegments — Phase 5: text/LLM node faithfulness (regres
     expect(result.current.promptSegments.map((s) => s.text).join("")).toBe(result.current.promptText)
   })
 })
+
+describe("useFinalPromptSegments — prompt affixes", () => {
+  const AFFIXED_IMAGE_GRAPH = {
+    nodes: [{ id: "n1", type: "generate-image", position: { x: 0, y: 0 }, data: { promptPrefix: "PRE", promptSuffix: "POST" } }] as never[],
+    edges: [] as never[],
+  }
+  it("image path: prompt text is wrapped exactly like the run and the affixes are tinted", () => {
+    const { result } = renderHook(() =>
+      useFinalPromptSegments({ userPrompt: "a knight", consumerNodeId: "n1", ...AFFIXED_IMAGE_GRAPH, provider: "gpt-image" }),
+    )
+    // Byte-parity with the run: same shared assembler, same wrapped core.
+    const expected = assembleImageInput({
+      ...buildImageAssembleInput({
+        node: AFFIXED_IMAGE_GRAPH.nodes[0] as never,
+        nodes: AFFIXED_IMAGE_GRAPH.nodes as never,
+        edges: [],
+        characterDefinitions: [],
+        composedPrompt: "PRE a knight POST",
+        provider: "gpt-image",
+        styleBypass: false,
+      }),
+    }).prompt
+    expect(result.current.promptText).toBe(expected)
+    expect(result.current.promptText).toContain("PRE a knight POST")
+    const affixSpans = result.current.promptSegments.filter((s) => s.origin === "affix").map((s) => s.text)
+    expect(affixSpans).toEqual(["PRE", "POST"])
+    expect(result.current.promptSegments.map((s) => s.text).join("")).toBe(result.current.promptText)
+  })
+  it("provider-less path: structural segments carry the affixes with the join rule", () => {
+    const graph = {
+      nodes: [{ id: "s1", type: "generate-script", position: { x: 0, y: 0 }, data: { promptPrefix: "RULES:\n\n", promptSuffix: ", tight" } }] as never[],
+      edges: [] as never[],
+    }
+    // `promptField: "prompt"` = the topic field the run wraps (generate-script's
+    // EDITABLE field is `styleGuide`, which the run does NOT wrap — spec §7).
+    const { result } = renderHook(() => useFinalPromptSegments({ userPrompt: "a heist", consumerNodeId: "s1", ...graph, promptField: "prompt" }))
+    expect(result.current.promptText).toBe("RULES:\n\na heist, tight")
+    expect(result.current.promptSegments.map((s) => s.text).join("")).toBe("RULES:\n\na heist, tight")
+    expect(result.current.promptSegments.filter((s) => s.origin === "affix")).toHaveLength(2)
+  })
+  it("no affixes → unchanged output", () => {
+    const { result } = renderHook(() => useFinalPromptSegments({ userPrompt: "a knight", consumerNodeId: "n1", ...IMAGE_ONLY_GRAPH, provider: "gpt-image" }))
+    expect(result.current.promptSegments.some((s) => s.origin === "affix")).toBe(false)
+  })
+})
+
+describe("useFinalPromptSegments — affixes apply ONLY to the field the run wraps", () => {
+  const graphOf = (type: string, extra: Record<string, unknown> = {}) => ({
+    nodes: [{ id: "n1", type, position: { x: 0, y: 0 }, data: { promptPrefix: "PRE", promptSuffix: "POST", ...extra } }] as never[],
+    edges: [] as never[],
+  })
+  const run = (args: Parameters<typeof useFinalPromptSegments>[0]) => renderHook(() => useFinalPromptSegments(args)).result
+
+  it("llm-chat: the System prompt preview is NOT wrapped (the run wraps userInput only)", () => {
+    const r = run({ userPrompt: "be terse", consumerNodeId: "n1", ...graphOf("llm-chat"), promptField: "systemPrompt" })
+    expect(r.current.promptText).toBe("be terse")
+    expect(r.current.promptSegments.some((s) => s.origin === "affix")).toBe(false)
+  })
+  it("llm-chat: the user-input preview IS wrapped", () => {
+    const r = run({ userPrompt: "summarize", consumerNodeId: "n1", ...graphOf("llm-chat"), promptField: "userInput" })
+    expect(r.current.promptText).toBe("PRE summarize POST")
+    expect(r.current.promptSegments.filter((s) => s.origin === "affix").map((s) => s.text)).toEqual(["PRE", "POST"])
+  })
+  it("generate-script: the style-guide preview is NOT wrapped (spec §7 — the run wraps the topic prompt)", () => {
+    const r = run({ userPrompt: "noir, terse", consumerNodeId: "n1", ...graphOf("generate-script"), promptField: "styleGuide" })
+    expect(r.current.promptText).toBe("noir, terse")
+    expect(r.current.promptSegments.some((s) => s.origin === "affix")).toBe(false)
+  })
+  it("generate-script: omitting promptField previews the node's PRIMARY field (styleGuide) → still not wrapped", () => {
+    const r = run({ userPrompt: "noir, terse", consumerNodeId: "n1", ...graphOf("generate-script") })
+    expect(r.current.promptText).toBe("noir, terse")
+    expect(r.current.promptSegments.some((s) => s.origin === "affix")).toBe(false)
+  })
+  it("generate-script: the topic `prompt` preview IS wrapped", () => {
+    const r = run({ userPrompt: "a heist", consumerNodeId: "n1", ...graphOf("generate-script"), promptField: "prompt" })
+    expect(r.current.promptText).toBe("PRE a heist POST")
+    expect(r.current.promptSegments.filter((s) => s.origin === "affix")).toHaveLength(2)
+  })
+  it("text-prompt carrying affixes in its data (reachable via workflow JSON) never renders them", () => {
+    const r = run({ userPrompt: "just some text", consumerNodeId: "n1", ...graphOf("text-prompt"), promptField: "text" })
+    expect(r.current.promptText).toBe("just some text")
+    expect(r.current.promptSegments.some((s) => s.origin === "affix")).toBe(false)
+  })
+  it("image-to-video: the legacy `motionPrompt` fallback IS wrapped (the run wraps whichever candidate wins)", () => {
+    const r = run({ userPrompt: "slow push in", consumerNodeId: "n1", ...graphOf("image-to-video"), promptField: "motionPrompt" })
+    expect(r.current.promptText).toBe("PRE slow push in POST")
+    expect(r.current.promptSegments.filter((s) => s.origin === "affix")).toHaveLength(2)
+  })
+  it("every case keeps the absolute join-guard", () => {
+    for (const args of [
+      { userPrompt: "be terse", consumerNodeId: "n1", ...graphOf("llm-chat"), promptField: "systemPrompt" },
+      { userPrompt: "summarize", consumerNodeId: "n1", ...graphOf("llm-chat"), promptField: "userInput" },
+      { userPrompt: "a heist", consumerNodeId: "n1", ...graphOf("generate-script"), promptField: "prompt" },
+    ]) {
+      const r = run(args)
+      expect(r.current.promptSegments.map((s) => s.text).join("")).toBe(r.current.promptText)
+    }
+  })
+})

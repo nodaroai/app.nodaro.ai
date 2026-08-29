@@ -15,6 +15,7 @@ It can also **dub an existing video**: HeyGen Lipsync Precision, Sync Lipsync 2 
 | Provider | Select | kling-avatar | AI model for lip sync |
 | Resolution | Select | 720p | Output resolution: 480p/720p (most KIE providers); OmniHuman 1.5 is 720p/1080p (default 1080p); the full `seedance-2` adds **1080p / 4K** and `seedance-2-5` adds **1080p** (`seedance-2-fast` and `seedance-2-mini` are 480p/720p only) |
 | Motion Prompt | Textarea | — | Optional: describe head/expression motions (KIE providers only) |
+| `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ### OmniHuman 1.5 options
 

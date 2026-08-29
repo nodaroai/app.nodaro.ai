@@ -86,6 +86,7 @@ The tier is determined by the selected LLM model (Economy / Standard / Premium).
 | Duration | number (seconds) | `5` | Duration of the output. Range: 1--60 seconds (hard maximum). |
 | Aspect Ratio | enum | `"16:9"` | Output aspect ratio. Options: `16:9`, `9:16`, `1:1`, `4:5`. |
 | Background Color | hex string | `"#00000000"` | Background color. Supports alpha channel for transparency (8-digit hex). Default is fully transparent. |
+| `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ## Inputs & Outputs
 

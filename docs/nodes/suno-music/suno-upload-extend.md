@@ -17,6 +17,7 @@ Suno Upload Extend takes any audio file via URL and extends it using Suno AI. Un
 | Style | string (max 500) | `""` | Genre and style tags for the extension. |
 | Negative Style | string (max 500) | `""` | Styles to avoid in the extension. |
 | Vocal Gender | enum | auto | `"male"`, `"female"`, or unset for automatic selection. |
+| `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ## Inputs & Outputs
 

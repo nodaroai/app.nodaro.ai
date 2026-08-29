@@ -10,6 +10,7 @@ The Forced Alignment node uses the ElevenLabs Forced Alignment API to match each
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | Transcript | `string` (textarea, required) | `""` | The full text transcript of the audio input. Must accurately match what is spoken in the audio |
+| `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ## Inputs & Outputs
 

@@ -1,5 +1,6 @@
-import { IMAGE_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, LIP_SYNC_PROVIDERS, VOICE_CHANGER_MODEL_IDS, GVP_SUPPORTED_PROVIDERS, SEEDANCE_2_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, hasContiguousSegmentDurations, isMinimaxH3Provider, MODEL_CATALOG } from "@nodaro/shared"
+import { IMAGE_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, LIP_SYNC_PROVIDERS, VOICE_CHANGER_MODEL_IDS, GVP_SUPPORTED_PROVIDERS, SEEDANCE_2_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, hasContiguousSegmentDurations, isMinimaxH3Provider, MODEL_CATALOG, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY } from "@nodaro/shared"
 import type { OutputType } from "@nodaro/shared"
+import { nodeSupportsPromptAffixes } from "@nodaro/prompts"
 import { STATIC_CREDIT_COSTS } from "../ee/billing/credits.js"
 import { hasCredits } from "./config.js"
 
@@ -159,7 +160,7 @@ const EVP_REGISTRY_PROVIDERS = [...SEEDANCE_2_PROVIDERS]
  * Hand-curated registry. Source of truth for `GET /v1/nodes`.
  * Add new entries when adding a new node type — see CLAUDE.md "New Node Registration".
  */
-export const NODE_REGISTRY: NodeDescriptor[] = [
+const RAW_NODE_REGISTRY: NodeDescriptor[] = [
   {
     type: "text-prompt",
     label: "Text Prompt",
@@ -1174,6 +1175,25 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
   { type: "temporal",             label: "Temporal",             category: "parameter", description: "Multi-dim picker for temporal-speed + freeze + direction + shutter (18 catalog options across 4 fields). Emits a temporal-effect prompt fragment via the cinematography handle.", outputType: "text" },
   { type: "exposure-settings",    label: "Exposure Settings",    category: "parameter", description: "Multi-dim picker for aperture + shutter-speed + ISO (20 catalog options across 3 fields). Emits a camera-exposure prompt fragment via the cinematography handle.", outputType: "text" },
 ]
+
+const PROMPT_AFFIX_FIELDS = [
+  { key: PROMPT_PREFIX_KEY, type: "text" },
+  { key: PROMPT_SUFFIX_KEY, type: "text" },
+] as const
+
+/** Every affix-capable node advertises promptPrefix/promptSuffix — derived from
+ *  the prompt-field registry, never hand-listed per node. */
+function withPromptAffixFields(registry: NodeDescriptor[]): NodeDescriptor[] {
+  return registry.map((d) => {
+    if (!nodeSupportsPromptAffixes(d.type)) return d
+    const fields = d.inputSchema?.fields ?? []
+    if (fields.some((f) => f.key === PROMPT_PREFIX_KEY)) return d
+    return { ...d, inputSchema: { fields: [...fields, ...PROMPT_AFFIX_FIELDS.map((f) => ({ ...f }))] } }
+  })
+}
+
+/** Source of truth for `GET /v1/nodes` (hand-curated entries + derived prompt-affix fields). */
+export const NODE_REGISTRY: NodeDescriptor[] = withPromptAffixFields(RAW_NODE_REGISTRY)
 
 /**
  * Enrich descriptors with live credit costs from STATIC_CREDIT_COSTS.

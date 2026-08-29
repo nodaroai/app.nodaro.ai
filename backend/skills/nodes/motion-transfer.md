@@ -1,7 +1,7 @@
 ---
 node_type: motion-transfer
-generated_at: 2026-08-15T21:55:08.351Z
-generated_from: 150c80ac9
+generated_at: 2026-08-29T19:02:39.259Z
+generated_from: 7dbf4818b
 ---
 
 # Motion Transfer
@@ -21,6 +21,8 @@ generated_from: 150c80ac9
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
+- `promptPrefix?: string`
+- `promptSuffix?: string`
 - `negativePrompt?: string`
 - `provider?: "kling" | "kling-3.0" | "wan-animate-move" | "wan-animate-replace"`
 - `backgroundSource?: "input_video" | "input_image"`

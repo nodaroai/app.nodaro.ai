@@ -1,7 +1,7 @@
 ---
 node_type: video-retake
-generated_at: 2026-08-15T21:55:06.695Z
-generated_from: 150c80ac9
+generated_at: 2026-08-29T19:02:38.576Z
+generated_from: 7dbf4818b
 ---
 
 # Retake Video
@@ -23,6 +23,8 @@ generated_from: 150c80ac9
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
+- `promptPrefix?: string`
+- `promptSuffix?: string`
 - `prompt?: string`
 - `aspectRatio?: "16:9" | "9:16"`
 - `fps?: 24 | 25 | 48 | 50`

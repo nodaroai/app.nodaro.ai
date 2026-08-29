@@ -1,7 +1,7 @@
 ---
 node_type: suno-lyrics
-generated_at: 2026-08-15T21:55:06.947Z
-generated_from: 150c80ac9
+generated_at: 2026-08-29T19:02:38.678Z
+generated_from: 7dbf4818b
 ---
 
 # Suno Lyrics
@@ -18,6 +18,8 @@ generated_from: 150c80ac9
 - `prompt: string`
 
 **Optional data fields:**
+- `promptPrefix?: string`
+- `promptSuffix?: string`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `generatedText?: string`

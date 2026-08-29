@@ -15,6 +15,7 @@ The Image Critic node uses a vision-language model to evaluate an image against 
 | Prompt | text | `""` | Required for `prompt-adherence` and `all` modes. Can be wired via the `prompt` input edge -- the edge wins when present. |
 | LLM model | select | Claude Sonnet 4.6 | Any vision-capable model. Pricing varies by tier (1 / 1 / 2 credits for economy / standard / premium). |
 | Advanced mode | boolean | `false` | Gemini models only. Runs the model on the provider's own API so **Temperature**, **Max Tokens** and the full reasoning-depth range actually apply. Bills one credit tier up; disabled with an inline reason on non-Gemini models |
+| `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ## Inputs & Outputs
 

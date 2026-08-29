@@ -1,7 +1,7 @@
 ---
 node_type: text-to-video
-generated_at: 2026-08-28T14:27:47.730Z
-generated_from: fedb0677f
+generated_at: 2026-08-29T19:02:38.586Z
+generated_from: 7dbf4818b
 ---
 
 # Text to Video
@@ -23,6 +23,8 @@ generated_from: fedb0677f
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
+- `promptPrefix?: string`
+- `promptSuffix?: string`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `generatedVideoUrl?: string`

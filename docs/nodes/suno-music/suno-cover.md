@@ -19,6 +19,7 @@ Suno Cover takes a source audio track and generates a new cover version of it. Y
 | Vocal Gender | enum | auto | `"male"`, `"female"`, or unset for automatic selection. |
 | Custom Mode | boolean | `false` | Enables advanced parameter control. |
 | Instrumental | boolean | `false` | When true, generates an instrumental cover (removes vocals). |
+| `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ## Inputs & Outputs
 

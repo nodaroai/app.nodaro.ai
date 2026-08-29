@@ -1,7 +1,7 @@
 ---
 node_type: text-to-audio
-generated_at: 2026-08-15T21:55:06.837Z
-generated_from: 150c80ac9
+generated_at: 2026-08-29T19:02:38.631Z
+generated_from: 7dbf4818b
 ---
 
 # Text to Audio
@@ -21,6 +21,8 @@ generated_from: 150c80ac9
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
+- `promptPrefix?: string`
+- `promptSuffix?: string`
 - `currentJobProgress?: number`
 - `loop?: boolean`
 - `promptInfluence?: number`

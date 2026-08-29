@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { render } from "@testing-library/react"
-import { getEffectiveSunoCustomMode } from "@nodaro/prompts"
+import { getEffectiveSunoCustomMode, appendField } from "@nodaro/prompts"
 import { collectAudioStyleHints } from "@/lib/audio-style-hints"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { FinalAudioPromptPreview } from "../final-audio-prompt-preview"
@@ -81,5 +81,76 @@ describe("FinalAudioPromptPreview — suno-generate (Task 3)", () => {
     const node = sunoNode({ prompt: "" })
     const { container } = renderSuno(node, [node], [])
     expect(container.textContent ?? "").toBe("")
+  })
+})
+
+/**
+ * Pre/post text (prompt affixes) in the per-panel "Final prompt" box.
+ *
+ * The box claims to be byte-identical to what the executor sends. Its non-suno
+ * branch used to compose from the raw props with NO affixes, so a generate-music
+ * node with a `promptPrefix` showed the bare typed prompt while the segments
+ * Final view above it — and the run — showed the wrapped one. These lock the two
+ * halves of the contract: affixes present ⇒ the box shows the WRAPPED core with
+ * the style hint folded AFTER it (the order the run uses: affix first, then
+ * fold); affixes absent ⇒ byte-identical to the pre-change output (the no-op
+ * guarantee of `applyPromptAffixes`).
+ */
+
+const musicNode = (data: Record<string, unknown>): WorkflowNode =>
+  ({ id: "m1", type: "generate-music", position: { x: 0, y: 0 }, data: { label: "Music", ...data } } as unknown as WorkflowNode)
+
+/** The same music-genre source as above, wired into the generate-music consumer. */
+const musicGenreEdge: WorkflowEdge =
+  ({ id: "em", source: "genre", target: "m1", sourceHandle: "out", targetHandle: "audio-style" } as unknown as WorkflowEdge)
+
+function renderMusic(node: WorkflowNode, nodes: WorkflowNode[], edges: WorkflowEdge[]) {
+  const data = node.data as Record<string, unknown>
+  return render(
+    <FinalAudioPromptPreview
+      consumerNodeId="m1"
+      consumerType="generate-music"
+      userPrompt={data.prompt as string | undefined}
+      nodes={nodes}
+      edges={edges}
+    />,
+  )
+}
+
+/** The single rendered prompt body (the box's <pre>), without the label chrome. */
+const bodyOf = (container: HTMLElement): string => container.querySelector("pre")?.textContent ?? ""
+
+describe("FinalAudioPromptPreview — prompt affixes (generate-music)", () => {
+  it("(e) affixes + a wired genre hint → the WRAPPED core is shown, hint folded after it", () => {
+    const node = musicNode({
+      prompt: "a jazzy tune.",
+      promptPrefix: "Cinematic score:",
+      promptSuffix: "in 4/4 time",
+    })
+    const nodes = [node, genreNode]
+    const edges = [musicGenreEdge]
+    const hint = collectAudioStyleHints(node, "generate-music", nodes, edges).text
+    expect(hint).not.toBe("")
+
+    const body = bodyOf(renderMusic(node, nodes, edges).container)
+    // The affix wraps the core CONTIGUOUSLY (prefix + core + suffix), and the
+    // style hint is appended AFTER the whole wrapped string — never between the
+    // core and its suffix.
+    const wrapped = "Cinematic score: a jazzy tune. in 4/4 time"
+    expect(body).toContain(wrapped)
+    expect(body.startsWith("Cinematic score:")).toBe(true)
+    expect(body).toContain(hint)
+    expect(body.indexOf(hint)).toBeGreaterThan(body.indexOf(wrapped))
+    expect(body).toBe(appendField(wrapped, hint))
+  })
+
+  it("(f) NO affixes → byte-identical to the pre-change output (no-op guarantee)", () => {
+    const node = musicNode({ prompt: "a jazzy tune." })
+    const nodes = [node, genreNode]
+    const edges = [musicGenreEdge]
+    const hint = collectAudioStyleHints(node, "generate-music", nodes, edges).text
+
+    const body = bodyOf(renderMusic(node, nodes, edges).container)
+    expect(body).toBe(appendField("a jazzy tune.", hint))
   })
 })
