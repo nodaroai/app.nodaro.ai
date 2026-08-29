@@ -1,6 +1,7 @@
 import type { LocaleCatalogMap } from "./types.js"
 
 const map: LocaleCatalogMap = {
+  "none": { label: "なし", description: "構図エフェクトなし" },
   "bursting-through-frame": { label: "フレームを突き破る", description: "フレームを破る3D紙破り効果" },
   "breaking-out-of-frame": { label: "フレームから飛び出す", description: "手足がキャンバスの境界を越える" },
   "pixel-disintegration": { label: "ピクセル崩壊", description: "粒子に溶け込む被写体" },
@@ -14,7 +15,6 @@ const map: LocaleCatalogMap = {
   "floating-fragments": { label: "浮かぶ断片", description: "体が部分的に漂い去る" },
   "silhouette-outline": { label: "シルエットの輪郭", description: "フラットな背景上の真っ黒なシルエット" },
   "exploding-particles": { label: "爆発する粒子", description: "粒子に飛散する輪郭" },
-  "3x3-grid-collage": { label: "3×3グリッド・コラージュ", description: "コンタクトシート風の9ポーズモンタージュ" },
 
   // Additional composition effects
   "matte-painting": { label: "マットペインティング", description: "実写と合成されたマットペイントの背景" },

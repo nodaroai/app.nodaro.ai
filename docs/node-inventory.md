@@ -43,7 +43,7 @@ One row per node **type**. Generative model wrappers are not rows — a type tha
 | `camera-motion` | Camera Motion | parameter | Pick a camera motion from 71 entries across categories (static/pan/tilt/dolly/zoom/track) | `in`:any | `out`:video | NO |
 | `character-fx` | Character FX | parameter | Pick character-driven effects (57 entries, 5 categories — transformation, power, body-mod, face FX, aura) with position/duration/intensity timing | `in`:any | `out`:look | NO |
 | `color-look` | Color / Look | parameter | Pick a color-grading look from 41 entries (warm, teal-orange, bleached, vintage, ...) | `in`:any | `out`:look | NO |
-| `composition-effects` | Composition Effects | parameter | Pick a composition effect from 19 entries (bursting-through-frame, depth-of-field, rule-of-thirds, ...) | `in`:any | `out`:look | NO |
+| `composition-effects` | Composition Effects | parameter | Pick a composition effect from 19 entries (none, bursting-through-frame, pixel-disintegration, ...) | `in`:any | `out`:look | NO |
 | `duration` | Duration | parameter | Set a target duration in seconds for connected video or audio generation nodes | `in`:any | `duration`:param | NO |
 | `era` | Era / Period | parameter | Pick a historical era from 32 entries (1950s, 1990s-mall, ancient-rome, victorian, ...) | `in`:any | `out`:look | NO |
 | `exposure-settings` | Exposure Settings | parameter | Multi-dim picker for aperture + shutter-speed + ISO (20 catalog options across 3 fields) | `in`:any | `out`:look | NO |

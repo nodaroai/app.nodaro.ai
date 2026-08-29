@@ -1249,7 +1249,7 @@ export function CompositionEffectsConfig({ data, onUpdate }: ConfigProps<Composi
       />
       <Label>Composition Effect</Label>
       <CompositionEffectsPicker
-        value={data.compositionEffect || "bursting-through-frame"}
+        value={data.compositionEffect || "none"}
         onValueChange={(v) => onUpdate({ compositionEffect: v })}
       />
     </div>

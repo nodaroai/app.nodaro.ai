@@ -6400,7 +6400,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
-    defaultData: { label: "Composition Effects", compositionEffect: "bursting-through-frame" },
+    defaultData: { label: "Composition Effects", compositionEffect: "none" },
   },
   {
     type: "post-process-effects",

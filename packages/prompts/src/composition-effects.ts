@@ -32,6 +32,12 @@ export interface CompositionEffect {
 }
 
 export const COMPOSITION_EFFECTS: ReadonlyArray<CompositionEffect> = [
+  // The neutral default. Every other entry is a dramatic subject transform, so
+  // an unconfigured node must inject nothing — the same no-op-entry convention
+  // `transitions`/`character-fx` use for their "auto" default, which keeps the
+  // default a real catalog id (see the `defaultValue` contract in
+  // picker-catalogs.ts) instead of a value absent from the option list.
+  { id: "none",                   label: "None",                   description: "No composition effect",              promptHint: "", term: "" },
   { id: "bursting-through-frame", label: "Bursting Through Frame", description: "3D paper-tear breaking the frame",   promptHint: "the subject bursting forward through a torn paper frame in a 3D paper-tear effect, head and shoulders breaking the plane of the canvas with ragged paper edges curling outward", term: "3d pop-out through a torn paper frame" },
   { id: "breaking-out-of-frame",  label: "Breaking Out of Frame",  description: "Limb extends past canvas border",     promptHint: "the subject's hand or limb extending past the canvas border, breaking the fourth wall and reaching beyond the frame's edge into the viewer's space", term: "out-of-bounds effect, limb past the frame" },
   { id: "pixel-disintegration",   label: "Pixel Disintegration",   description: "Subject dissolving into particles",   promptHint: "the subject pixelating and dissolving into floating geometric particles drifting outward, ordered chaos with crisp pixel-cube fragments scattering away from the silhouette" },
@@ -45,7 +51,6 @@ export const COMPOSITION_EFFECTS: ReadonlyArray<CompositionEffect> = [
   { id: "floating-fragments",     label: "Floating Fragments",     description: "Body partially drifting away",        promptHint: "the subject's body partially floating away in fragments, broken pieces of the figure detaching and drifting upward like windborne paper, leaving a partially dissolved silhouette", term: "body fragmenting into drifting pieces" },
   { id: "silhouette-outline",     label: "Silhouette Outline",     description: "Clean black silhouette on flat BG",   promptHint: "the subject reduced to a clean black silhouette outline against a flat single-color background, no internal detail, pure shape language", term: "flat black silhouette on a solid background" },
   { id: "exploding-particles",    label: "Exploding Particles",    description: "Outline scattering into particles",   promptHint: "the subject's outline exploding outward into a cloud of fine particles, dust and motes scattering radially around a partially intact core figure" },
-  { id: "3x3-grid-collage",       label: "3x3 Grid Collage",       description: "Contact-sheet 9-pose montage",        promptHint: "the subject shown in a 3x3 grid of varied poses and expressions arranged as a contact-sheet collage, nine clean panels with consistent lighting and slight pose variation in each cell" },
   { id: "matte-painting",         label: "Matte Painting",         description: "Composite matte-painted background blended with live action, classic VFX", promptHint: "the subject composited against a matte-painted background blended seamlessly with live action, classic VFX matte-painting integration with hand-painted environment extension behind the figure" },
   { id: "double-exposure",        label: "Double Exposure",        description: "Two layered photographic exposures fused into one image", promptHint: "two layered photographic exposures fused into one image, the subject's silhouette filled with a secondary scene and translucent overlapping forms in classic darkroom double-exposure technique" },
   { id: "multiple-exposure",      label: "Multiple Exposure",      description: "Three or more exposures stacked, kaleidoscopic layering", promptHint: "three or more photographic exposures stacked into a single frame, kaleidoscopic layering of repeated subject positions with translucent overlapping silhouettes echoing across the canvas" },

@@ -234,7 +234,8 @@ export const SINGLE_PICKERS: ReadonlyArray<SingleDimParameterPickerMeta> = [
     nodeType: "composition-effects",
     label: "Composition Effect",
     valueField: "compositionEffect",
-    defaultValue: "bursting-through-frame",
+    // No default effect — see the note in @nodaro/prompts picker-catalogs.ts.
+    defaultValue: "none",
     catalogId: "composition-effects",
     entries: mapCat(COMPOSITION_EFFECTS),
   },

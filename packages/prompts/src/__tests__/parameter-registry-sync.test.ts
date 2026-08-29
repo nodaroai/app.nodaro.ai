@@ -134,7 +134,10 @@ const SAMPLE_DATA_BY_TYPE: Record<string, Record<string, unknown>> = {
   "held-prop": { heldProp: firstId(HELD_PROPS) },
   "exposure-settings": { aperture: firstId(EXPOSURE_SETTINGS) },
   "render-quality": { renderQuality: firstId(RENDER_QUALITIES) },
-  "composition-effects": { compositionEffect: firstId(COMPOSITION_EFFECTS) },
+  // Not firstId: the head of the catalog is the neutral "none" entry, whose
+  // promptHint is deliberately empty (same reason transition/character-fx below
+  // name a real id instead of their "auto" head).
+  "composition-effects": { compositionEffect: "bursting-through-frame" },
   "post-process-effects": { postProcess: firstId(POST_PROCESS_EFFECTS) },
   "action-fx": { actionFx: firstId(ACTION_FX) },
   // TRANSITIONS[0] is "auto" with an intentionally empty promptHint — use a

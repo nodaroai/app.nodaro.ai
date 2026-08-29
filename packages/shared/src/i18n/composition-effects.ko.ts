@@ -1,6 +1,7 @@
 import type { LocaleCatalogMap } from "./types.js"
 
 const map: LocaleCatalogMap = {
+  "none": { label: "없음", description: "구도 효과 없음" },
   "bursting-through-frame": { label: "프레임을 뚫고 나오기", description: "프레임을 찢고 나오는 3D 페이퍼-티어 효과입니다" },
   "breaking-out-of-frame": { label: "프레임 밖으로 나오기", description: "사지가 캔버스 경계 너머로 뻗어 나옵니다" },
   "pixel-disintegration": { label: "픽셀 디스인테그레이션", description: "피사체가 입자로 분해되어 흩어집니다" },
@@ -14,7 +15,6 @@ const map: LocaleCatalogMap = {
   "floating-fragments": { label: "플로팅 프래그먼츠", description: "몸이 부분적으로 떠다니며 흩어집니다" },
   "silhouette-outline": { label: "실루엣 아웃라인", description: "평면 배경 위의 깔끔한 검은 실루엣입니다" },
   "exploding-particles": { label: "익스플로딩 파티클", description: "윤곽이 입자로 흩뿌려집니다" },
-  "3x3-grid-collage": { label: "3x3 그리드 콜라주", description: "9 포즈 콘택트 시트 몽타주입니다" },
 
   // Additional composition effects
   "matte-painting": { label: "매트 페인팅", description: "라이브 액션과 합성된 매트 페인팅 배경입니다" },

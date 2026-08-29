@@ -1,6 +1,7 @@
 import type { LocaleCatalogMap } from "./types.js"
 
 const map: LocaleCatalogMap = {
+  "none": { label: "Нет", description: "Без композиционного эффекта" },
   "bursting-through-frame": {
     label: "Прорыв сквозь рамку",
     description: "3D-эффект разорванной бумаги, ломающий рамку",
@@ -52,10 +53,6 @@ const map: LocaleCatalogMap = {
   "exploding-particles": {
     label: "Взрыв частиц",
     description: "Контур разлетается на частицы",
-  },
-  "3x3-grid-collage": {
-    label: "Коллаж 3×3",
-    description: "Контактный лист из 9 поз",
   },
   "matte-painting": {
     label: "Маттовая живопись",

@@ -1,6 +1,7 @@
 import type { LocaleCatalogMap } from "./types.js"
 
 const map: LocaleCatalogMap = {
+  "none": { label: "بدون", description: "بدون تأثير تركيبي" },
   "bursting-through-frame": { label: "اختراق الإطار", description: "تمزق ورقي ثلاثي الأبعاد يكسر الإطار" },
   "breaking-out-of-frame": { label: "الخروج من الإطار", description: "طرف يمتد خارج حدود اللوحة" },
   "pixel-disintegration": { label: "تفكك بكسلي", description: "الموضوع يتحلل إلى جسيمات" },
@@ -14,7 +15,6 @@ const map: LocaleCatalogMap = {
   "floating-fragments": { label: "شظايا عائمة", description: "أجزاء من الجسم تنجرف بعيدا" },
   "silhouette-outline": { label: "ظل خارجي", description: "ظل أسود نقي على خلفية مسطحة" },
   "exploding-particles": { label: "جسيمات منفجرة", description: "الخط الخارجي يتطاير إلى جسيمات" },
-  "3x3-grid-collage": { label: "كولاج شبكة 3×3", description: "مونتاج تسع وضعيات على ورقة اتصال" },
 
   "matte-painting": { label: "رسم Matte", description: "خلفية مرسومة بـ Matte مدمجة مع Live Action" },
   "double-exposure": { label: "تعريض مزدوج", description: "تعريضان فوتوغرافيان متراكبان مدمجان" },
