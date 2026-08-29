@@ -34,6 +34,9 @@ import { combineVideos } from "../../providers/video/combine-videos.js"
 import { extractTailToFile } from "../../providers/video/extract-tail.js"
 import { extractFrame } from "../../providers/video/extract-frame.js"
 import { resolveSourceMatchedAspect } from "../../providers/video/source-matched-aspect.js"
+import { seedanceExtendGenerationModel, seedanceExtendDurationWindow } from "../../lib/seedance-extend-model.js"
+import { findChainedMovReference, isMovUrl } from "../../lib/seedance-extend-mov-chain.js"
+import { seedance25OutputFormat } from "../../providers/kie/video.js"
 import {
   cleanupWorkDir,
   createWorkDir,
@@ -1095,16 +1098,22 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
     }
     console.log(`[worker] extend-video ${ctx.jobId} (provider: seedance-2-extend)`)
 
-    // Snap into seedance-2's native 4–15s window; the 8s default mirrors the
-    // credit reservation's default tier so reserve and generation can't diverge.
-    const extSeconds = Math.min(15, Math.max(4, Math.round(duration ?? 8)))
+    // Which model this transport dispatches through — `seedance-2` unless
+    // SEEDANCE_EXTEND_GENERATION_MODEL says 2.5. The credit reservation reads
+    // the SAME lever (lib/seedance-extend-model.ts), so reserve and generation
+    // can't diverge.
+    const genModel = seedanceExtendGenerationModel()
+    // Snap into the chosen model's native window (2.0: 4–15s, 2.5: 4–30s); the
+    // 8s default mirrors the credit reservation's default tier.
+    const genWindow = seedanceExtendDurationWindow(genModel)
+    const extSeconds = Math.min(genWindow.max, Math.max(genWindow.min, Math.round(duration ?? 8)))
 
     // The extension must match the SOURCE's shape or the stitch letterboxes.
     // seedance-2 natively accepts aspect_ratio "adaptive" (adopts the
     // reference video's ratio — live-verified: 720×1280 ref → 496×864 out),
     // so this resolves without a probe round-trip; providers without a
     // native token would ffprobe + snap to the closest catalog ratio.
-    const aspectRatio = await resolveSourceMatchedAspect("seedance-2", sourceUrl)
+    const aspectRatio = await resolveSourceMatchedAspect(genModel, sourceUrl)
 
     await setJobProgress(job, ctx.jobId, 5)
 
@@ -1145,6 +1154,18 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
 
     const kiePrompt = `extend @video_1 as follows:\n${String(userPrompt ?? "").trim()}`
 
+    // On 2.5, prefer the PREVIOUS extension's raw mov over the tail we just
+    // cut: the tail is re-encoded to 4:2:0 by ffmpeg, which throws away
+    // exactly the colour fidelity `output_format: "mov"` was requested for.
+    // Nothing found (a foreign source, a first extension, an mp4 chain) falls
+    // back to the tail, which is the transport that works today.
+    const chainedMovUrl =
+      genModel === "seedance-2-5" ? await findChainedMovReference(sourceUrl, ctx.jobUserId) : undefined
+    const referenceVideoUrl = chainedMovUrl ?? tailUrl
+    // `mp4` is KIE's default and is sent as no field at all, so the mp4
+    // payload stays byte-identical to today.
+    const outputFormat = genModel === "seedance-2-5" ? seedance25OutputFormat() : "mp4"
+
     const seedanceRamp = startProgressRamp(job, ctx.jobId, { start: 10, cap: 75 })
     let gen
     try {
@@ -1153,18 +1174,36 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
       // reconcile cron finalize this extend-video job with the unstitched
       // extension (silent wrong output). If the worker dies mid-wait,
       // BullMQ's stalled-job recovery re-runs the whole handler instead.
-      gen = await imageToVideo(lastFrameUrl, "seedance-2", kiePrompt, extSeconds, undefined, {
+      gen = await imageToVideo(lastFrameUrl, genModel, kiePrompt, extSeconds, undefined, {
         resolution: resolution ?? "720p",
         generateAudio: generateAudio ?? true,
         // User references (route-assembled) ride alongside the tail; the
         // shared seedance resolver seats them as @image_1…N and appends the
         // last-frame anchor after them, so their prompt ordinals hold.
         ...(referenceImageUrls?.length ? { referenceImageUrls } : {}),
-        referenceVideoUrls: [tailUrl],
+        referenceVideoUrls: [referenceVideoUrl],
         aspectRatio,
+        ...(outputFormat === "mov" ? { outputFormat } : {}),
       })
     } finally {
       seedanceRamp.stop()
+    }
+
+    // A mov extension is worth keeping: it is the next extension's reference,
+    // and KIE's own URL expires long before then. Stored under a THROWAWAY
+    // uuid key — the job's own key stays reserved for the stitched deliverable,
+    // and an object sitting there could be mistaken for the result. No KIE
+    // task is persisted either way (see the onTaskCreated note above), so the
+    // reconcile cron can never finalize this job with the raw extension.
+    // A copy failure only breaks the chain (the next extend falls back to the
+    // tail) — it must not fail a job whose deliverable is the stitch.
+    let rawExtensionUrl = gen.url
+    if (isMovUrl(gen.url)) {
+      try {
+        rawExtensionUrl = await uploadToR2(gen.url, randomUUID(), "video", ctx.jobUserId, { ext: "mov" })
+      } catch (err) {
+        console.warn(`[worker] Job ${ctx.jobId}: raw mov copy failed, chain not extended:`, err)
+      }
     }
 
     // Smart-stitch: the extension was generated FROM the source's tail, so
@@ -1206,8 +1245,9 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
       mediaUrl: stitchedR2Url,
       extraOutputData: {
         thumbnailUrl: stitchedThumbUrl,
-        // Raw (unstitched) extension clip — provenance/debug only.
-        rawExtensionUrl: gen.url,
+        // Raw (unstitched) extension clip — provenance/debug, AND the mov
+        // reference the next extension in this chain will use.
+        rawExtensionUrl,
         // Where the stitch actually cut (smart-cut decision + PSNR).
         ...(stitchCuts ? { smartCuts: stitchCuts } : {}),
       },

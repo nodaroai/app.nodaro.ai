@@ -20,8 +20,9 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { EXTEND_VIDEO_PROVIDERS, PROMPT_HARD_CEILING, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, applyVideoNegativePrompt, buildVideoCreditModelIdentifier, type ConnectedReference } from "@nodaro/shared"
+import { EXTEND_VIDEO_PROVIDERS, PROMPT_HARD_CEILING, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, applyVideoNegativePrompt, type ConnectedReference } from "@nodaro/shared"
 import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
+import { buildSeedanceExtendCreditIdentifier } from "../lib/seedance-extend-model.js"
 import { assembleVideoConnectedReferences } from "./generate-video.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
@@ -99,22 +100,21 @@ export function assembleExtendVideoReferences(args: {
 // downstream credit reservation. Keeping these in sync is critical — a
 // divergence would charge the preHandler's price but reserve at a different
 // price, which can let under-funded users through or over-charge paying ones.
-function resolveExtendVideoIdentifier(body: Record<string, unknown> | undefined): string {
+// Exported so the lever's three producers (here, the workflow payload builder,
+// the workflow estimate) can be asserted equal in one test.
+export function resolveExtendVideoIdentifier(body: Record<string, unknown> | undefined): string {
   const provider = (body?.provider as string) ?? "veo-extend"
   if (provider === "veo-extend" && body?.model === "quality") {
     return "veo-extend:quality"
   }
   if (provider === "seedance-2-extend") {
-    // Duration tier × resolution composites (rows include stitch overhead).
-    // Same builder the ee credits resolver uses, so guard + reserve + node
-    // cost display can never diverge.
-    return buildVideoCreditModelIdentifier(
-      provider,
-      (body?.duration as number) ?? 8,
-      undefined,
-      undefined,
-      undefined,
-      (body?.resolution as string) ?? "720p",
+    // Duration tier × resolution composites, priced for the model
+    // SEEDANCE_EXTEND_GENERATION_MODEL actually dispatches on. Same builder
+    // the workflow payload builder and the ee credits resolver use, so guard
+    // + reserve + node cost display can never diverge.
+    return buildSeedanceExtendCreditIdentifier(
+      body?.duration as number | undefined,
+      body?.resolution as string | undefined,
     )
   }
   return provider
