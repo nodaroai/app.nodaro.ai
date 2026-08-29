@@ -1,6 +1,7 @@
 import type { LocaleCatalogMap } from "./types.js"
 
 const map: LocaleCatalogMap = {
+  "none": { label: "Aucun", description: "Aucun effet de composition" },
   "bursting-through-frame": { label: "Surgissant à travers le cadre", description: "Déchirure de papier 3D brisant le cadre" },
   "breaking-out-of-frame": { label: "Sortant du cadre", description: "Membre s'étendant au-delà de la bordure du tableau" },
   "pixel-disintegration": { label: "Désintégration en pixels", description: "Sujet se dissolvant en particules" },
@@ -14,7 +15,6 @@ const map: LocaleCatalogMap = {
   "floating-fragments": { label: "Fragments flottants", description: "Corps se dispersant partiellement" },
   "silhouette-outline": { label: "Silhouette en contour", description: "Silhouette noire nette sur fond uni" },
   "exploding-particles": { label: "Particules explosives", description: "Contour se dispersant en particules" },
-  "3x3-grid-collage": { label: "Collage en grille 3x3", description: "Montage planche-contact de 9 poses" },
   "matte-painting": { label: "Matte painting", description: "Fond peint en matte painting fondu avec prise de vue réelle" },
   "double-exposure": { label: "Double exposition", description: "Deux expositions photographiques superposées et fondues" },
   "multiple-exposure": { label: "Exposition multiple", description: "Trois expositions ou plus empilées" },

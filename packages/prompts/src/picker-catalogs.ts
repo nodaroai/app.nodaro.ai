@@ -457,7 +457,10 @@ const SINGLE_CATALOGS: readonly PickerCatalog[] = [
     catalogId: "composition-effects",
     kind: "single",
     valueField: "compositionEffect",
-    defaultValue: "bursting-through-frame",
+    // No default effect — composition effects are dramatic subject transforms,
+    // so an unset node injects nothing until the user picks one (matches the
+    // "unset folds nothing" behaviour every consumer already honours).
+    defaultValue: "none",
     options: toOptions(COMPOSITION_EFFECTS),
   },
   {

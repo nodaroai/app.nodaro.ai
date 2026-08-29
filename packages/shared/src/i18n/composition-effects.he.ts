@@ -1,6 +1,7 @@
 import type { LocaleCatalogMap } from "./types.js"
 
 const map: LocaleCatalogMap = {
+  "none": { label: "ללא", description: "ללא אפקט קומפוזיציה" },
   "bursting-through-frame": { label: "פורץ דרך הפריים", description: "קריעת נייר תלת-ממדית הפורצת את הפריים" },
   "breaking-out-of-frame": { label: "פורץ מחוץ לפריים", description: "גף נמתח מעבר לגבול הקנבס" },
   "pixel-disintegration": { label: "פירוק לפיקסלים", description: "סובייקט מתפרק לחלקיקים" },
@@ -14,7 +15,6 @@ const map: LocaleCatalogMap = {
   "floating-fragments": { label: "שברים מרחפים", description: "גוף נסחף חלקית" },
   "silhouette-outline": { label: "מתאר צללית", description: "צללית שחורה נקייה על רקע שטוח" },
   "exploding-particles": { label: "חלקיקים מתפוצצים", description: "מתאר מתפזר לחלקיקים" },
-  "3x3-grid-collage": { label: "קולאז' רשת 3x3", description: "מונטז' של 9 פוזות בסגנון contact sheet" },
   "matte-painting": { label: "Matte Painting", description: "רקע matte-painting מורכב מעורב עם צילום חי" },
   "double-exposure": { label: "חשיפה כפולה", description: "שתי חשיפות צילום שכבתיות מוזגות" },
   "multiple-exposure": { label: "חשיפה מרובה", description: "שלוש חשיפות או יותר מוערמות" },

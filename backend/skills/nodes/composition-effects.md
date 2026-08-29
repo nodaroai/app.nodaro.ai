@@ -28,7 +28,7 @@ generated_from: ae8d76277
 ```json
 {
   "label": "Composition Effects",
-  "compositionEffect": "bursting-through-frame"
+  "compositionEffect": "none"
 }
 ```
 <!-- AUTO-GEN:END node-data-shape -->
@@ -57,7 +57,7 @@ generated_from: ae8d76277
   },
   "data": {
     "label": "Composition Effects",
-    "compositionEffect": "bursting-through-frame"
+    "compositionEffect": "none"
   }
 }
 ```

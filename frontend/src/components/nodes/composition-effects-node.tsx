@@ -9,7 +9,10 @@ import type { CompositionEffectsData } from "@/types/nodes"
 
 function CompositionEffectsNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as CompositionEffectsData
-  const effectId = nodeData.compositionEffect || "bursting-through-frame"
+  // "none" is the neutral catalog entry (empty promptHint), so an unconfigured
+  // node reads as None and injects nothing. A node saved with an empty value
+  // lands on it too.
+  const effectId = nodeData.compositionEffect || "none"
   const description = getCompositionEffect(effectId)?.description
 
   return (
