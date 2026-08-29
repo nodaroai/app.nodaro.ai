@@ -100,6 +100,13 @@ export interface ProviderOptions {
   referenceAudioUrls?: string[] // Reference audio tracks for generation (Seedance 2, max 3)
   videoTrimStart?: number  // Gemini Omni V2V: source-clip trim start (seconds)
   videoTrimEnd?: number    // Gemini Omni V2V: source-clip trim end (seconds, ends-start ≤ 10)
+  // Seedance 2.5 ONLY: request the `mov` container (H.264 yuv444p + PCM)
+  // instead of KIE's default mp4. Opt-in per CALL, never a global default —
+  // mov bytes are not browser-safe and `storage.ts` stamps a provider video
+  // `.mp4`/`video/mp4`, so only a caller that re-encodes downstream (the
+  // seedance extend worker's stitch) may ask for it. `seedance25OutputFormat()`
+  // in providers/kie/video.ts reads the lever that feeds this.
+  outputFormat?: "mp4" | "mov"
   webSearch?: boolean      // Enable online search capability (Seedance 2, required field)
   nsfwChecker?: boolean    // Toggle NSFW content filter (Seedance 2)
   generationType?: string // Generation type (e.g., "TEXT_2_VIDEO", "FIRST_AND_LAST_FRAMES_2_VIDEO", "REFERENCE_2_VIDEO")

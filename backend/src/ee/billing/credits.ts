@@ -3,6 +3,7 @@ import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
 import { attemptAutoRecharge } from "./auto-recharge.js"
 import { hasCredits } from "../../lib/config.js"
 import { getAppSettings } from "../../lib/app-settings.js"
+import { buildSeedanceExtendCreditIdentifier } from "../../lib/seedance-extend-model.js"
 import { FREE_TIER_RESTRICTIONS, TIER_STORAGE_LIMITS } from "./stripe-config.js"
 import { PIPELINE_PINNABLE_SCRIPT_LLMS, getLlmTier, buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, FLUX2_RES_MP, type Flux2Model, AI_AVATAR_DURATION_BUCKETS, resolveAiAvatarCreditId, type AiAvatarEngine, type AiAvatarResolution, CINEMATIC_MIN_DURATION_SEC, CINEMATIC_MAX_DURATION_SEC, cinematicCreditId, resolveCinematicCreditId, type CinematicResolution, resolveSwitchXCreditId, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_MODEL, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, resolveEffectiveTier, resolveStoredTier } from "@nodaro/shared"
 // Provider-$ cost formulas — CORE lib (not @nodaro/shared, an irrevocably
@@ -2721,15 +2722,13 @@ function getNodeModelIdentifier(node: { type: string; data?: Record<string, unkn
   }
 
   // Extend-video: seedance trim-stitch extend prices by duration tier ×
-  // resolution (rows already include the ffmpeg stitch overhead).
+  // resolution, for the model SEEDANCE_EXTEND_GENERATION_MODEL actually
+  // dispatches on (the 2.0 rows already include the ffmpeg stitch overhead).
+  // The estimate must follow the reservation or the quote lies.
   if (nodeType === "extend-video" && provider === "seedance-2-extend") {
-    return buildVideoCreditModelIdentifier(
-      provider,
-      (data.duration as number) ?? 8,
-      undefined,
-      undefined,
-      undefined,
-      (data.resolution as string) ?? "720p",
+    return buildSeedanceExtendCreditIdentifier(
+      data.duration as number | undefined,
+      data.resolution as string | undefined,
     )
   }
 

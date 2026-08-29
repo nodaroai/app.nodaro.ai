@@ -84,6 +84,26 @@ const HAPPYHORSE_REF2V_ASPECT_RATIOS = new Set<string>([
 ])
 
 /**
+ * `KIE_SEEDANCE_25_OUTPUT_FORMAT` — the container we ask Seedance 2.5 for.
+ *
+ * `mov` is H.264 **yuv444p** + **PCM** audio; ModelArk recommends it as both
+ * input and output for edit/extension rounds because it keeps colour and
+ * brightness consistent across joins (reproduced on KIE 2026-08-29: every mov
+ * join carried roughly half the luma drop of the mp4 joins). Anything other
+ * than the exact string `mov` — unset, `mp4`, junk — resolves to `mp4`, which
+ * is KIE's own default and is sent as NO field at all, so the payload stays
+ * byte-identical to today.
+ *
+ * Read at call time (never cached at module load) so a Railway variable change
+ * takes effect on the next job instead of the next deploy.
+ *
+ * Seedance 2.0 has no `output_format` field on KIE — only 2.5 gets it.
+ */
+export function seedance25OutputFormat(): "mp4" | "mov" {
+  return process.env.KIE_SEEDANCE_25_OUTPUT_FORMAT === "mov" ? "mov" : "mp4"
+}
+
+/**
  * Merge Seedance 2.0 options into the KIE payload (I2V + T2V).
  *
  * Delegates the three mutually-exclusive KIE input modes (first-frame /
@@ -159,6 +179,18 @@ export function applySeedance2Params(
     input.aspect_ratio !== "adaptive"
   ) {
     input.aspect_ratio = "adaptive"
+  }
+
+  // Container selection is 2.5-only and CALLER-driven: `output_format` does not
+  // exist on KIE's `bytedance/seedance-2` schema, and a caller whose raw KIE
+  // bytes ARE the deliverable must never receive mov (storage stamps every
+  // provider video `.mp4`/`video/mp4`, so mov bytes under that key would be an
+  // unplayable result). Deliberately NOT read from the env here — the lever is
+  // consulted by the seedance extend worker, whose deliverable is re-encoded by
+  // the stitch, and passed in as `options.outputFormat`. `mp4` is KIE's default
+  // and is sent as no field, keeping the mp4 payload byte-identical.
+  if (provider === "seedance-2-5" && options?.outputFormat === "mov") {
+    input.output_format = "mov"
   }
 
   if (resolved.promptSuffix) {
