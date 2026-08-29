@@ -25,9 +25,11 @@ import {
   downloadFile,
   runFfmpeg,
   runFfprobe,
+  withFfmpegSlot,
 } from "../video/ffmpeg-utils.js"
 import { settledWithLimit } from "../../lib/settled-with-limit.js"
 import { computeCollageLayout, type ImageDim, type CollageLayoutMode } from "./collage-layout.js"
+import { collageBadgeTexts, buildCollageBadgesSvg } from "./collage-badges.js"
 
 /** Concurrent input downloads. Bounded so a 30-image collage doesn't open 30
  *  sockets at once, while still overlapping the dominant network latency. */
@@ -49,6 +51,14 @@ export interface ImageCollageParams {
    *  care"), 1 = big, 2 = medium, 3 = small. Relative — smart layout only
    *  (grid cells are uniform by design). Missing/invalid entries are auto. */
   readonly imageSizes?: readonly number[]
+  /** Storyboard mode: stamp a 1-based sequence number at each image's top-right,
+   *  in `imageUrls` order. Absent/false → no numbers (and, with no labels, the
+   *  untouched ffmpeg PNG is returned unchanged — no sharp re-encode). */
+  readonly numbered?: boolean
+  /** Per-image captions, index-aligned with `imageUrls`, shown after the number
+   *  (or alone). `null`/""/whitespace = none; a short array pads with none and
+   *  extras are ignored (same tolerance as `imageSizes`). */
+  readonly imageLabels?: readonly (string | null)[]
 }
 
 /** Long edge (px) per resolution. Canvas W/H are derived from the aspect. */
@@ -320,6 +330,27 @@ export async function createImageCollage(params: ImageCollageParams): Promise<st
 
   const args = buildCollageFfmpegArgs({ localPaths, rects, canvasW, canvasH, bgColor, outputPath })
   await runFfmpeg(args)
+
+  // Storyboard badges: sequence numbers + per-image labels overlaid onto the
+  // finished composite. `buildCollageBadgesSvg` returns undefined when there is
+  // nothing to draw (numbered off AND every label empty) — in that case we
+  // return the untouched ffmpeg PNG so a plain collage renders byte-identically
+  // (no sharp re-encode). Text is drawn by sharp/Pango, never ffmpeg drawtext
+  // (local dev ffmpeg has no libfreetype). The re-encode is a CPU/memory-bound
+  // 4K raster, so it runs under the shared ffmpeg FIFO slot even though it is
+  // not an ffmpeg spawn — the worker fans out at concurrency 50.
+  const texts = collageBadgeTexts(imageUrls.length, params.numbered === true, params.imageLabels)
+  const svg = buildCollageBadgesSvg({ canvasW, canvasH, rects, dims, texts })
+  if (svg) {
+    const labeledPath = join(workDir, "collage-labeled.png")
+    await withFfmpegSlot(() =>
+      sharp(outputPath)
+        .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
+        .png()
+        .toFile(labeledPath),
+    )
+    return labeledPath
+  }
 
   return outputPath
 }

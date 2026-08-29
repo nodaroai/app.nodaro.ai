@@ -101,6 +101,8 @@ describe("media resource", () => {
     const out = await c.media.imageCollage({
       imageUrls: ["https://x/a.png", "https://x/b.png", "https://x/c.png"],
       imageSizes: [1, 0, 3],
+      numbered: true,
+      imageLabels: ["Wide", null, "Close-up"],
       layout: "smart",
       resolution: "2K",
       aspectRatio: "16:9",
@@ -111,6 +113,8 @@ describe("media resource", () => {
     expect(JSON.parse(init.body)).toEqual({
       imageUrls: ["https://x/a.png", "https://x/b.png", "https://x/c.png"],
       imageSizes: [1, 0, 3],
+      numbered: true,
+      imageLabels: ["Wide", null, "Close-up"],
       layout: "smart",
       resolution: "2K",
       aspectRatio: "16:9",

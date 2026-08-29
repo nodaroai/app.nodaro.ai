@@ -12,6 +12,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { rateLimiter } from "../middleware/rate-limit.js"
 import { resolveCollageGeometry, toCssColor } from "../providers/image/collage.js"
+import { normalizeCollageLabels } from "../providers/image/collage-badges.js"
 
 export const imageCollageBody = z.object({
   imageUrls: z
@@ -28,6 +29,23 @@ export const imageCollageBody = z.object({
   imageSizes: z
     .array(z.number().int().min(0).max(3))
     .max(30, "At most 30 size hints")
+    .optional(),
+  /**
+   * Storyboard mode: stamp a 1-based sequence number (in `imageUrls` order) at
+   * each image's top-right. NO default on purpose — an absent value stays
+   * absent in the persisted `input_data` (a stamped `false` would surface as a
+   * real "Numbered: off" setting in the client's result panel).
+   */
+  numbered: z.boolean().optional(),
+  /**
+   * Per-image captions, index-aligned with `imageUrls`, shown after the number
+   * (or alone, e.g. `3 · Close-up`). `null`/"" = none. A shorter array pads
+   * with none and extra entries are ignored (same tolerance as `imageSizes`),
+   * so no length-must-equal constraint here.
+   */
+  imageLabels: z
+    .array(z.string().max(80).nullable())
+    .max(30, "At most 30 labels")
     .optional(),
   resolution: z.enum(["2K", "4K"]).optional().default("4K"),
   // Any "W:H" (1–2 digits each). Parsed generically by resolveCollageCanvas, so
@@ -182,13 +200,20 @@ export async function imageCollageRoutes(app: FastifyInstance) {
         })
       }
 
-      const { imageUrls, imageSizes, layout, resolution, aspectRatio, gap, backgroundColor, attachToCharacterId, attachToColumn, attachName, attachBoardType } = parsed.data
+      const { imageUrls, imageSizes, numbered, imageLabels: rawImageLabels, layout, resolution, aspectRatio, gap, backgroundColor, attachToCharacterId, attachToColumn, attachName, attachBoardType, ...restBody } = parsed.data
       const userId = req.userId
       if (!userId) {
         return reply.status(401).send({
           error: { code: "unauthorized", message: "Authentication required" },
         })
       }
+
+      // Sanitize captions HERE, before anything is persisted: the array goes
+      // into jobs.input_data (JSONB), and Postgres rejects a `\u0000` outright —
+      // so an unsanitized NUL in a caption would 500 job creation rather than
+      // render. Same sanitizer the renderer and the workflow-run path use, so
+      // what is stored is exactly what gets drawn; all-empty → key omitted.
+      const imageLabels = normalizeCollageLabels(rawImageLabels)
 
       const modelIdentifier = "image-collage"
 
@@ -199,7 +224,25 @@ export async function imageCollageRoutes(app: FastifyInstance) {
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: buildJobInputData(parsed.data, "image-collage"),
+          input_data: buildJobInputData(
+            {
+              ...restBody,
+              imageUrls,
+              imageSizes,
+              numbered,
+              layout,
+              resolution,
+              aspectRatio,
+              gap,
+              backgroundColor,
+              attachToCharacterId,
+              attachToColumn,
+              attachName,
+              attachBoardType,
+              ...(imageLabels ? { imageLabels } : {}),
+            },
+            "image-collage",
+          ),
           ...(mcpClient ? { mcp_client: mcpClient } : {}),
         })
 
@@ -215,6 +258,8 @@ export async function imageCollageRoutes(app: FastifyInstance) {
         jobId: job.id,
         imageUrls,
         imageSizes,
+        ...(numbered !== undefined ? { numbered } : {}),
+        ...(imageLabels ? { imageLabels } : {}),
         layout,
         resolution,
         aspectRatio,

@@ -3340,6 +3340,10 @@ export type ImageCollageData = {
    *  payload-builder.ts) via imageUrlsWithSourceIds; entries for nodes no
    *  longer connected are simply ignored. */
   imageSizeBySource?: Record<string, number>
+  /** Stamp a 1-based sequence number (final input order) at each image's top-right — storyboard mode. Absent = off. */
+  numbered?: boolean
+  /** Per-input caption keyed by SOURCE NODE ID, shown after the number (or alone). A List source's label applies to every image it contributes. Converted to the wire's index-aligned `imageLabels` at run time (execute-node.ts + backend payload-builder.ts). */
+  imageLabelBySource?: Record<string, string>
   /** User-configured input ordering as SOURCE NODE IDs (parallel order field
    *  for the `in` handle — see getParallelOrderField). Applied at run time on
    *  top of edge order by execute-node.ts + payload-builder.ts: each listed

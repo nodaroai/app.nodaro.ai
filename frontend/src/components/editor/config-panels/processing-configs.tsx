@@ -6,6 +6,7 @@ import { ChevronDown, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import {
   Select,
   SelectContent,
@@ -1505,6 +1506,23 @@ export function ImageCollageConfig({ data, onUpdate, sources }: ConfigProps<Imag
           </SelectContent>
         </Select>
       </div>
+      <div className="space-y-1">
+        <div className="flex items-center justify-between">
+          <Label htmlFor="collage-numbered" className="text-xs font-medium">
+            Number images (storyboard)
+          </Label>
+          <Switch
+            id="collage-numbered"
+            checked={!!data.numbered}
+            // `undefined` rather than `false` when off, so a node that never
+            // touched this stays byte-identical to a pre-feature workflow.
+            onCheckedChange={(v) => onUpdate({ numbered: v ? true : undefined })}
+          />
+        </div>
+        <p className="text-[10px] text-muted-foreground">
+          1, 2, 3… at each image's top-right, in the order below.
+        </p>
+      </div>
       {sources.length > 0 && (
         <div>
           {/* ONE sortable list for both concerns: drag rows to set the collage
@@ -1535,34 +1553,50 @@ export function ImageCollageConfig({ data, onUpdate, sources }: ConfigProps<Imag
             renderRowExtra={(entry) => {
               const current = data.imageSizeBySource?.[entry.id] ?? 0
               return (
-                <div
-                  className="flex rounded-md border border-border overflow-hidden w-fit"
-                  role="radiogroup"
-                  aria-label={`Size for ${entry.label}`}
-                >
-                  {COLLAGE_SIZE_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      role="radio"
-                      aria-checked={current === opt.value}
-                      className={`px-1.5 py-0.5 text-[10px] font-medium transition-colors ${
-                        current === opt.value
-                          ? "bg-[#ff0073] text-white"
-                          : "bg-transparent text-muted-foreground hover:bg-muted"
-                      }`}
-                      onClick={() =>
-                        onUpdate({
-                          imageSizeBySource: {
-                            ...(data.imageSizeBySource ?? {}),
-                            [entry.id]: opt.value,
-                          },
-                        })
-                      }
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <div
+                    className="flex rounded-md border border-border overflow-hidden w-fit"
+                    role="radiogroup"
+                    aria-label={`Size for ${entry.label}`}
+                  >
+                    {COLLAGE_SIZE_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={current === opt.value}
+                        className={`px-1.5 py-0.5 text-[10px] font-medium transition-colors ${
+                          current === opt.value
+                            ? "bg-[#ff0073] text-white"
+                            : "bg-transparent text-muted-foreground hover:bg-muted"
+                        }`}
+                        onClick={() =>
+                          onUpdate({
+                            imageSizeBySource: {
+                              ...(data.imageSizeBySource ?? {}),
+                              [entry.id]: opt.value,
+                            },
+                          })
+                        }
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <Input
+                    className="h-6 w-32 text-[11px]"
+                    placeholder="Label (optional)"
+                    maxLength={80}
+                    aria-label={`Label for ${entry.label}`}
+                    value={data.imageLabelBySource?.[entry.id] ?? ""}
+                    onChange={(e) => {
+                      const next = { ...(data.imageLabelBySource ?? {}) }
+                      const v = e.target.value
+                      if (v) next[entry.id] = v
+                      else delete next[entry.id]
+                      onUpdate({ imageLabelBySource: next })
+                    }}
+                  />
                 </div>
               )
             }}
@@ -1571,6 +1605,10 @@ export function ImageCollageConfig({ data, onUpdate, sources }: ConfigProps<Imag
             {(data.layout ?? "smart") === "grid"
               ? "Drag to reorder (reading order). Size hints apply to the Smart layout — Grid keeps uniform cells."
               : "Drag to reorder (reading order). Sizes are relative hints: Big ≈ 2× Medium, Small ≈ ½. A List input moves as one block and applies its hint to every image it contributes."}
+          </p>
+          <p className="text-[10px] text-muted-foreground mt-1">
+            Labels show after the number (e.g. “3 · Close-up”). A List input’s
+            label repeats on each image it contributes.
           </p>
         </div>
       )}

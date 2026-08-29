@@ -1,7 +1,7 @@
 import { Command } from "commander"
 import { buildClient, handleError } from "../client.js"
 import { emit, success, dim, detail, info, warn, type OutputOpts } from "../output.js"
-import { reportQueuedJob } from "../util.js"
+import { collectVariadic, reportQueuedJob } from "../util.js"
 import type { DownloadVideoProgress } from "@nodaro/sdk"
 
 interface GlobalOpts extends OutputOpts {
@@ -323,6 +323,12 @@ Example:
       "--sizes <list>",
       "comma-separated per-image size hints aligned with the images: 0 auto (default), 1 big (~2× linear), 2 medium, 3 small (~½). Relative — smart layout only",
     )
+    .option("--numbered", "stamp 1-based sequence numbers at each image's top-right (storyboard mode)")
+    .option(
+      "--label <text>",
+      'per-image caption shown after the number; repeat once per image, in order (pass "" to skip one)',
+      collectVariadic,
+    )
     .option("--layout <layout>", "smart (default — justified rows, output height floats) or grid (uniform letterboxed cells)")
     .option("--resolution <res>", "long-edge resolution: 2K or 4K (default 4K)")
     .option("--aspect-ratio <W:H>", 'output canvas ratio, e.g. "4:3" (exact in grid; a target shape in smart)')
@@ -336,15 +342,22 @@ Example:
 Examples:
   $ nodaro media collage https://x/a.png https://x/b.png https://x/c.png --watch
   $ nodaro media collage https://x/hero.png https://x/b.png https://x/c.png --sizes 1,3,3 --aspect-ratio 16:9 --watch
+  $ nodaro media collage https://x/a.png https://x/b.png https://x/c.png --numbered --label Wide --label "" --label Close-up --watch
 
 --sizes aligns by position: "1,3,3" renders the first image big and the other
 two small. Hints are relative — all-equal hints change nothing, and the grid
-layout ignores them.`)
+layout ignores them.
+
+--numbered stamps 1, 2, 3… at each image's top-right, in the order the images
+are passed. Repeat --label once per image (in the same order) to caption it
+after the number ("3 · Close-up"); pass "" to skip a label for one image.`)
     .action(
       async (
         imageUrls: string[],
         opts: {
           sizes?: string
+          numbered?: boolean
+          label?: string[]
           layout?: string
           resolution?: string
           aspectRatio?: string
@@ -374,10 +387,30 @@ layout ignores them.`)
             }
             imageSizes = parsed as Array<0 | 1 | 2 | 3>
           }
+          // --label is repeatable and index-aligned with the image args; a
+          // trimmed-empty label ('' to skip) becomes null so numbering stays
+          // aligned. All-blank → omit the field (no captions).
+          let imageLabels: Array<string | null> | undefined
+          if (opts.label && opts.label.length > 0) {
+            if (opts.label.length > imageUrls.length) {
+              warn(`Too many --label values: ${opts.label.length} for ${imageUrls.length} images (one per image, in order)`)
+              process.exit(1)
+            }
+            if (opts.label.some((s) => s.length > 80)) {
+              warn("Each --label must be at most 80 characters")
+              process.exit(1)
+            }
+            const mapped = opts.label.map((s) => s.trim() || null)
+            if (mapped.some((l) => l !== null)) {
+              imageLabels = mapped
+            }
+          }
           const client = buildClient(opts.profile)
           const result = await client.media.imageCollage({
             imageUrls,
             ...(imageSizes ? { imageSizes } : {}),
+            ...(opts.numbered ? { numbered: true } : {}),
+            ...(imageLabels ? { imageLabels } : {}),
             ...(opts.layout ? { layout: opts.layout as "smart" | "grid" } : {}),
             ...(opts.resolution ? { resolution: opts.resolution as "2K" | "4K" } : {}),
             ...(opts.aspectRatio ? { aspectRatio: opts.aspectRatio } : {}),

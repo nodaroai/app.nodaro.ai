@@ -69,6 +69,58 @@ describe("imageCollageBody imageSizes (per-image size hints)", () => {
   })
 })
 
+describe("imageCollageBody numbered + imageLabels (storyboard badges)", () => {
+  it("accepts a boolean numbered", () => {
+    const on = imageCollageBody.safeParse({ ...base, numbered: true })
+    expect(on.success).toBe(true)
+    if (on.success) expect(on.data.numbered).toBe(true)
+    expect(imageCollageBody.safeParse({ ...base, numbered: false }).success).toBe(true)
+  })
+
+  it("leaves numbered ABSENT (undefined) when omitted — no default", () => {
+    const parsed = imageCollageBody.safeParse(base)
+    expect(parsed.success).toBe(true)
+    if (parsed.success) expect(parsed.data.numbered).toBeUndefined()
+  })
+
+  it("rejects a non-boolean numbered", () => {
+    expect(imageCollageBody.safeParse({ ...base, numbered: "yes" }).success).toBe(false)
+    expect(imageCollageBody.safeParse({ ...base, numbered: 1 }).success).toBe(false)
+  })
+
+  it("accepts imageLabels of strings and nulls", () => {
+    const parsed = imageCollageBody.safeParse({ ...base, imageLabels: ["Wide", null] })
+    expect(parsed.success).toBe(true)
+    if (parsed.success) expect(parsed.data.imageLabels).toEqual(["Wide", null])
+  })
+
+  it("is optional (undefined when omitted)", () => {
+    const parsed = imageCollageBody.safeParse(base)
+    expect(parsed.success).toBe(true)
+    if (parsed.success) expect(parsed.data.imageLabels).toBeUndefined()
+  })
+
+  it("rejects a label longer than 80 chars, accepts exactly 80", () => {
+    expect(
+      imageCollageBody.safeParse({ ...base, imageLabels: ["x".repeat(81)] }).success,
+    ).toBe(false)
+    expect(
+      imageCollageBody.safeParse({ ...base, imageLabels: ["x".repeat(80)] }).success,
+    ).toBe(true)
+  })
+
+  it("rejects more than 30 labels", () => {
+    expect(
+      imageCollageBody.safeParse({ ...base, imageLabels: new Array(31).fill("a") }).success,
+    ).toBe(false)
+  })
+
+  it("rejects non-string, non-null label entries", () => {
+    expect(imageCollageBody.safeParse({ ...base, imageLabels: [42] }).success).toBe(false)
+    expect(imageCollageBody.safeParse({ ...base, imageLabels: [{}] }).success).toBe(false)
+  })
+})
+
 describe("collageLayoutBody — the free preview", () => {
   const dims = [{ w: 1200, h: 800 }, { w: 800, h: 1200 }]
 

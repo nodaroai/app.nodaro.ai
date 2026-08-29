@@ -813,6 +813,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         "Composite multiple images into ONE large 2K/4K image. Each item is either { url } or { asset_id } (a Nodaro job id whose output is an image), plus an optional per-image size hint. " +
         "No image is ever cropped: 'smart' layout justifies images into aspect-balanced rows at their exact aspect ratios (Google-Photos style; the output height floats to fit); 'grid' uses uniform cells with off-ratio images letterboxed in the background color. " +
         "Per-image `size` hints bias the smart layout's row packing so hinted-big images render larger (hero rows) and hinted-small ones pack denser rows — relative to each other, never cropping. " +
+        "For storyboards, set `numbered` to stamp a 1-based sequence badge at each image's top-right (in `images` order) and give any image a `label` to caption it after the number (e.g. '3 · Close-up'). " +
         "Returns a job_id with the composited image.",
       inputSchema: {
         images: z
@@ -829,6 +830,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
                 .describe(
                   "Relative size hint for THIS image: 0 auto/don't care (default), 1 big (~2× linear vs medium), 2 medium, 3 small (~½ linear). Smart layout only — grid cells stay uniform.",
                 ),
+              label: z.string().max(80).optional().describe("Optional caption shown after the number at this image's top-right (e.g. 'Wide', 'Close-up')."),
             }),
           )
           .min(2)
@@ -847,6 +849,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           .regex(/^#?[0-9a-fA-F]{6}$/)
           .optional()
           .describe("Background shown in the gaps, #RRGGBB. Default #ffffff."),
+        numbered: z.boolean().optional().describe("Stamp 1-based sequence numbers at each image's top-right in `images` order — storyboard mode."),
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
@@ -871,9 +874,14 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
       // Per-image size hints ride each images[] item; the route wants them as
       // an index-aligned array. All-auto → omit (layout no-op).
       const imageSizes = args.images.map((item) => item.size ?? 0)
+      // Per-image captions ride each images[] item too; the route wants them as
+      // an index-aligned array (null = no caption for that image). All-blank → omit.
+      const imageLabels = args.images.map((item) => item.label?.trim() || null)
       const payload: Record<string, unknown> = {
         imageUrls,
         ...(imageSizes.some((s) => s !== 0) ? { imageSizes } : {}),
+        ...(imageLabels.some((l) => l !== null) ? { imageLabels } : {}),
+        ...(args.numbered ? { numbered: true } : {}),
         ...(args.layout ? { layout: args.layout } : {}),
         ...(args.resolution ? { resolution: args.resolution } : {}),
         ...(args.aspect_ratio ? { aspectRatio: args.aspect_ratio } : {}),

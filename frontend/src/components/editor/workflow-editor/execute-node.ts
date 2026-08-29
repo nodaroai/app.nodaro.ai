@@ -5835,12 +5835,29 @@ export function executeNode(
       });
       if (imageSizes.every((s) => s === 0)) imageSizes = undefined;
     }
+    // Align the per-SOURCE labels (imageLabelBySource) to the wire order via
+    // the same lockstep imageUrlsWithSourceIds as the size hints, so labels
+    // follow the imageOrder reorder and a List source's label duplicates onto
+    // every image it contributes. All-empty → omit. Mirrors backend
+    // payload-builder.ts case "image-collage".
+    const labelBySource = collageData.imageLabelBySource;
+    let imageLabels: (string | null)[] | undefined;
+    if (labelBySource && withSourceIds && withSourceIds.length === imageUrls.length) {
+      imageLabels = withSourceIds.map((e) => {
+        const l = labelBySource[e.nodeId];
+        return typeof l === "string" && l.trim() ? l.trim().slice(0, 80) : null;
+      });
+      if (imageLabels.every((l) => l === null)) imageLabels = undefined;
+    }
+    const numbered = collageData.numbered === true ? true : undefined;
     setUserPromptTemplate(undefined);
     return runProcessingNode(
       node.id,
       () =>
         imageCollageApi(imageUrls, {
           imageSizes,
+          numbered,
+          imageLabels,
           layout: collageData.layout,
           resolution: collageData.resolution,
           aspectRatio: collageData.aspectRatio,

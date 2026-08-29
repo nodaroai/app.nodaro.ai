@@ -18,6 +18,8 @@ export interface ResultGenerationSettings {
   readonly resolution?: string
   /** Image Collage layout ("smart" | "grid"). Absent on other node types. */
   readonly layout?: string
+  /** Image Collage storyboard mode — 1-based badges. Absent on other node types. */
+  readonly numbered?: boolean
   readonly quality?: string
   readonly seed?: number
   readonly renderingSpeed?: string
@@ -47,6 +49,8 @@ export function selectSettings(job: Job): ResultGenerationSettings {
     aspectRatio: str(d.aspectRatio),
     resolution: str(d.resolution),
     layout: str(d.layout),
+    // boolean — `false` is a real value (numbering explicitly off), so guard on type.
+    numbered: typeof d.numbered === "boolean" ? d.numbered : undefined,
     quality: str(d.quality),
     seed: typeof d.seed === "number" ? d.seed : undefined,
     renderingSpeed: str(d.renderingSpeed),

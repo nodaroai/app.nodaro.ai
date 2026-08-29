@@ -52,6 +52,7 @@ const mockAddCaptionsApi = vi.fn()
 const mockMixAudioApi = vi.fn()
 const mockSpeechToVideoApi = vi.fn()
 const mockVoiceChangerProApi = vi.fn()
+const mockImageCollageApi = vi.fn()
 let mockNodes: any[] = []
 let mockEdges: any[] = []
 let mockCharacterDefinitions: any[] = []
@@ -135,6 +136,7 @@ vi.mock("@/lib/api", () => ({
   mixAudioApi: (...args: unknown[]) => mockMixAudioApi(...args),
   speechToVideoApi: (...args: unknown[]) => mockSpeechToVideoApi(...args),
   voiceChangerProApi: (...args: unknown[]) => mockVoiceChangerProApi(...args),
+  imageCollageApi: (...args: unknown[]) => mockImageCollageApi(...args),
   combineVideos: vi.fn(),
   editImage: vi.fn(),
   imageToImage: vi.fn(),
@@ -1527,5 +1529,67 @@ describe("motion-transfer with kling-3.0 provider", () => {
       undefined,
       undefined,
     )
+  })
+})
+
+
+// ---------------------------------------------------------------------------
+// image-collage — numbered + per-source label alignment (mirrors imageSizes)
+// ---------------------------------------------------------------------------
+
+describe("image-collage", () => {
+  // Two sources: A contributes one image, B (a List) contributes two. Labels
+  // are keyed by SOURCE NODE ID and must follow the wire order (incl. imageOrder
+  // reorder) and duplicate a List source's label onto every image it contributes.
+  const withSourceIds = [
+    { nodeId: "A", url: "http://a.png" },
+    { nodeId: "B", url: "http://b1.png" },
+    { nodeId: "B", url: "http://b2.png" },
+  ]
+
+  async function runCollage(data: Record<string, unknown>) {
+    mockResolveNodeInputs.mockReturnValue({
+      imageUrls: withSourceIds.map((e) => e.url),
+      imageUrlsWithSourceIds: withSourceIds,
+    })
+    mockImageCollageApi.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("image-collage", data), makeCtx())
+    const calls = mockPollJobWithNodeUpdate.mock.calls
+    const apiCallFn = calls[calls.length - 1][1]
+    await apiCallFn()
+    const collageCalls = mockImageCollageApi.mock.calls
+    return collageCalls[collageCalls.length - 1]
+  }
+
+  it("aligns per-source labels to the wire order and duplicates a List label", async () => {
+    const [urls, opts] = await runCollage({
+      imageLabelBySource: { A: "Wide", B: "Close-up" },
+    })
+    expect(urls).toEqual(["http://a.png", "http://b1.png", "http://b2.png"])
+    expect(opts.imageLabels).toEqual(["Wide", "Close-up", "Close-up"])
+  })
+
+  it("labels follow the imageOrder reorder", async () => {
+    const [urls, opts] = await runCollage({
+      imageOrder: ["B", "A"],
+      imageLabelBySource: { A: "Wide", B: "Close-up" },
+    })
+    expect(urls).toEqual(["http://b1.png", "http://b2.png", "http://a.png"])
+    expect(opts.imageLabels).toEqual(["Close-up", "Close-up", "Wide"])
+  })
+
+  it("passes numbered through only when true", async () => {
+    const [, on] = await runCollage({ numbered: true })
+    expect(on.numbered).toBe(true)
+    const [, off] = await runCollage({ numbered: false })
+    expect(off.numbered).toBeUndefined()
+  })
+
+  it("omits imageLabels when every label is empty/whitespace", async () => {
+    const [, opts] = await runCollage({
+      imageLabelBySource: { A: "   ", B: "" },
+    })
+    expect(opts.imageLabels).toBeUndefined()
   })
 })

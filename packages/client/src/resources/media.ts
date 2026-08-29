@@ -111,11 +111,18 @@ export class MediaResource {
    * gives per-image RELATIVE size hints for the smart layout: `0` auto
    * ("don't care", default), `1` big (~2× linear vs medium), `2` medium,
    * `3` small (~½ linear). All-equal hints change nothing; grid ignores them.
-   * Poll `jobs.get(jobId)` for the finished image.
+   * For storyboards, set `numbered` to stamp a 1-based sequence badge at each
+   * image's top-right (in `imageUrls` order) and pass `imageLabels`
+   * (index-aligned with `imageUrls`; `null`/`""`/omitted = no caption for that
+   * image) to caption images after the number, e.g. `3 · Close-up`. Badges are
+   * an overlay only — they never change the layout, the output size or the
+   * credit cost. Poll `jobs.get(jobId)` for the finished image.
    */
   imageCollage(input: {
     imageUrls: string[]
     imageSizes?: Array<0 | 1 | 2 | 3>
+    numbered?: boolean
+    imageLabels?: Array<string | null>
     layout?: "smart" | "grid"
     resolution?: "2K" | "4K"
     aspectRatio?: string

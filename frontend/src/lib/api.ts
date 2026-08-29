@@ -3139,6 +3139,10 @@ export async function imageCollageApi(
     /** Per-image size hints aligned with imageUrls: 0 auto / 1 big / 2 medium
      *  / 3 small. Relative — smart layout only. */
     imageSizes?: number[]
+    /** Stamp a 1-based sequence number at each image's top-right (storyboard). */
+    numbered?: boolean
+    /** Per-image captions aligned with imageUrls, shown after the number; null = none. */
+    imageLabels?: (string | null)[]
     layout?: "smart" | "grid"
     resolution?: "2K" | "4K"
     aspectRatio?: string
@@ -3154,6 +3158,8 @@ export async function imageCollageApi(
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { imageUrls }
   if (opts.imageSizes?.length) body.imageSizes = opts.imageSizes
+  if (opts.numbered) body.numbered = true
+  if (opts.imageLabels?.length) body.imageLabels = opts.imageLabels
   if (opts.layout) body.layout = opts.layout
   if (opts.resolution) body.resolution = opts.resolution
   if (opts.aspectRatio) body.aspectRatio = opts.aspectRatio

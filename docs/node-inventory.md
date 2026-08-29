@@ -149,7 +149,7 @@ One row per node **type**. Generative model wrappers are not rows — a type tha
 | `extract-frame` | Extract Frame | processing | Extract a single frame as an image | `in`:video | `image`:image | NO |
 | `fade-video` | Fade In/Out | processing | Add fade transitions to the beginning and end of video | `in`:video | `video`:video | NO |
 | `gif-to-video` | Gif to Video | processing | Convert an animated GIF to an H.264 MP4 so it can be used as a motion reference for video models that reject GIF input; optional seam-aware loop-to-minimum and 24fps interpolation. Local FFmpeg, zero credits | `image`:image | `video`:video | NO |
-| `image-collage` | Image Collage | processing | Composite N images into one 2K/4K image with a smart (justified) or grid layout | `in`:image | `image`:image | NO |
+| `image-collage` | Image Collage | processing | Composite N images into one 2K/4K image with a smart (justified) or grid layout; optional 1-based sequence numbers and per-image labels for storyboards | `in`:image | `image`:image | NO |
 | `loop-video` | Loop Video | processing | Repeat video to reach a target duration or count, with optional smart-loop-cut for seamless seams | `in`:video | `video`:video | NO |
 | `lottie-overlay` | Lottie Overlay | processing | AI-placed timed Lottie animations overlaid on video | `in`:video, `lottie`:lottie-json | `composition`:composition | NO |
 | `manual-edit` | Manual Edit | processing | Open video in a browser-based web editor for manual adjustments | `in`:identity | `video`:video | YES |
