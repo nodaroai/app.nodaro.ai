@@ -76,7 +76,7 @@ import { StylePicker } from "@/lib/picker-ui"
 import { SettingPicker } from "@/lib/picker-ui"
 import { LoopSubjectPicker } from "@/lib/picker-ui"
 import { PersonPicker } from "@/lib/picker-ui"
-import { MOODS, POSES, buildFramingHints, getLensPromptHint, getCameraFormatPromptHint, buildLightingHints, getColorLookPromptHint, buildAtmosphereHints, buildActionFxHints, getStylePromptHint, getSettingPromptHint, getLoopSubjectPromptHint, buildMoodHints, buildPoseHints, buildStylingHints, buildTemporalHints, buildMaterialHints, getPhotoGenrePromptHint, getBackdropPromptHint, buildHeldPropHints, buildPhotographerHints, buildAestheticHints, getEraPromptHint, buildExposureHints, getRenderQualityPromptHint, getCompositionEffectPromptHint, buildPostProcessHints, buildPersonHints } from "@nodaro/prompts"
+import { MOODS, POSES, buildFramingHints, getLensPromptHint, getCameraFormatPromptHint, buildLightingHints, getColorLookPromptHint, buildAtmosphereHints, buildActionFxHints, getStylePromptHint, getSettingPromptHint, getLoopSubjectPromptHint, buildMoodHints, buildPoseHints, buildStylingHints, buildTemporalHints, buildMaterialHints, getPhotoGenrePromptHint, getBackdropPromptHint, buildHeldPropHints, buildPhotographerHints, buildAestheticHints, getEraPromptHint, buildExposureHints, getRenderQualityPromptHint, getCompositionEffectPromptHint, buildPostProcessHints, buildPersonHints, TRANSITION_POSITIONS, TRANSITION_DURATIONS, TRANSITION_INTENSITIES } from "@nodaro/prompts"
 import { getAnimal, getVehicle, getWeapon, getFurniture } from "@nodaro/shared"
 import { MoodEmoji } from "@/lib/picker-ui"
 import { DimensionTileGrid } from "@/lib/picker-ui"
@@ -1280,28 +1280,13 @@ export function PostProcessEffectsConfig({ data, onUpdate }: ConfigProps<PostPro
   )
 }
 
+// Built from the catalogs the API also serves, so the editor and an id-only
+// client (Studio, SDK, MCP) can never show different labels for the same value.
+// A hand-written copy here had already drifted on all three duration rows.
 const TIMING_SELECTS = [
-  { key: "position",  label: "Position",  options: [
-    { value: "auto",   label: "Auto" },
-    { value: "start",  label: "Start" },
-    { value: "middle", label: "Middle" },
-    { value: "end",    label: "End" },
-    { value: "full",   label: "Full" },
-  ]},
-  { key: "duration",  label: "Duration",  options: [
-    { value: "auto",    label: "Auto" },
-    { value: "instant", label: "Instant" },
-    { value: "short",   label: "Short (~1s)" },
-    { value: "medium",  label: "Medium (~2s)" },
-    { value: "long",    label: "Long (~3s)" },
-  ]},
-  { key: "intensity", label: "Intensity", options: [
-    { value: "auto",    label: "Auto" },
-    { value: "subtle",  label: "Subtle" },
-    { value: "natural", label: "Natural" },
-    { value: "dynamic", label: "Dynamic" },
-    { value: "crazy",   label: "Crazy" },
-  ]},
+  { key: "position",  label: "Position",  options: TRANSITION_POSITIONS },
+  { key: "duration",  label: "Duration",  options: TRANSITION_DURATIONS },
+  { key: "intensity", label: "Intensity", options: TRANSITION_INTENSITIES },
 ] as const
 
 export function TransitionConfig({ data, onUpdate }: ConfigProps<TransitionData>) {
@@ -1338,7 +1323,9 @@ export function TransitionConfig({ data, onUpdate }: ConfigProps<TransitionData>
               <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {options.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  <SelectItem key={opt.id} value={opt.id} title={opt.description}>
+                    {opt.label}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -1383,7 +1370,9 @@ export function CharacterFxConfig({ data, onUpdate }: ConfigProps<CharacterFxDat
               <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {options.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  <SelectItem key={opt.id} value={opt.id} title={opt.description}>
+                    {opt.label}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>

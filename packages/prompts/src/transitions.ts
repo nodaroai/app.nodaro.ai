@@ -42,9 +42,23 @@ export interface Transition {
   readonly term?: string
 }
 
-export type TransitionPosition = "auto" | "start" | "middle" | "end" | "full"
-export type TransitionDuration = "auto" | "instant" | "short" | "medium" | "long"
-export type TransitionIntensity = "auto" | "subtle" | "natural" | "dynamic" | "crazy"
+/**
+ * The three timing scales, each derived from the catalog that defines it (see
+ * `TRANSITION_POSITIONS` and friends below).
+ *
+ * The direction matters. These used to be hand-written unions with the clause
+ * tables written out separately beside them, so the two could disagree: add a
+ * step to the union, forget the clause, and the composer indexed a missing key
+ * — pushing `undefined` into the parts list, which `join(", ")` renders as a
+ * dangling separator on a prompt that then ships to a provider with the user's
+ * chosen parameter silently dropped. Deriving the union FROM the catalog makes
+ * that unrepresentable: one array is the source of the type, the option list
+ * the API serves, and the clause table, so a new step reaches all three or
+ * none. The exact id sets are pinned by `transition-timing-catalogs.test.ts`.
+ */
+export type TransitionPosition = (typeof TRANSITION_POSITIONS)[number]["id"]
+export type TransitionDuration = (typeof TRANSITION_DURATIONS)[number]["id"]
+export type TransitionIntensity = (typeof TRANSITION_INTENSITIES)[number]["id"]
 
 export interface TransitionTiming {
   position?: TransitionPosition
@@ -303,26 +317,72 @@ export const TRANSITION_IDS: ReadonlyArray<string> = TRANSITIONS.map((t) => t.id
 // Graph-aware composer — start/end input handles + timing fields + multi-pick
 // ---------------------------------------------------------------------------
 
-const POSITION_CLAUSES: Record<Exclude<TransitionPosition, "auto">, string> = {
-  start:  "the transition occurs at the opening of the clip",
-  middle: "the transition occurs in the middle of the clip",
-  end:    "the transition occurs at the end of the clip",
-  full:   "the transition spans the entire clip",
+/**
+ * The transition node's three timing parameters, as catalogs.
+ *
+ * These are graded scales, not free numbers — the same shape as
+ * `exposure-settings`' aperture or `temporal`'s speed — so a consumer that can
+ * only send ids (Studio, the SDK, MCP) can offer them without composing prompt
+ * text of its own. `auto` is the no-op head of each scale: an empty
+ * `promptHint`, so an unset parameter contributes nothing and the model is left
+ * to decide, exactly as before these were enumerable.
+ *
+ * `POSITION_CLAUSES` / `DURATION_CLAUSES` / `INTENSITY_CLAUSES` below are
+ * DERIVED from these arrays, so the clause the composer injects and the hint
+ * the catalog advertises are the same string by construction and cannot drift.
+ */
+export interface TransitionTimingOption {
+  readonly id: string
+  readonly label: string
+  readonly description: string
+  readonly promptHint: string
+  readonly term?: string
 }
 
-const DURATION_CLAUSES: Record<Exclude<TransitionDuration, "auto">, string> = {
-  instant: "occurring instantaneously",
-  short:   "lasting approximately 1 second",
-  medium:  "lasting approximately 2 seconds",
-  long:    "lasting approximately 3 seconds",
+export const TRANSITION_POSITIONS = [
+  { id: "auto",   label: "Auto",   description: "Let the model place it",        promptHint: "", term: "" },
+  { id: "start",  label: "Start",  description: "At the opening of the clip",    promptHint: "the transition occurs at the opening of the clip", term: "at the opening of the clip" },
+  { id: "middle", label: "Middle", description: "In the middle of the clip",     promptHint: "the transition occurs in the middle of the clip", term: "mid-clip" },
+  { id: "end",    label: "End",    description: "At the end of the clip",        promptHint: "the transition occurs at the end of the clip", term: "at the end of the clip" },
+  { id: "full",   label: "Full",   description: "Spans the entire clip",         promptHint: "the transition spans the entire clip", term: "across the whole clip" },
+] as const satisfies ReadonlyArray<TransitionTimingOption>
+
+export const TRANSITION_DURATIONS = [
+  { id: "auto",    label: "Auto",    description: "Let the model time it",       promptHint: "", term: "" },
+  { id: "instant", label: "Instant", description: "No perceptible duration",     promptHint: "occurring instantaneously", term: "instantaneous" },
+  { id: "short",   label: "Short (~1s)",   description: "Approximately 1 second",  promptHint: "lasting approximately 1 second", term: "about 1 second" },
+  { id: "medium",  label: "Medium (~2s)",  description: "Approximately 2 seconds", promptHint: "lasting approximately 2 seconds", term: "about 2 seconds" },
+  { id: "long",    label: "Long (~3s)",    description: "Approximately 3 seconds", promptHint: "lasting approximately 3 seconds", term: "about 3 seconds" },
+] as const satisfies ReadonlyArray<TransitionTimingOption>
+
+export const TRANSITION_INTENSITIES = [
+  { id: "auto",    label: "Auto",    description: "Let the model judge it",      promptHint: "", term: "" },
+  { id: "subtle",  label: "Subtle",  description: "Restrained, minimal flourish", promptHint: "with subtle restrained energy and minimal flourish", term: "subtly" },
+  { id: "natural", label: "Natural", description: "Unhurried, unforced timing",  promptHint: "with natural unhurried timing", term: "at a natural pace" },
+  { id: "dynamic", label: "Dynamic", description: "Assertive, energetic",        promptHint: "with dynamic energy and assertive flourish", term: "energetically" },
+  { id: "crazy",   label: "Crazy",   description: "Extreme, wild, distorted",    promptHint: "with extreme exaggerated energy, wild flourishes, and dramatic distortion", term: "wildly exaggerated" },
+] as const satisfies ReadonlyArray<TransitionTimingOption>
+
+/**
+ * Index a timing catalog into the `Record<value, clause>` the composer reads.
+ *
+ * The key type is derived from the SAME array, so the record is total over the
+ * catalog by construction. That matters: the composer indexes these records
+ * without a fallback, and a missing key would push `undefined` into the parts
+ * list, which `join(", ")` renders as a dangling separator — a malformed prompt
+ * shipped to a provider with the user's chosen parameter silently dropped.
+ */
+function clausesOf<T extends TransitionTimingOption>(
+  options: ReadonlyArray<T>,
+): Record<Exclude<T["id"], "auto">, string> {
+  return Object.fromEntries(
+    options.filter((o) => o.id !== "auto").map((o) => [o.id, o.promptHint]),
+  ) as Record<Exclude<T["id"], "auto">, string>
 }
 
-const INTENSITY_CLAUSES: Record<Exclude<TransitionIntensity, "auto">, string> = {
-  subtle:  "with subtle restrained energy and minimal flourish",
-  natural: "with natural unhurried timing",
-  dynamic: "with dynamic energy and assertive flourish",
-  crazy:   "with extreme exaggerated energy, wild flourishes, and dramatic distortion",
-}
+const POSITION_CLAUSES = clausesOf(TRANSITION_POSITIONS)
+const DURATION_CLAUSES = clausesOf(TRANSITION_DURATIONS)
+const INTENSITY_CLAUSES = clausesOf(TRANSITION_INTENSITIES)
 
 /**
  * Compose a structural prompt-hint sentence from a transition id (or array

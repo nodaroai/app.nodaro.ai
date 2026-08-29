@@ -57,7 +57,7 @@ export function registerPickerCatalogs(server: McpServer, _session: McpSession):
         field: z
           .string()
           .optional()
-          .describe("Multi-dim pickers (person/styling/framing): only this dimension field."),
+          .describe("Return only this dimension field. Multi-dim pickers (person/styling/framing), and single-dim pickers with secondary parameters (transition: position/duration/intensity)."),
       },
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
