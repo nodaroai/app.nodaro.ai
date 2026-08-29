@@ -157,11 +157,12 @@ describe("bare video-analysis node-type credit id", () => {
     // 24 and the schedule regenerated ~47% lower at the ceiling bucket, and 300
     // wrote 2064: the V1 hybrid-smart reprice (task A3) moved `smart` to a
     // multi-roll plan (native skeleton + donor rolls, always refined) and
-    // trued up every tier's judge/refine terms), and 355 wrote 2068: the
+    // trued up every tier's judge/refine terms), 355 wrote 2068: the
     // recast shot-craft Stage-1 doctrine (transitions + on-screen text, three
     // required wire fields) grew the analyser's system prompt, moving the
-    // plugin's token pin 8_203 -> 8_482.
-    expect(ceiling).toBe(2068)
+    // plugin's token pin 8_203 -> 8_482, and 356 wrote 2071: Stage 1.3 grew
+    // that prompt again, moving the pin 8_482 -> 8_706.
+    expect(ceiling).toBe(2071)
   })
 
   it("the bare id still bounds the default tier at the ceiling bucket", () => {
