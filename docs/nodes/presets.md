@@ -215,6 +215,23 @@ Three ways to use them:
 Presets deliberately do **not** set the node's Duration — the overlay plan timeline should track your
 source video, so the node's own duration/FPS settings stay untouched when you apply one.
 
+## Factory presets that ship pre & post text
+
+Presets whose text is a complete instruction — rather than a subject you replace — now ship it as
+[pre & post text](../prompt-pre-post-text.md) instead of `prompt`, so applying them leaves the
+prompt field free for your own additions and the run wraps whatever you type:
+
+- **Generate Image / Modify Image:** the eleven **Reference Sheet** boards and the **Character
+  Reference Grid** (instruction as pre-text, the `Style: … 8K` tail as post-text), **Label Elements**
+  and **Apply Named Edit**, the **Face Privacy** edits, the **Portrait Transformations**, the
+  **Stylized Subject** family and the **Edits** folder (Background Remove, Colorize, Restore Photo,
+  Doodle Overlay ×2).
+- **SwitchX:** all five operation recipes.
+- **Video to Video:** the six **Restyle Looks**.
+
+Template presets that fill from variables (`{subject || …}` camera moves, looks paired with a
+`style`, music / SFX examples) keep their text in `prompt` — you edit that text directly.
+
 ## Using presets
 
 Every configurable node has a **preset dropdown** in two places:
@@ -228,7 +245,10 @@ surface in a "Favorites" band** at the very top so you can reach them without op
 band stays hidden until you favorite something. Open the dropdown to:
 
 - **Select a preset** — loads its settings onto the node. Selecting a preset that would overwrite
-  your current settings asks you to confirm first. (Undo with ⌘/Ctrl-Z.)
+  your current settings asks you to confirm first. (Undo with ⌘/Ctrl-Z.) A preset that ships prompt
+  content (a `prompt` and/or [pre/post text](../prompt-pre-post-text.md)) replaces the node's pre &
+  post text, so no leftover text from a previous preset wraps the new prompt; a settings-only preset
+  leaves your prompt and pre/post text alone.
 - Once a preset is active, its **name shows in the dropdown**. If you then change any of its
   settings, a **`*`** appears next to the name so you know you've diverged from the saved preset.
 - **Save as new** — capture the node's current settings as a new custom preset.

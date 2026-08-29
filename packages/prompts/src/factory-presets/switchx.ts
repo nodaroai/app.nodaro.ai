@@ -2,7 +2,7 @@ import type { FactoryPreset } from "./types.js"
 
 // SwitchX (Beeble) relight & composite starting points — one per common job,
 // so users get a tuned prompt + the right alpha mode instead of a blank node.
-// Presets set alphaMode + a starter prompt (and keyframe for select); they
+// Presets set alphaMode + a starter promptPrefix (and keyframe for select); they
 // deliberately leave resolution alone so they don't override the user's choice.
 // A connected reference image is the biggest quality lever for all of these.
 export const SWITCHX_PRESETS: readonly FactoryPreset[] = [
@@ -13,7 +13,7 @@ export const SWITCHX_PRESETS: readonly FactoryPreset[] = [
     group: "Relight & Composite",
     data: {
       alphaMode: "auto",
-      prompt:
+      promptPrefix:
         "Relight the subject to match the reference: match its colour temperature, key-light direction and intensity, and add matching contact shadows. Keep the subject's motion, pose and identity unchanged.",
     },
   },
@@ -24,7 +24,7 @@ export const SWITCHX_PRESETS: readonly FactoryPreset[] = [
     group: "Relight & Composite",
     data: {
       alphaMode: "auto",
-      prompt:
+      promptPrefix:
         "Keep the foreground subject and replace the background with the environment from the reference. Relight the subject so it sits naturally in the new scene — match light direction, colour and shadows.",
     },
   },
@@ -35,7 +35,7 @@ export const SWITCHX_PRESETS: readonly FactoryPreset[] = [
     group: "Relight & Composite",
     data: {
       alphaMode: "fill",
-      prompt:
+      promptPrefix:
         "Restyle the entire frame to match the reference look — colour grade, lighting and mood — while preserving the original motion, composition and timing.",
     },
   },
@@ -47,7 +47,7 @@ export const SWITCHX_PRESETS: readonly FactoryPreset[] = [
     data: {
       alphaMode: "select",
       alphaKeyframeIndex: 0,
-      prompt:
+      promptPrefix:
         "Composite the masked region against the reference and relight it to match. Leave everything outside the mask untouched.",
     },
   },
@@ -58,7 +58,7 @@ export const SWITCHX_PRESETS: readonly FactoryPreset[] = [
     group: "Relight & Composite",
     data: {
       alphaMode: "custom",
-      prompt:
+      promptPrefix:
         "Composite using the supplied per-frame matte and relight the kept region to match the reference. Preserve the original motion.",
     },
   },

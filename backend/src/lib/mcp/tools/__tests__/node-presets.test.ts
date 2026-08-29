@@ -120,7 +120,7 @@ describe("get_node_preset (read one preset's full config)", () => {
     expect(tools.map((t) => t.name)).not.toContain("get_node_preset")
   })
 
-  it("returns a factory preset's full config (provider + prompt, stripped data)", async () => {
+  it("returns a factory preset's full config (provider + pre/post text, stripped data)", async () => {
     const res = await callTool(presetsServer(), "get_node_preset", {
       nodeType: "generate-image",
       presetId: "generate-image/location-board",
@@ -131,7 +131,12 @@ describe("get_node_preset (read one preset's full config)", () => {
     expect(body.nodeType).toBe("generate-image")
     expect(body.source).toBe("factory")
     expect(typeof body.data.provider).toBe("string")
-    expect(typeof body.data.prompt).toBe("string")
+    // location-board ships its doctrine as PRE/POST TEXT, leaving `prompt` free
+    // for the user's own subject — the affixes must survive the read verbatim.
+    expect(typeof body.data.promptPrefix).toBe("string")
+    expect(body.data.promptPrefix).toContain("LOCATION BOARD")
+    expect(typeof body.data.promptSuffix).toBe("string")
+    expect(body.data.prompt).toBeUndefined()
     // extractPresetData strips runtime/graph keys — never leak a node label.
     expect(body.data.label).toBeUndefined()
   })

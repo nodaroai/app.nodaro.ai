@@ -252,4 +252,41 @@ describe("buildPresetApplyPatch", () => {
     expect("motionPlan" in patch && patch.motionPlan === undefined).toBe(true)
     expect("lottieUrl" in patch && patch.lottieUrl === undefined).toBe(true)
   })
+
+  // Prompt pre/post text. A preset that owns prompt content (prompt and/or an affix) replaces the
+  // node's affixes; a settings-only preset must not touch them. `prompt` is never cleared — only
+  // overwritten when the preset ships it, so a preset shipping only affixes keeps what you typed.
+  it("a prompt-shipping preset clears BOTH affixes (no stale prefix wrapping the new prompt)", () => {
+    const patch = buildPresetApplyPatch({ prompt: "x" }, "u4")
+    expect("promptPrefix" in patch).toBe(true)
+    expect(patch.promptPrefix).toBeUndefined()
+    expect("promptSuffix" in patch).toBe(true)
+    expect(patch.promptSuffix).toBeUndefined()
+    expect(patch.prompt).toBe("x")
+  })
+
+  it("an affix-only preset sets its own affix, clears the other, and leaves `prompt` unnamed", () => {
+    const patch = buildPresetApplyPatch({ promptPrefix: "PRE" }, "u5")
+    expect(patch.promptPrefix).toBe("PRE")
+    expect("promptSuffix" in patch).toBe(true)
+    expect(patch.promptSuffix).toBeUndefined()
+    // The node's typed prompt must survive: absent from the patch, not cleared by it.
+    expect("prompt" in patch).toBe(false)
+  })
+
+  it("a settings-only preset names no affix key at all (leaves the user's pre/post text alone)", () => {
+    const patch = buildPresetApplyPatch({ provider: "flux" }, "u6")
+    expect("promptPrefix" in patch).toBe(false)
+    expect("promptSuffix" in patch).toBe(false)
+    expect("prompt" in patch).toBe(false)
+    expect(patch.provider).toBe("flux")
+  })
+
+  it("the no-config-change path (empty preset data) touches neither prompt nor affixes", () => {
+    const patch = buildPresetApplyPatch({}, "u7")
+    expect("promptPrefix" in patch).toBe(false)
+    expect("promptSuffix" in patch).toBe(false)
+    expect("prompt" in patch).toBe(false)
+    expect(patch.__activePresetId).toBe("u7")
+  })
 })

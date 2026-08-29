@@ -4035,7 +4035,8 @@ export function executeNode(
 
   if (node.type === "suno-style-boost") {
     const d = node.data as SunoStyleBoostData;
-    const content = applyPromptAffixes(inputs.prompt ?? d.content?.trim(), readPromptAffixes(d), refMap);
+    // Resolve {Label} refs in the typed content (parity with the Final view + every other prompt node).
+    const content = applyPromptAffixes(inputs.prompt ?? resolveTextRefs(d.content?.trim(), refMap), readPromptAffixes(d), refMap);
     if (!content) {
       toast.error(`Node "${d.label}": no content provided`);
       return Promise.reject(new Error("No content"));

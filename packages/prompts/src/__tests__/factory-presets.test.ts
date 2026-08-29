@@ -3,7 +3,23 @@ import { FACTORY_PRESETS, getFactoryPresets, groupFactoryPresets } from "../fact
 import { extractPresetData, PRESET_APPLY_CLEAR_KEYS } from "@nodaro/shared"
 import { COMPOSER_PLAN_MAP, COMPOSER_PLAN_FIELDS } from "@nodaro/shared"
 import { STYLE_IDS } from "../index.js"
+import { joinPromptParts } from "../resolve-prompt.js"
+import { nodeSupportsPromptAffixes } from "../node-prompt-fields.js"
 import { IMAGE_GEN_PROVIDERS, MODIFY_IMAGE_PROVIDERS, VIDEO_GEN_PROVIDERS, VIDEO_TO_VIDEO_PROVIDERS, MUSIC_PROVIDERS, SUNO_MODELS, TTS_PROVIDERS, TEXT_TO_AUDIO_PROVIDERS, ALL_CAPTION_STYLES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, aspectRatioOptionsByKind, durationsByMode, IMAGE_PROMPT_MAX, MODEL_CATALOG, NATIVE_NEGATIVE_VIDEO_PROVIDERS } from "@nodaro/shared"
+
+/**
+ * The text a preset ACTUALLY sends: a preset may ship its doctrine as pre/post
+ * text (`promptPrefix` / `promptSuffix`) with the `prompt` field left free for
+ * the user — see docs/prompt-pre-post-text.md. Every content guard below reads
+ * the ASSEMBLED prompt through this helper (same join rule the run uses) so a
+ * prompt→affix move can never silently drop a clause or blow a length cap.
+ */
+const effectivePrompt = (d: Record<string, unknown>) =>
+  joinPromptParts([
+    d.promptPrefix as string | undefined,
+    d.prompt as string | undefined,
+    d.promptSuffix as string | undefined,
+  ])
 
 describe("FACTORY_PRESETS", () => {
   it("has presets for generate-image", () => {
@@ -74,7 +90,7 @@ describe("Seedance Director factory presets", () => {
     for (const p of pack) {
       const prompt = p.data.prompt as string
       expect(prompt).not.toMatch(/\(\s*\d+\s*[-–]\s*\d+\s*s\s*\)/i) // "(0-3s)" style
-      expect(prompt.length).toBeLessThanOrEqual(2000)
+      expect(effectivePrompt(p.data).length).toBeLessThanOrEqual(2000)
       expect(prompt).toContain("subtitle-free")
     }
   })
@@ -157,7 +173,7 @@ describe("generate-image factory preset data validity", () => {
 
   it("respects prompt (IMAGE_PROMPT_MAX) and negativePrompt (5000) length caps", () => {
     for (const p of presets) {
-      const prompt = (p.data.prompt as string | undefined) ?? ""
+      const prompt = effectivePrompt(p.data)
       const neg = (p.data.negativePrompt as string | undefined) ?? ""
       expect(prompt.length, `${p.id}: prompt exceeds cap`).toBeLessThanOrEqual(IMAGE_PROMPT_MAX)
       expect(neg.length, `${p.id}: negativePrompt exceeds 5000 chars`).toBeLessThanOrEqual(5000)
@@ -211,7 +227,7 @@ describe("generate-image factory preset data validity", () => {
     const boards = presets.filter((p) => p.group === "Reference Sheet")
     expect(boards.length).toBeGreaterThanOrEqual(11)
     for (const b of boards) {
-      expect(b.data.prompt as string, `${b.id}: missing the never-merge-panels clause`).toContain(
+      expect(effectivePrompt(b.data), `${b.id}: missing the never-merge-panels clause`).toContain(
         "never merging or omitting a panel",
       )
     }
@@ -239,7 +255,7 @@ describe("generate-image factory preset data validity", () => {
     const handmade = presets.filter((p) => p.group === "Handmade & Stop-Motion")
     expect(handmade.length).toBeGreaterThanOrEqual(6)
     for (const p of handmade) {
-      expect(p.data.prompt as string, `${p.id}: missing the NOT digital CG clause`).toContain("NOT digital CG")
+      expect(effectivePrompt(p.data), `${p.id}: missing the NOT digital CG clause`).toContain("NOT digital CG")
     }
   })
 
@@ -264,7 +280,7 @@ describe("generate-image factory preset data validity", () => {
   it("non-style-pinned generate-image prompts are substantive (no thin one-liners)", () => {
     for (const p of presets) {
       if (p.data.style !== undefined) continue // style field carries the look; short prompt is fine
-      const prompt = (p.data.prompt as string | undefined) ?? ""
+      const prompt = effectivePrompt(p.data)
       expect(prompt.trim().length, `${p.id}: prompt too thin (${prompt.length} chars)`).toBeGreaterThanOrEqual(40)
     }
   })
@@ -296,7 +312,7 @@ describe("modify-image factory preset data validity", () => {
 
   it("respects the prompt 2000-char cap", () => {
     for (const p of presets) {
-      const prompt = (p.data.prompt as string | undefined) ?? ""
+      const prompt = effectivePrompt(p.data)
       expect(prompt.length, `${p.id}: prompt exceeds 2000 chars`).toBeLessThanOrEqual(2000)
     }
   })
@@ -349,7 +365,7 @@ describe("generate-video factory preset data validity", () => {
 
   it("respects prompt/negativePrompt length caps (2500)", () => {
     for (const p of presets) {
-      expect(((p.data.prompt as string) ?? "").length, `${p.id}: prompt too long`).toBeLessThanOrEqual(2500)
+      expect(effectivePrompt(p.data).length, `${p.id}: prompt too long`).toBeLessThanOrEqual(2500)
       expect(((p.data.negativePrompt as string) ?? "").length, `${p.id}: negativePrompt too long`).toBeLessThanOrEqual(2500)
     }
   })
@@ -737,7 +753,7 @@ describe("video-to-video factory preset data validity", () => {
 
   it("respects prompt (5000) and negativePrompt (500) caps", () => {
     for (const p of presets) {
-      expect(((p.data.prompt as string) ?? "").length, `${p.id}: prompt > 5000`).toBeLessThanOrEqual(5000)
+      expect(effectivePrompt(p.data).length, `${p.id}: prompt > 5000`).toBeLessThanOrEqual(5000)
       expect(((p.data.negativePrompt as string) ?? "").length, `${p.id}: negativePrompt > 500`).toBeLessThanOrEqual(500)
     }
   })
@@ -1006,19 +1022,53 @@ describe("presets don't bake config-field values (framing) into the prompt", () 
   const ratioRe = new RegExp(`(^|[^0-9.])(${RATIO_TOKENS.map((t) => t.replace(/\./g, "\\.")).join("|")})([^0-9]|$)`)
 
   it("no factory preset prompt names an aspect ratio", () => {
+    // Checks all three prompt-bearing fields: a preset may ship its doctrine as
+    // pre/post text, and a ratio smuggled into an affix reaches the model just
+    // the same. The message names the offending field.
     const offenders: string[] = []
     for (const [, presets] of Object.entries(FACTORY_PRESETS)) {
       for (const p of presets) {
-        const prompt = (p.data as Record<string, unknown>).prompt
-        if (typeof prompt !== "string") continue
-        const m = prompt.match(ratioRe)
-        if (m) offenders.push(`${p.id} → "${m[2]}"`)
+        const d = p.data as Record<string, unknown>
+        for (const field of ["promptPrefix", "prompt", "promptSuffix"] as const) {
+          const text = d[field]
+          if (typeof text !== "string") continue
+          const m = text.match(ratioRe)
+          if (m) offenders.push(`${p.id}.${field} → "${m[2]}"`)
+        }
       }
     }
     expect(
       offenders,
       `prompts must not name an aspect ratio (the aspectRatio field controls framing):\n${offenders.join("\n")}`,
     ).toEqual([])
+  })
+})
+
+describe("factory preset pre/post text (promptPrefix / promptSuffix)", () => {
+  // A preset may ship its doctrine as pre/post text so the prompt field stays
+  // free for the user (docs/prompt-pre-post-text.md). Two invariants: the node
+  // type must actually support affixes — otherwise the text is dead data the
+  // run never wraps — and a shipped affix must carry real content, since a
+  // blank one is dropped by the join and silently loses the doctrine.
+  it("every affix-carrying factory preset is affix-capable and ships no empty affix", () => {
+    for (const [nodeType, presets] of Object.entries(FACTORY_PRESETS)) {
+      for (const p of presets) {
+        const d = p.data as Record<string, unknown>
+        const affixes = (["promptPrefix", "promptSuffix"] as const).filter(
+          (k) => d[k] !== undefined,
+        )
+        if (affixes.length === 0) continue
+        expect(
+          nodeSupportsPromptAffixes(nodeType),
+          `${p.id}: ships ${affixes.join("/")} but "${nodeType}" does not support pre/post text`,
+        ).toBe(true)
+        for (const k of affixes) {
+          const v = d[k]
+          expect(typeof v, `${p.id}: ${k} must be a string`).toBe("string")
+          expect((v as string).trim().length, `${p.id}: ${k} is blank`).toBeGreaterThan(0)
+        }
+      }
+    }
   })
 })
 

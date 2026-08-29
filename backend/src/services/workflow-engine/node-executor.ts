@@ -824,7 +824,17 @@ export function buildSyncHttpBody(
 
     case "suno-style-boost":
       return withUserPrompt({
-        content: applyPromptAffixes((resolvedInputs.prompt || data.content || data.prompt) as string | undefined, readPromptAffixes(data as Record<string, unknown>), refMap),
+        // Typed content resolves {Label} refs (parity with the editor's Final view
+        // and the frontend executor); a wired prompt arrives already resolved.
+        content: applyPromptAffixes(
+          (resolvedInputs.prompt as string | undefined) ||
+            (() => {
+              const typed = (data.content || data.prompt) as string | undefined
+              return typed && refMap.size > 0 ? resolveNodeRefs(typed, refMap) : typed
+            })(),
+          readPromptAffixes(data as Record<string, unknown>),
+          refMap,
+        ),
         userId: ctx.userId,
       })
 

@@ -45,8 +45,12 @@ describe("resolvePreset", () => {
     })
     expect(r).toBeTruthy()
     expect(r!.source).toBe("factory")
-    expect(typeof r!.data.provider).toBe("string") // real factory data carries provider/prompt
-    expect(typeof r!.data.prompt).toBe("string")
+    expect(typeof r!.data.provider).toBe("string") // real factory data carries provider + affixes
+    // Reference-Sheet boards ship their instruction as pre/post text (promptPrefix/promptSuffix),
+    // leaving `prompt` free for the caller's own subject.
+    expect(typeof r!.data.promptPrefix).toBe("string")
+    expect(typeof r!.data.promptSuffix).toBe("string")
+    expect(r!.data.prompt).toBeUndefined()
     expect(r!.data.label).toBeUndefined() // stripped
     // Factory ids resolve without ever touching the DB.
     expect(q.from).toHaveBeenCalledTimes(0)

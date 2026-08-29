@@ -84,5 +84,5 @@ A clip is billed by the number of 30-frame blocks it spans — e.g. a 144-frame 
 - **Auto** and **Fill** need no mask; **Select** needs a single keyframe mask image; **Custom** needs a full alpha matte video.
 - For **Select** mode, the easiest way to make the mask is the **Generate Mask** node ("mask the person") wired into the Mask input — SwitchX then propagates that one-frame mask across the whole clip. Beeble has no separate alpha-generation API; `Auto` does the masking for you, and `Select`/`Custom` take a mask you supply.
 - Output URLs are re-hosted to your library automatically — there's no 72-hour expiry to worry about.
-- Start from a **preset** (Relight Subject, Swap Background, Restyle Scene, …) for a tuned starting point, then adjust the prompt and reference.
+- Start from a **preset** (Relight Subject, Swap Background, Restyle Scene, …) for a tuned starting point — the preset's instruction lives in the node's **Pre & post text** (settings panel), so the prompt field stays free for your own additions. Adjust those and the reference to taste.
 - Set a **Seed** to make a result repeatable across runs with the same inputs; leave it empty for a fresh variation each time.
