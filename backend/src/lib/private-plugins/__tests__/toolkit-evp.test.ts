@@ -185,6 +185,40 @@ describe("toolkit.ts — edit-video-pro members", () => {
       )
     })
 
+    it("threads transitions[] and edgeFades through to core combineVideos (Stage-3 seam devices and film-edge fades)", async () => {
+      mockCombineVideosCore.mockResolvedValue({ outputPath: "/tmp/combine-xyz/output.mp4" })
+      mockUploadFileToR2.mockResolvedValue("https://r2.example.com/videos/combined.mp4")
+
+      await tk.ffmpeg.combineVideos({
+        videoUrls: ["https://a.mp4", "https://b.mp4", "https://c.mp4"],
+        transition: "cut",
+        transitionDuration: 0,
+        transitions: [{ index: 1, transition: "dip-to-black", duration: 0.5 }],
+        edgeFades: { in: 0.5, out: 1 },
+      })
+
+      expect(mockCombineVideosCore).toHaveBeenCalledWith(
+        expect.objectContaining({
+          transitions: [{ index: 1, transition: "dip-to-black", duration: 0.5 }],
+          edgeFades: { in: 0.5, out: 1 },
+        }),
+      )
+    })
+
+    it("omits transitions/edgeFades when the caller passes neither (a plugin build predating them is unaffected)", async () => {
+      mockCombineVideosCore.mockResolvedValue({ outputPath: "/tmp/combine-xyz/output.mp4" })
+      mockUploadFileToR2.mockResolvedValue("https://r2.example.com/videos/combined.mp4")
+
+      await tk.ffmpeg.combineVideos({
+        videoUrls: ["https://a.mp4", "https://b.mp4"],
+        transition: "cut",
+      })
+
+      const passed = mockCombineVideosCore.mock.calls[0][0] as Record<string, unknown>
+      expect(passed.transitions).toBeUndefined()
+      expect(passed.edgeFades).toBeUndefined()
+    })
+
     it("threads smartCut through to core combineVideos (gvp/evp stitch boundary matcher)", async () => {
       mockCombineVideosCore.mockResolvedValue({ outputPath: "/tmp/combine-xyz/output.mp4" })
       mockUploadFileToR2.mockResolvedValue("https://r2.example.com/videos/combined.mp4")

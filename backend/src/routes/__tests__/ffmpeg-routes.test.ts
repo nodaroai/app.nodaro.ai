@@ -420,3 +420,98 @@ describe.each(FFMPEG_ROUTES)(
     })
   }
 )
+
+// ---------------------------------------------------------------------------
+// combine-videos: per-boundary transitions + film-edge fades (Stage 3).
+// The provider treats both as fully optional and byte-identical when absent;
+// the route is where an id from OUTSIDE the COMBINE_TRANSITIONS catalog, an
+// absurd overlap, or a negative boundary index has to be turned away.
+// ---------------------------------------------------------------------------
+
+describe("POST /v1/combine-videos — transitions[] + edgeFades", () => {
+  const baseline = {
+    userId: VALID_UUID,
+    videoUrls: [EXAMPLE_VIDEO_URL, "https://example.com/video2.mp4"],
+  }
+
+  it("forwards a valid transitions[] and edgeFades to the queue", async () => {
+    mockJobInsert({ data: { id: "job-1" }, error: null })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/combine-videos",
+      payload: {
+        ...baseline,
+        transitions: [{ index: 0, transition: "dip-to-black", duration: 0.5 }],
+        edgeFades: { in: 0.5, out: 1 },
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(videoQueue.add).toHaveBeenCalledWith(
+      "combine-videos",
+      expect.objectContaining({
+        transitions: [{ index: 0, transition: "dip-to-black", duration: 0.5 }],
+        edgeFades: { in: 0.5, out: 1 },
+      }),
+    )
+  })
+
+  it("rejects a transition id outside the COMBINE_TRANSITIONS catalog", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/combine-videos",
+      payload: {
+        ...baseline,
+        transitions: [{ index: 0, transition: "not-a-real-transition", duration: 0.5 }],
+      },
+    })
+
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
+  it("rejects a negative or non-integer boundary index", async () => {
+    for (const index of [-1, 1.5]) {
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/combine-videos",
+        payload: { ...baseline, transitions: [{ index, transition: "dissolve", duration: 0.5 }] },
+      })
+      expect(res.statusCode, `index ${index}`).toBe(400)
+    }
+  })
+
+  it("rejects a per-boundary duration outside 0–2 seconds", async () => {
+    for (const duration of [-0.1, 2.5]) {
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/combine-videos",
+        payload: { ...baseline, transitions: [{ index: 0, transition: "dissolve", duration }] },
+      })
+      expect(res.statusCode, `duration ${duration}`).toBe(400)
+    }
+  })
+
+  it("rejects an edge fade outside 0–3 seconds", async () => {
+    for (const edgeFades of [{ in: 4 }, { out: -1 }]) {
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/combine-videos",
+        payload: { ...baseline, edgeFades },
+      })
+      expect(res.statusCode, JSON.stringify(edgeFades)).toBe(400)
+    }
+  })
+
+  it("both fields stay optional — a payload without them still enqueues", async () => {
+    mockJobInsert({ data: { id: "job-1" }, error: null })
+
+    const res = await app.inject({ method: "POST", url: "/v1/combine-videos", payload: baseline })
+
+    expect(res.statusCode).toBe(200)
+    const enqueued = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+    expect(enqueued.transitions).toBeUndefined()
+    expect(enqueued.edgeFades).toBeUndefined()
+  })
+})

@@ -349,6 +349,8 @@ async function combineVideosToUrl(options: {
   targetWidth?: number
   targetHeight?: number
   smartCut?: { enabled: boolean; framesFromPrev: number; framesFromNext: number; boundaryMask?: readonly boolean[]; mode?: "best-pair" | "preroll-keep-prev" | "preroll-keep-next" }
+  transitions?: ReadonlyArray<{ index: number; transition: string; duration: number }>
+  edgeFades?: { in?: number; out?: number }
 }): Promise<string> {
   const { outputPath: localPath } = await combineVideosCore({
     videoUrls: options.videoUrls,
@@ -361,6 +363,10 @@ async function combineVideosToUrl(options: {
     targetWidth: options.targetWidth,
     targetHeight: options.targetHeight,
     smartCut: options.smartCut,
+    // Per-boundary seam devices and film-edge fades — forwarded verbatim (no
+    // default): absent on both sides is the byte-identical path.
+    transitions: options.transitions,
+    edgeFades: options.edgeFades,
   })
   try {
     return await uploadFileToR2(localPath, randomUUID(), "video")

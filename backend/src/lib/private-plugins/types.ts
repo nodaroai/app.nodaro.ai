@@ -404,6 +404,25 @@ export interface PluginFfmpegToolkit {
      *  near-twins; unmatched boundaries keep the fixed trims. Additive-
      *  optional so plugin versions on either side of this member interop. */
     smartCut?: { enabled: boolean; framesFromPrev: number; framesFromNext: number; boundaryMask?: readonly boolean[]; mode?: "best-pair" | "preroll-keep-prev" | "preroll-keep-next" }
+    /** PER-BOUNDARY override of `transition`/`transitionDuration`: `index` is
+     *  boundary k, the join between clip k and clip k+1 (N clips have N-1
+     *  boundaries). Built for the recast stitcher, which renders the device
+     *  the analyser recorded at each segment SEAM. A boundary with no entry
+     *  keeps the global transition; an entry with `transition: "cut"` or
+     *  `duration <= 0` is a hard cut there; an out-of-range index or an id
+     *  outside the app's `COMBINE_TRANSITIONS` catalog is warned about and
+     *  ignored (never fatal — a plugin released after the running app build
+     *  must degrade, not abort a stitch of already-paid-for renders). The
+     *  concat-demuxer fast path is used only when EVERY boundary is a cut.
+     *  Additive-optional, like `smartCut`: absent → byte-identical to before
+     *  this member existed, so plugin versions on either side interop. */
+    transitions?: ReadonlyArray<{ index: number; transition: string; duration: number }>
+    /** Film-edge fades in SECONDS — `fade=t=in` over the head of the first
+     *  clip, `fade=t=out` over the tail of the last. The opening/closing fades
+     *  a keyframes render cannot make itself (every segment opens on a pinned
+     *  anchor frame). Baked in before any join, so they survive the
+     *  stream-copying fast path. Absent/0 → no fade pass runs. */
+    edgeFades?: { in?: number; out?: number }
   }): Promise<string>
   /**
    * New core helper added alongside this contract member

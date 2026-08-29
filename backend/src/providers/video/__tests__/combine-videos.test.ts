@@ -118,6 +118,8 @@ interface CombineCallOpts {
   trimEndFrames?: number
   targetWidth?: number
   targetHeight?: number
+  transitions?: ReadonlyArray<{ index: number; transition: string; duration: number }>
+  edgeFades?: { in?: number; out?: number }
 }
 
 function defaultOptions(over: CombineCallOpts = {}): Parameters<typeof combineVideos>[0] {
@@ -133,6 +135,8 @@ function defaultOptions(over: CombineCallOpts = {}): Parameters<typeof combineVi
     trimEndFrames: over.trimEndFrames ?? 0,
     targetWidth: over.targetWidth,
     targetHeight: over.targetHeight,
+    transitions: over.transitions,
+    edgeFades: over.edgeFades,
   }
 }
 
@@ -1453,5 +1457,368 @@ describe("combineVideos — return + cleanup", () => {
       combineVideos(defaultOptions({ transition: "cut" })),
     ).rejects.toThrow()
     expect(mocks.cleanupWorkDir).toHaveBeenCalled()
+  })
+})
+
+// ===========================================================================
+// 8) Per-boundary transitions (`transitions[]`) — Stage 3 stitcher devices.
+//
+//    The analyser records a device (fade / dissolve / wipe / whip) at a
+//    SEGMENT SEAM; the stitcher is the only place that can render it. Each
+//    entry overrides the GLOBAL transition at one boundary — `index` = k,
+//    the join between clip k and clip k+1. Boundaries without an entry keep
+//    the global transition, so a payload with no `transitions` is
+//    byte-identical to today (every golden above still holds).
+//
+//    Mixed chains join with the ffmpeg `concat` FILTER at hard-cut
+//    boundaries and `xfade` at device boundaries; the concat-demuxer fast
+//    path (stream copy) is reachable only when EVERY boundary is a cut.
+// ===========================================================================
+
+describe("combineVideos — per-boundary transitions", () => {
+  it("global cut + one dip-to-black boundary: concat filter at boundary 0, xfade at boundary 1, offsets account for the boundary's own duration", async () => {
+    stubResolutionProbes(3)
+    mocks.getVideoDuration
+      .mockResolvedValueOnce(5)
+      .mockResolvedValueOnce(5)
+      .mockResolvedValueOnce(5)
+    stubAudioStreamProbes(3, true)
+
+    await combineVideos(defaultOptions({
+      videoUrls: ["a.mp4", "b.mp4", "c.mp4"],
+      transition: "cut", transitionDuration: 0,
+      audioMode: "remove",
+      transitions: [{ index: 1, transition: "dip-to-black", duration: 0.5 }],
+    }))
+
+    const args = lastArgs()
+    const fc = args[args.indexOf("-filter_complex") + 1]
+    // Boundary 0 is a hard cut → concat filter, running duration 5+5=10.
+    // Boundary 1 is a 0.5s dip-to-black → offset 10-0.5 = 9.5, and
+    // `dip-to-black` resolves through resolveXfadeName to `fadeblack`.
+    expect(fc).toBe(
+      "[0:v][1:v]concat=n=2:v=1:a=0[v1];" +
+      "[v1][2:v]xfade=transition=fadeblack:duration=0.5:offset=9.5[vout]",
+    )
+  })
+
+  it("per-boundary durations differ: each xfade offset consumes only its own boundary's duration", async () => {
+    stubResolutionProbes(3)
+    mocks.getVideoDuration
+      .mockResolvedValueOnce(6)
+      .mockResolvedValueOnce(6)
+      .mockResolvedValueOnce(6)
+    stubAudioStreamProbes(3, true)
+
+    await combineVideos(defaultOptions({
+      videoUrls: ["a.mp4", "b.mp4", "c.mp4"],
+      transition: "cut", transitionDuration: 0,
+      audioMode: "remove",
+      transitions: [
+        { index: 0, transition: "dissolve", duration: 1 },
+        { index: 1, transition: "wipe-left", duration: 0.5 },
+      ],
+    }))
+
+    const fc = lastArgs()[lastArgs().indexOf("-filter_complex") + 1]
+    // offset0 = 6 - 1 = 5; running = 5 + 6 = 11; offset1 = 11 - 0.5 = 10.5
+    expect(fc).toBe(
+      "[0:v][1:v]xfade=transition=dissolve:duration=1:offset=5[v1];" +
+      "[v1][2:v]xfade=transition=wipeleft:duration=0.5:offset=10.5[vout]",
+    )
+  })
+
+  it("a `cut` entry makes that boundary a hard cut inside an otherwise-xfade chain", async () => {
+    stubResolutionProbes(3)
+    mocks.getVideoDuration
+      .mockResolvedValueOnce(5)
+      .mockResolvedValueOnce(5)
+      .mockResolvedValueOnce(5)
+    stubAudioStreamProbes(3, true)
+
+    await combineVideos(defaultOptions({
+      videoUrls: ["a.mp4", "b.mp4", "c.mp4"],
+      transition: "fade", transitionDuration: 1,
+      audioMode: "remove",
+      transitions: [{ index: 0, transition: "cut", duration: 0 }],
+    }))
+
+    const fc = lastArgs()[lastArgs().indexOf("-filter_complex") + 1]
+    expect(fc).toBe(
+      "[0:v][1:v]concat=n=2:v=1:a=0[v1];" +
+      "[v1][2:v]xfade=transition=fade:duration=1:offset=9[vout]",
+    )
+  })
+
+  it("an entry whose duration is <= 0 is a hard cut at that boundary", async () => {
+    stubResolutionProbes(3)
+    mocks.getVideoDuration
+      .mockResolvedValueOnce(5)
+      .mockResolvedValueOnce(5)
+      .mockResolvedValueOnce(5)
+    stubAudioStreamProbes(3, true)
+
+    await combineVideos(defaultOptions({
+      videoUrls: ["a.mp4", "b.mp4", "c.mp4"],
+      transition: "fade", transitionDuration: 1,
+      audioMode: "remove",
+      transitions: [{ index: 1, transition: "dissolve", duration: 0 }],
+    }))
+
+    const fc = lastArgs()[lastArgs().indexOf("-filter_complex") + 1]
+    expect(fc).toBe(
+      "[0:v][1:v]xfade=transition=fade:duration=1:offset=4[v1];" +
+      "[v1][2:v]concat=n=2:v=1:a=0[vout]",
+    )
+  })
+
+  it("EVERY boundary a cut (via overrides) still takes the concat-demuxer fast path", async () => {
+    await combineVideos(defaultOptions({
+      videoUrls: ["a.mp4", "b.mp4"],
+      transition: "fade", transitionDuration: 1,
+      audioMode: "remove",
+      targetWidth: 1280, targetHeight: 720,
+      transitions: [{ index: 0, transition: "cut", duration: 0 }],
+    }))
+
+    const args = lastArgs()
+    expect(args).toContain("concat")
+    expect(args[args.indexOf("-c:v") + 1]).toBe("copy")
+    expect(args).not.toContain("-filter_complex")
+  })
+
+  it("at least one non-cut boundary keeps the fast path OFF (a real re-encode)", async () => {
+    stubResolutionProbes(2)
+    mocks.getVideoDuration.mockResolvedValueOnce(5).mockResolvedValueOnce(5)
+    stubAudioStreamProbes(2, true)
+
+    await combineVideos(defaultOptions({
+      videoUrls: ["a.mp4", "b.mp4"],
+      transition: "cut", transitionDuration: 0,
+      audioMode: "remove",
+      transitions: [{ index: 0, transition: "dissolve", duration: 0.5 }],
+    }))
+
+    const args = lastArgs()
+    expect(args).toContain("-filter_complex")
+    expect(args[args.indexOf("-c:v") + 1]).toBe("libx264")
+  })
+
+  it("an out-of-range boundary index warns and is ignored", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    try {
+      await combineVideos(defaultOptions({
+        videoUrls: ["a.mp4", "b.mp4"],
+        transition: "cut", transitionDuration: 0,
+        audioMode: "remove",
+        targetWidth: 1280, targetHeight: 720,
+        transitions: [{ index: 7, transition: "dissolve", duration: 0.5 }],
+      }))
+
+      expect(warn.mock.calls.flat().join(" ")).toMatch(/out of range/i)
+      // Ignored entirely → the combine is still all-cuts → fast path.
+      const args = lastArgs()
+      expect(args).toContain("concat")
+      expect(args).not.toContain("-filter_complex")
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it("an unknown transition id warns and falls back to the global transition (plugin-version-lag safety)", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    try {
+      await combineVideos(defaultOptions({
+        videoUrls: ["a.mp4", "b.mp4"],
+        transition: "cut", transitionDuration: 0,
+        audioMode: "remove",
+        targetWidth: 1280, targetHeight: 720,
+        transitions: [{ index: 0, transition: "not-a-real-transition", duration: 0.5 }],
+      }))
+
+      expect(warn.mock.calls.flat().join(" ")).toMatch(/unknown transition id/i)
+      const args = lastArgs()
+      expect(args).toContain("concat")
+      expect(args).not.toContain("-filter_complex")
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it("per-boundary transition durations clamp to 90% of the shortest clip", async () => {
+    stubResolutionProbes(2)
+    mocks.getVideoDuration.mockResolvedValueOnce(0.5).mockResolvedValueOnce(5)
+    stubAudioStreamProbes(2, true)
+
+    await combineVideos(defaultOptions({
+      videoUrls: ["a.mp4", "b.mp4"],
+      transition: "cut", transitionDuration: 0,
+      audioMode: "remove",
+      transitions: [{ index: 0, transition: "dissolve", duration: 2 }],
+    }))
+
+    const fc = lastArgs()[lastArgs().indexOf("-filter_complex") + 1]
+    expect(fc).toContain("duration=0.45")
+  })
+
+  it("audioMode=crossfade: a device boundary's audio crossfade is that boundary's VIDEO length; a cut boundary gets none", async () => {
+    stubResolutionProbes(3)
+    stubAudioStreamProbes(3, true)
+    mocks.getVideoDuration
+      .mockResolvedValueOnce(5)
+      .mockResolvedValueOnce(5)
+      .mockResolvedValueOnce(5)
+
+    await combineVideos(defaultOptions({
+      videoUrls: ["a.mp4", "b.mp4", "c.mp4"],
+      transition: "cut", transitionDuration: 0,
+      audioMode: "crossfade", audioCrossfadeDuration: 0.75,
+      transitions: [{ index: 1, transition: "dip-to-black", duration: 0.5 }],
+    }))
+
+    const args = lastArgs()
+    const fc = args[args.indexOf("-filter_complex") + 1]
+    // Boundary 0 is a hard cut: NO afade on either side of it (a fade to
+    // silence with no overlap is the rejected fade-through-silence design).
+    expect(fc).toContain("[0:a]anull[xa0]")
+    // Boundary 1 is a 0.5s dip: clip 1 fades out over its last 0.5s, clip 2
+    // fades in over 0.5s, and clip 2's audio is anchored at its video start
+    // (5 + 5 - 0.5 = 9.5s).
+    expect(fc).toContain("[1:a]afade=t=out:st=4.5:d=0.5:curve=tri,adelay=5000:all=1[xa1]")
+    expect(fc).toContain("[2:a]afade=t=in:st=0:d=0.5:curve=tri,adelay=9500:all=1[xa2]")
+  })
+})
+
+// ===========================================================================
+// 9) Film-edge fades (`edgeFades`) — the opening fade-in and closing fade-out
+//    the analyser records at the CLIP's edges. Baked into the first/last
+//    NORMALIZED files (before trimming and before any join), so they survive
+//    the concat-demuxer fast path, which stream-copies.
+// ===========================================================================
+
+describe("combineVideos — edge fades", () => {
+  it("absent: no fade pass at all (goldens unchanged)", async () => {
+    await combineVideos(defaultOptions({
+      videoUrls: ["a.mp4", "b.mp4"], transition: "cut", audioMode: "remove",
+      targetWidth: 1280, targetHeight: 720,
+    }))
+
+    for (const call of mocks.runFfmpeg.mock.calls) {
+      expect((call[0] as string[]).join(" ")).not.toContain("fade=t=")
+    }
+  })
+
+  it("fades the head of the FIRST normalized clip and the tail of the LAST", async () => {
+    // The closing fade's `st` is measured on the VIDEO STREAM duration of the
+    // last normalized clip (5s) — st = 5 - 0.5 = 4.5.
+    mocks.getVideoDuration.mockResolvedValueOnce(5)
+
+    await combineVideos(defaultOptions({
+      videoUrls: ["a.mp4", "b.mp4"], transition: "cut", audioMode: "remove",
+      targetWidth: 1280, targetHeight: 720,
+      edgeFades: { in: 0.5, out: 0.5 },
+    }))
+
+    const fadeCalls = mocks.runFfmpeg.mock.calls
+      .map((c) => c[0] as string[])
+      .filter((a) => a.includes("-vf") && a[a.indexOf("-vf") + 1].includes("fade=t="))
+    expect(fadeCalls).toHaveLength(2)
+
+    const [first, last] = fadeCalls
+    expect(first[first.indexOf("-i") + 1]).toBe("/tmp/work/normalized_0.mp4")
+    expect(first[first.indexOf("-vf") + 1]).toBe("fade=t=in:st=0:d=0.5")
+    expect(first[first.length - 1]).toBe("/tmp/work/faded_0.mp4")
+
+    expect(last[last.indexOf("-i") + 1]).toBe("/tmp/work/normalized_1.mp4")
+    expect(last[last.indexOf("-vf") + 1]).toBe("fade=t=out:st=4.5:d=0.5")
+    expect(last[last.length - 1]).toBe("/tmp/work/faded_1.mp4")
+  })
+
+  it("the faded files are what the rest of the pipeline joins", async () => {
+    mocks.getVideoDuration.mockResolvedValueOnce(5)
+
+    await combineVideos(defaultOptions({
+      videoUrls: ["a.mp4", "b.mp4"], transition: "cut", audioMode: "remove",
+      targetWidth: 1280, targetHeight: 720,
+      edgeFades: { in: 0.5, out: 0.5 },
+    }))
+
+    expect(mocks.trimEdgeFrames.mock.calls[0][0]).toBe("/tmp/work/faded_0.mp4")
+    expect(mocks.trimEdgeFrames.mock.calls[1][0]).toBe("/tmp/work/faded_1.mp4")
+    const list = mocks.fsWriteFile.mock.calls[0][1] as string
+    expect(list).toContain("faded_0.mp4")
+    expect(list).toContain("faded_1.mp4")
+  })
+
+  it("only `in`: one pass, on the first clip, and the duration probe is skipped", async () => {
+    await combineVideos(defaultOptions({
+      videoUrls: ["a.mp4", "b.mp4"], transition: "cut", audioMode: "remove",
+      targetWidth: 1280, targetHeight: 720,
+      edgeFades: { in: 1 },
+    }))
+
+    const fadeCalls = mocks.runFfmpeg.mock.calls
+      .map((c) => c[0] as string[])
+      .filter((a) => a.includes("-vf") && a[a.indexOf("-vf") + 1].includes("fade=t="))
+    expect(fadeCalls).toHaveLength(1)
+    expect(fadeCalls[0][fadeCalls[0].indexOf("-vf") + 1]).toBe("fade=t=in:st=0:d=1")
+    // No closing fade → nothing to measure.
+    expect(mocks.getVideoDuration).not.toHaveBeenCalled()
+  })
+
+  it("a single clip carries BOTH fades in one pass", async () => {
+    mocks.getVideoDuration.mockResolvedValueOnce(8)
+
+    await combineVideos(defaultOptions({
+      videoUrls: ["a.mp4"], transition: "cut", audioMode: "remove",
+      targetWidth: 1280, targetHeight: 720,
+      edgeFades: { in: 0.5, out: 1 },
+    }))
+
+    const fadeCalls = mocks.runFfmpeg.mock.calls
+      .map((c) => c[0] as string[])
+      .filter((a) => a.includes("-vf") && a[a.indexOf("-vf") + 1].includes("fade=t="))
+    expect(fadeCalls).toHaveLength(1)
+    expect(fadeCalls[0][fadeCalls[0].indexOf("-vf") + 1])
+      .toBe("fade=t=in:st=0:d=0.5,fade=t=out:st=7:d=1")
+  })
+
+  it("a closing fade longer than the clip clamps its start to 0", async () => {
+    mocks.getVideoDuration.mockResolvedValueOnce(0.4)
+
+    await combineVideos(defaultOptions({
+      videoUrls: ["a.mp4", "b.mp4"], transition: "cut", audioMode: "remove",
+      targetWidth: 1280, targetHeight: 720,
+      edgeFades: { out: 2 },
+    }))
+
+    const fadeCall = mocks.runFfmpeg.mock.calls
+      .map((c) => c[0] as string[])
+      .find((a) => a.includes("-vf"))!
+    expect(fadeCall[fadeCall.indexOf("-vf") + 1]).toBe("fade=t=out:st=0:d=2")
+  })
+
+  it("edge fades survive the concat fast path AND ride an xfade chain", async () => {
+    stubResolutionProbes(2)
+    stubAudioStreamProbes(2, true)
+    mocks.getVideoDuration
+      .mockResolvedValueOnce(5) // edge-fade probe on the last normalized clip
+      .mockResolvedValueOnce(5)
+      .mockResolvedValueOnce(5)
+
+    await combineVideos(defaultOptions({
+      videoUrls: ["a.mp4", "b.mp4"],
+      transition: "fade", transitionDuration: 1, audioMode: "remove",
+      edgeFades: { in: 0.5, out: 0.5 },
+    }))
+
+    const args = lastArgs()
+    expect(args).toContain("-filter_complex")
+    // The xfade chain reads the FADED files as its inputs.
+    const inputs = args.reduce<string[]>((acc, a, i) => {
+      if (a === "-i") acc.push(args[i + 1])
+      return acc
+    }, [])
+    expect(inputs).toEqual(["/tmp/work/faded_0.mp4", "/tmp/work/faded_1.mp4"])
   })
 })
