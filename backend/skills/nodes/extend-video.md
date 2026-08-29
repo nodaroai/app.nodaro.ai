@@ -1,7 +1,7 @@
 ---
 node_type: extend-video
-generated_at: 2026-08-26T00:26:54.443Z
-generated_from: cce51deb6
+generated_at: 2026-08-29T19:02:39.278Z
+generated_from: 7dbf4818b
 ---
 
 # Extend Video
@@ -20,6 +20,8 @@ generated_from: cce51deb6
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
+- `promptPrefix?: string`
+- `promptSuffix?: string`
 - `negativePrompt?: string`
 - `model?: "fast" | "quality"`
 - `seeds?: number`

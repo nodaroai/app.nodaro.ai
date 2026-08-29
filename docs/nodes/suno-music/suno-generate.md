@@ -22,6 +22,7 @@ Suno Generate creates complete songs from text prompts. It supports multiple Sun
 | Custom Mode | boolean | `false` | Enables advanced parameter control. |
 | Instrumental | boolean | `false` | When true, generates instrumental-only (no vocals). |
 | Duration | number (10–360) | auto | Requested song length in seconds. **V5.5 + custom mode only** — with any other model, or outside custom mode, Suno ignores it and picks the length itself. Leave empty for automatic. |
+| `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ## Inputs & Outputs
 

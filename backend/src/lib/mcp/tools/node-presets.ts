@@ -123,7 +123,8 @@ export function registerPresets({ server, session }: RegisterPresetsOpts): void 
       title: "Get Node Preset",
       description:
         "Fetch ONE preset's full saved configuration by id — the provider/model, prompt, " +
-        "aspect ratio, resolution, quality, and negative prompt it ships. Use this to APPLY a " +
+        "aspect ratio, resolution, quality, negative prompt, and pre/post text (`promptPrefix` / " +
+        "`promptSuffix` — wrapped around the prompt at run time) it ships. Use this to APPLY a " +
         "preset faithfully: get the id from list_node_presets, then either read these fields and " +
         "pass them to the matching generate_* tool, or pass `presetId` directly to generate_image. " +
         "Works for built-in (factory) and your own custom presets.",

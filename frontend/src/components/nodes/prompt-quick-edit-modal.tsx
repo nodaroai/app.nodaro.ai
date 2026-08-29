@@ -207,6 +207,10 @@ export function PromptQuickEditModal() {
     userPrompt: typeof data[fields?.prompt ?? "prompt"] === "string"
       ? (data[fields?.prompt ?? "prompt"] as string)
       : undefined,
+    // The key we preview — pre/post text is shown only when the run wraps THIS
+    // field (generate-script's editable field is `styleGuide`; the run wraps
+    // the topic `prompt`, so its modal must not render the wrap).
+    promptField: fields?.prompt ?? "prompt",
     style: typeof data.style === "string" ? data.style : undefined,
     negativePrompt: typeof data[fields?.negative ?? "negativePrompt"] === "string"
       ? (data[fields?.negative ?? "negativePrompt"] as string)

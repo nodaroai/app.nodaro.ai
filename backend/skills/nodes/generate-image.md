@@ -1,7 +1,7 @@
 ---
 node_type: generate-image
-generated_at: 2026-08-24T22:10:20.720Z
-generated_from: 39fdb63a4
+generated_at: 2026-08-29T19:02:38.430Z
+generated_from: 7dbf4818b
 ---
 
 # generate-image
@@ -24,6 +24,8 @@ generated_from: 39fdb63a4
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
+- `promptPrefix?: string`
+- `promptSuffix?: string`
 - `providers?: readonly ImageProvider[]`
 - `resolution?: string`
 - `quality?: string`

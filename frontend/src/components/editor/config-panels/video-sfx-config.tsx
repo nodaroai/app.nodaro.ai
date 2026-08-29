@@ -77,6 +77,7 @@ export function VideoSfxConfig({
   const negativeFieldMode = usePromptFieldMode(nodeId ?? "", "negativePrompt")
   const finalPrompt = useFinalPromptSegments({
     userPrompt: data.prompt,
+    promptField: "prompt",
     negativePrompt: data.negativePrompt,
     consumerNodeId: nodeId,
     nodes,

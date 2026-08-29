@@ -42,6 +42,9 @@ export interface PickerCatalog {
   options?: PickerOption[]
   /** multi-dim catalogs. */
   fields?: string[]
+  /** Per-field option lists. Multi-dim catalogs always carry these; a
+   *  single-dim catalog carries them when it has secondary parameter
+   *  fields beside its main picker (transition position/duration/intensity). */
   dimensions?: PickerDimension[]
   detail?: "compact" | "full"
 }

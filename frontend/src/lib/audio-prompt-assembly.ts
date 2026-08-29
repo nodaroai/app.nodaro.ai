@@ -40,8 +40,8 @@
  */
 
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
-import { computeNodePrompt, truncateForField, appendField, assembleSunoInput, type AssembleSunoResult, type SoundConsumerType } from "@nodaro/prompts"
-import { resolveNodeRefs } from "@nodaro/shared"
+import { applyPromptAffixes, computeNodePrompt, truncateForField, appendField, assembleSunoInput, type AssembleSunoResult, type SoundConsumerType } from "@nodaro/prompts"
+import { resolveNodeRefs, readPromptAffixes } from "@nodaro/shared"
 import { collectAudioStyleHints } from "@/lib/audio-style-hints"
 // The editor's field-mapping resolver — the SAME wrapper the RUN calls
 // (execute-node.ts ~892). Reused here so the Suno preview resolves `field-*`
@@ -184,7 +184,17 @@ export function assembleSunoPreview(args: AssembleAudioPromptArgs): AssembleSuno
     edges,
   )
   const resolvedNode = { ...node, data: resolvedData } as WorkflowNode
-  const userPrompt = resolveRefs(((resolvedData.prompt as string | undefined) ?? "").trim(), refMap)
+  // Pre/post text wraps the typed core BEFORE the style fold, mirroring the run
+  // (`userPrompt = applyPromptAffixes(overridePrompt ?? inputs.prompt ??
+  //  resolveTextRefs(d.prompt?.trim(), refMap), readPromptAffixes(d), refMap)`).
+  // Affixes are read off the RESOLVED data, exactly as the run reads `d` off the
+  // field-mapping-rebound node. `assembleSunoInput` carries no affix logic, so the
+  // wrap happens here once and rides into whichever field the fold lands in.
+  const userPrompt = applyPromptAffixes(
+    resolveRefs(((resolvedData.prompt as string | undefined) ?? "").trim(), refMap),
+    readPromptAffixes(resolvedData),
+    refMap,
+  )
   const lyrics = resolveRefs((resolvedData.lyrics as string | undefined) ?? "", refMap)
   return assembleSunoInput({
     node: resolvedNode,
@@ -278,9 +288,15 @@ export function assembleAudioPrompt(nodeType: string, args: AssembleAudioPromptA
     }
     case "voice-design":
     case "voice-remix": {
-      // The run reads data.voiceDescription RAW-trimmed (NOT ref-resolved),
-      // so mirror that exactly — no resolveTextRefs here.
-      const userDesc = ((data.voiceDescription as string | undefined) ?? "").trim()
+      // The run reads data.voiceDescription RAW-trimmed (NOT ref-resolved) and
+      // wraps it in the node's pre/post text, so mirror that expression exactly:
+      // `(applyPromptAffixes(d.voiceDescription, readPromptAffixes(d), refMap) ?? "").trim()`.
+      // `applyPromptAffixes` never touches the core (refs are resolved in the
+      // AFFIXES only), so the "not ref-resolved core" behaviour is preserved —
+      // and with no affix set it returns the core unchanged (no-op guarantee).
+      const userDesc = (
+        applyPromptAffixes(data.voiceDescription as string | undefined, readPromptAffixes(data), refMap) ?? ""
+      ).trim()
       const style = collectAudioStyleHints(node, nodeType as SoundConsumerType, nodes, edges)
       return foldStyle(userDesc, style.text, VOICE_DESC_BUDGET)
     }
@@ -289,8 +305,15 @@ export function assembleAudioPrompt(nodeType: string, args: AssembleAudioPromptA
     case "suno-style-boost": {
       // `suno-style-boost`'s prompt field is `content`, NOT `prompt`, so
       // computeNodePrompt (which defaults to data.prompt) would read the wrong
-      // field — resolve `content` directly.
-      return resolveRefs(((data.content as string | undefined) ?? "").trim(), refMap)
+      // field — resolve `content` directly, then wrap it in the node's pre/post
+      // text the way the run does (`applyPromptAffixes(inputs.prompt ??
+      // d.content?.trim(), readPromptAffixes(d), refMap)`). The core keeps its
+      // existing preview ref semantics; only the affixes are added.
+      return applyPromptAffixes(
+        resolveRefs(((data.content as string | undefined) ?? "").trim(), refMap),
+        readPromptAffixes(data),
+        refMap,
+      )
     }
     // text-to-speech (computeNodePrompt gates on textSource==="direct" →
     // directText, else ""), suno-cover / suno-extend / suno-lyrics /

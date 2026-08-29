@@ -1,7 +1,7 @@
 ---
 node_type: voice-remix
-generated_at: 2026-08-15T21:55:07.357Z
-generated_from: 150c80ac9
+generated_at: 2026-08-29T19:02:38.860Z
+generated_from: 7dbf4818b
 ---
 
 # Voice Remix
@@ -20,6 +20,8 @@ generated_from: 150c80ac9
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
+- `promptPrefix?: string`
+- `promptSuffix?: string`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `generatedAudioUrl?: string`

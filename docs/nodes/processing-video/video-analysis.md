@@ -68,6 +68,7 @@ the VOD to become available). Any source is capped at **10 minutes (600s)**.
 | Translate speech (`translateSpeechToEnglish`) | Checkbox | off | On — spoken and sung words come back in English. See [Output language](#output-language) |
 | Translate on-screen text (`translateOnScreenTextToEnglish`) | Checkbox | off | On — signs, captions, and titles come back in English. Independent of the speech checkbox |
 | Analysis Focus (`analysisFocus`) | Text (≤2000 chars) | — | Steer what the model pays attention to, e.g. "focus on the product shots and on-screen text" |
+| `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 **Quality tiers, no model to pick.** You choose a *tier* — `fast` for an
 economy analysis, `pro` for higher fidelity, or the `mixed` tiers for our most

@@ -1,7 +1,7 @@
 ---
 node_type: suno-cover
-generated_at: 2026-08-15T21:55:06.905Z
-generated_from: 150c80ac9
+generated_at: 2026-08-29T19:02:38.660Z
+generated_from: 7dbf4818b
 ---
 
 # Suno Cover
@@ -20,6 +20,8 @@ generated_from: 150c80ac9
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
+- `promptPrefix?: string`
+- `promptSuffix?: string`
 - `currentJobProgress?: number`
 - `uploadUrl?: string`
 - `lyrics?: string`

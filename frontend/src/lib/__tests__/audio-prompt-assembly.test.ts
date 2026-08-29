@@ -225,3 +225,72 @@ describe("assembleSunoPreview / sunoPreviewFields / formatSunoPreviewText", () =
     expect(result.lyrics).toBe("[verse] the ocean")
   })
 })
+
+/**
+ * Prompt affixes (pre/post text) for the FOUR audio types that BYPASS
+ * `computeNodePrompt`. The spec's §5.3 assumed the whole audio preview path was
+ * "Category A, free" — true only for the types that route through
+ * `computeNodePrompt` (which applies the affixes itself: generate-music,
+ * text-to-audio, and every pass-through default case). These four read their
+ * core field directly, so the preview would drop the affixes the RUN sends:
+ *   - voice-design / voice-remix → `(applyPromptAffixes(d.voiceDescription, …) ?? "").trim()`
+ *   - suno-style-boost          → `applyPromptAffixes(inputs.prompt ?? d.content?.trim(), …)`
+ *   - suno-generate             → `applyPromptAffixes(… d.prompt?.trim() …, …)` fed to `assembleSunoInput`
+ * (run expressions: `execute-node.ts` ~3220 / ~3258 / ~4038 / ~3681).
+ *
+ * Each type gets both halves of the contract: affixes present ⇒ "PRE CORE POST"
+ * appears EXACTLY once; affixes absent ⇒ byte-identical to the pre-change output
+ * (the no-op guarantee of `applyPromptAffixes`).
+ */
+describe("assembleAudioPrompt — prompt affixes on the four computeNodePrompt-bypassing types", () => {
+  const AFFIXES = { promptPrefix: "PRE", promptSuffix: "POST" } as const
+  /** Occurrences of `needle` in `hay` — the affix must wrap the core ONCE. */
+  const countOf = (hay: string, needle: string) => hay.split(needle).length - 1
+
+  const solo = (type: string, data: Record<string, unknown>) => {
+    const node = consumer(type, data)
+    return assembleAudioPrompt(type, { node, nodes: [node], edges: [], refMap: NO_REFS })
+  }
+
+  it("(f) voice-design wraps voiceDescription with the pre/post text exactly once", () => {
+    const out = solo("voice-design", { voiceDescription: "CORE", ...AFFIXES })
+    expect(countOf(out, "PRE CORE POST")).toBe(1)
+  })
+
+  it("(f2) voice-design with NO affixes is byte-identical to the pre-change output", () => {
+    expect(solo("voice-design", { voiceDescription: "CORE" })).toBe("CORE")
+  })
+
+  it("(g) voice-remix wraps voiceDescription with the pre/post text exactly once", () => {
+    const out = solo("voice-remix", { voiceDescription: "CORE", ...AFFIXES })
+    expect(countOf(out, "PRE CORE POST")).toBe(1)
+  })
+
+  it("(g2) voice-remix with NO affixes is byte-identical to the pre-change output", () => {
+    expect(solo("voice-remix", { voiceDescription: "CORE" })).toBe("CORE")
+  })
+
+  it("(h) suno-style-boost wraps its `content` field with the pre/post text exactly once", () => {
+    const out = solo("suno-style-boost", { content: "CORE", ...AFFIXES })
+    expect(countOf(out, "PRE CORE POST")).toBe(1)
+  })
+
+  it("(h2) suno-style-boost with NO affixes is byte-identical to the pre-change output", () => {
+    expect(solo("suno-style-boost", { content: "CORE" })).toBe("CORE")
+  })
+
+  it("(i) suno-generate wraps the typed prompt with the pre/post text exactly once", () => {
+    const out = solo("suno-generate", { prompt: "CORE", ...AFFIXES })
+    expect(countOf(out, "PRE CORE POST")).toBe(1)
+  })
+
+  it("(i2) suno-generate with NO affixes is byte-identical to the pre-change output", () => {
+    expect(solo("suno-generate", { prompt: "CORE" })).toBe("CORE")
+  })
+
+  it("(i3) suno-generate's affixed prompt reaches the assembled RESULT field (what the run sends)", () => {
+    const node = consumer("suno-generate", { prompt: "CORE", ...AFFIXES })
+    const result = assembleSunoPreview({ node, nodes: [node], edges: [], refMap: NO_REFS })
+    expect(countOf(result.prompt, "PRE CORE POST")).toBe(1)
+  })
+})

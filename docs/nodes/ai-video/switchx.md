@@ -15,6 +15,7 @@ Unlike a normal video generator, **Relight & Switch** is driven by your **source
 | Keyframe index | Number | 0 | *Select mode only* — 0-based frame your mask describes; the AI propagates it across the clip |
 | Resolution | Select | 1080p | 720p or 1080p output |
 | Seed | Number | — | Reproducibility seed (0–4,294,967,295); leave empty for random |
+| `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ### Alpha modes
 
@@ -83,5 +84,5 @@ A clip is billed by the number of 30-frame blocks it spans — e.g. a 144-frame 
 - **Auto** and **Fill** need no mask; **Select** needs a single keyframe mask image; **Custom** needs a full alpha matte video.
 - For **Select** mode, the easiest way to make the mask is the **Generate Mask** node ("mask the person") wired into the Mask input — SwitchX then propagates that one-frame mask across the whole clip. Beeble has no separate alpha-generation API; `Auto` does the masking for you, and `Select`/`Custom` take a mask you supply.
 - Output URLs are re-hosted to your library automatically — there's no 72-hour expiry to worry about.
-- Start from a **preset** (Relight Subject, Swap Background, Restyle Scene, …) for a tuned starting point, then adjust the prompt and reference.
+- Start from a **preset** (Relight Subject, Swap Background, Restyle Scene, …) for a tuned starting point — the preset's instruction lives in the node's **Pre & post text** (settings panel), so the prompt field stays free for your own additions. Adjust those and the reference to taste.
 - Set a **Seed** to make a result repeatable across runs with the same inputs; leave it empty for a fresh variation each time.

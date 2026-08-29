@@ -51,7 +51,14 @@ import { POST_PROCESS_EFFECTS } from "./post-process-effects.js"
 import { CAMERA_MOTIONS, CAMERA_MOTION_CATEGORY_LABELS, CAMERA_MOTION_CATEGORY_ORDER } from "./camera-motions.js"
 import { LENSES } from "./lens.js"
 import { CAMERA_FORMATS } from "./camera-format.js"
-import { TRANSITIONS, TRANSITION_CATEGORY_LABELS, TRANSITION_CATEGORY_ORDER } from "./transitions.js"
+import {
+  TRANSITIONS,
+  TRANSITION_CATEGORY_LABELS,
+  TRANSITION_CATEGORY_ORDER,
+  TRANSITION_POSITIONS,
+  TRANSITION_DURATIONS,
+  TRANSITION_INTENSITIES,
+} from "./transitions.js"
 import { CHARACTER_FX, CHARACTER_FX_CATEGORY_LABELS, CHARACTER_FX_CATEGORY_ORDER } from "./character-fx.js"
 import { POSES, POSE_CATEGORY_LABELS, POSE_CATEGORY_ORDER } from "./pose.js"
 import { MATERIALS, MATERIAL_CATEGORY_LABELS, MATERIAL_CATEGORY_ORDER } from "./materials.js"
@@ -127,7 +134,10 @@ export interface PickerCatalog {
   readonly options?: readonly PickerOption[]
   /** multi-dim: the dimension keys (no single catalog to flatten). */
   readonly fields?: readonly string[]
-  /** multi-dim: one self-describing entry per dimension field, in `fields` order. */
+  /** Per-field option lists. Multi-dim catalogs always carry these, one per
+   *  `fields` entry in order; a single-dim catalog carries them when it has
+   *  secondary parameter fields beside its main picker (transition
+   *  position/duration/intensity). */
   readonly dimensions?: readonly PickerDimension[]
 }
 
@@ -522,6 +532,17 @@ const SINGLE_CATALOGS: readonly PickerCatalog[] = [
     categoryOrder: TRANSITION_CATEGORY_ORDER,
     categoryLabels: TRANSITION_CATEGORY_LABELS,
     options: toOptions(TRANSITIONS, "category"),
+    // The node's three timing parameters, alongside the transition itself.
+    // `dimensions` on a single-dim catalog carries exactly what it says on a
+    // multi-dim one — extra value fields with their own option lists — so a
+    // consumer that only sends ids can offer Position/Duration/Intensity
+    // without composing the clauses itself. The rich picker UI still renders
+    // only `options`; these fields are secondary controls beside it.
+    dimensions: perFieldDims([
+      ["position", TRANSITION_POSITIONS],
+      ["duration", TRANSITION_DURATIONS],
+      ["intensity", TRANSITION_INTENSITIES],
+    ]),
   },
   {
     nodeType: "character-fx",
@@ -816,10 +837,11 @@ export function summarizePickerCatalogs(): readonly PickerCatalogSummary[] {
     kind: c.kind,
     valueField: c.valueField,
     fields: c.fields,
+    // Every option the detail call will return, whichever kind — a single-dim
+    // catalog with secondary dimensions carries both.
     optionCount:
-      c.kind === "single"
-        ? (c.options?.length ?? 0)
-        : (c.dimensions?.reduce((n, d) => n + d.options.length, 0) ?? 0),
+      (c.options?.length ?? 0) +
+      (c.dimensions?.reduce((n, d) => n + d.options.length, 0) ?? 0),
   }))
 }
 
@@ -876,22 +898,29 @@ export function projectPickerCatalog(
     categoryLabels: c.categoryLabels,
     detail,
   }
-  if (c.kind === "single") {
-    let options = c.options ?? []
-    if (opts.category) options = options.filter((o) => o.category === opts.category)
-    return { ...base, options: options.map((o) => projectOption(o, detail)) }
-  }
-  let dims = c.dimensions ?? []
-  if (opts.field) dims = dims.filter((d) => d.field === opts.field)
-  return {
-    ...base,
-    fields: c.fields,
-    dimensions: dims.map((d) => ({
+  const projectDims = (dims: readonly PickerDimension[]) =>
+    dims.map((d) => ({
       field: d.field,
       label: d.label,
       options: d.options.map((o) => projectOption(o, detail)),
-    })),
+    }))
+
+  if (c.kind === "single") {
+    let options = c.options ?? []
+    if (opts.category) options = options.filter((o) => o.category === opts.category)
+    const projected = { ...base, options: options.map((o) => projectOption(o, detail)) }
+    // A single-dim catalog may still carry secondary parameter dimensions
+    // (transition's position/duration/intensity). They are additive — a
+    // consumer reading only `options` is unaffected — but dropping them here
+    // would hide the one thing an id-only client needs to offer those controls.
+    if (!c.dimensions) return projected
+    let dims = c.dimensions
+    if (opts.field) dims = dims.filter((d) => d.field === opts.field)
+    return { ...projected, dimensions: projectDims(dims) }
   }
+  let dims = c.dimensions ?? []
+  if (opts.field) dims = dims.filter((d) => d.field === opts.field)
+  return { ...base, fields: c.fields, dimensions: projectDims(dims) }
 }
 
 /**

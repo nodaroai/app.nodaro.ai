@@ -19,6 +19,7 @@ The Generate Music node produces original music from a text description using Mi
 | Reference Source | `"none" \| "upload" \| "youtube"` | `"none"` | Optional reference audio source for style guidance |
 | Reference Audio URL | `string` | `""` | URL of uploaded reference audio (when Reference Source is "upload") |
 | Reference YouTube URL | `string` | `""` | YouTube URL for style reference (when Reference Source is "youtube") |
+| `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ### Providers
 

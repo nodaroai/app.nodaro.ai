@@ -313,6 +313,7 @@ export function ThreeDTitleConfig({ data, onUpdate, sources, fieldMappings, onMa
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "titlePrompt")
   const finalPrompt = useFinalPromptSegments({
     userPrompt: data.titlePrompt,
+    promptField: "titlePrompt",
     consumerNodeId: nodeId,
     nodes,
     edges: edges ?? [],
@@ -455,6 +456,7 @@ export function MotionGraphicsConfig({ data, onUpdate, sources, fieldMappings, o
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "motionPrompt")
   const finalPrompt = useFinalPromptSegments({
     userPrompt: data.motionPrompt,
+    promptField: "motionPrompt",
     consumerNodeId: nodeId,
     nodes,
     edges: edges ?? [],

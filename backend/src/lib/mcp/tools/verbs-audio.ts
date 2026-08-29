@@ -14,7 +14,8 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { SUNO_MODELS, SUNO_ADD_TRACK_MODELS, SUNO_TITLE_MAX, AUDIO_FX_PRESETS } from "@nodaro/shared"
+import { SUNO_MODELS, SUNO_ADD_TRACK_MODELS, SUNO_TITLE_MAX, AUDIO_FX_PRESETS, readPromptAffixes } from "@nodaro/shared"
+import { applyPromptAffixes } from "@nodaro/prompts"
 import { resolvePreset } from "../../presets/resolve-preset.js"
 import { mcpInject } from "../internal-request.js"
 
@@ -89,7 +90,8 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             "Apply a built-in/custom preset by id from list_node_presets; " +
-            "explicit fields below override it.",
+            "explicit fields below override it. A preset's promptPrefix/promptSuffix " +
+            "wrap your prompt.",
           ),
         model: z
           // `suno-v5_5` (underscore) is the catalog id list_models advertises;
@@ -179,6 +181,14 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           Object.entries(args).filter(([, v]) => v !== undefined),
         )
         effective = { ...presetParams, ...callerProvided }
+        // Pre/post text shipped by the preset wraps WHICHEVER prompt won above
+        // (the caller's, or the preset's own). No graph here → empty refMap, so
+        // a `{Label}` in an affix stays verbatim. Runs BEFORE the "prompt is
+        // required" guard so an affixes-only preset is a valid prompt.
+        const presetAffixes = readPromptAffixes(d)
+        if (presetAffixes.prefix || presetAffixes.suffix) {
+          effective.prompt = applyPromptAffixes(effective.prompt as string | undefined, presetAffixes, new Map())
+        }
       }
       // `presetId` is a control field — never submit it to the provider.
       delete effective.presetId
@@ -323,7 +333,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           .describe(
             "Apply a built-in/custom preset by id from list_node_presets; " +
             "the preset tunes delivery (speed/stability/style). Explicit fields " +
-            "below override it.",
+            "below override it. A preset's promptPrefix/promptSuffix wrap your text.",
           ),
         voice_id: z
           .string()
@@ -432,6 +442,15 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           Object.entries(args).filter(([, v]) => v !== undefined),
         )
         effective = { ...presetParams, ...callerProvided }
+        // Pre/post text shipped by the preset wraps the spoken text — parity
+        // with the DAG engine, where text-to-speech's prompt field is
+        // `directText` and `computeNodePrompt` wraps it. This verb's content
+        // param is `text` (Zod-required, so there is no empty-core case here).
+        // No graph → empty refMap, so a `{Label}` in an affix stays verbatim.
+        const presetAffixes = readPromptAffixes(d)
+        if (presetAffixes.prefix || presetAffixes.suffix) {
+          effective.text = applyPromptAffixes(effective.text as string | undefined, presetAffixes, new Map())
+        }
       }
       // `presetId` is a control field — never submit it to the provider.
       delete effective.presetId
@@ -1762,7 +1781,8 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             "Apply a built-in/custom preset by id from list_node_presets; " +
-            "explicit fields below override it.",
+            "explicit fields below override it. A preset's promptPrefix/promptSuffix " +
+            "wrap your prompt.",
           ),
         duration: z.number().min(0.5).max(30).optional().describe("Duration in seconds (0.5–30). Defaults to model choice."),
         loop: z.boolean().optional().describe("Whether the output should loop seamlessly."),
@@ -1809,6 +1829,14 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           Object.entries(args).filter(([, v]) => v !== undefined),
         )
         effective = { ...presetParams, ...callerProvided }
+        // Pre/post text shipped by the preset wraps WHICHEVER prompt won above
+        // (the caller's, or the preset's own). No graph here → empty refMap, so
+        // a `{Label}` in an affix stays verbatim. Runs BEFORE the "prompt is
+        // required" guard so an affixes-only preset is a valid prompt.
+        const presetAffixes = readPromptAffixes(d)
+        if (presetAffixes.prefix || presetAffixes.suffix) {
+          effective.prompt = applyPromptAffixes(effective.prompt as string | undefined, presetAffixes, new Map())
+        }
       }
       // `presetId` is a control field — never submit it to the provider.
       delete effective.presetId

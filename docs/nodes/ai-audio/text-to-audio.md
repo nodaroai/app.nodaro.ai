@@ -13,6 +13,7 @@ The Text to Audio node creates sound effects, ambient sounds, and audio textures
 | Duration | `number` (0.5-22) | `10` | Length of the generated audio in seconds, in 0.5s increments |
 | Loop | `boolean` | `false` | When enabled, generates audio designed for seamless looping |
 | Prompt Influence | `number` (0-1) | `0.3` | How strictly the output follows the prompt. Lower values allow more creative interpretation; higher values produce more literal results |
+| `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ## Inputs & Outputs
 

@@ -17,6 +17,7 @@ The Voice Design node provides comprehensive control over voice synthesis via th
 | Seed | `number` (optional) | -- | Random seed for reproducible results. Omit for random generation |
 | Quality | `number` (optional) | -- | Output quality setting (model-dependent) |
 | Enhance Audio | `boolean` | `false` | Post-process the output to improve audio clarity |
+| `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ## Inputs & Outputs
 

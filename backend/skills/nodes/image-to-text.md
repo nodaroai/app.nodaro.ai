@@ -1,7 +1,7 @@
 ---
 node_type: image-to-text
-generated_at: 2026-08-15T21:55:07.186Z
-generated_from: 150c80ac9
+generated_at: 2026-08-29T19:02:38.784Z
+generated_from: 7dbf4818b
 ---
 
 # Describe Image
@@ -20,6 +20,8 @@ generated_from: 150c80ac9
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
+- `promptPrefix?: string`
+- `promptSuffix?: string`
 - `llmModel?: string`
 - `reasoningEffort?: LlmReasoningEffort`
 - `advancedMode?: boolean`

@@ -79,6 +79,17 @@ export interface DeleteAppRunResult {
   archived: true
 }
 
+/** Advanced per-run options for `apps.run`. */
+export interface RunAppOptions {
+  /**
+   * Raw node-data overrides keyed by node id → field → value, merged onto the
+   * app's workflow for THIS run only. Reaches fields that are NOT exposed as app
+   * inputs — e.g. `{ [nodeId]: { promptPrefix: "…", promptSuffix: "…" } }` to
+   * wrap the end user's prompt with text they never see.
+   */
+  inputOverrides?: Record<string, Record<string, unknown>>
+}
+
 export class AppsResource {
   constructor(private client: NodaroClient) {}
 
@@ -101,11 +112,16 @@ export class AppsResource {
   /**
    * Trigger an app run with the given input values. The keys in `inputs` must
    * match the app's input-schema field names (see `get(slug).inputSchema`).
+   * `opts.inputOverrides` adds raw per-node overrides (see {@link RunAppOptions}).
    * Returns the execution-id for status polling via client.executions.get().
    */
-  run(slug: string, inputs: Record<string, unknown> = {}): Promise<AppRunResult> {
+  run(
+    slug: string,
+    inputs: Record<string, unknown> = {},
+    opts: RunAppOptions = {},
+  ): Promise<AppRunResult> {
     return this.client.request("POST", `/v1/app/${encodeURIComponent(slug)}/run`, {
-      body: { inputs },
+      body: { inputs, ...(opts.inputOverrides ? { inputOverrides: opts.inputOverrides } : {}) },
     })
   }
 

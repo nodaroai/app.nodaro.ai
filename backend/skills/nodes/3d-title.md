@@ -1,7 +1,7 @@
 ---
 node_type: 3d-title
-generated_at: 2026-08-15T21:55:08.041Z
-generated_from: 150c80ac9
+generated_at: 2026-08-29T19:02:39.130Z
+generated_from: 7dbf4818b
 ---
 
 # 3D Title
@@ -22,6 +22,8 @@ generated_from: 150c80ac9
 - `durationSeconds: number`
 
 **Optional data fields:**
+- `promptPrefix?: string`
+- `promptSuffix?: string`
 - `titlePlan?: Record<string, unknown>`
 - `backgroundMediaUrl?: string`
 - `llmModel?: string`

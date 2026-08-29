@@ -1,4 +1,4 @@
-import { resolveNodeRefs } from "@nodaro/shared"
+import { resolveNodeRefs, readPromptAffixes, type PromptAffixes } from "@nodaro/shared"
 import { SOCIAL_POST_NODE_TYPES } from "@nodaro/shared"
 
 export interface ResolvePromptArgs {
@@ -13,16 +13,71 @@ export interface ResolvePromptArgs {
    *  Off/undefined = exact legacy precedence (override > typed > wired) for every
    *  other node type. */
   appendWired?: boolean
+  /** Pre/post text wrapped around WHICHEVER core precedence produced (override,
+   *  typed, wired, or the appendWired combination). Applied last. */
+  affixes?: PromptAffixes
 }
 const present = (s?: string): s is string => typeof s === "string" && s.trim().length > 0
 const rr = (s: string, m: ReadonlyMap<string, string>) => (m.size > 0 ? resolveNodeRefs(s, m) : s)
+
+// ---------------------------------------------------------------------------
+// Prompt affixes (pre/post text) — see docs/prompt-pre-post-text.md (join rule, empty-core, no-op guarantee)
+// ---------------------------------------------------------------------------
+
+const GLUE_PUNCTUATION = new Set([",", ".", ";", ":", "!", "?", ")"])
+
+/** The ONE join rule between two non-blank prompt parts: a single space unless
+ *  the boundary already has whitespace on either side or the right part opens
+ *  with sentence punctuation. Shared by `joinPromptParts` and the editor's
+ *  Final-view segment builder so preview and run agree byte-for-byte. */
+export function promptPartSeparator(left: string, right: string): "" | " " {
+  if (left.length === 0 || right.length === 0) return ""
+  if (/\s$/.test(left) || /^\s/.test(right)) return ""
+  if (GLUE_PUNCTUATION.has(right[0])) return ""
+  return " "
+}
+
+/** Join prompt parts with `promptPartSeparator`; blank parts are dropped,
+ *  non-blank parts are used verbatim (no trimming). */
+export function joinPromptParts(parts: ReadonlyArray<string | undefined>): string {
+  let out = ""
+  for (const part of parts) {
+    if (!present(part)) continue
+    out = out.length === 0 ? part : out + promptPartSeparator(out, part) + part
+  }
+  return out
+}
+
+/**
+ * Wrap `core` with the node's pre/post text. `{Label}` refs are resolved in the
+ * AFFIXES only — the core arrives exactly as the caller's precedence produced it.
+ * NO-OP GUARANTEE: with no non-blank affix the core is returned unchanged (same
+ * reference) — every existing workflow stays byte-identical.
+ * EMPTY CORE: a blank core with affixes yields the joined affixes alone.
+ */
+export function applyPromptAffixes(core: string, affixes: PromptAffixes | undefined, refMap: ReadonlyMap<string, string>): string
+export function applyPromptAffixes(core: string | undefined, affixes: PromptAffixes | undefined, refMap: ReadonlyMap<string, string>): string | undefined
+export function applyPromptAffixes(
+  core: string | undefined,
+  affixes: PromptAffixes | undefined,
+  refMap: ReadonlyMap<string, string>,
+): string | undefined {
+  const prefix = present(affixes?.prefix) ? rr(affixes!.prefix!, refMap) : undefined
+  const suffix = present(affixes?.suffix) ? rr(affixes!.suffix!, refMap) : undefined
+  if (prefix === undefined && suffix === undefined) return core
+  return joinPromptParts([prefix, core, suffix])
+}
 
 /** SINGLE SOURCE OF TRUTH for prompt precedence across both DAG engines:
  *  override (list fan-out) > first present typed candidate > wired > "".
  *  "present" = non-empty after trim. {Label} refs are resolved on the chosen
  *  branch via the shared resolveNodeRefs. With `appendWired`, the chosen base
- *  AND the wired value are both emitted (joined ". "). */
-export function resolvePrompt({ override, typed = [], wired, refMap, appendWired }: ResolvePromptArgs): string {
+ *  AND the wired value are both emitted (joined ". "). Affixes wrap the result. */
+export function resolvePrompt({ override, typed = [], wired, refMap, appendWired, affixes }: ResolvePromptArgs): string {
+  return applyPromptAffixes(resolveCore({ override, typed, wired, refMap, appendWired }), affixes, refMap)
+}
+
+function resolveCore({ override, typed = [], wired, refMap, appendWired }: Omit<ResolvePromptArgs, "affixes">): string {
   // appendWired: a connected prompt APPENDS to the TYPED base. An `override`
   // (list fan-out item) still fully REPLACES — it never receives a wired append,
   // so per-item fan-out prompts are unchanged.
@@ -110,7 +165,7 @@ export function computeNodePrompt(
     const fields = NODE_PROMPT_CANDIDATE_FIELDS[nodeType] ?? ["prompt"]
     typed = fields.map((f) => data[f] as string | undefined)
   }
-  return resolvePrompt({ override, typed, wired, refMap, appendWired })
+  return resolvePrompt({ override, typed, wired, refMap, appendWired, affixes: readPromptAffixes(data) })
 }
 
 export interface LlmChatFieldArgs {
@@ -125,7 +180,7 @@ export function computeLlmChatFields(
   { override, wiredUserInput, wiredSystemPrompt, refMap }: LlmChatFieldArgs,
 ): { userInput: string; systemPrompt: string } {
   return {
-    userInput: resolvePrompt({ override, typed: [data.userInput as string | undefined], wired: wiredUserInput, refMap }),
+    userInput: resolvePrompt({ override, typed: [data.userInput as string | undefined], wired: wiredUserInput, refMap, affixes: readPromptAffixes(data) }),
     systemPrompt: resolvePrompt({ typed: [data.systemPrompt as string | undefined], wired: wiredSystemPrompt, refMap }),
   }
 }

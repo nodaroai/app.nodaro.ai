@@ -303,4 +303,29 @@ describe("buildSyncHttpBody — field shape matches route Zod schemas", () => {
       expect(body.inputs).toEqual([])
     })
   })
+
+  describe("suno-style-boost", () => {
+    it("resolves {Label} refs in the typed content and then wraps the pre/post text", () => {
+      const refMap = new Map([["Topic", "late-night jazz"]])
+      const body = buildSyncHttpBody(
+        node("suno-style-boost", { content: "{Topic} vibes", promptPrefix: "PRE", promptSuffix: "POST" }),
+        {},
+        CTX,
+        undefined,
+        refMap,
+      )
+      expect(body.content).toBe("PRE late-night jazz vibes POST")
+    })
+
+    it("a wired prompt wins over typed content and is not re-resolved", () => {
+      const body = buildSyncHttpBody(
+        node("suno-style-boost", { content: "{Topic} vibes" }),
+        { prompt: "wired text" },
+        CTX,
+        undefined,
+        new Map([["Topic", "x"]]),
+      )
+      expect(body.content).toBe("wired text")
+    })
+  })
 })

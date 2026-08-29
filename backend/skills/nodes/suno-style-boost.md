@@ -1,7 +1,7 @@
 ---
 node_type: suno-style-boost
-generated_at: 2026-08-15T21:55:07.063Z
-generated_from: 150c80ac9
+generated_at: 2026-08-29T19:02:38.725Z
+generated_from: 7dbf4818b
 ---
 
 # Suno Style Boost
@@ -19,6 +19,8 @@ generated_from: 150c80ac9
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
+- `promptPrefix?: string`
+- `promptSuffix?: string`
 - `currentJobProgress?: number`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`

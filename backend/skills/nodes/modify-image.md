@@ -1,7 +1,7 @@
 ---
 node_type: modify-image
-generated_at: 2026-08-15T21:55:06.379Z
-generated_from: 150c80ac9
+generated_at: 2026-08-29T19:02:38.439Z
+generated_from: 7dbf4818b
 ---
 
 # Modify Image
@@ -20,6 +20,8 @@ generated_from: 150c80ac9
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
+- `promptPrefix?: string`
+- `promptSuffix?: string`
 - `style?: string`
 - `strength?: number`
 - `aspectRatio?: string`

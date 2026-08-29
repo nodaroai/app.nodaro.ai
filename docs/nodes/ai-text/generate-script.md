@@ -17,6 +17,7 @@ The Generate Script node uses Gemini Flash to produce a structured, multi-scene 
 | Structure | `"freeform" \| "8-step" \| "custom"` | `"freeform"` | Script structure template. Freeform allows the AI to decide pacing; 8-step follows a classic narrative arc |
 | Tone | `string` | `""` | Optional tone descriptor (e.g., "cinematic", "playful", "dark", "documentary") |
 | Target Length | `number` | `60` | Target total duration in seconds for the entire script |
+| `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the script prompt (not the Style Guide) at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ## Inputs & Outputs
 

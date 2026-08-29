@@ -7,8 +7,8 @@ import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState, Workfl
 import { normalizeCollageLabels } from "../../providers/image/collage-badges.js"
 
 // Shared logic from packages/shared — single source of truth
-import { resolveSlideshowTransition, collectAncestorRefs as sharedCollectAncestorRefs, applyDefaultVideoSelection, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionableAssetArrays, buildCreditModelIdentifier, resolveImageGenCreditIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, resolveVideoModeForInputs, videoProviderRequiresImage, isVeoProvider, buildLipSyncCreditId, isPerSecondLipSyncProvider, resolveAiAvatarCreditId, resolveSwitchXCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, buildVideoAuditCreditId, resolveVideoAnalysisModel, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName, validateAiAvatarPayload, validateCinematicAvatarPayload, resolveNodeRefs, resolveEffectiveSourceType, PARAMETER_NODE_TYPES, characterMentionSlug, expandExtraRefsToConnectedReferences, PLATFORM_SPECS, isSeedance2Provider, isMinimaxH3Provider, supportsExtendRender, MODEL_CATALOG, hasFeature, referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality, COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS, buildLlmCreditIdentifier, motionGraphicsFeature, FLUX_LORA_CHARACTER_MODEL_ID, extractCharacterLoraFields, clampSmartCutWindow, resolveGvpAnchorWire, normalizeModelInput } from "@nodaro/shared"
-import { composeNegative, resolveTemplate, applyTemplate, computeNodePrompt, assembleImageInput, buildImagePrompt, buildScenePrompt, collectIdentityLockClause as sharedCollectIdentityLockClause, getParameterPromptHint, characterLockToRefLock, buildCharacterPrompt, buildObjectPrompt, buildCreaturePrompt, buildLocationPrompt, buildFaceTemplateInputs, appendMusicMeta, composeSoundHintFromConnections, truncateForField, appendField, assembleSunoInput, type SoundConsumerType, type SoundComposition, resolveVideoReferenceCore } from "@nodaro/prompts"
+import { resolveSlideshowTransition, collectAncestorRefs as sharedCollectAncestorRefs, applyDefaultVideoSelection, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionableAssetArrays, buildCreditModelIdentifier, resolveImageGenCreditIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, resolveVideoModeForInputs, videoProviderRequiresImage, isVeoProvider, buildLipSyncCreditId, isPerSecondLipSyncProvider, resolveAiAvatarCreditId, resolveSwitchXCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, buildVideoAuditCreditId, resolveVideoAnalysisModel, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName, validateAiAvatarPayload, validateCinematicAvatarPayload, resolveNodeRefs, resolveEffectiveSourceType, PARAMETER_NODE_TYPES, characterMentionSlug, expandExtraRefsToConnectedReferences, PLATFORM_SPECS, isSeedance2Provider, isMinimaxH3Provider, supportsExtendRender, MODEL_CATALOG, hasFeature, referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality, COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS, buildLlmCreditIdentifier, motionGraphicsFeature, FLUX_LORA_CHARACTER_MODEL_ID, extractCharacterLoraFields, clampSmartCutWindow, resolveGvpAnchorWire, normalizeModelInput, readPromptAffixes } from "@nodaro/shared"
+import { composeNegative, resolveTemplate, applyTemplate, computeNodePrompt, assembleImageInput, buildImagePrompt, buildScenePrompt, collectIdentityLockClause as sharedCollectIdentityLockClause, getParameterPromptHint, characterLockToRefLock, buildCharacterPrompt, buildObjectPrompt, buildCreaturePrompt, buildLocationPrompt, buildFaceTemplateInputs, appendMusicMeta, composeSoundHintFromConnections, truncateForField, appendField, assembleSunoInput, type SoundConsumerType, type SoundComposition, resolveVideoReferenceCore, applyPromptAffixes } from "@nodaro/prompts"
 import type { CharacterDef, ConnectedReference, SceneData, ExtraRefInput, ExtraRefCharacterContext } from "@nodaro/shared"
 import type { CharacterMeta } from "@nodaro/prompts"
 import { resolveEntityImageCreditIdentifier } from "../../lib/entity-credit-identifier.js"
@@ -2326,7 +2326,7 @@ export function buildPayload(
           }
         }
 
-        let editPrompt = (resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap)) as string | undefined
+        let editPrompt = applyPromptAffixes((resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap)) as string | undefined, readPromptAffixes(data), refMap)
         if (editPrompt) {
           const charIds = (data.characterDefinitionIds as string[]) ?? []
           const charDefs = (buildCtx?.settings?.characterDefinitions ?? []).filter(
@@ -2412,9 +2412,10 @@ export function buildPayload(
           ...charRefUrls,
         ]
 
-        let rawPrompt = resolveRefs(resolvedInputs.prompt as string | undefined, refMap)
-          || resolveRefs(data.prompt as string | undefined, refMap)
-          || ""
+        let rawPrompt = applyPromptAffixes(
+          resolveRefs(resolvedInputs.prompt as string | undefined, refMap)
+            || resolveRefs(data.prompt as string | undefined, refMap),
+          readPromptAffixes(data), refMap) || ""
         {
           // Bullet consumer (stamps character elements onto the ref) → exclude here.
           const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES, excludeCharacterElements: true })
@@ -3069,7 +3070,7 @@ export function buildPayload(
         payload: {
           jobId,
           videoUrl: resolvedInputs.videoUrl ?? (data.videoUrl as string | undefined),
-          prompt: resolvedInputs.prompt ?? (data.prompt as string | undefined),
+          prompt: applyPromptAffixes(resolvedInputs.prompt ?? (data.prompt as string | undefined), readPromptAffixes(data), refMap),
           // `negative` handle takes precedence over the config field; default
           // to "music" so MMAudio synthesizes SFX/foley rather than a score
           // (mirrors the route's Zod default at `routes/video-sfx.ts:18`).
@@ -3123,7 +3124,7 @@ export function buildPayload(
         // silently flip an orchestrated run into English.
         translateSpeechToEnglish: data.translateSpeechToEnglish === true ? true : undefined,
         translateOnScreenTextToEnglish: data.translateOnScreenTextToEnglish === true ? true : undefined,
-        analysisFocus: data.analysisFocus,
+        analysisFocus: applyPromptAffixes(data.analysisFocus as string | undefined, readPromptAffixes(data), refMap),
         reservedCreditId: creditId,
         // nodeId echoes the route's payload key (node.id == the canvas node id the
         // route reads from req.body). workflowId is route-only — buildPayload has
@@ -3353,7 +3354,7 @@ export function buildPayload(
         payload: {
           jobId,
           imageUrl: resolvedInputs.imageUrl || (data.generatedImageUrl as string | undefined),
-          prompt: data.prompt as string,
+          prompt: applyPromptAffixes(data.prompt as string | undefined, readPromptAffixes(data), refMap) as string,
           threshold: (data.threshold as number | undefined) ?? 0.3,
           usageLogId,
         },
@@ -3401,7 +3402,7 @@ export function buildPayload(
           imageUrl: resolvedInputs.imageUrl || data.imageUrl,
           videoUrl: resolvedInputs.videoUrl || data.videoUrl,
           audioUrl: resolvedInputs.audioUrl || data.audioUrl,
-          prompt: resolvedInputs.prompt || data.prompt || "A person talking naturally",
+          prompt: applyPromptAffixes((resolvedInputs.prompt || data.prompt) as string | undefined, readPromptAffixes(data), refMap) || "A person talking naturally",
           provider,
           resolution: data.resolution,
           audioDurationSec,
@@ -3603,7 +3604,7 @@ export function buildPayload(
           jobId,
           videoUrl: resolvedInputs.videoUrl || data.videoUrl,
           imageUrl: resolvedInputs.imageUrl || data.imageUrl,
-          prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
+          prompt: applyPromptAffixes(resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap), readPromptAffixes(data), refMap),
           negativePrompt: resolvedInputs.negativePrompt || (data.negativePrompt as string | undefined),
           provider: mtProvider,
           backgroundSource: data.backgroundSource,
@@ -4175,14 +4176,14 @@ export function buildPayload(
     case "voice-remix":
       return simpleResult("voice-remix", "elevenlabs-voice-remix", {
         jobId,
-        voiceDescription: data.voiceDescription,
+        voiceDescription: applyPromptAffixes(data.voiceDescription as string | undefined, readPromptAffixes(data), refMap),
         text: resolvedInputs.prompt || resolveRefs(data.text as string | undefined, refMap),
         usageLogId,
       })
 
     case "voice-design": {
       const audioStyle = collectAudioStyleHints(node, "voice-design", buildCtx)
-      const userVoiceDesc = (data.voiceDescription as string | undefined) ?? ""
+      const userVoiceDesc = applyPromptAffixes(data.voiceDescription as string | undefined, readPromptAffixes(data), refMap) ?? ""
       const composed = truncateForField(audioStyle.text, userVoiceDesc, 1000)
       const finalVoiceDescription = appendField(userVoiceDesc, composed)
       return simpleResult("voice-design", "elevenlabs-voice-design", {
@@ -4203,7 +4204,7 @@ export function buildPayload(
       return simpleResult("forced-alignment", "elevenlabs-forced-alignment", {
         jobId,
         audioUrl: resolvedInputs.audioUrl || data.audioUrl,
-        transcript: resolvedInputs.prompt || resolveRefs(data.transcript as string | undefined, refMap),
+        transcript: applyPromptAffixes(resolvedInputs.prompt || resolveRefs(data.transcript as string | undefined, refMap), readPromptAffixes(data), refMap),
         usageLogId,
       })
 
@@ -4221,8 +4222,9 @@ export function buildPayload(
       const result = assembleSunoInput({
         node,
         graph: { nodes: buildCtx?.nodes ?? [], edges: buildCtx?.edges ?? [] },
-        userPrompt:
-          resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap) || "",
+        userPrompt: applyPromptAffixes(
+          resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
+          readPromptAffixes(data), refMap) || "",
         lyrics: resolveRefs(data.lyrics as string | undefined, refMap),
         persona: resolvePersona(resolvedInputs, data),
         throwOnEmpty: false,
@@ -4235,7 +4237,7 @@ export function buildPayload(
       const sunoCoverCreditId = (data.model as string) === "V5" ? "suno-v5" : "suno-cover"
       return simpleResult("suno-cover", sunoCoverCreditId, {
         jobId,
-        prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
+        prompt: applyPromptAffixes(resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap), readPromptAffixes(data), refMap),
         uploadUrl: resolvedInputs.uploadUrl || resolvedInputs.audioUrl || data.uploadUrl || data.audioUrl,
         model: data.model,
         lyrics: resolveRefs(data.lyrics as string | undefined, refMap),
@@ -4263,7 +4265,7 @@ export function buildPayload(
         jobId,
         audioId: resolvedInputs.sunoTrackId || data.audioId,
         defaultParamFlag: data.defaultParamFlag ?? true,
-        prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
+        prompt: applyPromptAffixes(resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap), readPromptAffixes(data), refMap),
         model: data.model,
         style: data.style,
         title: data.title,
@@ -4281,7 +4283,7 @@ export function buildPayload(
     case "suno-lyrics":
       return simpleResult("suno-lyrics", "suno-lyrics", {
         jobId,
-        prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
+        prompt: applyPromptAffixes(resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap), readPromptAffixes(data), refMap),
         usageLogId,
       })
 
@@ -4370,7 +4372,7 @@ export function buildPayload(
       return simpleResult("suno-upload-extend", "suno-upload-extend", {
         jobId,
         uploadUrl: resolvedInputs.audioUrl || data.uploadUrl || data.audioUrl,
-        prompt: resolveRefs(data.prompt as string | undefined, refMap),
+        prompt: applyPromptAffixes(resolveRefs(data.prompt as string | undefined, refMap), readPromptAffixes(data), refMap),
         // Route schema requires continueAt as a non-negative number; default to
         // 0 (extend from start) to match the frontend single-node behaviour.
         continueAt: (data.continueAt as number | undefined) ?? 0,
@@ -5221,7 +5223,7 @@ export function buildPayload(
         modelIdentifier: buildLlmCreditIdentifier("generate-script", scriptLlmModel, scriptEffort, data.advancedMode === true),
         payload: {
           jobId,
-          prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
+          prompt: applyPromptAffixes(resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap), readPromptAffixes(data), refMap),
           sceneCount: data.sceneCount,
           tone: data.tone ?? data.style,
           targetDuration: data.targetDuration ?? data.targetLength,
@@ -5251,7 +5253,7 @@ export function buildPayload(
         modelIdentifier: buildLlmCreditIdentifier(motionGraphicsFeature(data.engine as string | undefined), mgLlmModel, mgEffort, data.advancedMode === true),
         payload: {
           jobId,
-          prompt: resolvedInputs.prompt || resolveRefs(data.motionPrompt as string | undefined, refMap),
+          prompt: applyPromptAffixes(resolvedInputs.prompt || resolveRefs(data.motionPrompt as string | undefined, refMap), readPromptAffixes(data), refMap),
           fps,
           width: (data.width as number) ?? dims.width,
           height: (data.height as number) ?? dims.height,

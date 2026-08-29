@@ -18,6 +18,7 @@ The Video SFX node takes an input video plus an optional text prompt and produce
 | cfg_strength | Number | 4.5 | Advanced — guidance scale (1.0–10.0). |
 | num_steps | Number | 25 | Advanced — diffusion steps (10–50). |
 | seed | Number | random | Advanced — leave blank or `-1` for random. When set, version N uses `seed + N`. |
+| `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ## Inputs & Outputs
 

@@ -271,7 +271,8 @@ export function registerWorkflows({
       {
         title: "Create Workflow",
         description:
-          "Create a new (empty or seeded) workflow in the mcp project. Returns the new workflow id.",
+          "Create a new (empty or seeded) workflow in the mcp project. Returns the new workflow id." +
+          " Any AI prompt node's `data` may carry `promptPrefix` / `promptSuffix` — pre/post text wrapped around its prompt at run time (settings-only; see get_node_skill for the node's fields).",
         inputSchema: {
           name: z.string().min(1).max(200),
           description: z.string().max(2000).optional(),
@@ -378,7 +379,8 @@ export function registerWorkflows({
       {
         title: "Update Workflow JSON",
         description:
-          "Update a workflow in the mcp project: replace its node graph (nodes + edges together), and/or its settings, and/or its thumbnail_url. All content fields are optional — e.g. pass only thumbnail_url to set the preview image without re-sending the graph. Supply expected_updated_at or expected_version (from get_workflow_json) to enable optimistic concurrency control.",
+          "Update a workflow in the mcp project: replace its node graph (nodes + edges together), and/or its settings, and/or its thumbnail_url. All content fields are optional — e.g. pass only thumbnail_url to set the preview image without re-sending the graph. Supply expected_updated_at or expected_version (from get_workflow_json) to enable optimistic concurrency control." +
+          " Any AI prompt node's `data` may carry `promptPrefix` / `promptSuffix` — pre/post text wrapped around its prompt at run time (settings-only; see get_node_skill for the node's fields).",
         inputSchema: {
           workflow_id: z.string().uuid(),
           nodes: z.array(z.record(z.string(), z.unknown())).optional(),

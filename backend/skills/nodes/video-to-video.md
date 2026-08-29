@@ -1,7 +1,7 @@
 ---
 node_type: video-to-video
-generated_at: 2026-08-15T21:55:06.621Z
-generated_from: 150c80ac9
+generated_at: 2026-08-29T19:02:38.549Z
+generated_from: 7dbf4818b
 ---
 
 # Video to Video
@@ -21,6 +21,8 @@ generated_from: 150c80ac9
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
+- `promptPrefix?: string`
+- `promptSuffix?: string`
 - `negativePrompt?: string`
 - `v2vDuration?: "5" | "10"`
 - `v2vResolution?: "720p" | "1080p"`

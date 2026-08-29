@@ -3,6 +3,7 @@ import {
   extractAppInputSchema,
   extractComponentInputSchema,
   flatInputsToOverrides,
+  mergeInputOverrides,
 } from "../extract-app-inputs.js"
 
 describe("extractAppInputSchema", () => {
@@ -464,5 +465,50 @@ describe("flatInputsToOverrides", () => {
         },
       ),
     ).toEqual({ n1: { c: "kept" } })
+  })
+})
+
+describe("mergeInputOverrides", () => {
+  it("returns undefined when both sides are absent or empty", () => {
+    expect(mergeInputOverrides(undefined, undefined)).toBeUndefined()
+    expect(mergeInputOverrides({}, {})).toBeUndefined()
+    expect(mergeInputOverrides({}, undefined)).toBeUndefined()
+  })
+
+  it("passes the base through when there is no overlay", () => {
+    expect(mergeInputOverrides({ n1: { text: "a cat" } }, undefined)).toEqual({
+      n1: { text: "a cat" },
+    })
+  })
+
+  it("passes the overlay through when there is no base", () => {
+    expect(mergeInputOverrides(undefined, { n1: { promptPrefix: "cinematic" } })).toEqual({
+      n1: { promptPrefix: "cinematic" },
+    })
+  })
+
+  it("merges the same node per field, overlay winning on conflicts", () => {
+    expect(
+      mergeInputOverrides(
+        { n1: { text: "a cat", seed: 1 } },
+        { n1: { seed: 42, promptPrefix: "cinematic" } },
+      ),
+    ).toEqual({ n1: { text: "a cat", seed: 42, promptPrefix: "cinematic" } })
+  })
+
+  it("keeps nodes that appear on only one side", () => {
+    expect(
+      mergeInputOverrides({ n1: { text: "a cat" } }, { n2: { promptSuffix: "35mm" } }),
+    ).toEqual({ n1: { text: "a cat" }, n2: { promptSuffix: "35mm" } })
+  })
+
+  it("never mutates either input", () => {
+    const base = { n1: { text: "a cat" } }
+    const overlay = { n1: { promptPrefix: "cinematic" } }
+    const merged = mergeInputOverrides(base, overlay)
+    expect(base).toEqual({ n1: { text: "a cat" } })
+    expect(overlay).toEqual({ n1: { promptPrefix: "cinematic" } })
+    expect(merged!.n1).not.toBe(base.n1)
+    expect(merged!.n1).not.toBe(overlay.n1)
   })
 })

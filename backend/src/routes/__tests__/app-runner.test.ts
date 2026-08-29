@@ -288,7 +288,7 @@ describe("POST /v1/app/:slug/run", () => {
     expect(res.json().error.code).toBe("rate_limit_exceeded")
   })
 
-  function setupSuccessfulRunMocks() {
+  function setupSuccessfulRunMocks(rowOverrides: Record<string, unknown> = {}) {
     let callCount = 0
     vi.mocked(supabase.from).mockImplementation((table: string) => {
       callCount++
@@ -298,7 +298,10 @@ describe("POST /v1/app/:slug/run", () => {
       }
       if (callCount === 2) {
         // Version lookup
-        return createChainMock({ data: { ...DB_APP_ROW, max_runs_per_user_per_day: null }, error: null }) as never
+        return createChainMock({
+          data: { ...DB_APP_ROW, max_runs_per_user_per_day: null, ...rowOverrides },
+          error: null,
+        }) as never
       }
       if (table === "workflow_executions") {
         return createChainMock({ data: { id: TEST_EXECUTION_ID }, error: null }) as never
@@ -337,6 +340,57 @@ describe("POST /v1/app/:slug/run", () => {
         appVersionId: TEST_APP_ID,
       }),
       { jobId: TEST_EXECUTION_ID }
+    )
+  })
+
+  it("merges flat `inputs` with nested `inputOverrides` (overlay wins per field)", async () => {
+    // The SDK's apps.run(slug, inputs, { inputOverrides }) and the CLI's
+    // `--input … --override …` send BOTH. Picking one silently ran the app with
+    // default prompt text; the two are complementary — flat inputs are the base,
+    // the raw nested overrides win field-by-field on top.
+    setupSuccessfulRunMocks({
+      snapshot_nodes: [
+        { id: "n1", type: "text-prompt", data: { label: "Prompt" } },
+        { id: "n2", type: "upload-image", data: { label: "Photo" } },
+      ],
+      snapshot_settings: {
+        presentationSettings: {
+          inputItems: [
+            { type: "node", nodeId: "n1" },
+            { type: "node", nodeId: "n2" },
+          ],
+        },
+      },
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/app/${TEST_SLUG}/run`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        inputs: { prompt: "a cat", photo: "https://r2/photo.jpg" },
+        inputOverrides: {
+          n1: { promptPrefix: "cinematic still,", promptSuffix: "shot on 35mm" },
+          n3: { seed: 7 },
+        },
+      },
+    })
+
+    expect(res.statusCode).toBe(202)
+    expect(orchestrationQueue.add).toHaveBeenCalledWith(
+      "workflow-execution",
+      expect.objectContaining({
+        inputOverrides: {
+          n1: {
+            text: "a cat",
+            promptPrefix: "cinematic still,",
+            promptSuffix: "shot on 35mm",
+          },
+          n2: { url: "https://r2/photo.jpg" },
+          n3: { seed: 7 },
+        },
+      }),
+      expect.any(Object)
     )
   })
 

@@ -1,7 +1,7 @@
 ---
 node_type: generate-video-pro
-generated_at: 2026-08-15T21:55:06.498Z
-generated_from: 150c80ac9
+generated_at: 2026-08-29T19:02:38.504Z
+generated_from: 7dbf4818b
 ---
 
 # Generate Video Pro
@@ -62,6 +62,8 @@ generated_from: 150c80ac9
 - `contentPolicyRewrites?: ContentPolicyRewriteEntry[]`
 - `gvpContinueFromJobId?: string`
 - `gvpContinueFromSegment?: number`
+- `promptPrefix?: string`
+- `promptSuffix?: string`
 
 **Default data:**
 ```json

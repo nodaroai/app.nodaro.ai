@@ -4,6 +4,7 @@ import {
   extractPresetData,
   PRESET_EXCLUDED_KEYS,
   PRESET_APPLY_CLEAR_KEYS,
+  presetApplyClearKeys,
   presetDataMatches,
 } from "../node-preset-extract.js"
 
@@ -162,5 +163,63 @@ describe("presetDataMatches", () => {
 
   it("empty preset data matches anything", () => {
     expect(presetDataMatches({ prompt: "a" }, {})).toBe(true)
+  })
+})
+
+describe("presetApplyClearKeys", () => {
+  const staticKeys = [...PRESET_APPLY_CLEAR_KEYS]
+  const hasAffixes = (keys: readonly string[]) =>
+    keys.includes("promptPrefix") && keys.includes("promptSuffix")
+
+  it("always includes every static clear key, whatever the preset ships", () => {
+    for (const data of [
+      {},
+      { prompt: "a cat" },
+      { promptPrefix: "Cinematic 35mm still of" },
+      { promptSuffix: ", golden hour" },
+      { prompt: "a cat", promptPrefix: "PRE", promptSuffix: "POST" },
+      { provider: "flux", aspectRatio: "16:9" },
+    ]) {
+      const keys = presetApplyClearKeys(data)
+      for (const k of staticKeys) expect(keys, `${k} missing for ${JSON.stringify(data)}`).toContain(k)
+    }
+  })
+
+  it("owns no prompt content -> does NOT clear the affixes (settings-only preset)", () => {
+    expect(hasAffixes(presetApplyClearKeys({}))).toBe(false)
+    expect(hasAffixes(presetApplyClearKeys({ provider: "flux", seed: 3 }))).toBe(false)
+    // exactly the static set, nothing added
+    expect([...presetApplyClearKeys({ provider: "flux" })].sort()).toEqual([...staticKeys].sort())
+  })
+
+  it("ships `prompt` -> clears BOTH affixes (the stale-prefix hazard)", () => {
+    expect(hasAffixes(presetApplyClearKeys({ prompt: "a cat" }))).toBe(true)
+  })
+
+  it("ships an affix -> clears both affixes (the other one is then re-set by the spread)", () => {
+    expect(hasAffixes(presetApplyClearKeys({ promptPrefix: "PRE" }))).toBe(true)
+    expect(hasAffixes(presetApplyClearKeys({ promptSuffix: "POST" }))).toBe(true)
+  })
+
+  it("ships prompt AND affixes -> clears both affixes", () => {
+    expect(hasAffixes(presetApplyClearKeys({ prompt: "a cat", promptPrefix: "PRE", promptSuffix: "POST" }))).toBe(true)
+  })
+
+  it("never lists `prompt` itself — it is overwritten only when the preset ships it", () => {
+    for (const data of [{}, { prompt: "a cat" }, { promptPrefix: "PRE" }]) {
+      expect(presetApplyClearKeys(data)).not.toContain("prompt")
+    }
+  })
+
+  it("treats an explicit `undefined` value as NOT owning prompt content", () => {
+    expect(hasAffixes(presetApplyClearKeys({ prompt: undefined }))).toBe(false)
+    expect(hasAffixes(presetApplyClearKeys({ promptPrefix: undefined }))).toBe(false)
+  })
+
+  it("does not mutate PRESET_APPLY_CLEAR_KEYS", () => {
+    presetApplyClearKeys({ prompt: "a cat" })
+    expect([...PRESET_APPLY_CLEAR_KEYS].sort()).toEqual([...staticKeys].sort())
+    expect(PRESET_APPLY_CLEAR_KEYS).not.toContain("promptPrefix")
+    expect(PRESET_APPLY_CLEAR_KEYS).not.toContain("promptSuffix")
   })
 })

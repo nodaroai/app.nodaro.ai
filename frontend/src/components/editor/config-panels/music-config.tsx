@@ -38,6 +38,7 @@ export function GenerateMusicConfig({ data, onUpdate, sources, fieldMappings, on
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
   const finalPrompt = useFinalPromptSegments({
     userPrompt: data.prompt,
+    promptField: "prompt",
     consumerNodeId: nodeId,
     nodes,
     edges: edges ?? EMPTY_EDGES,

@@ -452,6 +452,15 @@ nodaro nodes run generate-image \
   --watch --json | jq -r '.output_data.imageUrl'
 ```
 
+### Wrap an app's prompt with hidden text for one run
+
+```bash
+nodaro apps run hair-styler-dd3erw --input prompt="curly red hair" \
+  --override n1.promptPrefix="Studio portrait of" --override n1.promptSuffix=", 85mm, soft light"
+```
+
+See [Prompt pre & post text](./prompt-pre-post-text.md).
+
 ### Turn a rough idea into an optimized prompt
 
 ```bash

@@ -1,7 +1,7 @@
 ---
 node_type: forced-alignment
-generated_at: 2026-08-15T21:55:07.405Z
-generated_from: 150c80ac9
+generated_at: 2026-08-29T19:02:38.881Z
+generated_from: 7dbf4818b
 ---
 
 # Forced Alignment
@@ -19,6 +19,8 @@ generated_from: 150c80ac9
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
+- `promptPrefix?: string`
+- `promptSuffix?: string`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `alignmentResults?: AlignmentWord[]`

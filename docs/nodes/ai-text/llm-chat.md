@@ -33,6 +33,7 @@ When the prompt (or a template) produces a single block with no `===NEXT===` mar
 | # of runs | `number` | `1` | How many generations to produce per Run click (1–4 in the node's quick toolbar). Each run is charged separately — the Run button shows the multiplied credit cost |
 | Effort | `string` | `Auto` | Reasoning effort for models that support it — hidden entirely for models with no reasoning levels. See [Reasoning effort](#reasoning-effort) |
 | Advanced mode | `boolean` | `false` | Gemini models only. Runs the model on the provider's own API so **Temperature**, **Max Tokens** and the full reasoning-depth range actually apply — those controls appear once it is on. Bills one credit tier up; the node's cost badge updates immediately. Disabled with an inline reason on non-Gemini models |
+| `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the **User Input** (never the Instructions / system prompt) at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ### Model selector
 

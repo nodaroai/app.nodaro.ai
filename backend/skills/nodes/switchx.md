@@ -1,7 +1,7 @@
 ---
 node_type: switchx
-generated_at: 2026-08-15T21:55:06.673Z
-generated_from: 150c80ac9
+generated_at: 2026-08-29T19:08:21.144Z
+generated_from: 7dbf4818b
 ---
 
 # Relight & Switch
@@ -12,6 +12,37 @@ generated_from: 150c80ac9
 **Credit cost:** 36
 **Inputs (target handles):** `video`, `image`, `mask`, `mask-video`, `prompt`
 **Outputs (source handles):** `video`
+
+**Required data fields:**
+- `label: string`
+- `prompt: string`
+- `provider: "beeble-switchx"`
+- `alphaMode: "auto" | "fill" | "select" | "custom"`
+- `maxResolution: 720 | 1080`
+- `fieldMappings: FieldMappings`
+
+**Optional data fields:**
+- `promptPrefix?: string`
+- `promptSuffix?: string`
+- `referenceImageUrl?: string`
+- `maskUrl?: string`
+- `alphaKeyframeIndex?: number`
+- `seed?: number`
+- `repeatCount?: number`
+- `executionStatus?: "idle" | "running" | "completed" | "failed"`
+- `errorMessage?: string`
+- `generatedVideoUrl?: string`
+- `generatedResults?: GeneratedResult[]`
+- `activeResultIndex?: number`
+- `currentJobId?: string`
+- `currentJobProgress?: number`
+- `connectedImageOrder?: readonly string[]`
+- `referenceOrder?: readonly string[]`
+- `suppressedCanonicalCharacterIds?: readonly string[]`
+- `suppressedCanonicalLocationIds?: readonly string[]`
+- `extraRefs?: readonly ExtraRef[]`
+- `videoPlayState?: "loop" | "paused" | "stopped"`
+- `pausedAtTime?: number`
 
 **Default data:**
 ```json

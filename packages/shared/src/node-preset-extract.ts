@@ -1,5 +1,6 @@
 import { EXECUTION_DATA_KEYS } from "./node-runtime-keys.js"
 import { COMPOSER_PLAN_FIELDS } from "./model-constants.js"
+import { PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY } from "./prompt-affixes.js"
 
 /**
  * Generated-plan state on composer nodes that a preset must NEITHER capture NOR
@@ -25,6 +26,43 @@ import { COMPOSER_PLAN_FIELDS } from "./model-constants.js"
  *     bloating the preset row. These keys are in the capture-exclusion set below.
  */
 export const PRESET_APPLY_CLEAR_KEYS: readonly string[] = [...COMPOSER_PLAN_FIELDS, "lottieUrl"]
+
+/**
+ * The three keys that carry a preset's PROMPT CONTENT: the prompt itself plus the pre/post text
+ * wrapped around it at run time. A preset "owns prompt content" iff its data defines any of them.
+ */
+const PROMPT_CONTENT_KEYS: readonly string[] = ["prompt", PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY]
+
+/**
+ * The keys applying THIS preset must clear on the node: always `PRESET_APPLY_CLEAR_KEYS`, plus
+ * `promptPrefix` / `promptSuffix` when the preset owns prompt content. The dropdown spreads
+ * `{ ...clearPatch, ...preset.data }`, so the preset's own affixes (if any) land back on top of
+ * the clear — the clear only decides what happens to the keys the preset does NOT set.
+ *
+ * The hazard this closes: with a STATIC clear set the affixes are named by no patch, so applying
+ * preset B (which ships only `prompt`) over a node carrying preset A's `promptPrefix` leaves A's
+ * prefix in place, silently wrapping B's prompt. The node then runs text no preset ever authored,
+ * and nothing in the UI attributes it — the prefix lives in a collapsed settings section.
+ *
+ * The rule is ASYMMETRIC on purpose, because the two directions have opposite promises:
+ *  - A preset that owns prompt content is authoring the whole prompt, affixes included, so any
+ *    leftover affix from a previous preset is stale — clear both.
+ *  - A settings-only preset (provider / aspect ratio / seed …) promises to touch nothing about the
+ *    prompt, so it leaves prompt AND affixes exactly as the user has them.
+ *  - `prompt` is NEVER cleared, only overwritten when the preset ships it. That is the feature's
+ *    core promise: apply a preset that ships only affixes and your typed prompt is kept, wrapped.
+ *
+ * Pure; `PRESET_APPLY_CLEAR_KEYS` itself stays a fixed set (it is also spread into
+ * `PRESET_EXCLUDED_KEYS`, and affixes must remain capture-INCLUDED for presets to ship them).
+ */
+export function presetApplyClearKeys(
+  presetData: Readonly<Record<string, unknown>>,
+): readonly string[] {
+  const ownsPromptContent = PROMPT_CONTENT_KEYS.some((k) => presetData[k] !== undefined)
+  return ownsPromptContent
+    ? [...PRESET_APPLY_CLEAR_KEYS, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY]
+    : PRESET_APPLY_CLEAR_KEYS
+}
 
 /**
  * Config fields that are intentionally NOT part of a preset, because they are not portable

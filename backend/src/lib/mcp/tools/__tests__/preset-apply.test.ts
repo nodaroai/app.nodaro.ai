@@ -16,7 +16,10 @@ beforeEach(() => {
  * The supabase mock here returns no custom preset rows AND empty mcp_preferences,
  * so these tests exercise the FACTORY path (no DB) + the catalog-default fallback.
  * The factory preset `generate-image/location-board` ships
- * `{ provider: "nano-banana-pro", aspectRatio: "16:9", resolution: "2K", prompt: "...LOCATION BOARD..." }`.
+ * `{ provider: "nano-banana-pro", aspectRatio: "16:9", resolution: "2K",
+ * promptPrefix: "...LOCATION BOARD...", promptSuffix: "..." }` — its doctrine is
+ * PRE/POST TEXT, not a `prompt`, so the board's text wraps whatever prompt the
+ * caller supplies instead of being clobbered by it.
  */
 import { vi } from "vitest"
 
@@ -69,6 +72,17 @@ async function runGenerateImage(
   return { result, body: received.body }
 }
 
+/**
+ * location-board's shipped pre/post text, read from the catalog rather than
+ * re-typed — the assertions below pin the COMPOSITION, not the wording.
+ */
+const { getFactoryPresets } = await import("@nodaro/prompts")
+const locationBoard = getFactoryPresets("generate-image").find(
+  (p) => p.id === "generate-image/location-board",
+)!.data as Record<string, string | undefined>
+const LB_PREFIX = locationBoard.promptPrefix!
+const LB_SUFFIX = locationBoard.promptSuffix!
+
 describe("generate_image preset application", () => {
   it("applies a factory preset's config (provider + prompt) when given presetId with no explicit prompt/provider", async () => {
     const { result, body } = await runGenerateImage({
@@ -79,6 +93,9 @@ describe("generate_image preset application", () => {
     // Preset supplies the provider and prompt — they reach the route verbatim.
     expect(body?.provider).toBe("nano-banana-pro")
     expect(body?.prompt).toContain("LOCATION BOARD")
+    // With no caller prompt the core is empty, so the two affixes alone ARE the
+    // prompt — byte-identical to the board's old single `prompt` field.
+    expect(body?.prompt).toBe(`${LB_PREFIX} ${LB_SUFFIX}`)
     // Preset's other config fields are applied too.
     expect(body?.aspectRatio).toBe("16:9")
     expect(body?.resolution).toBe("2K")
@@ -86,14 +103,16 @@ describe("generate_image preset application", () => {
     expect(body?.presetId).toBeUndefined()
   })
 
-  it("lets an explicit prompt OVERRIDE the preset's prompt", async () => {
+  it("lets an explicit prompt become the CORE the preset's pre/post text wraps", async () => {
     const { result, body } = await runGenerateImage({
       presetId: "generate-image/location-board",
       prompt: "my own prompt",
     })
 
     expect(result.isError).toBeUndefined()
-    expect(body?.prompt).toBe("my own prompt")
+    // The board carries no `prompt` to override any more — its doctrine is
+    // pre/post text, so the caller's prompt lands between the two affixes.
+    expect(body?.prompt).toBe(`${LB_PREFIX} my own prompt ${LB_SUFFIX}`)
     // Non-overridden preset fields still apply.
     expect(body?.provider).toBe("nano-banana-pro")
   })
@@ -106,7 +125,7 @@ describe("generate_image preset application", () => {
 
     expect(result.isError).toBeUndefined()
     expect(body?.provider).toBe("nano-banana-2")
-    // The preset's prompt is still applied (only model was overridden).
+    // The preset's pre/post text is still applied (only model was overridden).
     expect(body?.prompt).toContain("LOCATION BOARD")
   })
 
@@ -525,5 +544,65 @@ describe("Task 5 verb→nodeType factory-preset coverage", () => {
   ])("%s has at least one factory preset", async (nodeType) => {
     const { getFactoryPresets } = await import("@nodaro/prompts")
     expect(getFactoryPresets(nodeType).length).toBeGreaterThan(0)
+  })
+})
+
+/**
+ * Task 9: a preset's pre/post text (`promptPrefix` / `promptSuffix`) composes
+ * around whichever prompt won the caller-vs-preset merge, BEFORE the "prompt is
+ * required" guard — so an affixes-only preset is itself a valid prompt (the
+ * empty-core rule, spec §4.1/§7). No graph here → empty refMap, so a `{Label}`
+ * inside an affix stays verbatim.
+ */
+describe("generate_image preset pre/post text", () => {
+  it("wraps the CALLER's prompt with the preset's promptPrefix/promptSuffix", async () => {
+    customPresetRow.value = { id: "p-affix", name: "Wrap", description: null, data: { promptPrefix: "Cinematic still of", promptSuffix: ", golden hour" } }
+    const { result, body } = await runGenerateImage({ presetId: "p-affix", prompt: "a cat" })
+    expect(result.isError).toBeUndefined()
+    expect(body?.prompt).toBe("Cinematic still of a cat, golden hour")
+  })
+  it("an affixes-only preset satisfies the 'prompt required' guard (empty-core rule)", async () => {
+    customPresetRow.value = { id: "p-only", name: "Only", description: null, data: { promptPrefix: "PRE", promptSuffix: "POST" } }
+    const { result, body } = await runGenerateImage({ presetId: "p-only" })
+    expect(result.isError).toBeUndefined()
+    expect(body?.prompt).toBe("PRE POST")
+  })
+  it("wraps the caller's prompt with a FACTORY preset's pre/post text (location-board)", async () => {
+    const { result, body } = await runGenerateImage({
+      presetId: "generate-image/location-board",
+      prompt: "a lighthouse",
+    })
+    expect(result.isError).toBeUndefined()
+    const prompt = body?.prompt as string
+    expect(prompt.startsWith(LB_PREFIX), "prompt must open with the board's promptPrefix").toBe(true)
+    expect(prompt).toContain("a lighthouse")
+    expect(prompt.endsWith(LB_SUFFIX), "prompt must close with the board's promptSuffix").toBe(true)
+  })
+  it("caller prompt still beats a preset prompt, and is then wrapped", async () => {
+    customPresetRow.value = { id: "p-both", name: "Both", description: null, data: { prompt: "preset prompt", promptSuffix: "POST" } }
+    const { body } = await runGenerateImage({ presetId: "p-both", prompt: "mine" })
+    expect(body?.prompt).toBe("mine POST")
+  })
+})
+
+/**
+ * generate_speech's content param is `text` (the node's prompt field is
+ * `directText`), so a text-to-speech preset's affixes wrap the SPOKEN TEXT —
+ * parity with the DAG engine, where `computeNodePrompt("text-to-speech", …)`
+ * wraps `directText`. Guards the one place this task's composition targets a
+ * param other than `prompt`.
+ */
+describe("generate_speech preset pre/post text", () => {
+  it("wraps the caller's text with the preset's promptPrefix/promptSuffix", async () => {
+    customPresetRow.value = { id: "tts-affix", name: "Wrap", description: null, data: { promptSuffix: "Thanks for listening." } }
+    const { result, body } = await runGenerateSpeech({ presetId: "tts-affix", text: "Hello there." })
+    expect(result.isError).toBeUndefined()
+    expect(body?.text).toBe("Hello there. Thanks for listening.")
+  })
+  it("leaves the text untouched for a preset with no affixes", async () => {
+    customPresetRow.value = { id: "tts-plain", name: "Plain", description: null, data: { speed: 1.1 } }
+    const { body } = await runGenerateSpeech({ presetId: "tts-plain", text: "Hello there." })
+    expect(body?.text).toBe("Hello there.")
+    expect(body?.speed).toBe(1.1)
   })
 })

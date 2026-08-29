@@ -79,3 +79,7 @@ The same per-second rate applies to **Extend Video** runs on LTX 2.3 Pro (`credi
 - [Extend Video](./extend-video.md) — append (or prepend) new footage to an existing clip. LTX 2.3 Pro extends are billed at the same `4 credits/second` rate as retake.
 - [Video to Video](./video-to-video.md) — transform an entire clip (not a time window) with a text prompt.
 - [Trim Video](../processing-video/trim-video.md) — for cutting a window out of a clip without regeneration.
+
+## Pre & post text
+
+This node supports `promptPrefix` / `promptSuffix` — optional text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md).

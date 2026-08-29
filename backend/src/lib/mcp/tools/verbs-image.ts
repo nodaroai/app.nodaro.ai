@@ -17,7 +17,8 @@ import {
 } from "./_verb-helpers.js"
 import { LLM_MCP_FIELDS, llmPayloadFields } from "./_llm-fields.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { modelIdsByKindMode, MODIFY_IMAGE_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS } from "@nodaro/shared"
+import { modelIdsByKindMode, MODIFY_IMAGE_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS, readPromptAffixes } from "@nodaro/shared"
+import { applyPromptAffixes } from "@nodaro/prompts"
 import { getUserMcpPreferences } from "../user-preferences.js"
 import { normalizeImageInput } from "../normalize.js"
 import { resolvePreset } from "../../presets/resolve-preset.js"
@@ -104,7 +105,8 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
             .optional()
             .describe(
               "Apply a built-in/custom preset by id from list_node_presets; " +
-              "explicit fields below override it.",
+              "explicit fields below override it. A preset's promptPrefix/promptSuffix " +
+              "wrap your prompt.",
             ),
           // Schemas are intentionally permissive — handler normalizes
           // anything unknown to the closest valid value (silent fallback).
@@ -249,6 +251,14 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
             Object.entries(args).filter(([, v]) => v !== undefined),
           )
           effective = { ...presetParams, ...callerProvided }
+          // Pre/post text shipped by the preset wraps WHICHEVER prompt won above
+          // (the caller's, or the preset's own). No graph here → empty refMap, so
+          // a `{Label}` in an affix stays verbatim. Runs BEFORE the "prompt is
+          // required" guard so an affixes-only preset is a valid prompt.
+          const presetAffixes = readPromptAffixes(d)
+          if (presetAffixes.prefix || presetAffixes.suffix) {
+            effective.prompt = applyPromptAffixes(effective.prompt as string | undefined, presetAffixes, new Map())
+          }
         }
         // `presetId` is a control field — never submit it to the provider.
         delete effective.presetId

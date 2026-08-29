@@ -1,7 +1,7 @@
 ---
 node_type: generate-script
-generated_at: 2026-08-15T21:55:06.356Z
-generated_from: 150c80ac9
+generated_at: 2026-08-29T19:02:38.419Z
+generated_from: 7dbf4818b
 ---
 
 # Generate Script
@@ -25,6 +25,8 @@ generated_from: 150c80ac9
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
+- `promptPrefix?: string`
+- `promptSuffix?: string`
 - `llmModel?: string`
 - `reasoningEffort?: LlmReasoningEffort`
 - `advancedMode?: boolean`

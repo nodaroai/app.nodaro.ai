@@ -1,7 +1,7 @@
 ---
 node_type: edit-video-pro
-generated_at: 2026-08-15T21:55:06.564Z
-generated_from: 150c80ac9
+generated_at: 2026-08-29T19:02:38.521Z
+generated_from: 7dbf4818b
 ---
 
 # Edit Video Pro
@@ -33,6 +33,8 @@ generated_from: 150c80ac9
 - `activeResultIndex?: number`
 - `currentJobId?: string`
 - `currentJobProgress?: number`
+- `promptPrefix?: string`
+- `promptSuffix?: string`
 
 **Default data:**
 ```json

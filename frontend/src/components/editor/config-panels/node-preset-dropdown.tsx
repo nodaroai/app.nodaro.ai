@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react"
 import { Check, ChevronDown, ChevronRight, Download, Folder, FolderOpen, Layers, Plus, RotateCcw, Settings2, Star, Trash2, Upload } from "lucide-react"
-import { buildNodePresetExport, extractPresetData, parseNodePresetExport, presetDataMatches, PRESET_APPLY_CLEAR_KEYS } from "@nodaro/shared"
+import { buildNodePresetExport, extractPresetData, parseNodePresetExport, presetApplyClearKeys, presetDataMatches } from "@nodaro/shared"
 import { getFactoryPresets, groupFactoryPresets, type FactoryPreset } from "@nodaro/prompts"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -59,19 +59,25 @@ const toMerged = (p: NodePreset): MergedPreset => ({
 
 /**
  * Build the data patch that applying a preset writes to the node. Spread order is
- * load-bearing: clear every generated composer-plan field (PRESET_APPLY_CLEAR_KEYS
- * -> undefined; use-workflow-store merges shallowly, so this drops the stale
- * plan/url from both the preview and the output handle) FIRST, then the preset's
- * own config (so a preset that ever sets a plan field could still override the
- * clear), then the active-preset marker. Pass empty presetData to only clear +
- * mark active (the no-config-change path). Exported pure for unit testing.
+ * load-bearing: clear first (-> undefined; use-workflow-store merges shallowly, so
+ * a cleared key drops off both the preview and the output handle), then the preset's
+ * own config (so its values land back on top of the clear), then the active-preset
+ * marker. Pass empty presetData to only clear + mark active (the no-config-change path).
+ * Exported pure for unit testing.
+ *
+ * What gets cleared is decided per preset by `presetApplyClearKeys` (@nodaro/shared):
+ * always the generated composer-plan fields (a stale plan would keep the OLD animation
+ * showing under the NEW prompt), PLUS `promptPrefix` / `promptSuffix` when the preset
+ * owns prompt content — otherwise a preset shipping only `prompt` would run wrapped in
+ * the PREVIOUS preset's pre/post text. A settings-only preset clears no affix, and
+ * `prompt` is never cleared, so a preset shipping only affixes keeps what the user typed.
  */
 export function buildPresetApplyPatch(
   presetData: Record<string, unknown>,
   presetId: string,
 ): Record<string, unknown> {
   return {
-    ...Object.fromEntries(PRESET_APPLY_CLEAR_KEYS.map((k) => [k, undefined])),
+    ...Object.fromEntries(presetApplyClearKeys(presetData).map((k) => [k, undefined])),
     ...presetData,
     __activePresetId: presetId,
   }

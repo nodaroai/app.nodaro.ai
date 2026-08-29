@@ -97,6 +97,7 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "directText")
   const finalPrompt = useFinalPromptSegments({
     userPrompt: data.directText,
+    promptField: "directText",
     consumerNodeId: nodeId,
     nodes,
     edges: edges ?? EMPTY_EDGES,
@@ -246,6 +247,7 @@ export function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMa
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
   const finalPrompt = useFinalPromptSegments({
     userPrompt: data.prompt,
+    promptField: "prompt",
     consumerNodeId: nodeId,
     nodes,
     edges: edges ?? EMPTY_EDGES,
@@ -403,6 +405,7 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
   const finalPrompt = useFinalPromptSegments({
     userPrompt: data.prompt,
+    promptField: "prompt",
     consumerNodeId: nodeId,
     nodes,
     edges: edges ?? EMPTY_EDGES,
@@ -545,6 +548,7 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
   const finalPrompt = useFinalPromptSegments({
     userPrompt: data.prompt,
+    promptField: "prompt",
     consumerNodeId: nodeId,
     nodes,
     edges: edges ?? EMPTY_EDGES,
@@ -674,6 +678,7 @@ export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMap
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
   const finalPrompt = useFinalPromptSegments({
     userPrompt: data.prompt,
+    promptField: "prompt",
     consumerNodeId: nodeId,
     nodes,
     edges: edges ?? EMPTY_EDGES,
@@ -762,6 +767,7 @@ export function SunoLyricsConfig({ data, onUpdate, sources, fieldMappings, onMap
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
   const finalPrompt = useFinalPromptSegments({
     userPrompt: data.prompt,
+    promptField: "prompt",
     consumerNodeId: nodeId,
     nodes,
     edges: edges ?? EMPTY_EDGES,
@@ -1079,6 +1085,7 @@ export function SunoReplaceSectionConfig({ data, onUpdate, sources, fieldMapping
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
   const finalPrompt = useFinalPromptSegments({
     userPrompt: data.prompt,
+    promptField: "prompt",
     consumerNodeId: nodeId,
     nodes,
     edges: edges ?? EMPTY_EDGES,
@@ -1130,6 +1137,7 @@ export function SunoStyleBoostConfig({ data, onUpdate, sources, fieldMappings, o
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "content")
   const finalPrompt = useFinalPromptSegments({
     userPrompt: data.content,
+    promptField: "content",
     consumerNodeId: nodeId,
     nodes,
     edges: edges ?? EMPTY_EDGES,
@@ -1250,6 +1258,7 @@ export function SunoUploadExtendConfig({ data, onUpdate, sources, fieldMappings,
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
   const finalPrompt = useFinalPromptSegments({
     userPrompt: data.prompt,
+    promptField: "prompt",
     consumerNodeId: nodeId,
     nodes,
     edges: edges ?? EMPTY_EDGES,
@@ -1415,6 +1424,7 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
   const finalPrompt = useFinalPromptSegments({
     userPrompt: data.prompt,
+    promptField: "prompt",
     consumerNodeId: nodeId,
     nodes,
     edges: edges ?? EMPTY_EDGES,
@@ -2156,6 +2166,7 @@ export function VoiceRemixConfig({ data, onUpdate, sources, fieldMappings, onMap
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "voiceDescription")
   const finalPrompt = useFinalPromptSegments({
     userPrompt: data.voiceDescription,
+    promptField: "voiceDescription",
     consumerNodeId: nodeId,
     nodes,
     edges: edges ?? EMPTY_EDGES,
@@ -2230,6 +2241,7 @@ export function VoiceDesignConfig({ data, onUpdate, sources, fieldMappings, onMa
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "voiceDescription")
   const finalPrompt = useFinalPromptSegments({
     userPrompt: data.voiceDescription,
+    promptField: "voiceDescription",
     consumerNodeId: nodeId,
     nodes,
     edges: edges ?? EMPTY_EDGES,
@@ -2377,6 +2389,7 @@ export function ForcedAlignmentConfig({ data, onUpdate, sources, fieldMappings, 
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "transcript")
   const finalPrompt = useFinalPromptSegments({
     userPrompt: data.transcript,
+    promptField: "transcript",
     consumerNodeId: nodeId,
     nodes,
     edges: edges ?? EMPTY_EDGES,

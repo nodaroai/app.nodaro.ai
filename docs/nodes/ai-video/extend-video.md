@@ -12,6 +12,7 @@ The Extend Video node continues a video by appending new content guided by a tex
 |-------|------|---------|-------------|
 | Provider | Select | veo-extend | Extension provider |
 | Prompt | Textarea | — | How the video should continue |
+| `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ### Provider-Specific Options
 

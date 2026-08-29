@@ -1,7 +1,7 @@
 ---
 node_type: suno-extend
-generated_at: 2026-08-15T21:55:06.927Z
-generated_from: 150c80ac9
+generated_at: 2026-08-29T19:02:38.670Z
+generated_from: 7dbf4818b
 ---
 
 # Suno Extend
@@ -21,6 +21,8 @@ generated_from: 150c80ac9
 - `model: SunoModel`
 
 **Optional data fields:**
+- `promptPrefix?: string`
+- `promptSuffix?: string`
 - `style?: string`
 - `title?: string`
 - `continueAt?: number`

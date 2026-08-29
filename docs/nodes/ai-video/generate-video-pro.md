@@ -61,6 +61,7 @@ Generate Video Pro exposes **exactly Generate Video's input handles** — same n
 | Plan only | Checkbox | off | Return the full segment plan **without generating any video** — see [Plan-only mode](#plan-only-mode) |
 | Continuation context | Select (2-5s) | 2s | How much of the previous segment each continuation segment sees as its reference. Raise for slow camera moves or music-timed motion; each extra second adds a small per-join cost (see the pricing formula). No effect under the Keyframes render method — nothing continues from a previous segment there |
 | Auto-cast from analysis | Checkbox | Off | Experimental — when enabled and the script is a [Video Analysis](../processing-video/video-analysis.md) result whose entities carry reference frames, those frames are added as identity references (after any images you wired yourself, up to the provider's own identity-ref cap — 30 on Seedance 2.5, 9 on the Seedance 2 family and Hailuo 3) and each segment prompt is told which reference is which entity. Off by default: generation is text-only unless you opt in |
+| `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 **Per-look identity.** When the driving analysis separates a subject's
 deliberate [appearance

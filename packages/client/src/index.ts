@@ -26,7 +26,10 @@ export {
 // Re-export selected types from @nodaro/shared for convenience
 export type { GenericNode, GenericEdge, WorkflowExport, WorkflowExportCharacter, WorkflowExportObject, WorkflowExportLocation, // The editor's structured-reference shape, used by GenerateImageParams /
   // GenerateVideoParams below so callers can build `connectedReferences`.
-  ConnectedReference } from "@nodaro/shared"
+  ConnectedReference,
+  // Node-data prompt affix fields (promptPrefix / promptSuffix) — set them via
+  // workflow JSON or `apps.run(..., { inputOverrides })`.
+  PromptAffixFields } from "@nodaro/shared"
 export type { WizardQuestion, WizardOption, WizardSelection, RecommendedModel, WizardNodeContext } from "@nodaro/prompts"
 
 // --- Resource classes (re-exported so consumers can typecheck `client.workflows`, etc.) ---
@@ -160,6 +163,7 @@ export type {
   ListAppsParams,
   ListAppsResult,
   AppRunResult,
+  RunAppOptions,
   AppRun,
   ListAppRunsParams,
   DeleteAppRunResult,
@@ -423,3 +427,4 @@ export type {
   WorkspaceView,
 } from "@nodaro/shared"
 export { WORKSPACE_HEADER } from "@nodaro/shared"
+export { PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY } from "@nodaro/shared"

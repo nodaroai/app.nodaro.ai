@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { NODE_PROMPT_FIELDS, getPromptFields, nodeHasPromptField, getSnippetMedia, nodeHasInlinePrompt } from "./prompt-fields"
+import { NODE_PROMPT_FIELDS, getPromptFields, nodeHasPromptField, getSnippetMedia, nodeHasInlinePrompt, nodeSupportsPromptAffixes } from "./prompt-fields"
 import { NODE_QUICK_CONFIGS } from "@/components/nodes/node-quick-configs"
 import { NODE_DEF_MAP } from "@/types/nodes"
 
@@ -134,5 +134,14 @@ describe("inline-prompt capability (media-preview nodes)", () => {
     expect(nodeHasInlinePrompt("llm-chat")).toBe(false)
     expect(nodeHasInlinePrompt("image-critic")).toBe(false)
     expect(nodeHasInlinePrompt("unknown-node")).toBe(false)
+  })
+})
+
+describe("prompt affixes capability", () => {
+  it("every affix-capable type is a creatable node and text-prompt is excluded", () => {
+    for (const type of Object.keys(NODE_PROMPT_FIELDS)) {
+      expect(nodeSupportsPromptAffixes(type)).toBe(type !== "text-prompt")
+      expect(NODE_DEF_MAP.has(type)).toBe(true)
+    }
   })
 })

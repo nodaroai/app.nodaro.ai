@@ -1,7 +1,7 @@
 ---
 node_type: llm-chat
-generated_at: 2026-08-15T21:55:08.850Z
-generated_from: 150c80ac9
+generated_at: 2026-08-29T19:02:39.432Z
+generated_from: 7dbf4818b
 ---
 
 # LLM Chat
@@ -22,6 +22,8 @@ generated_from: 150c80ac9
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
+- `promptPrefix?: string`
+- `promptSuffix?: string`
 - `llmModel?: string`
 - `reasoningEffort?: LlmReasoningEffort`
 - `advancedMode?: boolean`

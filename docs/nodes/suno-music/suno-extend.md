@@ -21,6 +21,7 @@ Suno Extend takes a previously generated Suno track (identified by its Audio ID)
 | Weirdness | number | `0.0` | Experimental output factor (0.0 to 1.0). |
 | Audio Weight | number | `0.5` | Balance between prompt and source audio (0.0 to 1.0). |
 | Use Default Parameters | boolean | `true` | When true, Suno uses its own defaults for advanced parameters. |
+| `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ## Inputs & Outputs
 

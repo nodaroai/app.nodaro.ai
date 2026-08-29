@@ -98,6 +98,7 @@ export function TextPromptConfig({ data, onUpdate, nodeRefs, refMap, variableDis
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "text")
   const finalPrompt = useFinalPromptSegments({
     userPrompt: data.text,
+    promptField: "text",
     consumerNodeId: nodeId,
     nodes,
     edges: edges ?? [],

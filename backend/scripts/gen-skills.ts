@@ -142,6 +142,7 @@ const INTERFACE_NAME_OVERRIDES: Record<string, string> = {
   "llm-chat": "LLMChatData",
   "3d-title": "ThreeDTitleData",
   "qa-check": "QACheckData",
+  "switchx": "SwitchXData",
 }
 
 /**

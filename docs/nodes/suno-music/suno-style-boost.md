@@ -10,6 +10,7 @@ Suno Style Boost takes raw text content (typically lyrics) and enhances its styl
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | Content | string (max 3000) | `""` | The text content to enhance (typically lyrics). |
+| `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ## Inputs & Outputs
 

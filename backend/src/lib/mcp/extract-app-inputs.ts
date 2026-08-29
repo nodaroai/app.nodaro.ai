@@ -415,3 +415,32 @@ export function flatInputsToOverrides(
   }
   return Object.keys(overrides).length ? overrides : undefined
 }
+
+/**
+ * Merge two nested `inputOverrides` maps — per node, per field, overlay wins.
+ *
+ * The callers (`/v1/app/:slug/run`, the MCP `run_app` tool) accept BOTH a flat
+ * `inputs` map (the app's exposed schema keys, translated by
+ * `flatInputsToOverrides`) and raw nested `inputOverrides` that reach fields the
+ * app never exposes (promptPrefix / promptSuffix, …). Those are complementary,
+ * not alternatives: picking one and dropping the other silently ran the app with
+ * default text whenever an SDK/CLI caller passed both. Merging keeps the flat
+ * inputs as the base and lets the explicit nested overrides win field-by-field.
+ *
+ * Returns `undefined` when the result has no nodes — same convention as
+ * `flatInputsToOverrides`, so `inputOverrides` stays absent rather than `{}`.
+ * Neither argument (nor any per-node object inside them) is mutated.
+ */
+export function mergeInputOverrides(
+  base: Record<string, Record<string, unknown>> | undefined,
+  overlay: Record<string, Record<string, unknown>> | undefined,
+): Record<string, Record<string, unknown>> | undefined {
+  const merged: Record<string, Record<string, unknown>> = {}
+  for (const src of [base, overlay]) {
+    if (!src) continue
+    for (const [nodeId, fields] of Object.entries(src)) {
+      merged[nodeId] = { ...merged[nodeId], ...fields }
+    }
+  }
+  return Object.keys(merged).length ? merged : undefined
+}

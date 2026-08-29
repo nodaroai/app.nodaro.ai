@@ -1,7 +1,7 @@
 ---
 node_type: generate-music
-generated_at: 2026-08-19T22:58:18.900Z
-generated_from: 7cb24d4c9
+generated_at: 2026-08-29T19:02:38.623Z
+generated_from: 7dbf4818b
 ---
 
 # generate-music
@@ -29,6 +29,8 @@ generated_from: 7cb24d4c9
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
+- `promptPrefix?: string`
+- `promptSuffix?: string`
 - `currentJobProgress?: number`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`

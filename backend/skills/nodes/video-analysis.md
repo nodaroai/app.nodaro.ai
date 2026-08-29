@@ -1,7 +1,7 @@
 ---
 node_type: video-analysis
-generated_at: 2026-08-15T21:55:07.453Z
-generated_from: 150c80ac9
+generated_at: 2026-08-29T19:02:38.898Z
+generated_from: 7dbf4818b
 ---
 
 # Video Analysis
@@ -17,6 +17,8 @@ generated_from: 150c80ac9
 - `label: string`
 
 **Optional data fields:**
+- `promptPrefix?: string`
+- `promptSuffix?: string`
 - `videoUrl?: string`
 - `youtubeUrl?: string`
 - `probedYoutube?: { url: string; durationSec: number }`

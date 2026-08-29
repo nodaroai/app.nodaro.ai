@@ -1,12 +1,9 @@
 "use client"
 
 import { useMemo, type ReactNode } from "react"
-import { collectAudioStyleHints, truncateForField, appendField } from "@/lib/audio-style-hints"
+import { collectAudioStyleHints } from "@/lib/audio-style-hints"
 import {
-  GENERATE_MUSIC_BUDGET,
-  TEXT_TO_AUDIO_BUDGET,
-  VOICE_DESC_BUDGET,
-  SUNO_PROMPT_BUDGET,
+  assembleAudioPrompt,
   assembleSunoPreview,
   sunoPreviewFields,
   type SunoPreviewField,
@@ -31,35 +28,30 @@ interface Props {
   readonly className?: string
 }
 
-// suno-generate-style (500) is unique to this component — it gates the STYLE
-// field in Suno custom mode, which audio-prompt-assembly.ts does not handle.
-const SUNO_STYLE_BUDGET = 500
-
-const FIELD_MAX = {
-  "suno-generate-style": SUNO_STYLE_BUDGET,
-  "suno-generate-prompt": SUNO_PROMPT_BUDGET,
-  "generate-music": GENERATE_MUSIC_BUDGET,
-  "voice-design": VOICE_DESC_BUDGET,
-  "voice-remix": VOICE_DESC_BUDGET,
-  "text-to-audio": TEXT_TO_AUDIO_BUDGET,
-} as const
-
 /**
  * Live preview of the byte-identical text the executor will send to the
- * consumer's prompt/style/voiceDescription field. Composes the user value
- * + audio-style hints with the same `truncateForField` + `appendField`
- * helpers the runtime uses, so what the user sees in the panel is what
- * actually goes on the wire.
+ * consumer's prompt/style/voiceDescription field.
+ *
+ * PASS-THROUGH, NOT A COPY: every branch delegates to the shared audio
+ * assembler (`@/lib/audio-prompt-assembly`) — `assembleSunoPreview` for
+ * suno-generate, `assembleAudioPrompt` for the rest — which is the SAME
+ * composer the coloured segments Final view uses and a faithful mirror of the
+ * run's per-type composition (typed-field resolution → pre/post text →
+ * audio-style fold, at the run's char budgets). This box used to hand-roll the
+ * user-value + style-hint fold off its raw props, which silently dropped the
+ * node's pre/post text (`promptPrefix` / `promptSuffix`): the box showed the
+ * bare typed prompt while the segments view above it — and the run — showed
+ * the wrapped one. Composing here again is how that drift happens, so don't:
+ * per-type budgets, the fold shape and the affix wrap all live in the assembler.
  *
  * Soft warnings (Voice → Suno, Music → Voice Design, etc.) are surfaced
  * underneath in amber. Renders nothing when there's no audio-style
  * composition AND no warnings.
  *
- * SUNO is special: it is a pass-through of the shared `assembleSunoInput` (the
- * SAME fn the run calls) and renders the FULL field set — prompt + style +
- * lyrics + title + negativeStyle, each as a labeled block — so typed-field edits
- * AND connected pickers are visible. It renders whenever the assembled result
- * has ANY content (a typed field OR a folded picker), not only when a connected
+ * SUNO is special: it renders the FULL field set — prompt + style + lyrics +
+ * title + negativeStyle, each as a labeled block — so typed-field edits AND
+ * connected pickers are visible. It renders whenever the assembled result has
+ * ANY content (a typed field OR a folded picker), not only when a connected
  * picker produced hint text — fixing the empty-preview + invisible-edit bugs.
  */
 export function FinalAudioPromptPreview({
@@ -93,32 +85,27 @@ export function FinalAudioPromptPreview({
     }
 
     // ── Other audio types: single folded prompt/voice-description field ──
+    // The hints are collected here for the WARNINGS + the render guard only; the
+    // text itself is composed by the shared assembler, which folds the very same
+    // composition at the run's budget.
     const composition = collectAudioStyleHints(consumer, consumerType, nodes, edges)
     if (!composition.text && composition.warnings.length === 0) return null
 
-    let label: string
-    let userText: string
-    let max: number
-    if (consumerType === "voice-design") {
-      label = "Final voice description"
-      userText = userVoiceDescription ?? ""
-      max = FIELD_MAX["voice-design"]
-    } else if (consumerType === "voice-remix") {
-      label = "Final voice description"
-      userText = userVoiceDescription ?? ""
-      max = FIELD_MAX["voice-remix"]
-    } else if (consumerType === "generate-music") {
-      label = "Final prompt"
-      userText = userPrompt ?? ""
-      max = FIELD_MAX["generate-music"]
-    } else {
-      label = "Final prompt"
-      userText = userPrompt ?? ""
-      max = FIELD_MAX["text-to-audio"]
-    }
-    const composed = truncateForField(composition.text, userText, max)
-    const final = appendField(userText, composed)
+    const label =
+      consumerType === "voice-design" || consumerType === "voice-remix"
+        ? "Final voice description"
+        : "Final prompt"
+    // Built only once we know we're rendering: this memo reruns on every render
+    // of every audio config panel, and `buildNodeRefMap` is a full-graph walk
+    // with no empty-graph short-circuit (unlike `collectAudioStyleHints`). Same
+    // refMap the run builds — it resolves `{Node Label}` refs in the typed
+    // fields AND in the pre/post text.
+    const refMap = buildNodeRefMap(consumer.id, nodes, edges)
+    const final = assembleAudioPrompt(consumerType, { node: consumer, nodes, edges, refMap })
     return { kind: "single", label, final, warnings: composition.warnings }
+    // The typed values are read off the consumer node's `data` (via the shared
+    // assembler), not off these props — but they stay in the deps so a keystroke
+    // recomputes the preview even if the `nodes` array is referentially stable.
   }, [consumerNodeId, consumerType, userPrompt, userStyle, userVoiceDescription, customMode, nodes, edges])
 
   if (!preview) return null

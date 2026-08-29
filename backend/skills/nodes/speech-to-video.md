@@ -1,7 +1,7 @@
 ---
 node_type: speech-to-video
-generated_at: 2026-08-15T21:55:08.277Z
-generated_from: 150c80ac9
+generated_at: 2026-08-29T19:02:39.233Z
+generated_from: 7dbf4818b
 ---
 
 # Speech to Video
@@ -20,6 +20,8 @@ generated_from: 150c80ac9
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
+- `promptPrefix?: string`
+- `promptSuffix?: string`
 - `negativePrompt?: string`
 - `seed?: number`
 - `numFrames?: number`

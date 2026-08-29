@@ -1,7 +1,7 @@
 ---
 node_type: voice-design
-generated_at: 2026-08-15T21:55:07.384Z
-generated_from: 150c80ac9
+generated_at: 2026-08-29T19:02:38.871Z
+generated_from: 7dbf4818b
 ---
 
 # Voice Design
@@ -20,6 +20,8 @@ generated_from: 150c80ac9
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
+- `promptPrefix?: string`
+- `promptSuffix?: string`
 - `model?: VoiceDesignModel`
 - `loudness?: number`
 - `guidanceScale?: number`

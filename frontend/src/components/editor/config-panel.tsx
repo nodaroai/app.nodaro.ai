@@ -28,6 +28,7 @@ import {
 import { PresentationDisplayConfig } from "./config-panels/presentation-display-config"
 import { PresetDropdown } from "./config-panels/node-preset-dropdown"
 import { PromptInjectionSection } from "./config-panels/prompt-injection-section"
+import { PromptAffixSection } from "./config-panels/prompt-affix-section"
 import { ParameterPreviewContext } from "./config-panels/parameter-preview-context"
 // Phase 1B.2: SceneConfig now ships from `./config-panels/scene-configs`.
 // Legacy `./scene-config` + `./scene-editor-modal` are dead code pending cleanup.
@@ -1200,6 +1201,14 @@ export function ConfigPanel() {
                Renders only for nodes with a look/cinematography or elements
                handle (gated inside the component). */}
             <PromptInjectionSection
+              nodeType={nodeType}
+              nodeData={nodeData}
+              selectedNodeId={selectedNodeId ?? undefined}
+              updateNodeData={updateNodeData}
+            />
+            {/* Pre & post text — optional promptPrefix / promptSuffix wrapped around
+                the prompt at run time (settings-only; gated inside the component). */}
+            <PromptAffixSection
               nodeType={nodeType}
               nodeData={nodeData}
               selectedNodeId={selectedNodeId ?? undefined}

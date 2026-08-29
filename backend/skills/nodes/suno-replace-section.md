@@ -1,7 +1,7 @@
 ---
 node_type: suno-replace-section
-generated_at: 2026-08-15T21:55:07.035Z
-generated_from: 150c80ac9
+generated_at: 2026-08-29T19:02:38.717Z
+generated_from: 7dbf4818b
 ---
 
 # Suno Replace Section
@@ -23,6 +23,8 @@ generated_from: 150c80ac9
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
+- `promptPrefix?: string`
+- `promptSuffix?: string`
 - `taskId?: string`
 - `audioId?: string`
 - `fullLyrics?: string`

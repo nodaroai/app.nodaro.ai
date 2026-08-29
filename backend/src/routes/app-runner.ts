@@ -18,7 +18,7 @@ import { CreditsService } from "../ee/billing/credits.js"
 import { flattenItems } from "@nodaro/shared"
 import type { PresentationItem } from "@nodaro/shared"
 import { executeAppRun } from "../services/app-execution.js"
-import { extractAppInputSchema, flatInputsToOverrides } from "../lib/mcp/extract-app-inputs.js"
+import { extractAppInputSchema, flatInputsToOverrides, mergeInputOverrides } from "../lib/mcp/extract-app-inputs.js"
 
 // In-memory cache for published app data (30min TTL — explicit invalidation on publish)
 const APP_CACHE_TTL_MS = 30 * 60_000
@@ -278,23 +278,25 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       })
     }
 
-    // Resolve the inputs the run will use. Explicit nested `inputOverrides` (editor /
-    // presentation UI) take precedence; otherwise translate the flat SDK/CLI `inputs`
-    // map → nested overrides via the app's snapshot schema (same path the MCP run_app
-    // tool uses). Before this, flat `inputs` were dropped → app ran with defaults.
-    const inputOverrides =
-      nestedOverrides ??
-      (flatInputs
-        ? flatInputsToOverrides(
-            flatInputs,
-            extractAppInputSchema({
-              snapshotSettings: appRow.snapshot_settings as Record<string, unknown> | null,
-              snapshotNodes: appRow.snapshot_nodes as
-                | Array<{ id: string; type?: string; data?: Record<string, unknown> }>
-                | null,
-            }).keyMap,
-          )
-        : undefined)
+    // Resolve the inputs the run will use. The flat SDK/CLI `inputs` map is translated
+    // → nested overrides via the app's snapshot schema (same path the MCP run_app tool
+    // uses), then the explicit nested `inputOverrides` (editor / presentation UI, and
+    // raw fields no app input exposes such as promptPrefix) are MERGED over it —
+    // per node, per field, the nested side winning. The two are complementary: picking
+    // one dropped the other, so `apps.run(slug, inputs, { inputOverrides })` silently
+    // ran with default prompt text.
+    const flatOverrides = flatInputs
+      ? flatInputsToOverrides(
+          flatInputs,
+          extractAppInputSchema({
+            snapshotSettings: appRow.snapshot_settings as Record<string, unknown> | null,
+            snapshotNodes: appRow.snapshot_nodes as
+              | Array<{ id: string; type?: string; data?: Record<string, unknown> }>
+              | null,
+          }).keyMap,
+        )
+      : undefined
+    const inputOverrides = mergeInputOverrides(flatOverrides, nestedOverrides)
 
     // Validate restricted field values against allowedValues
     const restrictedError = validateRestrictedFields(

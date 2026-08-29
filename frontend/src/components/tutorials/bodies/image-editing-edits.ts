@@ -94,12 +94,15 @@ function readDriver(node: WorkflowNode): EditDriver | null {
   const catalog = node.type ? getPickerCatalog(node.type) : undefined
   if (!catalog) return null
 
-  const dimensions: readonly PickerDimension[] =
-    catalog.kind === "multi"
-      ? (catalog.dimensions ?? [])
-      : catalog.valueField
-        ? [{ field: catalog.valueField, label: catalog.label, options: catalog.options ?? [] }]
-        : []
+  // A single-dim catalog's main field, plus any secondary dimensions it
+  // declares (transition carries position/duration/intensity beside its
+  // picker) — the two are additive, not alternatives.
+  const dimensions: readonly PickerDimension[] = [
+    ...(catalog.kind === "single" && catalog.valueField
+      ? [{ field: catalog.valueField, label: catalog.label, options: catalog.options ?? [] }]
+      : []),
+    ...(catalog.dimensions ?? []),
+  ]
   if (dimensions.length === 0) return null
 
   const data = (node.data ?? {}) as NodeData

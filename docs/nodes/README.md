@@ -6,6 +6,8 @@ Complete reference for all nodes available in the Nodaro.ai visual workflow edit
 > name and reload it in one click, with built-in factory presets plus your own custom ones
 > (searchable, exportable/importable).
 
+> **Pre & post text:** every AI prompt node can carry [`promptPrefix` / `promptSuffix`](../prompt-pre-post-text.md) — settings-only text wrapped around the prompt at run time (hidden from app users, captured by presets).
+
 > **Not sure which model to pick?** See [**Choosing Models**](../choosing-models.md) — everyday vs
 > premium tiers and a use-case → model table across image, video, audio, and text.
 

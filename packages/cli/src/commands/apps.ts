@@ -45,6 +45,24 @@ function rejectPositionalInputs(extras: string[], slug: string): void {
   process.exit(1)
 }
 
+/** `nodeId.field=value` pairs → nested inputOverrides. Values that parse as JSON are used as JSON. */
+export function parseOverridePairs(pairs: string[] | undefined): Record<string, Record<string, unknown>> | undefined {
+  if (!pairs?.length) return undefined
+  const out: Record<string, Record<string, unknown>> = {}
+  for (const pair of pairs) {
+    const eq = pair.indexOf("=")
+    const dot = pair.indexOf(".")
+    if (eq === -1 || dot === -1 || dot > eq) throw new Error(`--override expects nodeId.field=value, got "${pair}"`)
+    const nodeId = pair.slice(0, dot)
+    const field = pair.slice(dot + 1, eq)
+    const raw = pair.slice(eq + 1)
+    let value: unknown = raw
+    try { value = JSON.parse(raw) } catch { /* plain string */ }
+    out[nodeId] = { ...(out[nodeId] ?? {}), [field]: value }
+  }
+  return out
+}
+
 export function appsCommand(): Command {
   const cmd = new Command("apps").description("browse and run published apps (workflows wrapped in a curated UI)")
 
@@ -106,23 +124,27 @@ export function appsCommand(): Command {
     .description("trigger an app run. Inputs go through --input k=v (repeat) or --params-file inputs.json. Omit <slug> for an interactive picker.")
     .option("--input <pairs...>", "input value, repeat or space-separate; JSON arrays/objects supported (e.g. --input prompt=\"hi\" --input 'tags=[\"a\",\"b\"]')", collectVariadic)
     .option("--params-file <path>", "JSON file with the full inputs object (--input flags override matching keys)")
+    .option("--override <pairs...>", "advanced: raw node-data override nodeId.field=value (repeat); reaches fields not exposed as inputs, e.g. --override n1.promptPrefix=\"Cinematic still of\"", collectVariadic)
     .option("--watch", "follow the resulting execution until completion")
     .option("--profile <name>")
     .option("--json")
     .addHelpText("after", `
 Examples:
   $ nodaro apps run hair-styler-dd3erw --input prompt="curly red hair" --watch
+  $ nodaro apps run hair-styler-dd3erw --input prompt="curly red hair" --override n1.promptPrefix="Studio portrait of"
   $ echo '{"prompt":"hi","duration":8}' > inputs.json
   $ nodaro apps run hair-styler-dd3erw --params-file inputs.json --watch
 
 Tip: \`nodaro apps get <slug>\` shows the input schema for that app.`)
-    .action(async (slug: string | undefined, extras: string[], opts: { input?: string[]; paramsFile?: string; watch?: boolean } & GlobalOpts) => {
+    .action(async (slug: string | undefined, extras: string[], opts: { input?: string[]; paramsFile?: string; override?: string[]; watch?: boolean } & GlobalOpts) => {
       rejectPositionalInputs(extras, slug ?? "<slug>")
       try {
         const client = buildClient(opts.profile)
         const resolvedSlug = slug ?? (await pickAppInteractively(client))
         const inputs = resolveParams(opts.input, opts.paramsFile)
-        const result = await client.apps.run(resolvedSlug, inputs)
+        const result = await client.apps.run(resolvedSlug, inputs, {
+          inputOverrides: parseOverridePairs(opts.override),
+        })
         if (opts.json && !opts.watch) {
           emit(result, opts)
           return

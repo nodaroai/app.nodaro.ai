@@ -25,8 +25,8 @@ import { resolveFieldMappings, NODE_MAPPABLE_FIELDS } from "./resolve-field-mapp
 
 import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview, executeTeleporterPassthrough, executeRouter, executeExtractField, executeJsonProcess, executeFilterList, executeDeduplicateList, executeMergeLists, executeSortList, executeSelector } from "./inline-executor.js"
 import { executeSubWorkflow } from "./sub-workflow-handler.js"
-import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired, resolveNodeRefs, SOCIAL_POST_NODE_TYPES, isSeedance2Provider, isMinimaxH3Provider } from "@nodaro/shared"
-import { computeLlmChatFields, computeNodePrompt, pickerFanoutTargets } from "@nodaro/prompts"
+import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired, resolveNodeRefs, SOCIAL_POST_NODE_TYPES, isSeedance2Provider, isMinimaxH3Provider, readPromptAffixes } from "@nodaro/shared"
+import { computeLlmChatFields, computeNodePrompt, pickerFanoutTargets, applyPromptAffixes } from "@nodaro/prompts"
 import type { ComponentMetadata } from "@nodaro/shared"
 import { getAppSettings } from "../../lib/app-settings.js"
 import type {
@@ -779,7 +779,7 @@ export function buildSyncHttpBody(
 
     case "3d-title":
       return withUserPrompt({
-        prompt: resolvedInputs.prompt || data.titlePrompt || data.prompt,
+        prompt: applyPromptAffixes((resolvedInputs.prompt || data.titlePrompt || data.prompt) as string | undefined, readPromptAffixes(data as Record<string, unknown>), refMap),
         backgroundMediaUrl: resolvedInputs.videoUrl || resolvedInputs.imageUrl || data.backgroundMediaUrl,
         fps: data.fps,
         aspectRatio: data.aspectRatio,
@@ -793,7 +793,7 @@ export function buildSyncHttpBody(
 
     case "motion-graphics":
       return withUserPrompt({
-        prompt: resolvedInputs.prompt || data.motionPrompt || data.prompt,
+        prompt: applyPromptAffixes((resolvedInputs.prompt || data.motionPrompt || data.prompt) as string | undefined, readPromptAffixes(data as Record<string, unknown>), refMap),
         fps: data.fps,
         aspectRatio: data.aspectRatio,
         width: data.width,
@@ -807,7 +807,7 @@ export function buildSyncHttpBody(
     case "image-to-text":
       return withUserPrompt({
         imageUrl: resolvedInputs.imageUrl || data.imageUrl,
-        customPrompt: resolvedInputs.prompt || data.customPrompt || data.prompt,
+        customPrompt: applyPromptAffixes((resolvedInputs.prompt || data.customPrompt || data.prompt) as string | undefined, readPromptAffixes(data as Record<string, unknown>), refMap),
         detailLevel: data.detailLevel || "detailed",
         ...llmNodeParams(data),
         userId: ctx.userId,
@@ -824,7 +824,17 @@ export function buildSyncHttpBody(
 
     case "suno-style-boost":
       return withUserPrompt({
-        content: resolvedInputs.prompt || data.content || data.prompt,
+        // Typed content resolves {Label} refs (parity with the editor's Final view
+        // and the frontend executor); a wired prompt arrives already resolved.
+        content: applyPromptAffixes(
+          (resolvedInputs.prompt as string | undefined) ||
+            (() => {
+              const typed = (data.content || data.prompt) as string | undefined
+              return typed && refMap.size > 0 ? resolveNodeRefs(typed, refMap) : typed
+            })(),
+          readPromptAffixes(data as Record<string, unknown>),
+          refMap,
+        ),
         userId: ctx.userId,
       })
 
@@ -842,7 +852,7 @@ export function buildSyncHttpBody(
       return withUserPrompt({
         imageUrl: resolvedInputs.imageUrl,
         referenceImageUrl: resolvedInputs.referenceImageUrl,
-        prompt: resolvedInputs.prompt ?? (data.prompt as string | undefined),
+        prompt: applyPromptAffixes(resolvedInputs.prompt ?? (data.prompt as string | undefined), readPromptAffixes(data as Record<string, unknown>), refMap),
         mode: data.mode,
         threshold: data.threshold,
         ...llmNodeParams(data),

@@ -32,8 +32,11 @@ export function buildCatalogSnapshot(
   const push = (opts: CatalogSnapshotEntry[] | undefined) => {
     for (const o of opts ?? []) if (!seen.has(o.id)) seen.set(o.id, o)
   }
-  if (projected.kind === "single") push(projected.options)
-  else for (const d of projected.dimensions ?? []) push(d.options)
+  // Not either/or: a single-dim catalog can also carry secondary dimensions
+  // (transition position/duration/intensity). Skipping them would make
+  // `diff-upstream` blind to a label or hint changing on those rows.
+  push(projected.options)
+  for (const d of projected.dimensions ?? []) push(d.options)
   const entries = [...seen.values()].sort((a, b) => a.id.localeCompare(b.id))
   return { catalogId: projected.catalogId, kind: projected.kind, entries, sidecars }
 }

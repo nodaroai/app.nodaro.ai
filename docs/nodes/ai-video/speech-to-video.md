@@ -13,6 +13,7 @@ The Speech to Video node creates video content driven by speech audio. It uses W
 | Resolution | Select | 720p | Output resolution: 480p, 580p, 720p |
 | Prompt | Textarea | — | Scene description to guide visuals |
 | Negative Prompt | Textarea | — | Elements to exclude |
+| `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ### Advanced Settings (Collapsible)
 

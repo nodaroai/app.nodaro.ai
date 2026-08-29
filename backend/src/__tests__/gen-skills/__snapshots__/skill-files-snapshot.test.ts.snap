@@ -87,6 +87,8 @@ _Generated from \`IMAGE_REFERENCE_PROMPT_DOCTRINE\` in \`@nodaro/prompts\` — e
 - \`fieldMappings: FieldMappings\`
 
 **Optional data fields:**
+- \`promptPrefix?: string\`
+- \`promptSuffix?: string\`
 - \`providers?: readonly ImageProvider[]\`
 - \`resolution?: string\`
 - \`quality?: string\`
@@ -200,6 +202,8 @@ exports[`per-node skill file snapshots > generate-music.md auto-gen blocks match
 - \`fieldMappings: FieldMappings\`
 
 **Optional data fields:**
+- \`promptPrefix?: string\`
+- \`promptSuffix?: string\`
 - \`currentJobProgress?: number\`
 - \`executionStatus?: "idle" | "running" | "completed" | "failed"\`
 - \`errorMessage?: string\`
@@ -282,6 +286,8 @@ exports[`per-node skill file snapshots > generate-video.md auto-gen blocks match
 - \`provider: VideoGenProvider\`
 
 **Optional data fields:**
+- \`promptPrefix?: string\`
+- \`promptSuffix?: string\`
 - \`motion?: "subtle" | "moderate" | "dynamic"\`
 - \`motionEnabled?: boolean\`
 - \`prompt?: string\`
@@ -663,6 +669,8 @@ exports[`per-node skill file snapshots > image-to-video.md auto-gen blocks match
 - \`fieldMappings: FieldMappings\`
 
 **Optional data fields:**
+- \`promptPrefix?: string\`
+- \`promptSuffix?: string\`
 - \`motion?: "subtle" | "moderate" | "dynamic"\`
 - \`motionEnabled?: boolean\`
 - \`prompt?: string\`

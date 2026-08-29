@@ -32,6 +32,7 @@ with `503 nodaro_connection_required`.
 | Prompt | Text | — | Describes what should replace the selected span; also settable via the `prompt` handle |
 | Replace Span (From / To) | Number pair (seconds) | `0` – `8` | The window to replace. Minimum span length 4s. Maximum span length is the configured cap (120s by default) — see [Span rules](#span-rules) |
 | Generate Audio | Checkbox | on | |
+| `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 Edit Video Pro has **no Resolution or Aspect Ratio fields** — both are derived from the source video (see [Providers](#providers)).
 

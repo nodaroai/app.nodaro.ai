@@ -1,7 +1,7 @@
 ---
 node_type: motion-graphics
-generated_at: 2026-08-15T21:55:08.063Z
-generated_from: 150c80ac9
+generated_at: 2026-08-29T19:02:39.140Z
+generated_from: 7dbf4818b
 ---
 
 # Motion Graphics
@@ -22,6 +22,8 @@ generated_from: 150c80ac9
 - `durationSeconds: number`
 
 **Optional data fields:**
+- `promptPrefix?: string`
+- `promptSuffix?: string`
 - `motionPlan?: Record<string, unknown>`
 - `engine?: "elements" | "lottie"`
 - `lottieUrl?: string`

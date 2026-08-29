@@ -78,6 +78,9 @@ export function useNodeFinalPrompt(nodeId: string): UseFinalPromptSegmentsResult
 
   return useFinalPromptSegments({
     userPrompt: data[promptField] as string | undefined,
+    // The key we just read — so pre/post text is shown only when the run wraps
+    // THIS field (generate-script previews `styleGuide`; the run wraps `prompt`).
+    promptField,
     // `style` + `identityMeta` are image-only levers. For audio (suno-generate)
     // the assembler reads EVERY field — style, lyrics, title, negativeStyle, and
     // the folded pickers — straight from `node.data` (the shared
