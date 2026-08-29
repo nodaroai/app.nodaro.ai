@@ -788,7 +788,7 @@ const handleRemoveAudio: HandlerFn = async function handleRemoveAudio(job, ctx) 
 }
 
 const handleImageCollage: HandlerFn = async function handleImageCollage(job, ctx) {
-  const { imageUrls, imageSizes, numbered, imageLabels, layout, resolution, aspectRatio, gap, backgroundColor, attachToCharacterId, attachToColumn, attachName, attachBoardType } = job.data as {
+  const { imageUrls, imageSizes, numbered, imageLabels, badgePosition, layout, resolution, aspectRatio, gap, backgroundColor, attachToCharacterId, attachToColumn, attachName, attachBoardType } = job.data as {
     jobId: string
     imageUrls: string[]
     /** Per-image size hints aligned with imageUrls (0 auto / 1 big / 2 medium / 3 small). */
@@ -797,6 +797,8 @@ const handleImageCollage: HandlerFn = async function handleImageCollage(job, ctx
     numbered?: boolean
     /** Per-image captions aligned with imageUrls, shown after the number (or alone). */
     imageLabels?: (string | null)[]
+    /** Corner the badges sit in; default "top-left". */
+    badgePosition?: "top-left" | "top-right"
     layout?: "smart" | "grid"
     resolution?: "2K" | "4K"
     aspectRatio?: string
@@ -809,7 +811,7 @@ const handleImageCollage: HandlerFn = async function handleImageCollage(job, ctx
   }
   console.log(`[worker] image-collage ${ctx.jobId}: ${imageUrls.length} images, layout=${layout ?? "smart"}, ${resolution ?? "2K"} ${aspectRatio ?? "1:1"}${imageSizes?.some((s) => s !== 0) ? `, sizes=[${imageSizes.join(",")}]` : ""}${numbered ? ", numbered" : ""}${imageLabels?.some((l) => l != null && l !== "") ? `, labels=${imageLabels.filter((l) => l != null && l !== "").length}` : ""}`)
 
-  const outputPath = await createImageCollage({ imageUrls, imageSizes, numbered, imageLabels, layout, resolution, aspectRatio, gap, backgroundColor })
+  const outputPath = await createImageCollage({ imageUrls, imageSizes, numbered, imageLabels, badgePosition, layout, resolution, aspectRatio, gap, backgroundColor })
   await setJobProgress(job, ctx.jobId, 80)
 
   const r2Url = await uploadFileToR2(outputPath, ctx.jobId, "image", ctx.jobUserId)

@@ -111,6 +111,23 @@ export interface QuickConfigControl {
    *  values are also exempt from the stale-value snap and render on the
    *  trigger as `${value}${unit}`. Implies `numeric`. */
   readonly customRange?: { readonly min: number; readonly max: number; readonly step?: number; readonly unit?: string }
+  /** Derive the dropdown's current value from the node data instead of reading
+   *  `data[field]` — for a control that PROJECTS several fields into one choice
+   *  (image-collage "Badges": `numbered` + `badgePosition` → none/top-left/top-right).
+   *  Must return one of the option values. Pairs with {@link write}. */
+  readonly read?: (data: Record<string, unknown>) => string
+  /** Build the whole node-data patch for a chosen value instead of writing
+   *  `data[field]`; the fail-safe snap uses it too, so a projected control can
+   *  never write its virtual `field` into the data. Pairs with {@link read}. */
+  readonly write?: (value: string) => Record<string, unknown>
+}
+
+/** The strip's current value for a control — the projection when it has one,
+ *  else the raw field (stringified; "" when unset). */
+export function readQuickConfigValue(control: QuickConfigControl, data: Record<string, unknown>): string {
+  if (control.read) return control.read(data)
+  const v = data[control.field]
+  return v != null ? String(v) : ""
 }
 
 /** Resolve a control's options against the node's current data. */
@@ -525,7 +542,7 @@ export const NODE_QUICK_CONFIGS: Readonly<Record<string, ReadonlyArray<QuickConf
       options: toOptions(EVP_PROVIDERS),
     },
   ],
-  // ── Image Collage (layout · aspect · resolution) ──
+  // ── Image Collage (layout · aspect · resolution · badges) ──
   // No provider/model — a local FFmpeg composite. Aspect values are single-sourced
   // from COMPOSITION_RATIOS (the same list the config panel renders) so the strip
   // and panel can't drift; labels are compacted to the bare ratio for the pill.
@@ -553,6 +570,27 @@ export const NODE_QUICK_CONFIGS: Readonly<Record<string, ReadonlyArray<QuickConf
         { value: "2K", label: "2K" },
         { value: "4K", label: "4K" },
       ],
+    },
+    // Storyboard numbering as ONE choice — it projects two data fields
+    // (`numbered` + `badgePosition`) so the strip stays one pill, while the
+    // config panel keeps them as separate controls (the corner also applies to
+    // labels-only badges). "None" only turns the numbers off: it leaves the
+    // corner alone so any labels keep rendering where the user put them.
+    {
+      field: "badges",
+      ariaLabel: "Numbers",
+      icon: Hash,
+      options: [
+        { value: "none", label: "None", description: "No sequence numbers" },
+        { value: "top-left", label: "Top-left", description: "1, 2, 3… at each image's top-left" },
+        { value: "top-right", label: "Top-right", description: "1, 2, 3… at each image's top-right" },
+      ],
+      read: (data) =>
+        data.numbered === true ? (data.badgePosition === "top-right" ? "top-right" : "top-left") : "none",
+      write: (v) =>
+        v === "none"
+          ? { numbered: undefined }
+          : { numbered: true, badgePosition: v === "top-right" ? "top-right" : undefined },
     },
   ],
   // ── Assemble Narrated Video (voice / ambient / max-slow — per original
@@ -824,7 +862,7 @@ export function QuickConfigSelect({
       }
     } else if (!options.some((o) => o.value === value) && !inRange(value)) {
       const next = options[0].value
-      updateNodeData(nodeId, { [control.field]: coerceQuickConfigValue(control, next) })
+      updateNodeData(nodeId, control.write ? control.write(next) : { [control.field]: coerceQuickConfigValue(control, next) })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, options, nodeId, control, updateNodeData])
@@ -844,7 +882,9 @@ export function QuickConfigSelect({
     effectiveValue
   const CUSTOM = "__custom__"
   const writeValue = (v: string) => {
-    const patch: Record<string, unknown> = { [control.field]: coerceQuickConfigValue(control, v) }
+    const patch: Record<string, unknown> = control.write
+      ? control.write(v)
+      : { [control.field]: coerceQuickConfigValue(control, v) }
     if (control.additionalClear) {
       for (const f of control.additionalClear) patch[f] = undefined
     }

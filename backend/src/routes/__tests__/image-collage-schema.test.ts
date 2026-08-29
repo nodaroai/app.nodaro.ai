@@ -162,3 +162,22 @@ describe("collageLayoutBody — the free preview", () => {
     if (parsed.success) expect(parsed.data).not.toHaveProperty("imageUrls")
   })
 })
+
+describe("imageCollageBody badgePosition", () => {
+  it("defaults to top-left", () => {
+    const parsed = imageCollageBody.safeParse(base)
+    expect(parsed.success).toBe(true)
+    if (parsed.success) expect(parsed.data.badgePosition).toBe("top-left")
+  })
+
+  it("accepts top-right", () => {
+    const parsed = imageCollageBody.safeParse({ ...base, badgePosition: "top-right" })
+    expect(parsed.success).toBe(true)
+    if (parsed.success) expect(parsed.data.badgePosition).toBe("top-right")
+  })
+
+  it("rejects any other corner", () => {
+    expect(imageCollageBody.safeParse({ ...base, badgePosition: "bottom-left" }).success).toBe(false)
+    expect(imageCollageBody.safeParse({ ...base, badgePosition: 1 }).success).toBe(false)
+  })
+})

@@ -3344,6 +3344,8 @@ export type ImageCollageData = {
   numbered?: boolean
   /** Per-input caption keyed by SOURCE NODE ID, shown after the number (or alone). A List source's label applies to every image it contributes. Converted to the wire's index-aligned `imageLabels` at run time (execute-node.ts + backend payload-builder.ts). */
   imageLabelBySource?: Record<string, string>
+  /** Corner the number/label badges sit in. Absent = "top-left" (storyboard convention). */
+  badgePosition?: "top-left" | "top-right"
   /** User-configured input ordering as SOURCE NODE IDs (parallel order field
    *  for the `in` handle — see getParallelOrderField). Applied at run time on
    *  top of edge order by execute-node.ts + payload-builder.ts: each listed

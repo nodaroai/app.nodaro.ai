@@ -1402,12 +1402,14 @@ describe("image_collage verb", () => {
         { url: "https://x/c.png", label: "  Close-up  " },
       ],
       numbered: true,
+      badge_position: "top-right",
     })
 
     expect(result.isError).toBeUndefined()
     // Labels align by position (trimmed); a blank/absent label becomes null.
     expect(received.body?.imageLabels).toEqual(["Wide", null, "Close-up"])
     expect(received.body?.numbered).toBe(true)
+    expect(received.body?.badgePosition).toBe("top-right")
     expect(received.body?.imageUrls).toEqual(["https://x/a.png", "https://x/b.png", "https://x/c.png"])
   })
 
@@ -1423,5 +1425,7 @@ describe("image_collage verb", () => {
     expect(result.isError).toBeUndefined()
     expect(received.body?.imageLabels).toBeUndefined()
     expect(received.body?.numbered).toBeUndefined()
+    // No badge_position → the route's own default applies; nothing is sent.
+    expect(received.body?.badgePosition).toBeUndefined()
   })
 })

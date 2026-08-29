@@ -2,7 +2,8 @@
  * Storyboard badges for the Image Collage — PURE, no I/O.
  *
  * Builds the full-canvas SVG overlay that stamps a rounded dark pill with white
- * bold text at the top-right of EACH fitted image (a 1-based sequence number,
+ * bold text in one corner of EACH fitted image — top-left by default, or
+ * top-right — (a 1-based sequence number,
  * an optional per-image label, or both as `3 · Close-up`). It is deliberately
  * side-effect-free so the exact SVG string can be asserted exhaustively in unit
  * tests — the local dev ffmpeg has no `drawtext` (no libfreetype), so text is
@@ -20,6 +21,17 @@ import type { ImageDim, Rect } from "./collage-layout.js"
 
 /** Max label length, in Unicode code points. Matches the route/CLI/SDK caps. */
 export const MAX_LABEL_CHARS = 80
+
+/** Which corner of each image a badge sits in. */
+export type CollageBadgePosition = "top-left" | "top-right"
+/** Storyboard convention: the shot number leads the frame in reading order. */
+export const DEFAULT_BADGE_POSITION: CollageBadgePosition = "top-left"
+/** Coerce an untrusted wire/node-data value to a badge position — anything that
+ *  is not exactly "top-right" is the default, so the workflow-run path (which
+ *  bypasses route Zod) can never carry an unknown corner into the renderer. */
+export function resolveBadgePosition(v: unknown): CollageBadgePosition {
+  return v === "top-right" ? "top-right" : DEFAULT_BADGE_POSITION
+}
 
 /** Pill fill — semi-opaque dark so white text reads over any image. */
 const PILL_FILL = "rgba(0,0,0,0.62)"
@@ -155,6 +167,10 @@ export interface CollageBadgeGeometry {
   readonly pillH: number
   readonly rx: number
   readonly textX: number
+  /** `start` for a top-left badge, `end` for top-right — the text hugs the
+   *  image edge the pill is anchored to, so a mis-estimated width can only
+   *  mis-size the pill, never push glyphs past the corner. */
+  readonly textAnchor: "start" | "end"
   /** Explicit baseline: sharp/Pango honours `dominant-baseline` inconsistently,
    *  so the y is computed here (pillY + padY + round(fontSize*0.79)). */
   readonly textBaselineY: number
@@ -265,6 +281,7 @@ export function layoutCollageBadge(
   fitted: Rect,
   canvasW: number,
   baseFontSize?: number,
+  position: CollageBadgePosition = DEFAULT_BADGE_POSITION,
 ): CollageBadgeGeometry | undefined {
   const fw = fitted.w
   const fh = fitted.h
@@ -331,12 +348,13 @@ export function layoutCollageBadge(
 
   const drawnText = drawnCps.join("")
   const pillW = textWidthPx(drawnCps, fontSize) + 2 * padX
-  const pillX = fitted.x + fw - margin - pillW
+  const pillX = position === "top-right" ? fitted.x + fw - margin - pillW : fitted.x + margin
   const pillY = fitted.y + margin
-  const textX = pillX + pillW - padX
+  const textAnchor = position === "top-right" ? "end" : "start"
+  const textX = textAnchor === "end" ? pillX + pillW - padX : pillX + padX
   const textBaselineY = pillY + padY + Math.round(fontSize * 0.79)
 
-  return { fontSize, pillX, pillY, pillW, pillH, rx, textX, textBaselineY, text: drawnText }
+  return { fontSize, pillX, pillY, pillW, pillH, rx, textX, textAnchor, textBaselineY, text: drawnText }
 }
 
 /**
@@ -351,8 +369,11 @@ export function buildCollageBadgesSvg(opts: {
   rects: readonly Rect[]
   dims: readonly ImageDim[]
   texts: readonly (string | undefined)[]
+  /** Corner for every badge on the sheet. Default {@link DEFAULT_BADGE_POSITION}. */
+  position?: CollageBadgePosition
 }): string | undefined {
   const { canvasW, canvasH, rects, dims, texts } = opts
+  const position = opts.position ?? DEFAULT_BADGE_POSITION
   // Fitted rects of every image that gets a badge — the sheet-uniform font size
   // is derived from these, so images without a badge don't skew the median.
   const fittedByIndex = new Map<number, Rect>()
@@ -369,7 +390,7 @@ export function buildCollageBadgesSvg(opts: {
     const text = texts[i]
     const fitted = fittedByIndex.get(i)
     if (text === undefined || !fitted) continue
-    const g = layoutCollageBadge(text, fitted, canvasW, baseFontSize)
+    const g = layoutCollageBadge(text, fitted, canvasW, baseFontSize, position)
     if (!g) continue
     const clipId = `cb${i}`
     defs.push(
@@ -379,7 +400,7 @@ export function buildCollageBadgesSvg(opts: {
       `<g clip-path="url(#${clipId})">` +
         `<rect x="${g.pillX}" y="${g.pillY}" width="${g.pillW}" height="${g.pillH}" rx="${g.rx}" fill="${PILL_FILL}"/>` +
         `<text x="${g.textX}" y="${g.textBaselineY}" font-family="${FONT_FAMILY}" font-size="${g.fontSize}" ` +
-        `font-weight="700" fill="${TEXT_FILL}" text-anchor="end" xml:space="preserve">${escapeSvgText(g.text)}</text>` +
+        `font-weight="700" fill="${TEXT_FILL}" text-anchor="${g.textAnchor}" xml:space="preserve">${escapeSvgText(g.text)}</text>` +
         `</g>`,
     )
   }

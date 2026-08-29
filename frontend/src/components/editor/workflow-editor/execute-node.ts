@@ -5850,6 +5850,11 @@ export function executeNode(
       if (imageLabels.every((l) => l === null)) imageLabels = undefined;
     }
     const numbered = collageData.numbered === true ? true : undefined;
+    // Only a known corner travels; the route defaults anything absent to top-left.
+    const badgePosition =
+      collageData.badgePosition === "top-right" || collageData.badgePosition === "top-left"
+        ? collageData.badgePosition
+        : undefined;
     setUserPromptTemplate(undefined);
     return runProcessingNode(
       node.id,
@@ -5858,6 +5863,7 @@ export function executeNode(
           imageSizes,
           numbered,
           imageLabels,
+          badgePosition,
           layout: collageData.layout,
           resolution: collageData.resolution,
           aspectRatio: collageData.aspectRatio,

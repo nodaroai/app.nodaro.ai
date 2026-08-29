@@ -29,7 +29,12 @@ import {
 } from "../video/ffmpeg-utils.js"
 import { settledWithLimit } from "../../lib/settled-with-limit.js"
 import { computeCollageLayout, type ImageDim, type CollageLayoutMode } from "./collage-layout.js"
-import { collageBadgeTexts, buildCollageBadgesSvg } from "./collage-badges.js"
+import {
+  collageBadgeTexts,
+  buildCollageBadgesSvg,
+  resolveBadgePosition,
+  type CollageBadgePosition,
+} from "./collage-badges.js"
 
 /** Concurrent input downloads. Bounded so a 30-image collage doesn't open 30
  *  sockets at once, while still overlapping the dominant network latency. */
@@ -59,6 +64,9 @@ export interface ImageCollageParams {
    *  (or alone). `null`/""/whitespace = none; a short array pads with none and
    *  extras are ignored (same tolerance as `imageSizes`). */
   readonly imageLabels?: readonly (string | null)[]
+  /** Corner each badge sits in. Default "top-left" (storyboard convention);
+   *  anything but "top-right" resolves to it. */
+  readonly badgePosition?: CollageBadgePosition
 }
 
 /** Long edge (px) per resolution. Canvas W/H are derived from the aspect. */
@@ -340,7 +348,14 @@ export async function createImageCollage(params: ImageCollageParams): Promise<st
   // 4K raster, so it runs under the shared ffmpeg FIFO slot even though it is
   // not an ffmpeg spawn — the worker fans out at concurrency 50.
   const texts = collageBadgeTexts(imageUrls.length, params.numbered === true, params.imageLabels)
-  const svg = buildCollageBadgesSvg({ canvasW, canvasH, rects, dims, texts })
+  const svg = buildCollageBadgesSvg({
+    canvasW,
+    canvasH,
+    rects,
+    dims,
+    texts,
+    position: resolveBadgePosition(params.badgePosition),
+  })
   if (svg) {
     const labeledPath = join(workDir, "collage-labeled.png")
     await withFfmpegSlot(() =>

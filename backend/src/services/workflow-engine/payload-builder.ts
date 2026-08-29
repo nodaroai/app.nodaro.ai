@@ -4572,6 +4572,11 @@ export function buildPayload(
           ...(collageImageSizes ? { imageSizes: collageImageSizes } : {}),
           ...(numbered ? { numbered: true } : {}),
           ...(collageImageLabels ? { imageLabels: collageImageLabels } : {}),
+          // Badge corner: forwarded only when it is a known value (this path
+          // bypasses route Zod); the renderer defaults anything else to top-left.
+          ...(data.badgePosition === "top-left" || data.badgePosition === "top-right"
+            ? { badgePosition: data.badgePosition }
+            : {}),
           layout: (data.layout as string | undefined) ?? "smart",
           resolution,
           aspectRatio: (data.aspectRatio as string | undefined) ?? "1:1",

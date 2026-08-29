@@ -10,6 +10,7 @@ import {
   MAX_LABEL_CHARS,
   sanitizeCollageLabel,
   normalizeCollageLabels,
+  resolveBadgePosition,
   collageBadgeTexts,
   fittedImageRect,
   layoutCollageBadge,
@@ -145,18 +146,43 @@ describe("layoutCollageBadge — geometry invariants", () => {
     expect(g?.fontSize).toBe(50) // round(1000*0.05)
   })
 
-  it("keeps the pill within the fitted rect at its top-right", () => {
+  it("defaults to the TOP-LEFT corner: pill hugs the image's left edge, text anchored start", () => {
     const fitted = { x: 100, y: 200, w: 1000, h: 800 }
     const g = layoutCollageBadge("3 · Close-up", fitted, 3000)
     expect(g).toBeDefined()
     if (!g) return
-    // right/top edges inside the fitted rect
+    const margin = Math.round(g.fontSize * 0.35)
+    expect(g.pillX).toBe(fitted.x + margin)
+    expect(g.pillY).toBe(fitted.y + margin)
     expect(g.pillX + g.pillW).toBeLessThanOrEqual(fitted.x + fitted.w)
+    expect(g.textAnchor).toBe("start")
+    // text x sits at the pill's left padding, inside the pill
+    expect(g.textX).toBe(g.pillX + Math.round(g.fontSize * 0.5))
+    expect(g.textX).toBeLessThan(g.pillX + g.pillW)
+  })
+
+  it("top-right keeps the pill within the fitted rect at its right edge, text anchored end", () => {
+    const fitted = { x: 100, y: 200, w: 1000, h: 800 }
+    const g = layoutCollageBadge("3 · Close-up", fitted, 3000, undefined, "top-right")
+    expect(g).toBeDefined()
+    if (!g) return
+    const margin = Math.round(g.fontSize * 0.35)
+    expect(g.pillX + g.pillW).toBe(fitted.x + fitted.w - margin)
     expect(g.pillX).toBeGreaterThanOrEqual(fitted.x)
-    expect(g.pillY).toBeGreaterThanOrEqual(fitted.y)
-    // text-anchor=end x is at the pill's right padding, inside the pill
-    expect(g.textX).toBeLessThanOrEqual(g.pillX + g.pillW)
+    expect(g.pillY).toBe(fitted.y + margin)
+    expect(g.textAnchor).toBe("end")
+    expect(g.textX).toBe(g.pillX + g.pillW - Math.round(g.fontSize * 0.5))
     expect(g.textX).toBeGreaterThan(g.pillX)
+  })
+
+  it("both corners share the same font size and pill size for the same text", () => {
+    const fitted = { x: 0, y: 0, w: 1000, h: 800 }
+    const l = layoutCollageBadge("7 · Two-shot", fitted, 3000, 40, "top-left")!
+    const r = layoutCollageBadge("7 · Two-shot", fitted, 3000, 40, "top-right")!
+    expect(l.fontSize).toBe(r.fontSize)
+    expect(l.pillW).toBe(r.pillW)
+    expect(l.pillH).toBe(r.pillH)
+    expect(l.pillY).toBe(r.pillY)
   })
 
   it("keeps the pill height ≤ 35% of the fitted image height (small 4K-grid cell)", () => {
@@ -225,10 +251,11 @@ describe("buildCollageBadgesSvg", () => {
     expect(svg.startsWith('<svg xmlns="http://www.w3.org/2000/svg" width="2560" height="1920">')).toBe(true)
   })
 
-  it("uses no dominant-baseline; explicit baseline + end anchor + preserved spaces", () => {
+  it("uses no dominant-baseline; explicit baseline + start anchor (top-left default) + preserved spaces", () => {
     const svg = buildCollageBadgesSvg({ canvasW: 2000, canvasH: 2000, rects, dims, texts: ["1 · A", "2"] })!
     expect(svg).not.toContain("dominant-baseline")
-    expect(svg).toContain('text-anchor="end"')
+    expect(svg).toContain('text-anchor="start"')
+    expect(svg).not.toContain('text-anchor="end"')
     expect(svg).toContain('xml:space="preserve"')
     expect(svg).toContain('font-weight="700"')
     expect(svg).toContain('font-family="DejaVu Sans, sans-serif"')
@@ -327,5 +354,33 @@ describe("normalizeCollageLabels — the wire-boundary normalization (route + pa
   it("never lets a NUL reach the persisted array (JSONB rejects \\u0000)", () => {
     const out = normalizeCollageLabels(["x\u0000y"])!
     expect(JSON.stringify(out)).not.toContain("\\u0000")
+  })
+})
+
+describe("badge position", () => {
+  const rects = [{ x: 0, y: 0, w: 1000, h: 1000 }, { x: 1024, y: 0, w: 1000, h: 1000 }]
+  const dims = [{ w: 1000, h: 1000 }, { w: 1000, h: 1000 }]
+
+  it("resolveBadgePosition coerces anything but 'top-right' to the top-left default", () => {
+    expect(resolveBadgePosition("top-right")).toBe("top-right")
+    expect(resolveBadgePosition("top-left")).toBe("top-left")
+    expect(resolveBadgePosition(undefined)).toBe("top-left")
+    expect(resolveBadgePosition("bottom-left")).toBe("top-left")
+    expect(resolveBadgePosition(42)).toBe("top-left")
+  })
+
+  it("position: top-right anchors every badge end and places pills at the right edge", () => {
+    const svg = buildCollageBadgesSvg({ canvasW: 2024, canvasH: 1000, rects, dims, texts: ["1", "2"], position: "top-right" })!
+    expect(svg).toContain('text-anchor="end"')
+    expect(svg).not.toContain('text-anchor="start"')
+    const xs = [...svg.matchAll(/<rect x="(\d+)"/g)].map((m) => Number(m[1]))
+    // the second image's pill starts well into its cell (right-anchored), not at its left edge
+    expect(xs[1]).toBeGreaterThan(1024 + 500)
+  })
+
+  it("the default (no position) is top-left", () => {
+    const svg = buildCollageBadgesSvg({ canvasW: 2024, canvasH: 1000, rects, dims, texts: ["1", "2"] })!
+    const xs = [...svg.matchAll(/<rect x="(\d+)"/g)].map((m) => Number(m[1]))
+    expect(xs[1]).toBeLessThan(1024 + 100)
   })
 })
