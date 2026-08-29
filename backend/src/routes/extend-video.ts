@@ -57,10 +57,15 @@ export const extendVideoBody = z.object({
 })
 
 /**
- * The generation model the seedance-2-extend worker drives its i2v transport
- * through — assembly caps must derive from ITS reference limits, and the same
- * pairing is hardcoded at the worker's `imageToVideo(..., "seedance-2", ...)`
- * call.
+ * The model whose REFERENCE LIMITS this route's assembly caps derive from.
+ *
+ * Deliberately pinned to 2.0 even when SEEDANCE_EXTEND_GENERATION_MODEL
+ * dispatches on Seedance 2.5: 2.0's 9/3/3 caps are a strict subset of 2.5's
+ * 30/10/10, so keeping this constant leaves the assembled prompt and reference
+ * list byte-identical under the lever — a widened cap would silently change
+ * the prompt a user's saved node produces. The model actually DISPATCHED comes
+ * from `lib/seedance-extend-model.ts`, which the worker and the credit
+ * identifier both read.
  */
 export const SEEDANCE_2_EXTEND_GENERATION_MODEL = "seedance-2"
 
