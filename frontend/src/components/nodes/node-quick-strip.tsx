@@ -3,7 +3,7 @@
 import { createContext, useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { RunNodeButton } from "./run-node-button"
 import { PromptEditButton } from "./prompt-edit-button"
-import { QuickConfigSelect, getQuickConfigs } from "./node-quick-configs"
+import { QuickConfigSelect, getQuickConfigs, readQuickConfigValue } from "./node-quick-configs"
 import { nodeHasPromptField } from "@/lib/prompt-fields"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 
@@ -84,7 +84,7 @@ export function NodeQuickStrip({ nodeId, credits, isRunning, children }: NodeQui
           key={control.field}
           nodeId={nodeId}
           control={control}
-          value={data[control.field] != null ? String(data[control.field]) : ""}
+          value={readQuickConfigValue(control, data)}
           data={data}
           disabled={isRunning}
           onOpenChange={handleOpenChange}

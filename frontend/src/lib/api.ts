@@ -3143,6 +3143,8 @@ export async function imageCollageApi(
     numbered?: boolean
     /** Per-image captions aligned with imageUrls, shown after the number; null = none. */
     imageLabels?: (string | null)[]
+    /** Corner the badges sit in; the route defaults to "top-left". */
+    badgePosition?: "top-left" | "top-right"
     layout?: "smart" | "grid"
     resolution?: "2K" | "4K"
     aspectRatio?: string
@@ -3160,6 +3162,7 @@ export async function imageCollageApi(
   if (opts.imageSizes?.length) body.imageSizes = opts.imageSizes
   if (opts.numbered) body.numbered = true
   if (opts.imageLabels?.length) body.imageLabels = opts.imageLabels
+  if (opts.badgePosition) body.badgePosition = opts.badgePosition
   if (opts.layout) body.layout = opts.layout
   if (opts.resolution) body.resolution = opts.resolution
   if (opts.aspectRatio) body.aspectRatio = opts.aspectRatio

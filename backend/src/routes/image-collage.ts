@@ -47,6 +47,10 @@ export const imageCollageBody = z.object({
     .array(z.string().max(80).nullable())
     .max(30, "At most 30 labels")
     .optional(),
+  /** Corner each badge (number and/or label) sits in. Default "top-left" —
+   *  the storyboard convention; "top-right" keeps the badge clear of a subject
+   *  composed left-of-centre. */
+  badgePosition: z.enum(["top-left", "top-right"]).optional().default("top-left"),
   resolution: z.enum(["2K", "4K"]).optional().default("4K"),
   // Any "W:H" (1–2 digits each). Parsed generically by resolveCollageCanvas, so
   // new frontend ratios need no route change (no enum to keep in sync).
@@ -200,7 +204,7 @@ export async function imageCollageRoutes(app: FastifyInstance) {
         })
       }
 
-      const { imageUrls, imageSizes, numbered, imageLabels: rawImageLabels, layout, resolution, aspectRatio, gap, backgroundColor, attachToCharacterId, attachToColumn, attachName, attachBoardType, ...restBody } = parsed.data
+      const { imageUrls, imageSizes, numbered, imageLabels: rawImageLabels, badgePosition, layout, resolution, aspectRatio, gap, backgroundColor, attachToCharacterId, attachToColumn, attachName, attachBoardType, ...restBody } = parsed.data
       const userId = req.userId
       if (!userId) {
         return reply.status(401).send({
@@ -230,6 +234,7 @@ export async function imageCollageRoutes(app: FastifyInstance) {
               imageUrls,
               imageSizes,
               numbered,
+              badgePosition,
               layout,
               resolution,
               aspectRatio,
@@ -260,6 +265,7 @@ export async function imageCollageRoutes(app: FastifyInstance) {
         imageSizes,
         ...(numbered !== undefined ? { numbered } : {}),
         ...(imageLabels ? { imageLabels } : {}),
+        badgePosition,
         layout,
         resolution,
         aspectRatio,

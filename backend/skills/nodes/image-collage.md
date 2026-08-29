@@ -1,7 +1,7 @@
 ---
 node_type: image-collage
-generated_at: 2026-08-28T13:55:15.765Z
-generated_from: 2eb0afcf6
+generated_at: 2026-08-29T19:04:28.729Z
+generated_from: 1906376e1
 ---
 
 # Image Collage
@@ -27,6 +27,7 @@ generated_from: 2eb0afcf6
 - `imageSizeBySource?: Record<string, number>`
 - `numbered?: boolean`
 - `imageLabelBySource?: Record<string, string>`
+- `badgePosition?: "top-left" | "top-right"`
 - `imageOrder?: string[]`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
@@ -54,7 +55,7 @@ generated_from: 2eb0afcf6
 
 ## When to use
 
-Composite a batch of images into one 2K/4K sheet — contact sheets, mood boards, product grids, before/after comparisons. For a numbered **storyboard**, set `numbered: true` and give each input a label via `imageLabelBySource`: every image then gets a `1 · Wide` / `2 · Close-up` badge at its top-right, counted in the collage's final reading order.
+Composite a batch of images into one 2K/4K sheet — contact sheets, mood boards, product grids, before/after comparisons. For a numbered **storyboard**, set `numbered: true` and give each input a label via `imageLabelBySource`: every image then gets a `1 · Wide` / `2 · Close-up` badge at its top-left (or top-right via `badgePosition`), counted in the collage's final reading order.
 
 <!-- AUTO-GEN:START mcp-call -->
 <!-- AUTO-GEN:END mcp-call -->

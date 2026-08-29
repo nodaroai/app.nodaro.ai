@@ -759,3 +759,45 @@ describe("adjust-volume handler", () => {
     expect(mocks.mockCleanupWorkDir).toHaveBeenCalledWith("/tmp/vol")
   })
 })
+
+// ---------------------------------------------------------------------------
+// combine-videos: Stage-3 per-boundary transitions + film-edge fades. The
+// route validates them; the worker's only job is to hand them to the provider
+// untouched (a route that accepts a field the worker drops is worse than a
+// route that never accepted it).
+// ---------------------------------------------------------------------------
+
+describe("combine-videos handler — transitions[] + edgeFades", () => {
+  const handler = ffmpegHandlers["combine-videos"]
+
+  it("forwards transitions[] and edgeFades to combineVideos verbatim", async () => {
+    const job = makeJob("combine-videos", {
+      videoUrls: ["https://a.mp4", "https://b.mp4", "https://c.mp4"],
+      transition: "cut",
+      transitionDuration: 0,
+      transitions: [{ index: 1, transition: "dip-to-black", duration: 0.5 }],
+      edgeFades: { in: 0.5, out: 1 },
+    })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockCombineVideos).toHaveBeenCalledWith(
+      expect.objectContaining({
+        transitions: [{ index: 1, transition: "dip-to-black", duration: 0.5 }],
+        edgeFades: { in: 0.5, out: 1 },
+      }),
+    )
+  })
+
+  it("omits both when the job carries neither (byte-identical to today)", async () => {
+    const job = makeJob("combine-videos", {
+      videoUrls: ["https://a.mp4", "https://b.mp4"],
+      transition: "fade",
+      transitionDuration: 1,
+    })
+    await handler(job as never, makeCtx())
+
+    const passed = mocks.mockCombineVideos.mock.calls[0][0] as Record<string, unknown>
+    expect(passed.transitions).toBeUndefined()
+    expect(passed.edgeFades).toBeUndefined()
+  })
+})

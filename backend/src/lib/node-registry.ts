@@ -266,7 +266,7 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     description:
       "Re-watches a clip against a wired analysis (or auto-runs a fast analysis first when none is wired), applies video-verified corrections under guards, and returns a disclosed report of what was checked, fixed, and left open.",
     outputType: "data",
-    creditCost: "214-1915",
+    creditCost: "214-1917",
     inputSchema: {
       fields: [
         { key: "videoUrl", type: "video-url", required: true },
@@ -942,11 +942,12 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     creditCost: 4,
     description: "Fit N ordered (clip, voice) blocks into one MP4: center short voice, slow-to-fit long voice, never crop audio.",
   },
-  { type: "image-collage", label: "Image Collage", category: "processing", description: "Composite N images into one 2K/4K image with a smart (justified) or grid layout. No image is cropped — smart floats the output height; grid letterboxes. Per-image size hints via imageSizes (0 auto / 1 big / 2 medium / 3 small, index-aligned with imageUrls; relative, smart layout only). Storyboard badges: set numbered to stamp 1-based sequence numbers, and imageLabels for per-image captions, at each image's top-right (rendered as \"3 · Close-up\"). Local ffmpeg — priced by resolution (2K=2, 4K=4).", outputType: "image", creditCost: "2-4", inputSchema: { fields: [
+  { type: "image-collage", label: "Image Collage", category: "processing", description: "Composite N images into one 2K/4K image with a smart (justified) or grid layout. No image is cropped — smart floats the output height; grid letterboxes. Per-image size hints via imageSizes (0 auto / 1 big / 2 medium / 3 small, index-aligned with imageUrls; relative, smart layout only). Storyboard badges: set numbered to stamp 1-based sequence numbers, and imageLabels for per-image captions, at each image's top-left corner — or top-right via badgePosition (rendered as \"3 · Close-up\"). Local ffmpeg — priced by resolution (2K=2, 4K=4).", outputType: "image", creditCost: "2-4", inputSchema: { fields: [
     { key: "imageUrls", type: "image-url-array", required: true },
     { key: "imageSizes", type: "number-array" },
     { key: "numbered", type: "boolean" },
     { key: "imageLabels", type: "string-array" },
+    { key: "badgePosition", type: "select", options: ["top-left", "top-right"] },
     { key: "layout", type: "select", options: ["smart", "grid"] },
     { key: "resolution", type: "select", options: ["2K", "4K"] },
     { key: "aspectRatio", type: "select", options: ["1:1", "4:3", "3:2", "16:9", "21:9", "4:5", "3:4", "2:3", "9:16"] },

@@ -323,7 +323,8 @@ Example:
       "--sizes <list>",
       "comma-separated per-image size hints aligned with the images: 0 auto (default), 1 big (~2× linear), 2 medium, 3 small (~½). Relative — smart layout only",
     )
-    .option("--numbered", "stamp 1-based sequence numbers at each image's top-right (storyboard mode)")
+    .option("--numbered", "stamp 1-based sequence numbers at each image's corner (storyboard mode)")
+    .option("--badge-position <corner>", "where the number/label badges sit: top-left (default) or top-right")
     .option(
       "--label <text>",
       'per-image caption shown after the number; repeat once per image, in order (pass "" to skip one)',
@@ -348,8 +349,8 @@ Examples:
 two small. Hints are relative — all-equal hints change nothing, and the grid
 layout ignores them.
 
---numbered stamps 1, 2, 3… at each image's top-right, in the order the images
-are passed. Repeat --label once per image (in the same order) to caption it
+--numbered stamps 1, 2, 3… at each image's top-left corner, in the order the
+images are passed (--badge-position top-right moves the badges). Repeat --label once per image (in the same order) to caption it
 after the number ("3 · Close-up"); pass "" to skip a label for one image.`)
     .action(
       async (
@@ -357,6 +358,7 @@ after the number ("3 · Close-up"); pass "" to skip a label for one image.`)
         opts: {
           sizes?: string
           numbered?: boolean
+          badgePosition?: string
           label?: string[]
           layout?: string
           resolution?: string
@@ -376,6 +378,10 @@ after the number ("3 · Close-up"); pass "" to skip a label for one image.`)
           }
           if (opts.resolution && !["2K", "4K"].includes(opts.resolution)) {
             warn(`--resolution must be 2K or 4K (got "${opts.resolution}")`)
+            process.exit(1)
+          }
+          if (opts.badgePosition && !["top-left", "top-right"].includes(opts.badgePosition)) {
+            warn(`--badge-position must be top-left or top-right (got "${opts.badgePosition}")`)
             process.exit(1)
           }
           let imageSizes: Array<0 | 1 | 2 | 3> | undefined
@@ -411,6 +417,7 @@ after the number ("3 · Close-up"); pass "" to skip a label for one image.`)
             ...(imageSizes ? { imageSizes } : {}),
             ...(opts.numbered ? { numbered: true } : {}),
             ...(imageLabels ? { imageLabels } : {}),
+            ...(opts.badgePosition ? { badgePosition: opts.badgePosition as "top-left" | "top-right" } : {}),
             ...(opts.layout ? { layout: opts.layout as "smart" | "grid" } : {}),
             ...(opts.resolution ? { resolution: opts.resolution as "2K" | "4K" } : {}),
             ...(opts.aspectRatio ? { aspectRatio: opts.aspectRatio } : {}),

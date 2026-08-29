@@ -338,3 +338,20 @@ describe("media save command", () => {
     expect(vi.mocked(warn)).toHaveBeenCalledWith(expect.stringContaining("--type"))
   })
 })
+
+describe("media collage --badge-position", () => {
+  it("passes a valid corner through and rejects anything else", async () => {
+    mocks.imageCollage.mockResolvedValueOnce({ jobId: "j-bp" })
+    await runCmd("media", "collage", "https://x/a.png", "https://x/b.png", "--numbered", "--badge-position", "top-right", "--json")
+    expect(mocks.imageCollage).toHaveBeenCalledWith({
+      imageUrls: ["https://x/a.png", "https://x/b.png"],
+      numbered: true,
+      badgePosition: "top-right",
+    })
+    mocks.imageCollage.mockClear()
+    await expect(
+      runCmd("media", "collage", "https://x/a.png", "https://x/b.png", "--badge-position", "bottom-left"),
+    ).rejects.toThrow("process.exit(1)")
+    expect(mocks.imageCollage).not.toHaveBeenCalled()
+  })
+})

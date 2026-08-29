@@ -55,6 +55,85 @@ interface CombineOptions {
    *  normalizeVideoForCombine handles even-rounding. */
   readonly targetWidth?: number
   readonly targetHeight?: number
+  /** PER-BOUNDARY override of the global `transition`/`transitionDuration`.
+   *  `index` is boundary k — the join between clip k and clip k+1 (N clips
+   *  have N-1 boundaries, 0-based). Built for the recast stitcher, which
+   *  renders the device the analyser recorded at each segment SEAM (a fade,
+   *  dissolve, wipe or whip that falls between two segments can only be made
+   *  here); the id is any `COMBINE_TRANSITIONS` id, same vocabulary as
+   *  `transition`.
+   *
+   *  Rules: a boundary with no entry keeps the GLOBAL transition and
+   *  duration; an entry with `transition: "cut"` or `duration <= 0` is a hard
+   *  cut AT THAT BOUNDARY; an out-of-range `index` — or an id this build's
+   *  catalog doesn't know (a newer plugin against an older app) — is warned
+   *  about and ignored rather than failing a stitch that already cost real
+   *  render money. Mixed chains join with the `concat` FILTER at cut
+   *  boundaries and `xfade` at device boundaries; the concat-demuxer fast
+   *  path is reachable only when EVERY boundary is a cut.
+   *
+   *  Absent → every boundary uses the global transition, byte-identically to
+   *  before this option existed (the characterization goldens pin that). */
+  readonly transitions?: ReadonlyArray<{
+    readonly index: number
+    readonly transition: string
+    readonly duration: number
+  }>
+  /** Film-edge fades in SECONDS: `fade=t=in` over the head of the first clip
+   *  and `fade=t=out` over the tail of the last one — the opening/closing
+   *  fades a keyframes render can never make itself (every segment opens on a
+   *  pinned anchor frame). Baked into the first/last NORMALIZED files before
+   *  trimming and before any join, so they survive the concat-demuxer fast
+   *  path, which stream-copies. Absent (or 0) → no fade pass runs at all. */
+  readonly edgeFades?: {
+    readonly in?: number
+    readonly out?: number
+  }
+}
+
+/** One boundary's resolved override: the ffmpeg `xfade transition=` name, or
+ *  `null` for a hard cut at that boundary (with `duration` forced to 0). */
+interface BoundaryOverride {
+  readonly xfadeName: string | null
+  readonly duration: number
+}
+
+/**
+ * Resolve `CombineOptions.transitions` into a per-boundary map, dropping (with
+ * a warning) every entry that can't be honored: an index outside
+ * `0..boundaryCount-1`, and an id this build's `COMBINE_TRANSITIONS` catalog
+ * doesn't know — `resolveXfadeName` THROWS on an unknown id, and a plugin
+ * released after this app build must degrade to the global transition rather
+ * than abort a stitch of already-paid-for renders.
+ *
+ * Runs BEFORE the hard-cut/fast-path decision so that decision reads the same
+ * resolved plan the filter graph does (an entry that resolves to a cut must
+ * not keep the combine off the stream-copy fast path).
+ */
+function resolveBoundaryOverrides(
+  boundaryCount: number,
+  entries: CombineOptions["transitions"],
+): Map<number, BoundaryOverride> {
+  const overrides = new Map<number, BoundaryOverride>()
+  if (!entries) return overrides
+  for (const entry of entries) {
+    if (!Number.isInteger(entry.index) || entry.index < 0 || entry.index >= boundaryCount) {
+      console.warn(`[combineVideos] transitions: boundary index ${entry.index} is out of range (0..${boundaryCount - 1}) — ignored`)
+      continue
+    }
+    let xfadeName: string | null
+    try {
+      xfadeName = resolveXfadeName(entry.transition)
+    } catch {
+      console.warn(`[combineVideos] transitions: unknown transition id "${entry.transition}" at boundary ${entry.index} — ignored, that boundary keeps the global transition`)
+      continue
+    }
+    // "cut" (xfadeName null) or a non-positive duration IS a hard cut here,
+    // exactly as the global `transition`/`transitionDuration` pair behaves.
+    const isCut = xfadeName === null || !(entry.duration > 0)
+    overrides.set(entry.index, { xfadeName: isCut ? null : xfadeName, duration: isCut ? 0 : entry.duration })
+  }
+  return overrides
 }
 
 /**
@@ -127,33 +206,52 @@ export async function pickTargetResolution(
 }
 
 /**
- * Build chained xfade video filter for N clips.
+ * Build the chained video filter for N clips — one stage per boundary.
  *
- * For N clips the chain has N-1 xfade stages:
- *   [0:v][1:v]xfade=...:offset=O0[v01];
- *   [v01][2:v]xfade=...:offset=O1[v012];
+ * For N clips the chain has N-1 stages:
+ *   [0:v][1:v]xfade=...:offset=O0[v1];
+ *   [v1][2:v]xfade=...:offset=O1[v2];
  *   ...
  *
- * Each offset = (running duration so far) - transitionDuration.
+ * Each boundary carries its OWN ffmpeg transition name and duration
+ * (`boundaryTypes[k]` / `boundaryDurations[k]` describe boundary k, the join
+ * between clip k and clip k+1) — Stage 3's per-seam devices. A boundary whose
+ * type is `null` (or whose duration is <= 0) is a HARD CUT and joins with the
+ * `concat` filter instead: xfade cannot express a zero-length blend
+ * (`duration=0` errors out), and the concat-demuxer fast path is unavailable
+ * as soon as ANY other boundary needs a filter graph.
+ *
+ * An xfade offset = (running duration so far) - that boundary's duration, so
+ * each blend consumes only its OWN overlap from the outgoing side; a concat
+ * boundary consumes nothing. With one uniform type and duration across every
+ * boundary this is byte-identical to the single-transition chain it replaced.
  */
 function buildVideoFilter(
   durations: readonly number[],
-  transitionType: string,
-  transitionDuration: number,
+  boundaryTypes: ReadonlyArray<string | null>,
+  boundaryDurations: readonly number[],
 ): { filter: string; outputLabel: string } {
   const parts: string[] = []
   let runningDuration = durations[0]
 
   for (let i = 1; i < durations.length; i++) {
-    const offset = Math.max(0, runningDuration - transitionDuration)
+    const boundary = i - 1
+    const type = boundaryTypes[boundary] ?? null
+    const duration = boundaryDurations[boundary] ?? 0
     const inputA = i === 1 ? "[0:v]" : `[v${i - 1}]`
     const inputB = `[${i}:v]`
     const outputLabel = i === durations.length - 1 ? "[vout]" : `[v${i}]`
 
-    parts.push(
-      `${inputA}${inputB}xfade=transition=${transitionType}:duration=${transitionDuration}:offset=${offset}${outputLabel}`
-    )
+    if (type === null || duration <= 0) {
+      parts.push(`${inputA}${inputB}concat=n=2:v=1:a=0${outputLabel}`)
+      runningDuration = runningDuration + durations[i]
+      continue
+    }
 
+    const offset = Math.max(0, runningDuration - duration)
+    parts.push(
+      `${inputA}${inputB}xfade=transition=${type}:duration=${duration}:offset=${offset}${outputLabel}`
+    )
     runningDuration = offset + durations[i]
   }
 
@@ -220,18 +318,27 @@ function buildHardCutCrossfadeAudioFilter(
 /**
  * Audio for xfade joins with an INDEPENDENT audio-fade length: each clip's
  * audio is anchored at its video start (adelay to the xfade offset — sync-
- * safe by construction, no matter what `audioFadeDuration` is), faded in
+ * safe by construction, no matter what the audio fade length is), faded in
  * over its head and out over its tail, then everything is amixed. The clips
  * genuinely overlap by the VIDEO transition duration, so the fades cross-
- * blend there; when `audioFadeDuration` exceeds the video overlap the fades
+ * blend there; when the audio fade exceeds the video overlap the fades
  * simply extend into the solo regions — a longer, gentler blend with zero
  * effect on the video timeline. Degenerates to plain anchored amix (keep-
- * style) when `audioFadeDuration` is 0.
+ * style) when the audio fade length is 0.
+ *
+ * Both lengths are PER BOUNDARY (`[k]` describes the join between clip k and
+ * clip k+1): a mixed Stage-3 chain overlaps by different amounts at different
+ * seams, and clip i's fade-in belongs to boundary i-1 while its fade-out
+ * belongs to boundary i. A HARD-CUT boundary carries 0 on both — its clips
+ * abut with no overlap, and fading each side to silence across a join with
+ * nothing to blend into is the fade-through-silence design PR #3307 measured
+ * as an audible dropout (see buildHardCutCrossfadeAudioFilter's note). With
+ * uniform arrays this is byte-identical to the single-length version.
  */
 function buildAnchoredCrossfadeAudioFilter(
   durations: readonly number[],
-  videoTransitionDuration: number,
-  audioFadeDuration: number,
+  videoTransitionDurations: readonly number[],
+  audioFadeDurations: readonly number[],
   curve: string,
 ): { filter: string; outputLabel: string } {
   const n = durations.length
@@ -239,18 +346,20 @@ function buildAnchoredCrossfadeAudioFilter(
   let acc = 0
   for (let i = 0; i < n; i++) {
     starts.push(acc)
-    acc += durations[i]! - videoTransitionDuration
+    acc += durations[i]! - (videoTransitionDurations[i] ?? 0)
   }
   const parts: string[] = []
   const labels: string[] = []
   for (let i = 0; i < n; i++) {
     const chain: string[] = []
-    if (audioFadeDuration > 0 && i > 0) {
-      chain.push(`afade=t=in:st=0:d=${audioFadeDuration}:curve=${curve}`)
+    const fadeIn = i > 0 ? (audioFadeDurations[i - 1] ?? 0) : 0
+    const fadeOut = i < n - 1 ? (audioFadeDurations[i] ?? 0) : 0
+    if (fadeIn > 0) {
+      chain.push(`afade=t=in:st=0:d=${fadeIn}:curve=${curve}`)
     }
-    if (audioFadeDuration > 0 && i < n - 1) {
-      const st = Math.max(0, durations[i]! - audioFadeDuration)
-      chain.push(`afade=t=out:st=${st}:d=${audioFadeDuration}:curve=${curve}`)
+    if (fadeOut > 0) {
+      const st = Math.max(0, durations[i]! - fadeOut)
+      chain.push(`afade=t=out:st=${st}:d=${fadeOut}:curve=${curve}`)
     }
     const ms = Math.max(0, Math.round(starts[i]! * 1000))
     if (ms > 0) chain.push(`adelay=${ms}:all=1`)
@@ -300,7 +409,21 @@ export async function combineVideos(options: CombineOptions): Promise<CombineVid
   const audioCrossfadeSeconds = audioCrossfadeDuration ?? transitionDuration
   // A non-cut transition with zero duration IS a hard cut — route it through
   // the cut machinery (xfade duration=0 / acrossfade d=0 error out).
-  const hardCutVideo = transition === "cut" || transitionDuration <= 0
+  const globalHardCut = transition === "cut" || transitionDuration <= 0
+  // Per-boundary device overrides (Stage 3): resolved up front so the
+  // fast-path decision below reads exactly the plan the filter graph will.
+  const boundaryCount = Math.max(0, videoUrls.length - 1)
+  const boundaryOverrides = resolveBoundaryOverrides(boundaryCount, options.transitions)
+  const boundaryIsCut = (k: number): boolean => {
+    const override = boundaryOverrides.get(k)
+    return override ? override.xfadeName === null : globalHardCut
+  }
+  // The whole combine is "hard cut" (concat demuxer, stream copy) only when
+  // EVERY boundary is one. With no boundaries at all (a single clip) there is
+  // nothing to override, so the global rule stands unchanged.
+  const hardCutVideo = boundaryCount > 0
+    ? Array.from({ length: boundaryCount }, (_, k) => boundaryIsCut(k)).every(Boolean)
+    : globalHardCut
 
   try {
     // Download all clips first, then probe their resolutions so the whole set
@@ -324,6 +447,48 @@ export async function combineVideos(options: CombineOptions): Promise<CombineVid
       const normalizedPath = join(workDir, `normalized_${i}.mp4`)
       await normalizeVideoForCombine(rawPaths[i], normalizedPath, target.width, target.height)
       normalizedPaths.push(normalizedPath)
+    }
+
+    // Film-edge fades: baked into the FIRST and LAST normalized clips here,
+    // before trimming and before any join. Everything downstream then carries
+    // them for free — including the concat-demuxer fast path, which stream-
+    // copies and has no filter graph to add them to. Safe against the trim
+    // plan below by construction: the first clip's START and the last clip's
+    // END are never trimmed (they are the delivered film's own edges), so the
+    // faded regions always survive. The closing fade's start is measured on
+    // the VIDEO STREAM duration (same reason the join math below is — a
+    // container duration overshoots by the audio overhang AI clips carry, and
+    // would start the fade late enough to cut it off).
+    const edgeFadeIn = Math.max(0, options.edgeFades?.in ?? 0)
+    const edgeFadeOut = Math.max(0, options.edgeFades?.out ?? 0)
+    if (edgeFadeIn > 0 || edgeFadeOut > 0) {
+      const lastIndex = normalizedPaths.length - 1
+      const edgeFilters = new Map<number, string[]>()
+      if (edgeFadeIn > 0) {
+        edgeFilters.set(0, [`fade=t=in:st=0:d=${edgeFadeIn}`])
+      }
+      if (edgeFadeOut > 0) {
+        const lastDuration = await getVideoStreamDuration(normalizedPaths[lastIndex]!)
+        const st = Math.max(0, lastDuration - edgeFadeOut)
+        // A single clip is BOTH edges — one pass, both filters.
+        edgeFilters.set(lastIndex, [...(edgeFilters.get(lastIndex) ?? []), `fade=t=out:st=${st}:d=${edgeFadeOut}`])
+      }
+      for (const [i, filters] of [...edgeFilters.entries()].sort((a, b) => a[0] - b[0])) {
+        const fadedPath = join(workDir, `faded_${i}.mp4`)
+        console.log(`[combineVideos] Edge fade on clip ${i}: ${filters.join(",")}`)
+        // Re-encode pinned to normalizeVideoForCombine's exact video params so
+        // the concat demuxer can still stream-copy the set; audio is copied
+        // verbatim (normalize already fixed it at aac/44.1k/stereo).
+        await runFfmpeg([
+          "-y", "-i", normalizedPaths[i]!,
+          "-vf", filters.join(","),
+          "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "fast", "-crf", COMBINE_DELIVERY_CRF,
+          "-c:a", "copy",
+          "-movflags", "+faststart",
+          fadedPath,
+        ])
+        normalizedPaths[i] = fadedPath
+      }
     }
 
     // Per-clip trim plan. Frame trim is meant to clean transition artifacts
@@ -527,6 +692,25 @@ export async function combineVideos(options: CombineOptions): Promise<CombineVid
     const safeDuration = Math.min(transitionDuration, minDur * 0.9)
     const safeAudioCrossfade = Math.min(audioCrossfadeSeconds, minDur * 0.9)
 
+    // Per-boundary VIDEO overlap and AUDIO fade lengths. A boundary with a
+    // device override blends for its OWN length and crossfades its audio over
+    // exactly that overlap (the plan's rule: the seam's video duration IS its
+    // audio crossfade length); every other boundary keeps the global pair. A
+    // hard cut carries 0 on both — no overlap to blend across.
+    const boundaryVideoDurations: number[] = []
+    const boundaryAudioFades: number[] = []
+    for (let k = 0; k < durations.length - 1; k++) {
+      const override = boundaryOverrides.get(k)
+      if (override) {
+        const d = override.xfadeName === null ? 0 : Math.min(override.duration, minDur * 0.9)
+        boundaryVideoDurations.push(d)
+        boundaryAudioFades.push(d)
+      } else {
+        boundaryVideoDurations.push(globalHardCut ? 0 : safeDuration)
+        boundaryAudioFades.push(globalHardCut ? 0 : safeAudioCrossfade)
+      }
+    }
+
     const inputs: string[] = []
     for (const p of inputPaths) {
       inputs.push("-i", p)
@@ -595,12 +779,26 @@ export async function combineVideos(options: CombineOptions): Promise<CombineVid
       return { outputPath, smartCuts }
     }
 
-    const xfadeType = resolveXfadeName(transition)
-    if (xfadeType === null) {
+    // The global transition only needs resolving when some boundary actually
+    // uses it — a mixed chain can legitimately reach here with a global `cut`
+    // (every non-cut boundary came from `transitions`).
+    const someBoundaryUsesGlobal = boundaryCount === 0 || boundaryOverrides.size < boundaryCount
+    const needsGlobalXfade = someBoundaryUsesGlobal && !globalHardCut
+    const globalXfadeType = needsGlobalXfade ? resolveXfadeName(transition) : null
+    if (needsGlobalXfade && globalXfadeType === null) {
       // Unreachable: `cut` is handled above; Zod rejects unknown ids.
       throw new Error(`combineVideos: non-xfade transition reached xfade path: ${transition}`)
     }
-    const videoFilter = buildVideoFilter(durations, xfadeType, safeDuration)
+    const boundaryTypes = boundaryVideoDurations.map((_, k) => {
+      const override = boundaryOverrides.get(k)
+      if (override) return override.xfadeName
+      return globalHardCut ? null : globalXfadeType
+    })
+    const deviceSeams = boundaryVideoDurations.filter((d) => d > 0)
+    if (boundaryOverrides.size > 0) {
+      console.log(`[combineVideos] Per-boundary transitions: ${deviceSeams.length}/${boundaryVideoDurations.length} blended seams, ${deviceSeams.reduce((a, b) => a + b, 0).toFixed(2)}s of overlap consumed`)
+    }
+    const videoFilter = buildVideoFilter(durations, boundaryTypes, boundaryVideoDurations)
 
     // Try with audio crossfade first, fall back to video-only if clips lack audio
     if (audioMode === "remove") {
@@ -636,7 +834,7 @@ export async function combineVideos(options: CombineOptions): Promise<CombineVid
         // of the video fade (see buildAnchoredCrossfadeAudioFilter) and each
         // clip's audio stays locked to its video start.
         const audioFilter = buildAnchoredCrossfadeAudioFilter(
-          durations, safeDuration, safeAudioCrossfade, resolveAudioCrossfadeCurve(audioCrossfadeCurve),
+          durations, boundaryVideoDurations, boundaryAudioFades, resolveAudioCrossfadeCurve(audioCrossfadeCurve),
         )
         const fullFilter = `${videoFilter.filter};${audioFilter.filter}`
 
@@ -685,7 +883,7 @@ export async function combineVideos(options: CombineOptions): Promise<CombineVid
       let acc = 0
       for (let i = 0; i < durations.length; i++) {
         starts.push(acc)
-        acc += durations[i] - safeDuration
+        acc += durations[i] - (boundaryVideoDurations[i] ?? 0)
       }
 
       const delayParts: string[] = []

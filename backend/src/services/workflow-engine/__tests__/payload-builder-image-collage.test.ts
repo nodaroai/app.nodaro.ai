@@ -130,3 +130,12 @@ describe("buildPayload — image-collage storyboard badges (numbered + labels)",
     expect(result.payload.imageLabels).toBeUndefined()
   })
 })
+
+describe("buildPayload — image-collage badgePosition", () => {
+  it("forwards a known corner and omits anything else (route Zod is bypassed here)", () => {
+    expect(buildPayload(node("c1", { badgePosition: "top-right" }), "job1", { ...WIRE }, "usage1").payload.badgePosition).toBe("top-right")
+    expect(buildPayload(node("c1", { badgePosition: "top-left" }), "job1", { ...WIRE }, "usage1").payload.badgePosition).toBe("top-left")
+    expect(buildPayload(node("c1"), "job1", { ...WIRE }, "usage1").payload.badgePosition).toBeUndefined()
+    expect(buildPayload(node("c1", { badgePosition: "bottom-right" }), "job1", { ...WIRE }, "usage1").payload.badgePosition).toBeUndefined()
+  })
+})

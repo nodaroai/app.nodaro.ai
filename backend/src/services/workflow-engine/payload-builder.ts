@@ -19,6 +19,7 @@ import { isNodeDenied, deniedNodeRejectionMessage, isModelDenied, deniedModelRej
 import { isVoiceGenderAllowed, premadeVoiceGender } from "../../lib/voice-policy.js"
 import { applyPromptPolicies } from "../../lib/prompt-policy.js"
 import { ltxCameraMotionFromUpstream } from "../../lib/ltx-camera-motion.js"
+import { buildSeedanceExtendCreditIdentifier } from "../../lib/seedance-extend-model.js"
 import { extractSavedNodeOutput, extractSourceNodeOutput, getPrimaryOutput } from "./output-extractor.js"
 import { IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES, isSourceNode } from "./execution-graph.js"
 
@@ -3689,13 +3690,13 @@ export function buildPayload(
         return {
           jobName: "extend-video",
           queueName: "video-generation",
-          modelIdentifier: buildVideoCreditModelIdentifier(
-            evProvider,
-            (data.duration as number) ?? 8,
-            undefined,
-            undefined,
-            undefined,
-            (data.resolution as string) ?? "720p",
+          // Priced for the model SEEDANCE_EXTEND_GENERATION_MODEL actually
+          // dispatches on — the orchestrator reserves for real, and
+          // commit_credits only ever refunds a surplus, so a 2.0 reservation
+          // against a 2.5 generation would be a permanent shortfall.
+          modelIdentifier: buildSeedanceExtendCreditIdentifier(
+            data.duration as number | undefined,
+            data.resolution as string | undefined,
           ),
           payload: {
             jobId,
@@ -4571,6 +4572,11 @@ export function buildPayload(
           ...(collageImageSizes ? { imageSizes: collageImageSizes } : {}),
           ...(numbered ? { numbered: true } : {}),
           ...(collageImageLabels ? { imageLabels: collageImageLabels } : {}),
+          // Badge corner: forwarded only when it is a known value (this path
+          // bypasses route Zod); the renderer defaults anything else to top-left.
+          ...(data.badgePosition === "top-left" || data.badgePosition === "top-right"
+            ? { badgePosition: data.badgePosition }
+            : {}),
           layout: (data.layout as string | undefined) ?? "smart",
           resolution,
           aspectRatio: (data.aspectRatio as string | undefined) ?? "1:1",

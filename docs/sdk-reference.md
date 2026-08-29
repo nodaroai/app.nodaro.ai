@@ -3237,6 +3237,7 @@ imageCollage(input: {
   imageSizes?: Array<0 | 1 | 2 | 3>
   numbered?: boolean
   imageLabels?: Array<string | null>
+  badgePosition?: "top-left" | "top-right"
   layout?: "smart" | "grid"
   resolution?: "2K" | "4K"
   aspectRatio?: string
@@ -3252,8 +3253,10 @@ letterboxed cells). `imageSizes` is index-aligned with `imageUrls` and gives
 per-image **relative** size hints for the smart layout: `0` auto ("don't
 care", default), `1` big (~2× linear vs medium), `2` medium, `3` small
 (~½ linear). All-equal hints change nothing; grid ignores them. `numbered`
-stamps a 1-based sequence number at each image's top-right in
-`imageUrls` order — storyboard mode (default off). `imageLabels` is
+stamps a 1-based sequence number at each image's corner in
+`imageUrls` order — storyboard mode (default off). `badgePosition` picks
+that corner for numbers and labels alike: `"top-left"` (default — the
+storyboard convention) or `"top-right"`. `imageLabels` is
 index-aligned with `imageUrls` and shows an optional caption after the
 number as `3 · Close-up` (the label alone when `numbered` is off);
 `null`/`""` = no label for that image, each ≤ 80 chars, and a label too

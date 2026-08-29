@@ -91,6 +91,12 @@ export const VIDEO_ANALYSIS_WINDOW = { LEN: WINDOW_LEN, STRIDE: WINDOW_STRIDE, O
 // fields), so the plugin's system-prompt token pin moved 8_203 → 8_482 and
 // 21 of 28 rows tick up by 1–4 credits (~0.1–0.3%). Output of the plugin's
 // `scripts/gen-va-buckets.mjs` on `feat/va-shot-craft`, pasted verbatim.
+//
+// REGENERATED 2026-08-29 — recast shot-craft Stage 1.3: the analyser's system
+// prompt grew again, moving the plugin's system-prompt token pin 8_482 → 8_706
+// (cloud-plugins 0.209.0). 12 of 20 analysis rows and 6 of 8 audit rows tick up
+// by 1–3 credits (~0.1–0.3%); the legacy `gemini-3-flash` family is unchanged.
+// Output of the plugin's `scripts/gen-va-buckets.mjs`, pasted verbatim.
 export const VIDEO_ANALYSIS_BUCKET_CREDITS: Record<string, number> = {
   // Legacy fast-tier model (pre-2026-07) — kept for stored raw-id configs.
   "video-analysis:gemini-3-flash:60s": 180,
@@ -99,31 +105,31 @@ export const VIDEO_ANALYSIS_BUCKET_CREDITS: Record<string, number> = {
   "video-analysis:gemini-3-flash:600s": 847,
   // Current fast tier — regenerated from the private formula for its backing
   // model; higher than the legacy fast schedule but still ≤ pro per bucket.
-  "video-analysis:gemini-3.6-flash:60s": 203,
+  "video-analysis:gemini-3.6-flash:60s": 204,
   "video-analysis:gemini-3.6-flash:180s": 218,
-  "video-analysis:gemini-3.6-flash:360s": 599,
-  "video-analysis:gemini-3.6-flash:600s": 988,
-  "video-analysis:gemini-3.1-pro:60s": 215,
+  "video-analysis:gemini-3.6-flash:360s": 600,
+  "video-analysis:gemini-3.6-flash:600s": 990,
+  "video-analysis:gemini-3.1-pro:60s": 216,
   "video-analysis:gemini-3.1-pro:180s": 232,
-  "video-analysis:gemini-3.1-pro:360s": 638,
-  "video-analysis:gemini-3.1-pro:600s": 1052,
+  "video-analysis:gemini-3.1-pro:360s": 639,
+  "video-analysis:gemini-3.1-pro:600s": 1053,
   // Mixed tiers (`mixed` + `mixed-fast`) share ONE credit family — they are
   // variants of the same engine plan (plan internals live in the private
   // analysis plugin). Admin-tunable via model_pricing like every other row.
   "video-analysis:mixed:60s": 269,
   "video-analysis:mixed:180s": 290,
-  "video-analysis:mixed:360s": 725,
-  "video-analysis:mixed:600s": 1171,
+  "video-analysis:mixed:360s": 727,
+  "video-analysis:mixed:600s": 1174,
   // SMART — the accuracy tier, and since the 2026-08-03 re-plan a multi-roll
   // plan like the others, always refined (`selectionMode` does not apply
   // here — smart always refines; it never offers a cheaper "choose" path).
   // Priced above the economy tiers because it genuinely costs more to run;
   // the only tier whose accuracy is validated against a hand-counted edit
   // list, re-validated at the current plan before this schedule shipped.
-  "video-analysis:smart:60s": 411,
-  "video-analysis:smart:180s": 501,
-  "video-analysis:smart:360s": 1262,
-  "video-analysis:smart:600s": 2068,
+  "video-analysis:smart:60s": 412,
+  "video-analysis:smart:180s": 502,
+  "video-analysis:smart:360s": 1264,
+  "video-analysis:smart:600s": 2071,
 }
 
 /**
@@ -194,13 +200,13 @@ export function videoAnalysisNumWindows(bucketSec: number): number {
  */
 export const VIDEO_AUDIT_BUCKET_CREDITS: Record<string, number> = {
   "video-audit:60s": 214,
-  "video-audit:180s": 289,
-  "video-audit:360s": 660,
-  "video-audit:600s": 1068,
+  "video-audit:180s": 290,
+  "video-audit:360s": 661,
+  "video-audit:600s": 1070,
   "video-audit:auto:60s": 394,
-  "video-audit:auto:180s": 474,
-  "video-audit:auto:360s": 1175,
-  "video-audit:auto:600s": 1915,
+  "video-audit:auto:180s": 475,
+  "video-audit:auto:360s": 1176,
+  "video-audit:auto:600s": 1917,
 }
 
 /**

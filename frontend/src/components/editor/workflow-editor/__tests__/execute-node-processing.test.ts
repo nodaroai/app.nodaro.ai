@@ -1592,4 +1592,15 @@ describe("image-collage", () => {
     })
     expect(opts.imageLabels).toBeUndefined()
   })
+
+  it("passes badgePosition through only when it is a known corner (the route defaults to top-left)", async () => {
+    const [, right] = await runCollage({ numbered: true, badgePosition: "top-right" })
+    expect(right.badgePosition).toBe("top-right")
+    const [, left] = await runCollage({ numbered: true, badgePosition: "top-left" })
+    expect(left.badgePosition).toBe("top-left")
+    const [, absent] = await runCollage({ numbered: true })
+    expect(absent.badgePosition).toBeUndefined()
+    const [, junk] = await runCollage({ numbered: true, badgePosition: "bottom-left" })
+    expect(junk.badgePosition).toBeUndefined()
+  })
 })

@@ -48,6 +48,26 @@ const combineVideosBody = z.object({
    *  smart-cut FALLBACK values for boundaries without a genuine match. */
   trimStartFrames: z.number().int().min(0).max(120).optional().default(1),
   trimEndFrames: z.number().int().min(0).max(120).optional().default(2),
+  /** PER-BOUNDARY override of `transition`/`transitionDuration`. `index` is
+   *  boundary k — the join between clip k and clip k+1 (a set of N clips has
+   *  N-1 boundaries, 0-based). A boundary with no entry keeps the global
+   *  transition; an entry with `transition: "cut"` (or `duration` 0) is a hard
+   *  cut there. Same catalog as `transition`, so an unknown id is turned away
+   *  here rather than warned about in the worker. Duration is capped at 2s —
+   *  a seam device is a beat, not a scene, and the overlap is taken out of the
+   *  outgoing clip. The provider ignores (with a warning) any index outside
+   *  the real boundary range, which only this route's `videoUrls` fixes. */
+  transitions: z.array(z.object({
+    index: z.number().int().min(0),
+    transition: z.enum(TRANSITION_ID_TUPLE),
+    duration: z.number().min(0).max(2),
+  })).optional(),
+  /** Film-edge fades in seconds: a fade-in over the head of the first clip and
+   *  a fade-out over the tail of the last. Omitted → no fade pass at all. */
+  edgeFades: z.object({
+    in: z.number().min(0).max(3).optional(),
+    out: z.number().min(0).max(3).optional(),
+  }).optional(),
   userId: z.string().uuid().optional(),
   /** Optional upstream durations, one per videoUrls entry (same order).
    *  When length doesn't match videoUrls, ignored (backend falls back to 8s
@@ -82,7 +102,7 @@ export async function combineVideosRoutes(app: FastifyInstance) {
       })
     }
 
-    const { videoUrls, transition, transitionDuration, audioMode, audioCrossfadeCurve, audioCrossfadeDuration, smartCutEnabled, smartCutMode, smartCutFramesPrev, smartCutFramesNext, trimStartFrames, trimEndFrames } = parsed.data
+    const { videoUrls, transition, transitionDuration, audioMode, audioCrossfadeCurve, audioCrossfadeDuration, smartCutEnabled, smartCutMode, smartCutFramesPrev, smartCutFramesNext, trimStartFrames, trimEndFrames, transitions, edgeFades } = parsed.data
     const userId = req.userId
 
     // Smart cut is a Nodaro Cloud feature — its cut-point algorithms live in
@@ -137,6 +157,8 @@ export async function combineVideosRoutes(app: FastifyInstance) {
       smartCutFramesNext,
       trimStartFrames,
       trimEndFrames,
+      transitions,
+      edgeFades,
       usageLogId,
     })
 

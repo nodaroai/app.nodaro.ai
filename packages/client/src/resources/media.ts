@@ -112,7 +112,8 @@ export class MediaResource {
    * ("don't care", default), `1` big (~2× linear vs medium), `2` medium,
    * `3` small (~½ linear). All-equal hints change nothing; grid ignores them.
    * For storyboards, set `numbered` to stamp a 1-based sequence badge at each
-   * image's top-right (in `imageUrls` order) and pass `imageLabels`
+   * image's corner (top-left by default; `badgePosition: "top-right"` moves it;
+   * in `imageUrls` order) and pass `imageLabels`
    * (index-aligned with `imageUrls`; `null`/`""`/omitted = no caption for that
    * image) to caption images after the number, e.g. `3 · Close-up`. Badges are
    * an overlay only — they never change the layout, the output size or the
@@ -123,6 +124,8 @@ export class MediaResource {
     imageSizes?: Array<0 | 1 | 2 | 3>
     numbered?: boolean
     imageLabels?: Array<string | null>
+    /** Corner the badges sit in — `"top-left"` (default, storyboard convention) or `"top-right"`. */
+    badgePosition?: "top-left" | "top-right"
     layout?: "smart" | "grid"
     resolution?: "2K" | "4K"
     aspectRatio?: string

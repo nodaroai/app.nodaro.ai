@@ -1520,7 +1520,25 @@ export function ImageCollageConfig({ data, onUpdate, sources }: ConfigProps<Imag
           />
         </div>
         <p className="text-[10px] text-muted-foreground">
-          1, 2, 3… at each image's top-right, in the order below.
+          1, 2, 3… at each image's corner, in the order below.
+        </p>
+      </div>
+      <div>
+        <Label>Badge corner</Label>
+        <Select
+          value={data.badgePosition === "top-right" ? "top-right" : "top-left"}
+          // Top-left is the default: store `undefined` for it so a node that never
+          // touched this stays byte-identical to a pre-feature workflow.
+          onValueChange={(v) => onUpdate({ badgePosition: v === "top-right" ? "top-right" : undefined })}
+        >
+          <SelectTrigger aria-label="Badge corner"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="top-left">Top-left (storyboard convention)</SelectItem>
+            <SelectItem value="top-right">Top-right</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Where the number and label sit on each image.
         </p>
       </div>
       {sources.length > 0 && (
