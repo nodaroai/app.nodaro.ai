@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest"
 
 import { characterMentionSlug } from "../character-mention-slug.js"
 import { locationMentionSlug } from "../location-mention-slug.js"
+import { imageMentionSlug, knownImageSlugsFromRefs } from "../image-mention-slug.js"
 import {
   toConnectedReference,
   toConnectedReferences,
@@ -106,6 +107,50 @@ describe("toConnectedReference", () => {
     // Empty/missing description must NOT add the key (exact wire-shape pin).
     expect(
       "description" in toConnectedReference({ id: "cre-2", kind: "creature", name: "Rex" }),
+    ).toBe(false)
+  })
+
+  it("maps an image binding to a wired-image reference (no slug field — derived at prompt time)", () => {
+    expect(
+      toConnectedReference({
+        id: "img-1",
+        kind: "image",
+        name: "Town",
+        url: "https://r2.example/town.png",
+      }),
+    ).toEqual({
+      id: "img-1",
+      defaultName: "Town",
+      source: "wired-image",
+      url: "https://r2.example/town.png",
+    })
+  })
+
+  it("keeps the image name addressable by the derived mention slug", () => {
+    const ref = toConnectedReference({
+      id: "img-1",
+      kind: "image",
+      name: "Old Town Square",
+      url: "https://r2.example/town.png",
+    })
+    // There is no `imageSlug` on the wire — `knownImageSlugsFromRefs` derives it
+    // from `defaultName`, so this ref answers to `@old-town-square:N`.
+    expect(knownImageSlugsFromRefs([ref])).toEqual([imageMentionSlug("Old Town Square")])
+    expect(knownImageSlugsFromRefs([ref])).toEqual(["old-town-square"])
+  })
+
+  it("folds an image description into the reference; absent adds no key", () => {
+    expect(
+      toConnectedReference({
+        id: "img-1",
+        kind: "image",
+        name: "Town",
+        url: "https://r2.example/town.png",
+        description: "a quiet town square at dusk",
+      }).description,
+    ).toBe("a quiet town square at dusk")
+    expect(
+      "description" in toConnectedReference({ id: "img-2", kind: "image", name: "Barn" }),
     ).toBe(false)
   })
 
