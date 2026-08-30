@@ -944,6 +944,45 @@ page for the token syntax and worked examples.
 > optional `referenceOrder` (parity with video) to reorder its assembled
 > reference list and renumber the `@image_N` bindings.
 
+### Naming an image reference in the prompt (`@<name-slug>:<index>[:<role>]`)
+
+On `POST /v1/generate-image` a **media** reference (`source: "wired-image"` or
+`"manual"`) can be addressed inline by the slug of its name, the same way
+characters and locations already are — so you can say *where in the sentence*
+the picture belongs instead of relying on the trailing auto-attach block.
+
+- **The slug is derived from the entry's `defaultName`**, lower-cased with every
+  run of non-alphanumerics collapsed to a single `-` (`"Old Town"` →
+  `old-town`). There is no separate slug field to set, and nothing changes on
+  the wire: give the reference a name and it becomes mentionable.
+- **Grammar:** `@<name-slug>:<index>` renders that reference's binding at the
+  position you typed it (`reference image C`); `@<name-slug>:<index>:<role>`
+  renders the role phrase (`the background from reference image C`). The
+  `<index>` is a **correlation number only** — it is never echoed into the
+  prompt, and the platform binds by its own numbering walk, so you never
+  compute a seat.
+- **Roles** are the curated media set — `object`, `person`, `face`, `clothes`,
+  `background`, `style`, `pose`, `texture` — or any custom single-word role,
+  which passes through verbatim. Omit the role and the entry's own
+  `defaultRole` applies; with neither, you get the bare binding.
+- **`~lock` / `~nolock`** work here exactly as on character and location
+  mentions (`@town:1:background~lock`): a trailing sentinel forces that
+  reference's identity lock on or off for that mention.
+- **Precedence is character → location → image.** A name shared by a character
+  and an image resolves as the character. Duplicate image names bind
+  first-wins.
+- **A name that can't be a slug is never mentionable** — `"3D Render"` slugs to
+  `3d-render`, which starts with a digit and is outside the grammar, so no
+  token can bind it. Rename the reference to mention it.
+- Honored when the route assembles in the hybrid reference format. Under the
+  legacy format the token stays literal text and the reference auto-attaches
+  exactly as before. A token whose reference was capped out by the provider's
+  image-reference limit likewise stays literal.
+
+Mentioning a reference **re-seats** it: its URL moves from the trailing
+auto-attach block into the mention block, which re-letters the references after
+it. That is the point of the feature — the letters follow the sentence.
+
 ### Cinematic direction (`direction`) on generate-image
 
 `POST /v1/generate-image` accepts an optional `direction` object: a flat map of
