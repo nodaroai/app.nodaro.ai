@@ -251,6 +251,19 @@ describe("renderDirectionHints — multiplicity", () => {
       buildAtmosphereHints("clear", "full"),
     )
   })
+
+  it("stops scanning a key once maxPicks unique ids are in hand", () => {
+    // The dedupe is an `includes` scan, so scanning past `maxPicks` is
+    // quadratic in an array length no caller bounds for us — and one caller
+    // (`readDirectionFields`) reads untrusted persisted JSONB. Bailing is
+    // semantics-preserving: the result must equal the one from the
+    // already-sufficient prefix. No timing assertion — the default vitest
+    // timeout is the guard.
+    const flood = ["happy", "joyful", ...Array.from({ length: 200_000 }, (_, i) => `id-${i}`)]
+    expect(renderDirectionHints({ mood: flood }, IMAGE)).toEqual(
+      buildMoodHints({ mood: ["happy", "joyful"] }, "full"),
+    )
+  })
 })
 
 // ── THE DEDUPE INVARIANT ───────────────────────────────────────────────────

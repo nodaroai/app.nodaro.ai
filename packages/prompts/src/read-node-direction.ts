@@ -18,27 +18,52 @@
  * blob must not fail a canvas run, and an unknown catalog ID already degrades
  * to `""` inside each `get*PromptHint`, so this validates SHAPE only.
  *
- * DELIBERATELY STRICTER THAN THE WIRE SCHEMA on value length: the
- * `generate-image` route's `directionSchema` validates a request body that
- * already passed Fastify's limits; this reads persisted JSONB. Do not "fix" the
- * asymmetry.
+ * BOUNDS MATCH THE WIRE SCHEMA where both exist, by SHARED CONSTANT:
+ * `DIRECTION_ID_MAX_CHARS` and `DIRECTION_ARRAY_CEILING` are the same two
+ * literals the `generate-image` route's `directionSchema` enforces, imported
+ * from the registry rather than re-typed here — a body the route accepts and a
+ * node the canvas re-runs must not disagree about which strings are ids.
+ *
+ * DELIBERATELY STRICTER THAN THE WIRE SCHEMA on `structured` values: the
+ * route's `structuredPromptFieldsSchema` declares every field as a bare
+ * `z.string().optional()` (unbounded), while `MAX_STRUCTURED_VALUE_CHARS` below
+ * bounds them at 200. Do not "fix" that asymmetry by loosening HERE — this
+ * reads a blob any client may have written years ago, and the values land
+ * verbatim in `jobs.input_data.prompt`. Tightening the ROUTE instead would be a
+ * new 400 on currently-accepted input, so a >200-char structured value stored
+ * on a node is dropped on a canvas run while `POST /v1/generate-image` still
+ * renders it. That is the one known divergence; it is bounded to a field the
+ * canvas UI never writes that long.
  *
  * RETURNS `undefined`, NEVER `{}`: an empty object would still be a *defined*
  * `direction`, and the call sites' `...(x !== undefined ? { x } : {})` spread
  * would then hand `assembleImageInput` a defined-but-empty lever. Returning
  * `undefined` keeps that spread honest and the exact no-op branch taken.
  */
-import { DIRECTION_FIELDS, type DirectionFields } from "./direction-registry.js"
+import {
+  DIRECTION_ARRAY_CEILING,
+  DIRECTION_FIELDS,
+  DIRECTION_ID_MAX_CHARS,
+  type DirectionFields,
+} from "./direction-registry.js"
 import type { StructuredPromptFields } from "./prompt-builder-structured-fields.js"
-
-/** Catalog ids are short slugs (<= ~40 chars); 100 bounds the channel generously. */
-const MAX_DIRECTION_ID_CHARS = 100
 
 /**
  * Read a node's stored cinematic-direction ids. Accepts a single id OR an array
  * on every key (multi-pick dimensions carry arrays; a single-pick key may
- * legitimately carry one) — the per-dimension cap is the renderer's slice, not
- * this reader's job.
+ * legitimately carry one).
+ *
+ * The SEMANTIC per-dimension cap stays the renderer's slice (`maxPicks`) — this
+ * reader does not know a row's pick budget and must not guess it. But it DOES
+ * bound cardinality at `DIRECTION_ARRAY_CEILING`, the same ceiling the wire
+ * schema enforces: the value is untrusted persisted JSONB (a node blob is
+ * validated only as `z.record(z.string(), z.unknown())` on write), and handing
+ * an unbounded array to `renderDirectionHints` would put an `includes`-dedupe
+ * scan in front of that slice. Keeping the FIRST `DIRECTION_ARRAY_CEILING`
+ * survivors is what the wire door already does to the same input.
+ *
+ * Junk is filtered BEFORE the cap, so valid ids sitting behind malformed
+ * entries survive rather than being crowded out by them.
  */
 export function readDirectionFields(value: unknown): DirectionFields | undefined {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined
@@ -47,12 +72,15 @@ export function readDirectionFields(value: unknown): DirectionFields | undefined
   for (const spec of DIRECTION_FIELDS) {
     const v = src[spec.key]
     if (typeof v === "string") {
-      if (v.length > 0 && v.length <= MAX_DIRECTION_ID_CHARS) out[spec.key] = v
+      if (v.length > 0 && v.length <= DIRECTION_ID_MAX_CHARS) out[spec.key] = v
     } else if (Array.isArray(v)) {
-      const kept = v.filter(
-        (x): x is string =>
-          typeof x === "string" && x.length > 0 && x.length <= MAX_DIRECTION_ID_CHARS,
-      )
+      const kept: string[] = []
+      for (const x of v) {
+        if (kept.length >= DIRECTION_ARRAY_CEILING) break
+        if (typeof x === "string" && x.length > 0 && x.length <= DIRECTION_ID_MAX_CHARS) {
+          kept.push(x)
+        }
+      }
       if (kept.length > 0) out[spec.key] = kept
     }
   }

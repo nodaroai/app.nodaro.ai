@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest"
 import { readDirectionFields, readStructuredFields } from "../read-node-direction.js"
-import { DIRECTION_KEYS } from "../direction-registry.js"
+import {
+  DIRECTION_ARRAY_CEILING,
+  DIRECTION_KEYS,
+  renderDirectionHints,
+} from "../direction-registry.js"
 
 /**
  * The narrow readers are the ONLY thing standing between untrusted persisted
@@ -58,6 +62,34 @@ describe("readDirectionFields", () => {
       shotSize: "x".repeat(100),
     })
     expect(readDirectionFields({ mood: [overLong, "serene"] })).toEqual({ mood: ["serene"] })
+  })
+
+  it("caps an array at the wire ceiling, filtering junk BEFORE the cap", () => {
+    // Cardinality is bounded, not just per-id length: node data is validated
+    // only as `z.record(z.string(), z.unknown())` on write, so an unbounded
+    // array would otherwise reach `renderDirectionHints`' includes-dedupe.
+    const many = Array.from({ length: DIRECTION_ARRAY_CEILING + 20 }, (_, i) => `id-${i}`)
+    expect(readDirectionFields({ mood: many })).toEqual({
+      mood: many.slice(0, DIRECTION_ARRAY_CEILING),
+    })
+    // Junk entries must not consume the budget: 8 unusable entries in front of
+    // the real ids still leaves a full ceiling of real ids.
+    const junk = [...Array.from({ length: DIRECTION_ARRAY_CEILING }, () => ""), ...many]
+    expect(readDirectionFields({ mood: junk })).toEqual({
+      mood: many.slice(0, DIRECTION_ARRAY_CEILING),
+    })
+  })
+
+  it("bounds the work a stored blob can force on the renderer", () => {
+    // Pre-fix this pair was quadratic in the stored array's length (the dedupe
+    // scan ran over the FULL array before the per-row slice), so a node any
+    // authenticated user can persist blocked the event loop for seconds in the
+    // orchestrator and in the user's tab. No timing assertion — the default
+    // vitest timeout is the guard.
+    const huge = Array.from({ length: 200_000 }, (_, i) => `id-${i}`)
+    const direction = readDirectionFields({ mood: huge, lightingStyle: huge })
+    expect(direction?.mood).toHaveLength(DIRECTION_ARRAY_CEILING)
+    expect(() => renderDirectionHints(direction, { surface: "image" })).not.toThrow()
   })
 
   it("honors every registry key by construction (a new dimension needs no edit here)", () => {
