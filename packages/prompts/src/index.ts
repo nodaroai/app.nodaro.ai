@@ -2,8 +2,9 @@
  * @nodaro/prompts — creative/prompt IP shared across backend and
  * frontend but deliberately EXCLUDED from the published Apache packages.
  * Published to npm (`publishConfig.access: public`) so first-party clients
- * such as Studio can fold identically; licensed with the repository core under
- * the root Nodaro Sustainable Use License, NOT under Apache.
+ * such as Studio can fold identically, under FSL-1.1-Apache-2.0 (free
+ * non-competing use) — see `packages/prompts/LICENSE`. NOT Apache-2.0 like
+ * `packages/{shared,client,cli}`; never merge prompt content back into those.
  *
  * Placement rule (root CLAUDE.md): new prompt engineering, catalogs,
  * doctrine, and presets default to backend/ or here — packages/shared gets
