@@ -1051,7 +1051,7 @@ times an invalid answer is fed back to the model together with its validation
 error before the call gives up; `maxTokens` must not exceed the chosen model's
 own output limit (400 otherwise). The two sampling levers are **not
 symmetric**: `maxTokens` applies on every call — a deliberate departure from
-the other LLM endpoints, which take a caller's value only in Advanced mode —
+the LLM routes that put both levers behind the Advanced-mode gate —
 while `temperature` is **silently ignored** unless you also send
 `advancedMode: true`. Advanced mode pins the call to the vendor's own API,
 where those levers take effect, and therefore bills **one credit tier up**;
