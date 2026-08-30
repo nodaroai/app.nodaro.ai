@@ -1030,9 +1030,12 @@ clients — Nodaro Studio composes a whole production plan with it.
 
 Body: `{ system, input, jsonSchema, schemaName?, llmModel?, reasoningEffort?,
 maxRetries?, origin?, advancedMode?, temperature?, maxTokens? }`. `system` and
-`input` are plain text (each at most 100,000 characters). `jsonSchema` is a
-JSON Schema **object** (`type: "object"`, at most 64 KB serialized and 20
-levels of nesting) written in the keyword subset the server can convert:
+`input` are plain text (each at most 100,000 characters; `input` must be at
+least 1 character). `schemaName` names the forced-output tool the provider
+sees and caps at 64 characters. Omit `llmModel` and the call runs on
+`gemini-3.6-flash`, the generic `llm-chat` default. `jsonSchema` is a JSON
+Schema **object** (`type: "object"`, at most 64 KB serialized and 20 levels of
+nesting) written in the keyword subset the server can convert:
 `properties` / `required` / `additionalProperties` (including the record
 form), `items`, `string` / `number` / `integer` / `boolean`, `enum`, `const`,
 `anyOf` of concrete types, `minimum` / `maximum` / `minItems` / `maxItems` /
@@ -1046,10 +1049,18 @@ Returns `{ jobId, output, usage: { inputTokens, outputTokens } }`, where
 `output` has your schema's shape. `maxRetries` (0–3, default 2) is how many
 times an invalid answer is fed back to the model together with its validation
 error before the call gives up; `maxTokens` must not exceed the chosen model's
-own output limit (400 otherwise). The call is **synchronous and a single call
-may run several minutes** — each attempt is allowed up to 240 seconds — so give
-your HTTP client a matching timeout. Errors: 400 `validation_error`, 401,
-402 (credits), 502 `llm_error` once the retries are spent, 503
+own output limit (400 otherwise). The two sampling levers are **not
+symmetric**: `maxTokens` applies on every call — a deliberate departure from
+the other LLM endpoints, which take a caller's value only in Advanced mode —
+while `temperature` is **silently ignored** unless you also send
+`advancedMode: true`. Advanced mode pins the call to the vendor's own API,
+where those levers take effect, and therefore bills **one credit tier up**;
+asking for it on a model with no direct lane is a 400
+`advanced_mode_unsupported`. The call is
+**synchronous and a single call may run several minutes** — each attempt is
+allowed up to 240 seconds — so give your HTTP client a matching timeout.
+Errors: 400 `validation_error`, 401, 402 (credits), 500 `internal_error` (the
+job row could not be created), 502 `llm_error` once the retries are spent, 503
 `provider_unavailable`. No typed SDK resource yet — call it with
 `client.request("POST", "/v1/llm/structured", { body })`.
 
