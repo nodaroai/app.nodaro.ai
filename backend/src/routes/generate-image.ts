@@ -15,6 +15,8 @@ import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { IMAGE_GEN_PROVIDERS, T2I_TO_I2I_VARIANT, FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING, resolveImageGenCreditIdentifier } from "@nodaro/shared"
 import { assembleImageInput, type AssembleImageInput, type BuildImagePromptResult } from "@nodaro/prompts"
 import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
+import { directionSchema } from "../lib/direction-schema.js"
+import { backendHybridRoles } from "../lib/reference-format.js"
 import { formatZodError } from "../lib/zod-error.js"
 
 // Re-exported for the key-set drift guard in `__tests__/generate-image.test.ts`.
@@ -48,18 +50,13 @@ function resolveEffectiveProvider(
 // mirror. The key-set drift guard in `__tests__/generate-image.test.ts` still
 // pins its fields to the shared `ConnectedReference` type.
 
-/**
- * The 5 optional cinematic-direction id strings the Studio framing UI (and the
- * MCP route) expose. Mirrors `@nodaro/shared` `DirectionFields` — folded into
- * the prompt as hints by `assembleImageInput`.
- */
-const directionSchema = z.object({
-  framingId: z.string().optional(),
-  framingAngleId: z.string().optional(),
-  lightingId: z.string().optional(),
-  lensId: z.string().optional(),
-  cameraFormatId: z.string().optional(),
-})
+// The optional cinematic-direction id channel (`@nodaro/prompts`
+// `DirectionFields`) that the Studio framing UI, the MCP route and canvas node
+// data all speak now lives in `lib/direction-schema.ts` (imported above). Its
+// key set is DERIVED from the `DIRECTION_FIELDS` registry table
+// rather than hand-listed, and the same schema serves `generate-video`, so the
+// two routes cannot drift. `assembleImageInput` folds the ids into the prompt
+// as hints, in the registry's canonical order.
 
 /**
  * Mirror of `@nodaro/shared` `StructuredPromptFields` (Path-1 structured
@@ -244,12 +241,12 @@ function buildAssembleInput(
     // per-provider reference gate inside `buildImagePrompt` resolves the same
     // way regardless of which call site invokes assembly.
     provider: body.provider ?? "nano-banana",
-    // HYBRID IS THE DEFAULT everywhere (dev AND production). Test runs must
-    // resolve to legacy (route tests assert the legacy assembly) — so the test
-    // check comes FIRST. Set IMAGE_REFERENCE_FORMAT=legacy to revert to legacy.
-    ...(process.env.NODE_ENV === "test" || process.env.IMAGE_REFERENCE_FORMAT === "legacy"
-      ? {}
-      : { referenceFormat: "hybrid" as const }),
+    // HYBRID IS THE DEFAULT everywhere (dev AND production). Test runs resolve
+    // to legacy (route tests assert the legacy assembly), as does an explicit
+    // IMAGE_REFERENCE_FORMAT=legacy. `backendHybridRoles()` IS that
+    // determination — the video resolvers already gate on it, and it was
+    // written to mirror this site, so calling it removes a two-site drift.
+    ...(backendHybridRoles() ? { referenceFormat: "hybrid" as const } : {}),
     ...(body.connectedReferences !== undefined ? { connectedReferences: body.connectedReferences } : {}),
     ...(body.referenceOrder !== undefined ? { referenceOrder: body.referenceOrder } : {}),
     ...(body.direction !== undefined ? { direction: body.direction } : {}),

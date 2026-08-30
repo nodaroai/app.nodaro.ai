@@ -74,8 +74,8 @@ import {
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
-import { FLUX_LORA_CHARACTER_MODEL_ID, PROMPT_HARD_CEILING, type ConnectedReference } from "@nodaro/shared"
-import { assembleImageInput } from "@nodaro/prompts"
+import { FLUX_LORA_CHARACTER_MODEL_ID, PROMPT_HARD_CEILING, getMaxImagePromptChars, type ConnectedReference } from "@nodaro/shared"
+import { assembleImageInput, buildMoodHints, getFramingPromptHint, getStylePromptHint } from "@nodaro/prompts"
 import { registerPromptPolicy, clearPromptPolicies } from "../../lib/prompt-policy.js"
 
 // ---------------------------------------------------------------------------
@@ -845,6 +845,144 @@ describe("POST /v1/generate-image", () => {
       expect(queued.referenceImageUrls).toEqual(expected.referenceImageUrls)
       // The direction hints must have actually changed the prompt vs. the raw input.
       expect(queued.prompt).not.toBe("a hero shot")
+    })
+
+    // ── The full direction registry rides the wire ───────────────────────────
+    // The assertion above uses `assembleImageInput` as its own oracle, so it
+    // cannot catch a registry regression. These pin the QUEUED PROMPT against
+    // the catalog getters directly.
+    it("folds a registry key beyond the five legacy ones (non-vacuous: the clause is IN the queued prompt)", async () => {
+      setupSupabaseMock({})
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "a hero shot",
+          userId: VALID_UUID,
+          provider: "nano-banana",
+          direction: { style: "anime" },
+        },
+      })
+      expect(res.statusCode).toBe(200)
+      const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>
+      expect(getStylePromptHint("anime").length).toBeGreaterThan(0)
+      expect(queued.prompt).toContain(getStylePromptHint("anime"))
+    })
+
+    it("accepts an ARRAY on a multi-pick dimension and folds ONE blended clause", async () => {
+      setupSupabaseMock({})
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "a hero shot",
+          userId: VALID_UUID,
+          provider: "nano-banana",
+          direction: { mood: ["happy", "joyful"] },
+        },
+      })
+      expect(res.statusCode).toBe(200)
+      const blended = buildMoodHints({ mood: ["happy", "joyful"] }, "full")
+      expect(blended).toHaveLength(1)
+      const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>
+      expect(queued.prompt).toContain(blended[0])
+    })
+
+    it("DEGRADES on an over-sent array — 200 with only the dimension's cap rendered, never a 400", async () => {
+      setupSupabaseMock({})
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "a hero shot",
+          userId: VALID_UUID,
+          provider: "nano-banana",
+          direction: { mood: ["happy", "joyful", "relieved", "tense"] },
+        },
+      })
+      expect(res.statusCode).toBe(200)
+      const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>
+      // The top 2 win — the renderer's slice, not a wire rejection.
+      expect(queued.prompt).toContain(buildMoodHints({ mood: ["happy", "joyful"] }, "full")[0])
+    })
+
+    it("STRIPS an unknown direction key — 200, hints simply missing (documents the non-strict rollout behavior)", async () => {
+      setupSupabaseMock({})
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "a hero shot",
+          userId: VALID_UUID,
+          provider: "nano-banana",
+          direction: { notAKey: "whatever" },
+        },
+      })
+      expect(res.statusCode).toBe(200)
+    })
+
+    it("keeps the reference channel intact under a MAXIMAL direction on a low-cap provider (and documents truncation)", async () => {
+      setupSupabaseMock({})
+      // seedream's verified prompt cap (3000) is the tightest in the catalog and
+      // a maximal image-surface direction is ~31 full clauses (~3.3k chars), so
+      // the assembled prompt IS truncated at the cap. That is PRE-EXISTING
+      // behavior, not a registry regression: a client baking the same clauses
+      // into `prompt` client-side hits the identical cap — the fold just moved.
+      // What must hold either way: the reference CHANNEL is unaffected (refs
+      // ride `referenceImageUrls`, not the prompt) and the route still 200s.
+      const connectedReferences = mkManualRefs(2)
+      const direction = {
+        shotSize: "wide-shot",
+        angle: "low-angle",
+        coverage: "two-shot",
+        composition: "rule-of-thirds",
+        vantage: "profile-left",
+        pose: "confident-stance",
+        compositionEffect: "bursting-through-frame",
+        cameraFormat: "16mm-film",
+        lens: "wide-24mm",
+        aperture: "aperture-f1-4",
+        shutterSpeed: "shutter-1-60",
+        isoValue: "iso-400",
+        timeOfDay: "dawn",
+        lightingStyle: "rembrandt",
+        lightingDirection: "side",
+        lightingRatio: "ratio-1-2",
+        colorTemperature: "temp-3200k",
+        colorLook: "teal-orange",
+        atmosphere: ["clear", "cloudy"],
+        postProcess: ["vignette-soft", "dodge-and-burn"],
+        style: "anime",
+        mood: ["happy", "joyful"],
+        aesthetic: ["y2k", "cottagecore"],
+        photoGenre: "fashion-editorial",
+        photographer: ["tim-walker", "paolo-roversi"],
+        renderQuality: "octane-render",
+        setting: "coffee-shop",
+        era: "1920s-flapper",
+        backdrop: "white-seamless",
+      }
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "a hero shot",
+          userId: VALID_UUID,
+          provider: "seedream",
+          connectedReferences,
+          direction,
+        },
+      })
+      expect(res.statusCode).toBe(200)
+      const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>
+      // The refs survive the assembly untouched.
+      expect(queued.referenceImageUrls).toHaveLength(2)
+      // The fold ran (leading clauses present) and stops at the provider cap.
+      expect(queued.prompt).toContain(getFramingPromptHint("wide-shot"))
+      expect(String(queued.prompt).length).toBeLessThanOrEqual(
+        getMaxImagePromptChars("seedream"),
+      )
     })
 
     it("honors `referenceOrder` — reorders the assembled referenceImageUrls (parity with generate-video)", async () => {
