@@ -75,6 +75,7 @@ import { textToVideoRoutes } from "../text-to-video.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { registerPromptPolicy, clearPromptPolicies } from "../../lib/prompt-policy.js"
+import { getStylePromptHint } from "@nodaro/prompts"
 
 // ---------------------------------------------------------------------------
 // Test app setup
@@ -320,5 +321,46 @@ describe("POST /v1/text-to-video", () => {
         prompt: "a sunset timelapse",
       })
     )
+  })
+})
+
+/**
+ * The cinematic `direction` channel, at parity with /v1/generate-video (same
+ * shared schema, same composer, same fold site — before reference assembly).
+ * The composer's semantics are pinned in `@nodaro/prompts`; the two cases that
+ * matter for THIS route are that the fold lands and that its absence changes
+ * nothing.
+ */
+describe("POST /v1/text-to-video — the direction channel", () => {
+  const USER = "00000000-0000-4000-8000-000000000001"
+  const STYLE = "cinematic"
+
+  it("folds the direction ids into the queued prompt, recording the source in userPrompt", async () => {
+    const { mockInsert } = mockJobInsert({ data: { id: "job-dir" }, error: null })
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/text-to-video",
+      payload: { prompt: "a sunset timelapse", userId: USER, direction: { style: STYLE } },
+    })
+    expect(res.statusCode).toBe(200)
+    const folded = `a sunset timelapse. ${getStylePromptHint(STYLE)}`
+    expect(vi.mocked(videoQueue.add).mock.calls.at(-1)![1].prompt).toBe(folded)
+    expect(mockInsert.mock.calls.at(-1)![0].input_data).toEqual(
+      expect.objectContaining({
+        prompt: folded,
+        userPrompt: "a sunset timelapse",
+        direction: { style: STYLE },
+      }),
+    )
+  })
+
+  it("is byte-identical when `direction` is absent", async () => {
+    mockJobInsert({ data: { id: "job-nodir" }, error: null })
+    await app.inject({
+      method: "POST",
+      url: "/v1/text-to-video",
+      payload: { prompt: "a sunset timelapse", userId: USER },
+    })
+    expect(vi.mocked(videoQueue.add).mock.calls.at(-1)![1].prompt).toBe("a sunset timelapse")
   })
 })
