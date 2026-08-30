@@ -11,8 +11,8 @@ import {
  * `composeVideoPromptText` folds catalog text into the prompt BODY *before*
  * `resolveVideoReferenceCore` runs (the look/motion description has to be
  * inside the body the resolver frames, not appended after the identity
- * directives). The consequence is that catalog `promptHint` / `term` text is
- * then scanned by three passes that treat certain substrings as GRAMMAR:
+ * directives). The consequence is that catalog text is then scanned by three
+ * passes that treat certain substrings as INPUT GRAMMAR:
  *
  *  - the `{image:N}` / `{video:N}` / `{audio:N}` reference-slot expander,
  *  - the `{ref:<id>}` id-addressed reference-token pass,
@@ -22,28 +22,51 @@ import {
  * rewritten by a pass that was never meant to see it — and, worse, could change
  * the ASSEMBLED REFERENCE COUNT, which is exactly the quantity MiniMax-H3
  * credit prediction reserves against. That is the one theoretical coupling
- * between this text-only fold and pricing, and this test is what closes it.
+ * between this text-only fold and pricing, and those three patterns are what
+ * close it.
+ *
+ * A fourth pattern is scanned for HYGIENE, not pricing: the resolver's OUTPUT
+ * binding form `@image_N` / `@video_N` / `@audio_N`. Nothing re-parses that
+ * shape, so it cannot move the assembled reference count — but a catalog
+ * emitting one would ship a binding directive to the model that binds to
+ * nothing.
  *
  * Scope is deliberately TOTAL rather than "the direction dimensions": it runs
  * over every registered picker catalog (pack-composed, so a deployment's own
- * pack is covered too) and over both the full hint and the resolved compact
- * term, because a dimension can be promoted onto the direction channel at any
- * time and the guard must already hold when it is.
+ * pack is covered too) and over EVERY string a fold can inject — the full
+ * hint, the resolved compact term, AND the label. Labels are not decoration
+ * here: the multi-pick blend renderers weave them straight into the clause
+ * (`buildMoodHint`'s "with a {label} and {label} expression", `buildAestheticHints`'
+ * "{label} + {label} aesthetic blend", `buildPhotographerHints`' "blended visual
+ * language of {label} and {label}"), and mood + aesthetic are both
+ * `surface: "both"` with `maxPicks: 2`. Totality also has to survive promotion:
+ * a dimension can join the direction channel at any time, and the guard must
+ * already hold when it does.
  *
  * A failure here is a CATALOG fix (reword the entry), never a fold-site change.
  */
 
-/** The reference-slot grammar (`video-reference-resolver.ts`'s token regex). */
-const SLOT_TOKEN = /\{(?:image|video|audio):\d+/
-/** The id-addressed reference token (`ref-id-tokens.ts`). */
-const REF_ID_TOKEN = /\{ref:/
-/** A character / named-image mention (`@kira:1`), boundary-guarded like the pass. */
-const MENTION = /(?:^|[^A-Za-z0-9])@[a-z][a-z0-9-]*:\d+/
+/** The reference-slot grammar (`video-reference-resolver.ts`'s `REFERENCE_TOKEN_RE`, `i`-flagged there). */
+const SLOT_TOKEN = /\{(?:image|video|audio):\d+/i
+/** The id-addressed reference token (`ref-id-tokens.ts`'s `HAS_REF_ID_TOKEN_RE`, `i`-flagged there). */
+const REF_ID_TOKEN = /\{ref:/i
+/**
+ * A character / named-image mention (`@kira:1`), boundary-guarded like the pass.
+ *
+ * `i`-flagged even though `findCharacterMentionTokens` is NOT: `buildMoodHint`
+ * folds `label.toLowerCase()`, so an upper-case mention-shaped label reaches the
+ * prompt lower-cased — i.e. as live grammar. Scanning case-insensitively is
+ * strictly the safe side; do not "correct" this to match the pass.
+ */
+const MENTION = /(?:^|[^A-Za-z0-9])@[a-z][a-z0-9-]*:\d+/i
+/** The resolver's OUTPUT binding form (`video-reference-resolver.ts` emits `@${kind}_${n}`). */
+const BINDING_FORM = /@(?:image|video|audio)_\d+/i
 
 const FORBIDDEN: ReadonlyArray<{ name: string; re: RegExp }> = [
   { name: "reference slot token ({image:N} / {video:N} / {audio:N})", re: SLOT_TOKEN },
   { name: "id-addressed reference token ({ref:…})", re: REF_ID_TOKEN },
   { name: "character/named-image mention (@slug:N)", re: MENTION },
+  { name: "reference binding form (@image_N / @video_N / @audio_N)", re: BINDING_FORM },
 ]
 
 /** Every option of a catalog, single-dim and multi-dim alike. */
@@ -62,15 +85,19 @@ describe("direction hint token safety", () => {
     expect(catalogs.reduce((n, c) => n + allOptions(c).length, 0)).toBeGreaterThan(1000)
   })
 
-  it("emits no reference-grammar token from any catalog hint or term", () => {
+  it("emits no reference-grammar token from any catalog hint, term or label", () => {
     const offenders: string[] = []
     for (const catalog of catalogs) {
       for (const option of allOptions(catalog)) {
         // `term` is already RESOLVED by the projection (`resolveTerm`), so this
-        // checks exactly the string a compact-mode fold would inject.
+        // checks exactly the string a compact-mode fold would inject. `label`
+        // is injected verbatim by the multi-pick blend renderers (see the
+        // header). `description` is deliberately NOT scanned — no render path
+        // folds it into the prompt.
         for (const [field, text] of [
           ["promptHint", option.promptHint],
           ["term", option.term],
+          ["label", option.label],
         ] as const) {
           if (!text) continue
           for (const { name, re } of FORBIDDEN) {
