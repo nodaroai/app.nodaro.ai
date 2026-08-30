@@ -14,16 +14,19 @@ client puts on the reference — the same way characters and locations already a
 lettered bindings on the image path.
 
 - `@nodaro/shared` gains `imageMentionSlug`, `parseImageMentionToken`,
-  `findImageMentionTokens`, `knownImageSlugsFromRefs` and the
-  `ImageMentionTokenInfo` type. This is a DELIBERATE give-away to the public
+  `findImageMentionTokens`, `knownImageSlugsFromRefs`, `imageMentionSlugForRef`
+  and the `ImageMentionTokenInfo` type. This is a DELIBERATE give-away to the public
   tier: the SDK and every thin client must share one grammar with the resolver,
   so the parser lives in `shared` while all prompt-assembly logic stays in
   `@nodaro/prompts`. Grammar is 2–3 segments (no variants, no buckets, no usage
   modes) plus the additive `~lock` / `~nolock` sentinel; a 4-part token is never
   claimed, so an unresolved character mention (`@kira:1:smile:face`) can never be
-  mis-captured as a 3-part image mention with `:face` left dangling. No new
-  `ConnectedReference` field — the slug derives from `defaultName`, so nothing
-  changes on the wire and the reference schema is untouched.
+  mis-captured as a 3-part image mention with `:face` left dangling. The same
+  guard covers the location grammar's `/` separator: `@lib:1:weather/rain` is
+  never claimed as the truncated `@lib:1:weather`, while `@town:1/@barn:2` still
+  resolves both. No new `ConnectedReference` field — the slug derives from
+  `defaultName`, so nothing changes on the wire and the reference schema is
+  untouched.
 - `toConnectedReference` gains `kind: "image"`, the SDK interface point for a
   thin client binding an uploaded image.
 - `buildImagePrompt` resolves image mentions as Phase-0 pass 3, after characters
