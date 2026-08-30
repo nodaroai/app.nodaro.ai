@@ -8,10 +8,16 @@ const scene = { startSec: 0, endSec: 4, label: "hook", shotType: "Wide", camera:
 const slot = { slotId: "a", label: "A", source: "wired-character", role: "person", description: "d" }
 
 describe("shot-craft fields (keys only)", () => {
-  it("adds a text-kind vocabulary and a clip transition-in vocabulary without widening the transition enum", () => {
+  it("adds a text-kind vocabulary and a clip transition-in vocabulary; the transition enum is v2 (rev 1.5)", () => {
     expect(VIDEO_ANALYSIS_TEXT_KINDS).toEqual(["title", "caption", "lower-third", "subtitle", "logo", "other"])
     expect(VIDEO_ANALYSIS_CLIP_TRANSITIONS_IN).toEqual(["fade"])
-    expect(VIDEO_ANALYSIS_TRANSITIONS).toEqual(["cut", "fade", "dissolve", "wipe", "whip"])
+    // Stage 1 shipped "keys only, no enum widened" (a lagging client rejects an
+    // unknown VALUE). Rev 1.5 (2026-08-30) widens it on purpose — sequenced
+    // behind the client bump — so this pin now tracks the v2 vocabulary.
+    expect(VIDEO_ANALYSIS_TRANSITIONS).toEqual([
+      "cut", "fade", "dissolve", "wipe", "whip",
+      "zoom", "slide", "white-flash", "digital-glitch", "morph", "match", "jump",
+    ])
   })
   it("window and result accept transitionIn at the CLIP level and onScreenTextKind on a scene", () => {
     const w = windowAnalysisSchema.parse({ transitionIn: "fade", slots: [slot], scenes: [{ ...scene, onScreenText: "HELLO", onScreenTextKind: "title", transitionOut: "cut" }] })
