@@ -1,4 +1,6 @@
 import { hasCredits } from "./config.js"
+import { applyDisplayUnit } from "./billing-display-unit.js"
+import { runtimeSurfaceProfile } from "./surface-profile.js"
 
 /**
  * Billing adapter seam (B2). An external system meters and charges; Nodaro
@@ -134,16 +136,27 @@ export const noneBillingProvider: BillingProvider = {
   },
 }
 
-// One replaceable slot (mirror providers/egress.ts's decorator slot).
+// One replaceable slot (mirror providers/egress.ts's decorator slot). What is
+// READ is the registered provider composed with the display-unit layer
+// (billing-display-unit.ts): composing inside the slot means it does not
+// matter who writes it last — the overlay loader (app.ts, early) and
+// registerNodaroCloudBillingProvider() (late) both go through here. With no
+// unit configured, `current === base` by identity (mainline byte-identical).
+let base: BillingProvider = noneBillingProvider
 let current: BillingProvider = noneBillingProvider
+function recompute(): void {
+  current = applyDisplayUnit(base)
+}
 export function setBillingProvider(p: BillingProvider): void {
-  current = p
+  base = p
+  recompute()
 }
 export function getBillingProvider(): BillingProvider {
   return current
 }
 export function clearBillingProvider(): void {
-  current = noneBillingProvider
+  base = noneBillingProvider
+  recompute()
 }
 
 /** Deployment-level projection served by GET /v1/billing/surface and mirrored
@@ -161,6 +174,10 @@ export interface BillingSurface {
 
 export function billingSurface(): BillingSurface {
   const p = current
+  // `displayUnit` is already the configured label when one is set (the slot
+  // composes it in); `billing.costTab: "hidden"` is the deployment's lever to
+  // keep the canvas Cost tab off even with a provider registered (D3).
+  const costTabHidden = runtimeSurfaceProfile().billing.costTab === "hidden"
   return {
     contract: BILLING_CONTRACT_VERSION,
     providerId: p.id,
@@ -168,7 +185,7 @@ export function billingSurface(): BillingSurface {
     canReport: p.id !== "none",
     canQuote: typeof p.quote === "function" && p.id !== "none",
     canAccount: p.id !== "none",
-    mountCostTab: p.id !== "none",
+    mountCostTab: p.id !== "none" && !costTabHidden,
   }
 }
 

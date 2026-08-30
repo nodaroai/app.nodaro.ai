@@ -23,6 +23,15 @@ export interface SurfaceSibling {
   url: string
 }
 
+/** B2b — the billing display surface (Phase B); see the backend twin. */
+export interface SurfaceBilling {
+  costTab: "inherit" | "hidden"
+  unitLabel?: string
+  unitRate?: number
+  unitDecimals?: number
+  selfServe: boolean
+}
+
 export interface SurfaceProfile {
   nav: { hide: NavKey[] }
   dashboard: { tabs: DashboardTabKey[] }
@@ -34,6 +43,7 @@ export interface SurfaceProfile {
   locale: { default?: string; picker: boolean }
   outputs: { allowPublic: boolean }
   voice: { allowedGenders: string[] } // B4c — [] = all genders allowed (narrowing only)
+  billing: SurfaceBilling
   catalogPolicy?: unknown
 }
 
@@ -48,6 +58,7 @@ export const SURFACE_PROFILE_DEFAULT: SurfaceProfile = {
   locale: { picker: true },
   outputs: { allowPublic: true },
   voice: { allowedGenders: [] },
+  billing: { costTab: "inherit", selfServe: true },
 }
 
 function runtimeSurface(): Partial<SurfaceProfile> {
@@ -69,6 +80,7 @@ export function runtimeSurfaceProfile(): SurfaceProfile {
     locale: { ...d.locale, ...o.locale },
     outputs: { ...d.outputs, ...o.outputs },
     voice: { ...d.voice, ...o.voice },
+    billing: { ...d.billing, ...o.billing },
     catalogPolicy: o.catalogPolicy ?? d.catalogPolicy,
   }
 }
