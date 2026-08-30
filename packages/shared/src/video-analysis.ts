@@ -334,6 +334,15 @@ const windowSceneBase = z.object({
   /** Effects on this shot's PICTURE. Absent ⇒ a clean image. */
   effects: z.array(z.enum(VIDEO_ANALYSIS_VISUAL_EFFECTS)).optional(),
   transitionOut: z.enum(VIDEO_ANALYSIS_TRANSITIONS).optional(),
+  // Round 4 (2026-08-30, recast shot craft rev 1.5 Appendix F.8): the edit into
+  // the next scene in the analyser's OWN WORDS — a few words of what it saw
+  // ("fast blurred pan left", "fade to black", "zoom-blur warp into the tunnel")
+  // — or absent when the take continues through the change or no edit is seen
+  // (nothing asserted: the video model decides from story and refs). The closed
+  // `transitionOut` vocabulary above is LEGACY from here on: kept so stored
+  // blueprints still parse, never emitted again. Readers take
+  // `transition ?? transitionOut`.
+  transition: z.string().trim().min(1).max(120).optional(),
   // Array of concurrent layers (music + speech + sfx together); [] = silence.
   audio: z.array(audioLayerSchema),
   /** slotId → variationId for slots wearing a NON-default look in this scene
