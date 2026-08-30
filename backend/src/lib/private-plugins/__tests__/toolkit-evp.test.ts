@@ -59,6 +59,7 @@ vi.mock("@/providers/video/ffmpeg-utils.js", () => ({
   runFfprobe: vi.fn(),
   getVideoDuration: vi.fn(),
   probeMediaDuration: vi.fn(),
+  probeMediaStreams: vi.fn(),
   needsTranscode: vi.fn(),
   transcodeToBrowserSafe: vi.fn(),
   needsContainerRemux: vi.fn(),

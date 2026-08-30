@@ -72,6 +72,12 @@ The reverb presets use `wetDryMix`; the `echo` and `custom` presets use `delayMs
   - `audio` — the re-voiced audio track (always produced; in video mode this is the new dialogue track).
   - `video` — the re-voiced video. **Disabled until a video input is wired** (audio mode produces no video).
 
+**The media decides the mode, not the input it arrived through.** The node inspects the file's actual streams before doing any work:
+
+- An **audio-only file on the `video` input** (for example a voice-recorder `.mp4`/`.m4a` that carries no picture) runs in **audio mode**: you get the re-voiced audio on the `audio` output, and the `video` output stays empty. Nothing fails, nothing is re-run.
+- A **video file on the `audio` input** has its audio track extracted first and is treated as audio: you get re-voiced audio, as asked.
+- The result reports `sourceHasVideo` so you can tell which way a run went.
+
 ## Credit Pricing
 
 | Voices mapped | Credits |
@@ -97,6 +103,8 @@ Wire any talking video into the **video** input and the node will:
 4. Remux the new voices onto the original video and return it — plus the new audio track on the `audio` output handle.
 
 **Requires an audio track.** Most text-to-video / image-to-video models output *silent* video. If you feed in a silent clip, the node fails fast. Use a clip with spoken audio, or feed audio directly.
+
+**Audio-only files are fine here too.** If the file on the video input turns out to have no video stream (an audio-only `.mp4` / `.m4a`), the node does not fail — it runs in audio mode and returns the re-voiced audio on the `audio` output. See *Inputs & Outputs* above.
 
 **Keeping the background.** Leave **Preserve Background** on (default) to keep any music or sound effects baked into the clip's audio under the new voices. Turn it off for clean, voice-only results.
 

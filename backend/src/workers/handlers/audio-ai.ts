@@ -20,6 +20,7 @@ import { voiceChangerFromUrl, directVoiceChanger } from "../../providers/elevenl
 import { extractAudioTrack } from "../../providers/video/extract-audio-track.js"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import { cleanupWorkDir } from "../../providers/video/ffmpeg-utils.js"
+import { classifyMediaSource, isVideoMode } from "../../providers/video/media-source.js"
 import { startDubbing, waitForDubbing, downloadDubbedAudio } from "../../providers/elevenlabs/dubbing.js"
 import { remixVoice } from "../../providers/elevenlabs/voice-remix.js"
 import { designVoice } from "../../providers/elevenlabs/voice-design.js"
@@ -373,15 +374,31 @@ const handleVoiceChanger: HandlerFn = async function handleVoiceChanger(job, ctx
   // (ElevenLabs-recommended default, also required for non-English audio).
   const opts = { modelId: model, stability, similarityBoost, style, removeBackgroundNoise, useSpeakerBoost, seed }
 
-  // --- Video mode: demux audio → speech-to-speech → remux onto the original
-  // video. Video takes precedence when both inputs are wired (matches the route
-  // + frontend). Output exposes BOTH a video and the revoiced audio track. ---
-  if (videoUrl) {
-    console.log(`[worker] voice-changer ${ctx.jobId} (video mode)`)
+  // THE MEDIA DECIDES THE MODE, NEVER THE INPUT SLOT (incident 2026-08-30: an
+  // audio-only M4A uploaded as .mp4 sat in the video slot, ran the paid pass,
+  // then died at the remux). Video takes precedence when both inputs are wired
+  // (matches the route + frontend) — the video-slot media stays the source even
+  // when it turns out to be audio-only; it is then DEMOTED to audio mode. A
+  // video file in the AUDIO slot takes the demux path too (the speech-to-speech
+  // provider must never see a video container) and delivers audio, as asked.
+  // The probe fails OPEN (slot's word) — see providers/video/media-source.ts.
+  const sourceUrl = videoUrl || audioUrl
+  if (!sourceUrl) throw new Error("voice-changer requires audioUrl or videoUrl")
+  const source = await classifyMediaSource(sourceUrl, videoUrl ? "video" : "audio")
+  const videoMode = isVideoMode(source)
+
+  // --- Demux path: extract audio → speech-to-speech → (video mode) remux onto
+  // the original video. Output exposes BOTH a video and the revoiced audio
+  // track in video mode; the revoiced audio alone when demoted. ---
+  if (source.slot === "video" || source.hasVideo) {
+    console.log(
+      `[worker] voice-changer ${ctx.jobId} (${videoMode ? "video" : "audio"} mode` +
+      `${source.slot === "video" && !videoMode ? " — the video input carries no video stream, delivering audio" : ""})`,
+    )
 
     // 1. Download once + extract audio (throws NoAudioTrackError → friendly
     //    failure when the source clip is silent).
-    const { audioPath, workDir } = await extractAudioTrack(videoUrl)
+    const { audioPath, workDir } = await extractAudioTrack(sourceUrl)
     let newAudioR2Url: string
     try {
       const sourceAudio = await fs.readFile(audioPath)
@@ -402,11 +419,27 @@ const handleVoiceChanger: HandlerFn = async function handleVoiceChanger(job, ctx
     }
     await setJobProgress(job, ctx.jobId, 70)
 
+    if (!videoMode) {
+      // DEMOTED: nothing to remux onto. Deliver the revoiced audio exactly the
+      // way audio mode does; `sourceHasVideo` keeps the decision legible.
+      await setJobProgress(job, ctx.jobId, 100)
+      const { ok } = await finalizeJobWithMedia({
+        jobId: ctx.jobId,
+        jobType: "voice-clone",
+        result: { url: newAudioR2Url, cost: null, providerUsed: "elevenlabs-direct" },
+        mediaUrl: newAudioR2Url,
+        extraOutputData: { sourceHasVideo: source.hasVideo },
+      })
+      if (!ok) return
+      console.log(`[worker] Job ${ctx.jobId} completed (audio): ${newAudioR2Url}`)
+      return
+    }
+
     // 2. Remux the new audio onto the original video. Reuses merge-video-audio
     //    (VP8/VP9 re-encode + length handling). keepOriginalAudio:false replaces
     //    the source dialogue entirely.
     const mergedPath = await mergeVideoAudio({
-      videoUrl,
+      videoUrl: sourceUrl,
       audioTracks: [{ url: newAudioR2Url, startTime: 0, volume: 100, sourceType: "audio" }],
       keepOriginalAudio: false,
     })

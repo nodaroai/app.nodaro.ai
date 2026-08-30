@@ -460,6 +460,58 @@ export async function probeMediaDuration(srcUrlOrPath: string): Promise<number> 
   return duration
 }
 
+export interface MediaStreams {
+  /** At least one REAL video stream — embedded cover art (attached_pic) does not count. */
+  readonly hasVideo: boolean
+  /** At least one audio stream. */
+  readonly hasAudio: boolean
+}
+
+/**
+ * What streams does this media ACTUALLY carry? One ffprobe call, JSON out.
+ *
+ * The container, the extension, the client MIME and the input slot a file
+ * arrived through can all lie: an audio-only M4A is happily served as
+ * `video/mp4` from `uploads/videos/` (incident 2026-08-30, voice-changer-pro —
+ * the paid speech-to-speech pass ran, then the remux died at `-map 0:v`). The
+ * stream list is the only honest signal, so anything that must choose between
+ * an audio path and a video path decides on THIS, never on the slot.
+ *
+ * `hasVideo` ignores `disposition.attached_pic` streams — a podcast MP3 with
+ * cover art has an mjpeg/png "video" stream that is a still picture, and
+ * mapping it as video would be the same class of lie in the other direction.
+ *
+ * Accepts a local path OR a remote http(s) URL; remote URLs go through the
+ * SSRF guard (assertSafeProbeSource) before ffprobe touches the network.
+ * Throws (never guesses) when ffprobe's output is not parseable — callers
+ * that want a fail-open decision catch and fall back on the slot's word.
+ */
+export async function probeMediaStreams(srcUrlOrPath: string): Promise<MediaStreams> {
+  await assertSafeProbeSource(srcUrlOrPath)
+  const output = await runFfprobe([
+    "-v", "error",
+    "-protocol_whitelist", "file,http,https,tcp,tls",
+    "-show_entries", "stream=codec_type:stream_disposition=attached_pic",
+    "-of", "json",
+    srcUrlOrPath,
+  ])
+  let parsed: { streams?: unknown }
+  try {
+    parsed = JSON.parse(output) as { streams?: unknown }
+  } catch {
+    throw new Error(`probeMediaStreams failed to parse: "${output.trim().slice(0, 200)}"`)
+  }
+  if (!Array.isArray(parsed.streams)) {
+    throw new Error(`probeMediaStreams: no stream list in ffprobe output: "${output.trim().slice(0, 200)}"`)
+  }
+  const streams = parsed.streams as Array<{ codec_type?: unknown; disposition?: { attached_pic?: unknown } }>
+  const hasVideo = streams.some(
+    (s) => s.codec_type === "video" && s.disposition?.attached_pic !== 1,
+  )
+  const hasAudio = streams.some((s) => s.codec_type === "audio")
+  return { hasVideo, hasAudio }
+}
+
 /**
  * Probe the video codec and pixel format in a single ffprobe call.
  * Returns e.g. { codec: "h264", pixFmt: "yuv420p" }.

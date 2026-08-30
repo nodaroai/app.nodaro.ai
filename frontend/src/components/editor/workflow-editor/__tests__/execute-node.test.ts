@@ -2499,7 +2499,9 @@ describe("voice-changer", () => {
     expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
       "n1",
       expect.any(Function),
-      "generatedVideoUrl",
+      // Media-typed completion: video first, audio fallback (an audio-only
+      // "video" is demoted to audio by the backend).
+      ["generatedVideoUrl", "generatedAudioUrl"],
       "Voice Changer",
       expect.anything(),
       expect.any(Function),
@@ -2516,7 +2518,9 @@ describe("voice-changer", () => {
     expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
       "n1",
       expect.any(Function),
-      "generatedVideoUrl",
+      // Media-typed completion: video first, audio fallback (an audio-only
+      // "video" is demoted to audio by the backend).
+      ["generatedVideoUrl", "generatedAudioUrl"],
       "Voice Changer",
       expect.anything(),
       expect.any(Function),

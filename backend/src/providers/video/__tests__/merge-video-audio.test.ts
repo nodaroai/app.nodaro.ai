@@ -20,6 +20,8 @@ vi.mock("../ffmpeg-utils.js", () => ({
   downloadFile: mocks.downloadFile,
   runFfmpeg: mocks.runFfmpeg,
   needsTranscode: mocks.needsTranscode,
+  // The merge probes the "video" input's streams first; a real video here.
+  probeMediaStreams: vi.fn().mockResolvedValue({ hasVideo: true, hasAudio: true }),
   createWorkDir: mocks.createWorkDir,
   cleanupWorkDir: mocks.cleanupWorkDir,
   BROWSER_SAFE_VIDEO_ARGS: ["-c:v", "libx264"],

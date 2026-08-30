@@ -52,6 +52,7 @@ const mockAddCaptionsApi = vi.fn()
 const mockMixAudioApi = vi.fn()
 const mockSpeechToVideoApi = vi.fn()
 const mockVoiceChangerProApi = vi.fn()
+const mockVoiceChangerApi = vi.fn()
 const mockImageCollageApi = vi.fn()
 let mockNodes: any[] = []
 let mockEdges: any[] = []
@@ -136,6 +137,7 @@ vi.mock("@/lib/api", () => ({
   mixAudioApi: (...args: unknown[]) => mockMixAudioApi(...args),
   speechToVideoApi: (...args: unknown[]) => mockSpeechToVideoApi(...args),
   voiceChangerProApi: (...args: unknown[]) => mockVoiceChangerProApi(...args),
+  voiceChangerApi: (...args: unknown[]) => mockVoiceChangerApi(...args),
   imageCollageApi: (...args: unknown[]) => mockImageCollageApi(...args),
   combineVideos: vi.fn(),
   editImage: vi.fn(),
@@ -1398,6 +1400,40 @@ describe("speech-to-video", () => {
 })
 
 // ---------------------------------------------------------------------------
+// voice-changer (legacy single-voice node)
+// ---------------------------------------------------------------------------
+
+describe("voice-changer", () => {
+  // Same media-typed completion as voice-changer-pro: the backend demotes an
+  // audio-only "video" to audio output, so the video-wired dispatch must poll
+  // with a key LIST or a completed (and charged) job paints "No output URL".
+  it("video input wired → polls with a media-typed key list (video first, audio fallback)", async () => {
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://clip.mp4" })
+    mockVoiceChangerApi.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("voice-changer", { voiceId: "v1" }), makeCtx())
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      ["generatedVideoUrl", "generatedAudioUrl"],
+      "Voice Changer",
+      expect.anything(),
+      expect.any(Function),
+    )
+  })
+
+  it("audio input wired → polls the audio key only (unchanged)", async () => {
+    mockResolveNodeInputs.mockReturnValue({ audioUrl: "http://in.mp3" })
+    mockVoiceChangerApi.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("voice-changer", { voiceId: "v1" }), makeCtx())
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1", expect.any(Function), "generatedAudioUrl", "Voice Changer", expect.anything(), undefined,
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
 // voice-changer-pro
 // ---------------------------------------------------------------------------
 
@@ -1460,6 +1496,28 @@ describe("voice-changer-pro", () => {
       undefined,
       undefined,
       undefined,
+    )
+  })
+
+  // The backend decides audio-vs-video from the media's ACTUAL streams: a
+  // video-wired run can legitimately deliver audio (an audio-only .mp4 has no
+  // video to remux onto). The poller therefore gets an ordered key LIST —
+  // video first, audio as the fallback — instead of a single static key.
+  it("video input wired → polls with a media-typed key list (video first, audio fallback)", async () => {
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://clip.mp4" })
+    mockVoiceChangerProApi.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("voice-changer-pro", { orderedVoices: [{ voiceId: "v1" }] }),
+      makeCtx(),
+    )
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      ["generatedVideoUrl", "generatedAudioUrl"],
+      "Voice Changer Pro",
+      expect.anything(),
+      expect.any(Function),
     )
   })
 

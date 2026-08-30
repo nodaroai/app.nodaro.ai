@@ -27,6 +27,9 @@ const mocks = vi.hoisted(() => {
   const mockDirectVoiceChanger = vi.fn().mockResolvedValue(Buffer.from("revoiced-audio"))
   const mockMergeVideoAudio = vi.fn().mockResolvedValue("/tmp/merged/out.mp4")
   const mockCleanupWorkDir = vi.fn().mockResolvedValue(undefined)
+  // "What streams does this media ACTUALLY carry" — the voice-changer decides
+  // audio-vs-video mode from this, never from the input slot.
+  const mockProbeMediaStreams = vi.fn().mockResolvedValue({ hasVideo: true, hasAudio: true })
   const mockGenerateAndUploadThumbnail = vi.fn().mockResolvedValue("https://r2.example.com/thumb.png")
   const mockCreateAssetFromJob = vi.fn().mockResolvedValue(undefined)
   const mockFsReadFile = vi.fn().mockResolvedValue(Buffer.from("source-audio"))
@@ -76,6 +79,7 @@ const mocks = vi.hoisted(() => {
     mockDirectVoiceChanger,
     mockMergeVideoAudio,
     mockCleanupWorkDir,
+    mockProbeMediaStreams,
     mockGenerateAndUploadThumbnail,
     mockCreateAssetFromJob,
     mockFsReadFile,
@@ -103,7 +107,7 @@ vi.mock("@/providers/kie/audio.js", () => ({ KieAudioProvider: mocks.mockKieAudi
 vi.mock("@/providers/elevenlabs/voice-changer.js", () => ({ voiceChangerFromUrl: mocks.mockVoiceChangerFromUrl, directVoiceChanger: mocks.mockDirectVoiceChanger }))
 vi.mock("@/providers/video/extract-audio-track.js", () => ({ extractAudioTrack: mocks.mockExtractAudioTrack }))
 vi.mock("@/providers/video/merge-video-audio.js", () => ({ mergeVideoAudio: mocks.mockMergeVideoAudio }))
-vi.mock("@/providers/video/ffmpeg-utils.js", () => ({ cleanupWorkDir: mocks.mockCleanupWorkDir }))
+vi.mock("@/providers/video/ffmpeg-utils.js", () => ({ cleanupWorkDir: mocks.mockCleanupWorkDir, probeMediaStreams: mocks.mockProbeMediaStreams }))
 vi.mock("node:fs", () => ({ promises: { readFile: mocks.mockFsReadFile } }))
 vi.mock("@/providers/elevenlabs/dubbing.js", () => ({ startDubbing: mocks.mockStartDubbing, waitForDubbing: mocks.mockWaitForDubbing, downloadDubbedAudio: mocks.mockDownloadDubbedAudio }))
 vi.mock("@/providers/elevenlabs/voice-remix.js", () => ({ remixVoice: mocks.mockRemixVoice }))
@@ -179,6 +183,13 @@ beforeEach(() => {
   mocks.mockExtractAudioTrack.mockResolvedValue({ audioPath: "/tmp/vc/audio.mp3", workDir: "/tmp/vc" })
   mocks.mockDirectVoiceChanger.mockResolvedValue(Buffer.from("revoiced-audio"))
   mocks.mockMergeVideoAudio.mockResolvedValue("/tmp/merged/out.mp4")
+  // Realistic default: the media matches its extension (video files carry
+  // video, .mp3 does not). Per-test overrides are how the lying-container
+  // cases are exercised.
+  mocks.mockProbeMediaStreams.mockImplementation(async (url: string) => ({
+    hasVideo: /\.(mp4|webm|mov)(\?|$)/i.test(url),
+    hasAudio: true,
+  }))
   mocks.mockFsReadFile.mockResolvedValue(Buffer.from("source-audio"))
   // Pin the TTS branch. Ambient `backend/.env` must not decide which path the
   // suite exercises — see the note on the config import above.
@@ -717,5 +728,69 @@ describe("safe-direction: PRE-provider (input-side) failure → plain error (ref
     const err = await captureThrow(() => audioAIHandlers["transcribe"](job as never, makeCtx()))
     expect(mocks.mockTranscribe).not.toHaveBeenCalled() // provider never reached
     expect(isPostProcessingError(err)).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// voice-changer: THE MEDIA DECIDES THE MODE, never the input slot.
+// ---------------------------------------------------------------------------
+//
+// 2026-08-30: an audio-only M4A uploaded as `.mp4` (video/mp4) was wired into
+// the video input. The demux + paid speech-to-speech pass succeeded, then the
+// remux died at `-map 0:v` — three retries, no refund, no output. The slot,
+// extension and MIME all lied; the streams don't. Probe them and route on
+// what is actually there.
+
+describe("voice-changer: the media decides the mode, never the input slot", () => {
+  it("video slot + audio-only media → revoices, completes as AUDIO, never remuxes", async () => {
+    mocks.mockProbeMediaStreams.mockResolvedValueOnce({ hasVideo: false, hasAudio: true })
+    const src = "https://cdn.example.com/uploads/videos/consultation.mp4"
+    const job = makeJob("voice-changer", { videoUrl: src, voiceId: "v-1" })
+    await audioAIHandlers["voice-changer"](job as never, makeCtx())
+    expect(mocks.mockProbeMediaStreams).toHaveBeenCalledWith(src)
+    expect(mocks.mockExtractAudioTrack).toHaveBeenCalledWith(src)
+    expect(mocks.mockDirectVoiceChanger).toHaveBeenCalled()
+    expect(mocks.mockMergeVideoAudio).not.toHaveBeenCalled()
+    expect(mocks.mockMarkJobCompleted).not.toHaveBeenCalled()
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(expect.objectContaining({
+      jobId: "job-1",
+      mediaUrl: "https://r2.example.com/audio/job-1.mp3",
+      extraOutputData: expect.objectContaining({ sourceHasVideo: false }),
+    }))
+  })
+
+  it("probe failure fails OPEN — the video path (remux) still runs on the slot's word", async () => {
+    mocks.mockProbeMediaStreams.mockRejectedValueOnce(new Error("ffprobe hiccup"))
+    const job = makeJob("voice-changer", { videoUrl: "https://example.com/in.mp4", voiceId: "v-1" })
+    await audioAIHandlers["voice-changer"](job as never, makeCtx())
+    expect(mocks.mockMergeVideoAudio).toHaveBeenCalled()
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
+      output_data: expect.objectContaining({ videoUrl: "https://r2.example.com/video/job-1.mp4" }),
+    }))
+  })
+
+  it("audio slot + a VIDEO file → demuxes first (the STS provider never sees a video container); output is audio", async () => {
+    mocks.mockProbeMediaStreams.mockResolvedValueOnce({ hasVideo: true, hasAudio: true })
+    const src = "https://example.com/actually-a-video.mp4"
+    const job = makeJob("voice-changer", { audioUrl: src, voiceId: "v-1" })
+    await audioAIHandlers["voice-changer"](job as never, makeCtx())
+    expect(mocks.mockExtractAudioTrack).toHaveBeenCalledWith(src)
+    expect(mocks.mockDirectVoiceChanger).toHaveBeenCalled()
+    expect(mocks.mockVoiceChangerFromUrl).not.toHaveBeenCalled()
+    expect(mocks.mockMergeVideoAudio).not.toHaveBeenCalled()
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(expect.objectContaining({
+      mediaUrl: "https://r2.example.com/audio/job-1.mp3",
+      extraOutputData: expect.objectContaining({ sourceHasVideo: true }),
+    }))
+  })
+
+  it("audio slot + plain audio → the untouched legacy audio path (voiceChangerFromUrl)", async () => {
+    mocks.mockProbeMediaStreams.mockResolvedValueOnce({ hasVideo: false, hasAudio: true })
+    mocks.mockVoiceChangerFromUrl.mockResolvedValueOnce(Buffer.from("revoiced"))
+    const job = makeJob("voice-changer", { audioUrl: "https://example.com/in.mp3", voiceId: "v-1" })
+    await audioAIHandlers["voice-changer"](job as never, makeCtx())
+    expect(mocks.mockVoiceChangerFromUrl).toHaveBeenCalled()
+    expect(mocks.mockExtractAudioTrack).not.toHaveBeenCalled()
+    expect(mocks.mockMergeVideoAudio).not.toHaveBeenCalled()
   })
 })
