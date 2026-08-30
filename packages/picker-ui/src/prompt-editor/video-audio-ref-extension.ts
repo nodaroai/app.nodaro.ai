@@ -14,7 +14,7 @@ import { VideoAudioRefView } from "./video-audio-ref-view"
  * serialization. The token shape is the SAME as image (digit index + optional
  * `[a-zA-Z0-9_-]` label) so `{video:N}` / `{audio:N}` round-trip through the
  * editor exactly like `{image:N}`, and the shared backend resolver
- * (`packages/shared/src/video-reference-resolver.ts`, `REFERENCE_TOKEN_RE`)
+ * (`packages/prompts/src/video-reference-resolver.ts`, `REFERENCE_TOKEN_RE`)
  * sees the identical literal text the user would have typed by hand.
  */
 
@@ -46,6 +46,17 @@ const LABEL_PATTERN = "[a-zA-Z0-9_-]+"
  *  parse so a `{Video:1}` paste still resolves (mirrors the image scanner's
  *  `gi` flag), while the live input rule below stays lowercase like image's. */
 const REF_TOKEN_RE = new RegExp(`^\\{(video|audio):(\\d+)(?::(${LABEL_PATTERN}))?\\}$`, "i")
+
+/*
+ * NOT an editor node: the id-addressed `{ref:<id>[:label]}` form. That is the
+ * API/Studio token — a client names a reference by its own `connectedReferences[].id`
+ * and the shared resolver (`resolveRefIdTokens`) substitutes the `@image_N` seat
+ * after numbering. The canvas numbers positionally, so the editor never emits it;
+ * a pasted `{ref:…}` stays plain text here and is resolved (ref-capable
+ * providers) or stripped (`stripVideoImageTokens`) downstream. Do not add a
+ * grammar for it — its id is opaque (may contain `:` and `/`) and is matched by
+ * identity against the known ids, which the editor does not have.
+ */
 
 /**
  * Serialize a video/audio reference to its literal token — the single source of

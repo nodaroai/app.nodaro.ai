@@ -125,6 +125,7 @@ circle the person from @image_1 wearing the jacket from @image_2 for a 360 spin
 - **Start/end frames are NOT user-numbered.** They are auto-bound at the **tail** of the image set. With two reference images wired, a start frame becomes `@image_3` and the model is told `Use @image_3 as the opening (first) frame of the video.` — you never write a `{image:3}` token for a frame.
 - **Out-of-range tokens fall back to the bare label.** `{image:5:ghost}` on a node with only two references resolves to `ghost` (no dangling binding).
 - **Providers without reference support** ignore the tokens — they are stripped to their bare labels, so the prompt still reads naturally.
+- **API callers can address a reference by id instead of position.** A direct API / SDK / MCP call that passes `connectedReferences` may write `{ref:<id>}` (or `{ref:<id>:label}`) with the entry's own `id`; the platform substitutes the `@image_N` seat after numbering, so the client never computes `N`. Unattached references drop to the label or the entry's name. The editor itself always writes `{image:N}`. See [API Integration](../../api-integration.md#structured-references-connectedreferences-on-video).
 
 ### LTX 2.3 — auto-dispatch by wired inputs
 

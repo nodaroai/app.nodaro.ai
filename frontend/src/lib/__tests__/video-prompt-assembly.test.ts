@@ -349,3 +349,55 @@ describe("assembleVideoPrompt", () => {
     expect(out).toBe("")
   })
 })
+
+// ---------------------------------------------------------------------------
+// `{ref:<id>}` — id-addressed reference tokens.
+//
+// The canvas editor never writes these (it writes positional `{image:N}`); they
+// are the API/Studio form, resolved by the shared core. Two things the FE owes
+// them: (1) `stripVideoImageTokens` must strip them on the non-ref paths so a
+// token can never leak raw to a provider, and (2) a canvas run must bind them
+// exactly like the orchestrator does for the same node data — pinned by the
+// convergence case below, mirrored byte-for-byte in
+// `backend/src/services/workflow-engine/__tests__/payload-builder-video-mentions.test.ts`.
+// ---------------------------------------------------------------------------
+describe("stripVideoImageTokens — {ref:<id>} tokens", () => {
+  it("drops a bare {ref:<id>} entirely — the id may contain `:` and `/`", () => {
+    expect(stripVideoImageTokens("walk {ref:https://cdn/a.png} now")).toBe("walk now")
+  })
+
+  it("keeps the label of a labeled {ref:<id>:<label>}", () => {
+    expect(stripVideoImageTokens("{ref:kira:smile:the smile} waves")).toBe("the smile waves")
+  })
+
+  it("collapses an all-token prompt to undefined, like the positional tokens", () => {
+    expect(stripVideoImageTokens("{ref:x}")).toBeUndefined()
+  })
+})
+
+describe("assembleVideoPrompt — {ref:<id>} convergence with the orchestrator", () => {
+  // Same node data as the backend mirror case → same prompt, by construction:
+  // both read `data.extraRefs[].id` and delegate to `resolveVideoReferenceCore`.
+  const CONVERGENCE_PROMPT = "Use these characters:\n- @image_1 (reference): a red car.\n\n@image_1 drives off"
+
+  it("t2v on a ref-capable provider binds {ref:x} to the extra's slot", () => {
+    const node = videoNode("text-to-video", {
+      prompt: "{ref:x} drives off",
+      provider: "seedance-2",
+      extraRefs: [{ id: "x", url: "https://r2/car.png", description: "a red car" }],
+    })
+    const out = assembleVideoPrompt("text-to-video", { node, nodes: [node], edges: [], refMap: EMPTY_REFMAP })
+    expect(out).toBe(CONVERGENCE_PROMPT)
+  })
+
+  it("t2v on a NON-ref-capable provider strips {ref:x} (label kept when given)", () => {
+    const node = videoNode("text-to-video", {
+      prompt: "{ref:x:the car} drives off",
+      provider: "minimax",
+      extraRefs: [{ id: "x", url: "https://r2/car.png", description: "a red car" }],
+    })
+    const out = assembleVideoPrompt("text-to-video", { node, nodes: [node], edges: [], refMap: EMPTY_REFMAP })
+    expect(out).not.toMatch(/\{ref:/i)
+    expect(out).toContain("the car drives off")
+  })
+})

@@ -38,6 +38,13 @@ import type { ConnectedReference } from "./types.js"
  *  the backend (which sees node data as `Record<string, unknown>`) can pass
  *  raw JSON through `expandExtraRefsToConnectedReferences`. */
 export interface ExtraRefInput {
+  /**
+   * Stable id of this extra reference, when the row has one. What a
+   * `{ref:<id>}` token in the prompt names; passed through to the shared video
+   * resolver's slot map by both the canvas and the orchestrator. Absent → the
+   * row still numbers normally but cannot be addressed by id.
+   */
+  readonly id?: string
   readonly url?: string
   readonly description?: string
   readonly characterSlug?: string

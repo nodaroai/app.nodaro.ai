@@ -33,44 +33,15 @@ import { resolveCharacterMentions, applyReferenceOrderToVideo } from "./prompt-b
 import { roleToPhrase, REFERENCE_ROLE_PRESETS, resolveDefaultRole } from "@nodaro/shared"
 import { buildIdentityLockLine, withForcedIdentityLock } from "./identity-lock.js"
 import type { ConnectedReference } from "@nodaro/shared"
+import { REF_BINDING } from "./ref-binding.js"
+import { resolveRefIdTokens } from "./ref-id-tokens.js"
 
-/**
- * The SINGLE swap-point for the reference-binding surface-string (design D1/D7).
- *
- * Every place that renders an `@image_N`-style binding into a video prompt — the
- * per-image subject phrasing, the bare ordinal in a "Use these characters" /
- * pair-back bullet, and the opening/closing frame directive — MUST go through
- * these five arrows. The default form is `@image_N`; if the D7 probe shows a
- * provider prefers the legacy `Image N` form, flipping is editing ONLY these five
- * arrows (`@image_${n}` → `Image ${n}`), nothing downstream.
- *
- * This IS the live swap-point: `resolveVideoReferenceCore` routes the per-image
- * subject phrasing, the "Use these characters" / pair-back bullet ordinals, and
- * the frame directive through these arrows, and `resolveReferenceTokens` resolves
- * the body `{image:N}` tokens through `REF_BINDING[kind]` — so the five arrows
- * are the ONLY emission sites for the binding surface string.
- */
-/**
- * The identity-reference binding sentence shared by the flat-image-list
- * resolvers (gemini-omni, veo i2v): names the ordinal span as identities and
- * says the two things a multimodal model needs to hear — match exactly, and
- * these are not frames. One spelling; both resolvers ride it.
- */
-export function identityRefsSentence(firstOrdinal: number, lastOrdinal: number): string {
-  return firstOrdinal === lastOrdinal
-    ? `${REF_BINDING.ordinal(firstOrdinal)} is an identity reference for this shot's subjects — match its subject's exact appearance; it is not a frame.`
-    : `${REF_BINDING.ordinal(firstOrdinal)} through ${REF_BINDING.ordinal(lastOrdinal)} are identity references for this shot's subjects — match each subject's exact appearance; they are not frames.`
-}
+// The binding surface string and the id-addressed token resolver live in their
+// own modules (see them for the contracts); re-exported here so every existing
+// importer of this module — and the package index's `export *` — keeps working.
+export { REF_BINDING, identityRefsSentence } from "./ref-binding.js"
+export { resolveRefIdTokens, type RefIdTokenContext } from "./ref-id-tokens.js"
 
-export const REF_BINDING = {
-  image: (label: string, n: number) => `the ${label} from @image_${n}`,
-  video: (label: string, n: number) => `the ${label} from @video_${n}`,
-  audio: (label: string, n: number) => `the ${label} from @audio_${n}`,
-  /** ordinal as it appears in a "Use these characters" bullet / pair-back */
-  ordinal: (n: number) => `@image_${n}`,
-  frame: (n: number, role: "opening" | "closing") =>
-    `Use @image_${n} as the ${role} (${role === "opening" ? "first" : "last"}) frame of the video.`,
-} as const
 
 /**
  * Positional reference counts the editor tokens are resolved against — how many
@@ -135,11 +106,19 @@ export function resolveReferenceTokens(
   )
 }
 
+
 /**
  * A user-attached "extra reference image" row. Layer-agnostic shape of the
  * frontend `ExtraRef` / backend extras: only the fields this core reads.
  */
 export interface VideoExtraRef {
+  /**
+   * The caller's own id for this reference (`connectedReferences[].id` on the
+   * route, `extraRefs[].id` on the canvas) — what a `{ref:<id>}` token in the
+   * prompt names. Slot-map only: the reorder's tile id stays `wired:<url>`.
+   * Absent → the extra cannot be addressed by id (it still numbers normally).
+   */
+  id?: string
   url: string
   description?: string
   characterSlug?: string
@@ -241,6 +220,15 @@ export interface ResolveVideoReferenceCoreArgs {
    * Wired in Phase B Tasks 2-3.
    */
   hybridRoles?: boolean
+  /**
+   * Display names for EVERY reference the caller knows by id — including the
+   * ones it did NOT hand to this walk (the route caps `connectedReferences` to
+   * the provider's image budget before calling in). A `{ref:<id>}` token that
+   * cannot bind degrades to `label ?? refNamesById[id] ?? ""`, so a capped-out
+   * or skipped reference keeps its name in the prose instead of vanishing.
+   * The wired character refs' `defaultName`s are known without this.
+   */
+  refNamesById?: ReadonlyMap<string, string>
 }
 
 /** Result of the HYBRID mention pass — inline role phrases + surfaced opt-in
@@ -455,16 +443,39 @@ export function resolveVideoReferenceCore(
   // early-return below is gated on (no chars AND no extras) so we don't skip
   // extras-only setups.
   const hasExtras = (args.extraRefs?.length ?? 0) > 0
+  // `{ref:<id>}` degrade names — every id this call knows: the wired refs'
+  // display names, the extras' ids (name-less, so they match by identity rather
+  // than falling to the catch-all), then the caller's own map on top (it knows
+  // the refs it capped out before calling in).
+  const nameByRefId = new Map<string, string>()
+  for (const r of args.wiredCharRefs) {
+    if (r.id && !nameByRefId.has(r.id)) nameByRefId.set(r.id, r.defaultName || r.characterSlug || "")
+  }
+  for (const ex of args.extraRefs ?? []) {
+    if (ex.id && !nameByRefId.has(ex.id)) nameByRefId.set(ex.id, "")
+  }
+  for (const [id, name] of args.refNamesById ?? []) {
+    if (id) nameByRefId.set(id, name)
+  }
+  // id → seat, recorded by the walk below as `position` advances — never
+  // recovered from URLs afterwards (the walk counts a duplicate-URL extra that
+  // `merged` dedups, so URL → index is ambiguous; id → position is not).
+  const slotByRefId = new Map<string, number>()
   if (wiredCharRefs.length === 0 && !hasExtras) {
     // No wired chars / extras, but the node can still carry plain base reference
     // images (leadingRefUrls), so `{image:N}` body tokens MUST still resolve. The
     // count is the leading-ref count (or the legacy `imageRefCount` when no
     // leading refs were passed); the leading URLs are returned for the payload.
+    // Nothing was seated, so every `{ref:}` degrades (label → name → "").
+    const counts = tokenCounts(leadingRefUrls.length)
     return {
       // tokenCounts(leadingRefUrls.length) → image count == offset (no assets here):
       // leadingRefUrls mode counts the leading refs; ordinalOffset mode counts the
       // caller-owned leading refs the offset stands in for.
-      prompt: resolveReferenceTokens(args.prompt, tokenCounts(leadingRefUrls.length)),
+      prompt: resolveReferenceTokens(
+        resolveRefIdTokens(args.prompt, { slotById: slotByRefId, nameById: nameByRefId, imageCount: counts.image }),
+        counts,
+      ),
       additionalUrls: [...leadingRefUrls],
     }
   }
@@ -531,10 +542,17 @@ export function resolveVideoReferenceCore(
   let position = offset
   for (let i = 0; i < resolved.additionalUrls.length; i++) {
     position += 1
+    const url = resolved.additionalUrls[i]
     // Look up which ref this URL came from to learn its characterSlug.
-    const ref = wiredCharRefs.find((r) => r.url === resolved.additionalUrls[i])
+    const ref = wiredCharRefs.find((r) => r.url === url)
     const slug = ref?.characterSlug
     if (slug && !positionsByChar.has(slug)) positionsByChar.set(slug, position)
+    // `{ref:<id>}`: every wired ref sharing this URL sits in this seat (the
+    // merge dedups by URL). First sight wins — the legacy mention pass does
+    // not dedup, so a re-mentioned URL advances `position` but keeps its seat.
+    for (const r of wiredCharRefs) {
+      if (r.url === url && r.id && !slotByRefId.has(r.id)) slotByRefId.set(r.id, position)
+    }
   }
   for (const r of wiredCharRefs) {
     if (r.source !== "wired-character") continue
@@ -547,6 +565,7 @@ export function resolveVideoReferenceCore(
     fallbackUrls.push(r.url)
     position += 1
     if (!positionsByChar.has(r.characterSlug)) positionsByChar.set(r.characterSlug, position)
+    if (r.id && !slotByRefId.has(r.id)) slotByRefId.set(r.id, position)
     // Hybrid: emit the inline role phrase (`the person from @image_N`) + opt-in
     // lock + wired element injection instead of a "Use these characters:"
     // bullet. The selection above (canonical entry only, deduped, skip mentioned)
@@ -616,6 +635,7 @@ export function resolveVideoReferenceCore(
     for (const ex of args.extraRefs!) {
       if (!ex.url) continue
       position += 1
+      if (ex.id && !slotByRefId.has(ex.id)) slotByRefId.set(ex.id, position)
       const desc = (ex.description ?? "").trim()
       if (ex.characterSlug) {
         // First sight of this character via an extra. Resolution chain
@@ -797,6 +817,23 @@ export function resolveVideoReferenceCore(
     if (u && !seen.has(u)) { seen.add(u); merged.push(u) }
   }
 
+  // `{ref:<id>}` tokens resolve HERE — after the walk has seated every reference
+  // (the slot map is complete) and BEFORE the user reorder below, so the
+  // reorder's `@image_N` renumber pass carries the freshly emitted binding to
+  // the ref's final seat. That is the point of an id token: "this reference,
+  // wherever it lands". `{image:N}` is deliberately the opposite — resolved
+  // LAST, after the reorder, so the author's literal N is kept (see the note at
+  // the reorder return). Range-gated by the same image count `{image:N}` uses,
+  // so a seat the payload never ships (capped out, duplicate URL) degrades to
+  // the name instead of binding a phantom `@image_N`. A prompt with no `{ref:`
+  // is untouched — byte-identical to before this token existed.
+  finalPrompt =
+    resolveRefIdTokens(finalPrompt, {
+      slotById: slotByRefId,
+      nameById: nameByRefId,
+      imageCount: tokenCounts(merged.length).image,
+    }) ?? finalPrompt
+
   // Apply user-defined reorder + renumber `Image N` tokens — parity with the
   // backend `resolveVideoPromptMentions` and the shared image builder.
   const referenceOrder = args.referenceOrder
@@ -825,7 +862,9 @@ export function resolveVideoReferenceCore(
     // Resolve body tokens LAST — AFTER the reorder's `@image_N` renumber pass, so
     // it can't miscorrect a freshly-resolved binding (the curly `{image:N}` tokens
     // are invisible to the reorder's `(@image_|Image )` regex, so they ride through
-    // untouched and keep their author-typed N — documented v1 behavior).
+    // untouched and keep their author-typed N — documented v1 behavior). The
+    // id-addressed `{ref:<id>}` tokens are the deliberate opposite: resolved
+    // BEFORE the reorder (above), so their binding follows the reference.
     return {
       prompt: resolveReferenceTokens(reordered.prompt, tokenCounts(merged.length)),
       additionalUrls: [...leadingRefUrls, ...reordered.urls],

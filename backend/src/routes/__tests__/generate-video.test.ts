@@ -1145,3 +1145,88 @@ describe("POST /v1/generate-video — references-only (catalog-driven imageUrl e
     expect(res.statusCode).toBe(200)
   })
 })
+
+// ---------------------------------------------------------------------------
+// `{ref:<id>}` — id-addressed reference tokens (the Studio contract).
+//
+// Studio sends `connectedReferences` and writes `{ref:<connectedReference.id>}`
+// where the picture is used in the prose. The ROUTE numbers the references
+// (rail first, then canonical characters, then extras) and substitutes the
+// slot — the client never mirrors the walk.
+// ---------------------------------------------------------------------------
+describe("assembleVideoConnectedReferences — {ref:<id>} id-addressed tokens", () => {
+  it("the studio scene: rail + [character view, canonical character, image, image] → @image_3 / @image_2 / @image_4 / @image_5, legend agrees", () => {
+    const out = assembleVideoConnectedReferences({
+      prompt: "{ref:view-1} turns to {ref:char-kira}, then {ref:https://r2/p1.png} and {ref:https://r2/p2.png:poster}",
+      provider: "seedance-2",
+      connectedReferences: [
+        cref({ id: "view-1", source: "wired-character", url: "https://r2/kira-side.png", defaultName: "Kira / side", characterSlug: "kira", variantSlug: "side", isExtraRef: true, description: "side profile" }),
+        cref({ id: "char-kira", source: "wired-character", url: "https://r2/kira.png", defaultName: "Kira", characterSlug: "kira" }),
+        cref({ id: "https://r2/p1.png", source: "wired-image", url: "https://r2/p1.png", defaultName: "photo 1", description: "a city street" }),
+        cref({ id: "https://r2/p2.png", source: "wired-image", url: "https://r2/p2.png", defaultName: "photo 2", description: "a movie poster" }),
+      ],
+      baseReferenceImageUrls: ["https://r2/rail.png"],
+      referenceVideoCount: 0,
+      referenceAudioCount: 0,
+    })
+    // Payload order = the numbering: rail, canonical, then the extras in order.
+    expect(out.referenceImageUrls).toEqual([
+      "https://r2/rail.png",
+      "https://r2/kira.png",
+      "https://r2/kira-side.png",
+      "https://r2/p1.png",
+      "https://r2/p2.png",
+    ])
+    // The tokens landed on the same seats the legend lines describe.
+    expect(out.prompt).toContain("@image_3 turns to @image_2, then @image_4 and the poster from @image_5")
+    expect(out.prompt).toContain("- @image_3 is the same subject as @image_2, side profile.")
+    expect(out.prompt).toContain("- @image_4 (reference): a city street.")
+    expect(out.prompt).toContain("- @image_5 (reference): a movie poster.")
+    expect(out.prompt).not.toMatch(/\{ref:/i)
+  })
+
+  it("a ref capped out by the provider limit keeps its name — never a binding onto a dropped seat (veo3 = 3)", () => {
+    const out = assembleVideoConnectedReferences({
+      prompt: "{ref:d} chases {ref:c}",
+      provider: "veo3",
+      connectedReferences: [
+        cref({ id: "a", source: "wired-image", url: "https://r2/a.png", defaultName: "car", description: "a red car" }),
+        cref({ id: "b", source: "wired-image", url: "https://r2/b.png", defaultName: "dog", description: "a brown dog" }),
+        cref({ id: "c", source: "wired-image", url: "https://r2/c.png", defaultName: "bike", description: "a blue bike" }),
+        cref({ id: "d", source: "wired-image", url: "https://r2/d.png", defaultName: "the green truck", description: "a green truck" }),
+      ],
+      referenceVideoCount: 0,
+      referenceAudioCount: 0,
+    })
+    expect(out.referenceImageUrls).toEqual(["https://r2/a.png", "https://r2/b.png", "https://r2/c.png"])
+    expect(out.prompt).toContain("the green truck chases @image_3")
+    expect(out.prompt).not.toContain("@image_4")
+    expect(out.prompt).not.toMatch(/\{ref:/i)
+  })
+
+  it("a provider without image-ref support degrades every {ref:} — label, then name, then nothing — and attaches nothing", () => {
+    const out = assembleVideoConnectedReferences({
+      prompt: "{ref:a:the car} passes {ref:b} near {ref:zzz}",
+      provider: "kling", // not in VIDEO_REF_LIMITS_BY_PROVIDER → image cap 0
+      connectedReferences: [
+        cref({ id: "a", source: "wired-image", url: "https://r2/a.png", defaultName: "car", description: "a red car" }),
+        cref({ id: "b", source: "wired-image", url: "https://r2/b.png", defaultName: "the brown dog", description: "a brown dog" }),
+      ],
+      referenceVideoCount: 0,
+      referenceAudioCount: 0,
+    })
+    expect(out.prompt).toBe("the car passes the brown dog near")
+    expect(out.referenceImageUrls).toBeUndefined()
+  })
+
+  it("a prompt that is ONLY an unresolvable token ships as empty text, not as the raw token", () => {
+    const out = assembleVideoConnectedReferences({
+      prompt: "{ref:zzz}",
+      provider: "kling",
+      connectedReferences: [cref({ id: "a", source: "wired-image", url: "https://r2/a.png", description: "car" })],
+      referenceVideoCount: 0,
+      referenceAudioCount: 0,
+    })
+    expect(out.prompt ?? "").not.toMatch(/\{ref:/i)
+  })
+})

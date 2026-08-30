@@ -863,3 +863,27 @@ describe("payload-builder video paths: {image:N} reference tokens (Task 4.1)", (
     expect(result.payload.referenceImageUrls).toEqual(["https://r2/bg.png", "https://r2/obj.png"])
   })
 })
+
+// ---------------------------------------------------------------------------
+// `{ref:<id>}` — id-addressed reference tokens: FE↔BE convergence.
+//
+// Mirror of `frontend/src/lib/__tests__/video-prompt-assembly.test.ts`
+// ("assembleVideoPrompt — {ref:<id>} convergence with the orchestrator"): the
+// SAME node data must produce the SAME prompt on a canvas run and here. Both
+// read `data.extraRefs[].id` and delegate to `resolveVideoReferenceCore`, so
+// the literal below is shared with the frontend test on purpose.
+// ---------------------------------------------------------------------------
+describe("payload-builder video paths: {ref:<id>} convergence with the canvas", () => {
+  const CONVERGENCE_PROMPT = "Use these characters:\n- @image_1 (reference): a red car.\n\n@image_1 drives off"
+
+  it("t2v on a ref-capable provider binds {ref:x} to the extra's slot", () => {
+    const t2v = node("t2v-1", "text-to-video", {
+      prompt: "{ref:x} drives off",
+      provider: "seedance-2",
+      extraRefs: [{ id: "x", url: "https://r2/car.png", description: "a red car" }],
+    })
+    const result = buildPayload(t2v, "job-ref", {}, undefined, { nodes: [t2v], edges: [], nodeStates: {} })
+    expect(result.payload.prompt).toBe(CONVERGENCE_PROMPT)
+    expect(result.payload.referenceImageUrls).toEqual(["https://r2/car.png"])
+  })
+})

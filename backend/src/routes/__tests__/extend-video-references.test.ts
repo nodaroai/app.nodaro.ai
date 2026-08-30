@@ -306,3 +306,21 @@ describe("assembleExtendVideoReferences / imageCapOverride (pure)", () => {
     expect(out.prompt).not.toContain("{image:1}")
   })
 })
+
+describe("assembleExtendVideoReferences — {ref:<id>} under the anchor budget", () => {
+  const connected = (i: number): ConnectedReference =>
+    ({ id: `c${i}`, defaultName: `Ref ${i}`, source: "manual", url: refUrl(100 + i) }) as ConnectedReference
+
+  it("a ref that only fits WITHOUT the reserved anchor seat degrades to its name — never numbered onto the anchor's seat", () => {
+    const budget = SEEDANCE_2_REF_LIMITS.images - 1 // 8: the 9th seat is the anchor's
+    const out = assembleExtendVideoReferences({
+      prompt: `{ref:c${budget}} follows {ref:c${budget - 1}}`,
+      connectedReferences: Array.from({ length: budget + 1 }, (_, i) => connected(i)),
+    })
+    expect(out.referenceImageUrls).toHaveLength(budget)
+    // c8 is the 9th ref → capped out → its display name; c7 is the last seated ref.
+    expect(out.prompt).toContain(`Ref ${budget} follows @image_${budget}`)
+    expect(out.prompt).not.toContain(`@image_${budget + 1}`)
+    expect(out.prompt).not.toMatch(/\{ref:/i)
+  })
+})

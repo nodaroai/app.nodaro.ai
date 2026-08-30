@@ -971,6 +971,8 @@ function resolveVideoPromptMentions(
     wiredCharRefs,
     extraRefs: [
       ...(extraRefs?.map((ex) => ({
+        // `{ref:<id>}` slot-map key — the same row id the canvas passes.
+        id: ex.id,
         // BE `ExtraRefInput.url` is optional; the core skips falsy urls exactly as
         // the old BE body's `if (!ex.url) continue` did, so `?? ""` is a
         // behavior-preserving coercion into the core's required `url: string`.

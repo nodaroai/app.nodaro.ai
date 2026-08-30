@@ -37,10 +37,27 @@ import { IMAGE_REFERENCE_FORMAT } from "@/lib/image-reference-format"
  * spaces allowed) so `{audio:2:my song}` → `my song`. MOVED from `execute-node.ts`
  * (was the inline image-only `stripVideoImageTokens`); `execute-node.ts` imports
  * it back. Name kept (low-churn) — it now covers all three modalities.
+ *
+ * Also strips the id-addressed `{ref:<id>[:label]}` form (the API/Studio token
+ * the core's `resolveRefIdTokens` binds): the id is opaque and may contain `:`
+ * or `/`, so the token is scanned greedily over a brace-free class (linear, no
+ * nested optional group) and the tail after the LAST colon is kept when it is
+ * a well-formed label. This strip knows no reference ids or names, so a
+ * label-less `{ref:<id>}` drops to nothing here — the one place the name can't
+ * be recovered; the editor never writes `{ref:}`, so only a pasted token
+ * reaches this path.
  */
 export function stripVideoImageTokens(text: string | undefined): string | undefined {
   if (!text) return text
-  return text.replace(/\{(?:image|video|audio):\d+(?::([a-zA-Z0-9_ -]+))?\}/gi, (_, label) => label ?? "").replace(/\s{2,}/g, " ").trim() || undefined
+  return text
+    .replace(/\{(?:image|video|audio):\d+(?::([a-zA-Z0-9_ -]+))?\}/gi, (_, label?: string) => label ?? "")
+    .replace(/\{ref:([^{}]*)\}/gi, (_, content: string) => {
+      const at = content.lastIndexOf(":")
+      const tail = at === -1 ? "" : content.slice(at + 1)
+      return /^[a-zA-Z0-9_ -]+$/.test(tail) ? tail : ""
+    })
+    .replace(/\s{2,}/g, " ")
+    .trim() || undefined
 }
 
 /**
@@ -328,6 +345,8 @@ export function resolveVideoPromptMentions(
     wiredCharRefs,
     extraRefs: [
       ...(extraRefs?.map((ex) => ({
+        // `{ref:<id>}` slot-map key — the same row id the orchestrator passes.
+        id: ex.id,
         url: ex.url,
         description: ex.description,
         characterSlug: ex.characterSlug,
