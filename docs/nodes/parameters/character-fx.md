@@ -22,6 +22,8 @@ The distinguishing feature from other parameter pickers: when a character/face/o
 
 All four enum fields default to `auto`, which contributes no prompt text.
 
+Position, Duration and Intensity are catalogs, not free values: the `character-fx` picker catalog exposes them as `dimensions` beside its `options` (`GET /v1/picker-catalogs/character-fx`, `client.pickerCatalogs.get("character-fx")`, the MCP `get_picker_catalog` tool, or `CHARACTER_FX_POSITIONS` / `CHARACTER_FX_DURATIONS` / `CHARACTER_FX_INTENSITIES` from `@nodaro/prompts`), each row carrying the exact clause it injects — so an id-only client can offer the three controls without writing prompt text. The ids match the [Transition](./transition.md) node's, the wording deliberately does not (an effect *manifests* and *persists*; a transition *occurs* and *spans*). See [Parameter Picker Catalogs](../../picker-catalogs.md#single-dimension-pickers-with-secondary-parameters-transition-character-fx).
+
 ## Catalog (57 entries across 5 categories)
 
 | Category | Examples | Theme |

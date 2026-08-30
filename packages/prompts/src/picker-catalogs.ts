@@ -59,7 +59,14 @@ import {
   TRANSITION_DURATIONS,
   TRANSITION_INTENSITIES,
 } from "./transitions.js"
-import { CHARACTER_FX, CHARACTER_FX_CATEGORY_LABELS, CHARACTER_FX_CATEGORY_ORDER } from "./character-fx.js"
+import {
+  CHARACTER_FX,
+  CHARACTER_FX_CATEGORY_LABELS,
+  CHARACTER_FX_CATEGORY_ORDER,
+  CHARACTER_FX_POSITIONS,
+  CHARACTER_FX_DURATIONS,
+  CHARACTER_FX_INTENSITIES,
+} from "./character-fx.js"
 import { POSES, POSE_CATEGORY_LABELS, POSE_CATEGORY_ORDER } from "./pose.js"
 import { MATERIALS, MATERIAL_CATEGORY_LABELS, MATERIAL_CATEGORY_ORDER } from "./materials.js"
 import { ANIMALS, ANIMAL_SUBCATEGORY_LABELS, ANIMAL_SUBCATEGORY_ORDER } from "@nodaro/shared"
@@ -557,6 +564,16 @@ const SINGLE_CATALOGS: readonly PickerCatalog[] = [
     categoryOrder: CHARACTER_FX_CATEGORY_ORDER,
     categoryLabels: CHARACTER_FX_CATEGORY_LABELS,
     options: toOptions(CHARACTER_FX, "category"),
+    // The node's three timing parameters, alongside the effect itself — the
+    // same shape `transition` carries above, but the character-fx scales, not
+    // the transition ones: the wording is deliberately different (an effect
+    // manifests and persists; a transition occurs and spans), so an id-only
+    // consumer must read these rows, never reuse the transition rows.
+    dimensions: perFieldDims([
+      ["position", CHARACTER_FX_POSITIONS],
+      ["duration", CHARACTER_FX_DURATIONS],
+      ["intensity", CHARACTER_FX_INTENSITIES],
+    ]),
   },
 
   // -------- "Subject / Object" family --------

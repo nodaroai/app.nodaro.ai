@@ -76,7 +76,7 @@ import { StylePicker } from "@/lib/picker-ui"
 import { SettingPicker } from "@/lib/picker-ui"
 import { LoopSubjectPicker } from "@/lib/picker-ui"
 import { PersonPicker } from "@/lib/picker-ui"
-import { MOODS, POSES, buildFramingHints, getLensPromptHint, getCameraFormatPromptHint, buildLightingHints, getColorLookPromptHint, buildAtmosphereHints, buildActionFxHints, getStylePromptHint, getSettingPromptHint, getLoopSubjectPromptHint, buildMoodHints, buildPoseHints, buildStylingHints, buildTemporalHints, buildMaterialHints, getPhotoGenrePromptHint, getBackdropPromptHint, buildHeldPropHints, buildPhotographerHints, buildAestheticHints, getEraPromptHint, buildExposureHints, getRenderQualityPromptHint, getCompositionEffectPromptHint, buildPostProcessHints, buildPersonHints, TRANSITION_POSITIONS, TRANSITION_DURATIONS, TRANSITION_INTENSITIES } from "@nodaro/prompts"
+import { MOODS, POSES, buildFramingHints, getLensPromptHint, getCameraFormatPromptHint, buildLightingHints, getColorLookPromptHint, buildAtmosphereHints, buildActionFxHints, getStylePromptHint, getSettingPromptHint, getLoopSubjectPromptHint, buildMoodHints, buildPoseHints, buildStylingHints, buildTemporalHints, buildMaterialHints, getPhotoGenrePromptHint, getBackdropPromptHint, buildHeldPropHints, buildPhotographerHints, buildAestheticHints, getEraPromptHint, buildExposureHints, getRenderQualityPromptHint, getCompositionEffectPromptHint, buildPostProcessHints, buildPersonHints, TRANSITION_POSITIONS, TRANSITION_DURATIONS, TRANSITION_INTENSITIES, CHARACTER_FX_POSITIONS, CHARACTER_FX_DURATIONS, CHARACTER_FX_INTENSITIES } from "@nodaro/prompts"
 import { getAnimal, getVehicle, getWeapon, getFurniture } from "@nodaro/shared"
 import { MoodEmoji } from "@/lib/picker-ui"
 import { DimensionTileGrid } from "@/lib/picker-ui"
@@ -1283,10 +1283,21 @@ export function PostProcessEffectsConfig({ data, onUpdate }: ConfigProps<PostPro
 // Built from the catalogs the API also serves, so the editor and an id-only
 // client (Studio, SDK, MCP) can never show different labels for the same value.
 // A hand-written copy here had already drifted on all three duration rows.
-const TIMING_SELECTS = [
+//
+// One constant per node, never shared: the transition and character-fx scales
+// carry the same ids but deliberately different wording (a transition occurs
+// and spans the clip; an effect manifests and persists), and each panel must
+// render — and tooltip — its own node's rows.
+const TRANSITION_TIMING_SELECTS = [
   { key: "position",  label: "Position",  options: TRANSITION_POSITIONS },
   { key: "duration",  label: "Duration",  options: TRANSITION_DURATIONS },
   { key: "intensity", label: "Intensity", options: TRANSITION_INTENSITIES },
+] as const
+
+const CHARACTER_FX_TIMING_SELECTS = [
+  { key: "position",  label: "Position",  options: CHARACTER_FX_POSITIONS },
+  { key: "duration",  label: "Duration",  options: CHARACTER_FX_DURATIONS },
+  { key: "intensity", label: "Intensity", options: CHARACTER_FX_INTENSITIES },
 ] as const
 
 export function TransitionConfig({ data, onUpdate }: ConfigProps<TransitionData>) {
@@ -1313,7 +1324,7 @@ export function TransitionConfig({ data, onUpdate }: ConfigProps<TransitionData>
       />
 
       <div className="grid grid-cols-3 gap-2">
-        {TIMING_SELECTS.map(({ key, label: labelText, options }) => (
+        {TRANSITION_TIMING_SELECTS.map(({ key, label: labelText, options }) => (
           <div key={key} className="flex flex-col gap-1">
             <Label className="text-[10px] uppercase">{labelText}</Label>
             <Select
@@ -1360,7 +1371,7 @@ export function CharacterFxConfig({ data, onUpdate }: ConfigProps<CharacterFxDat
       />
 
       <div className="grid grid-cols-3 gap-2">
-        {TIMING_SELECTS.map(({ key, label: labelText, options }) => (
+        {CHARACTER_FX_TIMING_SELECTS.map(({ key, label: labelText, options }) => (
           <div key={key} className="flex flex-col gap-1">
             <Label className="text-[10px] uppercase">{labelText}</Label>
             <Select

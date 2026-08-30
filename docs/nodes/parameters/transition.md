@@ -22,6 +22,8 @@ Unlike the `transition` field on the Combine Videos node (which is an FFmpeg pos
 
 All four enum fields default to `auto`, which contributes no prompt text. Setting them to non-`auto` values appends descriptive clauses to the composed hint.
 
+Position, Duration and Intensity are catalogs, not free values: the `transition` picker catalog exposes them as `dimensions` beside its `options` (`GET /v1/picker-catalogs/transition`, `client.pickerCatalogs.get("transition")`, the MCP `get_picker_catalog` tool, or `TRANSITION_POSITIONS` / `TRANSITION_DURATIONS` / `TRANSITION_INTENSITIES` from `@nodaro/prompts`), each row carrying the exact clause it injects. The [Character FX](./character-fx.md) node has the same three fields with the same ids but its own wording — read each node's own rows. See [Parameter Picker Catalogs](../../picker-catalogs.md#single-dimension-pickers-with-secondary-parameters-transition-character-fx).
+
 ## Catalog (82 entries across 8 categories)
 
 | Category | Examples | Theme |

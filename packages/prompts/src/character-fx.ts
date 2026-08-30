@@ -37,9 +37,23 @@ export interface CharacterFx {
   readonly term?: string
 }
 
-export type CharacterFxPosition  = "auto" | "start" | "middle" | "end" | "full"
-export type CharacterFxDuration  = "auto" | "instant" | "short" | "medium" | "long"
-export type CharacterFxIntensity = "auto" | "subtle" | "natural" | "dynamic" | "crazy"
+/**
+ * The three timing scales, each derived from the catalog that defines it (see
+ * `CHARACTER_FX_POSITIONS` and friends below).
+ *
+ * The direction matters. These used to be hand-written unions with the clause
+ * tables written out separately beside them, so the two could disagree: add a
+ * step to the union, forget the clause, and the composer indexed a missing key
+ * — pushing `undefined` into the parts list, which `join(", ")` renders as a
+ * dangling separator on a prompt that then ships to a provider with the user's
+ * chosen parameter silently dropped. Deriving the union FROM the catalog makes
+ * that unrepresentable: one array is the source of the type, the option list
+ * the API serves, and the clause table, so a new step reaches all three or
+ * none. The exact id sets are pinned by `character-fx-timing-catalogs.test.ts`.
+ */
+export type CharacterFxPosition  = (typeof CHARACTER_FX_POSITIONS)[number]["id"]
+export type CharacterFxDuration  = (typeof CHARACTER_FX_DURATIONS)[number]["id"]
+export type CharacterFxIntensity = (typeof CHARACTER_FX_INTENSITIES)[number]["id"]
 
 export interface CharacterFxTiming {
   position?:  CharacterFxPosition
@@ -266,26 +280,95 @@ export const CHARACTER_FX_IDS: ReadonlyArray<string> = CHARACTER_FX.map((c) => c
 // Graph-aware composer — target input handle + timing fields + multi-pick
 // ---------------------------------------------------------------------------
 
-const POSITION_CLAUSES: Record<Exclude<CharacterFxPosition, "auto">, string> = {
-  start:  "the effect occurs at the opening of the clip",
-  middle: "the effect occurs in the middle of the clip",
-  end:    "the effect occurs at the end of the clip",
-  full:   "the effect persists for the entire clip",
+/**
+ * The character-fx node's three timing parameters, as catalogs.
+ *
+ * Graded scales in the standard option shape, so a consumer that can only send
+ * ids (Studio, the SDK, MCP) can offer Position / Duration / Intensity without
+ * composing prompt text of its own. `auto` is the no-op head of each scale: an
+ * empty `promptHint`, so an unset parameter contributes nothing and the model
+ * is left to decide, exactly as before these were enumerable.
+ *
+ * These are NOT the transition node's scales, even though the ids match. The
+ * wording is deliberately different — a transition OCCURS and SPANS the clip,
+ * an effect MANIFESTS and PERSISTS — and the three intensity clauses coincide
+ * by accident, not by shared definition. Keep the two catalogs separate; do
+ * not fold one into the other.
+ *
+ * `POSITION_CLAUSES` / `DURATION_CLAUSES` / `INTENSITY_CLAUSES` below are
+ * DERIVED from these arrays, so the clause the composer injects and the hint
+ * the catalog advertises are the same string by construction and cannot drift.
+ */
+export interface CharacterFxTimingOption {
+  readonly id: string
+  readonly label: string
+  readonly description: string
+  readonly promptHint: string
+  readonly term?: string
 }
 
-const DURATION_CLAUSES: Record<Exclude<CharacterFxDuration, "auto">, string> = {
-  instant: "manifesting instantaneously",
-  short:   "manifesting over approximately 1 second",
-  medium:  "manifesting over approximately 2 seconds",
-  long:    "manifesting over approximately 3 seconds",
+export const CHARACTER_FX_POSITIONS = [
+  { id: "auto",   label: "Auto",   description: "Let the model place the effect",    promptHint: "", term: "" },
+  { id: "start",  label: "Start",  description: "Occurs at the opening of the clip", promptHint: "the effect occurs at the opening of the clip", term: "at the opening of the clip" },
+  { id: "middle", label: "Middle", description: "Occurs in the middle of the clip",  promptHint: "the effect occurs in the middle of the clip", term: "mid-clip" },
+  { id: "end",    label: "End",    description: "Occurs at the end of the clip",     promptHint: "the effect occurs at the end of the clip", term: "at the end of the clip" },
+  { id: "full",   label: "Full",   description: "Persists for the entire clip",      promptHint: "the effect persists for the entire clip", term: "persisting for the whole clip" },
+] as const satisfies ReadonlyArray<CharacterFxTimingOption>
+
+export const CHARACTER_FX_DURATIONS = [
+  { id: "auto",    label: "Auto",         description: "Let the model time the effect",          promptHint: "", term: "" },
+  { id: "instant", label: "Instant",      description: "Manifests instantaneously",              promptHint: "manifesting instantaneously", term: "manifesting instantly" },
+  { id: "short",   label: "Short (~1s)",  description: "Manifests over approximately 1 second",  promptHint: "manifesting over approximately 1 second", term: "manifesting over about 1 second" },
+  { id: "medium",  label: "Medium (~2s)", description: "Manifests over approximately 2 seconds", promptHint: "manifesting over approximately 2 seconds", term: "manifesting over about 2 seconds" },
+  { id: "long",    label: "Long (~3s)",   description: "Manifests over approximately 3 seconds", promptHint: "manifesting over approximately 3 seconds", term: "manifesting over about 3 seconds" },
+] as const satisfies ReadonlyArray<CharacterFxTimingOption>
+
+export const CHARACTER_FX_INTENSITIES = [
+  { id: "auto",    label: "Auto",    description: "Let the model judge the effect's energy", promptHint: "", term: "" },
+  { id: "subtle",  label: "Subtle",  description: "Restrained, minimal flourish",            promptHint: "with subtle restrained energy and minimal flourish", term: "subtly" },
+  { id: "natural", label: "Natural", description: "Unhurried, unforced timing",             promptHint: "with natural unhurried timing", term: "at a natural pace" },
+  { id: "dynamic", label: "Dynamic", description: "Assertive, energetic",                   promptHint: "with dynamic energy and assertive flourish", term: "energetically" },
+  { id: "crazy",   label: "Crazy",   description: "Extreme, wild, distorted",               promptHint: "with extreme exaggerated energy, wild flourishes, and dramatic distortion", term: "wildly exaggerated" },
+] as const satisfies ReadonlyArray<CharacterFxTimingOption>
+
+/**
+ * Index a timing catalog into the `Record<value, clause>` the composer reads.
+ *
+ * The key type is derived from the SAME array, so the record is total over the
+ * catalog by construction. That matters: the composer indexes these records
+ * without a fallback, and a missing key would push `undefined` into the parts
+ * list, which `join(", ")` renders as a dangling separator — a malformed prompt
+ * shipped to a provider with the user's chosen parameter silently dropped.
+ *
+ * Deliberately a private twin of the helper in `transitions.ts` rather than a
+ * shared import: the two nodes' timing catalogs must stay independent.
+ */
+function clausesOf<T extends CharacterFxTimingOption>(
+  options: ReadonlyArray<T>,
+): Record<Exclude<T["id"], "auto">, string> {
+  return Object.fromEntries(
+    options.filter((o) => o.id !== "auto").map((o) => [o.id, o.promptHint]),
+  ) as Record<Exclude<T["id"], "auto">, string>
 }
 
-const INTENSITY_CLAUSES: Record<Exclude<CharacterFxIntensity, "auto">, string> = {
-  subtle:  "with subtle restrained energy and minimal flourish",
-  natural: "with natural unhurried timing",
-  dynamic: "with dynamic energy and assertive flourish",
-  crazy:   "with extreme exaggerated energy, wild flourishes, and dramatic distortion",
-}
+const POSITION_CLAUSES  = clausesOf(CHARACTER_FX_POSITIONS)
+const DURATION_CLAUSES  = clausesOf(CHARACTER_FX_DURATIONS)
+const INTENSITY_CLAUSES = clausesOf(CHARACTER_FX_INTENSITIES)
+
+/**
+ * Widening guard. `as const` on the three arrays above is load-bearing: drop
+ * it and every id widens to `string`, the derived unions stop constraining
+ * anything, and the clause records degrade to `Record<string, string>` — the
+ * totality guarantee is gone with no runtime symptom. This assignment stops
+ * compiling the moment that happens (tsup's DTS build runs the type checker).
+ */
+type NarrowIds<T> = string extends T ? never : true
+const _timingIdsStayNarrow: [
+  NarrowIds<CharacterFxPosition>,
+  NarrowIds<CharacterFxDuration>,
+  NarrowIds<CharacterFxIntensity>,
+] = [true, true, true]
+void _timingIdsStayNarrow
 
 /**
  * Compose a character-fx prompt-hint sentence from an effect id (or array

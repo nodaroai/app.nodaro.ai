@@ -33,7 +33,7 @@ interface PickerOption {
   icon?: string             // reserved; previews are app-side — render your own (see Visual)
 }
 
-interface PickerDimension {       // multi-dim pickers only
+interface PickerDimension {       // multi-dim pickers; also the secondary parameters of a single-dim picker
   field: string                   // e.g. "shotSize"
   label: string
   options: readonly PickerOption[]
@@ -49,7 +49,7 @@ interface PickerCatalog {
   categoryOrder?: readonly string[]
   categoryLabels?: Readonly<Record<string, string>>
   options?: readonly PickerOption[]      // single-dim
-  dimensions?: readonly PickerDimension[] // multi-dim
+  dimensions?: readonly PickerDimension[] // multi-dim — and a single-dim picker's secondary parameter fields (see below)
 }
 ```
 
@@ -88,6 +88,22 @@ const clause = getParameterPromptHint({ type: "mood", data: { mood: selected } }
 const prompt = ["a portrait of a woman", clause].filter(Boolean).join(", ")
 const { jobIds } = await client.nodes.run("generate-image", { prompt })
 ```
+
+### Single-dimension pickers with secondary parameters (Transition, Character FX)
+
+Two single pickers carry extra parameter fields beside the main choice: **Transition** and **Character FX** each have `position`, `duration` and `intensity` dropdowns next to their picker. Those are catalogs too — the same `{ id, label, description, promptHint, term }` rows as everything else, each led by a no-op `auto` — and the catalog exposes them as `dimensions` **in addition to** `options`. Render the picker from `options` and the three dropdowns from `dimensions`; a client that only sends ids never has to write the timing clause itself.
+
+```ts
+const fx = getPickerCatalog("character-fx")!
+fx.options        // the 57 effects — the main picker
+fx.dimensions     // [{ field: "position", … }, { field: "duration", … }, { field: "intensity", … }]
+
+// Each dimension's rows are also exported directly:
+//   TRANSITION_POSITIONS / TRANSITION_DURATIONS / TRANSITION_INTENSITIES
+//   CHARACTER_FX_POSITIONS / CHARACTER_FX_DURATIONS / CHARACTER_FX_INTENSITIES
+```
+
+The two nodes share the same ids (`start` / `middle` / `end` / `full`, `instant` / `short` / `medium` / `long`, `subtle` / `natural` / `dynamic` / `crazy`) but **not** the same wording — a transition *occurs* and *spans* the clip, an effect *manifests* and *persists* — so always read the rows from the node's own catalog.
 
 ## Multi-dimension pickers (e.g. Framing)
 

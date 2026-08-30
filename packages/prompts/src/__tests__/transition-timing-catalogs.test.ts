@@ -143,9 +143,11 @@ describe("transition timing catalogs", () => {
   })
 
   it("leaves every other single-dim catalog without dimensions", () => {
+    // `character-fx` carries the same three timing fields with its own,
+    // deliberately different wording (see `character-fx-timing-catalogs.test.ts`).
     const singlesWithDims = PICKER_CATALOGS.filter(
       (c) => c.kind === "single" && c.dimensions,
     ).map((c) => c.nodeType)
-    expect(singlesWithDims).toEqual(["transition"])
+    expect(singlesWithDims).toEqual(["transition", "character-fx"])
   })
 })
