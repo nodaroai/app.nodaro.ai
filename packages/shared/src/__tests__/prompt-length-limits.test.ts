@@ -92,8 +92,8 @@ describe("per-model prompt length limits", () => {
     it("returns verified per-model TTS caps", () => {
       expect(getMaxTtsChars("elevenlabs-turbo")).toBe(40000)
       expect(getMaxTtsChars("elevenlabs-multilingual")).toBe(10000)
-      expect(getMaxTtsChars("elevenlabs-v3")).toBe(3000) // conservative
-      expect(getMaxTtsChars("elevenlabs-dialogue")).toBe(2000)
+      expect(getMaxTtsChars("elevenlabs-v3")).toBe(5000) // official cap (probed 2026-08-30)
+      expect(getMaxTtsChars("elevenlabs-dialogue")).toBe(5000) // total across lines
     })
     it("defaults to TTS_TEXT_MAX for the legacy/unknown provider", () => {
       expect(getMaxTtsChars("elevenlabs")).toBe(TTS_TEXT_MAX)

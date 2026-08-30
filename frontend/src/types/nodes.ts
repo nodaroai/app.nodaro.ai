@@ -3075,6 +3075,10 @@ export type TextToDialogueData = {
   dialogue: DialogueLine[]
   stability: number
   languageCode: string
+  /** Deterministic sampling (0..4294967295); unset = random. */
+  seed?: number
+  /** ElevenLabs text normalization: "auto" (default) | "on" | "off". */
+  applyTextNormalization?: "auto" | "on" | "off"
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string

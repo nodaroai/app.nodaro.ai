@@ -25,9 +25,6 @@ vi.mock("../models.js", () => ({
   KIE_AUDIO_ISOLATION_MODELS: {
     "elevenlabs-isolation": { model: "elevenlabs/audio-isolation", cost: 0.01 },
   },
-  KIE_DIALOGUE_MODELS: {
-    "elevenlabs-dialogue": { model: "elevenlabs/text-to-dialogue-v3", cost: 0.07 },
-  },
 }))
 
 import { KieAudioProvider } from "../audio.js"
@@ -126,47 +123,6 @@ describe("KieAudioProvider.generateSoundEffect", () => {
       undefined,
       expect.objectContaining({ modelKey: "elevenlabs-sfx" }),
     )
-  })
-})
-
-describe("KieAudioProvider.generateDialogue", () => {
-  // Production-path proof: generateDialogue itself does the spread, so the
-  // 5th arg to runKieTask must carry OUR Nodaro key (never the KIE provider
-  // id "elevenlabs/text-to-dialogue-v3"). Guards the null-key create it used
-  // to egress (bare reconcileOpts → modelKey null).
-  it("threads OUR modelKey into the create funnel", async () => {
-    const result = await provider.generateDialogue([
-      { text: "Hi", voice: "Rachel" },
-      { text: "Hello", voice: "Daniel" },
-    ])
-    expect(mocks.mockRunKieTask).toHaveBeenCalledWith(
-      "elevenlabs/text-to-dialogue-v3",
-      expect.objectContaining({ dialogue: expect.any(Array) }),
-      90,
-      undefined,
-      expect.objectContaining({ modelKey: "elevenlabs-dialogue" }),
-    )
-    expect(result.url).toBe("https://kie.example.com/audio.mp3")
-  })
-
-  it("preserves passed reconcileOpts while forcing the key", async () => {
-    const onTaskCreated = vi.fn()
-    await provider.generateDialogue(
-      [{ text: "Hi", voice: "Rachel" }],
-      { stability: 0.4, languageCode: "en" },
-      { onTaskCreated },
-    )
-    const call = mocks.mockRunKieTask.mock.calls.at(-1)!
-    expect(call[4]).toEqual(expect.objectContaining({ onTaskCreated, modelKey: "elevenlabs-dialogue" }))
-    // stability + language_code reach the wire body
-    expect(call[1]).toEqual(expect.objectContaining({ stability: 0.4, language_code: "en" }))
-  })
-
-  it("throws when no result URL", async () => {
-    mocks.mockRunKieTask.mockResolvedValueOnce({ resultJson: {} })
-    await expect(
-      provider.generateDialogue([{ text: "x", voice: "Rachel" }]),
-    ).rejects.toThrow()
   })
 })
 

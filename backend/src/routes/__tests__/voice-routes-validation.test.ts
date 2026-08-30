@@ -438,6 +438,55 @@ describe("POST /v1/text-to-dialogue", () => {
     const res = await app.inject({ method: "POST", url: "/v1/text-to-dialogue", payload: { ...validBody, stability: 0.3 } })
     expect(res.statusCode).toBe(400)
   })
+
+  it("accepts total text at the shared cap (5000 chars)", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/text-to-dialogue", payload: { dialogue: [{ text: "a".repeat(5000), voice: "voice-1" }], userId: USER_ID } })
+    expect(res.statusCode).not.toBe(400)
+  })
+
+  it("rejects total text over the shared cap", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/text-to-dialogue", payload: { dialogue: [{ text: "a".repeat(4000), voice: "v1" }, { text: "b".repeat(1001), voice: "v2" }], userId: USER_ID } })
+    expect(res.statusCode).toBe(400)
+  })
+
+  it("accepts 10 unique voices (the probed ElevenLabs hard limit)", async () => {
+    const dialogue = Array.from({ length: 10 }, (_, i) => ({ text: "hi", voice: `voice-${i}` }))
+    const res = await app.inject({ method: "POST", url: "/v1/text-to-dialogue", payload: { dialogue, userId: USER_ID } })
+    expect(res.statusCode).not.toBe(400)
+  })
+
+  it("rejects 11 unique voices with an actionable message", async () => {
+    const dialogue = Array.from({ length: 11 }, (_, i) => ({ text: "hi", voice: `voice-${i}` }))
+    const res = await app.inject({ method: "POST", url: "/v1/text-to-dialogue", payload: { dialogue, userId: USER_ID } })
+    expect(res.statusCode).toBe(400)
+    expect(res.body).toContain("10 unique voices")
+  })
+
+  it("repeated voices don't count against the unique-voice cap", async () => {
+    const dialogue = Array.from({ length: 30 }, (_, i) => ({ text: "hi", voice: `voice-${i % 5}` }))
+    const res = await app.inject({ method: "POST", url: "/v1/text-to-dialogue", payload: { dialogue, userId: USER_ID } })
+    expect(res.statusCode).not.toBe(400)
+  })
+
+  it("accepts seed in range and rejects out-of-range / non-integer seeds", async () => {
+    const ok = await app.inject({ method: "POST", url: "/v1/text-to-dialogue", payload: { ...validBody, seed: 4294967295 } })
+    expect(ok.statusCode).not.toBe(400)
+    const negative = await app.inject({ method: "POST", url: "/v1/text-to-dialogue", payload: { ...validBody, seed: -1 } })
+    expect(negative.statusCode).toBe(400)
+    const tooBig = await app.inject({ method: "POST", url: "/v1/text-to-dialogue", payload: { ...validBody, seed: 4294967296 } })
+    expect(tooBig.statusCode).toBe(400)
+    const fractional = await app.inject({ method: "POST", url: "/v1/text-to-dialogue", payload: { ...validBody, seed: 1.5 } })
+    expect(fractional.statusCode).toBe(400)
+  })
+
+  it("accepts applyTextNormalization auto/on/off and rejects other values", async () => {
+    for (const v of ["auto", "on", "off"]) {
+      const res = await app.inject({ method: "POST", url: "/v1/text-to-dialogue", payload: { ...validBody, applyTextNormalization: v } })
+      expect(res.statusCode).not.toBe(400)
+    }
+    const bad = await app.inject({ method: "POST", url: "/v1/text-to-dialogue", payload: { ...validBody, applyTextNormalization: "always" } })
+    expect(bad.statusCode).toBe(400)
+  })
 })
 
 // ═══════════════════════════════════════════════════════════════════════════

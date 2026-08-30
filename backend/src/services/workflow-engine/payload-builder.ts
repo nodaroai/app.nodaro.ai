@@ -4048,11 +4048,32 @@ export function buildPayload(
       // Filter empty dialogue lines (matches frontend behavior)
       const rawDialogue = (data.dialogue ?? data.script) as Array<{ text: string; voice?: string }> | undefined
       const filteredDialogue = rawDialogue?.filter((l) => l.text?.trim())
+      // Fail HONESTLY before dispatch when nothing is left to voice. The route
+      // Zod can't cover this seam (orchestrator enqueues directly), and letting
+      // it through means a raw provider 422 mid-run after credits reserve —
+      // mirrors the frontend engine's "no dialogue lines" rejection.
+      if (!filteredDialogue || filteredDialogue.length === 0) {
+        throw new Error("Text to Dialogue has no dialogue lines — add at least one line with text before running")
+      }
+      // B4c: per-line voice-gender backstop, mirroring the TTS case above —
+      // the orchestrator path must vet what it dispatches, not trust the
+      // route. Dialogue lines carry no voiceType, so vet by name resolution
+      // alone: custom/library UUIDs resolve to `undefined` gender and pass.
+      for (const line of filteredDialogue) {
+        const g = premadeVoiceGender(typeof line.voice === "string" ? line.voice : undefined)
+        if (g !== undefined && !isVoiceGenderAllowed(g)) {
+          const err = new Error("A selected voice is not available on this deployment.") as Error & { code?: string }
+          err.code = "voice_not_available"
+          throw err
+        }
+      }
       return simpleResult("text-to-dialogue", "elevenlabs-dialogue", {
         jobId,
         dialogue: filteredDialogue,
         stability: data.stability,
         languageCode: data.languageCode,
+        seed: data.seed,
+        applyTextNormalization: data.applyTextNormalization,
         usageLogId,
       })
     }

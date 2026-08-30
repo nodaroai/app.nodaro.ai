@@ -3816,11 +3816,15 @@ export async function textToDialogueApi(
   userId?: string,
   stability?: number,
   languageCode?: string,
+  seed?: number,
+  applyTextNormalization?: "auto" | "on" | "off",
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { dialogue }
   if (userId) body.userId = userId
   if (stability != null) body.stability = stability
   if (languageCode) body.languageCode = languageCode
+  if (seed != null) body.seed = seed
+  if (applyTextNormalization) body.applyTextNormalization = applyTextNormalization
   return apiJson("/v1/text-to-dialogue", {
     body,
     workflowId: true,

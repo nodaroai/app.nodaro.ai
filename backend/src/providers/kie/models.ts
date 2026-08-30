@@ -1427,17 +1427,6 @@ export const KIE_STT_MODELS: Record<string, KieModelConfig> = {
 }
 
 // =============================================================================
-// TEXT-TO-DIALOGUE MODELS (Multi-speaker TTS)
-// =============================================================================
-export const KIE_DIALOGUE_MODELS: Record<string, KieModelConfig> = {
-  "elevenlabs-dialogue": {
-    model: "elevenlabs/text-to-dialogue-v3",
-    credits: 14,
-    cost: 0.07,  // per 1K chars
-  },
-}
-
-// =============================================================================
 // SPEECH-TO-VIDEO MODELS
 // =============================================================================
 export const KIE_SPEECH_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
@@ -1468,7 +1457,7 @@ export const KIE_SPECIAL_MODELS: Record<string, KieModelConfig> = {
 // HELPER FUNCTIONS
 // =============================================================================
 
-export type KieCategory = "image" | "video" | "video-to-video" | "text-to-video" | "motion-transfer" | "video-upscale" | "lip-sync" | "speech-to-video" | "music" | "tts" | "sound-effect" | "audio-isolation" | "stt" | "dialogue" | "special"
+export type KieCategory = "image" | "video" | "video-to-video" | "text-to-video" | "motion-transfer" | "video-upscale" | "lip-sync" | "speech-to-video" | "music" | "tts" | "sound-effect" | "audio-isolation" | "stt" | "special"
 
 /**
  * Get KIE.ai model config for a given category and provider
@@ -1505,8 +1494,6 @@ export function getKieModelConfig(
       return KIE_AUDIO_ISOLATION_MODELS[provider] ?? null
     case "stt":
       return KIE_STT_MODELS[provider] ?? null
-    case "dialogue":
-      return KIE_DIALOGUE_MODELS[provider] ?? null
     case "special":
       return KIE_SPECIAL_MODELS[provider] ?? null
     default:

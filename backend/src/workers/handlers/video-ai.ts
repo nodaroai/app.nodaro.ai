@@ -27,7 +27,7 @@ import {
   runLtxRetake,
 } from "../../providers/replicate/ltx-video.js"
 import { config } from "../../lib/config.js"
-import { FAL_LIP_SYNC_PROVIDERS, REPLICATE_LIP_SYNC_PROVIDERS, SEEDANCE_2_EXTEND_STITCH, SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC, SEEDANCE_LIP_SYNC_PROVIDERS, estimateLoopTrimAddonCredits, isVeoProvider, getVideoAudioCapability, parseAttributedDialogue, resolveDialogueVoices } from "@nodaro/shared"
+import { FAL_LIP_SYNC_PROVIDERS, REPLICATE_LIP_SYNC_PROVIDERS, SEEDANCE_2_EXTEND_STITCH, SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC, SEEDANCE_LIP_SYNC_PROVIDERS, estimateLoopTrimAddonCredits, getMaxTtsChars, isVeoProvider, getVideoAudioCapability, parseAttributedDialogue, resolveDialogueVoices } from "@nodaro/shared"
 import type { CharacterVoiceSpec, DialogueLine, ResolvedDialogueVoiceLine } from "@nodaro/shared"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import { combineVideos } from "../../providers/video/combine-videos.js"
@@ -50,11 +50,11 @@ import { uploadBufferToR2, uploadFileToR2, mediaObjectKey } from "../../lib/stor
 import { randomUUID } from "node:crypto"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
 import { rewriteForContentPolicy } from "../../lib/content-policy-rewrite.js"
-import { KieAudioProvider, isKieAcceptedVoice } from "../../providers/kie/audio.js"
 import { extractAudioTrack } from "../../providers/video/extract-audio-track.js"
 import { probeVideoSource } from "../../providers/video/ffmpeg-utils.js"
 import { directVoiceChanger } from "../../providers/elevenlabs/voice-changer.js"
 import { directElevenLabsTTS, stripAudioTags } from "../../providers/elevenlabs/direct-tts.js"
+import { directElevenLabsDialogue } from "../../providers/elevenlabs/direct-dialogue.js"
 
 /**
  * VEO3 / VEO3.1 always produce a video with background audio per KIE's
@@ -1450,8 +1450,8 @@ const handleGenerateMask: HandlerFn = async function handleGenerateMask(job, ctx
 // One job, one combined reservation. Two modes, chosen by the model's audio
 // capability (the route already gated this via videoModelCanSpeakDialogue):
 //   audio_driven (Seedance 2) -> synthesise the dialogue track (direct ElevenLabs
-//     TTS for single / library / custom voices; Dialogue v3 only for all-premade
-//     multi-speaker), feed it as reference audio, model lip-syncs.
+//     TTS for a single voice; direct Dialogue v3 for multi-speaker, any voice
+//     mix), feed it as reference audio, model lip-syncs.
 //   native_speech (VEO)       -> bake the line during generation, then revoice the
 //     baked audio to the primary character voice (keeps the music/SFX bed).
 // The voice chain NEVER hard-fails the clip: a synth / revoice failure degrades to
@@ -1465,19 +1465,23 @@ const handleGenerateMask: HandlerFn = async function handleGenerateMask(job, ctx
 // job_type via the worker CAS, but finalize/asset both key off the passed
 // jobType + output_data, so the deliverable is always handled as a video.
 
-const MAX_DIALOGUE_CHARS = 5000 // total-text cap for synthesis (Dialogue v3 / direct TTS)
+// Total-text cap for synthesis (Dialogue v3 / direct TTS) — the SAME shared
+// constant the route and panel read, never a third hand-kept copy (this
+// literal used to be one and drifted).
+const maxDialogueChars = () => getMaxTtsChars("elevenlabs-dialogue")
 
 /** Trim resolved lines to the synthesis char budget; logs any drop (no silent cap). */
 function capDialogueLines(lines: ResolvedDialogueVoiceLine[], jobId: string): ResolvedDialogueVoiceLine[] {
+  const cap = maxDialogueChars()
   let total = 0
   const out: ResolvedDialogueVoiceLine[] = []
   for (const l of lines) {
-    if (total + l.text.length > MAX_DIALOGUE_CHARS) break
+    if (total + l.text.length > cap) break
     total += l.text.length
     out.push(l)
   }
   if (out.length < lines.length) {
-    console.warn(`[worker] voiced-video ${jobId}: dropped ${lines.length - out.length} dialogue line(s) over the ${MAX_DIALOGUE_CHARS}-char Dialogue v3 cap`)
+    console.warn(`[worker] voiced-video ${jobId}: dropped ${lines.length - out.length} dialogue line(s) over the ${cap}-char Dialogue v3 cap`)
   }
   return out
 }
@@ -1534,15 +1538,13 @@ async function mergeVoiceTrackToR2(
 
 /**
  * Synthesise the resolved dialogue into ONE reference-audio track (R2 URL) for the
- * audio_driven (Seedance) path. KIE's Dialogue v3 only accepts ~21 PREMADE voice
- * NAMES, so it's used ONLY for genuine multi-speaker where every voice is
- * KIE-premade. Otherwise (single voice, or ANY library / custom voice) we go
- * through the direct ElevenLabs API — the same path the TTS node uses for
- * library/custom voices (resolves by id, honours `ttsProvider`). This is the fix
- * for the Studio bug: a `library` voice UUID sent to Dialogue v3 was rejected
- * ("Invalid input parameters"). Multiple distinct non-premade voices degrade to
- * the primary voice (best-effort; proper per-voice multi-speaker needs per-line
- * concat — fast-follow).
+ * audio_driven (Seedance) path. Genuine multi-speaker goes through the direct
+ * ElevenLabs Dialogue v3 API in ONE call — per-line voice resolution means ANY
+ * voice mix works (premade names, library UUIDs, clones); the old KIE proxy's
+ * premade-names-only limit (and its degrade-to-primary-voice fallback) is gone
+ * with the proxy itself. A single voice stays on direct TTS: it honours the
+ * voice's `ttsProvider` (turbo/multilingual/v3), which dialogue — always
+ * eleven_v3 — could not.
  */
 async function synthesizeDialogueTrack(
   ctx: Parameters<HandlerFn>[1],
@@ -1551,17 +1553,18 @@ async function synthesizeDialogueTrack(
   languageCode: string | undefined,
 ): Promise<string> {
   const distinctVoices = new Set(resolved.map((r) => r.voice))
-  const allPremade = resolved.every((r) => isKieAcceptedVoice(r.voice))
-  if (distinctVoices.size > 1 && allPremade) {
-    // Genuine multi-speaker, every voice KIE-premade → Dialogue v3 (one call).
-    const dia = await new KieAudioProvider().generateDialogue(
+  if (distinctVoices.size > 1) {
+    // Genuine multi-speaker, any voice mix → direct Dialogue v3 (one call).
+    const buf = await directElevenLabsDialogue(
       resolved.map((r) => ({ text: r.text, voice: r.voice })),
       languageCode ? { languageCode } : undefined,
     )
-    return runPostProcessing(() => uploadToR2(dia.url, ctx.jobId, "audio", ctx.jobUserId))
+    return runPostProcessing(() =>
+      uploadBufferToR2(buf, mediaObjectKey(ctx.jobId, "audio", "mp3"), "audio/mpeg", ctx.jobUserId),
+    )
   }
-  // Single voice OR any library/custom voice → direct ElevenLabs TTS (supports
-  // library/custom by id; premade names resolve too). Honour the voice's ttsProvider.
+  // Single voice → direct ElevenLabs TTS (supports library/custom by id;
+  // premade names resolve too). Honour the voice's ttsProvider.
   const ttsProvider = voices[0]?.ttsProvider
   const joined = resolved.map((r) => r.text).join(" ")
   const processed = ttsProvider === "elevenlabs-v3" ? joined : stripAudioTags(joined)

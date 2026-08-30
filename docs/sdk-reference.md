@@ -3128,6 +3128,26 @@ dub(input: {
 Dub an audio clip into another language while preserving each speaker's voice
 (`POST /v1/dubbing`).
 
+#### `textToDialogue(input)`
+
+```ts
+textToDialogue(input: {
+  dialogue: Array<{ text: string; voice: string }>  // in speaking order
+  stability?: 0 | 0.5 | 1
+  languageCode?: string                              // ISO 639-1 hint, auto-detected when omitted
+  seed?: number                                      // 0–4294967295; omit for random
+  applyTextNormalization?: "auto" | "on" | "off"
+}): Promise<{ jobId: string }>
+```
+
+Voice a multi-speaker script as ONE audio file (`POST /v1/text-to-dialogue`,
+ElevenLabs Dialogue v3). Each line's `voice` is a premade voice name or an
+ElevenLabs voice UUID — cloned and Voice Library voices work, mixed casts are
+fine, and line text may carry `[audio tags]` like `[laughs]`. At most 5,000
+characters total across lines (under 2,000 recommended for best quality) and
+10 unique voices per generation. Poll `jobs.get(jobId)` for
+`output_data.audioUrl`.
+
 ---
 
 ### `client.media`

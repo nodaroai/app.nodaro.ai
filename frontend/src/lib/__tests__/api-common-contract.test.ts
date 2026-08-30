@@ -387,7 +387,7 @@ describe("speechToVideoApi", () => {
 // ===========================================================================
 
 describe("textToDialogueApi", () => {
-  it("POSTs dialogue array + optional stability/languageCode", async () => {
+  it("POSTs dialogue array + optional stability/languageCode/seed/normalization", async () => {
     sessionWith("tok-dlg")
     const mock = mockFetchJson({ jobId: "jd" })
     vi.stubGlobal("fetch", mock)
@@ -396,7 +396,7 @@ describe("textToDialogueApi", () => {
       { text: "Hi", voice: "v1" },
       { text: "Bye", voice: "v2" },
     ]
-    await textToDialogueApi(dialogue, "user-2", 0.4, "en")
+    await textToDialogueApi(dialogue, "user-2", 0.4, "en", 42, "on")
 
     const [url, init] = lastCall(mock)
     expect(url).toBe("/v1/text-to-dialogue")
@@ -406,6 +406,8 @@ describe("textToDialogueApi", () => {
       userId: "user-2",
       stability: 0.4,
       languageCode: "en",
+      seed: 42,
+      applyTextNormalization: "on",
     })
   })
 

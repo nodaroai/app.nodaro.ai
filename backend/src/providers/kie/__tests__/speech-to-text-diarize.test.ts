@@ -11,7 +11,7 @@ vi.mock("../models.js", () => ({
   KIE_STT_MODELS: {
     "elevenlabs-stt": { model: "elevenlabs/speech-to-text", cost: 0.01 },
   },
-  KIE_DIALOGUE_MODELS: {},
+
 }))
 
 import { KieAudioProvider } from "../audio.js"

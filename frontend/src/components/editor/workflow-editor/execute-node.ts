@@ -3015,6 +3015,8 @@ export function executeNode(
           ctx.userId,
           d.stability,
           d.languageCode || undefined,
+          d.seed,
+          d.applyTextNormalization,
         ),
       "generatedAudioUrl",
       "Text to Dialogue",

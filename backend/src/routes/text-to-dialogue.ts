@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { getMaxTtsChars } from "@nodaro/shared"
 import { supabase } from "../lib/supabase.js"
 import { insertJob } from "../lib/insert-job.js"
 import { videoQueue } from "../lib/queue.js"
@@ -8,20 +9,31 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { isVoiceGenderAllowed, premadeVoiceGender } from "../lib/voice-policy.js"
+
+// Probed hard limit (2026-08-30): an 11th unique voice → 400 max_voices_exceeded.
+const MAX_UNIQUE_DIALOGUE_VOICES = 10
 
 const textToDialogueBody = z.object({
   dialogue: z.array(z.object({
     text: z.string().min(1),
     voice: z.string().min(1),
   })).min(1).refine(
-    (lines) => lines.reduce((sum, l) => sum + l.text.length, 0) <= 5000,
-    { message: "Total dialogue text must not exceed 5000 characters" }
+    // Same shared cap the panel counter and the GVP synth read — never a
+    // hand-kept literal (three copies of this number drifted before).
+    (lines) => lines.reduce((sum, l) => sum + l.text.length, 0) <= getMaxTtsChars("elevenlabs-dialogue"),
+    { message: `Total dialogue text must not exceed ${getMaxTtsChars("elevenlabs-dialogue")} characters` }
+  ).refine(
+    (lines) => new Set(lines.map((l) => l.voice)).size <= MAX_UNIQUE_DIALOGUE_VOICES,
+    { message: `A dialogue can use at most ${MAX_UNIQUE_DIALOGUE_VOICES} unique voices — reuse voices across lines or split the script into two nodes` }
   ),
   userPrompt: z.string().max(8000).optional(),
   stability: z.number().refine((v) => v === 0 || v === 0.5 || v === 1, {
     message: "Stability must be 0, 0.5, or 1",
   }).optional(),
   languageCode: z.string().max(10).optional(),
+  seed: z.number().int().min(0).max(4294967295).optional(),
+  applyTextNormalization: z.enum(["auto", "on", "off"]).optional(),
   userId: z.string().uuid().optional(),
 })
 
@@ -36,13 +48,29 @@ export async function textToDialogueRoutes(app: FastifyInstance) {
       })
     }
 
-    const { dialogue, stability, languageCode } = parsed.data
+    const { dialogue, stability, languageCode, seed, applyTextNormalization } = parsed.data
     const userId = req.userId
 
     if (!userId) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
       })
+    }
+
+    // B4c: reject any line whose PREMADE voice gender the deployment disallows
+    // (mirrors the TTS route). Custom / library / unknown-gender identifiers
+    // pass (UUIDs resolve to `undefined` gender). Unrestricted deployments are
+    // byte-identical (isVoiceGenderAllowed returns true when allowedGenders
+    // is []). Dialogue enforced this at NEITHER seam before — going direct
+    // removes even the KIE proxy's incidental name-clamping, so the policy
+    // gate must be explicit now.
+    for (const line of dialogue) {
+      const g = premadeVoiceGender(line.voice)
+      if (g !== undefined && !isVoiceGenderAllowed(g)) {
+        return reply.status(400).send({
+          error: { code: "voice_not_available", message: "A selected voice is not available on this deployment." },
+        })
+      }
     }
 
     const { data: job, error } = await insertJob(req, {
@@ -67,6 +95,8 @@ export async function textToDialogueRoutes(app: FastifyInstance) {
       dialogue,
       stability,
       languageCode,
+      seed,
+      applyTextNormalization,
       usageLogId,
     })
 

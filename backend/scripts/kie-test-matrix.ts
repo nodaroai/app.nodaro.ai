@@ -1466,23 +1466,6 @@ export const AUDIO_TEST_CONFIGS: TestConfig[] = [
     estimatedTimeSec: 15,
     skipByDefault: false,
   },
-
-  // --- Dialogue ---
-  {
-    modelKey: "elevenlabs-dialogue",
-    category: "dialogue",
-    kieModel: "elevenlabs/text-to-dialogue-v3",
-    expectedKieCredits: 10,
-    expectedCostUsd: 0.05,
-    configDesc: "ElevenLabs Text-to-Dialogue V3",
-    apiType: "standard",
-    input: { script: [{ voice_id: "21m00Tcm4TlvDq8ikWAM", text: "Hello world." }] },
-    requiresImage: false,
-    requiresAudio: false,
-    requiresVideo: false,
-    estimatedTimeSec: 15,
-    skipByDefault: false,
-  },
 ]
 
 // ---------------------------------------------------------------------------

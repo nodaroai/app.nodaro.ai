@@ -321,6 +321,55 @@ await check("the voice list says why it is limited without a key", async () => {
   return `${json.voices.length} built-in voices + an actionable hint`
 })
 
+await check("a keyless dialogue generation fails honestly (direct-ElevenLabs path)", async () => {
+  // Dialogue left the KIE proxy for the direct ElevenLabs API — a keyless
+  // install must now reach the SHARED missing-key ladder (key → connection →
+  // requireProviderKey), never a hang, a 500, or a raw vendor error.
+  if (ctx.keys.elevenlabs) {
+    return skip(
+      "a keyless dialogue generation fails honestly (direct-ElevenLabs path)",
+      "install has an ElevenLabs key",
+    )
+  }
+  const submitted = await api("/v1/text-to-dialogue", {
+    method: "POST",
+    token: ctx.token,
+    body: {
+      dialogue: [
+        { text: "Community smoke line one.", voice: "Rachel" },
+        { text: "And line two.", voice: "Daniel" },
+      ],
+    },
+  })
+  if (submitted.status >= 400) {
+    assert(submitted.status !== 500, `route 500'd: ${submitted.text.slice(0, 300)}`)
+    assertActionable(submitted.json?.error?.message, "text-to-dialogue refusal")
+    return `refused synchronously with ${submitted.status} and an actionable message`
+  }
+  const jobId = submitted.json?.jobId
+  assert(jobId, `no jobId in response: ${JSON.stringify(submitted.json).slice(0, 200)}`)
+
+  const deadline = Date.now() + JOB_TIMEOUT_MS
+  let last = null
+  while (Date.now() < deadline) {
+    const { json } = await api(`/v1/jobs/${jobId}/status`, { token: ctx.token })
+    last = json?.data
+    if (last?.status === "failed" || last?.status === "completed") break
+    await new Promise((r) => setTimeout(r, 2000))
+  }
+  // A connected install may legitimately COMPLETE the job through the cloud
+  // lane — that is the honest success shape, not a contract violation.
+  if (last?.status === "completed") {
+    return `job completed through the connection`
+  }
+  assert(
+    last?.status === "failed",
+    `job ${jobId} is "${last?.status}" after ${JOB_TIMEOUT_MS / 1000}s — a keyless install must fail it, not strand it`,
+  )
+  assertActionable(last.error_message, "keyless dialogue error_message")
+  return `job failed with: "${last.error_message}"`
+})
+
 await check("a keyless LLM route refuses cleanly", async () => {
   if (!ctx.keyless) {
     return skip("a keyless LLM route refuses cleanly", "install has a provider")

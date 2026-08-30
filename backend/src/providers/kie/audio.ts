@@ -17,7 +17,7 @@ import {
   runKieTask,
   MAX_POLL_ATTEMPTS_VIDEO,
 } from "./client.js"
-import { KIE_MUSIC_MODELS, KIE_TTS_MODELS, KIE_SOUND_EFFECT_MODELS, KIE_AUDIO_ISOLATION_MODELS, KIE_STT_MODELS, KIE_DIALOGUE_MODELS } from "./models.js"
+import { KIE_MUSIC_MODELS, KIE_TTS_MODELS, KIE_SOUND_EFFECT_MODELS, KIE_AUDIO_ISOLATION_MODELS, KIE_STT_MODELS } from "./models.js"
 import { deriveKieEgressDimensions } from "./egress-dimensions.js"
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
 import { defaultAllowedVoiceId } from "../../lib/voice-policy.js"
@@ -45,20 +45,6 @@ let voiceIdToName: Map<string, string> | null = null
  */
 export function registerVoiceLookup(voices: ReadonlyArray<{ voice_id: string; name: string }>) {
   voiceIdToName = new Map(voices.map((v) => [v.voice_id, v.name]))
-}
-
-/**
- * Check whether a voice identifier can be resolved to a KIE-accepted voice.
- * Returns false for Voice Library UUIDs and other non-KIE voices.
- */
-export function isKieAcceptedVoice(voice: string | undefined): boolean {
-  if (!voice) return true // will default to "Rachel"
-  if (KIE_ACCEPTED_VOICE_NAMES.has(voice)) return true
-  if (voiceIdToName) {
-    const name = voiceIdToName.get(voice)
-    if (name && KIE_ACCEPTED_VOICE_NAMES.has(name)) return true
-  }
-  return false
 }
 
 /**
@@ -383,59 +369,5 @@ export class KieAudioProvider
     )
 
     return { text, language, cost: actualCost, words: words.length ? words : undefined }
-  }
-
-  async generateDialogue(
-    dialogue: Array<{ text: string; voice: string }>,
-    options?: { stability?: number; languageCode?: string },
-    reconcileOpts?: ReconcileOpts,
-  ): Promise<ProviderResult> {
-    const modelConfig = KIE_DIALOGUE_MODELS["elevenlabs-dialogue"]
-    if (!modelConfig) {
-      throw createSanitizedError(
-        "elevenlabs-dialogue model not configured",
-        "Dialogue generation"
-      )
-    }
-
-    console.log(
-      `[KIE.ai] Generating dialogue with ${modelConfig.model}: ${dialogue.length} lines`
-    )
-
-    // Resolve each voice UUID to a KIE-accepted name
-    const resolvedDialogue = dialogue.map((line) => ({
-      ...line,
-      voice: resolveVoiceForKie(line.voice),
-    }))
-
-    const input: Record<string, unknown> = { dialogue: resolvedDialogue }
-    if (options?.stability != null) input.stability = options.stability
-    if (options?.languageCode) input.language_code = options.languageCode
-
-    const { resultJson, providerMs } = await runKieTask(
-      modelConfig.model,
-      input,
-      MAX_POLL_ATTEMPTS_VIDEO,
-      undefined,
-      // OUR Nodaro key (NOT modelConfig.model, the KIE provider id) for the
-      // egress seam — mirrors the sibling speechToText site above. Dialogue is
-      // character-priced, so the summed line lengths ride as `characters`.
-      { ...reconcileOpts, modelKey: "elevenlabs-dialogue", dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(input) } },
-    )
-
-    const audioUrl =
-      resultJson.resultUrls?.[0] ?? resultJson.audioUrl
-    if (!audioUrl) {
-      throw createSanitizedError(
-        "dialogue task succeeded but no URL found",
-        "Dialogue generation"
-      )
-    }
-
-    console.log(
-      `[KIE.ai] Dialogue completed: ${audioUrl} (cost: $${modelConfig.cost.toFixed(4)})`
-    )
-
-    return { url: audioUrl, cost: modelConfig.cost, ...(providerMs !== undefined && { providerMs }) }
   }
 }

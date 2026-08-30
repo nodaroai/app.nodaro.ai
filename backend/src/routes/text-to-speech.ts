@@ -17,7 +17,7 @@ import { isVoiceGenderAllowed, premadeVoiceGender } from "../lib/voice-policy.js
  *
  * v3 is the default for the common case (matches the editor's default and is
  * the highest-quality model), but v3's per-request cap
- * (`getMaxTtsChars("elevenlabs-v3")`, currently 3,000 chars) is far below the
+ * (`getMaxTtsChars("elevenlabs-v3")`, currently 5,000 chars) is far below the
  * route's 40,000-char ceiling. A legacy integration that always omits
  * `provider` and sends long text would otherwise be silently truncated by
  * the v3 clamp below it (previously "elevenlabs" aliased to turbo, cap
@@ -98,7 +98,7 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
     const modelIdentifier = resolvedProvider
 
     // Clamp to the model's verified per-request character cap (turbo 40000 /
-    // multilingual 10000 / v3 3000) so an over-long request can't be rejected by
+    // multilingual 10000 / v3 5000) so an over-long request can't be rejected by
     // the provider. Mutate parsed.data BEFORE destructuring below so both
     // input_data (built from parsed.data) and the queue payload (built from
     // the destructured `text`) see the clamped value.

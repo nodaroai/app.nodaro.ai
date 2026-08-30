@@ -352,12 +352,12 @@ A request is **voiced** only when a spec is present **and** the model can carry 
 
 | Audio mode | Models | Chain |
 |---|---|---|
-| `audio_driven` | `seedance-2`, `seedance-2-fast`, `seedance-2-mini`, `seedance-2-5`, `minimax-h3` (audio always on — no toggle) | Synthesize the dialogue (each line in its own voice) via ElevenLabs Dialogue v3 → feed as reference audio → the model lip-syncs to it. |
+| `audio_driven` | `seedance-2`, `seedance-2-fast`, `seedance-2-mini`, `seedance-2-5`, `minimax-h3` (audio always on — no toggle) | Synthesize the dialogue (each line in its own voice) via ElevenLabs Dialogue v3 (direct API — any voice mix works: premade, Voice Library, and cloned voices, no premade-only restriction) → feed as reference audio → the model lip-syncs to it. |
 | `native_speech` | `veo3`, `veo3.1`, `veo3_lite` (always on); `kling`, `kling-3.0` (behind the `sound` toggle — enabling it on Kling raises the credit cost, see the `:audio` composites below); `kling-3-omni` (audio included in the flat rate) | Bake the line during generation, then revoice the baked audio to the primary character voice (ElevenLabs voice-changer, keeping the music/SFX bed). |
 
 Kling models speak scripted dialogue natively: quote the line in the prompt (optionally with a voice description, e.g. `[Anna: warm calm voice]: "good morning"`) and enable sound. Kling 2.6 voices are English/Chinese; other languages are auto-translated to English by the model.
 
-**Speaker mapping.** Each `dialogue[].speaker` is matched (case-insensitive) to a `characterVoices[].speaker` to pick that line's `voiceId`. An unmatched speaker falls back to the default (first) voice, mirroring the pipeline's non-fatal missing-voice behavior. Total dialogue text is capped at 5000 characters (the Dialogue v3 limit); lines over the budget are dropped with a log entry.
+**Speaker mapping.** Each `dialogue[].speaker` is matched (case-insensitive) to a `characterVoices[].speaker` to pick that line's `voiceId`. An unmatched speaker falls back to the default (first) voice, mirroring the pipeline's non-fatal missing-voice behavior. Total dialogue text is capped at 5,000 characters (the shared Dialogue v3 limit); lines over the budget are dropped with a log entry.
 
 ### Credit pricing (character voice)
 
