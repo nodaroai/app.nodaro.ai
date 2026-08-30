@@ -16,13 +16,17 @@
  * This wrapper collapses them into one.
  *
  * THE NO-OP CONTRACT (load-bearing — the platform-caller parity relies on it):
- * the two platform callers (`execute-node` / `payload-builder`) compose their
- * prompt from the canvas graph themselves and pass NO cinematic `direction`
- * ids and NO `structured` fields. In that case `composePromptText` MUST return
- * the caller's `userPrompt` byte-for-byte unchanged, so the wrapper degenerates
- * to exactly the `buildImagePrompt(...)` call those sites make today. Studio
- * (and the MCP route) supply `direction` / `structured` and get the id-hint
- * composition on top.
+ * a node that carries NO stored `direction` / `structured` (every workflow
+ * authored before the canvas honored them) still reaches here with both absent,
+ * and `composePromptText` MUST return the caller's `userPrompt` byte-for-byte
+ * unchanged, so the wrapper degenerates to exactly the `buildImagePrompt(...)`
+ * call those sites made before. The platform callers (`execute-node` /
+ * `payload-builder`) compose their prompt from the canvas GRAPH themselves and
+ * ALSO forward a node's STORED `direction` / `structured` when it carries them
+ * (`readDirectionFields` / `readStructuredFields`); those nodes get the id-hint
+ * composition on top, ADDITIVE to the graph-wired cinematography hints the
+ * caller already folded into `userPrompt`. Studio and the MCP route supply the
+ * same two levers directly.
  *
  * THE EMPTY-CHECK FLAG (also load-bearing for parity): `execute-node` rejects a
  * truly-empty assembled prompt (its "type one, mention a character, or connect
@@ -52,8 +56,9 @@ import type { CharacterDef, ConnectedReference, IdentityMeta } from "@nodaro/sha
  * canvas node data expose — all optional. The dimensions, their canonical fold
  * ORDER and their per-catalog rendering live in `direction-registry.ts`; this
  * re-export keeps the import path stable for existing consumers. The platform
- * callers pass none of these (they fold their hints from the graph into
- * `userPrompt` themselves).
+ * callers fold their GRAPH-WIRED hints into `userPrompt` themselves and pass
+ * these only when the node carries them as stored data (Studio-emitted graphs,
+ * spec D3).
  */
 export type { DirectionFields }
 
@@ -76,8 +81,9 @@ export interface AssembleImageInput {
   connectedReferences?: ConnectedReference[]
   /**
    * Flat cinematic-direction ids → folded into the prompt as hints. Studio /
-   * MCP-route use; the platform callers pass none (so `composePromptText` is a
-   * no-op for them and the result is byte-identical to today).
+   * MCP-route use, and the platform callers' narrow-read of a node's STORED
+   * `data.direction`; absent on a node that carries none (so `composePromptText`
+   * is a no-op for it and the result is byte-identical to today).
    */
   direction?: DirectionFields
   /** Path-1 structured fields → composed fragment appended to the prompt. */
@@ -144,12 +150,17 @@ export interface AssembleImageInput {
  * so the structured fragment always lands LAST.
  *
  * EXACT NO-OP CONTRACT: when there are no cinematic/structured hint pieces (the
- * platform-caller case — execute-node / payload-builder never pass `direction`/
- * `structured`), the user's prompt is returned **verbatim, untrimmed** by
- * `joinPromptHints`. This is load-bearing for parity: the old platform path
- * passed the prompt straight to `buildImagePrompt`, which never trims, so
- * trimming here would change the assembled prompt (and the recorded
- * `jobs.input_data`) byte-for-byte. Never mutates inputs.
+ * platform-caller case for a node that carries no stored `direction`/
+ * `structured` — every workflow authored before the canvas honored them), the
+ * user's prompt is returned **verbatim, untrimmed** by `joinPromptHints`. This
+ * is load-bearing for parity: the old platform path passed the prompt straight
+ * to `buildImagePrompt`, which never trims, so trimming here would change the
+ * assembled prompt (and the recorded `jobs.input_data`) byte-for-byte. Never
+ * mutates inputs.
+ *
+ * A node that DOES carry `direction`/`structured` takes the join branch and is
+ * therefore trimmed + `". "`-joined — intended, and asserted at the caller
+ * level by the payload-builder before/after test.
  */
 function composePromptText(
   userPrompt: string,
