@@ -111,6 +111,13 @@ export interface ManualReferenceImage {
  * `payload-builder.ts` for the build-time logic.
  */
 export interface ExtraRef {
+  /**
+   * Stable id of this row, when it has one — what a `{ref:<id>}` prompt token
+   * names (the API/Studio form of `{image:N}`). Passed through to the shared
+   * video resolver's slot map on both the canvas run and the orchestrator.
+   * The editor never writes `{ref:}` itself; rows without an id number normally.
+   */
+  readonly id?: string
   /** R2 URL of the reference image (uploaded or from a character asset). */
   readonly url: string
   /** Free-form description appended to the prompt's identity directive. */

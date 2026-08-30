@@ -15,7 +15,7 @@ import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, isMinimaxH3Provider, isVeoProvider, estimateLoopTrimAddonCredits, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, buildVideoCreditModelIdentifier, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, type ConnectedReference } from "@nodaro/shared"
-import { resolveVideoReferenceCore, resolveReferenceTokens, type VideoExtraRef, type CharacterMeta } from "@nodaro/prompts"
+import { resolveVideoReferenceCore, resolveReferenceTokens, resolveRefIdTokens, type VideoExtraRef, type CharacterMeta } from "@nodaro/prompts"
 import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { backendHybridRoles } from "../lib/reference-format.js"
@@ -195,17 +195,31 @@ export function assembleVideoConnectedReferences(args: {
   const imageCap =
     args.imageCapOverride !== undefined ? Math.min(Math.max(0, args.imageCapOverride), providerCap) : providerCap
 
+  // Every reference the caller named, by ITS id → display name — built from the
+  // FULL list, before any cap, so a `{ref:<id>}` for a reference that never
+  // reaches the walk (capped out below, or no image support at all) degrades to
+  // the name the caller gave it rather than to nothing.
+  const refNamesById = new Map<string, string>()
+  for (const r of connectedReferences) {
+    if (r.id && !refNamesById.has(r.id)) refNamesById.set(r.id, r.defaultName)
+  }
+
   // Provider can't carry image references → nothing to attach. Strip the
   // editor's `{image:N}` tokens to bare labels so they never ship raw to the
   // model; `{video:N}` / `{audio:N}` still resolve against the flat ref counts.
+  // `{ref:<id>}` degrades the same way (label → name → nothing). A prompt that
+  // resolves to nothing ships as empty text — never as the raw token.
   if (imageCap <= 0) {
+    const resolved = resolveReferenceTokens(
+      resolveRefIdTokens(prompt, { slotById: new Map(), nameById: refNamesById, imageCount: 0 }),
+      {
+        image: 0,
+        video: referenceVideoCount,
+        audio: referenceAudioCount,
+      },
+    )
     return {
-      prompt:
-        resolveReferenceTokens(prompt, {
-          image: 0,
-          video: referenceVideoCount,
-          audio: referenceAudioCount,
-        }) ?? prompt,
+      prompt: resolved ?? (prompt === undefined ? undefined : ""),
       referenceImageUrls: baseReferenceImageUrls,
     }
   }
@@ -239,6 +253,8 @@ export function assembleVideoConnectedReferences(args: {
       wiredCharRefs.push(r)
     } else {
       extraRefs.push({
+        // The caller's own id — what a `{ref:<id>}` token in the prompt names.
+        id: r.id,
         url: r.url,
         // Best available label for the "(reference): <…>" bullet.
         description: (r.description ?? "").trim() || r.defaultName,
@@ -294,6 +310,8 @@ export function assembleVideoConnectedReferences(args: {
     // BE gate: same env determination as the image side (see reference-format.ts).
     // default false = legacy block (dark in prod); flips in lockstep with image.
     hybridRoles: backendHybridRoles(),
+    // `{ref:<id>}` degrade names for the refs the cap kept OUT of the walk.
+    refNamesById,
   })
 
   // `core.additionalUrls` is already `[leading flat refs, …asset URLs]` (D5), so

@@ -879,6 +879,17 @@ orchestrator already use):
   `wired-character` refs.
 - **`{image:N:label}` tokens in `prompt` expand** to `the <label> from @image_N`,
   numbered against the attached references (front-of-list order).
+- **`{ref:<id>}` / `{ref:<id>:label}` address a reference by its own id.** Write
+  the `id` you gave the entry in `connectedReferences` and the platform substitutes
+  its `@image_N` seat *after* it has numbered the references (flat
+  `referenceImageUrls` first, then unmentioned wired characters, then the other
+  entries, in order) — so you never compute `N` yourself, and a later change to
+  the numbering can't misbind your picture. Ids are opaque and may contain `:`
+  and `/` (an image URL is a fine id). A token whose reference was not attached
+  (capped out, or a provider without reference support) drops to its label, else
+  the entry's `defaultName`, else nothing — it never reaches the model raw.
+  `{ref:}` follows the reference through `referenceOrder`; `{image:N}` keeps its
+  literal `N`. The canvas editor keeps writing `{image:N}`.
 - **`referenceOrder`** (an optional string array of stable ref ids) reorders the
   reference list and renumbers the `@image_N` bindings to match.
 - **`identityLock` (per-reference, opt-in — default off).** Each
