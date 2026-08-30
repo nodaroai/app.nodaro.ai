@@ -362,10 +362,10 @@ charged) — generated and drift-guarded internally, never hand-written.
 
 | Tier | ≤60s | ≤180s | ≤360s | ≤600s |
 |------|------|-------|-------|-------|
-| `fast` (economy) | 180 | 185 | 514 | 846 |
-| `pro` (default) | 215 | 231 | 636 | 1050 |
-| `mixed` / `mixed-fast` | 268 | 289 | 724 | 1169 |
-| `smart` (highest accuracy) | 410 | 500 | 1259 | 2064 |
+| `fast` (economy) | 181 | 185 | 515 | 848 |
+| `pro` (default) | 216 | 232 | 640 | 1056 |
+| `mixed` / `mixed-fast` | 270 | 291 | 729 | 1177 |
+| `smart` (highest accuracy) | 413 | 503 | 1267 | 2076 |
 
 The two mixed tiers are variants of the same advanced analysis and share one
 price: `mixed` is tuned for maximum result quality; `mixed-fast` for the most
@@ -378,6 +378,14 @@ disappears from later scenes). Every correction and watch flag is disclosed in
 the result's `warnings`.
 
 > These values are the internal pricing formula's current outputs.
+
+> **Schedule refreshed, 2026-08-30.** The analysis doctrine gained a defined
+> transition vocabulary (twelve named values, with an absent transition
+> asserting nothing) on top of the earlier on-screen-text and shot-craft
+> additions. Each addition lengthens the instructions the analyser reads on
+> every window, so the formula's output ticks up: across those rounds most
+> buckets rose by well under 1% each. The tables above are the current values;
+> nothing about how a tier is priced changed.
 
 > **Hybrid smart plan + measured judge/refine terms, 2026-08-03.** The `smart`
 > tier is now a **hybrid plan**: one native skeleton pass blended with several

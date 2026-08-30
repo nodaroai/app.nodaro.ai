@@ -964,10 +964,14 @@ returns 400 `validation_error`):
 |---|---|---|
 | `detail` | `compact` (default) / `full` | `compact`: `id`, `label`, `category`, `term`, `icon`. `full`: additionally includes each option's `description` and `promptHint` (the prompt fragment it injects). |
 | `category` | string | Single-dim pickers: filter options to one category. |
-| `field` | string | Multi-dim pickers (person / styling / framing): return only this dimension's field. |
+| `field` | string | Return only this dimension's field — multi-dim pickers (person / styling / framing), and the secondary parameters of a single-dim picker (transition / character-fx: `position` / `duration` / `intensity`). |
 
 A single-dim catalog carries `options`; a multi-dim catalog carries
-`dimensions` (one `{ field, label, options }` per field). Every option carries a
+`dimensions` (one `{ field, label, options }` per field). A single-dim catalog
+with secondary parameter fields beside its main picker — `transition` and
+`character-fx`, whose `position` / `duration` / `intensity` dropdowns are
+catalogs in their own right — carries **both**: `options` for the picker and
+`dimensions` for the three secondary fields. Every option carries a
 `term` at **both** detail levels — the short professional phrase to inject into
 a prompt when you want a compact instruction (`"whip pan left"`), where `label`
 is display-only and `promptHint` is the full mechanism sentence. It is `""` for
@@ -998,7 +1002,7 @@ Query param (a bad value returns 400 `validation_error`):
 |---|---|---|
 | `detail` | `compact` (default) / `full` | `compact`: `id`, `label`, `category`, `term`, `icon`. `full`: additionally includes each option's `description` and `promptHint`. |
 
-Each `ProjectedCatalog` is `{ nodeType, label, catalogId, kind, valueField?, defaultValue?, categoryOrder?, categoryLabels?, detail, options?, fields?, dimensions? }` — single-dim catalogs carry `options`; multi-dim catalogs carry `dimensions` (one `{ field, label, options }` per field). Each option is `{ id, label, category?, term, icon?, description?, promptHint? }`; `term` rides at **both** detail levels so a thin client can render `label` and inject the compact professional term without a second `detail=full` fetch. The shape is deliberately tag/policy-free.
+Each `ProjectedCatalog` is `{ nodeType, label, catalogId, kind, valueField?, defaultValue?, categoryOrder?, categoryLabels?, detail, options?, fields?, dimensions? }` — single-dim catalogs carry `options`; multi-dim catalogs carry `dimensions` (one `{ field, label, options }` per field); a single-dim catalog with secondary parameter fields (`transition`, `character-fx`: `position` / `duration` / `intensity`) carries both. Each option is `{ id, label, category?, term, icon?, description?, promptHint? }`; `term` rides at **both** detail levels so a thin client can render `label` and inject the compact professional term without a second `detail=full` fetch. The shape is deliberately tag/policy-free.
 
 ### Text → pickers (AI Fill)
 

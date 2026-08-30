@@ -231,11 +231,12 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     label: "Video Analysis",
     category: "processing",
     // outputType: data — emits the scene-segmented analysis JSON via the `json` handle.
-    // Duration-bucketed pricing: <model>:60s → <model>:600s (2cr small clip fast → 14cr @10min mixed);
+    // Duration-bucketed pricing: <model>:60s → <model>:600s (181cr small clip on the legacy
+    // fast tier → 2076cr @10min smart — the range below is the table's min..max);
     // unknown duration reserves the 600s ceiling. See @nodaro/shared video-analysis-pricing.ts.
     description: "Scene-segmented analysis of a video: prompt-ready visuals, camera language, mode-tagged audio, castable entity slots.",
     outputType: "data",
-    creditCost: "2-14",
+    creditCost: "181-2076",
     inputSchema: {
       fields: [
         { key: "videoUrl", type: "string" },
@@ -267,7 +268,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     description:
       "Re-watches a clip against a wired analysis (or auto-runs a fast analysis first when none is wired), applies video-verified corrections under guards, and returns a disclosed report of what was checked, fixed, and left open.",
     outputType: "data",
-    creditCost: "214-1917",
+    creditCost: "215-1921",
     inputSchema: {
       fields: [
         { key: "videoUrl", type: "video-url", required: true },

@@ -1,5 +1,36 @@
 # @nodaro/prompts
 
+## 1.10.0
+
+### Minor Changes
+
+- b07cb56: feat(character-fx): expose the character-fx node's position / duration / intensity as catalog dimensions.
+
+  The character-fx node has always had three timing parameters beside its 57-effect picker, and the platform has always owned their wording — `POSITION_CLAUSES` / `DURATION_CLAUSES` / `INTENSITY_CLAUSES` were composed into the hint at runtime. What was missing is that no consumer could _enumerate_ them, so an id-only client (Studio, the SDK, MCP) had no way to offer the controls without inventing prompt text of its own. The transition node's identical gap was closed in the previous minor; character-fx was the last node with these three fields that a catalog consumer could not see.
+
+  - New exports `CHARACTER_FX_POSITIONS`, `CHARACTER_FX_DURATIONS`, `CHARACTER_FX_INTENSITIES` — graded scales in the same shape as every other catalog (id, label, description, `promptHint`, `term`), each led by a no-op `auto` whose hint is empty.
+  - The three clause tables AND the `CharacterFxPosition` / `CharacterFxDuration` / `CharacterFxIntensity` unions are now DERIVED from those arrays, so the clause the composer injects, the option list the API serves, and the type a consumer writes against all come from one place. The unions resolve to exactly the same members as before — no consumer change — but a step can no longer exist in one of the three and not the others.
+  - The `character-fx` catalog carries them as `dimensions` (the same additive shape `transition` already uses), so `GET /v1/catalogs`, `GET /v1/picker-catalogs/character-fx`, the MCP `get_picker_catalog` tool and `client.pickerCatalogs.get("character-fx")` all return the three option lists at both detail levels. A consumer reading only `options` is unaffected.
+  - These are the character-fx scales, not the transition ones: the ids match, but the wording is deliberately different (an effect _manifests_ and _persists_; a transition _occurs_ and _spans_). Read each node's own rows.
+
+  No prompt text changed: every hint is byte-identical to the clause that was already being injected.
+
+- 7ca2869: feat(video): `{ref:<id>}` / `{ref:<id>:<label>}` — address a video reference by its own id.
+
+  A caller that passes `connectedReferences` to the video routes can now name a reference in the `prompt` by the `id` it gave that entry, and the platform substitutes the `@image_N` seat after it has numbered the references. Until now a client that wanted the binding inline had to compute `N` itself — a client-side mirror of the platform's numbering walk (flat refs → mentioned characters → unmentioned wired characters → the rest, bounded by the provider's image cap) that silently misbound pictures the moment the walk changed.
+
+  - `resolveVideoReferenceCore` records each reference's seat as it numbers (`id → @image_N`) and resolves `{ref:<id>}` tokens against that map — before the `referenceOrder` reorder, so the binding follows the reference to its final seat. `{image:N}` / `{video:N}` / `{audio:N}` are unchanged: still resolved after the reorder, still keeping the author's literal `N`.
+  - Ids are opaque and may contain `:` and `/`; they are matched by identity against the known ids, never parsed by character class. The optional `:<label>` uses the same label class as `{image:N:label}` and renders `the <label> from @image_N`.
+  - A token never ships raw: an unknown id, a reference the walk skipped, one the provider cap dropped, or a provider without image-reference support degrades to the label, else the reference's display name, else nothing. New core input `refNamesById` lets a caller supply names for references it capped out before the walk; new exported `resolveRefIdTokens` is the standalone resolver.
+  - `VideoExtraRef.id` (prompts) and `ExtraRefInput.id` (shared) carry the row id through to the slot map. Additive: extras without an id number exactly as before.
+  - No output changes for prompts that carry no `{ref:` token.
+
+### Patch Changes
+
+- Updated dependencies [9915a46]
+- Updated dependencies [7ca2869]
+  - @nodaro/shared@2.14.0
+
 ## 1.9.0
 
 ### Minor Changes
