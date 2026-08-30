@@ -106,14 +106,14 @@ internally, never hand-written.
 
 | Family | ≤60s | ≤180s | ≤360s | ≤600s |
 |--------|------|-------|-------|-------|
-| Analysis wired (`video-audit`) | 213 | 289 | 659 | 1066 |
-| No analysis wired (`video-audit:auto`) | 393 | 474 | 1173 | 1912 |
+| Analysis wired (`video-audit`) | 215 | 290 | 663 | 1073 |
+| No analysis wired (`video-audit:auto`) | 396 | 475 | 1178 | 1921 |
 
 **Worked example.** A 72-second clip falls in the ≤180s bucket. Wire a
 finished analysis into the Analysis handle and the audit — a re-check only —
-costs **289 credits**. Leave that handle unwired and the node must run its own
+costs **290 credits**. Leave that handle unwired and the node must run its own
 fast analysis before it can audit anything, so the same 72-second clip costs
-**474 credits** instead.
+**475 credits** instead.
 
 Wiring an analysis whenever you already have one is always the cheaper path —
 the `video-audit:auto` family's extra cost is the fast analysis pass it runs

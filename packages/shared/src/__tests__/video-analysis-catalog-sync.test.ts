@@ -160,9 +160,11 @@ describe("bare video-analysis node-type credit id", () => {
     // trued up every tier's judge/refine terms), 355 wrote 2068: the
     // recast shot-craft Stage-1 doctrine (transitions + on-screen text, three
     // required wire fields) grew the analyser's system prompt, moving the
-    // plugin's token pin 8_203 -> 8_482, and 356 wrote 2071: Stage 1.3 grew
-    // that prompt again, moving the pin 8_482 -> 8_706.
-    expect(ceiling).toBe(2071)
+    // plugin's token pin 8_203 -> 8_482, 356 wrote 2071: Stage 1.3 grew
+    // that prompt again, moving the pin 8_482 -> 8_706, and 357 wrote 2076:
+    // the transition vocabulary v2 doctrine (twelve named values; absent =
+    // nothing asserted) grew it once more, moving the pin 8_706 -> 9_082.
+    expect(ceiling).toBe(2076)
   })
 
   it("the bare id still bounds the default tier at the ceiling bucket", () => {
