@@ -230,21 +230,21 @@ describe("billing — the display-unit trio is coherent or absent (Phase B, §3.
   afterEach(() => vi.restoreAllMocks())
 
   it("stock default: inherit + self-serve on, no unit", () => {
-    expect(SURFACE_PROFILE_DEFAULT.billing).toEqual({ costTab: "inherit", selfServe: true })
-    expect(parseSurfaceProfile(JSON.stringify({})).billing).toEqual({ costTab: "inherit", selfServe: true })
+    expect(SURFACE_PROFILE_DEFAULT.billing).toEqual({ costTab: "inherit", sidebarCard: "inherit", selfServe: true })
+    expect(parseSurfaceProfile(JSON.stringify({})).billing).toEqual({ costTab: "inherit", sidebarCard: "inherit", selfServe: true })
   })
 
   it("keeps a coherent trio (label + rate, optional decimals) and trims the label", () => {
     const p = parseSurfaceProfile(JSON.stringify({ billing: { unitLabel: " קרדיטים ", unitRate: 2000, selfServe: false, costTab: "hidden" } }))
-    expect(p.billing).toEqual({ costTab: "hidden", selfServe: false, unitLabel: "קרדיטים", unitRate: 2000 })
+    expect(p.billing).toEqual({ costTab: "hidden", sidebarCard: "inherit", selfServe: false, unitLabel: "קרדיטים", unitRate: 2000 })
     const q = parseSurfaceProfile(JSON.stringify({ billing: { unitLabel: "u", unitRate: 0.07, unitDecimals: 2 } }))
-    expect(q.billing).toEqual({ costTab: "inherit", selfServe: true, unitLabel: "u", unitRate: 0.07, unitDecimals: 2 })
+    expect(q.billing).toEqual({ costTab: "inherit", sidebarCard: "inherit", selfServe: true, unitLabel: "u", unitRate: 0.07, unitDecimals: 2 })
   })
 
   it("both-or-neither: a label without a rate (or vice versa) drops BOTH, loudly", () => {
     const { calls } = warn()
-    expect(parseSurfaceProfile(JSON.stringify({ billing: { unitLabel: "u" } })).billing).toEqual({ costTab: "inherit", selfServe: true })
-    expect(parseSurfaceProfile(JSON.stringify({ billing: { unitRate: 2000 } })).billing).toEqual({ costTab: "inherit", selfServe: true })
+    expect(parseSurfaceProfile(JSON.stringify({ billing: { unitLabel: "u" } })).billing).toEqual({ costTab: "inherit", sidebarCard: "inherit", selfServe: true })
+    expect(parseSurfaceProfile(JSON.stringify({ billing: { unitRate: 2000 } })).billing).toEqual({ costTab: "inherit", sidebarCard: "inherit", selfServe: true })
     expect(calls().filter((m) => m.includes("both or neither")).length).toBe(2)
   })
 
@@ -285,7 +285,7 @@ describe("billing — the display-unit trio is coherent or absent (Phase B, §3.
 
   it("decimals without a label/rate is dropped; an empty label is dropped", () => {
     warn()
-    expect(parseSurfaceProfile(JSON.stringify({ billing: { unitDecimals: 2 } })).billing).toEqual({ costTab: "inherit", selfServe: true })
+    expect(parseSurfaceProfile(JSON.stringify({ billing: { unitDecimals: 2 } })).billing).toEqual({ costTab: "inherit", sidebarCard: "inherit", selfServe: true })
     expect(parseSurfaceProfile(JSON.stringify({ billing: { unitLabel: "   ", unitRate: 2000 } })).billing.unitLabel).toBeUndefined()
   })
 
@@ -300,8 +300,40 @@ describe("billing — the display-unit trio is coherent or absent (Phase B, §3.
   it("costTab: an unknown value degrades to inherit; a non-object billing block degrades to the default", () => {
     warn()
     expect(parseSurfaceProfile(JSON.stringify({ billing: { costTab: "bogus" } })).billing.costTab).toBe("inherit")
-    expect(parseSurfaceProfile(JSON.stringify({ billing: "x" })).billing).toEqual({ costTab: "inherit", selfServe: true })
+    expect(parseSurfaceProfile(JSON.stringify({ billing: "x" })).billing).toEqual({ costTab: "inherit", sidebarCard: "inherit", selfServe: true })
     // …and never takes the rest of the profile down with it.
     expect(parseSurfaceProfile(JSON.stringify({ billing: "x", nav: { hide: ["gallery"] } })).nav.hide).toEqual(["gallery"])
+  })
+
+  it("sidebarCard: \"hidden\" survives the parse (does not vanish in coherentBilling); unknown/absent degrade to inherit", () => {
+    warn()
+    // The trap: coherentBilling constructs its output explicitly — a field
+    // parsed but not threaded through would validate and then silently vanish.
+    const p = parseSurfaceProfile(JSON.stringify({ billing: { sidebarCard: "hidden", selfServe: false } }))
+    expect(p.billing.sidebarCard).toBe("hidden")
+    // …also alongside a coherent unit trio (the hosted-instance shape).
+    const q = parseSurfaceProfile(JSON.stringify({ billing: { sidebarCard: "hidden", unitLabel: "u", unitRate: 2000 } }))
+    expect(q.billing).toEqual({ costTab: "inherit", sidebarCard: "hidden", selfServe: true, unitLabel: "u", unitRate: 2000 })
+    expect(parseSurfaceProfile(JSON.stringify({ billing: { sidebarCard: "bogus" } })).billing.sidebarCard).toBe("inherit")
+    expect(parseSurfaceProfile(JSON.stringify({ billing: {} })).billing.sidebarCard).toBe("inherit")
+  })
+})
+
+describe("sidebar surface additions — integrations nav key, studio tab key, brand wordmark", () => {
+  it("nav.hide accepts \"integrations\"", () => {
+    const p = parseSurfaceProfile(JSON.stringify({ nav: { hide: ["integrations", "pricing"] } }))
+    expect(p.nav.hide).toEqual(["integrations", "pricing"])
+  })
+
+  it("dashboard.tabs accepts \"studio\" (the workspace strip's Studio list is narrowable)", () => {
+    const p = parseSurfaceProfile(JSON.stringify({ dashboard: { tabs: ["workflows", "projects", "studio"] } }))
+    expect(p.dashboard.tabs).toEqual(["workflows", "projects", "studio"])
+  })
+
+  it("brand.wordmark survives beside productName; absent stays absent (text-only lockup)", () => {
+    const p = parseSurfaceProfile(JSON.stringify({ brand: { productName: "Acme Studio", wordmark: "Studio" } }))
+    expect(p.brand.productName).toBe("Acme Studio")
+    expect(p.brand.wordmark).toBe("Studio")
+    expect(parseSurfaceProfile(JSON.stringify({ brand: { productName: "Acme Studio" } })).brand.wordmark).toBeUndefined()
   })
 })

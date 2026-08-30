@@ -185,6 +185,7 @@ import { textToDialogueRoutes } from "./routes/text-to-dialogue.js"
 import { imageToTextRoutes } from "./routes/image-to-text.js"
 import { describeToPickerRoutes } from "./routes/describe-to-picker.js"
 import { textToPickerRoutes } from "./routes/text-to-picker.js"
+import { llmStructuredRoutes } from "./routes/llm-structured.js"
 import { shotsRoutes } from "./routes/shots.js"
 import { modelsRoutes } from "./routes/models.js"
 import { voicesRoutes } from "./routes/voices.js"
@@ -557,6 +558,7 @@ export async function buildApp() {
   await app.register(imageToTextRoutes)
   await app.register(describeToPickerRoutes)
   await app.register(textToPickerRoutes)
+  await app.register(llmStructuredRoutes)
   await app.register(shotsRoutes)
   await app.register(modelsRoutes)
   await app.register(voicesRoutes)

@@ -35,31 +35,27 @@ import {
   buildImagePrompt,
   type BuildImagePromptResult,
 } from "./prompt-builder.js"
-import { getFramingPromptHint } from "./framing.js"
-import { getLightingPromptHint } from "./lighting.js"
-import { getLensPromptHint } from "./lens.js"
-import { getCameraFormatPromptHint } from "./camera-format.js"
 import {
   renderStructuredFields,
   type StructuredPromptFields,
 } from "./prompt-builder-structured-fields.js"
+import {
+  renderDirectionHints,
+  IMAGE_HINT_MODE_DEFAULT,
+  type DirectionFields,
+} from "./direction-registry.js"
+import { joinPromptHints } from "./prompt-hint-join.js"
 import type { CharacterDef, ConnectedReference, IdentityMeta } from "@nodaro/shared"
 
 /**
- * Flat cinematic-direction ids the Studio framing UI (and the MCP route)
- * expose — all optional. Promoted here from Studio's `assembly.ts` so the
- * id → hint composition lives in one place. The platform callers pass none of
- * these (they fold their hints from the graph into `userPrompt` themselves).
+ * Flat cinematic-direction ids the Studio framing UI, the MCP route and the
+ * canvas node data expose — all optional. The dimensions, their canonical fold
+ * ORDER and their per-catalog rendering live in `direction-registry.ts`; this
+ * re-export keeps the import path stable for existing consumers. The platform
+ * callers pass none of these (they fold their hints from the graph into
+ * `userPrompt` themselves).
  */
-export interface DirectionFields {
-  /** Shot Type — the FRAMINGS shot-size/coverage/composition/vantage dimensions. */
-  framingId?: string
-  /** Angle — the FRAMINGS angle dimension (separate pill, so it can coexist with Shot Type). */
-  framingAngleId?: string
-  lightingId?: string
-  lensId?: string
-  cameraFormatId?: string
-}
+export type { DirectionFields }
 
 /**
  * Input to `assembleImageInput`. A faithful SUPERSET of what the two platform
@@ -142,17 +138,18 @@ export interface AssembleImageInput {
 
 /**
  * Compose the cinematic-direction hints + structured-field fragment with the
- * user's prompt. Each `get*PromptHint` returns "" on a miss, and
- * `renderStructuredFields` returns "" when nothing is populated.
+ * user's prompt. `renderDirectionHints` folds the `direction` ids in the
+ * registry's canonical table order (unknown keys and unknown ids contribute
+ * nothing), and `renderStructuredFields` returns "" when nothing is populated —
+ * so the structured fragment always lands LAST.
  *
  * EXACT NO-OP CONTRACT: when there are no cinematic/structured hint pieces (the
  * platform-caller case — execute-node / payload-builder never pass `direction`/
- * `structured`), the user's prompt is returned **verbatim, untrimmed**. This is
- * load-bearing for parity: the old platform path passed the prompt straight to
- * `buildImagePrompt`, which never trims, so trimming here would change the
- * assembled prompt (and the recorded `jobs.input_data`) byte-for-byte. We only
- * trim the user prompt when joining it WITH hints, so it reads cleanly
- * ("prompt. hint", not "prompt . hint"). Never mutates inputs.
+ * `structured`), the user's prompt is returned **verbatim, untrimmed** by
+ * `joinPromptHints`. This is load-bearing for parity: the old platform path
+ * passed the prompt straight to `buildImagePrompt`, which never trims, so
+ * trimming here would change the assembled prompt (and the recorded
+ * `jobs.input_data`) byte-for-byte. Never mutates inputs.
  */
 function composePromptText(
   userPrompt: string,
@@ -160,19 +157,10 @@ function composePromptText(
   structured: StructuredPromptFields | undefined,
 ): string {
   const hints = [
-    getFramingPromptHint(direction?.framingId),
-    getFramingPromptHint(direction?.framingAngleId),
-    getLightingPromptHint(direction?.lightingId),
-    getLensPromptHint(direction?.lensId),
-    getCameraFormatPromptHint(direction?.cameraFormatId),
+    ...renderDirectionHints(direction, { surface: "image", mode: IMAGE_HINT_MODE_DEFAULT }),
     structured ? renderStructuredFields(structured) : "",
   ].filter((p) => p.length > 0)
-  // No hints → verbatim (exact no-op = platform parity). With hints → trim the
-  // user prompt so the ". " join is clean. The trailing filter drops a blank
-  // user prompt so the join never starts with ". " (parity-critical — don't
-  // remove it as "redundant": `hints` is pre-filtered but `userPrompt` is not).
-  if (hints.length === 0) return userPrompt
-  return [userPrompt.trim(), ...hints].filter((p) => p.length > 0).join(". ")
+  return joinPromptHints(userPrompt, hints)
 }
 
 /**

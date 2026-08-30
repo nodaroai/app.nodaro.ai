@@ -983,6 +983,61 @@ Mentioning a reference **re-seats** it: its URL moves from the trailing
 auto-attach block into the mention block, which re-letters the references after
 it. That is the point of the feature — the letters follow the sentence.
 
+### Cinematic direction (`direction`) on generate-image
+
+`POST /v1/generate-image` accepts an optional `direction` object: a flat map of
+**catalog ids**, one key per cinematic dimension, which the platform folds into
+the prompt as its own hint clauses. Send ids, not prose — the wording stays
+platform-owned, so a saved production picks up improved phrasing instead of
+freezing whatever text your client wrote the day it was saved.
+
+```json
+{
+  "prompt": "a knight on a hill",
+  "provider": "nano-banana",
+  "direction": {
+    "shotSize": "wide-shot",
+    "lightingStyle": "rembrandt",
+    "style": "anime",
+    "mood": ["happy", "joyful"]
+  }
+}
+```
+
+- **The keys are the platform's own picker field names** — `shotSize`, `angle`,
+  `coverage`, `composition`, `vantage`, `pose`, `compositionEffect`,
+  `cameraFormat`, `lens`, `aperture`, `shutterSpeed`, `isoValue`, `timeOfDay`,
+  `lightingStyle`, `lightingDirection`, `lightingRatio`, `colorTemperature`,
+  `colorLook`, `atmosphere`, `postProcess`, `style`, `mood`, `aesthetic`,
+  `photoGenre`, `photographer`, `renderQuality`, `setting`, `era`, `backdrop`.
+  (The registry also defines motion dimensions — `cameraMotion`, `actionFx`,
+  the `temporal*` keys, `transition`, `loopSubject` — for the video surface;
+  `POST /v1/generate-video` does not accept a `direction` field yet, so sending
+  one there has no effect today.) Valid ids come from
+  [`GET /v1/picker-catalogs`](#picker-catalogs) — the same catalogs the canvas
+  pickers read. One caveat on deployments that register catalog **packs**: that
+  endpoint returns the pack-composed catalogs while the fold reads the base
+  catalogs, so a pack-added id is listed and accepted but renders no clause.
+- **Single id or an array.** Multi-pick dimensions (`mood`, `aesthetic`,
+  `photographer`, `atmosphere`, `postProcess`, `composition`, `lightingStyle`)
+  honor up to their own cap; a single-pick key given an array takes the first
+  entry. Exceeding a *dimension's* cap truncates rather than 400ing. The two
+  *wire* bounds do reject with a `validation_error`: at most **8** entries per
+  key, and at most **100** characters per id.
+- **Absent ≠ empty.** A missing key means "no hint", never a default. An empty
+  string or an empty array contributes nothing, and a `direction` that renders
+  no clause leaves your `prompt` byte-for-byte untouched.
+- **Unknown keys and unknown ids are skipped silently**, not rejected — a newer
+  client on an older API degrades to fewer hints rather than erroring, which is
+  why you should deploy the platform before the client that starts sending new
+  dimensions.
+- **Fold order is the platform's**, not your object's key order, and the
+  clauses are appended after your prompt (`". "`-joined), before any
+  `structured` fragment. Repeated identical clauses collapse to one.
+- The assembled prompt is still truncated to the provider's verified prompt cap,
+  so a maximal `direction` on a low-cap model can lose its tail clauses — send
+  the dimensions that matter most first-class rather than everything at once.
+
 ### Picker catalogs
 
 `GET /v1/picker-catalogs` and `GET /v1/picker-catalogs/:nodeType` expose the
@@ -1058,6 +1113,50 @@ describe-to-picker — hydrate pickers from it verbatim), and `gaps` lists
 attributes the text described that no catalog id represents well (surface
 as "we couldn't infer X"). SDK: `client.pickerCatalogs.analyzeText(...)`;
 CLI: `nodaro pickers analyze "<text>"`.
+
+### Structured LLM output (any schema)
+
+`POST /v1/llm/structured` runs one LLM call whose answer is forced to the
+JSON Schema you supply, validated against it, and handed back as an object.
+Authenticated and credit-billed under its own `llm-structured` feature id
+(priced per model tier). It is the generic primitive behind schema-authoring
+clients — Nodaro Studio composes a whole production plan with it.
+
+Body: `{ system, input, jsonSchema, schemaName?, llmModel?, reasoningEffort?,
+maxRetries?, origin?, advancedMode?, temperature?, maxTokens? }`. `system` and
+`input` are plain text (each at most 100,000 characters; `input` must be at
+least 1 character). `schemaName` names the forced-output tool the provider
+sees and caps at 64 characters. Omit `llmModel` and the call runs on
+`gemini-3.6-flash`, the generic `llm-chat` default. `jsonSchema` is a JSON
+Schema **object** (`type: "object"`, at most 64 KB serialized and 20 levels of
+nesting) written in the keyword subset the server can convert:
+`properties` / `required` / `additionalProperties` (including the record
+form), `items`, `string` / `number` / `integer` / `boolean`, `enum`, `const`,
+`anyOf` of concrete types, `minimum` / `maximum` / `minItems` / `maxItems` /
+`minLength` / `maxLength`, `multipleOf`, `exclusiveMinimum` and `description`.
+`not`, `if` / `then` / `else`, `dependent*` and external `$ref` are refused
+with 400. One caveat worth reading twice: an `anyOf` of bare `required`
+branches — the usual "at least one of these fields" idiom — is **accepted and
+not enforced**. Express cross-field rules in your own validator.
+
+Returns `{ jobId, output, usage: { inputTokens, outputTokens } }`, where
+`output` has your schema's shape. `maxRetries` (0–3, default 2) is how many
+times an invalid answer is fed back to the model together with its validation
+error before the call gives up; `maxTokens` must not exceed the chosen model's
+own output limit (400 otherwise). The two sampling levers are **not
+symmetric**: `maxTokens` applies on every call — a deliberate departure from
+the LLM routes that put both levers behind the Advanced-mode gate —
+while `temperature` is **silently ignored** unless you also send
+`advancedMode: true`. Advanced mode pins the call to the vendor's own API,
+where those levers take effect, and therefore bills **one credit tier up**;
+asking for it on a model with no direct lane is a 400
+`advanced_mode_unsupported`. The call is
+**synchronous and a single call may run several minutes** — each attempt is
+allowed up to 240 seconds — so give your HTTP client a matching timeout.
+Errors: 400 `validation_error`, 401, 402 (credits), 500 `internal_error` (the
+job row could not be created), 502 `llm_error` once the retries are spent, 503
+`provider_unavailable`. No typed SDK resource yet — call it with
+`client.request("POST", "/v1/llm/structured", { body })`.
 
 ### Direct uploads
 
