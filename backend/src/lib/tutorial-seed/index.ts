@@ -10,10 +10,16 @@
 // creative content belongs here or in `@nodaro/prompts` — never in the Apache
 // packages. Same call, and same reasoning, as `lib/demo-workflow.ts`.
 //
-// CLOUD IS EXCLUDED. Staging and production share one Supabase project, so
-// anything that ran as a migration would also run against Cloud production,
-// where these four templates already exist and belong to a real user. A boot
-// seeder can be gated; a migration cannot.
+// CLOUD IS EXCLUDED — for the BUILT-IN set. Staging and production share one
+// Supabase project, so anything that ran as a migration would also run against
+// Cloud production, where these four templates already exist and belong to a
+// real user. A boot seeder can be gated; a migration cannot.
+//
+// Operator packs (NODARO_TUTORIAL_PACKS) are the one exception. A dedicated
+// hosted instance runs EDITION=cloud against ITS OWN Supabase and ships its
+// tutorials as a pack; on such an instance the seeder seeds the packs and
+// nothing else. Nodaro's shared cloud never sets the env, so it still returns
+// before a single Supabase call — see seedTutorialTemplates.
 
 import { createHash } from "node:crypto"
 import { readFile, readdir } from "node:fs/promises"
@@ -23,7 +29,7 @@ import { supabase } from "../supabase.js"
 import { isCloud } from "../config.js"
 import { isTransportError, withTransportRetry, type TransportRetryOptions } from "../boot-retry.js"
 import { TUTORIAL_SYSTEM_EMAIL } from "../system-account.js"
-import { loadTutorialPacks } from "./packs.js"
+import { loadTutorialPacks, parsePackDirList } from "./packs.js"
 import type { TutorialPackCategory, TutorialTemplateDoc } from "./types.js"
 
 const TEMPLATES_DIR = join(dirname(fileURLToPath(import.meta.url)), "templates")
@@ -292,8 +298,9 @@ async function seedOne(
 }
 
 /**
- * Idempotent, self-healing, and a no-op on Cloud. Never throws into boot: a
- * seeding failure must not take the server down, it just means no tutorials.
+ * Idempotent, self-healing, and a no-op on Cloud unless operator packs are
+ * configured (header). Never throws into boot: a seeding failure must not take
+ * the server down, it just means no tutorials.
  *
  * Fired at API init (server.ts), which on the community stack is BEFORE the
  * container's own Caddy — the proxy every Supabase call here goes through —
@@ -303,7 +310,10 @@ async function seedOne(
  * boot-retry schedule; an application error still skips at once.
  */
 export async function seedTutorialTemplates(retry: TransportRetryOptions = {}): Promise<void> {
-  if (isCloud()) return
+  // Cloud seeds operator packs only; with none configured there is nothing to
+  // do, and returning here keeps Nodaro's shared cloud byte-identical (no
+  // system account, no Supabase call).
+  if (isCloud() && !packsConfigured()) return
 
   try {
     await withTransportRetry("tutorial-seed", runSeed, retry)
@@ -312,9 +322,19 @@ export async function seedTutorialTemplates(retry: TransportRetryOptions = {}): 
   }
 }
 
+/** Read at call time, like loadTutorialPacks, so a test can flip the env. */
+function packsConfigured(): boolean {
+  return parsePackDirList(process.env.NODARO_TUTORIAL_PACKS).length > 0
+}
+
 async function runSeed(): Promise<void> {
+  // The built-in set is loaded on every edition, but SEEDED only off Cloud
+  // (header). On Cloud its slugs still feed the pack de-dup below, so a pack
+  // can never shadow a built-in a real user already owns there.
   const docs = await loadDocs()
-  if (docs.length === 0) return
+  const seedBuiltIns = !isCloud()
+  if (!seedBuiltIns && !packsConfigured()) return
+  if (docs.length === 0 && !packsConfigured()) return
 
   const userId = await ensureSystemUser()
   if (!userId) {
@@ -335,9 +355,9 @@ async function runSeed(): Promise<void> {
     }
   }
 
-  for (const doc of docs) await seedDoc(doc)
+  if (seedBuiltIns) for (const doc of docs) await seedDoc(doc)
 
-  // Operator-supplied packs (business/self-host). loadTutorialPacks has already
+  // Operator-supplied packs (business/self-host, or a dedicated Cloud instance). loadTutorialPacks has already
   // validated + de-duplicated them against the base slugs; a malformed pack was
   // skipped whole and logged. Ensure each pack's categories before its docs so
   // the migration-114 tutorial-requires-category CHECK never fires.
