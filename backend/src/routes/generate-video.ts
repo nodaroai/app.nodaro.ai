@@ -12,7 +12,7 @@ import { getModelCreditBaseCost } from "../ee/billing/credits.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
+import { insertJobIdempotent } from "../lib/insert-job.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, isMinimaxH3Provider, isVeoProvider, estimateLoopTrimAddonCredits, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, buildVideoCreditModelIdentifier, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, type ConnectedReference } from "@nodaro/shared"
@@ -772,8 +772,8 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     // back the winner's row with `created: false`.
     let insertResult: { row: { id: string }; created: boolean }
     try {
-      insertResult = await insertWithIdempotencyKey<{ id: string }>(
-        "jobs",
+      insertResult = await insertJobIdempotent<{ id: string }>(
+        req,
         {
           workflow_id: extractWorkflowId(req.body),
           node_id: extractNodeId(req.body),

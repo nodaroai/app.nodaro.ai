@@ -24,6 +24,8 @@ import { hashApiToken, invalidateApiTokenCache, resolveApiToken } from "../lib/a
 import { getPluginServices } from "../lib/private-plugins/load.js"
 import { rejectProgrammaticAuth } from "../lib/api-auth-mode.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
+import { personalPayer } from "../lib/billing-context.js"
+import { billingPairColumns } from "../lib/insert-job.js"
 import { estimateWorkflowCredits } from "../ee/billing/credits.js"
 import type { WorkflowExecutionJob, NodeExecutionState } from "../services/workflow-engine/types.js"
 import { normalizeLegacyNodeTypes } from "../services/workflow-engine/normalize-node-types.js"
@@ -584,6 +586,8 @@ export async function apiTokenRoutes(app: FastifyInstance) {
         .select("id, name, nodes, edges, settings")
         .eq("id", workflowId)
         .eq("user_id", resolved.userId)
+        // Same personal-only doctrine as the run route below.
+        .is("workspace_id", null)
         .single()
 
       if (wfError || !workflow) {
@@ -708,6 +712,11 @@ export async function apiTokenRoutes(app: FastifyInstance) {
         .select("id, nodes")
         .eq("id", workflowId)
         .eq("user_id", resolved.userId)
+        // P9 doctrine, now enforced at RUN time too (bind + list always had
+        // it): token runs are personal-only — a workspace-homed workflow is
+        // not reachable through this lane, which is also why the P14
+        // degraded-refusal is not needed here.
+        .is("workspace_id", null)
         .single()
 
       if (wfError || !workflow) {
@@ -731,6 +740,8 @@ export async function apiTokenRoutes(app: FastifyInstance) {
           status: "pending",
           trigger_type: "api",
           trigger_data: { apiTokenId: resolved.id },
+          // P14/W7: the hook-resolved payer's pair (personal adds nothing).
+          ...billingPairColumns(req.billingContext),
         })
         .select("id")
         .single()
@@ -747,6 +758,9 @@ export async function apiTokenRoutes(app: FastifyInstance) {
         triggerType: "api",
         triggerData: { apiTokenId: resolved.id },
         inputOverrides,
+        // P14: the token's authenticated context — resolved once by the
+        // billing hook (a workspace-BOUND token acts as an implicit header).
+        billingContext: req.billingContext ?? personalPayer(resolved.userId),
       }
 
       await orchestrationQueue.add("workflow-execution", jobData, {

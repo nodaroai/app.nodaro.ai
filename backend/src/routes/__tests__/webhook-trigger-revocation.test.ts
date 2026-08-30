@@ -35,6 +35,20 @@ vi.mock("@/lib/orchestration-queue.js", () => ({
   orchestrationQueue: { add: vi.fn().mockResolvedValue({ id: "orch-1" }) },
 }))
 
+const mockResolveBillingContext = vi.hoisted(() =>
+  vi.fn(async (input: { userId: string }) => ({ payer: "user" as const, userId: input.userId })),
+)
+const mockRecordRefusal = vi.hoisted(() => vi.fn(async () => undefined))
+vi.mock("@/lib/trigger-fire-refusal.js", () => ({
+  recordTriggerFireRefusal: mockRecordRefusal,
+  RUN_REQUIRES_AUTHENTICATED_MEMBER: "run_requires_authenticated_member",
+}))
+
+vi.mock("@/lib/billing-context.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/billing-context.js")>()
+  return { ...actual, resolveBillingContext: mockResolveBillingContext }
+})
+
 import { webhookTriggerRoutes } from "../webhook-triggers.js"
 import { supabase } from "../../lib/supabase.js"
 import { getPluginServices } from "../../lib/private-plugins/load.js"
@@ -144,6 +158,14 @@ describe("POST /v1/webhooks/:token — a trigger must not outlive its access", (
     // would turn a Redis blip into a permanently dead trigger. Refusing the one
     // fire is free to retry.
     expect(triggerUpdate).not.toHaveBeenCalled()
+    // P14/W6: the refusal leaves the owner ONE visible failed row (deduped
+    // inside the helper) while the caller keeps the oracle-free 404.
+    expect(mockRecordRefusal).toHaveBeenCalledWith({
+      workflowId: WF,
+      userId: OWNER,
+      triggerType: "webhook",
+      triggerId: TRIGGER,
+    })
   })
 
   it("fires normally while the owner still may", async () => {
@@ -159,6 +181,16 @@ describe("POST /v1/webhooks/:token — a trigger must not outlive its access", (
     expect(res.statusCode).toBe(202)
     expect(execInsert).toHaveBeenCalled()
     expect(orchestrationQueue.add).toHaveBeenCalled()
+    expect(mockRecordRefusal).not.toHaveBeenCalled()
+    // P14: the fire resolves the payer under the TRIGGER OWNER and the
+    // workflow's CURRENT home — a wrong identity here spends someone
+    // else's money, so the resolve INPUTS are pinned, not just presence.
+    expect(mockResolveBillingContext).toHaveBeenCalledWith({
+      userId: TRIGGER_ROW.user_id,
+      workflowId: TRIGGER_ROW.workflow_id,
+    })
+    const enqueued = vi.mocked(orchestrationQueue.add).mock.calls[0]?.[1] as { billingContext?: unknown }
+    expect(enqueued.billingContext).toEqual({ payer: "user", userId: TRIGGER_ROW.user_id })
   })
 })
 

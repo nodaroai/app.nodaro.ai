@@ -30,6 +30,13 @@ vi.mock("../../../lib/credits-job-lifecycle.js", () => ({
   commitReservedCreditsForJob: vi.fn().mockResolvedValue(undefined),
   refundReservedCreditsForJob: vi.fn().mockResolvedValue(undefined),
 }))
+vi.mock("../pipeline-payer.js", () => ({
+  getPipelineBillingContext: vi.fn(async (_sb: unknown, _pid: string, userId: string) => ({ payer: "user", userId })),
+}))
+
+// P14: the reader's answer must ride BOTH the job row and the reservation —
+// asserted in test 1 below via the reserveCredits options.
+
 vi.mock("../../billing/credits.js", () => ({
   CreditsService: {
     reserveCredits: vi.fn().mockResolvedValue({
@@ -146,6 +153,11 @@ describe("pipelineFinalMerge", () => {
 
     expect(result.finalAssetUrl).toBe("https://r2/final.mp4")
     expect(result.finalAssetId).toBe("asset-1")
+    // P14: the durable payer stamp rides the reservation options (the carry
+    // was compile-checked only until this pin).
+    const { CreditsService } = await import("../../billing/credits.js")
+    const reserveOptions = vi.mocked(CreditsService.reserveCredits).mock.calls[0]?.[5] as { billingContext?: { payer: string; userId: string } }
+    expect(reserveOptions.billingContext).toEqual({ payer: "user", userId: "u1" })
     expect(downloadFile).toHaveBeenCalledWith(
       "https://r2/scene-1.mp4",
       expect.any(String),

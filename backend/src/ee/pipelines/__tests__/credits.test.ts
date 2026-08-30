@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
+
+const mockAttemptAutoRecharge = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+vi.mock("../../billing/auto-recharge.js", () => ({ attemptAutoRecharge: mockAttemptAutoRecharge }))
 import {
   estimateUpfrontCredits,
   resolveMaxCostCredits,
@@ -290,6 +293,74 @@ describe("reservePipelineCredits", () => {
       expect(result.reason).toBe("rpc_error")
       expect(result.detail).toContain("connection")
     }
+  })
+})
+
+describe("reservePipelineCredits — P14 workspace payer", () => {
+  const WS_CTX = {
+    payer: "workspace" as const,
+    userId: "u1",
+    workspaceId: "ws-1",
+    orgId: "org-1",
+    memberCap: null,
+    entitlements: {
+      watermark: false as const,
+      dailyCapCredits: null,
+      parallelism: 12,
+      tierForGates: "business" as const,
+      freeTierBlocklist: false as const,
+      webFreeMode: false as const,
+      appCreditsAllowance: false as const,
+    },
+  }
+
+  it("threads p_workspace_id for a workspace payer", async () => {
+    const supabase = makeSupabaseMock({ data: "log-1" })
+    const result = await reservePipelineCredits({
+      supabase: supabase as never,
+      userId: "u1",
+      pipelineId: "p1",
+      credits: 30,
+      billingContext: WS_CTX,
+    })
+    expect(result.ok).toBe(true)
+    expect(supabase.rpc).toHaveBeenCalledWith(
+      "reserve_credits",
+      expect.objectContaining({ p_workspace_id: "ws-1" }),
+    )
+  })
+
+  it("never fires auto-recharge for a workspace payer — class work must not pump a member's card", async () => {
+    mockAttemptAutoRecharge.mockClear()
+    const supabase = makeSupabaseMock({ data: "log-1" })
+    await reservePipelineCredits({
+      supabase: supabase as never,
+      userId: "u1",
+      pipelineId: "p1",
+      credits: 30,
+      billingContext: WS_CTX,
+    })
+    expect(mockAttemptAutoRecharge).not.toHaveBeenCalled()
+
+    await reservePipelineCredits({
+      supabase: makeSupabaseMock({ data: "log-2" }) as never,
+      userId: "u1",
+      pipelineId: "p1",
+      credits: 30,
+    })
+    expect(mockAttemptAutoRecharge).toHaveBeenCalledTimes(1)
+  })
+
+  it("a personal reserve's wire shape is byte-identical — no p_workspace_id key", async () => {
+    const supabase = makeSupabaseMock({ data: "log-1" })
+    await reservePipelineCredits({
+      supabase: supabase as never,
+      userId: "u1",
+      pipelineId: "p1",
+      credits: 30,
+    })
+    const args = (supabase.rpc as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as Record<string, unknown>
+    expect(args).not.toHaveProperty("p_workspace_id")
   })
 })
 

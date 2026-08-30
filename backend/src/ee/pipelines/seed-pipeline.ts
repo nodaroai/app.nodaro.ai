@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto"
 import type { SupabaseClient } from "@supabase/supabase-js"
+import type { BillingContext } from "../../lib/billing-context.js"
 import {
   ShowrunnerPlanSchema,
   SceneNodeDataSchema,
@@ -73,6 +74,9 @@ export interface SeededPipelineInput {
   /** PipelineConfigSchema partial (music_enabled, video_model, …). */
   config?: Record<string, unknown>
   maxCostCredits?: number
+  /** The creating lane's resolved payer (P14) — stamped durably into
+   *  pipelines.config; one payer per pipeline. Absent = personal. */
+  billingContext?: BillingContext
 }
 
 /**
@@ -102,7 +106,9 @@ export async function createSeededPipeline(
   // (engine.ts:101 → canvas_drift), which would otherwise pause an unattended run.
   assertSeedConsistency(plan, scenes)
 
-  const config = (input.config ?? {}) as Record<string, unknown>
+  // P14: one payer per pipeline — strip-then-stamp via the ONE rule.
+  const { stampPipelineConfig } = await import("./pipeline-payer.js")
+  const config = stampPipelineConfig(input.config, input.billingContext)
 
   const { estimateUpfrontCredits, reservePipelineCredits } = await import("./credits.js")
   const estimate = estimateUpfrontCredits({
@@ -152,6 +158,7 @@ export async function createSeededPipeline(
     userId: input.userId,
     pipelineId,
     credits: estimate,
+    billingContext: input.billingContext,
   })
   if (!reservation.ok) {
     await supabase.from("pipelines").delete().eq("id", pipelineId)

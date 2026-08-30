@@ -5,6 +5,8 @@
 
 import { supabase } from "../lib/supabase.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
+import { payloadBillingContext, type BillingContext } from "../lib/billing-context.js"
+import { billingPairColumns } from "../lib/insert-job.js"
 import type { WorkflowExecutionJob } from "./workflow-engine/types.js"
 
 // ---------------------------------------------------------------------------
@@ -32,6 +34,12 @@ export interface ExecuteAppRunParams {
   isComponentExecution?: boolean
   /** Spend-surface flag captured at the originating route (D1 v2). */
   webFreeMode?: boolean
+  /**
+   * The originating lane's resolved payer (P14), carried verbatim — this
+   * function never resolves. A component inner execution inherits the
+   * PARENT execution's context this way; absent means personal.
+   */
+  billingContext?: BillingContext
 }
 
 export interface ExecuteAppRunResult {
@@ -62,6 +70,7 @@ export async function executeAppRun(
     componentDepth,
     executingComponentIds,
     webFreeMode,
+    billingContext,
     isComponentExecution,
   } = params
 
@@ -74,6 +83,8 @@ export async function executeAppRun(
       status: "pending",
       trigger_type: "app_run",
       ...(isComponentExecution ? { is_component_execution: true } : {}),
+      // P14/W7: the carried payer's pair rides the row (personal adds nothing).
+      ...billingPairColumns(billingContext),
     })
     .select("id")
     .single()
@@ -111,6 +122,7 @@ export async function executeAppRun(
     componentDepth,
     executingComponentIds,
     webFreeMode,
+    billingContext: payloadBillingContext({ userId, billingContext }),
   }
 
   await orchestrationQueue.add("workflow-execution", jobData, {

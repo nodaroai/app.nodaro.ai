@@ -5,6 +5,28 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 vi.mock("../../../../lib/queue.js", () => ({
   videoQueue: { add: vi.fn().mockResolvedValue(undefined) },
 }))
+// P14: this file is the worker-lane WORKSPACE end-to-end — the payer stub
+// answers a workspace stamp, and the reservation options must carry it
+// verbatim (the sibling files keep the personal stub).
+vi.mock("../../pipeline-payer.js", () => ({
+  getPipelineBillingContext: vi.fn(async () => ({
+    payer: "workspace",
+    userId: "u1",
+    workspaceId: "ws-e2e",
+    orgId: "org-e2e",
+    memberCap: null,
+    entitlements: {
+      watermark: false,
+      dailyCapCredits: null,
+      parallelism: 12,
+      tierForGates: "business",
+      freeTierBlocklist: false,
+      webFreeMode: false,
+      appCreditsAllowance: false,
+    },
+  })),
+}))
+
 vi.mock("../../../billing/credits.js", () => ({
   CreditsService: {
     reserveCredits: vi.fn().mockResolvedValue({
@@ -138,8 +160,11 @@ describe("pipelineExtractFrame", () => {
       "extract-frame",
       0,
       0,
-      { isAppRun: false },
+      { isAppRun: false, billingContext: expect.objectContaining({ payer: "workspace", workspaceId: "ws-e2e", orgId: "org-e2e" }) },
     )
+    // The STAMP half of the end-to-end: the job ROW carries the pair too
+    // (insertInternalJob opts) — reserve options alone were only half.
+    expect(recorded.jobInsert).toMatchObject({ workspace_id: "ws-e2e", org_id: "org-e2e" })
     expect(videoQueue.add).toHaveBeenCalledWith(
       "extract-frame",
       expect.objectContaining({

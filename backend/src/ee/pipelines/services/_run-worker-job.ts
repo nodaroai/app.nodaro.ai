@@ -94,6 +94,10 @@ export async function runPipelineWorkerJob(
   //    can correlate this child job back to its parent pipeline. `jobName` is
   //    the worker's switch key ("generate-image", "lip-sync", …), i.e. the
   //    job_type vocabulary.
+  // P14/W7: the pipeline's durable payer stamp rides the job row too (the
+  // reporting pair + the DB privacy clamp), read ONCE here and reused below.
+  const { getPipelineBillingContext } = await import("../pipeline-payer.js")
+  const billingContext = await getPipelineBillingContext(supabase, pipelineId, userId)
   const { data: job, error: insertErr } = await insertInternalJob(
     `pipeline:${jobName}`,
     {
@@ -103,7 +107,7 @@ export async function runPipelineWorkerJob(
       job_type: jobName,
       pipeline_id: pipelineId,
     },
-    { client: supabase },
+    { client: supabase, billingContext },
   )
   if (insertErr || !job?.id) {
     throw new Error(
@@ -115,14 +119,13 @@ export async function runPipelineWorkerJob(
   // 2. Reserve credits via the canonical service. Worker commits/refunds the
   //    real cost on its own — we don't double-commit here.
   const { CreditsService } = await import("../../billing/credits.js")
-  // billing-payer-ok: pipeline worker jobs are personal-payer until P14 rides the resolved payer on the job payload (resolved once at enqueue, never re-resolved in a worker)
   const reservation = await CreditsService.reserveCredits(
     userId,
     jobId,
     modelIdentifier,
     0,
     0,
-    { isAppRun: false },
+    { isAppRun: false, billingContext },
   )
 
   // 3. Enqueue with the flat payload shape the worker handler destructures.

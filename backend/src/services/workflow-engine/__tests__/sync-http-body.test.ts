@@ -24,8 +24,21 @@ const CTX: OrchestratorContext = {
   workflowId: "wf-1",
   userId: "user-1",
   triggerType: "manual",
+  billingContext: { payer: "user", userId: "user-1" },
   cancelled: false,
 }
+
+describe("buildSyncHttpBody — a node-data key named workflowId is NEVER a payer lever (P14/W9)", () => {
+  it("the default case strips workflowId from the spread", () => {
+    const body = buildSyncHttpBody(
+      node("some-default-shaped-node", { url: "https://example.com", workflowId: "planted-by-someone" }),
+      {},
+      CTX,
+    )
+    expect(body).not.toHaveProperty("workflowId")
+    expect(body.url).toBe("https://example.com")
+  })
+})
 
 describe("buildSyncHttpBody — field shape matches route Zod schemas", () => {
   describe("after-effects", () => {

@@ -98,6 +98,8 @@ const DB_RUN_ROW = {
 }
 
 let app: FastifyInstance
+/** When true, the auth-bypass hook stamps a DEGRADED personal payer (P14). */
+const stampDegradedContext = { value: false }
 
 beforeEach(async () => {
   vi.clearAllMocks()
@@ -108,6 +110,9 @@ beforeEach(async () => {
   // Bypass auth — set userId from header
   app.addHook("preHandler", async (req) => {
     const header = req.headers["x-user-id"]
+    if (stampDegradedContext.value && typeof header === "string") {
+      req.billingContext = { payer: "user", userId: header, degraded: true }
+    }
     if (header && typeof header === "string") {
       req.userId = header
       req.userRole = undefined
@@ -313,6 +318,44 @@ describe("POST /v1/app/:slug/run", () => {
     })
   }
 
+  it("P14 (stage-9 C1): a DEGRADED payer on workspace-homed work refuses BEFORE any row — draft path included", async () => {
+    stampDegradedContext.value = true
+    const writes: string[] = []
+    let callCount = 0
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      callCount++
+      if (callCount === 1) {
+        return createChainMock({ data: { workflow_id: TEST_WORKFLOW_ID }, error: null }) as never
+      }
+      if (callCount === 2) {
+        return createChainMock({ data: { ...DB_APP_ROW, max_runs_per_user_per_day: null }, error: null }) as never
+      }
+      if (table === "workflows") {
+        return createChainMock({ data: { workspace_id: "ws-home" }, error: null }) as never
+      }
+      if (table === "workflow_executions" || table === "app_runs") {
+        writes.push(table)
+      }
+      return createChainMock({ data: null, error: null }) as never
+    })
+
+    try {
+      const res = await app.inject({
+        method: "POST",
+        url: `/v1/app/${TEST_SLUG}/run`,
+        headers: { "x-user-id": TEST_USER_ID },
+        payload: { runId: "00000000-0000-4000-8000-0000000000dd" },
+      })
+      expect(res.statusCode).toBe(503)
+      expect(res.json().error.code).toBe("billing_unavailable")
+      // The refusal preceded EVERY write — no orphaned pending execution
+      // to 409-brick the (user, workflow) pair, no flipped draft.
+      expect(writes).toEqual([])
+      expect(orchestrationQueue.add).not.toHaveBeenCalled()
+    } finally {
+      stampDegradedContext.value = false
+    }
+  })
   it("returns 202 on success (creates execution + app_run + enqueues job)", async () => {
     setupSuccessfulRunMocks()
 

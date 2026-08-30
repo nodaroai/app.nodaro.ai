@@ -1,3 +1,4 @@
+import { resolveBillingContext } from "../../billing-context.js"
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
 import { PIPELINE_STAGE_NAMES, PIPELINE_FORMATS, PIPELINE_MODES, PIPELINE_OUTPUT_RESOLUTIONS, PipelineInputSchema, CHAT_ENABLED_STAGES, CHAT_WIRED_STAGES, CHAT_TURN_CAPS, type ChatEnabledStage, type JsonPatch, type ProposedChange } from "@nodaro/shared"
@@ -70,6 +71,17 @@ export function registerPipelineTools({ server, session }: RegisterPipelineTools
             originalPipelineId: args.pipeline_id,
             fromStage: args.from_stage,
             userId: session.userId,
+            // P14: the MCP session's payer — rung 2 (the session's bound
+            // workspace), resolved once at this enqueue-shaped call. No
+            // bound workspace = trivially personal: skip the resolve AND the
+            // stamp (flag-off byte-identity — same short-circuit as the
+            // billing hook's).
+            billingContext: session.workspaceId
+              ? await resolveBillingContext({
+                  userId: session.userId,
+                  explicitWorkspaceId: session.workspaceId,
+                })
+              : undefined,
           })
           return ok(
             `Branched pipeline ${args.pipeline_id} from stage '${args.from_stage}'. ` +
@@ -154,6 +166,17 @@ export function registerPipelineTools({ server, session }: RegisterPipelineTools
             supabase,
             userId: session.userId,
             input,
+            // P14: the MCP session's payer — rung 2 (the session's bound
+            // workspace), resolved once at this enqueue-shaped call. No
+            // bound workspace = trivially personal: skip the resolve AND the
+            // stamp (flag-off byte-identity — same short-circuit as the
+            // billing hook's).
+            billingContext: session.workspaceId
+              ? await resolveBillingContext({
+                  userId: session.userId,
+                  explicitWorkspaceId: session.workspaceId,
+                })
+              : undefined,
           })
           if (!result.ok) {
             return err(

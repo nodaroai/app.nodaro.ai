@@ -5,7 +5,7 @@ import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
+import { insertJobIdempotent } from "../lib/insert-job.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { buildCreditModelIdentifier, REFERENCE_BOARD_PROVIDERS, buildBoardPrompt } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
@@ -76,8 +76,8 @@ export async function referenceBoardRoutes(app: FastifyInstance): Promise<void> 
 
     let insertResult: { row: { id: string }; created: boolean }
     try {
-      insertResult = await insertWithIdempotencyKey<{ id: string }>(
-        "jobs",
+      insertResult = await insertJobIdempotent<{ id: string }>(
+        req,
         {
           user_id: userId,
           status: "pending",

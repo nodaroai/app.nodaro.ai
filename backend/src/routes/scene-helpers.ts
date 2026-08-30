@@ -299,7 +299,14 @@ function registerHelperRoute(app: FastifyInstance, cfg: HelperConfig<unknown>) {
       const { reserveHelperCredits, refundHelperCredits } = await import(
         "../ee/pipelines/scene-helper-credits.js"
       )
+      // P14: every spend ATTRIBUTED TO A PIPELINE reads the pipeline's own
+      // durable payer stamp — never the request's context, which is decided
+      // independently (the UI's active-workspace header is a global
+      // selection, not this pipeline's home; an SDK caller sends no header
+      // at all). Ownership was already verified by loadHelperContext above.
+      const { getPipelineBillingContext } = await import("../ee/pipelines/pipeline-payer.js")
       const reservation = await reserveHelperCredits({
+        billingContext: await getPipelineBillingContext(supabase, req.params.id, userId),
         supabase,
         userId,
         helperName: cfg.name,

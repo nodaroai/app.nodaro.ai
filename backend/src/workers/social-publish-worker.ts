@@ -4,6 +4,7 @@ import type { SocialPublishJobData } from "../lib/social-queue.js"
 import { supabase } from "../lib/supabase.js"
 import { insertInternalJob } from "../lib/insert-job.js"
 import { hasCredits } from "../lib/config.js"
+import { payloadBillingContext, type BillingContext } from "../lib/billing-context.js"
 import { acquireConnectionLock, releaseConnectionLock } from "../services/social/connection-lock.js"
 import {
   executePublish,
@@ -54,7 +55,7 @@ async function updateRow(id: string, patch: Record<string, unknown>): Promise<vo
     .eq("id", id)
 }
 
-async function ensureJobRow(row: ScheduledPostRow): Promise<string | null> {
+async function ensureJobRow(row: ScheduledPostRow, billingContext: BillingContext): Promise<string | null> {
   if (row.job_id) return row.job_id
   const { data } = await insertInternalJob("social-publish-worker", {
     user_id: row.user_id,
@@ -71,18 +72,21 @@ async function ensureJobRow(row: ScheduledPostRow): Promise<string | null> {
       platform: row.platform,
       action: row.action,
     },
-  })
+  }, { billingContext })
   const jobId = data?.id ?? null
   if (jobId) await updateRow(row.id, { job_id: jobId })
   return jobId
 }
 
-/** Reserve credits from worker context (no req/reply). EE import stays dynamic. */
-async function reserveScheduledCredits(userId: string, jobId: string): Promise<string | null> {
+/** Reserve credits from worker context (no req/reply). EE import stays dynamic.
+ * @internal Exported only for the payer-carry unit test — the happy-path
+ * harness runs hasCredits()=false and cannot see this path. */
+export async function reserveScheduledCredits(userId: string, jobId: string, billingContext: BillingContext): Promise<string | null> {
   if (!hasCredits()) return null
   const { CreditsService } = await import("../ee/services/credits.js")
-  // billing-payer-ok: social publish jobs are personal-payer until P14 rides the resolved payer on the job payload (resolved once at enqueue, never re-resolved in a worker)
-  const result = await CreditsService.reserveCredits(userId, jobId, "social-publish", 0, 0)
+  // P14/W4e: the payload's resolved payer rides the reservation — the worker
+  // reads, never resolves (absent payloads coalesced by the caller).
+  const result = await CreditsService.reserveCredits(userId, jobId, "social-publish", 0, 0, { billingContext })
   return result.usageLogId
 }
 
@@ -110,8 +114,10 @@ export async function processScheduledPost(job: Job<SocialPublishJobData>, token
   try {
     await updateRow(row.id, { status: "publishing", attempts: row.attempts + 1 })
 
-    jobId = await ensureJobRow(row)
-    if (jobId) usageLogId = await reserveScheduledCredits(row.user_id, jobId)
+    // P14: one coalesce for both the job row and the reservation.
+    const scheduledCtx = payloadBillingContext({ userId: row.user_id, billingContext: job.data.billingContext })
+    jobId = await ensureJobRow(row, scheduledCtx)
+    if (jobId) usageLogId = await reserveScheduledCredits(row.user_id, jobId, scheduledCtx)
 
     const payload = row.payload ?? {}
     const request: PublishRequest = {

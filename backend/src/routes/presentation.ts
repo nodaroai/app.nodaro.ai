@@ -13,6 +13,8 @@ import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
+import { personalPayer, shouldRefuseDegradedRun } from "../lib/billing-context.js"
+import { billingPairColumns } from "../lib/insert-job.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
 import { estimateWorkflowCredits } from "../ee/billing/credits.js"
@@ -171,7 +173,9 @@ export async function presentationRoutes(app: FastifyInstance) {
     // Use service-role supabase to bypass RLS (share_token lookup)
     const { data: workflow, error: wfError } = await supabase
       .from("workflows")
-      .select("id, name, nodes, edges, settings, user_id, is_presentation_enabled")
+      // workspace_id is LOAD-BEARING for the P14 degraded-refusal below —
+      // removing it from this list silently restores a fail-open path.
+      .select("id, name, nodes, edges, settings, user_id, workspace_id, is_presentation_enabled")
       .eq("share_token", token)
       .eq("is_presentation_enabled", true)
       .single()
@@ -271,6 +275,15 @@ export async function presentationRoutes(app: FastifyInstance) {
       })
     }
 
+    // P14: a DEGRADED resolve on WORKSPACE-HOMED work refuses rather than
+    // billing the viewer's pocket for class work. Retryable. The home comes
+    // off the row this route already loaded — no second query, no probe to
+    // fail open.
+    if (req.billingContext && shouldRefuseDegradedRun(req.billingContext, (workflow as { workspace_id?: string | null }).workspace_id)) {
+      return reply.status(503).send({
+        error: { code: "billing_unavailable", message: "Billing is temporarily unavailable for workspace runs. Try again shortly." },
+      })
+    }
     // Create execution under the VIEWER's userId (viewer pays credits)
     const { data: execution, error: execError } = await supabase
       .from("workflow_executions")
@@ -279,6 +292,8 @@ export async function presentationRoutes(app: FastifyInstance) {
         user_id: req.userId,
         status: "pending",
         trigger_type: "manual",
+        // P14/W7: the hook-resolved payer's pair (personal adds nothing).
+        ...billingPairColumns(req.billingContext),
       })
       .select("id")
       .single()
@@ -310,6 +325,9 @@ export async function presentationRoutes(app: FastifyInstance) {
       triggerType: "manual",
       inputOverrides,
       nodeIds,
+      // P14: the viewer's authenticated context (a shared-workflow run —
+      // the VIEWER pays; share-token runs have no member and stay personal).
+      billingContext: req.billingContext ?? personalPayer(req.userId),
     }
 
     await orchestrationQueue.add("workflow-execution", jobData, {

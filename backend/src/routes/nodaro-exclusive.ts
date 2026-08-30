@@ -110,7 +110,13 @@ export async function nodaroExclusiveRoutes(app: FastifyInstance) {
       }
       return enqueueExclusive({ req, reply, jobType, body: parsed.data as Record<string, unknown> })
     }
-  const guarded = (jobType: string) => ({ preHandler: creditGuard(() => jobType) })
+  // checkOnly: this file registers only when !hasCredits() (see app.ts) —
+  // billing happens on the connected cloud account and the local creditGuard
+  // is shape-parity pass-through, so nothing here ever reserves. The flag
+  // records that truthfully for the P14 scope-rule scanner; the cloud
+  // versions of these routes live in the plugin and reserve in-request
+  // there, under the default (payer-aware) guard.
+  const guarded = (jobType: string) => ({ preHandler: creditGuard(() => jobType, { checkOnly: true }) })
 
   app.post("/v1/voice-changer-pro", guarded("voice-changer-pro"), jobHandler("voice-changer-pro", vcpBody))
   app.post("/v1/generate-video-pro", guarded("generate-video-pro"), jobHandler("generate-video-pro", gvpBody))
@@ -174,7 +180,7 @@ export async function nodaroExclusiveRoutes(app: FastifyInstance) {
 
   // ── gvp continue: a NEW local job resuming the CLOUD parent. The local
   //    fromJobId maps to its provider_task_id (the cloud parent id). ────────
-  app.post("/v1/generate-video-pro/continue", { preHandler: creditGuard(() => "generate-video-pro") }, async (req, reply) => {
+  app.post("/v1/generate-video-pro/continue", { preHandler: creditGuard(() => "generate-video-pro", { checkOnly: true }) }, async (req, reply) => {
     if (!(await requireConnection(req, reply))) return
     const parsed = continueBody.safeParse(req.body)
     if (!parsed.success) {

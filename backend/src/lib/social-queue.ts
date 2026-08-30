@@ -1,3 +1,4 @@
+import type { BillingContext } from "./billing-context.js"
 import { Queue, type ConnectionOptions } from "bullmq"
 import { redis } from "./queue.js"
 
@@ -20,4 +21,8 @@ export const socialPublishQueue = new Queue("social-publish", {
 
 export interface SocialPublishJobData {
   scheduledPostId: string
+  /** The fire's resolved payer (P14), stamped at enqueue by the cron —
+   *  scheduled posts carry no workflow, so today this resolves personal;
+   *  the field exists so the worker never resolves. Absent = personal. */
+  billingContext?: BillingContext
 }

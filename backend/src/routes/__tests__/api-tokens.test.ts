@@ -5,8 +5,9 @@ import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify"
 // Mocks — hoisted before any route import
 // ---------------------------------------------------------------------------
 
-const { mockOrchestrationQueueAdd } = vi.hoisted(() => ({
+const { mockOrchestrationQueueAdd, mockResolveToken } = vi.hoisted(() => ({
   mockOrchestrationQueueAdd: vi.fn().mockResolvedValue({ id: "orch-job-1" }),
+  mockResolveToken: vi.fn(),
 }))
 
 vi.mock("@/lib/supabase.js", () => {
@@ -36,6 +37,11 @@ vi.mock("@/lib/config.js", () => ({
   isBusiness: () => false,
   hasAdmin: () => true,
 }))
+
+vi.mock("@/lib/api-token-resolver.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api-token-resolver.js")>()
+  return { ...actual, resolveApiToken: mockResolveToken }
+})
 
 vi.mock("@/lib/admin-check.js", () => ({
   warmAdminCache: vi.fn(),
@@ -583,5 +589,51 @@ describe("api-token management rejects programmatic tokens", () => {
     expect((await app2.inject({ method: "PATCH", url: `/v1/api-tokens/${ID}`, payload: { name: "n" } })).statusCode).toBe(403)
     expect((await app2.inject({ method: "DELETE", url: `/v1/api-tokens/${ID}` })).statusCode).toBe(403)
     await app2.close()
+  })
+})
+
+// ==========================================================================
+// POST /v1/api/run — the external token lane
+// ==========================================================================
+
+describe("POST /v1/api/run — token runs are PERSONAL-ONLY (P9 doctrine, enforced at run time)", () => {
+  it("a workspace-homed workflow is unreachable: the lookup filters workspace_id IS NULL and answers 404", async () => {
+    mockResolveToken.mockResolvedValue({
+      id: TEST_TOKEN_ID,
+      userId: TEST_USER_ID,
+      workflowIds: [],
+      rateLimit: 60,
+      tokenHash: "th-run-scope",
+      workspaceId: null,
+    })
+
+    const isCalls: unknown[][] = []
+    vi.mocked(supabase.from).mockImplementation(() => {
+      const chain: Record<string, unknown> = {}
+      for (const m of ["select", "eq", "in", "order", "limit", "lt"]) {
+        chain[m] = vi.fn().mockReturnValue(chain)
+      }
+      chain.is = vi.fn().mockImplementation((...args: unknown[]) => {
+        isCalls.push(args)
+        return chain
+      })
+      chain.single = vi.fn().mockResolvedValue({ data: null, error: null })
+      chain.maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null })
+      return chain as never
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/api/run",
+      headers: { authorization: "Bearer ndr_test_token" },
+      payload: { workflowId: "00000000-0000-4000-8000-000000000042" },
+    })
+
+    expect(res.statusCode).toBe(404)
+    // The pin: the ownership lookup carries the personal-only filter — drop
+    // the .is("workspace_id", null) (bind and list always had it; the run
+    // route gained it in the P14 stage-9 review) and this goes red.
+    expect(isCalls).toContainEqual(["workspace_id", null])
+    expect(mockOrchestrationQueueAdd).not.toHaveBeenCalled()
   })
 })

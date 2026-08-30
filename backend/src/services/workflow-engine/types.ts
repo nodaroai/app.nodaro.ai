@@ -3,6 +3,7 @@
  */
 
 import type { MediaItem } from "../social/platforms/index.js"
+import type { BillingContext } from "../../lib/billing-context.js"
 import type { Caption } from "@remotion/captions"
 
 // ---------------------------------------------------------------------------
@@ -171,6 +172,16 @@ export interface WorkflowExecutionJob {
   appVersionId?: string
   /** Spend-surface flag captured at run creation (see OrchestratorContext.webFreeMode). */
   webFreeMode?: boolean
+  /**
+   * Who pays for this execution, resolved ONCE at enqueue (P14) — a new
+   * producer is compile-forced to answer it, which is why the field is
+   * REQUIRED here. On the wire it may still be absent (a payload enqueued by
+   * pre-P14 code, or a rollback window): the worker coalesces an absent
+   * field to `{ payer: "user", userId }`, unconditionally and permanently —
+   * see `payloadBillingContext` in lib/billing-context.ts. Workers never
+   * re-resolve; they read this.
+   */
+  billingContext: BillingContext
   /** Current component nesting depth (limit 5, like sub-workflows) */
   componentDepth?: number
   /** Slugs of ancestor components in the execution chain — used for cycle detection */
@@ -370,6 +381,13 @@ export interface OrchestratorContext {
    *  resolves downstream (credits layer / RPC self-gate); free users and
    *  subscribers are unaffected, so the flag threads unconditionally. */
   webFreeMode?: boolean
+  /**
+   * The execution's resolved payer (P14), coalesced from the payload by the
+   * worker — never absent past that point. Sub-workflows and every node
+   * dispatch read THIS; nothing below the worker re-resolves (one payer per
+   * execution, even across a mid-run membership change).
+   */
+  billingContext: BillingContext
   /** Current component nesting depth (limit 5, like sub-workflows) */
   componentDepth?: number
   /** Slugs of ancestor components in the execution chain — used for cycle detection */

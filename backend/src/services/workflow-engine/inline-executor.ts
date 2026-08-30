@@ -920,7 +920,7 @@ export async function executeWebhookOutput(
       // `node_id` lets the reconcile cron map this row back to its node
       // when the orchestrator dies before persisting node_states[X].jobId.
       input_data: { url, payload, type: "webhook-output", node_id: node.id },
-    })
+    }, { billingContext: ctx.billingContext })
     jobId = job?.id
     if (jobId) ctx.onJobCreated?.(node.id, jobId)
   }

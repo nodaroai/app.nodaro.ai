@@ -6,6 +6,10 @@ import { config } from "../lib/config.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import { uploadBufferToR2 } from "../lib/storage.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
+import { resolveBillingContext, shouldRefuseDegradedRunFor } from "../lib/billing-context.js"
+import { billingPairColumns } from "../lib/insert-job.js"
+import { canRunWorkflow } from "../lib/workflow-access.js"
+import { recordTriggerFireRefusal } from "../lib/trigger-fire-refusal.js"
 import {
   getTriggersForToken,
   generateWebhookToken,
@@ -106,6 +110,36 @@ export async function telegramWebhookRoutes(app: FastifyInstance) {
       if (videoUrl) triggerData.videoUrl = videoUrl
       if (audioUrl) triggerData.audioUrl = audioUrl
 
+      // Does the trigger's owner STILL have the right to run this workflow?
+      // The same fire-time question the webhook and schedule lanes ask —
+      // this lane simply never asked it (P14/W6 closes that): a trigger
+      // outlives the session that created it, and without this the bot
+      // keeps firing the current graph after the owner lost access. Refuse
+      // with ONE visible failed row (deduped); reply ok to Telegram either
+      // way (a retry storm helps nobody).
+      if (!(await canRunWorkflow(trigger.userId, trigger.workflowId))) {
+        await recordTriggerFireRefusal({
+          workflowId: trigger.workflowId,
+          userId: trigger.userId,
+          triggerType: "telegram",
+          triggerId: trigger.triggerId,
+        })
+        continue
+      }
+
+      // P14: payer resolved at FIRE TIME under the trigger's owner and the
+      // workflow's CURRENT home; the row carries the pair (W7).
+      const billingContext = await resolveBillingContext({
+        userId: trigger.userId,
+        workflowId: trigger.workflowId,
+      })
+      // P14: a DEGRADED resolve on WORKSPACE-HOMED (or unreadable-home)
+      // work skips this trigger (Telegram gets its usual ok) rather than
+      // billing the owner's pocket — the ONE fail-closed probe.
+      if (await shouldRefuseDegradedRunFor(billingContext, trigger.workflowId)) {
+        req.log.error({ triggerId: trigger.triggerId }, "degraded billing resolve on workspace workflow — telegram fire skipped")
+        continue
+      }
       // Create execution and enqueue orchestrator
       const { data: execution } = await supabase
         .from("workflow_executions")
@@ -115,6 +149,7 @@ export async function telegramWebhookRoutes(app: FastifyInstance) {
           status: "pending",
           trigger_type: "telegram",
           trigger_data: triggerData,
+          ...billingPairColumns(billingContext),
         })
         .select("id")
         .single()
@@ -126,6 +161,7 @@ export async function telegramWebhookRoutes(app: FastifyInstance) {
           userId: trigger.userId,
           triggerType: "telegram",
           triggerData,
+          billingContext,
         }
         await orchestrationQueue.add("workflow-execution", jobData, {
           jobId: execution.id,
@@ -154,6 +190,14 @@ export async function telegramWebhookRoutes(app: FastifyInstance) {
     }
 
     const { workflowId, connectionId, chatIdFilter, messageTypeFilters } = parsed.data
+
+    // A trigger IS a standing run — creating one requires the same right the
+    // fire-time gate checks (the webhook trigger-create route's rule).
+    if (!(await canRunWorkflow(userId, workflowId))) {
+      return reply.status(403).send({
+        error: { code: "forbidden", message: "You do not have permission to run this workflow" },
+      })
+    }
 
     const { data: conn } = await supabase
       .from("social_connections")

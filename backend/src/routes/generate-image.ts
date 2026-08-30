@@ -9,7 +9,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
+import { insertJobIdempotent } from "../lib/insert-job.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { IMAGE_GEN_PROVIDERS, T2I_TO_I2I_VARIANT, FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING, resolveImageGenCreditIdentifier } from "@nodaro/shared"
@@ -573,8 +573,8 @@ export async function generateImageRoutes(app: FastifyInstance) {
     // reservation in that case — the original caller already reserved.
     let insertResult: { row: { id: string }; created: boolean }
     try {
-      insertResult = await insertWithIdempotencyKey<{ id: string }>(
-        "jobs",
+      insertResult = await insertJobIdempotent<{ id: string }>(
+        req,
         {
           workflow_id: extractWorkflowId(req.body),
           node_id: extractNodeId(req.body),

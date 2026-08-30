@@ -53,7 +53,7 @@ function buildStorageLimitError(
 export async function saveToStorageRoutes(app: FastifyInstance) {
   // 0 credits — creditGuard still enforces storage quota and daily limits
   app.post("/v1/save-to-storage", {
-    preHandler: creditGuard(() => "save-to-storage"),
+    preHandler: creditGuard(() => "save-to-storage", { checkOnly: true }),
   }, async (req, reply) => {
     const parsed = saveToStorageBody.safeParse(req.body)
     if (!parsed.success) {

@@ -11,6 +11,8 @@ import { JOB_POLL_INTERVAL_MS, POLL_ABSOLUTE_TIMEOUT_MS } from "../services/work
 import { STATIC_CREDIT_COSTS } from "../ee/billing/credits.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { isBillingContext, shouldRefuseDegradedRunFor, type BillingContext } from "../lib/billing-context.js"
+import { billingPairColumns } from "../lib/insert-job.js"
 
 
 const bodySchema = z.object({
@@ -20,6 +22,10 @@ const bodySchema = z.object({
   workflowId: z.string().uuid().optional(),
   componentDepth: z.number().int().min(0).max(5).optional(),
   executingComponentIds: z.array(z.string()).optional(),
+  /** P14 — the parent execution's resolved payer, forwarded by the
+   *  orchestrator's component dispatch. Honored ONLY on the internal lane
+   *  (see below); shape-guarded, never trusted from the type alone. */
+  billingContext: z.unknown().optional(),
 })
 
 async function updateWrapperJob(jobId: string, fields: Record<string, unknown>) {
@@ -41,6 +47,28 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
     }
 
     const { appSlug, inputOverrides, pinnedVersion, workflowId, componentDepth, executingComponentIds } = parsed.data
+
+    // P14: which payer does the inner execution ride?
+    // - INTERNAL lane (the orchestrator's component dispatch): the body
+    //   carries the PARENT execution's resolved context verbatim — a header
+    //   would be re-resolved mid-run, and the parent already decided. The
+    //   value is shape-guarded; a malformed one degrades to this route's own
+    //   context, never to a trusted cast.
+    // - Any other caller (this route also serves authenticated users): the
+    //   body field is IGNORED — accepting it would let any JWT caller forge
+    //   a workspace payer. Their payer is the one the billing hook resolved
+    //   for this request.
+    const forwardedCtx: BillingContext | undefined =
+      req.authKind === "internal" &&
+      isBillingContext(parsed.data.billingContext) &&
+      // Defense in depth: the forwarded context must belong to the request's
+      // own user (the internal secret already grants a lot, but a mismatched
+      // pair should never ride into a reservation; the RPC's membership
+      // guards are the hard backstop either way).
+      parsed.data.billingContext.userId === req.userId
+        ? parsed.data.billingContext
+        : undefined
+    const runBillingContext = forwardedCtx ?? req.billingContext
 
     // Look up published app by slug. snapshot_nodes + snapshot_edges are
     // needed for compound output handles (sub-workflow-output ports) — they
@@ -71,6 +99,18 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: { code: "invalid_component", message: "Component metadata missing" } })
     }
 
+    // P14: on the DIRECT lane (no forwarded parent context) a DEGRADED
+    // resolve on a workspace-homed underlying workflow refuses BEFORE any
+    // row is written — the same rule as /v1/app/:slug/run. The forwarded
+    // internal lane skips: the parent's own run-creation surface refused
+    // the only refusable state, so the child never sees it.
+    if (!forwardedCtx && runBillingContext &&
+        (await shouldRefuseDegradedRunFor(runBillingContext, appRow.workflow_id as string))) {
+      return reply.status(503).send({
+        error: { code: "billing_unavailable", message: "Billing is temporarily unavailable for workspace runs. Try again shortly." },
+      })
+    }
+
     // Create wrapper job
     const mcpClient = extractMcpClient(req.body)
     const wrapperInput: Record<string, unknown> = {
@@ -87,6 +127,9 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
         input_data: wrapperInput,
         ...(workflowId ? { workflow_id: workflowId } : {}),
         ...(mcpClient ? { mcp_client: mcpClient } : {}),
+        // P14/W7: the HONORED context's pair (the internal lane carries it in
+        // the body, where the request-level stamp cannot see it).
+        ...billingPairColumns(runBillingContext),
       })
 
     if (jobError || !wrapperJob) {
@@ -111,6 +154,7 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
           componentDepth,
           executingComponentIds,
           webFreeMode: req.webFreeMode === true,
+          billingContext: runBillingContext,
         })
 
         // Stamp the nested execution id on the wrapper IMMEDIATELY (it was

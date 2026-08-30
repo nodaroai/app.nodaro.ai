@@ -3,6 +3,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 vi.mock("../../../../lib/queue.js", () => ({
   videoQueue: { add: vi.fn().mockResolvedValue(undefined) },
 }))
+// P14: the worker-lane payer read — personal in these hermetic worlds.
+vi.mock("../../pipeline-payer.js", () => ({
+  getPipelineBillingContext: vi.fn(async (_sb: unknown, _pid: string, userId: string) => ({ payer: "user", userId })),
+}))
+
 vi.mock("../../../billing/credits.js", () => ({
   CreditsService: {
     reserveCredits: vi.fn().mockResolvedValue({
@@ -109,7 +114,7 @@ describe("pipelineCombineVideos", () => {
     expect(result.assetUrl).toBe("https://r2/scene-composite.mp4")
     expect(result.assetId).toBe("asset-cv-1")
     expect(CreditsService.reserveCredits).toHaveBeenCalledWith(
-      "u1", "cv-job-1", "combine-videos", 0, 0, { isAppRun: false },
+      "u1", "cv-job-1", "combine-videos", 0, 0, { isAppRun: false, billingContext: { payer: "user", userId: "u1" } },
     )
     expect(videoQueue.add).toHaveBeenCalledWith(
       "combine-videos",

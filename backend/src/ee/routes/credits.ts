@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { openApiRegistry } from "../../lib/openapi-registry.js"
 import { mapReserveError } from "../../lib/reserve-errors.js"
+import { billingService } from "../../lib/billing-context.js"
 import { z as zOpenApi } from "zod"
 import { z } from "zod"
 import { CreditsService } from "../services/credits.js"
@@ -51,6 +52,11 @@ const estimateWorkflowBody = z.object({
     type: z.string().min(1),
     data: z.record(z.string(), z.unknown()).optional(),
   })),
+  /** P14/W8 — lets the billing hook resolve the payer for this estimate
+   *  (rung 1 runs the workflow's own run predicate; a viewer of a shared
+   *  workflow never reaches the workspace branch, so budget numbers stay
+   *  member-only). */
+  workflowId: z.string().uuid().optional(),
 })
 
 // ============================================================
@@ -277,13 +283,17 @@ export async function creditsRoutes(app: FastifyInstance) {
     const { jobId, modelIdentifier, providerCostUsd = 0, displayCostUsd = 0 } = parsed.data
 
     try {
-      // billing-payer-ok: internal-secret orchestrator route (family 8) — the enqueuing site owns the payer and forwards it explicitly in P14; personal until then
+      // P14/W4f: the caller forwards the validated workspace header — the
+      // billing hook resolved it into req.billingContext (rung 2, internal
+      // lane) — and NO body field exists on purpose: a body would be a
+      // second, weaker door beside the header-validated one.
       const result = await CreditsService.reserveCredits(
         userId,
         jobId,
         modelIdentifier,
         providerCostUsd,
-        displayCostUsd
+        displayCostUsd,
+        { billingContext: req.billingContext }
       )
       invalidateBalanceCache(userId)
       return { data: result }
@@ -409,7 +419,39 @@ export async function creditsRoutes(app: FastifyInstance) {
 
     try {
       const totalCredits = CreditsService.estimateWorkflowCredits(nodes)
-      return { data: { totalCredits, nodeCount: nodes.length } }
+      // P14/W8: the payer-aware half. The billing hook already resolved this
+      // request's payer (rung 1 via the body's workflowId — which required
+      // the run predicate — or rung 2 via the validated workspace header),
+      // so the answer is read, never re-derived. Personal answers are
+      // byte-identical to pre-P14 plus the explicit payer field.
+      const ctx = req.billingContext
+      if (ctx?.payer !== "workspace") {
+        return { data: { totalCredits, nodeCount: nodes.length, payer: "user" } }
+      }
+      // Budget preview through the plugin's ONE headroom formula, reached
+      // through the SAME gated seam accessor as every resolve (flag +
+      // member probe); an older plugin (no member) degrades to "workspace
+      // pays — no preview". A FAILURE degrades the same way but is logged —
+      // a permanently broken formula must not be indistinguishable from an
+      // older plugin.
+      const billing = billingService()
+      const preview = billing?.headroom
+        ? await billing.headroom(ctx.workspaceId, ctx.userId).catch((err: Error) => {
+            console.error("[credits] headroom preview failed for workspace " + ctx.workspaceId + ":", err.message)
+            return null
+          })
+        : null
+      return {
+        data: {
+          totalCredits,
+          nodeCount: nodes.length,
+          payer: "workspace",
+          workspaceId: ctx.workspaceId,
+          memberCap: ctx.memberCap,
+          headroomCredits: preview?.headroomCredits ?? null,
+          ...(preview?.workspaceLabel ? { workspaceLabel: preview.workspaceLabel } : {}),
+        },
+      }
     } catch (error) {
       console.error("[credits] Failed to estimate workflow:", error)
       return reply.status(500).send({

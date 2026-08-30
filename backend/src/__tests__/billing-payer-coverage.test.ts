@@ -203,6 +203,16 @@ describe("billing payer coverage — every reserve/commit/refund site names its 
     `
     expect(findUncoveredBillingSites(threaded)).toHaveLength(0)
 
+    // P14/W9: the p_workspace_id wire shape satisfies too — the direct-RPC
+    // sites reference the payer through the conditional spread.
+    const wireShaped = `
+      const { data } = await supabase.rpc("reserve_credits", {
+        p_user_id: userId,
+        ...(ws ? { p_workspace_id: ws.workspaceId } : {}),
+      })
+    `
+    expect(findUncoveredBillingSites(wireShaped)).toHaveLength(0)
+
     const exemptAbove = `
       // billing-payer-ok: personal payer by definition — an account top-up has no workspace
       await creditsService.reserveCredits(userId, 10, jobId)

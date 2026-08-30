@@ -8,7 +8,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
+import { insertJobIdempotent } from "../lib/insert-job.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { TEXT_TO_VIDEO_PROVIDERS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, videoProviderRequiresImage, isSeedance2Provider, isMinimaxH3Provider, applyDefaultVideoSelection, buildVideoCreditModelIdentifier, type ConnectedReference } from "@nodaro/shared"
@@ -260,8 +260,8 @@ export async function textToVideoRoutes(app: FastifyInstance) {
     // idempotency_key). See generate-image.ts for full rationale.
     let insertResult: { row: { id: string }; created: boolean }
     try {
-      insertResult = await insertWithIdempotencyKey<{ id: string }>(
-        "jobs",
+      insertResult = await insertJobIdempotent<{ id: string }>(
+        req,
         {
           workflow_id: extractWorkflowId(req.body),
           node_id: extractNodeId(req.body),

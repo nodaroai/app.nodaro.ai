@@ -5,10 +5,11 @@ import Fastify, { type FastifyInstance } from "fastify"
 // Mocks — hoisted before any route import
 // ---------------------------------------------------------------------------
 
-const { mockOrchestrationQueueAdd, mockTryRemoveFromQueue, mockCheckIsAdmin } = vi.hoisted(() => ({
+const { mockOrchestrationQueueAdd, mockTryRemoveFromQueue, mockCheckIsAdmin, mockResolveBillingContext } = vi.hoisted(() => ({
   mockOrchestrationQueueAdd: vi.fn().mockResolvedValue({ id: "orch-job-1" }),
   mockTryRemoveFromQueue: vi.fn().mockResolvedValue(undefined),
   mockCheckIsAdmin: vi.fn().mockResolvedValue(false),
+  mockResolveBillingContext: vi.fn(async (input: { userId: string }) => ({ payer: "user" as const, userId: input.userId })),
 }))
 
 vi.mock("@/lib/supabase.js", () => {
@@ -50,6 +51,14 @@ vi.mock("@/lib/orchestration-queue.js", () => ({
     add: mockOrchestrationQueueAdd,
   },
 }))
+
+// P14: spy on the enqueue-time payer resolve, keeping the real module (the
+// resolver itself is covered by lib/__tests__/billing-context.test.ts — here
+// we pin that THIS producer consults it with the run's workflowId).
+vi.mock("@/lib/billing-context.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/billing-context.js")>()
+  return { ...actual, resolveBillingContext: mockResolveBillingContext }
+})
 
 vi.mock("@/lib/queue.js", () => ({
   videoQueue: {
@@ -336,9 +345,59 @@ describe("POST /v1/workflows/:id/run", () => {
         workflowId: TEST_WORKFLOW_ID,
         userId: TEST_USER_ID,
         triggerType: "manual",
+        // P14: the payer is resolved ONCE at enqueue and stamped on the
+        // payload — this producer consults the resolver with the RUN's
+        // workflow (the workflow's home workspace may pay only through the
+        // run predicate), never a hardcoded personal.
+        billingContext: { payer: "user", userId: TEST_USER_ID },
       }),
       expect.objectContaining({ jobId: TEST_EXEC_ID }),
     )
+    expect(mockResolveBillingContext).toHaveBeenCalledWith({
+      userId: TEST_USER_ID,
+      workflowId: TEST_WORKFLOW_ID,
+      explicitWorkspaceId: undefined,
+      internal: false,
+    })
+  })
+
+  it("P14: a DEGRADED resolve on WORKSPACE-HOMED work refuses 503 — never silently personal", async () => {
+    mockResolveBillingContext.mockResolvedValueOnce({ payer: "user", userId: TEST_USER_ID, degraded: true } as never)
+    const mockFrom = vi.mocked(supabase.from)
+    let callNum = 1
+    mockFrom.mockImplementation((table) => {
+      if (table !== "workflows") callNum++
+      if (table === "workflows") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: TEST_WORKFLOW_ID, user_id: TEST_USER_ID, workspace_id: "ws-home", visibility: "workspace" },
+                error: null,
+              }),
+            }),
+          }),
+        } as never
+      }
+      // Active-execution check (none) — nothing past it should run.
+      return {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              in: vi.fn().mockReturnValue({
+                limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+              }),
+            }),
+          }),
+        }),
+        insert: vi.fn(),
+      } as never
+    })
+
+    const res = await authedPost(`/v1/workflows/${TEST_WORKFLOW_ID}/run`)
+    expect(res.statusCode).toBe(503)
+    expect(res.json().error.code).toBe("billing_unavailable")
+    expect(mockOrchestrationQueueAdd).not.toHaveBeenCalled()
   })
 
   it("forwards inputOverrides into the enqueued job (was silently dropped)", async () => {

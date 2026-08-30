@@ -27,9 +27,14 @@ import { fileURLToPath } from "node:url"
 const SRC_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..")
 const ROUTES_DIR = join(SRC_DIR, "routes")
 
-/** The one file allowed to touch `.from("jobs").insert(` — the helpers live
- *  there. Everything else goes through them. */
-const ALLOWLIST = new Set(["lib/insert-job.ts"])
+/** The files allowed to touch the raw jobs-insert helpers:
+ *  - lib/insert-job.ts — the helpers themselves live there.
+ *  - lib/private-plugins/toolkit.ts — the plugin contract's own insert
+ *    lane (`insertJobWithIdempotencyKey`), which stamps the P14 payer
+ *    pair itself and whose callers supply their own provenance columns.
+ *  Everything else goes through insertJob / insertInternalJob /
+ *  insertJobIdempotent. */
+const ALLOWLIST = new Set(["lib/insert-job.ts", "lib/private-plugins/toolkit.ts"])
 
 function tsFiles(dir: string): string[] {
   const out: string[] = []
@@ -45,7 +50,7 @@ function tsFiles(dir: string): string[] {
 /** `.from("jobs")` followed by `.insert(` — allowing the newline-and-indent
  *  chain style the routes are written in. `.update(` / `.select(` on jobs are
  *  untouched by this rule and must not match. */
-const DIRECT_INSERT = /\.from\(\s*["']jobs["']\s*\)\s*\.insert\s*\(/
+const DIRECT_INSERT = /\.from\(\s*["']jobs["']\s*\)\s*\.insert\s*\(|insertWithIdempotencyKey\s*(?:<[^>]*>)?\s*\(\s*["']jobs["']/
 
 describe("all job inserts go through insert-job.ts", () => {
   const files = tsFiles(SRC_DIR)
@@ -56,7 +61,9 @@ describe("all job inserts go through insert-job.ts", () => {
 
   it("no file inserts into jobs directly", () => {
     const offenders = files
-      .map((f) => relative(SRC_DIR, f))
+      // Normalize Windows separators so the allowlist matches on every OS
+      // (this was a standing Windows-only false-fail).
+      .map((f) => relative(SRC_DIR, f).split("\\").join("/"))
       .filter((rel) => !ALLOWLIST.has(rel))
       .filter((rel) => DIRECT_INSERT.test(readFileSync(join(SRC_DIR, rel), "utf8")))
 

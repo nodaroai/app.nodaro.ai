@@ -7,7 +7,7 @@
  * DELETE /v1/app/:slug/runs/:runId  — Delete run from history
  */
 
-import type { FastifyInstance } from "fastify"
+import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import { sendInternalError } from "../lib/http-errors.js"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
@@ -18,6 +18,8 @@ import { CreditsService } from "../ee/billing/credits.js"
 import { flattenItems } from "@nodaro/shared"
 import type { PresentationItem } from "@nodaro/shared"
 import { executeAppRun } from "../services/app-execution.js"
+import { shouldRefuseDegradedRunFor, personalPayer } from "../lib/billing-context.js"
+import { billingPairColumns } from "../lib/insert-job.js"
 import { extractAppInputSchema, flatInputsToOverrides, mergeInputOverrides } from "../lib/mcp/extract-app-inputs.js"
 
 // In-memory cache for published app data (30min TTL — explicit invalidation on publish)
@@ -147,6 +149,19 @@ async function loadAppVersion(
 }
 
 export async function appRunnerRoutes(app: FastifyInstance) {
+  // P14: a DEGRADED resolve on a WORKSPACE-HOMED (or unreadable-home)
+  // underlying workflow refuses rather than silently billing the runner's
+  // pocket for class-published work — through the ONE fail-closed probe.
+  // Retryable.
+  async function refuseDegradedAppRun(req: FastifyRequest, reply: FastifyReply, workflowId: string): Promise<boolean> {
+    if (!req.billingContext) return false
+    if (!(await shouldRefuseDegradedRunFor(req.billingContext, workflowId))) return false
+    await reply.status(503).send({
+      error: { code: "billing_unavailable", message: "Billing is temporarily unavailable for workspace runs. Try again shortly." },
+    })
+    return true
+  }
+
   // --- Load published app (public, auth optional for personalization) ---
   app.get("/v1/app/:slug", async (req, reply) => {
     const parsed = slugParams.safeParse(req.params)
@@ -373,6 +388,11 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       // If empty (stale routeId in snapshot), fall through → runs entire workflow
     }
 
+    // P14 (C1): the refusal runs BEFORE any row is written — a refused
+    // draft must not leave an orphaned pending execution that bricks the
+    // (user, workflow) pair on every already-running guard.
+    if (await refuseDegradedAppRun(req, reply, appRow.workflow_id as string)) return
+
     if (runId) {
       // Existing draft run path — create execution inline then link the draft
       const { data: execution, error: execError } = await supabase
@@ -382,6 +402,8 @@ export async function appRunnerRoutes(app: FastifyInstance) {
           user_id: req.userId,
           status: "pending",
           trigger_type: "manual",
+          // P14/W7: the hook-resolved payer's pair (personal adds nothing).
+          ...billingPairColumns(req.billingContext),
         })
         .select("id")
         .single()
@@ -419,6 +441,10 @@ export async function appRunnerRoutes(app: FastifyInstance) {
         appVersionId: appRow.id,
         nodeIds,
         webFreeMode: await resolveWebSurfaceFlag(req),
+        // P14: the route's authenticated context — resolved once by the
+        // billing hook (rung 2, the validated workspace header); an app run
+        // never resolves through the underlying workflow.
+        billingContext: req.billingContext ?? personalPayer(req.userId),
       }
 
       await orchestrationQueue.add("workflow-execution", jobData, {
@@ -442,6 +468,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
         inputOverrides,
         nodeIds,
         webFreeMode: await resolveWebSurfaceFlag(req),
+        billingContext: req.billingContext ?? personalPayer(req.userId),
       })
 
       return reply.status(202).send({

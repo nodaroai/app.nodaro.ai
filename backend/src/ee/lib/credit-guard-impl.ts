@@ -195,7 +195,15 @@ export function creditGuardImpl(
         modelIdentifier,
         req.isAppRun,
         computedCreditOverride,
-        { webFreeMode: req.webFreeMode ?? false, communityInstance },
+        {
+          webFreeMode: req.webFreeMode ?? false,
+          communityInstance,
+          // P14/W4c: the workspace entitlement override applies ONLY where a
+          // reservation follows. A checkOnly route is a wealth check that
+          // reserves nothing — a workspace context there would pass callers
+          // out of a budget nothing ever debits (a free proxy, no payer).
+          ...(opts?.checkOnly ? {} : { billingContext: req.billingContext }),
+        },
       )
 
       if (!creditCheck.allowed) {
@@ -247,7 +255,6 @@ export async function reserveCreditsForJobImpl(
   const routeName = req.url.split("?")[0] ?? "unknown"
 
   try {
-    // billing-payer-ok: THE P14 threading point — req.billingContext resolves in this impl and rides this call; personal payer until that lands
     const reservation = await CreditsService.reserveCredits(
       userId,
       jobId,
@@ -255,11 +262,16 @@ export async function reserveCreditsForJobImpl(
       0,
       0,
       {
+        // P14/W4c: the request's resolved payer rides the reservation. The
+        // preHandler stamped it once (resolve-once); this is a carry, never
+        // a re-derivation.
+        billingContext: req.billingContext,
         watermarkOverride: req.creditReservation?.watermark,
         isAppRun: req.isAppRun,
         // Third-party OAuth-app operations must never pump the owner's card
         // (design §5.2 step 1); Phase 4 instance credentials join this same
-        // exclusion predicate.
+        // exclusion predicate. (A workspace payer is additionally excluded
+        // INSIDE reserveCredits, as an invariant — not a flag here.)
         skipAutoRecharge: Boolean(req.appAuthorization),
         creditOverride: req.creditReservation?.creditOverride,
         webFreeMode: req.webFreeMode,

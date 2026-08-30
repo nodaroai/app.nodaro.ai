@@ -25,7 +25,7 @@ import { resolveFieldMappings, NODE_MAPPABLE_FIELDS } from "./resolve-field-mapp
 
 import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview, executeTeleporterPassthrough, executeRouter, executeExtractField, executeJsonProcess, executeFilterList, executeDeduplicateList, executeMergeLists, executeSortList, executeSelector } from "./inline-executor.js"
 import { executeSubWorkflow } from "./sub-workflow-handler.js"
-import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired, resolveNodeRefs, SOCIAL_POST_NODE_TYPES, isSeedance2Provider, isMinimaxH3Provider, readPromptAffixes } from "@nodaro/shared"
+import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired, resolveNodeRefs, SOCIAL_POST_NODE_TYPES, isSeedance2Provider, isMinimaxH3Provider, readPromptAffixes, WORKSPACE_HEADER_LOWER } from "@nodaro/shared"
 import { computeLlmChatFields, computeNodePrompt, pickerFanoutTargets, applyPromptAffixes } from "@nodaro/prompts"
 import type { ComponentMetadata } from "@nodaro/shared"
 import { getAppSettings } from "../../lib/app-settings.js"
@@ -557,6 +557,14 @@ async function executeSyncHttpNode(
   if (ctx.webFreeMode) {
     headers["X-Web-Free-Mode"] = "true"
   }
+  // P14: forward the execution's resolved payer as the validated workspace
+  // header — on the internal lane the header IS the decision (the billing
+  // hook resolves rung-2-only there), and its absence means the parent
+  // decided personal. Only a workspace payer sends it; a personal run's
+  // loopback wire shape stays byte-identical to pre-P14.
+  if (ctx.billingContext.payer === "workspace") {
+    headers[WORKSPACE_HEADER_LOWER] = ctx.billingContext.workspaceId
+  }
 
   const response = await fetch(url, {
     method: "POST",
@@ -983,8 +991,19 @@ export function buildSyncHttpBody(
       }
     }
 
-    default:
-      return withUserPrompt({ ...data, userId: ctx.userId } as Record<string, unknown>)
+    default: {
+      // P14/W9 guard: the default case spreads the WHOLE node data into the
+      // loopback body — and `workflowId` in a request body is a payer
+      // selector at the billing hook (rung 1). This case is UNREACHABLE
+      // today (every sync-HTTP type has a named case above); the strip is
+      // pure future-proofing for the day a new type falls through carrying
+      // such a key — it becomes a plain dropped field, never a payer lever,
+      // and an author who wants it must route it deliberately. (The
+      // internal lane also strips rung 1 wholesale — this is defense in
+      // depth at the producer.) The run's own id rides ctx, never node data.
+      const { workflowId: _neverAPayerSelector, ...safeData } = data as Record<string, unknown>
+      return withUserPrompt({ ...safeData, userId: ctx.userId } as Record<string, unknown>)
+    }
   }
 }
 
@@ -1270,7 +1289,7 @@ async function executeWorkerNode(
     input_data: { type: node.type, node_id: node.id, ...(iterationIndex !== undefined ? { iterationIndex } : {}) },
     job_type: node.type,
     ...(isUploadDescendant && { force_private: true }),
-  })
+  }, { billingContext: ctx.billingContext })
 
   if (jobError || !job) {
     throw new Error(`Failed to create job for node ${node.id}: ${jobError?.message ?? "unknown"}`)
@@ -1386,19 +1405,30 @@ async function executeWorkerNode(
       // generate a blocked model (e.g. 4K gemini-omni-video). checkCredits
       // self-fetches the profile and reports blocked/over-limit; the
       // surrounding catch deletes the orphaned pending jobs row on throw.
-      const preflight = await CreditsService.checkCredits(ctx.userId, modelIdentifier, ctx.isAppRun, creditOverride, { webFreeMode: ctx.webFreeMode ?? false })
+      const preflight = await CreditsService.checkCredits(ctx.userId, modelIdentifier, ctx.isAppRun, creditOverride, {
+        webFreeMode: ctx.webFreeMode ?? false,
+        // P14: the execution's resolved payer — preflight and reserve read
+        // the SAME context, so they can never disagree about entitlements.
+        billingContext: ctx.billingContext,
+      })
       if (!preflight.allowed) {
         throw new Error(preflight.error ?? "Model not available on your plan or insufficient credits")
       }
 
-      // billing-payer-ok: orchestrator-side reserve — P14 rides the execution-resolved payer on the payload; personal payer until that lands
       const reservation = await CreditsService.reserveCredits(
         ctx.userId,
         jobId,
         modelIdentifier,
         0, // provider cost calculated in worker
         0, // display cost calculated in worker
-        { isAppRun: ctx.isAppRun, creditOverride, webFreeMode: ctx.webFreeMode ?? false },
+        {
+          isAppRun: ctx.isAppRun,
+          creditOverride,
+          webFreeMode: ctx.webFreeMode ?? false,
+          // P14: resolved at enqueue, carried on the payload — never
+          // re-derived here (one payer per execution).
+          billingContext: ctx.billingContext,
+        },
       )
       usageLogId = reservation.usageLogId
       creditsUsed = reservation.creditsReserved
@@ -1775,6 +1805,11 @@ async function executeComponentNode(
       componentDepth: depth + 1,
       executingComponentIds: [...ancestorIds, appSlug],
       userId: ctx.userId,
+      // P14: the component route replies 202 and starts a SEPARATE execution
+      // in the background — a header would die with this wrapper request, so
+      // the parent's resolved payer rides the BODY into the child execution's
+      // payload (the route honors it on the internal lane only).
+      billingContext: ctx.billingContext,
     }),
   })
 
