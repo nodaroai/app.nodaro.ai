@@ -60,6 +60,7 @@ const LLM_FEATURES = [
   "prompt-helper",
   "ai-writer",
   "llm-chat",
+  "llm-structured",
   "translate",
   "scene-graph-ai",
   "video-composer",

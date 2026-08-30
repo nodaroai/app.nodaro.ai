@@ -1309,6 +1309,13 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "describe-to-picker": 10,
   "describe-to-picker:economy": 10,
   "describe-to-picker:premium": 10,
+  // POST /v1/llm/structured — its own feature id, not llm-chat's: a rendered
+  // catalog legend as the system prompt is several times a chat turn. Flat per
+  // tier at describe-to-picker parity (migration 358).
+  // owner-tunable; confirm at PR review.
+  "llm-structured": 10,
+  "llm-structured:economy": 10,
+  "llm-structured:premium": 10,
   "image-critic": 5,
   "image-critic:economy": 10,
   "image-critic:premium": 20,
