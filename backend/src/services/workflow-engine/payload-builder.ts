@@ -7,7 +7,7 @@ import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState, Workfl
 import { normalizeCollageLabels } from "../../providers/image/collage-badges.js"
 
 // Shared logic from packages/shared — single source of truth
-import { resolveSlideshowTransition, collectAncestorRefs as sharedCollectAncestorRefs, applyDefaultVideoSelection, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionableAssetArrays, buildCreditModelIdentifier, resolveImageGenCreditIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, resolveVideoModeForInputs, videoProviderRequiresImage, isVeoProvider, buildLipSyncCreditId, isPerSecondLipSyncProvider, resolveAiAvatarCreditId, resolveSwitchXCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, buildVideoAuditCreditId, resolveVideoAnalysisModel, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName, validateAiAvatarPayload, validateCinematicAvatarPayload, resolveNodeRefs, resolveEffectiveSourceType, PARAMETER_NODE_TYPES, characterMentionSlug, expandExtraRefsToConnectedReferences, PLATFORM_SPECS, isSeedance2Provider, isMinimaxH3Provider, supportsExtendRender, MODEL_CATALOG, hasFeature, referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality, COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS, buildLlmCreditIdentifier, motionGraphicsFeature, FLUX_LORA_CHARACTER_MODEL_ID, extractCharacterLoraFields, clampSmartCutWindow, resolveGvpAnchorWire, normalizeModelInput, readPromptAffixes } from "@nodaro/shared"
+import { resolveSlideshowTransition, collectAncestorRefs as sharedCollectAncestorRefs, applyDefaultVideoSelection, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionableAssetArrays, buildCreditModelIdentifier, resolveImageGenCreditIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, resolveVideoModeForInputs, videoProviderRequiresImage, isVeoProvider, buildLipSyncCreditId, isPerSecondLipSyncProvider, resolveAiAvatarCreditId, resolveSwitchXCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, buildVideoAuditCreditId, resolveVideoAnalysisModel, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName, validateAiAvatarPayload, validateCinematicAvatarPayload, resolveNodeRefs, resolveEffectiveSourceType, PARAMETER_NODE_TYPES, characterMentionSlug, expandExtraRefsToConnectedReferences, PLATFORM_SPECS, isSeedance2Provider, isMinimaxH3Provider, supportsExtendRender, MODEL_CATALOG, hasFeature, referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality, COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS, buildLlmCreditIdentifier, motionGraphicsFeature, FLUX_LORA_CHARACTER_MODEL_ID, extractCharacterLoraFields, clampSmartCutWindow, resolveGvpAnchorWire, normalizeModelInput, readPromptAffixes, findImageMentionTokens, knownImageSlugsFromRefs } from "@nodaro/shared"
 import { composeNegative, resolveTemplate, applyTemplate, computeNodePrompt, assembleImageInput, buildImagePrompt, buildScenePrompt, collectIdentityLockClause as sharedCollectIdentityLockClause, getParameterPromptHint, characterLockToRefLock, buildCharacterPrompt, buildObjectPrompt, buildCreaturePrompt, buildLocationPrompt, buildFaceTemplateInputs, appendMusicMeta, composeSoundHintFromConnections, truncateForField, appendField, assembleSunoInput, type SoundConsumerType, type SoundComposition, resolveVideoReferenceCore, applyPromptAffixes } from "@nodaro/prompts"
 import type { CharacterDef, ConnectedReference, SceneData, ExtraRefInput, ExtraRefCharacterContext } from "@nodaro/shared"
 import type { CharacterMeta } from "@nodaro/prompts"
@@ -158,6 +158,12 @@ function buildConnectedRefsForGenerate(
   /** Wired Object / Creature (animal) upstream refs (unified-asset-references
    *  Phase 2) — auto-attach `Image N (reference)` entities, deduped by URL. */
   wiredObjCreatureRefs: readonly ConnectedReference[] = [],
+  /** Canvas node id → node name, from `buildRefNameLookup`. Gives a NAMED
+   *  upload-image node's label to the plain `wired-image` entries below, which
+   *  is what a `@<name-slug>:<index>` mention resolves against (P3). Empty by
+   *  default, in which case every entry keeps its id as its name exactly as
+   *  before. */
+  nameById: ReadonlyMap<string, string> = new Map(),
 ): ConnectedReference[] {
   const out: ConnectedReference[] = []
   const seenUrls = new Set<string>()
@@ -181,7 +187,11 @@ function buildConnectedRefsForGenerate(
     seenUrls.add(url)
     out.push({
       id,
-      defaultName: id,
+      // A ref id that IS a canvas node id resolves to that node's name; every
+      // other id (`extracted_N`, `char_<id>`, `wired_N`, a manual-upload id)
+      // has no node to look up and falls back to the id, byte-identically to
+      // before P3.
+      defaultName: nameById.get(id) ?? id,
       source: "wired-image",
       url,
     })
@@ -193,6 +203,33 @@ function buildConnectedRefsForGenerate(
   }
   for (const [id, url] of refUrlMap) {
     addRawUrl(id, url)
+  }
+  return out
+}
+
+/**
+ * Node-name lookup for reference ids that ARE canvas node ids (`refUrlMap`
+ * keys wired upstream images by source node id — see the `wiredSourceIds` walk
+ * in the generate-image case).
+ *
+ * Mirrors the frontend's `defaultName: (upstreamData.label) ||
+ * (upstreamData.name) || upstream.type` (`execute-node.ts:1077`) so a NAMED
+ * upload-image node carries the same name into `ConnectedReference.defaultName`
+ * on BOTH engines — which is what a `@<name-slug>:<index>` mention resolves
+ * against (P3). Without this the orchestrator stamped `defaultName: id`
+ * (`wired_0`, the raw node id) and a mention that resolved on a frontend
+ * single-node Run shipped as literal text through the identical DAG run.
+ */
+function buildRefNameLookup(
+  buildCtx: PayloadBuildContext | undefined,
+): ReadonlyMap<string, string> {
+  const out = new Map<string, string>()
+  for (const n of buildCtx?.nodes ?? []) {
+    const d = n.data as Record<string, unknown> | undefined
+    const label = typeof d?.label === "string" && d.label.trim() ? d.label : undefined
+    const name = typeof d?.name === "string" && d.name.trim() ? d.name : undefined
+    const resolved = label ?? name ?? n.type
+    if (resolved) out.set(n.id, resolved)
   }
   return out
 }
@@ -1873,7 +1910,38 @@ export function buildPayload(
         buildExtraRefCharacterContextLookup(node.id, buildCtx),
       )
       const hasWiredCharacter = wiredCharRefs.length > 0
-      const useConnectedRefs = hasWiredCharacter || extraRefEntries.length > 0
+      // Built UNCONDITIONALLY (in-memory, cheap) so the image-mention gate
+      // below derives its slugs from the SAME reference list the assembler
+      // would see — the two can never disagree about whether a prompt carries
+      // a resolvable mention.
+      const generateConnectedRefs = [
+        ...buildConnectedRefsForGenerate(
+          wiredCharRefs,
+          refUrlMap,
+          orderIds,
+          wiredLocRefs,
+          wiredObjCreatureRefs,
+          buildRefNameLookup(buildCtx),
+        ),
+        ...extraRefEntries,
+      ]
+      // P3 — FE/BE parity. An images-only graph (no wired character, no extras)
+      // used to take the FLAT branch below, so `connectedReferences` never
+      // reached `buildImagePrompt` and a named-image mention that resolves on a
+      // frontend single-node Run shipped as LITERAL TEXT through the
+      // orchestrator's identical DAG run. Route through the structured branch
+      // when — and ONLY when — the prompt carries a resolvable image mention,
+      // so every mention-free graph keeps its exact branch and byte output.
+      // Hybrid-gated on the same signal as the route and the Phase-0 arm, so
+      // this is always false under NODE_ENV=test / IMAGE_REFERENCE_FORMAT=legacy.
+      //
+      // `rawPrompt` is the right input: it is graph-composed above (hints +
+      // identity clause folded in) and is exactly what is passed as
+      // `userPrompt` to `assembleImageInput` below.
+      const hasImageMention =
+        backendHybridRoles()
+        && findImageMentionTokens(rawPrompt, knownImageSlugsFromRefs(generateConnectedRefs)).length > 0
+      const useConnectedRefs = hasWiredCharacter || extraRefEntries.length > 0 || hasImageMention
 
       // ─── Character LoRA routing decision (see design §6.3) ─────────────
       // EXACTLY ONE distinct character mentioned AND that character has a
@@ -1921,16 +1989,7 @@ export function buildPayload(
             // NODE_ENV=test/production → legacy block (dark in prod). Placed
             // before any explicit `referenceFormat` so it never overrides one.
             ...(backendHybridRoles() ? { referenceFormat: "hybrid" as const } : {}),
-            connectedReferences: [
-              ...buildConnectedRefsForGenerate(
-                wiredCharRefs,
-                refUrlMap,
-                orderIds,
-                wiredLocRefs,
-                wiredObjCreatureRefs,
-              ),
-              ...extraRefEntries,
-            ],
+            connectedReferences: generateConnectedRefs,
             ancestorRefs,
             referenceOrder: generateRefOrder,
             suppressedCanonicalCharacterIds: generateSuppressed,
