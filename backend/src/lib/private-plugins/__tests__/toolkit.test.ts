@@ -61,6 +61,9 @@ describe("buildToolkit", () => {
     expect(typeof tk.ffmpeg.createWorkDir).toBe("function")
     expect(typeof tk.ffmpeg.cleanupWorkDir).toBe("function")
     expect(typeof tk.ffmpeg.downloadFile).toBe("function")
+    // "What streams does this media ACTUALLY carry" — the voice-changer-pro
+    // plugin decides audio vs video mode from this, never from the input slot.
+    expect(typeof tk.ffmpeg.probeMediaStreams).toBe("function")
   })
 
   it("media: every member is a function", () => {

@@ -124,6 +124,7 @@ import {
   getVideoFps,
   probeVideoSource,
   probeVideoStream,
+  probeMediaStreams,
   needsTranscode,
   transcodeToBrowserSafe,
   createWorkDir,
@@ -1036,5 +1037,62 @@ describe("normalizeVideoForCombine", () => {
     const result = await normalizeVideoForCombine("/tmp/in.mp4", "/tmp/out.mp4", 1920, 1080)
 
     expect(result).toBe("/tmp/out.mp4")
+  })
+})
+
+// ===========================================================================
+// probeMediaStreams — "what streams does this media ACTUALLY carry"
+// ===========================================================================
+//
+// The 2026-08-30 voice-changer-pro incident: an audio-only M4A uploaded as
+// `.mp4` (video/mp4) went down the video path and died at `-map 0:v` AFTER the
+// paid speech-to-speech pass. The slot/extension/MIME lied; the streams don't.
+
+describe("probeMediaStreams", () => {
+  const ffprobeJson = (streams: Array<Record<string, unknown>>) => JSON.stringify({ streams })
+
+  it("reports video + audio for a normal clip", async () => {
+    execFileOnce(ffprobeJson([
+      { codec_type: "video", codec_name: "h264", disposition: { attached_pic: 0 } },
+      { codec_type: "audio", codec_name: "aac", disposition: { attached_pic: 0 } },
+    ]))
+    await expect(probeMediaStreams("/tmp/v.mp4")).resolves.toEqual({ hasVideo: true, hasAudio: true })
+  })
+
+  it("reports an audio-only container (M4A / audio-only .mp4) as hasVideo:false", async () => {
+    execFileOnce(ffprobeJson([{ codec_type: "audio", codec_name: "aac", disposition: { attached_pic: 0 } }]))
+    await expect(probeMediaStreams("/tmp/consultation.mp4")).resolves.toEqual({ hasVideo: false, hasAudio: true })
+  })
+
+  it("does NOT count embedded cover art (disposition.attached_pic) as a video stream", async () => {
+    execFileOnce(ffprobeJson([
+      { codec_type: "video", codec_name: "mjpeg", disposition: { attached_pic: 1 } },
+      { codec_type: "audio", codec_name: "mp3", disposition: { attached_pic: 0 } },
+    ]))
+    await expect(probeMediaStreams("/tmp/podcast.mp3")).resolves.toEqual({ hasVideo: false, hasAudio: true })
+  })
+
+  it("reports a silent video as hasAudio:false", async () => {
+    execFileOnce(ffprobeJson([{ codec_type: "video", codec_name: "h264", disposition: {} }]))
+    await expect(probeMediaStreams("/tmp/silent.mp4")).resolves.toEqual({ hasVideo: true, hasAudio: false })
+  })
+
+  it("asks ffprobe for JSON with the protocol whitelist (blocks protocol pivots)", async () => {
+    execFileOnce(ffprobeJson([]))
+    await probeMediaStreams("/tmp/v.mp4")
+    const args = execArgs(0)
+    expect(args).toContain("-protocol_whitelist")
+    expect(args[args.indexOf("-of") + 1]).toBe("json")
+  })
+
+  it("blocks private/reserved remote hosts before ffprobe touches the network (SSRF guard)", async () => {
+    mocks.dnsLookup.mockResolvedValueOnce([{ address: "10.0.0.5", family: 4 }])
+    await expect(probeMediaStreams("http://evil.example/v.mp4")).rejects.toThrow(/resolve|private|reserved/i)
+    expect(mocks.execFile).not.toHaveBeenCalled()
+  })
+
+  it("throws (never guesses) when ffprobe output is not parseable", async () => {
+    execFileOnce("not json")
+    await expect(probeMediaStreams("/tmp/v.mp4")).rejects.toThrow(/probeMediaStreams/)
   })
 })

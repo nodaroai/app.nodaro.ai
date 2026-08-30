@@ -31,6 +31,8 @@ In both cases the target voice's identity is applied while the original pacing, 
   - `audio` — the re-voiced audio track (always produced; in video mode this is the new dialogue track).
   - `video` — the re-voiced video. **Disabled until a video input is wired** (audio mode produces no video).
 
+**The media decides the mode, not the input it arrived through.** The node inspects the file's actual streams first: an **audio-only file on the `video` input** (a voice-recorder `.mp4`/`.m4a` with no picture) runs in **audio mode** and returns re-voiced audio on the `audio` output instead of failing; a **video file on the `audio` input** has its audio extracted and is treated as audio. The result reports `sourceHasVideo` so you can tell which way a run went.
+
 ## Video Mode
 
 Wire any talking video (a generated clip, an uploaded file, a lip-synced shot) into the **video** input and the node will:
@@ -42,6 +44,8 @@ Wire any talking video (a generated clip, an uploaded file, a lip-synced shot) i
 This collapses what used to be a four-node chain (generate video → extract audio → voice changer → merge audio+video) into a single node and a single result.
 
 **Requires an audio track.** Most text-to-video / image-to-video models output *silent* video — only models that generate sound (e.g. Veo 3, Kling) produce a usable track. If you feed in a silent clip, the node fails fast with: *"This video has no audio track to revoice."* Use a clip with spoken audio, or feed audio directly.
+
+**Audio-only files are fine here too.** The inverse case — a file on the video input that has no *video* stream — does not fail: the node runs in audio mode and returns the re-voiced audio on the `audio` output.
 
 **Keeping the music bed.** Leave **Remove Background Noise** off to keep any music or sound effects baked into the clip's audio under the new voice. Turn it on for a clean, voice-only result.
 

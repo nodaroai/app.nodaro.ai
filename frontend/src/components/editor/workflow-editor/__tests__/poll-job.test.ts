@@ -475,3 +475,73 @@ describe("pollJobWithNodeUpdate", () => {
     expect(mockCancelJob).not.toHaveBeenCalled()
   })
 })
+
+// ---------------------------------------------------------------------------
+// Media-typed completion: an ORDERED LIST of output keys.
+// ---------------------------------------------------------------------------
+//
+// voice-changer-pro with a video input wired can legitimately deliver AUDIO —
+// the backend decides the mode from the media's actual streams (an audio-only
+// .mp4 has no video to remux onto). With a single static key the poller saw
+// `output_data.videoUrl === undefined` and failed the node with "No output URL
+// returned" even though the job completed. A key list says "take the first
+// key the job actually produced".
+
+describe("pollJobWithNodeUpdate — media-typed completion (outputKey list)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+    mockNodes.length = 0
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  async function run(outputData: Record<string, unknown>) {
+    const apiCall = vi.fn().mockResolvedValue({ jobId: "j1" })
+    mockGetJobStatusLean.mockResolvedValue({ status: "completed", output_data: outputData })
+    mockNodes.push({ id: "n1", data: { generatedResults: [], generatedVideoUrl: "https://cdn.example.com/stale.mp4" } })
+    const promise = pollJobWithNodeUpdate(
+      "n1", apiCall, ["generatedVideoUrl", "generatedAudioUrl"], "Voice Changer Pro", makeCtx(),
+    )
+    promise.catch(() => {})
+    await vi.advanceTimersByTimeAsync(100)
+    await vi.advanceTimersByTimeAsync(2000)
+    return promise
+  }
+
+  it("resets EVERY listed key on start (no stale video result survives into an audio run)", async () => {
+    await run({ audioUrl: "https://cdn.example.com/out.mp3" })
+    expect(mockUpdateNodeData).toHaveBeenCalledWith("n1", expect.objectContaining({
+      executionStatus: "running",
+      generatedVideoUrl: undefined,
+      generatedAudioUrl: undefined,
+    }))
+  })
+
+  it("writes the FIRST key the job actually produced — a video-wired run that delivered audio lands on generatedAudioUrl", async () => {
+    const url = await run({ audioUrl: "https://cdn.example.com/out.mp3" })
+    expect(url).toBe("https://cdn.example.com/out.mp3")
+    const completed = mockUpdateNodeData.mock.calls
+      .map((c) => c[1])
+      .find((p) => p.executionStatus === "completed")
+    expect(completed).toBeDefined()
+    expect(completed!.generatedAudioUrl).toBe("https://cdn.example.com/out.mp3")
+    expect("generatedVideoUrl" in completed!).toBe(false)
+    expect(mockToastSuccess).toHaveBeenCalledWith("Voice Changer Pro complete")
+  })
+
+  it("prefers the earlier key when the job produced both", async () => {
+    const url = await run({ videoUrl: "https://cdn.example.com/out.mp4", audioUrl: "https://cdn.example.com/out.mp3" })
+    expect(url).toBe("https://cdn.example.com/out.mp4")
+    expect(mockUpdateNodeData).toHaveBeenCalledWith("n1", expect.objectContaining({
+      executionStatus: "completed",
+      generatedVideoUrl: "https://cdn.example.com/out.mp4",
+    }))
+  })
+
+  it("still rejects when the job produced none of the listed keys", async () => {
+    await expect(run({ imageUrl: "https://cdn.example.com/out.png" })).rejects.toThrow("No output URL returned from job")
+  })
+})

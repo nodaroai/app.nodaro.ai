@@ -1,6 +1,7 @@
 import { join } from "node:path"
-import { downloadFile, runFfmpeg, needsTranscode, BROWSER_SAFE_VIDEO_ARGS, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
+import { downloadFile, runFfmpeg, needsTranscode, probeMediaStreams, BROWSER_SAFE_VIDEO_ARGS, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
+import { NoVideoStreamError, isNoVideoStreamError } from "../../lib/media-stream-errors.js"
 
 interface AudioTrack {
   readonly url: string
@@ -78,7 +79,23 @@ export async function mergeVideoAudio(options: MergeVideoAudioOptions): Promise<
   // those results, ffprobe, or the ffmpeg merge ("FFmpeg merge failed") — is
   // post-delivery, so the credit-refund guard must SKIP. Tag it as a
   // PostProcessingError. See lib/post-processing-error.ts.
-  return runPostProcessing(() => mergeVideoAudioImpl(options))
+  //
+  // ONE exception: NoVideoStreamError — the "video" input carries no video
+  // stream at all (an audio-only file in a video slot). That is an INPUT
+  // defect the probe below catches BEFORE ffmpeg runs, not a post-delivery
+  // failure, and the nodes that could reach it with a paid result in hand
+  // (voice-changer, voice-changer-pro) probe first and demote to audio mode
+  // instead. Re-throw it UN-TAGGED so the refund guard refunds (the safe
+  // direction — see lib/media-stream-errors.ts).
+  try {
+    return await runPostProcessing(() => mergeVideoAudioImpl(options))
+  } catch (err) {
+    if (isNoVideoStreamError(err)) {
+      const cause = (err as { cause?: unknown }).cause
+      throw cause instanceof NoVideoStreamError ? cause : err
+    }
+    throw err
+  }
 }
 
 async function mergeVideoAudioImpl(options: MergeVideoAudioOptions): Promise<string> {
@@ -91,6 +108,21 @@ async function mergeVideoAudioImpl(options: MergeVideoAudioOptions): Promise<str
 
     console.log("[mergeVideoAudio] Downloading video")
     await downloadFile(videoUrl, videoPath)
+
+    // THE MEDIA DECIDES. The merge maps `0:v`, so a "video" that carries no
+    // video stream (an audio-only M4A uploaded as .mp4 — incident 2026-08-30)
+    // cannot be merged at all: refuse NOW, typed and legible, before any
+    // ffmpeg run. Fail OPEN on a probe error — the probe must never be the
+    // reason a valid merge is refused; ffmpeg itself remains the last word.
+    let streams: { hasVideo: boolean; hasAudio: boolean } | undefined
+    try {
+      streams = await probeMediaStreams(videoPath)
+    } catch (probeErr) {
+      console.warn(`[mergeVideoAudio] stream probe failed — proceeding on the input's word: ${probeErr instanceof Error ? probeErr.message : String(probeErr)}`)
+    }
+    if (streams && !streams.hasVideo) {
+      throw new NoVideoStreamError()
+    }
 
     const bgVol = backgroundVolume / 100
 
@@ -168,14 +200,20 @@ async function mergeVideoAudioImpl(options: MergeVideoAudioOptions): Promise<str
 
     try {
       await doMerge(filterComplex)
-    } catch {
+    } catch (err) {
+      // ffmpeg's stderr is the ONLY diagnosable signal a merge failure has;
+      // the user-facing message stays generic, the log never does. (The
+      // 2026-08-30 incident needed a local reproduction to learn it was
+      // "Stream map '0:v' matches no streams".)
+      const detail = (err instanceof Error ? err.message : String(err)).slice(0, 4000)
       if (keepOriginalAudio) {
         // Fallback: video may not have audio stream, retry without original audio
-        console.log("[mergeVideoAudio] Fallback: video has no audio stream, merging without original")
+        console.warn(`[mergeVideoAudio] Fallback: merge with original audio failed, retrying without it: ${detail}`)
         const fallbackFilter = buildAudioFilter(tracks, voiceoverVolume, bgVol, false, sumTracks)
         await doMerge(fallbackFilter)
       } else {
-        throw new Error("FFmpeg merge failed")
+        console.error(`[mergeVideoAudio] ffmpeg failed: ${detail}`)
+        throw new Error("FFmpeg merge failed", { cause: err })
       }
     }
 

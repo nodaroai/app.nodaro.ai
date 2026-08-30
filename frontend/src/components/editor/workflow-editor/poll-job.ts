@@ -32,6 +32,23 @@ export const guardedToast = {
 
 export type OutputKey = "generatedVideoUrl" | "generatedAudioUrl" | "generatedImageUrl";
 
+/**
+ * A single key, or an ORDERED list of acceptable keys ("media-typed
+ * completion"): the poller resets every listed key on start and, on
+ * completion, writes the FIRST key the job actually produced.
+ *
+ * voice-changer-pro with a video input wired can legitimately deliver AUDIO —
+ * the backend decides audio-vs-video from the media's real streams (an
+ * audio-only .mp4 has no video to remux onto) — so it polls with
+ * ["generatedVideoUrl", "generatedAudioUrl"]. With a single static key the
+ * poller failed such a completed job with "No output URL returned".
+ */
+export type OutputKeySpec = OutputKey | readonly OutputKey[];
+
+function outputKeyList(spec: OutputKeySpec): readonly OutputKey[] {
+  return typeof spec === "string" ? [spec] : spec;
+}
+
 /** Map store output key → backend output_data field. */
 const OUTPUT_URL_KEY: Record<OutputKey, string> = {
   generatedVideoUrl: "videoUrl",
@@ -123,12 +140,17 @@ function handleJobCompleted(
   job: Awaited<ReturnType<typeof getJobStatusLean>>,
   nodeId: string,
   jobId: string,
-  outputKey: OutputKey,
+  outputKeySpec: OutputKeySpec,
   label: string,
   extraOutputFields: ((od: Record<string, unknown>) => Record<string, unknown>) | undefined,
   updateNodeData: ReturnType<typeof useWorkflowStore.getState>["updateNodeData"],
   resolve: (url: string) => void,
 ): boolean {
+  // Media-typed completion: the first listed key the job actually produced.
+  const outputKey = outputKeyList(outputKeySpec).find(
+    (k) => Boolean(job.output_data?.[OUTPUT_URL_KEY[k]]),
+  );
+  if (!outputKey) return false;
   const url = job.output_data?.[OUTPUT_URL_KEY[outputKey]];
 
   if (!url) return false;
@@ -188,7 +210,7 @@ function handleJobCompleted(
 export function pollJobWithNodeUpdate(
   nodeId: string,
   apiCall: () => Promise<{ jobId: string }>,
-  outputKey: OutputKey,
+  outputKey: OutputKeySpec,
   label: string,
   ctx: ExecutionContext,
   extraOutputFields?: (
@@ -199,7 +221,9 @@ export function pollJobWithNodeUpdate(
   const { updateNodeData } = useWorkflowStore.getState();
   updateNodeData(nodeId, {
     executionStatus: "running",
-    [outputKey]: undefined,
+    // Every listed key is reset — a stale video result must not survive into
+    // a run that ends up delivering audio (or vice versa).
+    ...Object.fromEntries(outputKeyList(outputKey).map((k) => [k, undefined])),
     currentJobId: undefined,
     currentJobProgress: 0,
   });

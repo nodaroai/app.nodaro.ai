@@ -33,6 +33,9 @@ const mocks = vi.hoisted(() => {
   // merge-video-audio uses needsTranscode (codec≠h264 OR pixFmt≠yuv420p) to
   // decide stream-copy vs re-encode to browser-safe H.264.
   const needsTranscode = vi.fn().mockResolvedValue(false)
+  // merge-video-audio refuses a "video" input that carries no video stream
+  // BEFORE running ffmpeg (the 2026-08-30 audio-only-M4A incident).
+  const probeMediaStreams = vi.fn().mockResolvedValue({ hasVideo: true, hasAudio: true })
   const BROWSER_SAFE_VIDEO_ARGS = ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "fast", "-crf", "23", "-movflags", "+faststart"]
   const createWorkDir = vi.fn().mockResolvedValue("/tmp/work")
   const cleanupWorkDir = vi.fn().mockResolvedValue(undefined)
@@ -44,7 +47,7 @@ const mocks = vi.hoisted(() => {
   const uploadFileToR2 = vi.fn()
   const smartLoopCut = vi.fn()
   return {
-    downloadFile, runFfmpeg, runFfprobe, needsTranscode, BROWSER_SAFE_VIDEO_ARGS,
+    downloadFile, runFfmpeg, runFfprobe, needsTranscode, probeMediaStreams, BROWSER_SAFE_VIDEO_ARGS,
     createWorkDir, cleanupWorkDir,
     fsWriteFile, fsReaddirSync, execSync,
     uploadFileToR2, smartLoopCut,
@@ -56,6 +59,7 @@ vi.mock("../ffmpeg-utils.js", () => ({
   runFfmpeg: mocks.runFfmpeg,
   runFfprobe: mocks.runFfprobe,
   needsTranscode: mocks.needsTranscode,
+  probeMediaStreams: mocks.probeMediaStreams,
   BROWSER_SAFE_VIDEO_ARGS: mocks.BROWSER_SAFE_VIDEO_ARGS,
   createWorkDir: mocks.createWorkDir,
   cleanupWorkDir: mocks.cleanupWorkDir,
@@ -98,6 +102,8 @@ import { socialMediaFormat } from "../social-media-format.js"
 import { speedRamp } from "../speed-ramp.js"
 import { splitMedia } from "../split-media.js"
 import { mergeVideoAudio } from "../merge-video-audio.js"
+import { isNoVideoStreamError } from "@/lib/media-stream-errors.js"
+import { isPostProcessingError } from "@/lib/post-processing-error.js"
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -107,6 +113,7 @@ beforeEach(() => {
   mocks.runFfmpeg.mockResolvedValue("")
   mocks.runFfprobe.mockResolvedValue("h264")
   mocks.needsTranscode.mockResolvedValue(false)
+  mocks.probeMediaStreams.mockResolvedValue({ hasVideo: true, hasAudio: true })
   mocks.fsWriteFile.mockResolvedValue(undefined)
   mocks.fsReaddirSync.mockReturnValue([])
   mocks.execSync.mockReturnValue("h264")
@@ -731,5 +738,45 @@ describe("mergeVideoAudio", () => {
         videoUrl: "v", audioUrl: "a", keepOriginalAudio: false,
       }),
     ).rejects.toThrow(/FFmpeg merge failed/)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// mergeVideoAudio — the "video" input carries no video stream
+// ---------------------------------------------------------------------------
+//
+// An audio-only M4A uploaded as `.mp4` reached `-map 0:v` and died with a
+// swallowed stderr + a generic "FFmpeg merge failed" (2026-08-30, two jobs,
+// 6 paid provider passes). The merge now PROBES first and refuses with a
+// typed, user-facing error — and logs ffmpeg's stderr when it does fail.
+
+describe("mergeVideoAudio — 'video' input has no video stream", () => {
+  it("refuses BEFORE running ffmpeg with a typed NoVideoStreamError that is NOT post-processing (refundable)", async () => {
+    mocks.probeMediaStreams.mockResolvedValueOnce({ hasVideo: false, hasAudio: true })
+
+    const err = await mergeVideoAudio({ videoUrl: "v", audioUrl: "a" }).catch((e: unknown) => e)
+
+    expect(isNoVideoStreamError(err)).toBe(true)
+    expect((err as Error).message).toMatch(/no video stream/i)
+    expect(isPostProcessingError(err)).toBe(false)
+    expect(mocks.runFfmpeg).not.toHaveBeenCalled()
+  })
+
+  it("fails OPEN: a probe error never blocks the merge itself", async () => {
+    mocks.probeMediaStreams.mockRejectedValueOnce(new Error("ffprobe hiccup"))
+
+    await mergeVideoAudio({ videoUrl: "v", audioUrl: "a" })
+
+    expect(mocks.runFfmpeg).toHaveBeenCalled()
+  })
+
+  it("logs ffmpeg's stderr when the merge fails — the generic message alone is undiagnosable", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.runFfmpeg.mockRejectedValueOnce(new Error("ffmpeg failed: Stream map '0:v' matches no streams."))
+
+    await expect(mergeVideoAudio({ videoUrl: "v", audioUrl: "a" })).rejects.toThrow(/FFmpeg merge failed/)
+
+    expect(spy.mock.calls.flat().join(" ")).toContain("Stream map '0:v' matches no streams")
+    spy.mockRestore()
   })
 })

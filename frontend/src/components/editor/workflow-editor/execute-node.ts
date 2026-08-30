@@ -239,6 +239,7 @@ import { collectPreviewItems } from "./preview-items";
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
 import { resolveFieldMappings, NODE_MAPPABLE_FIELDS } from "./resolve-field-mappings";
 import { pollJobWithNodeUpdate, guardedToast } from "./poll-job";
+import type { OutputKeySpec } from "./poll-job";
 import { ensureNodeSheetPanels, SHEET_STAGE_A_CANCELLED } from "../reference-sheet/node-sheet-stage-a";
 import { shouldAbandonNode } from "./abandon-guard";
 import {
@@ -363,7 +364,7 @@ function resolvePersona(
 function runProcessingNode(
   nodeId: string,
   apiCall: () => Promise<{ jobId: string }>,
-  outputKey: "generatedVideoUrl" | "generatedAudioUrl" | "generatedImageUrl",
+  outputKey: OutputKeySpec,
   label: string,
   ctx: ExecutionContext,
   extraOutputFields?: (
@@ -3052,7 +3053,11 @@ export function executeNode(
             videoUrl,
             d.model,
           ),
-        "generatedVideoUrl",
+        // Media-typed completion: the backend decides audio-vs-video from the
+        // media's ACTUAL streams, so a video-wired run can legitimately deliver
+        // audio (an audio-only .mp4 has nothing to remux onto). Video first,
+        // audio as the fallback — the poller writes whichever the job produced.
+        ["generatedVideoUrl", "generatedAudioUrl"],
         "Voice Changer",
         ctx,
         // Surface the revoiced audio sidecar on the audio output handle.
@@ -3157,10 +3162,14 @@ export function executeNode(
         d.musicVolume,
       );
     if (videoUrl) {
+      // Media-typed completion: the backend decides audio-vs-video from the
+      // media's ACTUAL streams, so a video-wired run can legitimately deliver
+      // audio (an audio-only .mp4 has nothing to remux onto). Video first,
+      // audio as the fallback — the poller writes whichever the job produced.
       return runProcessingNode(
         node.id,
         callVoiceChangerPro,
-        "generatedVideoUrl",
+        ["generatedVideoUrl", "generatedAudioUrl"],
         "Voice Changer Pro",
         ctx,
         // Surface a revoiced audio sidecar on the audio handle when present.

@@ -470,6 +470,15 @@ export interface PluginFfmpegToolkit {
    */
   probeMediaDuration(srcUrlOrPath: string): Promise<number>
   /**
+   * Mirrors `probeMediaStreams` (`providers/video/ffmpeg-utils.ts`) — which
+   * streams a URL or path ACTUALLY carries (`hasVideo` ignores embedded cover
+   * art; SSRF-asserted for remote URLs). THE MEDIA, NOT THE INPUT SLOT, decides
+   * a plugin's audio-vs-video mode: an audio-only M4A uploaded as `.mp4` must run
+   * as audio (voice-changer-pro incident, 2026-08-30). Throws when ffprobe's
+   * output is unparseable — callers fail OPEN on the slot's word.
+   */
+  probeMediaStreams(srcUrlOrPath: string): Promise<{ hasVideo: boolean; hasAudio: boolean }>
+  /**
    * Mirrors `needsTranscode` (`providers/video/ffmpeg-utils.ts`) — true when the
    * source stream isn't browser-safe and must be re-encoded.
    */
