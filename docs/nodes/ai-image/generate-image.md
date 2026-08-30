@@ -213,6 +213,7 @@ deliberate: a preset should carry its look.
 - Use 1K resolution and medium quality during iteration, then switch to higher settings for final output.
 - The style dropdown supports a "Custom..." option for free-text style descriptions when presets are insufficient.
 - When connecting a Provider parameter node upstream, it overrides the provider selection on this node, which is useful for batch-switching models across multiple Generate Image nodes.
+- **Name your upload nodes to mention them.** Give a wired Upload Image node a Label and you can address it in the prompt by the slug of that label — `@town:1` puts that picture's binding exactly where you typed it, and `@town:1:background` says what to take from it. Roles are the usual media set (`object`, `person`, `face`, `clothes`, `background`, `style`, `pose`, `texture`) or any custom single word, and `~lock` / `~nolock` work as they do on character mentions. Unnamed uploads still attach as before — mentioning is optional, not required (an unlabelled node falls back to its node type, so it is still addressable as `@upload-image:1` if you want it). A label starting with a digit (`3D Render`) can't form a mention; rename it if you want to address it inline. Full grammar: [Reference Roles guide](../../reference-roles-guide.md#naming-a-plain-image-so-you-can-mention-it).
 
 ## Trained character routing (Cloud edition)
 

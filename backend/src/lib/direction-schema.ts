@@ -16,10 +16,10 @@ import {
  * `renderDirectionHints` actually folds (pinned by
  * `__tests__/direction-schema.test.ts`).
  *
- * ONE schema, designed to serve BOTH `/v1/generate-image` and
- * `/v1/generate-video`. Today only `/v1/generate-image` imports it —
- * `/v1/generate-video` has no `direction` body field yet and adopts this schema
- * unchanged when its channel ships. Surface is a RENDER concern
+ * ONE schema for every surface that takes direction: `/v1/generate-image`,
+ * `/v1/generate-video` and `/v1/text-to-video` all import it unchanged.
+ * `/v1/extend-video` deliberately does not — its prompt continues an existing
+ * clip, where re-stating the look is the wrong lever. Surface is a RENDER concern
  * (`renderDirectionHints` skips off-surface rows), not a wire concern, so an
  * image-only key sent to the video route is accepted and simply contributes no
  * hint. One schema also means one drift guard instead of two, and removes the

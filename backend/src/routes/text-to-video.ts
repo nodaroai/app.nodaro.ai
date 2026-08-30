@@ -3,6 +3,7 @@ import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { videoQueue } from "../lib/queue.js"
 import { shotsSchema, elementsSchema } from "../lib/video-schemas.js"
+import { effectiveVideoPromptCeiling } from "../lib/video-prompt-ceiling.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
@@ -11,7 +12,9 @@ import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { TEXT_TO_VIDEO_PROVIDERS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, videoProviderRequiresImage, isSeedance2Provider, isMinimaxH3Provider, applyDefaultVideoSelection, buildVideoCreditModelIdentifier, type ConnectedReference } from "@nodaro/shared"
+import { composeVideoPromptText } from "@nodaro/prompts"
 import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
+import { directionSchema } from "../lib/direction-schema.js"
 import { assembleVideoConnectedReferences } from "./generate-video.js"
 import { formatZodError } from "../lib/zod-error.js"
 
@@ -42,6 +45,10 @@ export const textToVideoBody = z.object({
   // expanding {image:N} tokens. Absent → byte-identical to the flat path.
   connectedReferences: z.array(connectedReferenceSchema).max(14).optional(),
   referenceOrder: z.array(z.string()).max(14).optional(),
+  // Structured cinematic direction: catalog IDS, not hint text (parity with
+  // /v1/generate-video, same shared schema). Rendered server-side with the
+  // platform's verbosity policy; absent → byte-identical to the flat path.
+  direction: directionSchema.optional(),
   webSearch: z.boolean().optional(),
   nsfwChecker: z.boolean().optional(),
   // VEO 3.x: opt out of KIE's auto-translate-to-English (default true
@@ -89,6 +96,10 @@ export async function textToVideoRoutes(app: FastifyInstance) {
           // surcharge for input images beyond the first 5. Predict the
           // ASSEMBLED reference-image count the same way the handler will
           // (connectedReferences → referenceImageUrls; t2v has no frames).
+          // The `direction` fold is not applied here and does not need to be:
+          // it is text-only, and the billed quantity is the reference count.
+          // See the same note in generate-video.ts for the guard that closes
+          // the one shape which could couple prompt text to that count.
           if (isMinimaxH3Provider(b?.provider as string | undefined)) {
             const { minimaxH3BaseCreditsFromUrls, minimaxH3BillableRefImageCount, MINIMAX_H3_FREE_INPUT_IMAGES } =
               await import("../ee/billing/minimax-h3-credits.js")
@@ -171,6 +182,35 @@ export async function textToVideoRoutes(app: FastifyInstance) {
           message: `${provider} requires an input image — connect an image to the node's image input (reference images alone are not enough).`,
         },
       })
+    }
+
+    // Cinematic direction fold — catalog IDS → prompt text, server-side. Same
+    // shape and same fold SITE as generate-video: before the reference
+    // assembly below, because the resolver frames the body. No `direction` →
+    // `composeVideoPromptText` returns `prompt` verbatim, so the flat path is
+    // byte-identical. (`prompt` is required on this route, so the composer's
+    // absent-prompt branch is dead here — the identical shape is deliberate so
+    // the two routes read the same.)
+    if (parsed.data.direction) {
+      const composed = composeVideoPromptText(prompt, parsed.data.direction)
+      if (composed !== undefined && composed !== prompt) {
+        // `input_data.userPrompt` records the SOURCE, never the render.
+        parsed.data.userPrompt ??= prompt
+        prompt = composed
+        parsed.data.prompt = prompt
+      }
+      // The provider clamp slices the tail at this ceiling — make it observable.
+      // `effectiveVideoPromptCeiling` (not the raw cap) because a non-native
+      // negative prompt is folded in as a "\nAvoid: …" suffix whose room the
+      // clamp reserves FIRST; thresholding on the cap would miss exactly the
+      // runs that get truncated. Same helper as generate-video, one mirror.
+      const promptCeiling = effectiveVideoPromptCeiling(provider, negativePrompt)
+      if (prompt.length > promptCeiling) {
+        req.log.warn(
+          { provider, promptLength: prompt.length, promptCeiling },
+          "[text-to-video] composed prompt exceeds the provider ceiling; the tail will be clamped",
+        )
+      }
     }
 
     // Structured references (parity with generate-video / generate-image): assemble

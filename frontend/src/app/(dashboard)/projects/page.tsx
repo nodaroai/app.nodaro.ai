@@ -314,22 +314,24 @@ export default function ProjectsPage() {
     localStorage.setItem("nodaro-dashboard-workspace-tab", workspaceTab)
   }, [workspaceTab])
 
-  // B1: a deployment surface profile can narrow which dashboard tabs show.
-  // "studio" is not a DashboardTabKey, so it is always available; workflows and
-  // projects can be narrowed. surfaceTabs returns the code default unless a
-  // profile whitelists a subset. effectiveWorkspaceTab guards against a stored/
-  // URL tab that the profile has since hidden (which would blank the view).
-  const allowedDashTabs = surfaceTabs(["workflows", "projects"] as const)
-  const workspaceTabDefs = (
-    [
-      { id: "workflows", label: t("dash.myWorkflows") },
-      { id: "projects", label: t("dash.myProjects") },
-      { id: "studio", label: t("dash.studioWorkflows") },
-    ] as const
-  ).filter((tab) => tab.id === "studio" || allowedDashTabs.includes(tab.id))
+  // B1: a deployment surface profile can narrow which dashboard tabs show —
+  // all three workspace tabs are DashboardTabKeys, so a whitelist can hide the
+  // Studio list too. surfaceTabs returns the code default unless a profile
+  // whitelists a subset; a whitelist naming NO workspace tab falls back to the
+  // full code default (S4, mirrors surfaceAuthMethods) so the strip can never
+  // go blank. effectiveWorkspaceTab guards against a stored/URL tab that the
+  // profile has since hidden (which would blank the view).
+  const allowedDashTabs = surfaceTabs(["workflows", "projects", "studio"] as const)
+  const allWorkspaceTabDefs = [
+    { id: "workflows", label: t("dash.myWorkflows") },
+    { id: "projects", label: t("dash.myProjects") },
+    { id: "studio", label: t("dash.studioWorkflows") },
+  ] as const
+  const narrowedWorkspaceTabDefs = allWorkspaceTabDefs.filter((tab) => allowedDashTabs.includes(tab.id))
+  const workspaceTabDefs = narrowedWorkspaceTabDefs.length ? narrowedWorkspaceTabDefs : allWorkspaceTabDefs
   const effectiveWorkspaceTab: WorkspaceTab = workspaceTabDefs.some((tb) => tb.id === workspaceTab)
     ? workspaceTab
-    : (workspaceTabDefs[0]?.id ?? "studio")
+    : (workspaceTabDefs[0]?.id ?? "workflows")
 
   // The create button lives with the list it creates into: it follows the ACTIVE
   // workspace tab (New Workflow on the flat list, New Project on the project
