@@ -19,7 +19,7 @@ import { isBusiness, isCloud } from "./config.js"
  * contract, and packages/shared is an irrevocable Apache grant.
  */
 
-export type NavKey = "gallery" | "explore" | "pricing" | "templates" | "apps" | "community"
+export type NavKey = "gallery" | "explore" | "pricing" | "templates" | "apps" | "community" | "integrations"
 export const DASHBOARD_TAB_KEYS = [
   "workflows",
   "projects",
@@ -29,6 +29,7 @@ export const DASHBOARD_TAB_KEYS = [
   "tutorials",
   "statistics",
   "gallery",
+  "studio",
 ] as const
 export type DashboardTabKey = (typeof DASHBOARD_TAB_KEYS)[number]
 export type AuthMethod = "email" | "google" | "sso"
@@ -47,6 +48,9 @@ export interface SurfaceSibling {
 export interface SurfaceBilling {
   /** "hidden" suppresses the canvas Cost tab (billingSurface().mountCostTab → false). */
   costTab: "inherit" | "hidden"
+  /** "hidden" suppresses the sidebar credit card (a prepaid instance can point
+   *  users at /usage instead of the always-on readout). */
+  sidebarCard: "inherit" | "hidden"
   /** Display label for a credit figure. BOTH-OR-NEITHER with unitRate. */
   unitLabel?: string
   /** Display units per 1 Nodaro credit. BOTH-OR-NEITHER with unitLabel. */
@@ -64,7 +68,7 @@ export interface SurfaceProfile {
   models: { deny: string[] }
   auth: { methods: AuthMethod[]; ssoLabel?: string }
   siblings: { apps: SurfaceSibling[] }
-  brand: { productName: string; description?: string }
+  brand: { productName: string; description?: string; wordmark?: string }
   locale: { default?: string; picker: boolean }
   outputs: { allowPublic: boolean }
   voice: { allowedGenders: string[] } // B4c — [] = all genders allowed (narrowing only)
@@ -83,10 +87,10 @@ export const SURFACE_PROFILE_DEFAULT: SurfaceProfile = {
   locale: { picker: true },
   outputs: { allowPublic: true },
   voice: { allowedGenders: [] },
-  billing: { costTab: "inherit", selfServe: true },
+  billing: { costTab: "inherit", sidebarCard: "inherit", selfServe: true },
 }
 
-const NAV_KEYS = z.enum(["gallery", "explore", "pricing", "templates", "apps", "community"])
+const NAV_KEYS = z.enum(["gallery", "explore", "pricing", "templates", "apps", "community", "integrations"])
 const TAB_KEYS = z.enum([...DASHBOARD_TAB_KEYS])
 const AUTH_METHODS = z.enum(["email", "google", "sso"])
 
@@ -151,7 +155,7 @@ const lenientPublicFlag = lenientFlag("outputs.allowPublic", true, "public", { w
  *  Absent is the mainline default and stays quiet. */
 const lenientSelfServeFlag = lenientFlag("billing.selfServe", true, "self-serve on", { warnOnAbsent: false })
 
-const BILLING_DEFAULT: SurfaceBilling = { costTab: "inherit", selfServe: true }
+const BILLING_DEFAULT: SurfaceBilling = { costTab: "inherit", sidebarCard: "inherit", selfServe: true }
 
 /**
  * The unit trio is validated HERE, as a unit, and dropped as a unit (§3.5):
@@ -173,8 +177,8 @@ const BILLING_DEFAULT: SurfaceBilling = { costTab: "inherit", selfServe: true }
  * requires the unit (the hosted overlay's register() asserts it and the loader
  * turns that into exit(1)); parseSurfaceProfile never throws, by contract.
  */
-function coherentBilling(raw: { costTab: "inherit" | "hidden"; selfServe: boolean; unitLabel?: unknown; unitRate?: unknown; unitDecimals?: unknown }): SurfaceBilling {
-  const out: SurfaceBilling = { costTab: raw.costTab, selfServe: raw.selfServe }
+function coherentBilling(raw: { costTab: "inherit" | "hidden"; sidebarCard: "inherit" | "hidden"; selfServe: boolean; unitLabel?: unknown; unitRate?: unknown; unitDecimals?: unknown }): SurfaceBilling {
+  const out: SurfaceBilling = { costTab: raw.costTab, sidebarCard: raw.sidebarCard, selfServe: raw.selfServe }
   const hasLabel = raw.unitLabel !== undefined
   const hasRate = raw.unitRate !== undefined
   if (!hasLabel && !hasRate && raw.unitDecimals === undefined) return out
@@ -222,13 +226,16 @@ export const SurfaceProfileSchema: z.ZodType<SurfaceProfile> = z.object({
   siblings: z
     .object({ apps: z.array(z.object({ label: z.string(), url: z.string() })).catch([]) })
     .catch({ apps: [] }),
-  brand: z.object({ productName: z.string().min(1), description: z.string().optional() }).catch({ productName: "Nodaro" }),
+  brand: z
+    .object({ productName: z.string().min(1), description: z.string().optional(), wordmark: z.string().optional() })
+    .catch({ productName: "Nodaro" }),
   locale: z.object({ default: z.string().optional(), picker: z.boolean() }).catch({ picker: true }),
   outputs: z.object({ allowPublic: lenientPublicFlag }).catch({ allowPublic: true }),
   voice: z.object({ allowedGenders: stringArray() }).catch({ allowedGenders: [] }),
   billing: z
     .object({
       costTab: z.enum(["inherit", "hidden"]).catch("inherit"),
+      sidebarCard: z.enum(["inherit", "hidden"]).catch("inherit"),
       selfServe: lenientSelfServeFlag,
       unitLabel: z.unknown().optional(),
       unitRate: z.unknown().optional(),

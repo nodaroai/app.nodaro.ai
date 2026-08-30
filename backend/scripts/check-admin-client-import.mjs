@@ -69,6 +69,12 @@ const ALLOWED_PATHS = [
   // user_id); migrates to the user-scoped client together with its twin
   // under roadmap #4.
   /^src\/routes\/text-to-picker\.ts$/,
+
+  // llm-structured: built on the text-to-picker template — same job-lifecycle
+  // writes (insert + own-row status updates filtered by user_id); migrates to
+  // the user-scoped client with the other LLM job routes under roadmap #4.
+  /^src\/routes\/llm-structured\.ts$/,
+
   /^src\/routes\/webhook-output\.ts$/,
   /^src\/routes\/telegram-webhook\.ts$/,
   // Meta privacy callbacks: server-to-server POSTs from Meta with no user JWT.

@@ -1025,6 +1025,22 @@ if ("jobId" in result) {
 > [Reference Roles guide](./reference-roles-guide.md) for the role-label + lock
 > model.
 
+> **Naming an image reference in the prompt.** On
+> `run("generate-image", …)`, a media reference (`source: "wired-image"` or
+> `"manual"`) is mentionable by the slug of its `defaultName` —
+> `@<name-slug>:<index>[:<role>]`, e.g. `@town:1` or `@town:1:background`. The
+> mention renders that reference's binding (or its role phrase) at the position
+> you typed it, instead of leaving it in the trailing auto-attach block. There
+> is no slug field to set: name the reference and it becomes mentionable, and
+> the index is correlation only — never a seat you compute. `~lock` / `~nolock`
+> apply as on character mentions. `@nodaro/shared` exports the grammar itself
+> (`imageMentionSlug`, `parseImageMentionToken`, `findImageMentionTokens`,
+> `knownImageSlugsFromRefs`) so a client can render the same preview the server
+> will assemble, and `toConnectedReference({ kind: "image", … })` builds the
+> reference entry. Honored in the hybrid reference format; under the legacy
+> format the token stays literal text. See
+> [API Integration](./api-integration.md) for the full grammar.
+
 > **Cinematic direction by id.** `run("generate-image" | "generate-video" |
 > "text-to-video", …)` also takes an optional `direction` object — a flat map of **catalog ids** (`shotSize`,
 > `lightingStyle`, `style`, `mood`, `photographer`, `era`, …) the platform folds

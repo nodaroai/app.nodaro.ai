@@ -944,6 +944,45 @@ page for the token syntax and worked examples.
 > optional `referenceOrder` (parity with video) to reorder its assembled
 > reference list and renumber the `@image_N` bindings.
 
+### Naming an image reference in the prompt (`@<name-slug>:<index>[:<role>]`)
+
+On `POST /v1/generate-image` a **media** reference (`source: "wired-image"` or
+`"manual"`) can be addressed inline by the slug of its name, the same way
+characters and locations already are — so you can say *where in the sentence*
+the picture belongs instead of relying on the trailing auto-attach block.
+
+- **The slug is derived from the entry's `defaultName`**, lower-cased with every
+  run of non-alphanumerics collapsed to a single `-` (`"Old Town"` →
+  `old-town`). There is no separate slug field to set, and nothing changes on
+  the wire: give the reference a name and it becomes mentionable.
+- **Grammar:** `@<name-slug>:<index>` renders that reference's binding at the
+  position you typed it (`reference image C`); `@<name-slug>:<index>:<role>`
+  renders the role phrase (`the background from reference image C`). The
+  `<index>` is a **correlation number only** — it is never echoed into the
+  prompt, and the platform binds by its own numbering walk, so you never
+  compute a seat.
+- **Roles** are the curated media set — `object`, `person`, `face`, `clothes`,
+  `background`, `style`, `pose`, `texture` — or any custom single-word role,
+  which passes through verbatim. Omit the role and the entry's own
+  `defaultRole` applies; with neither, you get the bare binding.
+- **`~lock` / `~nolock`** work here exactly as on character and location
+  mentions (`@town:1:background~lock`): a trailing sentinel forces that
+  reference's identity lock on or off for that mention.
+- **Precedence is character → location → image.** A name shared by a character
+  and an image resolves as the character. Duplicate image names bind
+  first-wins.
+- **A name that can't be a slug is never mentionable** — `"3D Render"` slugs to
+  `3d-render`, which starts with a digit and is outside the grammar, so no
+  token can bind it. Rename the reference to mention it.
+- Honored when the route assembles in the hybrid reference format. Under the
+  legacy format the token stays literal text and the reference auto-attaches
+  exactly as before. A token whose reference was capped out by the provider's
+  image-reference limit likewise stays literal.
+
+Mentioning a reference **re-seats** it: its URL moves from the trailing
+auto-attach block into the mention block, which re-letters the references after
+it. That is the point of the feature — the letters follow the sentence.
+
 ### Cinematic direction (`direction`) on generate-image
 
 `POST /v1/generate-image` accepts an optional `direction` object: a flat map of
@@ -1125,6 +1164,50 @@ describe-to-picker — hydrate pickers from it verbatim), and `gaps` lists
 attributes the text described that no catalog id represents well (surface
 as "we couldn't infer X"). SDK: `client.pickerCatalogs.analyzeText(...)`;
 CLI: `nodaro pickers analyze "<text>"`.
+
+### Structured LLM output (any schema)
+
+`POST /v1/llm/structured` runs one LLM call whose answer is forced to the
+JSON Schema you supply, validated against it, and handed back as an object.
+Authenticated and credit-billed under its own `llm-structured` feature id
+(priced per model tier). It is the generic primitive behind schema-authoring
+clients — Nodaro Studio composes a whole production plan with it.
+
+Body: `{ system, input, jsonSchema, schemaName?, llmModel?, reasoningEffort?,
+maxRetries?, origin?, advancedMode?, temperature?, maxTokens? }`. `system` and
+`input` are plain text (each at most 100,000 characters; `input` must be at
+least 1 character). `schemaName` names the forced-output tool the provider
+sees and caps at 64 characters. Omit `llmModel` and the call runs on
+`gemini-3.6-flash`, the generic `llm-chat` default. `jsonSchema` is a JSON
+Schema **object** (`type: "object"`, at most 64 KB serialized and 20 levels of
+nesting) written in the keyword subset the server can convert:
+`properties` / `required` / `additionalProperties` (including the record
+form), `items`, `string` / `number` / `integer` / `boolean`, `enum`, `const`,
+`anyOf` of concrete types, `minimum` / `maximum` / `minItems` / `maxItems` /
+`minLength` / `maxLength`, `multipleOf`, `exclusiveMinimum` and `description`.
+`not`, `if` / `then` / `else`, `dependent*` and external `$ref` are refused
+with 400. One caveat worth reading twice: an `anyOf` of bare `required`
+branches — the usual "at least one of these fields" idiom — is **accepted and
+not enforced**. Express cross-field rules in your own validator.
+
+Returns `{ jobId, output, usage: { inputTokens, outputTokens } }`, where
+`output` has your schema's shape. `maxRetries` (0–3, default 2) is how many
+times an invalid answer is fed back to the model together with its validation
+error before the call gives up; `maxTokens` must not exceed the chosen model's
+own output limit (400 otherwise). The two sampling levers are **not
+symmetric**: `maxTokens` applies on every call — a deliberate departure from
+the LLM routes that put both levers behind the Advanced-mode gate —
+while `temperature` is **silently ignored** unless you also send
+`advancedMode: true`. Advanced mode pins the call to the vendor's own API,
+where those levers take effect, and therefore bills **one credit tier up**;
+asking for it on a model with no direct lane is a 400
+`advanced_mode_unsupported`. The call is
+**synchronous and a single call may run several minutes** — each attempt is
+allowed up to 240 seconds — so give your HTTP client a matching timeout.
+Errors: 400 `validation_error`, 401, 402 (credits), 500 `internal_error` (the
+job row could not be created), 502 `llm_error` once the retries are spent, 503
+`provider_unavailable`. No typed SDK resource yet — call it with
+`client.request("POST", "/v1/llm/structured", { body })`.
 
 ### Direct uploads
 

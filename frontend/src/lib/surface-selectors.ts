@@ -49,6 +49,18 @@ export function surfaceBrandDescription(): string | undefined {
   return runtimeSurfaceProfile().brand.description
 }
 
+/**
+ * Short lockup text rendered BESIDE the deployment's own logo mark (the
+ * swapped /logo-*.svg files) in the full brand lockup — e.g. productName
+ * "Acme Studio" with wordmark "Studio". Only meaningful when the deployment
+ * ships its own logo files; without it a custom brand stays a text-only
+ * lockup (mainline behavior). undefined = not configured.
+ */
+export function surfaceBrandWordmark(): string | undefined {
+  const w = runtimeSurfaceProfile().brand.wordmark?.trim()
+  return w || undefined
+}
+
 export function surfaceAuthMethods(codeDefault: readonly AuthMethod[]): readonly AuthMethod[] {
   const m = runtimeSurfaceProfile().auth.methods
   if (!m.length) return codeDefault
@@ -129,4 +141,10 @@ export function surfaceBillingSelfServe(): boolean {
 /** true ⇒ the canvas Cost tab is not mounted, whatever the billing surface says. */
 export function surfaceCostTabHidden(): boolean {
   return runtimeSurfaceProfile().billing.costTab === "hidden"
+}
+
+/** true ⇒ the sidebar credit card is not rendered (a prepaid instance that
+ *  points users at /usage instead of the always-on readout). */
+export function surfaceSidebarCreditCardHidden(): boolean {
+  return runtimeSurfaceProfile().billing.sidebarCard === "hidden"
 }

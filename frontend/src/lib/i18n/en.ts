@@ -31,6 +31,7 @@ export const en = {
   "nav.integrations": "Integrations",
   "nav.pricing": "Pricing",
   "nav.billing": "Billing",
+  "nav.usage": "Usage & Cost",
   "nav.settings": "Settings",
   "nav.admin": "Admin",
   "nav.communityReports": "Community Reports",

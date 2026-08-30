@@ -27,7 +27,7 @@ with zero configuration:
 | Object | `object` |
 | Animal / Creature | `creature` |
 | Face | `face` |
-| Plain image / upload | **`ref-only`** (bare reference) |
+| Plain image / upload | **`ref-only`** (bare reference) — nameable, see [Naming a plain image](#naming-a-plain-image-so-you-can-mention-it) |
 | Video / audio | **`ref-only`** (bare reference) |
 
 Plain images, video, and audio default to **ref-only** — see [Ref only](#ref-only) below.
@@ -77,6 +77,31 @@ image (canonical or a variant — swapping within the same character keeps your 
 **label** to pick the role (picking a role keeps the variant; **Default** resets the role but keeps
 the image).
 
+### Naming a plain image so you can mention it
+
+Characters and locations are mentionable because they have names. A **plain image** gets one the same
+way: give the wired **Upload Image** node a **Label**, and the slug of that label becomes its mention
+name — so a node labelled `Town` is `@town:1`.
+
+The grammar is the simplest of the three — `@<name>:<index>[:<role>]`, two or three segments, no
+variants and no usage modes, because a picture has no variant array to choose from:
+
+| Token | Result |
+|-------|--------|
+| `@town:1` | the picture's bare binding (`reference image A`) placed exactly where you typed it |
+| `@town:1:background` | `the background from reference image A` |
+| `@town:1:signage` | any custom single word works, verbatim |
+| `@town:1~lock` / `@town:1~nolock` | force the identity-lock on / off for this mention |
+
+Roles are the usual media set (`object`, `person`, `face`, `clothes`, `background`, `style`, `pose`,
+`texture`) or a custom one, exactly as on the pill menu. The index is a correlation number the editor
+assigns; the letter you see in the prompt comes from the reference's position, not from it.
+
+Mentioning is **optional** — an unnamed upload still attaches exactly as before, it just has no name
+to address. Two notes: a label starting with a digit (`3D Render`) can't form a mention, so rename it
+if you want to address it inline; and when a name is shared with a character or location, the
+**character or location wins** — those resolve first.
+
 ### Custom labels
 
 Pick **Custom…** and type anything (e.g. `dragon`, `Danny`, `hoodie`). Custom labels are sanitized
@@ -98,7 +123,8 @@ built-in wording (tuned per type — person / face / creature / location) or rep
 Left off, your prompt stays terse and you remain in full control of any fidelity language.
 
 **In the editor** you can also flip the lock **per `@`-mention**: open a character or location pill's
-menu and toggle **Identity lock**. That mention then serializes a trailing `~lock`
+menu and toggle **Identity lock** (a named plain image takes the same trailing sentinel, typed
+directly — `@town:1~lock`). That mention then serializes a trailing `~lock`
 (`@kira:1:face~lock`, `@old-library:1:background~lock`) and its reference gets the lock line — even
 when the source's default lock is off. Locations use their own built-in wording:
 

@@ -12,7 +12,7 @@ import { locationMentionSlug } from "./location-mention-slug.js"
 export interface EntityReferenceInput {
   /** The entity row id. */
   readonly id: string
-  readonly kind: "character" | "location" | "creature"
+  readonly kind: "character" | "location" | "creature" | "image"
   /** Display name — the slug is derived from this. */
   readonly name: string
   /** Resolved thumbnail/source URL; null/undefined → "" (placeholder-safe). */
@@ -30,7 +30,9 @@ export interface EntityReferenceInput {
  * `locationMentionSlug`), creature → `wired-creature` (no mention-slug machinery
  * — like `wired-object`, a bound creature AUTO-ATTACHES and gets a canonical-style
  * creature/animal-subject directive with zero typing; `{image:N:creature}` tokens
- * also resolve against it). Canonical-description fields are null here (a binding
+ * also resolve against it), image → `wired-image` (a plain media reference; it
+ * AUTO-ATTACHES, and an `@<name-slug>:<index>[:<role>]` mention re-seats it at the
+ * position it was typed). Canonical-description fields are null here (a binding
  * captures only name+variant; the picker/full-row path supplies descriptions).
  */
 export function toConnectedReference(entity: EntityReferenceInput): ConnectedReference {
@@ -45,6 +47,18 @@ export function toConnectedReference(entity: EntityReferenceInput): ConnectedRef
       characterCanonicalDescription: null,
       variantDescription: null,
       variantDisplayName: entity.variant ?? "canonical",
+    }
+  }
+  if (entity.kind === "image") {
+    // No slug field — the resolver derives it from `defaultName` at prompt time
+    // (`knownImageSlugsFromRefs`), so a client cannot drift from the grammar and
+    // nothing changes on the wire.
+    return {
+      id: entity.id,
+      defaultName: entity.name,
+      source: "wired-image",
+      url: entity.url ?? "",
+      ...(entity.description ? { description: entity.description } : {}),
     }
   }
   if (entity.kind === "creature") {
