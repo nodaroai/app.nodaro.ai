@@ -28,6 +28,7 @@ export const he: ChromeDict = {
   "nav.integrations": "אינטגרציות",
   "nav.pricing": "תמחור",
   "nav.billing": "חיוב",
+  "nav.usage": "שימוש ועלויות",
   "nav.settings": "הגדרות",
   "nav.admin": "ניהול",
   "nav.communityReports": "דוחות קהילה",

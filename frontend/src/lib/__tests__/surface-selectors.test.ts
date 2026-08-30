@@ -79,6 +79,8 @@ import {
   surfaceCreditsToUnits,
   surfaceBillingSelfServe,
   surfaceCostTabHidden,
+  surfaceSidebarCreditCardHidden,
+  surfaceBrandWordmark,
 } from "../surface-selectors"
 
 describe("billing display-unit selectors (Phase B) — mainline literals by default", () => {
@@ -93,7 +95,7 @@ describe("billing display-unit selectors (Phase B) — mainline literals by defa
 
   it("configured: relabels and converts, rounding once at the configured decimals", () => {
     window.__NODARO_RUNTIME__ = {
-      surface: { billing: { costTab: "hidden", selfServe: false, unitLabel: "קרדיטים", unitRate: 2000 } },
+      surface: { billing: { costTab: "hidden", sidebarCard: "inherit", selfServe: false, unitLabel: "קרדיטים", unitRate: 2000 } },
     }
     expect(surfaceCreditUnitLabel()).toBe("קרדיטים")
     expect(surfaceCreditUnitRate()).toBe(2000)
@@ -102,19 +104,35 @@ describe("billing display-unit selectors (Phase B) — mainline literals by defa
     expect(surfaceBillingSelfServe()).toBe(false)
     expect(surfaceCostTabHidden()).toBe(true)
 
-    window.__NODARO_RUNTIME__ = { surface: { billing: { costTab: "inherit", selfServe: true, unitLabel: "u", unitRate: 0.5, unitDecimals: 1 } } }
+    window.__NODARO_RUNTIME__ = { surface: { billing: { costTab: "inherit", sidebarCard: "inherit", selfServe: true, unitLabel: "u", unitRate: 0.5, unitDecimals: 1 } } }
     expect(surfaceCreditUnitDecimals()).toBe(1)
     expect(surfaceCreditsToUnits(3)).toBe(1.5)
     expect(surfaceCreditsToUnits(1)).toBe(0.5)
   })
 
   it("null / undefined / non-finite never become a number (§5.2 rule 1)", () => {
-    window.__NODARO_RUNTIME__ = { surface: { billing: { costTab: "inherit", selfServe: true, unitLabel: "u", unitRate: 2000 } } }
+    window.__NODARO_RUNTIME__ = { surface: { billing: { costTab: "inherit", sidebarCard: "inherit", selfServe: true, unitLabel: "u", unitRate: 2000 } } }
     expect(surfaceCreditsToUnits(null)).toBeNull()
     expect(surfaceCreditsToUnits(undefined)).toBeNull()
     expect(surfaceCreditsToUnits(Number.NaN)).toBeNull()
     expect(surfaceCreditsToUnits(Number.POSITIVE_INFINITY)).toBeNull()
     delete window.__NODARO_RUNTIME__
     expect(surfaceCreditsToUnits(null)).toBeNull()
+  })
+
+  it("sidebar credit card: hidden only when the profile says \"hidden\"", () => {
+    expect(surfaceSidebarCreditCardHidden()).toBe(false)
+    window.__NODARO_RUNTIME__ = { surface: { billing: { costTab: "inherit", sidebarCard: "hidden", selfServe: false } } }
+    expect(surfaceSidebarCreditCardHidden()).toBe(true)
+  })
+})
+
+describe("brand wordmark — tile+text lockup opt-in", () => {
+  it("undefined when unconfigured or blank; the trimmed text when set", () => {
+    expect(surfaceBrandWordmark()).toBeUndefined()
+    window.__NODARO_RUNTIME__ = { surface: { brand: { productName: "Acme Studio", wordmark: "  Studio  " } } }
+    expect(surfaceBrandWordmark()).toBe("Studio")
+    window.__NODARO_RUNTIME__ = { surface: { brand: { productName: "Acme Studio", wordmark: "   " } } }
+    expect(surfaceBrandWordmark()).toBeUndefined()
   })
 })

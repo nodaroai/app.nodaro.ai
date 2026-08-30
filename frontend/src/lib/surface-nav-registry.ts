@@ -15,6 +15,7 @@ export const NAV_ENTRY_ROUTES: Record<NavKey, string[]> = {
   templates: ["/templates"],
   apps: ["/apps", "/apps/deleted", "/apps/:appId/analytics"],
   community: [],
+  integrations: ["/integrations"],
 }
 
 /**
@@ -59,7 +60,6 @@ export const ENTRY_BY_LINK: readonly string[] = [
   "/shared",
   "/my-files",
   "/library/locations",
-  "/integrations",
   "/billing",
   "/usage",
   "/settings",

@@ -58,7 +58,7 @@ const OrgSwitcherSection = hasOrganizations()
   ? lazy(() => import("@/ee/components/org/org-switcher-section").then((m) => ({ default: m.OrgSwitcherSection })))
   : null
 import { otherNodaroApps } from "@/lib/nodaro-apps"
-import { surfaceNavHidden, surfaceBillingSelfServe } from "@/lib/surface-selectors"
+import { surfaceNavHidden, surfaceBillingSelfServe, surfaceSidebarCreditCardHidden } from "@/lib/surface-selectors"
 import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
 import type { NavKey } from "@/lib/surface-profile"
 import {
@@ -87,6 +87,11 @@ interface NavItem {
   readonly icon: React.ComponentType<{ className?: string; strokeWidth?: number }>
   readonly adminOnly?: boolean
   readonly billingOnly?: boolean
+  /** Rendered only on a billing edition WITHOUT self-serve purchase (a prepaid
+   *  instance): those deployments lose the Pricing/Billing entries, and this is
+   *  their replacement destination (e.g. Usage). Mainline self-serve cloud
+   *  never renders it, so the stock sidebar is byte-identical. */
+  readonly prepaidOnly?: boolean
   readonly multiUserOnly?: boolean
   /** Query string for destinations that are a tab rather than a route, e.g.
    *  Tutorials lives at /projects?tab=tutorials. Also disambiguates the active
@@ -129,6 +134,7 @@ const NAV_SECTIONS: readonly NavSection[] = [
       { href: "/integrations", label: "nav.integrations", icon: Plug },
       { href: "/pricing", label: "nav.pricing", icon: Sparkles, billingOnly: true },
       { href: "/billing", label: "nav.billing", icon: CreditCard, billingOnly: true },
+      { href: "/usage", label: "nav.usage", icon: Coins, prepaidOnly: true },
       { href: "/settings", label: "nav.settings", icon: Settings },
       { href: "/admin", label: "nav.admin", icon: Shield, adminOnly: true },
       { href: "/admin/community-reports", label: "nav.communityReports", icon: Flag, adminOnly: true },
@@ -145,6 +151,7 @@ const NAV_HREF_TO_SURFACE_KEY: Partial<Record<string, NavKey>> = {
   "/explore": "explore",
   "/apps": "apps",
   "/templates": "templates",
+  "/integrations": "integrations",
 }
 
 /** True when the deployment surface profile hides this item's nav entry. */
@@ -431,8 +438,10 @@ export function AppSidebar({
           )}
         </div>
 
-        {/* Credit card */}
-        {hasCredits() && creditBalance && (
+        {/* Credit card. A deployment surface can suppress it wholesale
+            (billing.sidebarCard "hidden") — a prepaid instance whose users
+            read their balance on /usage instead. */}
+        {hasCredits() && creditBalance && !surfaceSidebarCreditCardHidden() && (
           isCollapsed ? (
             <div className="px-2 pt-2">
               <Tooltip>
@@ -600,6 +609,7 @@ export function AppSidebar({
               if (isNavItemSurfaceHidden(item)) return null
               if (item.adminOnly && (!isFeatureEnabled("adminPanel") || !isAdmin)) return null
               if (item.billingOnly && (!isFeatureEnabled("billing") || !selfServe)) return null
+              if (item.prepaidOnly && (!isFeatureEnabled("billing") || selfServe)) return null
               if (item.multiUserOnly && !isMultiUser()) return null
 
               const isActive = isNavItemActive(item)
@@ -642,6 +652,7 @@ export function AppSidebar({
                 if (isNavItemSurfaceHidden(item)) return false
                 if (item.adminOnly && (!isFeatureEnabled("adminPanel") || !isAdmin)) return false
                 if (item.billingOnly && (!isFeatureEnabled("billing") || !selfServe)) return false
+                if (item.prepaidOnly && (!isFeatureEnabled("billing") || selfServe)) return false
                 if (item.multiUserOnly && !isMultiUser()) return false
                 return true
               })
