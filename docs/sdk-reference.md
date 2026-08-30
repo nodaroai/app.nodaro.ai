@@ -1025,6 +1025,19 @@ if ("jobId" in result) {
 > [Reference Roles guide](./reference-roles-guide.md) for the role-label + lock
 > model.
 
+> **Cinematic direction by id.** `run("generate-image", …)` also takes an
+> optional `direction` object — a flat map of **catalog ids** (`shotSize`,
+> `lightingStyle`, `style`, `mood`, `photographer`, `era`, …) the platform folds
+> into the prompt as its own hint clauses, so you send ids and the wording stays
+> platform-owned. Values are a single id or an array (multi-pick dimensions honor
+> their own cap; over-sending truncates rather than 400s). Absent ≠ empty: a
+> missing key means "no hint", an empty `direction` leaves your `prompt`
+> untouched, and unknown keys / unknown ids are skipped silently rather than
+> rejected — so deploy the platform before a client that starts sending new
+> dimensions. Valid ids come from `client.pickerCatalogs.list()`. Full key list
+> and semantics in the
+> [API integration guide](./api-integration.md#cinematic-direction-direction-on-generate-image).
+
 > **Assemble Narrated Video.** `run("assemble-narrated-video", …)` also has a
 > typed overload — `AssembleNarratedVideoParams`: `blocks: { videoUrl: string;
 > audioUrl?: string }[]` (1–60, in play order) plus `voiceVolume` (0–200,

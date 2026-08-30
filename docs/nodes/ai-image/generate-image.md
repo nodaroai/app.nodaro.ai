@@ -133,6 +133,44 @@ Region editing is grok-2-only: the underlying endpoint references the prior grok
 
 An inpaint or refine edit is **one generation at the provider's normal cost** — there is **no extra surcharge** for the mask or the composite step. The price is exactly the per-provider Generate Image cost listed in [Supported Providers](#supported-providers) above (e.g. nano-banana-pro inpaint costs the same as a fresh nano-banana-pro generation). The same holds for a grok-2 region edit, and its region detection is free.
 
+## Cinematic direction by id (`direction`, API / SDK)
+
+On the canvas you set a look by **wiring parameter-picker nodes** into the
+`look` handle. A direct API / SDK / MCP caller does the same thing with the
+optional `direction` object on `POST /v1/generate-image`: a flat map of catalog
+ids, one key per dimension, which the platform folds into the prompt as its own
+hint clauses. You send ids; the platform owns the wording, so a saved run picks
+up improved phrasing instead of freezing the text your client wrote.
+
+```json
+"direction": {
+  "shotSize": "wide-shot",
+  "lens": "wide-24mm",
+  "timeOfDay": "golden-hour",
+  "style": "anime",
+  "mood": ["happy", "joyful"]
+}
+```
+
+- **Keys are the picker field names** this node's `look` pickers already use —
+  framing (`shotSize`, `angle`, `coverage`, `composition`, `vantage`), camera
+  (`cameraFormat`, `lens`), exposure (`aperture`, `shutterSpeed`, `isoValue`),
+  lighting (`timeOfDay`, `lightingStyle`, `lightingDirection`, `lightingRatio`,
+  `colorTemperature`), look (`colorLook`, `atmosphere`, `postProcess`, `style`,
+  `mood`, `aesthetic`, `photoGenre`, `photographer`, `renderQuality`), scene
+  (`setting`, `era`, `backdrop`), plus `pose` and `compositionEffect`. Valid ids
+  come from `GET /v1/picker-catalogs` — the same catalogs the pickers read.
+- **A value is one id or an array.** Multi-pick dimensions honor their own cap;
+  a single-pick key handed an array takes the first entry. Over-sending
+  truncates, never 400s, and unknown keys / unknown ids are skipped silently.
+- **Absent ≠ empty.** A missing key means "no hint", never a default; a
+  `direction` that renders nothing leaves your prompt byte-for-byte untouched.
+- The clauses are appended after your prompt in the platform's canonical order
+  (not your object's key order), and the assembled prompt is still truncated to
+  the provider's verified prompt cap.
+
+Full semantics: [API integration guide](../../api-integration.md#cinematic-direction-direction-on-generate-image).
+
 ## Best Practices
 
 - Use Nano Banana or Z-Image for rapid iteration and storyboarding due to fast generation speed.

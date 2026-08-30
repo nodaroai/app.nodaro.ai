@@ -944,6 +944,54 @@ page for the token syntax and worked examples.
 > optional `referenceOrder` (parity with video) to reorder its assembled
 > reference list and renumber the `@image_N` bindings.
 
+### Cinematic direction (`direction`) on generate-image
+
+`POST /v1/generate-image` accepts an optional `direction` object: a flat map of
+**catalog ids**, one key per cinematic dimension, which the platform folds into
+the prompt as its own hint clauses. Send ids, not prose — the wording stays
+platform-owned, so a saved production picks up improved phrasing instead of
+freezing whatever text your client wrote the day it was saved.
+
+```json
+{
+  "prompt": "a knight on a hill",
+  "provider": "nano-banana",
+  "direction": {
+    "shotSize": "wide-shot",
+    "lightingStyle": "rembrandt",
+    "style": "anime",
+    "mood": ["happy", "joyful"]
+  }
+}
+```
+
+- **The keys are the platform's own picker field names** — `shotSize`, `angle`,
+  `coverage`, `composition`, `vantage`, `pose`, `compositionEffect`,
+  `cameraFormat`, `lens`, `aperture`, `shutterSpeed`, `isoValue`, `timeOfDay`,
+  `lightingStyle`, `lightingDirection`, `lightingRatio`, `colorTemperature`,
+  `colorLook`, `atmosphere`, `postProcess`, `style`, `mood`, `aesthetic`,
+  `photoGenre`, `photographer`, `renderQuality`, `setting`, `era`, `backdrop`
+  (plus the motion dimensions the video routes fold). Valid ids come from
+  [`GET /v1/picker-catalogs`](#picker-catalogs) — the same catalogs the canvas
+  pickers read.
+- **Single id or an array.** Multi-pick dimensions (`mood`, `aesthetic`,
+  `photographer`, `atmosphere`, `postProcess`, `composition`, `lightingStyle`)
+  honor up to their own cap; a single-pick key given an array takes the first
+  entry. Over-sending truncates — it is never a 400.
+- **Absent ≠ empty.** A missing key means "no hint", never a default. An empty
+  string or an empty array contributes nothing, and a `direction` that renders
+  no clause leaves your `prompt` byte-for-byte untouched.
+- **Unknown keys and unknown ids are skipped silently**, not rejected — a newer
+  client on an older API degrades to fewer hints rather than erroring, which is
+  why you should deploy the platform before the client that starts sending new
+  dimensions.
+- **Fold order is the platform's**, not your object's key order, and the
+  clauses are appended after your prompt (`". "`-joined), before any
+  `structured` fragment. Repeated identical clauses collapse to one.
+- The assembled prompt is still truncated to the provider's verified prompt cap,
+  so a maximal `direction` on a low-cap model can lose its tail clauses — send
+  the dimensions that matter most first-class rather than everything at once.
+
 ### Picker catalogs
 
 `GET /v1/picker-catalogs` and `GET /v1/picker-catalogs/:nodeType` expose the
