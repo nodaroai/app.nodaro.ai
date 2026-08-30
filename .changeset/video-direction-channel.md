@@ -1,0 +1,20 @@
+---
+"@nodaro/prompts": minor
+---
+
+feat(video): the video routes gain a structured `direction` channel — picker ids on the wire, hint text rendered server-side.
+
+`/v1/generate-video` had no structured direction channel at all, so every client that offered a look or a motion baked the catalog hint TEXT into the prompt itself. Three consequences, all of them permanent for the user: a scene copied between clients froze whatever wording was current the day it was written; a re-generate re-baked the same clauses on top of the already-baked ones; and the platform could never improve a hint for anyone who had already generated. `composeVideoPromptText` moves the fold to where the model call is.
+
+- **New `composeVideoPromptText(userPrompt, direction, structured?, opts?)`** (`assemble-video-input.ts`) — the video twin of the image side's `composePromptText`. It folds catalog ids into the prompt BODY through the shared `renderDirectionHints` on `surface: "video"`, so the two surfaces cannot drift; the dimension table, the fold order and the dedupe stay in the direction registry.
+- **The verbosity policy moves server-side.** `VIDEO_HINT_MODE_DEFAULT = { look: "full", motion: "compact" }` — motion dimensions inject their short professional term (`"cross-dissolve"`), look dimensions their full clause. It is a threaded parameter with a pure default, overridable per call via `opts.hintMode`, never deployment state.
+- **`/v1/generate-video` and `/v1/text-to-video` accept `direction`**, the same registry-derived schema `/v1/generate-image` already uses — 35 dimensions on the video surface, `cameraMotion` first. Surface is a rendering concern, not a validation one: a stills-only key (`aperture`, `photographer`, …) is accepted here and simply contributes no clause, so one client-side look map serves both surfaces unchanged.
+- **`/v1/extend-video` deliberately gets no channel** — its prompt continues an existing clip, where re-stating the look is the wrong lever.
+- **The fold runs before reference assembly.** `resolveVideoReferenceCore` frames the body — the legacy format prepends its `Use these characters:` block, hybrid appends the canonical role phrases — so folding afterwards would strand the scene description past the identity directives. Both framings are pinned by test.
+- **`jobs.input_data` keeps the source and the render apart**: `prompt` is what the model received, `userPrompt` is what the caller submitted (the empty string on a direction-only run with no prompt), and `direction` is the submitted ids verbatim.
+- **A composed prompt over the provider's ceiling now logs a warning.** The provider clamp cuts the TAIL and video ceilings are tight (kling: 1000 characters); the truncation was always there and is no longer silent. Budget-aware verbosity degradation is a deliberate follow-up, not part of this change.
+- **New total guard `direction-hint-token-safety.test.ts`** proves no registered catalog's `promptHint` or `term` contains `{image:N}` / `{video:N}` / `{audio:N}`, `{ref:` or an `@slug:N` mention. That is what makes folding ahead of the reference resolver legal, and it closes the one path from this text-only fold to the assembled reference count that MiniMax-H3 credit prediction reserves against — pricing is provably untouched.
+
+No prompt text changed for any caller that sends no `direction`: with no direction and no structured fields the composer returns the caller's prompt verbatim and untrimmed, `undefined` included, so both routes are byte-identical on the flat path.
+
+One thing to know before adopting: a client MOVING an existing client-side fold onto this channel will see its wording change. The platform joins clauses with `". "` in the registry's canonical dimension order, blends mood / aesthetic into one clause rather than flat-mapping per id, and renders motion compact — where a client typically joined its own way in its own order. That is the point of the change. Import `renderDirectionHints` + `joinPromptHints` for a "will inject into prompt" preview that renders exactly what the server will.

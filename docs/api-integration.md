@@ -972,9 +972,9 @@ freezing whatever text your client wrote the day it was saved.
   `colorLook`, `atmosphere`, `postProcess`, `style`, `mood`, `aesthetic`,
   `photoGenre`, `photographer`, `renderQuality`, `setting`, `era`, `backdrop`.
   (The registry also defines motion dimensions — `cameraMotion`, `actionFx`,
-  the `temporal*` keys, `transition`, `loopSubject` — for the video surface;
-  `POST /v1/generate-video` does not accept a `direction` field yet, so sending
-  one there has no effect today.) Valid ids come from
+  the `temporal*` keys, `transition`, `loopSubject` — which fold on the video
+  routes; see [the next section](#cinematic-direction-on-the-video-routes).)
+  Valid ids come from
   [`GET /v1/picker-catalogs`](#picker-catalogs) — the same catalogs the canvas
   pickers read. One caveat on deployments that register catalog **packs**: that
   endpoint returns the pack-composed catalogs while the fold reads the base
@@ -998,6 +998,57 @@ freezing whatever text your client wrote the day it was saved.
 - The assembled prompt is still truncated to the provider's verified prompt cap,
   so a maximal `direction` on a low-cap model can lose its tail clauses — send
   the dimensions that matter most first-class rather than everything at once.
+
+### Cinematic direction on the video routes
+
+`POST /v1/generate-video` and `POST /v1/text-to-video` accept the SAME
+`direction` object, with the same tolerance rules, the same wire bounds and the
+same "absent ≠ empty" semantics as generate-image above. Two things differ.
+
+**The dimension set is the video surface.** Every look dimension listed above
+folds here too, minus the seven stills-only ones (`aperture`, `shutterSpeed`,
+`isoValue`, `postProcess`, `photoGenre`, `photographer`, `renderQuality`), plus
+the motion dimensions: `cameraMotion`, `actionFx`, `temporalSpeed`,
+`temporalFreeze`, `temporalDirection`, `temporalShutter`, `transition`,
+`loopSubject`. `cameraMotion` folds FIRST, ahead of every look clause. A
+stills-only key sent to a video route is **accepted and simply contributes no
+clause** — surface is a rendering concern, not a validation one — so one
+client-side look map can be sent to either route unchanged.
+
+**Motion dimensions render compact.** Look dimensions inject their full clause;
+motion dimensions inject their short professional term (`"cross-dissolve"`, not
+the sentence describing what a cross-dissolve does). Motion cues read better to
+a video model as terse directives, and video prompt ceilings are far tighter
+than image ones.
+
+```json
+{
+  "imageUrl": "https://…/frame.png",
+  "provider": "seedance-2",
+  "prompt": "she turns toward the window",
+  "direction": {
+    "cameraMotion": "dolly-in",
+    "shotSize": "medium-shot",
+    "timeOfDay": "dawn",
+    "temporalSpeed": "slow-motion"
+  }
+}
+```
+
+The fold happens **before** reference assembly, so your direction clauses sit
+inside the body that the reference resolver frames — the identity directives for
+a bound character still wrap the whole description. `jobs.input_data` records
+both halves: `prompt` is what the model received, `userPrompt` is the text you
+submitted (empty string if you sent `direction` with no prompt at all), and
+`direction` is your ids verbatim.
+
+Video prompt ceilings are provider-specific and low (kling clamps at 1000
+characters), and the clamp cuts the TAIL. A maximal direction across every look
+dimension can exceed that on its own, so prefer the dimensions that carry the
+shot.
+
+`POST /v1/extend-video` deliberately has no `direction` field: its prompt
+continues an existing clip, where re-stating the look is the wrong lever.
 
 ### Picker catalogs
 
