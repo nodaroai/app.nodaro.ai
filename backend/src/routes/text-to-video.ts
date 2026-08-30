@@ -3,6 +3,7 @@ import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { videoQueue } from "../lib/queue.js"
 import { shotsSchema, elementsSchema } from "../lib/video-schemas.js"
+import { effectiveVideoPromptCeiling } from "../lib/video-prompt-ceiling.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
@@ -10,7 +11,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
-import { TEXT_TO_VIDEO_PROVIDERS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, videoProviderRequiresImage, isSeedance2Provider, isMinimaxH3Provider, applyDefaultVideoSelection, buildVideoCreditModelIdentifier, getMaxVideoPromptChars, type ConnectedReference } from "@nodaro/shared"
+import { TEXT_TO_VIDEO_PROVIDERS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, videoProviderRequiresImage, isSeedance2Provider, isMinimaxH3Provider, applyDefaultVideoSelection, buildVideoCreditModelIdentifier, type ConnectedReference } from "@nodaro/shared"
 import { composeVideoPromptText } from "@nodaro/prompts"
 import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
 import { directionSchema } from "../lib/direction-schema.js"
@@ -199,7 +200,11 @@ export async function textToVideoRoutes(app: FastifyInstance) {
         parsed.data.prompt = prompt
       }
       // The provider clamp slices the tail at this ceiling — make it observable.
-      const promptCeiling = getMaxVideoPromptChars(provider)
+      // `effectiveVideoPromptCeiling` (not the raw cap) because a non-native
+      // negative prompt is folded in as a "\nAvoid: …" suffix whose room the
+      // clamp reserves FIRST; thresholding on the cap would miss exactly the
+      // runs that get truncated. Same helper as generate-video, one mirror.
+      const promptCeiling = effectiveVideoPromptCeiling(provider, negativePrompt)
       if (prompt.length > promptCeiling) {
         req.log.warn(
           { provider, promptLength: prompt.length, promptCeiling },

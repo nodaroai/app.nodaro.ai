@@ -5,6 +5,7 @@ import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { shotsSchema, elementsSchema } from "../lib/video-schemas.js"
+import { effectiveVideoPromptCeiling } from "../lib/video-prompt-ceiling.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
 import { getModelCreditBaseCost } from "../ee/billing/credits.js"
@@ -14,7 +15,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
-import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, isMinimaxH3Provider, isVeoProvider, estimateLoopTrimAddonCredits, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, buildVideoCreditModelIdentifier, applyDefaultVideoSelection, getMaxVideoPromptChars, VIDEO_REF_LIMITS_BY_PROVIDER, type ConnectedReference } from "@nodaro/shared"
+import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, isMinimaxH3Provider, isVeoProvider, estimateLoopTrimAddonCredits, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, buildVideoCreditModelIdentifier, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, type ConnectedReference } from "@nodaro/shared"
 import { resolveVideoReferenceCore, resolveReferenceTokens, resolveRefIdTokens, composeVideoPromptText, type VideoExtraRef, type CharacterMeta } from "@nodaro/prompts"
 import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
 import { directionSchema } from "../lib/direction-schema.js"
@@ -497,8 +498,9 @@ export async function generateVideoRoutes(app: FastifyInstance) {
           // prediction stays exact without it: the fold is TEXT-ONLY, and the
           // billed quantity below is the assembled REFERENCE COUNT, which no
           // amount of prompt text can move. The one shape that could — a
-          // catalog hint containing a literal `{image:N}` / `{ref:` / `@slug:N`
-          // — is ruled out for every registered catalog by
+          // catalog hint, term or LABEL containing a literal `{image:N}` /
+          // `{ref:` / `@slug:N` (labels are woven verbatim into the multi-pick
+          // blend clauses) — is ruled out for every registered catalog by
           // `packages/prompts/src/__tests__/direction-hint-token-safety.test.ts`.
           if (isMinimaxH3Provider(b?.provider as string | undefined)) {
             const { minimaxH3BaseCreditsFromUrls, minimaxH3BillableRefImageCount, MINIMAX_H3_FREE_INPUT_IMAGES } =
@@ -599,7 +601,14 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       // tail at this ceiling. Not a regression — clients bake the same text
       // today — but the fold makes the platform responsible for the length, so
       // make the truncation observable rather than silent.
-      const promptCeiling = getMaxVideoPromptChars(provider)
+      //
+      // The EFFECTIVE ceiling is not always the model cap: for a provider
+      // without a native negative param the clamp folds the negative in as a
+      // "\nAvoid: …" suffix and RESERVES room for it first
+      // (`model-constants.ts`'s `room = promptMax - avoid.length`), so the base
+      // prompt is cut at `cap - suffix`. Mirror that reservation here or the
+      // warning under-fires exactly on the runs that get truncated.
+      const promptCeiling = effectiveVideoPromptCeiling(provider, negativePrompt)
       if (prompt && prompt.length > promptCeiling) {
         req.log.warn(
           { provider, promptLength: prompt.length, promptCeiling },
