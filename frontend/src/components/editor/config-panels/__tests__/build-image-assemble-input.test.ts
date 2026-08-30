@@ -212,4 +212,62 @@ describe("buildImageAssembleInput", () => {
     })
     expect(noNeg.negativePrompt).toBeUndefined()
   })
+
+  it("narrow-reads the node's stored direction / structured (preview === run)", () => {
+    const node: WorkflowNode = {
+      id: "n1",
+      type: "generate-image",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "Image",
+        direction: { framingId: "medium-shot", mood: ["serene", "tense"] },
+        structured: { person: { age: 34, gender: "woman" } },
+      },
+    } as unknown as WorkflowNode
+    const out = buildImageAssembleInput({
+      node,
+      nodes: [node],
+      edges: [],
+      characterDefinitions: [],
+      composedPrompt: "a knight",
+      provider: "gpt-image",
+      styleBypass: false,
+    })
+    expect(out.direction).toEqual({ framingId: "medium-shot", mood: ["serene", "tense"] })
+    expect(out.structured).toEqual({ person: { age: 34, gender: "woman" } })
+  })
+
+  it("leaves direction / structured undefined for a node without them, and for junk", () => {
+    // `undefined`, never `{}` — a defined-but-empty lever would flip the shared
+    // composer off its exact no-op branch and trim the previewed prompt.
+    const bare: WorkflowNode = {
+      id: "n1",
+      type: "generate-image",
+      position: { x: 0, y: 0 },
+      data: { label: "Image" },
+    } as unknown as WorkflowNode
+    const junk: WorkflowNode = {
+      id: "n2",
+      type: "generate-image",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "Image",
+        direction: { framingId: 5, bogus: "x" },
+        structured: { person: { age: "drop table" } },
+      },
+    } as unknown as WorkflowNode
+    for (const node of [bare, junk]) {
+      const out = buildImageAssembleInput({
+        node,
+        nodes: [node],
+        edges: [],
+        characterDefinitions: [],
+        composedPrompt: "a knight",
+        provider: "gpt-image",
+        styleBypass: false,
+      })
+      expect(out.direction).toBeUndefined()
+      expect(out.structured).toBeUndefined()
+    }
+  })
 })
