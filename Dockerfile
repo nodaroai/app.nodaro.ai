@@ -671,13 +671,21 @@ if [ -z "$FRONTEND_SUPABASE_URL_EFFECTIVE" ] && [ -n "$PUBLIC_URL" ]; then
     http://localhost:3000/supabase*|http://127.0.0.1:3000/supabase*) FRONTEND_SUPABASE_URL_EFFECTIVE="${PUBLIC_URL%/}/supabase" ;;
   esac
 fi
-# The surface block (B1) rides the same channel — parsed by
-# tools/build-runtime-config.mjs (a testable module, not an inline heredoc:
-# inline-JSON-or-@file parsing + the d2 business+ edition gate are too much
-# logic to leave untested). It prints the /config.js line to stdout (log line to
-# stderr), so the redirect captures only the payload; on failure the file is
-# left empty, which the frontend reads as "no override" → build-time values.
-if ! RUNTIME_API_URL="$PUBLIC_URL" RUNTIME_SUPABASE_URL="$FRONTEND_SUPABASE_URL_EFFECTIVE" RUNTIME_SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" RUNTIME_FREECUT_URL="$FREECUT_URL" RUNTIME_AUDIOMASS_URL="$AUDIOMASS_URL" RUNTIME_DEFAULT_LOCALE="$DEFAULT_LOCALE" RUNTIME_SURFACE_PROFILE="$NODARO_SURFACE_PROFILE" EDITION="$EDITION" \
+# The surface block (B1) rides the same channel, resolved by ONE parser (SAI-3 /
+# H10): the backend's own funnel (edition gate → Zod → merge → refine) prints
+# the profile the browser must see, and tools/build-runtime-config.mjs passes it
+# through verbatim — so the browser can never render a key the backend dropped
+# (a typo'd billing rate would otherwise be dropped server-side and multiplied
+# client-side). stdout IS the payload: the printer forces DOTENV_CONFIG_QUIET
+# itself (dotenv's banner is the known stdout corruptor) and prints "" when
+# nothing is configured, the gate is closed, or the profile failed to load —
+# which the writer reads as "no override". A printer failure (non-zero exit)
+# is the same "" and the backend's own boot reports the real cause.
+RUNTIME_SURFACE_PROFILE_RESOLVED="$(node /app/backend/dist/lib/print-surface-profile.js)" || RUNTIME_SURFACE_PROFILE_RESOLVED=""
+# The writer prints the /config.js line to stdout (log line to stderr), so the
+# redirect captures only the payload; on failure the file is left empty, which
+# the frontend reads as "no override" → build-time values.
+if ! RUNTIME_API_URL="$PUBLIC_URL" RUNTIME_SUPABASE_URL="$FRONTEND_SUPABASE_URL_EFFECTIVE" RUNTIME_SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" RUNTIME_FREECUT_URL="$FREECUT_URL" RUNTIME_AUDIOMASS_URL="$AUDIOMASS_URL" RUNTIME_DEFAULT_LOCALE="$DEFAULT_LOCALE" RUNTIME_SURFACE_PROFILE="$RUNTIME_SURFACE_PROFILE_RESOLVED" \
   node /app/tools/build-runtime-config.mjs > /app/frontend/dist/config.js; then
   echo "[start.sh] WARNING: could not write /app/frontend/dist/config.js — the frontend keeps its build-time URLs"
 fi

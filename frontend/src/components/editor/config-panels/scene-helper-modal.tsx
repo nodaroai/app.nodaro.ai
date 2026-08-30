@@ -17,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { creditUnits } from "@/lib/credit-units"
 import type { SceneHelperState } from "@/hooks/use-scene-helper"
 import type { SceneNodeFrontendData } from "@/types/nodes"
 
@@ -348,7 +349,7 @@ function AnchorBody(props: {
         />
       </div>
       <div className="text-xs text-zinc-500 italic">{result.anchor_prompt}</div>
-      <div className="text-xs text-zinc-500">{result.credits_spent} credits spent</div>
+      <div className="text-xs text-zinc-500">{creditUnits(result.credits_spent)} credits spent</div>
       <DialogFooter className="mt-4">
         <Button variant="outline" onClick={onReject}>
           Reject

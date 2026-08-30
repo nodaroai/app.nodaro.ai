@@ -6,6 +6,7 @@
 // which is why this body shares no geometry with the other tutorial.
 
 import { useMemo } from "react"
+import { formatCreditUnits } from "@/lib/credit-units"
 import type { TutorialBodyProps } from "../tutorial-registry"
 import { nodeText, nodeMedia, nodeField } from "../derive-tutorial-data"
 import { TutorialVideo } from "../tutorial-video"
@@ -102,7 +103,7 @@ export default function WelcomeDemoBody({
             <Chips items={[label(imageModel), nodeField(image, "aspectRatio")]} />
             <button type="button" className="wd-run" onClick={onRunNode}>
               <span className="wd-run-label">Run this node</span>
-              {cost > 0 && <span className="wd-run-cost">{cost} CR</span>}
+              {cost > 0 && <span className="wd-run-cost">{formatCreditUnits(cost)}</span>}
             </button>
           </div>
         </section>

@@ -13,6 +13,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import type { RunConfirmInfo } from "./types"
+import { creditUnits } from "@/lib/credit-units"
 
 interface UseRunConfirm {
   /** Resolves true to run, false to abort. Single-flight: a second call while a
@@ -53,8 +54,8 @@ export function useRunConfirm(): UseRunConfirm {
   const nodeLabel = info ? `${info.nodeCount} node${info.nodeCount === 1 ? "" : "s"} will run.` : ""
   const title = info?.alwaysConfirm
     ? "Run the entire workflow?"
-    : `This run will use ~${credits ?? 0} credits`
-  const body = info?.alwaysConfirm && credits != null ? `${nodeLabel} Estimated ~${credits} credits.` : nodeLabel
+    : `This run will use ~${creditUnits(credits ?? 0)} credits`
+  const body = info?.alwaysConfirm && credits != null ? `${nodeLabel} Estimated ~${creditUnits(credits)} credits.` : nodeLabel
 
   const dialog = (
     <AlertDialog open={open} onOpenChange={(o) => { if (!o) settle(false) }}>

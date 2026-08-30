@@ -3,6 +3,7 @@ import { optimizedImageUrl } from "@/lib/image"
 import { useMediaAspectRatio } from "../studio-shell/use-media-aspect"
 import { Link as LinkIcon, Maximize2, Plus, Star } from "lucide-react"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { formatCreditUnits } from "@/lib/credit-units"
 import { copyToClipboard } from "@/lib/utils"
 import { AiHelperButton } from "@/components/ui/ai-helper-button"
 
@@ -63,7 +64,7 @@ export function AssetCard({ item, isVideo, onDelete, onRefine, onRegenerate, onR
   const [refining, setRefining] = useState(false)
   const [prompt, setPrompt] = useState("")
   const cost = useModelCredits(costModel, 0)
-  const costLabel = cost > 0 ? ` (${cost} CR)` : ""
+  const costLabel = cost > 0 ? ` (${formatCreditUnits(cost)})` : ""
   // Video preview: rewind + play on mouse-enter, pause + rewind on mouse-leave.
   // `muted`+`playsInline` are required for the browser to honor a JS-driven
   // play() outside a click handler. We catch the play() rejection promise

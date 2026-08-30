@@ -76,3 +76,57 @@ export function surfaceLocaleDefault(): string | undefined {
 export function surfaceLocalePicker(): boolean {
   return runtimeSurfaceProfile().locale.picker
 }
+
+// ── B2b — billing display surface (Phase B) ──────────────────────────────────
+//
+// The browser reads the profile the BACKEND resolved (/config.js is written from
+// print-surface-profile — one parser), so a unit that reaches these selectors
+// has already passed coherentBilling: both-or-neither, finite > 0, decimals in
+// [0, 4], no-zero-lie, lossless. Defaults are the mainline literals ("CR", 1, 0)
+// so an unconfigured deployment renders byte-identically.
+
+/** The label a CLIENT-computed credit figure is rendered with. "CR" when no
+ *  unit is configured. Figures that arrive from the billing seam carry their
+ *  own unit (cost-summary `unit`, account `unit`) — render those with THAT. */
+export function surfaceCreditUnitLabel(): string {
+  return runtimeSurfaceProfile().billing.unitLabel ?? "CR"
+}
+
+/** Display units per 1 Nodaro credit; 1 when no unit is configured. */
+export function surfaceCreditUnitRate(): number {
+  return runtimeSurfaceProfile().billing.unitRate ?? 1
+}
+
+export function surfaceCreditUnitDecimals(): number {
+  return runtimeSurfaceProfile().billing.unitDecimals ?? 0
+}
+
+/**
+ * Convert a CLIENT-computed Nodaro-credit figure (NODE_CREDIT_COSTS, the run
+ * estimate, a balance from /v1/user/credits) to the display unit, rounding
+ * ONCE, here — never before summing (H12). Identity when no unit is
+ * configured. `null`/`undefined` stay `null`: an authority's "could not say"
+ * must never become a number (§5.2 rule 1); a site whose `undefined` means
+ * "no estimate yet" decides that BEFORE calling this.
+ */
+export function surfaceCreditsToUnits(credits: number | null | undefined): number | null {
+  if (credits == null || !Number.isFinite(credits)) return null
+  const b = runtimeSurfaceProfile().billing
+  if (b.unitRate === undefined) return credits
+  const out = credits * b.unitRate
+  if (!Number.isFinite(out)) return null
+  const f = 10 ** (b.unitDecimals ?? 0)
+  return Math.round(out * f) / f
+}
+
+/** false ⇒ no self-serve purchase: /pricing, /billing, buy-packs and every
+ *  "buy credits" CTA are withheld (a prepaid instance's users must not be able
+ *  to buy the platform's credits with a card). */
+export function surfaceBillingSelfServe(): boolean {
+  return runtimeSurfaceProfile().billing.selfServe
+}
+
+/** true ⇒ the canvas Cost tab is not mounted, whatever the billing surface says. */
+export function surfaceCostTabHidden(): boolean {
+  return runtimeSurfaceProfile().billing.costTab === "hidden"
+}

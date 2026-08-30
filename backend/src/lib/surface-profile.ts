@@ -38,6 +38,25 @@ export interface SurfaceSibling {
   url: string
 }
 
+/**
+ * B2b — the billing display surface (Phase B). A dedicated hosted instance
+ * meters in Nodaro credits but shows its customer's own unit; these keys are
+ * what lib/billing-display-unit.ts reads. Every one narrows or relabels —
+ * none can widen what the edition offers.
+ */
+export interface SurfaceBilling {
+  /** "hidden" suppresses the canvas Cost tab (billingSurface().mountCostTab → false). */
+  costTab: "inherit" | "hidden"
+  /** Display label for a credit figure. BOTH-OR-NEITHER with unitRate. */
+  unitLabel?: string
+  /** Display units per 1 Nodaro credit. BOTH-OR-NEITHER with unitLabel. */
+  unitRate?: number
+  /** Decimal places for a converted figure. 0..4, default 0. */
+  unitDecimals?: number
+  /** false removes self-serve purchase (pricing page, buy-packs, billing routes). */
+  selfServe: boolean
+}
+
 export interface SurfaceProfile {
   nav: { hide: NavKey[] }
   dashboard: { tabs: DashboardTabKey[] }
@@ -49,6 +68,7 @@ export interface SurfaceProfile {
   locale: { default?: string; picker: boolean }
   outputs: { allowPublic: boolean }
   voice: { allowedGenders: string[] } // B4c — [] = all genders allowed (narrowing only)
+  billing: SurfaceBilling
   catalogPolicy?: unknown // B4 (Phase 4) — carried opaque; validated loosely, never read here
 }
 
@@ -63,6 +83,7 @@ export const SURFACE_PROFILE_DEFAULT: SurfaceProfile = {
   locale: { picker: true },
   outputs: { allowPublic: true },
   voice: { allowedGenders: [] },
+  billing: { costTab: "inherit", selfServe: true },
 }
 
 const NAV_KEYS = z.enum(["gallery", "explore", "pricing", "templates", "apps", "community"])
@@ -107,13 +128,82 @@ const stringArray = () =>
  * had exactly that bug — a stringified `"false"` failed z.boolean(), so the whole
  * `outputs` object caught to `{ allowPublic: true }` and privacy flipped open.
  */
-const lenientPublicFlag = z.unknown().transform((v) => {
-  if (typeof v === "boolean") return v
-  if (v === "true" || v === "1") return true
-  if (v === "false" || v === "0") return false
-  console.warn("[surface-profile] outputs.allowPublic absent or unparseable — defaulting to public (true)")
-  return true
-})
+// `.optional()` BEFORE `.transform()` is load-bearing (Zod 4): a bare
+// `z.unknown().transform(…)` makes the key REQUIRED ("expected nonoptional"),
+// so an object that omits it fails as a whole and the enclosing `.catch` swaps
+// in the default — silently, and taking every sibling key down with it.
+const lenientFlag = (name: string, fallback: boolean, fallbackWord: string, opts: { warnOnAbsent: boolean }) =>
+  z
+    .unknown()
+    .optional()
+    .transform((v) => {
+      if (typeof v === "boolean") return v
+      if (v === "true" || v === "1") return true
+      if (v === "false" || v === "0") return false
+      if (v !== undefined || opts.warnOnAbsent) {
+        console.warn(`[surface-profile] ${name} ${v === undefined ? "absent" : "unparseable"} — defaulting to ${fallbackWord} (${fallback})`)
+      }
+      return fallback
+    })
+const lenientPublicFlag = lenientFlag("outputs.allowPublic", true, "public", { warnOnAbsent: true })
+/** Same posture for the purchase surface: a present `false` (SAI: prepaid
+ *  users must not buy Nodaro credits with a card) is never flipped open.
+ *  Absent is the mainline default and stays quiet. */
+const lenientSelfServeFlag = lenientFlag("billing.selfServe", true, "self-serve on", { warnOnAbsent: false })
+
+const BILLING_DEFAULT: SurfaceBilling = { costTab: "inherit", selfServe: true }
+
+/**
+ * The unit trio is validated HERE, as a unit, and dropped as a unit (§3.5):
+ *
+ *  1. Both-or-neither. A label without a rate, or a rate without a label, is
+ *     the WORST state — converted numbers under "CR", or Nodaro credits under
+ *     the customer's label — and neither is detectable by eye.
+ *  2. `unitRate` must be a finite number > 0.
+ *  3. `unitDecimals` must be an integer in [0, 4] (default 0).
+ *  4. No-zero-lie: 1 credit must not round to 0 in the display unit — a rate of
+ *     0.01 at 0 decimals would render a 1-credit charge as free.
+ *  5. Lossless per-charge conversion (H12): `unitRate × 10^decimals` must be an
+ *     integer, so converting each charge and summing equals converting the
+ *     sum — routes total converted figures.
+ *
+ * Any violation drops the whole trio with a warning and the instance runs as
+ * if no unit were configured: fail-safe for correctness (never wrong numbers),
+ * fail-open for branding. The fail-LOUD half belongs to a deployment that
+ * requires the unit (the hosted overlay's register() asserts it and the loader
+ * turns that into exit(1)); parseSurfaceProfile never throws, by contract.
+ */
+function coherentBilling(raw: { costTab: "inherit" | "hidden"; selfServe: boolean; unitLabel?: unknown; unitRate?: unknown; unitDecimals?: unknown }): SurfaceBilling {
+  const out: SurfaceBilling = { costTab: raw.costTab, selfServe: raw.selfServe }
+  const hasLabel = raw.unitLabel !== undefined
+  const hasRate = raw.unitRate !== undefined
+  if (!hasLabel && !hasRate && raw.unitDecimals === undefined) return out
+
+  const drop = (why: string): SurfaceBilling => {
+    console.warn(`[surface-profile] billing.unitLabel/unitRate/unitDecimals dropped — ${why}`)
+    return out
+  }
+  if (hasLabel !== hasRate) return drop("unitLabel and unitRate must be set together (both or neither)")
+  if (!hasLabel) return drop("unitDecimals without unitLabel + unitRate")
+  if (typeof raw.unitLabel !== "string" || raw.unitLabel.trim().length === 0) return drop("unitLabel must be a non-empty string")
+  const rate = raw.unitRate
+  if (typeof rate !== "number" || !Number.isFinite(rate) || rate <= 0) return drop("unitRate must be a finite number > 0")
+  let decimals = 0
+  if (raw.unitDecimals !== undefined) {
+    if (typeof raw.unitDecimals !== "number" || !Number.isInteger(raw.unitDecimals) || raw.unitDecimals < 0 || raw.unitDecimals > 4) {
+      return drop("unitDecimals must be an integer in [0, 4]")
+    }
+    decimals = raw.unitDecimals
+  }
+  const scale = 10 ** decimals
+  if (Math.round(1 * rate * scale) / scale <= 0) return drop("1 credit would display as 0 at this rate/decimals (no-zero-lie)")
+  const product = rate * scale
+  if (Math.abs(product - Math.round(product)) > 1e-9) return drop("unitRate × 10^unitDecimals must be an integer (lossless per-charge conversion)")
+  out.unitLabel = raw.unitLabel.trim()
+  out.unitRate = rate
+  if (raw.unitDecimals !== undefined) out.unitDecimals = decimals
+  return out
+}
 
 /**
  * Structural schema. Each top-level field `.catch`es to its default, so an
@@ -136,6 +226,16 @@ export const SurfaceProfileSchema: z.ZodType<SurfaceProfile> = z.object({
   locale: z.object({ default: z.string().optional(), picker: z.boolean() }).catch({ picker: true }),
   outputs: z.object({ allowPublic: lenientPublicFlag }).catch({ allowPublic: true }),
   voice: z.object({ allowedGenders: stringArray() }).catch({ allowedGenders: [] }),
+  billing: z
+    .object({
+      costTab: z.enum(["inherit", "hidden"]).catch("inherit"),
+      selfServe: lenientSelfServeFlag,
+      unitLabel: z.unknown().optional(),
+      unitRate: z.unknown().optional(),
+      unitDecimals: z.unknown().optional(),
+    })
+    .transform(coherentBilling)
+    .catch(BILLING_DEFAULT),
   catalogPolicy: z.unknown().optional(),
 }) as z.ZodType<SurfaceProfile>
 
@@ -154,6 +254,7 @@ function mergeOverDefault(override: Partial<SurfaceProfile>): SurfaceProfile {
     locale: { ...d.locale, ...override.locale },
     outputs: { ...d.outputs, ...override.outputs },
     voice: { ...d.voice, ...override.voice },
+    billing: { ...d.billing, ...override.billing },
     catalogPolicy: override.catalogPolicy ?? d.catalogPolicy,
   }
 }

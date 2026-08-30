@@ -67,6 +67,7 @@ import { probeMediaMetadata } from "@/lib/probe-media-metadata";
 import { matchShortcut, SHORTCUTS } from "@/lib/shortcuts";
 import { queryClient } from "@/lib/query-client";
 import { hasCredits } from "@/lib/edition";
+import { creditUnits, creditUnitLabel } from "@/lib/credit-units";
 import { useBillingSurface } from "@/hooks/use-billing-surface";
 import { getCachedCredits, prefetchModelCredits } from "@/ee/hooks/use-model-credits";
 import { getModelIdentifier } from "@/components/editor/config-panels/helpers";
@@ -1427,7 +1428,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                   {t("run.executeWorkflow")}
                   {hasCredits() && !estimateLoading && workflowCreditEstimate > 0 && (
                     <span className="ml-2 opacity-80">
-                      {t("node.creditsSuffix", { n: workflowCreditEstimate })}
+                      {t("node.creditsSuffix", { n: creditUnits(workflowCreditEstimate), u: creditUnitLabel(t("credits.unitShort")) })}
                     </span>
                   )}
                 </Button>

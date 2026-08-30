@@ -5,6 +5,7 @@ import { FastForward, Play, Loader2, Trash2, RotateCcw, Save } from "lucide-reac
 import { useShallow } from "zustand/react/shallow"
 import { hasCredits } from "@/lib/edition"
 import { useT } from "@/lib/i18n"
+import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
 import { cancelJob, stopGenerateVideoPro } from "@/lib/api"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { abortNodeRun } from "@/lib/node-run-abort"
@@ -226,7 +227,7 @@ export function RunNodeButton({ nodeId, credits, isRunning, onRun, runFromHere }
               <Loader2 className="w-3 h-3 animate-spin" />
               {t("node.stop")}
               {hasCredits() && credits !== undefined && credits > 0 && (
-                <span className="ml-1 opacity-80">{t("node.creditsSuffix", { n: totalCredits })}</span>
+                <span className="ml-1 opacity-80">{t("node.creditsSuffix", { n: creditUnits(totalCredits), u: creditUnitLabel(t("credits.unitShort")) })}</span>
               )}
             </button>
           </DropdownMenuTrigger>
@@ -267,7 +268,7 @@ export function RunNodeButton({ nodeId, credits, isRunning, onRun, runFromHere }
       {label}
       {hasCredits() && credits !== undefined && credits > 0 && (
         <span className="ml-1 opacity-80">
-          {t("node.creditsSuffix", { n: totalCredits })}
+          {t("node.creditsSuffix", { n: creditUnits(totalCredits), u: creditUnitLabel(t("credits.unitShort")) })}
         </span>
       )}
     </button>

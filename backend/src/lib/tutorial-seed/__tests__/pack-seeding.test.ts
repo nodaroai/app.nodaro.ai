@@ -4,7 +4,9 @@
  * free. These tests pin: (1) inert default — no packs env is byte-identical to
  * base-only; (2) a pack's category is ensured before its template inserts, so
  * the migration-114 CHECK never fires; (3) a pack tutorial an operator hid
- * stays hidden across a content reseed.
+ * stays hidden across a content reseed; (4) Cloud seeds operator packs and
+ * ONLY those — a dedicated hosted instance (EDITION=cloud on its own Supabase)
+ * gets its pack, while Nodaro's shared cloud (no packs env) makes no call at all.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
@@ -284,5 +286,56 @@ describe("tutorial seeder — operator-supplied packs", () => {
     for (const { payload } of updates) {
       expect(Object.keys(payload).filter((k) => OPERATOR_OWNED_COLUMNS.includes(k))).toEqual([])
     }
+  })
+
+  it("on Cloud with a pack: seeds the pack, never the built-in set", async () => {
+    // A dedicated hosted instance: EDITION=cloud, its own Supabase, tutorials
+    // shipped as a pack. The built-in welcome-demo must NOT appear — on the
+    // shared cloud those rows belong to a real user, and on a dedicated
+    // instance they are Nodaro's English content, not the tenant's.
+    config.EDITION = "cloud"
+    const dir = join(packRoot, "demo")
+    await mkdir(dir, { recursive: true })
+    await writeFile(join(dir, "manifest.json"), JSON.stringify({
+      name: "Demo", categories: [{ slug: "demo-basics", name: "Demo Basics" }],
+    }))
+    await packDoc(dir, "demo-welcome")
+    process.env.NODARO_TUTORIAL_PACKS = dir
+
+    await seed()
+
+    expect(store.workflow_templates.map((r) => r.slug)).toEqual(["demo-welcome"])
+    expect(store.workflow_templates[0].is_active).toBe(true)
+    expect(store.tutorial_categories.some((c) => c.slug === "demo-basics")).toBe(true)
+  })
+
+  it("on Cloud with a pack: a pack slug colliding with a built-in is still rejected", async () => {
+    // The built-in slugs feed the de-dup even though they are not seeded, so a
+    // pack can never shadow a built-in a real user owns on the shared cloud.
+    config.EDITION = "cloud"
+    const dir = join(packRoot, "demo")
+    await mkdir(dir, { recursive: true })
+    await writeFile(join(dir, "manifest.json"), JSON.stringify({
+      name: "Demo", categories: [{ slug: "demo-basics", name: "Demo Basics" }],
+    }))
+    await packDoc(dir, "welcome-demo") // same slug as the built-in doc
+    process.env.NODARO_TUTORIAL_PACKS = dir
+
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    try {
+      await seedTutorialTemplates({ delaysMs: [] })
+      expect(warn.mock.calls.some((c) => /slug_conflict/.test(String(c[0])))).toBe(true)
+    } finally {
+      warn.mockRestore()
+    }
+    expect(store.workflow_templates).toEqual([])
+  })
+
+  it("on Cloud with no packs env: byte-identical no-op — zero Supabase calls, no system account", async () => {
+    config.EDITION = "cloud"
+    await seed()
+    expect(store.fromCalls).toBe(0)
+    expect(store.users).toEqual([])
+    expect(store.workflow_templates).toEqual([])
   })
 })

@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest"
+import { describe, it, expect, afterEach, vi } from "vitest"
 import { config } from "../config.js"
 import {
   SURFACE_PROFILE_DEFAULT,
@@ -219,5 +219,89 @@ describe("surfaceProfileFailedToLoad — fail-closed boot guard (SAI-4/H8)", () 
     process.env.NODARO_SURFACE_PROFILE = "{ not valid json"
     __resetSurfaceProfileCacheForTests()
     expect(surfaceProfileFailedToLoad()).toBe(false)
+  })
+})
+
+describe("billing — the display-unit trio is coherent or absent (Phase B, §3.5)", () => {
+  const warn = () => {
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {})
+    return { spy, calls: () => spy.mock.calls.map((c) => String(c[0])) }
+  }
+  afterEach(() => vi.restoreAllMocks())
+
+  it("stock default: inherit + self-serve on, no unit", () => {
+    expect(SURFACE_PROFILE_DEFAULT.billing).toEqual({ costTab: "inherit", selfServe: true })
+    expect(parseSurfaceProfile(JSON.stringify({})).billing).toEqual({ costTab: "inherit", selfServe: true })
+  })
+
+  it("keeps a coherent trio (label + rate, optional decimals) and trims the label", () => {
+    const p = parseSurfaceProfile(JSON.stringify({ billing: { unitLabel: " קרדיטים ", unitRate: 2000, selfServe: false, costTab: "hidden" } }))
+    expect(p.billing).toEqual({ costTab: "hidden", selfServe: false, unitLabel: "קרדיטים", unitRate: 2000 })
+    const q = parseSurfaceProfile(JSON.stringify({ billing: { unitLabel: "u", unitRate: 0.07, unitDecimals: 2 } }))
+    expect(q.billing).toEqual({ costTab: "inherit", selfServe: true, unitLabel: "u", unitRate: 0.07, unitDecimals: 2 })
+  })
+
+  it("both-or-neither: a label without a rate (or vice versa) drops BOTH, loudly", () => {
+    const { calls } = warn()
+    expect(parseSurfaceProfile(JSON.stringify({ billing: { unitLabel: "u" } })).billing).toEqual({ costTab: "inherit", selfServe: true })
+    expect(parseSurfaceProfile(JSON.stringify({ billing: { unitRate: 2000 } })).billing).toEqual({ costTab: "inherit", selfServe: true })
+    expect(calls().filter((m) => m.includes("both or neither")).length).toBe(2)
+  })
+
+  it("a rate that is not a finite positive NUMBER drops the trio (a stringified \"250\" included)", () => {
+    const { calls } = warn()
+    for (const unitRate of ["250", 0, -1, Number.POSITIVE_INFINITY, null]) {
+      const p = parseSurfaceProfile(JSON.stringify({ billing: { unitLabel: "u", unitRate } }))
+      expect(p.billing.unitRate, String(unitRate)).toBeUndefined()
+      expect(p.billing.unitLabel, String(unitRate)).toBeUndefined()
+    }
+    expect(calls().some((m) => m.includes("finite number > 0") || m.includes("both or neither"))).toBe(true)
+  })
+
+  it("decimals outside 0..4 or non-integer drop the trio", () => {
+    warn()
+    for (const unitDecimals of [5, -1, 1.5, "2"]) {
+      const p = parseSurfaceProfile(JSON.stringify({ billing: { unitLabel: "u", unitRate: 2000, unitDecimals } }))
+      expect(p.billing.unitLabel, String(unitDecimals)).toBeUndefined()
+    }
+  })
+
+  it("no-zero-lie: a configuration where 1 credit would display as 0 is rejected", () => {
+    const { calls } = warn()
+    const p = parseSurfaceProfile(JSON.stringify({ billing: { unitLabel: "u", unitRate: 0.01, unitDecimals: 0 } }))
+    expect(p.billing.unitLabel).toBeUndefined()
+    expect(calls().some((m) => m.includes("no-zero-lie"))).toBe(true)
+    // …but the same rate with enough decimals is fine.
+    expect(parseSurfaceProfile(JSON.stringify({ billing: { unitLabel: "u", unitRate: 0.01, unitDecimals: 2 } })).billing.unitRate).toBe(0.01)
+  })
+
+  it("lossless (H12): unitRate × 10^decimals must be an integer, so per-charge conversion sums exactly", () => {
+    const { calls } = warn()
+    expect(parseSurfaceProfile(JSON.stringify({ billing: { unitLabel: "u", unitRate: 0.07, unitDecimals: 1 } })).billing.unitLabel).toBeUndefined()
+    expect(parseSurfaceProfile(JSON.stringify({ billing: { unitLabel: "u", unitRate: 2.5 } })).billing.unitLabel).toBeUndefined()
+    expect(calls().some((m) => m.includes("must be an integer"))).toBe(true)
+    expect(parseSurfaceProfile(JSON.stringify({ billing: { unitLabel: "u", unitRate: 2.5, unitDecimals: 1 } })).billing.unitRate).toBe(2.5)
+  })
+
+  it("decimals without a label/rate is dropped; an empty label is dropped", () => {
+    warn()
+    expect(parseSurfaceProfile(JSON.stringify({ billing: { unitDecimals: 2 } })).billing).toEqual({ costTab: "inherit", selfServe: true })
+    expect(parseSurfaceProfile(JSON.stringify({ billing: { unitLabel: "   ", unitRate: 2000 } })).billing.unitLabel).toBeUndefined()
+  })
+
+  it("selfServe is a fail-closed flag: a present \"false\" never flips open; absent → true", () => {
+    warn()
+    expect(parseSurfaceProfile(JSON.stringify({ billing: { selfServe: "false" } })).billing.selfServe).toBe(false)
+    expect(parseSurfaceProfile(JSON.stringify({ billing: { selfServe: false } })).billing.selfServe).toBe(false)
+    expect(parseSurfaceProfile(JSON.stringify({ billing: { selfServe: "0" } })).billing.selfServe).toBe(false)
+    expect(parseSurfaceProfile(JSON.stringify({ billing: {} })).billing.selfServe).toBe(true)
+  })
+
+  it("costTab: an unknown value degrades to inherit; a non-object billing block degrades to the default", () => {
+    warn()
+    expect(parseSurfaceProfile(JSON.stringify({ billing: { costTab: "bogus" } })).billing.costTab).toBe("inherit")
+    expect(parseSurfaceProfile(JSON.stringify({ billing: "x" })).billing).toEqual({ costTab: "inherit", selfServe: true })
+    // …and never takes the rest of the profile down with it.
+    expect(parseSurfaceProfile(JSON.stringify({ billing: "x", nav: { hide: ["gallery"] } })).nav.hide).toEqual(["gallery"])
   })
 })

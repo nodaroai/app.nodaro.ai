@@ -1,4 +1,5 @@
 import { hasCredits } from "@/lib/edition"
+import { creditUnits, creditUnitLabel, formatCreditUnits } from "@/lib/credit-units"
 import { runtimeSurfaceProfile } from "@/lib/surface-profile"
 import { aspectRatioOptionsByKind, resolutionOptionsByKind, qualityOptionsByKind, durationsByMode, creditRangesAll, modelsWithFeature, isFlux2Model, isGvpSupportedProvider, isSeedance2Provider, GVP_SUPPORTED_PROVIDERS, VIDEO_GEN_COLLAPSED_T2V_IDS, type LabeledOption } from "@nodaro/shared"
 import { STYLES } from "@nodaro/prompts"
@@ -266,9 +267,9 @@ export function formatCreditBadge(value: string, credits: number): string | unde
   // credits (found in the 2026-08-13 community grind).
   if (!hasCredits()) return undefined
   const range = MODEL_CREDIT_RANGES[value]
-  if (range) return `${range.min}-${range.max} CR`
+  if (range) return `${creditUnits(range.min)}-${creditUnits(range.max)} ${creditUnitLabel()}`
   // credit-gated: unreachable without credits — the guard above returns first.
-  if (credits > 0) return `${credits} CR`
+  if (credits > 0) return formatCreditUnits(credits)
   return undefined
 }
 
@@ -284,7 +285,7 @@ export function formatPerSecondCreditBadge(credits15s: number): string | undefin
   if (!hasCredits()) return undefined
   if (!(credits15s > 0)) return undefined
   // credit-gated: unreachable without credits — the guard above returns first.
-  return `~${Math.max(1, Math.round(credits15s / 15))} CR/s`
+  return `~${creditUnits(Math.max(1, Math.round(credits15s / 15)))} ${creditUnitLabel()}/s`
 }
 
 // =============================================================================

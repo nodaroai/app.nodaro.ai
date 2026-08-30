@@ -58,6 +58,7 @@ import { getMyApps, updateApp, deactivateApp, getMonetizationDefaults, updateMon
 import { queryKeys } from "@/lib/query-keys"
 import { hasCredits } from "@/lib/edition"
 import { CreditCost } from "@/components/ui/credit-cost"
+import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
 import { calculateMonetizedCost } from "@nodaro/shared"
 import { useAuth } from "@/hooks/use-auth"
 import { Label } from "@/components/ui/label"
@@ -330,7 +331,7 @@ export default function AppsPage() {
                   <h4 className="text-sm font-medium">{t("apps.defaultPricing")}</h4>
                   <p className="text-xs text-muted-foreground">{t("apps.defaultPricingDesc")}</p>
                   <div>
-                    <Label className="text-xs">{t("apps.flatFee")}</Label>
+                    <Label className="text-xs">{t("apps.flatFee", { u: creditUnitLabel(t("credits.unitShort")) })}</Label>
                     <Input
                       type="number"
                       min={0}
@@ -747,7 +748,7 @@ function MyAppCard({
         ) : (
           // Pre-#645 this else branch rendered the figure UNGATED — the one
           // leak the per-site pass missed. The component self-gates.
-          <CreditCost credits={app.estimatedCredits ?? 0} suffix={t("apps.crRunSuffix")} />
+          <CreditCost credits={app.estimatedCredits ?? 0} suffix={t("apps.crRunSuffix", { u: creditUnitLabel(t("credits.unitShort")) })} />
         )}
         {app.favoriteCount > 0 && <span>{t("apps.favorites", { n: app.favoriteCount })}</span>}
       </div>
@@ -1190,7 +1191,7 @@ function EditAppDialog({
                 <div className="space-y-3 pl-1">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <Label className="text-xs">{t("apps.flatFee")}</Label>
+                      <Label className="text-xs">{t("apps.flatFee", { u: creditUnitLabel(t("credits.unitShort")) })}</Label>
                       <Input
                         type="number"
                         min={0}
@@ -1213,7 +1214,7 @@ function EditAppDialog({
                   </div>
 
                   <p className="text-[11px] text-muted-foreground">
-                    {t("apps.monetizationCalc", { base: baseCredits, total: calculatedCredits })}
+                    {t("apps.monetizationCalc", { base: creditUnits(baseCredits), total: creditUnits(calculatedCredits), u: creditUnitLabel(t("credits.unitShort")) })}
                   </p>
 
                   <Button

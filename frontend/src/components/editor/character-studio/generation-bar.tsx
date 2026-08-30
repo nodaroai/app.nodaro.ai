@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { Check, Loader2 } from "lucide-react"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { creditUnits, formatCreditUnits } from "@/lib/credit-units"
 import { presetState } from "../studio-shell/preset-state"
 
 /** Stable empty set so an omitted createdNames/busyNames prop doesn't allocate
@@ -35,7 +36,7 @@ export function GenerationBar({ presets, models, defaultModel, disabled, disable
   const [model, setModel] = useState(defaultModel)
   const [text, setText] = useState("")
   const cost = useModelCredits(model, 0)
-  const costLabel = cost > 0 ? ` (${cost} CR)` : ""
+  const costLabel = cost > 0 ? ` (${formatCreditUnits(cost)})` : ""
   const allCost = cost > 0 && generateAllCount ? cost * generateAllCount : 0
 
   const setModelAndNotify = (m: string) => {
@@ -71,7 +72,7 @@ export function GenerationBar({ presets, models, defaultModel, disabled, disable
               {st === "creating" && <Loader2 className="w-2.5 h-2.5 animate-spin" />}
               {st === "created" && <Check className="w-2.5 h-2.5" />}
               {p}
-              {st === "idle" && cost > 0 && <span className="text-slate-500">· {cost}</span>}
+              {st === "idle" && cost > 0 && <span className="text-slate-500">· {creditUnits(cost)}</span>}
             </button>
           )
         })}
@@ -79,10 +80,10 @@ export function GenerationBar({ presets, models, defaultModel, disabled, disable
           <button
             type="button"
             disabled={disabled}
-            title={generateAllCount ? `${generateAllCount} missing × ${cost} CR = ${allCost} CR` : undefined}
+            title={generateAllCount ? `${generateAllCount} missing × ${formatCreditUnits(cost)} = ${formatCreditUnits(allCost)}` : undefined}
             className="text-[10px] bg-[#1e293b] border border-[#334155] rounded px-2 py-0.5 text-slate-400 ml-auto transition-transform active:scale-95 disabled:active:scale-100 disabled:opacity-40"
             onClick={onGenerateAll}
-          >⟳ Generate All{allCost > 0 ? ` (${allCost} CR)` : ""}</button>
+          >⟳ Generate All{allCost > 0 ? ` (${formatCreditUnits(allCost)})` : ""}</button>
         )}
       </div>
       <div className="flex gap-2 items-center">

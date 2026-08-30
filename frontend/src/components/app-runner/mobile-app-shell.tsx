@@ -13,6 +13,7 @@ import { useAppRunnerStore } from "@/hooks/use-app-runner-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import { useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
 import { hasCredits } from "@/lib/edition"
+import { formatCreditUnits } from "@/lib/credit-units"
 import { AUTH_REDIRECT_KEY } from "@/lib/storage-keys"
 import {
   getInputNodes,
@@ -150,7 +151,7 @@ export function MobileAppShell({
     return userCredits.total < estimatedCost
   }, [user, userCredits, estimatedCost])
 
-  const costLabel = hasCredits() && estimatedCost > 0 ? ` (${estimatedCost} CR)` : ""
+  const costLabel = hasCredits() && estimatedCost > 0 ? ` (${formatCreditUnits(estimatedCost)})` : ""
 
   const allInputsFilled = useMemo(
     () => areAllInputsFilled(orderedInputNodes, presInputValues),

@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils"
 import { useT, type MessageKey } from "@/lib/i18n"
 import { formatMoney } from "@/lib/format-money"
 import type { BillingAccount, MoneyAmount, UsageCategory } from "@/lib/billing-surface"
+import { serverUnitLabel } from "@/lib/credit-units"
 
 const ACCENT = "#ff0073"
 
@@ -21,6 +22,9 @@ function amountOrDash(n: number | null): string { return n == null ? "—" : n.t
 export function BillingAccountSummary({ account, className = "" }: { account: BillingAccount; className?: string }) {
   const t = useT()
   const money = (m: MoneyAmount) => formatMoney(m)
+  // The account's figures arrive in the display unit and carry it (`unit`);
+  // the long-form word is the label when the provider's own id comes back.
+  const unit = serverUnitLabel(account.unit, t("credits.unit.other"))
   const daily = account.daily
   const cats: readonly UsageCategory[] = account.byCategory ?? []
   const totalForPct = cats.reduce((s, c) => s + (c.amount ?? 0), 0)
@@ -33,6 +37,7 @@ export function BillingAccountSummary({ account, className = "" }: { account: Bi
           <div className="text-sm text-muted-foreground">{account.spent ? t("usage.spent") : t("usage.balance")}</div>
           <div className="mt-1 text-3xl font-bold" style={{ color: ACCENT }}>
             {account.spent ? amountOrDash(account.generations ?? account.balance) : amountOrDash(account.balance)}
+            {!account.spent && <span className="ml-2 text-base font-medium text-muted-foreground">{unit}</span>}
           </div>
           {account.spent && (
             <div className="mt-1 text-sm font-medium">
@@ -54,7 +59,10 @@ export function BillingAccountSummary({ account, className = "" }: { account: Bi
               {account.plan}
             </span>
           </div>
-          <div className="mt-1 text-3xl font-bold">{amountOrDash(account.balance)}</div>
+          <div className="mt-1 text-3xl font-bold">
+            {amountOrDash(account.balance)}
+            <span className="ml-2 text-base font-medium text-muted-foreground">{unit}</span>
+          </div>
           {account.reserveValue && (
             <div className="mt-1 text-sm font-medium">
               {t("usage.reserve")}: {t("usage.approx", { amount: money(account.reserveValue) })}

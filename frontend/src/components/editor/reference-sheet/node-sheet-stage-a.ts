@@ -4,6 +4,7 @@ import type { EntityKind, SheetType, SheetFlavour } from "@nodaro/shared"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { SHEET_TAB_ADAPTERS } from "./sheet-tab-adapter"
 import { pollJobToCompletion } from "../workflow-editor/poll-job"
+import { creditUnits } from "@/lib/credit-units"
 import { WorkflowStaleError, type ExecutionContext } from "../workflow-editor/types"
 
 /**
@@ -65,8 +66,8 @@ function defaultConfirm(missingCount: number, label: string, assemblyFee: number
   const estTotal = n + assemblyFee // panels are ≈1 credit each (nano-banana) + the flat assembly fee
   return window.confirm(
     `"${label}": this reference sheet needs ${n} more panel${n === 1 ? "" : "s"} generated from the ` +
-      `main image — about ${n} credit${n === 1 ? "" : "s"} (≈1 each), then composing adds ${assemblyFee} ` +
-      `credits. ≈ ${estTotal} credits total. Generate now?`,
+      `main image — about ${creditUnits(n)} credit${creditUnits(n) === 1 ? "" : "s"} (≈${creditUnits(1)} each), then composing adds ${creditUnits(assemblyFee)} ` +
+      `credits. ≈ ${creditUnits(estTotal)} credits total. Generate now?`,
   )
 }
 

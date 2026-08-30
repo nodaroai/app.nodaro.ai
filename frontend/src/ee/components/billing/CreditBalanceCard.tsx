@@ -3,6 +3,8 @@ import { Loader2 } from "lucide-react"
 import type { TransactionRecord, UserBalance } from "@/lib/api"
 import { AutoRechargeCard } from "@/ee/components/credits/AutoRechargeCard"
 import { BuyPacksSection } from "./BuyPacksSection"
+import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
+import { surfaceBillingSelfServe } from "@/lib/surface-selectors"
 import {
   CYAN,
   CYAN_BADGE_TEXT,
@@ -126,7 +128,7 @@ function BalanceBucket(props: BalanceBucketProps) {
             fontVariantNumeric: "tabular-nums",
           }}
         >
-          {formatCredits(props.amount)}
+          {formatCredits(creditUnits(props.amount))}
         </span>
         <span style={{ fontSize: 13, color: "var(--blg-t2-soft)" }}>{props.amountSuffix}</span>
       </div>
@@ -220,7 +222,7 @@ function BalanceSection({
               fontVariantNumeric: "tabular-nums",
             }}
           >
-            {formatCredits(total)}
+            {formatCredits(creditUnits(total))}
           </div>
         </div>
       </div>
@@ -247,13 +249,13 @@ function BalanceSection({
               badgeBackground="var(--blg-pink-chip)"
               amount={subscriptionCredits}
               amountSuffix={
-                allocation > 0 ? `of ${formatCredits(allocation)} left` : "credits left"
+                allocation > 0 ? `of ${formatCredits(creditUnits(allocation))} left` : `${creditUnitLabel("credits")} left`
               }
               barBackground="var(--blg-pink-track)"
               barPercent={subPercent}
               footerLeft={
                 usedThisCycle !== null
-                  ? `${formatCredits(usedThisCycle)} used this cycle`
+                  ? `${formatCredits(creditUnits(usedThisCycle))} used this cycle`
                   : "No monthly allocation"
               }
               footerRight={allocation > 0 ? renewalText(balance?.periodEnd ?? null) : ""}
@@ -268,12 +270,12 @@ function BalanceSection({
               badgeColor={CYAN_BADGE_TEXT}
               badgeBackground="var(--blg-cyan-chip)"
               amount={topup}
-              amountSuffix="credits banked"
+              amountSuffix={`${creditUnitLabel("credits")} banked`}
               barBackground="var(--blg-cyan-track)"
               barPercent={topup > 0 ? 100 : 0}
               footerLeft={
                 lastTopupTx
-                  ? `Last purchase ${formatShortDate(lastTopupTx.created_at)} · ${formatCredits(lastTopupTx.credits_granted)}`
+                  ? `Last purchase ${formatShortDate(lastTopupTx.created_at)} · ${formatCredits(creditUnits(lastTopupTx.credits_granted))}`
                   : ""
               }
               footerRight="Used after subscription"
@@ -293,19 +295,19 @@ function BalanceSection({
             <div>
               <div style={statLabel}>Used today</div>
               <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4 }}>
-                {formatCredits(balance?.dailySpent ?? 0)}
+                {formatCredits(creditUnits(balance?.dailySpent ?? 0))}
               </div>
             </div>
             <div>
               <div style={statLabel}>Used this cycle</div>
               <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4 }}>
-                {usedThisCycle !== null ? formatCredits(usedThisCycle) : "—"}
+                {usedThisCycle !== null ? formatCredits(creditUnits(usedThisCycle)) : "—"}
               </div>
             </div>
             <div>
               <div style={statLabel}>Avg. daily burn</div>
               <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4 }}>
-                {avgDailyBurn !== null ? formatCredits(avgDailyBurn) : "—"}
+                {avgDailyBurn !== null ? formatCredits(creditUnits(avgDailyBurn)) : "—"}
               </div>
             </div>
           </div>
@@ -327,6 +329,10 @@ export function CreditBalanceCard({
   transactions,
   showAutoRecharge,
 }: CreditBalanceCardProps) {
+  // Buying packs and auto-recharge both charge a card for the platform's
+  // credits — withheld on a deployment without self-serve purchase (a prepaid
+  // instance). The balance section stays.
+  const selfServe = surfaceBillingSelfServe()
   return (
     <>
       <BalanceSection
@@ -334,8 +340,8 @@ export function CreditBalanceCard({
         creditsLoading={creditsLoading}
         transactions={transactions}
       />
-      <BuyPacksSection />
-      {showAutoRecharge && (
+      {selfServe && <BuyPacksSection />}
+      {selfServe && showAutoRecharge && (
         <section style={sectionCardSpaced} className="empty:hidden">
           <AutoRechargeCard />
         </section>

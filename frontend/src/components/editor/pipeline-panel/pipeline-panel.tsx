@@ -29,6 +29,7 @@ import {
 } from "./dialogue-recheck-banner"
 import { StageProgressBanner } from "./stage-progress-banner"
 import { ChatPanel } from "./chat/chat-panel"
+import { creditUnits } from "@/lib/credit-units"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 
@@ -890,8 +891,8 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
       )}
 
       <div className="mt-6 text-xs text-zinc-500 dark:text-zinc-400">
-        Estimated cost: {pipeline?.upfront_credit_estimate ?? "—"} credits ·
-        Spent: {pipeline?.spent_credits ?? 0}
+        Estimated cost: {pipeline?.upfront_credit_estimate != null ? creditUnits(pipeline.upfront_credit_estimate) : "—"} credits ·
+        Spent: {creditUnits(pipeline?.spent_credits ?? 0)}
       </div>
 
       <div className="mt-4">

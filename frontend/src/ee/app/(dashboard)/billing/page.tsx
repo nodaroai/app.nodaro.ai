@@ -27,6 +27,7 @@ import {
   statLabel,
 } from "@/ee/components/billing/billing-styles"
 import { useT, tx } from "@/lib/i18n"
+import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
 
 /**
  * MiniApp earnings — preserved from the previous billing page (self-hides
@@ -59,7 +60,7 @@ function EarningsSection() {
           <div key={stat.label}>
             <div style={{ ...statLabel, marginBottom: 6 }}>{stat.label}</div>
             <div style={{ fontSize: 20, fontWeight: 700 }}>
-              {formatCredits(stat.value)} CR
+              {formatCredits(creditUnits(stat.value))} {creditUnitLabel()}
             </div>
           </div>
         ))}
@@ -85,7 +86,7 @@ function EarningsSection() {
                 </span>
               </div>
               <span style={{ color: "var(--blg-pos)", fontWeight: 500 }}>
-                +{formatCredits(item.totalEarned)} CR
+                +{formatCredits(creditUnits(item.totalEarned))} {creditUnitLabel()}
               </span>
             </div>
           ))}

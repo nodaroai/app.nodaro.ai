@@ -11,6 +11,7 @@ import { toast } from "sonner"
 import { createClient } from "@/lib/supabase"
 import { getTemplateBySlug, cloneTemplate, getModelCreditCost } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
+import { formatCreditUnits } from "@/lib/credit-units"
 import { useAuth } from "@/hooks/use-auth"
 import { TutorialShell } from "@/components/tutorials/tutorial-shell"
 import { getTutorial } from "@/components/tutorials/tutorial-registry"
@@ -136,7 +137,7 @@ export default function TutorialPage() {
   const credits = startCostModel
     ? (startCost ?? 0)
     : (template.estimatedCredits ?? 0)
-  const costChip = hasCredits() ? (startCostModel ? `${credits} CR to start` : `${credits} CR`) : null
+  const costChip = hasCredits() ? (startCostModel ? `${formatCreditUnits(credits)} to start` : formatCreditUnits(credits)) : null
 
   const chips = [
     `${steps.length} steps`,

@@ -1105,12 +1105,15 @@ Every money figure and per-category `amount` is `number | null` / a nullable
 money object: a `null` means **unavailable**, never `0`. Render a `null`
 distinctly (e.g. an em dash), never as a free/zero cost.
 
-**Cost summary response (`POST /v1/jobs/cost-summary`).** The money fields
-`total_credits` and `total_cost_usd` (top-level and per breakdown row) are
-`number | null`, and the response carries an `unavailable` count (jobs the
-metering authority could not price). A `null` total means **no** job in the
-batch had a known charge — it is NOT `0`. Render a `null` value distinctly
-(e.g. an em dash), never as a free/zero cost.
+**Cost summary response (`POST /v1/jobs/cost-summary`).** The credit field
+`total_credits` (top-level and per breakdown row) is `number | null`, the
+response carries `unit` — the registered provider's display unit the credit
+figures are denominated in — and an `unavailable` count (jobs the metering
+authority could not price). A `null` total means **no** job in the batch had a
+known charge — it is NOT `0`. Render a `null` value distinctly (e.g. an em
+dash), never as a free/zero cost. `total_cost_usd` (top-level and per row) is
+**admin-only**, like every USD figure across api/sdk/mcp: for a non-admin
+caller the key is absent (not `null`).
 
 ## 13. Job batch polling
 

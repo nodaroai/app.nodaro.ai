@@ -2,6 +2,7 @@ import { useState } from "react"
 import { toast } from "sonner"
 import { startLoadCheckout } from "@/lib/checkout"
 import { creditsForLoadUsd, MIN_LOAD_USD, MAX_LOAD_USD } from "@/lib/pricing-data"
+import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
 import {
   CYAN_TEXT,
   MONO_FONT,
@@ -36,7 +37,7 @@ export function BuyPacksSection() {
     return {
       usd,
       credits: credits ?? 0,
-      perCredit: credits ? `$${(usd / credits).toFixed(4)} / credit` : "",
+      perCredit: credits ? `$${(usd / creditUnits(credits)).toFixed(4)} / ${creditUnitLabel("credit")}` : "",
       popular: usd === POPULAR_PACK_USD,
     }
   })
@@ -54,7 +55,7 @@ export function BuyPacksSection() {
 
   const amountHint =
     customCredits !== null
-      ? `≈ ${formatCredits(customCredits)} credits · added to top-up`
+      ? `≈ ${formatCredits(creditUnits(customCredits))} credits · added to top-up`
       : customUsd
         ? `$${MIN_LOAD_USD}–$${MAX_LOAD_USD}, whole dollars`
         : "goes to top-up · valid for 12 months"
@@ -128,9 +129,9 @@ export function BuyPacksSection() {
                 fontVariantNumeric: "tabular-nums",
               }}
             >
-              {formatCredits(pack.credits)}
+              {formatCredits(creditUnits(pack.credits))}
             </div>
-            <div style={{ fontSize: 12, color: "var(--blg-t2-dim)", marginTop: 2 }}>credits</div>
+            <div style={{ fontSize: 12, color: "var(--blg-t2-dim)", marginTop: 2 }}>{creditUnitLabel("credits")}</div>
             <div style={{ fontSize: 19, fontWeight: 700, marginTop: 14 }}>
               ${pack.usd}
             </div>

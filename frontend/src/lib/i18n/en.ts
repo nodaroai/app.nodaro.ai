@@ -297,7 +297,7 @@ export const en = {
   "apps.monetizationDefaults": "Monetization Defaults",
   "apps.defaultPricing": "Default Pricing",
   "apps.defaultPricingDesc": "Applied to new MiniApps when monetization is first enabled.",
-  "apps.flatFee": "Flat Fee (CR)",
+  "apps.flatFee": "Flat Fee ({u})",
   "apps.percentage": "Percentage (%)",
   "apps.saving": "Saving...",
   "apps.saveDefaults": "Save Defaults",
@@ -325,7 +325,7 @@ export const en = {
   "apps.clickToUnlist": "Click to unlist from marketplace",
   "apps.clickToList": "Click to list on marketplace",
   "apps.runs": "{n} runs",
-  "apps.crRunSuffix": "CR/run",
+  "apps.crRunSuffix": "{u}/run",
   "apps.baseLabel": "Base:",
   "apps.totalLabel": "Total:",
   "apps.favorites": "{n} favorites",
@@ -365,7 +365,7 @@ export const en = {
   "apps.listedMarketplaceDesc": "Make discoverable in the MiniApps browse page",
   "apps.monetization": "Monetization",
   "apps.monetizationDesc": "Charge a markup when others run your MiniApp",
-  "apps.monetizationCalc": "If this MiniApp costs {base} CR to run, users will pay {total} CR",
+  "apps.monetizationCalc": "If this MiniApp costs {base} {u} to run, users will pay {total} {u}",
   "apps.useMyDefaults": "Use my defaults",
   "apps.saveChanges": "Save Changes",
   "apps.nameRequired": "Name is required",
@@ -443,7 +443,7 @@ export const en = {
   "cost.col.model": "Model",
   "cost.col.runs": "Runs",
   "cost.col.perRunDollars": "$/Run",
-  "cost.col.perRunCredits": "CR/Run",
+  "cost.col.perRunCredits": "{u}/Run",
   "cost.col.total": "Total",
 
   // ── Usage / billing account summary (generic, provider-driven) ───────────
@@ -485,7 +485,7 @@ export const en = {
   "node.discardRunCreditsNote": "If a job can't be completed, its credits are refunded automatically.",
   "node.dontAskAgain": "Don't ask again",
   "node.keepRunning": "Keep running",
-  "node.creditsSuffix": "({n} CR)",
+  "node.creditsSuffix": "({n} {u})",
   "node.model": "Model",
   "node.multiProvider": "Multi-provider — open settings to edit cohort",
   "node.versionsPerRun": "Versions per run",
@@ -1127,7 +1127,7 @@ export const en = {
   "marketplace.listed": "Listed",
   "marketplace.unlisted": "Unlisted",
   "marketplace.runsCount": "{n} runs",
-  "marketplace.crPerRun": "CR/run",
+  "marketplace.crPerRun": "{u}/run",
   "marketplace.favsCount": "{n} favs",
   "marketplace.open": "Open",
   "marketplace.restore": "Restore",
@@ -1150,9 +1150,9 @@ export const en = {
   "marketplace.listedDesc": "Make discoverable in the component browser",
   "marketplace.monetizationTitle": "Monetization",
   "marketplace.monetizationDesc": "Charge a markup when others use this component",
-  "marketplace.flatFeeLabel": "Flat fee (CR)",
+  "marketplace.flatFeeLabel": "Flat fee ({u})",
   "marketplace.percentLabel": "Percentage (%)",
-  "marketplace.costSummary": "Base cost: {base} CR | Users will pay: {pay} CR",
+  "marketplace.costSummary": "Base cost: {base} {u} | Users will pay: {pay} {u}",
   "marketplace.saveChanges": "Save Changes",
 
   // ── Add-node / connect popup + node categories + handles ──
@@ -1916,6 +1916,12 @@ export const en = {
   "credits.processing": "Processing...",
   "credits.unit.one": "credit",
   "credits.unit.other": "credits",
+  // The SHORT unit label a site passes as `{u}` to the keys above/below, via
+  // creditUnitLabel(t("credits.unitShort")) — the deployment's display unit
+  // replaces it when one is configured (Phase B). "cr" (lowercase) is what
+  // credits.perCreditSuffix used; every other site said "CR".
+  "credits.unitShort": "CR",
+  "credits.unitShortLower": "cr",
   "credits.amount": "({n} {unit})",
   "credits.insufficientTooltip": "Insufficient credits (need {need}, have {have})",
   "credits.getMoreCreditsTitle": "Get More Credits",
@@ -1929,7 +1935,7 @@ export const en = {
   "credits.subscribeMonthlyTitle": "Subscribe for Monthly Credits",
   "credits.upgradePlanTitle": "Upgrade Your Plan",
   "credits.buyPacksTitle": "Buy Credit Packs",
-  "credits.perCreditSuffix": "/cr",
+  "credits.perCreditSuffix": "/{u}",
 
   // ── Workflow run toasts (every run — orchestration) ─────────────────────
   "run.noExecutableNodes": "No executable nodes found. Add Generate Image, Image to Video, or Video to Video nodes.",
@@ -1970,7 +1976,7 @@ export const en = {
   "run.statusRunning": "Running",
   "run.statusPending": "Pending",
   "run.progressDone": "{completed}/{total} done",
-  "run.creditsShort": "{credits} CR",
+  "run.creditsShort": "{credits} {u}",
   "run.discardMenu": "Discard (save to Library, off canvas)",
   "run.stopAfterCurrentMenu": "Stop after current node",
 

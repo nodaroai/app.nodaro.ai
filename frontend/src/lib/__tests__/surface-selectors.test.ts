@@ -71,3 +71,50 @@ describe("surface selectors — empty means inherit, non-empty means narrow", ()
     expect(surfaceAuthMethods(["email", "google"])).toEqual(["email"])
   })
 })
+
+import {
+  surfaceCreditUnitLabel,
+  surfaceCreditUnitRate,
+  surfaceCreditUnitDecimals,
+  surfaceCreditsToUnits,
+  surfaceBillingSelfServe,
+  surfaceCostTabHidden,
+} from "../surface-selectors"
+
+describe("billing display-unit selectors (Phase B) — mainline literals by default", () => {
+  it("unconfigured: label \"CR\", rate 1, 0 decimals, self-serve on, cost tab inherited — conversion is identity", () => {
+    expect(surfaceCreditUnitLabel()).toBe("CR")
+    expect(surfaceCreditUnitRate()).toBe(1)
+    expect(surfaceCreditUnitDecimals()).toBe(0)
+    expect(surfaceBillingSelfServe()).toBe(true)
+    expect(surfaceCostTabHidden()).toBe(false)
+    for (const n of [0, 1, 12, 500, 123456]) expect(surfaceCreditsToUnits(n)).toBe(n)
+  })
+
+  it("configured: relabels and converts, rounding once at the configured decimals", () => {
+    window.__NODARO_RUNTIME__ = {
+      surface: { billing: { costTab: "hidden", selfServe: false, unitLabel: "קרדיטים", unitRate: 2000 } },
+    }
+    expect(surfaceCreditUnitLabel()).toBe("קרדיטים")
+    expect(surfaceCreditUnitRate()).toBe(2000)
+    expect(surfaceCreditsToUnits(12)).toBe(24000)
+    expect(surfaceCreditsToUnits(0)).toBe(0)
+    expect(surfaceBillingSelfServe()).toBe(false)
+    expect(surfaceCostTabHidden()).toBe(true)
+
+    window.__NODARO_RUNTIME__ = { surface: { billing: { costTab: "inherit", selfServe: true, unitLabel: "u", unitRate: 0.5, unitDecimals: 1 } } }
+    expect(surfaceCreditUnitDecimals()).toBe(1)
+    expect(surfaceCreditsToUnits(3)).toBe(1.5)
+    expect(surfaceCreditsToUnits(1)).toBe(0.5)
+  })
+
+  it("null / undefined / non-finite never become a number (§5.2 rule 1)", () => {
+    window.__NODARO_RUNTIME__ = { surface: { billing: { costTab: "inherit", selfServe: true, unitLabel: "u", unitRate: 2000 } } }
+    expect(surfaceCreditsToUnits(null)).toBeNull()
+    expect(surfaceCreditsToUnits(undefined)).toBeNull()
+    expect(surfaceCreditsToUnits(Number.NaN)).toBeNull()
+    expect(surfaceCreditsToUnits(Number.POSITIVE_INFINITY)).toBeNull()
+    delete window.__NODARO_RUNTIME__
+    expect(surfaceCreditsToUnits(null)).toBeNull()
+  })
+})

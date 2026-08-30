@@ -21,6 +21,7 @@ import {
 } from "@/lib/api"
 import { Card } from "@/components/ui/card"
 import { hasCredits } from "@/lib/edition"
+import { creditUnits, formatCreditUnits } from "@/lib/credit-units"
 import { useT } from "@/lib/i18n"
 
 type PeriodKey = "today" | "last7Days" | "last30Days" | "allTime"
@@ -110,7 +111,7 @@ export default function AppAnalyticsPage() {
         <div className="grid grid-cols-3 gap-4 mb-4">
           <Card className="p-4">
             <p className="text-xs text-muted-foreground">{t("apps.analytics.totalEarned")}</p>
-            <p className="text-lg font-semibold">{earnings.totalEarned} CR</p>
+            <p className="text-lg font-semibold">{formatCreditUnits(earnings.totalEarned)}</p>
           </Card>
           <Card className="p-4">
             <p className="text-xs text-muted-foreground">{t("apps.analytics.paidRuns")}</p>
@@ -118,7 +119,7 @@ export default function AppAnalyticsPage() {
           </Card>
           <Card className="p-4">
             <p className="text-xs text-muted-foreground">{t("apps.analytics.thisMonth")}</p>
-            <p className="text-lg font-semibold">{earnings.thisMonth} CR</p>
+            <p className="text-lg font-semibold">{formatCreditUnits(earnings.thisMonth)}</p>
           </Card>
         </div>
       )}
@@ -127,7 +128,7 @@ export default function AppAnalyticsPage() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-8">
         <StatCard icon={Activity} label={t("apps.analytics.totalRuns")} value={currentPeriod.totalRuns} />
         <StatCard icon={Users} label={t("apps.analytics.uniqueRunners")} value={currentPeriod.uniqueRunners} />
-        <StatCard icon={Coins} label={t("apps.analytics.creditsUsed")} value={currentPeriod.totalCredits} />
+        <StatCard icon={Coins} label={t("apps.analytics.creditsUsed")} value={creditUnits(currentPeriod.totalCredits)} />
         <StatCard icon={CheckCircle2} label={t("apps.analytics.successful")} value={currentPeriod.successfulRuns} color="text-emerald-500" />
         <StatCard icon={XCircle} label={t("apps.analytics.failed")} value={currentPeriod.failedRuns} color="text-red-500" />
       </div>

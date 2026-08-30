@@ -16,6 +16,8 @@ import {
 } from "@/lib/pricing-data"
 import { toast } from "sonner"
 import { useT } from "@/lib/i18n"
+import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
+import { surfaceBillingSelfServe } from "@/lib/surface-selectors"
 
 interface GetCreditsModalProps {
   open: boolean
@@ -37,6 +39,9 @@ export function GetCreditsModal({
   const [loadingId, setLoadingId] = useState<string | null>(null)
 
   const isFree = tier === "free"
+  // Subscribe/upgrade and the packs sell the platform's credits — withheld on
+  // a deployment without self-serve purchase; the cost/balance line stays.
+  const selfServe = surfaceBillingSelfServe()
 
   // Show tiers above current as upgrade options
   const currentTierIndex = PRICING_TIERS.findIndex((pt) => pt.id === tier)
@@ -64,8 +69,8 @@ export function GetCreditsModal({
             {t("credits.getMoreCreditsTitle")}
           </DialogTitle>
           <p className="text-sm text-muted-foreground">
-            {t("credits.appCostPrefix")} <strong>{required}</strong> {t("credits.appCostSuffix")}
-            {" "}{t("credits.youHavePrefix")} <strong>{balance}</strong> {t("credits.unit.other")}
+            {t("credits.appCostPrefix")} <strong>{creditUnits(required)}</strong> {t("credits.appCostSuffix")}
+            {" "}{t("credits.youHavePrefix")} <strong>{creditUnits(balance)}</strong> {creditUnitLabel(t("credits.unit.other"))}
             {required > 0 ? (
               <>
                 {" "}{t("credits.enoughForPrefix")} <strong>{Math.floor(balance / required)}</strong>{" "}
@@ -80,7 +85,7 @@ export function GetCreditsModal({
 
         <div className="space-y-6 py-2">
           {/* Section 1: Subscribe / Upgrade */}
-          {upgradeTiers.length > 0 && (
+          {selfServe && upgradeTiers.length > 0 && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-medium flex items-center gap-2">
@@ -137,7 +142,7 @@ export function GetCreditsModal({
                           )}
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          {t("pricing.creditsPerMoShort", { n: upTier.credits.toLocaleString() })}
+                          {t("pricing.creditsPerMoShort", { n: creditUnits(upTier.credits).toLocaleString() })}
                         </p>
                       </div>
                       <div className="flex items-center gap-3 shrink-0">
@@ -160,37 +165,42 @@ export function GetCreditsModal({
           )}
 
           {/* Section 3: Top-up packs */}
-          <div className="space-y-3">
-            <h3 className="text-sm font-medium flex items-center gap-2">
-              <CreditCard className="w-4 h-4" />
-              {t("credits.buyPacksTitle")}
-            </h3>
-            <div className="grid grid-cols-2 gap-2">
-              {TOPUP_PACKAGES.map((pkg) => (
-                <button
-                  key={pkg.id}
-                  type="button"
-                  onClick={() => handleCheckout(pkg.priceId, "payment")}
-                  disabled={loadingId === pkg.priceId}
-                  className={`relative flex flex-col items-center rounded-lg border p-3 transition-all hover:border-[#ff0073]/50 hover:bg-[#ff0073]/5 ${
-                    pkg.popular
-                      ? "border-[#ff0073]/30 bg-[#ff0073]/5"
-                      : "border-border"
-                  } ${loadingId === pkg.priceId ? "opacity-60 pointer-events-none" : ""}`}
-                >
-                  {pkg.popular && (
-                    <span className="absolute -top-2 right-2 rounded-full bg-[#ff0073] px-2 py-0.5 text-[10px] font-medium text-white">
-                      {t("pricing.popular")}
+          {selfServe && (
+            <div className="space-y-3">
+              <h3 className="text-sm font-medium flex items-center gap-2">
+                <CreditCard className="w-4 h-4" />
+                {t("credits.buyPacksTitle")}
+              </h3>
+              <div className="grid grid-cols-2 gap-2">
+                {TOPUP_PACKAGES.map((pkg) => (
+                  <button
+                    key={pkg.id}
+                    type="button"
+                    onClick={() => handleCheckout(pkg.priceId, "payment")}
+                    disabled={loadingId === pkg.priceId}
+                    className={`relative flex flex-col items-center rounded-lg border p-3 transition-all hover:border-[#ff0073]/50 hover:bg-[#ff0073]/5 ${
+                      pkg.popular
+                        ? "border-[#ff0073]/30 bg-[#ff0073]/5"
+                        : "border-border"
+                    } ${loadingId === pkg.priceId ? "opacity-60 pointer-events-none" : ""}`}
+                  >
+                    {pkg.popular && (
+                      <span className="absolute -top-2 right-2 rounded-full bg-[#ff0073] px-2 py-0.5 text-[10px] font-medium text-white">
+                        {t("pricing.popular")}
+                      </span>
+                    )}
+                    <span className="text-lg font-bold">{creditUnits(pkg.credits)}</span>
+                    <span className="text-xs text-muted-foreground">{creditUnitLabel(t("credits.unit.other"))}</span>
+                    <span className="mt-1 text-sm font-semibold">${pkg.price}</span>
+                    <span className="text-[10px] text-muted-foreground">
+                      ${(pkg.price / creditUnits(pkg.credits)).toFixed(4)}
+                      {t("credits.perCreditSuffix", { u: creditUnitLabel(t("credits.unitShortLower")) })}
                     </span>
-                  )}
-                  <span className="text-lg font-bold">{pkg.credits}</span>
-                  <span className="text-xs text-muted-foreground">{t("credits.unit.other")}</span>
-                  <span className="mt-1 text-sm font-semibold">${pkg.price}</span>
-                  <span className="text-[10px] text-muted-foreground">{pkg.perCredit}{t("credits.perCreditSuffix")}</span>
-                </button>
-              ))}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>

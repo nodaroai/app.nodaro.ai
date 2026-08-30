@@ -32,6 +32,7 @@ import { GetCreditsModal } from "@/ee/components/credits/GetCreditsModal"
 import { useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
 import { useAppRunnerStore } from "@/hooks/use-app-runner-store"
 import { hasCredits } from "@/lib/edition"
+import { formatCreditUnits } from "@/lib/credit-units"
 import { useAuth, refreshAuth, setAuthFromTokens } from "@/hooks/use-auth"
 import { useWorkflowStore, type PresentationViewMode, type PresentationSettings } from "@/hooks/use-workflow-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
@@ -1563,7 +1564,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     [outputItems, makeItemsDragEndHandler, handleOutputDragEnd],
   )
 
-  const costLabel = hasCredits() && estimatedCost > 0 ? ` (${estimatedCost} CR)` : ""
+  const costLabel = hasCredits() && estimatedCost > 0 ? ` (${formatCreditUnits(estimatedCost)})` : ""
 
   // Stable reference for ShareDialog nodes prop
   const allPresentationNodes = useMemo(

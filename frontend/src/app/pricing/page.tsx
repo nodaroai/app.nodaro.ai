@@ -15,6 +15,7 @@ import { useSubscription, useChangePlanMutation } from "@/ee/hooks/queries/use-b
 import { useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
 import { TopupSection } from "./topup-section"
 import { useT, type MessageKey } from "@/lib/i18n"
+import { creditUnits } from "@/lib/credit-units"
 
 /**
  * Theme-aware pricing page, ported 1:1 from the designer's Pricing mocks
@@ -371,7 +372,7 @@ export default function PricingPage() {
                     <span style={{ fontSize: 14, color: "var(--blg-t2)" }}>{t("pricing.perMonthShort")}</span>
                   </div>
                   <div style={{ fontFamily: MONO, fontSize: 12.5, letterSpacing: "0.06em", marginTop: 10 }}>
-                    <span style={{ color: PINK, fontWeight: 700 }}>{tier.credits.toLocaleString()}</span>
+                    <span style={{ color: PINK, fontWeight: 700 }}>{creditUnits(tier.credits).toLocaleString()}</span>
                     <span style={{ color: "var(--blg-t2-mono)" }}> {t("pricing.creditsPerMoBadge")}</span>
                   </div>
                   <div
@@ -470,7 +471,7 @@ export default function PricingPage() {
                     <>
                       {t("pricing.onThisPlanPrefix")}{" "}
                       <span style={{ fontWeight: 800 }}>
-                        {t("pricing.freeCreditsCount", { credits: freeTier.credits.toLocaleString() })}
+                        {t("pricing.freeCreditsCount", { credits: creditUnits(freeTier.credits).toLocaleString() })}
                       </span>{" "}
                       {t("pricing.includedAtSignup")}
                     </>
@@ -478,7 +479,7 @@ export default function PricingPage() {
                     <>
                       {t("pricing.tryEverythingPrefix")}{" "}
                       <span style={{ fontWeight: 800 }}>
-                        {t("pricing.freeCreditsCount", { credits: freeTier.credits.toLocaleString() })}
+                        {t("pricing.freeCreditsCount", { credits: creditUnits(freeTier.credits).toLocaleString() })}
                       </span>{" "}
                       {t("pricing.noCreditCardSuffix")}
                     </>

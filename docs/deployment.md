@@ -517,11 +517,28 @@ array empty = "keep the default"):
   Suno vocal-gender tags in the editor hide the disallowed side. Pair with
   `nodes.deny: ["voice-clone","voice-design","voice-remix"]` to remove the
   voice-creation nodes (whose output gender is not knowable up front).
+- `billing` — the billing display surface (a dedicated hosted instance meters
+  in the platform's credits but shows its customer's own unit):
+  - `billing.unitLabel` + `billing.unitRate` (+ optional `billing.unitDecimals`,
+    0–4, default 0): relabel and convert every credit figure — the Cost tab,
+    the usage page, the sidebar balance, canvas estimates, and the `unit` field
+    the billing routes emit. `unitRate` = display units per 1 credit. The three
+    are validated as a unit and dropped together (with a warning) when
+    incoherent: label and rate must both be set; the rate must be a finite
+    number > 0; decimals an integer in 0–4; 1 credit must not round to 0; and
+    `unitRate × 10^unitDecimals` must be an integer so per-charge conversion
+    sums exactly. Unset = the platform's own labels, no conversion.
+  - `billing.costTab`: `"hidden"` keeps the canvas Cost tab off even with a
+    billing provider registered (default `"inherit"`).
+  - `billing.selfServe`: `false` withholds self-serve purchase — the pricing
+    page, buy-packs, `/billing` and every "buy credits" call to action — for a
+    prepaid instance whose users must not buy the platform's credits with a
+    card (default `true`; a present `false` is never flipped open).
 
 Example:
 
 ```bash
-NODARO_SURFACE_PROFILE={"nav":{"hide":["gallery"]},"brand":{"productName":"Studio"},"outputs":{"allowPublic":false},"voice":{"allowedGenders":["male"]}}
+NODARO_SURFACE_PROFILE={"nav":{"hide":["gallery"]},"brand":{"productName":"Studio"},"outputs":{"allowPublic":false},"voice":{"allowedGenders":["male"]},"billing":{"unitLabel":"credits","unitRate":2000,"selfServe":false}}
 ```
 
 **Prompt policy (modesty / content clauses).** A deployment that needs to fold a

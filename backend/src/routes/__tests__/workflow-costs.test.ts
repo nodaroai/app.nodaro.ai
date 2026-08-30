@@ -142,7 +142,9 @@ describe("POST /v1/jobs/cost-summary", () => {
     const res = await app.inject({ method: "POST", url: "/v1/jobs/cost-summary", payload: { jobIds: ["j1"] } })
     const d = res.json().data
     expect(d.total_credits).toBeNull()
-    expect(d.total_cost_usd).toBeNull()
+    // USD is admin-only on this wire (SAI-7): for this non-admin caller the key
+    // is ABSENT — `null` would wrongly say "the authority could not price it".
+    expect("total_cost_usd" in d).toBe(false)
     expect(d.unavailable).toBe(1)
   })
 })

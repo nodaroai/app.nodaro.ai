@@ -10,6 +10,7 @@
  */
 import { useEffect, useRef, useState } from "react"
 import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
+import { creditUnits } from "@/lib/credit-units"
 import { mentionDisplayName, splitWireMessage } from "@/ee/lib/copilot/mentions"
 import { useCopilotStore } from "@/ee/lib/copilot/turn-store"
 import { CopilotActivityRows } from "./copilot-activity"
@@ -132,7 +133,7 @@ export function CopilotConversation({
       )}
       {insufficient && (
         <div className="text-[11.5px] text-[var(--copilot-fail)] px-0.5">
-          Not enough credits — this turn needs {insufficient.required}, you have {insufficient.balance}.
+          Not enough credits — this turn needs {creditUnits(insufficient.required)}, you have {creditUnits(insufficient.balance)}.
         </div>
       )}
       {turn.creditsCharged !== null && turn.creditsCharged > 0 && (

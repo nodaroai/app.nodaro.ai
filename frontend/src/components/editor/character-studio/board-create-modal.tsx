@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { STUDIO_CHILD_DIALOG_Z } from "../studio-shell/studio-modal-z"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { formatCreditUnits } from "@/lib/credit-units"
 import { hasCredits } from "@/lib/edition"
 import { optimizedImageUrl } from "@/lib/image"
 import { cn } from "@/lib/utils"
@@ -221,7 +222,7 @@ export function BoardCreateModal({
             </Button>
             <Button type="button" size="sm" disabled={!canGenerate} onClick={handleGenerate}>
               <Sparkles className="size-4" />
-              {hasCredits() && cost > 0 ? `Generate (${cost} CR)` : "Generate"}
+              {hasCredits() && cost > 0 ? `Generate (${formatCreditUnits(cost)})` : "Generate"}
             </Button>
           </div>
         </div>

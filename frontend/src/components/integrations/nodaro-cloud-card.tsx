@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { getAuthHeaders } from "@/lib/api"
 import { isCloud } from "@/lib/edition"
+import { creditUnits } from "@/lib/credit-units"
 import { NodaroScopeDialog, type NodaroProviderPrefs } from "./nodaro-scope-dialog"
 
 /**
@@ -210,7 +211,7 @@ export function NodaroCloudCard() {
             {totalCredits !== null ? (
               <>
                 <span className="block text-sm font-semibold text-gray-900 dark:text-white">
-                  {totalCredits.toLocaleString()} credits
+                  {creditUnits(totalCredits).toLocaleString()} credits
                 </span>
                 <span className="block text-[11px] text-gray-500 dark:text-gray-400">
                   Cloud account balance

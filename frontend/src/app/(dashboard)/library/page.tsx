@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, memo } from "react"
 import { hasCredits } from "@/lib/edition"
+import { surfaceBillingSelfServe } from "@/lib/surface-selectors"
 import { Link } from "react-router-dom"
 import {
   HardDrive,
@@ -375,12 +376,15 @@ export default function LibraryPage() {
             <p className="text-sm text-amber-700 dark:text-amber-400">
               {usagePercent >= 90 ? t("lib.storageWarningFull") : t("lib.storageWarningLow")}
             </p>
-            <Link to="/pricing">
-              <Button size="sm" variant="outline" className="border-amber-500/30 text-amber-700 dark:text-amber-400">
-                <ArrowUpRight className="h-3 w-3 me-1" />
-                {t("lib.upgrade")}
-              </Button>
-            </Link>
+            {/* A prepaid deployment has no self-serve pricing page to send users to. */}
+            {surfaceBillingSelfServe() && (
+              <Link to="/pricing">
+                <Button size="sm" variant="outline" className="border-amber-500/30 text-amber-700 dark:text-amber-400">
+                  <ArrowUpRight className="h-3 w-3 me-1" />
+                  {t("lib.upgrade")}
+                </Button>
+              </Link>
+            )}
           </div>
         )}
       </section>

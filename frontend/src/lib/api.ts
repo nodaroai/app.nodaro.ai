@@ -5423,7 +5423,14 @@ export async function getStats(scope: "user" | "platform" = "user", userId?: str
   })
 }
 
-// Cost summary types
+// Cost summary types.
+//
+// `total_cost_usd` is OPTIONAL: the route emits it for admins only (SAI-7 —
+// USD is admin-only across api/sdk/mcp, key absent for everyone else). `null`
+// keeps its own meaning, "the authority could not price this". `unit` is the
+// registered provider's display unit and rides WITH the figures (H13): render
+// a credit figure from this object next to THIS unit, never next to a label
+// derived elsewhere.
 export interface CostBreakdownItem {
   readonly node_type: string
   readonly model: string
@@ -5431,14 +5438,15 @@ export interface CostBreakdownItem {
   readonly successful: number
   readonly failed: number
   readonly total_credits: number | null
-  readonly total_cost_usd: number | null
+  readonly total_cost_usd?: number | null
   readonly avg_credits_per_run: number | null
   readonly unavailable: number
 }
 
 export interface CostSummary {
   readonly total_credits: number | null
-  readonly total_cost_usd: number | null
+  readonly total_cost_usd?: number | null
+  readonly unit?: string
   readonly total_jobs: number
   readonly unavailable: number
   readonly breakdown: readonly CostBreakdownItem[]
@@ -5460,7 +5468,10 @@ export function mergeCostSummaries(summaries: readonly CostSummary[]): CostSumma
   let creditsSum = 0, creditsKnown = false
   let usdSum = 0, usdKnown = false
   let total_jobs = 0, unavailable = 0
+  // One authority answers every batch, so the first unit seen is the unit.
+  let unit: string | undefined
   for (const s of summaries) {
+    unit ??= s.unit
     if (s.total_credits != null) { creditsSum += s.total_credits; creditsKnown = true }
     if (s.total_cost_usd != null) { usdSum += s.total_cost_usd; usdKnown = true }
     total_jobs += s.total_jobs
@@ -5489,6 +5500,7 @@ export function mergeCostSummaries(summaries: readonly CostSummary[]): CostSumma
   return {
     total_credits: creditsKnown ? creditsSum : null,
     total_cost_usd: usdKnown ? roundUsd(usdSum) : null,
+    ...(unit !== undefined ? { unit } : {}),
     total_jobs, unavailable, breakdown,
   }
 }
