@@ -1,7 +1,28 @@
+import type { FastifyInstance } from "fastify"
 import { createHash } from "node:crypto"
 import { z, type ZodType } from "zod"
-import { LLM_MODEL_IDS, LLM_REASONING_EFFORTS, LLM_TEXT_INPUT_MAX } from "@nodaro/shared"
-import { LLM_ADVANCED_SHAPE } from "../lib/llm-advanced-mode.js"
+import {
+  buildLlmCreditIdentifier,
+  getLlmModel,
+  resolveLlmCreditId,
+  LLM_FEATURE_DEFAULTS,
+  LLM_MODEL_IDS,
+  LLM_REASONING_EFFORTS,
+  LLM_TEXT_INPUT_MAX,
+} from "@nodaro/shared"
+import { maybeProxyLlmRouteToCloud } from "../lib/cloud-llm-proxy.js"
+import { supabase } from "../lib/supabase.js"
+import { insertJob } from "../lib/insert-job.js"
+import { config } from "../lib/config.js"
+import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { llmCompleteStructured } from "../lib/llm-client.js"
+import { LLM_ADVANCED_SHAPE, advancedModeError, resolveLlmParams } from "../lib/llm-advanced-mode.js"
+import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
+import { buildJobInputData } from "../lib/job-input-data.js"
+import { formatZodError } from "../lib/zod-error.js"
+import { sendInternalError } from "../lib/http-errors.js"
+import { markProviderCallStart } from "../lib/reconcile/persistence.js"
+import { commitReservedCreditsForJob, refundReservedCreditsForJob } from "../lib/credits-job-lifecycle.js"
 
 /**
  * POST /v1/llm/structured — one forced-schema LLM call, any caller's JSON
@@ -140,3 +161,133 @@ export const llmStructuredBody = z.object({
   origin: z.string().max(64).optional(),
   ...LLM_ADVANCED_SHAPE,
 })
+
+export async function llmStructuredRoutes(app: FastifyInstance) {
+  app.post(
+    "/v1/llm/structured",
+    { preHandler: creditGuard((req) => resolveLlmCreditId("llm-structured", req.body)) },
+    async (req, reply) => {
+      // Keyless install with a live connection: the cloud runs the same code,
+      // so forward the body and pass its answer straight back. FIRST, before
+      // any local row — the proxy mirrors its own job from the cloud's answer,
+      // so an insert ahead of it leaves an orphan and a local reservation
+      // beside the cloud's billing.
+      if (await maybeProxyLlmRouteToCloud(req, reply, "/v1/llm/structured", "llm-structured")) return
+
+      const parsed = llmStructuredBody.safeParse(req.body)
+      if (!parsed.success) {
+        return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
+      }
+      const { system, input, schemaName } = parsed.data
+      const userId = req.userId
+      if (!userId) {
+        return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
+      }
+      // Text-only structured output — either LLM key works (mirrors text-to-picker).
+      if (!config.KIE_API_KEY && !config.ANTHROPIC_API_KEY) {
+        return reply.status(503).send({ error: { code: "provider_unavailable", message: "LLM API key not configured" } })
+      }
+
+      // No `llm-structured` entry in LLM_FEATURE_DEFAULTS: the route is generic
+      // and has no opinion about the task, so it borrows the generic chat
+      // default. Billing is a separate axis and uses its OWN feature id below.
+      const llmModelId = parsed.data.llmModel ?? LLM_FEATURE_DEFAULTS["llm-chat"]
+      const model = getLlmModel(llmModelId)
+      if (!model) {
+        return reply.status(400).send({ error: { code: "validation_error", message: "Unknown llmModel" } })
+      }
+      const advancedError = advancedModeError(parsed.data, model.id)
+      if (advancedError) return reply.status(400).send({ error: advancedError })
+      // `deriveParams` floors the output cap UP when reasoning shares the
+      // budget but never clamps it DOWN, so an over-cap value would reach the
+      // vendor and be rejected there — after the credits are reserved. Refuse
+      // it here, where nothing has been spent.
+      if (parsed.data.maxTokens !== undefined && parsed.data.maxTokens > model.maxOutputTokens) {
+        return reply.status(400).send({
+          error: {
+            code: "validation_error",
+            message: `maxTokens ${parsed.data.maxTokens} exceeds the ${model.id} output limit of ${model.maxOutputTokens}`,
+          },
+        })
+      }
+      const converted = convertJsonSchema(parsed.data.jsonSchema)
+      if ("error" in converted) {
+        return reply.status(400).send({ error: { code: "validation_error", message: converted.error } })
+      }
+
+      const modelIdentifier = buildLlmCreditIdentifier(
+        "llm-structured",
+        llmModelId,
+        parsed.data.reasoningEffort,
+        parsed.data.advancedMode,
+      )
+
+      const { data: job, error: jobError } = await insertJob(req, {
+        workflow_id: extractWorkflowId(req.body),
+        node_id: extractNodeId(req.body),
+        force_private: extractForcePrivate(req.body) || undefined,
+        user_id: userId,
+        status: "pending",
+        input_data: {
+          ...buildJobInputData(parsed.data, "llm-structured"),
+          // Route-side overrides of the spread (the helper's doc sanctions
+          // them): a 100k-char system prompt and a 64 KB schema PER ROW is not
+          // something to store, and neither is needed to answer "what config
+          // produced this result" — the digest identifies the prompt, the head
+          // makes it recognisable in the admin job view.
+          system: digestText(system),
+          jsonSchema: {
+            name: schemaName ?? null,
+            bytes: Buffer.byteLength(JSON.stringify(parsed.data.jsonSchema), "utf8"),
+          },
+        },
+      })
+      if (jobError) {
+        return sendInternalError(reply, req, jobError, "Failed to create job")
+      }
+
+      const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
+      if (reply.sent) return
+      void reservation
+
+      await markProviderCallStart(job.id, "anthropic-sync")
+
+      try {
+        const { output, inputTokens, outputTokens } = await llmCompleteStructured(
+          {
+            modelId: model.id,
+            system,
+            messages: [{ role: "user", content: input }],
+            reasoningEffort: parsed.data.reasoningEffort,
+            timeoutMs: STRUCTURED_LLM_TIMEOUT_MS,
+            // The caller's maxTokens is the DEFAULT, not an Advanced-only
+            // lever: a generic route has no tuned literal of its own to
+            // protect, and text-to-picker's bare resolveLlmParams(parsed.data)
+            // would discard the value outside Advanced mode.
+            ...resolveLlmParams(parsed.data, { maxTokens: parsed.data.maxTokens }),
+          },
+          converted.schema,
+          { schemaName, maxRetries: parsed.data.maxRetries },
+        )
+        const usage = { inputTokens, outputTokens }
+
+        await supabase
+          .from("jobs")
+          .update({ status: "completed", output_data: { output, ...usage } })
+          .eq("id", job.id)
+          .eq("user_id", userId)
+        await commitReservedCreditsForJob(job.id)
+
+        // Usage rides the RESPONSE, not just output_data (text-to-picker's
+        // choice): a synchronous caller sizing its next prompt should not have
+        // to fetch the job row to learn what the last one cost it.
+        return reply.send({ jobId: job.id, output, usage })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Structured generation failed"
+        await supabase.from("jobs").update({ status: "failed", output_data: { error: message } }).eq("id", job.id).eq("user_id", userId)
+        await refundReservedCreditsForJob(job.id)
+        return reply.status(502).send({ error: { code: "llm_error", message } })
+      }
+    },
+  )
+}
