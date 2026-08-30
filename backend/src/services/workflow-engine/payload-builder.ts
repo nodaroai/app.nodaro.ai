@@ -219,6 +219,14 @@ function buildConnectedRefsForGenerate(
  * against (P3). Without this the orchestrator stamped `defaultName: id`
  * (`wired_0`, the raw node id) and a mention that resolved on a frontend
  * single-node Run shipped as literal text through the identical DAG run.
+ *
+ * An UNNAMED node falls back to its TYPE, not its id — again mirroring the
+ * frontend — so an unlabelled `upload-image` node is mentionable as
+ * `@upload-image:1`. That is deliberate: excluding the type fallback here would
+ * make the two engines resolve different mention sets.
+ *
+ * Only applied when the caller's node-id → URL zip is provably 1:1; see the
+ * `wiredZipIsOneToOne` guard at the `chainRefs` walk.
  */
 function buildRefNameLookup(
   buildCtx: PayloadBuildContext | undefined,
@@ -1822,6 +1830,10 @@ export function buildPayload(
       // Wired upstream images — use source node IDs as keys (matching frontend)
       const chainRefs = resolvedInputs.referenceImageUrls
         ?? (resolvedInputs.imageUrl ? [resolvedInputs.imageUrl] : undefined)
+      // Is the `wiredSourceIds` ↔ `chainRefs` zip below actually 1:1? See the
+      // long note at its assignment — it gates the NAME lookup only, never the
+      // keys themselves.
+      let wiredZipIsOneToOne = true
       if (chainRefs) {
         const imageSourceTypes = new Set(["upload-image", "generate-image", "edit-image", "image-to-image", "modify-image", "upscale-image", "remove-background", "extract-frame"])
         const wiredSourceIds = (buildCtx?.edges ?? [])
@@ -1829,6 +1841,30 @@ export function buildPayload(
           .map((e) => (buildCtx?.nodes ?? []).find((n) => n.id === e.source))
           .filter((n): n is SimpleNode => !!n && imageSourceTypes.has(n.type))
           .map((n) => n.id)
+        // The zip is POSITIONAL and only correct when every URL in `chainRefs`
+        // came from a DISTINCT `imageSourceTypes` upstream, in edge order. Two
+        // shapes break it, both real: an upstream that contributes MORE than one
+        // URL (`reference-sheet` spreads its whole `panels` set, `generate-script`
+        // its whole `images` set — see input-resolver), and an upstream whose
+        // type is not in the set at all (both of those, again) — either shifts
+        // every later position.
+        //
+        // Mis-keying used to be inert: the id only fed `referenceImageOrder`
+        // matching. P3 made the id carry the source node's LABEL, and the label
+        // is exactly what `@<name-slug>:<index>` binds to — so a shifted zip
+        // would silently bind a mention to the WRONG image, with no error.
+        //
+        // Guard, not repair: the keys stay byte-identical (repairing them would
+        // move `referenceImageOrder` matching under every existing graph), and
+        // a non-1:1 zip simply forfeits the NAME lookup below. The mention then
+        // finds nothing to bind and stays literal text — pre-P3 behavior, and
+        // the safe direction to fail in.
+        //
+        // Known bound of the heuristic: a URL-contributing NON-image upstream
+        // paired with an image-type upstream that contributes ZERO URLs gives
+        // equal lengths while still being misaligned. Constructible, not
+        // reachable through the two confirmed multi-URL sources above.
+        wiredZipIsOneToOne = wiredSourceIds.length === chainRefs.length
         for (let i = 0; i < chainRefs.length; i++) {
           const key = wiredSourceIds[i] ?? `wired_${i}`
           refUrlMap.set(key, chainRefs[i])
@@ -1921,7 +1957,12 @@ export function buildPayload(
           orderIds,
           wiredLocRefs,
           wiredObjCreatureRefs,
-          buildRefNameLookup(buildCtx),
+          // Names ONLY when the `wiredSourceIds` ↔ `chainRefs` zip is 1:1 —
+          // otherwise a node id in `refUrlMap` points at another node's URL and
+          // the label would bind a mention to the wrong image (see the guard's
+          // note at the zip). Empty map ⇒ every entry keeps its id as its name,
+          // byte-identically to before P3, and the mention stays literal.
+          wiredZipIsOneToOne ? buildRefNameLookup(buildCtx) : new Map(),
         ),
         ...extraRefEntries,
       ]
