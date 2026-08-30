@@ -275,6 +275,18 @@ describe("cinematography fields (angle / speed / onScreenText / look)", () => {
     }
   })
 
+  it("vocabulary v2 carries the twelve common edits, and the wire neutral is not a member", () => {
+    // rev 1.5 Appendix F: absent = nothing asserted; `none` is wire-local to the
+    // analyser's roll schema and must never reach the canonical enum.
+    expect([...VIDEO_ANALYSIS_TRANSITIONS]).toEqual([
+      "cut", "fade", "dissolve", "wipe", "whip",
+      "zoom", "slide", "white-flash", "digital-glitch", "morph", "match", "jump",
+    ])
+    expect(VIDEO_ANALYSIS_TRANSITIONS).not.toContain("none" as never)
+    expect(windowAnalysisSchema.safeParse({ slots: [slot], scenes: [{ ...baseScene, transitionOut: "none" }] }).success).toBe(false)
+    expect(windowAnalysisSchema.safeParse({ slots: [slot], scenes: [{ ...baseScene }] }).success).toBe(true)
+  })
+
   it("marks the viewpoints where no face is visible — auto-cast reads this", () => {
     // A reference frame shot from behind cannot cast a face, however well framed.
     expect([...VIDEO_ANALYSIS_FACELESS_ANGLES].sort()).toEqual(["from-behind", "over-the-shoulder"])

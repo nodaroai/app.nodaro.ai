@@ -84,8 +84,20 @@ export type VideoAnalysisVisualEffect = (typeof VIDEO_ANALYSIS_VISUAL_EFFECTS)[n
  * `dissolve` (a cross-fade from one image to the other) is distinct from `fade`
  * (through black or white). Collapsing both onto `fade` — as this enum did — makes
  * a recreation render the wrong edit, and the two look nothing alike.
+ *
+ * ABSENT means NOTHING ASSERTED (since v2): the analyser emits a value only
+ * when it can see the device; an unknown or uncertain edit is left out so the
+ * video model chooses. `cut` is itself an assertion (an instant change between
+ * two clearly different shots), never a default.
  */
-export const VIDEO_ANALYSIS_TRANSITIONS = ["cut", "fade", "dissolve", "wipe", "whip"] as const
+export const VIDEO_ANALYSIS_TRANSITIONS = [
+  "cut", "fade", "dissolve", "wipe", "whip",
+  // v2 (2026-08-30, recast shot craft rev 1.5 Appendix F): the common edits a
+  // creator actually cuts with. `white-flash` / `digital-glitch` are spelled
+  // out because `flash` / `glitch` already name in-shot EFFECTS (the axis test
+  // below) — a device is the edit BETWEEN two shots, an effect is on one shot.
+  "zoom", "slide", "white-flash", "digital-glitch", "morph", "match", "jump",
+] as const
 export type VideoAnalysisTransition = (typeof VIDEO_ANALYSIS_TRANSITIONS)[number]
 
 /**
