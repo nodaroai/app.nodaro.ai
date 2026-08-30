@@ -1,5 +1,128 @@
 # @nodaro/prompts
 
+## 1.11.0
+
+### Minor Changes
+
+- d746992: feat(assemble-image-input): the canvas executors honor a node's stored `direction` / `structured`.
+
+  `readDirectionFields` / `readStructuredFields` are new public exports: narrow,
+  throw-free readers that turn untrusted persisted node data into the typed levers
+  `assembleImageInput` already accepts. `readDirectionFields` iterates the
+  direction registry, so a dimension added there is honored by construction, and
+  it accepts `string | string[]` on every key, bounded by the SAME two constants
+  the wire schema enforces — `DIRECTION_ID_MAX_CHARS` (also a new export) and
+  `DIRECTION_ARRAY_CEILING`, imported rather than re-typed per door, so a body the
+  route accepts and the same node re-run from the canvas cannot start disagreeing
+  about which strings are ids. Bounding cardinality is load-bearing, not hygiene:
+  node data is validated only as `z.record(z.string(), z.unknown())` on write, and
+  `renderDirectionHints` de-dupes with an `includes` scan, so an unbounded stored
+  array would put quadratic work in front of the per-dimension slice — for the
+  orchestrator, on every payload build. `renderDirectionHints` now also stops
+  scanning a key once `maxPicks` unique ids are in hand (same output, linear
+  cost). `readStructuredFields` validates field by field, which is what keeps junk
+  from rendering verbatim into the recorded prompt. The frontend single-node executor, the orchestrator's
+  `generate-image` payload builder, and the config-panel final-prompt preview all
+  read through them, so a graph that carries picker IDS (rather than baked hint
+  text) folds identically on every path and stays editable on the canvas.
+
+  No prompt text changed for a node that carries no `direction` / `structured`
+  key — which is every workflow authored before this release: `composePromptText`
+  still returns such a prompt verbatim and untrimmed, and the platform-caller
+  parity fixtures are unchanged. A node that DOES carry them is trimmed and
+  `". "`-joined, additively with the hints from any wired Framing/Lighting/Style
+  picker node, and is not gated by the node's Inject Look switch (that switch
+  documents wired handles; stored direction is node-local look data like `style`).
+
+- 988ba38: feat(prompts): the direction registry — one ordered table for every cinematic dimension the `direction` channel carries.
+
+  `assembleImageInput` accepted exactly five cinematic ids — `framingId`, `framingAngleId`, `lightingId`, `lensId`, `cameraFormatId` — folded by five hardcoded `get*PromptHint` calls. Every other dimension a client offers (style, mood, aesthetic, the five lighting categories, the three exposure categories, photographer, atmosphere, post-process, setting, era, backdrop, …) had nowhere to ride, so each client baked those clauses into the prompt TEXT itself. A production copied between clients therefore froze whatever wording was current the day it was written, and the platform could not improve a hint for anyone who had already generated. `DIRECTION_FIELDS` is the replacement: a 42-row table where the wire carries ids and the platform renders the clauses.
+
+  - **The wire vocabulary is the platform's own field names** — `shotSize`, `lightingStyle`, `isoValue`, `style`, `mood`, `cameraMotion`, the names `SINGLE_PICKER_WIRING[].valueField` and the four `*_FIELD_BY_CATEGORY` maps already use. A Studio-emitted graph and a hand-built canvas node speak ONE vocabulary for one catalog.
+  - **`DIRECTION_KEYS` exports the canonical fold order**, so a client's "will inject into prompt" preview can render the exact server output instead of re-implementing the fold and drifting from it.
+  - **Multi-pick is honored per dimension** (`maxPicks`), and the three BLEND catalogs go through their own builders: two moods become the single `buildMoodHints` clause, not two paragraphs — likewise `buildAestheticHints` and `buildPhotographerHints`.
+  - **`renderDirectionHints(direction, { surface, mode })` is the one renderer.** It iterates the TABLE, never the caller's object, so unknown wire keys are ignored, off-surface dimensions are inert, and unknown ids are silently skipped (every `get*PromptHint` returns `""` on a miss) rather than rejected. `joinPromptHints` is extracted beside it so the image and video composers share one measured join.
+  - **De-dupe by exact clause, first occurrence wins.** This is what lets the five legacy WHOLE-catalog keys coexist with their canonical counterparts without an alias table: `framingId` + `shotSize` carrying the same id emits one clause, while `lightingId: "dawn"` beside `lightingStyle: "rembrandt"` correctly emits both — they are different ids in the same catalog, and an alias table would have wrongly suppressed one.
+  - **`/v1/generate-image`'s `direction` schema is now derived from the table** (`backend/src/lib/direction-schema.ts`), deliberately tolerant: non-strict (an unknown key is stripped, never a 400), `string | string[]` to a flat ceiling with the per-dimension cap applied at render, and no `.min(1)` — the previous schema accepted the empty string. Two bounds are deliberately NOT tolerant, and both are a new 400 relative to the previous unbounded `z.string().optional()` ids: more than 8 entries in one key's array, and an id longer than 100 characters (previously parsed fine, rendered no clause, and returned 200). The asymmetry with `.min(1)` is the point — an empty string is realistic legacy input a client actually stores, a 101-character "catalog id" is not an id, and the channel lands verbatim in `jobs.input_data`.
+  - **`DirectionFields` widens from `string` to `string | readonly string[]`** on every key. Safe, and the reason for a minor rather than a patch: the only reader was `composePromptText` itself.
+
+  Clause text is unchanged for every key, AND the five pre-existing keys keep their exact fold order (the legacy block is placed LAST in the table), so every existing caller whose input the schema still accepts (see the two new bounds above) is byte-identical — with one degenerate exception: a caller that sent the SAME id on two keys of one catalog (e.g. `framingId` and `framingAngleId` both `"wide-shot"`) emitted that clause twice and now emits it once. New keys are inert until a client sends them.
+
+  Two things to know before adopting: a client that renders mood / aesthetic / photographer by flat-mapping per id will see ONE blended clause where it used to see several (that is the platform doctrine, now applied server-side); and `get*PromptHint` reads the frozen base arrays, so ids added by a deployment-registered catalog pack resolve to `""` and contribute no clause — identical to the behavior of the five keys that shipped before this table, not a new limitation.
+
+- e40d384: feat(prompts,shared): named-image mentions — `@<name-slug>:<index>[:<role>]`
+
+  A wired image (`wired-image` / `manual` reference) can now be addressed inline by
+  the slug of its name — an upload node's label on the canvas, or the name a thin
+  client puts on the reference — the same way characters and locations already are.
+  `@town:3` renders the reference's binding at the position it was typed
+  (`reference image C`); `@town:3:background` renders the role phrase
+  (`the background from reference image C`). Model-facing rendering is unchanged:
+  lettered bindings on the image path.
+
+  - `@nodaro/shared` gains `imageMentionSlug`, `parseImageMentionToken`,
+    `findImageMentionTokens`, `knownImageSlugsFromRefs`, `imageMentionSlugForRef`
+    and the `ImageMentionTokenInfo` type. This is a DELIBERATE give-away to the public
+    tier: the SDK and every thin client must share one grammar with the resolver,
+    so the parser lives in `shared` while all prompt-assembly logic stays in
+    `@nodaro/prompts`. Grammar is 2–3 segments (no variants, no buckets, no usage
+    modes) plus the additive `~lock` / `~nolock` sentinel; a 4-part token is never
+    claimed, so an unresolved character mention (`@kira:1:smile:face`) can never be
+    mis-captured as a 3-part image mention with `:face` left dangling. The same
+    guard covers the location grammar's `/` separator: `@lib:1:weather/rain` is
+    never claimed as the truncated `@lib:1:weather`, while `@town:1/@barn:2` still
+    resolves both. No new `ConnectedReference` field — the slug derives from
+    `defaultName`, so nothing changes on the wire and the reference schema is
+    untouched.
+  - `toConnectedReference` gains `kind: "image"`, the SDK interface point for a
+    thin client binding an uploaded image.
+  - `buildImagePrompt` resolves image mentions as Phase-0 pass 3, after characters
+    and locations. Pass order is precedence: a name shared with a character
+    resolves as the character. Duplicate image slugs bind first-wins, matching
+    `buildTileIdForUrl` — every unrenamed upload node shares its default label, so
+    ties are the common case rather than an edge.
+  - HYBRID only. Under the legacy reference format an `@name:N` token stays literal
+    text and the reference attaches exactly as before, so
+    `IMAGE_REFERENCE_FORMAT=legacy` reverts the feature entirely.
+
+  No prompt text changed for any prompt that carries no `@<image-name>` mention:
+  the Phase-0 arm is gated on TOKEN presence rather than slug presence, so an
+  unmentioned graph never enters the mention path and its prompt and
+  `referenceImageUrls` are byte-identical. Prompts that DO carry a mention
+  intentionally re-seat that reference's letter — its URL moves from the trailing
+  auto-attach block into the mention block, which re-letters everything after it.
+  That is the point of the feature, not a regression.
+
+  A capped-out reference degrades silently: `imageReferenceLimit(provider)`
+  truncates `connectedReferences` before Phase 0, so a mention whose reference was
+  capped out falls through as literal text — matching how a capped character
+  mention behaves today.
+
+- df7adc4: feat(video): the video routes gain a structured `direction` channel — picker ids on the wire, hint text rendered server-side.
+
+  `/v1/generate-video` had no structured direction channel at all, so every client that offered a look or a motion baked the catalog hint TEXT into the prompt itself. Three consequences, all of them permanent for the user: a scene copied between clients froze whatever wording was current the day it was written; a re-generate re-baked the same clauses on top of the already-baked ones; and the platform could never improve a hint for anyone who had already generated. `composeVideoPromptText` moves the fold to where the model call is.
+
+  - **New `composeVideoPromptText(userPrompt, direction, structured?, opts?)`** (`assemble-video-input.ts`) — the video twin of the image side's `composePromptText`. It folds catalog ids into the prompt BODY through the shared `renderDirectionHints` on `surface: "video"`, so the two surfaces cannot drift; the dimension table, the fold order and the dedupe stay in the direction registry.
+  - **The verbosity policy moves server-side.** `VIDEO_HINT_MODE_DEFAULT = { look: "full", motion: "compact" }` — motion dimensions inject their short professional term (`"cross-dissolve"`), look dimensions their full clause. It is a threaded parameter with a pure default, overridable per call via `opts.hintMode`, never deployment state.
+  - **`/v1/generate-video` and `/v1/text-to-video` accept `direction`**, the same registry-derived schema `/v1/generate-image` already uses — 35 dimensions on the video surface, `cameraMotion` first. Surface is a rendering concern, not a validation one: a stills-only key (`aperture`, `photographer`, …) is accepted here and simply contributes no clause, so one client-side look map serves both surfaces unchanged.
+  - **`/v1/extend-video` deliberately gets no channel** — its prompt continues an existing clip, where re-stating the look is the wrong lever.
+  - **The fold runs before reference assembly.** `resolveVideoReferenceCore` frames the body — the legacy format prepends its `Use these characters:` block, hybrid appends the canonical role phrases — so folding afterwards would strand the scene description past the identity directives. Both framings are pinned by test.
+  - **`jobs.input_data` keeps the source and the render apart**: `prompt` is what the model received, `userPrompt` is what the caller submitted (the empty string on a direction-only run with no prompt), and `direction` is the submitted ids verbatim.
+  - **A composed prompt over the provider's ceiling now logs a warning.** The provider clamp cuts the TAIL and video ceilings are tight (kling: 1000 characters); the truncation was always there and is no longer silent. The threshold is the EFFECTIVE ceiling, not the raw model cap: for a provider without a native negative param the clamp folds the negative in as a `"\nAvoid: …"` suffix and reserves its room first, so the base prompt is cut at `cap - suffix`. Budget-aware verbosity degradation is a deliberate follow-up, not part of this change.
+  - **New total guard `direction-hint-token-safety.test.ts`** proves no registered catalog's `promptHint`, `term` or `label` contains `{image:N}` / `{video:N}` / `{audio:N}`, `{ref:` or an `@slug:N` mention (case-insensitively, matching the `i`-flagged passes; `label` is in scope because the multi-pick blend renderers weave labels verbatim into the clause). Those three patterns are INPUT grammar the reference passes rewrite — ruling them out is what makes folding ahead of the reference resolver legal, and it closes the one path from this text-only fold to the assembled reference count that MiniMax-H3 credit prediction reserves against, so pricing is provably untouched. The guard also rejects the resolver's OUTPUT binding form `@image_N` for hygiene; nothing re-parses that shape, so it carries no pricing weight either way.
+
+  No prompt text changed for any caller that sends no `direction`: with no direction and no structured fields the composer returns the caller's prompt verbatim and untrimmed, `undefined` included, so both routes are byte-identical on the flat path.
+
+  One tolerance boundary worth stating plainly, because the schema's tolerance is otherwise total: unknown KEYS inside a `direction` object are stripped and unknown IDS are skipped, never 400'd — but a non-object `direction` VALUE (`"left"`, `0`, `true`, `null`, `[]`) is now a `validation_error` on both video routes, where before it was an unknown body key and was silently dropped. No caller in the platform, the SDK, the MCP verbs or studio sends `direction` on a video route at all, and `/v1/generate-image` set the identical precedent when its channel shipped.
+
+  One thing to know before adopting: a client MOVING an existing client-side fold onto this channel will see its wording change. The platform joins clauses with `". "` in the registry's canonical dimension order, blends mood / aesthetic into one clause rather than flat-mapping per id, and renders motion compact — where a client typically joined its own way in its own order. That is the point of the change. Import `renderDirectionHints` + `joinPromptHints` for a "will inject into prompt" preview that renders exactly what the server will.
+
+### Patch Changes
+
+- Updated dependencies [a136e52]
+- Updated dependencies [e40d384]
+  - @nodaro/shared@2.16.0
+
 ## 1.10.0
 
 ### Minor Changes
