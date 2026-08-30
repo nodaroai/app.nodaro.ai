@@ -275,6 +275,72 @@ describe("mention-free graphs are byte-identical to the pre-change tree", () => 
 })
 
 /**
+ * CROSS-GRAMMAR: a LOCATION `bucket/variant` token must never be claimed — not
+ * even in truncated form — by the image pass. The image pass is the only one of
+ * the three that SPLICES its match, so a truncated claim does not merely fail
+ * to resolve, it corrupts the model-facing prompt with a dangling `/variant`.
+ */
+describe("a location bucket/variant token is never claimed by the image pass", () => {
+  const oldLibraryImage: ConnectedReference = {
+    id: "n3", defaultName: "Old Library", source: "wired-image",
+    url: "https://cdn/old-library-photo.png",
+  }
+
+  it("images-only graph: the whole token stays literal, no `/rain` left dangling", () => {
+    const out = buildImagePrompt({
+      prompt: "a shot of @old-library:1:weather/rain",
+      connectedReferences: [oldLibraryImage],
+      provider: "nano-banana-pro",
+      referenceFormat: "hybrid",
+    })
+    expect(out.prompt).toContain("@old-library:1:weather/rain")
+    // The corruption this pins shut: the truncated claim spliced
+    // `@old-library:1:weather` and left `/rain` welded to the binding phrase.
+    expect(out.prompt).not.toContain("reference image A/rain")
+    expect(out.prompt).not.toContain("/rain\n")
+  })
+
+  it("4-part location token (variant + mode) is left alone too", () => {
+    const out = buildImagePrompt({
+      prompt: "a shot of @old-library:1:weather/rain:style",
+      connectedReferences: [oldLibraryImage],
+      provider: "nano-banana-pro",
+      referenceFormat: "hybrid",
+    })
+    expect(out.prompt).toContain("@old-library:1:weather/rain:style")
+  })
+
+  it("PRECEDENCE: a shared name + an unresolvable variant does not demote the location to slot B", () => {
+    // The location pass leaves the token alone (the node carries no
+    // `weather/rain` variant); the image pass must not then mangle it, bind the
+    // upload to slot A and push the user's actual location image to slot B.
+    const out = buildImagePrompt({
+      prompt: "a shot of @old-library:1:weather/rain",
+      connectedReferences: [library, oldLibraryImage],
+      provider: "nano-banana-pro",
+      referenceFormat: "hybrid",
+    })
+    expect(out.prompt).toContain("@old-library:1:weather/rain")
+    expect(out.referenceImageUrls[0]).toBe("https://cdn/library.png")
+  })
+
+  it("a slash BETWEEN two image mentions still resolves both", () => {
+    const out = buildImagePrompt({
+      prompt: "@town:1/@plaza:2",
+      connectedReferences: [town, plaza],
+      provider: "nano-banana-pro",
+      referenceFormat: "hybrid",
+    })
+    expect(out.prompt).not.toContain("@town")
+    expect(out.prompt).not.toContain("@plaza")
+    expect(out.referenceImageUrls).toEqual([
+      "https://cdn/town.png",
+      "https://cdn/plaza.png",
+    ])
+  })
+})
+
+/**
  * LEGACY (the kill-switch path). `IMAGE_REFERENCE_FORMAT=legacy` reverts the
  * whole leg: there is no legacy image resolver, so a token stays literal text
  * and the reference attaches exactly as it does today.

@@ -12,7 +12,7 @@ import { usageModeDirective, DEFAULT_USAGE_MODE, type UsageMode } from "@nodaro/
 import { roleToPhrase, defaultRoleForSource, REFERENCE_ROLE_PRESETS, normalizeRoleSlug, resolveDefaultRole } from "@nodaro/shared"
 import { buildIdentityLockLine, withForcedIdentityLock } from "./identity-lock.js"
 import { findLocationMentionTokens, DEFAULT_LOCATION_USAGE_MODE, type LocationMentionTokenInfo, type LocationUsageMode } from "@nodaro/shared"
-import { findImageMentionTokens, imageMentionSlug, knownImageSlugsFromRefs, type ImageMentionTokenInfo } from "@nodaro/shared"
+import { findImageMentionTokens, imageMentionSlugForRef, knownImageSlugsFromRefs, type ImageMentionTokenInfo } from "@nodaro/shared"
 import type { CharacterDef, ConnectedReference, IdentityFidelity, IdentityMeta, ReferenceSource, SceneData } from "@nodaro/shared"
 import { locationReferencePhotoKindLabel, type LocationReferencePhotoKind } from "@nodaro/shared"
 
@@ -702,8 +702,10 @@ interface ResolveImageMentionsHybridResult {
   prompt: string
   /** Matched image URLs in mention order (deduped by the caller). */
   additionalUrls: string[]
-  /** Slugs that had at least one resolved mention. */
-  mentionedImageSlugs: Set<string>
+  /** NO `mentionedImageSlugs` — the location result's analog exists to FILTER
+   *  mentioned refs out of `connectedReferences`, and this pass deliberately
+   *  does no such filtering (see the caller's NOTE). Carrying the set anyway
+   *  would advertise a filter that does not exist. */
   /** Per-reference identity-lock lines (deduped per URL). Caller prepends them
    *  as ONE block, merged with the character/location lock lines. */
   lockLines: string[]
@@ -751,19 +753,17 @@ function resolveImageMentionsHybrid(
 ): ResolveImageMentionsHybridResult {
   const bySlug = new Map<string, ConnectedReference>()
   for (const r of refs) {
-    if (r.source !== "wired-image" && r.source !== "manual") continue
-    // Extras render through `renderExtraRefsHybrid` with their own body lines;
-    // letting a mention also bind one would double-emit prose. Excluded here AND
-    // from `knownImageSlugsFromRefs`, so the two views agree.
-    if (r.isExtraRef === true) continue
-    if (!r.url || !r.defaultName) continue
-    const slug = imageMentionSlug(r.defaultName)
+    // `imageMentionSlugForRef` is the SAME predicate `knownImageSlugsFromRefs`
+    // applies to build the finder's known-slug set — one gate, so this map and
+    // that set can never admit different refs. (It also drops extras, which
+    // render through `renderExtraRefsHybrid` with their own body lines, and
+    // grammar-invalid slugs, where emptiness is NOT the gate.)
+    const slug = imageMentionSlugForRef(r)
     if (!slug) continue
     if (!bySlug.has(slug)) bySlug.set(slug, r)
   }
 
   const additionalUrls: string[] = []
-  const mentionedImageSlugs = new Set<string>()
   const refByUrl = new Map<string, ConnectedReference>()
   // Per-mention `~lock` / `~nolock`: the tri-state lock OVERRIDE per attached
   // URL, fed to `withForcedIdentityLock` below. Only sentinel-bearing mentions
@@ -775,7 +775,6 @@ function resolveImageMentionsHybrid(
     const match = bySlug.get(t.imageSlug)
     if (!match || !match.url) continue
     additionalUrls.push(match.url)
-    mentionedImageSlugs.add(t.imageSlug)
     refByUrl.set(match.url, match)
     if (t.lock !== undefined) lockOverrideByUrl.set(match.url, t.lock)
     const role = (t.role ?? "").trim()
@@ -818,7 +817,7 @@ function resolveImageMentionsHybrid(
     if (inject) elementDirectives.push(inject)
   }
 
-  return { prompt: resolvedPrompt, additionalUrls, mentionedImageSlugs, lockLines, elementDirectives }
+  return { prompt: resolvedPrompt, additionalUrls, lockLines, elementDirectives }
 }
 
 /**
