@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAuth } from "@/hooks/use-auth"
 import { useWorkflowCostSummary } from "@/hooks/queries/use-editor-queries"
-import { useBillingSurface } from "@/hooks/use-billing-surface"
 import { isValidUuid } from "@/lib/uuid"
 import { useT } from "@/lib/i18n"
 import {
@@ -154,10 +153,15 @@ export function CostTab({ className = "" }: CostTabProps) {
   const nodes = useWorkflowStore((s) => s.nodes)
   const jobIds = useMemo(() => collectJobIds(nodes), [nodes])
   const { data: summary, isLoading: loading, error, refetch } = useWorkflowCostSummary(jobIds)
-  // Rule 3 — the display unit follows the metering authority, not isCloud():
-  // a credits authority defaults to credits, everyone else to their own unit.
-  const { surface } = useBillingSurface()
-  const [showDollars, setShowDollars] = useState(surface.displayUnit !== "credits")
+  // The ONE rule for showing a dollar figure (SAI-8 / A3, D4): an admin, and an
+  // explicit toggle they turned on. `showDollars` used to be seeded from
+  // `surface.displayUnit !== "credits"` while only the toggle BUTTON was
+  // admin-gated — so any provider whose unit was not the literal "credits"
+  // landed every user on the raw-USD view with no control to leave it. The
+  // surface's unit is a label now, never a boolean seed; the route no longer
+  // even sends USD to a non-admin (SAI-7), so `dollars` is belt-and-braces.
+  const [showDollars, setShowDollars] = useState(false)
+  const dollars = isAdmin && showDollars
 
   // Empty state - no executions at all (or no job IDs so query is disabled)
   if (shouldShowEmptyState({ loading, summary, error })) {
@@ -189,20 +193,20 @@ export function CostTab({ className = "" }: CostTabProps) {
                     variant="outline"
                     size="sm"
                     onClick={() => setShowDollars((prev) => !prev)}
-                    className={`h-8 px-2.5 dark:border-[#2D2D2D] ${showDollars ? "bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30" : ""}`}
+                    className={`h-8 px-2.5 dark:border-[#2D2D2D] ${dollars ? "bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30" : ""}`}
                   >
-                    {showDollars ? (
+                    {dollars ? (
                       <DollarSign className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                     ) : (
                       <Coins className="w-4 h-4 text-[#ff0073]" />
                     )}
                     <span className="ml-1.5 text-xs font-medium">
-                      {showDollars ? "$" : "CR"}
+                      {dollars ? "$" : "CR"}
                     </span>
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
-                  <p>{showDollars ? t("cost.toggleDollars") : t("cost.toggleCredits")}</p>
+                  <p>{dollars ? t("cost.toggleDollars") : t("cost.toggleCredits")}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -240,7 +244,7 @@ export function CostTab({ className = "" }: CostTabProps) {
           <div className="mb-6 p-5 rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E]">
             <div className="flex items-baseline gap-3">
               <span className="text-3xl font-bold text-[#ff0073] font-mono">
-                {showDollars ? formatDollarsN(summary.total_cost_usd) : formatCreditsN(summary.total_credits)}
+                {dollars ? formatDollarsN(summary.total_cost_usd ?? null) : formatCreditsN(summary.total_credits)}
               </span>
               <span className="text-sm text-gray-500 dark:text-[#94A3B8]">
                 {summary.total_jobs === 1 ? t("cost.totalFromRun") : t("cost.totalFromRuns", { n: summary.total_jobs })}
@@ -268,7 +272,7 @@ export function CostTab({ className = "" }: CostTabProps) {
                     {t("cost.col.runs")}
                   </th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                    {showDollars ? t("cost.col.perRunDollars") : t("cost.col.perRunCredits")}
+                    {dollars ? t("cost.col.perRunDollars") : t("cost.col.perRunCredits")}
                   </th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
                     {t("cost.col.total")}
@@ -294,14 +298,14 @@ export function CostTab({ className = "" }: CostTabProps) {
                       )}
                     </td>
                     <td className="px-4 py-3 text-right text-gray-500 dark:text-[#94A3B8] font-mono">
-                      {showDollars
+                      {dollars
                         ? formatDollarsN(item.runs > 0 && item.total_cost_usd != null ? item.total_cost_usd / item.runs : null)
                         : item.avg_credits_per_run == null
                           ? "—"
                           : `${item.avg_credits_per_run} CR` /* credit-gated: Cost tab mounts behind the billing-surface gate */}
                     </td>
                     <td className="px-4 py-3 text-right text-[#ff0073] font-mono font-medium">
-                      {showDollars ? formatDollarsN(item.total_cost_usd) : formatCreditsN(item.total_credits)}
+                      {dollars ? formatDollarsN(item.total_cost_usd ?? null) : formatCreditsN(item.total_credits)}
                     </td>
                   </tr>
                 ))}
@@ -317,7 +321,7 @@ export function CostTab({ className = "" }: CostTabProps) {
                   </td>
                   <td />
                   <td className="px-4 py-3 text-right text-[#ff0073] font-mono font-bold">
-                    {showDollars ? formatDollarsN(summary.total_cost_usd) : formatCreditsN(summary.total_credits)}
+                    {dollars ? formatDollarsN(summary.total_cost_usd ?? null) : formatCreditsN(summary.total_credits)}
                   </td>
                 </tr>
               </tfoot>

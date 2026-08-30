@@ -5,6 +5,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { requireScope } from "../lib/scopes.js"
 import { getBillingProvider, type Charge } from "../lib/billing-provider.js"
+import { sanitizeCostSummaryForPublic } from "./jobs.js"
 
 const costSummaryBody = z.object({
   jobIds: z.array(z.string().min(1)).min(1).max(500),
@@ -130,14 +131,22 @@ export async function workflowCostRoutes(app: FastifyInstance) {
       }))
       .sort((a, b) => (b.total_credits ?? -1) - (a.total_credits ?? -1))
 
-    return {
-      data: {
-        total_credits: creditsKnown ? creditsSum : null,
-        total_cost_usd: usdKnown ? Math.round(usdSum * 1_000_000) / 1_000_000 : null,
-        total_jobs: totalJobs,
-        unavailable,
-        breakdown,
-      },
+    // The unit the credit figures are denominated in, as the registered
+    // provider states it — it rides WITH the figures (H13) so a client renders
+    // the pair from one layer and never pairs a converted number with a label
+    // it derived elsewhere.
+    const unit = getBillingProvider().displayUnit
+
+    const data = {
+      total_credits: creditsKnown ? creditsSum : null,
+      total_cost_usd: usdKnown ? Math.round(usdSum * 1_000_000) / 1_000_000 : null,
+      unit,
+      total_jobs: totalJobs,
+      unavailable,
+      breakdown,
     }
+    // USD is admin-only across api/sdk/mcp (same boundary as sanitizeJobForPublic):
+    // non-admins get the key absent, never a null they could misread as "free".
+    return { data: sanitizeCostSummaryForPublic(data, isAdmin) }
   })
 }

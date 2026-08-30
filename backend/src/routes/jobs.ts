@@ -210,6 +210,36 @@ export function sanitizeJobForPublic(job: JobRecord, isAdmin: boolean): JobRecor
   return rest
 }
 
+/**
+ * The cost-summary twin of sanitizeJobForPublic (SAI-7 / A2).
+ *
+ * POST /v1/jobs/cost-summary was the one money route that skipped this
+ * convention: `total_cost_usd` — top-level and per breakdown row — went to
+ * every authenticated caller, while the same USD (`display_cost` /
+ * `provider_cost`, which is what the nodaro-cloud provider reports as the
+ * charge's `secondaryAmount`) is stripped from every job row above. The
+ * frontend's admin-only "$" toggle was the only thing between a user and our
+ * provider economics, i.e. one character of client config.
+ *
+ * Non-admins get the key ABSENT — not `null`. `null` already means "the
+ * authority could not price this" (§5.2 rule 1) and must keep meaning that;
+ * absence means "not yours to see". Credits and every count are untouched.
+ * Admins keep the full shape. Lives here, not in workflow-costs.ts, so the
+ * next money route finds the convention where sanitizeJobForPublic is.
+ */
+export function sanitizeCostSummaryForPublic<
+  T extends { total_cost_usd?: number | null; breakdown: readonly { total_cost_usd?: number | null }[] },
+>(summary: T, isAdmin: boolean): T {
+  if (isAdmin) return summary
+  const { total_cost_usd: _usd, ...rest } = summary
+  // Same shape minus one optional key on each level; TS cannot prove that for
+  // an arbitrary T, hence the unknown hop — the redaction test pins it.
+  return {
+    ...rest,
+    breakdown: summary.breakdown.map(({ total_cost_usd: _rowUsd, ...row }) => row),
+  } as unknown as T
+}
+
 export async function jobRoutes(app: FastifyInstance) {
   // Light batch-status endpoint for studio polling (every ~2s).
   // Declared BEFORE /v1/jobs/:id so the literal `status` segment wins

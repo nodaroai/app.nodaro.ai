@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import type { Job } from "@/lib/api"
 import { deleteJob } from "@/lib/api"
 import { isCloud } from "@/lib/edition"
+import { useAuth } from "@/hooks/use-auth"
 import { toast } from "sonner"
 import { CachedImage } from "@/components/ui/cached-image"
 import { WaveformAudioPlayer } from "@/components/audio-player"
@@ -329,6 +330,13 @@ function InputField({ name, value }: InputFieldProps) {
 }
 
 export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollars = !isCloud(), nodeInfo }: ExecutionDetailModalProps) {
+  // Same single rule as the Cost tab (SAI-8 / A3, D4): a dollar figure is shown
+  // to an admin who asked for it, and to nobody else. `showDollars` stays the
+  // caller's REQUEST (a self-hoster's own provider cost is the right figure for
+  // the operator, so off-cloud it defaults on); `isAdmin` decides whether the
+  // request is honoured — a non-admin on a shared instance never sees USD.
+  const { isAdmin } = useAuth()
+  const dollars = showDollars && isAdmin
   const [inputTab, setInputTab] = useState<InputTabType>("form")
   const [outputTab, setOutputTab] = useState<OutputTabType>("preview")
   const [copiedId, setCopiedId] = useState(false)
@@ -676,8 +684,8 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
 
             {/* Cost */}
             <div className="flex items-center gap-1.5 text-sm text-[#ff0073] font-mono">
-              {showDollars ? <DollarSign className="w-4 h-4" /> : <Coins className="w-4 h-4" />}
-              {getCostDisplayForModal(job, showDollars)}
+              {dollars ? <DollarSign className="w-4 h-4" /> : <Coins className="w-4 h-4" />}
+              {getCostDisplayForModal(job, dollars)}
             </div>
 
             {/* Duration */}
