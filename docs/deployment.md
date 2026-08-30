@@ -485,15 +485,18 @@ blocks boot. Unset = the full default surface. The profile can only **narrow** �
 it never turns on a surface the edition gates off. Fields (all optional; each
 array empty = "keep the default"):
 
-- `nav.hide`: `["gallery","explore","pricing","templates","apps","community"]`
+- `nav.hide`: `["gallery","explore","pricing","templates","apps","community","integrations"]`
 - `dashboard.tabs`: one ordered whitelist governing **both** dashboard tab groups —
-  the workspace strip (`workflows`, `projects`) and the app-discovery strip
-  (`apps`, `miniapps`, `templates`, `tutorials`, `statistics`). Each group renders
-  the intersection of this list with its own tabs, in the list's order; a group
-  whose intersection is empty is not rendered at all. So list every tab you want
-  to keep across both strips — e.g. `["workflows","projects","statistics","tutorials"]`
-  keeps the two workspace tabs and trims the app-discovery strip to Statistics and
-  Tutorials. Full key set: `["workflows","projects","apps","miniapps","templates","tutorials","statistics","gallery"]`
+  the workspace strip (`workflows`, `projects`, `studio`) and the app-discovery
+  strip (`apps`, `miniapps`, `templates`, `tutorials`, `statistics`). Each group
+  renders the intersection of this list with its own tabs, in the list's order.
+  An app-discovery strip whose intersection is empty is not rendered at all; the
+  workspace strip instead falls back to all of its tabs when the list names none
+  of them (the dashboard's main list can never go blank). So list every tab you
+  want to keep across both strips — e.g. `["workflows","projects","statistics","tutorials"]`
+  keeps the flat-workflows and projects workspace tabs (hiding the Studio list)
+  and trims the app-discovery strip to Statistics and Tutorials. Full key set:
+  `["workflows","projects","apps","miniapps","templates","tutorials","statistics","gallery","studio"]`
 - `nodes.deny` / `models.deny`: node types / model ids to remove everywhere — the
   picker, `GET /v1/nodes`, `GET /v1/models`, the MCP tools, and at run time (a
   denied node fails with `node_not_available`)
@@ -502,6 +505,11 @@ array empty = "keep the default"):
   family links in the product switcher
 - `brand.productName`: replaces the wordmark and the document title (absent =
   the static `<title>` shipped in `index.html` is left untouched)
+- `brand.wordmark`: short lockup text rendered **beside your own logo mark** in
+  the sidebar header — for a deployment that ships its own `/logo-*.svg` files
+  and wants a tile+text lockup (e.g. productName `"Acme Studio"` with wordmark
+  `"Studio"`). Absent = a custom-branded install keeps the text-only header.
+  `productName` still drives the document title and accessibility name.
 - `brand.description`: replaces the `<meta name="description">` (absent = the
   built-in default is kept)
 - `locale.default` / `locale.picker`
@@ -530,10 +538,15 @@ array empty = "keep the default"):
     sums exactly. Unset = the platform's own labels, no conversion.
   - `billing.costTab`: `"hidden"` keeps the canvas Cost tab off even with a
     billing provider registered (default `"inherit"`).
+  - `billing.sidebarCard`: `"hidden"` removes the sidebar credit-balance card
+    (default `"inherit"`) — for a prepaid instance whose users read balances on
+    the usage page instead of an always-on readout.
   - `billing.selfServe`: `false` withholds self-serve purchase — the pricing
     page, buy-packs, `/billing` and every "buy credits" call to action — for a
     prepaid instance whose users must not buy the platform's credits with a
-    card (default `true`; a present `false` is never flipped open).
+    card (default `true`; a present `false` is never flipped open). A prepaid
+    billing instance renders a **Usage & Cost** sidebar entry (`/usage`) in
+    their place.
 
 Example:
 

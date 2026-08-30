@@ -4,7 +4,7 @@
  * The browser reads the already-validated profile from /config.js — no Zod
  * here; the backend is the authority.
  */
-export type NavKey = "gallery" | "explore" | "pricing" | "templates" | "apps" | "community"
+export type NavKey = "gallery" | "explore" | "pricing" | "templates" | "apps" | "community" | "integrations"
 export const DASHBOARD_TAB_KEYS = [
   "workflows",
   "projects",
@@ -14,6 +14,7 @@ export const DASHBOARD_TAB_KEYS = [
   "tutorials",
   "statistics",
   "gallery",
+  "studio",
 ] as const
 export type DashboardTabKey = (typeof DASHBOARD_TAB_KEYS)[number]
 export type AuthMethod = "email" | "google" | "sso"
@@ -26,6 +27,7 @@ export interface SurfaceSibling {
 /** B2b — the billing display surface (Phase B); see the backend twin. */
 export interface SurfaceBilling {
   costTab: "inherit" | "hidden"
+  sidebarCard: "inherit" | "hidden"
   unitLabel?: string
   unitRate?: number
   unitDecimals?: number
@@ -39,7 +41,7 @@ export interface SurfaceProfile {
   models: { deny: string[] }
   auth: { methods: AuthMethod[]; ssoLabel?: string }
   siblings: { apps: SurfaceSibling[] }
-  brand: { productName: string; description?: string }
+  brand: { productName: string; description?: string; wordmark?: string }
   locale: { default?: string; picker: boolean }
   outputs: { allowPublic: boolean }
   voice: { allowedGenders: string[] } // B4c — [] = all genders allowed (narrowing only)
@@ -58,7 +60,7 @@ export const SURFACE_PROFILE_DEFAULT: SurfaceProfile = {
   locale: { picker: true },
   outputs: { allowPublic: true },
   voice: { allowedGenders: [] },
-  billing: { costTab: "inherit", selfServe: true },
+  billing: { costTab: "inherit", sidebarCard: "inherit", selfServe: true },
 }
 
 function runtimeSurface(): Partial<SurfaceProfile> {

@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils"
-import { surfaceBrandName } from "@/lib/surface-selectors"
+import { surfaceBrandName, surfaceBrandWordmark } from "@/lib/surface-selectors"
 import { SURFACE_PROFILE_DEFAULT } from "@/lib/surface-profile"
 
 interface NodaroLogoProps {
@@ -54,8 +54,27 @@ export function NodaroLogo({
   }
 
   // A custom product name renders as plain text — the Nodaro tile is Nodaro's
-  // own mark and would be wrong next to another brand.
+  // own mark and would be wrong next to another brand. A deployment that ships
+  // its OWN /logo-*.svg files opts into the tile+text lockup by configuring
+  // brand.wordmark (the short text beside the mark, e.g. "Studio"); productName
+  // stays the full name for <title>/meta and accessibility. No dir pin here:
+  // this mark carries no split "N"+"odaro" trick, so the lockup follows the
+  // app direction (mark sits after the text in RTL, before it in LTR).
   if (!isDefaultBrand) {
+    const wordmark = surfaceBrandWordmark()
+    if (wordmark) {
+      return (
+        <span className={cn("inline-flex items-center gap-[6px]", className)}>
+          <span className={cn(ICON_SIZES[size], "inline-flex shrink-0")}>
+            <LogoImg className="h-full w-full" />
+          </span>
+          <span className={cn("font-brand font-bold text-zinc-900 dark:text-white", TEXT_SIZES[size])} aria-hidden="true">
+            {wordmark}
+          </span>
+          <span className="sr-only">{brandName}</span>
+        </span>
+      )
+    }
     return (
       <span dir="ltr" className={cn("inline-flex items-center", className)}>
         <span className={cn("font-brand font-bold text-zinc-900 dark:text-white", TEXT_SIZES[size])}>
