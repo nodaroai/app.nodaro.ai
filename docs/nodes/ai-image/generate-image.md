@@ -175,6 +175,23 @@ up improved phrasing instead of freezing the text your client wrote.
 
 Full semantics: [API integration guide](../../api-integration.md#cinematic-direction-direction-on-generate-image).
 
+### The same ids stored on the node
+
+A Generate Image **node** can carry that same `direction` object (and the
+structured prompt fields `structured`) in its own data, written by an API / MCP
+author or by an app that emits Nodaro graphs. The canvas honors them: a
+single-node run, a whole-workflow run and the config panel's final-prompt
+preview all fold them the same way, once, at the model call — so the graph
+stores ids and the wording is produced fresh each run instead of being frozen
+into the prompt text.
+
+Stored ids are **additive** to any wired Framing / Lighting / Style picker node:
+the wired hint lands first, the stored ids after, exactly as two wired pickers
+of one family behave. A node that carries neither key is untouched — its prompt
+reaches the model byte-for-byte as before. Node presets and workflow
+export/import capture the ids along with the rest of the node, which is
+deliberate: a preset should carry its look.
+
 ## Best Practices
 
 - Use Nano Banana or Z-Image for rapid iteration and storyboarding due to fast generation speed.

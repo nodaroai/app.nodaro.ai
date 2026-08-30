@@ -15,9 +15,9 @@ import type { ConnectedReference } from "@nodaro/shared"
  * `generate-image` assembly through it. These tests pin BOTH layers:
  *   (a) the id-based composition (direction / structured) — ported from
  *       Studio's `assembly.test.ts` as the oracle, and
- *   (b) the BY-CONSTRUCTION PARITY the caller refactor relies on: with no
- *       direction/structured, the wrapper === the old inline `buildImagePrompt`
- *       call + empty-check, byte-for-byte.
+ *   (b) the BY-CONSTRUCTION PARITY the caller refactor relies on: for a node
+ *       that carries no direction/structured, the wrapper === the old inline
+ *       `buildImagePrompt` call + empty-check, byte-for-byte.
  */
 
 // flux-2-max supports reference images (used to assert refs survive the gate).

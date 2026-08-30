@@ -2,7 +2,7 @@ import type { Node, Edge } from "@xyflow/react"
 import { MODIFY_IMAGE_PROVIDERS } from "@nodaro/shared"
 import { MUSIC_GENRE_DEFAULT_DATA, MUSIC_MOOD_DEFAULT_DATA, INSTRUMENTATION_DEFAULT_DATA, VOICE_CHARACTER_DEFAULT_DATA, VOICE_DELIVERY_DEFAULT_DATA } from "@nodaro/prompts"
 import type { ImageI2IProvider, ImageGenProvider, ImageEditProvider, ModifyImageProvider, UpscaleImageProvider, ImageToVideoProvider, TextToVideoProvider, VideoToVideoProvider, VideoGenProvider, VideoUpscaleProvider, ExtendVideoProvider, FaceSwapProvider, TtsProvider, TextToAudioProvider, MusicProvider, TranscribeProvider, LipSyncProvider, ScriptProvider, QaCheckProvider, SunoModel, VoiceDesignModel, VoiceChangerModel, CaptionStyle, ImageCriticMode, ReduceStrategyId, ReduceMeta, SelectorConfig, ScraperActorId, CharacterAspectRatio, AudioFxPreset, LocationReferencePhotoKind as SharedLocationReferencePhotoKind, PipelineFormat, PipelineMode, PipelinePinnableImageModel, PipelinePinnableScriptLlm, PipelinePinnableVideoModel, VideoCriticFrameMode, SceneNodeData as SharedSceneNodeData, PipelineState, ReferenceSheet, SheetType, SheetSkin, SheetFlavour, EntityKind, VideoAnalysisResult, ExposableField, ExposableOutput, ComponentMetadata, IdentityMeta, LlmReasoningEffort } from "@nodaro/shared"
-import type { WardrobeValue, TransitionPosition, TransitionDuration, TransitionIntensity, CharacterFxPosition, CharacterFxDuration, CharacterFxIntensity, PersonValue, PickerApplyMode, PickerGaps } from "@nodaro/prompts"
+import type { WardrobeValue, TransitionPosition, TransitionDuration, TransitionIntensity, CharacterFxPosition, CharacterFxDuration, CharacterFxIntensity, PersonValue, PickerApplyMode, PickerGaps, DirectionFields, StructuredPromptFields } from "@nodaro/prompts"
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 import { IMAGE_STYLE_PRESETS, GVP_PROVIDERS, getAspectRatiosForVideoModel, getVideoResolutionOptions } from "@/components/editor/config-panels/model-options"
 
@@ -1551,6 +1551,19 @@ export type GenerateImageData = PromptAffixFields & {
   suppressedCanonicalLocationIds?: readonly string[]
   /** Per-identity (imageIndex+label) user overrides for fidelity / custom text. */
   identityMeta?: readonly IdentityMeta[]
+  /**
+   * Cinematic-direction catalog IDS (never rendered hint text — the fold is a
+   * render artifact materialized once, server-side, at the model call).
+   * Written by an app that emits Nodaro graphs and by API/MCP authors; folded
+   * into the prompt by `assembleImageInput`. Honored by BOTH the orchestrator
+   * (`payload-builder.ts`) AND the frontend single-node executor
+   * (`execute-node.ts`), and shown in the config panel's final-prompt preview.
+   * ADDITIVE to hints from wired Framing/Lighting/Style picker nodes — the two
+   * are independent look sources, exactly as two wired picker nodes are.
+   */
+  direction?: DirectionFields
+  /** Path-1 structured prompt fields — same stored-ids/fold contract as `direction`. */
+  structured?: StructuredPromptFields
   /** Extra reference images with per-ref descriptions. See `ExtraRef`. */
   extraRefs?: readonly ExtraRef[]
   fieldMappings: FieldMappings

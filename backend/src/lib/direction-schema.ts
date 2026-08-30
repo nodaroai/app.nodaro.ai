@@ -1,5 +1,10 @@
 import { z } from "zod"
-import { DIRECTION_FIELDS, DIRECTION_ARRAY_CEILING, type DirectionKey } from "@nodaro/prompts"
+import {
+  DIRECTION_FIELDS,
+  DIRECTION_ARRAY_CEILING,
+  DIRECTION_ID_MAX_CHARS,
+  type DirectionKey,
+} from "@nodaro/prompts"
 
 /**
  * Route-level Zod mirror of `@nodaro/prompts` `DirectionFields` — the flat
@@ -39,24 +44,25 @@ import { DIRECTION_FIELDS, DIRECTION_ARRAY_CEILING, type DirectionKey } from "@n
  * TWO BOUNDS ARE DELIBERATELY *NOT* TOLERANT, and both are a new 400 relative
  * to the pre-registry 5-key schema (whose `z.string().optional()` ids were
  * unbounded): a value array longer than `DIRECTION_ARRAY_CEILING`, and an id
- * string longer than `DIRECTION_ID_MAX`. The asymmetry with point 3 is the
- * point — the empty string is realistic legacy input a real client stores, a
- * 101-character "catalog id" is not an id at all, and the channel lands
+ * string longer than `DIRECTION_ID_MAX_CHARS`. The asymmetry with point 3 is
+ * the point — the empty string is realistic legacy input a real client stores,
+ * a 101-character "catalog id" is not an id at all, and the channel lands
  * verbatim in `jobs.input_data`. Tolerance is for input someone plausibly sent;
  * these bounds are storage hygiene on input nobody plausibly sent.
+ *
+ * BOTH bounds come from `@nodaro/prompts`, shared with the persisted-node
+ * reader (`read-node-direction.ts`) rather than re-typed per door: the wire and
+ * the canvas must agree on which strings are ids, or a body this route accepts
+ * would silently lose ids when the same node is re-run from the canvas.
  *
  * Unknown IDS are likewise skipped, never rejected: every `get*PromptHint`
  * returns `""` on a miss, so a retired or pack-only id contributes no clause.
  */
 
-/** Catalog ids are short slugs; a generous ceiling that closes an unbounded
- *  string channel landing verbatim in `jobs.input_data`. */
-const DIRECTION_ID_MAX = 100
-
 const directionValue = z
   .union([
-    z.string().max(DIRECTION_ID_MAX),
-    z.array(z.string().max(DIRECTION_ID_MAX)).max(DIRECTION_ARRAY_CEILING),
+    z.string().max(DIRECTION_ID_MAX_CHARS),
+    z.array(z.string().max(DIRECTION_ID_MAX_CHARS)).max(DIRECTION_ARRAY_CEILING),
   ])
   .optional()
 

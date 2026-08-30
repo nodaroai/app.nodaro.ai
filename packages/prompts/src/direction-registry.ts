@@ -265,13 +265,37 @@ export function modeForFamily(mode: DirectionHintMode, family: DirectionFamily):
  */
 export const DIRECTION_ARRAY_CEILING = 8
 
-/** `string | string[]` → deduped, non-empty, capped id list. */
+/**
+ * Tolerance ceiling for the LENGTH of a single direction id. Catalog ids are
+ * short slugs (<= ~40 chars); 100 is generous and closes an otherwise unbounded
+ * string channel that lands verbatim in `jobs.input_data`.
+ *
+ * ONE literal for BOTH doors into the fold — the route's `directionSchema`
+ * (`backend/src/lib/direction-schema.ts`) and the persisted-node reader
+ * (`read-node-direction.ts`) — so the wire and the canvas cannot start
+ * disagreeing about which strings are ids at all.
+ */
+export const DIRECTION_ID_MAX_CHARS = 100
+
+/**
+ * `string | string[]` → deduped, non-empty, capped id list.
+ *
+ * The `ids.length >= maxPicks` bail is load-bearing, not an optimization: the
+ * dedupe is an `includes` scan, so without it the cost is quadratic in the
+ * CALLER's array length — and one caller (`readDirectionFields`) reads
+ * untrusted persisted JSONB. Bailing is semantics-preserving: once `maxPicks`
+ * unique ids exist, no later entry can change the sliced result (and
+ * `maxPicks = 0` still yields `[]`).
+ */
 function normalizeDirectionIds(value: unknown, maxPicks: number): string[] {
   const ids: string[] = []
   if (typeof value === "string") {
     if (value) ids.push(value)
   } else if (Array.isArray(value)) {
-    for (const v of value) if (typeof v === "string" && v && !ids.includes(v)) ids.push(v)
+    for (const v of value) {
+      if (ids.length >= maxPicks) break
+      if (typeof v === "string" && v && !ids.includes(v)) ids.push(v)
+    }
   }
   return ids.slice(0, maxPicks)
 }

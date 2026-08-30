@@ -1,5 +1,6 @@
 import type { IdentityMeta } from "@nodaro/shared"
 import type { AssembleImageInput } from "@nodaro/prompts"
+import { readDirectionFields, readStructuredFields } from "@nodaro/prompts"
 import { collectAncestorRefs } from "@/components/editor/workflow-editor/execution-graph"
 import type {
   WorkflowNode,
@@ -49,8 +50,9 @@ export interface BuildImageAssembleInputArgs {
   /**
    * The already-composed prompt — user prose + cinematography hints + identity
    * clause — exactly as the hook computes `preBuildPrompt`. Passed as
-   * `userPrompt` with NO `direction` / `structured` (the shared composer is a
-   * no-op for those), so the assembled text is byte-identical to the run.
+   * `userPrompt`; the node's STORED `direction` / `structured` ids are read off
+   * `node.data` below (exactly as the run reads them), so the assembled text
+   * stays byte-identical to the run for a node with them and without them.
    */
   readonly composedPrompt: string
   readonly provider: string
@@ -118,6 +120,11 @@ export function buildImageAssembleInput(
   const suppressedCanonicalLocationIds = data.suppressedCanonicalLocationIds as
     | readonly string[]
     | undefined
+  // Stored cinematic direction / structured fields — narrow-read through the
+  // SAME readers the two executors use, so the preview can never accept more
+  // (or less) than a run does.
+  const direction = readDirectionFields(data.direction)
+  const structured = readStructuredFields(data.structured)
 
   return {
     userPrompt: composedPrompt,
@@ -135,5 +142,7 @@ export function buildImageAssembleInput(
     referenceOrder: referenceOrder ?? undefined,
     suppressedCanonicalCharacterIds: suppressedCanonicalCharacterIds ?? undefined,
     suppressedCanonicalLocationIds: suppressedCanonicalLocationIds ?? undefined,
+    direction,
+    structured,
   }
 }
