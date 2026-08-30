@@ -287,6 +287,17 @@ describe("cinematography fields (angle / speed / onScreenText / look)", () => {
     expect(windowAnalysisSchema.safeParse({ slots: [slot], scenes: [{ ...baseScene }] }).success).toBe(true)
   })
 
+  it("round 4: a scene carries a free-text `transition` beside the legacy enum", () => {
+    // F.8: the analyser describes the edit in its own words; the enum is legacy.
+    const ok = windowAnalysisSchema.safeParse({ slots: [slot], scenes: [{ ...baseScene, transition: "fast blurred pan left" }] })
+    expect(ok.success).toBe(true)
+    expect(ok.success && ok.data.scenes[0]!.transition).toBe("fast blurred pan left")
+    expect(windowAnalysisSchema.safeParse({ slots: [slot], scenes: [{ ...baseScene, transition: "" }] }).success).toBe(false)
+    expect(windowAnalysisSchema.safeParse({ slots: [slot], scenes: [{ ...baseScene, transition: "x".repeat(121) }] }).success).toBe(false)
+    // legacy blueprints still parse
+    expect(windowAnalysisSchema.safeParse({ slots: [slot], scenes: [{ ...baseScene, transitionOut: "whip" }] }).success).toBe(true)
+  })
+
   it("marks the viewpoints where no face is visible — auto-cast reads this", () => {
     // A reference frame shot from behind cannot cast a face, however well framed.
     expect([...VIDEO_ANALYSIS_FACELESS_ANGLES].sort()).toEqual(["from-behind", "over-the-shoulder"])
