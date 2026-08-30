@@ -970,14 +970,21 @@ freezing whatever text your client wrote the day it was saved.
   `cameraFormat`, `lens`, `aperture`, `shutterSpeed`, `isoValue`, `timeOfDay`,
   `lightingStyle`, `lightingDirection`, `lightingRatio`, `colorTemperature`,
   `colorLook`, `atmosphere`, `postProcess`, `style`, `mood`, `aesthetic`,
-  `photoGenre`, `photographer`, `renderQuality`, `setting`, `era`, `backdrop`
-  (plus the motion dimensions the video routes fold). Valid ids come from
+  `photoGenre`, `photographer`, `renderQuality`, `setting`, `era`, `backdrop`.
+  (The registry also defines motion dimensions — `cameraMotion`, `actionFx`,
+  the `temporal*` keys, `transition`, `loopSubject` — for the video surface;
+  `POST /v1/generate-video` does not accept a `direction` field yet, so sending
+  one there has no effect today.) Valid ids come from
   [`GET /v1/picker-catalogs`](#picker-catalogs) — the same catalogs the canvas
-  pickers read.
+  pickers read. One caveat on deployments that register catalog **packs**: that
+  endpoint returns the pack-composed catalogs while the fold reads the base
+  catalogs, so a pack-added id is listed and accepted but renders no clause.
 - **Single id or an array.** Multi-pick dimensions (`mood`, `aesthetic`,
   `photographer`, `atmosphere`, `postProcess`, `composition`, `lightingStyle`)
   honor up to their own cap; a single-pick key given an array takes the first
-  entry. Over-sending truncates — it is never a 400.
+  entry. Exceeding a *dimension's* cap truncates rather than 400ing. The two
+  *wire* bounds do reject with a `validation_error`: at most **8** entries per
+  key, and at most **100** characters per id.
 - **Absent ≠ empty.** A missing key means "no hint", never a default. An empty
   string or an empty array contributes nothing, and a `direction` that renders
   no clause leaves your `prompt` byte-for-byte untouched.

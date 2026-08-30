@@ -1030,12 +1030,15 @@ if ("jobId" in result) {
 > `lightingStyle`, `style`, `mood`, `photographer`, `era`, …) the platform folds
 > into the prompt as its own hint clauses, so you send ids and the wording stays
 > platform-owned. Values are a single id or an array (multi-pick dimensions honor
-> their own cap; over-sending truncates rather than 400s). Absent ≠ empty: a
-> missing key means "no hint", an empty `direction` leaves your `prompt`
-> untouched, and unknown keys / unknown ids are skipped silently rather than
-> rejected — so deploy the platform before a client that starts sending new
-> dimensions. Valid ids come from `client.pickerCatalogs.list()`. Full key list
-> and semantics in the
+> their own cap; exceeding a dimension's cap truncates rather than 400ing, while
+> the wire bounds — 8 entries per key, 100 characters per id — do reject).
+> Absent ≠ empty: a missing key means "no hint", an empty `direction` leaves your
+> `prompt` untouched, and unknown keys / unknown ids are skipped silently rather
+> than rejected — so deploy the platform before a client that starts sending new
+> dimensions. Valid ids come from `client.pickerCatalogs.list()` (on a deployment
+> with registered catalog packs, pack-added ids are listed and accepted but
+> render no clause — only base-catalog ids fold). Full key list and semantics in
+> the
 > [API integration guide](./api-integration.md#cinematic-direction-direction-on-generate-image).
 
 > **Assemble Narrated Video.** `run("assemble-narrated-video", …)` also has a

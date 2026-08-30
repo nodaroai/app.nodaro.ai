@@ -1235,6 +1235,19 @@ describe("POST /v1/generate-image", () => {
       }))
     }
 
+    // Every body below carries a `direction` object. Pricing is resolved from
+    // the ASSEMBLED reference count and the provider, both of which `direction`
+    // is structurally incapable of touching — it only contributes prompt-text
+    // hints. Sending it on every case turns that structural argument into a
+    // green assertion: the pinned identifiers stay byte-identical with the
+    // direction channel populated.
+    const DIRECTION = {
+      shotSize: "wide-shot",
+      lightingStyle: ["rembrandt", "rim"],
+      style: "anime",
+      mood: ["happy", "joyful"],
+    }
+
     /** Run the route, return the DEBIT identifier (reserveCreditsForJob arg 4). */
     async function debitIdentifierFor(payload: Record<string, unknown>): Promise<string | undefined> {
       vi.clearAllMocks()
@@ -1258,6 +1271,7 @@ describe("POST /v1/generate-image", () => {
           userId: VALID_UUID,
           provider: "flux-2-max",
           connectedReferences: mkManualRefs(n),
+          direction: DIRECTION,
         }
         const debit = await debitIdentifierFor(body)
         const check = checkIdentifierFor(body)
@@ -1273,6 +1287,7 @@ describe("POST /v1/generate-image", () => {
         userId: VALID_UUID,
         provider: "flux-2-max",
         referenceImageUrls: ["https://r2.nodaro.ai/a.png", "https://r2.nodaro.ai/b.png", "https://r2.nodaro.ai/c.png"],
+        direction: DIRECTION,
       }
       const debit = await debitIdentifierFor(body)
       const check = checkIdentifierFor(body)
@@ -1292,6 +1307,7 @@ describe("POST /v1/generate-image", () => {
           characterSlug: "kira",
           url: "https://r2.nodaro.ai/kira.png",
         }],
+        direction: DIRECTION,
       }
       const debit = await debitIdentifierFor(body)
       const check = checkIdentifierFor(body)
@@ -1305,6 +1321,7 @@ describe("POST /v1/generate-image", () => {
         userId: VALID_UUID,
         provider: "seedream-5-lite",
         connectedReferences: mkManualRefs(1),
+        direction: DIRECTION,
       }
       const debit = await debitIdentifierFor(body)
       const check = checkIdentifierFor(body)

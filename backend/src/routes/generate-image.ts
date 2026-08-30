@@ -54,9 +54,11 @@ function resolveEffectiveProvider(
 // `DirectionFields`) that the Studio framing UI, the MCP route and canvas node
 // data all speak now lives in `lib/direction-schema.ts` (imported above). Its
 // key set is DERIVED from the `DIRECTION_FIELDS` registry table
-// rather than hand-listed, and the same schema serves `generate-video`, so the
-// two routes cannot drift. `assembleImageInput` folds the ids into the prompt
-// as hints, in the registry's canonical order.
+// rather than hand-listed. This route is its only consumer today;
+// `generate-video` has no `direction` field yet and adopts the same schema when
+// its channel ships, which is why the schema is surface-agnostic.
+// `assembleImageInput` folds the ids into the prompt as hints, in the
+// registry's canonical order.
 
 /**
  * Mirror of `@nodaro/shared` `StructuredPromptFields` (Path-1 structured

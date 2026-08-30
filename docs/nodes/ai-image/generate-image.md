@@ -159,10 +159,14 @@ up improved phrasing instead of freezing the text your client wrote.
   `colorTemperature`), look (`colorLook`, `atmosphere`, `postProcess`, `style`,
   `mood`, `aesthetic`, `photoGenre`, `photographer`, `renderQuality`), scene
   (`setting`, `era`, `backdrop`), plus `pose` and `compositionEffect`. Valid ids
-  come from `GET /v1/picker-catalogs` — the same catalogs the pickers read.
+  come from `GET /v1/picker-catalogs` — the same catalogs the pickers read; on a
+  deployment with registered catalog **packs** that endpoint also lists
+  pack-added ids, which are accepted but render no clause.
 - **A value is one id or an array.** Multi-pick dimensions honor their own cap;
-  a single-pick key handed an array takes the first entry. Over-sending
-  truncates, never 400s, and unknown keys / unknown ids are skipped silently.
+  a single-pick key handed an array takes the first entry. Exceeding a
+  dimension's cap truncates rather than 400ing, and unknown keys / unknown ids
+  are skipped silently — but the wire bounds (8 entries per key, 100 characters
+  per id) do reject.
 - **Absent ≠ empty.** A missing key means "no hint", never a default; a
   `direction` that renders nothing leaves your prompt byte-for-byte untouched.
 - The clauses are appended after your prompt in the platform's canonical order

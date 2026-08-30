@@ -9,7 +9,14 @@ import {
   modeForFamily,
   renderDirectionHints,
 } from "../direction-registry.js"
-import { buildFramingHints, getFramingPromptHint, getFramingTerm } from "../framing.js"
+import {
+  buildFramingHints,
+  getFramingPromptHint,
+  getFramingTerm,
+  getFramingCategoryLimit,
+  FRAMING_FIELD_BY_CATEGORY,
+  type FramingCategory,
+} from "../framing.js"
 import { buildLightingHints, getLightingPromptHint } from "../lighting.js"
 import { buildExposureHints } from "../exposure-settings.js"
 import { getLensPromptHint } from "../lens.js"
@@ -155,6 +162,20 @@ describe("DIRECTION_FIELDS — table integrity", () => {
   it("exposes a wire array ceiling above every per-row cap", () => {
     for (const spec of DIRECTION_FIELDS) {
       expect(spec.maxPicks, spec.key).toBeLessThanOrEqual(DIRECTION_ARRAY_CEILING)
+    }
+  })
+
+  // ── CANONICAL-CAP PIN ────────────────────────────────────────────────────
+  // `maxPicks` is written as a literal per row (the table stays readable, and
+  // most catalogs have no exported cap to derive from), but where the platform
+  // DOES own a canonical per-dimension limit the two must agree. Framing is
+  // that case: `getFramingCategoryLimit` is the source of truth the pickers
+  // read, so raising it (e.g. composition 2 → 3) must fail here rather than
+  // leave the registry silently slicing to the stale number.
+  it("matches the canonical framing category limits", () => {
+    const byKey = new Map(DIRECTION_FIELDS.map((f) => [f.key as string, f.maxPicks]))
+    for (const [category, field] of Object.entries(FRAMING_FIELD_BY_CATEGORY)) {
+      expect(byKey.get(field), field).toBe(getFramingCategoryLimit(category as FramingCategory))
     }
   })
 })

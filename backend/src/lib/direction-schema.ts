@@ -11,12 +11,15 @@ import { DIRECTION_FIELDS, DIRECTION_ARRAY_CEILING, type DirectionKey } from "@n
  * `renderDirectionHints` actually folds (pinned by
  * `__tests__/direction-schema.test.ts`).
  *
- * ONE schema for BOTH `/v1/generate-image` and `/v1/generate-video`. Surface is
- * a RENDER concern (`renderDirectionHints` skips off-surface rows), not a wire
- * concern, so an image-only key sent to the video route is accepted and simply
- * contributes no hint. One schema also means one drift guard instead of two,
- * and removes the class of bug where a per-surface generic's type argument and
- * its runtime filter disagree.
+ * ONE schema, designed to serve BOTH `/v1/generate-image` and
+ * `/v1/generate-video`. Today only `/v1/generate-image` imports it —
+ * `/v1/generate-video` has no `direction` body field yet and adopts this schema
+ * unchanged when its channel ships. Surface is a RENDER concern
+ * (`renderDirectionHints` skips off-surface rows), not a wire concern, so an
+ * image-only key sent to the video route is accepted and simply contributes no
+ * hint. One schema also means one drift guard instead of two, and removes the
+ * class of bug where a per-surface generic's type argument and its runtime
+ * filter disagree.
  *
  * DELIBERATELY TOLERANT, in three ways, all load-bearing:
  *  1. NOT `.strict()` (matching `connectedReferenceSchema`): a NEWER client on
@@ -32,6 +35,15 @@ import { DIRECTION_FIELDS, DIRECTION_ARRAY_CEILING, type DirectionKey } from "@n
  *  3. NO `.min(1)` on an id — the pre-registry 5-key schema accepted the empty
  *     string and the renderer drops it, so adding `min(1)` would be a NEW 400
  *     on currently-accepted input.
+ *
+ * TWO BOUNDS ARE DELIBERATELY *NOT* TOLERANT, and both are a new 400 relative
+ * to the pre-registry 5-key schema (whose `z.string().optional()` ids were
+ * unbounded): a value array longer than `DIRECTION_ARRAY_CEILING`, and an id
+ * string longer than `DIRECTION_ID_MAX`. The asymmetry with point 3 is the
+ * point — the empty string is realistic legacy input a real client stores, a
+ * 101-character "catalog id" is not an id at all, and the channel lands
+ * verbatim in `jobs.input_data`. Tolerance is for input someone plausibly sent;
+ * these bounds are storage hygiene on input nobody plausibly sent.
  *
  * Unknown IDS are likewise skipped, never rejected: every `get*PromptHint`
  * returns `""` on a miss, so a retired or pack-only id contributes no clause.
