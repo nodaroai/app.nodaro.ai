@@ -1020,6 +1020,39 @@ attributes the text described that no catalog id represents well (surface
 as "we couldn't infer X"). SDK: `client.pickerCatalogs.analyzeText(...)`;
 CLI: `nodaro pickers analyze "<text>"`.
 
+### Structured LLM output (any schema)
+
+`POST /v1/llm/structured` runs one LLM call whose answer is forced to the
+JSON Schema you supply, validated against it, and handed back as an object.
+Authenticated and credit-billed under its own `llm-structured` feature id
+(priced per model tier). It is the generic primitive behind schema-authoring
+clients — Nodaro Studio composes a whole production plan with it.
+
+Body: `{ system, input, jsonSchema, schemaName?, llmModel?, reasoningEffort?,
+maxRetries?, origin?, advancedMode?, temperature?, maxTokens? }`. `system` and
+`input` are plain text (each at most 100,000 characters). `jsonSchema` is a
+JSON Schema **object** (`type: "object"`, at most 64 KB serialized and 20
+levels of nesting) written in the keyword subset the server can convert:
+`properties` / `required` / `additionalProperties` (including the record
+form), `items`, `string` / `number` / `integer` / `boolean`, `enum`, `const`,
+`anyOf` of concrete types, `minimum` / `maximum` / `minItems` / `maxItems` /
+`minLength` / `maxLength`, `multipleOf`, `exclusiveMinimum` and `description`.
+`not`, `if` / `then` / `else`, `dependent*` and external `$ref` are refused
+with 400. One caveat worth reading twice: an `anyOf` of bare `required`
+branches — the usual "at least one of these fields" idiom — is **accepted and
+not enforced**. Express cross-field rules in your own validator.
+
+Returns `{ jobId, output, usage: { inputTokens, outputTokens } }`, where
+`output` has your schema's shape. `maxRetries` (0–3, default 2) is how many
+times an invalid answer is fed back to the model together with its validation
+error before the call gives up; `maxTokens` must not exceed the chosen model's
+own output limit (400 otherwise). The call is **synchronous and a single call
+may run several minutes** — each attempt is allowed up to 240 seconds — so give
+your HTTP client a matching timeout. Errors: 400 `validation_error`, 401,
+402 (credits), 502 `llm_error` once the retries are spent, 503
+`provider_unavailable`. No typed SDK resource yet — call it with
+`client.request("POST", "/v1/llm/structured", { body })`.
+
 ### Direct uploads
 
 `POST /v1/upload` (multipart: `file` + `type` of `image` / `video` /
