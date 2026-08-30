@@ -61,6 +61,7 @@ import { NodeConfigModal, CONFIG_INPUT_TYPES } from "./node-config-modal"
 import { PlatformPreview, PLATFORM_COLORS } from "@/components/nodes/platform-preview"
 import { PLATFORM_LABELS } from "@/lib/social-media-specs"
 import { isVideoUrl } from "@/lib/media-type"
+import { runtimeAudiomassUrl } from "@/lib/runtime-config"
 import { optimizedImageUrl } from "@/lib/image"
 import { responsiveColumns } from "@/lib/presentation-display"
 import { useIsMobile } from "@/hooks/use-is-mobile"
@@ -577,7 +578,10 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
       } else if (type === "image") {
         useWorkflowStore.getState().openImageEdit(nodeId, url)
       } else if (type === "audio") {
-        // Audio: open locally even in tab mode (no workflow store equivalent)
+        // Audio: open locally even in tab mode (no workflow store equivalent).
+        // Gate on the editor being configured, mirroring openFreeCut's guard —
+        // fullscreen still opens the modal, which shows the disabled panel.
+        if (!runtimeAudiomassUrl()) return
         setEditState({ nodeId, type, url })
       }
     }

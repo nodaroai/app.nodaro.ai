@@ -10,9 +10,9 @@
  * override falls back to the build-time value, so the cloud (where the two
  * agree) is byte-for-byte unchanged (#700, release check 13).
  *
- * Every read of `VITE_API_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
- * and `VITE_FREECUT_URL` goes through here; a raw `import.meta.env` read
- * of those three elsewhere is a regression (guard test in
+ * Every read of `VITE_API_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`,
+ * `VITE_FREECUT_URL` and `VITE_AUDIOMASS_URL` goes through here; a raw
+ * `import.meta.env` read of those elsewhere is a regression (guard test in
  * `__tests__/runtime-config.test.ts`).
  */
 export interface NodaroRuntimeConfig {
@@ -20,6 +20,7 @@ export interface NodaroRuntimeConfig {
   readonly supabaseUrl?: string
   readonly supabaseAnonKey?: string
   readonly freecutUrl?: string
+  readonly audiomassUrl?: string
   readonly defaultLocale?: string
   /**
    * Deployment surface profile (B1) — a partial narrowing set by the /config.js
@@ -86,8 +87,8 @@ export function runtimeSupabaseAnonKey(): string {
  */
 export const DEFAULT_FREECUT_URL = "https://freecut.nodaro.ai"
 
-/** Explicit opt-out. Any casing; surrounding whitespace ignored. */
-const FREECUT_DISABLED_VALUES = new Set(["off", "none", "false", "disabled"])
+/** Explicit opt-out for an embedded editor. Any casing; surrounding whitespace ignored. */
+const EDITOR_DISABLED_VALUES = new Set(["off", "none", "false", "disabled"])
 
 /**
  * An absolute http(s) URL, or empty when the editor is switched off.
@@ -99,7 +100,7 @@ const FREECUT_DISABLED_VALUES = new Set(["off", "none", "false", "disabled"])
  */
 export function runtimeFreecutUrl(): string {
   const configured = pick(runtime().freecutUrl, import.meta.env.VITE_FREECUT_URL as string | undefined).trim()
-  if (FREECUT_DISABLED_VALUES.has(configured.toLowerCase())) return ""
+  if (EDITOR_DISABLED_VALUES.has(configured.toLowerCase())) return ""
   if (!configured) return DEFAULT_FREECUT_URL
   return isAbsoluteHttpUrl(configured) ? configured : DEFAULT_FREECUT_URL
 }
@@ -124,6 +125,49 @@ export function runtimeFreecutOrigin(): string {
   try {
     // No base on purpose — runtimeFreecutUrl only ever returns an absolute
     // http(s) URL or empty, so a base could only mask a bad value.
+    return new URL(url).origin
+  } catch {
+    return ""
+  }
+}
+
+/**
+ * The audio editor this install embeds (AudioMass in an iframe).
+ *
+ * Runtime-overridable for the same reason as FreeCut above: the published
+ * cloud/community image is built once, and a Nodaro-operated tenant or a
+ * self-hoster points it at their own AudioMass with an `AUDIOMASS_URL` env and
+ * a restart rather than rebuilding the image.
+ *
+ * Unlike FreeCut there is NO public hosted AudioMass to fall back to, so an
+ * unconfigured install has no editor: the default is "" (disabled), and the
+ * modal says so instead of framing a dead `http://localhost:5175` dev server —
+ * the old build-time fallback, which only ever worked on a developer's laptop.
+ * Set `AUDIOMASS_URL` to a reachable editor to enable it; `off` (and the other
+ * opt-out words) map to the same disabled state, for symmetry with FREECUT_URL.
+ * An empty value is NOT a silent regression here the way it was for FreeCut:
+ * there is nothing working to remove — no editor was ever hosted for it.
+ */
+export const DEFAULT_AUDIOMASS_URL = ""
+
+/** An absolute http(s) URL, or empty when no audio editor is configured. */
+export function runtimeAudiomassUrl(): string {
+  const configured = pick(runtime().audiomassUrl, import.meta.env.VITE_AUDIOMASS_URL as string | undefined).trim()
+  if (EDITOR_DISABLED_VALUES.has(configured.toLowerCase())) return ""
+  if (!configured) return DEFAULT_AUDIOMASS_URL
+  return isAbsoluteHttpUrl(configured) ? configured : DEFAULT_AUDIOMASS_URL
+}
+
+/**
+ * The origin every inbound AudioMass postMessage is checked against — derived
+ * from the SAME getter as the frame URL so the two can never disagree. Empty
+ * when no editor is configured, so nothing is trusted (and a junk value never
+ * resolves against our own origin — see runtimeFreecutOrigin).
+ */
+export function runtimeAudiomassOrigin(): string {
+  const url = runtimeAudiomassUrl()
+  if (!url) return ""
+  try {
     return new URL(url).origin
   } catch {
     return ""

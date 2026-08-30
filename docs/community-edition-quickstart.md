@@ -152,6 +152,26 @@ FREECUT_URL=https://freecut.example.internal
 Restart the stack and the editor follows — no rebuild. Set `FREECUT_URL=off`
 to remove the Edit-video action entirely.
 
+## Editing audio
+
+Audio results have an **Edit audio** action that opens the AudioMass editor the
+same way — the bytes are handed to the editor inside your browser, nothing is
+uploaded to it.
+
+Unlike the video editor there is **no public hosted AudioMass**, so this action
+is **inert until you configure it**: with nothing set, choosing **Edit audio**
+opens a panel that explains what to set rather than an editor. Run your own
+[AudioMass](https://github.com/nodaroai/audiomass) — Nodaro's fork speaks the
+in-browser bridge the editor needs (vanilla AudioMass does not) — and point this
+install at it:
+
+```bash
+AUDIOMASS_URL=https://audiomass.example.internal
+```
+
+Restart the stack and the editor follows — no rebuild. `AUDIOMASS_URL=off`
+behaves the same as leaving it unset.
+
 ## Before exposing the stack to a network
 
 The compose defaults are designed for local play and are public knowledge.

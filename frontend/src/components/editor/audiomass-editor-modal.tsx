@@ -2,9 +2,17 @@
 import { useEffect, useCallback, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { X, Loader2, Check } from "lucide-react"
+import { runtimeAudiomassOrigin, runtimeAudiomassUrl } from "@/lib/runtime-config"
 
-const AUDIOMASS_URL = import.meta.env.VITE_AUDIOMASS_URL || "http://localhost:5175"
-const AUDIOMASS_ORIGIN = new URL(AUDIOMASS_URL).origin
+/**
+ * Read at RUNTIME, not inlined at build time — same reason as FreeCut (#767):
+ * the cloud/community image is built once and must be repointable at a
+ * self-hosted AudioMass with an `AUDIOMASS_URL` value and a restart. Both
+ * values come from the same getter pair, so the frame URL and the postMessage
+ * origin check can never disagree. Empty means no editor is configured.
+ */
+const audiomassUrl = () => runtimeAudiomassUrl()
+const audiomassOrigin = () => runtimeAudiomassOrigin()
 
 interface AudiomassEditorModalProps {
   readonly audioUrl: string
@@ -24,6 +32,12 @@ export function AudiomassEditorModal({ audioUrl, onExportComplete, onClose }: Au
   onExportRef.current = onExportComplete
   onCloseRef.current = onClose
 
+  // An `<iframe src="">` loads the PARENT document — the app inside its own
+  // editor. The presentation / app-runner surface mounts this modal from its
+  // own state, so the guard lives here where every caller passes through
+  // (mirrors FreeCutEditorModal's editorDisabled).
+  const editorDisabled = audiomassUrl() === ""
+
   // Send audio to Audiomass once ready
   const sendAudio = useCallback(async () => {
     if (sentAudioRef.current || !iframeRef.current?.contentWindow) return
@@ -34,14 +48,14 @@ export function AudiomassEditorModal({ audioUrl, onExportComplete, onClose }: Au
       const buffer = await res.arrayBuffer()
       iframeRef.current.contentWindow.postMessage(
         { type: "NODARO_LOAD_AUDIO", payload: { audioUrl, audioBuffer: buffer } },
-        AUDIOMASS_ORIGIN,
+        audiomassOrigin(),
         [buffer],
       )
     } catch {
       // Fallback: send URL only
       iframeRef.current?.contentWindow?.postMessage(
         { type: "NODARO_LOAD_AUDIO", payload: { audioUrl } },
-        AUDIOMASS_ORIGIN,
+        audiomassOrigin(),
       )
     }
   }, [audioUrl])
@@ -49,7 +63,8 @@ export function AudiomassEditorModal({ audioUrl, onExportComplete, onClose }: Au
   // Listen for messages from Audiomass (stable deps via refs)
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
-      if (event.origin !== AUDIOMASS_ORIGIN) return
+      const origin = audiomassOrigin()
+      if (!origin || event.origin !== origin) return
       const { type, payload } = event.data || {}
 
       if (type === "AUDIOMASS_READY") {
@@ -104,18 +119,24 @@ export function AudiomassEditorModal({ audioUrl, onExportComplete, onClose }: Au
 
       {/* Iframe */}
       <div className="flex-1 relative">
-        {!iframeLoaded && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black">
-            <Loader2 className="w-8 h-8 text-[#ff0073] animate-spin" />
-          </div>
+        {editorDisabled ? (
+          <EditorDisabled />
+        ) : (
+          <>
+            {!iframeLoaded && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black">
+                <Loader2 className="w-8 h-8 text-[#ff0073] animate-spin" />
+              </div>
+            )}
+            <iframe
+              ref={iframeRef}
+              src={audiomassUrl()}
+              className="w-full h-full border-0"
+              allow="autoplay"
+              title="Audiomass Audio Editor"
+            />
+          </>
         )}
-        <iframe
-          ref={iframeRef}
-          src={AUDIOMASS_URL}
-          className="w-full h-full border-0"
-          allow="autoplay"
-          title="Audiomass Audio Editor"
-        />
       </div>
 
       {/* Save overlay */}
@@ -162,5 +183,18 @@ export function AudiomassEditorModal({ audioUrl, onExportComplete, onClose }: Au
       )}
     </div>,
     document.body,
+  )
+}
+
+/** No editor configured (`AUDIOMASS_URL=off`, or none set). Says so instead of framing nothing. */
+function EditorDisabled() {
+  return (
+    <div className="absolute inset-0 flex items-center justify-center bg-black p-8">
+      <p className="max-w-md text-center text-white/60 text-xs leading-relaxed">
+        No audio editor is configured for this install. Set{" "}
+        <span className="font-mono">AUDIOMASS_URL</span> to your own AudioMass deployment
+        to enable editing.
+      </p>
+    </div>
   )
 }

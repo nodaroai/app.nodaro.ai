@@ -37,6 +37,7 @@ export function buildRuntimeConfig(env) {
     supabaseUrl: pick(env.RUNTIME_SUPABASE_URL),
     supabaseAnonKey: pick(env.RUNTIME_SUPABASE_ANON_KEY),
     freecutUrl: pick(env.RUNTIME_FREECUT_URL),
+    audiomassUrl: pick(env.RUNTIME_AUDIOMASS_URL),
     defaultLocale: pick(env.RUNTIME_DEFAULT_LOCALE),
     surface: parseSurface(env.RUNTIME_SURFACE_PROFILE, env.EDITION),
     moderation: env.RUNTIME_UPLOAD_MODERATION === "true" ? { uploadImage: true } : undefined,

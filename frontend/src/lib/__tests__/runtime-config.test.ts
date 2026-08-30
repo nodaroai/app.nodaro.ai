@@ -58,16 +58,18 @@ describe("no direct reads of the three runtime-configurable VITE_* values", () =
     }
     return out
   }
-  // FREECUT_URL joined the set in #767 for the same reason as the trio: the
-  // published image is built once, and a direct import.meta.env read would
-  // silently bypass the /config.js override an operator set to point at their
-  // own editor — the exact failure the runtime layer exists to prevent.
+  // FREECUT_URL joined the set in #767, and AUDIOMASS_URL alongside it, for the
+  // same reason as the trio: the published image is built once, and a direct
+  // import.meta.env read would silently bypass the /config.js override an
+  // operator set to point at their own editor — the exact failure the runtime
+  // layer exists to prevent. (The regex previously named only the trio even
+  // though the comment claimed FreeCut had joined; both editors are enforced now.)
   it("every runtime-overridable VITE_* read goes through runtime-config.ts", () => {
     const offenders = walk(SRC)
       .filter((f) => !f.endsWith(join("lib", "runtime-config.ts")))
-      .filter((f) => /import\.meta\.env\.VITE_(API_URL|SUPABASE_URL|SUPABASE_ANON_KEY)\b/.test(readFileSync(f, "utf8")))
+      .filter((f) => /import\.meta\.env\.VITE_(API_URL|SUPABASE_URL|SUPABASE_ANON_KEY|FREECUT_URL|AUDIOMASS_URL)\b/.test(readFileSync(f, "utf8")))
       .map((f) => f.slice(SRC.length + 1))
-    expect(offenders, `read the baked value directly (use runtimeApiUrl / runtimeSupabaseUrl / runtimeSupabaseAnonKey / runtimeFreecutUrl): ${offenders.join(", ")}`).toEqual([])
+    expect(offenders, `read the baked value directly (use runtimeApiUrl / runtimeSupabaseUrl / runtimeSupabaseAnonKey / runtimeFreecutUrl / runtimeAudiomassUrl): ${offenders.join(", ")}`).toEqual([])
   })
 })
 
