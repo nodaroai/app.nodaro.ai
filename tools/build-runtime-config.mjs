@@ -1,26 +1,27 @@
 // Standalone (no TS import): builds window.__NODARO_RUNTIME__ for /config.js at
-// container boot. Mirrors backend/src/lib/surface-profile.ts's parse+gate
-// semantics; the drift stays honest because both degrade to "no override".
-import { readFileSync } from "node:fs"
+// container boot.
 
 const pick = (v) => (typeof v === "string" && v.trim() ? v.trim() : undefined)
 
 /**
- * d2 gate for the writer (RESOLVED — Branch B, business+). Keep in lock-step
- * with surfaceGateOpen() (backend). Community omits the surface block so the
- * frontend getter sees `undefined` and inherits the code default.
+ * The surface block is a VERBATIM pass-through (SAI-3 / H10). RUNTIME_SURFACE_PROFILE
+ * is no longer the operator's NODARO_SURFACE_PROFILE env: start.sh fills it from
+ * backend/dist/lib/print-surface-profile.js — the backend's OWN resolved profile
+ * (edition gate → Zod → merge over default → refine). This module used to
+ * re-implement the @file read and the edition gate and apply no schema, so the
+ * browser rendered an object the backend never validated; one parser by
+ * construction closes that. Nothing here knows an edition or a key name any more.
+ *
+ * Only a JSON object passes. Anything else — blank (nothing configured / gate
+ * closed / failed load, all rendered as "" by the printer), or malformed —
+ * degrades to "no override", so the frontend inherits its code default.
  */
-function surfaceGateOpenForEdition(edition) {
-  return edition === "business" || edition === "cloud"
-}
-
-function parseSurface(raw, edition) {
+function passThroughSurface(raw) {
   const trimmed = raw && raw.trim()
-  if (!trimmed || !surfaceGateOpenForEdition(edition)) return undefined
+  if (!trimmed) return undefined
   try {
-    const text = trimmed.startsWith("@") ? readFileSync(trimmed.slice(1), "utf8") : trimmed
-    const obj = JSON.parse(text)
-    return obj && typeof obj === "object" ? obj : undefined
+    const obj = JSON.parse(trimmed)
+    return obj && typeof obj === "object" && !Array.isArray(obj) ? obj : undefined
   } catch (err) {
     // MUST be stderr, never stdout: the CLI entry's stdout is redirected verbatim
     // into /config.js (start.sh). A stray stdout line here lands as line 1 of the
@@ -39,7 +40,7 @@ export function buildRuntimeConfig(env) {
     freecutUrl: pick(env.RUNTIME_FREECUT_URL),
     audiomassUrl: pick(env.RUNTIME_AUDIOMASS_URL),
     defaultLocale: pick(env.RUNTIME_DEFAULT_LOCALE),
-    surface: parseSurface(env.RUNTIME_SURFACE_PROFILE, env.EDITION),
+    surface: passThroughSurface(env.RUNTIME_SURFACE_PROFILE),
     moderation: env.RUNTIME_UPLOAD_MODERATION === "true" ? { uploadImage: true } : undefined,
   }
   for (const k of Object.keys(cfg)) if (cfg[k] === undefined) delete cfg[k]

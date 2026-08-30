@@ -41,21 +41,33 @@ test("malformed surface JSON → no surface key, never throws", () => {
   assert.ok(!("surface" in cfg))
 })
 
-test("d2 gate: community edition drops the surface (business+ only)", () => {
-  // Keep this in lock-step with surfaceGateOpenForEdition's body (d2, Branch B).
+// SAI-3 / H10: the writer no longer gates by edition or reads an @file — the
+// backend printer (backend/src/lib/print-surface-profile.ts) already applied the
+// gate and resolved the file, and hands over "" when the browser should inherit
+// its code default. These pin that the writer stays a verbatim pass-through, so
+// a second parser can never grow back here.
+test("no edition gate here: the surface passes through regardless of EDITION", () => {
   const cfg = buildRuntimeConfig({
     EDITION: "community",
     RUNTIME_SURFACE_PROFILE: JSON.stringify({ nav: { hide: ["gallery"] } }),
   })
+  assert.deepEqual(cfg.surface.nav.hide, ["gallery"])
+})
+
+test("passes the resolved profile through verbatim — every key, unknown ones included", () => {
+  const resolved = { nav: { hide: ["pricing"] }, billing: { unitLabel: "קרדיטים", unitRate: 2000 }, future: { k: 1 } }
+  const cfg = buildRuntimeConfig({ EDITION: "cloud", RUNTIME_SURFACE_PROFILE: JSON.stringify(resolved) })
+  assert.deepEqual(cfg.surface, resolved)
+})
+
+test("an @file reference is NOT read here (the printer resolved it) → treated as not-JSON, no surface key", () => {
+  const cfg = buildRuntimeConfig({ EDITION: "cloud", RUNTIME_SURFACE_PROFILE: "@/etc/passwd" })
   assert.ok(!("surface" in cfg))
 })
 
-test("d2 gate: cloud edition honours the surface", () => {
-  const cfg = buildRuntimeConfig({
-    EDITION: "cloud",
-    RUNTIME_SURFACE_PROFILE: JSON.stringify({ nav: { hide: ["pricing"] } }),
-  })
-  assert.deepEqual(cfg.surface.nav.hide, ["pricing"])
+test("a JSON array or scalar is not a profile → no surface key", () => {
+  assert.ok(!("surface" in buildRuntimeConfig({ RUNTIME_SURFACE_PROFILE: "[1,2]" })))
+  assert.ok(!("surface" in buildRuntimeConfig({ RUNTIME_SURFACE_PROFILE: "42" })))
 })
 
 // BLOCKER 1 — the degrade notice for a malformed surface profile MUST go to
