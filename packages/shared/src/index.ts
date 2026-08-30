@@ -814,6 +814,7 @@ export {
   parseImageMentionToken,
   findImageMentionTokens,
   knownImageSlugsFromRefs,
+  imageMentionSlugForRef,
 } from "./image-mention-slug.js"
 export type { ImageMentionTokenInfo } from "./image-mention-slug.js"
 

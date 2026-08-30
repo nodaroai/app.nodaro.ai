@@ -4,6 +4,7 @@ import {
   parseImageMentionToken,
   findImageMentionTokens,
   knownImageSlugsFromRefs,
+  imageMentionSlugForRef,
 } from "../image-mention-slug.js"
 import type { ConnectedReference } from "../types.js"
 
@@ -123,6 +124,10 @@ describe("parseImageMentionToken — accepts", () => {
     expect(parseImageMentionToken("@town:3:background~nolock")).toEqual({
       imageSlug: "town", imageIndex: 3, role: "background", lock: false,
     })
+    // The role + force-ON pairing — the other half of the role×sentinel matrix.
+    expect(parseImageMentionToken("@town:3:background~lock")).toEqual({
+      imageSlug: "town", imageIndex: 3, role: "background", lock: true,
+    })
   })
 
   it("accepts a multi-segment slug and a large index", () => {
@@ -177,6 +182,33 @@ describe("findImageMentionTokens", () => {
     const [t] = findImageMentionTokens("@town:1~lock", ["town"])
     expect(t.token).toBe("@town:1~lock")
     expect(t.lock).toBe(true)
+  })
+
+  it("claims a `~nolock` sentinel through the FINDER too (force-OFF, tri-state)", () => {
+    const [t] = findImageMentionTokens("a shot of @town:1~nolock at dusk", ["town"])
+    expect(t.token).toBe("@town:1~nolock")
+    expect(t.lock).toBe(false)
+    expect(findImageMentionTokens("@town:1~nolockx", ["town"])[0].token).toBe("@town:1")
+  })
+
+  it("yields NO token for a LOCATION bucket/variant token, even on a known slug", () => {
+    // The slash guard. Without it the finder claims the truncated 3-part prefix
+    // `@old-library:1:weather` and SPLICES it, leaving `/rain` dangling in the
+    // model-facing prompt — a corruption the character/location finders never
+    // commit (they leave an unresolvable token literal).
+    expect(findImageMentionTokens("a shot of @old-library:1:weather/rain", ["old-library"]))
+      .toEqual([])
+    // 4-part location token (variant + mode) — same rejection.
+    expect(findImageMentionTokens("@old-library:1:weather/rain:style", ["old-library"]))
+      .toEqual([])
+    // Sentinel + slash: the whole token stays literal rather than backtracking
+    // to `@town:1` and splicing that.
+    expect(findImageMentionTokens("@town:1~lock/rain", ["town"])).toEqual([])
+  })
+
+  it("still matches two mentions separated by a slash (`/` alone is not the signal)", () => {
+    const tokens = findImageMentionTokens("@town:1/@barn:2", ["town", "barn"])
+    expect(tokens.map((t) => t.token)).toEqual(["@town:1", "@barn:2"])
   })
 
   it("finds several mentions in prompt order", () => {
@@ -237,5 +269,35 @@ describe("knownImageSlugsFromRefs", () => {
     for (const slug of slugs) {
       expect(findImageMentionTokens(`@${slug}:1`, slugs)).toHaveLength(1)
     }
+  })
+})
+
+describe("imageMentionSlugForRef — the single mentionability gate", () => {
+  it("returns the slug for a mentionable media ref", () => {
+    expect(imageMentionSlugForRef(media())).toBe("town")
+    expect(imageMentionSlugForRef(media({ source: "manual", defaultName: "My Upload" })))
+      .toBe("my-upload")
+  })
+
+  it("returns null for every non-mentionable ref", () => {
+    expect(imageMentionSlugForRef(media({ source: "wired-character" }))).toBeNull()
+    expect(imageMentionSlugForRef(media({ isExtraRef: true }))).toBeNull()
+    expect(imageMentionSlugForRef(media({ url: "" }))).toBeNull()
+    expect(imageMentionSlugForRef(media({ defaultName: "" }))).toBeNull()
+    // Non-empty but grammar-invalid — emptiness is NOT the gate.
+    expect(imageMentionSlugForRef(media({ defaultName: "3D Render" }))).toBeNull()
+  })
+
+  it("is the SAME gate `knownImageSlugsFromRefs` applies (the two views cannot drift)", () => {
+    const refs = [
+      media(),
+      media({ id: "b", defaultName: "3D Render", url: "https://cdn/b.png" }),
+      media({ id: "c", defaultName: "Extra", isExtraRef: true, url: "https://cdn/c.png" }),
+      media({ id: "d", source: "wired-location", defaultName: "Old Library", url: "https://cdn/d.png" }),
+      media({ id: "e", source: "manual", defaultName: "My Upload", url: "https://cdn/e.png" }),
+    ]
+    expect(knownImageSlugsFromRefs(refs)).toEqual(
+      [...new Set(refs.map(imageMentionSlugForRef).filter((s): s is string => s !== null))],
+    )
   })
 })

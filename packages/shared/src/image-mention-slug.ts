@@ -161,12 +161,46 @@ export function findImageMentionTokens(
   for (const match of prompt.matchAll(regex)) {
     const token = match[1]
     const offset = (match.index ?? 0) + (match[0].length - token.length)
+    // SLASH GUARD — the second half of the collision guard, and the reason it
+    // is a post-match check instead of another lookahead in the regex. `/` is
+    // the LOCATION grammar's bucket/variant separator (`@lib:1:weather/rain`),
+    // so a token immediately followed by `/<segment>` is a sibling-grammar
+    // token, never an image mention. A lookahead cannot express this: the
+    // engine would just BACKTRACK to a shorter prefix (`@lib:1:weather` →
+    // `@lib:1`, or `@town:1~lock` → `@town:1`) and splice THAT, which is the
+    // very corruption being prevented. Rejecting the whole match here leaves
+    // the token literal, exactly as the character/location finders do.
+    //
+    // `/` alone is NOT the signal — `@town:1/@barn:2` (two mentions separated
+    // by a slash) must keep matching, and a location segment always starts
+    // `[a-z]`. So the guard is `/` + a segment start.
+    if (/^\/[a-z]/.test(prompt.slice(offset + token.length))) continue
     const parsed = parseImageMentionToken(token)
     if (parsed && knownSet.has(parsed.imageSlug)) {
       tokens.push({ token, ...parsed, offset })
     }
   }
   return tokens
+}
+
+/**
+ * The mention slug a single reference contributes, or `null` when the ref
+ * cannot carry a mention at all — the SINGLE gate, so every view of "which
+ * refs are mentionable" is the same view.
+ *
+ * Shared by `knownImageSlugsFromRefs` (the finder's known-slug set) and the
+ * prompt-builder's hybrid resolver (its slug → ref lookup map). Those two must
+ * admit exactly the same refs: a slug the finder accepts but the resolver drops
+ * would splice a token with nothing to bind, and a ref the resolver keys under
+ * a slug no token can match is dead weight. Emptiness is NOT the gate (see
+ * `IMAGE_SLUG_PATTERN`).
+ */
+export function imageMentionSlugForRef(r: ConnectedReference): string | null {
+  if (r.source !== "wired-image" && r.source !== "manual") return null
+  if (r.isExtraRef === true) return null
+  if (!r.url || !r.defaultName) return null
+  const slug = imageMentionSlug(r.defaultName)
+  return IMAGE_SLUG_PATTERN.test(slug) ? slug : null
 }
 
 /**
@@ -185,17 +219,18 @@ export function findImageMentionTokens(
  * Grammar-invalid slugs are DROPPED (see `IMAGE_SLUG_PATTERN`) — a ref named
  * "3D Render" slugs to the non-empty but unparseable `"3d-render"`, and admitting
  * it would put a slug in the set that no token can ever match.
+ *
+ * All four of those gates live in `imageMentionSlugForRef`, which the hybrid
+ * resolver's own lookup map uses too — one predicate, so the two views cannot
+ * drift apart.
  */
 export function knownImageSlugsFromRefs(
   refs: readonly ConnectedReference[],
 ): string[] {
   const out = new Set<string>()
   for (const r of refs) {
-    if (r.source !== "wired-image" && r.source !== "manual") continue
-    if (r.isExtraRef === true) continue
-    if (!r.url || !r.defaultName) continue
-    const slug = imageMentionSlug(r.defaultName)
-    if (IMAGE_SLUG_PATTERN.test(slug)) out.add(slug)
+    const slug = imageMentionSlugForRef(r)
+    if (slug) out.add(slug)
   }
   return [...out]
 }
