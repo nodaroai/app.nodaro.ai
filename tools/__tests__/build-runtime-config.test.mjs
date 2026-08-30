@@ -14,6 +14,13 @@ test("carries the A3 trio + locale, omitting absent keys", () => {
   assert.ok(!("supabaseUrl" in cfg))
 })
 
+test("carries the editor URLs (freecut + audiomass), omitting absent ones", () => {
+  const cfg = buildRuntimeConfig({ RUNTIME_FREECUT_URL: "https://fc.test", RUNTIME_AUDIOMASS_URL: "https://am.test" })
+  assert.equal(cfg.freecutUrl, "https://fc.test")
+  assert.equal(cfg.audiomassUrl, "https://am.test")
+  assert.ok(!("audiomassUrl" in buildRuntimeConfig({ RUNTIME_FREECUT_URL: "https://fc.test" })))
+})
+
 test("parses an inline surface JSON into cfg.surface", () => {
   const cfg = buildRuntimeConfig({
     EDITION: "business",

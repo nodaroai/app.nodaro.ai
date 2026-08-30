@@ -677,7 +677,7 @@ fi
 # logic to leave untested). It prints the /config.js line to stdout (log line to
 # stderr), so the redirect captures only the payload; on failure the file is
 # left empty, which the frontend reads as "no override" → build-time values.
-if ! RUNTIME_API_URL="$PUBLIC_URL" RUNTIME_SUPABASE_URL="$FRONTEND_SUPABASE_URL_EFFECTIVE" RUNTIME_SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" RUNTIME_FREECUT_URL="$FREECUT_URL" RUNTIME_DEFAULT_LOCALE="$DEFAULT_LOCALE" RUNTIME_SURFACE_PROFILE="$NODARO_SURFACE_PROFILE" EDITION="$EDITION" \
+if ! RUNTIME_API_URL="$PUBLIC_URL" RUNTIME_SUPABASE_URL="$FRONTEND_SUPABASE_URL_EFFECTIVE" RUNTIME_SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" RUNTIME_FREECUT_URL="$FREECUT_URL" RUNTIME_AUDIOMASS_URL="$AUDIOMASS_URL" RUNTIME_DEFAULT_LOCALE="$DEFAULT_LOCALE" RUNTIME_SURFACE_PROFILE="$NODARO_SURFACE_PROFILE" EDITION="$EDITION" \
   node /app/tools/build-runtime-config.mjs > /app/frontend/dist/config.js; then
   echo "[start.sh] WARNING: could not write /app/frontend/dist/config.js — the frontend keeps its build-time URLs"
 fi
