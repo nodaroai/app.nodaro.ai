@@ -232,3 +232,19 @@ describe("POST /v1/llm/structured — the failed call", () => {
     expect(mocks.commitReservedCreditsForJob).not.toHaveBeenCalled()
   })
 })
+
+describe("route registration", () => {
+  it("app.ts imports and registers llmStructuredRoutes", async () => {
+    const { readFileSync } = await import("node:fs")
+    const { dirname, resolve } = await import("node:path")
+    const { fileURLToPath } = await import("node:url")
+    // A route file that is never registered typechecks, tests green, and 404s
+    // in production — the exact drift route-path-parity was written for.
+    const appSource = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "app.ts"),
+      "utf8",
+    )
+    expect(appSource).toContain('import { llmStructuredRoutes } from "./routes/llm-structured.js"')
+    expect(appSource).toContain("await app.register(llmStructuredRoutes)")
+  })
+})
