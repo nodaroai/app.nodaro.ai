@@ -1,5 +1,21 @@
 # @nodaro/shared
 
+## 2.13.0
+
+### Minor Changes
+
+- 9963ec5: Prompt pre & post text: `promptPrefix` / `promptSuffix` node-data fields on every AI prompt node (`PromptAffixFields`, `applyPromptAffixes`, `nodeSupportsPromptAffixes`); `apps.run(slug, inputs, { inputOverrides })`; `nodaro apps run --override nodeId.field=value`.
+- b08b3dc: video-analysis: transition vocabulary v2 — `VIDEO_ANALYSIS_TRANSITIONS` gains `zoom`, `slide`, `white-flash`, `digital-glitch`, `morph`, `match`, `jump` (twelve values); an ABSENT `transitionOut` now means nothing asserted (the video model decides) and `cut` is an explicit assertion, never a default.
+
+### Patch Changes
+
+- db47f72: fix(composition-effects): add a neutral `none` default and de-duplicate `3x3-grid-collage`.
+
+  - The `composition-effects` picker defaulted to `bursting-through-frame`, a heavy 3D paper-tear, so every unconfigured node injected a dramatic subject transform the user never asked for. The catalog now leads with a neutral `none` entry (empty `promptHint`) and defaults to it — the same no-op-entry convention `transitions` and `character-fx` use for their `auto` default, which keeps the advertised `defaultValue` a real member of the option list every consumer enumerates. Changed in both `@nodaro/prompts` sources that carry it (`PICKER_CATALOGS` and `ALL_PICKER_WIRING`), and localized in all 11 locales (`@nodaro/shared`).
+  - `3x3-grid-collage` existed under the same id in both `framing/composition` and `composition-effects`. It is removed from the composition-effects catalog (`@nodaro/prompts`) and all 11 i18n locales (`@nodaro/shared`); the `framing` entry stays as the canonical one.
+
+- 68d0464: Factory presets whose text is a complete instruction (Reference Sheet boards, Character Reference Grid, Label Elements / Apply Named Edit, Face Privacy, Portrait Transformations, Stylized Subject & Edits, SwitchX operations, Restyle Looks) now ship it as `promptPrefix` / `promptSuffix` instead of `prompt`, so applying them keeps your prompt. `presetApplyClearKeys` (shared): a preset that ships prompt content clears stale pre/post text on apply.
+
 ## 2.12.2
 
 ### Patch Changes

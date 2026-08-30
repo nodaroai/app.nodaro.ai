@@ -1,5 +1,21 @@
 # @nodaro/sdk
 
+## 1.23.0
+
+### Minor Changes
+
+- 9963ec5: Prompt pre & post text: `promptPrefix` / `promptSuffix` node-data fields on every AI prompt node (`PromptAffixFields`, `applyPromptAffixes`, `nodeSupportsPromptAffixes`); `apps.run(slug, inputs, { inputOverrides })`; `nodaro apps run --override nodeId.field=value`.
+
+### Patch Changes
+
+- Updated dependencies [db47f72]
+- Updated dependencies [68d0464]
+- Updated dependencies [9963ec5]
+- Updated dependencies [a305fd5]
+- Updated dependencies [b08b3dc]
+  - @nodaro/prompts@1.9.0
+  - @nodaro/shared@2.13.0
+
 ## 1.22.0
 
 ### Minor Changes
