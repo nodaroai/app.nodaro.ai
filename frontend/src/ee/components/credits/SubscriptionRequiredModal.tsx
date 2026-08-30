@@ -11,6 +11,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { Sparkles } from "lucide-react"
+import { surfaceBillingSelfServe } from "@/lib/surface-selectors"
 
 interface SubscriptionRequiredModalProps {
   open: boolean
@@ -45,9 +46,11 @@ export function SubscriptionRequiredModal({ open, onClose }: SubscriptionRequire
           <Button variant="outline" onClick={onClose}>
             Not now
           </Button>
-          <Button asChild className="bg-[#ff0073] hover:bg-[#ff0073]/90 text-white">
-            <Link to="/pricing">View plans</Link>
-          </Button>
+          {surfaceBillingSelfServe() && (
+            <Button asChild className="bg-[#ff0073] hover:bg-[#ff0073]/90 text-white">
+              <Link to="/pricing">View plans</Link>
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

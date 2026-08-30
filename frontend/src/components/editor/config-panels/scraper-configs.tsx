@@ -24,6 +24,7 @@ import {
   webScrapePeekLine,
 } from "@/components/nodes/web-scrape-run-state"
 import { MappableField } from "./mappable-field"
+import { formatCreditUnits } from "@/lib/credit-units"
 import type { ConfigProps } from "./types"
 
 // Ordered so google-search sits first as the default, followed by the others.
@@ -260,8 +261,8 @@ function WebScrapeConfigTab({ data, onUpdate, sources, fieldMappings, onMapField
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="page">Single page (3 CR)</SelectItem>
-                <SelectItem value="site">Site crawl, up to 20 pages (10 CR)</SelectItem>
+                <SelectItem value="page">{`Single page (${formatCreditUnits(3)})`}</SelectItem>
+                <SelectItem value="site">{`Site crawl, up to 20 pages (${formatCreditUnits(10)})`}</SelectItem>
               </SelectContent>
             </Select>
           </div>

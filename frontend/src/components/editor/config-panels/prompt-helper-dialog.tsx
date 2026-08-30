@@ -28,6 +28,7 @@ import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
 import type { LlmReasoningEffort } from "@nodaro/shared"
 import type { WizardQuestion, RecommendedModel, ModelChange } from "@nodaro/prompts"
 import { LlmModelSelect } from "./llm-model-select"
+import { formatCreditUnits } from "@/lib/credit-units"
 import { ReasoningEffortSelect } from "./reasoning-effort-select"
 
 interface PromptHelperDialogProps {
@@ -718,7 +719,7 @@ export function PromptHelperDialog({
                 <>
                   <Sparkles className="w-3.5 h-3.5 mr-1.5" />
                   Build Prompt
-                  <span className="ml-1.5 text-[10px] opacity-80 bg-white/20 px-1.5 py-0.5 rounded">{creditCost} CR</span>
+                  <span className="ml-1.5 text-[10px] opacity-80 bg-white/20 px-1.5 py-0.5 rounded">{formatCreditUnits(creditCost)}</span>
                 </>
               )}
             </Button>
@@ -733,7 +734,7 @@ export function PromptHelperDialog({
               >
                 <ArrowLeft className="w-3.5 h-3.5 mr-1" />
                 Re-analyze
-                <span className="ml-1 text-[10px] opacity-60">{creditCost} CR</span>
+                <span className="ml-1 text-[10px] opacity-60">{formatCreditUnits(creditCost)}</span>
               </Button>
               <Button
                 onClick={handleGenerate}
@@ -745,7 +746,7 @@ export function PromptHelperDialog({
                 ) : (
                   <>
                     Generate Prompt
-                    <span className="ml-1.5 text-[10px] opacity-80 bg-white/20 px-1.5 py-0.5 rounded">{creditCost} CR</span>
+                    <span className="ml-1.5 text-[10px] opacity-80 bg-white/20 px-1.5 py-0.5 rounded">{formatCreditUnits(creditCost)}</span>
                   </>
                 )}
               </Button>

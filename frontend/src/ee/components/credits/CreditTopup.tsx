@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { startCheckout, startLoadCheckout } from "@/lib/checkout"
 import { TOPUP_PACKAGES, type TopupPackage, creditsForLoadUsd, MIN_LOAD_USD, MAX_LOAD_USD } from "@/lib/pricing-data"
+import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
 
 export function CreditTopup() {
   const [loadingId, setLoadingId] = useState<string | null>(null)
@@ -63,11 +64,11 @@ export function CreditTopup() {
               </span>
             )}
             <Coins className="h-5 w-5 text-[#ff0073] mb-2" />
-            <span className="text-lg font-bold">{pkg.credits}</span>
-            <span className="text-xs text-muted-foreground">credits</span>
+            <span className="text-lg font-bold">{creditUnits(pkg.credits)}</span>
+            <span className="text-xs text-muted-foreground">{creditUnitLabel("credits")}</span>
             <span className="mt-2 text-sm font-semibold">${pkg.price}</span>
             <span className="text-[10px] text-muted-foreground">
-              {pkg.perCredit} / credit
+              ${(pkg.price / creditUnits(pkg.credits)).toFixed(4)} / {creditUnitLabel("credit")}
             </span>
           </button>
         ))}
@@ -93,7 +94,7 @@ export function CreditTopup() {
         </div>
         <span className="text-sm text-muted-foreground min-w-32">
           {customCredits !== null
-            ? `= ${customCredits.toLocaleString()} credits`
+            ? `= ${creditUnits(customCredits).toLocaleString()} credits`
             : customUsd
               ? `$${MIN_LOAD_USD}–$${MAX_LOAD_USD}, whole dollars`
               : "credits valid for 12 months"}

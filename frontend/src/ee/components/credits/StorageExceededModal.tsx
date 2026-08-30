@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { HardDrive, ArrowUpCircle, FolderOpen } from "lucide-react"
+import { surfaceBillingSelfServe } from "@/lib/surface-selectors"
 
 interface StorageExceededModalProps {
   open: boolean
@@ -85,12 +86,14 @@ export function StorageExceededModal({
         </div>
 
         <DialogFooter className="flex-col sm:flex-row gap-2">
-          <Button asChild className="flex-1">
-            <a href="/pricing">
-              <ArrowUpCircle className="w-4 h-4" />
-              Upgrade Plan
-            </a>
-          </Button>
+          {surfaceBillingSelfServe() && (
+            <Button asChild className="flex-1">
+              <a href="/pricing">
+                <ArrowUpCircle className="w-4 h-4" />
+                Upgrade Plan
+              </a>
+            </Button>
+          )}
           <Button variant="outline" asChild className="flex-1">
             <a href="/my-files">
               <FolderOpen className="w-4 h-4" />

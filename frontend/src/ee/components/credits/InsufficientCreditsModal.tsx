@@ -11,6 +11,8 @@ import {
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { AlertCircle, ArrowUpCircle, CreditCard } from "lucide-react"
+import { creditUnits } from "@/lib/credit-units"
+import { surfaceBillingSelfServe } from "@/lib/surface-selectors"
 
 interface InsufficientCreditsModalProps {
   open: boolean
@@ -38,7 +40,7 @@ export function InsufficientCreditsModal({
             Insufficient Credits
           </DialogTitle>
           <DialogDescription>
-            You need {required} credits but only have {available} available.
+            You need {creditUnits(required)} credits but only have {creditUnits(available)} available.
           </DialogDescription>
         </DialogHeader>
 
@@ -46,17 +48,17 @@ export function InsufficientCreditsModal({
           <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground">Current balance</p>
-              <p className="text-lg font-semibold font-mono">{available.toLocaleString()}</p>
+              <p className="text-lg font-semibold font-mono">{creditUnits(available).toLocaleString()}</p>
             </div>
             <div className="space-y-1 text-right">
               <p className="text-sm text-muted-foreground">Required</p>
-              <p className="text-lg font-semibold font-mono text-destructive">{required.toLocaleString()}</p>
+              <p className="text-lg font-semibold font-mono text-destructive">{creditUnits(required).toLocaleString()}</p>
             </div>
           </div>
 
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Short by</span>
-            <span className="font-medium font-mono">{shortage.toLocaleString()} credits</span>
+            <span className="font-medium font-mono">{creditUnits(shortage).toLocaleString()} credits</span>
           </div>
 
           <div className="flex items-center justify-between text-sm">
@@ -65,20 +67,24 @@ export function InsufficientCreditsModal({
           </div>
         </div>
 
-        <DialogFooter className="flex-col sm:flex-row gap-2">
-          <Button asChild className="flex-1">
-            <a href="/pricing">
-              <ArrowUpCircle className="w-4 h-4" />
-              Upgrade Plan
-            </a>
-          </Button>
-          <Button variant="outline" asChild className="flex-1">
-            <a href="/credits/buy">
-              <CreditCard className="w-4 h-4" />
-              Buy Credits
-            </a>
-          </Button>
-        </DialogFooter>
+        {/* Both CTAs sell the platform's credits — withheld on a deployment
+            without self-serve purchase (a prepaid instance). */}
+        {surfaceBillingSelfServe() && (
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button asChild className="flex-1">
+              <a href="/pricing">
+                <ArrowUpCircle className="w-4 h-4" />
+                Upgrade Plan
+              </a>
+            </Button>
+            <Button variant="outline" asChild className="flex-1">
+              <a href="/credits/buy">
+                <CreditCard className="w-4 h-4" />
+                Buy Credits
+              </a>
+            </Button>
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   )

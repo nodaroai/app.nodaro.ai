@@ -3,6 +3,7 @@ import { RefreshCw, Loader2, DollarSign, Coins, BarChart3 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAuth } from "@/hooks/use-auth"
+import { serverUnitLabel } from "@/lib/credit-units"
 import { useWorkflowCostSummary } from "@/hooks/queries/use-editor-queries"
 import { isValidUuid } from "@/lib/uuid"
 import { useT } from "@/lib/i18n"
@@ -57,10 +58,15 @@ function formatNodeType(type: string): string {
 // Null-aware money formatters (§5.2 rule 1): `null` = the metering authority
 // could not answer, and MUST render distinctly (an em dash) — never as $0 / 0 CR,
 // which would tell someone a paid generation was free.
-function formatCreditsN(credits: number | null): string {
+//
+// The credit figures in a cost summary arrive ALREADY in the display unit (the
+// billing seam converts them) and carry their `unit`; they are rendered
+// verbatim next to that unit — never re-converted, never paired with a label
+// derived elsewhere (Phase B, H13).
+function formatCreditsN(credits: number | null, unit: string | undefined): string {
   if (credits == null) return "—"
   // credit-gated: the Cost tab is mount-gated by the billing surface (mountCostTab).
-  return `${credits} CR`
+  return `${credits} ${serverUnitLabel(unit)}`
 }
 
 function formatDollarsN(usd: number | null): string {
@@ -201,7 +207,7 @@ export function CostTab({ className = "" }: CostTabProps) {
                       <Coins className="w-4 h-4 text-[#ff0073]" />
                     )}
                     <span className="ml-1.5 text-xs font-medium">
-                      {dollars ? "$" : "CR"}
+                      {dollars ? "$" : serverUnitLabel(summary?.unit, t("credits.unitShort"))}
                     </span>
                   </Button>
                 </TooltipTrigger>
@@ -244,7 +250,7 @@ export function CostTab({ className = "" }: CostTabProps) {
           <div className="mb-6 p-5 rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E]">
             <div className="flex items-baseline gap-3">
               <span className="text-3xl font-bold text-[#ff0073] font-mono">
-                {dollars ? formatDollarsN(summary.total_cost_usd ?? null) : formatCreditsN(summary.total_credits)}
+                {dollars ? formatDollarsN(summary.total_cost_usd ?? null) : formatCreditsN(summary.total_credits, summary.unit)}
               </span>
               <span className="text-sm text-gray-500 dark:text-[#94A3B8]">
                 {summary.total_jobs === 1 ? t("cost.totalFromRun") : t("cost.totalFromRuns", { n: summary.total_jobs })}
@@ -272,7 +278,7 @@ export function CostTab({ className = "" }: CostTabProps) {
                     {t("cost.col.runs")}
                   </th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
-                    {dollars ? t("cost.col.perRunDollars") : t("cost.col.perRunCredits")}
+                    {dollars ? t("cost.col.perRunDollars") : t("cost.col.perRunCredits", { u: serverUnitLabel(summary.unit, t("credits.unitShort")) })}
                   </th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider">
                     {t("cost.col.total")}
@@ -300,12 +306,10 @@ export function CostTab({ className = "" }: CostTabProps) {
                     <td className="px-4 py-3 text-right text-gray-500 dark:text-[#94A3B8] font-mono">
                       {dollars
                         ? formatDollarsN(item.runs > 0 && item.total_cost_usd != null ? item.total_cost_usd / item.runs : null)
-                        : item.avg_credits_per_run == null
-                          ? "—"
-                          : `${item.avg_credits_per_run} CR` /* credit-gated: Cost tab mounts behind the billing-surface gate */}
+                        : formatCreditsN(item.avg_credits_per_run, summary.unit)}
                     </td>
                     <td className="px-4 py-3 text-right text-[#ff0073] font-mono font-medium">
-                      {dollars ? formatDollarsN(item.total_cost_usd ?? null) : formatCreditsN(item.total_credits)}
+                      {dollars ? formatDollarsN(item.total_cost_usd ?? null) : formatCreditsN(item.total_credits, summary.unit)}
                     </td>
                   </tr>
                 ))}
@@ -321,7 +325,7 @@ export function CostTab({ className = "" }: CostTabProps) {
                   </td>
                   <td />
                   <td className="px-4 py-3 text-right text-[#ff0073] font-mono font-bold">
-                    {dollars ? formatDollarsN(summary.total_cost_usd ?? null) : formatCreditsN(summary.total_credits)}
+                    {dollars ? formatDollarsN(summary.total_cost_usd ?? null) : formatCreditsN(summary.total_credits, summary.unit)}
                   </td>
                 </tr>
               </tfoot>

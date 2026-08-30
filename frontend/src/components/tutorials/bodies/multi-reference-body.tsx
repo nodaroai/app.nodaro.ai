@@ -7,6 +7,7 @@
 
 import { useMemo, useRef } from "react"
 import { optimizedImageUrl } from "@/lib/image"
+import { formatCreditUnits } from "@/lib/credit-units"
 import { deriveTutorialGraph, tokenizePrompt } from "../derive-tutorial-data"
 import type { TutorialBodyProps } from "../tutorial-registry"
 import {
@@ -191,7 +192,7 @@ export default function MultiReferenceBody({
             </div>
             <button type="button" className="mrc-run" onClick={onRunNode}>
               <span className="mrc-run-label">Run this node</span>
-              {estimatedCredits > 0 && <span className="mrc-run-cost">{estimatedCredits} CR</span>}
+              {estimatedCredits > 0 && <span className="mrc-run-cost">{formatCreditUnits(estimatedCredits)}</span>}
             </button>
           </div>
         </section>

@@ -3,6 +3,7 @@ import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { getAutoRecharge, updateAutoRecharge, type AutoRechargeConfig } from "@/lib/api"
 import { creditsForLoadUsd, MIN_LOAD_USD, MAX_LOAD_USD } from "@/lib/pricing-data"
+import { creditUnits } from "@/lib/credit-units"
 
 /**
  * Auto-recharge settings — "when my balance drops below X credits, load $Y".
@@ -185,7 +186,7 @@ export function AutoRechargeCard({ frameless = false }: { frameless?: boolean } 
           />
         </span>
         {previewCredits !== null && (
-          <span style={{ color: "var(--blg-t2-dim)" }}>= {previewCredits.toLocaleString()} credits</span>
+          <span style={{ color: "var(--blg-t2-dim)" }}>= {creditUnits(previewCredits).toLocaleString()} credits</span>
         )}
       </div>
 

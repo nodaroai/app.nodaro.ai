@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react"
 import { hasCredits } from "@/lib/edition"
+import { creditUnits } from "@/lib/credit-units"
 import { useNavigate, useParams } from "react-router-dom"
 import { PIPELINE_PINNABLE_IMAGE_MODELS, PIPELINE_PINNABLE_VIDEO_MODELS, getFeaturedEntities, estimateFilmCredits } from "@nodaro/shared"
 import { STYLE_PRESETS, getStylePreset } from "@nodaro/prompts"
@@ -520,9 +521,9 @@ function PipelinePrompt({ onOpen }: { onOpen: (id: string) => void }) {
         <div className="mt-3 flex items-baseline justify-between rounded-md border border-dashed bg-card/50 px-3 py-2">
           <span className="text-xs text-muted-foreground">{t("pipe.estimatedCost")}</span>
           <span className="text-sm text-foreground">
-            ≈ {cost.totalCredits.toLocaleString()} credits{" "}
+            ≈ {creditUnits(cost.totalCredits).toLocaleString()} credits{" "}
             <span className="text-xs text-muted-foreground">
-              ({cost.shotCount} shots · ~{cost.creditsPerSecond}/s
+              ({cost.shotCount} shots · ~{creditUnits(cost.creditsPerSecond)}/s
               {cost.modelKnown ? "" : " · Auto"})
             </span>
           </span>

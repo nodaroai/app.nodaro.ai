@@ -7,6 +7,8 @@
  * including the curly quotes — so do not "fix" punctuation here.
  */
 
+import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
+
 export const COPILOT_STRINGS = {
   title: "Copilot",
 
@@ -46,12 +48,12 @@ export const COPILOT_STRINGS = {
   proposeTitle: "Run this workflow?",
   proposeRun: "Run",
   proposeSkip: "Skip",
-  proposeEstimate: (credits: number) => `~${credits} credits`,
+  proposeEstimate: (credits: number) => `~${creditUnits(credits)} credits`,
   estimatePending: "pricing…",
-  autoNotice: (credits: number, ceiling: number) => `Auto mode — running it now, ~${credits} of your ${ceiling} credit limit.`,
-  autoNoticePending: (ceiling: number) => `Auto mode — starting it now, within your ${ceiling} credit limit.`,
+  autoNotice: (credits: number, ceiling: number) => `Auto mode — running it now, ~${creditUnits(credits)} of your ${creditUnits(ceiling)} credit limit.`,
+  autoNoticePending: (ceiling: number) => `Auto mode — starting it now, within your ${creditUnits(ceiling)} credit limit.`,
   autoOverLimit: (credits: number, ceiling: number) =>
-    `This run is ~${credits} credits, over your ${ceiling} credit auto limit — asking first.`,
+    `This run is ~${creditUnits(credits)} credits, over your ${creditUnits(ceiling)} credit auto limit — asking first.`,
 
   running: "Running",
   runStop: "Stop",
@@ -69,10 +71,10 @@ export const COPILOT_STRINGS = {
 
   composerPlaceholder: "Describe what you want to do — @ to mention",
   composerHintAsk: "nothing runs without your OK",
-  turnCeiling: (credits: number) => `up to ~${credits} CR`,
+  turnCeiling: (credits: number) => `up to ~${creditUnits(credits)} ${creditUnitLabel()}`,
   turnCeilingFull: (credits: number) =>
-    `This message costs at most ~${credits} credits. You are billed for what the assistant actually uses, which is usually far less.`,
-  composerHintAuto: (ceiling: number) => `auto-runs up to ~${ceiling} credits`,
+    `This message costs at most ~${creditUnits(credits)} credits. You are billed for what the assistant actually uses, which is usually far less.`,
+  composerHintAuto: (ceiling: number) => `auto-runs up to ~${creditUnits(ceiling)} credits`,
   send: "Send",
   stop: "Stop",
   mention: "Mention something of yours",
@@ -148,7 +150,10 @@ export const COPILOT_STRINGS = {
   errorRetry: "Try again",
   cancelled: "Stopped",
   capped: "Reached this turn's budget — send “continue” to keep going.",
-  usedCredits: (credits: number) => `${credits} ${credits === 1 ? "credit" : "credits"}`,
+  usedCredits: (credits: number) => {
+    const n = creditUnits(credits)
+    return `${n} ${n === 1 ? "credit" : "credits"}`
+  },
 } as const
 
 /** Suggestion chips on the empty state. `icon` maps to a lucide component in the view. */

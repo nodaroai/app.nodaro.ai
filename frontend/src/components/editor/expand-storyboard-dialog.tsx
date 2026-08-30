@@ -15,6 +15,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
+import { creditUnits } from "@/lib/credit-units"
 import type { GeneratedScript } from "@/types/nodes"
 
 export type NarrationSource = "visualDescription" | "action" | "imagePrompt"
@@ -91,7 +92,7 @@ export function ExpandStoryboardDialog({
                   {allImagesReady ? (
                     <span className="text-green-600 dark:text-green-400">0 credits</span>
                   ) : (
-                    <>{scenesNeedingImages} x 5 = {imageCost} credits</>
+                    <>{scenesNeedingImages} x {creditUnits(5)} = {creditUnits(imageCost)} credits</>
                   )}
                 </span>
               </div>
@@ -117,7 +118,7 @@ export function ExpandStoryboardDialog({
                           </span>
                         </span>
                         <span className="text-muted-foreground">
-                          {hasImage ? "has image" : "5 credits"}
+                          {hasImage ? "has image" : `${creditUnits(5)} credits`}
                         </span>
                       </div>
                     )
@@ -136,11 +137,11 @@ export function ExpandStoryboardDialog({
                 <Separator />
                 <div className="flex justify-between">
                   <span>{sceneCount}x Image to Video nodes</span>
-                  <span className="text-muted-foreground">{sceneCount} x 20 = {videoCost} credits</span>
+                  <span className="text-muted-foreground">{sceneCount} x {creditUnits(20)} = {creditUnits(videoCost)} credits</span>
                 </div>
                 <div className="flex justify-between">
                   <span>{sceneCount}x Text to Speech nodes</span>
-                  <span className="text-muted-foreground">{sceneCount} x 3 = {ttsCost} credits</span>
+                  <span className="text-muted-foreground">{sceneCount} x {creditUnits(3)} = {creditUnits(ttsCost)} credits</span>
                 </div>
                 <div className="flex justify-between">
                   <span>{sceneCount}x Merge Video & Audio</span>
@@ -153,7 +154,7 @@ export function ExpandStoryboardDialog({
                 {includeCombine && (
                   <div className="flex justify-between">
                     <span>1x Combine Videos node</span>
-                    <span className="text-muted-foreground">1 x 2 = {combineCost} credits</span>
+                    <span className="text-muted-foreground">1 x {creditUnits(2)} = {creditUnits(combineCost)} credits</span>
                   </div>
                 )}
               </>
@@ -164,7 +165,7 @@ export function ExpandStoryboardDialog({
                 <Sparkles className="w-3.5 h-3.5" />
                 Total estimated
               </span>
-              <span>{totalCost} credits</span>
+              <span>{creditUnits(totalCost)} credits</span>
             </div>
           </div>
 

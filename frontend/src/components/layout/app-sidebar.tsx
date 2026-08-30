@@ -58,7 +58,8 @@ const OrgSwitcherSection = hasOrganizations()
   ? lazy(() => import("@/ee/components/org/org-switcher-section").then((m) => ({ default: m.OrgSwitcherSection })))
   : null
 import { otherNodaroApps } from "@/lib/nodaro-apps"
-import { surfaceNavHidden } from "@/lib/surface-selectors"
+import { surfaceNavHidden, surfaceBillingSelfServe } from "@/lib/surface-selectors"
+import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
 import type { NavKey } from "@/lib/surface-profile"
 import {
   DropdownMenu,
@@ -203,7 +204,7 @@ function CreditRow({
           {label}
         </span>
         <span style={{ fontSize: 14, fontWeight: 600, color: "var(--blg-t1)", fontVariantNumeric: "tabular-nums" }}>
-          {value.toLocaleString()}
+          {creditUnits(value).toLocaleString()}
         </span>
       </div>
       <div style={{ height: 3, borderRadius: 2, background: "var(--blg-track)", overflow: "hidden" }}>
@@ -247,6 +248,9 @@ export function AppSidebar({
   // the border faces the content, and every chevron points the other way.
   const isRtl = useAppDir() === "rtl"
   const { data: creditBalance } = useUserCredits(user?.id)
+  // Self-serve purchase off (a prepaid instance): the credit card is a plain
+  // readout — no hop to /billing — and the Pricing/Billing entries are withheld.
+  const selfServe = surfaceBillingSelfServe()
   const [mounted, setMounted] = useState(false)
   const updateInfo = useUpdateCheck()
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false)
@@ -435,19 +439,23 @@ export function AppSidebar({
                 <TooltipTrigger asChild>
                   <button
                     type="button"
-                    onClick={() => navigate("/billing")}
-                    className="w-full flex flex-col items-center gap-1.5 hover:opacity-90 transition-opacity"
+                    onClick={selfServe ? () => navigate("/billing") : undefined}
+                    className={cn(
+                      "w-full flex flex-col items-center gap-1.5",
+                      selfServe && "hover:opacity-90 transition-opacity",
+                    )}
                     style={{
                       padding: "10px 6px",
                       borderRadius: 12,
                       border: "1px solid var(--blg-border-3)",
                       background: "var(--blg-card)",
+                      cursor: selfServe ? undefined : "default",
                     }}
                   >
                     <span className="font-mono" style={{ fontSize: 12, fontWeight: 700, color: "var(--blg-t1)" }}>
-                      {creditBalance.total >= 1000
-                        ? `${(creditBalance.total / 1000).toFixed(1).replace(/\.0$/, "")}K`
-                        : creditBalance.total}
+                      {creditUnits(creditBalance.total) >= 1000
+                        ? `${(creditUnits(creditBalance.total) / 1000).toFixed(1).replace(/\.0$/, "")}K`
+                        : creditUnits(creditBalance.total)}
                     </span>
                     <span className="flex flex-col gap-[3px] w-full px-1">
                       <span
@@ -475,10 +483,10 @@ export function AppSidebar({
                   side={isRtl ? "left" : "right"}
                   className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white border-zinc-200 dark:border-zinc-700"
                 >
-                  <p>{t("nav.creditsLeft", { n: creditBalance.total })}</p>
+                  <p>{t("nav.creditsLeft", { n: creditUnits(creditBalance.total) })}</p>
                   {creditBalance.effectiveTier === "free" ? (
                     creditBalance.dailyLimit != null && (
-                      <p className="text-zinc-500 dark:text-zinc-400">{t("nav.dailyLimitCreditsLeft", { n: Math.max(0, creditBalance.dailyLimit - creditBalance.dailySpent) })}</p>
+                      <p className="text-zinc-500 dark:text-zinc-400">{t("nav.dailyLimitCreditsLeft", { n: creditUnits(Math.max(0, creditBalance.dailyLimit - creditBalance.dailySpent)) })}</p>
                     )
                   ) : creditBalance.periodEnd && formatRenewalTime(creditBalance.periodEnd) ? (
                     <p className="text-zinc-500 dark:text-zinc-400">
@@ -502,7 +510,7 @@ export function AppSidebar({
             // one-time signup grant, nothing refreshes (verified 2026-08-12).
             const subscriptionSubline = isDailyTier
               ? dailyLeft != null
-                ? t("nav.dailyLeft", { n: dailyLeft })
+                ? t("nav.dailyLeft", { n: creditUnits(dailyLeft) })
                 : t("nav.oneTimeGrant")
               : renewal
                 ? t("nav.renewsLower", { time: renewal })
@@ -513,7 +521,7 @@ export function AppSidebar({
             // (light values from the lite mock, dark = original constants).
             return (
               <div
-                className="mx-2 mt-2 cursor-pointer text-left"
+                className={cn("mx-2 mt-2 text-left", selfServe ? "cursor-pointer" : "cursor-default")}
                 style={{
                   border: "1px solid var(--blg-border-3)",
                   borderRadius: 14,
@@ -526,7 +534,7 @@ export function AppSidebar({
                   // scrolls instead (see its min-h-0 + overflow-y-auto).
                   flexShrink: 0,
                 }}
-                onClick={() => navigate("/billing")}
+                onClick={selfServe ? () => navigate("/billing") : undefined}
               >
                 <div style={{ padding: "14px 16px 14px" }}>
                   <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
@@ -547,9 +555,9 @@ export function AppSidebar({
                         color: "var(--blg-t1)",
                       }}
                     >
-                      {creditBalance.total.toLocaleString()}
+                      {creditUnits(creditBalance.total).toLocaleString()}
                     </span>
-                    <span style={{ fontSize: 13, color: "var(--blg-t2-dim)" }}>{t("nav.credits")}</span>
+                    <span style={{ fontSize: 13, color: "var(--blg-t2-dim)" }}>{creditUnitLabel(t("nav.credits"))}</span>
                   </div>
                   {/* Two stacked rows, each with its own bar — replaces the
                       side-by-side columns from the first pass. Splitting the
@@ -591,7 +599,7 @@ export function AppSidebar({
               if (item.hidden) return null
               if (isNavItemSurfaceHidden(item)) return null
               if (item.adminOnly && (!isFeatureEnabled("adminPanel") || !isAdmin)) return null
-              if (item.billingOnly && !isFeatureEnabled("billing")) return null
+              if (item.billingOnly && (!isFeatureEnabled("billing") || !selfServe)) return null
               if (item.multiUserOnly && !isMultiUser()) return null
 
               const isActive = isNavItemActive(item)
@@ -633,7 +641,7 @@ export function AppSidebar({
                 if (item.hidden) return false
                 if (isNavItemSurfaceHidden(item)) return false
                 if (item.adminOnly && (!isFeatureEnabled("adminPanel") || !isAdmin)) return false
-                if (item.billingOnly && !isFeatureEnabled("billing")) return false
+                if (item.billingOnly && (!isFeatureEnabled("billing") || !selfServe)) return false
                 if (item.multiUserOnly && !isMultiUser()) return false
                 return true
               })

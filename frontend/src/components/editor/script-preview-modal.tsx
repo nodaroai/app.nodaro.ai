@@ -11,6 +11,7 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { ExtractReferencesModal } from "./extract-references-modal"
 import { DefineCharacterModal } from "./define-character-modal"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { creditUnits } from "@/lib/credit-units"
 import type { GeneratedScript, ExtractedReference, CharacterDefinition, ScriptScene } from "@/types/nodes"
 import { getSceneCharacterNames, getSceneMoodDisplay } from "@/types/nodes"
 
@@ -216,7 +217,7 @@ export function ScriptPreviewModal({
             <span>{script.totalDuration}s total</span>
             <span className="flex items-center gap-1">
               <Sparkles className="w-3.5 h-3.5" />
-              Est. {totalCredits} credits
+              Est. {creditUnits(totalCredits)} credits
             </span>
           </div>
           <div className="mt-3 flex gap-2">
@@ -237,7 +238,7 @@ export function ScriptPreviewModal({
                   Generate All Images
                   {pendingCount > 0 && (
                     <span className="text-white/70">
-                      ({pendingCount * 5} credits for {pendingCount} images)
+                      ({creditUnits(pendingCount * 5)} credits for {pendingCount} images)
                     </span>
                   )}
                 </>

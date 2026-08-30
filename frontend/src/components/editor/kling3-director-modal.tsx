@@ -12,6 +12,7 @@ import { useAuth } from "@/hooks/use-auth"
 import { useClickOutside } from "@/hooks/use-click-outside"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { uploadFile } from "@/lib/api"
+import { formatCreditUnits } from "@/lib/credit-units"
 import { optimizedImageUrl } from "@/lib/image"
 import type { ImageToVideoData, GeneratedResult } from "@/types/nodes"
 
@@ -1033,7 +1034,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                 {status === "running" ? (
                   <><Loader2 className="w-4 h-4 animate-spin" /> Generating...</>
                 ) : (
-                  <><Play className="w-4 h-4" /> Run This Node ({credits} CR)</>
+                  <><Play className="w-4 h-4" /> Run This Node ({formatCreditUnits(credits)})</>
                 )}
               </button>
               <button

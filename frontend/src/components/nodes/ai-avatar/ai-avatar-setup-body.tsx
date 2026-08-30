@@ -19,6 +19,7 @@ import type { HeygenAvatar } from "@/lib/api"
 import type { AiAvatarData } from "@/types/nodes"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { hasCredits } from "@/lib/edition"
+import { formatCreditUnits } from "@/lib/credit-units"
 import { avatarSelectionPatch } from "@/components/heygen/heygen-catalog"
 import { AvatarPickerModal } from "@/components/heygen/avatar-picker-modal/avatar-picker-modal"
 import { AvatarQuickPick } from "./avatar-quick-pick"
@@ -122,7 +123,7 @@ export function AiAvatarSetupBody({ nodeId, data, failed = false, failureMessage
           onSelect={pickAvatar}
           // Credits are a Cloud thing: off-cloud the hook hands back its
           // fallback, which must never be shown as a price.
-          costLabel={hasCredits() && costCredits !== undefined && costCredits > 0 ? `from ${costCredits} CR` : undefined}
+          costLabel={hasCredits() && costCredits !== undefined && costCredits > 0 ? `from ${formatCreditUnits(costCredits)}` : undefined}
         />
       )}
     </div>

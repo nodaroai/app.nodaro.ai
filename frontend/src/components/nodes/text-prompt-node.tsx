@@ -25,6 +25,7 @@ import { SUNO_LYRICS_SUGGESTION_ITEMS } from "@/lib/suno-tags"
 import { getUpstreamNodes } from "@/lib/node-refs"
 import { INK, NODE_COLORS, getEffectiveColor, readableInk } from "@/lib/node-colors"
 import { hasCredits } from "@/lib/edition"
+import { formatCreditUnits } from "@/lib/credit-units"
 import { estimateNodeCredits, EXECUTABLE_TYPES } from "@/components/editor/workflow-editor/types"
 import { getPickerOutputMeta, PICKER_FAMILY_COLORS } from "@/lib/picker-handles"
 import type { TextPromptData } from "@/types/nodes"
@@ -536,7 +537,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
                 <FastForward className="w-3 h-3" />
                 Run from here
                 {hasCredits() && downstreamCredits > 0 && (
-                  <span className="ml-1 opacity-80">({downstreamCredits} CR)</span>
+                  <span className="ml-1 opacity-80">({formatCreditUnits(downstreamCredits)})</span>
                 )}
               </button>
             </NodeRunStripShell>

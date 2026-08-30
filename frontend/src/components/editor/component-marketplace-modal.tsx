@@ -20,6 +20,7 @@ import { toast } from "sonner"
 import { getMyApps, updateApp, deactivateApp, getMonetizationDefaults } from "@/lib/api"
 import type { AppBrowseCard, PublishedApp } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
+import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
 import { CreditCost } from "@/components/ui/credit-cost"
 import { calculateMonetizedCost } from "@nodaro/shared"
 import type { ComponentMetadata } from "@nodaro/shared"
@@ -572,7 +573,7 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
                   )}
                   <div className="flex items-center gap-3 mb-3 text-xs text-muted-foreground">
                     <span>{t("marketplace.runsCount", { n: comp.totalRunCount ?? 0 })}</span>
-                    <CreditCost credits={comp.estimatedCredits ?? 0} suffix={t("marketplace.crPerRun")} />
+                    <CreditCost credits={comp.estimatedCredits ?? 0} suffix={t("marketplace.crPerRun", { u: creditUnitLabel(t("credits.unitShort")) })} />
                     {(comp.favoriteCount ?? 0) > 0 && <span>{t("marketplace.favsCount", { n: comp.favoriteCount })}</span>}
                   </div>
                   <div className="flex items-center gap-1.5 flex-wrap">
@@ -980,7 +981,7 @@ function ComponentEditDialog({
                 <div className="space-y-3 pl-1">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <Label className="text-xs">{t("marketplace.flatFeeLabel")}</Label>
+                      <Label className="text-xs">{t("marketplace.flatFeeLabel", { u: creditUnitLabel(t("credits.unitShort")) })}</Label>
                       <Input type="number" min={0} value={monetizationFlatFee} onChange={(e) => setMonetizationFlatFee(Math.max(0, Number(e.target.value) || 0))} className="h-8 text-xs mt-1" />
                     </div>
                     <div>
@@ -989,7 +990,7 @@ function ComponentEditDialog({
                     </div>
                   </div>
                   <p className="text-[11px] text-muted-foreground">
-                    {t("marketplace.costSummary", { base: baseCredits, pay: calculatedCredits })}
+                    {t("marketplace.costSummary", { base: creditUnits(baseCredits), pay: creditUnits(calculatedCredits), u: creditUnitLabel(t("credits.unitShort")) })}
                   </p>
                 </div>
               )}

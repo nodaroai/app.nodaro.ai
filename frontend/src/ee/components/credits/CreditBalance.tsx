@@ -2,6 +2,7 @@ import { Coins } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { hasCredits } from "@/lib/edition"
 import { useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
+import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
 
 export { useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
 
@@ -44,15 +45,15 @@ export function CreditBalance({ userId, onClick }: CreditBalanceProps) {
       <Coins className="w-4 h-4 text-muted-foreground" />
       {isPayg ? (
         <span className="text-sm font-medium font-mono" title="Free credits (studio) / API credits (SDK, MCP, API)">
-          {balance.subscription.toLocaleString()}
+          {creditUnits(balance.subscription).toLocaleString()}
           <span className="text-muted-foreground"> free · </span>
-          {balance.topup.toLocaleString()}
+          {creditUnits(balance.topup).toLocaleString()}
           <span className="text-muted-foreground"> API</span>
         </span>
       ) : (
-        <span className="text-sm font-medium font-mono">{balance.total.toLocaleString()}</span>
+        <span className="text-sm font-medium font-mono">{creditUnits(balance.total).toLocaleString()}</span>
       )}
-      <span className="text-xs text-muted-foreground hidden sm:inline">credits</span>
+      <span className="text-xs text-muted-foreground hidden sm:inline">{creditUnitLabel("credits")}</span>
       <Badge
         variant="secondary"
         className="text-[10px] px-1.5 py-0 h-4 capitalize"

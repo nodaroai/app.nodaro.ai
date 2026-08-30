@@ -4,6 +4,8 @@ import { Calendar, Loader2 } from "lucide-react"
 import type { SubscriptionInfo, UserBalance } from "@/lib/api"
 import { PRICING_TIERS } from "@/lib/pricing-data"
 import { getScheduledCancelDate } from "@/ee/lib/subscription"
+import { creditUnits } from "@/lib/credit-units"
+import { surfaceBillingSelfServe } from "@/lib/surface-selectors"
 import {
   sectionCardSpaced,
   sectionIcon,
@@ -82,7 +84,7 @@ export function CurrentPlanCard({
     },
     {
       label: "Credits / month",
-      value: (balance?.monthlyAllocation ?? 0).toLocaleString("en-US"),
+      value: creditUnits(balance?.monthlyAllocation ?? 0).toLocaleString("en-US"),
     },
     ...(storageLimitBytes != null && storageLimitBytes > 0
       ? [{ label: "Storage", value: formatBytes(storageLimitBytes) }]
@@ -175,17 +177,21 @@ export function CurrentPlanCard({
             ↗ {subscription && subscription.status !== "canceled" ? "Manage Subscription" : "Manage Billing"}
           </button>
         )}
-        <Link to="/pricing">
-          <button
-            className="bg-transparent text-[var(--blg-t1-label)] hover:bg-[var(--blg-hover)] hover:text-[var(--blg-t1)] dark:hover:text-white"
-            style={{
-              ...planButton,
-              border: "1px solid var(--blg-border-strong)",
-            }}
-          >
-            ⇅ {subscription ? "Change Plan" : "View Plans"}
-          </button>
-        </Link>
+        {/* Plan change is a self-serve purchase — withheld when the deployment
+            turns self-serve off. */}
+        {surfaceBillingSelfServe() && (
+          <Link to="/pricing">
+            <button
+              className="bg-transparent text-[var(--blg-t1-label)] hover:bg-[var(--blg-hover)] hover:text-[var(--blg-t1)] dark:hover:text-white"
+              style={{
+                ...planButton,
+                border: "1px solid var(--blg-border-strong)",
+              }}
+            >
+              ⇅ {subscription ? "Change Plan" : "View Plans"}
+            </button>
+          </Link>
+        )}
       </div>
     </section>
   )

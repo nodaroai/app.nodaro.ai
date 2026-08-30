@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useCallback, useEffect, Suspense, memo } from "react"
 import { hasCredits } from "@/lib/edition"
+import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
 import { lazyWithRetry } from "@/lib/lazy-with-retry"
 import { ImageIcon } from "lucide-react"
 import { Input } from "@/components/ui/input"
@@ -1971,9 +1972,9 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
             {/* The credit cache is never populated without billing, so the
                 hardcoded fallbacks below rendered as real prices on a
                 self-host (community grind, 2026-08-13). */}
-            <SelectItem value="topaz">{`Topaz factor-based${hasCredits() ? ` (${getCachedCredits("topaz-video") ?? 19} CR)` : ""}`}</SelectItem>
-            <SelectItem value="veo-1080p">{`VEO 1080p${hasCredits() ? ` (${getCachedCredits("veo-1080p") ?? 2} CR)` : ""}`}</SelectItem>
-            <SelectItem value="veo-4k">{`VEO 4K${hasCredits() ? ` (${getCachedCredits("veo-4k") ?? 38} CR)` : ""}`}</SelectItem>
+            <SelectItem value="topaz">{`Topaz factor-based${hasCredits() ? ` (${creditUnits(getCachedCredits("topaz-video") ?? 19)} ${creditUnitLabel(t("credits.unitShort"))})` : ""}`}</SelectItem>
+            <SelectItem value="veo-1080p">{`VEO 1080p${hasCredits() ? ` (${creditUnits(getCachedCredits("veo-1080p") ?? 2)} ${creditUnitLabel(t("credits.unitShort"))})` : ""}`}</SelectItem>
+            <SelectItem value="veo-4k">{`VEO 4K${hasCredits() ? ` (${creditUnits(getCachedCredits("veo-4k") ?? 38)} ${creditUnitLabel(t("credits.unitShort"))})` : ""}`}</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
@@ -4557,7 +4558,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
                 {seedanceResolutions.map((r) => {
                   const credits = getCachedCredits(buildVideoCreditModelIdentifier("seedance-2-extend", seedanceDuration, undefined, undefined, undefined, r))
                   return (
-                    <SelectItem key={r} value={r}>{credits != null ? `${r} (${credits} credits)` : r}</SelectItem>
+                    <SelectItem key={r} value={r}>{credits != null ? `${r} (${creditUnits(credits)} credits)` : r}</SelectItem>
                   )
                 })}
               </SelectContent>
@@ -4639,9 +4640,9 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="480p">{`480p (${getCachedCredits("speech-to-video") ?? 4} credits)`}</SelectItem>
-            <SelectItem value="580p">{`580p (${getCachedCredits("speech-to-video:580p") ?? 6} credits)`}</SelectItem>
-            <SelectItem value="720p">{`720p (${getCachedCredits("speech-to-video:720p") ?? 8} credits)`}</SelectItem>
+            <SelectItem value="480p">{`480p (${creditUnits(getCachedCredits("speech-to-video") ?? 4)} credits)`}</SelectItem>
+            <SelectItem value="580p">{`580p (${creditUnits(getCachedCredits("speech-to-video:580p") ?? 6)} credits)`}</SelectItem>
+            <SelectItem value="720p">{`720p (${creditUnits(getCachedCredits("speech-to-video:720p") ?? 8)} credits)`}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -4837,7 +4838,7 @@ export function FaceSwapConfig({ data, onUpdate, sources, edges, nodeId }: Confi
       <p className="text-xs text-muted-foreground px-1">
         {t("vidcfg.descFaceSwap1")}
         {t("vidcfg.descFaceSwap2")}
-        Powered by Roop (Replicate) — {getCachedCredits("roop-face-swap") ?? 16} CR per run.
+        Powered by Roop (Replicate) — {creditUnits(getCachedCredits("roop-face-swap") ?? 16)} {creditUnitLabel(t("credits.unitShort"))} per run.
       </p>
 
       {/* Unified injected-references list — face-swap doesn't have a prompt to
@@ -5280,12 +5281,13 @@ export function VideoAnalysisConfig({ data, onUpdate }: ConfigProps<VideoAnalysi
 // --- AI Audit (video-audit) -----------------------------------------------
 
 /** The credit span of one audit family, DERIVED from the shared bucket table
- *  so a reprice can never leave stale numbers in this panel's copy. */
-function auditCreditRange(auto: boolean): string {
+ *  so a reprice can never leave stale numbers in this panel's copy. Raw
+ *  Nodaro credits — the render site converts each bound to the display unit. */
+function auditCreditRange(auto: boolean): { readonly min: number; readonly max: number } {
   const values = Object.entries(VIDEO_AUDIT_BUCKET_CREDITS)
     .filter(([id]) => id.startsWith("video-audit:auto:") === auto)
     .map(([, credits]) => credits)
-  return `${Math.min(...values)}–${Math.max(...values)}`
+  return { min: Math.min(...values), max: Math.max(...values) }
 }
 
 /**
@@ -5297,6 +5299,8 @@ function auditCreditRange(auto: boolean): string {
 export function VideoAuditConfig({ sources }: ConfigProps<VideoAuditNodeData>) {
   const analysisSource = sources.find((s) => s.targetHandle === "analysis")
   const videoSource = sources.find((s) => s.targetHandle === "video")
+  const wiredRange = auditCreditRange(false)
+  const autoRange = auditCreditRange(true)
 
   return (
     <div className="flex flex-col gap-3">
@@ -5310,8 +5314,8 @@ export function VideoAuditConfig({ sources }: ConfigProps<VideoAuditNodeData>) {
         </p>
         <p className="text-[11px] text-muted-foreground leading-snug">
           {analysisSource
-            ? `The audit re-watches the clip against that analysis and applies only video-verified corrections, disclosing every change. ${auditCreditRange(false)} credits by video length.`
-            : `Wire a Video Analysis (or another AI Audit) into the Analysis handle to audit it. Left unwired, this node runs its own fast analysis first — the same audit, but ${auditCreditRange(true)} credits by video length instead of ${auditCreditRange(false)}.`}
+            ? `The audit re-watches the clip against that analysis and applies only video-verified corrections, disclosing every change. ${creditUnits(wiredRange.min)}–${creditUnits(wiredRange.max)} credits by video length.`
+            : `Wire a Video Analysis (or another AI Audit) into the Analysis handle to audit it. Left unwired, this node runs its own fast analysis first — the same audit, but ${creditUnits(autoRange.min)}–${creditUnits(autoRange.max)} credits by video length instead of ${creditUnits(wiredRange.min)}–${creditUnits(wiredRange.max)}.`}
         </p>
       </div>
 

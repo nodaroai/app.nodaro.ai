@@ -57,7 +57,10 @@ describe("CostTab — no dollar figure without admin + explicit toggle", () => {
       expect(container.textContent).not.toContain("$")
       expect(container.textContent).not.toContain("1.2639")
       expect(container.textContent).not.toContain("1.264")
-      expect(screen.getAllByText(/36 CR/).length).toBeGreaterThan(0)
+      // The figure renders under the unit the summary arrived with (H13): the
+      // provider id "credits" (and an unstated unit) map to the short label.
+      const label = unit === "credits" || unit === "" ? "CR" : unit
+      expect(screen.getAllByText(new RegExp(`36 ${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`)).length).toBeGreaterThan(0)
     })
   }
 
@@ -65,7 +68,7 @@ describe("CostTab — no dollar figure without admin + explicit toggle", () => {
     auth.isAdmin = true
     surface.displayUnit = "usd"
     const { container } = render(<CostTab />)
-    expect(screen.getAllByText(/36 CR/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/36 usd/).length).toBeGreaterThan(0)
     expect(container.textContent).not.toContain("1.26")
     // The toggle exists for the admin (it shows the current "CR" state), but
     // the only "$" on screen may be that toggle's own glyph — never a figure.

@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { discardWorkflowExecution, stopWorkflowExecution, getWorkflowExecution } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
+import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
 import { toast } from "sonner"
 import { useQuery } from "@tanstack/react-query"
 import { isNotFound } from "@/lib/api-errors"
@@ -116,7 +117,7 @@ export function ExecutionStatusBar({ executionId, onStopped, onRunInstead }: Exe
           {t("run.progressDone", { completed, total })}
         </span>
         {hasCredits() && credits > 0 && (
-          <span className="opacity-70">{t("run.creditsShort", { credits })}</span>
+          <span className="opacity-70">{t("run.creditsShort", { credits: creditUnits(credits), u: creditUnitLabel(t("credits.unitShort")) })}</span>
         )}
       </div>
 

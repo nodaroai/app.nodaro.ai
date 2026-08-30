@@ -5,6 +5,7 @@ import { hasCredits } from "@/lib/edition"
 import { useT } from "@/lib/i18n"
 import { RUN_BUTTON_CLASS } from "@/lib/run-button-style"
 import { useModelCreditCost, useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
+import { creditUnits } from "@/lib/credit-units"
 
 interface GenerateButtonProps {
   onClick: () => void
@@ -44,6 +45,9 @@ export function GenerateButton({
   const insufficient = creditsActive && totalCost != null && totalCost > 0 && totalBalance < totalCost
 
   const showCreditInfo = creditsActive && totalCost != null && totalCost > 0
+  // Display unit (Phase B): the gate above compares RAW credits; only what is
+  // shown converts.
+  const shownCost = creditUnits(totalCost)
 
   const buttonContent = (
     <>
@@ -52,8 +56,8 @@ export function GenerateButton({
       {showCreditInfo && !isRunning && (
         <span className="ml-1 opacity-80">
           {t("credits.amount", {
-            n: totalCost as number,
-            unit: totalCost === 1 ? t("credits.unit.one") : t("credits.unit.other"),
+            n: shownCost,
+            unit: shownCost === 1 ? t("credits.unit.one") : t("credits.unit.other"),
           })}
         </span>
       )}
@@ -77,7 +81,7 @@ export function GenerateButton({
           <span className="w-full">{button}</span>
         </TooltipTrigger>
         <TooltipContent>
-          {t("credits.insufficientTooltip", { need: totalCost as number, have: totalBalance })}
+          {t("credits.insufficientTooltip", { need: shownCost, have: creditUnits(totalBalance) })}
         </TooltipContent>
       </Tooltip>
     )

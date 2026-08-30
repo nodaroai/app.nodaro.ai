@@ -7,6 +7,7 @@ import type { Job } from "@/lib/api"
 import { deleteJob } from "@/lib/api"
 import { isCloud } from "@/lib/edition"
 import { useAuth } from "@/hooks/use-auth"
+import { formatCreditUnits, creditUnits } from "@/lib/credit-units"
 import { toast } from "sonner"
 import { CachedImage } from "@/components/ui/cached-image"
 import { WaveformAudioPlayer } from "@/components/audio-player"
@@ -28,14 +29,15 @@ function getCostDisplayForModal(job: Job, showDollars: boolean): string {
     if (cost < 0.01) return `$${cost.toFixed(4)}`
     return `$${cost.toFixed(3)}`
   }
-  // Admin sees actual vs estimated; regular users only have credits
+  // Admin sees actual vs estimated; regular users only have credits. A job row
+  // carries RAW Nodaro credits — converted here, at render.
   const actual = job.credits_actual
   const estimated = job.credits
   if (actual == null && estimated == null) return "-"
   if (actual != null && estimated != null && actual !== estimated) {
-    return `${actual} CR (est. ${estimated})`
+    return `${formatCreditUnits(actual)} (est. ${creditUnits(estimated)})`
   }
-  return `${actual ?? estimated} CR`
+  return formatCreditUnits(actual ?? estimated)
 }
 
 interface ExecutionDetailModalProps {
@@ -399,7 +401,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
               {state.creditsUsed != null && state.creditsUsed > 0 && (
                 <div className="flex items-center gap-1.5 text-sm text-[#ff0073] font-mono">
                   <Coins className="w-4 h-4" />
-                  {state.creditsUsed} CR
+                  {formatCreditUnits(state.creditsUsed)}
                 </div>
               )}
               <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close" className="text-gray-500 dark:text-[#94A3B8] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]">
@@ -462,7 +464,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                       <div className="py-3">
                         <div className="flex items-start gap-3">
                           <span className="text-sm font-medium text-gray-700 dark:text-[#E2E8F0] shrink-0 w-32">Credits</span>
-                          <span className="text-sm text-[#ff0073] font-mono">{state.creditsUsed} CR</span>
+                          <span className="text-sm text-[#ff0073] font-mono">{formatCreditUnits(state.creditsUsed)}</span>
                         </div>
                       </div>
                     )}

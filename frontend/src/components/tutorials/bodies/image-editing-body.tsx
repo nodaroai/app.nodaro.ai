@@ -12,6 +12,7 @@
 
 import { useMemo, useState } from "react"
 import { optimizedImageUrl } from "@/lib/image"
+import { formatCreditUnits } from "@/lib/credit-units"
 import { deriveEditFanOut } from "./image-editing-edits"
 import {
   CRITIC_LINE,
@@ -266,7 +267,7 @@ export default function ImageEditingBody({
                 <button type="button" className="ied-run" onClick={onRunNode}>
                   <span>Open this template</span>
                   {estimatedCredits > 0 && (
-                    <span className="ied-run-cost">{estimatedCredits} CR to run it all</span>
+                    <span className="ied-run-cost">{formatCreditUnits(estimatedCredits)} to run it all</span>
                   )}
                 </button>
               </div>

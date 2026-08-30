@@ -37,6 +37,7 @@ import { ModelSearchSelect } from "./model-search-select"
 import { ModelDescriptionHint } from "./model-description-hint"
 import { MappableField } from "./mappable-field"
 import { prefetchModelCredits, useModelCredits } from "@/ee/hooks/use-model-credits"
+import { formatCreditUnits } from "@/lib/credit-units"
 import type { ConfigProps } from "./types"
 
 type CharacterConfigProps = ConfigProps<CharacterNodeData> & { nodeId?: string }
@@ -278,7 +279,7 @@ export function FaceConfig({ data, onUpdate, sources, fieldMappings, onMapField 
         disabled={isRunning || !data.faceName || (!data.sourceImageUrl && !hasConnectedImage)}
         onClick={() => { if (selectedNodeId && runSingleNode) runSingleNode(selectedNodeId) }}
       >
-        {isRunning ? (<><Loader2 className="w-3 h-3 mr-1.5 animate-spin" />Generating...</>) : (<><Play className="w-3 h-3 mr-1.5" />Generate Headshot{creditCost > 0 ? ` (${creditCost} CR)` : ""}</>)}
+        {isRunning ? (<><Loader2 className="w-3 h-3 mr-1.5 animate-spin" />Generating...</>) : (<><Play className="w-3 h-3 mr-1.5" />Generate Headshot{creditCost > 0 ? ` (${formatCreditUnits(creditCost)})` : ""}</>)}
       </Button>
       {!data.sourceImageUrl && !hasConnectedImage && data.faceName && (
         <p className="text-[10px] text-muted-foreground">Upload a reference photo or connect an Upload Image node to enable headshot generation.</p>

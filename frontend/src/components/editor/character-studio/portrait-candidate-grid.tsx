@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { formatCreditUnits } from "@/lib/credit-units"
 import { optimizedImageUrl } from "@/lib/image"
 import { X } from "lucide-react"
 import { useMediaAspectRatio } from "../studio-shell/use-media-aspect"
@@ -34,7 +35,7 @@ export function PortraitCandidateGrid({
 }: PortraitCandidateGridProps) {
   const [count, setCount] = useState<CandidateCount>(1)
   const totalCost = cost * count
-  const generateLabel = count === 1 ? `Generate · ${totalCost} CR` : `Generate ${count} · ${totalCost} CR`
+  const generateLabel = count === 1 ? `Generate · ${formatCreditUnits(totalCost)}` : `Generate ${count} · ${formatCreditUnits(totalCost)}`
 
   return (
     <div className="space-y-2">

@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { creditsForLoadUsd, MIN_LOAD_USD, MAX_LOAD_USD } from "@/lib/pricing-data"
+import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
 
 /**
  * "API / Pay-as-you-go" top-up section, styled per the designer's Pricing
@@ -55,7 +56,7 @@ export function TopupSection({ topupBalance, onLoad, loading }: TopupSectionProp
                 YOUR TOP-UP BALANCE
               </div>
               <div className="font-mono text-3xl font-bold text-[var(--tps-cyan)]">
-                {topupBalance.toLocaleString()}
+                {creditUnits(topupBalance).toLocaleString()}
               </div>
             </div>
           )}
@@ -86,12 +87,12 @@ export function TopupSection({ topupBalance, onLoad, loading }: TopupSectionProp
                   <span className="absolute inset-x-0 top-0 h-0.5 bg-[var(--tps-cyan)]" />
                 )}
                 <div className="font-mono text-xs tracking-widest text-muted-foreground">
-                  ${(usd / credits).toFixed(4)} / CR
+                  ${(usd / creditUnits(credits)).toFixed(4)} / {creditUnitLabel()}
                 </div>
                 <div className="mt-3 text-4xl font-bold tracking-tight">
-                  {credits.toLocaleString()}
+                  {creditUnits(credits).toLocaleString()}
                 </div>
-                <div className="text-sm text-muted-foreground">credits</div>
+                <div className="text-sm text-muted-foreground">{creditUnitLabel("credits")}</div>
                 <div className="mt-3 text-2xl font-semibold">${usd}</div>
               </button>
             )
@@ -116,7 +117,7 @@ export function TopupSection({ topupBalance, onLoad, loading }: TopupSectionProp
           </div>
           <span className="text-sm text-muted-foreground">
             {customUsd && customValid
-              ? `= ${(creditsForLoadUsd(parsedCustom) ?? 0).toLocaleString()} credits`
+              ? `= ${creditUnits(creditsForLoadUsd(parsedCustom)).toLocaleString()} credits`
               : "credits valid for 12 months"}
           </span>
           <button

@@ -18,6 +18,7 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import { CachedImage } from "@/components/ui/cached-image"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { creditUnits } from "@/lib/credit-units"
 import { NodeJobProgress } from "./node-job-progress"
 import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
 import type { GenerateScriptData, GeneratedScriptResult } from "@/types/nodes"
@@ -136,12 +137,12 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
               <div className="flex items-center justify-between text-[10px] text-muted-foreground/70 pt-0.5 border-t border-border/30">
                 <span className="flex items-center gap-1">
                   <Sparkles className="w-3 h-3" />
-                  Est. {totalEstimatedCredits} credits
+                  Est. {creditUnits(totalEstimatedCredits)} credits
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <span className="flex items-center gap-0.5"><ImageIcon className="w-2.5 h-2.5" />{sceneCount * 5}</span>
+                  <span className="flex items-center gap-0.5"><ImageIcon className="w-2.5 h-2.5" />{creditUnits(sceneCount * 5)}</span>
                   +
-                  <span className="flex items-center gap-0.5"><Film className="w-2.5 h-2.5" />{sceneCount * 20}</span>
+                  <span className="flex items-center gap-0.5"><Film className="w-2.5 h-2.5" />{creditUnits(sceneCount * 20)}</span>
                 </span>
               </div>
 

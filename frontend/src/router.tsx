@@ -2,7 +2,7 @@ import { createBrowserRouter, Navigate, type RouteObject } from "react-router-do
 import { Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { hasAdmin, hasCredits, isCloud, isMultiUser, hasOrganizations } from "@/lib/edition"
-import { surfaceNavHidden } from "@/lib/surface-selectors"
+import { surfaceNavHidden, surfaceBillingSelfServe } from "@/lib/surface-selectors"
 
 // Error handling
 import RouteErrorBoundary from "@/components/route-error-boundary"
@@ -227,8 +227,9 @@ export const router = createBrowserRouter([
       }]),
   // Public, no-auth return page for embedded Stripe Checkout (new-tab flow).
   // Only reachable by returning from Stripe, which never happens without
-  // billing — and the page talks about plans and credits.
-  ...(hasCredits()
+  // billing — and the page talks about plans and credits. Also withheld when
+  // the deployment turns self-serve purchase off (nothing is ever checked out).
+  ...(hasCredits() && surfaceBillingSelfServe()
     ? [
         {
           path: "/checkout-complete",
@@ -302,10 +303,15 @@ export const router = createBrowserRouter([
         path: "/video-director",
         element: <SuspenseWrapper><VideoDirectorPage /></SuspenseWrapper>,
       },
-      {
-        path: "/billing",
-        element: <SuspenseWrapper><BillingPage /></SuspenseWrapper>,
-      },
+      // Self-serve billing. Withheld when the deployment turns self-serve
+      // purchase off (a prepaid instance's users must not buy the platform's
+      // credits by card); the sidebar hides its entry on the same switch.
+      ...(surfaceBillingSelfServe()
+        ? [{
+            path: "/billing",
+            element: <SuspenseWrapper><BillingPage /></SuspenseWrapper>,
+          }]
+        : []),
       {
         path: "/settings",
         element: <SuspenseWrapper><SettingsPage /></SuspenseWrapper>,
