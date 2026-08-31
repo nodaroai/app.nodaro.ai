@@ -1703,9 +1703,11 @@ function readNodeDirectionLevers(data: WorkflowNodeData): {
  * `direction` / `structured` are the node's STORED cinematic ids (P4b — the
  * video twin of the image side's node-data direction). They are OPT-IN per
  * caller, not read here: only the generate-video family (`generate-video` and
- * its two legacy modes) passes them, so every other video case that funnels
- * through this helper (v2v, gvp, s2v…) keeps its exact text — and the frontend,
- * which has no equivalent single funnel, can mirror that set branch-for-branch.
+ * its two legacy modes) passes them, so `generate-video-pro` — the ONLY other
+ * case that funnels through this helper — keeps its exact text. The video cases
+ * that compose their prompt inline instead (v2v, s2v…) never reach this helper
+ * at all, so they are untouched by construction. The frontend, which has no
+ * equivalent single funnel, mirrors that set branch-for-branch.
  * Passing neither is an exact no-op (`composeVideoPromptText` hands the body
  * back verbatim, `undefined` included).
  */
@@ -1738,7 +1740,7 @@ function composeVideoPrompt(args: {
   // frames the body with identity directives — see `assemble-video-input.ts`.
   p = composeVideoPromptText(p, args.direction, args.structured)
   // B4b: apply any registered PromptPolicy at the single orchestrator video
-  // funnel (i2v/t2v/v2v/gvp all pass through here). An absent prompt stays
+  // funnel (i2v/t2v/generate-video/gvp all pass through here). An absent prompt stays
   // undefined — no policy on nothing. No policy registered = identity.
   if (p === undefined) return p
   return applyPromptPolicies({ prompt: p, negativePrompt: "", kind: "video" }).prompt
