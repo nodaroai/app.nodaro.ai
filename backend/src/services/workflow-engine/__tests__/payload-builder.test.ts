@@ -880,24 +880,32 @@ describe("buildPayload", () => {
       expect(result.payload.voiceId).toBe("v1")
     })
 
-    it("voice-changer-pro maps ordered voice objects to voiceId strings", () => {
+    it("voice-changer-pro passes ordered voice OBJECTS through whole — per-voice levers survive a workflow run", () => {
+      // The old flatten-to-voiceId silently dropped stability/seed/engine on
+      // the orchestrator path (the Run button honoured them, a workflow run
+      // did not). The plugin's wire schema takes the object form natively.
       const n = node("n1", "voice-changer-pro", {
-        orderedVoices: [{ voiceId: "v1" }, { voiceId: "v2" }],
+        orderedVoices: [
+          { voiceId: "v1", engine: "v3", stability: 0.5, seed: 7 },
+          { voiceId: "v2", similarityBoost: 0.6 },
+        ],
       })
       const result = buildPayload(n, jobId, { audioUrl: "a.mp3" })
       expect(result.jobName).toBe("voice-changer-pro")
-      expect(result.payload.orderedVoices).toEqual(["v1", "v2"])
+      expect(result.payload.orderedVoices).toEqual([
+        { voiceId: "v1", engine: "v3", stability: 0.5, seed: 7 },
+        { voiceId: "v2", similarityBoost: 0.6 },
+      ])
     })
 
     // Keep-slot: a null entry means "keep this speaker's original voice"
-    // (cloud-plugins orderedVoices contract). The map must preserve it
-    // positionally instead of crashing on `v.voiceId`.
+    // (cloud-plugins orderedVoices contract) — preserved positionally.
     it("voice-changer-pro preserves a null keep-original slot positionally", () => {
       const n = node("n1", "voice-changer-pro", {
         orderedVoices: [null, { voiceId: "v2" }],
       })
       const result = buildPayload(n, jobId, { audioUrl: "a.mp3" })
-      expect(result.payload.orderedVoices).toEqual([null, "v2"])
+      expect(result.payload.orderedVoices).toEqual([null, { voiceId: "v2" }])
     })
 
     // The orchestrator path has no route in front of it (dispatches straight

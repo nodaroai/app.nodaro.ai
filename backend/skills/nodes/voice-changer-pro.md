@@ -1,7 +1,7 @@
 ---
 node_type: voice-changer-pro
-generated_at: 2026-08-15T21:55:07.318Z
-generated_from: 150c80ac9
+generated_at: 2026-08-31T00:09:26.390Z
+generated_from: 5fe66b0ff
 ---
 
 # Voice Changer Pro
@@ -19,6 +19,11 @@ generated_from: 150c80ac9
     voiceId: string
     voiceLabel: string
     voiceType: "premade" | "custom" | "library"
+    /** Which lane converts this speaker: "sts" (default — speech-to-speech
+     *  recast) | "v3" (Re-speak: the performance is regenerated from the
+     *  transcript with eleven_v3; stability 0/0.5/1 only;
+     *  similarityBoost/style/useSpeakerBoost are ignored). */
+    engine?: "sts" | "v3"
     stability?: number
     similarityBoost?: number
     style?: number

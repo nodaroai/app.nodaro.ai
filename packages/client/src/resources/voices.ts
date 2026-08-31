@@ -262,6 +262,18 @@ export type VoiceChangerProVoice =
   | {
       /** Target voice — premade name (`"Rachel"`, `"Aria"`, …) or an ElevenLabs UUID for a custom clone. */
       voiceId: string
+      /**
+       * Which lane converts this speaker. `"sts"` (default) is the classic
+       * speech-to-speech recast; `"v3"` is RE-SPEAK — the performance is
+       * REGENERATED from the transcript with eleven_v3 (supports `[audio
+       * tags]`; original delivery is replaced, and lips won't match on video).
+       * A v3 speaker needs transcript text: pass an `analysis` whose
+       * `segments[].text` carries it (analyze now emits this), or omit
+       * `analysis` and the engine re-speaks from its own transcription. For
+       * `"v3"`, `stability` accepts exactly 0 / 0.5 / 1, and
+       * `similarityBoost` / `style` / `useSpeakerBoost` are ignored.
+       */
+      engine?: "sts" | "v3"
       /** ElevenLabs stability (0–1). Higher = steadier, lower = more expressive. */
       stability?: number
       /** ElevenLabs similarity boost (0–1) — how closely the output hugs the target voice's timbre. */
@@ -366,8 +378,10 @@ export interface VoiceChangerProInput {
 export interface VcpAnalysisSpeaker {
   /** Stable speaker id (first-appearance order). */
   id: string
-  /** The speaker's spoken time ranges (seconds). */
-  segments: Array<{ start: number; end: number }>
+  /** The speaker's spoken time ranges (seconds). `text` is what was said in
+   *  the range — the paid input for a speaker recast with `engine: "v3"`
+   *  (editable before conversion); the STS lane ignores it. */
+  segments: Array<{ start: number; end: number; text?: string }>
   /** When the speaker first speaks (seconds). */
   firstStartSec?: number
   /** Rough word count across the clip — a proxy for how much this speaker says. */

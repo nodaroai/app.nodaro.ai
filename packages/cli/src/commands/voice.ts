@@ -192,7 +192,11 @@ Examples:
     )
     .option(
       "--voices-json <json>",
-      'JSON array for per-voice settings — entries are a voice id string, a {"voiceId","stability","similarityBoost","style","useSpeakerBoost","seed","volumeMode","volume"} object, or null to keep that speaker\'s original voice',
+      'JSON array for per-voice settings — entries are a voice id string, a {"voiceId","engine","stability","similarityBoost","style","useSpeakerBoost","seed","volumeMode","volume"} object, or null to keep that speaker\'s original voice',
+    )
+    .option(
+      "--v3 <indexes>",
+      "comma-separated 1-based speaker indexes converted with the Re-speak (eleven_v3) engine instead of the recast — the performance is regenerated from the transcript ([audio tags] supported; delivery replaced; lips won't match on video). With --analysis-file the analysis text is the script; without one the engine re-speaks from its own transcription",
     )
     .option("--model <id>", "speech-to-speech model override")
     .option("--output <mode>", "output mode: video (default — merged, rendered result) or stems (dry per-track stems for an interactive mix; render later with `voice export`)")
@@ -228,6 +232,7 @@ Examples:
           video?: string
           voices?: string
           voicesJson?: string
+          v3?: string
           model?: string
           output?: string
           analysisJson?: string
@@ -290,6 +295,25 @@ Examples:
           if (!orderedVoices.some((v) => v !== null)) {
             warn("At least one speaker must get a new voice — `keep` only marks speakers whose original voice stays")
             process.exit(1)
+          }
+
+          // --v3: 1-based indexes into --voices, marking Re-speak speakers
+          // (index-addressed like dropSpeakerIndexes — a parallel list would
+          // drift out of sync with --voices length; an index cannot).
+          if (opts.v3) {
+            const idxs = opts.v3.split(",").map((s) => parseInt(s.trim(), 10))
+            if (idxs.some((n) => !Number.isInteger(n) || n < 1 || n > orderedVoices.length)) {
+              warn(`--v3 indexes must be 1..${orderedVoices.length} (matching --voices positions)`)
+              process.exit(1)
+            }
+            for (const n of idxs) {
+              const v = orderedVoices[n - 1]
+              if (v === null) {
+                warn(`--v3 index ${n} is a keep-slot — a kept speaker is not converted at all`)
+                process.exit(1)
+              }
+              orderedVoices[n - 1] = typeof v === "string" ? { voiceId: v, engine: "v3" } : { ...v, engine: "v3" }
+            }
           }
 
           const voiceFx = buildVoiceFx(opts)

@@ -4109,10 +4109,19 @@ export function buildPayload(
       // a dynamic per-node credit override into the orchestrator (same
       // class of fix as the route's).
       // A null entry means "keep this speaker's original voice" (cloud-plugins
-      // orderedVoices contract) — preserve it positionally instead of reading
-      // .voiceId off it.
+      // orderedVoices contract) — preserve it positionally.
+      //
+      // OBJECTS PASS THROUGH WHOLE. This used to flatten each entry to its
+      // bare voiceId — which silently dropped every per-voice lever the node
+      // stored (stability, similarityBoost, style, useSpeakerBoost, seed —
+      // a LIVE latent bug: the Run button honoured them, a workflow run did
+      // not) and would have dropped the new `engine` ("v3" re-speak) with
+      // them. The plugin route's wire schema accepts the object form
+      // natively (recastVoice union), so pass the node's own objects.
       const rawVoices = (data.orderedVoices ?? []) as Array<{ voiceId: string } | null>
-      const orderedVoices = rawVoices.map((v) => (v === null ? null : v.voiceId))
+      const orderedVoices = rawVoices.map((v) =>
+        v === null ? null : (typeof v === "string" ? v : { ...v }),
+      )
       // Fail fast BEFORE a job row is created and credits are reserved — same
       // ≥1-non-null contract the route enforces with a 400 and the editor's
       // executeNode enforces with a toast. This path dispatches straight to

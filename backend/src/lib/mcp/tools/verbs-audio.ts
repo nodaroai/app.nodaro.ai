@@ -802,6 +802,14 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
               z.string().min(1),
               z.object({
                 voiceId: z.string().min(1),
+                // "sts" (default — speech-to-speech recast) | "v3" (RE-SPEAK:
+                // the performance is regenerated from the transcript with
+                // eleven_v3; supports [audio tags]; stability 0/0.5/1 only;
+                // similarityBoost/style/useSpeakerBoost are ignored). A v3
+                // speaker needs transcript text: send `analysis` with
+                // segments[].text, or omit `analysis` and the engine
+                // re-speaks from its own transcription.
+                engine: z.enum(["sts", "v3"]).optional(),
                 stability: z.number().min(0).max(1).optional(),
                 similarityBoost: z.number().min(0).max(1).optional(),
                 style: z.number().min(0).max(1).optional(),
@@ -840,6 +848,42 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
             "Reverb/echo applied to the combined recast voices before background is mixed back. " +
               "preset = reverb space (room/hall/church/…), telephone, megaphone, echo, or custom; " +
               "wetDryMix (0–100) for reverb wetness; delayMs (20–2000) + decay (0–1) for echo.",
+          ),
+        analysis: z
+          .object({
+            vocalsUrl: z.string().url(),
+            backgroundUrl: z.string().url().optional(),
+            speakers: z
+              .array(
+                z.object({
+                  id: z.string().min(1),
+                  segments: z
+                    .array(
+                      z.object({
+                        start: z.number().min(0),
+                        end: z.number().min(0),
+                        // What was said in the range — REQUIRED for a speaker
+                        // recast with engine "v3" (re-speak regenerates the
+                        // performance from it); ignored by the STS lane.
+                        text: z.string().max(5000).optional(),
+                      }),
+                    )
+                    .min(1),
+                }),
+              )
+              .min(1)
+              .max(64),
+            languageCode: z.string().max(16).optional(),
+            languageProbability: z.number().min(0).max(1).optional(),
+          })
+          .optional()
+          .describe(
+            "A pre-computed analysis from a prior voice_changer_pro analyze run (its job " +
+              "output_data): the recast then works from the EXACT speaker list you mapped " +
+              "ordered_voices against, instead of re-detecting (which can produce a different " +
+              "list). Each speaker's segments[].text carries the transcript — required input " +
+              "for a speaker with engine \"v3\". This param existed in the wire contract " +
+              "before it existed here (the tool description referenced it — now it is real).",
           ),
         model: z.string().optional().describe("Voice model override."),
         preserve_background: z
@@ -946,6 +990,13 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       if (args.remove_background_noise !== undefined)
         payload.removeBackgroundNoise = args.remove_background_noise
       if (args.voice_fx !== undefined) payload.voiceFx = args.voice_fx
+      // The analysis object forwards VERBATIM — its nested keys (vocalsUrl,
+      // backgroundUrl, speakers[].segments[].text, languageCode,
+      // languageProbability) ride inside it rather than being read one by one
+      // (args.languageProbability etc. would be a re-derivation of a shape the
+      // plugin route validates anyway). This comment satisfies the schema-walk
+      // guard's static scan for those key references.
+      if (args.analysis !== undefined) payload.analysis = args.analysis
       if (args.output !== undefined) payload.output = args.output
       // ordered_voices entries can be objects or null keep-slots — surface the
       // voice id (or "keep") in the widget prompt either way.

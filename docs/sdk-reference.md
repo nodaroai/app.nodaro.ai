@@ -2896,6 +2896,12 @@ type VoiceChangerProVoice =
   | string
   | {
       voiceId: string
+      engine?: "sts" | "v3"       // "sts" (default) = speech-to-speech recast; "v3" = Re-speak —
+                                  // the performance is REGENERATED from the transcript with eleven_v3
+                                  // ([audio tags] supported; stability 0/0.5/1 only; similarityBoost/
+                                  // style/useSpeakerBoost ignored). A v3 speaker needs transcript text:
+                                  // pass an analysis whose segments[].text carries it, or omit analysis
+                                  // and the engine re-speaks from its own transcription.
       stability?: number          // 0–1
       similarityBoost?: number    // 0–1
       style?: number              // 0–1, default 0

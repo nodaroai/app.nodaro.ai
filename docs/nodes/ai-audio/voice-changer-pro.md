@@ -42,6 +42,7 @@ Each entry in **Ordered Voices** may be an object that pins per-speaker ElevenLa
 | Field | Type | Range | Default | Description |
 |-------|------|-------|---------|-------------|
 | `voiceId` | `string` | — | *(required)* | Target voice — premade name (`Rachel`, `Aria`, …) or an ElevenLabs UUID for a custom clone. |
+| `engine` | `"sts" \| "v3"` | — | `"sts"` | Which lane converts this speaker. `"sts"` is the classic speech-to-speech recast. `"v3"` is **Re-speak**: the performance is regenerated from the transcript with eleven_v3 (`[audio tags]` supported) — the original delivery is replaced, and lips won't match on video. A v3 speaker needs transcript text (the analysis now carries per-segment `text`, editable before conversion); without an analysis the engine re-speaks from its own transcription. For `"v3"`, stability accepts exactly 0 / 0.5 / 1, and `similarityBoost`/`style`/`useSpeakerBoost` are ignored. Priced per 1K characters of the re-spoken text (floor: one recast unit). |
 | `stability` | `number` | 0–1 | model default | Higher = steadier and more consistent; lower = more expressive and variable. |
 | `similarityBoost` | `number` | 0–1 | model default | How closely the output hugs the target voice's timbre. |
 | `style` | `number` | 0–1 | `0` | Style exaggeration. `>0` amplifies delivery at the cost of latency / stability. |
