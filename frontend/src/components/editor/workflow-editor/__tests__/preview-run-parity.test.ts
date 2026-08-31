@@ -192,6 +192,12 @@ import { executeNode } from "../execute-node"
 import { generateMusicApi, sunoGenerateApi } from "@/lib/api"
 import { assembleVideoPrompt } from "@/lib/video-prompt-assembly"
 import { assembleAudioPrompt, assembleSunoPreview } from "@/lib/audio-prompt-assembly"
+import {
+  getCameraMotionPromptHint,
+  getCameraMotionTerm,
+  getStylePromptHint,
+  renderStructuredFields,
+} from "@nodaro/prompts"
 import { buildNodeRefMap } from "@/lib/node-refs"
 
 // ---------------------------------------------------------------------------
@@ -586,6 +592,164 @@ describe("preview↔run parity — video", () => {
     expect(runPrompt).toContain("the gadget from @image_1")
     expect(runPrompt).not.toMatch(/\{image:1/)
     expect(previewPrompt).toBe(runPrompt)
+  })
+
+  // ── Node-data cinematic direction / structured ids (P4b) ─────────────────
+  // The FRONTEND half of the keystone whose orchestrator half lives in
+  // `backend/src/services/workflow-engine/__tests__/payload-builder-video-node-direction.test.ts`.
+  // Both halves must agree on the SAME two things: a node carrying neither key
+  // is byte-identical to before the leg, and a node carrying them folds them
+  // exactly once, under the VIDEO verbosity policy, before mention resolution.
+  //
+  // These live in this file because it owns the only harness that runs the REAL
+  // `execute-node` video handlers, and because the preview must fold identically
+  // or the config panel would understate every direction-carrying video run —
+  // the same three-site contract the still side pins.
+  describe("stored direction / structured", () => {
+    // Real catalog ids: every hint helper returns "" on a miss, so a made-up id
+    // would make the fold assertions vacuously pass.
+    const CAMERA_MOTION = "handheld" // MOTION dimension → compact term
+    const STYLE = "cinematic" // LOOK dimension → full clause
+
+    /** Run a `generate-video` node and return the prompt the run actually sent.
+     *  With a start frame it dispatches i2v, without one t2v — the two frontend
+     *  branches a unified node is re-typed onto, and the two fold sites. */
+    async function runGenerateVideo(
+      data: Record<string, unknown>,
+      opts: { startFrame?: boolean } = {},
+    ): Promise<{ runPrompt: string; previewPrompt: string }> {
+      const genVidNode = makeNode("generate-video", { provider: "seedance-2", ...data })
+      mockNodes = [genVidNode]
+      mockEdges = []
+      mockResolveNodeInputs.mockReturnValue(
+        opts.startFrame ? { startFrameUrl: "http://frame.png" } : {},
+      )
+      mockRunVideoGeneration.mockResolvedValue(undefined)
+      mockRunTextToVideoGeneration.mockResolvedValue(undefined)
+
+      await executeNode(genVidNode as any, makeCtx())
+
+      const runPrompt = opts.startFrame
+        ? (mockRunVideoGeneration.mock.calls[0][8] as string)
+        : (mockRunTextToVideoGeneration.mock.calls[0][1] as string)
+      return {
+        runPrompt,
+        previewPrompt: assembleVideoPrompt("generate-video", assemblerArgs(genVidNode)),
+      }
+    }
+
+    for (const mode of [
+      { name: "t2v (no frame)", startFrame: false },
+      { name: "i2v (start frame)", startFrame: true },
+    ]) {
+      it(`(k) ${mode.name}: a node with NEITHER key is byte-identical to before the leg`, async () => {
+        const body = "a knight rides at dusk"
+        const baseline = await runGenerateVideo({ prompt: body }, mode)
+        expect(baseline.runPrompt).toBe(body)
+        expect(baseline.previewPrompt).toBe(body)
+
+        // Junk is DROPPED by the narrow readers, never thrown on — a malformed
+        // blob (a node written years ago by any client) must not change a byte.
+        for (const junk of [
+          { direction: "nope" },
+          { direction: {} },
+          { direction: { cameraMotion: 5 } },
+          { direction: { cameraMotion: "" } },
+          { structured: "nope" },
+          { structured: { person: { age: "drop table" } } },
+        ]) {
+          vi.clearAllMocks()
+          const out = await runGenerateVideo({ prompt: body, ...junk }, mode)
+          expect(out.runPrompt, JSON.stringify(junk)).toBe(body)
+          expect(out.previewPrompt, JSON.stringify(junk)).toBe(body)
+        }
+      })
+
+      it(`(l) ${mode.name}: a motion id folds as its COMPACT term, once, in run and preview`, async () => {
+        const { runPrompt, previewPrompt } = await runGenerateVideo(
+          { prompt: "a knight rides at dusk", direction: { cameraMotion: CAMERA_MOTION } },
+          mode,
+        )
+        const term = getCameraMotionTerm(CAMERA_MOTION)
+        expect(term.length).toBeGreaterThan(0)
+        // The video verbosity policy: the motion term, NOT the full clause.
+        expect(getCameraMotionPromptHint(CAMERA_MOTION)).not.toBe(term)
+        expect(runPrompt).toBe(`a knight rides at dusk. ${term}`)
+        expect(previewPrompt).toBe(runPrompt)
+      })
+
+      it(`(m) ${mode.name}: a look id folds as its FULL clause, and structured lands last`, async () => {
+        const structured = { mood: "brooding" }
+        const { runPrompt, previewPrompt } = await runGenerateVideo(
+          { prompt: "a knight", direction: { style: STYLE }, structured },
+          mode,
+        )
+        const styleHint = getStylePromptHint(STYLE)
+        const fragment = renderStructuredFields(structured)
+        expect(styleHint.length).toBeGreaterThan(0)
+        expect(fragment.length).toBeGreaterThan(0)
+        expect(runPrompt).toBe(`a knight. ${styleHint}. ${fragment}`)
+        expect(previewPrompt).toBe(runPrompt)
+      })
+    }
+
+    it("(n) folds BEFORE mention resolution, so the @image_N binding still frames the body", async () => {
+      // The fold must land on the prompt BODY — folding after the resolver would
+      // push the look description past the identity directives, a worse version
+      // of the bug the stored-ids channel exists to fix.
+      const objNode = {
+        id: "obj-1",
+        type: "object",
+        position: { x: 0, y: 0 },
+        data: { label: "Gadget", objectName: "Gadget", sourceImageUrl: "http://r2/gadget.png" },
+      }
+      const genVidNode = makeNode("generate-video", {
+        prompt: "spinning {image:1:gadget}",
+        provider: "seedance-2",
+        direction: { cameraMotion: CAMERA_MOTION },
+      })
+      mockNodes = [objNode, genVidNode]
+      mockEdges = [
+        { id: "e1", source: "obj-1", target: "n1", sourceHandle: "objectRef", targetHandle: "assets" },
+      ]
+      mockResolveNodeInputs.mockReturnValue({})
+      mockRunTextToVideoGeneration.mockResolvedValue(undefined)
+
+      await executeNode(genVidNode as any, makeCtx())
+
+      const runPrompt = mockRunTextToVideoGeneration.mock.calls[0][1] as string
+      const term = getCameraMotionTerm(CAMERA_MOTION)
+      expect(runPrompt).toContain("the gadget from @image_1")
+      expect(runPrompt).toContain(term)
+      expect(runPrompt).not.toMatch(/\{image:1/)
+      expect(assembleVideoPrompt("generate-video", assemblerArgs(genVidNode))).toBe(runPrompt)
+    })
+
+    it("(o) is ADDITIVE to a wired cinematography source — wired hint first, stored second", async () => {
+      const personNode = {
+        id: "cine-person",
+        type: "person",
+        position: { x: 0, y: 0 },
+        data: { label: "Person", preText: "a weathered fisherman" },
+      }
+      const genVidNode = makeNode("generate-video", {
+        prompt: "walking the pier",
+        provider: "seedance-2",
+        direction: { cameraMotion: CAMERA_MOTION },
+      })
+      mockNodes = [personNode, genVidNode]
+      mockEdges = [{ id: "e1", source: "cine-person", target: "n1", targetHandle: "look" }]
+      mockResolveNodeInputs.mockReturnValue({})
+      mockRunTextToVideoGeneration.mockResolvedValue(undefined)
+
+      await executeNode(genVidNode as any, makeCtx())
+
+      const runPrompt = mockRunTextToVideoGeneration.mock.calls[0][1] as string
+      const term = getCameraMotionTerm(CAMERA_MOTION)
+      expect(runPrompt).toContain("a weathered fisherman")
+      expect(runPrompt.indexOf(term)).toBeGreaterThan(runPrompt.indexOf("a weathered fisherman"))
+      expect(assembleVideoPrompt("generate-video", assemblerArgs(genVidNode))).toBe(runPrompt)
+    })
   })
 })
 

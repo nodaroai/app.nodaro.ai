@@ -1,7 +1,7 @@
 ---
 node_type: image-to-video
-generated_at: 2026-08-30T01:24:47.613Z
-generated_from: 1d03c26b5
+generated_at: 2026-08-31T12:50:22.023Z
+generated_from: 19dcdff1c
 ---
 
 # image-to-video
@@ -65,6 +65,8 @@ generated_from: 1d03c26b5
 - `suppressedCanonicalCharacterIds?: readonly string[]`
 - `suppressedCanonicalLocationIds?: readonly string[]`
 - `veoMode?: "frame-to-frame" | "reference"`
+- `direction?: DirectionFields`
+- `structured?: StructuredPromptFields`
 - `seedance2InputMode?: "frames" | "references"`
 - `extraRefs?: readonly ExtraRef[]`
 - `videoPlayState?: "loop" | "paused" | "stopped"`

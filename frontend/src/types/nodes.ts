@@ -1815,6 +1815,21 @@ export type ImageToVideoData = PromptAffixFields & {
   /** See GenerateImageData.suppressedCanonicalCharacterIds — location equivalent. */
   suppressedCanonicalLocationIds?: readonly string[]
   veoMode?: "frame-to-frame" | "reference"  // VEO 3/3.1: toggle between start+end frame and reference mode
+  /**
+   * Cinematic-direction catalog IDS — the video twin of
+   * `GenerateImageData.direction`, same stored-ids contract (never rendered
+   * hint text). Folded into the prompt body by `composeVideoPromptText` under
+   * the VIDEO verbosity policy: motion dimensions render their compact
+   * professional term, look dimensions their full clause. Honored by BOTH the
+   * orchestrator (`payload-builder.ts`) AND the frontend single-node executor
+   * (`execute-node.ts`), and shown in the config panel's final-prompt preview
+   * (`video-prompt-assembly.ts`). ADDITIVE to hints from wired picker nodes,
+   * exactly as two wired pickers of one family are. Inherited by
+   * `GenerateVideoNodeData` — the node an app that emits Nodaro graphs writes.
+   */
+  direction?: DirectionFields
+  /** Path-1 structured prompt fields — same stored-ids/fold contract as `direction`. */
+  structured?: StructuredPromptFields
   /** @deprecated Seedance 2 inputs are auto-detected; no longer written by the UI. */
   seedance2InputMode?: "frames" | "references"
   /** Extra reference images with per-ref descriptions. See `ExtraRef`. */
@@ -1886,6 +1901,11 @@ export type TextToVideoData = PromptAffixFields & {
   suppressedCanonicalCharacterIds?: readonly string[]
   /** See GenerateImageData.suppressedCanonicalCharacterIds — location equivalent. */
   suppressedCanonicalLocationIds?: readonly string[]
+  /** See ImageToVideoData.direction — same stored-ids/fold contract on the
+   *  text-to-video surface (both are fold sites for a re-typed generate-video). */
+  direction?: DirectionFields
+  /** See ImageToVideoData.structured. */
+  structured?: StructuredPromptFields
   /** Extra reference images with per-ref descriptions. See `ExtraRef`. */
   extraRefs?: readonly ExtraRef[]
   videoPlayState?: "loop" | "paused" | "stopped"
