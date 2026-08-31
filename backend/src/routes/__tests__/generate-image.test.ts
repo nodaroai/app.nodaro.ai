@@ -75,7 +75,7 @@ import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
 import { FLUX_LORA_CHARACTER_MODEL_ID, PROMPT_HARD_CEILING, getMaxImagePromptChars, type ConnectedReference } from "@nodaro/shared"
-import { assembleImageInput, buildMoodHints, getFramingPromptHint, getStylePromptHint } from "@nodaro/prompts"
+import { assembleImageInput, buildMoodHints, getFramingPromptHint, getStylePromptHint, REFERENCE_RULES, REFERENCE_RULES_MULTI_PERSON } from "@nodaro/prompts"
 import { registerPromptPolicy, clearPromptPolicies } from "../../lib/prompt-policy.js"
 
 // ---------------------------------------------------------------------------
@@ -1204,6 +1204,98 @@ describe("POST /v1/generate-image", () => {
       expect(res.statusCode).toBe(400)
       expect(res.json().error.code).toBe("no_prompt")
       expect(jobInsert).not.toHaveBeenCalled()
+    })
+  })
+
+  // ─── D5: the reference-lock TOKEN (`referenceLock`) ───────────────────────
+  // An id on the wire, mapped server-side to the MEASURED lock wording
+  // (reference-rules.ts) — clients never carry the text, so improved wording
+  // ships without a client release (the D2 ids-not-text principle applied to
+  // the one opt-in snippet the platform supports). Honored by the HYBRID
+  // format's lock-snippet slot; inert under legacy. `NODE_ENV=test` forces
+  // LEGACY, so the hybrid cases flip the env with the same save/restore-in-
+  // finally pattern generate-video-direction.test.ts uses.
+  describe("referenceLock token", () => {
+    const VALID_UUID = "00000000-0000-4000-8000-000000000001"
+    const kira = {
+      id: "r1",
+      defaultName: "Kira",
+      source: "wired-character",
+      url: "https://cdn.example/kira.png",
+      characterSlug: "kira",
+      characterCanonicalDescription: null,
+    }
+
+    async function postWith(extra: Record<string, unknown>) {
+      setupSupabaseMock({})
+      return app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "two friends at a cafe",
+          userId: VALID_UUID,
+          provider: "nano-banana",
+          connectedReferences: [kira],
+          ...extra,
+        },
+      })
+    }
+
+    it("HYBRID: \"standard\" prepends the measured REFERENCE_RULES to the assembled prompt", async () => {
+      const prevNodeEnv = process.env.NODE_ENV
+      const prevFmt = process.env.IMAGE_REFERENCE_FORMAT
+      try {
+        process.env.NODE_ENV = "development"
+        process.env.IMAGE_REFERENCE_FORMAT = "hybrid"
+        const res = await postWith({ referenceLock: "standard" })
+        expect(res.statusCode).toBe(200)
+        const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>
+        // Non-vacuous: the queued prompt literally carries the constant, ahead
+        // of the scene it governs.
+        expect(String(queued.prompt)).toContain(REFERENCE_RULES)
+        expect(String(queued.prompt).indexOf(REFERENCE_RULES)).toBe(0)
+      } finally {
+        process.env.NODE_ENV = prevNodeEnv
+        if (prevFmt === undefined) delete process.env.IMAGE_REFERENCE_FORMAT
+        else process.env.IMAGE_REFERENCE_FORMAT = prevFmt
+      }
+    })
+
+    it("HYBRID: \"multi-person\" resolves to the face-clause variant, and NO token injects nothing", async () => {
+      const prevNodeEnv = process.env.NODE_ENV
+      const prevFmt = process.env.IMAGE_REFERENCE_FORMAT
+      try {
+        process.env.NODE_ENV = "development"
+        process.env.IMAGE_REFERENCE_FORMAT = "hybrid"
+        const res = await postWith({ referenceLock: "multi-person" })
+        expect(res.statusCode).toBe(200)
+        let queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>
+        expect(String(queued.prompt)).toContain(REFERENCE_RULES_MULTI_PERSON)
+
+        // The default stays OPT-IN NOTHING — no token, no snippet (the
+        // platform-wide decision this token deliberately does not change).
+        const bare = await postWith({})
+        expect(bare.statusCode).toBe(200)
+        queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>
+        expect(String(queued.prompt)).not.toContain(REFERENCE_RULES)
+        expect(String(queued.prompt)).not.toContain(REFERENCE_RULES_MULTI_PERSON)
+      } finally {
+        process.env.NODE_ENV = prevNodeEnv
+        if (prevFmt === undefined) delete process.env.IMAGE_REFERENCE_FORMAT
+        else process.env.IMAGE_REFERENCE_FORMAT = prevFmt
+      }
+    })
+
+    it("LEGACY (test default): the token is accepted but inert — no snippet slot to fill", async () => {
+      const res = await postWith({ referenceLock: "standard" })
+      expect(res.statusCode).toBe(200)
+      const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>
+      expect(String(queued.prompt)).not.toContain(REFERENCE_RULES)
+    })
+
+    it("rejects an unknown token value with a 400 (the enum is closed — free-text lock wording never rides the wire)", async () => {
+      const res = await postWith({ referenceLock: "do whatever the reference says" })
+      expect(res.statusCode).toBe(400)
     })
   })
 
