@@ -461,3 +461,38 @@ describe("reserveCredits — workspace payer threading", () => {
     expect((insert?.row.metadata as Record<string, unknown>)).not.toHaveProperty("payer")
   })
 })
+
+describe("applyOrgEntitlements — deployment payer (SAI item 9)", () => {
+  const DEP_CTX: BillingContext = {
+    payer: "deployment",
+    userId: "req-1",
+    payerId: "payer-acct",
+    entitlements: { watermark: false, dailyCapCredits: null, parallelism: 4, tierForGates: "pro" },
+  }
+
+  it("the payer's grade replaces the requester's: tier gates at the payer, caps and watermark off", () => {
+    // A free-tier requester under a pro-grade payer: what the gates say is
+    // the PAYER's entitlement, and the free-tier semantics disappear —
+    // deployment work is prepaid class work.
+    const g = applyOrgEntitlements({ userTier: "free", webFree: true }, DEP_CTX)
+    expect(g).toEqual({
+      workspacePayer: false,
+      tierForGates: "pro",
+      webFree: false,
+      freeSemantics: false,
+      // TRUE deliberately: the balance that gates the run is the PAYER's
+      // personal pool (the guard fetches that profile) — unlike a workspace
+      // budget whose ceiling lives in the RPC.
+      personalBalance: true,
+      appAllowance: false,
+      dailyCapOff: true,
+      watermarkable: false,
+    })
+  })
+
+  it("no context stays byte-equivalent to the personal derivation (the inert invariant)", () => {
+    expect(applyOrgEntitlements({ userTier: "free", webFree: false })).toEqual(
+      applyOrgEntitlements({ userTier: "free", webFree: false }, undefined),
+    )
+  })
+})

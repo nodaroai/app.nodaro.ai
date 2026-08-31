@@ -153,6 +153,7 @@ import { connectedInstancesRoutes } from "./ee/routes/connected-instances.js"
 import { galleryRoutes } from "./routes/gallery.js"
 import { runtimeSurfaceProfile, surfaceProfileFailedToLoad } from "./lib/surface-profile.js"
 import { loadAvailabilityOverrides } from "./lib/availability-override.js"
+import { configureDeploymentPayer } from "./lib/deployment-payer.js"
 import { surfaceAvailabilityRoutes } from "./routes/surface-availability.js"
 import { userSettingsRoutes } from "./routes/user-settings.js"
 import { meRoutes } from "./routes/me.js"
@@ -323,6 +324,20 @@ export async function buildApp() {
   // serve the surface profile's FACTORY set (the deployment's safe baseline,
   // same guarantee class as the 60s TTL drift between sibling instances).
   await loadAvailabilityOverrides()
+
+  // SAI item 9 — deployment payer. BLOCKING and fail-loud, the opposite
+  // posture from the availability warm above: a payer that is configured but
+  // does not resolve means every job this boot accepted would silently bill
+  // requesters the deployment promised to cover — refuse to boot instead.
+  // Inert (zero queries) when `billing.payerAccount` is absent.
+  const payerBoot = await configureDeploymentPayer()
+  if (!payerBoot.ok) {
+    console.error(
+      `[deployment-payer] FATAL: billing.payerAccount is configured but did not resolve — ${payerBoot.reason}. ` +
+        "Refusing to boot a deployment-payer instance requester-billed. Fix the profile (or the payer account) and redeploy.",
+    )
+    process.exit(1)
+  }
 
   const app = Fastify({
     // Same defaults as `logger: true`, plus a req serializer that redacts

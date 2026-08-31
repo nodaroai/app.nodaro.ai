@@ -251,3 +251,90 @@ describe("registerBillingContextHook — real Fastify, real stage, real ordering
     expect(resolve).not.toHaveBeenCalled()
   })
 })
+
+// ---------------------------------------------------------------------------
+// Deployment payer (SAI item 9) — the rung ABOVE the plugin gate
+// ---------------------------------------------------------------------------
+
+const { __setDeploymentPayerForTests, __resetDeploymentPayerForTests } = await import("../deployment-payer.js")
+
+const DEP_ENT = {
+  watermark: false as const,
+  dailyCapCredits: null,
+  parallelism: 4,
+  tierForGates: "basic",
+}
+
+describe("deployment payer rung — resolveBillingContext", () => {
+  afterEach(() => __resetDeploymentPayerForTests())
+
+  it("THE SAI SHAPE, exactly: no orgs plugin at all + payer active ⇒ deployment context", async () => {
+    // This placement is load-bearing: with the rung BELOW the `if (!svc)`
+    // gate the whole feature silently no-ops on the one instance it exists
+    // for (no orgs plugin ⇒ the gate returns personal first).
+    h.hasOrganizations.mockReturnValue(false)
+    __setDeploymentPayerForTests("payer-acct")
+    expect(await resolveBillingContext({ userId: "u-1" })).toEqual({
+      payer: "deployment",
+      userId: "u-1",
+      payerId: "payer-acct",
+      entitlements: DEP_ENT,
+    })
+  })
+
+  it("outranks a capable plugin: one payer per instance, nothing left to resolve", async () => {
+    const resolve = vi.fn(async () => WS_CTX)
+    h.services.billing = { resolve }
+    __setDeploymentPayerForTests("payer-acct")
+    const ctx = await resolveBillingContext({ userId: "u-1", workflowId: WF_UUID, explicitWorkspaceId: "ws-1" })
+    expect(ctx).toMatchObject({ payer: "deployment", userId: "u-1", payerId: "payer-acct" })
+    expect(resolve).not.toHaveBeenCalled()
+  })
+
+  it("inactive (mainline): byte-identical personal answers — the inert invariant", async () => {
+    expect(await resolveBillingContext({ userId: "u-1" })).toEqual({ payer: "user", userId: "u-1" })
+  })
+})
+
+describe("deployment payer rung — the per-request hook (real Fastify)", () => {
+  let app: FastifyInstance
+  let resolve: ReturnType<typeof vi.fn>
+
+  beforeEach(async () => {
+    resolve = vi.fn(async () => WS_CTX)
+    // No orgs plugin — the SAI shape. The deployment rung must fire anyway.
+    h.hasOrganizations.mockReturnValue(false)
+    h.services.billing = undefined
+    __setDeploymentPayerForTests("payer-acct")
+
+    app = Fastify()
+    app.addHook("preHandler", async (req) => {
+      const userId = req.headers["x-user-id"]
+      if (typeof userId === "string") req.userId = userId
+    })
+    registerBillingContextHook(app)
+    app.post("/probe", async (req) => ({ ctx: req.billingContext ?? null }))
+    app.get("/probe", async (req) => ({ ctx: req.billingContext ?? null }))
+    await app.ready()
+  })
+  afterEach(async () => {
+    __resetDeploymentPayerForTests()
+    await app.close()
+  })
+
+  it("a mutating authenticated request is stamped with the deployment payer, zero plugin calls", async () => {
+    const res = await app.inject({ method: "POST", url: "/probe", headers: { "x-user-id": "u-1" }, payload: {} })
+    expect(res.json().ctx).toEqual({ payer: "deployment", userId: "u-1", payerId: "payer-acct", entitlements: DEP_ENT })
+    expect(resolve).not.toHaveBeenCalled()
+  })
+
+  it("GET stays unstamped — reads never spend, deployment payer or not", async () => {
+    const res = await app.inject({ method: "GET", url: "/probe", headers: { "x-user-id": "u-1" } })
+    expect(res.json().ctx).toBeNull()
+  })
+
+  it("unauthenticated requests are untouched", async () => {
+    const res = await app.inject({ method: "POST", url: "/probe", payload: {} })
+    expect(res.json().ctx).toBeNull()
+  })
+})

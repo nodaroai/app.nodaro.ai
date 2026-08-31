@@ -123,3 +123,29 @@ describe("print-surface-profile CLI — stdout is exactly the payload", () => {
     expect(res.stdout).toBe("")
   })
 })
+
+describe("renderSurfaceProfileForRuntimeConfig — payerAccount redaction (SAI item 9)", () => {
+  it("billing.payerAccount NEVER reaches the browser; everything else renders resolved", () => {
+    config.EDITION = "business"
+    setEnv(
+      JSON.stringify({
+        ...AUTHORED,
+        billing: { sidebarCard: "hidden", payerAccount: "billing@sai-app.com" },
+      }),
+    )
+
+    const backendProfile = runtimeSurfaceProfile()
+    // The backend KEEPS the key (deployment-payer boot reads it)…
+    expect(backendProfile.billing.payerAccount).toBe("billing@sai-app.com")
+
+    const out = renderSurfaceProfileForRuntimeConfig()
+    // …and the render strips it — by key AND by value (an email in
+    // /config.js is the leak this pin exists to prevent).
+    expect(out).not.toContain("payerAccount")
+    expect(out).not.toContain("billing@sai-app.com")
+    const parsed = JSON.parse(out)
+    expect(parsed.billing.sidebarCard).toBe("hidden") // the rest of billing survives
+    const { payerAccount: _stripped, ...restBilling } = backendProfile.billing
+    expect(parsed).toEqual({ ...backendProfile, billing: restBilling })
+  })
+})

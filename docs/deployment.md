@@ -556,6 +556,20 @@ array empty = "keep the default"):
     card (default `true`; a present `false` is never flipped open). A prepaid
     billing instance renders a **Usage & Cost** sidebar entry (`/usage`) in
     their place.
+  - `billing.payerAccount`: the **deployment payer** — one designated account
+    (a user uuid, or the account's email) that pays for *every* action on the
+    instance instead of the requester. For reseller-style deployments: the
+    operator tops up this one prepaid account; end users never hold balances.
+    Consequences when set: every reservation debits the payer account
+    (ownership and galleries stay the requester's); requester tier gates run
+    at the payer account's grade, with watermarking and daily caps off;
+    per-user storage quotas stop enforcing (usage is still tracked); the
+    payer is never auto-recharged; and `/usage` shows each user their own
+    consumption for the period — never any balance. The value is
+    backend-only: it is stripped from `/config.js`, and the browser learns
+    only a boolean `deploymentPayer` flag from `GET /v1/billing/surface`.
+    **Fail-loud:** if set but the account does not resolve at boot, the
+    instance refuses to start. Unset = requesters pay, exactly as before.
 
 Example:
 

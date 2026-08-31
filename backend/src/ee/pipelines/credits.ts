@@ -226,8 +226,12 @@ export async function reservePipelineCredits(
   // RPC's workspace branch. Conditional spread — a personal pipeline's wire
   // shape stays byte-identical to pre-P14.
   const ws = args.billingContext?.payer === "workspace" ? args.billingContext : undefined
+  // Deployment payer (SAI item 9): the debit user becomes the payer account —
+  // the RPC's personal branch runs against its pools (the
+  // CreditsService.reserveCredits mirror for this direct-RPC lane).
+  const dep = args.billingContext?.payer === "deployment" ? args.billingContext : undefined
   const { data: usageLogId, error } = await args.supabase.rpc("reserve_credits", {
-    p_user_id: args.userId,
+    p_user_id: dep ? dep.payerId : args.userId,
     p_credits: args.credits,
     p_job_id: null,
     p_model_identifier: "pipeline-orchestration",
@@ -257,8 +261,24 @@ export async function reservePipelineCredits(
   // forget, never blocks the pipeline). Covers the direct-RPC reserve lane
   // the CreditsService hook can't see (audit F2.2). NEVER for a workspace
   // payer — the member's balance did not move, and class work must not pump
-  // a member's saved card (the family-0 invariant, mirrored).
-  if (!ws) void attemptAutoRecharge(args.userId)
+  // a member's saved card (the family-0 invariant, mirrored). NEVER for a
+  // deployment payer — prepaid-only, the payer account has no card to pump.
+  if (!ws && !dep) void attemptAutoRecharge(args.userId)
+  // Deployment payer: stamp the requester into on_behalf_of (migration 362)
+  // — attribution only, never settlement; loud-but-tolerated on a DB that
+  // predates the column (the 361 degrade class).
+  if (dep) {
+    const { error: attributionError } = await args.supabase
+      .from("usage_logs")
+      .update({ on_behalf_of: args.userId } as Record<string, unknown>)
+      .eq("id", usageLogId)
+    if (attributionError) {
+      console.error(
+        `[pipelines/credits] on_behalf_of attribution failed for usage log ${usageLogId}:`,
+        attributionError.message,
+      )
+    }
+  }
   // Persist for later refund.
   const { error: updateError } = await args.supabase
     .from("pipelines")

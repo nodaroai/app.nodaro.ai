@@ -1,6 +1,7 @@
 import { hasCredits } from "./config.js"
 import { applyDisplayUnit } from "./billing-display-unit.js"
 import { runtimeSurfaceProfile } from "./surface-profile.js"
+import { deploymentPayerActive } from "./deployment-payer.js"
 
 /**
  * Billing adapter seam (B2). An external system meters and charges; Nodaro
@@ -170,6 +171,10 @@ export interface BillingSurface {
   canAccount: boolean
   /** The Cost tab mounts iff a provider other than `none` is registered. */
   mountCostTab: boolean
+  /** One designated account pays for every action on this instance (SAI item
+   *  9). The flag is all the browser may learn — the payer's IDENTITY is
+   *  backend-only (redacted from /config.js). Drives consumption-only /usage. */
+  deploymentPayer: boolean
 }
 
 export function billingSurface(): BillingSurface {
@@ -186,6 +191,7 @@ export function billingSurface(): BillingSurface {
     canQuote: typeof p.quote === "function" && p.id !== "none",
     canAccount: p.id !== "none",
     mountCostTab: p.id !== "none" && !costTabHidden,
+    deploymentPayer: deploymentPayerActive(),
   }
 }
 

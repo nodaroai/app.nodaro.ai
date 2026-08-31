@@ -109,11 +109,21 @@ export function creditGuardImpl(
       }
     }
 
+    // Deployment payer (SAI item 9): the account whose pools gate this
+    // request is the PAYER's, so the profile below is fetched for it — the
+    // requester's balance is a frozen signup grant nothing ever debits, and
+    // evaluating it would 402 the whole instance the day those grants run
+    // out. This applies on check-only routes too, deliberately: unlike the
+    // workspace exclusion (whose budget a check-only route never debits — a
+    // free proxy), the payer's pool IS what the reserving twin will debit,
+    // so the wealth check against it is the honest answer.
+    const dep = req.billingContext?.payer === "deployment" ? req.billingContext : undefined
+
     // Fetch profile ONCE with all columns needed by both storage + credit checks
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("role, tier, subscription_tier, lifetime_topup_credits, subscription_credits, topup_credits, daily_spent_credits, last_daily_reset, storage_used_bytes, storage_limit_bytes")
-      .eq("id", userId)
+      .eq("id", dep ? dep.payerId : userId)
       .single()
 
     if (profileError || !profile) {
@@ -123,7 +133,9 @@ export function creditGuardImpl(
       return
     }
 
-    warmAdminCache(userId, (profile as Record<string, unknown>).role as string | undefined)
+    // The role in hand is the PAYER's under a deployment payer — warming the
+    // requester's admin cache with it would be a privilege confusion.
+    if (!dep) warmAdminCache(userId, (profile as Record<string, unknown>).role as string | undefined)
 
     // Step 0: spend-surface mode (D1 v2, pool-aware) — on a consumer surface
     // a payg account spends its FREE pool only, under free-tier semantics.
@@ -151,8 +163,13 @@ export function creditGuardImpl(
       }
     }
 
-    // Step 1: storage limit
-    try {
+    // Step 1: storage limit — SKIPPED under a deployment payer: media lives
+    // in the deployment's own bucket (their space, their business), and the
+    // profile in hand carries the PAYER's storage columns, which would gate
+    // every requester on one account's counter.
+    if (dep) {
+      // fallthrough to the credit check with no storage snapshot
+    } else try {
       const storageCheck = CreditsService.checkStorageLimitWithProfile(profile as StorageProfile)
       // Effective tier for the 413 payload + storage snapshot — payg users
       // must see their real entitlement tier in storage errors, not "free".
@@ -202,7 +219,10 @@ export function creditGuardImpl(
           // reservation follows. A checkOnly route is a wealth check that
           // reserves nothing — a workspace context there would pass callers
           // out of a budget nothing ever debits (a free proxy, no payer).
-          ...(opts?.checkOnly ? {} : { billingContext: req.billingContext }),
+          // A DEPLOYMENT context is exempt from the exclusion (see `dep`
+          // above): the profile in hand is already the payer's, and checking
+          // it under the requester's free-tier gates would be the lie.
+          ...(opts?.checkOnly && !dep ? {} : { billingContext: req.billingContext }),
         },
       )
 

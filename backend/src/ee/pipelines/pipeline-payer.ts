@@ -5,7 +5,7 @@
 // heavy CreditsService, and hermetic tests of those services must not drag
 // the whole pipeline-credits import graph in through it.
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { isBillingContext, personalPayer, type BillingContext } from "../../lib/billing-context.js"
+import { isBillingContext, isDeploymentBillingContext, personalPayer, type BillingContext } from "../../lib/billing-context.js"
 
 /** Small in-process cache: a pipeline's payer is immutable once stamped. */
 const pipelineCtxCache = new Map<string, BillingContext>()
@@ -53,7 +53,16 @@ export async function getPipelineBillingContext(
   // The personal fallback prefers the ROW's user_id (the pipeline's owner —
   // who an unstamped pre-P14 pipeline has always billed) over the caller's
   // id; the two can differ on worker lanes.
-  const ctx = isBillingContext(raw) ? raw : personalPayer((data?.user_id as string | undefined) ?? fallbackUserId)
+  // Two guards on purpose: isBillingContext admits the PLUGIN shapes only
+  // (user/workspace), and a DEPLOYMENT stamp (SAI item 9) written at
+  // creation would degrade to the owner's personal payer here — billing the
+  // pocket the deployment promised to cover, on every req-less pipeline
+  // lane. isDeploymentBillingContext admits that third shape with the same
+  // literal-checking rigor.
+  const ctx =
+    isBillingContext(raw) || isDeploymentBillingContext(raw)
+      ? raw
+      : personalPayer((data?.user_id as string | undefined) ?? fallbackUserId)
   if (pipelineCtxCache.size >= PIPELINE_CTX_CACHE_MAX) pipelineCtxCache.clear()
   pipelineCtxCache.set(pipelineId, ctx)
   return ctx

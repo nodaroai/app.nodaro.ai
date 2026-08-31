@@ -34,8 +34,42 @@ import type {
   PluginOrgEntitlements,
 } from "./private-plugins/types.js"
 import { extractWorkflowId } from "./request-helpers.js"
+import { deploymentPayerActive, deploymentBillingContext } from "./deployment-payer.js"
 
-export type BillingContext = PluginBillingContext
+/**
+ * The entitlement grade a DEPLOYMENT payer's work runs under (SAI item 9,
+ * decision D2). Watermark-off and cap-off are literal-typed like the org
+ * grade (a deployment context that watermarks cannot be constructed);
+ * `tierForGates`/`parallelism` are the PAYER account's grade, read at resolve
+ * time — parallelism applies PER REQUESTER (each user gets their own
+ * concurrency budget at the payer's tier), never as one shared instance pool.
+ */
+export interface DeploymentEntitlements {
+  watermark: false
+  dailyCapCredits: null
+  parallelism: number
+  tierForGates: string
+}
+
+/**
+ * The third payer (SAI item 9): one designated account pays for everything on
+ * this instance. Constructed ONLY in core (lib/deployment-payer.ts, from the
+ * surface profile) — it never crosses the plugin boundary, so
+ * `isBillingContext` below deliberately does not admit it. `userId` stays the
+ * REQUESTER (the workspace precedent: every existing `ctx.userId` read means
+ * "the human doing the work"); the debit target lives in `payerId`, and only
+ * deployment-aware spend sites read it.
+ */
+export interface DeploymentBillingContext {
+  payer: "deployment"
+  /** The human doing the work — jobs.user_id and ownership stay this. */
+  userId: string
+  /** The deployment payer account — the DEBIT user. */
+  payerId: string
+  entitlements: DeploymentEntitlements
+}
+
+export type BillingContext = PluginBillingContext | DeploymentBillingContext
 export type OrgEntitlements = PluginOrgEntitlements
 export type BillingResolveInput = PluginBillingResolveInput
 
@@ -48,6 +82,11 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * degrade exactly like a throw: to the personal payer, loudly. Without this,
  * a context missing `entitlements` 500s the credit-guard hot path for every
  * workspace member the moment a spend site deep-destructures it.
+ *
+ * PLUGIN SHAPES ONLY, deliberately: `payer: "deployment"` is constructed in
+ * core (lib/deployment-payer.ts) and never crosses the process boundary this
+ * guard exists for — a plugin returning it is malformed and degrades like
+ * any other malformed answer.
  */
 export function isBillingContext(v: unknown): v is BillingContext {
   if (!v || typeof v !== "object") return false
@@ -74,6 +113,34 @@ export function isBillingContext(v: unknown): v is BillingContext {
     ent.freeTierBlocklist === false &&
     ent.webFreeMode === false &&
     ent.appCreditsAllowance === false
+  )
+}
+
+/**
+ * Runtime validator for a DEPLOYMENT context that crossed a durable boundary
+ * — today that is exactly one place: the pipeline payer stamp
+ * (`pipelines.config.billingContext`, read back by pipeline-payer.ts on
+ * req-less worker lanes). `isBillingContext` deliberately rejects this shape
+ * (it guards the PLUGIN boundary), so a reader of stored contexts must ask
+ * both — without this, every pipeline on a deployment-payer instance would
+ * degrade its stored stamp to the requester's personal payer and quietly
+ * bill the pocket the deployment promised to cover. Same literal-checking
+ * posture as the workspace guard: a "deployment" context that watermarks or
+ * daily-caps cannot ride in from a row.
+ */
+export function isDeploymentBillingContext(v: unknown): v is DeploymentBillingContext {
+  if (!v || typeof v !== "object") return false
+  const c = v as Record<string, unknown>
+  if (c.payer !== "deployment") return false
+  if (typeof c.userId !== "string" || typeof c.payerId !== "string") return false
+  const ent = c.entitlements as Record<string, unknown> | undefined
+  return (
+    !!ent &&
+    typeof ent === "object" &&
+    ent.watermark === false &&
+    ent.dailyCapCredits === null &&
+    typeof ent.parallelism === "number" &&
+    typeof ent.tierForGates === "string"
   )
 }
 
@@ -169,6 +236,12 @@ export function payloadBillingContext(payload: { userId: string; billingContext?
  * never anything that already received a context.
  */
 export async function resolveBillingContext(input: BillingResolveInput): Promise<BillingContext> {
+  // Deployment payer (SAI item 9) — the TOP rung, before the plugin gate: on
+  // the instance this exists for there IS no orgs plugin, so any placement
+  // after `if (!svc)` would be dead code exactly where it matters. When one
+  // account pays for the whole instance there is nothing left to resolve —
+  // the answer is the same for every request, workspace headers included.
+  if (deploymentPayerActive()) return deploymentBillingContext(input.userId)
   const svc = billingService()
   if (!svc) return personalPayer(input.userId)
   // The internal-lane rung-1 strip is a CORE invariant, not a plugin promise:
@@ -218,13 +291,24 @@ export async function resolveBillingContext(input: BillingResolveInput): Promise
 export function registerBillingContextHook(app: FastifyInstance): void {
   app.addHook("preHandler", async (req: FastifyRequest) => {
     if (!req.userId) return
-    const svc = billingService()
-    if (!svc) return
 
     // Reads never spend: resolving on every workspace-scoped GET would run
     // the standing check twice per request (the orgs hook already ran it)
     // for an answer nothing consumes. Spend sites live on mutating verbs.
+    // Hoisted above the plugin gate so the deployment rung below shares it.
     if (req.method === "GET" || req.method === "HEAD") return
+
+    // Deployment payer (SAI item 9): stamped BEFORE the plugin gate — the
+    // target instance has no orgs plugin, and `if (!svc) return` would
+    // otherwise leave every request personal exactly where the payer is
+    // configured. Sync + zero queries (cached grade, background-refreshed).
+    if (deploymentPayerActive()) {
+      req.billingContext = deploymentBillingContext(req.userId)
+      return
+    }
+
+    const svc = billingService()
+    if (!svc) return
 
     const internal = req.authKind === "internal"
     const rawWorkflowId = internal ? undefined : (extractWorkflowId(req.body) ?? undefined)

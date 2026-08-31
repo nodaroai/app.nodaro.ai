@@ -1,6 +1,7 @@
 import { supabase } from "../lib/supabase.js"
 import { resolveEffectiveTier } from "@nodaro/shared"
 import { hasCredits } from "../lib/config.js"
+import { deploymentPayerActive } from "../lib/deployment-payer.js"
 import { TIER_STORAGE_LIMITS } from "../ee/billing/stripe-config.js"
 
 // ============================================================
@@ -193,6 +194,13 @@ export async function checkStorageQuota(
     return { allowed: true }
   }
 
+  // Deployment payer (SAI item 9): media lives in the deployment's own
+  // bucket — their space, their business. No per-user ceiling; per-user
+  // LIMITS, if the deployment wants them, belong in their overlay hooks.
+  if (deploymentPayerActive()) {
+    return { allowed: true }
+  }
+
   // Get user profile for tier, current storage usage, and admin-overridable limit
   const { data: profile, error } = await supabase
     .from("profiles")
@@ -275,6 +283,15 @@ export async function reserveStorageIfWithinLimit(
 ): Promise<boolean> {
   if (!hasCredits()) return true
   if (bytes <= 0) return true
+
+  // Deployment payer (SAI item 9): TRACK without ENFORCING — the per-user
+  // counter keeps meaning something (the deployment can read it for its own
+  // limits), but no requester is ever refused for space in a bucket the
+  // deployment owns. refundStorage stays the exact inverse.
+  if (deploymentPayerActive()) {
+    await updateStorageUsage(userId, bytes)
+    return true
+  }
 
   const { data, error } = await supabase.rpc("reserve_storage_if_within_limit", {
     p_user_id: userId,
