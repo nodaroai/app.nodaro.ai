@@ -560,6 +560,12 @@ function repointReference(entry: unknown, idMap: CreatedAssetMap): unknown {
   // chip exactly as it is — resolving or dropping it is the client's call.
   if (!created) return entry
   const isCanonical = VARIANT_CHIP_FIELDS.every((field) => !ref[field])
+  // `defaultName` follows the row: the insert may have stepped it ("Kira 2")
+  // to clear the per-user unique active-name index, and a chip that keeps
+  // saying "Kira" while the library says "Kira 2" is a lie in the picker. The
+  // cost is on the other side: a client that binds its stored prose by chip
+  // NAME no longer matches the prose it saved. That degrades — the reference
+  // still rides, unnamed in the prompt — where a mislabelled chip persists.
   return {
     ...ref,
     id: created.id,
