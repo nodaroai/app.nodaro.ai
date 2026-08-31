@@ -75,7 +75,8 @@ import { textToVideoRoutes } from "../text-to-video.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { registerPromptPolicy, clearPromptPolicies } from "../../lib/prompt-policy.js"
-import { getStylePromptHint } from "@nodaro/prompts"
+import { getStylePromptHint, composeVideoPromptText } from "@nodaro/prompts"
+import { getMaxVideoPromptChars } from "@nodaro/shared"
 
 // ---------------------------------------------------------------------------
 // Test app setup
@@ -362,5 +363,77 @@ describe("POST /v1/text-to-video — the direction channel", () => {
       payload: { prompt: "a sunset timelapse", userId: USER },
     })
     expect(vi.mocked(videoQueue.add).mock.calls.at(-1)![1].prompt).toBe("a sunset timelapse")
+  })
+
+  /**
+   * TRUNCATION ORDERING — the route must hand the composer the EFFECTIVE
+   * ceiling, not just fold and hope. `/v1/generate-video` pins the reference
+   * FRAMING half end to end (it needs a provider that carries image refs);
+   * every t2v provider at a low enough cap to overflow carries none, so what is
+   * proved here is the cap half — including that the ceiling is the one the
+   * `"\nAvoid: …"` reservation leaves, which is the number a route that read
+   * `getMaxVideoPromptChars` itself would get wrong.
+   */
+  const BIG_DIRECTION = {
+    cameraMotion: "handheld",
+    shotSize: "wide-shot",
+    angle: "low-angle",
+    timeOfDay: "golden-hour",
+    lightingStyle: "rembrandt",
+    colorLook: "teal-orange",
+    atmosphere: ["fog"],
+    style: "cinematic",
+    mood: ["happy", "joyful"],
+    setting: "forest",
+  }
+  // 36 is TUNED: it overflows minimax's 1500 cap with the full fold, and puts the
+  // Avoid reservation across a clause boundary so the two cases below differ.
+  const PROSE = "The waves are loud. ".repeat(36)
+
+  async function postT2V(payload: Record<string, unknown>) {
+    mockJobInsert({ data: { id: "job-shed" }, error: null })
+    const res = await app.inject({ method: "POST", url: "/v1/text-to-video", payload })
+    return { res, prompt: vi.mocked(videoQueue.add).mock.calls.at(-1)![1].prompt as string }
+  }
+
+  it("sheds trailing hints so an over-cap direction fits the provider ceiling", async () => {
+    const cap = getMaxVideoPromptChars("minimax")
+    // NON-VACUITY: the unshed fold really would have overflowed minimax.
+    expect((composeVideoPromptText(PROSE, BIG_DIRECTION) as string).length).toBeGreaterThan(cap)
+
+    const { res, prompt } = await postT2V({
+      prompt: PROSE,
+      userId: USER,
+      provider: "minimax",
+      direction: BIG_DIRECTION,
+    })
+    expect(res.statusCode).toBe(200)
+    expect(prompt.length).toBeLessThanOrEqual(cap)
+    // The prose is untouched and leads the body; only hints paid.
+    expect(prompt.startsWith(PROSE.trim())).toBe(true)
+  })
+
+  it("budgets against the ceiling the Avoid suffix leaves, not the raw cap", async () => {
+    // `minimax` is outside NATIVE_NEGATIVE_VIDEO_PROVIDERS, so the clamp folds
+    // the negative in as a suffix and reserves its room FIRST.
+    const negativePrompt = "blurry, low quality, distorted faces, watermark, text overlay, jitter"
+    const reserved = getMaxVideoPromptChars("minimax") - `\nAvoid: ${negativePrompt}`.length
+    const withNeg = await postT2V({
+      prompt: PROSE,
+      userId: USER,
+      provider: "minimax",
+      direction: BIG_DIRECTION,
+      negativePrompt,
+    })
+    const withoutNeg = await postT2V({
+      prompt: PROSE,
+      userId: USER,
+      provider: "minimax",
+      direction: BIG_DIRECTION,
+    })
+    expect(reserved).toBeLessThan(getMaxVideoPromptChars("minimax"))
+    expect(withNeg.prompt.length).toBeLessThanOrEqual(reserved)
+    expect(withNeg.prompt.length).toBeLessThan(withoutNeg.prompt.length)
+    expect(withNeg.prompt.startsWith(PROSE.trim())).toBe(true)
   })
 })

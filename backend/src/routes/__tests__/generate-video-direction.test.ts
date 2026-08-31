@@ -89,7 +89,11 @@ import {
   getTransitionTerm,
   buildAtmosphereHints,
   buildPhotographerHints,
+  composeVideoPromptText,
+  renderDirectionHints,
+  VIDEO_HINT_MODE_DEFAULT,
 } from "@nodaro/prompts"
+import { getMaxVideoPromptChars } from "@nodaro/shared"
 
 /**
  * `/v1/generate-video`'s cinematic `direction` channel, end to end.
@@ -427,5 +431,163 @@ describe("POST /v1/generate-video — wire tolerance", () => {
     expect(queued!.prompt).toBe(`a knight rides. ${getTransitionTerm(TRANSITION)}`)
     // …and the look family is NOT compacted along with it.
     expect(getStyleTerm(STYLE)).not.toBe(getStylePromptHint(STYLE))
+  })
+})
+
+/**
+ * TRUNCATION ORDERING, at the route. The composer's shed arithmetic is pinned in
+ * `packages/prompts/src/__tests__/assemble-video-input-cap.test.ts`; what is
+ * proved HERE is the WIRING — that the route actually hands the composer the
+ * EFFECTIVE ceiling AND the reference framing. Both package suites can pass
+ * while the route forgets one of the two, and the failure would be invisible
+ * (a silently clamped prompt), so it gets its own end-to-end assertion.
+ *
+ * Provider choice is forced by the catalog: the shed only matters where the
+ * body is FRAMED, so the test needs a provider that both carries image
+ * references and has a low prompt cap. `grok-i2v` is the tightest such pair
+ * (5000 chars, 7 image refs) — kling's 1000 cap looks like the sharper test but
+ * kling carries no image references at all, so nothing frames the body there.
+ */
+describe("POST /v1/generate-video — over-cap direction sheds hints, never bindings", () => {
+  // Broad but ordinary direction — the kind a "set every picker" UI emits.
+  const BIG_DIRECTION = {
+    cameraMotion: "handheld",
+    shotSize: "wide-shot",
+    angle: "low-angle",
+    timeOfDay: "golden-hour",
+    lightingStyle: "rembrandt",
+    colorLook: "teal-orange",
+    atmosphere: ["fog"],
+    style: "cinematic",
+    mood: ["happy", "joyful"],
+    setting: "forest",
+  }
+  // 219 is TUNED, not arbitrary: it puts the shed decision inside the window
+  // where the resolver's appended role phrases are what tips the prompt over the
+  // ceiling. Drop the frame from the route wiring and this case really does
+  // overflow (and severs the trailing binding) rather than passing by luck.
+  const TAIL = "The waves are loud. ".repeat(219)
+  const PROSE = `@kira:1 walks the seawall at dusk. ${TAIL}`
+  const REFS = [
+    {
+      id: "r1",
+      defaultName: "Kira",
+      source: "wired-character",
+      url: "https://cdn.example/kira.png",
+      characterSlug: "kira",
+      characterCanonicalDescription: "auburn hair, hazel eyes",
+    },
+    {
+      id: "r2",
+      defaultName: "Ray",
+      source: "wired-character",
+      url: "https://cdn.example/ray.png",
+      characterSlug: "ray",
+      characterCanonicalDescription: "a grizzled dockworker",
+    },
+  ]
+  const CAP = getMaxVideoPromptChars("grok-i2v")
+  const HINTS = renderDirectionHints(BIG_DIRECTION, {
+    surface: "video",
+    mode: VIDEO_HINT_MODE_DEFAULT,
+  })
+
+  async function postHybrid(payload: Record<string, unknown>) {
+    const prevNodeEnv = process.env.NODE_ENV
+    const prevFmt = process.env.IMAGE_REFERENCE_FORMAT
+    try {
+      process.env.NODE_ENV = "development"
+      process.env.IMAGE_REFERENCE_FORMAT = "hybrid"
+      return await post(payload)
+    } finally {
+      if (prevNodeEnv === undefined) delete process.env.NODE_ENV
+      else process.env.NODE_ENV = prevNodeEnv
+      if (prevFmt === undefined) delete process.env.IMAGE_REFERENCE_FORMAT
+      else process.env.IMAGE_REFERENCE_FORMAT = prevFmt
+    }
+  }
+
+  it("HYBRID: the queued prompt fits the cap with every binding and the prose intact", async () => {
+    const { res, queued } = await postHybrid({
+      ...BASE,
+      provider: "grok-i2v",
+      prompt: PROSE,
+      direction: BIG_DIRECTION,
+      connectedReferences: REFS,
+    })
+    expect(res.statusCode).toBe(200)
+    const prompt = queued!.prompt as string
+
+    // NON-VACUITY: the unshed fold really would have overflowed, so the
+    // provider clamp really would have cut this prompt's tail.
+    expect((composeVideoPromptText(PROSE, BIG_DIRECTION) as string).length).toBeGreaterThan(CAP)
+
+    // The route shed enough that the clamp is never reached.
+    expect(prompt.length).toBeLessThanOrEqual(CAP)
+
+    // Both bindings survive — the mention resolved INLINE and Ray's
+    // canonical-fallback role phrase, which the resolver APPENDS last and which
+    // an order-blind tail cut destroys first.
+    expect(prompt).toContain("@image_1")
+    expect(prompt).toContain("@image_2")
+    expect(prompt.lastIndexOf("@image_2")).toBeGreaterThan(prompt.indexOf(HINTS[0]))
+    expect(queued!.referenceImageUrls).toEqual([
+      "https://cdn.example/kira.png",
+      "https://cdn.example/ray.png",
+    ])
+
+    // The user's prose survives in full.
+    expect(prompt).toContain(TAIL.trim())
+
+    // Trailing hints went; the first-folded one stayed.
+    expect(prompt).not.toContain(HINTS[HINTS.length - 1])
+    expect(prompt).toContain(HINTS[0])
+  })
+
+  it("an under-cap run on the same direction is byte-identical to the capless fold", async () => {
+    // A high-cap provider takes the whole fold, so the shed leg stays dark and
+    // the wiring costs nothing on the overwhelming majority of runs.
+    const { queued } = await post({
+      ...BASE,
+      provider: "seedance-2",
+      prompt: "a knight rides",
+      direction: BIG_DIRECTION,
+    })
+    expect(queued!.prompt).toBe(composeVideoPromptText("a knight rides", BIG_DIRECTION))
+  })
+
+  it("sheds against the ceiling the Avoid suffix leaves, not the raw model cap", async () => {
+    // `grok-i2v` is OUTSIDE NATIVE_NEGATIVE_VIDEO_PROVIDERS, so the clamp folds
+    // the negative in as "\nAvoid: …" and reserves its room FIRST. Budgeting on
+    // the raw cap would shed too little and let the clamp cut after all. This is
+    // the leg a native-negative provider structurally cannot cover, and it is
+    // the reason the route passes `effectiveVideoPromptCeiling` rather than
+    // letting the composer read `getMaxVideoPromptChars` itself.
+    const negativePrompt = "blurry, low quality, distorted faces, watermark, text overlay, jitter"
+    const reserved = CAP - `\nAvoid: ${negativePrompt}`.length
+    const withNeg = await postHybrid({
+      ...BASE,
+      provider: "grok-i2v",
+      prompt: PROSE,
+      direction: BIG_DIRECTION,
+      connectedReferences: REFS,
+      negativePrompt,
+    })
+    const withoutNeg = await postHybrid({
+      ...BASE,
+      provider: "grok-i2v",
+      prompt: PROSE,
+      direction: BIG_DIRECTION,
+      connectedReferences: REFS,
+    })
+    const prompt = withNeg.queued!.prompt as string
+
+    expect(reserved).toBeLessThan(CAP) // the assertion below has teeth
+    expect(prompt.length).toBeLessThanOrEqual(reserved)
+    // Strictly more shedding than the same request without a negative — proof
+    // the reservation, not just the cap, drove the decision.
+    expect(prompt.length).toBeLessThan((withoutNeg.queued!.prompt as string).length)
+    // …and the prose is still untouched: only hints paid for the suffix.
+    expect(prompt).toContain(TAIL.trim())
   })
 })
