@@ -79,7 +79,7 @@ vi.mock("@/lib/video-schemas.js", async () => {
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { generateVideoRoutes } from "../generate-video.js"
+import { generateVideoRoutes, assembleVideoConnectedReferences } from "../generate-video.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import {
@@ -492,13 +492,16 @@ describe("POST /v1/generate-video — over-cap direction sheds hints, never bind
     mode: VIDEO_HINT_MODE_DEFAULT,
   })
 
-  async function postHybrid(payload: Record<string, unknown>) {
+  // The resolver reads the format env at CALL time, so anything that has to see
+  // the same framing the route saw must run inside this window — the arithmetic
+  // guards below included, not just the request.
+  async function inHybrid<T>(fn: () => T | Promise<T>): Promise<T> {
     const prevNodeEnv = process.env.NODE_ENV
     const prevFmt = process.env.IMAGE_REFERENCE_FORMAT
     try {
       process.env.NODE_ENV = "development"
       process.env.IMAGE_REFERENCE_FORMAT = "hybrid"
-      return await post(payload)
+      return await fn()
     } finally {
       if (prevNodeEnv === undefined) delete process.env.NODE_ENV
       else process.env.NODE_ENV = prevNodeEnv
@@ -506,6 +509,35 @@ describe("POST /v1/generate-video — over-cap direction sheds hints, never bind
       else process.env.IMAGE_REFERENCE_FORMAT = prevFmt
     }
   }
+
+  const postHybrid = (payload: Record<string, unknown>) => inHybrid(() => post(payload))
+
+  /**
+   * The route's own `frame`, rebuilt. Used only to prove the guards below are
+   * not vacuous: how much a frame-BLIND shed would still overflow by is the
+   * entire signal that `frame` (as opposed to `cap` alone) is wired at all.
+   *
+   * On this provider that margin is THIN — 40 characters in the plain hybrid
+   * case and 1 in the `Avoid` one (hybrid framing appends only short role
+   * phrases, ~21 chars each, and `TAIL`'s repeat count is tuned to land inside
+   * that window). Thin is fine as long as it is ASSERTED: a catalog wording
+   * change that closes it now fails here, loudly, instead of quietly
+   * downgrading these cases to "proves shedding happens" while the `frame`
+   * wiring goes untested. If one does go red, retune `TAIL` — do not delete the
+   * guard. `text-to-video.test.ts` covers the same wiring with a much wider
+   * margin (the legacy character block is worth hundreds of characters).
+   */
+  const frameHybrid = (body: string | undefined) =>
+    inHybrid(
+      () =>
+        assembleVideoConnectedReferences({
+          prompt: body,
+          provider: "grok-i2v",
+          connectedReferences: REFS as never,
+          referenceVideoCount: 0,
+          referenceAudioCount: 0,
+        }).prompt!,
+    )
 
   it("HYBRID: the queued prompt fits the cap with every binding and the prose intact", async () => {
     const { res, queued } = await postHybrid({
@@ -518,9 +550,16 @@ describe("POST /v1/generate-video — over-cap direction sheds hints, never bind
     expect(res.statusCode).toBe(200)
     const prompt = queued!.prompt as string
 
-    // NON-VACUITY: the unshed fold really would have overflowed, so the
+    // NON-VACUITY (1): the unshed fold really would have overflowed, so the
     // provider clamp really would have cut this prompt's tail.
     expect((composeVideoPromptText(PROSE, BIG_DIRECTION) as string).length).toBeGreaterThan(CAP)
+
+    // NON-VACUITY (2) — the half that pins `frame` rather than `cap`: a shed
+    // that budgeted the BARE body is still over the ceiling once the resolver's
+    // appended role phrases are counted. Without this the case would pass on
+    // `cap` alone and the missing `frame` would be invisible.
+    const frameBlind = composeVideoPromptText(PROSE, BIG_DIRECTION, undefined, { cap: CAP })
+    expect((await frameHybrid(frameBlind)).length).toBeGreaterThan(CAP)
 
     // The route shed enough that the clamp is never reached.
     expect(prompt.length).toBeLessThanOrEqual(CAP)
@@ -583,6 +622,10 @@ describe("POST /v1/generate-video — over-cap direction sheds hints, never bind
     const prompt = withNeg.queued!.prompt as string
 
     expect(reserved).toBeLessThan(CAP) // the assertion below has teeth
+    // …and so does the framing, at the reserved ceiling too: a frame-blind shed
+    // budgeted on `reserved` still overflows it once the resolver's text lands.
+    const frameBlind = composeVideoPromptText(PROSE, BIG_DIRECTION, undefined, { cap: reserved })
+    expect((await frameHybrid(frameBlind)).length).toBeGreaterThan(reserved)
     expect(prompt.length).toBeLessThanOrEqual(reserved)
     // Strictly more shedding than the same request without a negative — proof
     // the reservation, not just the cap, drove the decision.

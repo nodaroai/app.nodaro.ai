@@ -75,7 +75,13 @@ import { textToVideoRoutes } from "../text-to-video.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { registerPromptPolicy, clearPromptPolicies } from "../../lib/prompt-policy.js"
-import { getStylePromptHint, composeVideoPromptText } from "@nodaro/prompts"
+import { assembleVideoConnectedReferences } from "../generate-video.js"
+import {
+  getStylePromptHint,
+  composeVideoPromptText,
+  renderDirectionHints,
+  VIDEO_HINT_MODE_DEFAULT,
+} from "@nodaro/prompts"
 import { getMaxVideoPromptChars } from "@nodaro/shared"
 
 // ---------------------------------------------------------------------------
@@ -366,13 +372,17 @@ describe("POST /v1/text-to-video — the direction channel", () => {
   })
 
   /**
-   * TRUNCATION ORDERING — the route must hand the composer the EFFECTIVE
-   * ceiling, not just fold and hope. `/v1/generate-video` pins the reference
-   * FRAMING half end to end (it needs a provider that carries image refs);
-   * every t2v provider at a low enough cap to overflow carries none, so what is
-   * proved here is the cap half — including that the ceiling is the one the
-   * `"\nAvoid: …"` reservation leaves, which is the number a route that read
-   * `getMaxVideoPromptChars` itself would get wrong.
+   * TRUNCATION ORDERING — the route must hand the composer BOTH halves of the
+   * budget: the EFFECTIVE ceiling and the reference FRAMING. Either one missing
+   * is a silently clamped prompt, and the package suites can't see it, so both
+   * get an end-to-end case here.
+   *
+   * The two halves need different providers, which is why there are two blocks:
+   * `minimax` (1500 cap, ZERO image refs) isolates the ceiling half — nothing
+   * frames the body there, so only the cap can be under test — while
+   * `minimax-h3` (7000 cap, 9 image refs, non-native negative) is the cheapest
+   * t2v provider that carries references and therefore the one that can prove
+   * the framing half.
    */
   const BIG_DIRECTION = {
     cameraMotion: "handheld",
@@ -435,5 +445,115 @@ describe("POST /v1/text-to-video — the direction channel", () => {
     expect(withNeg.prompt.length).toBeLessThanOrEqual(reserved)
     expect(withNeg.prompt.length).toBeLessThan(withoutNeg.prompt.length)
     expect(withNeg.prompt.startsWith(PROSE.trim())).toBe(true)
+  })
+
+  /**
+   * …and the FRAMING half. The fold runs BEFORE the reference assembly, but the
+   * assembly is what APPENDS the binding text, so the shed has to be decided on
+   * the FRAMED length — the route passes its own assembly as `opts.frame`.
+   * Forget that and the composer budgets a body that fits while the prompt the
+   * provider receives does not, and the order-blind clamp cuts the bindings.
+   *
+   * `minimax-h3` is the provider that makes this observable on t2v: 7000-char
+   * cap AND 9 image-reference seats. (`minimax` above has none, so nothing
+   * frames its body — that block structurally cannot cover this.)
+   */
+  describe("the framing half — the budget includes what the resolver appends", () => {
+    // Long canonical descriptions on purpose: the frame's contribution IS the
+    // signal under test, so it should be worth hundreds of characters rather
+    // than a handful, and the margins below should be obvious, not knife-edge.
+    const REFS = [
+      {
+        id: "r1",
+        defaultName: "Kira",
+        source: "wired-character",
+        url: "https://cdn.example/kira.png",
+        characterSlug: "kira",
+        characterCanonicalDescription:
+          "auburn hair worn in a loose braid, hazel eyes, a weathered navy peacoat over a grey fisherman's sweater, salt-stained leather boots, a thin silver ring on her left hand",
+      },
+      {
+        id: "r2",
+        defaultName: "Ray",
+        source: "wired-character",
+        url: "https://cdn.example/ray.png",
+        characterSlug: "ray",
+        characterCanonicalDescription:
+          "a grizzled dockworker in his sixties, close-cropped white beard, deep crow's feet, an oilskin jacket patched at both elbows, forearms tattooed with faded anchors",
+      },
+    ]
+    // Sized so that the PROSE plus the framing fits well under 7000 on its own —
+    // the overflow is the direction fold's doing, and the shed's job is to give
+    // exactly it back.
+    const TAIL = "The waves are loud. ".repeat(280)
+    const REF_PROSE = `@kira:1 walks the seawall at dusk. ${TAIL}`
+    const CAP = getMaxVideoPromptChars("minimax-h3")
+    const HINTS = renderDirectionHints(BIG_DIRECTION, {
+      surface: "video",
+      mode: VIDEO_HINT_MODE_DEFAULT,
+    })
+
+    // The same framing the route builds, for the non-vacuity arithmetic below.
+    const frame = (body: string | undefined) =>
+      assembleVideoConnectedReferences({
+        prompt: body,
+        provider: "minimax-h3",
+        connectedReferences: REFS as never,
+        referenceVideoCount: 0,
+        referenceAudioCount: 0,
+      }).prompt
+
+    it("sheds on the FRAMED length, so the bindings and the prose both survive", async () => {
+      // NON-VACUITY (1): the unshed fold really would have overflowed.
+      expect(frame(composeVideoPromptText(REF_PROSE, BIG_DIRECTION))!.length).toBeGreaterThan(CAP)
+      // NON-VACUITY (2) — the one that pins `frame` itself: a shed that budgeted
+      // the BARE body still overflows once the resolver's text is added. So this
+      // case cannot pass on the ceiling alone; drop `frame` from the route wiring
+      // and the prompt below really is over the cap and really is clamped.
+      const frameBlind = composeVideoPromptText(REF_PROSE, BIG_DIRECTION, undefined, { cap: CAP })
+      expect(frame(frameBlind)!.length).toBeGreaterThan(CAP)
+      // …and the prose plus the framing alone was never the problem.
+      expect(frame(REF_PROSE)!.length).toBeLessThanOrEqual(CAP)
+
+      const { res, prompt } = await postT2V({
+        prompt: REF_PROSE,
+        userId: USER,
+        provider: "minimax-h3",
+        direction: BIG_DIRECTION,
+        connectedReferences: REFS,
+      })
+      expect(res.statusCode).toBe(200)
+      expect(prompt.length).toBeLessThanOrEqual(CAP)
+
+      // Every byte the resolver added is intact — the block header and BOTH
+      // canonical descriptions, which an order-blind tail cut takes first.
+      expect(prompt).toContain("Use these characters:")
+      expect(prompt).toContain(REFS[0]!.characterCanonicalDescription)
+      expect(prompt).toContain(REFS[1]!.characterCanonicalDescription)
+      // The billed quantity cannot move either.
+      expect(vi.mocked(videoQueue.add).mock.calls.at(-1)![1].referenceImageUrls).toEqual([
+        "https://cdn.example/kira.png",
+        "https://cdn.example/ray.png",
+      ])
+
+      // The user's prose survives in full…
+      expect(prompt).toContain(TAIL.trim())
+      // …and only trailing hints paid: the first-folded one stayed.
+      expect(prompt).toContain(HINTS[0])
+      expect(prompt).not.toContain(HINTS[HINTS.length - 1])
+    })
+
+    it("leaves an under-cap framed run byte-identical to the capless fold", async () => {
+      // The framing costs nothing when there is room: the shed leg stays dark.
+      const short = "she walks the seawall at dusk"
+      const { prompt } = await postT2V({
+        prompt: short,
+        userId: USER,
+        provider: "minimax-h3",
+        direction: BIG_DIRECTION,
+        connectedReferences: REFS,
+      })
+      expect(prompt).toBe(frame(composeVideoPromptText(short, BIG_DIRECTION)))
+    })
   })
 })
