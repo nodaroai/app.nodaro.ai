@@ -523,13 +523,26 @@ import(input: WorkflowExport & { projectId: string }): Promise<{ data: Workflow;
 ```
 
 Imports a `WorkflowExport` bundle into the specified project. Re-creates any
-bundled assets (characters, objects, locations) under your account. Returns the
-full record of the newly created workflow.
+bundled assets (characters, objects, creatures, locations) under your account
+and re-points the graph at them — both the entity nodes' `*DbId` fields and
+every `@`-chip (`ConnectedReference`) bound in node data **or in the workflow's
+freeform `settings`**, so a graph that binds its entities only through chips
+arrives bound rather than dangling. Returns the full record of the newly created
+workflow.
 
 Media the bundle references on other hosts is **copied onto this instance's
-storage** where it is reachable (up to 25 distinct files per import; images up
-to 20 MB, video/audio up to 50 MB), so the workflow runs from local copies
-rather than someone else's host. `importReport` says what happened:
+storage** where it is reachable (up to 25 distinct files for the graph's media
+and 25 more for the bundled entities' — the two budgets are separate, so neither
+can starve the other; images up to 20 MB, video/audio up to 50 MB), so the
+workflow runs from local copies rather than someone else's host. URLs in
+`settings` follow those copies but never trigger one of their own. A bundled
+**entity's** images are copied
+whoever hosts them — they are the exporter's bytes, and their delete, quota
+sweep and retention reaper answer to the exporter, not to you. Those copies
+count against your storage quota; when it runs out the workflow still lands and
+the entities that did not fit are named in the report.
+
+`importReport` says what happened:
 
 ```ts
 const { data: wf, importReport } = await client.workflows.import({ ...bundle, projectId })
@@ -538,8 +551,15 @@ importReport
 //   rehosted: 3,                                  // copied onto this instance
 //   unreachable: [{ nodeId, nodeLabel, field, url }], // private hosts — left as-is
 //   skipped: [{ nodeId, field, url, reason: "HTTP 404" }],
+//   assetIdMap: { "<bundled entity id>": "<the row created for it>" },
+//   assetsSkipped: [{ kind: "character", id, name: "Kira", reason: "Storage limit exceeded" }],
 // }
 ```
+
+`assetIdMap` is present whenever the bundle carried `assets`. The server has
+already re-pointed every chip inside the nodes it stored; the map is for chips
+a client holds **outside** the graph. `assetsSkipped` appears only when
+something was left out.
 
 #### `setVisibility(id, visibility)`
 

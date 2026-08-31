@@ -33,12 +33,16 @@ import { loadWorkflowFor, toAccessRow } from "../lib/workflow-route-access.js"
 import type { WorkflowAccessRow } from "../lib/private-plugins/types.js"
 import {
   asObjectArray,
+  assetIdMapForReport,
   collectAssetIds,
+  droppedAssetIdsFromReport,
   fetchExportAssets,
   reCreateAssets,
   remapNodeAssetIds,
+  remapSettingsReferences,
   workflowExportSchema,
 } from "../lib/workflow-assets.js"
+import type { CreatedAssetMap } from "../lib/workflow-assets.js"
 import { migrateGenerateImageHandles } from "../lib/generate-image-handle-migration.js"
 import { findUnroutableMedia, rehostForeignMedia } from "../lib/media-portability.js"
 import {
@@ -1744,7 +1748,11 @@ export async function workflowRoutes(app: FastifyInstance) {
       // exported by a collaborator comes back with the graph and without the
       // entities they were never given. Deliberate; do not "fix" it by passing
       // the creator's id.
-      const ids = collectAssetIds(rawNodes)
+      // The settings blob is walked too (#1088): an app's own index there can
+      // bind entities the graph never mentions (a studio shot's PLAN carries
+      // chips before anything is framed), and the import re-points exactly the
+      // chips this collects.
+      const ids = collectAssetIds(rawNodes, wf.settings)
       const assetsResult = await fetchExportAssets(ids, userId)
       if ("error" in assetsResult) return sendInternalError(reply, req, assetsResult.error, "Failed to export workflow")
       result.assets = assetsResult
@@ -1752,7 +1760,9 @@ export async function workflowRoutes(app: FastifyInstance) {
 
     // Media another instance cannot fetch (a private host's own storage,
     // #866) — listed so the exporter hears it now, not at Run time elsewhere.
-    const unreachableMedia = findUnroutableMedia(result.nodes)
+    // The bundled ENTITIES' images ride the same check (#1088): a character
+    // whose portrait only this host can serve is as unportable as a still.
+    const unreachableMedia = findUnroutableMedia(result.nodes, result.assets)
     if (unreachableMedia.length > 0) result.portability = { unreachableMedia }
 
     return reply.send(result)
@@ -1779,10 +1789,35 @@ export async function workflowRoutes(app: FastifyInstance) {
       return notFound(reply, "Project not found")
     }
 
-    // Re-create bundled assets, mapping old DB id → new DB id (node_id preserved).
-    let assetIdMap: ReadonlyMap<string, string> = new Map()
-    if (wf.assets) {
-      const result = await reCreateAssets(wf.assets, userId, projectId)
+    // Copy the bundle's media into the importer's own storage BEFORE anything
+    // is created from it. The graph's media is the #866 case (foreign hosts);
+    // the bundled ENTITIES' images are #1088's, and they are copied even when
+    // they already sit on this instance — they are the EXPORTER's bytes, and
+    // their delete / quarantine sweep / retention reaper answer to nobody
+    // here. Both halves ride ONE pass, so a still and the chip pointing at it
+    // are fetched and charged once. Never throws: what could not be copied is
+    // in the report, and the workflow still lands.
+    //
+    // This runs before the workflow row exists because `reCreateAssets` must
+    // insert rows that already point at the copies — the entity inserts were
+    // always ahead of the workflow insert, so the copy joins them there.
+    const {
+      nodes: portableNodes,
+      assets: portableAssets,
+      settings: portableSettings,
+      report: importReport,
+    } = await rehostForeignMedia(wf.nodes, userId, {
+      ...(wf.assets ? { assets: wf.assets } : {}),
+      // The settings blob is REWRITE-ONLY here: it follows the copies the graph
+      // and the entities paid for, so the row's two views of one production
+      // agree about where the bytes are. It never adds a candidate of its own.
+      ...(wf.settings ? { settings: wf.settings } : {}),
+    })
+
+    // Re-create bundled assets, mapping old DB id → the new row (node_id preserved).
+    let assetIdMap: CreatedAssetMap = new Map()
+    if (portableAssets) {
+      const result = await reCreateAssets(portableAssets, userId, projectId)
       if (result instanceof Map) {
         assetIdMap = result
       } else {
@@ -1790,7 +1825,22 @@ export async function workflowRoutes(app: FastifyInstance) {
       }
     }
 
-    const remappedNodes = remapNodeAssetIds(wf.nodes, assetIdMap)
+    // Node entity fields AND the `@`-chips bound in node data both follow the
+    // re-created rows (#1088) — a chips-only graph (every studio production)
+    // arrives bound instead of dangling. Entities the copy DROPPED (storage
+    // quota) have no row here, so their node ids are cleared rather than left
+    // pointing at the exporter's.
+    const droppedAssetIds = droppedAssetIdsFromReport(importReport.assetsSkipped)
+    const remappedNodes = remapNodeAssetIds(portableNodes, assetIdMap, droppedAssetIds)
+    // The settings blob's chips follow the same rows — an app that keeps its
+    // own index there (studio's `settings.studio`) must not read a production
+    // whose graph is bound and whose index still is not.
+    const remappedSettings = remapSettingsReferences(portableSettings, assetIdMap) ?? {}
+    if (portableAssets) {
+      // The map leaves the server so a client holding chips OUTSIDE the
+      // workflow can finish the same job (published wire contract).
+      importReport.assetIdMap = assetIdMapForReport(assetIdMap)
+    }
 
     const migratedEdges = migrateGenerateImageHandles(
       remappedNodes as Array<{ id: string; type?: string }>,
@@ -1805,7 +1855,7 @@ export async function workflowRoutes(app: FastifyInstance) {
         name: wf.name,
         nodes: remappedNodes,
         edges: migratedEdges,
-        settings: wf.settings ?? {},
+        settings: remappedSettings,
         // Where this row came from. The importer is recorded as the original
         // author because the bundle format carries no author — adding one is
         // a change to a published wire contract, and an import from an
@@ -1821,27 +1871,7 @@ export async function workflowRoutes(app: FastifyInstance) {
       return sendInternalError(reply, req, wfError, "Failed to create workflow")
     }
 
-    // Media the bundle points at elsewhere is copied onto THIS instance's
-    // storage so the workflow runs from local copies (#866) — AFTER the row
-    // exists, so a slow or failed copy degrades to "foreign URLs, reported",
-    // never to a lost import. What could not be copied is in the report.
-    const { nodes: portableNodes, report: importReport } = await rehostForeignMedia(remappedNodes, userId)
-    let finalRow = newWorkflow as Record<string, unknown>
-    if (importReport.rehosted > 0) {
-      const { data: updated, error: updError } = await supabase
-        .from("workflows")
-        .update({ nodes: portableNodes })
-        .eq("id", newWorkflow.id)
-        .eq("user_id", userId)
-        .select(WORKFLOW_FULL_COLS)
-        .single()
-      if (updError || !updated) {
-        req.log.warn({ err: updError, workflowId: newWorkflow.id }, "[workflows/import] media copied but the workflow could not be updated to use the copies")
-        importReport.notes = [...(importReport.notes ?? []), "Media was copied onto this instance, but the workflow could not be updated to use the copies — it still points at the original URLs."]
-      } else {
-        finalRow = updated as Record<string, unknown>
-      }
-    }
+    const finalRow = newWorkflow as Record<string, unknown>
 
     return reply
       .status(201)
