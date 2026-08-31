@@ -459,7 +459,7 @@ describe("dubbingApi", () => {
     const mock = mockFetchJson({ jobId: "jdub" })
     vi.stubGlobal("fetch", mock)
 
-    await dubbingApi("http://a.mp3", "es", "user-4", "en", 2)
+    await dubbingApi({ audioUrl: "http://a.mp3" }, "es", "user-4", "en", 2)
 
     const [url, init] = lastCall(mock)
     expect(url).toBe("/v1/dubbing")
@@ -470,6 +470,46 @@ describe("dubbingApi", () => {
       userId: "user-4",
       sourceLanguage: "en",
       numSpeakers: 2,
+    })
+  })
+
+  it("POSTs a video source with the full-surface options (window, resolution, accent)", async () => {
+    sessionWith("tok-dub")
+    const mock = mockFetchJson({ jobId: "jdub2" })
+    vi.stubGlobal("fetch", mock)
+
+    await dubbingApi({ videoUrl: "http://clip.mp4" }, "fr", undefined, undefined, 0, {
+      startTime: 10,
+      endTime: 90,
+      highestResolution: true,
+      useProfanityFilter: true,
+      targetAccent: "british",
+      watermark: false,
+    })
+
+    expect(parseBody(mock)).toEqual({
+      videoUrl: "http://clip.mp4",
+      targetLanguage: "fr",
+      numSpeakers: 0,
+      startTime: 10,
+      endTime: 90,
+      highestResolution: true,
+      useProfanityFilter: true,
+      targetAccent: "british",
+      watermark: false,
+    })
+  })
+
+  it("POSTs a bare sourceUrl (link mode)", async () => {
+    sessionWith("tok-dub")
+    const mock = mockFetchJson({ jobId: "jdub3" })
+    vi.stubGlobal("fetch", mock)
+
+    await dubbingApi({ sourceUrl: "https://youtube.com/watch?v=x" }, "he")
+
+    expect(parseBody(mock)).toEqual({
+      sourceUrl: "https://youtube.com/watch?v=x",
+      targetLanguage: "he",
     })
   })
 })

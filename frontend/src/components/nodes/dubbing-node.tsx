@@ -1,44 +1,103 @@
 "use client"
 
-import { memo, useState } from "react"
+import { memo, useState, useEffect, useMemo, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Languages, Loader2, AlertCircle, Volume2, LayoutGrid } from "lucide-react"
+import { Languages, Loader2, AlertCircle, LayoutGrid, Film, Link2 } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { NodeQuickStrip } from "./node-quick-strip"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
+import { ResultsThumbnailsPanel } from "./results-thumbnails-panel"
 import { isValidDubbingConnection } from "@/lib/audio-text-handles"
+import { useHandleConnections } from "@/hooks/use-handle-connections"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { AudioResultOverlay } from "./audio-result-overlay"
+import { VideoResultOverlay } from "./video-result-overlay"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
+import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
+import { videoNodeSizing } from "./video-node-defaults"
 import type { DubbingData } from "@/types/nodes"
 
 const ACCEPTS_AUDIO = (t: string) => isValidDubbingConnection("audio", t)
+const ACCEPTS_VIDEO = (t: string) => isValidDubbingConnection("video", t)
 
 function DubbingNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as DubbingData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  const selectNode = useWorkflowStore((s) => s.selectNode)
+  const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
+  const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
+  const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
   const activeResult = results[activeIndex]
-  const activeUrl = activeResult?.url ?? nodeData.generatedAudioUrl
-  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
+
+  // Dual-mode (mirrors voice-changer): a wired video input dubs the whole
+  // clip and delivers the dubbed VIDEO (+ audio sidecar); audio-in stays
+  // audio-out. A sourceUrl (config panel) needs no wired input at all —
+  // ElevenLabs fetches the link itself.
+  const videoInConnected = useHandleConnections(id, "video", "target").length > 0
+  const audioInConnected = useHandleConnections(id, "audio", "target").length > 0
+  const audioIgnored = videoInConnected && audioInConnected
+  const hasSourceUrl = Boolean(nodeData.sourceUrl?.trim())
+
+  // The video result drives the display + which output handle is live.
+  const isVideoResult = Boolean(nodeData.generatedVideoUrl)
+  const activeUrl = activeResult?.url ?? (isVideoResult ? nodeData.generatedVideoUrl : nodeData.generatedAudioUrl)
+  const urlField = isVideoResult ? "generatedVideoUrl" : "generatedAudioUrl"
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [showThumbnails, setShowThumbnails] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
-  const credits = useModelCredits("elevenlabs-dubbing", 8)
+  const [videoError, setVideoError] = useState(false)
+  // Per-minute base rate — the run-confirm dialog shows the real span-based reserve.
+  const credits = useModelCredits("elevenlabs-dubbing", 40)
+
+  useEffect(() => {
+    setVideoError(false)
+  }, [activeUrl])
+
+  // Dubbing is dual-mode: audio by default, video when a video input (or a
+  // video sourceUrl result) drives it. Video mode sizes like every other
+  // video node — 240 / 16:9-until-result / snap-to-result-aspect (the shared
+  // helper; media-node-sizing.test.ts bites on hand-picked sizing).
+  const { aspectRatio: mediaAspectRatio, onLoadDimensions: handleLoadDimensions } =
+    useResultAspectRatio(id, results, activeIndex)
+
+  const hasVideoResult = isVideoResult && status !== "running" && !!activeUrl && !videoError
+  const canBrowseAlternates = !!activeUrl && results.length > 1
+
+  const thumbResults = useMemo(
+    () =>
+      results.map((r) => ({
+        url: isVideoResult ? (r.thumbnailUrl ?? r.url) : r.url,
+        jobId: r.jobId,
+      })),
+    [results, isVideoResult],
+  )
+  const handleSelectResult = useCallback(
+    (i: number) => updateNodeData(id, { activeResultIndex: i, [urlField]: results[i].url }),
+    [id, updateNodeData, results, urlField],
+  )
+  const requestDelete = useCallback(
+    (i: number) => {
+      const jobId = results[i]?.jobId
+      if (jobId) setDeleteConfirm(jobId)
+    },
+    [results],
+  )
+  const activeJobId = activeResult?.jobId
 
   function handleDeleteResult(indexToDelete: number) {
-    updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedAudioUrl"))
+    updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, urlField))
   }
 
   return (
-    <div className="relative" style={{ maxWidth: '220px' }}>
+    <div className="relative group/node" style={isVideoResult ? { width: '100%', height: '100%', overflow: 'visible' } : { maxWidth: '220px' }}>
     {/* Floating label above node */}
     <EditableNodeLabel
       label={nodeData.label}
@@ -53,107 +112,148 @@ function DubbingNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={status === "running"}
+      {...(isVideoResult ? videoNodeSizing(mediaAspectRatio) : {})}
+      className={hasVideoResult ? "!border-0 !shadow-none !bg-transparent" : undefined}
       hideHeader
       topToolbarContent={
                   <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
       }
       bottomToolbarContent={
-        showThumbnails && results.length > 1 ? (
-          <div className="flex gap-2 px-2 py-1.5 bg-black/60 backdrop-blur-sm rounded-xl border border-white/10">
-            {results.slice(0, 8).map((r, i) => (
-              <button
-                key={`${r.jobId}-${i}`}
-                type="button"
-                aria-label={`Result ${i + 1}`}
-                className={`w-10 h-10 flex items-center justify-center rounded-lg cursor-pointer transition-all ${
-                  i === activeIndex
-                    ? "ring-2 ring-[#ff0073] bg-[#ff0073]/20"
-                    : "opacity-50 hover:opacity-80 bg-white/10"
-                }`}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  updateNodeData(id, { activeResultIndex: i, generatedAudioUrl: r.url })
-                }}
-              >
-                <Volume2 className="w-4 h-4 text-white" />
-              </button>
-            ))}
-          </div>
+        showThumbnails && canBrowseAlternates ? (
+          <ResultsThumbnailsPanel
+            results={thumbResults}
+            activeIndex={activeIndex}
+            nodeSelected={!!selected || isSettingsOpen}
+            onSelect={handleSelectResult}
+            mediaType={isVideoResult ? "video" : "audio"}
+            onDelete={requestDelete}
+          />
         ) : undefined
       }
       handles={[
+        { id: "video", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 52px)', left: '-29px' }, external: true },
         { id: "audio", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
         { id: "audio", type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
+        { id: "video", type: "source", position: Position.Right, customStyle: { top: '52px',              right: '-29px' }, external: true },
       ]}
     >
-      <div className="flex flex-col gap-2 p-3" style={{ minHeight: 180 }}>
-        {status === "running" && !activeUrl && (
-          <div className="flex flex-col items-center justify-center gap-2 h-12 rounded-md bg-muted/30">
-            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-            <NodeJobProgress progress={nodeData.currentJobProgress} />
-          </div>
-        )}
-
-        {activeUrl && results.length > 0 && (
-          <div className="flex justify-end px-3">
-            <button type="button"
-              className="flex items-center gap-1 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white text-[11px] rounded-md"
-              onClick={(e) => { e.stopPropagation(); setShowThumbnails(v => !v) }}
-            >
-              <LayoutGrid className="w-3 h-3" />
-              <span>{results.length}</span>
-            </button>
-          </div>
-        )}
-        {activeUrl && (
-          <div className="px-3 py-2">
-            <AudioResultOverlay
-              url={activeUrl}
-              label={nodeData.label}
-              hasResults={results.length > 0}
-              onExpand={() => setPreviewOpen(true)}
-              onDelete={() => setDeleteConfirm(activeIndex)}
-            />
-          </div>
-        )}
-
-        {status === "failed" && !activeUrl && (
-          <div className="flex flex-col items-center justify-center gap-1 h-12 rounded-md bg-red-500/5 text-red-500 p-2">
-            <div className="flex items-center gap-1.5">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span className="font-medium">Failed</span>
+      {hasVideoResult ? null : (
+        <div className={`flex flex-col gap-2 ${isVideoResult ? "" : "p-3"}`} style={{ minHeight: isVideoResult ? undefined : 180 }}>
+          {/* Video wins, audio ignored — surfaced graphically so the precedence
+              rule is obvious on the canvas. */}
+          {audioIgnored && (
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/10 text-amber-600 text-[10px] leading-tight">
+              <Film className="w-3 h-3 shrink-0" />
+              <span>Video wins — audio input ignored</span>
             </div>
-            {nodeData.errorMessage && (
-              <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
-                {nodeData.errorMessage}
-              </p>
-            )}
-          </div>
-        )}
+          )}
+          {hasSourceUrl && (audioInConnected || videoInConnected) && (
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/10 text-amber-600 text-[10px] leading-tight">
+              <Link2 className="w-3 h-3 shrink-0" />
+              <span>Source link set — wired inputs ignored</span>
+            </div>
+          )}
 
-        {status !== "running" && !activeUrl && status !== "failed" && (
-          <div className="flex items-center justify-center rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40" style={{ minHeight: 120, flex: 1 }}>
-            <Languages className="w-5 h-5" />
-          </div>
-        )}
+          {status === "running" && !activeUrl && (
+            <div className="flex flex-col items-center justify-center gap-2 h-12 rounded-md bg-muted/30">
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+              <NodeJobProgress progress={nodeData.currentJobProgress} />
+            </div>
+          )}
 
-        <div className="flex justify-between text-muted-foreground">
-          <span>Dubbing</span>
-          {nodeData.targetLanguage && <span className="text-xs">{nodeData.targetLanguage}</span>}
+          {activeUrl && results.length > 0 && (
+            <div className="flex justify-end px-3">
+              <button type="button"
+                className="flex items-center gap-1 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white text-[11px] rounded-md"
+                onClick={(e) => { e.stopPropagation(); setShowThumbnails(v => !v) }}
+              >
+                <LayoutGrid className="w-3 h-3" />
+                <span>{results.length}</span>
+              </button>
+            </div>
+          )}
+          {/* Audio mode only — the rich audio player. Video results render via
+              the VideoResultOverlay sibling below. */}
+          {activeUrl && !isVideoResult && (
+            <div className="px-3 py-2">
+              <AudioResultOverlay
+                url={activeUrl}
+                label={nodeData.label}
+                hasResults={results.length > 0}
+                onExpand={() => setPreviewOpen(true)}
+                onDelete={() => { if (activeJobId) setDeleteConfirm(activeJobId) }}
+              />
+            </div>
+          )}
+
+          {status === "failed" && !activeUrl && (
+            <div className="flex flex-col items-center justify-center gap-1 h-12 rounded-md bg-red-500/5 text-red-500 p-2">
+              <div className="flex items-center gap-1.5">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span className="font-medium">Failed</span>
+              </div>
+              {nodeData.errorMessage && (
+                <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
+                  {nodeData.errorMessage}
+                </p>
+              )}
+            </div>
+          )}
+
+          {status !== "running" && !activeUrl && status !== "failed" && (
+            <div className="flex items-center justify-center rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40" style={{ minHeight: 120, flex: 1 }}>
+              {hasSourceUrl ? <Link2 className="w-5 h-5" /> : videoInConnected ? <Film className="w-5 h-5" /> : <Languages className="w-5 h-5" />}
+            </div>
+          )}
+
+          <div className="flex justify-between text-muted-foreground">
+            <span>Dubbing</span>
+            {nodeData.targetLanguage && <span className="text-xs">{nodeData.targetLanguage}</span>}
+          </div>
         </div>
-      </div>
+      )}
     </BaseNode>
-    <HandleWithPopover nodeId={id} nodeType="dubbing" handleId="audio" type="target" position={Position.Left}  label="Audio" color={HANDLE_COLORS.audio} icon={<Languages />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} />
+
+    {/* Video result: rich player overlay filling the transparent node — same
+        controls the standard video nodes have. */}
+    {hasVideoResult && (
+      <VideoResultOverlay
+        url={activeUrl!}
+        videoAutoplay={videoAutoplay}
+        label={nodeData.label}
+        hasResults={results.length > 0}
+        onExpand={() => setPreviewOpen(true)}
+        onDelete={() => { if (activeJobId) setDeleteConfirm(activeJobId) }}
+        onEdit={() => openFreeCut(id, activeUrl!, activeResult?.freecutProjectUrl)}
+        onRawDimensions={handleLoadDimensions}
+        onVideoError={() => setVideoError(true)}
+        onVideoLoad={() => setVideoError(false)}
+        onSettings={() => selectNode(isSettingsOpen ? null : id)}
+        isSettingsOpen={isSettingsOpen}
+      />
+    )}
+
+    {/* Inputs (left): video above audio. Audio input is dimmed when a video is
+        also wired (video wins, audio ignored). */}
+    <HandleWithPopover nodeId={id} nodeType="dubbing" handleId="video" type="target" position={Position.Left}  label="Video" color={HANDLE_COLORS.video} icon={<Film />}      side="left"  top="calc(100% - 52px)" accepts={ACCEPTS_VIDEO} />
+    <HandleWithPopover nodeId={id} nodeType="dubbing" handleId="audio" type="target" position={Position.Left}  label="Audio" color={HANDLE_COLORS.audio} icon={<Languages />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} disabled={videoInConnected} />
+    {/* Outputs (right): audio always live (the dubbed dialogue track). Video
+        output goes live when a video input (or source link) drives the dub. */}
     <HandleWithPopover nodeId={id} nodeType="dubbing" handleId="audio" type="source" position={Position.Right} label="Audio" color={HANDLE_COLORS.audio} icon={<Languages />} side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="dubbing" handleId="video" type="source" position={Position.Right} label="Video" color={HANDLE_COLORS.video} icon={<Film />}      side="right" top="52px" disabled={!videoInConnected && !hasSourceUrl} />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
       onClose={() => setDeleteConfirm(null)}
       onConfirm={() => {
-        if (deleteConfirm !== null) handleDeleteResult(deleteConfirm)
+        // Resolve the stored jobId back to its CURRENT index in the
+        // (possibly-shifted) results array. Stale jobId safely no-ops.
+        if (deleteConfirm === null) return
+        const currentIndex = results.findIndex((r) => r.jobId === deleteConfirm)
+        if (currentIndex >= 0) handleDeleteResult(currentIndex)
       }}
     />
     {activeUrl && (
-      <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type="audio" url={activeUrl} results={results} initialIndex={activeIndex} />
+      <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type={isVideoResult ? "video" : "audio"} url={activeUrl} results={results} initialIndex={activeIndex} />
     )}
     </div>
   )

@@ -741,6 +741,14 @@ export function getPrimaryOutput(
     return output.videoUrl || output.audioUrl
   }
 
+  // Dubbing is dual-mode (same pattern as voice-changer): audio in → dubbed
+  // audio; video in / video sourceUrl → dubbed video (+ audio sidecar).
+  if (sourceType === "dubbing") {
+    if (sourceHandle === "audio") return output.audioUrl
+    if (sourceHandle === "video") return output.videoUrl
+    return output.videoUrl || output.audioUrl
+  }
+
   // Split-media ("Split into Chunks"): dual-output time chunker. Route by the
   // tapped handle so an audio-handle wire gets the audio chunk and a video-
   // handle wire gets the video chunk. Accepts the legacy "*-out" handle ids as
@@ -951,7 +959,7 @@ const AUDIO_RESULT_TYPES = new Set([
   "suno-convert-wav",
   "suno-upload-extend",
   "text-to-dialogue",
-  "dubbing",
+  // dubbing has its own dual-mode case above (video + audio sidecar).
   "voice-remix",
   "audio-isolation",
   "trim-audio",
@@ -1044,6 +1052,22 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     if (videoUrls[0]) out.videoUrl = videoUrls[0]
     if (audioUrls[0]) out.audioUrl = audioUrls[0]
     return out.videoUrl || out.audioUrl ? out : undefined
+  }
+
+  // Dubbing is dual-mode (voice-changer pattern): prefer the video result so
+  // "Run from here" hydrates downstream video consumers; expose the dubbed
+  // audio sidecar for the audio handle.
+  if (type === "dubbing") {
+    const videoUrl = data.generatedVideoUrl as string | undefined
+    if (videoUrl) {
+      const out: NodeOutput = { videoUrl }
+      const audioUrl = data.generatedAudioUrl as string | undefined
+      if (audioUrl) out.audioUrl = audioUrl
+      return out
+    }
+    const audioUrl =
+      (data.generatedAudioUrl as string | undefined) ?? getActiveResultUrl(data)
+    return audioUrl ? { audioUrl } : undefined
   }
 
   // Voice-changer is dual-mode: audio in → audio out; video in → video out (+

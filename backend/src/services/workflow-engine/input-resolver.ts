@@ -1853,6 +1853,23 @@ function routeOutput(
     return
   }
 
+  // --- Dubbing → audio (audio mode) or video (video mode) ---
+  // Dual-mode like voice-changer since the full-surface upgrade: audio in →
+  // dubbed audio; video in (or a video sourceUrl) → dubbed VIDEO (+ audio
+  // sidecar). Route by the tapped source handle; default prefers video when
+  // the node produced one (mirrors the voice-changer pattern exactly).
+  if (srcType === "dubbing") {
+    const producedVideo =
+      Boolean(nodeStates[src.id]?.output?.videoUrl) ||
+      Boolean(src.data.generatedVideoUrl)
+    if (edge.sourceHandle === "video" || (edge.sourceHandle !== "audio" && producedVideo)) {
+      inputs.videoUrl = output
+    } else {
+      routeAudioOutput(inputs, output, targetType, src.id)
+    }
+    return
+  }
+
   // --- Audio output nodes ---
   if (AUDIO_OUTPUT_NODE_TYPES.has(srcType)) {
     routeAudioOutput(inputs, output, targetType, src.id)

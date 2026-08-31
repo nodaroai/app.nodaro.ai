@@ -589,7 +589,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     type: "voice-changer-pro",
     label: "Voice Changer Pro",
     category: "ai-audio",
-    description: "Detect each speaker in a multi-speaker recording and replace each one's voice independently, preserving words, timing and lip-sync. Provide an ordered list of target voices — voice N recasts the N-th speaker to talk; a null entry is a keep-slot (that speaker keeps their original voice). Cloud edition only.",
+    description: "Detect each speaker in a multi-speaker recording and replace each one's voice independently, preserving words, timing and lip-sync. Provide an ordered list of target voices — voice N recasts the N-th speaker to talk; a null entry is a keep-slot (that speaker keeps their original voice). Per-voice engine: \"sts\" (default recast) or \"v3\" (Re-speak — regenerates the performance from the transcript with eleven_v3). Cloud edition only.",
     outputType: "audio",
     creditCost: 4,
     capabilities: ["multi-speaker", "video-revoice", "dual-output-handles"],
@@ -598,7 +598,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
         { key: "audioUrl", type: "audio-url" },
         { key: "videoUrl", type: "video-url" },
         // Each entry is a voiceId string OR a per-voice settings object
-        // { voiceId, stability?, similarityBoost?, style?, useSpeakerBoost?, volumeMode?, volume? }
+        // { voiceId, engine?, stability?, similarityBoost?, style?, useSpeakerBoost?, seed?, volumeMode?, volume? }
         // OR null — a keep-slot: that speaker keeps their original voice.
         { key: "orderedVoices", type: "voice[]", required: true },
         { key: "model", type: "select", options: [...VOICE_CHANGER_MODEL_IDS] },
@@ -608,7 +608,31 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
       ],
     },
   },
-  { type: "dubbing", label: "Dubbing", category: "ai-audio", description: "Translate spoken audio into another language while preserving the original speaker's voice and identity.", outputType: "audio" },
+  {
+    type: "dubbing",
+    label: "Dubbing",
+    category: "ai-audio",
+    description: "Translate spoken audio OR video into another language while preserving each speaker's voice. Video in (or a public source link) delivers the dubbed VIDEO plus the dubbed audio track; priced per minute of the dubbed span (max 30 minutes — use the start/end window for longer sources).",
+    outputType: "audio",
+    inputSchema: {
+      fields: [
+        { key: "audioUrl", type: "audio-url" },
+        { key: "videoUrl", type: "video-url" },
+        { key: "sourceUrl", type: "text" },
+        { key: "targetLanguage", type: "text", required: true },
+        { key: "sourceLanguage", type: "text" },
+        { key: "numSpeakers", type: "number" },
+        { key: "disableVoiceCloning", type: "boolean" },
+        { key: "dropBackgroundAudio", type: "boolean" },
+        { key: "startTime", type: "number" },
+        { key: "endTime", type: "number" },
+        { key: "highestResolution", type: "boolean" },
+        { key: "useProfanityFilter", type: "boolean" },
+        { key: "targetAccent", type: "text" },
+        { key: "watermark", type: "boolean" },
+      ],
+    },
+  },
   { type: "voice-remix", label: "Voice Remix", category: "ai-audio", description: "Generate a voice from a natural language description and hear it speak preview text.", outputType: "audio" },
   { type: "voice-design", label: "Voice Design", category: "ai-audio", description: "Create a custom voice with full parameter controls and receive both an audio preview and a reusable voice ID.", outputType: "audio" },
   // Suno audio-track nodes (output audio) — suno-music-video is ai-video (above), suno-lyrics / suno-style-boost are ai-text (below).

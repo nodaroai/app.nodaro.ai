@@ -34,6 +34,9 @@ describe("DYNAMIC_PRODUCER_TYPES — shared set contents", () => {
       // voice-changer-pro: behavioral twin of voice-changer (identical dual-mode
       // output). Added so its outputs connect on both audio and video handles.
       "voice-changer-pro",
+      // dubbing joined the dual-mode family with the full-surface upgrade:
+      // audio in → dubbed audio; video in / video sourceUrl → dubbed video.
+      "dubbing",
       "reduce",
       // Dual-output time chunker ("Split into Chunks"): video chunks + audio
       // chunks on two handles; routed by sourceHandle at execution time.

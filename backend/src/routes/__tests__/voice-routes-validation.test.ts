@@ -59,6 +59,14 @@ vi.mock("@/providers/elevenlabs/voice-design.js", () => ({
 
 vi.mock("@/providers/elevenlabs/dubbing.js", () => ({
   runDubbing: vi.fn().mockResolvedValue({ audioUrl: "https://r2.example.com/out.mp3", cost: 0.10 }),
+  DUBBING_MAX_DURATION_SEC: 30 * 60,
+  DUBBING_FALLBACK_SECONDS: 120,
+}))
+
+// The dubbing route ffprobes the uploaded source in a preHandler. Default: a
+// short probeable clip; per-test overrides drive the 413 duration-cap path.
+vi.mock("@/providers/video/ffmpeg-utils.js", () => ({
+  probeMediaDuration: vi.fn().mockResolvedValue(60),
 }))
 
 vi.mock("@/providers/elevenlabs/forced-alignment.js", () => ({
@@ -288,9 +296,64 @@ describe("POST /v1/dubbing", () => {
     expect(res.statusCode).not.toBe(400)
   })
 
-  it("rejects missing audioUrl", async () => {
+  it("rejects a body with NO source (audioUrl / videoUrl / sourceUrl)", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/dubbing", payload: { targetLanguage: "es", userId: USER_ID } })
     expect(res.statusCode).toBe(400)
+    expect(res.body).toContain("exactly one source")
+  })
+
+  it("rejects TWO sources at once", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/dubbing", payload: { ...validBody, videoUrl: "https://example.com/c.mp4" } })
+    expect(res.statusCode).toBe(400)
+    expect(res.body).toContain("exactly one source")
+  })
+
+  it("accepts a videoUrl source", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/dubbing", payload: { videoUrl: "https://example.com/c.mp4", targetLanguage: "es", userId: USER_ID } })
+    expect(res.statusCode).not.toBe(400)
+  })
+
+  it("accepts a sourceUrl source (public link — ElevenLabs fetches it)", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/dubbing", payload: { sourceUrl: "https://youtube.com/watch?v=x", targetLanguage: "es", userId: USER_ID } })
+    expect(res.statusCode).not.toBe(400)
+  })
+
+  it("accepts the window + video options", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/dubbing",
+      payload: { ...validBody, startTime: 5, endTime: 65, highestResolution: true, useProfanityFilter: true, targetAccent: "british", watermark: true },
+    })
+    expect(res.statusCode).not.toBe(400)
+  })
+
+  it("rejects endTime <= startTime", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/dubbing", payload: { ...validBody, startTime: 60, endTime: 60 } })
+    expect(res.statusCode).toBe(400)
+  })
+
+  it("413s a probeable span past 30 minutes with an actionable message", async () => {
+    const { probeMediaDuration } = await import("@/providers/video/ffmpeg-utils.js")
+    vi.mocked(probeMediaDuration).mockResolvedValueOnce(31 * 60)
+    const res = await app.inject({ method: "POST", url: "/v1/dubbing", payload: validBody })
+    expect(res.statusCode).toBe(413)
+    expect(res.body).toContain("start/end window")
+  })
+
+  it("a window under the cap rescues an over-long source (the window IS the span)", async () => {
+    const { probeMediaDuration } = await import("@/providers/video/ffmpeg-utils.js")
+    vi.mocked(probeMediaDuration).mockResolvedValueOnce(45 * 60)
+    const res = await app.inject({ method: "POST", url: "/v1/dubbing", payload: { ...validBody, startTime: 0, endTime: 10 * 60 } })
+    expect(res.statusCode).not.toBe(413)
+    expect(res.statusCode).not.toBe(400)
+  })
+
+  it("a probe failure fails OPEN to the fallback bucket (never rejects the request)", async () => {
+    const { probeMediaDuration } = await import("@/providers/video/ffmpeg-utils.js")
+    vi.mocked(probeMediaDuration).mockRejectedValueOnce(new Error("ffprobe blip"))
+    const res = await app.inject({ method: "POST", url: "/v1/dubbing", payload: validBody })
+    expect(res.statusCode).not.toBe(400)
+    expect(res.statusCode).not.toBe(413)
   })
 
   it("rejects missing targetLanguage", async () => {
@@ -303,9 +366,9 @@ describe("POST /v1/dubbing", () => {
     expect(res.statusCode).toBe(400)
   })
 
-  it("rejects numSpeakers 0", async () => {
+  it("accepts numSpeakers 0 (auto-detect, the API default)", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/dubbing", payload: { ...validBody, numSpeakers: 0 } })
-    expect(res.statusCode).toBe(400)
+    expect(res.statusCode).not.toBe(400)
   })
 
   it("accepts numSpeakers 1", async () => {

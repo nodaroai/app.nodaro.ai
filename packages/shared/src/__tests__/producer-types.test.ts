@@ -42,6 +42,28 @@ describe("producer-types", () => {
     expect(DYNAMIC_PRODUCER_TYPES.has("voice-changer-pro")).toBe(true)
   })
 
+  // Dubbing joined the dual-mode family with the full-surface upgrade
+  // (audio in → dubbed audio; video in / video sourceUrl → dubbed video +
+  // audio sidecar). EXPLICIT assertions — the suite does not fail on
+  // omission, so without these a refactor could drop dubbing from a set
+  // and resurrect the "cannot connect the outputs" bug for it alone.
+  it("registers dubbing as an audio producer (its default output)", () => {
+    expect(AUDIO_PRODUCER_TYPES.has("dubbing")).toBe(true)
+  })
+
+  it("registers dubbing as a dynamic producer (dual-mode → accepted on BOTH audio and video input handles)", () => {
+    expect(DYNAMIC_PRODUCER_TYPES.has("dubbing")).toBe(true)
+  })
+
+  it("keeps dubbing's producer membership identical to voice-changer (same dual-mode contract)", () => {
+    for (const [name, set] of Object.entries(ALL_SETS)) {
+      expect(
+        set.has("dubbing"),
+        `dubbing must match voice-changer in ${name}`,
+      ).toBe(set.has("voice-changer"))
+    }
+  })
+
   // voice-changer-pro is a behavioral twin of voice-changer (identical
   // dual-mode output: audio in → audio out; video in → video out). Their
   // producer-set membership must never drift apart — if voice-changer is

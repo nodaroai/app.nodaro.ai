@@ -22,7 +22,8 @@ import { extractAudioTrack } from "../../providers/video/extract-audio-track.js"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import { cleanupWorkDir } from "../../providers/video/ffmpeg-utils.js"
 import { classifyMediaSource, isVideoMode } from "../../providers/video/media-source.js"
-import { startDubbing, waitForDubbing, downloadDubbedAudio } from "../../providers/elevenlabs/dubbing.js"
+import { startDubbing, waitForDubbing, pollDubbingStatus, downloadDubbedMedia, DUBBING_MAX_DURATION_SEC } from "../../providers/elevenlabs/dubbing.js"
+import { deliverDubbedMedia } from "../../lib/dubbing-delivery.js"
 import { remixVoice } from "../../providers/elevenlabs/voice-remix.js"
 import { designVoice } from "../../providers/elevenlabs/voice-design.js"
 import { forcedAlignment } from "../../providers/elevenlabs/forced-alignment.js"
@@ -530,41 +531,140 @@ const handleVoiceChanger: HandlerFn = async function handleVoiceChanger(job, ctx
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
 
+// Poll budget the dubbing worker will spend inline before PARKING the job for
+// the reconcile lane (elevenlabs-async, 15-min stale threshold) to deliver.
+// Parking is a NORMAL handoff for long sources, never a failure: the BullMQ
+// job completes without finalize, provider_call_started_at is already
+// stamped, and the cron (or a stall-retry inline reconcile) finishes the
+// download + delivery. Never fail+refund a dub ElevenLabs is still rendering
+// and will still bill.
+const DUBBING_WORKER_POLL_BUDGET_MS = 20 * 60 * 1000
+
 const handleDubbing: HandlerFn = async function handleDubbing(job, ctx) {
-  const { audioUrl, targetLanguage, sourceLanguage, numSpeakers, disableVoiceCloning, dropBackgroundAudio } = job.data as {
-    jobId: string; audioUrl: string; targetLanguage: string
-    sourceLanguage?: string; numSpeakers?: number
-    disableVoiceCloning?: boolean; dropBackgroundAudio?: boolean
+  const d = job.data as {
+    jobId: string
+    audioUrl?: string
+    videoUrl?: string
+    sourceUrl?: string
+    targetLanguage: string
+    sourceLanguage?: string
+    numSpeakers?: number
+    disableVoiceCloning?: boolean
+    dropBackgroundAudio?: boolean
+    startTime?: number
+    endTime?: number
+    highestResolution?: boolean
+    useProfanityFilter?: boolean
+    targetAccent?: string
+    watermark?: boolean
+    probedDurationSec?: number
   }
-  console.log(`[worker] dubbing ${ctx.jobId} (target: ${targetLanguage})`)
+  // THE MEDIA DECIDES THE MODE, NEVER THE INPUT SLOT (#1069 rule, mirrors
+  // voice-changer): a video wired into the video slot dubs as VIDEO; an
+  // audio-only file in the video slot is demoted to audio; a video file in
+  // the AUDIO slot is a request for audio. sourceUrl mode is decided by
+  // ElevenLabs' own probe (media_metadata) after start — we never fetch it.
+  const uploadedUrl = d.videoUrl || d.audioUrl
+  let videoMode = false
+  let sourceMime: string | undefined
+  let sourceExt: string | undefined
+  if (uploadedUrl) {
+    const source = await classifyMediaSource(uploadedUrl, d.videoUrl ? "video" : "audio")
+    videoMode = isVideoMode(source)
+    // Real mime/extension for the upload — the old audio.mp3-for-everything
+    // upload is why video-in used to yield audio-out.
+    sourceMime = source.hasVideo ? "video/mp4" : "audio/mpeg"
+    sourceExt = source.hasVideo ? "mp4" : "mp3"
+  }
+  console.log(`[worker] dubbing ${ctx.jobId} (target: ${d.targetLanguage}, mode: ${uploadedUrl ? (videoMode ? "video" : "audio") : "source-url"})`)
+
   const dubbingOnTaskCreated = makeOnTaskCreated(ctx.jobId, "elevenlabs-async")
-  const { dubbingId } = await startDubbing(
-    audioUrl,
-    targetLanguage,
-    { sourceLang: sourceLanguage, numSpeakers, disableVoiceCloning, dropBackgroundAudio },
+  const { dubbingId, expectedDurationSec } = await startDubbing(
+    uploadedUrl ? { url: uploadedUrl, mime: sourceMime, ext: sourceExt } : { sourceUrl: d.sourceUrl },
+    d.targetLanguage,
+    {
+      sourceLang: d.sourceLanguage,
+      numSpeakers: d.numSpeakers,
+      disableVoiceCloning: d.disableVoiceCloning,
+      dropBackgroundAudio: d.dropBackgroundAudio,
+      startTime: d.startTime,
+      endTime: d.endTime,
+      highestResolution: d.highestResolution,
+      useProfanityFilter: d.useProfanityFilter,
+      targetAccent: d.targetAccent,
+      watermark: d.watermark,
+    },
     { onTaskCreated: dubbingOnTaskCreated },
   )
   await setJobProgress(job, ctx.jobId, 20)
 
-  await waitForDubbing(dubbingId, (status) => {
-    if (status === "dubbing") void setJobProgress(job, ctx.jobId, 50)
-  })
+  // Post-hoc duration + mode check for spans the ROUTE could not probe
+  // (sourceUrl, probe failures): ElevenLabs probed the media, the 30-min
+  // policy still holds — fail fast BEFORE polling long, not after. Their
+  // metadata also settles the mode for sourceUrl dubs.
+  if (!d.probedDurationSec || !uploadedUrl) {
+    const status = await pollDubbingStatus(dubbingId)
+    const meta = status.media_metadata
+    if (!uploadedUrl && meta?.content_type) {
+      videoMode = meta.content_type.startsWith("video/")
+    }
+    if (typeof meta?.duration === "number" && meta.duration > 0 && !d.probedDurationSec) {
+      const window = d.startTime != null && d.endTime != null ? Math.ceil(d.endTime - d.startTime) : undefined
+      const effective = window && window > 0 ? Math.min(Math.ceil(meta.duration), window) : Math.ceil(meta.duration)
+      if (effective > DUBBING_MAX_DURATION_SEC) {
+        throw new Error(
+          `The span to dub is ${Math.ceil(effective / 60)} minutes; the maximum is ${DUBBING_MAX_DURATION_SEC / 60} minutes. ` +
+          `Trim the clip, or set a start/end window to dub part of it.`,
+        )
+      }
+    }
+  }
+
+  // Inline poll budget: expected render time x3 (floor 10 min), capped by the
+  // worker budget — a projected wait past the budget parks immediately.
+  const pollCapMs = Math.max(600_000, (expectedDurationSec || 0) * 3 * 1000)
+  if (pollCapMs > DUBBING_WORKER_POLL_BUDGET_MS) {
+    console.log(`[worker] dubbing ${ctx.jobId}: expected ~${expectedDurationSec}s render — parking for the reconcile lane`)
+    return
+  }
+  const finalStatus = await waitForDubbing(
+    dubbingId,
+    (status) => {
+      if (status === "dubbing") void setJobProgress(job, ctx.jobId, 50)
+    },
+    pollCapMs,
+    10_000,
+    { throwOnTimeout: false },
+  )
+  if (finalStatus.status !== "dubbed") {
+    // Still rendering at budget's end — park; reconcile delivers (or refunds a
+    // genuine upstream failure). Never a fail+refund while ElevenLabs bills.
+    console.log(`[worker] dubbing ${ctx.jobId}: still "${finalStatus.status}" after the inline budget — parking for the reconcile lane`)
+    return
+  }
+  // sourceUrl dubs: RE-derive the mode from the FINAL status — the early
+  // post-start poll can race ElevenLabs' own fetch of the link (media_metadata
+  // not yet populated), and a stale audio-mode there would deliver a dubbed
+  // VIDEO as a mis-typed .mp3 — the exact wart this upgrade removes. The
+  // reconcile lane already re-derives at delivery time; the worker must too.
+  if (!uploadedUrl && finalStatus.media_metadata?.content_type) {
+    videoMode = finalStatus.media_metadata.content_type.startsWith("video/")
+  }
   await setJobProgress(job, ctx.jobId, 70)
 
-  const audioBuffer = await downloadDubbedAudio(dubbingId, targetLanguage)
+  const mediaBuffer = await downloadDubbedMedia(dubbingId, d.targetLanguage, videoMode)
   await setJobProgress(job, ctx.jobId, 85)
-  // POST-PROVIDER: ElevenLabs already produced + delivered the dub (we were
-  // billed) — an R2 upload failure here is post-delivery, so skip the refund.
-  const r2Url = await runPostProcessing(() => uploadBufferToR2(audioBuffer, mediaObjectKey(ctx.jobId, "audio", "mp3"), "audio/mpeg", ctx.jobUserId))
-  await setJobProgress(job, ctx.jobId, 100)
-  const { ok } = await finalizeJobWithMedia({
+  const { ok, url } = await deliverDubbedMedia({
     jobId: ctx.jobId,
-    jobType: "text-to-audio",
-    result: { url: r2Url, cost: null, providerUsed: "elevenlabs-direct" },
-    mediaUrl: r2Url,
+    userId: ctx.jobUserId,
+    buffer: mediaBuffer,
+    videoMode,
+    shouldWatermark: videoMode ? ctx.shouldWatermark : false,
+    usageLogId: ctx.usageLogId,
   })
   if (!ok) return
-  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
+  await setJobProgress(job, ctx.jobId, 100)
+  console.log(`[worker] Job ${ctx.jobId} completed (${videoMode ? "video" : "audio"}): ${url}`)
 }
 
 const handleVoiceRemix: HandlerFn = async function handleVoiceRemix(job, ctx) {

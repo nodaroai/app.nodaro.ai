@@ -1,7 +1,7 @@
 ---
 node_type: dubbing
-generated_at: 2026-08-15T21:55:07.337Z
-generated_from: 150c80ac9
+generated_at: 2026-08-30T23:28:29.053Z
+generated_from: 5be082c3f
 ---
 
 # Dubbing
@@ -9,9 +9,9 @@ generated_from: 150c80ac9
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `dubbing`
 **Category:** ai
-**Credit cost:** 8
-**Inputs (target handles):** `audio`
-**Outputs (source handles):** `audio`
+**Credit cost:** 40
+**Inputs (target handles):** `audio`, `video`
+**Outputs (source handles):** `audio`, `video`
 
 **Required data fields:**
 - `label: string`
@@ -23,9 +23,17 @@ generated_from: 150c80ac9
 - `numSpeakers?: number`
 - `disableVoiceCloning?: boolean`
 - `dropBackgroundAudio?: boolean`
+- `sourceUrl?: string`
+- `startTime?: number`
+- `endTime?: number`
+- `highestResolution?: boolean`
+- `useProfanityFilter?: boolean`
+- `targetAccent?: string`
+- `watermark?: boolean`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `generatedAudioUrl?: string`
+- `generatedVideoUrl?: string`
 - `generatedResults?: GeneratedResult[]`
 - `activeResultIndex?: number`
 - `currentJobId?: string`
@@ -54,11 +62,20 @@ generated_from: 150c80ac9
 **Input parameters:**
 - `audio_url`
 - `audio_asset_id`
+- `video_url`
+- `video_asset_id`
+- `source_url`
 - `target_language`
 - `source_language`
 - `num_speakers`
 - `disable_voice_cloning`
 - `drop_background_audio`
+- `start_time`
+- `end_time`
+- `highest_resolution`
+- `use_profanity_filter`
+- `target_accent`
+- `watermark`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas

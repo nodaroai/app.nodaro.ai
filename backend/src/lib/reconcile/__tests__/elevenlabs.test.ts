@@ -26,11 +26,27 @@ const mocks = vi.hoisted(() => {
       return { in: jobsUpdateInMock }
     }),
   }))
-  const fromMock = vi.fn((_table: string) => ({
-    select: jobsSelectMock,
-    update: jobsUpdateMock,
-  }))
-  return { fetchMock, finalizeMock, refundMock, uploadBufferMock, jobsSingleMock, jobsUpdateMock, fromMock }
+  // usage_logs: deliver's video path loads the reserved usage log itself
+  // (.select().eq().eq().limit() chain).
+  const usageLogsLimitMock = vi.fn().mockResolvedValue({ data: [{ id: "ul-1" }], error: null })
+  const usageLogsChain = { select: vi.fn(() => ({ eq: vi.fn(() => ({ eq: vi.fn(() => ({ limit: usageLogsLimitMock })) })) })) }
+  const fromMock = vi.fn((table: string) => (
+    table === "usage_logs" ? usageLogsChain : {
+      select: jobsSelectMock,
+      update: jobsUpdateMock,
+    }
+  ))
+  const markCompletedMock = vi.fn().mockResolvedValue(true)
+  const shouldSaveMock = vi.fn().mockResolvedValue(true)
+  const watermarkUploadMock = vi.fn().mockResolvedValue("https://r2.example/video/j1.mp4")
+  const commitMock = vi.fn().mockResolvedValue(undefined)
+  const createAssetMock = vi.fn().mockResolvedValue(undefined)
+  const thumbnailMock = vi.fn().mockResolvedValue("https://r2.example/thumb.png")
+  const extractAudioMock = vi.fn().mockResolvedValue({ audioPath: "/tmp/x/audio.mp3", workDir: "/tmp/x" })
+  return {
+    fetchMock, finalizeMock, refundMock, uploadBufferMock, jobsSingleMock, jobsUpdateMock, fromMock,
+    markCompletedMock, shouldSaveMock, watermarkUploadMock, commitMock, createAssetMock, thumbnailMock, extractAudioMock,
+  }
 })
 
 vi.mock("../../supabase.js", () => ({ supabase: { from: mocks.fromMock } }))
@@ -38,6 +54,21 @@ vi.mock("../../job-finalize.js", () => ({ finalizeJobWithMedia: mocks.finalizeMo
 vi.mock("../../credits-job-lifecycle.js", () => ({ refundReservedCreditsForJob: mocks.refundMock }))
 vi.mock("../../storage.js", () => ({ uploadBufferToR2: mocks.uploadBufferMock, mediaObjectKey: (id: string, type: string, ext: string) => `${type}s/${id}.${ext}` }))
 vi.mock("../../config.js", () => ({ config: { ELEVENLABS_API_KEY: "test-key" } }))
+// Video-path deps of the shared deliver helper (audio path never touches these).
+vi.mock("../../../workers/shared.js", () => ({
+  commitJobCredits: mocks.commitMock,
+  markJobCompleted: mocks.markCompletedMock,
+  shouldSaveJobResult: mocks.shouldSaveMock,
+  generateAndUploadThumbnail: mocks.thumbnailMock,
+  createAssetFromJob: mocks.createAssetMock,
+  watermarkLocalVideoAndUpload: mocks.watermarkUploadMock,
+}))
+vi.mock("../../../providers/video/ffmpeg-utils.js", () => ({
+  createWorkDir: vi.fn().mockResolvedValue("/tmp/dub-rec"),
+  cleanupWorkDir: vi.fn().mockResolvedValue(undefined),
+}))
+vi.mock("../../../providers/video/extract-audio-track.js", () => ({ extractAudioTrack: mocks.extractAudioMock }))
+vi.mock("node:fs", () => ({ promises: { readFile: vi.fn().mockResolvedValue(Buffer.from("aud")), writeFile: vi.fn().mockResolvedValue(undefined) } }))
 
 import { reconcileElevenLabsJob, type ElevenLabsJobRow } from "../elevenlabs.js"
 
@@ -106,6 +137,37 @@ describe("reconcileElevenLabsJob", () => {
       (c) => (c[0] as Record<string, unknown>).reconcile_attempts === 1,
     )
     expect(bumpCall).toBeTruthy()
+  })
+
+  it("VIDEO dub (media_metadata content_type video/*) → .mp4 Accept, video delivery, NO cron watermark", async () => {
+    mocks.fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          dubbing_id: "dub-1", status: "dubbed", target_languages: ["en"],
+          media_metadata: { content_type: "video/mp4", duration: 90 },
+        }),
+      })
+      .mockResolvedValueOnce({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) })
+
+    await reconcileElevenLabsJob(row({ input_data: { targetLanguage: "en", videoUrl: "https://x/clip.mp4" } }))
+
+    // The media download asked for video.
+    const dl = mocks.fetchMock.mock.calls[1]
+    expect((dl[1] as { headers: Record<string, string> }).headers.Accept).toBe("video/mp4")
+    // Cron-recovered video skips the free-tier watermark (KIE reconcile precedent).
+    expect(mocks.watermarkUploadMock).toHaveBeenCalledWith(expect.stringContaining("dubbed.mp4"), "j-el-1", "u1", false)
+    // Same output shape the worker delivers: video + audio sidecar + thumbnail.
+    expect(mocks.markCompletedMock).toHaveBeenCalledWith("j-el-1", {
+      output_data: expect.objectContaining({
+        videoUrl: "https://r2.example/video/j1.mp4",
+        audioUrl: "https://r2.example/audio/j1.mp3",
+        thumbnailUrl: "https://r2.example/thumb.png",
+      }),
+    })
+    expect(mocks.commitMock).toHaveBeenCalledWith("ul-1", "j-el-1")
+    expect(mocks.finalizeMock).not.toHaveBeenCalled()
+    expect(mocks.refundMock).not.toHaveBeenCalled()
   })
 
   it("finalize throws → bumps reconcile_attempts, no refund, no propagation", async () => {

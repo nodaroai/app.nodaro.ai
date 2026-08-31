@@ -435,7 +435,6 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     type === "suno-cover" ||
     type === "suno-extend" ||
     type === "text-to-dialogue" ||
-    type === "dubbing" ||
     type === "voice-remix" ||
     type === "audio-isolation" ||
     type === "suno-mashup" ||
@@ -580,6 +579,18 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     // Same dual-mode as voice-changer: audio in → audio out; video in → video out.
     // Route by the tapped output handle; default prefers the active result, then
     // video (video mode), then audio.
+    const audioUrl = data.generatedAudioUrl as string | undefined;
+    const videoUrl = data.generatedVideoUrl as string | undefined;
+    if (sourceHandle === "audio") return audioUrl;
+    if (sourceHandle === "video") return videoUrl;
+    const results = (data.generatedResults as GeneratedResult[] | undefined) ?? [];
+    const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;
+    return results[activeIndex]?.url ?? videoUrl ?? audioUrl;
+  }
+  if (type === "dubbing") {
+    // Dual-mode like voice-changer: audio in → dubbed audio; video in (or a
+    // video sourceUrl) → dubbed video (+ audio sidecar). Route by the tapped
+    // output handle; default prefers the active result, then video, then audio.
     const audioUrl = data.generatedAudioUrl as string | undefined;
     const videoUrl = data.generatedVideoUrl as string | undefined;
     if (sourceHandle === "audio") return audioUrl;

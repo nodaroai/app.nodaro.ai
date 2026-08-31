@@ -2148,67 +2148,9 @@ export function VoiceChangerConfig({ data, onUpdate, nodeRefs }: ConfigProps<Voi
   )
 }
 
-export function DubbingConfig({ data, onUpdate, nodeRefs }: ConfigProps<DubbingData>) {
-  const t = useT()
-  return (
-    <div className="flex flex-col gap-3">
-      <div>
-        <Label>{t("field.targetLanguage")}</Label>
-        <Select
-          value={data.targetLanguage || "es"}
-          onValueChange={(v) => onUpdate({ targetLanguage: v })}
-        >
-          <SelectTrigger aria-label={t("field.targetLanguage")}><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {ALL_LANGUAGES.map((l) => (
-              <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <div>
-        <Label>{t("field.sourceLanguageOptional")}</Label>
-        <Select
-          value={data.sourceLanguage || "auto"}
-          onValueChange={(v) => onUpdate({ sourceLanguage: v === "auto" ? undefined : v })}
-        >
-          <SelectTrigger aria-label={t("field.sourceLanguageOptional")}><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="auto">{t("audiocfg.phAutoDetect")}</SelectItem>
-            {ALL_LANGUAGES.map((l) => (
-              <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <div>
-        <Label>{t("audiocfg.numSpeakersOptional")}</Label>
-        <Input
-          type="number"
-          min={1}
-          max={10}
-          value={data.numSpeakers ?? ""}
-          onChange={(e) => onUpdate({ numSpeakers: e.target.value ? parseInt(e.target.value) : undefined })}
-          placeholder={t("audiocfg.phAutoDetect")}
-        />
-      </div>
-      <div className="flex items-center gap-2">
-        <Checkbox id="dubbing-native-voice" checked={data.disableVoiceCloning ?? false} onCheckedChange={(v) => onUpdate({ disableVoiceCloning: !!v })} />
-        <Label htmlFor="dubbing-native-voice" className="text-xs">{t("audiocfg.nativeVoice")}</Label>
-      </div>
-      <p className="text-xs text-muted-foreground -mt-1">
-        {t("audiocfg.hintDubCloneDesc")}
-      </p>
-      <div className="flex items-center gap-2">
-        <Checkbox id="dubbing-drop-bg" checked={data.dropBackgroundAudio ?? false} onCheckedChange={(v) => onUpdate({ dropBackgroundAudio: !!v })} />
-        <Label htmlFor="dubbing-drop-bg" className="text-xs">{t("audiocfg.dropBackgroundAudio")}</Label>
-      </div>
-      <p className="text-xs text-muted-foreground">
-        {t("audiocfg.hintDubTranslate")}
-      </p>
-    </div>
-  )
-}
+// DubbingConfig moved to ./dubbing-config.tsx (file-size cap + the full-surface
+// upgrade: video mode, source links, dub windows, per-minute pricing).
+export { DubbingConfig } from "./dubbing-config"
 
 export function VoiceRemixConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<VoiceRemixData> & { nodeId?: string }) {
   const t = useT()
@@ -2584,10 +2526,57 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
               <summary className="cursor-pointer text-[11px] text-muted-foreground select-none">{t("audiocfg.voiceSettings")}</summary>
               <div className="flex flex-col gap-2 pt-2">
                 <div>
+                  <Label>{t("audiocfg.vcpEngine")}</Label>
+                  <div className="grid grid-cols-2 gap-1" role="radiogroup" aria-label={t("audiocfg.vcpEngine")}>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={(v.engine ?? "sts") === "sts"}
+                      className={`h-7 rounded-md border text-xs ${(v.engine ?? "sts") === "sts" ? "border-[#ff0073] text-foreground" : "border-border text-muted-foreground"}`}
+                      onClick={() => updateVoice(i, { engine: undefined })}
+                    >
+                      {t("audiocfg.engineRecast")}
+                    </button>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={v.engine === "v3"}
+                      className={`h-7 rounded-md border text-xs ${v.engine === "v3" ? "border-[#ff0073] text-foreground" : "border-border text-muted-foreground"}`}
+                      onClick={() => updateVoice(i, { engine: "v3", stability: v.stability === 0 || v.stability === 0.5 || v.stability === 1 ? v.stability : 0.5 })}
+                    >
+                      {t("audiocfg.engineRespeak")}
+                    </button>
+                  </div>
+                  {v.engine === "v3" && (
+                    <p className="text-[10px] text-amber-600 mt-1">{t("audiocfg.hintRespeakWarning")}</p>
+                  )}
+                </div>
+                {v.engine === "v3" ? (
+                  <div>
+                    <Label>{t("field.stability")}</Label>
+                    <Select
+                      value={String(v.stability ?? 0.5)}
+                      onValueChange={(val) => updateVoice(i, { stability: parseFloat(val) })}
+                    >
+                      <SelectTrigger aria-label={t("field.stability")}><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="0">{t("audiocfg.mostVariable")}</SelectItem>
+                        <SelectItem value="0.5">{t("audiocfg.balanced05")}</SelectItem>
+                        <SelectItem value="1">{t("audiocfg.mostStable")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                <div>
                   <Label htmlFor={`stability-${i}`}>{t("field.stability")} ({v.stability ?? 0.5})</Label>
                   <Input id={`stability-${i}`} type="range" min={0} max={1} step={0.05} value={v.stability ?? 0.5} onChange={(e) => updateVoice(i, { stability: parseFloat(e.target.value) })} className="h-2" />
                   <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>{t("audiocfg.variable")}</span><span>{t("audiocfg.stable")}</span></div>
                 </div>
+                )}
+                {/* STS-only levers — the v3 re-speak lane ignores all three
+                    (documented in the wire contract), so hide them rather
+                    than render dead controls. */}
+                {(v.engine ?? "sts") === "sts" && (<>
                 <div>
                   <Label htmlFor={`similarity-${i}`}>{t("audiocfg.similarity")} ({v.similarityBoost ?? 0.75})</Label>
                   <Input id={`similarity-${i}`} type="range" min={0} max={1} step={0.05} value={v.similarityBoost ?? 0.75} onChange={(e) => updateVoice(i, { similarityBoost: parseFloat(e.target.value) })} className="h-2" />
@@ -2607,6 +2596,7 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
                     Boosts the recast&apos;s fidelity to the target voice (slightly higher latency).
                   </p>
                 </div>
+                </>)}
                 <div>
                   <Label htmlFor={`volume-mode-${i}`}>{t("field.volume")}</Label>
                   <Select

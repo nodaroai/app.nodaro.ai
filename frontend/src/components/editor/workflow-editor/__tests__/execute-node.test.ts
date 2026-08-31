@@ -2533,18 +2533,18 @@ describe("voice-changer", () => {
 // ---------------------------------------------------------------------------
 
 describe("dubbing", () => {
-  it("rejects when no audio input", async () => {
+  it("rejects when no input at all (audio / video / source link)", async () => {
     mockResolveNodeInputs.mockReturnValue({})
     const promise = executeNode(
       makeNode("dubbing", { targetLanguage: "es" }),
       makeCtx(),
     )
     promise.catch(() => {})
-    await expect(promise).rejects.toThrow("No audio input")
+    await expect(promise).rejects.toThrow("No input")
     expect(mockToastError).toHaveBeenCalled()
   })
 
-  it("calls pollJobWithNodeUpdate on valid input", async () => {
+  it("audio mode: single-field completion on generatedAudioUrl", async () => {
     mockResolveNodeInputs.mockReturnValue({ audioUrl: "http://audio.mp3" })
     mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
     await executeNode(
@@ -2558,6 +2558,40 @@ describe("dubbing", () => {
       "Dubbing",
       expect.anything(),
       undefined,
+    )
+  })
+
+  it("video mode: media-typed completion (video first, audio fallback) + sidecar extractor", async () => {
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://clip.mp4" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("dubbing", { targetLanguage: "fr" }),
+      makeCtx(),
+    )
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      ["generatedVideoUrl", "generatedAudioUrl"],
+      "Dubbing",
+      expect.anything(),
+      expect.any(Function),
+    )
+  })
+
+  it("a panel source link needs no wired input and is treated as potentially-video", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("dubbing", { targetLanguage: "he", sourceUrl: "https://youtube.com/watch?v=x" }),
+      makeCtx(),
+    )
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      ["generatedVideoUrl", "generatedAudioUrl"],
+      "Dubbing",
+      expect.anything(),
+      expect.any(Function),
     )
   })
 })

@@ -174,11 +174,11 @@ Text-to-speech, voice cloning/design/changing, dubbing, sound effects, transcrip
 | Suno v4 | Suno | Premium | 30 | music | Suno v4 music generation — full songs with vocals, multiple genres. |
 | Suno v5 | Suno | Premium | 30 | music | Newer Suno v5 — better vocal quality, more genres. Same price as v4. |
 | ⭐ Suno v5.5 | Suno | Premium | 30 | music | Suno v5.5 — latest model with improved audio quality and expressiveness. |
+| ElevenLabs Dubbing | ElevenLabs | Premium | 40 | dubbing | Translate + dub audio or a whole video into a new language — video in, dubbed video out. Async. |
 | ElevenLabs Voice Changer | ElevenLabs | Premium | 40 | voice-changer | Speech-to-speech: convert one voice to another while preserving prosody. |
 | ElevenLabs Voice Design | ElevenLabs | Premium | 50 | voice-design | Design a synthetic voice from a description (no reference clip needed). |
 | Voice Clone (Instant) | ElevenLabs | Premium | 50 | voice-clone | Clone a voice from a short reference clip. Instant clone via direct ElevenLabs API. |
 | ElevenLabs Voice Isolation | ElevenLabs | Premium | 74 | isolation | Strip background noise / music from a vocal track. |
-| ElevenLabs Dubbing | ElevenLabs | Premium | 80 | dubbing | Translate + dub a video into a new language. Async. |
 <!-- AUTO-GEN:END model-table-audio -->
 
 ## Text & LLM models

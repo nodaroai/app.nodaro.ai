@@ -210,11 +210,14 @@ export function buildStatsKey(nodeType: string, inputData: InputData): StatsKey 
     }
 
     case "dubbing": {
+      // Per-minute-priced: the route stashes the probed span on input_data
+      // (0 = un-probeable sourceUrl / probe-failure fallback bucket).
+      const probed = num(inputData.probedDurationSec)
       return {
         model_identifier: "elevenlabs-dubbing",
         aspect_ratio: "",
         quality: "",
-        duration_seconds: 0,
+        duration_seconds: probed > 0 ? probed : 0,
       }
     }
 

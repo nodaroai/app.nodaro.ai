@@ -54,7 +54,7 @@ import { forcedAlignment } from "../forced-alignment.js"
 import {
   startDubbing,
   pollDubbingStatus,
-  downloadDubbedAudio,
+  downloadDubbedMedia,
   waitForDubbing,
 } from "../dubbing.js"
 
@@ -678,7 +678,7 @@ describe("dubbing — startDubbing", () => {
         expected_duration_sec: 30,
       }))
 
-    const result = await startDubbing("https://src.mp3", "es")
+    const result = await startDubbing({ url: "https://src.mp3" }, "es")
 
     expect(fetchMock.mock.calls[1][0]).toBe(`${ELEVENLABS_BASE_URL}/v1/dubbing`)
     const init = fetchMock.mock.calls[1][1] as { body: FormData }
@@ -693,7 +693,7 @@ describe("dubbing — startDubbing", () => {
       .mockResolvedValueOnce(audioResponse(Buffer.from("audio")))
       .mockResolvedValueOnce(jsonResponse({ dubbing_id: "d", expected_duration_sec: 10 }))
 
-    await startDubbing("u", "es", { sourceLang: "en", numSpeakers: 2, watermark: true })
+    await startDubbing({ url: "u" }, "es", { sourceLang: "en", numSpeakers: 2, watermark: true })
 
     const init = fetchMock.mock.calls[1][1] as { body: FormData }
     expect(init.body.get("source_lang")).toBe("en")
@@ -706,7 +706,7 @@ describe("dubbing — startDubbing", () => {
       .mockResolvedValueOnce(audioResponse(Buffer.from("audio")))
       .mockResolvedValueOnce(jsonResponse({ dubbing_id: "d", expected_duration_sec: 1 }))
 
-    await startDubbing("u", "es", { watermark: false })
+    await startDubbing({ url: "u" }, "es", { watermark: false })
 
     const init = fetchMock.mock.calls[1][1] as { body: FormData }
     expect(init.body.get("watermark")).toBe("false")
@@ -717,7 +717,7 @@ describe("dubbing — startDubbing", () => {
       .mockResolvedValueOnce(audioResponse(Buffer.from("audio")))
       .mockResolvedValueOnce(jsonResponse({ dubbing_id: "d", expected_duration_sec: 1 }))
 
-    await startDubbing("u", "es", { numSpeakers: 0 })
+    await startDubbing({ url: "u" }, "es", { numSpeakers: 0 })
 
     const init = fetchMock.mock.calls[1][1] as { body: FormData }
     expect(init.body.get("num_speakers")).toBe("0")
@@ -728,7 +728,7 @@ describe("dubbing — startDubbing", () => {
       .mockResolvedValueOnce(audioResponse(Buffer.from("audio")))
       .mockResolvedValueOnce(errorResponse("invalid lang", 400))
 
-    await expect(startDubbing("u", "xx")).rejects.toThrow(
+    await expect(startDubbing({ url: "u" }, "xx")).rejects.toThrow(
       /Dubbing start failed \(400\): invalid lang/,
     )
   })
@@ -744,7 +744,7 @@ describe("dubbing — startDubbing onTaskCreated reconciliation hook", () => {
       }))
 
     let captured: string | null = null
-    const result = await startDubbing("https://x.test/a.mp3", "es", undefined, {
+    const result = await startDubbing({ url: "https://x.test/a.mp3" }, "es", undefined, {
       onTaskCreated: async (id) => {
         captured = id
       },
@@ -764,7 +764,7 @@ describe("dubbing — startDubbing onTaskCreated reconciliation hook", () => {
 
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
 
-    const result = await startDubbing("https://x.test/a.mp3", "es", undefined, {
+    const result = await startDubbing({ url: "https://x.test/a.mp3" }, "es", undefined, {
       onTaskCreated: async () => {
         throw new Error("persistence failed")
       },
@@ -810,7 +810,7 @@ describe("dubbing — downloadDubbedAudio", () => {
   it("GETs /v1/dubbing/{id}/audio/{lang} and returns Buffer", async () => {
     fetchMock.mockResolvedValueOnce(audioResponse(Buffer.from("dubbed-bytes")))
 
-    const buf = await downloadDubbedAudio("dub-1", "es")
+    const buf = await downloadDubbedMedia("dub-1", "es")
 
     expect(fetchMock.mock.calls[0][0]).toBe(
       `${ELEVENLABS_BASE_URL}/v1/dubbing/dub-1/audio/es`,
@@ -822,7 +822,7 @@ describe("dubbing — downloadDubbedAudio", () => {
   it("throws on non-200", async () => {
     fetchMock.mockResolvedValueOnce(errorResponse("not ready", 409))
 
-    await expect(downloadDubbedAudio("dub-1", "es")).rejects.toThrow(
+    await expect(downloadDubbedMedia("dub-1", "es")).rejects.toThrow(
       /Dubbing download failed \(409\): not ready/,
     )
   })

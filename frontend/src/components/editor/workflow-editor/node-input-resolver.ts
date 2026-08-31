@@ -11,6 +11,7 @@ import type {
   AdjustVolumeData,
   VoiceChangerData,
   VoiceChangerProData,
+  DubbingData,
   GeneratedResult,
   LoopNodeData,
 } from "@/types/nodes";
@@ -2306,6 +2307,32 @@ export function resolveNodeInputs(
       } else {
         inputs.audioUrl = output;
       }
+    } else if (src.type === "dubbing") {
+      // Dual-mode like voice-changer: video mode → videoUrl (the dubbed clip);
+      // audio mode → the usual audio routing. Route by the edge's sourceHandle;
+      // default prefers video when the node produced one.
+      const dubData = src.data as DubbingData;
+      const producedVideo = Boolean(dubData.generatedVideoUrl);
+      if (resolvedSourceHandle === "video" || (resolvedSourceHandle !== "audio" && producedVideo)) {
+        inputs.videoUrl = output;
+      } else if (node.type === "suno-mashup") {
+        routeSunoMashupAudio(inputs, output);
+      } else if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
+        inputs.audioUrls = [...(inputs.audioUrls ?? []), output];
+        inputs.audioUrlsWithSourceIds = [
+          ...(inputs.audioUrlsWithSourceIds ?? []),
+          { nodeId: src.id, url: output },
+        ];
+      } else if (node.type === "merge-video-audio") {
+        inputs.audioSources = [
+          ...(inputs.audioSources ?? []),
+          { url: output, sourceNodeId: src.id },
+        ];
+      } else if (node.type === "manual-edit") {
+        appendManualEditAsset(inputs, src.id, output, "audio");
+      } else {
+        inputs.audioUrl = output;
+      }
     } else if (src.type === "suno-voice") {
       // Suno Voice persona: route voiceId → personaId on downstream music nodes.
       // No-op for non-music targets so the edge stays valid but doesn't poison
@@ -2395,7 +2422,6 @@ export function resolveNodeInputs(
       src.type === "combine-audio" ||
       src.type === "extract-audio" ||
       src.type === "audio-fx" ||
-      src.type === "dubbing" ||
       src.type === "voice-remix" ||
       src.type === "voice-design"
     ) {

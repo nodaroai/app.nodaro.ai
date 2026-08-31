@@ -262,6 +262,18 @@ export type VoiceChangerProVoice =
   | {
       /** Target voice — premade name (`"Rachel"`, `"Aria"`, …) or an ElevenLabs UUID for a custom clone. */
       voiceId: string
+      /**
+       * Which lane converts this speaker. `"sts"` (default) is the classic
+       * speech-to-speech recast; `"v3"` is RE-SPEAK — the performance is
+       * REGENERATED from the transcript with eleven_v3 (supports `[audio
+       * tags]`; original delivery is replaced, and lips won't match on video).
+       * A v3 speaker needs transcript text: pass an `analysis` whose
+       * `segments[].text` carries it (analyze now emits this), or omit
+       * `analysis` and the engine re-speaks from its own transcription. For
+       * `"v3"`, `stability` accepts exactly 0 / 0.5 / 1, and
+       * `similarityBoost` / `style` / `useSpeakerBoost` are ignored.
+       */
+      engine?: "sts" | "v3"
       /** ElevenLabs stability (0–1). Higher = steadier, lower = more expressive. */
       stability?: number
       /** ElevenLabs similarity boost (0–1) — how closely the output hugs the target voice's timbre. */
@@ -366,8 +378,10 @@ export interface VoiceChangerProInput {
 export interface VcpAnalysisSpeaker {
   /** Stable speaker id (first-appearance order). */
   id: string
-  /** The speaker's spoken time ranges (seconds). */
-  segments: Array<{ start: number; end: number }>
+  /** The speaker's spoken time ranges (seconds). `text` is what was said in
+   *  the range — the paid input for a speaker recast with `engine: "v3"`
+   *  (editable before conversion); the STS lane ignores it. */
+  segments: Array<{ start: number; end: number; text?: string }>
   /** When the speaker first speaks (seconds). */
   firstStartSec?: number
   /** Rough word count across the clip — a proxy for how much this speaker says. */
@@ -469,18 +483,37 @@ export interface VoiceRemixInput {
   userPrompt?: string
 }
 
-/** Input for {@link VoicesResource.dub}. */
+/** Input for {@link VoicesResource.dub}. Provide exactly ONE source:
+ *  `audioUrl` (dubbed audio out), `videoUrl` (the dubbed VIDEO out, plus the
+ *  dubbed audio track as `output_data.audioUrl`), or `sourceUrl` (a public
+ *  YouTube/TikTok/direct link ElevenLabs fetches itself). Priced per minute
+ *  of the dubbed span; the span is capped at 30 minutes — use
+ *  `startTime`/`endTime` to dub part of a longer source. */
 export interface DubbingInput {
-  /** URL of the audio to dub. */
-  audioUrl: string
+  /** URL of the audio to dub (audio mode). */
+  audioUrl?: string
+  /** URL of the video to dub — the result is the dubbed VIDEO (+ audio track). */
+  videoUrl?: string
+  /** Public page/media URL (YouTube, TikTok, or a direct link) — ElevenLabs fetches it directly. */
+  sourceUrl?: string
   /** Target language ISO code (2–10 chars), e.g. `"es"`, `"pt-BR"`. */
   targetLanguage: string
   /** Source language ISO code; auto-detected when omitted. */
   sourceLanguage?: string
-  /** Expected number of speakers (1–20) — improves separation when known. */
+  /** Expected number of speakers (1–20; 0 = auto-detect) — improves separation when known. */
   numSpeakers?: number
   /** Keep the original voices instead of cloning them into the target language. */
   disableVoiceCloning?: boolean
   /** Drop the background/music bed from the dubbed output. */
   dropBackgroundAudio?: boolean
+  /** Dub only this window of the source (seconds). */
+  startTime?: number
+  endTime?: number
+  /** Keep the source resolution on video dubs (slower render). */
+  highestResolution?: boolean
+  useProfanityFilter?: boolean
+  /** Experimental: steer dubbed voices toward an accent. */
+  targetAccent?: string
+  /** Apply ElevenLabs' own watermark to video dubs. */
+  watermark?: boolean
 }

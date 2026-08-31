@@ -192,7 +192,11 @@ Examples:
     )
     .option(
       "--voices-json <json>",
-      'JSON array for per-voice settings — entries are a voice id string, a {"voiceId","stability","similarityBoost","style","useSpeakerBoost","seed","volumeMode","volume"} object, or null to keep that speaker\'s original voice',
+      'JSON array for per-voice settings — entries are a voice id string, a {"voiceId","engine","stability","similarityBoost","style","useSpeakerBoost","seed","volumeMode","volume"} object, or null to keep that speaker\'s original voice',
+    )
+    .option(
+      "--v3 <indexes>",
+      "comma-separated 1-based speaker indexes converted with the Re-speak (eleven_v3) engine instead of the recast — the performance is regenerated from the transcript ([audio tags] supported; delivery replaced; lips won't match on video). With --analysis-file the analysis text is the script; without one the engine re-speaks from its own transcription",
     )
     .option("--model <id>", "speech-to-speech model override")
     .option("--output <mode>", "output mode: video (default — merged, rendered result) or stems (dry per-track stems for an interactive mix; render later with `voice export`)")
@@ -228,6 +232,7 @@ Examples:
           video?: string
           voices?: string
           voicesJson?: string
+          v3?: string
           model?: string
           output?: string
           analysisJson?: string
@@ -290,6 +295,25 @@ Examples:
           if (!orderedVoices.some((v) => v !== null)) {
             warn("At least one speaker must get a new voice — `keep` only marks speakers whose original voice stays")
             process.exit(1)
+          }
+
+          // --v3: 1-based indexes into --voices, marking Re-speak speakers
+          // (index-addressed like dropSpeakerIndexes — a parallel list would
+          // drift out of sync with --voices length; an index cannot).
+          if (opts.v3) {
+            const idxs = opts.v3.split(",").map((s) => parseInt(s.trim(), 10))
+            if (idxs.some((n) => !Number.isInteger(n) || n < 1 || n > orderedVoices.length)) {
+              warn(`--v3 indexes must be 1..${orderedVoices.length} (matching --voices positions)`)
+              process.exit(1)
+            }
+            for (const n of idxs) {
+              const v = orderedVoices[n - 1]
+              if (v === null) {
+                warn(`--v3 index ${n} is a keep-slot — a kept speaker is not converted at all`)
+                process.exit(1)
+              }
+              orderedVoices[n - 1] = typeof v === "string" ? { voiceId: v, engine: "v3" } : { ...v, engine: "v3" }
+            }
           }
 
           const voiceFx = buildVoiceFx(opts)
@@ -559,40 +583,72 @@ Example:
 
   cmd
     .command("dub")
-    .description("dub an audio clip into another language while preserving each speaker's voice")
-    .requiredOption("--audio <url>", "audio URL to dub")
+    .description("dub audio OR video into another language while preserving each speaker's voice (video in -> dubbed video out)")
+    .option("--audio <url>", "audio URL to dub")
+    .option("--video <url>", "video URL to dub — the result is the dubbed VIDEO (+ dubbed audio track)")
+    .option("--source-url <url>", "public YouTube/TikTok/direct link — ElevenLabs fetches it directly")
     .requiredOption("--target-language <code>", 'target language ISO code, e.g. "es", "fr", "pt-BR"')
     .option("--source-language <code>", "source language ISO code (auto-detected when omitted)")
-    .option("--num-speakers <n>", "expected number of speakers (1-20) — improves separation when known", (v) => parseInt(v, 10))
+    .option("--num-speakers <n>", "expected number of speakers (1-20; 0 = auto) — improves separation when known", (v) => parseInt(v, 10))
     .option("--disable-voice-cloning", "keep the original voices instead of cloning them into the target language")
     .option("--drop-background-audio", "drop the background/music bed from the dubbed output")
+    .option("--start-time <sec>", "dub only from this second of the source", (v) => parseFloat(v))
+    .option("--end-time <sec>", "dub only up to this second of the source", (v) => parseFloat(v))
+    .option("--highest-resolution", "keep the source resolution on video dubs (slower render)")
+    .option("--profanity-filter", "apply ElevenLabs' profanity filter to the dubbed speech")
+    .option("--target-accent <accent>", "experimental: steer dubbed voices toward an accent")
+    .option("--el-watermark", "apply ElevenLabs' own watermark to video dubs")
     .option("--watch", "poll until the job completes")
     .option("--poll-interval <ms>", "watch poll interval in ms", (v) => parseInt(v, 10), 2000)
     .option("--profile <name>")
     .option("--json")
     .addHelpText("after", `
-Example:
-  $ nodaro voice dub --audio https://.../interview.mp3 --target-language es --num-speakers 2 --watch`)
+Priced per minute of the dubbed span; max 30 minutes — use --start-time/--end-time for longer sources.
+
+Examples:
+  $ nodaro voice dub --audio https://.../interview.mp3 --target-language es --num-speakers 2 --watch
+  $ nodaro voice dub --video https://.../talk.mp4 --target-language fr --highest-resolution --watch
+  $ nodaro voice dub --source-url https://youtube.com/watch?v=... --target-language he --watch`)
     .action(
       async (
         opts: {
-          audio: string
+          audio?: string
+          video?: string
+          sourceUrl?: string
           targetLanguage: string
           sourceLanguage?: string
           numSpeakers?: number
           disableVoiceCloning?: boolean
           dropBackgroundAudio?: boolean
+          startTime?: number
+          endTime?: number
+          highestResolution?: boolean
+          profanityFilter?: boolean
+          targetAccent?: string
+          elWatermark?: boolean
         } & WatchOpts,
       ) => {
         try {
+          const sources = [opts.audio, opts.video, opts.sourceUrl].filter(Boolean)
+          if (sources.length !== 1) {
+            throw new Error("provide exactly one source: --audio, --video, or --source-url")
+          }
           const client = buildClient(opts.profile)
           const result = await client.voices.dub({
-            audioUrl: opts.audio,
+            ...(opts.audio ? { audioUrl: opts.audio } : {}),
+            ...(opts.video ? { videoUrl: opts.video } : {}),
+            ...(opts.sourceUrl ? { sourceUrl: opts.sourceUrl } : {}),
             targetLanguage: opts.targetLanguage,
             ...(opts.sourceLanguage ? { sourceLanguage: opts.sourceLanguage } : {}),
             ...(opts.numSpeakers !== undefined ? { numSpeakers: opts.numSpeakers } : {}),
             ...(opts.disableVoiceCloning ? { disableVoiceCloning: true } : {}),
             ...(opts.dropBackgroundAudio ? { dropBackgroundAudio: true } : {}),
+            ...(opts.startTime !== undefined ? { startTime: opts.startTime } : {}),
+            ...(opts.endTime !== undefined ? { endTime: opts.endTime } : {}),
+            ...(opts.highestResolution ? { highestResolution: true } : {}),
+            ...(opts.profanityFilter ? { useProfanityFilter: true } : {}),
+            ...(opts.targetAccent ? { targetAccent: opts.targetAccent } : {}),
+            ...(opts.elWatermark ? { watermark: true } : {}),
           })
           await reportQueuedJob(result, () => client.jobs.get(result.jobId), {
             ...opts,

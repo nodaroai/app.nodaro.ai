@@ -71,6 +71,10 @@ const AUDIO_JOBS = new Set([
   "voice-design",
 ])
 
+/** Dual-mode generators (voice-changer / voice-changer-pro / dubbing): the RUN
+ *  decides audio vs video, so the static sets alone mis-kind their video rows. */
+const DUAL_MODE_JOBS = new Set(["voice-changer", "voice-changer-pro", "dubbing"])
+
 function getKind(jobType: string | null): "image" | "video" | "audio" | null {
   if (!jobType) return null
   if (IMAGE_JOBS.has(jobType)) return "image"
@@ -81,12 +85,19 @@ function getKind(jobType: string | null): "image" | "video" | "audio" | null {
 
 function jobNamesForKind(kind: "image" | "video" | "audio"): string[] {
   if (kind === "image") return [...IMAGE_JOBS]
-  if (kind === "video") return [...VIDEO_JOBS]
+  // Dual-mode rows can be the requested kind either way — include them in the
+  // video filter too (they already sit in the audio set); the per-row display
+  // reads what the run actually produced.
+  if (kind === "video") return [...VIDEO_JOBS, ...DUAL_MODE_JOBS]
   return [...AUDIO_JOBS]
 }
 
 function formatRow(row: GalleryRow): string {
-  const kind = getKind(row.job_type) ?? "unknown"
+  const outputData = (row.output_data ?? {}) as Record<string, unknown>
+  const kind =
+    row.job_type && DUAL_MODE_JOBS.has(row.job_type)
+      ? (typeof outputData.videoUrl === "string" && outputData.videoUrl ? "video" : "audio")
+      : getKind(row.job_type) ?? "unknown"
   const prompt = (row.input_data?.prompt as string | undefined) ?? ""
   const truncated = prompt.length > 80 ? `${prompt.slice(0, 77)}...` : prompt
   const model = (row.input_data?.provider as string | undefined) ?? row.provider ?? "?"
