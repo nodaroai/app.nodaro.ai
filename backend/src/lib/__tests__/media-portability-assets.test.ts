@@ -264,3 +264,98 @@ describe("rehostForeignMedia — entity assets", () => {
     expect(result.report.unreachable[0]!.nodeLabel).toBe("Kira")
   })
 })
+
+describe("rehostForeignMedia — the per-import cap is per HALF", () => {
+  /** N distinct expression urls on one character — the shape that overruns. */
+  function crowdedCharacter(count: number): BundleAssets {
+    return {
+      characters: [
+        {
+          id: KIRA_ID,
+          nodeId: "node-1",
+          name: "Kira",
+          sourceImageUrl: THEIR_PORTRAIT,
+          expressions: Array.from({ length: count }, (_, i) => ({
+            name: `e${i}`,
+            url: `https://their-instance.example/uploads/images/e${i}.png`,
+          })),
+        },
+      ],
+      objects: [],
+      locations: [],
+    }
+  }
+
+  it("a crowded bundle of entities cannot starve the graph's media (#866)", async () => {
+    const nodes = [{ id: "shot-1", data: { imageUrl: "https://their-instance.example/uploads/images/still.png" } }]
+
+    const result = await rehostForeignMedia(nodes, USER, { assets: crowdedCharacter(5), maxFiles: 3 })
+
+    // The graph's one URL got its own budget and was copied.
+    expect((result.nodes[0]!.data as any).imageUrl).toBe(
+      `https://mine.example/copy-of/${encodeURIComponent("https://their-instance.example/uploads/images/still.png")}`,
+    )
+    // Only the entity's over-cap images were declined.
+    expect(result.report.skipped.map((s) => s.reason)).toEqual([
+      "over the 3-file import cap",
+      "over the 3-file import cap",
+      "over the 3-file import cap",
+    ])
+    expect(result.report.rehosted).toBe(4)
+  })
+
+  it("a media-heavy graph cannot starve the bundle's entities (#1088)", async () => {
+    const nodes = Array.from({ length: 5 }, (_, i) => ({
+      id: `shot-${i}`,
+      data: { imageUrl: `https://their-instance.example/uploads/images/g${i}.png` },
+    }))
+
+    const result = await rehostForeignMedia(nodes, USER, { assets: bundle(), maxFiles: 2 })
+
+    // Both of the character's images landed on the importer's storage.
+    const character = result.assets!.characters[0]!
+    expect(character.sourceImageUrl).toBe(`https://mine.example/copy-of/${encodeURIComponent(THEIR_PORTRAIT)}`)
+    expect(character.expressions![0]!.url).toBe(`https://mine.example/copy-of/${encodeURIComponent(THEIR_SMILE)}`)
+    expect(result.report.skipped).toHaveLength(3)
+  })
+})
+
+describe("rehostForeignMedia — the settings blob", () => {
+  /** Studio-shaped: two wrapper levels above node data. */
+  const studioSettings = () => ({
+    studio: {
+      version: 3,
+      shots: [
+        {
+          id: "s1",
+          startFrameUrl: THEIR_PORTRAIT,
+          plan: { frame: { references: [{ id: KIRA_ID, source: "wired-character", url: THEIR_SMILE }] } },
+        },
+      ],
+    },
+  })
+
+  it("follows the copies the graph and the entities paid for, at settings depth", async () => {
+    const settings = studioSettings()
+    const result = await rehostForeignMedia([], USER, { assets: bundle(), settings })
+
+    const shot = (result.settings as any).studio.shots[0]
+    expect(shot.startFrameUrl).toBe(`https://mine.example/copy-of/${encodeURIComponent(THEIR_PORTRAIT)}`)
+    expect(shot.plan.frame.references[0].url).toBe(
+      `https://mine.example/copy-of/${encodeURIComponent(THEIR_SMILE)}`,
+    )
+    // Rewrite-only: nothing in settings was fetched on its own account.
+    expect(result.report.rehosted).toBe(2)
+    // The caller's object is never mutated.
+    expect(settings.studio.shots[0]!.startFrameUrl).toBe(THEIR_PORTRAIT)
+  })
+
+  it("never makes a settings-only URL a copy candidate", async () => {
+    const settings = { studio: { cast: [{ assetId: KIRA_ID, defaultLook: { url: THEIR_SMILE } }] } }
+    const result = await rehostForeignMedia([], USER, { settings })
+
+    expect(safeFetchMock).not.toHaveBeenCalled()
+    expect(result.settings).toBe(settings)
+    expect(result.report.rehosted).toBe(0)
+  })
+})

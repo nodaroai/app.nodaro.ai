@@ -156,6 +156,14 @@ const REFERENCE_SOURCE_BUCKETS: Readonly<Record<string, keyof AssetIds>> = {
 const REFERENCE_WALK_DEPTH = 6
 
 /**
+ * The same budget for the workflow's freeform `settings` blob, which sits two
+ * levels ABOVE a node's `data`: an app namespaces itself (`settings.studio`)
+ * and indexes its own entries (`…​.shots[]`) before it reaches the shapes node
+ * data starts at. Mirrors media-portability's `SETTINGS_WALK_DEPTH`.
+ */
+const SETTINGS_REFERENCE_WALK_DEPTH = REFERENCE_WALK_DEPTH + 2
+
+/**
  * Push every entity id bound by a `references` array anywhere under `value`.
  *
  * The chips are found by the ARRAY'S NAME, not by a path: a studio production
@@ -163,10 +171,15 @@ const REFERENCE_WALK_DEPTH = 6
  * `beats[].references[]`, and a plan on its per-stage `references[]` — one walk
  * covers all three, and the next site that grows them.
  */
-function collectReferenceIds(value: unknown, depth: number, out: AssetIds): void {
-  if (depth > REFERENCE_WALK_DEPTH || !value || typeof value !== "object") return
+function collectReferenceIds(
+  value: unknown,
+  depth: number,
+  out: AssetIds,
+  maxDepth: number = REFERENCE_WALK_DEPTH,
+): void {
+  if (depth > maxDepth || !value || typeof value !== "object") return
   if (Array.isArray(value)) {
-    for (const item of value) collectReferenceIds(item, depth + 1, out)
+    for (const item of value) collectReferenceIds(item, depth + 1, out, maxDepth)
     return
   }
   for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
@@ -180,7 +193,7 @@ function collectReferenceIds(value: unknown, depth: number, out: AssetIds): void
       }
       continue
     }
-    collectReferenceIds(v, depth + 1, out)
+    collectReferenceIds(v, depth + 1, out, maxDepth)
   }
 }
 
@@ -193,8 +206,17 @@ function collectReferenceIds(value: unknown, depth: number, out: AssetIds): void
  * through chips instead of entity nodes — every studio production, by the
  * minimal-graph rule — exported ZERO assets and imported with dangling
  * references.
+ *
+ * `settings` is walked on the same terms when given: an app that keeps a second
+ * view of its work in the freeform blob (studio's `settings.studio` — a shot's
+ * PLAN and its beats carry chips there before anything is framed) binds
+ * entities that appear nowhere in the graph. Collect and remap must find the
+ * same chips, so whatever this walks, {@link remapSettingsReferences} re-points.
  */
-export function collectAssetIds(nodes: readonly Record<string, unknown>[]): AssetIds {
+export function collectAssetIds(
+  nodes: readonly Record<string, unknown>[],
+  settings?: unknown,
+): AssetIds {
   const ids: AssetIds = { characterIds: [], objectIds: [], creatureIds: [], locationIds: [] }
   for (const node of nodes) {
     const data = (node.data ?? {}) as Record<string, unknown>
@@ -209,6 +231,7 @@ export function collectAssetIds(nodes: readonly Record<string, unknown>[]): Asse
     }
     collectReferenceIds(data, 0, ids)
   }
+  collectReferenceIds(settings, 0, ids, SETTINGS_REFERENCE_WALK_DEPTH)
   return ids
 }
 
@@ -367,6 +390,29 @@ export interface CreatedAsset {
 
 /** Bundle entity id (the exporter's) → the row created under the importer. */
 export type CreatedAssetMap = ReadonlyMap<string, CreatedAsset>
+
+/**
+ * `importReport.assetIdMap`, the PUBLISHED wire shape (bundle entity id → the
+ * created row's id). One builder for both import surfaces (REST + MCP) so the
+ * two cannot drift, and unconditional: the documented contract is "present
+ * whenever the bundle carried `assets`", so a bundle with empty arms — or one
+ * whose every entity was quota-skipped — still answers with `{}` rather than
+ * making a client tell "no map" apart from "no entities".
+ */
+export function assetIdMapForReport(idMap: CreatedAssetMap): Record<string, string> {
+  return Object.fromEntries([...idMap].map(([bundleId, created]) => [bundleId, created.id]))
+}
+
+/**
+ * The bundle entity ids an import DECLINED to create, from the report's
+ * `assetsSkipped`. Fed to {@link remapNodeAssetIds} so an entity node whose row
+ * was dropped lands unlinked instead of dangling at the exporter's row.
+ */
+export function droppedAssetIdsFromReport(
+  assetsSkipped: ReadonlyArray<{ id: string }> | undefined,
+): ReadonlySet<string> {
+  return new Set((assetsSkipped ?? []).map((a) => a.id))
+}
 
 /**
  * Re-create the bundle's entities under `{ userId, projectId }` and return a
@@ -535,12 +581,27 @@ export async function reCreateAssets(
 }
 
 /**
- * Chip fields that mark a reference as pointing at a VARIANT — an expression, a
- * pose, a weather pass, a mood-board photo — rather than at the entity's
- * canonical image. A variant chip's `url` is that variant's, so it must NOT be
- * refreshed from the created row's `source_image_url`; it follows the media
- * copy instead (media-portability rewrites `references[].url` like any other
- * URL field, so a chip whose image was copied already points at the copy).
+ * Chip fields that mark a reference as pointing at a SPECIFIC IMAGE — an
+ * expression, a pose, a weather pass, a mood-board photo, a user-attached extra
+ * — rather than at the entity's canonical image. Such a chip's `url` is that
+ * image's, so it must NOT be refreshed from the created row's
+ * `source_image_url`; it follows the media copy instead (media-portability
+ * rewrites `references[].url` like any other URL field, so a chip whose image
+ * was copied already points at the copy).
+ *
+ * `isExtraRef` is the load-bearing one for the URL-BOUND kinds. Only a
+ * CHARACTER view chip carries a `variantSlug`; an object / creature / location
+ * view binds by url alone (no mention/variant machinery), so its only marker is
+ * "the user attached exactly this image". Without it here, a prop's "Brass"
+ * material view or a location's "rain" pass classifies as canonical and its url
+ * is silently swapped for the entity's main image — a wrong generation input,
+ * with nothing in the report to explain it.
+ *
+ * Residual, pre-existing and not reachable by field enumeration:
+ * `toConnectedReference` drops the `variant` for `wired-creature` at
+ * construction, so a creature chip built through that shared helper with a
+ * variant url carries no marker at all. The helper is where that would be
+ * fixed.
  */
 const VARIANT_CHIP_FIELDS = [
   "variantSlug",
@@ -548,6 +609,7 @@ const VARIANT_CHIP_FIELDS = [
   "locationVariantBucket",
   "locationVariantSlug",
   "locationReferencePhotoKind",
+  "isExtraRef",
 ] as const
 
 /** Re-point one `ConnectedReference` at its re-created row, or leave it alone. */
@@ -580,12 +642,17 @@ function repointReference(entry: unknown, idMap: CreatedAssetMap): unknown {
  * assets rebuilds no node data. Mirrors {@link collectReferenceIds}' walk —
  * the two must find the same chips.
  */
-function remapReferences(value: unknown, depth: number, idMap: CreatedAssetMap): unknown {
-  if (depth > REFERENCE_WALK_DEPTH || !value || typeof value !== "object") return value
+function remapReferences(
+  value: unknown,
+  depth: number,
+  idMap: CreatedAssetMap,
+  maxDepth: number = REFERENCE_WALK_DEPTH,
+): unknown {
+  if (depth > maxDepth || !value || typeof value !== "object") return value
   if (Array.isArray(value)) {
     let changed = false
     const next = value.map((item) => {
-      const mapped = remapReferences(item, depth + 1, idMap)
+      const mapped = remapReferences(item, depth + 1, idMap, maxDepth)
       if (mapped !== item) changed = true
       return mapped
     })
@@ -605,11 +672,35 @@ function remapReferences(value: unknown, depth: number, idMap: CreatedAssetMap):
       changed ||= armChanged
       continue
     }
-    const mapped = remapReferences(v, depth + 1, idMap)
+    const mapped = remapReferences(v, depth + 1, idMap, maxDepth)
     changed ||= mapped !== v
     out[key] = mapped
   }
   return changed ? out : value
+}
+
+/**
+ * The `settings` half of the same remap (#1088). A workflow row holds TWO views
+ * of the same production when its app keeps an index in the freeform blob —
+ * studio's `settings.studio.shots[]` carries a shot's plan and beats, chips and
+ * all — and a row whose nodes point at the importer's rows while its settings
+ * still point at the exporter's is internally inconsistent: whichever view the
+ * client reads decides whether the chips resolve.
+ *
+ * Same walk, same rules, one budget deeper (see
+ * {@link SETTINGS_REFERENCE_WALK_DEPTH}). Returns the SAME object when nothing
+ * changed. `settings` is opaque to us, so nothing here interprets it beyond the
+ * `references` arrays {@link collectAssetIds} already bundled.
+ */
+export function remapSettingsReferences(
+  settings: unknown,
+  idMap: CreatedAssetMap,
+): Record<string, unknown> | undefined {
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return undefined
+  return remapReferences(settings, 0, idMap, SETTINGS_REFERENCE_WALK_DEPTH) as Record<
+    string,
+    unknown
+  >
 }
 
 /**
@@ -619,10 +710,14 @@ function remapReferences(value: unknown, depth: number, idMap: CreatedAssetMap):
  * same rows (#1088) — refreshing the chip's `defaultName` (and, for a chip on
  * the entity's canonical image, its `url`) from the row that was actually
  * created. Returns new node objects; inputs are not mutated.
+ *
+ * `droppedAssetIds` are bundle entity ids the import DECLINED to create (the
+ * storage-quota drop, `report.assetsSkipped`) — see the clearing rule below.
  */
 export function remapNodeAssetIds<T extends Record<string, unknown>>(
   nodes: readonly T[],
   idMap: CreatedAssetMap,
+  droppedAssetIds: ReadonlySet<string> = new Set(),
 ): T[] {
   return nodes.map((node) => {
     const data = { ...((remapReferences(node.data ?? {}, 0, idMap) ?? {}) as Record<string, unknown>) }
@@ -630,6 +725,15 @@ export function remapNodeAssetIds<T extends Record<string, unknown>>(
       const oldId = data[field]
       if (typeof oldId === "string" && idMap.has(oldId)) {
         data[field] = idMap.get(oldId)!.id
+      } else if (typeof oldId === "string" && oldId && droppedAssetIds.has(oldId)) {
+        // The bundle CARRIED this entity and the import declined to create it
+        // (out of storage). The id is provably the exporter's row, so clear it
+        // for the same reason `faceDbId` is cleared below — the node lands
+        // unlinked, not dangling at a row this account cannot read. Only ids
+        // the import itself dropped: an unmapped id in an asset-LESS bundle may
+        // well be a valid row of the importer's own (a self-reimport), and
+        // clearing that would break a working node.
+        data[field] = ""
       }
     }
     // Reference fields that are NOT bundled/remapped point at rows the importer

@@ -433,8 +433,10 @@ imports into the mcp project. If the bundle includes asset data
 under your account with fresh IDs; node references are remapped automatically.
 
 Media the bundle references on other hosts is copied onto this instance's
-storage where reachable (up to 25 distinct files per import; images up to
-20 MB, video/audio up to 50 MB), so the workflow runs from local copies.
+storage where reachable (up to 25 distinct files for the graph's media and 25
+more for the bundled entities' — separate budgets, so neither starves the other;
+images up to 20 MB, video/audio up to 50 MB), so the workflow runs from local
+copies.
 
 **Scope:** `workflows:write`
 
@@ -451,8 +453,10 @@ host this instance cannot reach (left as-is), and which was skipped with the
 reason. The text reply repeats the same, naming the affected nodes.
 
 Bundled entities (characters, objects, creatures, locations) are re-created
-under the caller, and both the entity nodes and every `@`-chip in the graph are
-re-pointed at the new rows. An entity's images are copied into the caller's own
+under the caller, and both the entity nodes and every `@`-chip — in the graph or
+in the workflow's freeform `settings` — are re-pointed at the new rows. URLs in
+`settings` follow the copies the graph and the entities paid for, but never
+trigger a copy of their own. An entity's images are copied into the caller's own
 storage even when they already sit on this instance — they are the exporter's
 bytes — so the copies count against the caller's quota; `assetIdMap` maps each
 bundled entity id to the row created for it, and `assetsSkipped` names any

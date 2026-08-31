@@ -33,10 +33,13 @@ import { loadWorkflowFor, toAccessRow } from "../lib/workflow-route-access.js"
 import type { WorkflowAccessRow } from "../lib/private-plugins/types.js"
 import {
   asObjectArray,
+  assetIdMapForReport,
   collectAssetIds,
+  droppedAssetIdsFromReport,
   fetchExportAssets,
   reCreateAssets,
   remapNodeAssetIds,
+  remapSettingsReferences,
   workflowExportSchema,
 } from "../lib/workflow-assets.js"
 import type { CreatedAssetMap } from "../lib/workflow-assets.js"
@@ -1745,7 +1748,11 @@ export async function workflowRoutes(app: FastifyInstance) {
       // exported by a collaborator comes back with the graph and without the
       // entities they were never given. Deliberate; do not "fix" it by passing
       // the creator's id.
-      const ids = collectAssetIds(rawNodes)
+      // The settings blob is walked too (#1088): an app's own index there can
+      // bind entities the graph never mentions (a studio shot's PLAN carries
+      // chips before anything is framed), and the import re-points exactly the
+      // chips this collects.
+      const ids = collectAssetIds(rawNodes, wf.settings)
       const assetsResult = await fetchExportAssets(ids, userId)
       if ("error" in assetsResult) return sendInternalError(reply, req, assetsResult.error, "Failed to export workflow")
       result.assets = assetsResult
@@ -1797,8 +1804,15 @@ export async function workflowRoutes(app: FastifyInstance) {
     const {
       nodes: portableNodes,
       assets: portableAssets,
+      settings: portableSettings,
       report: importReport,
-    } = await rehostForeignMedia(wf.nodes, userId, wf.assets ? { assets: wf.assets } : {})
+    } = await rehostForeignMedia(wf.nodes, userId, {
+      ...(wf.assets ? { assets: wf.assets } : {}),
+      // The settings blob is REWRITE-ONLY here: it follows the copies the graph
+      // and the entities paid for, so the row's two views of one production
+      // agree about where the bytes are. It never adds a candidate of its own.
+      ...(wf.settings ? { settings: wf.settings } : {}),
+    })
 
     // Re-create bundled assets, mapping old DB id → the new row (node_id preserved).
     let assetIdMap: CreatedAssetMap = new Map()
@@ -1813,14 +1827,19 @@ export async function workflowRoutes(app: FastifyInstance) {
 
     // Node entity fields AND the `@`-chips bound in node data both follow the
     // re-created rows (#1088) — a chips-only graph (every studio production)
-    // arrives bound instead of dangling.
-    const remappedNodes = remapNodeAssetIds(portableNodes, assetIdMap)
-    if (assetIdMap.size > 0) {
-      // The map leaves the server so a client holding chips OUTSIDE the graph
-      // can finish the same job (published wire contract).
-      importReport.assetIdMap = Object.fromEntries(
-        [...assetIdMap].map(([bundleId, created]) => [bundleId, created.id]),
-      )
+    // arrives bound instead of dangling. Entities the copy DROPPED (storage
+    // quota) have no row here, so their node ids are cleared rather than left
+    // pointing at the exporter's.
+    const droppedAssetIds = droppedAssetIdsFromReport(importReport.assetsSkipped)
+    const remappedNodes = remapNodeAssetIds(portableNodes, assetIdMap, droppedAssetIds)
+    // The settings blob's chips follow the same rows — an app that keeps its
+    // own index there (studio's `settings.studio`) must not read a production
+    // whose graph is bound and whose index still is not.
+    const remappedSettings = remapSettingsReferences(portableSettings, assetIdMap) ?? {}
+    if (portableAssets) {
+      // The map leaves the server so a client holding chips OUTSIDE the
+      // workflow can finish the same job (published wire contract).
+      importReport.assetIdMap = assetIdMapForReport(assetIdMap)
     }
 
     const migratedEdges = migrateGenerateImageHandles(
@@ -1836,7 +1855,7 @@ export async function workflowRoutes(app: FastifyInstance) {
         name: wf.name,
         nodes: remappedNodes,
         edges: migratedEdges,
-        settings: wf.settings ?? {},
+        settings: remappedSettings,
         // Where this row came from. The importer is recorded as the original
         // author because the bundle format carries no author — adding one is
         // a change to a published wire contract, and an import from an

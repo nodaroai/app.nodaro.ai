@@ -280,6 +280,12 @@ function storedNodes(): Array<{ id: string; data: Record<string, any> }> {
   return wf!.row.nodes as Array<{ id: string; data: Record<string, any> }>
 }
 
+/** The settings blob the import actually stored. */
+function storedSettings(): Record<string, any> {
+  const wf = inserts.find((i) => i.table === "workflows")
+  return wf!.row.settings as Record<string, any>
+}
+
 function importBundle(bundle: unknown = IMPORT_BUNDLE) {
   return app.inject({
     method: "POST",
@@ -382,9 +388,56 @@ describe("POST /v1/workflows/import — a chips-only production", () => {
     expect(body.importReport.assetsSkipped).toEqual([
       { kind: "character", id: KIRA, name: "Kira", reason: "Storage limit exceeded" },
     ])
-    expect(body.importReport.assetIdMap).toBeUndefined()
+    // The bundle CARRIED assets, so the map is present — empty, because
+    // nothing was created. "No map" and "no entities" must not read alike.
+    expect(body.importReport.assetIdMap).toEqual({})
     // The chip keeps the exporter's id — unresolvable, and the client's call.
     expect(storedNodes()[0]!.data.generatedResults[0].references[0].id).toBe(KIRA)
+  })
+
+  it("clears the entity NODE's id for an entity the import declined to create", async () => {
+    storeImageMock.mockImplementation(async () => ({
+      ok: false,
+      status: 413,
+      code: "storage_limit_exceeded",
+      message: "Storage limit exceeded",
+    }))
+
+    const res = await importBundle({
+      ...IMPORT_BUNDLE,
+      nodes: [{ id: "n-char", type: "character", data: { characterDbId: KIRA } }],
+    })
+
+    expect(res.statusCode).toBe(201)
+    // No row exists for it here, so the node lands unlinked rather than
+    // dangling at the exporter's private row.
+    expect(storedNodes()[0]!.data.characterDbId).toBe("")
+  })
+
+  it("re-points the chips in `settings` and moves its urls onto the copies", async () => {
+    const res = await importBundle({
+      ...IMPORT_BUNDLE,
+      settings: {
+        studio: {
+          version: 3,
+          shots: [
+            {
+              id: "s1",
+              imageNodeId: "shot-1",
+              startFrameUrl: THEIR_PORTRAIT,
+              plan: { frame: { references: [KIRA_CHIP] } },
+            },
+          ],
+        },
+      },
+    })
+
+    expect(res.statusCode).toBe(201)
+    const shot = storedSettings().studio.shots[0]
+    // The row's two views of one production agree: same row, same bytes.
+    expect(shot.plan.frame.references[0].id).toBe("new-characters-1")
+    expect(shot.plan.frame.references[0].url).toBe(COPIED(THEIR_PORTRAIT))
+    expect(shot.startFrameUrl).toBe(COPIED(THEIR_PORTRAIT))
   })
 
   it("leaves an entity image on a host it cannot reach, and says so", async () => {

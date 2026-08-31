@@ -52,7 +52,12 @@ vi.mock("../supabase.js", () => {
   }
 })
 
-import { collectAssetIds, reCreateAssets, remapNodeAssetIds } from "../workflow-assets.js"
+import {
+  collectAssetIds,
+  reCreateAssets,
+  remapNodeAssetIds,
+  remapSettingsReferences,
+} from "../workflow-assets.js"
 import type { CreatedAsset } from "../workflow-assets.js"
 
 const KIRA = "11111111-1111-4111-8111-111111111111"
@@ -300,5 +305,108 @@ describe("remapNodeAssetIds — chips (#1088)", () => {
     const data = { generatedResults: [{ references: [chip(KIRA, "wired-character")] }] }
     const [node] = remapNodeAssetIds([{ id: "shot-1", data }], new Map())
     expect(node!.data).toEqual(data)
+  })
+
+  // A prop / creature / location VIEW chip binds by url alone — none of the
+  // character mention/variant machinery — so `isExtraRef` ("the user attached
+  // exactly this image") is its ONLY marker. Read as canonical, its url would
+  // be swapped for the entity's main image: a silent wrong generation input.
+  it.each([
+    ["object", SWORD, "https://cdn.example/sword-brass.png", "Brass"],
+    ["creature", WOLF, "https://cdn.example/wolf-side.png", "Side"],
+    ["location", LIBRARY, "https://cdn.example/library-rain.png", "Rain"],
+  ])("keeps a %s VIEW chip's url — it carries no variant field, only isExtraRef", (
+    kind,
+    id,
+    url,
+    label,
+  ) => {
+    const viewIdMap = new Map<string, CreatedAsset>([
+      [id, { id: `new-${kind}`, name: "Renamed", sourceImageUrl: "https://mine.example/main.png" }],
+    ])
+    const nodes = [
+      {
+        id: "shot-1",
+        data: {
+          generatedResults: [
+            {
+              references: [
+                chip(id, `wired-${kind}`, { url, isExtraRef: true, description: label }),
+              ],
+            },
+          ],
+        },
+      },
+    ]
+
+    const [node] = remapNodeAssetIds(nodes, viewIdMap)
+    const ref = (node!.data as any).generatedResults[0].references[0]
+    expect(ref.id).toBe(`new-${kind}`)
+    expect(ref.defaultName).toBe("Renamed")
+    expect(ref.url).toBe(url)
+  })
+
+  it("clears an entity node's id when the import DROPPED that entity", () => {
+    const nodes = [
+      { id: "n-char", type: "character", data: { characterDbId: WOLF } },
+      { id: "n-loc", type: "location", data: { locationDbId: LIBRARY } },
+    ]
+
+    const remapped = remapNodeAssetIds(nodes, idMap, new Set([WOLF]))
+    // Dropped: cleared, so the node lands unlinked rather than dangling.
+    expect((remapped[0]!.data as any).characterDbId).toBe("")
+    // Created: re-pointed as always.
+    expect((remapped[1]!.data as any).locationDbId).toBe("new-library")
+  })
+
+  it("leaves an unmapped id alone when the import dropped nothing", () => {
+    // An asset-LESS bundle's id may be a valid row of the importer's own.
+    const nodes = [{ id: "n-char", type: "character", data: { characterDbId: WOLF } }]
+    expect((remapNodeAssetIds(nodes, idMap)[0]!.data as any).characterDbId).toBe(WOLF)
+  })
+})
+
+describe("the settings blob (#1088)", () => {
+  /** A studio-shaped settings index: two wrapper levels above node data. */
+  const studioSettings = () => ({
+    studio: {
+      version: 3,
+      shots: [
+        {
+          id: "s1",
+          imageNodeId: "shot-1",
+          plan: { frame: { references: [chip(KIRA, "wired-character")] } },
+          beats: [{ id: "b1", references: [chip(LIBRARY, "wired-location")] }],
+        },
+      ],
+    },
+  })
+
+  it("collects the entities bound ONLY in settings", () => {
+    // The graph is empty: a planned shot binds its cast before it is framed.
+    const ids = collectAssetIds([], studioSettings())
+    expect(ids.characterIds).toEqual([KIRA])
+    expect(ids.locationIds).toEqual([LIBRARY])
+  })
+
+  it("re-points those chips at the created rows without mutating the input", () => {
+    const idMap = new Map<string, CreatedAsset>([
+      [KIRA, { id: "new-kira", name: "Kira 2", sourceImageUrl: "https://mine.example/kira.png" }],
+      [LIBRARY, { id: "new-library", name: "Old Library", sourceImageUrl: null }],
+    ])
+    const settings = studioSettings()
+
+    const out = remapSettingsReferences(settings, idMap) as any
+    expect(out.studio.shots[0].plan.frame.references[0].id).toBe("new-kira")
+    expect(out.studio.shots[0].beats[0].references[0].id).toBe("new-library")
+    // Collect and remap must agree: whatever one finds, the other re-points.
+    expect(settings.studio.shots[0]!.plan.frame.references[0]!.id).toBe(KIRA)
+  })
+
+  it("returns the same object when nothing was created, and undefined for a non-object", () => {
+    const settings = studioSettings()
+    expect(remapSettingsReferences(settings, new Map())).toBe(settings)
+    expect(remapSettingsReferences(undefined, new Map())).toBeUndefined()
+    expect(remapSettingsReferences([], new Map())).toBeUndefined()
   })
 })

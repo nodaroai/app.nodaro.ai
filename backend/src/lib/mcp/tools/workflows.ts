@@ -17,10 +17,13 @@ import { canChangeWorkflowVisibility } from "../../workflow-access.js"
 import { changesStudioPublishFlag } from "../../studio-audience.js"
 import {
   asObjectArray,
+  assetIdMapForReport,
   collectAssetIds,
+  droppedAssetIdsFromReport,
   fetchExportAssets,
   reCreateAssets,
   remapNodeAssetIds,
+  remapSettingsReferences,
   workflowExportSchema,
 } from "../../workflow-assets.js"
 import type { CreatedAssetMap } from "../../workflow-assets.js"
@@ -251,7 +254,8 @@ export function registerWorkflows({
         }
 
         if (includeAssets) {
-          const ids = collectAssetIds(rawNodes)
+          // Graph AND settings, exactly as the REST export collects them.
+          const ids = collectAssetIds(rawNodes, row.settings)
           const assetsResult = await fetchExportAssets(ids, session.userId)
           if ("error" in assetsResult) return err(`Error: ${assetsResult.error}`)
           result.assets = assetsResult
@@ -595,8 +599,13 @@ export function registerWorkflows({
         const {
           nodes: portableNodes,
           assets: portableAssets,
+          settings: portableSettings,
           report: importReport,
-        } = await rehostForeignMedia(wf.nodes, session.userId, wf.assets ? { assets: wf.assets } : {})
+        } = await rehostForeignMedia(wf.nodes, session.userId, {
+          ...(wf.assets ? { assets: wf.assets } : {}),
+          // Rewrite-only, exactly as the REST import passes it.
+          ...(wf.settings ? { settings: wf.settings } : {}),
+        })
 
         // Re-create bundled assets, mapping old DB id → the new row (node_id preserved).
         let assetIdMap: CreatedAssetMap = new Map()
@@ -614,12 +623,16 @@ export function registerWorkflows({
         // hand-edited JSON), and nothing downstream re-checks them. The remap
         // re-points node entity fields AND the `@`-chips in node data (#1088).
         const remappedNodes = normalizeNodeModelParams(
-          remapNodeAssetIds(portableNodes, assetIdMap) as Array<{ id?: unknown; type?: unknown; data?: unknown }>,
+          remapNodeAssetIds(
+            portableNodes,
+            assetIdMap,
+            droppedAssetIdsFromReport(importReport.assetsSkipped),
+          ) as Array<{ id?: unknown; type?: unknown; data?: unknown }>,
         ).nodes
-        if (assetIdMap.size > 0) {
-          importReport.assetIdMap = Object.fromEntries(
-            [...assetIdMap].map(([bundleId, created]) => [bundleId, created.id]),
-          )
+        // The settings blob's chips follow the same rows as the graph's.
+        const remappedSettings = remapSettingsReferences(portableSettings, assetIdMap) ?? {}
+        if (portableAssets) {
+          importReport.assetIdMap = assetIdMapForReport(assetIdMap)
         }
 
         const migratedEdges = migrateGenerateImageHandles(
@@ -635,7 +648,7 @@ export function registerWorkflows({
             name: wf.name,
             nodes: remappedNodes,
             edges: migratedEdges,
-            settings: wf.settings ?? {},
+            settings: remappedSettings,
           })
           .select("id, name, created_at, updated_at")
           .single()

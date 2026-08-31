@@ -257,10 +257,18 @@ export interface RehostOptions {
    * production lands, that entity does not.
    */
   readonly assets?: BundleAssets
+  /**
+   * The bundle's freeform `settings` blob. REWRITE-ONLY: its URL fields follow
+   * the copies made for the graph and the entities, but a URL that appears
+   * ONLY here is never a copy candidate — settings is app-owned, unbounded,
+   * and pulling it into the fetch pass would put an app's private shape in
+   * charge of the importer's quota and the per-import cap.
+   */
+  readonly settings?: Record<string, unknown>
 }
 
 /** The copy limits alone — what {@link rehostOne} needs, without the payload. */
-type RehostLimits = Required<Omit<RehostOptions, "assets">>
+type RehostLimits = Required<Omit<RehostOptions, "assets" | "settings">>
 
 // Buffered in memory while copying: maxBytes × concurrency is the peak.
 const REHOST_DEFAULTS: RehostLimits = {
@@ -446,10 +454,19 @@ async function runPool<T>(items: readonly T[], concurrency: number, work: (item:
   await Promise.all(lanes)
 }
 
-/** Deep copy of a node's DATA with every URL-field value passed through `map` — inputs untouched. */
-function rewriteUrlFields(value: unknown, depth: number, map: (url: string) => string): unknown {
-  if (depth > WALK_DEPTH || !value || typeof value !== "object") return value
-  if (Array.isArray(value)) return value.map((item) => rewriteUrlFields(item, depth + 1, map))
+/**
+ * Deep copy of a node's DATA with every URL-field value passed through `map` —
+ * inputs untouched. `maxDepth` defaults to the node-data budget; the settings
+ * blob passes its own (see {@link SETTINGS_WALK_DEPTH}).
+ */
+function rewriteUrlFields(
+  value: unknown,
+  depth: number,
+  map: (url: string) => string,
+  maxDepth: number = WALK_DEPTH,
+): unknown {
+  if (depth > maxDepth || !value || typeof value !== "object") return value
+  if (Array.isArray(value)) return value.map((item) => rewriteUrlFields(item, depth + 1, map, maxDepth))
   return Object.fromEntries(
     Object.entries(value as Record<string, unknown>).map(([key, v]) => {
       if (URL_FIELD.test(key)) {
@@ -457,22 +474,35 @@ function rewriteUrlFields(value: unknown, depth: number, map: (url: string) => s
         if (Array.isArray(v)) return [key, v.map((item) => (typeof item === "string" ? map(item) : item))]
         return [key, v]
       }
-      return [key, rewriteUrlFields(v, depth + 1, map)]
+      return [key, rewriteUrlFields(v, depth + 1, map, maxDepth)]
     }),
   )
 }
+
+/**
+ * The settings blob's rewrite budget. `settings` sits two levels ABOVE a node's
+ * `data`: an app namespaces itself (`settings.studio`) and indexes its own
+ * entries (`…​.shots[]`) before it reaches the shapes node data starts at, so
+ * the same `references[].url` that is depth 4 in a node is depth 7 here. Two
+ * levels of headroom over {@link WALK_DEPTH}, for exactly that reason.
+ */
+const SETTINGS_WALK_DEPTH = WALK_DEPTH + 2
 
 function emptyReport(): WorkflowImportReport {
   return { rehosted: 0, unreachable: [], skipped: [] }
 }
 
 /**
- * True when the IMPORTER already owns the bytes behind one of our own URLs —
- * their own production, exported and read back in. Only then is sharing the
- * object safe: their delete, their reaper, their lifecycle.
+ * True when the importer has an `assets` ROW for the object behind one of our
+ * own URLs — their own production, exported and read back in. Only then is
+ * sharing the object safe: their delete, their reaper, their lifecycle.
  *
- * Copying is the safe default, so every doubt (not our prefix, a DB error, no
- * asset row) answers false. Never throws.
+ * The row, not the key prefix, is the ownership proof — so this answers false
+ * for an object the platform wrote WITHOUT recording a row (a few internal
+ * paths do), and that URL is copied and charged again on a self-reimport. That
+ * is the deliberate direction to be wrong in: copying is the safe default, and
+ * every doubt (not our prefix, a DB error, no asset row) answers false. Never
+ * throws.
  */
 async function importerOwnsBytes(url: string, userId: string, deps: ImportDeps): Promise<boolean> {
   const [{ r2KeyFromOurUrl }, { supabase }] = deps
@@ -517,23 +547,31 @@ function rewriteBundleAssets(
 /**
  * The import half. Returns new node objects (the input is never mutated), the
  * bundle's entity assets rewritten to the copies when `options.assets` was
- * given, plus a report the response carries so the importer can explain what
- * happened. Never throws: an unavailable storage layer degrades to "nothing
- * copied, every candidate reported as skipped".
+ * given, the `settings` blob rewritten to the same copies when
+ * `options.settings` was given, plus a report the response carries so the
+ * importer can explain what happened. Never throws: an unavailable storage
+ * layer degrades to "nothing copied, every candidate reported as skipped".
  */
 export async function rehostForeignMedia<T>(
   nodes: readonly T[],
   userId: string,
   options: RehostOptions = {},
-): Promise<{ nodes: T[]; assets?: BundleAssets; report: WorkflowImportReport }> {
+): Promise<{
+  nodes: T[]
+  assets?: BundleAssets
+  settings?: Record<string, unknown>
+  report: WorkflowImportReport
+}> {
   const opts = { ...REHOST_DEFAULTS, ...options }
   const report = emptyReport()
   const bundleAssets = options.assets
+  const bundleSettings = options.settings
   const refs = collectNodeMediaUrls(nodes, REHOST_FILTER)
   const assetRefs = collectAssetMediaUrls(bundleAssets)
   const unchanged = () => ({
     nodes: [...nodes],
     ...(bundleAssets ? { assets: bundleAssets } : {}),
+    ...(bundleSettings ? { settings: bundleSettings } : {}),
     report,
   })
   if (refs.length === 0 && assetRefs.length === 0) return unchanged()
@@ -549,15 +587,23 @@ export async function rehostForeignMedia<T>(
   }
   const { r2KeyFromOurUrl, getR2ObjectSize } = deps[0]
 
-  // One decision per distinct URL, however many fields reference it.
-  const candidates = new Map<string, WorkflowMediaRef>()
+  // One decision per distinct URL, however many fields reference it. The two
+  // halves keep SEPARATE candidate sets so the per-import cap can be applied to
+  // each: one shared queue let a handful of well-populated entities (a
+  // character's expressions + poses + lighting passes are ~20 URLs on their
+  // own) consume every slot and starve the graph's media — the #866 breakage —
+  // or, the other way round, a media-heavy graph leave the entities pointing at
+  // the exporter's host, which is #1088's.
+  const assetCandidates = new Map<string, WorkflowMediaRef>()
+  const graphCandidates = new Map<string, WorkflowMediaRef>()
   const ownPrefixed = new Map<string, WorkflowMediaRef>()
 
   // ── Entity assets first (#1088) ──────────────────────────────────────────
   // Their rule is stricter than the graph's — copy even what already sits on
   // this instance — and classifying them first means a URL the graph ALSO
   // references follows it: one fetch, one charge, and the node field is
-  // rewritten to the same copy.
+  // rewritten to the same copy. (Ordering decides which SET a shared URL joins,
+  // not which one survives the cap — each set is capped on its own.)
   const assetOwners = new Map<string, AssetMediaRef[]>()
   for (const ref of assetRefs) {
     const owners = assetOwners.get(ref.url)
@@ -578,7 +624,7 @@ export async function rehostForeignMedia<T>(
       report.unreachable.push(plainRef(ref))
       continue
     }
-    candidates.set(ref.url, plainRef(ref))
+    assetCandidates.set(ref.url, plainRef(ref))
   }
   await runPool(maybeAlreadyOurs, opts.concurrency, async (ref) => {
     if (await importerOwnsBytes(ref.url, userId, deps)) return
@@ -590,13 +636,13 @@ export async function rehostForeignMedia<T>(
       report.unreachable.push(plainRef(ref))
       return
     }
-    candidates.set(ref.url, plainRef(ref))
+    assetCandidates.set(ref.url, plainRef(ref))
   })
 
   // ── The graph's own media (#866) ─────────────────────────────────────────
   for (const ref of refs) {
     // Already decided as an entity's URL above — that decision governs.
-    if (candidates.has(ref.url) || ownPrefixed.has(ref.url) || assetOwners.has(ref.url)) continue
+    if (graphCandidates.has(ref.url) || ownPrefixed.has(ref.url) || assetOwners.has(ref.url)) continue
     if (r2KeyFromOurUrl(ref.url)) {
       ownPrefixed.set(ref.url, ref)
       continue
@@ -605,7 +651,7 @@ export async function rehostForeignMedia<T>(
       report.unreachable.push(ref)
       continue
     }
-    candidates.set(ref.url, ref)
+    graphCandidates.set(ref.url, ref)
   }
 
   // A URL under OUR public prefix is ours only if the object exists here. Two
@@ -619,13 +665,16 @@ export async function rehostForeignMedia<T>(
     if (size <= 0) report.unreachable.push(ref)
   })
 
-  // Entity URLs were queued first, so the per-import cap falls on the graph's
-  // media before it falls on the bundle's entities — a chip that arrives
-  // unbound is worse than a still that keeps pointing at its origin.
-  const queue = [...candidates.values()]
-  for (const ref of queue.splice(opts.maxFiles)) {
+  // The cap is PER HALF, not per import: neither the bundle's entities nor the
+  // graph's media can spend the other's slots. Each half keeps the wall-time
+  // and memory bound it had when it was the only one (peak is still
+  // `maxBytes × concurrency` — the two halves share one pool).
+  const assetQueue = [...assetCandidates.values()]
+  const graphQueue = [...graphCandidates.values()]
+  for (const ref of [...assetQueue.splice(opts.maxFiles), ...graphQueue.splice(opts.maxFiles)]) {
     report.skipped.push({ ...ref, reason: `over the ${opts.maxFiles}-file import cap` })
   }
+  const queue = [...assetQueue, ...graphQueue]
 
   const replacements = new Map<string, string>()
   const skippedAssets = new Map<string, WorkflowImportSkippedAsset>()
@@ -668,6 +717,21 @@ export async function rehostForeignMedia<T>(
   return {
     nodes: mapped,
     ...(bundleAssets ? { assets: rewriteBundleAssets(bundleAssets, map, skippedAssets) } : {}),
+    // The settings blob follows the SAME substitutions — nothing more. A
+    // production that keeps a second view of its shots there (studio's
+    // `settings.studio`) must not end up with one half on the importer's copies
+    // and the other still on the exporter's bytes.
+    ...(bundleSettings
+      ? {
+          settings:
+            replacements.size === 0
+              ? bundleSettings
+              : (rewriteUrlFields(bundleSettings, 0, map, SETTINGS_WALK_DEPTH) as Record<
+                  string,
+                  unknown
+                >),
+        }
+      : {}),
     report,
   }
 }

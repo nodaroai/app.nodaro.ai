@@ -525,14 +525,18 @@ import(input: WorkflowExport & { projectId: string }): Promise<{ data: Workflow;
 Imports a `WorkflowExport` bundle into the specified project. Re-creates any
 bundled assets (characters, objects, creatures, locations) under your account
 and re-points the graph at them — both the entity nodes' `*DbId` fields and
-every `@`-chip (`ConnectedReference`) bound in node data, so a graph that binds
-its entities only through chips arrives bound rather than dangling. Returns the
-full record of the newly created workflow.
+every `@`-chip (`ConnectedReference`) bound in node data **or in the workflow's
+freeform `settings`**, so a graph that binds its entities only through chips
+arrives bound rather than dangling. Returns the full record of the newly created
+workflow.
 
 Media the bundle references on other hosts is **copied onto this instance's
-storage** where it is reachable (up to 25 distinct files per import; images up
-to 20 MB, video/audio up to 50 MB), so the workflow runs from local copies
-rather than someone else's host. A bundled **entity's** images are copied
+storage** where it is reachable (up to 25 distinct files for the graph's media
+and 25 more for the bundled entities' — the two budgets are separate, so neither
+can starve the other; images up to 20 MB, video/audio up to 50 MB), so the
+workflow runs from local copies rather than someone else's host. URLs in
+`settings` follow those copies but never trigger one of their own. A bundled
+**entity's** images are copied
 whoever hosts them — they are the exporter's bytes, and their delete, quota
 sweep and retention reaper answer to the exporter, not to you. Those copies
 count against your storage quota; when it runs out the workflow still lands and
