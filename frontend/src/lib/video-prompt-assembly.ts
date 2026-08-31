@@ -17,7 +17,7 @@
 
 import type { WorkflowNode, WorkflowEdge, CharacterNodeData, ExtraRef } from "@/types/nodes"
 import { characterMentionSlug, extractCharacterLoraFields, characterMentionableAssetArrays, resolveEffectiveSourceType, resolveVideoProviderForMode, hasFeature, countRefModalityEdges, type ReferenceModality } from "@nodaro/shared"
-import { computeNodePrompt, characterLockToRefLock, collectIdentityLockClause, resolveVideoReferenceCore, type CharacterMeta } from "@nodaro/prompts"
+import { computeNodePrompt, characterLockToRefLock, collectIdentityLockClause, composeVideoPromptText, readDirectionFields, readStructuredFields, resolveVideoReferenceCore, type CharacterMeta } from "@nodaro/prompts"
 import type { ConnectedReference } from "@nodaro/shared"
 import { collectCinematographyHints } from "@/lib/cinematography-hints"
 import { stampElementInjections, collectCharacterElementInjections } from "@/components/editor/workflow-editor/node-input-resolver"
@@ -535,6 +535,22 @@ export function assembleVideoPrompt(nodeType: string, args: AssembleVideoPromptA
   // but mirror the run exactly so the preview stays faithful if it's revived.
   const identityClause = collectIdentityLockClause(id, nodes, edges)
   if (identityClause) prompt = prompt ? `${prompt} ${identityClause}` : identityClause
+
+  // ── Stored cinematic direction / structured ids (P4b) ──
+  // The node's OWN look ids, folded by the shared `composeVideoPromptText`
+  // under the video verbosity policy. Scoped to the i2v / t2v effective types —
+  // exactly the run branches that fold them (`execute-node.ts`'s image-to-video
+  // and text-to-video handlers, which is where the unified generate-video node
+  // is re-typed to). v2v / s2v / cinematic-avatar / extend-video / video-retake
+  // fold nothing on the run path, so folding here would make the preview
+  // overstate what they send.
+  if (effectiveType === "image-to-video" || effectiveType === "text-to-video") {
+    prompt = composeVideoPromptText(
+      prompt,
+      readDirectionFields(data.direction),
+      readStructuredFields(data.structured),
+    )
+  }
 
   // ── @-mention resolution (i2v / t2v / v2v ONLY) ──
   if (

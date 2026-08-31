@@ -13,6 +13,9 @@ import { ImageRefExtension } from "./image-ref-extension"
 import { VideoRefExtension, AudioRefExtension } from "./video-audio-ref-extension"
 import { CharacterRefExtension, parseCharacterRefMatch } from "./character-ref-extension"
 import { LocationRefExtension, parseLocationRefMatch } from "./location-ref-extension"
+import { ImageMentionExtension } from "./image-mention-extension"
+import { knownImageMentionSlugs, mentionNamespaceSlugs } from "./lib/image-mention-refs"
+import { findImageMentionTokens } from "@nodaro/shared"
 import { IMAGE_REFERENCE_FORMAT } from "./lib/image-reference-format"
 import { SuggestionList, type SuggestionCommandPayload } from "./suggestion-list"
 import { buildRefPillNodes, nextMentionIndex } from "./build-ref-pill-nodes"
@@ -134,6 +137,12 @@ export interface KnownSlugSets {
   characters: ReadonlySet<string>
   /** Location slugs known to this editor (from upstream wired locations). */
   locations: ReadonlySet<string>
+  /**
+   * NAME-slugs of the wired MEDIA refs (`uploaded` / `wired`), derived by the
+   * shared `imageMentionSlug` — the third `@<slug>:N` namespace. Same role as
+   * the two above: only a slug in this set promotes to an `imageMention` pill.
+   */
+  images: ReadonlySet<string>
   /** Snippets whose text gets promoted to display pills. */
   snippets: readonly MatchableSnippet[]
 }
@@ -296,6 +305,37 @@ export function collectTokens(line: string, known: KnownSlugSets): TokenMatch[] 
     })
   }
 
+  // NAME-addressed image mentions LAST — mirroring the prompt-builder's pass
+  // order (character → location → image), so a name shared by a character and
+  // an image resolves as the character in the editor exactly as it does at
+  // build time. The dedup-by-offset below keeps the earlier token on a tie.
+  //
+  // Delegated wholesale to the SHARED `findImageMentionTokens`, which owns the
+  // 4-part guard and the slash guard — the editor never re-implements them.
+  // HYBRID-gated: legacy has no image-mention resolver, so an `@name:N` token
+  // stays literal text there and must not flip text→pill on reload.
+  if (IMAGE_REFERENCE_FORMAT === "hybrid" && known.images.size > 0) {
+    for (const t of findImageMentionTokens(line, [...known.images])) {
+      tokens.push({
+        start: t.offset,
+        end: t.offset + t.token.length,
+        node: {
+          type: "imageMention",
+          attrs: {
+            imageSlug: t.imageSlug,
+            imageIndex: t.imageIndex,
+            // Carried verbatim: dropping the role would let `renderText`
+            // silently rewrite `@town:3:background` → `@town:3` on the next
+            // edit. `lock` stays tri-state (undefined = inherit, NOT false,
+            // which would emit a spurious `~nolock`).
+            role: t.role ?? null,
+            lock: t.lock,
+          },
+        },
+      })
+    }
+  }
+
   // Snippet display-pills: exact-text matches promote to snippetPill nodes.
   // Snippet texts can't contain `@`/`{`/`}` (guard-tested), so they can never
   // overlap a mention/image token span — `occupied` is belt-and-braces.
@@ -375,13 +415,14 @@ function buildKnownSlugSets(
   refs: readonly RefImageItem[],
   snippets: readonly MatchableSnippet[],
 ): KnownSlugSets {
-  const characters = new Set<string>()
-  const locations = new Set<string>()
-  for (const r of refs) {
-    if (r.source === "character" && r.characterSlug) characters.add(r.characterSlug)
-    else if (r.source === "location" && r.locationSlug) locations.add(r.locationSlug)
-  }
-  return { characters, locations, snippets }
+  // The two entity namespaces come from `mentionNamespaceSlugs`, which is also
+  // what `knownImageMentionSlugs` subtracts — so a slug can never be counted as
+  // both a character/location AND an image mention.
+  const { characters, locations } = mentionNamespaceSlugs(refs)
+  // Media name-slugs come from the SAME predicate the autocomplete rows and the
+  // extension's input/paste rules use, so all three views of "which refs are
+  // mentionable by name" are one view.
+  return { characters, locations, images: knownImageMentionSlugs(refs), snippets }
 }
 
 /**
@@ -533,6 +574,11 @@ export function PromptEditor({
       Placeholder.configure({ placeholder: placeholder ?? "" }),
       CharacterRefExtension,
       LocationRefExtension,
+      // NAME-addressed media mention (`@town:3`) — the sibling of the
+      // POSITIONAL `{image:N}` imageRef pill below, not its replacement. Both
+      // grammars stay live; only the known-slug set separates which `@<slug>:N`
+      // token belongs to which extension.
+      ImageMentionExtension,
       SnippetPillExtension,
       // Atomic `{video:N:label}` / `{audio:N:label}` pills (Task 5.1). Render +
       // round-trip only — their inherited Mention `@` suggestion plugin is
@@ -576,7 +622,12 @@ export function PromptEditor({
             // `deleteRange`/`insertContent` did.
             const needsMentionIndex =
               (item.source === "location" && !!item.locationSlug) ||
-              (item.source === "character" && !!item.characterSlug)
+              (item.source === "character" && !!item.characterSlug) ||
+              // The NAME-addressed media mention joins the SAME counter — its
+              // `@<slug>:N` shares one correlation namespace with characters
+              // and locations, so it must never reuse the ref's positional
+              // `index` (which would collide with an existing `@kira:2`).
+              !!item.imageMentionSlug
             ed
               .chain()
               .focus()
@@ -752,6 +803,13 @@ export function PromptEditor({
     storage.locationRef = storage.locationRef ?? {}
     storage.locationRef.referenceImages = stableReferenceImages
     storage.locationRef.revision = (storage.locationRef.revision ?? 0) + 1
+    // Same mirror for the NAME-addressed imageMention extension. Its view
+    // resolves the pill by the ref's derived name-slug (not by slot), and its
+    // input/paste rules derive their known-slug set from this same list — so a
+    // renamed or re-wired upstream image updates both at once.
+    storage.imageMention = storage.imageMention ?? {}
+    storage.imageMention.referenceImages = stableReferenceImages
+    storage.imageMention.revision = (storage.imageMention.revision ?? 0) + 1
     // Force node views to re-read storage by dispatching a no-op transaction.
     // Gated by `stableReferenceImages` so this only fires when the ref list
     // actually changes — not on every parent keystroke.

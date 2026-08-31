@@ -14,14 +14,18 @@ import { roleToLocationRefSlots } from "./location-ref-roles"
  * sites can't drift. The caller owns positioning (`deleteRange`/`insertContentAt`);
  * this only decides node type + attrs.
  *
- * `mentionIndex` is the unified `@<slug>:N` counter (character + location);
- * image / video / audio use the item's positional `index` instead. A trailing
+ * `mentionIndex` is the unified `@<slug>:N` counter (character + location +
+ * NAME-addressed image mention); positional `{image:N}` / `{video:N}` /
+ * `{audio:N}` refs use the item's own `index` instead. A trailing
  * space is appended by default (so the cursor lands ready after an `@` insert);
  * pass `trailingSpace: false` for an in-place swap.
  */
 /**
  * Next unified `@<slug>:N` mention index for a prompt — `max(existing N) + 1`.
- * Characters and locations share one positional counter. Scans serialized text
+ * Characters, locations AND named-image mentions share one counter: the regex
+ * matches any `@<slug>:N` with up to two optional segments, which is a superset
+ * of all three grammars, so `@town:3` is counted exactly like `@kira:1`. Scans
+ * serialized text
  * (pills round-trip through `renderText`), so raw-typed and pill mentions are
  * counted together. Pure — the caller passes `editor.getText({ blockSeparator:
  * "\n" })`. Shared by the `@`-insert command and the thumbnail swap-picker.
@@ -126,6 +130,31 @@ export function buildRefPillNodes(
           variantSlug: variantSlugForNode,
           usageMode: modeForNode,
           role: roleForNode,
+        },
+      },
+      ...trailing,
+    ]
+  }
+
+  // Named media ref → the `imageMention` pill: the NAME-addressed sibling of
+  // the positional `imageRef` below, not its replacement. The autocomplete sets
+  // `imageMentionSlug` only on the "mention by name" row (slug derived by the
+  // SHARED `imageMentionSlug`), so a media ref keeps offering BOTH rows and the
+  // positional `{image:N}` insert is byte-unchanged when the field is absent.
+  //
+  // Uses `mentionIndex` — the unified `@<slug>:N` counter — NOT `item.index`: a
+  // name-addressed mention shares one correlation namespace with characters and
+  // locations, and `nextMentionIndex` already counts image mentions.
+  if (item.imageMentionSlug) {
+    return [
+      {
+        type: "imageMention",
+        attrs: {
+          imageSlug: item.imageMentionSlug,
+          imageIndex: mentionIndex,
+          // 3rd-segment role. The media grammar has no variant/mode slot, so
+          // the role never needs slot-routing — it goes straight through.
+          role: item.role ?? null,
         },
       },
       ...trailing,

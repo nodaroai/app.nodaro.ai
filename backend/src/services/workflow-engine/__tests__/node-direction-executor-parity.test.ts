@@ -67,3 +67,52 @@ describe("canvas node-data direction: frontend ↔ backend source parity", () =>
     )
   })
 })
+
+/**
+ * The VIDEO half of the same gate (P4b). The unified `generate-video` node is
+ * re-typed to image-to-video / text-to-video before the frontend composes, so
+ * the fold lives in BOTH of those branches — a leg wired into only one silently
+ * drops a stored look for half the graphs. `video-prompt-assembly.ts` is the
+ * preview's copy of that same composition and must fold identically.
+ *
+ * The behavioural halves are executed elsewhere:
+ * `payload-builder-video-node-direction.test.ts` (orchestrator) and
+ * `frontend/…/__tests__/preview-run-parity.test.ts` (run ↔ preview). This gate
+ * adds what neither can: that the two frontend BRANCHES both carry the call.
+ */
+const VIDEO_FIX_HINT =
+  "If the fold moved or was renamed, update this pattern — do NOT delete the gate. " +
+  "A generate-video node is re-typed onto BOTH branches, so a fold in only one " +
+  "makes a single-node run disagree with itself depending on whether a start " +
+  "frame is wired."
+
+describe("canvas node-data direction: the VIDEO executors fold the stored ids", () => {
+  it("execute-node folds in BOTH the image-to-video and text-to-video branches", () => {
+    const source = readFileSync(join(REPO_ROOT, SITES[0]), "utf8")
+    for (const lever of [
+      "readDirectionFields(i2vData.direction)",
+      "readStructuredFields(i2vData.structured)",
+      "readDirectionFields(t2vData.direction)",
+      "readStructuredFields(t2vData.structured)",
+    ]) {
+      expect(source, `execute-node must call \`${lever}\`. ${VIDEO_FIX_HINT}`).toContain(lever)
+    }
+    // Reading them without folding them is the silent half of the failure.
+    const folds = source.split("composeVideoPromptText(").length - 1
+    expect(folds, `execute-node must fold via composeVideoPromptText twice. ${VIDEO_FIX_HINT}`)
+      .toBeGreaterThanOrEqual(2)
+  })
+
+  it("the video preview assembler folds through the same composer", () => {
+    const source = readFileSync(join(REPO_ROOT, "frontend/src/lib/video-prompt-assembly.ts"), "utf8")
+    for (const call of [
+      "composeVideoPromptText(",
+      "readDirectionFields(data.direction)",
+      "readStructuredFields(data.structured)",
+    ]) {
+      expect(source, `video-prompt-assembly must call \`${call}\`. ${VIDEO_FIX_HINT}`).toContain(
+        call,
+      )
+    }
+  })
+})

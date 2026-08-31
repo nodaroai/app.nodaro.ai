@@ -253,10 +253,17 @@ export class WorkflowsResource {
 
   /**
    * Import a `WorkflowExport` bundle into the specified project.
-   * Re-creates any bundled assets (characters, objects, locations) under your account.
+   * Re-creates any bundled assets (characters, objects, creatures, locations)
+   * under your account, and re-points BOTH the entity nodes and every `@`-chip
+   * (`ConnectedReference`) bound in the graph at the rows it created.
    * Media the bundle references on other hosts is copied onto this instance's
-   * storage where reachable; `importReport` says what was copied, what could
-   * not be reached, and what was skipped (and why).
+   * storage where reachable; a bundled entity's images are copied whoever
+   * hosts them, because they are the exporter's bytes and their lifecycle is
+   * not yours. `importReport` says what was copied, what could not be reached
+   * and what was skipped (and why); `assetIdMap` maps each bundled entity id
+   * to the row created for it (for chips you hold outside the graph), and
+   * `assetsSkipped` names the entities your storage quota left uncreated —
+   * the workflow itself still lands.
    */
   import(input: WorkflowExport & { projectId: string }): Promise<{ data: Workflow; importReport?: WorkflowImportReport }> {
     const { projectId, ...workflowJson } = input

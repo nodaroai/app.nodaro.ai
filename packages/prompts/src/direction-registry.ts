@@ -158,6 +158,13 @@ const temporal = perId(getTemporalPromptHint, getTemporalTerm)
  * so they are NOT aliases of `shotSize` / `lightingStyle`, and an alias table
  * would wrongly suppress a legal second selection. Overlap is handled instead
  * by the exact-string dedupe in `renderDirectionHints`.
+ *
+ * SECOND MEANING OF POSITION: `assembleImageInput` sheds hint clauses from the
+ * TAIL of this order when a provider's prompt cap overflows, so a row's
+ * position is also its survival order under the cap. That is a consequence of
+ * reusing the fold order, not a ranking — this table stays a compatibility
+ * order; anything that needs a real importance ranking should add an explicit
+ * priority column rather than reorder these rows.
  */
 export const DIRECTION_FIELDS = [
   { key: "cameraMotion", surface: "video", family: "motion", maxPicks: 1, render: perId(getCameraMotionPromptHint, getCameraMotionTerm) },

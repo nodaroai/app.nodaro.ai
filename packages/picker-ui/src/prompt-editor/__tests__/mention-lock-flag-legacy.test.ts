@@ -9,8 +9,8 @@ import { collectTokens, type KnownSlugSets } from "../index"
  * (hidden, toggle-less) lock on/off. Stripping to `undefined` (NOT `false`) is
  * critical: `false` would re-serialize as a spurious `~nolock`.
  */
-function known(opts: { chars?: string[]; locs?: string[] } = {}): KnownSlugSets {
-  return { characters: new Set(opts.chars ?? []), locations: new Set(opts.locs ?? []), snippets: [] }
+function known(opts: { chars?: string[]; locs?: string[]; imgs?: string[] } = {}): KnownSlugSets {
+  return { characters: new Set(opts.chars ?? []), locations: new Set(opts.locs ?? []), images: new Set(opts.imgs ?? []), snippets: [] }
 }
 
 describe("collectTokens — lock sentinels are inert in legacy", () => {

@@ -96,6 +96,22 @@ export interface WorkflowPortability {
   unreachableMedia: WorkflowMediaRef[]
 }
 
+/** The four entity kinds a bundle's `assets` can carry. */
+export type WorkflowAssetKind = "character" | "object" | "creature" | "location"
+
+/**
+ * A bundled entity the import declined to re-create (#1088). The workflow
+ * still lands — the film is the thing the importer asked for — so this is how
+ * they hear that an `@` chip arrived unbound.
+ */
+export interface WorkflowImportSkippedAsset {
+  kind: WorkflowAssetKind
+  /** The entity's id IN THE BUNDLE (the exporter's row id). */
+  id: string
+  name: string
+  reason: string
+}
+
 /**
  * What the importer did about the bundle's media (#866). Publicly reachable
  * media that is not already on the importing instance's own storage is
@@ -103,11 +119,29 @@ export interface WorkflowPortability {
  * a host the importer cannot reach is left as-is and listed (`unreachable`);
  * anything declined for another reason (too large, not a media type, over
  * the per-import cap, upload failed) is listed with the reason (`skipped`).
+ *
+ * The bundle's ENTITY images (`assets`) ride the same walk (#1088) — with one
+ * rule of their own: they are copied even when they already sit on this
+ * instance, because they are the EXPORTER's bytes and the two accounts'
+ * lifecycles are uncorrelated (their delete, their quarantine sweep, their
+ * retention reaper). Only bytes the importer already owns are left alone.
  */
 export interface WorkflowImportReport {
   rehosted: number
   unreachable: WorkflowMediaRef[]
   skipped: Array<WorkflowMediaRef & { reason: string }>
+  /**
+   * Bundled entity id (the EXPORTER's) → the row created under the importer,
+   * for every entity the import re-created. Present whenever the bundle
+   * carried `assets`. A client that holds chips outside the graph — a
+   * timeline, a copy-a-shared-production path that never posts to
+   * `/v1/workflows/import` — re-points them with this; the server has already
+   * re-pointed every `references[]` entry inside the nodes it stored.
+   */
+  assetIdMap?: Record<string, string>
+  /** Entities the import declined to create (storage quota). The workflow
+   *  still landed; chips bound to these arrive unresolvable. */
+  assetsSkipped?: WorkflowImportSkippedAsset[]
   /** Anything else the importer should know, e.g. copies were made but the
    *  workflow could not be updated to use them. */
   notes?: string[]

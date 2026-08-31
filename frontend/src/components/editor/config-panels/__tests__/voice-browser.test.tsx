@@ -116,6 +116,8 @@ function renderBrowser(onSelect = vi.fn()) {
 }
 
 async function openLibraryTab() {
+  // The library IS the default tab now — opening the dialog lands on it; the
+  // explicit click stays as a harmless no-op that also asserts the tab exists.
   fireEvent.click(screen.getByRole("button", { name: "Open voice picker" }))
   fireEvent.click(await screen.findByText("Voice Library"))
 }
@@ -199,11 +201,25 @@ describe("VoiceBrowser — Premade tab", () => {
   it("selection fires onSelect with the premade voice id and type", async () => {
     const onSelect = vi.fn()
     renderBrowser(onSelect)
-    // Premade is the default tab; open the dialog.
+    // The library is the default tab now — reach Premade by its tab.
     fireEvent.click(screen.getByRole("button", { name: "Open voice picker" }))
+    fireEvent.click(await screen.findByText("Premade"))
 
     fireEvent.click(await screen.findByText("Premade 2"))
 
     expect(onSelect).toHaveBeenCalledWith("pre-2", "Premade 2", "premade", undefined)
+  })
+})
+
+describe("VoiceBrowser — default tab", () => {
+  it("opens on the Voice Library with the filter row expanded", async () => {
+    renderBrowser()
+    fireEvent.click(screen.getByRole("button", { name: "Open voice picker" }))
+
+    // Library content renders WITHOUT any tab click — it is the default tab.
+    expect(await screen.findByText("Lib Voice 0")).toBeInTheDocument()
+    // The advanced filters are OPEN by default (their collapse used to read as
+    // "no language filter") — the toggle shows its expanded label.
+    expect(screen.getByText("Hide filters")).toBeInTheDocument()
   })
 })

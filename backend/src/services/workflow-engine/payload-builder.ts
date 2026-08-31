@@ -8,7 +8,7 @@ import { normalizeCollageLabels } from "../../providers/image/collage-badges.js"
 
 // Shared logic from packages/shared — single source of truth
 import { resolveSlideshowTransition, collectAncestorRefs as sharedCollectAncestorRefs, applyDefaultVideoSelection, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionableAssetArrays, buildCreditModelIdentifier, resolveImageGenCreditIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, resolveVideoModeForInputs, videoProviderRequiresImage, isVeoProvider, buildLipSyncCreditId, isPerSecondLipSyncProvider, resolveAiAvatarCreditId, resolveSwitchXCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, buildVideoAuditCreditId, resolveVideoAnalysisModel, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName, validateAiAvatarPayload, validateCinematicAvatarPayload, resolveNodeRefs, resolveEffectiveSourceType, PARAMETER_NODE_TYPES, characterMentionSlug, expandExtraRefsToConnectedReferences, PLATFORM_SPECS, isSeedance2Provider, isMinimaxH3Provider, supportsExtendRender, MODEL_CATALOG, hasFeature, referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality, COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS, buildLlmCreditIdentifier, motionGraphicsFeature, FLUX_LORA_CHARACTER_MODEL_ID, extractCharacterLoraFields, clampSmartCutWindow, resolveGvpAnchorWire, normalizeModelInput, readPromptAffixes, findImageMentionTokens, knownImageSlugsFromRefs } from "@nodaro/shared"
-import { composeNegative, resolveTemplate, applyTemplate, computeNodePrompt, assembleImageInput, readDirectionFields, readStructuredFields, buildImagePrompt, buildScenePrompt, collectIdentityLockClause as sharedCollectIdentityLockClause, getParameterPromptHint, characterLockToRefLock, buildCharacterPrompt, buildObjectPrompt, buildCreaturePrompt, buildLocationPrompt, buildFaceTemplateInputs, appendMusicMeta, composeSoundHintFromConnections, truncateForField, appendField, assembleSunoInput, type SoundConsumerType, type SoundComposition, resolveVideoReferenceCore, applyPromptAffixes } from "@nodaro/prompts"
+import { composeNegative, resolveTemplate, applyTemplate, computeNodePrompt, assembleImageInput, readDirectionFields, readStructuredFields, buildImagePrompt, buildScenePrompt, collectIdentityLockClause as sharedCollectIdentityLockClause, getParameterPromptHint, characterLockToRefLock, buildCharacterPrompt, buildObjectPrompt, buildCreaturePrompt, buildLocationPrompt, buildFaceTemplateInputs, appendMusicMeta, composeSoundHintFromConnections, truncateForField, appendField, assembleSunoInput, type SoundConsumerType, type SoundComposition, resolveVideoReferenceCore, applyPromptAffixes, composeVideoPromptText, type DirectionFields, type StructuredPromptFields } from "@nodaro/prompts"
 import type { CharacterDef, ConnectedReference, SceneData, ExtraRefInput, ExtraRefCharacterContext } from "@nodaro/shared"
 import type { CharacterMeta } from "@nodaro/prompts"
 import { resolveEntityImageCreditIdentifier } from "../../lib/entity-credit-identifier.js"
@@ -1663,6 +1663,30 @@ function withImagePromptPolicy<T extends { prompt: string; nativeNegativePrompt?
 }
 
 /**
+ * Narrow-read a video node's STORED cinematic-direction / structured ids into
+ * the two `composeVideoPrompt` levers, as a SPREADABLE object (P4b).
+ *
+ * ONE helper rather than a pair of `readX(data.y)` calls per case: the
+ * generate-video family has FOUR fold sites in this file (image-to-video,
+ * text-to-video, generate-video, and generate-video's LTX early return), and a
+ * site that read only one of the two levers would silently fold half of a
+ * node's stored look. `data` is untrusted persisted JSONB — the readers drop
+ * junk rather than throwing, and return `undefined` (never `{}`) so the spreads
+ * below omit the key entirely for a node that carries neither.
+ */
+function readNodeDirectionLevers(data: WorkflowNodeData): {
+  direction?: DirectionFields
+  structured?: StructuredPromptFields
+} {
+  const direction = readDirectionFields(data.direction)
+  const structured = readStructuredFields(data.structured)
+  return {
+    ...(direction !== undefined ? { direction } : {}),
+    ...(structured !== undefined ? { structured } : {}),
+  }
+}
+
+/**
  * Compose a video-generation prompt: merge user prompt + cinematography hints
  * + identity-lock clause. Used by both the legacy image-to-video / text-to-video
  * cases AND the new generate-video case so all three emit identical text.
@@ -1675,12 +1699,25 @@ function withImagePromptPolicy<T extends { prompt: string; nativeNegativePrompt?
  *
  * Caller is responsible for any provider-specific motion/data fallback chains
  * (e.g. i2v's `data.motionPrompt` initial fallback) — pass them as `rawPrompt`.
+ *
+ * `direction` / `structured` are the node's STORED cinematic ids (P4b — the
+ * video twin of the image side's node-data direction). They are OPT-IN per
+ * caller, not read here: only the generate-video family (`generate-video` and
+ * its two legacy modes) passes them, so `generate-video-pro` — the ONLY other
+ * case that funnels through this helper — keeps its exact text. The video cases
+ * that compose their prompt inline instead (v2v, s2v…) never reach this helper
+ * at all, so they are untouched by construction. The frontend, which has no
+ * equivalent single funnel, mirrors that set branch-for-branch.
+ * Passing neither is an exact no-op (`composeVideoPromptText` hands the body
+ * back verbatim, `undefined` included).
  */
 function composeVideoPrompt(args: {
   rawPrompt: string | undefined
   nodeId: string
   buildCtx: PayloadBuildContext | undefined
   motionHint?: string | undefined
+  direction?: DirectionFields | undefined
+  structured?: StructuredPromptFields | undefined
 }): string | undefined {
   let p = args.rawPrompt
   const hints: string[] = []
@@ -1695,8 +1732,15 @@ function composeVideoPrompt(args: {
   }
   const identityClause = collectIdentityLockClause(args.nodeId, args.buildCtx)
   if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
+  // Stored cinematic-direction / structured ids fold LAST — on the fully
+  // graph-composed body, AFTER the wired picker hints and the identity clause
+  // and BEFORE the prompt policy. That is exactly where the image side folds
+  // them (`assembleImageInput` runs on the graph-composed `rawPrompt`, inside
+  // `withImagePromptPolicy`), and it is before `resolveVideoPromptMentions`
+  // frames the body with identity directives — see `assemble-video-input.ts`.
+  p = composeVideoPromptText(p, args.direction, args.structured)
   // B4b: apply any registered PromptPolicy at the single orchestrator video
-  // funnel (i2v/t2v/v2v/gvp all pass through here). An absent prompt stays
+  // funnel (i2v/t2v/generate-video/gvp all pass through here). An absent prompt stays
   // undefined — no policy on nothing. No policy registered = identity.
   if (p === undefined) return p
   return applyPromptPolicies({ prompt: p, negativePrompt: "", kind: "video" }).prompt
@@ -2677,6 +2721,11 @@ export function buildPayload(
         nodeId: node.id,
         buildCtx,
         motionHint: data.motionEnabled && data.motion ? `${data.motion} motion` : undefined,
+        // Node-data cinematic direction / structured ids (P4b). Narrow-read:
+        // `data` is untrusted persisted JSON. A generate-video node re-typed to
+        // i2v by the FE lands in THIS case's frontend twin, so the legacy
+        // standalone node must honor the same stored ids or the two diverge.
+        ...readNodeDirectionLevers(data),
       })
       // Resolve `{image:N}` body tokens for ref-capable providers (FE↔BE parity
       // with execute-node.ts / video-prompt-assembly.ts). Pass the per-handle
@@ -2829,7 +2878,8 @@ export function buildPayload(
       // t2v has no `imageUrl` slot — all resolved URLs become entries in
       // `referenceImageUrls`, merged with whatever upstream already provided.
       const t2vRawPrompt = promptFor("text-to-video")
-      let t2vPrompt = composeVideoPrompt({ rawPrompt: t2vRawPrompt, nodeId: node.id, buildCtx })
+      // Node-data cinematic direction / structured ids (P4b) — see the i2v case.
+      let t2vPrompt = composeVideoPrompt({ rawPrompt: t2vRawPrompt, nodeId: node.id, buildCtx, ...readNodeDirectionLevers(data) })
       // `{image:N}` token resolution — see i2v note. Same gate + edge counts.
       const t2vSupportsRefs = !!provider && hasFeature(provider, "reference-image")
       // Plain image-refs LEAD the unified @image_N numbering (D5) — computed BEFORE
@@ -2917,6 +2967,14 @@ export function buildPayload(
       // disagreed with the single-node default ("kling" vs "minimax").
       const gvSel = applyDefaultVideoSelection({ provider: data.provider as string | undefined, duration: data.duration as number | string | undefined })
       const provider = gvSel.provider
+      // Node-data cinematic direction / structured ids (P4b): the node carries
+      // picker IDS, not baked hint text — the fold happens once, server-side,
+      // at the model call. Hoisted above the LTX early return so BOTH exits of
+      // this case honor the same stored look. Narrow-read (untrusted persisted
+      // JSON). NOT gated by any injectLook switch — that governs WIRED handles
+      // (`collectCinematographyHints`); stored direction is node-local look
+      // data and folds regardless, additively, exactly like the image side.
+      const gvDirectionLevers = readNodeDirectionLevers(data)
       const isS2 = isSeedance2Provider(provider)
       const isH3 = isMinimaxH3Provider(provider)
 
@@ -2962,7 +3020,15 @@ export function buildPayload(
             jobId,
             provider,
             task,
-            prompt: promptFor("generate-video", true),
+            // The LTX exit composes NO graph hints (no wired-picker fold, no
+            // identity clause) — deliberately minimal, unchanged here. The
+            // node's OWN stored ids still fold, so an LTX generate-video node
+            // keeps the look the frontend single-node run already sends.
+            prompt: composeVideoPromptText(
+              promptFor("generate-video", true),
+              gvDirectionLevers.direction,
+              gvDirectionLevers.structured,
+            ),
             ...(task === "image_to_video" && {
               image: resolvedInputs.startFrameUrl,
               ...(hasEnd && { last_frame_image: resolvedInputs.endFrameUrl }),
@@ -3027,7 +3093,7 @@ export function buildPayload(
       const motionHint = data.motionEnabled && typeof data.motion === "string" && data.motion
         ? `${data.motion} motion`
         : undefined
-      let composedPrompt = composeVideoPrompt({ rawPrompt, motionHint, nodeId: node.id, buildCtx })
+      let composedPrompt = composeVideoPrompt({ rawPrompt, motionHint, nodeId: node.id, buildCtx, ...gvDirectionLevers })
 
       // Mention resolution + ref-image merging (mirrors i2v case). Extras /
       // suppressed-canonicals stay opt-in via the same node-data fields.

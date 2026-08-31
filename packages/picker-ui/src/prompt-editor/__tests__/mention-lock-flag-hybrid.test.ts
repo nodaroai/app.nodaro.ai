@@ -23,8 +23,8 @@ import {
 } from "../character-ref-extension"
 import { collectTokens, type KnownSlugSets } from "../index"
 
-function known(opts: { chars?: string[]; locs?: string[] } = {}): KnownSlugSets {
-  return { characters: new Set(opts.chars ?? []), locations: new Set(opts.locs ?? []), snippets: [] }
+function known(opts: { chars?: string[]; locs?: string[]; imgs?: string[] } = {}): KnownSlugSets {
+  return { characters: new Set(opts.chars ?? []), locations: new Set(opts.locs ?? []), images: new Set(opts.imgs ?? []), snippets: [] }
 }
 
 // renderText is defined on the Node.create config; call it with a fake node.

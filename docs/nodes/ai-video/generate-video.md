@@ -234,6 +234,36 @@ prompt continues an existing clip, where re-stating the look is the wrong lever.
 
 Full semantics: [API integration guide](../../api-integration.md#cinematic-direction-on-the-video-routes).
 
+### The same ids stored on the node
+
+A Generate Video **node** can carry that same `direction` object (and the
+structured prompt fields `structured`) in its own data, written by an API / MCP
+author or by an app that emits Nodaro graphs. The canvas honors them: a
+single-node run, a whole-workflow run and the config panel's final-prompt
+preview all fold them the same way, once, at the model call — so the graph
+stores ids and the wording is produced fresh each run instead of being frozen
+into the prompt text. The same applies to the legacy standalone Image to Video
+and Text to Video nodes.
+
+**`structured` is node data only.** `direction` is literally the wire field
+documented above — the same object, the same ids. `structured` is not: neither
+`POST /v1/generate-video` nor `POST /v1/text-to-video` declares it, so a
+`structured` key sent to either is dropped by request validation without a 400
+and without reaching the prompt. Only `POST /v1/generate-image` accepts
+`structured` on the wire. On a video **node** it folds as described here; over
+the video wire, put the same content in `prompt`.
+
+The **video** verbosity policy applies exactly as it does on the wire: motion
+dimensions render their compact term, look dimensions their full clause.
+
+Stored ids are **additive** to any wired parameter-picker node: the wired hint
+lands first, the stored ids after, exactly as two wired pickers of one family
+behave. They fold into the prompt body **before** reference assembly, so a bound
+character's identity directives still wrap the whole description. A node that
+carries neither key is untouched — its prompt reaches the model byte-for-byte as
+before. Node presets and workflow export/import capture the ids along with the
+rest of the node, which is deliberate: a preset should carry its look.
+
 ## Credit pricing
 
 Pricing is computed at credit-reservation time via `buildVideoCreditModelIdentifier(provider, duration, sound, mode, videoSize, resolution, hasVideoRef)` in `@nodaro/shared/credit-identifiers`. The `mode` argument is the dispatched mode (`"image-to-video"` or `"text-to-video"`), so T2V and I2V prices can differ per provider (via `T2V_CREDIT_OVERRIDES`).
