@@ -15,6 +15,7 @@ import { TEXT_TO_VIDEO_PROVIDERS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, 
 import { composeVideoPromptText } from "@nodaro/prompts"
 import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
 import { directionSchema } from "../lib/direction-schema.js"
+import { subjectSchema } from "../lib/subject-schema.js"
 import { assembleVideoConnectedReferences } from "./generate-video.js"
 import { formatZodError } from "../lib/zod-error.js"
 
@@ -49,6 +50,10 @@ export const textToVideoBody = z.object({
   // /v1/generate-video, same shared schema). Rendered server-side with the
   // platform's verbosity policy; absent → byte-identical to the flat path.
   direction: directionSchema.optional(),
+  // Structured SUBJECT ids (parity with /v1/generate-image and
+  // /v1/generate-video, same shared schema). Folded ahead of the direction
+  // clauses; absent → byte-identical to the flat path.
+  subject: subjectSchema.optional(),
   webSearch: z.boolean().optional(),
   nsfwChecker: z.boolean().optional(),
   // VEO 3.x: opt out of KIE's auto-translate-to-English (default true
@@ -184,11 +189,11 @@ export async function textToVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    // Cinematic direction fold — catalog IDS → prompt text, server-side. Same
-    // shape and same fold SITE as generate-video: before the reference
-    // assembly below, because the resolver frames the body. No `direction` →
-    // `composeVideoPromptText` returns `prompt` verbatim, so the flat path is
-    // byte-identical. (`prompt` is required on this route, so the composer's
+    // Subject + cinematic direction fold — catalog IDS → prompt text,
+    // server-side. Same shape and same fold SITE as generate-video: before the
+    // reference assembly below, because the resolver frames the body. Neither
+    // channel → `composeVideoPromptText` returns `prompt` verbatim, so the flat
+    // path is byte-identical. (`prompt` is required on this route, so the composer's
     // absent-prompt branch is dead here — the identical shape is deliberate so
     // the two routes read the same.)
     // The clamp's EFFECTIVE ceiling, not the raw cap: a non-native negative
@@ -215,11 +220,14 @@ export async function textToVideoRoutes(app: FastifyInstance) {
         }).prompt
         : body
 
-    if (parsed.data.direction) {
+    if (parsed.data.direction || parsed.data.subject) {
       // TRUNCATION ORDERING: hint clauses shed last-folded-first rather than the
       // order-blind clamp cutting whatever happens to be last. Under-cap runs
-      // are byte-identical to the capless fold.
+      // are byte-identical to the capless fold. Both catalog channels ride the
+      // one sheddable list (subject ahead of direction, so direction leaves
+      // first), which is why a subject-only fold needs no second budget.
       const composed = composeVideoPromptText(prompt, parsed.data.direction, undefined, {
+        ...(parsed.data.subject !== undefined ? { subject: parsed.data.subject } : {}),
         cap: promptCeiling,
         frame: frameWithReferences,
       })
@@ -255,8 +263,9 @@ export async function textToVideoRoutes(app: FastifyInstance) {
     // Truncation warning on the ASSEMBLED prompt — the string the shed budgeted
     // for and the one the clamp will cut. Reaching here means the overflow was
     // UNSHEDABLE (prose or bindings alone clear the ceiling). Mirrors
-    // generate-video, including the `direction` gate.
-    if (parsed.data.direction && prompt.length > promptCeiling) {
+    // generate-video, including the fold gate — EITHER catalog channel, since a
+    // subject-only fold renders text the platform is equally responsible for.
+    if ((parsed.data.direction || parsed.data.subject) && prompt.length > promptCeiling) {
       req.log.warn(
         { provider, promptLength: prompt.length, promptCeiling },
         "[text-to-video] assembled prompt exceeds the provider ceiling after shedding every hint; the tail will be clamped",

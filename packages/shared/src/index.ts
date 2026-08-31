@@ -637,6 +637,8 @@ export {
   ANIMAL_SUBCATEGORY_ORDER,
   getAnimal,
   getAnimalLabel,
+  getAnimalPromptHint,
+  getAnimalTerm,
 } from "./animals.js"
 export type { Animal, AnimalSubcategory } from "./animals.js"
 

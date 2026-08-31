@@ -19,6 +19,7 @@ import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, PR
 import { resolveVideoReferenceCore, resolveReferenceTokens, resolveRefIdTokens, composeVideoPromptText, type VideoExtraRef, type CharacterMeta } from "@nodaro/prompts"
 import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
 import { directionSchema } from "../lib/direction-schema.js"
+import { subjectSchema } from "../lib/subject-schema.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { backendHybridRoles } from "../lib/reference-format.js"
 
@@ -87,6 +88,13 @@ export const generateVideoBody = z.object({
   // dimension is accepted here and simply contributes no video hint (filtering
   // is a render concern), and unknown keys/ids are stripped/skipped, never 400.
   direction: directionSchema.optional(),
+  // Structured SUBJECT: the same doctrine one channel over — catalog IDS for
+  // WHO is in the shot (Person / Styling / props) instead of the client baking
+  // their wording. Folded ahead of the direction clauses by the same composer,
+  // at the platform's video verbosity policy (compact terms: the start frame
+  // already carries the subject's identity into the clip). Absent → the flat
+  // path is byte-identical.
+  subject: subjectSchema.optional(),
   webSearch: z.boolean().optional(),
   nsfwChecker: z.boolean().optional(),
   generationType: z.enum(["TEXT_2_VIDEO", "FIRST_AND_LAST_FRAMES_2_VIDEO", "REFERENCE_2_VIDEO"]).optional(),
@@ -580,7 +588,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     // scene/look description past the identity directives — a worse version of
     // the bug this channel exists to fix.
     //
-    // No `direction` → `composeVideoPromptText` returns `prompt` verbatim
+    // No `subject`/`direction` → `composeVideoPromptText` returns `prompt` verbatim
     // (`undefined` included), so the flat path stays byte-identical (the
     // "backward-compatible: no connectedReferences → prompt + flat refs pass
     // through unchanged" oracle in generate-video.test.ts).
@@ -618,12 +626,15 @@ export async function generateVideoRoutes(app: FastifyInstance) {
         }).prompt
         : body
 
-    if (parsed.data.direction) {
+    if (parsed.data.direction || parsed.data.subject) {
       // TRUNCATION ORDERING: pass the ceiling + the framing so the composer
       // sheds its own hint clauses (last-folded first) instead of letting the
       // order-blind clamp sever a reference binding or the end of the prose.
       // A prompt that already fits is byte-identical to the capless fold.
+      // Both catalog channels ride the one sheddable list, subject ahead of
+      // direction, so a subject-only fold is budgeted the same way.
       const composed = composeVideoPromptText(prompt, parsed.data.direction, undefined, {
+        ...(parsed.data.subject !== undefined ? { subject: parsed.data.subject } : {}),
         cap: promptCeiling,
         frame: frameWithReferences,
       })
@@ -632,7 +643,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
         // `buildJobInputData` only mirrors prompt→userPrompt when userPrompt is
         // unset, and it runs AFTER we overwrite parsed.data.prompt — so pin the
         // original submission here. The `?? ""` branch is load-bearing: a
-        // direction-only run has no `prompt`, and without it the fold's OUTPUT
+        // direction- or subject-only run has no `prompt`, and without it the fold's OUTPUT
         // would be recorded as the user's own words. (A FULL shed folds nothing
         // and leaves `composed === prompt`, so it correctly pins nothing.)
         parsed.data.userPrompt ??= rawPrompt ?? ""
@@ -698,9 +709,11 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     // over-fired on runs the clamp never touched and missed every byte the
     // resolver added.) Reaching here means the overflow was UNSHEDABLE: prose or
     // bindings alone clear the ceiling, so the order-blind clamp is the last
-    // resort. Still gated on `direction` — the platform only owns the length on
-    // the runs where it rendered the text.
-    if (parsed.data.direction && prompt && prompt.length > promptCeiling) {
+    // resort. Still gated on the fold — the platform only owns the length on the
+    // runs where it rendered the text — but that gate is now EITHER catalog
+    // channel: a subject-only fold renders text the same way, so leaving it out
+    // would make exactly those overflows clamp silently.
+    if ((parsed.data.direction || parsed.data.subject) && prompt && prompt.length > promptCeiling) {
       req.log.warn(
         { provider, promptLength: prompt.length, promptCeiling },
         "[generate-video] assembled prompt exceeds the provider ceiling after shedding every hint; the tail will be clamped",

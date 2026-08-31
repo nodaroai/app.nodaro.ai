@@ -95,7 +95,7 @@ import { applyWebScrapeFailure, applyWebScrapeResult, webScrapeRunStartPatch } f
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
 import {
   readPromptAffixes, resolveSlideshowTransition, ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, supportsExtendRender, isMinimaxH3Provider, isVeoProvider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS, resolveVideoProviderForMode, resolveVideoModeForInputs, VIDEO_REF_LIMITS_BY_PROVIDER, resolveEffectiveSourceType, sourceRefKey, hasFeature, countRefModalityEdges, type ReferenceModality, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionSlug, characterMentionableAssetArrays, selectLoraRoutingForMentions, expandExtraRefsToConnectedReferences, resolveSeparator, evaluateJsonPath, stringifyPathResults, spreadJsonArrayIfSingleton, zipMergeLists, evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, tryParseJson, evaluateCondition, evaluateConditionGroup, resolveConditionValue, sortListItems, runSelector, resolveSelectorRefs, buildConditionVariables, VARIABLES_HANDLE_ID, clampSmartCutWindow, resolveGvpAnchorWire } from "@nodaro/shared"
-import { applyPromptAffixes, composeNegative, computeNodePrompt, computeLlmChatFields, pickerFanoutTargets, buildImagePrompt, assembleImageInput, composeVideoPromptText, readDirectionFields, readStructuredFields, collectIdentityLockClause, characterLockToRefLock, assembleSunoInput, type AssembleSunoResult } from "@nodaro/prompts"
+import { applyPromptAffixes, composeNegative, computeNodePrompt, computeLlmChatFields, pickerFanoutTargets, buildImagePrompt, assembleImageInput, composeVideoPromptText, readDirectionFields, readStructuredFields, readSubjectFields, collectIdentityLockClause, characterLockToRefLock, assembleSunoInput, type AssembleSunoResult } from "@nodaro/prompts"
 import type { CharacterDef, ConnectedReference, ReferenceSource, ExtraRefCharacterContext } from "@nodaro/shared"
 import { ANALYZABLE_PICKER_HINT } from "@/lib/picker-labels";
 import { getGenerateTextTemplate } from "@/lib/generate-text-templates";
@@ -1274,13 +1274,15 @@ export function executeNode(
       if (characterId) internalLora = { characterId };
     }
 
-    // Node-data cinematic direction / structured fields (spec D3): the node
+    // Node-data subject / cinematic direction / structured fields (spec D3,
+    // P6): the node
     // carries picker IDS, not baked hint text — the fold happens once, inside
     // `assembleImageInput`. Narrow-read: `node.data` is untrusted persisted
     // JSON. NOT gated by `injectLook` — that switch documents WIRED HANDLES
     // (`collectCinematographyHints`); stored direction is node-local look data,
     // like `imgData.style`, and folds regardless.
     const nodeDirection = readDirectionFields(imgData.direction);
+    const nodeSubject = readSubjectFields(imgData.subject);
     const nodeStructured = readStructuredFields(imgData.structured);
 
     // Shared node-input assembly (WI-1a) — single source of truth with the
@@ -1295,6 +1297,7 @@ export function executeNode(
       provider: providerKey,
       referenceFormat: IMAGE_REFERENCE_FORMAT,
       ...(nodeDirection !== undefined ? { direction: nodeDirection } : {}),
+      ...(nodeSubject !== undefined ? { subject: nodeSubject } : {}),
       ...(nodeStructured !== undefined ? { structured: nodeStructured } : {}),
       style: hasConnectedStyleNode(node.id, nodes, edges) ? undefined : imgData.style,
       // Negative: typed (with {label} resolved) + wired connected-negative are
@@ -2364,10 +2367,12 @@ export function executeNode(
     // returns `prompt` verbatim, `undefined` included. A generate-video node
     // re-typed to i2v lands HERE, which is why the fold sits in this branch
     // rather than in the generate-video re-type above.
+    const i2vSubject = readSubjectFields(i2vData.subject);
     prompt = composeVideoPromptText(
       prompt,
       readDirectionFields(i2vData.direction),
       readStructuredFields(i2vData.structured),
+      { ...(i2vSubject !== undefined ? { subject: i2vSubject } : {}) },
     );
     // Resolve @-mentions in the i2v prompt. Mirrors the backend
     // `resolveVideoPromptMentions` in `payload-builder.ts` so single-node
@@ -2675,12 +2680,14 @@ export function executeNode(
       const identityClause = collectIdentityLockClause(node.id, nodes, edges);
       if (identityClause) prompt = prompt ? `${prompt} ${identityClause}` : identityClause;
     }
-    // Node-data cinematic direction / structured fields (P4b) — see the i2v
-    // branch. A generate-video node re-typed to t2v lands here.
+    // Node-data subject / cinematic direction / structured fields (P4b, P6) —
+    // see the i2v branch. A generate-video node re-typed to t2v lands here.
+    const t2vSubject = readSubjectFields(t2vData.subject);
     prompt = composeVideoPromptText(
       prompt,
       readDirectionFields(t2vData.direction),
       readStructuredFields(t2vData.structured),
+      { ...(t2vSubject !== undefined ? { subject: t2vSubject } : {}) },
     );
     // Resolve @-mentions in the t2v prompt. Mirrors the backend
     // `resolveVideoPromptMentions` in `payload-builder.ts`. t2v has no

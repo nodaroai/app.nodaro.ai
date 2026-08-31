@@ -21,16 +21,22 @@
  * rather than a provider id: the shed must run at the FOLD site (before the
  * resolver) but be decided on the RESOLVED length (after it), so the binding
  * text the resolver adds is inside the budget and can never be the thing that
- * gets dropped. See {@link VideoPromptCapOptions}.
+ * gets dropped. See {@link VideoPromptCapOptions}. Both catalog channels —
+ * SUBJECT and direction — fold into the one sheddable list that budget walks.
  *
  * THE VERBOSITY POLICY LIVES HERE, NOT IN THE CLIENT: motion dimensions render
  * their compact professional term, look dimensions their full clause
- * (`VIDEO_HINT_MODE_DEFAULT`, resolved per row's `family` by the registry).
+ * (`VIDEO_HINT_MODE_DEFAULT`, resolved per row's `family` by the registry). The
+ * SUBJECT fold has its own policy — compact on video
+ * (`SUBJECT_VIDEO_HINT_MODE_DEFAULT`), because a fully specified person at full
+ * verbosity is ~30 paragraph clauses and the start frame already carries the
+ * subject's identity into the clip.
  * It is a threaded PARAMETER with a pure default — never deployment state:
  * `__tests__/content-free-contract.test.ts` hard-fails any environment read
  * under `packages/prompts/src`, and this module has nothing to read anyway.
  *
- * EXACT NO-OP CONTRACT: with no direction and no structured fields the caller's
+ * EXACT NO-OP CONTRACT: with no subject, no direction and no structured fields
+ * the caller's
  * `userPrompt` comes back VERBATIM AND UNTRIMMED — `undefined` included, since
  * a video prompt is optional on the route. That is what keeps every existing
  * caller byte-identical (the "backward-compatible: no connectedReferences →
@@ -39,8 +45,9 @@
  * `__tests__/assemble-video-input.test.ts`).
  *
  * WHAT IS DELIBERATELY NOT HERE: the dimension table, the fold order, the
- * dedupe and the surface filter all live in `direction-registry.ts` — ONE
- * renderer serves both surfaces, so the image and video folds cannot drift.
+ * dedupe and the surface filter all live in `direction-registry.ts` (and
+ * `subject-registry.ts` for the subject channel) — ONE renderer per channel
+ * serves both surfaces, so the image and video folds cannot drift.
  * Clients render their "will inject into prompt" preview by importing
  * `renderDirectionHints` + `joinPromptHints` directly.
  */
@@ -50,6 +57,12 @@ import {
   type DirectionFields,
   type DirectionHintMode,
 } from "./direction-registry.js"
+import {
+  renderSubjectHints,
+  SUBJECT_VIDEO_HINT_MODE_DEFAULT,
+  type SubjectFields,
+  type SubjectHintMode,
+} from "./subject-registry.js"
 import { joinPromptHints } from "./prompt-hint-join.js"
 import { keepableDirectionHints } from "./hint-shedding.js"
 import {
@@ -105,12 +118,18 @@ export interface VideoPromptCapOptions {
 }
 
 /**
- * Fold a video run's cinematic-direction ids (and optional structured fields)
- * into its prompt body.
+ * Fold a video run's subject and cinematic-direction ids (and optional
+ * structured fields) into its prompt body.
  *
- * The direction hints land first, in the registry's canonical table order
- * (camera motion leads), and the structured fragment lands LAST — the same
- * ordering `composePromptText` uses for stills.
+ * The SUBJECT hints land first (who is in the shot — the noun phrase the
+ * cinematography modifies), then the direction hints in the registry's
+ * canonical table order (camera motion leads), and the structured fragment
+ * lands LAST — the same ordering `composePromptText` uses for stills.
+ *
+ * `subject` rides `opts` rather than a fourth positional parameter on purpose:
+ * every existing caller passes `(prompt, direction)` or
+ * `(prompt, direction, structured)` positionally, and a new positional would
+ * have made the two levers' order a memorization test.
  *
  * TRUNCATION ORDERING (opt-in via `opts.cap`): the provider clamp
  * (`applyVideoNegativePrompt`) slices the prompt TAIL, which is ORDER-BLIND —
@@ -122,6 +141,16 @@ export interface VideoPromptCapOptions {
  * the user's prose, the structured fragment (user CONTENT, never a garnish) and
  * every byte the resolver's framing adds — outranks a hint.
  *
+ * SUBJECT CLAUSES ARE SHED CANDIDATES TOO, and they shed AFTER the direction
+ * clauses. Both folds are catalog decoration of the same class — ids the
+ * platform rendered into wording — so exempting one would just move the
+ * overflow into the order-blind clamp, which is the bug this machinery exists
+ * to prevent. They ride the SAME `hintClauses` list the shed already walks
+ * (subject first, direction second, tail-first shedding), so there is exactly
+ * one shed arithmetic (`hint-shedding.ts`) across both channels and both
+ * surfaces. Neither channel ever sheds before the prose, the references or the
+ * structured fragment.
+ *
  * WHAT THE BUDGET DELIBERATELY EXCLUDES: the route's later opt-in identity
  * injection (an async DB read that appends a canonical description) and any
  * registered `applyPromptPolicies` transform both run AFTER the reference
@@ -131,8 +160,9 @@ export interface VideoPromptCapOptions {
  * hints left — long prose, or many bound references on their own.
  *
  * UNDER-CAP PARITY: the first pass folds every hint, so a prompt that fits is
- * byte-identical to a capless call, and a caller with no `direction`/`structured`
- * takes the same exact no-op path it always did.
+ * byte-identical to a capless call, and a caller with no
+ * `subject`/`direction`/`structured` takes the same exact no-op path it always
+ * did.
  *
  * @param userPrompt The user's prompt. Optional: an image-to-video run may
  *   legitimately have none, and it is returned as-is when nothing folds.
@@ -141,25 +171,45 @@ export interface VideoPromptCapOptions {
  *   nothing — never a throw.
  * @param structured Path-1 structured fields. Not a `/v1/generate-video` wire
  *   field today; the canvas orchestrator passes it directly.
- * @param opts.hintMode Override the verbosity policy (a whole-fold
+ * @param opts.hintMode Override the direction verbosity policy (a whole-fold
  *   `PickerHintMode`, or a `{ look, motion }` split).
+ * @param opts.subject Flat subject ids (Person / Styling / props), same
+ *   inertness contract as `direction`.
+ * @param opts.subjectHintMode Override the subject verbosity policy.
  * @param opts.cap / `opts.frame` See {@link VideoPromptCapOptions}.
  */
 export function composeVideoPromptText(
   userPrompt: string | undefined,
   direction: DirectionFields | undefined,
   structured?: StructuredPromptFields,
-  opts?: { readonly hintMode?: DirectionHintMode } & VideoPromptCapOptions,
+  opts?: {
+    readonly hintMode?: DirectionHintMode
+    readonly subject?: SubjectFields
+    readonly subjectHintMode?: SubjectHintMode
+  } & VideoPromptCapOptions,
 ): string | undefined {
-  const directionHints = renderDirectionHints(direction, {
-    surface: "video",
-    mode: opts?.hintMode ?? VIDEO_HINT_MODE_DEFAULT,
-  }).filter((p) => p.length > 0)
+  // ONE sheddable list, subject FIRST then direction — because the shed walks it
+  // from the TAIL, so this order IS the survival order: a direction clause
+  // leaves before a subject clause. Deliberate, and the same order the image
+  // side uses (`renderImageHintPieces`): the subject is the noun phrase the
+  // cinematography modifies, so losing "who is in the shot" to keep a
+  // decorative grade would be the wrong trade. With no `subject` the list IS
+  // the direction fold, so every pre-subject caller is byte-identical.
+  const hintClauses = [
+    ...renderSubjectHints(opts?.subject, {
+      surface: "video",
+      mode: opts?.subjectHintMode ?? SUBJECT_VIDEO_HINT_MODE_DEFAULT,
+    }),
+    ...renderDirectionHints(direction, {
+      surface: "video",
+      mode: opts?.hintMode ?? VIDEO_HINT_MODE_DEFAULT,
+    }),
+  ].filter((p) => p.length > 0)
   // User CONTENT, not a garnish: never sheddable, always last.
   const structuredFragment = structured ? renderStructuredFields(structured) : ""
 
   const composeWith = (kept: number): string | undefined => {
-    const hints = [...directionHints.slice(0, kept), structuredFragment].filter(
+    const hints = [...hintClauses.slice(0, kept), structuredFragment].filter(
       (p) => p.length > 0,
     )
     // Nothing to fold → the caller's value straight back, `undefined` included.
@@ -173,19 +223,20 @@ export function composeVideoPromptText(
   }
 
   const cap = opts?.cap
-  if (cap === undefined) return composeWith(directionHints.length)
+  if (cap === undefined) return composeWith(hintClauses.length)
 
   // Fold everything first (the under-cap byte-parity pass), then shed from the
   // tail of the fold order while the FRAMED prompt overflows the ceiling.
-  // `keepableDirectionHints` strictly decreases `kept` whenever there is a
-  // deficit, so this terminates at `kept === 0` in the worst case — at which
-  // point nothing droppable is left and the provider clamp stands.
+  // `keepableDirectionHints` — the ONE shed arithmetic, shared with the image
+  // assembler — strictly decreases `kept` whenever there is a deficit, so this
+  // terminates at `kept === 0` in the worst case, at which point nothing
+  // droppable is left and the provider clamp stands.
   const frame = opts?.frame ?? ((body: string | undefined) => body)
-  let kept = directionHints.length
+  let kept = hintClauses.length
   let body = composeWith(kept)
   let framedLength = frame(body)?.length ?? 0
   while (framedLength > cap && kept > 0) {
-    kept = keepableDirectionHints(directionHints, kept, framedLength - cap)
+    kept = keepableDirectionHints(hintClauses, kept, framedLength - cap)
     body = composeWith(kept)
     framedLength = frame(body)?.length ?? 0
   }

@@ -2,7 +2,9 @@ import { describe, it, expect } from "vitest"
 import { composeVideoPromptText } from "../assemble-video-input.js"
 import { resolveVideoReferenceCore } from "../video-reference-resolver.js"
 import { renderDirectionHints, VIDEO_HINT_MODE_DEFAULT } from "../direction-registry.js"
+import { renderSubjectHints, SUBJECT_VIDEO_HINT_MODE_DEFAULT } from "../subject-registry.js"
 import { renderStructuredFields } from "../prompt-builder-structured-fields.js"
+import { joinPromptHints } from "../prompt-hint-join.js"
 import { getMaxVideoPromptChars } from "@nodaro/shared"
 import type { ConnectedReference } from "@nodaro/shared"
 
@@ -208,5 +210,147 @@ describe("composeVideoPromptText — under-cap byte parity", () => {
     expect(composeVideoPromptText(PROSE, DIRECTION, undefined, { frame })).toBe(
       composeVideoPromptText(PROSE, DIRECTION),
     )
+  })
+})
+
+/**
+ * THE SUBJECT CHANNEL UNDER THE SAME CAP. The decision this pins: subject
+ * clauses ARE shed candidates, exactly like direction clauses — both are
+ * catalog decoration the platform rendered from ids — and they shed AFTER the
+ * direction fold, because both channels ride ONE list (`[...subject,
+ * ...direction]`) that the shared `hint-shedding.ts` arithmetic walks TAIL
+ * FIRST. Exempting the subject fold would not save it: a fully specified person
+ * is the largest single fold on the surface, so the overflow would simply land
+ * in the provider's order-blind clamp and sever a binding or the prose instead.
+ *
+ * The image twin of this ordering is pinned in `subject-fold.test.ts`; what is
+ * new HERE is the composition the video surface only gained once the cap and
+ * the subject channel met — including the SUBJECT-ONLY fold, which neither
+ * channel's own suite exercises under a cap.
+ *
+ * Caps are derived from the framed body rather than hardcoded, so the cases
+ * keep testing the claim when catalog wording changes.
+ */
+describe("composeVideoPromptText — the subject fold under the cap", () => {
+  const SUBJECT = {
+    type: "woman",
+    ethnicity: "east-asian",
+    hairBase: "base-short-straight",
+    makeup: "makeup-smoky",
+    animal: "dog-corgi",
+  } as const
+
+  const SUBJECT_HINTS = renderSubjectHints(SUBJECT, {
+    surface: "video",
+    mode: SUBJECT_VIDEO_HINT_MODE_DEFAULT,
+  })
+
+  /**
+   * Framed length of the body that folds exactly the first `n` subject clauses
+   * and no direction at all — i.e. the tightest budget under which the shed
+   * should settle on `n` kept clauses. Built the same way the composer builds
+   * it, so the derived caps track catalog wording instead of pinning it.
+   */
+  const framedWithSubjectClauses = (n: number): number =>
+    frame(n === 0 ? PROSE : joinPromptHints(PROSE, SUBJECT_HINTS.slice(0, n)))!.length
+
+  it("sheds the whole direction fold before a single subject clause", () => {
+    // Non-vacuity: subject + direction together really do overflow the frame.
+    const unshed = frame(
+      composeVideoPromptText(PROSE, DIRECTION, undefined, { subject: SUBJECT }),
+    )!
+    expect(unshed.length).toBeGreaterThan(KLING_CAP)
+    expect(SUBJECT_HINTS.length).toBeGreaterThan(1)
+
+    // A budget that fits the prose plus the FULL subject fold and nothing else.
+    const cap = framedWithSubjectClauses(SUBJECT_HINTS.length)
+    const body = composeVideoPromptText(PROSE, DIRECTION, undefined, {
+      subject: SUBJECT,
+      cap,
+      frame,
+    })!
+    expect(frame(body)!.length).toBeLessThanOrEqual(cap)
+    // Every subject clause survived; the direction fold paid the whole bill.
+    for (const hint of SUBJECT_HINTS) expect(body).toContain(hint)
+    for (const hint of VIDEO_HINTS) expect(body).not.toContain(hint)
+    // …and the prose and both bindings are untouched, as always.
+    expect(body.startsWith(PROSE.trim())).toBe(true)
+    expect(frame(body)!).toContain(MENTION_BINDING)
+    expect(frame(body)!).toContain(TRAILING_BINDING)
+  })
+
+  it("then sheds subject clauses too, last-folded first, once direction is gone", () => {
+    // Tighter than the prose plus the full subject fold → the tail of the
+    // SUBJECT list has to go as well. This is the decision: subject clauses are
+    // shed candidates, not a protected channel.
+    const cap = framedWithSubjectClauses(SUBJECT_HINTS.length - 1)
+    const body = composeVideoPromptText(PROSE, DIRECTION, undefined, {
+      subject: SUBJECT,
+      cap,
+      frame,
+    })!
+    expect(frame(body)!.length).toBeLessThanOrEqual(cap)
+    expect(body).not.toContain(SUBJECT_HINTS[SUBJECT_HINTS.length - 1])
+    expect(body).toContain(SUBJECT_HINTS[0])
+  })
+
+  it("sheds a SUBJECT-ONLY fold, and still never the prose or the bindings", () => {
+    // The composition neither parent shipped: `subject` with a cap and no
+    // `direction` at all — the shape a subject-only route request takes.
+    const cap = framedWithSubjectClauses(0)
+    const body = composeVideoPromptText(PROSE, undefined, undefined, {
+      subject: SUBJECT,
+      cap,
+      frame,
+    })!
+    // Everything droppable is gone, so the body is the prose VERBATIM (the
+    // `kept === 0` no-op branch), which is what leaves the route's
+    // `composed !== prompt` guard correctly unpinned.
+    expect(body).toBe(PROSE)
+    for (const hint of SUBJECT_HINTS) expect(body).not.toContain(hint)
+    const framed = frame(body)!
+    expect(framed).toContain(MENTION_BINDING)
+    expect(framed).toContain(TRAILING_BINDING)
+  })
+
+  it("never sheds the structured fragment to save a subject clause", () => {
+    // Ordering across ALL THREE pieces at once: user content outranks both
+    // catalog channels and still lands last.
+    const structured = { subject: "a lighthouse keeper", action: "hauls a rope" }
+    const fragment = renderStructuredFields(structured)
+    const body = composeVideoPromptText(PROSE, DIRECTION, structured, {
+      subject: SUBJECT,
+      cap: framedWithSubjectClauses(0),
+      frame,
+    })!
+    expect(body.endsWith(fragment)).toBe(true)
+    for (const hint of [...SUBJECT_HINTS, ...VIDEO_HINTS]) {
+      expect(body).not.toContain(hint)
+    }
+  })
+
+  it("is byte-identical to the capless subject fold when it fits", () => {
+    // The under-cap parity oracle, extended to the subject channel: a fold that
+    // fits must not be able to tell it was budgeted.
+    const short = "a knight on a hill"
+    const cap = getMaxVideoPromptChars("seedance-2")
+    const expected = composeVideoPromptText(short, DIRECTION, undefined, { subject: SUBJECT })
+    const actual = composeVideoPromptText(short, DIRECTION, undefined, {
+      subject: SUBJECT,
+      cap,
+      frame,
+    })
+    expect(actual).toBe(expected)
+    expect(frame(expected)!.length).toBeLessThanOrEqual(cap)
+  })
+
+  it("leaves a subject-less request byte-identical under a cap (the parity oracle)", () => {
+    // The channel must stay dark: no `subject` → exactly what the direction-only
+    // cap path produced before the two met.
+    for (const cap of [KLING_CAP, 700, 10]) {
+      expect(composeVideoPromptText(PROSE, DIRECTION, undefined, { cap, frame })).toBe(
+        composeVideoPromptText(PROSE, DIRECTION, undefined, { subject: {}, cap, frame }),
+      )
+    }
   })
 })

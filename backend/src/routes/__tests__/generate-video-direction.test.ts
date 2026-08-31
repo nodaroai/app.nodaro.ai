@@ -83,12 +83,17 @@ import { generateVideoRoutes, assembleVideoConnectedReferences } from "../genera
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import {
+  getPersonPromptHint,
+  getPersonTerm,
   getStylePromptHint,
   getStyleTerm,
   getTransitionPromptHint,
   getTransitionTerm,
   buildAtmosphereHints,
   buildPhotographerHints,
+  getStylingPromptHint,
+  renderSubjectHints,
+  SUBJECT_VIDEO_HINT_MODE_DEFAULT,
   composeVideoPromptText,
   renderDirectionHints,
   VIDEO_HINT_MODE_DEFAULT,
@@ -431,6 +436,123 @@ describe("POST /v1/generate-video — wire tolerance", () => {
     expect(queued!.prompt).toBe(`a knight rides. ${getTransitionTerm(TRANSITION)}`)
     // …and the look family is NOT compacted along with it.
     expect(getStyleTerm(STYLE)).not.toBe(getStylePromptHint(STYLE))
+  })
+})
+
+/**
+ * The SUBJECT channel on the same route — who is in the shot, alongside how it
+ * is shot. Everything the composer owns is pinned in
+ * `packages/prompts/src/__tests__/subject-fold.test.ts`; what is proved HERE is
+ * the route's own wiring: the fold reaches the queued payload and
+ * `jobs.input_data`, the recorded ids are the platform's vocabulary (the
+ * schema normalizes at the door), and a body without `subject` is untouched.
+ */
+describe("POST /v1/generate-video — the subject channel", () => {
+  it("folds subject ids into the queued prompt, COMPACT, ahead of the direction clause", async () => {
+    const { res, queued, inputData } = await post({
+      ...BASE,
+      prompt: "a knight rides",
+      subject: { type: "woman" },
+      direction: { style: STYLE },
+    })
+    expect(res.statusCode).toBe(200)
+    // The video policy is compact for subject, full for the look family.
+    expect(queued!.prompt).toBe(
+      `a knight rides. ${getPersonTerm("woman")}. ${getStylePromptHint(STYLE)}`,
+    )
+    expect(inputData!.prompt).toBe(queued!.prompt)
+    // Non-vacuity: the compact term really is a different string from the clause.
+    expect(getPersonTerm("woman")).not.toBe(getPersonPromptHint("woman"))
+  })
+
+  it("records the submitted ids in input_data.subject, normalized to platform keys", async () => {
+    const { inputData } = await post({
+      ...BASE,
+      prompt: "a knight rides",
+      subject: { type: "woman", __not_a_field__: "x" },
+    })
+    expect(inputData!.subject).toEqual({ type: "woman" })
+    expect(inputData!.userPrompt).toBe("a knight rides")
+  })
+
+  it("emits the Person/Styling lipstick twins once, through the route", async () => {
+    const { queued } = await post({
+      ...BASE,
+      prompt: "a knight rides",
+      subject: { lipState: "lip-state-bold-red", makeup: "makeup-bold-lips" },
+    })
+    expect(queued!.prompt).not.toContain(getStylingPromptHint("makeup-bold-lips"))
+  })
+
+  it("is byte-identical when `subject` is absent", async () => {
+    const { queued } = await post({ ...BASE, prompt: "a knight rides", subject: {} })
+    expect(queued!.prompt).toBe("a knight rides")
+  })
+
+  it("rejects a subject value that is neither a string, a string array nor a number", async () => {
+    const { res } = await post({
+      ...BASE,
+      prompt: "a knight rides",
+      subject: { type: { nested: true } },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
+  it("budgets a SUBJECT-ONLY fold against the ceiling, not just a `direction` one", async () => {
+    // The seam where the subject channel meets cap-aware shedding: the fold
+    // gate, the ceiling and the truncation warning are all EITHER catalog
+    // channel. Gated on `direction` alone, this run would fold subject clauses
+    // past the ceiling and hand the tail to the provider's ORDER-BLIND clamp,
+    // which would cut the end of the user's prose instead of a decoration.
+    //
+    // kling has the catalog's tightest cap AND carries no image references, so
+    // nothing frames the body and the ceiling alone decides — which isolates the
+    // `cap` half of the wiring that the framed `grok-i2v` cases below cannot.
+    const cap = getMaxVideoPromptChars("kling")
+    const subject = {
+      type: "woman",
+      ethnicity: "east-asian",
+      hairBase: "base-short-straight",
+      makeup: "makeup-smoky",
+      animal: "dog-corgi",
+    }
+    const hints = renderSubjectHints(subject, {
+      surface: "video",
+      mode: SUBJECT_VIDEO_HINT_MODE_DEFAULT,
+    })
+    expect(hints.length).toBeGreaterThan(1)
+
+    // Prose sized so the FULL fold clears the ceiling by exactly one character —
+    // derived from the rendered clauses, not hand-tuned, so catalog rewording
+    // moves the case instead of breaking it. Ends on a period: `joinPromptHints`
+    // trims the body, and a trailing space would silently buy back the overflow.
+    const probe = "x"
+    const foldChars =
+      (composeVideoPromptText(probe, undefined, undefined, { subject }) as string).length
+      - probe.length
+    const target = cap - foldChars + 1
+    const unit = "The waves are loud. "
+    const prose =
+      ("A knight rides at dusk. " + unit.repeat(Math.ceil(target / unit.length)))
+        .slice(0, target - 1) + "."
+    expect(prose.length).toBe(target)
+    expect(prose.length).toBeLessThanOrEqual(cap)
+    // Non-vacuity: unshed, the subject-only fold really does overflow.
+    expect(
+      (composeVideoPromptText(prose, undefined, undefined, { subject }) as string).length,
+    ).toBeGreaterThan(cap)
+
+    const { res, queued } = await post({ ...BASE, provider: "kling", prompt: prose, subject })
+    expect(res.statusCode).toBe(200)
+    const prompt = queued!.prompt as string
+
+    expect(prompt.length).toBeLessThanOrEqual(cap)
+    // Tail-first inside the subject block: the last clause left, the first stayed.
+    expect(prompt).not.toContain(hints[hints.length - 1])
+    expect(prompt).toContain(hints[0])
+    // Only decoration paid — the user's prose is whole.
+    expect(prompt).toContain(prose)
   })
 })
 

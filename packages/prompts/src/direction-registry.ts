@@ -32,7 +32,8 @@
  *    token, not a bare id. A single-id channel cannot carry it.
  *  - Subject / Styling / prop dimensions (`animal`, `heldProp`, `material`,
  *    Person, Styling) — a separate `subject` channel, deliberately out of scope
- *    here.
+ *    here. It now exists: `subject-registry.ts`, same table-driven shape, its
+ *    key set DISJOINT from this one (pinned by a test) so nothing folds twice.
  *
  * PACK BLINDNESS (parity, not a regression): `get*PromptHint` reads the frozen
  * base arrays, so ids added by a deployment-registered catalog pack resolve to
@@ -169,6 +170,11 @@ const temporal = perId(getTemporalPromptHint, getTemporalTerm)
  * fold. That is a consequence of reusing the fold order, not a ranking — this
  * table stays a compatibility order; anything that needs a real importance
  * ranking should add an explicit priority column rather than reorder these rows.
+ *
+ * WHERE THIS TABLE SITS IN THE COMBINED ORDER: both assemblers fold the SUBJECT
+ * channel (`subject-registry.ts`) BEFORE this one and shed the combined list
+ * tail-first, so every direction row here is dropped before any subject clause.
+ * Deliberate — see `hint-shedding.ts` for the argument.
  */
 export const DIRECTION_FIELDS = [
   { key: "cameraMotion", surface: "video", family: "motion", maxPicks: 1, render: perId(getCameraMotionPromptHint, getCameraMotionTerm) },
