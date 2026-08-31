@@ -190,11 +190,10 @@ export async function textToVideoRoutes(app: FastifyInstance) {
     }
 
     // Subject + cinematic direction fold — catalog IDS → prompt text,
-    // server-side. Same
-    // shape and same fold SITE as generate-video: before the reference
-    // assembly below, because the resolver frames the body. Neither channel →
-    // `composeVideoPromptText` returns `prompt` verbatim, so the flat path is
-    // byte-identical. (`prompt` is required on this route, so the composer's
+    // server-side. Same shape and same fold SITE as generate-video: before the
+    // reference assembly below, because the resolver frames the body. Neither
+    // channel → `composeVideoPromptText` returns `prompt` verbatim, so the flat
+    // path is byte-identical. (`prompt` is required on this route, so the composer's
     // absent-prompt branch is dead here — the identical shape is deliberate so
     // the two routes read the same.)
     if (parsed.data.direction || parsed.data.subject) {
