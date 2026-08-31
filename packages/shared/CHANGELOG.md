@@ -1,5 +1,34 @@
 # @nodaro/shared
 
+## 2.17.0
+
+### Minor Changes
+
+- 9193ea3: Animal prompt phrasing gets one owner: new `getAnimalPromptHint(id)` / `getAnimalTerm(id)` in `@nodaro/shared`, next to the `ANIMALS` catalog they read. "featuring a {label}, {description}" had two independent copies — the picker-catalog funnel's synthesized `promptHint` and `getParameterPromptHint`'s `animal` case — and both now call the getters instead of re-authoring the sentence. Output is byte-identical; the getters return `""` on an unknown, empty or absent id, exactly like every `get*PromptHint` in `@nodaro/prompts`.
+
+  They live in `@nodaro/shared` rather than `@nodaro/prompts` because the incoming `subject` prompt channel needs a third caller, and a getter under `packages/prompts/src` that read the raw `ANIMALS` array would be a new offender against the catalog-funnel ratchet. `getAnimalTerm` therefore carries a local copy of `deriveTerm`'s mechanical label derivation (`@nodaro/prompts` depends on `@nodaro/shared`, never the reverse), pinned entry-by-entry against the original by a new parity test.
+
+- 3979aa4: Workflow export/import now carries the `@`-chips' entities. `collectAssetIds` harvests the entity ids bound in `ConnectedReference` chips (`generatedResults[].references[]`, `beats[].references[]`, anywhere else a `references` array sits in node data — and in the workflow's freeform `settings`, where an app can keep its own index of the same work), not only the four entity-node `*DbId` fields — so a graph that binds its entities through chips alone exports its characters, objects, creatures and locations instead of none of them, and imports with every chip, in the graph and in `settings` alike, re-pointed at the rows created under the importer.
+
+  `WorkflowImportReport` gains two optional fields: `assetIdMap` (bundled entity id → the row created for it, for chips a client holds outside the graph; present whenever the bundle carried `assets`, `{}` when nothing was created) and `assetsSkipped` (`{ kind, id, name, reason }[]` — entities storage quota left uncreated; the workflow still lands). A bundled entity's images are now copied into the importer's own storage even when they already sit on the same instance, because they are the exporter's bytes; the export's `portability.unreachableMedia` covers them too. The per-import copy cap applies per HALF — the graph's media and the bundled entities' each get the full budget, so neither can starve the other.
+
+- a6bc7bd: Dubbing full surface: video in -> dubbed VIDEO out (+ the dubbed audio track), `sourceUrl` for public links ElevenLabs fetches itself, start/end dub windows, `numSpeakers` 0=auto, resolution/profanity/accent/watermark options, and per-minute pricing of the dubbed span (max 30 minutes). `voices.dub()` accepts the new source object and options; dubbing joins the shared dual-mode producer set.
+- 7abf3ed: Creature and object `@-mention` grammar.
+
+  `wired-creature` and `wired-object` references gain the same name-addressed
+  mention grammar the named-image reference already had —
+  `@<name-slug>:<index>[:<role>][~lock|~nolock]` — through a new
+  `entity-mention-slug` surface: `entityMentionSlug`, `parseEntityMentionToken`,
+  `findEntityMentionTokens`, `entityMentionSlugForRef`, `knownEntitySlugsFromRefs`
+  and the `EntityMentionTokenInfo` type.
+
+  The grammar itself — slug shape, parser, finder and both collision guards (the
+  4-part trailing reject that stops a character token being mis-claimed, and the
+  slash guard that stops a location bucket token being spliced as a truncated
+  prefix) — is factored into one internal core shared with the named-image
+  grammar, so those guards exist in exactly one place. Every existing
+  image-mention export keeps its signature and behavior.
+
 ## 2.16.0
 
 ### Minor Changes

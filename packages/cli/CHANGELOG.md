@@ -1,5 +1,28 @@
 # @nodaro/cli
 
+## 1.17.0
+
+### Minor Changes
+
+- a6bc7bd: Dubbing full surface: video in -> dubbed VIDEO out (+ the dubbed audio track), `sourceUrl` for public links ElevenLabs fetches itself, start/end dub windows, `numSpeakers` 0=auto, resolution/profanity/accent/watermark options, and per-minute pricing of the dubbed span (max 30 minutes). `voices.dub()` accepts the new source object and options; dubbing joins the shared dual-mode producer set.
+- 220ec75: Voice Changer Pro: per-voice `engine` — `"sts"` (default recast) or `"v3"` (Re-speak: the performance is regenerated from the transcript with eleven_v3, `[audio tags]` supported). Analyze results now carry per-segment transcript `text` (the paid input for a v3 speaker, editable before conversion). Requires a platform running cloud-plugins >= 0.216.0; on older platforms the fields are accepted-and-ignored.
+
+### Patch Changes
+
+- Updated dependencies [9193ea3]
+- Updated dependencies [3979aa4]
+- Updated dependencies [a6bc7bd]
+- Updated dependencies [7abf3ed]
+- Updated dependencies [d1b83cd]
+- Updated dependencies [fc51a97]
+- Updated dependencies [2f48344]
+- Updated dependencies [c3fa6a4]
+- Updated dependencies [220ec75]
+- Updated dependencies [d10d8b8]
+  - @nodaro/shared@2.17.0
+  - @nodaro/prompts@1.12.0
+  - @nodaro/sdk@1.25.0
+
 ## 1.16.0
 
 ### Minor Changes

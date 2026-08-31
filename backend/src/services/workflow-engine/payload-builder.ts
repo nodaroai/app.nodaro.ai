@@ -7,8 +7,8 @@ import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState, Workfl
 import { normalizeCollageLabels } from "../../providers/image/collage-badges.js"
 
 // Shared logic from packages/shared — single source of truth
-import { resolveSlideshowTransition, collectAncestorRefs as sharedCollectAncestorRefs, applyDefaultVideoSelection, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionableAssetArrays, buildCreditModelIdentifier, resolveImageGenCreditIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, resolveVideoModeForInputs, videoProviderRequiresImage, isVeoProvider, buildLipSyncCreditId, isPerSecondLipSyncProvider, resolveAiAvatarCreditId, resolveSwitchXCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, buildVideoAuditCreditId, resolveVideoAnalysisModel, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName, validateAiAvatarPayload, validateCinematicAvatarPayload, resolveNodeRefs, resolveEffectiveSourceType, PARAMETER_NODE_TYPES, characterMentionSlug, expandExtraRefsToConnectedReferences, PLATFORM_SPECS, isSeedance2Provider, isMinimaxH3Provider, supportsExtendRender, MODEL_CATALOG, hasFeature, referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality, COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS, buildLlmCreditIdentifier, motionGraphicsFeature, FLUX_LORA_CHARACTER_MODEL_ID, extractCharacterLoraFields, clampSmartCutWindow, resolveGvpAnchorWire, normalizeModelInput, readPromptAffixes, findImageMentionTokens, knownImageSlugsFromRefs } from "@nodaro/shared"
-import { composeNegative, resolveTemplate, applyTemplate, computeNodePrompt, assembleImageInput, readDirectionFields, readStructuredFields, buildImagePrompt, buildScenePrompt, collectIdentityLockClause as sharedCollectIdentityLockClause, getParameterPromptHint, characterLockToRefLock, buildCharacterPrompt, buildObjectPrompt, buildCreaturePrompt, buildLocationPrompt, buildFaceTemplateInputs, appendMusicMeta, composeSoundHintFromConnections, truncateForField, appendField, assembleSunoInput, type SoundConsumerType, type SoundComposition, resolveVideoReferenceCore, applyPromptAffixes, composeVideoPromptText, type DirectionFields, type StructuredPromptFields } from "@nodaro/prompts"
+import { resolveSlideshowTransition, collectAncestorRefs as sharedCollectAncestorRefs, applyDefaultVideoSelection, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionableAssetArrays, buildCreditModelIdentifier, resolveImageGenCreditIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, resolveVideoModeForInputs, videoProviderRequiresImage, isVeoProvider, buildLipSyncCreditId, isPerSecondLipSyncProvider, resolveAiAvatarCreditId, resolveSwitchXCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, buildVideoAuditCreditId, resolveVideoAnalysisModel, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName, validateAiAvatarPayload, validateCinematicAvatarPayload, resolveNodeRefs, resolveEffectiveSourceType, PARAMETER_NODE_TYPES, characterMentionSlug, expandExtraRefsToConnectedReferences, PLATFORM_SPECS, isSeedance2Provider, isMinimaxH3Provider, supportsExtendRender, MODEL_CATALOG, hasFeature, referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality, COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS, buildLlmCreditIdentifier, motionGraphicsFeature, FLUX_LORA_CHARACTER_MODEL_ID, extractCharacterLoraFields, clampSmartCutWindow, resolveGvpAnchorWire, normalizeModelInput, readPromptAffixes, findImageMentionTokens, knownImageSlugsFromRefs, findEntityMentionTokens, knownEntitySlugsFromRefs } from "@nodaro/shared"
+import { composeNegative, resolveTemplate, applyTemplate, computeNodePrompt, assembleImageInput, readDirectionFields, readStructuredFields, readSubjectFields, buildImagePrompt, buildScenePrompt, collectIdentityLockClause as sharedCollectIdentityLockClause, getParameterPromptHint, characterLockToRefLock, buildCharacterPrompt, buildObjectPrompt, buildCreaturePrompt, buildLocationPrompt, buildFaceTemplateInputs, appendMusicMeta, composeSoundHintFromConnections, truncateForField, appendField, assembleSunoInput, type SoundConsumerType, type SoundComposition, resolveVideoReferenceCore, applyPromptAffixes, composeVideoPromptText, type DirectionFields, type StructuredPromptFields, type SubjectFields } from "@nodaro/prompts"
 import type { CharacterDef, ConnectedReference, SceneData, ExtraRefInput, ExtraRefCharacterContext } from "@nodaro/shared"
 import type { CharacterMeta } from "@nodaro/prompts"
 import { resolveEntityImageCreditIdentifier } from "../../lib/entity-credit-identifier.js"
@@ -1669,19 +1669,22 @@ function withImagePromptPolicy<T extends { prompt: string; nativeNegativePrompt?
  * ONE helper rather than a pair of `readX(data.y)` calls per case: the
  * generate-video family has FOUR fold sites in this file (image-to-video,
  * text-to-video, generate-video, and generate-video's LTX early return), and a
- * site that read only one of the two levers would silently fold half of a
+ * site that read only some of the three levers would silently fold part of a
  * node's stored look. `data` is untrusted persisted JSONB — the readers drop
  * junk rather than throwing, and return `undefined` (never `{}`) so the spreads
  * below omit the key entirely for a node that carries neither.
  */
 function readNodeDirectionLevers(data: WorkflowNodeData): {
   direction?: DirectionFields
+  subject?: SubjectFields
   structured?: StructuredPromptFields
 } {
   const direction = readDirectionFields(data.direction)
+  const subject = readSubjectFields(data.subject)
   const structured = readStructuredFields(data.structured)
   return {
     ...(direction !== undefined ? { direction } : {}),
+    ...(subject !== undefined ? { subject } : {}),
     ...(structured !== undefined ? { structured } : {}),
   }
 }
@@ -1700,8 +1703,8 @@ function readNodeDirectionLevers(data: WorkflowNodeData): {
  * Caller is responsible for any provider-specific motion/data fallback chains
  * (e.g. i2v's `data.motionPrompt` initial fallback) — pass them as `rawPrompt`.
  *
- * `direction` / `structured` are the node's STORED cinematic ids (P4b — the
- * video twin of the image side's node-data direction). They are OPT-IN per
+ * `direction` / `subject` / `structured` are the node's STORED cinematic and
+ * subject ids (P4b / P6 — the video twin of the image side's node-data levers). They are OPT-IN per
  * caller, not read here: only the generate-video family (`generate-video` and
  * its two legacy modes) passes them, so `generate-video-pro` — the ONLY other
  * case that funnels through this helper — keeps its exact text. The video cases
@@ -1717,6 +1720,7 @@ function composeVideoPrompt(args: {
   buildCtx: PayloadBuildContext | undefined
   motionHint?: string | undefined
   direction?: DirectionFields | undefined
+  subject?: SubjectFields | undefined
   structured?: StructuredPromptFields | undefined
 }): string | undefined {
   let p = args.rawPrompt
@@ -1738,7 +1742,9 @@ function composeVideoPrompt(args: {
   // them (`assembleImageInput` runs on the graph-composed `rawPrompt`, inside
   // `withImagePromptPolicy`), and it is before `resolveVideoPromptMentions`
   // frames the body with identity directives — see `assemble-video-input.ts`.
-  p = composeVideoPromptText(p, args.direction, args.structured)
+  p = composeVideoPromptText(p, args.direction, args.structured, {
+    ...(args.subject !== undefined ? { subject: args.subject } : {}),
+  })
   // B4b: apply any registered PromptPolicy at the single orchestrator video
   // funnel (i2v/t2v/generate-video/gvp all pass through here). An absent prompt stays
   // undefined — no policy on nothing. No policy registered = identity.
@@ -2026,7 +2032,18 @@ export function buildPayload(
       const hasImageMention =
         backendHybridRoles()
         && findImageMentionTokens(rawPrompt, knownImageSlugsFromRefs(generateConnectedRefs)).length > 0
-      const useConnectedRefs = hasWiredCharacter || extraRefEntries.length > 0 || hasImageMention
+      // Same parity argument for wired-creature / wired-object mentions. A graph
+      // whose only refs are entities (no wired character, no extras) takes the
+      // FLAT branch, so an `@creature` mention that resolves on a frontend
+      // single-node Run would ship as LITERAL TEXT through the orchestrator's
+      // identical DAG run. Derived by the SAME `knownEntitySlugsFromRefs` the
+      // Phase-0 arm uses, over the SAME `generateConnectedRefs`, so the two can
+      // never disagree about whether the prompt carries a resolvable mention.
+      const hasEntityMention =
+        backendHybridRoles()
+        && findEntityMentionTokens(rawPrompt, knownEntitySlugsFromRefs(generateConnectedRefs)).length > 0
+      const useConnectedRefs =
+        hasWiredCharacter || extraRefEntries.length > 0 || hasImageMention || hasEntityMention
 
       // ─── Character LoRA routing decision (see design §6.3) ─────────────
       // EXACTLY ONE distinct character mentioned AND that character has a
@@ -2058,11 +2075,12 @@ export function buildPayload(
       // (`collectCinematographyHints` above); stored direction is node-local
       // look data, like `data.style`, and folds regardless.
       const generateDirection = readDirectionFields(data.direction)
+      const generateSubject = readSubjectFields(data.subject)
       const generateStructured = readStructuredFields(data.structured)
       // Shared node-input assembly (WI-1a) — single source of truth with the
       // frontend execute-node + Studio. `rawPrompt` is already graph-composed
       // (cinematography hints + identity clause folded above), passed as
-      // `userPrompt` plus the node's STORED `direction`/`structured` ids
+      // `userPrompt` plus the node's STORED `direction`/`subject`/`structured` ids
       // (absent on every node authored before the canvas honored them, in which
       // case the composer is a no-op and the result is byte-identical to the
       // previous inline `buildImagePrompt` calls). No `throwOnEmpty` — the
@@ -2090,6 +2108,7 @@ export function buildPayload(
             suppressedCanonicalCharacterIds: generateSuppressed,
             suppressedCanonicalLocationIds: generateSuppressedLoc,
             ...(generateDirection !== undefined ? { direction: generateDirection } : {}),
+            ...(generateSubject !== undefined ? { subject: generateSubject } : {}),
             ...(generateStructured !== undefined ? { structured: generateStructured } : {}),
             // LoRA path: skip mention machinery (trigger word + LoRA carry identity).
             skipCharacterMentions: lora !== null,
@@ -2112,6 +2131,7 @@ export function buildPayload(
             suppressedCanonicalCharacterIds: generateSuppressed,
             suppressedCanonicalLocationIds: generateSuppressedLoc,
             ...(generateDirection !== undefined ? { direction: generateDirection } : {}),
+            ...(generateSubject !== undefined ? { subject: generateSubject } : {}),
             ...(generateStructured !== undefined ? { structured: generateStructured } : {}),
           })
       const result = withImagePromptPolicy(rawImageResult)
@@ -3028,6 +3048,11 @@ export function buildPayload(
               promptFor("generate-video", true),
               gvDirectionLevers.direction,
               gvDirectionLevers.structured,
+              {
+                ...(gvDirectionLevers.subject !== undefined
+                  ? { subject: gvDirectionLevers.subject }
+                  : {}),
+              },
             ),
             ...(task === "image_to_video" && {
               image: resolvedInputs.startFrameUrl,

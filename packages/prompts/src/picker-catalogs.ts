@@ -69,7 +69,7 @@ import {
 } from "./character-fx.js"
 import { POSES, POSE_CATEGORY_LABELS, POSE_CATEGORY_ORDER } from "./pose.js"
 import { MATERIALS, MATERIAL_CATEGORY_LABELS, MATERIAL_CATEGORY_ORDER } from "./materials.js"
-import { ANIMALS, ANIMAL_SUBCATEGORY_LABELS, ANIMAL_SUBCATEGORY_ORDER } from "@nodaro/shared"
+import { ANIMALS, ANIMAL_SUBCATEGORY_LABELS, ANIMAL_SUBCATEGORY_ORDER, getAnimalPromptHint } from "@nodaro/shared"
 import { VEHICLES, VEHICLE_SUBCATEGORY_LABELS, VEHICLE_SUBCATEGORY_ORDER } from "@nodaro/shared"
 import { WEAPONS, WEAPON_SUBCATEGORY_LABELS, WEAPON_SUBCATEGORY_ORDER } from "@nodaro/shared"
 import { FURNITURE, FURNITURE_SUBCATEGORY_LABELS, FURNITURE_SUBCATEGORY_ORDER } from "@nodaro/shared"
@@ -193,6 +193,13 @@ function toOptions<T extends BaseCatalogEntry>(
  * label + description. Reproduce the exact phrasing from
  * `getParameterPromptHint` so the registry stays faithful + every option's
  * `promptHint` is non-empty.
+ *
+ * ANIMALS is the exception, and the direction of travel for the other three:
+ * its phrasing now has ONE owner, `@nodaro/shared`'s `getAnimalPromptHint`,
+ * which this funnel and `getParameterPromptHint` both call instead of
+ * re-authoring the sentence. `phrase` therefore takes the ENTRY (not
+ * label+description), so a catalog whose phrasing has moved to a getter can be
+ * pointed at it.
  */
 interface ObjectCatalogEntry {
   readonly id: string
@@ -204,14 +211,14 @@ interface ObjectCatalogEntry {
 }
 function objectOptions(
   arr: ReadonlyArray<ObjectCatalogEntry>,
-  phrase: (label: string, description: string) => string,
+  phrase: (entry: ObjectCatalogEntry) => string,
 ): ReadonlyArray<PickerOption> {
   return arr.map((e) => ({
     id: e.id,
     label: e.label,
     description: e.description,
     category: e.subcategory,
-    promptHint: phrase(e.label.toLowerCase(), e.description),
+    promptHint: phrase(e),
     // Object entities have no `promptHint` field of their own (it is
     // synthesized above), so the term cannot come from `resolveTerm`'s
     // empty-hint rule: an authored `term` wins, and otherwise the label IS the
@@ -608,7 +615,7 @@ const SINGLE_CATALOGS: readonly PickerCatalog[] = [
     defaultValue: "dog-golden-retriever",
     categoryOrder: ANIMAL_SUBCATEGORY_ORDER,
     categoryLabels: ANIMAL_SUBCATEGORY_LABELS,
-    options: objectOptions(ANIMALS, (label, description) => `featuring a ${label}, ${description}`),
+    options: objectOptions(ANIMALS, (e) => getAnimalPromptHint(e.id)),
   },
   {
     nodeType: "vehicle",
@@ -619,7 +626,7 @@ const SINGLE_CATALOGS: readonly PickerCatalog[] = [
     defaultValue: "sedan",
     categoryOrder: VEHICLE_SUBCATEGORY_ORDER,
     categoryLabels: VEHICLE_SUBCATEGORY_LABELS,
-    options: objectOptions(VEHICLES, (label, description) => `featuring a ${label}, ${description}`),
+    options: objectOptions(VEHICLES, (e) => `featuring a ${e.label.toLowerCase()}, ${e.description}`),
   },
   {
     nodeType: "weapon",
@@ -630,7 +637,7 @@ const SINGLE_CATALOGS: readonly PickerCatalog[] = [
     defaultValue: "katana",
     categoryOrder: WEAPON_SUBCATEGORY_ORDER,
     categoryLabels: WEAPON_SUBCATEGORY_LABELS,
-    options: objectOptions(WEAPONS, (label, description) => `with a ${label}, ${description}`),
+    options: objectOptions(WEAPONS, (e) => `with a ${e.label.toLowerCase()}, ${e.description}`),
   },
   {
     nodeType: "furniture",
@@ -641,7 +648,7 @@ const SINGLE_CATALOGS: readonly PickerCatalog[] = [
     defaultValue: "sofa",
     categoryOrder: FURNITURE_SUBCATEGORY_ORDER,
     categoryLabels: FURNITURE_SUBCATEGORY_LABELS,
-    options: objectOptions(FURNITURE, (label, description) => `including a ${label}, ${description}`),
+    options: objectOptions(FURNITURE, (e) => `including a ${e.label.toLowerCase()}, ${e.description}`),
   },
   {
     nodeType: "held-prop",

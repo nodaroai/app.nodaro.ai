@@ -208,6 +208,63 @@ export function getAnimalLabel(id: string | undefined | null, fallback?: string)
   return (id ?? "").replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
+/**
+ * The ONE authored phrasing for an animal selection — "featuring a golden
+ * retriever, Medium-large dog with …".
+ *
+ * WHY IT LIVES HERE: the phrase had two independent copies (the picker-catalog
+ * funnel's synthesized `promptHint` and `getParameterPromptHint`'s `animal`
+ * case), and the `subject` prompt channel needs a third caller. A third copy
+ * would be new drift, and the channel's registry cannot read `ANIMALS`
+ * directly — `catalog-funnel-ratchet.test.ts` derives its watch set from
+ * `picker-catalogs.ts`'s own uppercase value imports and can only SHRINK, so a
+ * new raw-array reader under `packages/prompts/src` fails CI. A FUNCTION in
+ * `@nodaro/shared` (where the catalog itself lives) is invisible to that scan
+ * and is the same "functions only" discipline `direction-registry.ts` follows.
+ *
+ * Empty string on a miss, matching every `get*PromptHint` in `@nodaro/prompts`:
+ * a retired or unknown id contributes no clause rather than throwing.
+ */
+export function getAnimalPromptHint(id: string | undefined | null): string {
+  const a = getAnimal(id)
+  return a ? `featuring a ${a.label.toLowerCase()}, ${a.description}` : ""
+}
+
+/** Parenthetical segments — "Rifle (bolt-action)", "ISO 1600 (visible grain)". */
+const PARENTHETICAL = /\([^)]*\)/g
+
+/**
+ * Mechanical label → term derivation, a deliberate LOCAL COPY of
+ * `@nodaro/prompts`' `deriveTerm`: `@nodaro/prompts` depends on this package,
+ * never the other way round, so the function cannot be imported here. The copy
+ * is pinned byte-for-byte against the original by
+ * `packages/prompts/src/__tests__/animal-getters-parity.test.ts` (which can
+ * import both sides) — the repo's "an invariant + guard test" idiom rather than
+ * "remember to update the other one".
+ */
+function deriveAnimalTerm(label: string): string {
+  return label
+    .replace(PARENTHETICAL, " ")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+/**
+ * The COMPACT counterpart of `getAnimalPromptHint`: the same lookup, the same
+ * empty-string-on-miss, returning the short professional term a prompt would
+ * actually carry ("golden retriever", "t-rex") instead of the full clause.
+ *
+ * An authored `term` wins; otherwise the label IS the professional term for a
+ * concrete object, resolved through the mechanical derivation — NOT a bare
+ * `toLowerCase()` — so a parenthetical label is stripped exactly the way every
+ * other catalog strips it.
+ */
+export function getAnimalTerm(id: string | undefined | null): string {
+  const a = getAnimal(id)
+  return a ? (a.term ?? deriveAnimalTerm(a.label)) : ""
+}
+
 export const ANIMAL_IDS: ReadonlyArray<string> = ANIMALS.map((a) => a.id)
 
 export const ANIMAL_SUBCATEGORY_LABELS: Readonly<Record<AnimalSubcategory, string>> = {

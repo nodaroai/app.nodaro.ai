@@ -1,5 +1,30 @@
 # @nodaro/sdk
 
+## 1.25.0
+
+### Minor Changes
+
+- 3979aa4: Workflow export/import now carries the `@`-chips' entities. `collectAssetIds` harvests the entity ids bound in `ConnectedReference` chips (`generatedResults[].references[]`, `beats[].references[]`, anywhere else a `references` array sits in node data — and in the workflow's freeform `settings`, where an app can keep its own index of the same work), not only the four entity-node `*DbId` fields — so a graph that binds its entities through chips alone exports its characters, objects, creatures and locations instead of none of them, and imports with every chip, in the graph and in `settings` alike, re-pointed at the rows created under the importer.
+
+  `WorkflowImportReport` gains two optional fields: `assetIdMap` (bundled entity id → the row created for it, for chips a client holds outside the graph; present whenever the bundle carried `assets`, `{}` when nothing was created) and `assetsSkipped` (`{ kind, id, name, reason }[]` — entities storage quota left uncreated; the workflow still lands). A bundled entity's images are now copied into the importer's own storage even when they already sit on the same instance, because they are the exporter's bytes; the export's `portability.unreachableMedia` covers them too. The per-import copy cap applies per HALF — the graph's media and the bundled entities' each get the full budget, so neither can starve the other.
+
+- a6bc7bd: Dubbing full surface: video in -> dubbed VIDEO out (+ the dubbed audio track), `sourceUrl` for public links ElevenLabs fetches itself, start/end dub windows, `numSpeakers` 0=auto, resolution/profanity/accent/watermark options, and per-minute pricing of the dubbed span (max 30 minutes). `voices.dub()` accepts the new source object and options; dubbing joins the shared dual-mode producer set.
+- 220ec75: Voice Changer Pro: per-voice `engine` — `"sts"` (default recast) or `"v3"` (Re-speak: the performance is regenerated from the transcript with eleven_v3, `[audio tags]` supported). Analyze results now carry per-segment transcript `text` (the paid input for a v3 speaker, editable before conversion). Requires a platform running cloud-plugins >= 0.216.0; on older platforms the fields are accepted-and-ignored.
+
+### Patch Changes
+
+- Updated dependencies [9193ea3]
+- Updated dependencies [3979aa4]
+- Updated dependencies [a6bc7bd]
+- Updated dependencies [7abf3ed]
+- Updated dependencies [d1b83cd]
+- Updated dependencies [fc51a97]
+- Updated dependencies [2f48344]
+- Updated dependencies [c3fa6a4]
+- Updated dependencies [d10d8b8]
+  - @nodaro/shared@2.17.0
+  - @nodaro/prompts@1.12.0
+
 ## 1.24.0
 
 ### Minor Changes

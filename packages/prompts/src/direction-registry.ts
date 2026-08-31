@@ -32,7 +32,8 @@
  *    token, not a bare id. A single-id channel cannot carry it.
  *  - Subject / Styling / prop dimensions (`animal`, `heldProp`, `material`,
  *    Person, Styling) — a separate `subject` channel, deliberately out of scope
- *    here.
+ *    here. It now exists: `subject-registry.ts`, same table-driven shape, its
+ *    key set DISJOINT from this one (pinned by a test) so nothing folds twice.
  *
  * PACK BLINDNESS (parity, not a regression): `get*PromptHint` reads the frozen
  * base arrays, so ids added by a deployment-registered catalog pack resolve to
@@ -159,12 +160,21 @@ const temporal = perId(getTemporalPromptHint, getTemporalTerm)
  * would wrongly suppress a legal second selection. Overlap is handled instead
  * by the exact-string dedupe in `renderDirectionHints`.
  *
- * SECOND MEANING OF POSITION: `assembleImageInput` sheds hint clauses from the
- * TAIL of this order when a provider's prompt cap overflows, so a row's
- * position is also its survival order under the cap. That is a consequence of
- * reusing the fold order, not a ranking — this table stays a compatibility
- * order; anything that needs a real importance ranking should add an explicit
- * priority column rather than reorder these rows.
+ * SECOND MEANING OF POSITION: BOTH cap-aware assemblers — `assembleImageInput`
+ * (stills) and `composeVideoPromptText` (video) — shed hint clauses from the
+ * TAIL of this order when a provider's prompt cap overflows, through the one
+ * shared arithmetic in `hint-shedding.ts`. So a row's position is also its
+ * survival order under the cap on EVERY surface: reordering rows for one
+ * surface silently changes what the other drops first, and the row a
+ * video-surface reorder would most likely touch (`cameraMotion`) leads the
+ * fold. That is a consequence of reusing the fold order, not a ranking — this
+ * table stays a compatibility order; anything that needs a real importance
+ * ranking should add an explicit priority column rather than reorder these rows.
+ *
+ * WHERE THIS TABLE SITS IN THE COMBINED ORDER: both assemblers fold the SUBJECT
+ * channel (`subject-registry.ts`) BEFORE this one and shed the combined list
+ * tail-first, so every direction row here is dropped before any subject clause.
+ * Deliberate — see `hint-shedding.ts` for the argument.
  */
 export const DIRECTION_FIELDS = [
   { key: "cameraMotion", surface: "video", family: "motion", maxPicks: 1, render: perId(getCameraMotionPromptHint, getCameraMotionTerm) },

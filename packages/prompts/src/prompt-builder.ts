@@ -13,6 +13,7 @@ import { roleToPhrase, defaultRoleForSource, REFERENCE_ROLE_PRESETS, normalizeRo
 import { buildIdentityLockLine, withForcedIdentityLock } from "./identity-lock.js"
 import { findLocationMentionTokens, DEFAULT_LOCATION_USAGE_MODE, type LocationMentionTokenInfo, type LocationUsageMode } from "@nodaro/shared"
 import { findImageMentionTokens, imageMentionSlugForRef, knownImageSlugsFromRefs, type ImageMentionTokenInfo } from "@nodaro/shared"
+import { findEntityMentionTokens, entityMentionSlugForRef, knownEntitySlugsFromRefs, type EntityMentionTokenInfo } from "@nodaro/shared"
 import type { CharacterDef, ConnectedReference, IdentityFidelity, IdentityMeta, ReferenceSource, SceneData } from "@nodaro/shared"
 import { locationReferencePhotoKindLabel, type LocationReferencePhotoKind } from "@nodaro/shared"
 
@@ -206,6 +207,56 @@ export function resolveCharacterMentions(
   return { prompt: resolvedPrompt, additionalUrls, mentionedCharacterSlugs }
 }
 
+/**
+ * Splice one resolved mention phrase in for its token, collapsing the horizontal
+ * whitespace ON EITHER SIDE OF THE SEAM to a single space. The single splice
+ * primitive for every HYBRID image mention splice — the four `@`-mention
+ * resolvers (character, location, named image, wired entity) and the
+ * `{image:N:label}` positional-pill expansion (`expandImageRefTokensHybrid`).
+ *
+ * WHY: an editor serializes a mention chip as its token plus its own trailing
+ * space, and the prose that follows the chip carries the space the author typed
+ * — so a perfectly ordinary sentence arrives as `@panda:1  and @panda2:2 …` and
+ * assembles to "the person from reference image A  and reference image C …",
+ * with the doubled space sitting exactly where the model is being told what the
+ * reference IS. The VIDEO core never shows this because `resolveReferenceTokens`
+ * runs a `[^\S\r\n]{2,}` collapse over its fully-assembled prompt on every
+ * return; the image path has no such tidy. This is that collapse, SCOPED to the
+ * seam: a doubled space the author put elsewhere in their prose is theirs to
+ * keep, and a prompt whose seams are already single-spaced is byte-identical
+ * (the run must be 2+ to match).
+ *
+ * The class is `[^\S\r\n]` (NOT `\s`) for the same reason the video tidy uses
+ * it: `\n` / `\n\n` separate the assembled blocks, and a `\s`-based collapse
+ * would silently merge paragraphs.
+ *
+ * INDENTATION is structure, not a seam. The leading collapse is anchored with a
+ * `(?<=\S)` lookbehind so it only fires on a run that FOLLOWS prose on the same
+ * line. A mention that opens an indented line (`"Scene:\n    @panda:1 stands"` —
+ * a shot list, a numbered beat sheet) keeps its indent verbatim; without the
+ * anchor that run IS the left seam and a 4-space indent flattened to one space,
+ * which is the same class of damage as merging paragraphs and would have made
+ * the "already-single-spaced prompts are byte-identical" claim false for every
+ * multi-line prompt. The trailing collapse stays unconditional: a run AFTER a
+ * chip is the reported bug itself and can never be indentation.
+ *
+ * OFFSET SAFETY: callers splice right-to-left over offsets taken against the
+ * pre-splice string. The left-hand collapse only ever removes characters from
+ * the whitespace run immediately preceding THIS token — positions at or after
+ * the end of any earlier token (tokens are non-whitespace and never overlap) —
+ * so every not-yet-applied (smaller) offset stays valid.
+ */
+function spliceMentionPhrase(
+  prompt: string,
+  offset: number,
+  tokenLength: number,
+  phrase: string,
+): string {
+  const before = prompt.slice(0, offset).replace(/(?<=\S)[^\S\r\n]{2,}$/, " ")
+  const after = prompt.slice(offset + tokenLength).replace(/^[^\S\r\n]{2,}/, " ")
+  return before + phrase + after
+}
+
 interface ResolveCharacterMentionsHybridResult {
   /** Body with each `@`-mention replaced INLINE by its role phrase
    *  ("the {role} from reference image {LETTER}"). No directive block. */
@@ -249,6 +300,7 @@ interface ResolveCharacterMentionsHybridResult {
  * parsed as a variant slug (e.g. `@kira:1:person`) still attaches the canonical
  * reference instead of being dropped (the legacy resolver skips variant misses).
  */
+
 function resolveCharacterMentionsHybrid(
   prompt: string,
   tokens: readonly CharacterMentionTokenInfo[],
@@ -327,12 +379,12 @@ function resolveCharacterMentionsHybrid(
     return slot ? `reference image ${slotToLetter(slot)}` : "the reference image"
   }
 
-  // Replace mention tokens right-to-left so earlier offsets stay valid.
+  // Replace mention tokens right-to-left so earlier offsets stay valid;
+  // `spliceMentionPhrase` also tidies the horizontal whitespace at each seam.
   let resolvedPrompt = prompt
   for (const m of [...matched].sort((a, b) => b.offset - a.offset)) {
     const phrase = roleToPhrase(m.role, bindingFor(m.url))
-    resolvedPrompt =
-      resolvedPrompt.slice(0, m.offset) + phrase + resolvedPrompt.slice(m.offset + m.token.length)
+    resolvedPrompt = spliceMentionPhrase(resolvedPrompt, m.offset, m.token.length, phrase)
   }
 
   // One identity-lock + one element directive per UNIQUE attached URL (a
@@ -399,28 +451,111 @@ function locationModeDirective(mode: LocationUsageMode): string | null {
  * `roleToPhrase` renders into "the {role} from reference image {LETTER}". The
  * location analog of the character mention's role segment, for the 4-mode
  * location enum:
- *   - identical → "background"  (lock the scene to this image)
- *   - style     → "style"       (borrow look / mood / palette)
- *   - layout    → "layout"      (borrow compositional framing)
- *   - none / undefined / anything else → the source default (`"background"`).
+ *   - identical → the source default (`"location"`) — lock the scene to this image
+ *   - style     → "style"   (borrow look / mood / palette)
+ *   - layout    → "layout"  (borrow compositional framing)
+ *   - none / undefined / anything else → the source default (`"location"`).
+ *
+ * A PLACE, NOT A BACKDROP — `identical` used to map to `"background"`, which is
+ * the exact word `DEFAULT_LABEL_BY_SOURCE["wired-location"]` stopped emitting on
+ * 2026-08-05 after it was measured harmful: `roleToPhrase` renders it as "the
+ * background from reference image B", and image models read that as *paste this
+ * behind the subject* — on gpt-image-2 (character + location, 4 draws per arm,
+ * only the role word varying) every `background` draw came back a cut-out
+ * composite with no shared light and no ground contact, while `location` put the
+ * subject inside the scene. That fix changed the SOURCE default but missed this
+ * branch, so `identical` — the DEFAULT location usage mode
+ * (`DEFAULT_LOCATION_USAGE_MODE`) — kept handing every un-roled location mention
+ * the harmful word. Both defaults now read from `defaultRoleForSource`, so the
+ * source default is the single source of truth and the two cannot drift again.
+ * `"background"` stays a curated pick in `REFERENCE_ROLE_PRESETS` for the genuine
+ * backdrop case — an explicit `@lib:1:background` token is untouched.
  *
  * Accepts a loose `string` so a `ConnectedReference.defaultUsageMode` (typed as
  * the CHARACTER `UsageMode`, which can't express `"layout"`) flows in without a
  * cast — unknown / non-location modes fall through to the safe source default
- * instead of throwing. The three real roles are members of
+ * instead of throwing. The two mode-specific roles are members of
  * `REFERENCE_ROLE_PRESETS["wired-location"]`, so the phrasing stays curated.
  */
 function locationModeToRole(mode: string | null | undefined): string {
-  switch (mode) {
-    case "identical":
-      return "background"
-    case "style":
-      return "style"
-    case "layout":
-      return "layout"
-    default:
-      return defaultRoleForSource("wired-location")
-  }
+  return roleBearingLocationMode(mode) ?? defaultRoleForSource("wired-location")
+}
+
+/**
+ * The ROLE a location usage mode expresses, or `null` when the mode expresses no
+ * role opinion at all. Splits the 4-mode enum the way the character chain splits
+ * `USAGE_MODES`: `style` / `layout` SAY what the reference is, while `identical`
+ * (which IS `DEFAULT_LOCATION_USAGE_MODE`) and `none` are directive-only — they
+ * say how the LEGACY bullet reads, not what the model should take from the
+ * image. Only a role-bearing mode may outrank a ref-level `defaultRole`; see
+ * `resolveLocationRole`.
+ *
+ * Data-driven rather than a hardcoded pair: a mode is role-bearing exactly when
+ * it is itself a member of `REFERENCE_ROLE_PRESETS["wired-location"]` — the same
+ * test the location pill runs (`LOCATION_ROLE_PRESETS.includes(attrs.usageMode)`)
+ * to decide whether a mode-slot value should surface as the pill's hybrid role,
+ * and the same shape as the character resolver's `presets.includes(segment)`. A
+ * mode added to both lists later is role-bearing on its own, with no list here
+ * to remember to update.
+ */
+function roleBearingLocationMode(mode: string | null | undefined): string | null {
+  const m = mode?.trim()
+  if (!m) return null
+  return REFERENCE_ROLE_PRESETS["wired-location"].includes(m) ? m : null
+}
+
+/**
+ * The effective HYBRID role for a wired LOCATION reference — the location analog
+ * of `resolveDefaultRole`, and the single source of truth for the location role
+ * chain (read by the mention resolver AND the canonical-fallback renderer, so a
+ * location cannot phrase itself one way mentioned and another way unmentioned).
+ *
+ * Precedence:
+ *   1. the per-mention token ROLE (`@lib:1:atmosphere`, `@lib:1:x/y:lighting`) —
+ *      verbatim, slug-normalized so the non-noun specials still hit
+ *      (`empty-background` → `empty background`).
+ *   2. the per-mention token MODE, but ONLY when it is ROLE-BEARING
+ *      (`@lib:1:style`, `@lib:1:layout` — `roleBearingLocationMode`).
+ *   3. the ref's own `defaultRole` — the node/caller's hybrid role pick, same
+ *      slug normalization as (1).
+ *   4. the ref's legacy `defaultUsageMode` → `locationModeToRole`.
+ *   5. the source default (`locationModeToRole`'s fallback — `"location"`).
+ *
+ * Step 2 is GATED for the same reason the character chain gates its segment on
+ * `presets.includes(segment)`: `identical` and `none` express no role opinion —
+ * `identical` IS `DEFAULT_LOCATION_USAGE_MODE`, the un-roled state, and the
+ * location pill's `renderText` emits a mode segment whenever the attr is set, so
+ * an ungated step 2 would let a round-tripped `@lib:1:identical` suppress the
+ * very `defaultRole` this chain exists to honor — on the majority of real
+ * tokens. A directive-only mode therefore falls THROUGH to the ref's role, the
+ * same way a character's `identical` / `name` / `none` segment falls through to
+ * `resolveDefaultRole`. With no `defaultRole` the outcome is unchanged
+ * (`identical` → step 4 → the source default, `"location"`).
+ *
+ * Step 3 is what this exists for. `ConnectedReference.defaultRole` is on the
+ * wire schema for EVERY source, and the character and named-image mention paths
+ * have always consulted it via `resolveDefaultRole` — but the location paths
+ * read only the usage mode, so a ref-level default role was silently dropped.
+ * It is the ONLY channel a location has for a custom default role: a location
+ * mention's 3rd segment is a bucket/variant or a role, so a caller cannot pin a
+ * per-mention role AND keep the canonical image, and the character trick of a
+ * 4th segment needs a variant to sit in the third. An explicit token role or
+ * role-bearing mode still wins (steps 1–2); with no `defaultRole` the chain
+ * collapses to exactly the old `t.usageMode ?? defaultUsageMode ?? DEFAULT`
+ * derivation.
+ */
+function resolveLocationRole(
+  tokenRole: string | null | undefined,
+  tokenUsageMode: string | null | undefined,
+  ref: Pick<ConnectedReference, "defaultRole" | "defaultUsageMode">,
+): string {
+  const explicitRole = tokenRole?.trim()
+  if (explicitRole) return normalizeRoleSlug(explicitRole)
+  const modeRole = roleBearingLocationMode(tokenUsageMode)
+  if (modeRole) return modeRole
+  const nodeRole = ref.defaultRole?.trim()
+  if (nodeRole) return normalizeRoleSlug(nodeRole)
+  return locationModeToRole(ref.defaultUsageMode ?? DEFAULT_LOCATION_USAGE_MODE)
 }
 
 /**
@@ -595,9 +730,12 @@ interface ResolveLocationMentionsHybridResult {
  * fallback on a variant miss) so the set of attached URLs / matched tokens never
  * diverges between formats — only the rendered phrasing differs.
  *
- * ROLE is `locationModeToRole(mode)` with `mode = perMentionOverride ?? the
- * location node's defaultUsageMode ?? DEFAULT_LOCATION_USAGE_MODE` — so a node
- * whose default is "style" renders "the style from …" for a bare `@old-library:1`.
+ * ROLE is `resolveLocationRole(t.role, t.usageMode, ref)` — per-mention role →
+ * per-mention ROLE-BEARING mode (`style` / `layout`; the directive-only
+ * `identical` / `none` fall through) → the ref's own `defaultRole` → its
+ * `defaultUsageMode` → the source default. So a node whose default mode is
+ * "style" renders "the style from …" for a bare `@old-library:1`, and one
+ * carrying `defaultRole: "atmosphere"` renders "the atmosphere from …".
  *
  * SLOT/LETTER: a URL's 1-based position in `dedup([...existingUrls,
  * ...mentionUrls])`. The caller passes `existingUrls = [base refs, resolved
@@ -645,15 +783,12 @@ function resolveLocationMentionsHybrid(
     mentionedLocationSlugs.add(t.locationSlug)
     refByUrl.set(match.url, match)
     if (t.lock !== undefined) lockOverrideByUrl.set(match.url, t.lock)
-    const mode = t.usageMode ?? match.defaultUsageMode ?? DEFAULT_LOCATION_USAGE_MODE
     // A bare-slug ROLE (Unified Reference Roles, Phase D — e.g. `background`,
     // `empty-background`, `as-is`, or a curated custom role) is used VERBATIM:
-    // it's acting as a role, not selecting a bucket/variant. `t.role` is the
-    // token slug; map it back to the phrase key so `roleToPhrase` hits the
-    // non-noun specials (`empty-background` → `empty background`). With no role
-    // segment, derive the role from the usage mode (mode-aware default) —
-    // byte-identical to the prior behavior for every non-role mention.
-    const role = t.role ? normalizeRoleSlug(t.role) : locationModeToRole(mode)
+    // it's acting as a role, not selecting a bucket/variant. With no role
+    // segment, the chain falls through the token's ROLE-BEARING mode, then the
+    // REF's own `defaultRole`, then its usage mode — see `resolveLocationRole`.
+    const role = resolveLocationRole(t.role, t.usageMode, match)
     matched.push({ token: t.token, offset: t.offset, url: match.url, role })
   }
 
@@ -668,12 +803,12 @@ function resolveLocationMentionsHybrid(
     return slot ? `reference image ${slotToLetter(slot)}` : "the reference image"
   }
 
-  // Replace mention tokens right-to-left so earlier offsets stay valid.
+  // Replace mention tokens right-to-left so earlier offsets stay valid;
+  // `spliceMentionPhrase` also tidies the horizontal whitespace at each seam.
   let resolvedPrompt = prompt
   for (const m of [...matched].sort((a, b) => b.offset - a.offset)) {
     const phrase = roleToPhrase(m.role, bindingFor(m.url))
-    resolvedPrompt =
-      resolvedPrompt.slice(0, m.offset) + phrase + resolvedPrompt.slice(m.offset + m.token.length)
+    resolvedPrompt = spliceMentionPhrase(resolvedPrompt, m.offset, m.token.length, phrase)
   }
 
   // One opt-in lock + one element directive per UNIQUE attached URL.
@@ -793,12 +928,12 @@ function resolveImageMentionsHybrid(
     return slot ? `reference image ${slotToLetter(slot)}` : "the reference image"
   }
 
-  // Replace mention tokens right-to-left so earlier offsets stay valid.
+  // Replace mention tokens right-to-left so earlier offsets stay valid;
+  // `spliceMentionPhrase` also tidies the horizontal whitespace at each seam.
   let resolvedPrompt = prompt
   for (const m of [...matched].sort((a, b) => b.offset - a.offset)) {
     const phrase = roleToPhrase(m.role, bindingFor(m.url))
-    resolvedPrompt =
-      resolvedPrompt.slice(0, m.offset) + phrase + resolvedPrompt.slice(m.offset + m.token.length)
+    resolvedPrompt = spliceMentionPhrase(resolvedPrompt, m.offset, m.token.length, phrase)
   }
 
   // One lock + one element directive per UNIQUE attached URL.
@@ -818,6 +953,188 @@ function resolveImageMentionsHybrid(
   }
 
   return { prompt: resolvedPrompt, additionalUrls, lockLines, elementDirectives }
+}
+
+interface ResolveEntityMentionsHybridResult {
+  /** Body with each `@<entity-name>` mention replaced INLINE by its role phrase
+   *  ("the creature from reference image D", "the material from reference image
+   *  B", …). No directive block. */
+  prompt: string
+  /** Matched entity URLs in mention order (deduped by the caller). */
+  additionalUrls: string[]
+  /**
+   * The URLs a mention BOUND — fed into `renderObjectCreatureCanonicalHybrid`'s
+   * `coveredUrls` so the ref's trailing canonical phrase is SUPPRESSED. This is
+   * the whole point of the pass: without it the same reference would render
+   * twice, once inline and once as the dangling trailing line the mention exists
+   * to replace. Distinct from `additionalUrls` only in being a set — kept as its
+   * own field so the suppression contract is explicit at both ends.
+   */
+  mentionedUrls: Set<string>
+  /** Per-reference identity-lock lines (deduped per URL). Caller prepends them
+   *  as ONE block, merged with the character/location/image lock lines. */
+  lockLines: string[]
+  /** Non-empty `elementInjection` fragments (deduped per URL). Caller appends
+   *  them as trailing scene directives. */
+  elementDirectives: string[]
+}
+
+/**
+ * HYBRID wired-entity mention convergence — the `wired-creature` /
+ * `wired-object` analog of `resolveImageMentionsHybrid`, for entities addressed
+ * by the slug of their `defaultName`.
+ *
+ * THE BUG THIS KILLS. An unmentioned creature renders through
+ * `renderObjectCreatureCanonicalHybrid` as a TRAILING phrase — "the creature
+ * from reference image D" — appended after the scene and the style hints, while
+ * the creature's name sits in the prose as plain text the model has no reason to
+ * connect to a reference. A mention binds the two: the phrase renders INLINE at
+ * the typed position, and this pass's `mentionedUrls` suppresses the trailing
+ * fallback for that ref.
+ *
+ * ASYMMETRY vs. images, and why suppression is needed here but not there: a
+ * media ref carries NO canonical prose, so the image pass has nothing to
+ * suppress. A creature/object DOES, so this pass must hand its bound URLs to the
+ * canonical renderer's `coveredUrls` — exactly the mechanism that already stops
+ * an `{image:N}`-token-referenced entity from double-rendering.
+ *
+ * NOT a `connectedReferences` FILTER, matching the image pass and unlike the
+ * location pass: the ref stays in the list so `nonCharacterRefs[N-1]` positional
+ * indexing for `{image:N}` tokens is unperturbed and the New-path URL merge keeps
+ * the ref's earlier Phase-0 slot (the merge dedups by URL). Suppression is
+ * coveredUrls-only.
+ *
+ * PRECEDENCE. The caller runs this AFTER the character, location and image
+ * passes, each of which has already spliced its own tokens out — so a name shared
+ * with an earlier kind never reaches this pass (character → location → image →
+ * creature → object). The creature-before-object tail is settled HERE, in the
+ * slug → ref map: creature refs are inserted first, so a name claimed by both a
+ * creature and an object binds the CREATURE.
+ *
+ * DUPLICATE SLUGS within a kind: FIRST WINS, matching the image pass.
+ *
+ * ROLE precedence: the per-mention 3rd segment (VERBATIM — both entity preset
+ * lists are single-word, so `normalizeRoleSlug` stays location-only and must NOT
+ * be called here) → the ref's own `defaultRole`, then its `defaultUsageMode`, via
+ * the SHARED `resolveDefaultRole` helper → the SOURCE default (`"creature"` /
+ * `"object"`).
+ *
+ * ONE HELPER, NOT A COPY. `resolveDefaultRole` is the same chain the character
+ * and named-image resolvers run, and `ConnectedReference.defaultRole` is a wire
+ * field on EVERY source (see its doc in `types.ts`), so an entity ref's role pick
+ * is honored here for free. The LOCATION paths need their own `resolveLocationRole`
+ * only because a location token carries a MODE segment whose role-bearing members
+ * (`style` / `layout`) sit between the token role and the ref's `defaultRole`, and
+ * because location roles are slug-normalized; an entity token has no mode segment
+ * (`EntityMentionTokenInfo` is role + lock only) and no multi-word roles, so there
+ * is no gate to replicate and an entity analog of that helper would be two copies
+ * of one chain.
+ *
+ * That LAST step is the one `renderObjectCreatureCanonicalHybrid` would also have
+ * used for the trailing line — but only that one: the canonical renderer reads
+ * `defaultRoleForSource(r.source)` and ignores `defaultRole` / `defaultUsageMode`
+ * entirely. So a bare `@nessie:4` relocates the IDENTICAL phrase only when the ref
+ * carries neither node field; with a node default the mention honors it and the
+ * phrase CHANGES ("the anatomy from …" rather than "the creature from …"). That is
+ * deliberate — it is what `resolveCharacterMentionsHybrid` and
+ * `resolveImageMentionsHybrid` do, and it is pinned by
+ * `entity-convergence-image.test.ts`. Suppression is
+ * unaffected either way: the mention pass covers the same URL and emits the same
+ * lock line (modulo a `~lock`/`~nolock` sentinel) and the same `elementInjection`.
+ *
+ * NO LEGACY COUNTERPART — the image-grammar precedent. The Phase-0 arm that
+ * reaches this is hybrid-gated, so under the legacy reference format an
+ * `@name:N` token stays literal text and the entity attaches with its numbered
+ * directive exactly as it does today.
+ *
+ * CAPPED REFS: `imageReferenceLimit(provider)` truncates `connectedReferences`
+ * BEFORE Phase 0, so a mention whose ref was capped out silently falls through as
+ * literal text — matching how a capped character or image mention behaves today.
+ */
+function resolveEntityMentionsHybrid(
+  prompt: string,
+  tokens: readonly EntityMentionTokenInfo[],
+  refs: readonly ConnectedReference[],
+  existingUrls: readonly string[],
+): ResolveEntityMentionsHybridResult {
+  const bySlug = new Map<string, ConnectedReference>()
+  // Creature-first insertion IS the creature → object half of the precedence
+  // chain (the other four steps are the caller's pass order). `entityMentionSlug
+  // ForRef` is the SAME predicate `knownEntitySlugsFromRefs` applies to build the
+  // finder's known-slug set — one gate, so this map and that set can never admit
+  // different refs.
+  for (const source of ["wired-creature", "wired-object"] as const) {
+    for (const r of refs) {
+      if (r.source !== source) continue
+      const slug = entityMentionSlugForRef(r)
+      if (!slug) continue
+      if (!bySlug.has(slug)) bySlug.set(slug, r)
+    }
+  }
+
+  const additionalUrls: string[] = []
+  const mentionedUrls = new Set<string>()
+  const refByUrl = new Map<string, ConnectedReference>()
+  // Per-mention `~lock` / `~nolock`: the tri-state lock OVERRIDE per attached
+  // URL, fed to `withForcedIdentityLock` below. Only sentinel-bearing mentions
+  // write here (last sentinel wins), mirroring the image/location resolvers.
+  const lockOverrideByUrl = new Map<string, boolean>()
+  const matched: Array<{ token: string; offset: number; url: string; role: string }> = []
+
+  for (const t of tokens) {
+    const match = bySlug.get(t.entitySlug)
+    if (!match || !match.url) continue
+    additionalUrls.push(match.url)
+    mentionedUrls.add(match.url)
+    refByUrl.set(match.url, match)
+    if (t.lock !== undefined) lockOverrideByUrl.set(match.url, t.lock)
+    const role = (t.role ?? "").trim()
+      || resolveDefaultRole(match.defaultRole, match.defaultUsageMode, match.source)
+    matched.push({ token: t.token, offset: t.offset, url: match.url, role })
+  }
+
+  // Slot letters from the deduped [existing, mention] URL list — the prefix of
+  // the caller's `finalIndexByUrl`, so the letters agree.
+  const slotByUrl = new Map<string, number>()
+  for (const u of [...existingUrls, ...additionalUrls]) {
+    if (!slotByUrl.has(u)) slotByUrl.set(u, slotByUrl.size + 1)
+  }
+  const bindingFor = (url: string): string => {
+    const slot = slotByUrl.get(url)
+    return slot ? `reference image ${slotToLetter(slot)}` : "the reference image"
+  }
+
+  // Replace mention tokens right-to-left so earlier offsets stay valid;
+  // `spliceMentionPhrase` also tidies the horizontal whitespace at each seam —
+  // an entity chip serializes with its own trailing space exactly like every
+  // other mention chip, so its seams get the same collapse as the character,
+  // location and named-image ones.
+  let resolvedPrompt = prompt
+  for (const m of [...matched].sort((a, b) => b.offset - a.offset)) {
+    const phrase = roleToPhrase(m.role, bindingFor(m.url))
+    resolvedPrompt = spliceMentionPhrase(resolvedPrompt, m.offset, m.token.length, phrase)
+  }
+
+  // One lock + one element directive per UNIQUE attached URL. These are the
+  // SAME lines `renderObjectCreatureCanonicalHybrid` would have emitted for the
+  // ref, moved here — which is why suppressing its canonical entry does not lose
+  // an opt-in lock or a wired `elementInjection`.
+  const lockLines: string[] = []
+  const elementDirectives: string[] = []
+  const seenUrls = new Set<string>()
+  for (const m of matched) {
+    if (seenUrls.has(m.url)) continue
+    seenUrls.add(m.url)
+    const ref = refByUrl.get(m.url)
+    if (!ref) continue
+    const binding = bindingFor(m.url)
+    const lock = buildIdentityLockLine(withForcedIdentityLock(ref, lockOverrideByUrl.get(m.url)), binding)
+    if (lock) lockLines.push(lock)
+    const inject = ref.elementInjection?.trim()
+    if (inject) elementDirectives.push(inject)
+  }
+
+  return { prompt: resolvedPrompt, additionalUrls, mentionedUrls, lockLines, elementDirectives }
 }
 
 /**
@@ -1180,8 +1497,9 @@ function renderExtraRefsHybrid(
  * Render the hybrid canonical convergence for UNMENTIONED wired locations (the
  * location analog of `renderCanonicalFallbackHybrid`). Each unmentioned
  * `wired-location` ref → the inline role phrase
- * `roleToPhrase(locationModeToRole(defaultUsageMode), binding)` (the caller
- * appends these as trailing scene directives) + its opt-in identity-lock line
+ * `roleToPhrase(resolveLocationRole(null, null, ref), binding)` — the SAME role
+ * chain the mention path runs, minus the token steps (the caller appends these as
+ * trailing scene directives) + its opt-in identity-lock line
  * (null unless the ref enables one — locations have no built-in lock wording) +
  * its wired `elementInjection` as a trailing directive.
  *
@@ -1215,7 +1533,10 @@ function renderLocationCanonicalHybrid(
     if (!slot) continue
     seenUrls.add(r.url)
     const binding = `reference image ${slotToLetter(slot)}`
-    phrases.push(roleToPhrase(locationModeToRole(r.defaultUsageMode), binding))
+    // Same role chain as the mention path (there is no token here, so it starts
+    // at the ref's own `defaultRole`) — one helper, so a location cannot phrase
+    // itself one way mentioned and another way unmentioned.
+    phrases.push(roleToPhrase(resolveLocationRole(null, null, r), binding))
     const lock = buildIdentityLockLine(r, binding)
     if (lock) lockLines.push(lock)
     const inject = r.elementInjection?.trim()
@@ -1236,11 +1557,19 @@ function renderLocationCanonicalHybrid(
  * has wording but it is OFF unless `identityLock.enabled === true`, per Plan A's
  * default-off flip) + its wired `elementInjection` as a trailing directive.
  *
- * Objects/creatures have NO `@-mention` path, so the ONLY way one renders inline
- * is an `{image:N}` token. `coveredUrls` (the URLs already expanded by such a
- * token in this scene) is threaded in so a wired object/creature that is BOTH
- * unmentioned AND `{image:N}`-referenced renders ONCE (inline), never also as a
- * trailing canonical phrase. Deduped per URL (an object wired twice → one phrase).
+ * `coveredUrls` is every URL that ALREADY rendered inline in this scene, and it
+ * carries TWO contributions the caller unions together: the URLs expanded by an
+ * `{image:N}` token, and — since the creature/object mention leg — the URLs bound
+ * by a Phase-0 `@creature` / `@object` mention. Either way the ref renders ONCE,
+ * inline, never also as a trailing canonical phrase.
+ *
+ * The mention half is why this loop is NOT reached via a `connectedReferences`
+ * filter the way mentioned locations are: an entity ref stays in the list to keep
+ * `nonCharacterRefs[N-1]` positional `{image:N}` indexing stable, so suppression
+ * has to happen HERE, per URL. The mention pass emits the same lock line and
+ * `elementInjection` this loop would have, so nothing is lost by skipping it.
+ *
+ * Deduped per URL (an object wired twice → one phrase).
  */
 function renderObjectCreatureCanonicalHybrid(
   nonCharacterRefs: readonly ConnectedReference[],
@@ -1785,6 +2114,14 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
   // line-initials (which would corrupt "the face from reference image A" → "The
   // face …" / "the style from reference image A" → "The style …").
   let hybridBodyConverged = false
+  // URLs bound by a Phase-0 wired-entity (`@creature` / `@object`) mention.
+  // Declared at function scope because it must BRIDGE the two blocks below:
+  // Phase 0 populates it, and the New path unions it into
+  // `renderObjectCreatureCanonicalHybrid`'s `coveredUrls` so a mentioned
+  // creature/object does NOT also emit its trailing canonical phrase. Empty for
+  // every prompt without an entity mention, which is what keeps those outputs
+  // byte-identical.
+  const mentionedEntityUrls = new Set<string>()
 
   // Character LoRA inference path: trigger word + LoRA model carry identity,
   // so we strip raw `@slug[:V[:variant]]` tokens from the prompt AND drop the
@@ -1908,7 +2245,22 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
     const hasImageMentionTokens = isHybrid
       && knownImageSlugs.length > 0
       && findImageMentionTokens(config.prompt, knownImageSlugs).length > 0
-    if (knownCharacterSlugs.length > 0 || hasExtraRefs || knownLocationSlugs.length > 0 || hasImageMentionTokens) {
+    // Wired-entity mentions (`wired-creature` / `wired-object`). Slugs derive
+    // from each entity ref's `defaultName` — no `entitySlug` wire field, matching
+    // the image grammar — and the derivation is shared with the backend
+    // orchestrator's structured-branch gate via `knownEntitySlugsFromRefs`.
+    const knownEntitySlugs = knownEntitySlugsFromRefs(connectedReferences)
+    // EXISTENCE-ONLY precheck, gating the Phase-0 arm below — the image
+    // precedent. An unmentioned creature/object already renders correctly
+    // through `renderObjectCreatureCanonicalHybrid`, so a graph with no entity
+    // mention has no reason to enter Phase 0: gating on TOKEN presence keeps
+    // today's control flow and byte output for every such graph BY
+    // CONSTRUCTION. HYBRID-only — under the legacy format an `@name:N` token
+    // stays literal text.
+    const hasEntityMentionTokens = isHybrid
+      && knownEntitySlugs.length > 0
+      && findEntityMentionTokens(config.prompt, knownEntitySlugs).length > 0
+    if (knownCharacterSlugs.length > 0 || hasExtraRefs || knownLocationSlugs.length > 0 || hasImageMentionTokens || hasEntityMentionTokens) {
       const mentionTokens = knownCharacterSlugs.length > 0
         ? findCharacterMentionTokens(config.prompt, knownCharacterSlugs)
         : []
@@ -2038,6 +2390,47 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
       // is gated to wired-location/object/creature); and leaving the ref in
       // place keeps `nonCharacterRefs[N-1]` positional indexing stable for
       // `{image:N}` tokens.
+      //
+      // Pass 4: wired-entity (`@creature` / `@object`) mentions, resolved on the
+      // POST-character, POST-location, POST-image prompt. The finder MUST re-run
+      // here — every earlier pass spliced its own tokens out, so an offset
+      // computed before them is stale. PRECEDENCE character → location → image →
+      // creature → object falls out of this pass order plus the creature-first
+      // map inside the resolver: a name shared with an earlier kind resolves as
+      // that kind, and the entity token never fires.
+      //
+      // `existingUrls` is already location- AND image-inclusive because
+      // `additionalUrls` absorbed both above, so the mention slot letters stay a
+      // prefix of the final `finalIndexByUrl`.
+      let hybridEntityLockLines: string[] = []
+      let hybridEntityElementDirectives: string[] = []
+      if (hasEntityMentionTokens) {
+        const entityTokens = findEntityMentionTokens(resolved.prompt, knownEntitySlugs)
+        if (entityTokens.length > 0) {
+          const he = resolveEntityMentionsHybrid(
+            resolved.prompt,
+            entityTokens,
+            connectedReferences,
+            [...(referenceImageUrls || []), ...resolved.additionalUrls],
+          )
+          resolved.prompt = he.prompt
+          resolved.additionalUrls = [...resolved.additionalUrls, ...he.additionalUrls]
+          hybridEntityLockLines = he.lockLines
+          hybridEntityElementDirectives = he.elementDirectives
+          // The suppression handoff to the New path: every bound URL is skipped
+          // by `renderObjectCreatureCanonicalHybrid`, so the phrase renders ONCE
+          // — inline, where the user typed it — instead of also dangling as a
+          // trailing "the creature from reference image D" line. Like the image
+          // pass, the ref itself is NOT filtered out of `connectedReferences`
+          // (positional `{image:N}` stability); coveredUrls is the whole
+          // mechanism.
+          for (const u of he.mentionedUrls) mentionedEntityUrls.add(u)
+          // Inline role phrases now live in the body → skip line-initial
+          // capitalization, which would otherwise corrupt a mid-sentence
+          // "the creature from reference image D".
+          if (he.additionalUrls.length > 0) hybridBodyConverged = true
+        }
+      }
       // Default-fallback canonical URLs + directives for any wired character
       // that has zero mentions in the prompt. Mirrors the legacy behavior the
       // mention feature replaced — wire a character with no typing required.
@@ -2177,6 +2570,7 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
           ...hybridLockLines,
           ...hybridLocationLockLines,
           ...hybridImageLockLines,
+          ...hybridEntityLockLines,
           ...canonical.lockLines,
           ...extrasRendered.lockLines,
         ])]
@@ -2184,6 +2578,7 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
           ...hybridElementDirectives,
           ...hybridLocationElementDirectives,
           ...hybridImageElementDirectives,
+          ...hybridEntityElementDirectives,
           ...canonical.phrases,
           ...canonical.elementDirectives,
           ...extrasRendered.bodyLines,
@@ -2314,10 +2709,22 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
       // (Phase C): each → the trailing role phrase "the {role} from reference
       // image {LETTER}" + opt-in lock + wired elementInjection, numbered against
       // `finalIndexByUrl`. Mentioned locations were converged inline in Phase 0
-      // and filtered out of `nonCharacterRefs`; objects/creatures have no mention
-      // path, so their only inline route is an `{image:N}` token (guarded above).
+      // and filtered out of `nonCharacterRefs`; mentioned objects/creatures were
+      // converged inline too but stay in the list, so they are suppressed by URL
+      // via the covered set below.
       const locCanon = renderLocationCanonicalHybrid(nonCharacterRefs, finalIndexByUrl, tokenCoveredUrls)
-      const objCanon = renderObjectCreatureCanonicalHybrid(nonCharacterRefs, finalIndexByUrl, tokenCoveredUrls)
+      // Objects/creatures now have a mention path too, so their covered set is
+      // the union of the `{image:N}`-token URLs and the URLs a Phase-0
+      // `@creature` / `@object` mention bound. That union is the SUPPRESSION —
+      // a mentioned entity already rendered its role phrase inline, and without
+      // this it would ALSO emit the trailing "the creature from reference image
+      // D" line, which is the exact double-render this leg removes. Locations
+      // keep `tokenCoveredUrls` alone: their mentioned refs are FILTERED out of
+      // `nonCharacterRefs` upstream, so they never reach the loop at all.
+      const objCoveredUrls = mentionedEntityUrls.size > 0
+        ? new Set([...tokenCoveredUrls, ...mentionedEntityUrls])
+        : tokenCoveredUrls
+      const objCanon = renderObjectCreatureCanonicalHybrid(nonCharacterRefs, finalIndexByUrl, objCoveredUrls)
       const canonLockLines = [...locCanon.lockLines, ...objCanon.lockLines]
       const canonLockBlock = canonLockLines.length > 0 ? `${canonLockLines.join("\n")}\n\n` : ""
       const canonTrailingLines = [
@@ -2936,21 +3343,48 @@ function hybridRolePhrase(label: string, letter: string): string {
   return `the ${label} from reference image ${letter}`
 }
 
-/** Like `expandImageRefTokensForRefs`, but emits the hybrid lettered phrase
- *  ("the subject from reference image A") instead of the legacy "Image N
- *  (label)". Out-of-range tokens / URL-less refs are left untouched. */
+/**
+ * Like `expandImageRefTokensForRefs`, but emits the hybrid lettered phrase
+ * ("the subject from reference image A") instead of the legacy "Image N
+ * (label)". Out-of-range tokens / URL-less refs are left untouched — visible so
+ * the author can fix them.
+ *
+ * A `{image:N:label}` pill is a mention chip like any other: `buildRefPillNodes`
+ * appends its own trailing space to EVERY pill it builds, the positional
+ * `imageRef` node included, so `a man wearing {image:1:hat}  in the park` is the
+ * ordinary shape and it expanded to "…the hat from reference image A  in the
+ * park". Splice through `spliceMentionPhrase` for the same seam tidy the three
+ * `@`-mention resolvers use, right-to-left over offsets taken against the
+ * pre-splice string (its OFFSET SAFETY note covers exactly this loop). The
+ * legacy `expandImageRefTokensForRefs` keeps its raw `.replace` — legacy output
+ * is pinned byte-identical.
+ */
 function expandImageRefTokensHybrid(
   prompt: string,
   refs: readonly ConnectedReference[],
   finalIndexByUrl: ReadonlyMap<string, number>,
 ): string {
-  return prompt.replace(IMAGE_TOKEN_PATTERN, (match, num, label) => {
-    const n = parseInt(num, 10)
+  const splices: Array<{ offset: number; length: number; phrase: string }> = []
+  for (const m of prompt.matchAll(IMAGE_TOKEN_PATTERN)) {
+    const n = parseInt(m[1], 10)
     const ref = refs[n - 1]
     const finalIdx = ref?.url ? finalIndexByUrl.get(ref.url) : undefined
-    if (!finalIdx) return match
-    return hybridRolePhrase((label ?? "").trim(), slotToLetter(finalIdx))
-  })
+    if (!finalIdx) continue
+    splices.push({
+      offset: m.index ?? 0,
+      length: m[0].length,
+      phrase: hybridRolePhrase((m[2] ?? "").trim(), slotToLetter(finalIdx)),
+    })
+  }
+
+  // `matchAll` yields ascending offsets; splice back-to-front so the
+  // not-yet-applied (smaller) offsets stay valid.
+  let resolved = prompt
+  for (let i = splices.length - 1; i >= 0; i--) {
+    const s = splices[i]
+    resolved = spliceMentionPhrase(resolved, s.offset, s.length, s.phrase)
+  }
+  return resolved
 }
 
 /** Capitalize the first alphabetic character of a string (line-initial). */

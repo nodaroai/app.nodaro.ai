@@ -1,6 +1,6 @@
 import type { IdentityMeta } from "@nodaro/shared"
 import type { AssembleImageInput } from "@nodaro/prompts"
-import { readDirectionFields, readStructuredFields } from "@nodaro/prompts"
+import { readDirectionFields, readStructuredFields, readSubjectFields } from "@nodaro/prompts"
 import { collectAncestorRefs } from "@/components/editor/workflow-editor/execution-graph"
 import type {
   WorkflowNode,
@@ -120,10 +120,11 @@ export function buildImageAssembleInput(
   const suppressedCanonicalLocationIds = data.suppressedCanonicalLocationIds as
     | readonly string[]
     | undefined
-  // Stored cinematic direction / structured fields — narrow-read through the
-  // SAME readers the two executors use, so the preview can never accept more
-  // (or less) than a run does.
+  // Stored subject / cinematic direction / structured fields — narrow-read
+  // through the SAME readers the two executors use, so the preview can never
+  // accept more (or less) than a run does.
   const direction = readDirectionFields(data.direction)
+  const subject = readSubjectFields(data.subject)
   const structured = readStructuredFields(data.structured)
 
   return {
@@ -143,6 +144,7 @@ export function buildImageAssembleInput(
     suppressedCanonicalCharacterIds: suppressedCanonicalCharacterIds ?? undefined,
     suppressedCanonicalLocationIds: suppressedCanonicalLocationIds ?? undefined,
     direction,
+    subject,
     structured,
   }
 }
