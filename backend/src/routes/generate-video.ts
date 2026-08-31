@@ -5,18 +5,20 @@ import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { shotsSchema, elementsSchema } from "../lib/video-schemas.js"
+import { effectiveVideoPromptCeiling } from "../lib/video-prompt-ceiling.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
 import { getModelCreditBaseCost } from "../ee/billing/credits.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
+import { insertJobIdempotent } from "../lib/insert-job.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, isMinimaxH3Provider, isVeoProvider, estimateLoopTrimAddonCredits, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, buildVideoCreditModelIdentifier, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, type ConnectedReference } from "@nodaro/shared"
-import { resolveVideoReferenceCore, resolveReferenceTokens, resolveRefIdTokens, type VideoExtraRef, type CharacterMeta } from "@nodaro/prompts"
+import { resolveVideoReferenceCore, resolveReferenceTokens, resolveRefIdTokens, composeVideoPromptText, type VideoExtraRef, type CharacterMeta } from "@nodaro/prompts"
 import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
+import { directionSchema } from "../lib/direction-schema.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { backendHybridRoles } from "../lib/reference-format.js"
 
@@ -77,6 +79,14 @@ export const generateVideoBody = z.object({
   // User-defined reorder of the injected reference list (stable tile ids),
   // honored by `resolveVideoReferenceCore`'s `applyReferenceOrderToVideo` pass.
   referenceOrder: z.array(z.string()).max(14).optional(),
+  // Structured cinematic direction: catalog IDS, not hint text. The route
+  // renders them into the prompt body via `composeVideoPromptText` with the
+  // platform's verbosity policy (motion compact / look full), so a client stops
+  // baking catalog wording it can never un-bake. Absent → the flat path is
+  // byte-identical. The schema is surface-AGNOSTIC on purpose: an image-only
+  // dimension is accepted here and simply contributes no video hint (filtering
+  // is a render concern), and unknown keys/ids are stripped/skipped, never 400.
+  direction: directionSchema.optional(),
   webSearch: z.boolean().optional(),
   nsfwChecker: z.boolean().optional(),
   generationType: z.enum(["TEXT_2_VIDEO", "FIRST_AND_LAST_FRAMES_2_VIDEO", "REFERENCE_2_VIDEO"]).optional(),
@@ -483,6 +493,15 @@ export async function generateVideoRoutes(app: FastifyInstance) {
           // handler will build it (connectedReferences → referenceImageUrls →
           // frames folded by the shared resolver), then reserve the full
           // scaled base up front (commit_credits only refunds).
+          //
+          // The `direction` fold is deliberately NOT applied here, and the
+          // prediction stays exact without it: the fold is TEXT-ONLY, and the
+          // billed quantity below is the assembled REFERENCE COUNT, which no
+          // amount of prompt text can move. The one shape that could — a
+          // catalog hint, term or LABEL containing a literal `{image:N}` /
+          // `{ref:` / `@slug:N` (labels are woven verbatim into the multi-pick
+          // blend clauses) — is ruled out for every registered catalog by
+          // `packages/prompts/src/__tests__/direction-hint-token-safety.test.ts`.
           if (isMinimaxH3Provider(b?.provider as string | undefined)) {
             const { minimaxH3BaseCreditsFromUrls, minimaxH3BillableRefImageCount, MINIMAX_H3_FREE_INPUT_IMAGES } =
               await import("../ee/billing/minimax-h3-credits.js")
@@ -551,6 +570,52 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     // helper the DAG payload builder uses, so the two paths cannot drift.
     const { provider, duration } = applyDefaultVideoSelection({ provider: rawProvider, duration: rawDuration })
     let prompt = rawPrompt
+
+    // Cinematic direction fold — catalog IDS → prompt text, server-side.
+    //
+    // Runs BEFORE the connected-reference assembly below because
+    // `resolveVideoReferenceCore` FRAMES the body: the legacy format prepends
+    // its "Use these characters:" block, hybrid prepends the lock lines and
+    // APPENDS the canonical role phrases. Folding afterwards would strand the
+    // scene/look description past the identity directives — a worse version of
+    // the bug this channel exists to fix.
+    //
+    // No `direction` → `composeVideoPromptText` returns `prompt` verbatim
+    // (`undefined` included), so the flat path stays byte-identical (the
+    // "backward-compatible: no connectedReferences → prompt + flat refs pass
+    // through unchanged" oracle in generate-video.test.ts).
+    if (parsed.data.direction) {
+      const composed = composeVideoPromptText(prompt, parsed.data.direction)
+      if (composed !== prompt) {
+        // `input_data.userPrompt` records the SOURCE, never the render.
+        // `buildJobInputData` only mirrors prompt→userPrompt when userPrompt is
+        // unset, and it runs AFTER we overwrite parsed.data.prompt — so pin the
+        // original submission here. The `?? ""` branch is load-bearing: a
+        // direction-only run has no `prompt`, and without it the fold's OUTPUT
+        // would be recorded as the user's own words.
+        parsed.data.userPrompt ??= rawPrompt ?? ""
+        prompt = composed
+        parsed.data.prompt = prompt
+      }
+      // The provider clamp (`applyVideoNegativePrompt`) hard-slices the prompt
+      // tail at this ceiling. Not a regression — clients bake the same text
+      // today — but the fold makes the platform responsible for the length, so
+      // make the truncation observable rather than silent.
+      //
+      // The EFFECTIVE ceiling is not always the model cap: for a provider
+      // without a native negative param the clamp folds the negative in as a
+      // "\nAvoid: …" suffix and RESERVES room for it first
+      // (`model-constants.ts`'s `room = promptMax - avoid.length`), so the base
+      // prompt is cut at `cap - suffix`. Mirror that reservation here or the
+      // warning under-fires exactly on the runs that get truncated.
+      const promptCeiling = effectiveVideoPromptCeiling(provider, negativePrompt)
+      if (prompt && prompt.length > promptCeiling) {
+        req.log.warn(
+          { provider, promptLength: prompt.length, promptCeiling },
+          "[generate-video] composed prompt exceeds the provider ceiling; the tail will be clamped",
+        )
+      }
+    }
 
     // Seedance 2 accepts unified inputs: pass every wired input (first/last frame,
     // reference image/video/audio) through unconditionally. The shared
@@ -707,8 +772,8 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     // back the winner's row with `created: false`.
     let insertResult: { row: { id: string }; created: boolean }
     try {
-      insertResult = await insertWithIdempotencyKey<{ id: string }>(
-        "jobs",
+      insertResult = await insertJobIdempotent<{ id: string }>(
+        req,
         {
           workflow_id: extractWorkflowId(req.body),
           node_id: extractNodeId(req.body),

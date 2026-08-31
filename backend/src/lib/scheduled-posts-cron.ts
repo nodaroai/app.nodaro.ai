@@ -41,6 +41,11 @@ export async function scanDueScheduledPosts(): Promise<number> {
     if (!claimed?.length) continue // another instance won, or the row changed
 
     try {
+      // P14: the req-less enqueue is this lane's resolve point — and a
+      // scheduled post names no workspace and no workflow, so it is
+      // TRIVIALLY personal: no resolve, no stamp (flag-off byte-identity;
+      // the worker coalesces the absent field to the row owner's personal
+      // payer). If workspace-scoped scheduling ever lands, resolve HERE.
       await socialPublishQueue.add("publish", { scheduledPostId: row.id })
       enqueued++
     } catch (err) {

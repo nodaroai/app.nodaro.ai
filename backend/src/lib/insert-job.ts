@@ -32,6 +32,17 @@ import { supabase } from "./supabase.js"
 import { insertWithIdempotencyKey, type IdempotentInsertResult } from "./idempotent-insert.js"
 import { jobSourceColumns } from "./job-source.js"
 import { extractMcpClient } from "./extract-mcp-client.js"
+import type { BillingContext } from "./billing-context.js"
+
+/**
+ * The P14 payer pair for a job/execution row, from a resolved context.
+ * Personal (or absent) adds NOTHING — a personal row is byte-identical to
+ * pre-P14. A workspace pair also flips the row private via the DB's own
+ * clamp trigger (migration 337): class work never rides a public gallery.
+ */
+export function billingPairColumns(ctx: BillingContext | undefined): Record<string, unknown> {
+  return ctx?.payer === "workspace" ? { workspace_id: ctx.workspaceId, org_id: ctx.orgId } : {}
+}
 
 /**
  * Request-derived columns every job row should carry.
@@ -39,6 +50,14 @@ import { extractMcpClient } from "./extract-mcp-client.js"
  * Caller-supplied columns WIN: the orchestrator and the plugin toolkit create
  * jobs on behalf of a caller whose surface they know better than the current
  * request does, and must be able to say so.
+ *
+ * The ONE exception is the P14 payer pair (`workspace_id`/`org_id`), spread
+ * AFTER the caller's row: who pays was resolved once for this request and a
+ * job attributed to it must not be able to claim otherwise — reporting joins
+ * and the privacy clamp both key on these columns. It is an OVERRIDE, not a
+ * clear: with a personal context the spread adds nothing, so a caller-
+ * supplied pair survives — required by the component wrapper, whose honored
+ * context rides the body where the request-level stamp cannot see it.
  */
 export function withJobProvenance(
   req: FastifyRequest,
@@ -49,6 +68,7 @@ export function withJobProvenance(
     ...jobSourceColumns(req),
     ...(mcpClient ? { mcp_client: mcpClient } : {}),
     ...row,
+    ...billingPairColumns(req.billingContext),
   }
 }
 
@@ -99,11 +119,14 @@ export async function insertJob<T = { id: string }>(
 export async function insertInternalJob<T = { id: string }>(
   sourceDetail: string,
   row: Record<string, unknown>,
-  opts: { selectColumns?: string; client?: typeof supabase } = {},
+  opts: { selectColumns?: string; client?: typeof supabase; billingContext?: BillingContext } = {},
 ): Promise<InsertJobResult<T>> {
   const { data, error } = await (opts.client ?? supabase)
     .from("jobs")
-    .insert({ source: "internal", source_detail: sourceDetail, ...row })
+    // Same one-exception rule as withJobProvenance: the carried payer pair
+    // (P14) is spread AFTER the caller's row — the execution's resolved
+    // payer, never a per-site claim.
+    .insert({ source: "internal", source_detail: sourceDetail, ...row, ...billingPairColumns(opts.billingContext) })
     .select(opts.selectColumns ?? "id")
     .single()
   return (error ? { data: null, error } : { data: data as T, error: null }) as InsertJobResult<T>

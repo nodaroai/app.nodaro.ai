@@ -1849,6 +1849,11 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
   const t = useT()
   const dialogue = data.dialogue ?? [{ id: "1", text: "", voice: DEFAULT_DIALOGUE_VOICE }]
   const totalChars = dialogue.reduce((sum, l) => sum + l.text.length, 0)
+  // Shared cap — the same getter the route's Zod refine reads, so the counter
+  // can't drift from what the backend accepts (three copies drifted before).
+  const maxChars = getMaxTtsChars("elevenlabs-dialogue")
+  // Probed ElevenLabs hard limit: an 11th unique voice → 400 max_voices_exceeded.
+  const uniqueVoices = new Set(dialogue.filter((l) => l.voice).map((l) => l.voice)).size
 
   const scriptSource = sources.find(
     (s) => s.type === "generate-script" && s.sourceHandle === "dialogue"
@@ -1904,10 +1909,16 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <Label>{t("audiocfg.dialogueLines")}</Label>
-        <span className={`text-xs ${totalChars > 5000 ? "text-red-500" : "text-muted-foreground"}`}>
-          {totalChars}/5000
-        </span>
+        <div className="flex items-center gap-2">
+          <span className={`text-xs ${uniqueVoices > 10 ? "text-red-500" : "text-muted-foreground"}`} title={t("audiocfg.hintDialogueVoiceCap")}>
+            {t("audiocfg.dialogueVoiceCount", { count: uniqueVoices })}
+          </span>
+          <span className={`text-xs ${totalChars > maxChars ? "text-red-500" : "text-muted-foreground"}`}>
+            {totalChars}/{maxChars}
+          </span>
+        </div>
       </div>
+      <p className="text-[10px] text-muted-foreground -mt-2">{t("audiocfg.hintDialogueRecommended")}</p>
 
       {scriptDialogue.length > 0 && (
         <Button
@@ -1988,8 +1999,47 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
         </Select>
       </div>
 
+      <div>
+        <Label htmlFor="dlg-seed">{t("field.seed")}</Label>
+        <Input
+          id="dlg-seed"
+          type="number"
+          min={0}
+          max={4294967295}
+          placeholder={t("audiocfg.phRandom")}
+          value={data.seed ?? ""}
+          onChange={(e) => {
+            const raw = e.target.value.trim()
+            if (raw === "") { onUpdate({ seed: undefined }); return }
+            const n = parseInt(raw, 10)
+            if (Number.isFinite(n)) onUpdate({ seed: n })
+          }}
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          {t("audiocfg.hintSeedReproducible")}
+        </p>
+      </div>
+
+      <div>
+        <Label>{t("audiocfg.textNormalization")}</Label>
+        <Select
+          value={data.applyTextNormalization ?? "auto"}
+          onValueChange={(v) => onUpdate({ applyTextNormalization: v === "auto" ? undefined : (v as TextToDialogueData["applyTextNormalization"]) })}
+        >
+          <SelectTrigger aria-label={t("audiocfg.textNormalization")}><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="auto">{t("audiocfg.normalizationAuto")}</SelectItem>
+            <SelectItem value="on">{t("audiocfg.normalizationOn")}</SelectItem>
+            <SelectItem value="off">{t("audiocfg.normalizationOff")}</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-[10px] text-muted-foreground mt-1">
+          {t("audiocfg.hintTextNormalization")}
+        </p>
+      </div>
+
       <p className="text-xs text-muted-foreground">
-        Multi-speaker dialogue using ElevenLabs voices. Each line is spoken by the selected voice. All lines are combined into a single audio output.
+        {t("audiocfg.descTextToDialogue")}
       </p>
     </div>
   )

@@ -327,6 +327,17 @@ already spent what was refunded records the shortfall instead of going
 negative. Deleting an organization requires reclaiming every workspace
 allocation first.
 
+**Automations spend the workspace's money.** A webhook trigger's URL is a
+bearer capability: whoever holds it can start the run, and once workspace
+payment is live, a run of a workspace-homed workflow bills the workspace's
+budget. Treat trigger URLs like credentials — anyone you share one with can
+spend against the class. Every automated fire (webhook, schedule, Telegram)
+re-checks at fire time that the trigger's creator may still run the
+workflow; a creator who lost access (grant revoked, membership suspended,
+workspace archived) stops the automation, and the workflow's run history
+shows one failed entry with the code `run_requires_authenticated_member`
+saying why. (Rollout-gated: workspace-paid runs may lag this document.)
+
 ## Errors
 
 Errors use the standard envelope `{ "error": { "code", "message" } }`; dispatch

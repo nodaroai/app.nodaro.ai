@@ -16,6 +16,8 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js"
+import type { BillingContext } from "../../lib/billing-context.js"
+import { stampPipelineConfig } from "./pipeline-payer.js"
 import { PIPELINE_STAGE_NAMES, type PipelineStageName } from "@nodaro/shared"
 
 // Re-export so callers have one import point.
@@ -33,6 +35,11 @@ export interface BranchPipelineArgs {
   originalPipelineId: string
   fromStage: PipelineStageName
   userId: string
+  /** The BRANCHING lane's resolved payer (P14) — a branch is a new pipeline
+   *  the brancher actively starts, so it is stamped fresh from their request,
+   *  never inherited from the original (inheriting would spend the original
+   *  payer's budget on a fork it never asked for). Absent = personal. */
+  billingContext?: BillingContext
 }
 
 export interface BranchPipelineResult {
@@ -78,7 +85,7 @@ const ENTITY_BY_STAGE: Record<PipelineStageName, readonly string[]> = {
 export async function branchPipeline(
   args: BranchPipelineArgs,
 ): Promise<BranchPipelineResult> {
-  const { supabase, originalPipelineId, fromStage, userId } = args
+  const { supabase, originalPipelineId, fromStage, userId, billingContext } = args
 
   // 1. Validate fromStage
   const branchOrder = STAGE_ORDER.indexOf(fromStage)
@@ -140,7 +147,7 @@ export async function branchPipeline(
   if (pinnedModels.length > 0) {
     const { CreditsService } = await import("../billing/credits.js")
     for (const modelId of pinnedModels) {
-      const check = await CreditsService.checkCredits(userId, modelId)
+      const check = await CreditsService.checkCredits(userId, modelId, false, undefined, { billingContext })
       if (!check.allowed) {
         throw new BranchPipelineError(
           "model_pin_forbidden",
@@ -176,7 +183,9 @@ export async function branchPipeline(
       output_resolution: original.output_resolution,
       language: original.language,
       style_directives: original.style_directives ?? null,
-      config: original.config ?? null,
+      // P14: strip the ORIGINAL's stamped payer and stamp the brancher's own
+      // (see BranchPipelineArgs.billingContext).
+      config: rebrandBranchConfig(original.config, billingContext),
       max_cost_credits: original.max_cost_credits ?? null,
       upfront_credit_estimate: upfront,
       reserved_credits: upfront,
@@ -203,6 +212,7 @@ export async function branchPipeline(
     userId,
     pipelineId: newPipelineId,
     credits: upfront,
+    billingContext,
   })
   if (!reservation.ok) {
     await supabase.from("pipelines").delete().eq("id", newPipelineId)
@@ -332,4 +342,15 @@ export async function branchPipeline(
       .eq("id", newPipelineId)
     throw err
   }
+}
+
+/** P14: a branched pipeline's config carries the BRANCHER's payer stamp,
+ * never the original's (and never a forged one riding the copied config).
+ * Thin null-mapping wrapper over the ONE stamping rule. */
+function rebrandBranchConfig(
+  originalConfig: unknown,
+  billingContext: BillingContext | undefined,
+): Record<string, unknown> | null {
+  const stamped = stampPipelineConfig(originalConfig as Record<string, unknown> | null, billingContext)
+  return Object.keys(stamped).length > 0 ? stamped : null
 }

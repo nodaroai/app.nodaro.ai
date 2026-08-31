@@ -3,6 +3,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 vi.mock("../../../../lib/queue.js", () => ({
   videoQueue: { add: vi.fn().mockResolvedValue(undefined) },
 }))
+// P14: the worker-lane payer read — personal in these hermetic worlds.
+vi.mock("../../pipeline-payer.js", () => ({
+  getPipelineBillingContext: vi.fn(async (_sb: unknown, _pid: string, userId: string) => ({ payer: "user", userId })),
+}))
+
 vi.mock("../../../billing/credits.js", () => ({
   CreditsService: {
     reserveCredits: vi.fn().mockResolvedValue({
@@ -120,7 +125,7 @@ describe("pipelineGenerateNarration", () => {
     expect(getVideoDuration).toHaveBeenCalledWith("https://r2/narration.mp3")
     // Default model is elevenlabs-v3 (direct API, supports [audio tags]).
     expect(CreditsService.reserveCredits).toHaveBeenCalledWith(
-      "u1", "narr-job-1", "elevenlabs-v3", 0, 0, { isAppRun: false },
+      "u1", "narr-job-1", "elevenlabs-v3", 0, 0, { isAppRun: false, billingContext: { payer: "user", userId: "u1" } },
     )
     expect(videoQueue.add).toHaveBeenCalledWith(
       "text-to-speech",

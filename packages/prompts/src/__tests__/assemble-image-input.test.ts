@@ -3,6 +3,10 @@ import { assembleImageInput } from "../assemble-image-input.js"
 import { buildImagePrompt } from "../prompt-builder.js"
 import { getFramingPromptHint } from "../framing.js"
 import { getLightingPromptHint } from "../lighting.js"
+import { getLensPromptHint } from "../lens.js"
+import { getCameraFormatPromptHint } from "../camera-format.js"
+import { getStylePromptHint } from "../style.js"
+import { buildMoodHints } from "../mood.js"
 import type { ConnectedReference } from "@nodaro/shared"
 
 /**
@@ -11,9 +15,9 @@ import type { ConnectedReference } from "@nodaro/shared"
  * `generate-image` assembly through it. These tests pin BOTH layers:
  *   (a) the id-based composition (direction / structured) — ported from
  *       Studio's `assembly.test.ts` as the oracle, and
- *   (b) the BY-CONSTRUCTION PARITY the caller refactor relies on: with no
- *       direction/structured, the wrapper === the old inline `buildImagePrompt`
- *       call + empty-check, byte-for-byte.
+ *   (b) the BY-CONSTRUCTION PARITY the caller refactor relies on: for a node
+ *       that carries no direction/structured, the wrapper === the old inline
+ *       `buildImagePrompt` call + empty-check, byte-for-byte.
  */
 
 // flux-2-max supports reference images (used to assert refs survive the gate).
@@ -92,6 +96,92 @@ describe("assembleImageInput — id-based composition (Studio oracle)", () => {
       structured: { person: { age: 30, gender: "woman", expression: "calm" } },
     })
     expect(result.prompt).toBe("a portrait. Subject: 30 years old, woman, calm expression.")
+  })
+
+  // ── The direction registry (the fold moved into `direction-registry.ts`) ──
+
+  it("returns the prompt VERBATIM and UNTRIMMED for a direction that renders nothing", () => {
+    // The no-op branch is what the platform-caller parity contract rests on: an
+    // empty (or all-empty-valued) `direction` must not trip the join, or the
+    // prompt would silently get trimmed.
+    for (const direction of [{}, { style: "" }, { mood: [] }, { style: "__no_such_style__" }]) {
+      const result = assembleImageInput({
+        userPrompt: "  a knight \n",
+        provider: REF_PROVIDER,
+        direction,
+      })
+      expect(result.prompt).toBe("  a knight \n")
+    }
+  })
+
+  it("folds a registry key that predates no legacy field (style) end to end", () => {
+    const result = assembleImageInput({
+      userPrompt: "a knight",
+      provider: REF_PROVIDER,
+      direction: { style: "anime" },
+    })
+    expect(result.prompt).toBe(`a knight. ${getStylePromptHint("anime")}`)
+  })
+
+  it("blends a multi-pick dimension into ONE clause", () => {
+    const blended = buildMoodHints({ mood: ["happy", "joyful"] }, "full")
+    expect(blended).toHaveLength(1)
+    const result = assembleImageInput({
+      userPrompt: "a knight",
+      provider: REF_PROVIDER,
+      direction: { mood: ["happy", "joyful"] },
+    })
+    expect(result.prompt).toBe(`a knight. ${blended[0]}`)
+  })
+
+  it("folds in TABLE order, not the caller's object-literal order", () => {
+    const result = assembleImageInput({
+      userPrompt: "a knight",
+      provider: REF_PROVIDER,
+      direction: { style: "anime", shotSize: "wide-shot" },
+    })
+    expect(result.prompt).toBe(
+      `a knight. ${getFramingPromptHint("wide-shot")}. ${getStylePromptHint("anime")}`,
+    )
+  })
+
+  it("keeps the five pre-registry keys byte-identical to the old inlined fold", () => {
+    const direction = {
+      framingId: "wide-shot",
+      framingAngleId: "low-angle",
+      lightingId: "golden-hour",
+      lensId: "wide-24mm",
+      cameraFormatId: "16mm-film",
+    }
+    const result = assembleImageInput({
+      userPrompt: "a knight",
+      provider: REF_PROVIDER,
+      direction,
+    })
+    // The exact string the pre-registry `composePromptText` produced: the same
+    // five clauses, in the same order, joined with the same ". ".
+    expect(result.prompt).toBe(
+      [
+        "a knight",
+        getFramingPromptHint("wide-shot"),
+        getFramingPromptHint("low-angle"),
+        getLightingPromptHint("golden-hour"),
+        getLensPromptHint("wide-24mm"),
+        getCameraFormatPromptHint("16mm-film"),
+      ].join(". "),
+    )
+  })
+
+  it("keeps the structured fragment LAST, after every direction clause", () => {
+    const result = assembleImageInput({
+      userPrompt: "a portrait",
+      provider: REF_PROVIDER,
+      direction: { style: "anime" },
+      structured: { person: { age: 30, gender: "woman", expression: "calm" } },
+    })
+    expect(result.prompt).toBe(
+      `a portrait. ${getStylePromptHint("anime")}. Subject: 30 years old, woman, calm expression.`,
+    )
   })
 })
 

@@ -4,6 +4,11 @@ import type { SceneNodeData, ShotSpec } from "@nodaro/shared"
 vi.mock("../../../../lib/queue.js", () => ({
   videoQueue: { add: vi.fn().mockResolvedValue(undefined) },
 }))
+// P14: the worker-lane payer read — personal in these hermetic worlds.
+vi.mock("../../pipeline-payer.js", () => ({
+  getPipelineBillingContext: vi.fn(async (_sb: unknown, _pid: string, userId: string) => ({ payer: "user", userId })),
+}))
+
 vi.mock("../../../billing/credits.js", () => ({
   CreditsService: {
     reserveCredits: vi.fn().mockResolvedValue({

@@ -953,6 +953,11 @@ export interface PluginCreditReservation {
 export interface PluginCreditGuardOpts {
   computeCredits?: (parsedBody: unknown) => number | Promise<number>
   dedup?: boolean
+  /** P14: wealth-check-only guard — the route never reserves in-request, so
+   *  the preflight stays PERSONAL even under a workspace billing context.
+   *  Additive-optional (no CONTRACT_VERSION bump); today's plugin routes all
+   *  reserve in-request via `tk.reserveCreditsForJob` and take the default. */
+  checkOnly?: boolean
 }
 
 /**
@@ -1077,10 +1082,14 @@ export interface PluginHttpToolkit {
    * rather than importing undici's `SafeFetchInit`/`Response` types.
    */
   safeFetch(url: string): Promise<PluginFetchResponse>
-  /** Mirrors `insertWithIdempotencyKey` (`lib/idempotent-insert.ts:33`). */
+  /** Mirrors `insertWithIdempotencyKey` (`lib/idempotent-insert.ts:33`).
+   *  P14: the optional context stamps the payer pair (workspace_id/org_id)
+   *  onto the row — which also trips the DB privacy clamp for workspace
+   *  work. Additive-optional: an older plugin's rows stay personal-shaped. */
   insertJobWithIdempotencyKey(
     data: Record<string, unknown> & { user_id: string },
     idempotencyKey: string | null | undefined,
+    billingContext?: PluginBillingContext,
   ): Promise<{ id: string; created: boolean }>
   /**
    * Mirrors `computeGenerateVideoProPricing`
@@ -1342,6 +1351,10 @@ export interface SeededPipelineInput {
   scenes?: Array<{ sceneIndex: number; sceneNodeData: unknown }>
   config?: Record<string, unknown>
   maxCostCredits?: number
+  /** P14: the seeding lane's resolved payer, stamped durably into
+   *  pipelines.config (one payer per pipeline). Additive-optional — an
+   *  older plugin simply seeds unstamped (personal) pipelines. */
+  billingContext?: PluginBillingContext
 }
 
 /** Seeded pipeline estimate input — the subset of `SeededPipelineInput` used for credit estimation. */
@@ -1855,6 +1868,15 @@ export interface PluginBillingResolveInput {
  */
 export interface PluginBillingService {
   resolve(input: PluginBillingResolveInput): Promise<PluginBillingContext>
+  /**
+   * P14/W8 — the payer-aware estimate's budget preview: the workspace's
+   * remaining headroom for this member, plus a display label. ONE formula,
+   * shared with the budget route (the plugin extracts its route-local math
+   * into this member). Additive-optional: an older plugin degrades the
+   * preview to "workspace pays — no preview" (headroom null), never an
+   * error.
+   */
+  headroom?(workspaceId: string, userId: string): Promise<{ headroomCredits: number; workspaceLabel?: string } | null>
 }
 
 export interface PluginServices {

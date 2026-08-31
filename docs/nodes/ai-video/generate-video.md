@@ -176,6 +176,64 @@ Composite credit identifier: `gemini-omni-video:<resolution_prefix>:<duration>` 
 
 > **Note:** 4K is blocked on the free tier. Free-tier requests at 4K resolution are rejected with a `tier_restriction` error — upgrade to Basic or higher to use 4K output.
 
+## Cinematic direction by id (`direction`, API / SDK)
+
+On the canvas you set a look and a motion by **wiring parameter-picker nodes**
+into the node's handles. A direct API / SDK / MCP caller does the same thing
+with the optional `direction` object on `POST /v1/generate-video` (and
+`POST /v1/text-to-video`): a flat map of catalog ids, one key per dimension,
+which the platform folds into the prompt itself. You send ids; the platform owns
+the wording — so a saved shot picks up improved phrasing instead of freezing the
+hint text your client wrote, and re-generating it never double-bakes.
+
+```json
+"direction": {
+  "cameraMotion": "dolly-in",
+  "shotSize": "medium-shot",
+  "timeOfDay": "dawn",
+  "colorLook": "teal-orange",
+  "temporalSpeed": "slow-motion"
+}
+```
+
+- **Keys are the picker field names** the canvas already uses. Look dimensions:
+  framing (`shotSize`, `angle`, `coverage`, `composition`, `vantage`), camera
+  (`cameraFormat`, `lens`), lighting (`timeOfDay`, `lightingStyle`,
+  `lightingDirection`, `lightingRatio`, `colorTemperature`), look (`colorLook`,
+  `atmosphere`, `style`, `mood`, `aesthetic`), scene (`setting`, `era`,
+  `backdrop`), plus `pose` and `compositionEffect`. Motion dimensions:
+  `cameraMotion`, `actionFx`, `temporalSpeed`, `temporalFreeze`,
+  `temporalDirection`, `temporalShutter`, `transition`, `loopSubject`. Valid ids
+  come from `GET /v1/picker-catalogs`; on a deployment with registered catalog
+  **packs** that endpoint also lists pack-added ids, which are accepted but
+  render no clause.
+- **Camera motion leads**, then the look clauses in the platform's canonical
+  order — not your object's key order.
+- **Motion dimensions render as short terms, look dimensions as full clauses.**
+  `transition: "cross-dissolve"` injects the term, not the sentence explaining
+  it: terse motion cues read better to a video model, and video prompt ceilings
+  are tight.
+- **Stills-only dimensions are accepted and ignored here** (`aperture`,
+  `shutterSpeed`, `isoValue`, `postProcess`, `photoGenre`, `photographer`,
+  `renderQuality`), so one client-side look map can be sent to either surface
+  unchanged.
+- **A value is one id or an array.** Multi-pick dimensions honor their own cap; a
+  single-pick key handed an array takes the first entry. Exceeding a dimension's
+  cap truncates rather than 400ing, and unknown keys / unknown ids are skipped
+  silently — but the wire bounds (8 entries per key, 100 characters per id) do
+  reject.
+- **Absent ≠ empty.** A missing key means "no hint", never a default; a
+  `direction` that renders nothing leaves your prompt byte-for-byte untouched.
+- The clauses fold into the prompt **before** reference assembly, so a bound
+  character's identity directives still wrap the whole description. The final
+  prompt is then clamped to the provider's ceiling (kling: 1000 characters) and
+  the clamp cuts the tail, so send the dimensions that carry the shot.
+
+[Extend Video](./extend-video.md) deliberately has no `direction` field — its
+prompt continues an existing clip, where re-stating the look is the wrong lever.
+
+Full semantics: [API integration guide](../../api-integration.md#cinematic-direction-on-the-video-routes).
+
 ## Credit pricing
 
 Pricing is computed at credit-reservation time via `buildVideoCreditModelIdentifier(provider, duration, sound, mode, videoSize, resolution, hasVideoRef)` in `@nodaro/shared/credit-identifiers`. The `mode` argument is the dispatched mode (`"image-to-video"` or `"text-to-video"`), so T2V and I2V prices can differ per provider (via `T2V_CREDIT_OVERRIDES`).
@@ -294,12 +352,12 @@ A request is **voiced** only when a spec is present **and** the model can carry 
 
 | Audio mode | Models | Chain |
 |---|---|---|
-| `audio_driven` | `seedance-2`, `seedance-2-fast`, `seedance-2-mini`, `seedance-2-5`, `minimax-h3` (audio always on — no toggle) | Synthesize the dialogue (each line in its own voice) via ElevenLabs Dialogue v3 → feed as reference audio → the model lip-syncs to it. |
+| `audio_driven` | `seedance-2`, `seedance-2-fast`, `seedance-2-mini`, `seedance-2-5`, `minimax-h3` (audio always on — no toggle) | Synthesize the dialogue (each line in its own voice) via ElevenLabs Dialogue v3 (direct API — any voice mix works: premade, Voice Library, and cloned voices, no premade-only restriction) → feed as reference audio → the model lip-syncs to it. |
 | `native_speech` | `veo3`, `veo3.1`, `veo3_lite` (always on); `kling`, `kling-3.0` (behind the `sound` toggle — enabling it on Kling raises the credit cost, see the `:audio` composites below); `kling-3-omni` (audio included in the flat rate) | Bake the line during generation, then revoice the baked audio to the primary character voice (ElevenLabs voice-changer, keeping the music/SFX bed). |
 
 Kling models speak scripted dialogue natively: quote the line in the prompt (optionally with a voice description, e.g. `[Anna: warm calm voice]: "good morning"`) and enable sound. Kling 2.6 voices are English/Chinese; other languages are auto-translated to English by the model.
 
-**Speaker mapping.** Each `dialogue[].speaker` is matched (case-insensitive) to a `characterVoices[].speaker` to pick that line's `voiceId`. An unmatched speaker falls back to the default (first) voice, mirroring the pipeline's non-fatal missing-voice behavior. Total dialogue text is capped at 5000 characters (the Dialogue v3 limit); lines over the budget are dropped with a log entry.
+**Speaker mapping.** Each `dialogue[].speaker` is matched (case-insensitive) to a `characterVoices[].speaker` to pick that line's `voiceId`. An unmatched speaker falls back to the default (first) voice, mirroring the pipeline's non-fatal missing-voice behavior. Total dialogue text is capped at 5,000 characters (the shared Dialogue v3 limit); lines over the budget are dropped with a log entry.
 
 ### Credit pricing (character voice)
 

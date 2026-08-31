@@ -432,14 +432,16 @@ async function maybeForceSequentialMode(
   if (currentMode === "sequential") return
 
   // Why: this is a read-modify-write on `pipelines.config` (select then
-  // update), which is technically a lost-update race window. However, the
-  // window is bounded to Stage 5 only — no other concurrent writer touches
-  // `shot_generation_mode` at this point in the pipeline lifecycle (Stage 6+
-  // only reads the field; user config edits arrive before Stage 5 starts).
-  // The practical risk is effectively zero given the single-pipeline sequential
-  // execution model. Revisit with a JSONB merge UPDATE (`config = config ||
-  // '{"shot_generation_mode":"sequential"}'::jsonb`) if multi-writer stages
-  // are introduced in a later phase.
+  // update) — a lost-update race window. It is bounded to Stage 5 only — no
+  // other backend writer touches `config` at this point in the lifecycle
+  // (Stage 6+ only reads; user config edits arrive before Stage 5 starts;
+  // migration 359 removed the browser's direct write path entirely). NOTE
+  // (P14): `config` now also carries the pipeline's payer stamp
+  // (`billingContext`), so a lost update here would DROP the payer, not just
+  // a mode flag — the fresh select immediately above is what preserves it on
+  // the normal path. If any second backend writer of `config` ever appears,
+  // switch this to a JSONB merge UPDATE (`config = config ||
+  // '{"shot_generation_mode":"sequential"}'::jsonb` via an RPC) FIRST.
   await supabase
     .from("pipelines")
     .update({

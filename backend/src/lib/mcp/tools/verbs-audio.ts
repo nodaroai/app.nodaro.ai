@@ -311,7 +311,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "`elevenlabs-multilingual` is a legacy v2 model routed through a " +
         "third-party wrapper known to garble some languages (Hebrew observed) " +
         "— only pick it when a specific library voice is verified for v2 " +
-        "only, or the text exceeds v3's ~3,000-char single-request cap (v2 " +
+        "only, or the text exceeds v3's 5,000-char single-request cap (v2 " +
         "takes ~10,000). Never switch away from v3 for language reasons " +
         "alone. Call `list_models { kind: \"audio\", mode: \"tts\" }` for the " +
         "full sheet.\n\n" +
@@ -370,7 +370,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
             "`elevenlabs-turbo` is cheaper for plain narration. " +
             "`elevenlabs-multilingual` is a legacy v2 model via a third-party " +
             "wrapper known to garble some languages (Hebrew observed) — only " +
-            "use it for a v2-only-verified voice or text over v3's ~3,000-char " +
+            "use it for a v2-only-verified voice or text over v3's 5,000-char " +
             "cap (v2 allows ~10,000). Call " +
             "list_models { kind: \"audio\", mode: \"tts\" } for the full sheet.",
           ),
@@ -479,6 +479,85 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         widgetData: {
           prompt: effective.text as string,
           model: modelId,
+        },
+      })
+    },
+  )
+
+  // ── generate_dialogue (text-to-dialogue) ──
+  server.registerTool(
+    "generate_dialogue",
+    {
+      title: "Generate Dialogue",
+      description:
+        "Generate a multi-speaker dialogue as ONE audio file via ElevenLabs " +
+        "Dialogue v3 (direct API). Give it a script — an ordered list of " +
+        "{ text, voice_id } lines — and each line is spoken by its voice, " +
+        "combined into a single track. Returns a job_id.\n\n" +
+        "Use this (never generate_speech per line + stitching) for " +
+        "conversations, interviews, podcast-style exchanges, and scenes: the " +
+        "model voices the exchange with natural turn-taking. Supports " +
+        "`[audio tags]` like `[laughs]`, `[whispers]` inside line text, and " +
+        "ANY voice — premade names, cloned/library UUIDs, mixed casts.\n\n" +
+        "Limits: 5,000 characters total across lines (≤2,000 recommended " +
+        "for best quality), at most 10 unique voices per generation.",
+      inputSchema: {
+        dialogue: z
+          .array(
+            z.object({
+              text: z.string().min(1).describe("What this line says. `[audio tags]` allowed."),
+              voice_id: z
+                .string()
+                .min(1)
+                .describe(
+                  "Voice for this line — a premade voice NAME (recommended; " +
+                  "same naming as `generate_speech`: Rachel, Aria, Roger, " +
+                  "Sarah, Laura, Charlie, George, Callum, River, Liam, " +
+                  "Charlotte, Alice, Matilda, Will, Jessica, Eric, Chris, " +
+                  "Brian, Daniel, Lily, Bill) or an ElevenLabs UUID of a " +
+                  "voice the user has cloned/saved. DO NOT invent UUIDs.",
+                ),
+            }),
+          )
+          .min(1)
+          .max(200)
+          .describe("The script, in speaking order. Reuse voice_ids across lines for the same character."),
+        stability: z
+          .union([z.literal(0), z.literal(0.5), z.literal(1)])
+          .optional()
+          .describe("v3 stability: 0 = most variable, 0.5 = balanced, 1 = most stable."),
+        language_code: z.string().max(10).optional().describe("ISO 639-1 hint (e.g. \"en\", \"he\"). Omit for auto-detect."),
+        seed: z.number().int().min(0).max(4294967295).optional().describe("Deterministic sampling. Omit for random."),
+        apply_text_normalization: z
+          .enum(["auto", "on", "off"])
+          .optional()
+          .describe("Spell out numbers/dates/abbreviations. Default auto."),
+      },
+      outputSchema: JOB_OUTPUT_SCHEMA,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v4/job-audio",
+        ui: { resourceUri: "ui://nodaro/widget/v4/job-audio", visibility: ["model", "app"] },
+      },
+    },
+    async (args) => {
+      const payload = {
+        dialogue: args.dialogue.map((l) => ({ text: l.text, voice: l.voice_id })),
+        stability: args.stability,
+        languageCode: args.language_code,
+        seed: args.seed,
+        applyTextNormalization: args.apply_text_normalization,
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      return dispatchJob(fastify, session, {
+        url: "/v1/text-to-dialogue",
+        payload,
+        label: "text-to-dialogue",
+        widgetKind: "audio",
+        widgetData: {
+          prompt: args.dialogue.map((l) => l.text).join("\n"),
+          model: "elevenlabs-dialogue",
         },
       })
     },

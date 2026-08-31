@@ -25,6 +25,7 @@
  */
 import type { FastifyInstance, FastifyRequest } from "fastify"
 import { hasOrganizations } from "./config.js"
+import { supabase } from "./supabase.js"
 import { getPluginServices } from "./private-plugins/load.js"
 import type {
   PluginBillingContext,
@@ -48,7 +49,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * a context missing `entitlements` 500s the credit-guard hot path for every
  * workspace member the moment a spend site deep-destructures it.
  */
-function isBillingContext(v: unknown): v is BillingContext {
+export function isBillingContext(v: unknown): v is BillingContext {
   if (!v || typeof v !== "object") return false
   const c = v as Record<string, unknown>
   if (typeof c.userId !== "string") return false
@@ -64,7 +65,15 @@ function isBillingContext(v: unknown): v is BillingContext {
     ent.watermark === false &&
     ent.dailyCapCredits === null &&
     typeof ent.parallelism === "number" &&
-    ent.tierForGates === "business"
+    ent.tierForGates === "business" &&
+    // The three gate literals the entitlement override (org-entitlements.ts)
+    // reads at the spend sites. Compile-time literals in the contract, but
+    // this value crossed a process boundary from a build-arg-pinned plugin —
+    // runtime truth is this check, and each of these relaxes a personal gate
+    // the moment it is consumed.
+    ent.freeTierBlocklist === false &&
+    ent.webFreeMode === false &&
+    ent.appCreditsAllowance === false
   )
 }
 
@@ -92,6 +101,66 @@ export function billingService(): PluginBillingService | null {
 /** The answer every lane starts from, and every failure returns to. */
 export function personalPayer(userId: string): BillingContext {
   return { payer: "user", userId }
+}
+
+/**
+ * The DEGRADED-context refusal (P14). A resolver failure degrades to the
+ * personal payer, marked — and for work HOMED IN A WORKSPACE that fallback
+ * would silently bill the member's own pocket for class work, the one
+ * direction this whole seam exists to prevent. A run-creation surface asks
+ * this before enqueueing: true ⇒ refuse the run (503-shaped where the caller
+ * is authenticated; the fire lanes keep their uniform responses and skip),
+ * retryable, the personal pocket untouched. Personal-homed work proceeds on
+ * the degraded personal answer — it is the answer that work always had.
+ */
+export function shouldRefuseDegradedRun(
+  ctx: BillingContext,
+  workflowWorkspaceId: string | null | undefined,
+): boolean {
+  return ctx.payer === "user" && ctx.degraded === true && workflowWorkspaceId != null
+}
+
+/**
+ * The same question for a surface that has NOT already loaded the workflow
+ * row — the ONE probe every such lane shares, because five copies of a
+ * security decision are five places to fail it differently.
+ *
+ * FAIL-CLOSED on the probe itself: the resolver degrades on exactly the
+ * database blips that would also fail this read, so an unreadable home +
+ * a degraded payer must refuse — treating "unknown" as "personal" would
+ * bill the member in precisely the outage this guard exists for. Costs one
+ * indexed select, on the rare degraded path only.
+ */
+export async function shouldRefuseDegradedRunFor(
+  ctx: BillingContext,
+  workflowId: string,
+): Promise<boolean> {
+  if (!(ctx.payer === "user" && ctx.degraded === true)) return false
+  const { data, error } = await supabase
+    .from("workflows")
+    .select("workspace_id")
+    .eq("id", workflowId)
+    .maybeSingle()
+  if (error) {
+    console.error(
+      `[billing-context] cannot read the home of workflow ${workflowId} on a degraded payer — refusing:`,
+      error.message,
+    )
+    return true
+  }
+  return shouldRefuseDegradedRun(ctx, (data?.workspace_id as string | null | undefined) ?? null)
+}
+
+/**
+ * The NORMATIVE absent-field rule (decision #7): a queue payload with no
+ * `billingContext` reads as `{ payer: "user", userId: payload.userId }`,
+ * unconditionally and permanently — old-API→new-worker and rollback windows
+ * depend on it. The TYPE requires the field (a new producer is
+ * compile-forced); the WIRE may still predate it, which is why the read
+ * widens instead of trusting the annotation.
+ */
+export function payloadBillingContext(payload: { userId: string; billingContext?: BillingContext }): BillingContext {
+  return payload.billingContext ?? personalPayer(payload.userId)
 }
 
 /**

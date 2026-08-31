@@ -1,6 +1,8 @@
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
 import { attemptAutoRecharge } from "./auto-recharge.js"
+import { applyOrgEntitlements } from "./org-entitlements.js"
+import type { BillingContext } from "../../lib/billing-context.js"
 import { hasCredits } from "../../lib/config.js"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { buildSeedanceExtendCreditIdentifier } from "../../lib/seedance-extend-model.js"
@@ -150,6 +152,18 @@ for (const analysisProvided of [true, false]) {
 // ============================================================
 // Types
 // ============================================================
+
+/**
+ * Spend-surface facts the guard threads into a credit check. `billingContext`
+ * (P14) may carry a workspace payer, which swaps the profile-derived gates
+ * for the org entitlement grade — see `org-entitlements.ts`, including the
+ * scope rule: only a path that actually reserves may thread a context.
+ */
+export interface CreditCheckSurface {
+  webFreeMode?: boolean
+  communityInstance?: boolean
+  billingContext?: BillingContext
+}
 
 export interface CreditCheckResult {
   allowed: boolean
@@ -1720,13 +1734,19 @@ export class CreditsService {
   static async logTransaction(params: {
     userId: string
     amount: number
-    creditType: "subscription" | "topup"
-    source: "subscription_created" | "subscription_renewal" | "one_time_purchase" | "admin_adjustment" | "usage" | "refund" | "stripe_refund" | "expiry"
+    /** `"org"` = a workspace-paid row (P14): the money moved in the workspace
+     *  budget, never the personal pools. The personal-history views filter
+     *  these out; the org reporting joins on them (P15). */
+    creditType: "subscription" | "topup" | "org"
+    source: "subscription_created" | "subscription_renewal" | "one_time_purchase" | "admin_adjustment" | "usage" | "org_usage" | "refund" | "stripe_refund" | "expiry"
     description?: string
     jobId?: string
     stripeTransactionId?: string
     adminUserId?: string
     balanceAfter: number
+    /** Set together on workspace-paid rows only (migration 351 columns). */
+    workspaceId?: string
+    orgId?: string
   }): Promise<boolean> {
     try {
       const { error } = await supabase
@@ -1741,6 +1761,10 @@ export class CreditsService {
           stripe_transaction_id: params.stripeTransactionId || null,
           admin_user_id: params.adminUserId || null,
           balance_after: params.balanceAfter,
+          // Conditional so every existing personal caller's insert shape is
+          // byte-identical (and never trips 42703 on a DB before 351).
+          ...(params.workspaceId ? { workspace_id: params.workspaceId } : {}),
+          ...(params.orgId ? { org_id: params.orgId } : {}),
         })
       if (error) {
         console.error("[credits] Failed to log transaction:", error)
@@ -1837,7 +1861,7 @@ export class CreditsService {
     modelIdentifier: string,
     isAppRun?: boolean,
     creditOverride?: number,
-    surface?: { webFreeMode?: boolean; communityInstance?: boolean },
+    surface?: CreditCheckSurface,
   ): Promise<CreditCheckResult> {
     // Self-hosted: always allow
     if (creditsDisabled()) {
@@ -1876,7 +1900,7 @@ export class CreditsService {
     modelIdentifier: string,
     isAppRun?: boolean,
     creditOverride?: number,
-    surface?: { webFreeMode?: boolean; communityInstance?: boolean },
+    surface?: CreditCheckSurface,
   ): Promise<CreditCheckResult> {
     if (creditsDisabled()) {
       return { allowed: true, balance: 999999, watermark: false }
@@ -1904,13 +1928,24 @@ export class CreditsService {
     // Resolved here (not by callers) so the surface flag can be threaded
     // dumbly: for free users the restriction is vacuous, for subscribers it
     // must not apply.
-    const webFree = Boolean(surface?.webFreeMode) && userTier === "payg"
-    const isFree = userTier === "free" || webFree
-    const watermark = isFree && FREE_TIER_RESTRICTIONS.watermark
+    //
+    // P14: a workspace payer swaps every profile-derived gate for the org
+    // entitlement grade — through the ONE helper both spend sites share, so
+    // the preflight and the reservation can never disagree. Without a
+    // workspace context the gates are the pre-P14 derivation, verbatim.
+    const gates = applyOrgEntitlements(
+      { userTier, webFree: Boolean(surface?.webFreeMode) && userTier === "payg" },
+      surface?.billingContext,
+    )
+    const webFree = gates.webFree
+    const isFree = gates.freeSemantics
+    const watermark = gates.watermarkable && FREE_TIER_RESTRICTIONS.watermark
 
-    // Check tier restriction (from model_pricing table)
+    // Check tier restriction (from model_pricing table). A workspace payer is
+    // gated at the org grade (`tierForGates`), not the member's personal tier
+    // — a free-tier student's class run may use what the class may use.
     if (pricing.tierRestriction) {
-      const userTierIndex = TIER_ORDER.indexOf(webFree ? "free" : userTier)
+      const userTierIndex = TIER_ORDER.indexOf(gates.tierForGates)
       const requiredTierIndex = TIER_ORDER.indexOf(pricing.tierRestriction)
 
       if (userTierIndex < requiredTierIndex) {
@@ -1940,8 +1975,11 @@ export class CreditsService {
     const topupCredits = webFree ? 0 : (profile.topup_credits ?? 0)
     const totalBalance = subscriptionCredits + topupCredits
 
-    // Check if user has enough credits
-    if (totalBalance < pricing.creditCost) {
+    // Check if user has enough credits. BYPASSED for a workspace payer: the
+    // personal pools are not what pays, and headroom is the reserve RPC's
+    // atomic job (`FOR UPDATE` on the budget row) — a zero-balance member
+    // doing class work must not be refused for a balance they don't need.
+    if (gates.personalBalance && totalBalance < pricing.creditCost) {
       return {
         allowed: false,
         error: webFree
@@ -1958,8 +1996,10 @@ export class CreditsService {
 
     // App run check: free tier users with no topup must have earned enough app
     // allowance. Payg web-free users are exempt — they left the allowance
-    // economy at first purchase (mirrors the RPC's v_lifetime gate).
-    if (isAppRun && isFree && !webFree && topupCredits === 0) {
+    // economy at first purchase (mirrors the RPC's v_lifetime gate). A
+    // workspace payer is outside the allowance economy entirely
+    // (`appAllowance` false — the class budget pays, nothing is "earned").
+    if (isAppRun && gates.appAllowance && isFree && !webFree && topupCredits === 0) {
       const appAllowance = profile.app_credits_allowance ?? 0
       if (appAllowance < pricing.creditCost) {
         return {
@@ -2026,25 +2066,32 @@ export class CreditsService {
     // reset on a new UTC day — reading raw daily_spent_credits would compare
     // today's first request against yesterday's spend and falsely 402-block,
     // even though the authoritative reserve_credits RPC resets it correctly.
-    const tierConfig = await getTierConfig(userTier)
-    const dailyLimit = surface?.communityInstance
-      ? undefined
-      : tierConfig.daily_credit_limit ?? undefined
-    const dailySpent = await getEffectiveDailySpent(
-      userId,
-      profile.daily_spent_credits ?? 0,
-      profile.last_daily_reset ?? null
-    )
+    // A workspace payer skips the whole block (`dailyCapOff`): class work is
+    // never personally day-capped, and the two reads would be paid for an
+    // answer nothing consumes.
+    let dailyLimit: number | undefined
+    let dailySpent: number | undefined
+    if (!gates.dailyCapOff) {
+      const tierConfig = await getTierConfig(userTier)
+      dailyLimit = surface?.communityInstance
+        ? undefined
+        : tierConfig.daily_credit_limit ?? undefined
+      dailySpent = await getEffectiveDailySpent(
+        userId,
+        profile.daily_spent_credits ?? 0,
+        profile.last_daily_reset ?? null
+      )
 
-    if (dailyLimit !== undefined && dailySpent + pricing.creditCost > dailyLimit) {
-      return {
-        allowed: false,
-        error: `Daily credit limit reached. Limit: ${dailyLimit}, Spent: ${dailySpent}`,
-        balance: totalBalance,
-        required: pricing.creditCost,
-        dailyLimit,
-        dailySpent,
-        watermark,
+      if (dailyLimit !== undefined && dailySpent + pricing.creditCost > dailyLimit) {
+        return {
+          allowed: false,
+          error: `Daily credit limit reached. Limit: ${dailyLimit}, Spent: ${dailySpent}`,
+          balance: totalBalance,
+          required: pricing.creditCost,
+          dailyLimit,
+          dailySpent,
+          watermark,
+        }
       }
     }
 
@@ -2071,7 +2118,7 @@ export class CreditsService {
     modelIdentifier: string,
     providerCostUsd: number,
     displayCostUsd: number,
-    options?: { watermarkOverride?: boolean; isAppRun?: boolean; creditOverride?: number; skipAutoRecharge?: boolean; webFreeMode?: boolean; communityInstance?: boolean },
+    options?: { watermarkOverride?: boolean; isAppRun?: boolean; creditOverride?: number; skipAutoRecharge?: boolean; webFreeMode?: boolean; communityInstance?: boolean; billingContext?: BillingContext },
   ): Promise<ReserveResult> {
     // Self-hosted: skip reservation
     if (creditsDisabled()) {
@@ -2079,6 +2126,10 @@ export class CreditsService {
     }
 
     const { watermarkOverride, isAppRun, creditOverride } = options ?? {}
+    // P14: the resolved payer, carried from the lane's ONE resolve point.
+    // Workspace ⇒ the RPC's workspace branch pays (p_workspace_id below) and
+    // the org entitlement grade replaces every profile-derived gate.
+    const ws = options?.billingContext?.payer === "workspace" ? options.billingContext : undefined
 
     // Get credit cost: route-supplied override or DB lookup.
     const dbPricing = await getModelCreditCostFromDB(modelIdentifier)
@@ -2097,23 +2148,50 @@ export class CreditsService {
       : "free"
     // Pool-aware web spending (D1 v2): resolved against payg-ness here so the
     // surface flag can be threaded from any web-origin caller unconditionally.
-    const webFree = Boolean(options?.webFreeMode) && userTier === "payg"
-    const watermark = watermarkOverride !== undefined
+    // P14: the same helper the preflight uses swaps these gates for the org
+    // grade under a workspace payer — the two sites can never disagree.
+    const derivedWebFree = Boolean(options?.webFreeMode) && userTier === "payg"
+    const gates = applyOrgEntitlements(
+      { userTier, webFree: derivedWebFree },
+      options?.billingContext,
+    )
+    const webFree = gates.webFree
+    // The PERSONAL watermark derivation — what the zero-cost path must use
+    // (no entitlement override without payment: the RPC's workspace guards
+    // never ran there), and the personal payer's answer everywhere.
+    const personalWatermark = watermarkOverride !== undefined
       ? watermarkOverride
-      : ((userTier === "free" || webFree) && FREE_TIER_RESTRICTIONS.watermark)
+      : ((userTier === "free" || derivedWebFree) && FREE_TIER_RESTRICTIONS.watermark)
+    // A workspace payer never watermarks — the entitlement grade decides, and
+    // it outranks even an explicit watermarkOverride (a stale personal-derived
+    // override from a caller must not watermark class work).
+    const watermark = ws ? (gates.watermarkable && FREE_TIER_RESTRICTIONS.watermark) : personalWatermark
 
     // Daily credit cap, enforced atomically inside reserve_credits (closes the
     // TOCTOU the read-only creditGuard preHandler left open). Free tier uses
     // FREE_TIER_RESTRICTIONS.dailyCreditCap (null since 2026-08-17 = no cap);
     // paid tiers use their configured daily_credit_limit (null = no cap).
     // Web-free payg runs ride the free cap — they ARE free-tier spending.
-    const dailyLimit: number | null = options?.communityInstance
-      ? null // D2: connected community instances ride uncapped days
-      : (userTier === "free" || webFree)
-        ? FREE_TIER_RESTRICTIONS.dailyCreditCap
-        : (await getTierConfig(userTier)).daily_credit_limit
+    // Workspace payer: no personal cap at all (`dailyCapOff`) — the RPC's
+    // budget/member-cap guards are the ceiling, atomically.
+    const dailyLimit: number | null = gates.dailyCapOff
+      ? null
+      : options?.communityInstance
+        ? null // D2: connected community instances ride uncapped days
+        : (userTier === "free" || webFree)
+          ? FREE_TIER_RESTRICTIONS.dailyCreditCap
+          : (await getTierConfig(userTier)).daily_credit_limit
 
-    // Skip deduction for zero-cost models
+    // Skip deduction for zero-cost models. The workspace payer is recorded in
+    // METADATA ONLY — deliberately not in the top-level workspace_id/org_id
+    // columns, because those are settlement DISPATCH KEYS: commit_credits and
+    // refund_credits branch on `usage_logs.workspace_id` (migration 351), and
+    // this reservation never passed a single workspace guard (membership,
+    // suspension, budget — all live in the RPC branch that never ran). A
+    // stamped column here would let a later metered commit debit the
+    // workspace budget with no reserve-side authorization. The ENTITLEMENTS
+    // stay personal-derived too (`personalWatermark`) — no override without
+    // payment.
     if (pricing.creditCost === 0) {
       const { data: usageLog } = await supabase
         .from("usage_logs")
@@ -2124,7 +2202,13 @@ export class CreditsService {
           provider: "reserved",
           credits_used: 0,
           cost_usd: providerCostUsd,
-          metadata: { status: "reserved", display_cost_usd: displayCostUsd },
+          metadata: {
+            status: "reserved",
+            display_cost_usd: displayCostUsd,
+            // Mirrors the RPC's payer shape (migration 351) minus
+            // `member_spend` — no spend row was touched, nothing to reverse.
+            ...(ws ? { payer: { kind: "workspace", workspace_id: ws.workspaceId, org_id: ws.orgId } } : {}),
+          },
         })
         .select("id")
         .single()
@@ -2132,12 +2216,15 @@ export class CreditsService {
       return {
         usageLogId: usageLog?.id ?? "log-failed",
         creditsReserved: 0,
-        watermark,
+        watermark: personalWatermark,
       }
     }
 
-    // Atomic reservation via single RPC (deducts credits + increments daily spent + creates usage log)
-    // billing-payer-ok: family 0 — the one line that talks to reserve_credits. P14 threads p_workspace_id here from BillingContext; until then every caller is a personal payer by definition
+    // Atomic reservation via single RPC (deducts credits + increments daily
+    // spent + creates usage log). `p_workspace_id` (P14) routes the RPC into
+    // its workspace branch — membership, suspension, member cap and budget
+    // headroom under FOR UPDATE. The key is spread conditionally so the
+    // personal call's wire shape stays byte-identical to pre-P14.
     const { data: usageLogId, error: reserveError } = await supabase.rpc("reserve_credits", {
       p_user_id: userId,
       p_credits: pricing.creditCost,
@@ -2148,6 +2235,7 @@ export class CreditsService {
       p_is_app_run: isAppRun ?? false,
       p_daily_limit: dailyLimit,
       p_web_free_mode: webFree,
+      ...(ws ? { p_workspace_id: ws.workspaceId } : {}),
     })
 
     if (reserveError) {
@@ -2167,50 +2255,67 @@ export class CreditsService {
     }
 
     // Fetch usage_log metadata (from_sub/from_topup) for accurate creditType,
-    // and current user balance for accurate balanceAfter (C3 + H6 fix)
-    let creditType: "subscription" | "topup" = "subscription"
+    // and current user balance for accurate balanceAfter (C3 + H6 fix).
+    // Workspace payer: SKIPPED — the money moved in the workspace budget, the
+    // personal pools are untouched, and the ledger row is org-shaped below.
+    let creditType: "subscription" | "topup" | "org" = ws ? "org" : "subscription"
     let balanceAfter = 0
-    try {
-      const [{ data: usageLog }, { data: balanceProfile }] = await Promise.all([
-        supabase
-          .from("usage_logs")
-          .select("metadata")
-          .eq("id", usageLogId)
-          .single(),
-        supabase
-          .from("profiles")
-          .select("subscription_credits, topup_credits")
-          .eq("id", userId)
-          .single(),
-      ])
-      const meta = usageLog?.metadata as Record<string, unknown> | null
-      const fromSub = (meta?.from_sub as number) ?? 0
-      const fromTopup = (meta?.from_topup as number) ?? 0
-      if (fromTopup > 0 && fromSub === 0) {
-        creditType = "topup"
+    if (!ws) {
+      try {
+        const [{ data: usageLog }, { data: balanceProfile }] = await Promise.all([
+          supabase
+            .from("usage_logs")
+            .select("metadata")
+            .eq("id", usageLogId)
+            .single(),
+          supabase
+            .from("profiles")
+            .select("subscription_credits, topup_credits")
+            .eq("id", userId)
+            .single(),
+        ])
+        const meta = usageLog?.metadata as Record<string, unknown> | null
+        const fromSub = (meta?.from_sub as number) ?? 0
+        const fromTopup = (meta?.from_topup as number) ?? 0
+        if (fromTopup > 0 && fromSub === 0) {
+          creditType = "topup"
+        }
+        if (balanceProfile) {
+          balanceAfter = (balanceProfile.subscription_credits ?? 0) + (balanceProfile.topup_credits ?? 0)
+        }
+      } catch {
+        // Non-critical: fall back to defaults if fetch fails
       }
-      if (balanceProfile) {
-        balanceAfter = (balanceProfile.subscription_credits ?? 0) + (balanceProfile.topup_credits ?? 0)
-      }
-    } catch {
-      // Non-critical: fall back to defaults if fetch fails
     }
 
-    // Log credit transaction
+    // Log credit transaction. Org rows carry the workspace/org pair and
+    // `credit_type: 'org'` — never a personal-shaped debit row for money that
+    // didn't move personally (the personal-history views filter on this; P15
+    // joins on it). `balance_after: 0` matches the RPC's own org-row
+    // convention (migration 351 omits it → column default) — the personal
+    // balance did not move, and the workspace budget lives in
+    // workspace_budgets, not here.
     await CreditsService.logTransaction({
       userId,
       amount: -pricing.creditCost,
       creditType,
-      source: "usage",
+      // org_usage (a 351 CHECK value, prepared for exactly these rows) so
+      // org usage is distinguishable from personal usage by source as well
+      // as by the pair — P15's reporting convention starts here.
+      source: ws ? "org_usage" : "usage",
       description: `Job ${jobId}: ${modelIdentifier}`,
       jobId,
       balanceAfter,
+      ...(ws ? { workspaceId: ws.workspaceId, orgId: ws.orgId } : {}),
     })
 
     // Successful reserve = the only place balances DECREASE — fire the
     // auto-recharge check (best-effort, never blocks). Third-party-app
-    // attributed operations are excluded via skipAutoRecharge.
-    if (!options?.skipAutoRecharge) {
+    // attributed operations are excluded via skipAutoRecharge. A WORKSPACE
+    // payer is excluded as an invariant, not a call-site flag: the member's
+    // personal balance did not move, and class work must never charge a
+    // member's saved card.
+    if (!options?.skipAutoRecharge && !ws) {
       void attemptAutoRecharge(userId)
     }
     return { usageLogId: usageLogId as string, creditsReserved: pricing.creditCost, watermark }

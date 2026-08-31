@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest"
 import { renderHook } from "@testing-library/react"
 import { useFinalPromptSegments } from "../use-final-prompt-segments"
 import { buildImageAssembleInput } from "../build-image-assemble-input"
-import { assembleImageInput } from "@nodaro/prompts"
+import { assembleImageInput, getFramingPromptHint } from "@nodaro/prompts"
 import type { SnippetPoolItem } from "@/lib/snippet-pool"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 
@@ -1164,5 +1164,75 @@ describe("useFinalPromptSegments — affixes apply ONLY to the field the run wra
       const r = run(args)
       expect(r.current.promptSegments.map((s) => s.text).join("")).toBe(r.current.promptText)
     }
+  })
+})
+
+describe("useFinalPromptSegments — a node's stored direction folds into the preview", () => {
+  // R6: if the preview did not read `node.data.direction`, the config panel's
+  // "final prompt" would understate every direction-carrying run — the exact
+  // bug class the WI-1a consolidation exists to kill, and the image path has no
+  // executed-run parity test to catch it.
+  beforeEach(() => {
+    useWorkflowStore.setState({
+      userPromptTemplates: {},
+      flowPromptTemplates: {},
+      characterDefinitions: [],
+    })
+  })
+
+  it("previews the same text the run assembles for a direction-carrying node", () => {
+    const node = {
+      id: "n1",
+      type: "generate-image",
+      position: { x: 0, y: 0 },
+      data: { prompt: "a knight", direction: { framingId: "medium-shot" } },
+    }
+    const nodes = [node] as never[]
+    const { result } = renderHook(() =>
+      useFinalPromptSegments({
+        userPrompt: "a knight",
+        consumerNodeId: "n1",
+        nodes,
+        edges: [] as never[],
+        provider: "gpt-image",
+      }),
+    )
+    const expected = assembleImageInput(
+      buildImageAssembleInput({
+        node: node as never,
+        nodes,
+        edges: [] as never[],
+        characterDefinitions: [],
+        userPromptTemplates: {},
+        flowPromptTemplates: {},
+        composedPrompt: "a knight",
+        provider: "gpt-image",
+        styleBypass: false,
+      }),
+    ).prompt
+    expect(result.current.promptText).toBe(expected)
+    // Non-vacuous: the framing hint really is in the previewed text.
+    const hint = getFramingPromptHint("medium-shot")
+    expect(hint.length).toBeGreaterThan(0)
+    expect(result.current.promptText).toContain(hint)
+  })
+
+  it("leaves a node without stored direction byte-identical", () => {
+    const node = {
+      id: "n1",
+      type: "generate-image",
+      position: { x: 0, y: 0 },
+      data: { prompt: "a knight" },
+    }
+    const { result } = renderHook(() =>
+      useFinalPromptSegments({
+        userPrompt: "a knight",
+        consumerNodeId: "n1",
+        nodes: [node] as never[],
+        edges: [] as never[],
+        provider: "gpt-image",
+      }),
+    )
+    expect(result.current.promptText).toBe("a knight")
   })
 })

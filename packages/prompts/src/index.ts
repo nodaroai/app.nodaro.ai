@@ -1,8 +1,10 @@
 /**
  * @nodaro/prompts — creative/prompt IP shared across backend and
  * frontend but deliberately EXCLUDED from the published Apache packages.
- * Never published to npm ("private": true); licensed with the repository
- * core under the root Nodaro Sustainable Use License.
+ * Published to npm (`publishConfig.access: public`) so first-party clients
+ * such as Studio can fold identically, under FSL-1.1-Apache-2.0 (free
+ * non-competing use) — see `packages/prompts/LICENSE`. NOT Apache-2.0 like
+ * `packages/{shared,client,cli}`; never merge prompt content back into those.
  *
  * Placement rule (root CLAUDE.md): new prompt engineering, catalogs,
  * doctrine, and presets default to backend/ or here — packages/shared gets
@@ -16,10 +18,14 @@ export * from "./entity-prompts.js"
 export * from "./brand-tokens.js"
 export * from "./prompt-builder.js"
 export * from "./prompt-builder-structured-fields.js"
+export * from "./direction-registry.js"
+export * from "./prompt-hint-join.js"
 export * from "./video-reference-resolver.js"
 export * from "./sound-aggregator.js"
 export * from "./assemble-suno-input.js"
 export * from "./assemble-image-input.js"
+export * from "./assemble-video-input.js"
+export * from "./read-node-direction.js"
 export * from "./seedance-2-inputs.js"
 export * from "./gemini-omni-inputs.js"
 export * from "./veo-i2v-inputs.js"

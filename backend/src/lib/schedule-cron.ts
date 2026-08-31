@@ -8,6 +8,9 @@
 import { supabase } from "./supabase.js"
 import { orchestrationQueue } from "./orchestration-queue.js"
 import { canRunWorkflow } from "./workflow-access.js"
+import { resolveBillingContext, shouldRefuseDegradedRunFor } from "./billing-context.js"
+import { billingPairColumns } from "./insert-job.js"
+import { recordTriggerFireRefusal } from "./trigger-fire-refusal.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 
 let intervalId: ReturnType<typeof setInterval> | null = null
@@ -85,7 +88,17 @@ export async function checkScheduledTriggers(): Promise<void> {
       // returns false for a transient outage too, and a cron that turned a
       // Redis blip into a permanently dead schedule would be worse than one
       // that quietly skips a tick and tries again next interval.
-      if (!(await canRunWorkflow(trigger.user_id, trigger.workflow_id))) continue
+      if (!(await canRunWorkflow(trigger.user_id, trigger.workflow_id))) {
+        // P14/W6: leave the owner ONE visible failed row (deduped) instead of
+        // a schedule that silently stops producing history.
+        await recordTriggerFireRefusal({
+          workflowId: trigger.workflow_id,
+          userId: trigger.user_id,
+          triggerType: "schedule",
+          triggerId: trigger.id,
+        })
+        continue
+      }
 
       // Check for an execution THIS OWNER already has running. Scoped to them
       // like the webhook path and the run route: before workflows were shared,
@@ -112,6 +125,19 @@ export async function checkScheduledTriggers(): Promise<void> {
       // the activeExec check for the same tick (identical previousLastTriggeredAt),
       // so the unique (user_id, idempotency_key) index rejects the duplicate INSERT
       // (execError → `continue`) instead of double-executing (double-charging).
+      // P14: payer resolved at FIRE TIME (same rule as the webhook fire);
+      // the row carries the pair (W7), the payload carries the context.
+      const billingContext = await resolveBillingContext({
+        userId: trigger.user_id,
+        workflowId: trigger.workflow_id,
+      })
+      // P14: a DEGRADED resolve on WORKSPACE-HOMED (or unreadable-home)
+      // work skips the tick (the next interval retries) rather than billing
+      // the owner's pocket — the ONE fail-closed probe.
+      if (await shouldRefuseDegradedRunFor(billingContext, trigger.workflow_id)) {
+        console.error(`[schedule-cron] degraded billing resolve on workspace workflow ${trigger.workflow_id} — tick skipped`)
+        continue
+      }
       const idempotencyKey = `schedule:${trigger.id}:${previousLastTriggeredAt ?? "initial"}`
       const { data: execution, error: execError } = await supabase
         .from("workflow_executions")
@@ -120,6 +146,7 @@ export async function checkScheduledTriggers(): Promise<void> {
           user_id: trigger.user_id,
           status: "pending",
           trigger_type: "schedule",
+          ...billingPairColumns(billingContext),
           trigger_data: {
             timestamp: now.toISOString(),
             cron: config.cron,
@@ -141,7 +168,7 @@ export async function checkScheduledTriggers(): Promise<void> {
         })
         .eq("id", trigger.id)
 
-      // Enqueue orchestration
+      // Enqueue orchestration (payer resolved above, before the row).
       const jobData: WorkflowExecutionJob = {
         executionId: execution.id,
         workflowId: trigger.workflow_id,
@@ -151,6 +178,7 @@ export async function checkScheduledTriggers(): Promise<void> {
           timestamp: now.toISOString(),
           last_triggered_at: previousLastTriggeredAt,
         },
+        billingContext,
       }
 
       await orchestrationQueue.add("workflow-execution", jobData, {

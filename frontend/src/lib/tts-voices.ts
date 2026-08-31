@@ -40,20 +40,6 @@ export const TTS_VOICES: readonly TTSVoice[] = [
   { id: "River", name: "River (Non-binary, American)" },
 ]
 
-/**
- * Voices supported by the ElevenLabs text-to-dialogue-v3 API (via KIE.ai).
- * @deprecated No longer used for filtering — all voices are now available for dialogue.
- */
-export const DIALOGUE_VOICE_IDS = new Set([
-  "pNInz6obpgDQGcFmaJgB", "Alice", "Bill", "Brian", "Callum", "Charlie", "Chris",
-  "Daniel", "Eric", "George", "SOYHLrjzK2X1ezoPC6cr", "Jessica", "Laura", "Liam",
-  "Lily", "Matilda", "River", "Roger", "Sarah", "Will",
-])
-
-export const DIALOGUE_VOICES: readonly TTSVoice[] = TTS_VOICES.filter(
-  (v) => DIALOGUE_VOICE_IDS.has(v.id),
-)
-
 export const DEFAULT_DIALOGUE_VOICE = "Sarah"
 
 export function getVoiceName(

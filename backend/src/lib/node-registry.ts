@@ -534,7 +534,22 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
   },
   // ---- Additional ai-audio nodes (outputType: AUDIO_OUTPUT_NODE_TYPES in input-resolver.ts; creditCost auto-filled from STATIC_CREDIT_COSTS) ----
   { type: "text-to-audio", label: "Text to Audio", category: "ai-audio", description: "Generate sound effects and ambient audio from a text description using ElevenLabs SFX.", outputType: "audio" },
-  { type: "text-to-dialogue", label: "Text to Dialogue", category: "ai-audio", description: "Generate multi-speaker dialogue audio where each line is spoken by a different voice.", outputType: "audio" },
+  {
+    type: "text-to-dialogue",
+    label: "Text to Dialogue",
+    category: "ai-audio",
+    description: "Generate multi-speaker dialogue audio where each line is spoken by a different voice (ElevenLabs Dialogue v3, direct API — any voice: premade, library, or cloned).",
+    outputType: "audio",
+    inputSchema: {
+      fields: [
+        { key: "dialogue", type: "json", required: true },
+        { key: "stability", type: "select", options: ["0", "0.5", "1"] },
+        { key: "languageCode", type: "text" },
+        { key: "seed", type: "number" },
+        { key: "applyTextNormalization", type: "select", options: ["auto", "on", "off"] },
+      ],
+    },
+  },
   { type: "audio-isolation", label: "Audio Isolation", category: "ai-audio", description: "Isolate and clean up vocal audio by removing background noise and non-speech elements.", outputType: "audio" },
   {
     type: "audio-separation",

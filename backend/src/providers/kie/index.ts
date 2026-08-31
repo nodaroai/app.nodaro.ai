@@ -23,7 +23,6 @@ import {
   KIE_SOUND_EFFECT_MODELS,
   KIE_AUDIO_ISOLATION_MODELS,
   KIE_STT_MODELS,
-  KIE_DIALOGUE_MODELS,
 } from "./models.js"
 
 const kieInfo: ProviderInfo = {
@@ -43,7 +42,6 @@ const kieInfo: ProviderInfo = {
     "text-to-speech",
     "audio-isolation",
     "transcription",
-    "dialogue",
   ],
   supportedModels: {
     "image-generation": Object.keys(KIE_IMAGE_MODELS),
@@ -65,7 +63,9 @@ const kieInfo: ProviderInfo = {
     "audio-isolation": Object.keys(KIE_AUDIO_ISOLATION_MODELS),
     "audio-separation": [], // KIE has no Demucs; Replicate-only capability
     "transcription": Object.keys(KIE_STT_MODELS),
-    "dialogue": Object.keys(KIE_DIALOGUE_MODELS),
+    // Dialogue left KIE for the direct ElevenLabs API (the last proxy to go);
+    // the capability key stays — the Record is exhaustive over ProviderCapability.
+    "dialogue": [],
   },
 }
 

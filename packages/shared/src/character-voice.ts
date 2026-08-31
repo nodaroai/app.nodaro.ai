@@ -40,9 +40,10 @@ export interface DialogueLine {
 }
 
 /**
- * A dialogue line resolved to a concrete voice, in the exact shape the
- * ElevenLabs Dialogue v3 primitive (`POST /v1/text-to-dialogue`) consumes:
- * `{ text, voice }` per line, in order. `voiceType` rides along so the TTS layer
+ * A dialogue line resolved to a concrete voice: `{ text, voice }` per line, in
+ * order. `voice` is OUR identifier (premade name or library/custom UUID) — the
+ * direct ElevenLabs Dialogue call resolves it per line to the `voice_id` the
+ * wire shape (`inputs[]`) wants. `voiceType` rides along so the TTS layer
  * resolves premade-by-name vs library/custom-by-id correctly.
  */
 export interface ResolvedDialogueVoiceLine {

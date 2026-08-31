@@ -113,6 +113,8 @@ _Generated from \`IMAGE_REFERENCE_PROMPT_DOCTRINE\` in \`@nodaro/prompts\` — e
 - \`suppressedCanonicalCharacterIds?: readonly string[]\`
 - \`suppressedCanonicalLocationIds?: readonly string[]\`
 - \`identityMeta?: readonly IdentityMeta[]\`
+- \`direction?: DirectionFields\`
+- \`structured?: StructuredPromptFields\`
 - \`extraRefs?: readonly ExtraRef[]\`
 - \`executionStatus?: "idle" | "running" | "completed" | "failed"\`
 - \`errorMessage?: string\`

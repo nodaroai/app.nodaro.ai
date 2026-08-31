@@ -6,9 +6,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const mocks = vi.hoisted(() => ({
   mockImageToVideo: vi.fn(),
-  mockGenerateDialogue: vi.fn(),
+  mockDirectDialogue: vi.fn(),
   mockDirectTTS: vi.fn(),
-  mockIsKieAcceptedVoice: vi.fn(),
   mockExtractAudioTrack: vi.fn(),
   mockDirectVoiceChanger: vi.fn(),
   mockMergeVideoAudio: vi.fn(),
@@ -41,11 +40,8 @@ vi.mock("@/providers/index.js", () => ({
   videoUpscale: vi.fn(),
 }))
 
-vi.mock("@/providers/kie/audio.js", () => ({
-  KieAudioProvider: class {
-    generateDialogue = mocks.mockGenerateDialogue
-  },
-  isKieAcceptedVoice: mocks.mockIsKieAcceptedVoice,
+vi.mock("@/providers/elevenlabs/direct-dialogue.js", () => ({
+  directElevenLabsDialogue: mocks.mockDirectDialogue,
 }))
 
 vi.mock("@/providers/elevenlabs/direct-tts.js", () => ({
@@ -113,9 +109,8 @@ const VIDEO_RESULT = { url: "https://r2.example.com/raw.mp4", providerUsed: "kie
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.mockImageToVideo.mockResolvedValue(VIDEO_RESULT)
-  mocks.mockGenerateDialogue.mockResolvedValue({ url: "https://kie.example.com/dialogue.mp3", cost: 0.07 })
+  mocks.mockDirectDialogue.mockResolvedValue(Buffer.from("dialogue-audio"))
   mocks.mockDirectTTS.mockResolvedValue(Buffer.from("tts-audio"))
-  mocks.mockIsKieAcceptedVoice.mockReturnValue(false) // default: treat as library/custom
   mocks.mockUploadToR2.mockResolvedValue("https://r2.example.com/dialogue.mp3")
   mocks.mockUploadBufferToR2.mockResolvedValue("https://r2.example.com/tts.mp3")
   mocks.mockExtractAudioTrack.mockResolvedValue({ audioPath: "/tmp/a.mp3", workDir: "/tmp/wd" })
@@ -145,14 +140,15 @@ describe("voiced-video handler — audio_driven (Seedance 2)", () => {
       ctx,
     )
 
-    // The Studio bug fix: library voice routes through direct TTS, NOT Dialogue v3.
+    // A single voice routes through direct TTS (honours ttsProvider), NOT
+    // Dialogue v3 (always eleven_v3 — would silently switch models).
     expect(mocks.mockDirectTTS).toHaveBeenCalledWith(
       "good morning",
       "W3C2vBPukr5b5jvoXhPK",
       "elevenlabs-turbo",
       expect.objectContaining({ allowDefaultVoiceFallback: true }),
     )
-    expect(mocks.mockGenerateDialogue).not.toHaveBeenCalled()
+    expect(mocks.mockDirectDialogue).not.toHaveBeenCalled()
     expect(mocks.mockImageToVideo).toHaveBeenCalledWith(
       "https://x.png",
       "seedance-2",
@@ -205,8 +201,10 @@ describe("voiced-video handler — audio_driven (Seedance 2)", () => {
     )
   })
 
-  it("uses Dialogue v3 only for multi-speaker where every voice is KIE-premade", async () => {
-    mocks.mockIsKieAcceptedVoice.mockReturnValue(true)
+  it("synthesises multi-speaker via direct Dialogue v3 in ONE call — any voice mix, premade AND library", async () => {
+    // The restriction this replaces: the KIE proxy accepted only premade
+    // NAMES, so a premade+library cast degraded to the primary voice. Going
+    // direct, per-line voice resolution makes the mixed cast first-class.
     await handler(
       makeJob({
         imageUrl: "https://x.png",
@@ -215,25 +213,30 @@ describe("voiced-video handler — audio_driven (Seedance 2)", () => {
         duration: 8,
         characterVoices: [
           { voiceId: "Rachel", voiceType: "premade", speaker: "Anna" },
-          { voiceId: "Sarah", voiceType: "premade", speaker: "Gordon" },
+          { voiceId: "W3C2vBPukr5b5jvoXhPK", voiceType: "library", speaker: "Gordon" },
         ],
         dialogue: [
           { speaker: "Anna", line: "hi" },
           { speaker: "Gordon", line: "hello" },
         ],
+        languageCode: "en",
         voicedAudioAddon: 4,
       }) as never,
       ctx,
     )
 
-    expect(mocks.mockGenerateDialogue).toHaveBeenCalledWith(
+    expect(mocks.mockDirectDialogue).toHaveBeenCalledWith(
       [
         { text: "hi", voice: "Rachel" },
-        { text: "hello", voice: "Sarah" },
+        { text: "hello", voice: "W3C2vBPukr5b5jvoXhPK" },
       ],
-      undefined,
+      { languageCode: "en" },
     )
     expect(mocks.mockDirectTTS).not.toHaveBeenCalled()
+    // Bytes → R2 (the direct call returns a Buffer, not a URL to re-host).
+    expect(mocks.mockUploadBufferToR2).toHaveBeenCalledWith(
+      Buffer.from("dialogue-audio"), "audios/job-1.mp3", "audio/mpeg", "user-1",
+    )
     expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
       expect.objectContaining({ extraOutputData: expect.objectContaining({ voiceApplied: true }) }),
     )
@@ -335,7 +338,7 @@ describe("voiced-video handler — no voice resolvable", () => {
       ctx,
     )
 
-    expect(mocks.mockGenerateDialogue).not.toHaveBeenCalled()
+    expect(mocks.mockDirectDialogue).not.toHaveBeenCalled()
     expect(mocks.mockDirectTTS).not.toHaveBeenCalled()
     const opts = mocks.mockImageToVideo.mock.calls[0][5] as Record<string, unknown>
     expect(opts.referenceAudioUrls).toBeUndefined()

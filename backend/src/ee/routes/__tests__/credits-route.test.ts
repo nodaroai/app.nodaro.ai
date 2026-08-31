@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import Fastify, { type FastifyInstance } from "fastify"
+import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify"
 
 // ---------------------------------------------------------------------------
 // Mocks -- vi.hoisted ensures these are available inside vi.mock factories
@@ -59,6 +59,11 @@ vi.mock("@/middleware/credit-guard.js", () => ({
   }),
 }))
 
+const pluginBillingHolder = vi.hoisted(() => ({ value: undefined as unknown }))
+vi.mock("@/lib/private-plugins/load.js", () => ({
+  getPluginServices: () => ({ billing: pluginBillingHolder.value }),
+}))
+
 vi.mock("@/lib/admin-check.js", () => ({
   warmAdminCache: vi.fn(),
   checkIsAdmin: vi.fn().mockResolvedValue(false),
@@ -75,6 +80,7 @@ vi.mock("@/lib/config.js", () => ({
   isCommunity: () => false,
   isBusiness: () => false,
   hasAdmin: () => true,
+  hasOrganizations: () => true,
 }))
 
 // ---------------------------------------------------------------------------
@@ -91,6 +97,8 @@ import { supabase } from "../../../lib/supabase.js"
 const TEST_USER_ID = "00000000-0000-4000-8000-000000000001"
 
 let app: FastifyInstance
+/** When set, the auth-bypass hook stamps it as `req.billingContext` (P14). */
+let stampBillingContext: FastifyRequest["billingContext"] | undefined
 
 beforeEach(async () => {
   vi.clearAllMocks()
@@ -107,6 +115,10 @@ beforeEach(async () => {
     // Simulate the internal-orchestrator-secret auth mode (auth.ts sets this).
     if (req.headers["x-test-internal"] === "true") {
       req.isInternalCall = true
+    }
+    // Simulate the billing hook's resolve (P14) — stamped per test.
+    if (stampBillingContext) {
+      req.billingContext = stampBillingContext
     }
   })
 
@@ -392,7 +404,45 @@ describe("POST /v1/credits/reserve", () => {
       "nano-banana",
       0.02,
       0.025,
+      // P14/W4f: the hook-resolved payer rides the options — undefined here
+      // (no workspace header on this request), so the reserve is personal.
+      { billingContext: undefined },
     )
+  })
+
+  it("P14/W4f: the hook-resolved workspace payer rides the reservation — no body field exists", async () => {
+    const wsCtx = {
+      payer: "workspace",
+      userId: TEST_USER_ID,
+      workspaceId: "ws-1",
+      orgId: "org-1",
+      memberCap: null,
+      entitlements: {
+        watermark: false,
+        dailyCapCredits: null,
+        parallelism: 12,
+        tierForGates: "business",
+        freeTierBlocklist: false,
+        webFreeMode: false,
+        appCreditsAllowance: false,
+      },
+    }
+    stampBillingContext = wsCtx as never
+    try {
+      mockReserveCredits.mockResolvedValue({ usageLogId: "u-1", creditsReserved: 4, watermark: false })
+      const res = await internalPost("/v1/credits/reserve", {
+        jobId: "job-1",
+        modelIdentifier: "nano-banana",
+        // A forged body field must be ignored — the header-validated hook is
+        // the only door (this key is not even in the Zod schema).
+        billingContext: { payer: "workspace", workspaceId: "evil" },
+      })
+      expect(res.statusCode).toBe(200)
+      const options = mockReserveCredits.mock.calls[0]?.[5] as { billingContext?: unknown }
+      expect(options.billingContext).toBe(wsCtx)
+    } finally {
+      stampBillingContext = undefined
+    }
   })
 })
 
@@ -466,6 +516,64 @@ describe("POST /v1/credits/refund", () => {
 })
 
 describe("POST /v1/credits/estimate-workflow", () => {
+  it("P14/W8: a workspace payer answers the budget preview through the plugin's ONE formula, degrading to null without it", async () => {
+    mockEstimateWorkflowCredits.mockReturnValue(40)
+    const wsCtx = {
+      payer: "workspace" as const,
+      userId: TEST_USER_ID,
+      workspaceId: "ws-1",
+      orgId: "org-1",
+      memberCap: 500,
+      entitlements: {
+        watermark: false as const,
+        dailyCapCredits: null,
+        parallelism: 12,
+        tierForGates: "business" as const,
+        freeTierBlocklist: false as const,
+        webFreeMode: false as const,
+        appCreditsAllowance: false as const,
+      },
+    }
+    stampBillingContext = wsCtx as never
+    try {
+      // Plugin present with the headroom member — full preview. `resolve`
+      // must exist too: the gated seam accessor (billingService) only hands
+      // back a service capable of resolving. NOTE (harness honesty): the
+      // context is stamped directly here, bypassing the billing hook — the
+      // "a workflowId reaches the workspace branch only through the run
+      // predicate" half lives in the PLUGIN's resolver, not in this file.
+      pluginBillingHolder.value = {
+        resolve: vi.fn(),
+        headroom: vi.fn(async () => ({ headroomCredits: 1200, workspaceLabel: "Class 5B" })),
+      }
+      const withMember = await authedPost("/v1/credits/estimate-workflow", {
+        nodes: [{ type: "generate-image" }],
+        workflowId: "00000000-0000-4000-8000-00000000aaaa",
+      })
+      expect(withMember.statusCode).toBe(200)
+      expect(withMember.json().data).toEqual({
+        totalCredits: 40,
+        nodeCount: 1,
+        payer: "workspace",
+        workspaceId: "ws-1",
+        memberCap: 500,
+        headroomCredits: 1200,
+        workspaceLabel: "Class 5B",
+      })
+
+      // Older plugin (no member) — "workspace pays, no preview", never an error.
+      pluginBillingHolder.value = { resolve: vi.fn() }
+      const withoutMember = await authedPost("/v1/credits/estimate-workflow", {
+        nodes: [{ type: "generate-image" }],
+      })
+      expect(withoutMember.statusCode).toBe(200)
+      expect(withoutMember.json().data).toMatchObject({ payer: "workspace", headroomCredits: null })
+    } finally {
+      stampBillingContext = undefined
+      pluginBillingHolder.value = undefined
+    }
+  })
+
   it("returns estimated total credits", async () => {
     mockEstimateWorkflowCredits.mockReturnValue(14)
 
@@ -483,7 +591,7 @@ describe("POST /v1/credits/estimate-workflow", () => {
 
     expect(res.statusCode).toBe(200)
     const body = res.json()
-    expect(body.data).toEqual({ totalCredits: 14, nodeCount: 3 })
+    expect(body.data).toEqual({ totalCredits: 14, nodeCount: 3, payer: "user" })
     expect(mockEstimateWorkflowCredits).toHaveBeenCalledWith(nodes)
   })
 })

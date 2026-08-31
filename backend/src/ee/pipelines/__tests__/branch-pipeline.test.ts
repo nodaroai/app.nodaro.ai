@@ -242,6 +242,53 @@ describe("branchPipeline", () => {
     expect(inserted.pipeline_type).toBe("story_to_video")
   })
 
+  it("P14: the branch carries the BRANCHER's payer stamp — the original's is stripped, forged ones don't survive", async () => {
+    const wsCtx = {
+      payer: "workspace" as const,
+      userId: "user-1",
+      workspaceId: "ws-1",
+      orgId: "org-1",
+      memberCap: null,
+      entitlements: {
+        watermark: false as const,
+        dailyCapCredits: null,
+        parallelism: 12,
+        tierForGates: "business" as const,
+        freeTierBlocklist: false as const,
+        webFreeMode: false as const,
+        appCreditsAllowance: false as const,
+      },
+    }
+    // The ORIGINAL carries someone's stamp — it must not ride the branch.
+    const original = makePipeline()
+    original.config = { music_enabled: true, billingContext: { payer: "workspace", workspaceId: "someone-elses" } }
+
+    const { client, fixture } = makeSupabaseMock(original, makeStagesUpTo(5))
+    await branchPipeline({
+      supabase: client as never,
+      originalPipelineId: "orig-pipeline-id",
+      fromStage: "scene_images",
+      userId: "user-1",
+      billingContext: wsCtx,
+    })
+    const cfg = fixture.pipelinesInserted[0]!.config as Record<string, unknown>
+    expect(cfg.billingContext).toEqual(wsCtx)
+    expect(cfg.music_enabled).toBe(true)
+
+    // And a PERSONAL brancher gets no stamp at all — the original's gone too.
+    vi.clearAllMocks()
+    const second = makeSupabaseMock(original, makeStagesUpTo(5))
+    await branchPipeline({
+      supabase: second.client as never,
+      originalPipelineId: "orig-pipeline-id",
+      fromStage: "scene_images",
+      userId: "user-1",
+    })
+    const cfg2 = second.fixture.pipelinesInserted[0]!.config as Record<string, unknown>
+    expect(cfg2.billingContext).toBeUndefined()
+    expect(cfg2.music_enabled).toBe(true)
+  })
+
   it("clones upstream stages as approved", async () => {
     // Branching from scene_images (order 6) → clone stages 1-5
     const stages = makeStagesUpTo(5)

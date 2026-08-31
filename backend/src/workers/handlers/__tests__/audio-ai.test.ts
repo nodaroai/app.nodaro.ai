@@ -6,7 +6,6 @@ const mocks = vi.hoisted(() => {
   const mockKieAudioProviderInstance = {
     generateSoundEffect: vi.fn(),
     isolateAudio: vi.fn(),
-    generateDialogue: vi.fn(),
   }
   const mockKieAudioProvider = vi.fn().mockImplementation(function () { return mockKieAudioProviderInstance })
   const mockTranscribe = vi.fn()
@@ -14,6 +13,7 @@ const mocks = vi.hoisted(() => {
   const mockUploadToR2 = vi.fn().mockResolvedValue("https://r2.example.com/audio/job-1.mp3")
   const mockUploadBufferToR2 = vi.fn().mockResolvedValue("https://r2.example.com/audio/job-1.mp3")
   const mockDirectElevenLabsTTS = vi.fn().mockResolvedValue(Buffer.from("fake-audio"))
+  const mockDirectElevenLabsDialogue = vi.fn().mockResolvedValue(Buffer.from("fake-dialogue"))
   const mockStripAudioTags = vi.fn((text: string) => text)
   const mockVoiceChangerFromUrl = vi.fn().mockResolvedValue(Buffer.from("fake-audio"))
   const mockStartDubbing = vi.fn().mockResolvedValue("dub-id")
@@ -42,6 +42,8 @@ const mocks = vi.hoisted(() => {
   const mockNodaroCloudAudioProvider = vi.fn().mockImplementation(function () {
     return { textToSpeech: mockCloudTextToSpeech }
   })
+  const mockCreateCloudJob = vi.fn().mockResolvedValue("cloud-job-1")
+  const mockWaitForCloudJob = vi.fn().mockResolvedValue({ output_data: { audioUrl: "https://cloud.nodaro.ai/dlg.mp3" } })
   const mockSafeFetch = vi.fn().mockResolvedValue({
     ok: true,
     status: 200,
@@ -66,6 +68,7 @@ const mocks = vi.hoisted(() => {
     mockUploadToR2,
     mockUploadBufferToR2,
     mockDirectElevenLabsTTS,
+    mockDirectElevenLabsDialogue,
     mockStripAudioTags,
     mockVoiceChangerFromUrl,
     mockStartDubbing,
@@ -94,6 +97,8 @@ const mocks = vi.hoisted(() => {
     mockShouldRunOnCloud, mockRunJobOnCloud,
     mockCloudTextToSpeech,
     mockNodaroCloudAudioProvider,
+    mockCreateCloudJob,
+    mockWaitForCloudJob,
     mockSafeFetch,
   }
 })
@@ -103,6 +108,7 @@ vi.mock("@/lib/storage.js", () => ({ uploadToR2: mocks.mockUploadToR2, uploadBuf
 vi.mock("@/providers/audio/generate-music.js", () => ({ generateMusic: mocks.mockGenerateMusic }))
 vi.mock("@/providers/audio/text-to-audio.js", () => ({ textToAudio: mocks.mockTextToAudio }))
 vi.mock("@/providers/elevenlabs/direct-tts.js", () => ({ directElevenLabsTTS: mocks.mockDirectElevenLabsTTS, stripAudioTags: mocks.mockStripAudioTags }))
+vi.mock("@/providers/elevenlabs/direct-dialogue.js", () => ({ directElevenLabsDialogue: mocks.mockDirectElevenLabsDialogue }))
 vi.mock("@/providers/kie/audio.js", () => ({ KieAudioProvider: mocks.mockKieAudioProvider }))
 vi.mock("@/providers/elevenlabs/voice-changer.js", () => ({ voiceChangerFromUrl: mocks.mockVoiceChangerFromUrl, directVoiceChanger: mocks.mockDirectVoiceChanger }))
 vi.mock("@/providers/video/extract-audio-track.js", () => ({ extractAudioTrack: mocks.mockExtractAudioTrack }))
@@ -141,6 +147,11 @@ vi.mock("../../../providers/nodaro/run-on-cloud.js", () => ({
   shouldRunOnCloud: mocks.mockShouldRunOnCloud,
   runJobOnCloud: mocks.mockRunJobOnCloud,
 }))
+vi.mock("../../../providers/nodaro/client.js", () => ({
+  createCloudJob: mocks.mockCreateCloudJob,
+  waitForCloudJob: mocks.mockWaitForCloudJob,
+  NodaroCloudError: class NodaroCloudError extends Error {},
+}))
 vi.mock("../../../lib/safe-fetch.js", () => ({ safeFetch: mocks.mockSafeFetch }))
 
 import { audioAIHandlers } from "../audio-ai.js"
@@ -172,7 +183,7 @@ beforeEach(() => {
   mocks.mockTextToAudio.mockResolvedValue("https://replicate.example.com/audio.mp3")
   mocks.mockKieAudioProviderInstance.generateSoundEffect.mockResolvedValue({ url: "https://kie.example.com/sfx.mp3", cost: 0.01 })
   mocks.mockKieAudioProviderInstance.isolateAudio.mockResolvedValue({ url: "https://kie.example.com/isolated.mp3", cost: 0.01 })
-  mocks.mockKieAudioProviderInstance.generateDialogue.mockResolvedValue({ url: "https://kie.example.com/dialogue.mp3", cost: 0.01 })
+  mocks.mockDirectElevenLabsDialogue.mockResolvedValue(Buffer.from("fake-dialogue"))
   mocks.mockTranscribe.mockResolvedValue({ text: "Hello world", language: "en", segments: [] })
   mocks.mockExtractYouTubeAudio.mockResolvedValue("https://example.com/yt-audio.mp3")
   mocks.mockShouldSaveJobResult.mockResolvedValue(true)
@@ -260,6 +271,61 @@ describe("text-to-speech provider selection (keyless self-host)", () => {
     ).rejects.toMatchObject({ code: "provider_key_missing" })
 
     expect(mocks.mockCloudTextToSpeech).not.toHaveBeenCalled()
+  })
+})
+
+describe("text-to-dialogue provider selection (keyless self-host)", () => {
+  const handler = audioAIHandlers["text-to-dialogue"]
+  const lines = [{ text: "Hi", voice: "Rachel" }, { text: "Hello", voice: "Daniel" }]
+
+  it("a local key wins — direct API, options threaded, bytes to OUR R2 key", async () => {
+    config.ELEVENLABS_API_KEY = "el_test"
+    mocks.mockIsNodaroConnected.mockResolvedValue(true)
+
+    await handler(makeJob("text-to-dialogue", { dialogue: lines, stability: 0.5, languageCode: "en", seed: 42, applyTextNormalization: "on" }) as never, makeCtx())
+
+    expect(mocks.mockDirectElevenLabsDialogue).toHaveBeenCalledWith(
+      lines,
+      expect.objectContaining({ stability: 0.5, languageCode: "en", seed: 42, applyTextNormalization: "on" }),
+    )
+    expect(mocks.mockCreateCloudJob).not.toHaveBeenCalled()
+    expect(mocks.mockUploadBufferToR2).toHaveBeenCalledWith(
+      Buffer.from("fake-dialogue"), "audios/job-1.mp3", "audio/mpeg", "user-1",
+    )
+    // finalize keeps the historical jobType (asset creation keys off it)
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobType: "generate-dialogue",
+        result: expect.objectContaining({ cost: null, providerUsed: "elevenlabs-direct" }),
+      }),
+    )
+  })
+
+  it("no key + connected — generates on the cloud and stores the bytes locally", async () => {
+    config.ELEVENLABS_API_KEY = ""
+    mocks.mockIsNodaroConnected.mockResolvedValue(true)
+
+    await handler(makeJob("text-to-dialogue", { dialogue: lines }) as never, makeCtx())
+
+    expect(mocks.mockCreateCloudJob).toHaveBeenCalledWith(
+      "/v1/text-to-dialogue", expect.objectContaining({ dialogue: lines }),
+    )
+    expect(mocks.mockDirectElevenLabsDialogue).not.toHaveBeenCalled()
+    expect(mocks.mockUploadBufferToR2).toHaveBeenCalledWith(
+      Buffer.from("cloud-audio"), "audios/job-1.mp3", "audio/mpeg", "user-1",
+    )
+  })
+
+  it("no key + NOT connected — the shared missing-key error", async () => {
+    config.ELEVENLABS_API_KEY = ""
+    mocks.mockIsNodaroConnected.mockResolvedValue(false)
+
+    await expect(
+      handler(makeJob("text-to-dialogue", { dialogue: lines }) as never, makeCtx()),
+    ).rejects.toMatchObject({ code: "provider_key_missing" })
+
+    expect(mocks.mockCreateCloudJob).not.toHaveBeenCalled()
+    expect(mocks.mockDirectElevenLabsDialogue).not.toHaveBeenCalled()
   })
 })
 
@@ -636,11 +702,11 @@ describe("revenue-leak: post-provider upload failure → PostProcessingError (re
     expect(isPostProcessingError(err)).toBe(true)
   })
 
-  it("text-to-dialogue (uploadToR2)", async () => {
-    mocks.mockUploadToR2.mockRejectedValueOnce(rawUploadError())
+  it("text-to-dialogue (direct ElevenLabs API, uploadBufferToR2)", async () => {
+    mocks.mockUploadBufferToR2.mockRejectedValueOnce(rawUploadError())
     const job = makeJob("text-to-dialogue", { dialogue: [{ text: "hi", voice: "Rachel" }] })
     const err = await captureThrow(() => audioAIHandlers["text-to-dialogue"](job as never, makeCtx()))
-    expect(mocks.mockKieAudioProviderInstance.generateDialogue).toHaveBeenCalled()
+    expect(mocks.mockDirectElevenLabsDialogue).toHaveBeenCalled()
     expect(isPostProcessingError(err)).toBe(true)
   })
 

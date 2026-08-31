@@ -154,7 +154,7 @@ export async function pipelinesRoutes(app: FastifyInstance) {
     // Dynamic import keeps the core→ee boundary intact (same pattern the route
     // already uses for credits.js / queue.js).
     const { createPipeline } = await import("../ee/pipelines/create-pipeline.js")
-    const result = await createPipeline({ supabase, userId, input })
+    const result = await createPipeline({ supabase, userId, input, billingContext: req.billingContext })
     if (!result.ok) {
       const errBody: Record<string, unknown> = { code: result.code }
       if (result.message !== undefined) errBody.message = result.message
@@ -637,7 +637,27 @@ export async function pipelinesRoutes(app: FastifyInstance) {
   }>(
     "/v1/pipelines/:id/stages/script/regenerate-scene",
     {
-      preHandler: creditGuard(() => "regenerate-scene", { dedup: false }),
+      // P14: a spend attributed to a pipeline bills the pipeline's durable
+      // payer stamp, never the request's independently-decided context (the
+      // UI's active-workspace header is a global selection, not this
+      // pipeline's home). The override runs BEFORE creditGuard so preflight
+      // and reservation read the SAME payer. This runs before the handler's
+      // ownership check, so a FOREIGN-but-existing id briefly puts that
+      // pipeline's stamp on the preflight — harmless by construction: the
+      // handler's ownership 404 precedes every job insert and reserve, and
+      // the RPC's membership guards refuse a foreign workspace regardless.
+      // Do not move the override after the ownership check — that would
+      // split preflight and reservation onto different payers again.
+      preHandler: [
+        async (req) => {
+          const { getPipelineBillingContext } = await import("../ee/pipelines/pipeline-payer.js")
+          const pipelineId = (req.params as { id?: string }).id
+          if (req.userId && pipelineId) {
+            req.billingContext = await getPipelineBillingContext(supabase, pipelineId, req.userId)
+          }
+        },
+        creditGuard(() => "regenerate-scene", { dedup: false }),
+      ],
     },
     async (req, reply) => {
       if (!gateEdition(reply)) return
@@ -3022,6 +3042,7 @@ export async function pipelinesRoutes(app: FastifyInstance) {
           originalPipelineId: req.params.id,
           fromStage: bodyParsed.data.fromStage as PipelineStageName,
           userId,
+          billingContext: req.billingContext,
         })
         return reply.status(201).send({
           pipelineId: result.newPipelineId,

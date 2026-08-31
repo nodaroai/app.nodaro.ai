@@ -14,6 +14,15 @@ vi.mock("../../lib/config.js", () => ({
   isCommunity: vi.fn(() => false),
 }))
 
+// P14: the pipeline payer read — personal stub in these worlds.
+vi.mock("../../ee/pipelines/pipeline-payer.js", () => ({
+  getPipelineBillingContext: vi.fn(async (_sb: unknown, _pid: string, userId: string) => ({ payer: "user", userId })),
+  stampPipelineConfig: vi.fn((cfg: Record<string, unknown> | null | undefined, ctx?: unknown) => {
+    const { billingContext: _forged, ...rest } = cfg ?? {}
+    return ctx ? { ...rest, billingContext: ctx } : rest
+  }),
+}))
+
 vi.mock("../../ee/pipelines/scene-helper-credits.js", () => ({
   reserveHelperCredits: vi.fn(async () => ({ ok: true, usageLogId: "log-1" })),
   refundHelperCredits: vi.fn(async () => undefined),

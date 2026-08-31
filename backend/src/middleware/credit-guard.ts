@@ -52,6 +52,14 @@ export interface CreditGuardOpts {
    *  e.g., voice-clone returns `{ id, name, elevenlabsVoiceId, ... }` and
    *  the frontend would break on the simplified dedup response. */
   dedup?: boolean
+  /** This guard is a wealth check only — the route never reserves credits.
+   *  P14: keeps the preflight PERSONAL even when the request carries a
+   *  workspace billing context. On a route that reserves nothing, the
+   *  workspace override would bypass the personal-balance check with no one
+   *  ever paying — a free proxy. The check-only set is pinned by
+   *  ee/lib/__tests__/check-only-credit-guard.test.ts, which fails when a
+   *  new no-reserve route appears unclassified. */
+  checkOnly?: boolean
 }
 
 // FastifyRequest augmentation (userId, userRole, creditReservation, storageSnapshot)

@@ -211,16 +211,18 @@ export const TTS_TEXT_MAX = 5000
 
 /**
  * Per-model Text-to-Speech character cap (PER REQUEST), from official ElevenLabs
- * docs. turbo/multilingual accept FAR more than the old flat 5000; v3 uses the
- * conservative 3000 (official pages say 5000 but the API is widely reported to
- * hard-limit v3 at 3000 — conservative avoids prod rejections). Absent →
- * {@link TTS_TEXT_MAX}.
+ * docs. turbo/multilingual accept FAR more than the old flat 5000; v3 matches
+ * the official 5000 (probed live 2026-08-30: 4,500 AND 5,200 chars both
+ * returned 200 — the old "API hard-limits v3 at 3000" report no longer holds).
+ * Dialogue's documented 2,000 is a recommendation, not a limit (2,500 and
+ * 5,000 total chars both probed 200); we cap at 5000 like v3 — same model
+ * underneath. Absent → {@link TTS_TEXT_MAX}.
  */
 export const MAX_TTS_CHARS_BY_PROVIDER: Record<string, number> = {
   "elevenlabs-turbo": 40000,        // == eleven_flash_v2_5 (functionally equivalent)
   "elevenlabs-multilingual": 10000, // eleven_multilingual_v2
-  "elevenlabs-v3": 3000,            // conservative (official 5000 / API-reported 3000)
-  "elevenlabs-dialogue": 2000,      // text-to-dialogue recommended per-request max
+  "elevenlabs-v3": 5000,            // official cap (probed: 5,200 chars accepted; keep the clamp)
+  "elevenlabs-dialogue": 5000,      // total across lines; ≤2,000 recommended for best quality
 }
 
 /** Max TTS text length (chars) for a provider: verified override, else {@link TTS_TEXT_MAX}. */

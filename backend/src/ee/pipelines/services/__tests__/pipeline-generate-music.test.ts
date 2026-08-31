@@ -3,6 +3,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 vi.mock("../../../../lib/queue.js", () => ({
   videoQueue: { add: vi.fn().mockResolvedValue(undefined) },
 }))
+// P14: the worker-lane payer read — personal in these hermetic worlds.
+vi.mock("../../pipeline-payer.js", () => ({
+  getPipelineBillingContext: vi.fn(async (_sb: unknown, _pid: string, userId: string) => ({ payer: "user", userId })),
+}))
+
 vi.mock("../../../billing/credits.js", () => ({
   CreditsService: {
     reserveCredits: vi.fn().mockResolvedValue({
@@ -105,7 +110,7 @@ describe("pipelineGenerateMusic", () => {
     expect(result.assetUrl).toBe("https://r2/music.mp3")
     expect(result.assetId).toBe("asset-music-1")
     expect(CreditsService.reserveCredits).toHaveBeenCalledWith(
-      "u1", "music-job-1", "generate-music", 0, 0, { isAppRun: false },
+      "u1", "music-job-1", "generate-music", 0, 0, { isAppRun: false, billingContext: { payer: "user", userId: "u1" } },
     )
     expect(videoQueue.add).toHaveBeenCalledWith(
       "generate-music",
@@ -142,7 +147,7 @@ describe("pipelineGenerateMusic", () => {
 
     expect(result.assetUrl).toBe("https://r2/suno.mp3")
     expect(CreditsService.reserveCredits).toHaveBeenCalledWith(
-      "u1", "music-job-1", "suno-v5_5", 0, 0, { isAppRun: false },
+      "u1", "music-job-1", "suno-v5_5", 0, 0, { isAppRun: false, billingContext: { payer: "user", userId: "u1" } },
     )
     expect(videoQueue.add).toHaveBeenCalledWith(
       "suno-generate",

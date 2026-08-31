@@ -15,7 +15,7 @@ import {
   KIE_IMAGE_MODELS, KIE_VIDEO_MODELS, KIE_TEXT_TO_VIDEO_MODELS,
   KIE_VIDEO_TO_VIDEO_MODELS, KIE_MOTION_TRANSFER_MODELS, KIE_VIDEO_UPSCALE_MODELS,
   KIE_LIP_SYNC_MODELS, KIE_MUSIC_MODELS, KIE_TTS_MODELS, KIE_SOUND_EFFECT_MODELS,
-  KIE_AUDIO_ISOLATION_MODELS, KIE_STT_MODELS, KIE_DIALOGUE_MODELS,
+  KIE_AUDIO_ISOLATION_MODELS, KIE_STT_MODELS,
   KIE_SPEECH_TO_VIDEO_MODELS, KIE_SPECIAL_MODELS,
 } from "../../providers/kie/models.js"
 import type { KieModelConfig } from "../../providers/kie/models.js"
@@ -97,7 +97,6 @@ export function buildModelMap(): Map<string, ModelMapping[]> {
   addModels(KIE_SOUND_EFFECT_MODELS, "sfx")
   addModels(KIE_AUDIO_ISOLATION_MODELS, "isolation")
   addModels(KIE_STT_MODELS, "stt")
-  addModels(KIE_DIALOGUE_MODELS, "dialogue")
   addModels(KIE_SPEECH_TO_VIDEO_MODELS, "s2v")
   addModels(KIE_SPECIAL_MODELS, "special")
 

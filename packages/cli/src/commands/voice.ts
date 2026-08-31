@@ -605,6 +605,78 @@ Example:
     )
 
   cmd
+    .command("dialogue")
+    .description("voice a multi-speaker script as one audio file (ElevenLabs Dialogue v3) — each --line is \"Voice: text\"")
+    .requiredOption(
+      "--line <line>",
+      'one script line as "Voice: text" (e.g. "Rachel: Hello there") — repeat in speaking order; the voice is a premade name or an ElevenLabs voice UUID',
+      (v: string, prev: string[]) => [...prev, v],
+      [] as string[],
+    )
+    .option("--stability <n>", "0 (most variable) | 0.5 (balanced) | 1 (most stable)", (v) => parseFloat(v))
+    .option("--language <code>", 'ISO 639-1 language hint, e.g. "en" (auto-detected when omitted)')
+    .option("--seed <n>", "deterministic sampling seed (0-4294967295); omit for random", (v) => parseInt(v, 10))
+    .option("--text-normalization <mode>", "spell out numbers/dates: auto | on | off")
+    .option("--watch", "poll until the job completes")
+    .option("--poll-interval <ms>", "watch poll interval in ms", (v) => parseInt(v, 10), 2000)
+    .option("--profile <name>")
+    .option("--json")
+    .addHelpText("after", `
+Limits: 5,000 characters total (under 2,000 recommended), up to 10 unique voices.
+Line text may carry [audio tags] like [laughs].
+
+Example:
+  $ nodaro voice dialogue --line "Rachel: [excited] We did it!" --line "Daniel: I never doubted us." --watch`)
+    .action(
+      async (
+        opts: {
+          line: string[]
+          stability?: number
+          language?: string
+          seed?: number
+          textNormalization?: string
+        } & WatchOpts,
+      ) => {
+        try {
+          // requiredOption is inert here: the collecting default ([]) satisfies
+          // commander's "has a value" check, so a bare `nodaro voice dialogue`
+          // reaches the action with zero lines — guard explicitly or the user
+          // gets a confusing downstream error instead of the real problem.
+          if (opts.line.length === 0) {
+            throw new Error('at least one --line is required (e.g. --line "Rachel: Hello there")')
+          }
+          const dialogue = opts.line.map((raw) => {
+            const idx = raw.indexOf(":")
+            if (idx < 1 || idx === raw.length - 1) {
+              throw new Error(`--line must be "Voice: text", got: ${raw}`)
+            }
+            return { voice: raw.slice(0, idx).trim(), text: raw.slice(idx + 1).trim() }
+          })
+          if (opts.stability !== undefined && ![0, 0.5, 1].includes(opts.stability)) {
+            throw new Error("--stability must be exactly 0, 0.5, or 1")
+          }
+          if (opts.textNormalization !== undefined && !["auto", "on", "off"].includes(opts.textNormalization)) {
+            throw new Error("--text-normalization must be auto, on, or off")
+          }
+          const client = buildClient(opts.profile)
+          const result = await client.voices.textToDialogue({
+            dialogue,
+            ...(opts.stability !== undefined ? { stability: opts.stability as 0 | 0.5 | 1 } : {}),
+            ...(opts.language ? { languageCode: opts.language } : {}),
+            ...(opts.seed !== undefined ? { seed: opts.seed } : {}),
+            ...(opts.textNormalization ? { applyTextNormalization: opts.textNormalization as "auto" | "on" | "off" } : {}),
+          })
+          await reportQueuedJob(result, () => client.jobs.get(result.jobId), {
+            ...opts,
+            note: `dialogue (${dialogue.length} lines)`,
+          })
+        } catch (err) {
+          handleError(err)
+        }
+      },
+    )
+
+  cmd
     .command("list")
     .description("list the premade voices you can pass to --voice / --voices (or your voice clones with --clones)")
     .option("--clones", "list your voice clones instead of the premade catalog")

@@ -199,6 +199,30 @@ export class VoicesResource {
   }
 
   /**
+   * Voice a multi-speaker script as ONE audio file
+   * (`POST /v1/text-to-dialogue`, ElevenLabs Dialogue v3). Each `dialogue`
+   * line is `{ text, voice }` in speaking order — `voice` is a premade voice
+   * name or an ElevenLabs voice UUID (cloned/library voices work too; mixed
+   * casts are fine). At most 5,000 characters total across lines (≤2,000
+   * recommended for best quality) and 10 unique voices. Line text may carry
+   * `[audio tags]` like `[laughs]`. Costs credits and runs async — poll
+   * `jobs.get(jobId)` for `output_data.audioUrl`.
+   */
+  textToDialogue(input: {
+    dialogue: Array<{ text: string; voice: string }>
+    /** v3 stability: 0 (most variable) | 0.5 (balanced) | 1 (most stable). */
+    stability?: 0 | 0.5 | 1
+    /** ISO 639-1 language hint (e.g. "en"); auto-detected when omitted. */
+    languageCode?: string
+    /** Deterministic sampling seed (integer 0–4294967295). Omit for random. */
+    seed?: number
+    /** Spell out numbers/dates/abbreviations: "auto" (default) | "on" | "off". */
+    applyTextNormalization?: "auto" | "on" | "off"
+  }): Promise<{ jobId: string }> {
+    return this.client.request<{ jobId: string }>("POST", "/v1/text-to-dialogue", { body: input })
+  }
+
+  /**
    * Clone a voice from an audio FILE you hold in memory
    * (`POST /v1/voice-clones`, multipart) — the counterpart to
    * {@link VoicesResource.createClone}, which clones from an already-uploaded

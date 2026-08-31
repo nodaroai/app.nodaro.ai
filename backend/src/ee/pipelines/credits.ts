@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { mapReserveError, type MappedReserveError } from "../../lib/reserve-errors.js"
+import type { BillingContext } from "../../lib/billing-context.js"
 import { attemptAutoRecharge } from "../billing/auto-recharge.js"
 import { CHAT_STAGES, CHAT_TURN_CAPS, TIER_MAX_PIPELINE_COST_CREDITS, ShowrunnerPlanSchema, buildVideoCreditModelIdentifier, creditsToUsd, usdToCredits, type PipelineFormat, type PipelineMode, type VideoCriticFrameMode } from "@nodaro/shared"
 // ee-to-ee static import — allowed (only core/backend/src/lib/** is barred from
@@ -195,6 +196,10 @@ export interface ReservePipelineCreditsArgs {
   userId: string
   pipelineId: string
   credits: number
+  /** The pipeline's resolved payer (P14) — stamped into pipelines.config at
+   *  creation; in-request callers pass req.billingContext, worker-lane
+   *  callers read the row via getPipelineBillingContext. */
+  billingContext?: BillingContext
 }
 
 export type ReservePipelineResult =
@@ -217,12 +222,16 @@ export type ReservePipelineResult =
 export async function reservePipelineCredits(
   args: ReservePipelineCreditsArgs,
 ): Promise<ReservePipelineResult> {
-  // billing-payer-ok: pipeline jobs are personal-payer until P14 rides the resolved payer on the job payload (resolved once at enqueue, never re-resolved in a worker)
+  // P14/W4e: the pipeline's resolved payer rides `p_workspace_id` into the
+  // RPC's workspace branch. Conditional spread — a personal pipeline's wire
+  // shape stays byte-identical to pre-P14.
+  const ws = args.billingContext?.payer === "workspace" ? args.billingContext : undefined
   const { data: usageLogId, error } = await args.supabase.rpc("reserve_credits", {
     p_user_id: args.userId,
     p_credits: args.credits,
     p_job_id: null,
     p_model_identifier: "pipeline-orchestration",
+    ...(ws ? { p_workspace_id: ws.workspaceId } : {}),
     p_provider_cost_usd: 0, // pipelines aggregate many provider calls; tracked separately
     p_display_cost_usd: creditsToUsd(args.credits),
     p_is_app_run: false,
@@ -246,8 +255,10 @@ export async function reservePipelineCredits(
   }
   // Reserve succeeded — balance dropped; auto-recharge check (fire-and-
   // forget, never blocks the pipeline). Covers the direct-RPC reserve lane
-  // the CreditsService hook can't see (audit F2.2).
-  void attemptAutoRecharge(args.userId)
+  // the CreditsService hook can't see (audit F2.2). NEVER for a workspace
+  // payer — the member's balance did not move, and class work must not pump
+  // a member's saved card (the family-0 invariant, mirrored).
+  if (!ws) void attemptAutoRecharge(args.userId)
   // Persist for later refund.
   const { error: updateError } = await args.supabase
     .from("pipelines")

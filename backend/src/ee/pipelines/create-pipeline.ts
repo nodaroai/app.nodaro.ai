@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import type { BillingContext } from "../../lib/billing-context.js"
 import { type PipelineInput, validateDurationForFormat, validateModeActivation, resolveEffectiveTier } from "@nodaro/shared"
 
 /**
@@ -28,12 +29,15 @@ export interface CreatePipelineArgs {
   supabase: SupabaseClient
   userId: string
   input: PipelineInput
+  /** The creating lane's resolved payer (P14) — stamped durably into
+   *  pipelines.config; one payer per pipeline. Absent = personal. */
+  billingContext?: BillingContext
 }
 
 export async function createPipeline(
   args: CreatePipelineArgs,
 ): Promise<CreatePipelineResult> {
-  const { supabase, userId, input } = args
+  const { supabase, userId, input, billingContext } = args
 
   // S9 fast-fail — the FIRST check, before any other work (duration
   // validation, DB row, credit reservation). This is the single funnel both
@@ -108,7 +112,10 @@ export async function createPipeline(
       })
     : "free"
 
-  const config = input.config ?? {}
+  // P14: one payer per pipeline — strip-then-stamp via the ONE rule
+  // (pipeline-payer.ts), read back by every reserve site.
+  const { stampPipelineConfig } = await import("./pipeline-payer.js")
+  const config = stampPipelineConfig(input.config, billingContext) as NonNullable<PipelineInput["config"]>
 
   // Tier-restriction guard for user-pinned model picks (image/video/script/
   // per-stage). The Zod schema constrains values to the pinnable allowlists,
@@ -130,7 +137,7 @@ export async function createPipeline(
       typeof CreditsService.checkCreditsWithProfile
     >[1]
     for (const modelId of pinnedModels) {
-      const check = await CreditsService.checkCreditsWithProfile(userId, profile, modelId)
+      const check = await CreditsService.checkCreditsWithProfile(userId, profile, modelId, false, undefined, { billingContext })
       if (!check.allowed) {
         return {
           ok: false,
@@ -192,6 +199,7 @@ export async function createPipeline(
     userId,
     pipelineId: pipeline.id,
     credits: upfront,
+    billingContext,
   })
   if (!reservation.ok) {
     // Roll back the pipeline row — cheaper than carrying a dead 'queued' row.

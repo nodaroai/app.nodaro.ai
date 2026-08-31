@@ -8,6 +8,7 @@ import { promises as fs } from "node:fs"
 import { uploadToR2, uploadBufferToR2, uploadFileToR2, mediaObjectKey } from "../../lib/storage.js"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
 import { directElevenLabsTTS, stripAudioTags } from "../../providers/elevenlabs/direct-tts.js"
+import { directElevenLabsDialogue } from "../../providers/elevenlabs/direct-dialogue.js"
 import { defaultAllowedVoiceId } from "../../lib/voice-policy.js"
 import { FALLBACK_VOICES } from "../../lib/premade-voices.js"
 import { generateMusic, type MusicProvider } from "../../providers/audio/generate-music.js"
@@ -329,39 +330,83 @@ const handleAudioIsolation: HandlerFn = async function handleAudioIsolation(job,
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
 
+/**
+ * Dialogue through the connected cloud, returned as bytes so the caller's
+ * storage path is untouched (same contract as `generateSpeechViaCloud`, which
+ * is TTS-shaped — single text — and so not reusable for a script of lines).
+ * The old cloud route strips `seed`/`applyTextNormalization` until the new
+ * route deploys there — harmless degradation, the dialogue still renders.
+ */
+async function generateDialogueViaCloud(body: Record<string, unknown>): Promise<Buffer> {
+  const { createCloudJob, waitForCloudJob, NodaroCloudError } = await import("../../providers/nodaro/client.js")
+  const jobId = await createCloudJob("/v1/text-to-dialogue", body)
+  const cloudJob = await waitForCloudJob(jobId)
+  const output = (cloudJob.output_data ?? {}) as { audioUrl?: unknown }
+  const url = typeof output.audioUrl === "string" ? output.audioUrl : undefined
+  if (!url) {
+    throw new NodaroCloudError(`nodaro.ai: dialogue job ${jobId} completed but returned no audioUrl`)
+  }
+  const res = await safeFetch(url)
+  if (!res.ok) {
+    throw new Error(`nodaro.ai: could not download the generated audio (${res.status})`)
+  }
+  return Buffer.from(await res.arrayBuffer())
+}
+
 const handleTextToDialogue: HandlerFn = async function handleTextToDialogue(job, ctx) {
-  const { dialogue, stability, languageCode } = job.data as {
+  const { dialogue, stability, languageCode, seed, applyTextNormalization } = job.data as {
     jobId: string
     dialogue: Array<{ text: string; voice: string }>
     stability?: number
     languageCode?: string
+    seed?: number
+    applyTextNormalization?: "auto" | "on" | "off"
   }
-  console.log(`[worker] text-to-dialogue ${ctx.jobId} (${dialogue.length} lines)`)
-  const kieAudio = new KieAudioProvider()
-  const dialogueOnTaskCreated = makeOnTaskCreated(ctx.jobId, "kie-standard")
-  const result = await withProgressRamp(
-    job,
-    ctx.jobId,
-    { start: 5, cap: 45 },
-    () => kieAudio.generateDialogue(dialogue, {
-      stability,
-      languageCode,
-    }, { onTaskCreated: dialogueOnTaskCreated }),
-  )
+  console.log(`[worker] text-to-dialogue ${ctx.jobId} (${dialogue.length} lines, direct API)`)
+
+  // Same three ways out as handleTextToSpeech, same order, same reasons —
+  // the order IS the contract (see the TTS ladder comment above):
+  //   1. local key -> direct ElevenLabs; 2. no key + connected -> the cloud;
+  //   3. neither -> the SHARED missing-key error, and no further.
+  // Synchronous call → no onTaskCreated lane, no reconcile kind stamped:
+  // the worker pre-task sentinel / 30-min sweep is the crash backstop,
+  // byte-identical to text-to-speech. Deliberately NOT `elevenlabs-sync` —
+  // its 5-minute stale threshold would race a legitimate near-300s dialogue
+  // + R2 upload into a false fail+refund.
+  let audioBuffer: Buffer
+  const dialogueOptions = { stability, languageCode, seed, applyTextNormalization }
+  if (config.ELEVENLABS_API_KEY) {
+    audioBuffer = await withProgressRamp(
+      job,
+      ctx.jobId,
+      { start: 5, cap: 45 },
+      () => directElevenLabsDialogue(dialogue, dialogueOptions),
+    )
+  } else if (await isNodaroConnected().catch(() => false)) {
+    audioBuffer = await withProgressRamp(
+      job,
+      ctx.jobId,
+      { start: 5, cap: 45 },
+      () => generateDialogueViaCloud({ dialogue, ...dialogueOptions }),
+    )
+  } else {
+    // Throws MissingProviderKeyError — the one phrasing every provider uses.
+    requireProviderKey(config.ELEVENLABS_API_KEY, "ELEVENLABS_API_KEY")
+    throw new Error("unreachable: requireProviderKey throws on an empty key")
+  }
   await setJobProgress(job, ctx.jobId, 50)
-  // POST-PROVIDER: KIE already delivered the dialogue audio (we were billed) —
+  // POST-PROVIDER: the provider already delivered the audio (we were billed) —
   // an R2 upload failure here is post-delivery, so skip the refund.
-  const r2Url = await runPostProcessing(() => uploadToR2(result.url, ctx.jobId, "audio", ctx.jobUserId))
+  const r2Url = await runPostProcessing(() => uploadBufferToR2(audioBuffer, mediaObjectKey(ctx.jobId, "audio", "mp3"), "audio/mpeg", ctx.jobUserId))
   await setJobProgress(job, ctx.jobId, 100)
   const { ok } = await finalizeJobWithMedia({
     jobId: ctx.jobId,
     jobType: "generate-dialogue",
-    result,
+    result: { url: r2Url, cost: null, providerUsed: "elevenlabs-direct" },
     mediaUrl: r2Url,
-    extraOutputData: buildProviderMeta(result),
   })
   if (!ok) return
-  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: elevenlabs-direct)`)
 }
 
 const handleVoiceChanger: HandlerFn = async function handleVoiceChanger(job, ctx) {

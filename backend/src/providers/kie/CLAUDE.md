@@ -131,7 +131,7 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `elevenlabs-multilingual` | `elevenlabs/text-to-speech-multilingual-v2` | [11labs multilingual](https://docs.kie.ai/market/elevenlabs/text-to-speech-multilingual-v2.md) |
 | `elevenlabs-sfx` | `elevenlabs/sound-effect-v2` | [11labs sfx](https://docs.kie.ai/market/elevenlabs/sound-effect-v2.md) |
 | `elevenlabs-stt` | `elevenlabs/speech-to-text` | [11labs stt](https://docs.kie.ai/market/elevenlabs/speech-to-text.md) |
-| `elevenlabs-dialogue` | `elevenlabs/text-to-dialogue-v3` | [11labs dialogue](https://docs.kie.ai/market/elevenlabs/text-to-dialogue-v3.md) |
+
 
 ---
 

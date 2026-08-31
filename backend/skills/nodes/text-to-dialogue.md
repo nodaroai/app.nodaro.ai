@@ -1,7 +1,7 @@
 ---
 node_type: text-to-dialogue
-generated_at: 2026-08-15T21:55:07.272Z
-generated_from: 150c80ac9
+generated_at: 2026-08-30T23:55:00.000Z
+generated_from: 35e3ee423
 ---
 
 # Text to Dialogue
@@ -21,6 +21,8 @@ generated_from: 150c80ac9
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
+- `seed?: number`
+- `applyTextNormalization?: "auto" | "on" | "off"`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `generatedAudioUrl?: string`

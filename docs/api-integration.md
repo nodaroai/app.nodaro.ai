@@ -445,11 +445,17 @@ All errors share the same shape:
 | 400 | `validation_error` | — | Malformed body, bad UUID, invalid field. |
 | 401 | `unauthorized` | — | Missing/invalid/expired/revoked token. |
 | 402 | `insufficient_credits` | — | (Cloud edition only) Account out of credits. |
+| 402 | `budget_exceeded` | — | (Cloud edition, organizations) Workspace-paid work: the workspace's allocated budget can't cover the reservation. Ask a workspace admin for headroom. Rollout-gated: availability may lag this document. |
+| 402 | `member_cap_exceeded` | — | (Cloud edition, organizations) Workspace-paid work: your per-member spending cap in this workspace is reached. Rollout-gated. |
 | 403 | `forbidden` | — | Token isn't authorized for this workflow (workflow scoping). |
+| 403 | `member_suspended` | — | (Cloud edition, organizations) Workspace-paid work: your membership in the paying workspace is suspended. Rollout-gated. |
+| 403 | `not_a_member` | — | (Cloud edition, organizations) The request names a workspace you are not an active member of. Rollout-gated. |
 | 403 | `insufficient_scope` | `missingScope` (+ `message`) | (OAuth tokens only) The token is missing a scope the route requires. Re-run the OAuth consent with the broader scope. See [OAuth Flow §4](./oauth-flow.md#4-scope-vocabulary). |
 | 403 | `edition_required` | `required_edition: "<edition>"` (+ `message`) | Endpoint needs a higher edition than the caller has. `required_edition` is the minimum: `"cloud"` for pipeline (`POST /v1/pipelines/:id/branch`) + scene-helper routes; `"business"` for API-token management (`POST /v1/api-tokens`, `DELETE /v1/api-tokens/:id`). |
 | 403 | `subscription_required` | — | (Cloud edition only) A pay-as-you-go account tried to spend from a first-party consumer surface (browser session in the studio or another Nodaro app). Payg credits are redeemable via the API/SDK/CLI/MCP — this never fires for token-authenticated calls. Rollout-gated: availability may lag this document. |
 | 404 | `not_found` | — | Workflow, execution, or token not found. |
+| 404 | `workspace_not_found` | — | (Cloud edition, organizations) The workspace named by workspace-paid work does not exist (or was deleted mid-flight). Rollout-gated. |
+| 409 | `workspace_archived` | — | (Cloud edition, organizations) Workspace-paid work into an archived workspace. Unarchive it or move the work. Rollout-gated. |
 | 429 | `rate_limited` | — | You've exceeded the per-minute bucket. Back off. |
 | 500 | `internal_error` | — | Server bug or downstream dependency failure. Retry with backoff. |
 | 503 | `price_not_configured` | — | (Cloud edition only) No pricing row exists for the requested model — the server hard-fails rather than silently mis-billing. Operator must seed the price; the call is not retryable as-is. |
@@ -943,6 +949,151 @@ page for the token syntax and worked examples.
 > **`referenceOrder` on images too.** `POST /v1/generate-image` accepts the same
 > optional `referenceOrder` (parity with video) to reorder its assembled
 > reference list and renumber the `@image_N` bindings.
+
+### Naming an image reference in the prompt (`@<name-slug>:<index>[:<role>]`)
+
+On `POST /v1/generate-image` a **media** reference (`source: "wired-image"` or
+`"manual"`) can be addressed inline by the slug of its name, the same way
+characters and locations already are — so you can say *where in the sentence*
+the picture belongs instead of relying on the trailing auto-attach block.
+
+- **The slug is derived from the entry's `defaultName`**, lower-cased with every
+  run of non-alphanumerics collapsed to a single `-` (`"Old Town"` →
+  `old-town`). There is no separate slug field to set, and nothing changes on
+  the wire: give the reference a name and it becomes mentionable.
+- **Grammar:** `@<name-slug>:<index>` renders that reference's binding at the
+  position you typed it (`reference image C`); `@<name-slug>:<index>:<role>`
+  renders the role phrase (`the background from reference image C`). The
+  `<index>` is a **correlation number only** — it is never echoed into the
+  prompt, and the platform binds by its own numbering walk, so you never
+  compute a seat.
+- **Roles** are the curated media set — `object`, `person`, `face`, `clothes`,
+  `background`, `style`, `pose`, `texture` — or any custom single-word role,
+  which passes through verbatim. Omit the role and the entry's own
+  `defaultRole` applies; with neither, you get the bare binding.
+- **`~lock` / `~nolock`** work here exactly as on character and location
+  mentions (`@town:1:background~lock`): a trailing sentinel forces that
+  reference's identity lock on or off for that mention.
+- **Precedence is character → location → image.** A name shared by a character
+  and an image resolves as the character. Duplicate image names bind
+  first-wins.
+- **A name that can't be a slug is never mentionable** — `"3D Render"` slugs to
+  `3d-render`, which starts with a digit and is outside the grammar, so no
+  token can bind it. Rename the reference to mention it.
+- Honored when the route assembles in the hybrid reference format. Under the
+  legacy format the token stays literal text and the reference auto-attaches
+  exactly as before. A token whose reference was capped out by the provider's
+  image-reference limit likewise stays literal.
+
+Mentioning a reference **re-seats** it: its URL moves from the trailing
+auto-attach block into the mention block, which re-letters the references after
+it. That is the point of the feature — the letters follow the sentence.
+
+### Cinematic direction (`direction`) on generate-image
+
+`POST /v1/generate-image` accepts an optional `direction` object: a flat map of
+**catalog ids**, one key per cinematic dimension, which the platform folds into
+the prompt as its own hint clauses. Send ids, not prose — the wording stays
+platform-owned, so a saved production picks up improved phrasing instead of
+freezing whatever text your client wrote the day it was saved.
+
+```json
+{
+  "prompt": "a knight on a hill",
+  "provider": "nano-banana",
+  "direction": {
+    "shotSize": "wide-shot",
+    "lightingStyle": "rembrandt",
+    "style": "anime",
+    "mood": ["happy", "joyful"]
+  }
+}
+```
+
+- **The keys are the platform's own picker field names** — `shotSize`, `angle`,
+  `coverage`, `composition`, `vantage`, `pose`, `compositionEffect`,
+  `cameraFormat`, `lens`, `aperture`, `shutterSpeed`, `isoValue`, `timeOfDay`,
+  `lightingStyle`, `lightingDirection`, `lightingRatio`, `colorTemperature`,
+  `colorLook`, `atmosphere`, `postProcess`, `style`, `mood`, `aesthetic`,
+  `photoGenre`, `photographer`, `renderQuality`, `setting`, `era`, `backdrop`.
+  (The registry also defines motion dimensions — `cameraMotion`, `actionFx`,
+  the `temporal*` keys, `transition`, `loopSubject` — which fold on the video
+  routes; see [the next section](#cinematic-direction-on-the-video-routes).)
+  Valid ids come from
+  [`GET /v1/picker-catalogs`](#picker-catalogs) — the same catalogs the canvas
+  pickers read. One caveat on deployments that register catalog **packs**: that
+  endpoint returns the pack-composed catalogs while the fold reads the base
+  catalogs, so a pack-added id is listed and accepted but renders no clause.
+- **Single id or an array.** Multi-pick dimensions (`mood`, `aesthetic`,
+  `photographer`, `atmosphere`, `postProcess`, `composition`, `lightingStyle`)
+  honor up to their own cap; a single-pick key given an array takes the first
+  entry. Exceeding a *dimension's* cap truncates rather than 400ing. The two
+  *wire* bounds do reject with a `validation_error`: at most **8** entries per
+  key, and at most **100** characters per id.
+- **Absent ≠ empty.** A missing key means "no hint", never a default. An empty
+  string or an empty array contributes nothing, and a `direction` that renders
+  no clause leaves your `prompt` byte-for-byte untouched.
+- **Unknown keys and unknown ids are skipped silently**, not rejected — a newer
+  client on an older API degrades to fewer hints rather than erroring, which is
+  why you should deploy the platform before the client that starts sending new
+  dimensions.
+- **Fold order is the platform's**, not your object's key order, and the
+  clauses are appended after your prompt (`". "`-joined), before any
+  `structured` fragment. Repeated identical clauses collapse to one.
+- The assembled prompt is still truncated to the provider's verified prompt cap,
+  so a maximal `direction` on a low-cap model can lose its tail clauses — send
+  the dimensions that matter most first-class rather than everything at once.
+
+### Cinematic direction on the video routes
+
+`POST /v1/generate-video` and `POST /v1/text-to-video` accept the SAME
+`direction` object, with the same tolerance rules, the same wire bounds and the
+same "absent ≠ empty" semantics as generate-image above. Two things differ.
+
+**The dimension set is the video surface.** Every look dimension listed above
+folds here too, minus the seven stills-only ones (`aperture`, `shutterSpeed`,
+`isoValue`, `postProcess`, `photoGenre`, `photographer`, `renderQuality`), plus
+the motion dimensions: `cameraMotion`, `actionFx`, `temporalSpeed`,
+`temporalFreeze`, `temporalDirection`, `temporalShutter`, `transition`,
+`loopSubject`. `cameraMotion` folds FIRST, ahead of every look clause. A
+stills-only key sent to a video route is **accepted and simply contributes no
+clause** — surface is a rendering concern, not a validation one — so one
+client-side look map can be sent to either route unchanged.
+
+**Motion dimensions render compact.** Look dimensions inject their full clause;
+motion dimensions inject their short professional term (`"cross-dissolve"`, not
+the sentence describing what a cross-dissolve does). Motion cues read better to
+a video model as terse directives, and video prompt ceilings are far tighter
+than image ones.
+
+```json
+{
+  "imageUrl": "https://…/frame.png",
+  "provider": "seedance-2",
+  "prompt": "she turns toward the window",
+  "direction": {
+    "cameraMotion": "dolly-in",
+    "shotSize": "medium-shot",
+    "timeOfDay": "dawn",
+    "temporalSpeed": "slow-motion"
+  }
+}
+```
+
+The fold happens **before** reference assembly, so your direction clauses sit
+inside the body that the reference resolver frames — the identity directives for
+a bound character still wrap the whole description. `jobs.input_data` records
+both halves: `prompt` is what the model received, `userPrompt` is the text you
+submitted (empty string if you sent `direction` with no prompt at all), and
+`direction` is your ids verbatim.
+
+Video prompt ceilings are provider-specific and low (kling clamps at 1000
+characters), and the clamp cuts the TAIL. A maximal direction across every look
+dimension can exceed that on its own, so prefer the dimensions that carry the
+shot.
+
+`POST /v1/extend-video` deliberately has no `direction` field: its prompt
+continues an existing clip, where re-stating the look is the wrong lever.
 
 ### Picker catalogs
 

@@ -12,6 +12,7 @@ import { usageModeDirective, DEFAULT_USAGE_MODE, type UsageMode } from "@nodaro/
 import { roleToPhrase, defaultRoleForSource, REFERENCE_ROLE_PRESETS, normalizeRoleSlug, resolveDefaultRole } from "@nodaro/shared"
 import { buildIdentityLockLine, withForcedIdentityLock } from "./identity-lock.js"
 import { findLocationMentionTokens, DEFAULT_LOCATION_USAGE_MODE, type LocationMentionTokenInfo, type LocationUsageMode } from "@nodaro/shared"
+import { findImageMentionTokens, imageMentionSlugForRef, knownImageSlugsFromRefs, type ImageMentionTokenInfo } from "@nodaro/shared"
 import type { CharacterDef, ConnectedReference, IdentityFidelity, IdentityMeta, ReferenceSource, SceneData } from "@nodaro/shared"
 import { locationReferencePhotoKindLabel, type LocationReferencePhotoKind } from "@nodaro/shared"
 
@@ -692,6 +693,131 @@ function resolveLocationMentionsHybrid(
   }
 
   return { prompt: resolvedPrompt, additionalUrls, mentionedLocationSlugs, lockLines, elementDirectives }
+}
+
+interface ResolveImageMentionsHybridResult {
+  /** Body with each `@<image-name>` mention replaced INLINE by its role phrase
+   *  ("the {role} from reference image {LETTER}", or the bare binding when the
+   *  role resolves to the media default `""`). No directive block. */
+  prompt: string
+  /** Matched image URLs in mention order (deduped by the caller). */
+  additionalUrls: string[]
+  /** NO `mentionedImageSlugs` — the location result's analog exists to FILTER
+   *  mentioned refs out of `connectedReferences`, and this pass deliberately
+   *  does no such filtering (see the caller's NOTE). Carrying the set anyway
+   *  would advertise a filter that does not exist. */
+  /** Per-reference identity-lock lines (deduped per URL). Caller prepends them
+   *  as ONE block, merged with the character/location lock lines. */
+  lockLines: string[]
+  /** Non-empty `elementInjection` fragments (deduped per URL). Caller appends
+   *  them as trailing scene directives. */
+  elementDirectives: string[]
+}
+
+/**
+ * HYBRID named-image mention convergence (P3). The media analog of
+ * `resolveLocationMentionsHybrid`, for `wired-image` / `manual` references
+ * addressed by the slug of their `defaultName` (an upload node's label on the
+ * canvas, or the name a thin client puts on the reference).
+ *
+ * ASYMMETRY vs. characters and locations: a media ref AUTO-ATTACHES its URL
+ * through the New path whether or not it is mentioned, and carries NO canonical
+ * prose. So a mention here is BINDING + RE-SEATING, never attach-gating — which
+ * is why the caller does NOT filter mentioned refs out of `connectedReferences`
+ * the way the location pass does.
+ *
+ * NO LEGACY COUNTERPART. The Phase-0 arm that reaches this is hybrid-gated, so
+ * an `@name:N` token under the legacy reference format stays literal text and
+ * the ref attaches exactly as it does today (the `resolveLocationMentions`
+ * role-token precedent, where `if (t.role) continue` leaves the token alone).
+ *
+ * DUPLICATE SLUGS: FIRST WINS (`if (!bySlug.has(...))`), matching
+ * `buildTileIdForUrl`. Every unrenamed upload node shares its default label, so
+ * ties are the common case, not an edge.
+ *
+ * ROLE precedence: the per-mention 3rd segment (VERBATIM — media role presets
+ * are all single-word, so `normalizeRoleSlug` is location-only and must NOT be
+ * called here) → the node default via `resolveDefaultRole` → `""`, which
+ * `roleToPhrase` renders as the BARE binding ("reference image C"), i.e. today's
+ * ref-only default with a name attached to it.
+ *
+ * CAPPED REFS: `imageReferenceLimit(provider)` truncates `connectedReferences`
+ * BEFORE Phase 0, so a mention whose ref was capped out silently falls through
+ * as literal text — matching how a capped character mention behaves today.
+ */
+function resolveImageMentionsHybrid(
+  prompt: string,
+  tokens: readonly ImageMentionTokenInfo[],
+  refs: readonly ConnectedReference[],
+  existingUrls: readonly string[],
+): ResolveImageMentionsHybridResult {
+  const bySlug = new Map<string, ConnectedReference>()
+  for (const r of refs) {
+    // `imageMentionSlugForRef` is the SAME predicate `knownImageSlugsFromRefs`
+    // applies to build the finder's known-slug set — one gate, so this map and
+    // that set can never admit different refs. (It also drops extras, which
+    // render through `renderExtraRefsHybrid` with their own body lines, and
+    // grammar-invalid slugs, where emptiness is NOT the gate.)
+    const slug = imageMentionSlugForRef(r)
+    if (!slug) continue
+    if (!bySlug.has(slug)) bySlug.set(slug, r)
+  }
+
+  const additionalUrls: string[] = []
+  const refByUrl = new Map<string, ConnectedReference>()
+  // Per-mention `~lock` / `~nolock`: the tri-state lock OVERRIDE per attached
+  // URL, fed to `withForcedIdentityLock` below. Only sentinel-bearing mentions
+  // write here (last sentinel wins), mirroring the location resolver.
+  const lockOverrideByUrl = new Map<string, boolean>()
+  const matched: Array<{ token: string; offset: number; url: string; role: string }> = []
+
+  for (const t of tokens) {
+    const match = bySlug.get(t.imageSlug)
+    if (!match || !match.url) continue
+    additionalUrls.push(match.url)
+    refByUrl.set(match.url, match)
+    if (t.lock !== undefined) lockOverrideByUrl.set(match.url, t.lock)
+    const role = (t.role ?? "").trim()
+      || resolveDefaultRole(match.defaultRole, match.defaultUsageMode, match.source)
+    matched.push({ token: t.token, offset: t.offset, url: match.url, role })
+  }
+
+  // Slot letters from the deduped [existing, mention] URL list — the prefix of
+  // the caller's `finalIndexByUrl`, so the letters agree.
+  const slotByUrl = new Map<string, number>()
+  for (const u of [...existingUrls, ...additionalUrls]) {
+    if (!slotByUrl.has(u)) slotByUrl.set(u, slotByUrl.size + 1)
+  }
+  const bindingFor = (url: string): string => {
+    const slot = slotByUrl.get(url)
+    return slot ? `reference image ${slotToLetter(slot)}` : "the reference image"
+  }
+
+  // Replace mention tokens right-to-left so earlier offsets stay valid.
+  let resolvedPrompt = prompt
+  for (const m of [...matched].sort((a, b) => b.offset - a.offset)) {
+    const phrase = roleToPhrase(m.role, bindingFor(m.url))
+    resolvedPrompt =
+      resolvedPrompt.slice(0, m.offset) + phrase + resolvedPrompt.slice(m.offset + m.token.length)
+  }
+
+  // One lock + one element directive per UNIQUE attached URL.
+  const lockLines: string[] = []
+  const elementDirectives: string[] = []
+  const seenUrls = new Set<string>()
+  for (const m of matched) {
+    if (seenUrls.has(m.url)) continue
+    seenUrls.add(m.url)
+    const ref = refByUrl.get(m.url)
+    if (!ref) continue
+    const binding = bindingFor(m.url)
+    const lock = buildIdentityLockLine(withForcedIdentityLock(ref, lockOverrideByUrl.get(m.url)), binding)
+    if (lock) lockLines.push(lock)
+    const inject = ref.elementInjection?.trim()
+    if (inject) elementDirectives.push(inject)
+  }
+
+  return { prompt: resolvedPrompt, additionalUrls, lockLines, elementDirectives }
 }
 
 /**
@@ -1495,6 +1621,12 @@ export interface BuildImagePromptConfig {
    * (`flux-lora-character`) — the trigger word + LoRA carries identity, so
    * the directive bullets are redundant and the wired-character refs
    * shouldn't be injected as `Image N`.
+   *
+   * The strip regex is grammar-agnostic — it eats LOCATION and named-IMAGE
+   * mentions (`@town:3:background`) as well as character ones. That is
+   * INTENDED, not an oversight: this path drops `connectedReferences` outright,
+   * so there is no reference left for any mention to bind to and a surviving
+   * token would reach the model as literal noise. Do not narrow it.
    */
   skipCharacterMentions?: boolean
 }
@@ -1714,7 +1846,22 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
           .filter((s): s is string => typeof s === "string" && s.length > 0)
       )
     )
-    if (knownCharacterSlugs.length > 0 || hasExtraRefs || knownLocationSlugs.length > 0) {
+    // Named-image mentions (P3). Slugs derive from each media ref's
+    // `defaultName` — there is no `imageSlug` wire field; the derivation is
+    // shared with the backend orchestrator's structured-branch gate via
+    // `knownImageSlugsFromRefs`, so the two can never disagree about whether a
+    // prompt carries a resolvable image mention.
+    const knownImageSlugs = knownImageSlugsFromRefs(connectedReferences)
+    // EXISTENCE-ONLY precheck, gating the Phase-0 arm below. Unlike characters
+    // (whose canonical fallback must run even with ZERO mentions), images have
+    // NO canonical fallback, so an image-only graph with no mention has no
+    // reason to enter Phase 0 — gating on TOKEN presence keeps today's control
+    // flow and byte output for every unmentioned graph BY CONSTRUCTION.
+    // HYBRID-only: under the legacy format an `@name:N` token stays literal text.
+    const hasImageMentionTokens = isHybrid
+      && knownImageSlugs.length > 0
+      && findImageMentionTokens(config.prompt, knownImageSlugs).length > 0
+    if (knownCharacterSlugs.length > 0 || hasExtraRefs || knownLocationSlugs.length > 0 || hasImageMentionTokens) {
       const mentionTokens = knownCharacterSlugs.length > 0
         ? findCharacterMentionTokens(config.prompt, knownCharacterSlugs)
         : []
@@ -1806,6 +1953,44 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
         if (r.locationVariantBucket) return false
         return !mentionedLocationSlugs.has(r.locationSlug)
       })
+      // Pass 3 (P3): named-image mentions, resolved on the POST-character,
+      // POST-location prompt. The finder MUST re-run here — the earlier passes
+      // spliced their own tokens out, so any offset computed before them is
+      // stale. PRECEDENCE character → location → image falls out of this pass
+      // order: a name shared by a character and an image resolves as the
+      // character, and the image token never fires.
+      //
+      // `existingUrls` is already location-inclusive because `additionalUrls`
+      // absorbed the location URLs just above, so the mention slot letters stay
+      // a prefix of the final `finalIndexByUrl`.
+      let hybridImageLockLines: string[] = []
+      let hybridImageElementDirectives: string[] = []
+      if (hasImageMentionTokens) {
+        const imageTokens = findImageMentionTokens(resolved.prompt, knownImageSlugs)
+        if (imageTokens.length > 0) {
+          const hi = resolveImageMentionsHybrid(
+            resolved.prompt,
+            imageTokens,
+            connectedReferences,
+            [...(referenceImageUrls || []), ...resolved.additionalUrls],
+          )
+          resolved.prompt = hi.prompt
+          resolved.additionalUrls = [...resolved.additionalUrls, ...hi.additionalUrls]
+          hybridImageLockLines = hi.lockLines
+          hybridImageElementDirectives = hi.elementDirectives
+          // Inline role phrases now live in the body → skip line-initial
+          // capitalization, which would otherwise corrupt a mid-sentence
+          // "the background from reference image C".
+          if (hi.additionalUrls.length > 0) hybridBodyConverged = true
+        }
+      }
+      // NOTE — deliberately NO `connectedReferences` filter for mentioned image
+      // refs (the location pass filters, just above). The New-path URL merge
+      // dedups by URL so the ref keeps its earlier Phase-0 slot; wired-image /
+      // manual refs have no canonical-fallback prose to double-emit (that loop
+      // is gated to wired-location/object/creature); and leaving the ref in
+      // place keeps `nonCharacterRefs[N-1]` positional indexing stable for
+      // `{image:N}` tokens.
       // Default-fallback canonical URLs + directives for any wired character
       // that has zero mentions in the prompt. Mirrors the legacy behavior the
       // mention feature replaced — wire a character with no typing required.
@@ -1944,12 +2129,14 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
         const allLockLines = [...new Set([
           ...hybridLockLines,
           ...hybridLocationLockLines,
+          ...hybridImageLockLines,
           ...canonical.lockLines,
           ...extrasRendered.lockLines,
         ])]
         const trailingLines = [
           ...hybridElementDirectives,
           ...hybridLocationElementDirectives,
+          ...hybridImageElementDirectives,
           ...canonical.phrases,
           ...canonical.elementDirectives,
           ...extrasRendered.bodyLines,

@@ -810,6 +810,15 @@ export type {
 } from "./location-mention-slug.js"
 
 export {
+  imageMentionSlug,
+  parseImageMentionToken,
+  findImageMentionTokens,
+  knownImageSlugsFromRefs,
+  imageMentionSlugForRef,
+} from "./image-mention-slug.js"
+export type { ImageMentionTokenInfo } from "./image-mention-slug.js"
+
+export {
   toConnectedReference,
   toConnectedReferences,
 } from "./to-connected-references.js"

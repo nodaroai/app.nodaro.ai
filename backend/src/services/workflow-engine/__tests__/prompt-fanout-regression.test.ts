@@ -46,6 +46,7 @@ const CTX: OrchestratorContext = {
   workflowId: "wf-1",
   userId: "user-1",
   triggerType: "manual",
+  billingContext: { payer: "user", userId: "user-1" },
   cancelled: false,
 }
 

@@ -167,6 +167,7 @@ Text-to-speech, voice cloning/design/changing, dubbing, sound effects, transcrip
 | ElevenLabs Sound Effects | ElevenLabs | Everyday | 3 | sfx | Generate short sound effects from a text prompt. |
 | ElevenLabs Turbo v2.5 | ElevenLabs | Premium | 15 | tts | Fast, cheap ElevenLabs TTS via the direct ElevenLabs API. Good for narration. |
 | ElevenLabs STT | ElevenLabs | Premium | 22 | stt | Speech-to-text — transcribe audio with timestamps. |
+| ElevenLabs Dialogue v3 | ElevenLabs | Premium | 25 | dialogue | Multi-speaker dialogue via the direct ElevenLabs API — give it a script, it voices each role (any voice: premade, library, or cloned). |
 | ElevenLabs Forced Alignment | ElevenLabs | Premium | 30 | forced-alignment | Align an existing transcript to audio with word-level timestamps. |
 | ElevenLabs Multilingual v2 | ElevenLabs | Premium | 30 | tts | Multi-language ElevenLabs TTS via the direct ElevenLabs API. |
 | ⭐ ElevenLabs v3 | ElevenLabs | Premium | 30 | tts | Latest ElevenLabs TTS — supports [audio tags] for emotion / pacing. Direct API. |

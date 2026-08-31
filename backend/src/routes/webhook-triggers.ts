@@ -19,6 +19,9 @@ import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
 import { accessAtLeast, canRunWorkflow, workflowAccessFromRow } from "../lib/workflow-access.js"
+import { resolveBillingContext, shouldRefuseDegradedRunFor } from "../lib/billing-context.js"
+import { billingPairColumns } from "../lib/insert-job.js"
+import { recordTriggerFireRefusal } from "../lib/trigger-fire-refusal.js"
 import { toAccessRow } from "../lib/workflow-route-access.js"
 
 // ---------------------------------------------------------------------------
@@ -151,6 +154,15 @@ export async function webhookTriggerRoutes(app: FastifyInstance) {
     // route is rate-limited to 10/min. The 404 is the same answer an unknown
     // token gets, so a revoked URL learns nothing about whether it was real.
     if (!(await canRunWorkflow(trigger.user_id as string, trigger.workflow_id as string))) {
+      // P14/W6: the refusal must be VISIBLE to the owner — one failed row
+      // with the stable code (deduped) — while the caller keeps getting the
+      // oracle-free 404 an unknown token gets.
+      await recordTriggerFireRefusal({
+        workflowId: trigger.workflow_id as string,
+        userId: trigger.user_id as string,
+        triggerType: "webhook",
+        triggerId: trigger.id as string,
+      })
       return reply.status(404).send({
         error: { code: "not_found", message: "Webhook not found" },
       })
@@ -196,6 +208,22 @@ export async function webhookTriggerRoutes(app: FastifyInstance) {
     // the first hasn't updated last_triggered_at yet — so the second INSERT
     // collides on workflow_executions_idempotency_uniq (user_id, idempotency_key)
     // and is rejected atomically instead of double-executing (double-charging).
+    // P14: payer resolved at FIRE TIME under the trigger's creator and the
+    // workflow's CURRENT home; the row carries the pair (W7) and the payload
+    // carries the context.
+    const billingContext = await resolveBillingContext({
+      userId: trigger.user_id as string,
+      workflowId: trigger.workflow_id as string,
+    })
+    // P14: a DEGRADED resolve on WORKSPACE-HOMED (or unreadable-home) work
+    // skips the fire rather than billing the owner's pocket — the ONE
+    // fail-closed probe. The response stays the uniform 404 (the oracle
+    // doctrine above outranks retry ergonomics for a transient outage);
+    // the retry is simply the next fire.
+    if (await shouldRefuseDegradedRunFor(billingContext, trigger.workflow_id as string)) {
+      req.log.error({ triggerId: trigger.id }, "degraded billing resolve on workspace workflow — webhook fire skipped")
+      return reply.status(404).send({ error: { code: "not_found", message: "Webhook not found" } })
+    }
     const idempotencyKey = `webhook:${trigger.id}:${previousLastTriggeredAt ?? "initial"}`
     const { data: execution, error: execError } = await supabase
       .from("workflow_executions")
@@ -206,6 +234,7 @@ export async function webhookTriggerRoutes(app: FastifyInstance) {
         trigger_type: "webhook",
         trigger_data: triggerData,
         idempotency_key: idempotencyKey,
+        ...billingPairColumns(billingContext),
       })
       .select("id")
       .single()
@@ -230,13 +259,16 @@ export async function webhookTriggerRoutes(app: FastifyInstance) {
       .update({ last_triggered_at: new Date().toISOString() })
       .eq("id", trigger.id)
 
-    // Enqueue orchestration
+    // Enqueue orchestration (payer resolved above, before the row; moving a
+    // workflow into a workspace re-points its triggers' payer on the next
+    // fire — the run predicate above refused a creator who lost access).
     const jobData: WorkflowExecutionJob = {
       executionId: execution.id,
       workflowId: trigger.workflow_id,
       userId: trigger.user_id,
       triggerType: "webhook",
       triggerData,
+      billingContext,
     }
 
     await orchestrationQueue.add("workflow-execution", jobData, {

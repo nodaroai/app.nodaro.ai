@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import type { BillingContext } from "../../lib/billing-context.js"
 import { mapReserveError, type MappedReserveError } from "../../lib/reserve-errors.js"
 import { attemptAutoRecharge } from "../billing/auto-recharge.js"
 import { creditsToUsd } from "@nodaro/shared"
@@ -27,6 +28,8 @@ export interface ReserveHelperCreditsArgs {
   supabase: SupabaseClient
   userId: string
   helperName: SceneHelperName
+  /** The requesting lane's resolved payer (P14). Absent = personal. */
+  billingContext?: BillingContext
 }
 
 export type ReserveHelperResult =
@@ -68,12 +71,15 @@ export async function reserveHelperCredits(
     throw err
   }
   const modelIdentifier = `scene-helper:${args.helperName}`
-  // billing-payer-ok: scene helpers are personal-payer until P14 rides the resolved payer on the job payload (resolved once at enqueue, never re-resolved in a worker)
+  // P14/W4e: the resolved payer rides p_workspace_id — conditional spread, a
+  // personal call's wire shape stays byte-identical to pre-P14.
+  const ws = args.billingContext?.payer === "workspace" ? args.billingContext : undefined
   const { data: usageLogId, error } = await args.supabase.rpc("reserve_credits", {
     p_user_id: args.userId,
     p_credits: credits,
     p_job_id: null,
     p_model_identifier: modelIdentifier,
+    ...(ws ? { p_workspace_id: ws.workspaceId } : {}),
     p_provider_cost_usd: 0, // helpers aggregate to provider cost on the parent pipeline
     p_display_cost_usd: creditsToUsd(credits),
     p_is_app_run: false,
@@ -95,8 +101,9 @@ export async function reserveHelperCredits(
   }
   // Reserve succeeded — balance dropped; auto-recharge check (fire-and-
   // forget, never blocks the pipeline). Covers the direct-RPC reserve lane
-  // the CreditsService hook can't see (audit F2.2).
-  void attemptAutoRecharge(args.userId)
+  // the CreditsService hook can't see (audit F2.2). NEVER for a workspace
+  // payer — class work must not pump a member's saved card.
+  if (!ws) void attemptAutoRecharge(args.userId)
   return { ok: true, usageLogId: usageLogId as string }
 }
 

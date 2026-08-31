@@ -133,6 +133,65 @@ Region editing is grok-2-only: the underlying endpoint references the prior grok
 
 An inpaint or refine edit is **one generation at the provider's normal cost** — there is **no extra surcharge** for the mask or the composite step. The price is exactly the per-provider Generate Image cost listed in [Supported Providers](#supported-providers) above (e.g. nano-banana-pro inpaint costs the same as a fresh nano-banana-pro generation). The same holds for a grok-2 region edit, and its region detection is free.
 
+## Cinematic direction by id (`direction`, API / SDK)
+
+On the canvas you set a look by **wiring parameter-picker nodes** into the
+`look` handle. A direct API / SDK / MCP caller does the same thing with the
+optional `direction` object on `POST /v1/generate-image`: a flat map of catalog
+ids, one key per dimension, which the platform folds into the prompt as its own
+hint clauses. You send ids; the platform owns the wording, so a saved run picks
+up improved phrasing instead of freezing the text your client wrote.
+
+```json
+"direction": {
+  "shotSize": "wide-shot",
+  "lens": "wide-24mm",
+  "timeOfDay": "golden-hour",
+  "style": "anime",
+  "mood": ["happy", "joyful"]
+}
+```
+
+- **Keys are the picker field names** this node's `look` pickers already use —
+  framing (`shotSize`, `angle`, `coverage`, `composition`, `vantage`), camera
+  (`cameraFormat`, `lens`), exposure (`aperture`, `shutterSpeed`, `isoValue`),
+  lighting (`timeOfDay`, `lightingStyle`, `lightingDirection`, `lightingRatio`,
+  `colorTemperature`), look (`colorLook`, `atmosphere`, `postProcess`, `style`,
+  `mood`, `aesthetic`, `photoGenre`, `photographer`, `renderQuality`), scene
+  (`setting`, `era`, `backdrop`), plus `pose` and `compositionEffect`. Valid ids
+  come from `GET /v1/picker-catalogs` — the same catalogs the pickers read; on a
+  deployment with registered catalog **packs** that endpoint also lists
+  pack-added ids, which are accepted but render no clause.
+- **A value is one id or an array.** Multi-pick dimensions honor their own cap;
+  a single-pick key handed an array takes the first entry. Exceeding a
+  dimension's cap truncates rather than 400ing, and unknown keys / unknown ids
+  are skipped silently — but the wire bounds (8 entries per key, 100 characters
+  per id) do reject.
+- **Absent ≠ empty.** A missing key means "no hint", never a default; a
+  `direction` that renders nothing leaves your prompt byte-for-byte untouched.
+- The clauses are appended after your prompt in the platform's canonical order
+  (not your object's key order), and the assembled prompt is still truncated to
+  the provider's verified prompt cap.
+
+Full semantics: [API integration guide](../../api-integration.md#cinematic-direction-direction-on-generate-image).
+
+### The same ids stored on the node
+
+A Generate Image **node** can carry that same `direction` object (and the
+structured prompt fields `structured`) in its own data, written by an API / MCP
+author or by an app that emits Nodaro graphs. The canvas honors them: a
+single-node run, a whole-workflow run and the config panel's final-prompt
+preview all fold them the same way, once, at the model call — so the graph
+stores ids and the wording is produced fresh each run instead of being frozen
+into the prompt text.
+
+Stored ids are **additive** to any wired Framing / Lighting / Style picker node:
+the wired hint lands first, the stored ids after, exactly as two wired pickers
+of one family behave. A node that carries neither key is untouched — its prompt
+reaches the model byte-for-byte as before. Node presets and workflow
+export/import capture the ids along with the rest of the node, which is
+deliberate: a preset should carry its look.
+
 ## Best Practices
 
 - Use Nano Banana or Z-Image for rapid iteration and storyboarding due to fast generation speed.
@@ -154,6 +213,7 @@ An inpaint or refine edit is **one generation at the provider's normal cost** �
 - Use 1K resolution and medium quality during iteration, then switch to higher settings for final output.
 - The style dropdown supports a "Custom..." option for free-text style descriptions when presets are insufficient.
 - When connecting a Provider parameter node upstream, it overrides the provider selection on this node, which is useful for batch-switching models across multiple Generate Image nodes.
+- **Name your upload nodes to mention them.** Give a wired Upload Image node a Label and you can address it in the prompt by the slug of that label — `@town:1` puts that picture's binding exactly where you typed it, and `@town:1:background` says what to take from it. Roles are the usual media set (`object`, `person`, `face`, `clothes`, `background`, `style`, `pose`, `texture`) or any custom single word, and `~lock` / `~nolock` work as they do on character mentions. Unnamed uploads still attach as before — mentioning is optional, not required (an unlabelled node falls back to its node type, so it is still addressable as `@upload-image:1` if you want it). A label starting with a digit (`3D Render`) can't form a mention; rename it if you want to address it inline. Full grammar: [Reference Roles guide](../../reference-roles-guide.md#naming-a-plain-image-so-you-can-mention-it).
 
 ## Trained character routing (Cloud edition)
 

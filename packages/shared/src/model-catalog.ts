@@ -58,6 +58,10 @@ export type ModelMode =
   | "isolation"
   | "dubbing"
   | "forced-alignment"
+  // dialogue — deliberately its own mode, never "tts": the dialogue model
+  // takes a multi-speaker script shape (inputs[]), not the single-text
+  // generate_speech contract, so it must never appear in a TTS model list.
+  | "dialogue"
   // video analysis
   | "video-analysis"
   // video audit — deliberately its own mode, never "video-analysis": the
@@ -2143,18 +2147,17 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
   "elevenlabs-dialogue": {
     id: "elevenlabs-dialogue",
     kind: "audio",
-    modes: ["tts"] as const,
+    // Its own mode, never "tts": the script shape (inputs[]) doesn't fit the
+    // single-text generate_speech contract, so list_models must never offer
+    // it there. The dialogue-capable MCP verb is `generate_dialogue`.
+    modes: ["dialogue"] as const,
     family: "ElevenLabs",
     label: "ElevenLabs Dialogue v3",
     series: "ElevenLabs",
-    description: "Multi-speaker dialogue TTS — give it a script, it voices each role.",
+    description: "Multi-speaker dialogue via the direct ElevenLabs API — give it a script, it voices each role (any voice: premade, library, or cloned).",
     useCases: ["tts", "dialogue", "multi-speaker"],
+    features: ["audio-tags", "voice-cloning"],
     pricing: [{ identifier: "elevenlabs-dialogue", credits: 25, note: "per 1K chars" }],
-    // Driven only via the dialogue/character-voice path (multi-speaker script
-    // shape), NOT the single-text generate_speech verb. Hide from MCP
-    // list_models so generate_speech (TTS_PROVIDERS) can't advertise it and
-    // then 400. Re-expose if a dialogue-capable MCP verb is added.
-    mcpHidden: true,
   },
 
   // ── ElevenLabs voice utilities ──

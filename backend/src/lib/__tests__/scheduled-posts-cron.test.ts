@@ -68,7 +68,10 @@ describe("scanDueScheduledPosts", () => {
     expect(n).toBe(1)
     expect(claimAttempts).toEqual(["a", "b"])
     expect(addMock).toHaveBeenCalledTimes(1)
+    // P14: a scheduled post is TRIVIALLY personal — the payload must carry
+    // NO billingContext key (flag-off byte-identity; the worker coalesces).
     expect(addMock).toHaveBeenCalledWith("publish", { scheduledPostId: "a" })
+    expect(addMock.mock.calls[0]?.[1]).not.toHaveProperty("billingContext")
   })
 
   it("reverts the claim when enqueue fails — fail-closed, retried next tick", async () => {

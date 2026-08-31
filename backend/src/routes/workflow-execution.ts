@@ -15,6 +15,8 @@ import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import { createSSEStream } from "../lib/sse.js"
 import { executionEvents, type ExecutionEvent } from "../lib/execution-events.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
+import { resolveBillingContext, shouldRefuseDegradedRun } from "../lib/billing-context.js"
+import { billingPairColumns } from "../lib/insert-job.js"
 import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
@@ -352,6 +354,27 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     const idempotencyKey =
       headerKey.length >= MIN_IDEMPOTENCY_KEY_LENGTH ? headerKey : undefined
 
+    // P14: the payer is resolved HERE, once per execution — under the
+    // requester and the RUN'S workflow (the workflow's home workspace may
+    // pay only through the run predicate, already enforced above). On the
+    // internal lane (MCP dispatch) the resolver strips the workflowId and
+    // the forwarded workspace header is the decision. The execution ROW
+    // carries the pair (W7) and the payload carries the context; workers
+    // read, never re-resolve.
+    const billingContext = await resolveBillingContext({
+      userId: req.userId,
+      workflowId,
+      explicitWorkspaceId: req.workspaceId,
+      internal: req.authKind === "internal",
+    })
+    // P14: a DEGRADED resolve on WORKSPACE-HOMED work refuses rather than
+    // silently billing the member's pocket for class work. Retryable.
+    if (shouldRefuseDegradedRun(billingContext, accessFacts.workspace_id)) {
+      return reply.status(503).send({
+        error: { code: "billing_unavailable", message: "Billing is temporarily unavailable for workspace runs. Try again shortly." },
+      })
+    }
+
     let execution: { id: string }
     let dedupHit = false
     try {
@@ -363,6 +386,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
           status: "pending",
           trigger_type: mcpClient ? "mcp" : "manual",
           ...(mcpClient ? { mcp_client: mcpClient } : {}),
+          ...billingPairColumns(billingContext),
         },
         idempotencyKey,
       )
@@ -393,7 +417,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       })
     }
 
-    // Enqueue orchestration job
+    // Enqueue orchestration job (payer resolved above, before the row).
     const jobData: WorkflowExecutionJob = {
       executionId: execution.id,
       workflowId,
@@ -401,6 +425,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       triggerType: "manual",
       nodeIds,
       webFreeMode: await resolveWebSurfaceFlag(req),
+      billingContext,
       ...(inputOverrides ? { inputOverrides } : {}),
     }
 

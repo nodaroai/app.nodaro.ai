@@ -97,36 +97,6 @@ describe("video create sites — full egress dimensions from the wire body (G9)"
 })
 
 describe("audio create sites — full egress dimensions from the wire body (G9)", () => {
-  it("a dialogue create call surfaces summed characters in dimensions", async () => {
-    const srv = await loopback((req, _body, res) => {
-      res.writeHead(200, { "content-type": "application/json" })
-      res.end(
-        req.url?.includes("recordInfo")
-          ? JSON.stringify({ code: 200, data: { state: "success", resultJson: JSON.stringify({ resultUrls: ["http://x/a.mp3"] }) } })
-          : JSON.stringify({ code: 200, data: { taskId: "dlg-1" } }),
-      )
-    })
-    cfg.KIE_API_BASE_URL = srv.base
-    vi.resetModules()
-    const { setEgressDecorator, clearEgressDecorator } = await import("../../egress.js")
-    const { KieAudioProvider } = await import("../audio.js")
-    const seen: EgressCall[] = []
-    setEgressDecorator({ decorate: (c: EgressCall) => { seen.push(c); return null } })
-    try {
-      await new KieAudioProvider().generateDialogue(
-        [{ text: "ab", voice: "Rachel" }, { text: "cde", voice: "Rachel" }],
-        {},
-        { modelKey: "elevenlabs-dialogue" },
-      ).catch(() => {})
-      const call = seen.find((c) => c.modelKey === "elevenlabs-dialogue")
-      expect(call).toBeDefined()
-      expect(call!.dimensions.characters).toBe(5)
-    } finally {
-      clearEgressDecorator()
-      await srv.close()
-    }
-  })
-
   it("a TTS create call still surfaces characters", async () => {
     const srv = await loopback((req, _body, res) => {
       res.writeHead(200, { "content-type": "application/json" })

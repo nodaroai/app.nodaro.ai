@@ -11,6 +11,8 @@ import { config, hasCredits } from "../lib/config.js"
 import { TIER_PARALLELISM } from "../ee/billing/stripe-config.js"
 import { executionEvents, type ExecutionEvent } from "../lib/execution-events.js"
 import { supabase } from "../lib/supabase.js"
+import { payloadBillingContext } from "../lib/billing-context.js"
+import { monetizationRpcArgs } from "../services/workflow-engine/monetization-args.js"
 import { reconcileNodeStatesFromJobs } from "../lib/reconcile/node-states.js"
 import { cancelInFlightChildJobs } from "../lib/reconcile/cancel-inflight-jobs.js"
 import { updateExecutionWithRetry } from "../lib/execution-writes.js"
@@ -328,6 +330,10 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     cancelled: false,
     isAppRun: !!appVersionId,
     webFreeMode: job.data.webFreeMode === true,
+    // Resolved at enqueue, coalesced here ONCE (absent = personal, the
+    // normative rule — a payload from pre-P14 code or a rollback window).
+    // Nothing below this line re-resolves the payer.
+    billingContext: payloadBillingContext(job.data),
     componentDepth: job.data.componentDepth ?? 0,
     executingComponentIds: job.data.executingComponentIds ?? [],
   }
@@ -1123,16 +1129,21 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
               .single()
 
             if (appRun) {
-              await supabase.rpc("process_app_monetization", {
-                p_runner_id: ctx.userId,
-                p_creator_id: appVersion.creator_id,
-                p_markup_amount: markup,
-                p_app_id: appVersionId,
-                p_run_id: appRun.id,
-                p_base_cost: totalCredits,
-                p_flat_fee: flatFee,
-                p_percent_fee: percentFee,
-              })
+              // P14/W4g: the execution's resolved payer routes the BASE
+              // through the workspace; the approved/unapproved MARKUP fork
+              // lives entirely in the RPC (migration 352). Args built by the
+              // pure helper so the routing is pinned by unit tests.
+              await supabase.rpc("process_app_monetization", monetizationRpcArgs({
+                runnerId: ctx.userId,
+                creatorId: appVersion.creator_id as string,
+                markupAmount: markup,
+                appVersionId,
+                runId: appRun.id as string,
+                baseCost: totalCredits,
+                flatFee,
+                percentFee,
+                billingContext: ctx.billingContext,
+              }))
               console.log(`[monetization] Credited ${markup} CR to creator ${appVersion.creator_id} from runner ${ctx.userId}`)
             }
           }

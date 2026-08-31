@@ -64,6 +64,7 @@ import { extractMcpClient } from "../extract-mcp-client.js"
 import { buildJobInputData } from "../job-input-data.js"
 import { formatZodError } from "../zod-error.js"
 import { insertWithIdempotencyKey } from "../idempotent-insert.js"
+import { billingPairColumns } from "../insert-job.js"
 import { throwIfJobCancelled } from "../job-cancellation.js"
 import { hasCredits, hasOrganizations } from "../config.js"
 import { appBaseUrl } from "../deployment-urls.js"
@@ -1093,8 +1094,14 @@ export function buildToolkit(): PluginToolkit {
       safeFetch,
       // Mirrors `insertWithIdempotencyKey` (`lib/idempotent-insert.ts:33`),
       // narrowed to the "jobs" table + the one column the contract needs.
-      insertJobWithIdempotencyKey: async (data, idempotencyKey) => {
-        const { row, created } = await insertWithIdempotencyKey<{ id: string }>("jobs", data, idempotencyKey)
+      insertJobWithIdempotencyKey: async (data, idempotencyKey, billingContext) => {
+        // P14: the payer pair is spread AFTER the plugin's row — the ONE
+        // exception to caller-wins, same as withJobProvenance.
+        const { row, created } = await insertWithIdempotencyKey<{ id: string }>(
+          "jobs",
+          { ...data, ...billingPairColumns(billingContext) },
+          idempotencyKey,
+        )
         return { id: row.id, created }
       },
       // Dynamic import keeps the core/ee boundary: this file (core) may not

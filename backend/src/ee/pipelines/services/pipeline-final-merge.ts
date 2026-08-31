@@ -140,6 +140,10 @@ export async function pipelineFinalMerge(
 
   // 1. Create the jobs row + reserve credits BEFORE doing FFmpeg work. Mirrors
   //    the pattern in `_run-worker-job.ts` (reserve → work → commit/refund).
+  // P14/W7: the pipeline's durable payer stamp rides the job row too, read
+  // ONCE here and reused for the reservation below.
+  const { getPipelineBillingContext } = await import("../pipeline-payer.js")
+  const billingContext = await getPipelineBillingContext(supabase, pipelineId, userId)
   const { data: job, error: insertErr } = await insertInternalJob(
     "pipeline:final-merge",
     {
@@ -154,7 +158,7 @@ export async function pipelineFinalMerge(
       job_type: "pipeline-final-merge",
       pipeline_id: pipelineId,
     },
-    { client: supabase },
+    { client: supabase, billingContext },
   )
   if (insertErr || !job?.id) {
     throw new Error(
@@ -165,9 +169,9 @@ export async function pipelineFinalMerge(
 
   // 2. Reserve credits.
   const { CreditsService } = await import("../../billing/credits.js")
-  // billing-payer-ok: pipeline merge jobs are personal-payer until P14 rides the resolved payer on the job payload (resolved once at enqueue, never re-resolved in a worker)
   await CreditsService.reserveCredits(userId, jobId, "pipeline-final-merge", 0, 0, {
     isAppRun: false,
+    billingContext,
   })
 
   let workDir: string | null = null

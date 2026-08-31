@@ -60,6 +60,21 @@ describe("direct-ElevenLabs create funnels default OUR modelKey with no meta", (
     await srv.close()
   })
 
+  it("dialogue → elevenlabs-dialogue", async () => {
+    const srv = await loopback((_req, res) => { res.writeHead(200, { "content-type": "audio/mpeg" }); res.end(Buffer.from([1])) })
+    cfg.ELEVENLABS_BASE_URL = srv.base
+    vi.resetModules()
+    const { directElevenLabsDialogue } = await import("../direct-dialogue.js")
+    const call = await keyFor("dialogue", () => directElevenLabsDialogue([
+      { text: "Hello there", voice: "Rachel" },
+      { text: "General Kenobi", voice: "George" },
+    ]))
+    expect(call?.provider).toBe("elevenlabs")
+    expect(call?.modelKey).toBe("elevenlabs-dialogue")
+    expect(call?.dimensions?.characters).toBe("Hello there".length + "General Kenobi".length)
+    await srv.close()
+  })
+
   it("voiceDesign → elevenlabs-voice-design", async () => {
     const srv = await loopback((_req, res) => { res.writeHead(200, { "content-type": "application/json" }); res.end("{}") })
     cfg.ELEVENLABS_BASE_URL = srv.base

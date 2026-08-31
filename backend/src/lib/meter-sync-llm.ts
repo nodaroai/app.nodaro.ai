@@ -26,6 +26,12 @@ export interface SyncLlmMeter {
  * Returns `null` when the reservation could not proceed (job-insert error or
  * insufficient credits) — a reply has already been sent, so the caller must
  * `return` immediately.
+ *
+ * P14 NOTE: a route that calls this DOES reserve in-request — it must take
+ * the default (payer-aware) creditGuard, never `checkOnly: true`. The
+ * check-only scanner (`ee/lib/__tests__/check-only-credit-guard.test.ts`)
+ * recognizes this wrapper by name; if you write another reserve-on-behalf
+ * wrapper, add it to that test's RESERVE_MARKERS.
  */
 export async function meterSyncLlm(
   req: FastifyRequest,

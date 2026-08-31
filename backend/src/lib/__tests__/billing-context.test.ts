@@ -98,6 +98,38 @@ describe("resolveBillingContext — absent means personal, always", () => {
     h.services.billing = { resolve: vi.fn(async () => WS_CTX) }
     expect(await resolveBillingContext({ userId: "u-1" })).toBe(WS_CTX)
   })
+
+  it("the NORMATIVE absent-field rule: a payload without billingContext reads personal, verbatim otherwise", async () => {
+    const { payloadBillingContext } = await import("../billing-context.js")
+    // Absent — a payload enqueued by pre-P14 code or a rollback window.
+    expect(payloadBillingContext({ userId: "u-1" })).toEqual({ payer: "user", userId: "u-1" })
+    // Present — carried VERBATIM, the same object (workers never re-resolve).
+    expect(payloadBillingContext({ userId: "u-1", billingContext: WS_CTX })).toBe(WS_CTX)
+  })
+
+  it("every gate literal the spend sites read is runtime-checked — a grade that relaxes one degrades", async () => {
+    // P14/W4b made freeTierBlocklist / webFreeMode / appCreditsAllowance
+    // load-bearing at the spend sites (org-entitlements.ts). They are
+    // compile-time literals in the contract, but the value crosses a process
+    // boundary from a build-arg-pinned plugin — runtime truth is this guard.
+    for (const relaxed of [
+      { freeTierBlocklist: true },
+      { webFreeMode: true },
+      { appCreditsAllowance: true },
+      { watermark: true },
+      { dailyCapCredits: 500 },
+      { tierForGates: "free" },
+    ]) {
+      h.services.billing = {
+        resolve: vi.fn(async () => ({ ...WS_CTX, entitlements: { ...WS_CTX.entitlements, ...relaxed } })),
+      }
+      expect(await resolveBillingContext({ userId: "u-1" }), JSON.stringify(relaxed)).toEqual({
+        payer: "user",
+        userId: "u-1",
+        degraded: true,
+      })
+    }
+  })
 })
 
 describe("registerBillingContextHook — real Fastify, real stage, real ordering", () => {

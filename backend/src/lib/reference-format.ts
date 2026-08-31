@@ -1,14 +1,14 @@
 /**
- * Whether reference roles render in the hybrid form server-side. Mirrors the
- * image determination in `routes/generate-image.ts` (the `buildAssembleInput`
- * `referenceFormat` gate): test or explicit `IMAGE_REFERENCE_FORMAT=legacy` →
- * false; otherwise → true (HYBRID IS THE DEFAULT everywhere, incl. production).
- * Set `IMAGE_REFERENCE_FORMAT=legacy` to revert (pair with the frontend
- * `VITE_IMAGE_REFERENCE_FORMAT=legacy`).
+ * Whether reference roles render in the hybrid form server-side. THE single
+ * determination, not a mirror of one: `routes/generate-image.ts`'s
+ * `buildAssembleInput` `referenceFormat` gate calls it too, so the image and
+ * video sides cannot drift. Test runs or an explicit
+ * `IMAGE_REFERENCE_FORMAT=legacy` → false; otherwise → true (HYBRID IS THE
+ * DEFAULT everywhere, incl. production). Set `IMAGE_REFERENCE_FORMAT=legacy` to
+ * revert (pair with the frontend `VITE_IMAGE_REFERENCE_FORMAT=legacy`).
  *
- * Used to drive `ResolveVideoReferenceCoreArgs.hybridRoles` from the backend
- * video resolvers (`payload-builder.ts`, `routes/generate-video.ts`) so the
- * video side gates on the SAME env signal as the image side.
+ * Also drives `ResolveVideoReferenceCoreArgs.hybridRoles` from the backend
+ * video resolvers (`payload-builder.ts`, `routes/generate-video.ts`).
  */
 export function backendHybridRoles(): boolean {
   if (process.env.NODE_ENV === "test" || process.env.IMAGE_REFERENCE_FORMAT === "legacy") return false
