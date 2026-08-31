@@ -38,7 +38,7 @@ import { composeCameraMotionHintFromConnections } from "./camera-motions.js"
 import { composeTransitionHintFromConnections, type TransitionDuration, type TransitionIntensity, type TransitionPosition, type TransitionTiming } from "./transitions.js"
 import { composeCharacterFxHintFromConnections, type CharacterFxDuration, type CharacterFxIntensity, type CharacterFxPosition, type CharacterFxTiming } from "./character-fx.js"
 import { buildMaterialHints } from "./materials.js"
-import { getAnimal } from "@nodaro/shared"
+import { getAnimalPromptHint, getAnimalTerm } from "@nodaro/shared"
 import { getVehicle } from "@nodaro/shared"
 import { getWeapon } from "@nodaro/shared"
 import { getFurniture } from "@nodaro/shared"
@@ -322,15 +322,16 @@ function resolveBaseHint(
       return withCustomText(data, byMode(mode, getLoopSubjectPromptHint, getLoopSubjectTerm)(asStr(data.loopSubject)))
     case "material":
       return withCustomText(data, buildMaterialHints(data.material, mode))
-    case "animal": {
-      const animal = getAnimal(asStr(data.animal))
+    // Animal is the one Object-entity catalog whose phrasing has a single
+    // owner: `@nodaro/shared`'s `getAnimalPromptHint` / `getAnimalTerm`, which
+    // the picker-catalog funnel calls too. Both getters already return "" on a
+    // miss, so the entry lookup and the `animal ? … : ""` guard are the
+    // getters' job now, not this switch's.
+    case "animal":
       return withCustomText(
         data,
-        animal
-          ? byMode(mode, `featuring a ${animal.label.toLowerCase()}, ${animal.description}`, objectEntityTerm(animal))
-          : "",
+        byMode(mode, getAnimalPromptHint, getAnimalTerm)(asStr(data.animal)),
       )
-    }
     case "vehicle": {
       const vehicle = getVehicle(asStr(data.vehicle))
       return withCustomText(
