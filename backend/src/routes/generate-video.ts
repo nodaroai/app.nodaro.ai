@@ -592,38 +592,63 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     // (`undefined` included), so the flat path stays byte-identical (the
     // "backward-compatible: no connectedReferences → prompt + flat refs pass
     // through unchanged" oracle in generate-video.test.ts).
+    // The provider clamp (`applyVideoNegativePrompt`) hard-slices the prompt
+    // tail at this ceiling, ORDER-BLIND. The EFFECTIVE ceiling is not always the
+    // model cap: for a provider without a native negative param the clamp folds
+    // the negative in as a "\nAvoid: …" suffix and RESERVES room for it first
+    // (`model-constants.ts`'s `room = promptMax - avoid.length`), so the base
+    // prompt is cut at `cap - suffix`. `effectiveVideoPromptCeiling` is the one
+    // mirror of that reservation, shared with text-to-video.
+    const promptCeiling = effectiveVideoPromptCeiling(provider, negativePrompt)
+
+    // The FRAMING the cap is measured through. `resolveVideoReferenceCore` runs
+    // AFTER the fold (see above) and ADDS the binding text — hybrid APPENDS the
+    // canonical role phrases, so they land behind every folded hint and are the
+    // first thing a tail cut destroys. Handing the composer this closure puts
+    // that added text inside the shed's budget while leaving it un-sheddable:
+    // the only thing the composer can drop is a clause it rendered itself.
+    // Pure and cheap (no I/O), so calling it once per shed iteration is fine —
+    // the real assembly below re-runs it on the settled body.
+    //
+    // Mirrors the assembly's own gate exactly: no `connectedReferences` → the
+    // body is not framed at all, so the frame is identity.
+    const connectedRefs = parsed.data.connectedReferences
+    const frameWithReferences = (body: string | undefined): string | undefined =>
+      connectedRefs && connectedRefs.length > 0
+        ? assembleVideoConnectedReferences({
+          prompt: body,
+          provider,
+          connectedReferences: connectedRefs,
+          baseReferenceImageUrls: parsed.data.referenceImageUrls,
+          referenceOrder: parsed.data.referenceOrder,
+          referenceVideoCount: parsed.data.referenceVideoUrls?.length ?? 0,
+          referenceAudioCount: parsed.data.referenceAudioUrls?.length ?? 0,
+        }).prompt
+        : body
+
     if (parsed.data.direction || parsed.data.subject) {
+      // TRUNCATION ORDERING: pass the ceiling + the framing so the composer
+      // sheds its own hint clauses (last-folded first) instead of letting the
+      // order-blind clamp sever a reference binding or the end of the prose.
+      // A prompt that already fits is byte-identical to the capless fold.
+      // Both catalog channels ride the one sheddable list, subject ahead of
+      // direction, so a subject-only fold is budgeted the same way.
       const composed = composeVideoPromptText(prompt, parsed.data.direction, undefined, {
         ...(parsed.data.subject !== undefined ? { subject: parsed.data.subject } : {}),
+        cap: promptCeiling,
+        frame: frameWithReferences,
       })
       if (composed !== prompt) {
         // `input_data.userPrompt` records the SOURCE, never the render.
         // `buildJobInputData` only mirrors prompt→userPrompt when userPrompt is
         // unset, and it runs AFTER we overwrite parsed.data.prompt — so pin the
         // original submission here. The `?? ""` branch is load-bearing: a
-        // direction-only run has no `prompt`, and without it the fold's OUTPUT
-        // would be recorded as the user's own words.
+        // direction- or subject-only run has no `prompt`, and without it the fold's OUTPUT
+        // would be recorded as the user's own words. (A FULL shed folds nothing
+        // and leaves `composed === prompt`, so it correctly pins nothing.)
         parsed.data.userPrompt ??= rawPrompt ?? ""
         prompt = composed
         parsed.data.prompt = prompt
-      }
-      // The provider clamp (`applyVideoNegativePrompt`) hard-slices the prompt
-      // tail at this ceiling. Not a regression — clients bake the same text
-      // today — but the fold makes the platform responsible for the length, so
-      // make the truncation observable rather than silent.
-      //
-      // The EFFECTIVE ceiling is not always the model cap: for a provider
-      // without a native negative param the clamp folds the negative in as a
-      // "\nAvoid: …" suffix and RESERVES room for it first
-      // (`model-constants.ts`'s `room = promptMax - avoid.length`), so the base
-      // prompt is cut at `cap - suffix`. Mirror that reservation here or the
-      // warning under-fires exactly on the runs that get truncated.
-      const promptCeiling = effectiveVideoPromptCeiling(provider, negativePrompt)
-      if (prompt && prompt.length > promptCeiling) {
-        req.log.warn(
-          { provider, promptLength: prompt.length, promptCeiling },
-          "[generate-video] composed prompt exceeds the provider ceiling; the tail will be clamped",
-        )
       }
     }
 
@@ -676,6 +701,23 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       // exactly what the worker receives.
       parsed.data.prompt = prompt
       parsed.data.referenceImageUrls = referenceImageUrls
+    }
+
+    // Truncation warning, measured on the ASSEMBLED prompt — the same string the
+    // shed above budgeted for, and the one the provider clamp will actually cut.
+    // (Before shedding existed this compared the pre-resolver body, which both
+    // over-fired on runs the clamp never touched and missed every byte the
+    // resolver added.) Reaching here means the overflow was UNSHEDABLE: prose or
+    // bindings alone clear the ceiling, so the order-blind clamp is the last
+    // resort. Still gated on the fold — the platform only owns the length on the
+    // runs where it rendered the text — but that gate is now EITHER catalog
+    // channel: a subject-only fold renders text the same way, so leaving it out
+    // would make exactly those overflows clamp silently.
+    if ((parsed.data.direction || parsed.data.subject) && prompt && prompt.length > promptCeiling) {
+      req.log.warn(
+        { provider, promptLength: prompt.length, promptCeiling },
+        "[generate-video] assembled prompt exceeds the provider ceiling after shedding every hint; the tail will be clamped",
+      )
     }
 
     // Identity injection — when enabled + a character is referenced, append

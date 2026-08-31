@@ -53,7 +53,8 @@ import {
   SUBJECT_IMAGE_HINT_MODE_DEFAULT,
   type SubjectFields,
 } from "./subject-registry.js"
-import { joinPromptHints, PROMPT_HINT_SEPARATOR } from "./prompt-hint-join.js"
+import { joinPromptHints } from "./prompt-hint-join.js"
+import { keepableDirectionHints } from "./hint-shedding.js"
 import type { CharacterDef, ConnectedReference, IdentityMeta } from "@nodaro/shared"
 
 /**
@@ -246,48 +247,6 @@ function composePromptText(
 }
 
 /**
- * How many of the first `kept` hint clauses may STAY if `overflowChars`
- * characters have to leave the body. Walks the fold order from the TAIL,
- * subtracting each clause plus the separator it brought, and stops as soon as
- * enough has been reclaimed.
- *
- * Tail-first over the COMBINED list means the direction fold sheds before the
- * subject fold — deliberate: a fully specified person is ~30 clauses and, left
- * unsheddable, would push the overflow into `buildImagePrompt`'s order-blind
- * tail clamp, severing references or the user's prose while decorative clauses
- * survive. That is precisely the bug this machinery exists to prevent.
- *
- * Within the direction block the shed order is `DIRECTION_FIELDS` order
- * REVERSED. Note what that
- * is and is not: the table's order is a COMPATIBILITY order (grouped by family,
- * with the legacy `DirectionFields` block pinned last so every pre-registry
- * caller's fold stays byte-identical) — it is NOT a ranking of how load-bearing
- * a dimension is, and this function does not claim one. Tail-first is chosen
- * because it is deterministic, matches the fold order the API documents, and
- * needs no second ordering to drift out of sync with the table. A caller mixing
- * legacy keys with the newer ones can therefore lose e.g. `lightingId` before a
- * decorative `isoValue` clause; if that ever matters, the fix is an explicit
- * priority column on `DIRECTION_FIELDS`, not a second hand-kept list here.
- *
- * Deliberately approximate (assembly is not perfectly additive); the caller
- * re-assembles and re-checks, and this function strictly decreases `kept`
- * whenever `overflowChars > 0`, so that loop terminates.
- */
-function keepableHintClauses(
-  hintClauses: readonly string[],
-  kept: number,
-  overflowChars: number,
-): number {
-  let deficit = overflowChars
-  let next = kept
-  while (next > 0 && deficit > 0) {
-    next -= 1
-    deficit -= hintClauses[next]!.length + PROMPT_HINT_SEPARATOR.length
-  }
-  return next
-}
-
-/**
  * Assemble a node's image-generation inputs into a `BuildImagePromptResult`
  * (`{ prompt, nativeNegativePrompt, referenceImageUrls }`).
  *
@@ -351,14 +310,16 @@ export function assembleImageInput(
   })
 
   // Fold everything first (the under-cap byte-parity pass), then shed hints
-  // from the tail of the fold order while the assembled prompt overflows the
-  // provider cap. `keepableHintClauses` strictly decreases `kept` whenever
-  // there IS an overflow, so this terminates at `kept === 0` in the worst case —
-  // at which point the body overflows on its own and the builder's clamp stands.
+  // from the tail of the COMBINED fold order (subject clauses first in the list,
+  // therefore last to leave) while the assembled prompt overflows the provider
+  // cap. `keepableDirectionHints` — the one shed arithmetic, shared with
+  // `composeVideoPromptText` — strictly decreases `kept` whenever there IS an
+  // overflow, so this terminates at `kept === 0` in the worst case, at which
+  // point the body overflows on its own and the builder's clamp stands.
   let kept = pieces.hintClauses.length
   let fitted = assembleWith(kept)
   while (fitted.overflowChars > 0 && kept > 0) {
-    kept = keepableHintClauses(pieces.hintClauses, kept, fitted.overflowChars)
+    kept = keepableDirectionHints(pieces.hintClauses, kept, fitted.overflowChars)
     fitted = assembleWith(kept)
   }
   // `overflowChars` is assembly bookkeeping, not part of the callers' contract.

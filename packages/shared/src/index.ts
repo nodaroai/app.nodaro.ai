@@ -822,6 +822,20 @@ export {
 } from "./image-mention-slug.js"
 export type { ImageMentionTokenInfo } from "./image-mention-slug.js"
 
+// Wired-creature / wired-object mentions — the SAME 2-or-3-segment grammar as
+// the named-image mention (both are views of `mention-token-grammar.ts`), with
+// their own ref gate. The grammar core itself stays internal to the package: it
+// has no standalone consumer, and a third public `@slug:N` surface would invite
+// call sites that bypass a kind's gate.
+export {
+  entityMentionSlug,
+  parseEntityMentionToken,
+  findEntityMentionTokens,
+  knownEntitySlugsFromRefs,
+  entityMentionSlugForRef,
+} from "./entity-mention-slug.js"
+export type { EntityMentionTokenInfo } from "./entity-mention-slug.js"
+
 export {
   toConnectedReference,
   toConnectedReferences,

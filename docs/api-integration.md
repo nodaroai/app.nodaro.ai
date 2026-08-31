@@ -974,9 +974,9 @@ the picture belongs instead of relying on the trailing auto-attach block.
 - **`~lock` / `~nolock`** work here exactly as on character and location
   mentions (`@town:1:background~lock`): a trailing sentinel forces that
   reference's identity lock on or off for that mention.
-- **Precedence is character → location → image.** A name shared by a character
-  and an image resolves as the character. Duplicate image names bind
-  first-wins.
+- **Precedence is character → location → image → creature → object.** A name
+  shared by a character and an image resolves as the character. Duplicate names
+  within one kind bind first-wins.
 - **A name that can't be a slug is never mentionable** — `"3D Render"` slugs to
   `3d-render`, which starts with a digit and is outside the grammar, so no
   token can bind it. Rename the reference to mention it.
@@ -988,6 +988,37 @@ the picture belongs instead of relying on the trailing auto-attach block.
 Mentioning a reference **re-seats** it: its URL moves from the trailing
 auto-attach block into the mention block, which re-letters the references after
 it. That is the point of the feature — the letters follow the sentence.
+
+### Naming a creature or object in the prompt (same grammar)
+
+`source: "wired-creature"` and `source: "wired-object"` entries use the **same
+grammar**, the same slug derivation from `defaultName`, the same `~lock` /
+`~nolock` sentinels, and the same hybrid-only, capped-ref and unmentionable-slug
+rules as the media mention above. Two things differ:
+
+- **The roles are the entity sets** — creature: `creature`, `anatomy`,
+  `markings`, `pose`, `color`, `style`; object: `object`, `shape`, `material`,
+  `color`, `texture`, `style` — or any custom single-word role, verbatim. Omit
+  the role and the entry's `defaultRole` applies; with neither you get the
+  source default, `the creature from …` / `the object from …`.
+- **A mention SUPPRESSES that entry's trailing auto-attach phrase.** Unlike a
+  media reference, an unmentioned creature or object already contributes a
+  trailing line (`the creature from reference image D`). Without a mention the
+  entity's *name* sits in your prose as plain text while its binding dangles at
+  the end — two halves of one intent. Mention it and the phrase renders once,
+  inline, where you typed it.
+
+```jsonc
+{
+  "prompt": "a wide shot of @nessie:1 rising beside @dock:2:material",
+  "connectedReferences": [
+    { "id": "cr-1", "defaultName": "Nessie", "source": "wired-creature", "url": "https://…/nessie.png" },
+    { "id": "ob-1", "defaultName": "Dock",   "source": "wired-object",   "url": "https://…/dock.png" }
+  ]
+}
+// → "a wide shot of the creature from reference image A rising beside
+//    the material from reference image B"
+```
 
 ### Reference lock (`referenceLock`) on generate-image
 
@@ -1073,17 +1104,18 @@ freezing whatever text your client wrote the day it was saved.
   ZERO hints left — very long prose, or many bound references on their own —
   does the last-resort tail clamp cut mid-text and end the prompt with `...`.
   Send the dimensions that carry the shot rather than everything at once and
-  you will never reach either stage. **This ordering is generate-image's alone**
-  — the video routes still clamp order-blind, at much tighter caps; see
+  you will never reach either stage. **The video routes shed the same way**, at
+  much tighter caps and with one extra thing in the budget; see
   [the next section](#cinematic-direction-on-the-video-routes).
 
 ### Cinematic direction on the video routes
 
 `POST /v1/generate-video` and `POST /v1/text-to-video` accept the SAME
 `direction` object, with the same tolerance rules, the same wire bounds and the
-same "absent ≠ empty" semantics as generate-image above. Three things differ —
-the dimension set and how motion renders, below, and how an over-cap prompt is
-truncated (after the example).
+same "absent ≠ empty" semantics as generate-image above — including the
+truncation ordering, which sheds direction clauses before your prose or your
+references. Three things differ — the dimension set and how motion renders,
+below, and what the truncation budget has to cover (after the example).
 
 **The dimension set is the video surface.** Every look dimension listed above
 folds here too, minus the seven stills-only ones (`aperture`, `shutterSpeed`,
@@ -1122,14 +1154,37 @@ both halves: `prompt` is what the model received, `userPrompt` is the text you
 submitted (empty string if you sent `direction` with no prompt at all), and
 `direction` is your ids verbatim.
 
-**Truncation is the third thing that differs.** Video prompt ceilings are
-provider-specific and low (kling clamps at 1000 characters), and the clamp cuts
-the TAIL of the whole assembled prompt, order-blind — the hint-by-hint shedding
-described for generate-image above does **not** apply here, so a video prompt
-that overflows can lose its references and the end of your prose, not just its
-direction clauses (and it is a bare cut, with no trailing `...`). A maximal
-direction across every look dimension can exceed the ceiling on its own, so
-prefer the dimensions that carry the shot.
+**Truncation is the third thing that differs — in the budget, not the rule.**
+Video prompt ceilings are provider-specific and far lower than image ones (kling
+clamps at 1000 characters), so a broad `direction` can exceed one on its own.
+The shed described for generate-image applies here too: over the ceiling, the
+route drops hint clauses from the END of the fold order until the prompt fits,
+and your prose, your references and the role phrases that bind them all survive
+intact. `subject` clauses ([below](#structured-subject-subject)) are in the same
+budget on this surface too, folded ahead of `direction` and therefore shed last
+— and a `subject`-only request is budgeted exactly the same way.
+
+Two video-specific details are worth knowing:
+
+- **The budget includes the reference framing.** The fold runs before reference
+  assembly (above), and the resolver then ADDS text — the `Use these characters:`
+  block, or, in the hybrid format, the lock lines and the trailing canonical role
+  phrases. Those trailing phrases are exactly what an order-blind tail cut
+  destroys first, so the shed is decided on the length AFTER framing. Reference
+  text is never what gets dropped.
+- **The ceiling is the one the negative prompt leaves.** For a provider with no
+  native `negative_prompt` parameter the negative is folded into the prompt as a
+  `"\nAvoid: …"` suffix whose room is reserved FIRST, so the base prompt's real
+  ceiling is `cap − suffix`. The shed budgets against that number, which means a
+  longer `negativePrompt` costs you hint clauses rather than prose.
+
+Two things stay outside the budget and fall back to the order-blind clamp (a
+bare tail cut, with no trailing `...`): the opt-in identity injection
+(`injectCharacterContext`), which appends a character's canonical description
+after assembly, and a body that still overflows with ZERO hints left — very long
+prose, or many bound references on their own. As on the image side, nothing is
+shed while the prompt fits, so an under-cap request is byte-for-byte what it
+always was.
 
 `POST /v1/extend-video` deliberately has no `direction` field: its prompt
 continues an existing clip, where re-stating the look is the wrong lever.
@@ -1201,9 +1256,14 @@ in frame) which the platform folds into the prompt as its own clauses.
   dimension; the video routes fold the short professional term, because the
   start frame already carries the subject's identity into the clip.
 - **Absent ≠ empty**, and a `subject` that renders no clause leaves your
-  `prompt` byte-for-byte untouched. Under a provider's prompt cap on
-  generate-image, subject clauses are the LAST hints to be shed (see the
-  direction section above).
+  `prompt` byte-for-byte untouched. Under a provider's prompt cap — on
+  generate-image and on both video routes alike — subject clauses ARE shed
+  candidates, exactly like direction clauses, but they are the LAST hints to
+  go: the whole direction fold leaves before the first subject clause does, and
+  neither channel is ever shed before your prose, your references or the
+  `structured` fragment (see the direction sections above). On the video routes
+  the same reference framing and negative-prompt reservation are inside the
+  budget, so a subject-only fold is budgeted exactly like a direction one.
 
 `POST /v1/extend-video` deliberately has no `subject` field, for the same
 reason it has no `direction`.

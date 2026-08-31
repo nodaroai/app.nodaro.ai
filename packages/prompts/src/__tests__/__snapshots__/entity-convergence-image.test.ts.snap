@@ -1,0 +1,19 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`byte-identity guarantees > mention-free prompt with a wired creature AND object is unchanged 1`] = `
+"A still life in a dim room
+the creature from reference image A
+the object from reference image B"
+`;
+
+exports[`byte-identity guarantees > mention-free prompt with a wired creature is unchanged 1`] = `
+"A wide shot of a lake monster at dusk
+the creature from reference image A"
+`;
+
+exports[`byte-identity guarantees > no connectedReferences at all is unchanged 1`] = `"a wide shot of a lake at dusk"`;
+
+exports[`byte-identity guarantees > prompt with an @-token that matches no entity is unchanged 1`] = `
+"A shot of @dragon:1 over the lake
+the creature from reference image A"
+`;

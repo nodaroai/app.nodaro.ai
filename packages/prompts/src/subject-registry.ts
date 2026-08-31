@@ -186,6 +186,14 @@ const perId =
  * made of, and finally the animal in frame. Both group rows run over the SAME
  * normalized bag, in this order, which is what keeps the styling builder's
  * `lipState` dedupe alive.
+ *
+ * SECOND MEANING OF POSITION (same as `DIRECTION_FIELDS`): both cap-aware
+ * assemblers fold this table AHEAD of the direction table into ONE sheddable
+ * list and shed it TAIL-FIRST through `hint-shedding.ts`, so a row's position
+ * here is also its survival order under a provider's prompt cap — subject
+ * clauses outlive every direction clause, and within this block `animal` leaves
+ * before `person`. A compatibility order, not a ranking; anything needing a
+ * real ranking adds an explicit priority column rather than reordering rows.
  */
 export const SUBJECT_FIELDS = [
   { key: "person", kind: "group", surface: "both", render: viaFragmentBuilder(buildPersonHints) },

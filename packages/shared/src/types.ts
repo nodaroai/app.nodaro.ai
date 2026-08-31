@@ -163,13 +163,19 @@ export interface ConnectedReference {
    */
   readonly defaultUsageMode?: UsageMode
   /**
-   * Character node's HYBRID `defaultRole` (the role-dropdown pick: a
-   * `REFERENCE_ROLE_PRESETS["wired-character"]` value or a sanitized Custom
-   * slug) propagated into every entry derived from that node. Read via
+   * The reference's HYBRID `defaultRole` (the role-dropdown pick: a
+   * `REFERENCE_ROLE_PRESETS[source]` value or a sanitized Custom slug)
+   * propagated into every entry derived from that node. Read via
    * `resolveDefaultRole(defaultRole, defaultUsageMode, source)` at the hybrid
    * resolver sites — it takes precedence over `defaultUsageMode`. Absent for
-   * non-character refs and for nodes that never set a role (fall back to the
-   * `defaultUsageMode`-derived role, then the source default).
+   * nodes that never set a role (fall back to the `defaultUsageMode`-derived
+   * role, then the source default).
+   *
+   * Written by the character node's role dropdown, and accepted from any source
+   * on the wire (`connectedReferenceSchema`). The LOCATION paths read it through
+   * their own `resolveLocationRole` chain rather than `resolveDefaultRole` — the
+   * location role vocabulary is mode-derived and slug-normalized — so it is NOT
+   * a character-only field: do not re-narrow this doc to characters.
    */
   readonly defaultRole?: string
   /**

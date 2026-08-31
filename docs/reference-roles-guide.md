@@ -23,9 +23,9 @@ with zero configuration:
 | Wired source | Default label |
 |--------------|---------------|
 | Character | `person` |
-| Location | `background` |
-| Object | `object` |
-| Animal / Creature | `creature` |
+| Location | `location` |
+| Object | `object` — nameable, see [Mentioning a creature or an object](#mentioning-a-creature-or-an-object) |
+| Animal / Creature | `creature` — nameable, see [Mentioning a creature or an object](#mentioning-a-creature-or-an-object) |
 | Face | `face` |
 | Plain image / upload | **`ref-only`** (bare reference) — nameable, see [Naming a plain image](#naming-a-plain-image-so-you-can-mention-it) |
 | Video / audio | **`ref-only`** (bare reference) |
@@ -40,7 +40,7 @@ default is **bold**). **Custom…** is always available for anything not listed.
 | Source | Preset roles |
 |--------|--------------|
 | **Character / Person** | ref-only · **person** · face · clothes · hair · pose · expression · style |
-| **Location** | ref-only · **background** · atmosphere · as-is · empty background · layout · lighting · style |
+| **Location** | ref-only · **location** · background · atmosphere · as-is · empty background · layout · lighting · style |
 | **Object** | **object** · shape · material · color · texture · style |
 | **Animal / Creature** | **creature** · anatomy · markings · pose · color · style |
 | **Plain image** (wired / uploaded) | **ref-only** · object · person · face · clothes · background · style · pose · texture |
@@ -60,7 +60,7 @@ reference without being told what to take from it. It's the top entry of every r
 and the **default** for plain image, video, and audio references.
 
 For **Character / Location / Object / Animal** assets, ref-only is an explicit choice (their described
-defaults — person / background / object / creature — are unchanged). A Character or Location pill set
+defaults — person / location / object / creature — are unchanged). A Character or Location pill set
 to ref-only serializes as a plain role (`@kira:1:ref-only`) and shows a compact **ref** badge to set
 it apart from its described default.
 
@@ -83,8 +83,9 @@ Characters and locations are mentionable because they have names. A **plain imag
 way: give the wired **Upload Image** node a **Label**, and the slug of that label becomes its mention
 name — so a node labelled `Town` is `@town:1`.
 
-The grammar is the simplest of the three — `@<name>:<index>[:<role>]`, two or three segments, no
-variants and no usage modes, because a picture has no variant array to choose from:
+The grammar is the short one — `@<name>:<index>[:<role>]`, two or three segments, no variants and no
+usage modes, because a picture has no variant array to choose from (creatures and objects speak the
+same short grammar — see below):
 
 | Token | Result |
 |-------|--------|
@@ -101,6 +102,38 @@ Mentioning is **optional** — an unnamed upload still attaches exactly as befor
 to address. Two notes: a label starting with a digit (`3D Render`) can't form a mention, so rename it
 if you want to address it inline; and when a name is shared with a character or location, the
 **character or location wins** — those resolve first.
+
+### Mentioning a creature or an object
+
+**Object** and **Animal / Creature** assets are mentionable by name too, with the **same grammar** as
+a plain image — `@<name>:<index>[:<role>]`, plus the `~lock` / `~nolock` sentinels. The name is the
+entity's own name (a creature named `Nessie` is `@nessie:1`), and the roles are that asset's sets:
+`creature` · `anatomy` · `markings` · `pose` · `color` · `style`, and `object` · `shape` · `material`
+· `color` · `texture` · `style` — or a custom one.
+
+**Type these by hand.** Unlike character, location and plain-image mentions, creatures and objects
+have no `@` autocomplete row and no pill in the editor yet — the token stays plain text while you
+write, and is resolved when the prompt is generated.
+
+| Token | Result |
+|-------|--------|
+| `@nessie:1` | `the creature from reference image A`, placed where you typed it |
+| `@nessie:1:markings` | `the markings from reference image A` |
+| `@dock:2:material` | `the material from reference image B` |
+| `@nessie:1~lock` / `@nessie:1~nolock` | force the identity-lock on / off for this mention |
+
+This is the one place mentioning changes more than *where* the phrase lands. A wired creature or
+object you **don't** mention still contributes a phrase, appended at the end of the prompt — so
+writing the creature's name in your sentence leaves the name as plain prose while its binding dangles
+in a trailing line, and the model has no reason to connect the two. **Mentioning binds them:** the
+phrase renders once, inline, and the trailing line for that reference goes away.
+
+> Before: *"a wide shot of Nessie rising from the lake"* … `the creature from reference image A`
+>
+> After (`@nessie:1`): *"a wide shot of **the creature from reference image A** rising from the lake"*
+
+Full precedence when a name is shared across kinds: **character → location → image → creature →
+object**. The earlier kind wins and the later mention never fires.
 
 ### Custom labels
 
@@ -123,8 +156,8 @@ built-in wording (tuned per type — person / face / creature / location) or rep
 Left off, your prompt stays terse and you remain in full control of any fidelity language.
 
 **In the editor** you can also flip the lock **per `@`-mention**: open a character or location pill's
-menu and toggle **Identity lock** (a named plain image takes the same trailing sentinel, typed
-directly — `@town:1~lock`). That mention then serializes a trailing `~lock`
+menu and toggle **Identity lock** (a named plain image, creature or object takes the same trailing
+sentinel, typed directly — `@town:1~lock`, `@nessie:1~lock`). That mention then serializes a trailing `~lock`
 (`@kira:1:face~lock`, `@old-library:1:background~lock`) and its reference gets the lock line — even
 when the source's default lock is off. Locations use their own built-in wording:
 
