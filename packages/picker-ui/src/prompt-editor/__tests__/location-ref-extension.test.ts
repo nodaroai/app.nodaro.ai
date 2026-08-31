@@ -18,10 +18,11 @@ import { collectTokens, type KnownSlugSets } from "../index"
  *     as plain text (when the slug isn't known to the editor).
  */
 
-function known(opts: { chars?: string[]; locs?: string[] } = {}): KnownSlugSets {
+function known(opts: { chars?: string[]; locs?: string[]; imgs?: string[] } = {}): KnownSlugSets {
   return {
     characters: new Set(opts.chars ?? []),
     locations: new Set(opts.locs ?? []),
+    images: new Set(opts.imgs ?? []),
     snippets: [],
   }
 }

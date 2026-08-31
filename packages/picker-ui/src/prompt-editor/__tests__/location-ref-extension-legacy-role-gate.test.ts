@@ -165,7 +165,7 @@ describe("HYBRID: role tokens ARE auto-promoted to a role pill", () => {
  * text→pill on reload. Driven through the same hoisted format holder.
  */
 function known(locs: string[]): KnownSlugSets {
-  return { characters: new Set(), locations: new Set(locs), snippets: [] }
+  return { characters: new Set(), locations: new Set(locs), images: new Set(), snippets: [] }
 }
 
 describe("collectTokens (valueToDoc) honors the legacy role gate", () => {

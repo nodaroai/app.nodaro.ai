@@ -14,6 +14,26 @@ describe("buildRefPillNodes", () => {
     ])
   })
 
+  // The NAME-addressed sibling of the row above: SAME media item, but the
+  // "mention by name" row sets `imageMentionSlug`, which routes to the
+  // `imageMention` pill AND to the unified mention counter.
+  it("imageMentionSlug → imageMention node using mentionIndex (NOT item.index)", () => {
+    expect(buildRefPillNodes(item({ source: "wired", imageMentionSlug: "town" }), 5)).toEqual([
+      { type: "imageMention", attrs: { imageSlug: "town", imageIndex: 5, role: null } },
+      { type: "text", text: " " },
+    ])
+  })
+
+  it("imageMentionSlug + role → the 3rd segment, straight through (no slot routing)", () => {
+    expect(buildRefPillNodes(item({ imageMentionSlug: "town", role: "background" }), 4)[0].attrs)
+      .toEqual({ imageSlug: "town", imageIndex: 4, role: "background" })
+  })
+
+  it("a media item WITHOUT imageMentionSlug still builds the positional imageRef", () => {
+    expect(buildRefPillNodes(item({ source: "wired", defaultLabel: "object" }), 5)[0].type)
+      .toBe("imageRef")
+  })
+
   it("video / audio → videoRef / audioRef with item.index (NOT mentionIndex)", () => {
     expect(buildRefPillNodes(item({ source: "video" }), 5)[0]).toEqual({
       type: "videoRef", attrs: { refIndex: 2, label: "" },
@@ -93,5 +113,11 @@ describe("nextMentionIndex", () => {
   })
   it("ignores {image:N} tokens (only @<slug>:N counts)", () => {
     expect(nextMentionIndex("{image:9} and @kira:2")).toBe(3)
+  })
+  // The counter is UNIFIED across all three mention grammars: a named-image
+  // mention must not reuse an index a character/location already took.
+  it("counts named-image mentions in the same namespace", () => {
+    expect(nextMentionIndex("@town:4 near the @barn:2:background")).toBe(5)
+    expect(nextMentionIndex("@kira:1 walks past @town:7~lock")).toBe(8)
   })
 })

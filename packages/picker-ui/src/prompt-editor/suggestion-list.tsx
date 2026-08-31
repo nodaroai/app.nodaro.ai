@@ -6,6 +6,7 @@ import type { RefImageItem } from "./editor-types"
 import { TrainedPill } from "./trained-pill"
 import { optimizedImageUrl } from "./lib/image"
 import { IMAGE_REFERENCE_FORMAT } from "./lib/image-reference-format"
+import { imageMentionSlugForItem } from "./lib/image-mention-refs"
 import { characterSwapMenuRoles, sanitizeRole } from "./character-ref-roles"
 import { locationSwapMenuRoles, sanitizeLocationRole } from "./location-ref-roles"
 import { useScrollActiveOptionIntoView } from "./use-scroll-active-option-into-view"
@@ -43,6 +44,14 @@ export type SuggestionCommandPayload = RefImageItem & {
    * list unchanged, so this field never appears.
    */
   role?: string
+  /**
+   * Set ONLY by the "mention by name" row of a media ref (`uploaded` /
+   * `wired`), carrying the slug the SHARED `imageMentionSlug` derived from that
+   * ref's name. Its presence is what routes `buildRefPillNodes` to the
+   * NAME-addressed `imageMention` pill instead of the positional `imageRef`
+   * one — both rows are offered for the same ref, so neither replaces the other.
+   */
+  imageMentionSlug?: string
 }
 
 export interface SuggestionListHandle {
@@ -79,6 +88,12 @@ interface SuggestionListProps {
  *                          drill view. Selecting inserts the slug with that
  *                          mode appended.
  *   - "image-ref":         non-character ref (uploaded / wired-image), inserted directly
+ *   - "image-mention":     the SAME media ref offered a second time, addressed
+ *                          by NAME (`@town:N`) instead of by slot (`{image:N}`).
+ *                          Emitted only when the ref's name yields a
+ *                          grammar-valid slug (shared `imageMentionSlug`) and
+ *                          only in HYBRID, the one format with an image-mention
+ *                          resolver. Selecting inserts the `imageMention` pill.
  *   - "location-root":     one row per location at root view; clicking drills in
  *                          to the location's variant list (level 2). Trailing
  *                          chip shows the variant count.
@@ -104,6 +119,7 @@ type DisplayRow =
   // the role into usageMode XOR variantSlug via `roleToCharacterRefSlots`.
   | { kind: "role"; role: string }
   | { kind: "image-ref"; item: RefImageItem }
+  | { kind: "image-mention"; item: RefImageItem; slug: string }
   | {
       kind: "location-root"
       item: RefImageItem
@@ -123,6 +139,29 @@ type DisplayRow =
   // `command({ ...item, role })`; the parent routes the role into `role` XOR
   // usageMode (bucket/variant cleared) via `roleToLocationRefSlots`.
   | { kind: "location-role"; role: string }
+
+/**
+ * The rows a non-character / non-location ref contributes, in display order:
+ * the POSITIONAL row it has always had (`{image:N}` / `{video:N}` / `{audio:N}`)
+ * and — for a media ref whose NAME yields a grammar-valid mention slug — a
+ * second NAME-addressed row right beneath it. Two ways to reference one image,
+ * not a replacement: the slot form survives a rename, the named form survives a
+ * re-order.
+ *
+ * The named row is HYBRID-only. Legacy has no image-mention resolver, so the
+ * `@town:1` it would insert stays literal text in the built prompt — the same
+ * gate the pill's promotion rules apply.
+ *
+ * Called from BOTH the root view and the flat-search view so the pair can never
+ * appear in one and not the other.
+ */
+function mediaRefRows(item: RefImageItem): DisplayRow[] {
+  const rows: DisplayRow[] = [{ kind: "image-ref", item }]
+  if (IMAGE_REFERENCE_FORMAT !== "hybrid") return rows
+  const slug = imageMentionSlugForItem(item)
+  if (slug) rows.push({ kind: "image-mention", item, slug })
+  return rows
+}
 
 /** The reference image URL for a row, when it has one (character/location roots
  *  + variants + plain image-refs). Drives the large side-preview shown while
@@ -396,14 +435,17 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
             }
           }
         }
-        // Non-character/non-location refs filtered by label, index, or default-label.
+        // Non-character/non-location refs filtered by label, index, default-label
+        // — or by the ref's own MENTION SLUG, so typing "@to" finds the ref
+        // named "Town Square" by the token the user is about to write.
         for (const r of nonCharacterItems) {
           if (
             r.label.toLowerCase().includes(q)
             || String(r.index).includes(q)
             || r.defaultLabel.toLowerCase().includes(q)
+            || (imageMentionSlugForItem(r) ?? "").includes(q)
           ) {
-            rows.push({ kind: "image-ref", item: r })
+            rows.push(...mediaRefRows(r))
           }
         }
         return rows
@@ -444,7 +486,7 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
       // one row per location.
       const rows: DisplayRow[] = []
       for (const r of nonCharacterItems) {
-        rows.push({ kind: "image-ref", item: r })
+        rows.push(...mediaRefRows(r))
       }
       for (const [slug, group] of characterGroups) {
         const canonical = group.find((i) => !i.variantSlug) ?? group[0]
@@ -585,6 +627,13 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
         if (drillLocationVariant) {
           command({ ...drillLocationVariant.item, role: row.role })
         }
+        return
+      }
+      if (row.kind === "image-mention") {
+        // The NAME-addressed twin of the "image-ref" row. `imageMentionSlug` is
+        // what routes `buildRefPillNodes` to the `imageMention` pill (and to the
+        // unified mention counter) instead of the positional `imageRef` one.
+        command({ ...row.item, imageMentionSlug: row.slug })
         return
       }
       // "variant", "image-ref", or "location-variant" — fire the parent's
@@ -1029,17 +1078,20 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
               </button>
             )
           }
-          // "variant" or "image-ref" — leaf rows with thumbnail + tag pill.
+          // "variant", "image-ref" or "image-mention" — leaf rows with
+          // thumbnail + tag pill.
           const { item } = row
           const tagPreview = row.kind === "variant"
             ? (item.variantSlug
                 ? `@${item.characterSlug}:N:${item.variantSlug}`
                 : `@${item.characterSlug}:N`)
-            : item.source === "video"
-              ? `@video:${item.index}`
-              : item.source === "audio"
-                ? `@audio:${item.index}`
-                : `@image:${item.index}${item.defaultLabel ? `:${item.defaultLabel}` : ""}`
+            : row.kind === "image-mention"
+              ? `@${row.slug}:N`
+              : item.source === "video"
+                ? `@video:${item.index}`
+                : item.source === "audio"
+                  ? `@audio:${item.index}`
+                  : `@image:${item.index}${item.defaultLabel ? `:${item.defaultLabel}` : ""}`
           // In flat-search mode, the parent character label is hoisted into
           // the row so the user can distinguish identically-named variants
           // across characters ("Kira / smile" vs "Aria / smile"). The normal
@@ -1080,6 +1132,8 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
               <span className="truncate flex-1 min-w-0">
                 {row.kind === "image-ref"
                   ? <>#{item.index} {item.label}</>
+                  : row.kind === "image-mention"
+                  ? <>{item.label}<span className="text-slate-500 ml-1">by name</span></>
                   : useFullPath
                     ? <>
                         {row.characterLabel ?? item.label}
