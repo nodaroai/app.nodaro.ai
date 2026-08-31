@@ -95,7 +95,7 @@ import { applyWebScrapeFailure, applyWebScrapeResult, webScrapeRunStartPatch } f
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
 import {
   readPromptAffixes, resolveSlideshowTransition, ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, supportsExtendRender, isMinimaxH3Provider, isVeoProvider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS, resolveVideoProviderForMode, resolveVideoModeForInputs, VIDEO_REF_LIMITS_BY_PROVIDER, resolveEffectiveSourceType, sourceRefKey, hasFeature, countRefModalityEdges, type ReferenceModality, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionSlug, characterMentionableAssetArrays, selectLoraRoutingForMentions, expandExtraRefsToConnectedReferences, resolveSeparator, evaluateJsonPath, stringifyPathResults, spreadJsonArrayIfSingleton, zipMergeLists, evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, tryParseJson, evaluateCondition, evaluateConditionGroup, resolveConditionValue, sortListItems, runSelector, resolveSelectorRefs, buildConditionVariables, VARIABLES_HANDLE_ID, clampSmartCutWindow, resolveGvpAnchorWire } from "@nodaro/shared"
-import { applyPromptAffixes, composeNegative, computeNodePrompt, computeLlmChatFields, pickerFanoutTargets, buildImagePrompt, assembleImageInput, readDirectionFields, readStructuredFields, collectIdentityLockClause, characterLockToRefLock, assembleSunoInput, type AssembleSunoResult } from "@nodaro/prompts"
+import { applyPromptAffixes, composeNegative, computeNodePrompt, computeLlmChatFields, pickerFanoutTargets, buildImagePrompt, assembleImageInput, composeVideoPromptText, readDirectionFields, readStructuredFields, collectIdentityLockClause, characterLockToRefLock, assembleSunoInput, type AssembleSunoResult } from "@nodaro/prompts"
 import type { CharacterDef, ConnectedReference, ReferenceSource, ExtraRefCharacterContext } from "@nodaro/shared"
 import { ANALYZABLE_PICKER_HINT } from "@/lib/picker-labels";
 import { getGenerateTextTemplate } from "@/lib/generate-text-templates";
@@ -2356,6 +2356,19 @@ export function executeNode(
       const identityClause = collectIdentityLockClause(node.id, nodes, edges);
       if (identityClause) prompt = prompt ? `${prompt} ${identityClause}` : identityClause;
     }
+    // Node-data cinematic direction / structured fields (P4b) — the video twin
+    // of the generate-image branch above: the node carries picker IDS, the fold
+    // happens once, here, on the graph-composed body and BEFORE mention
+    // resolution frames it with identity directives. Narrow-read (`node.data`
+    // is untrusted persisted JSON); with neither key `composeVideoPromptText`
+    // returns `prompt` verbatim, `undefined` included. A generate-video node
+    // re-typed to i2v lands HERE, which is why the fold sits in this branch
+    // rather than in the generate-video re-type above.
+    prompt = composeVideoPromptText(
+      prompt,
+      readDirectionFields(i2vData.direction),
+      readStructuredFields(i2vData.structured),
+    );
     // Resolve @-mentions in the i2v prompt. Mirrors the backend
     // `resolveVideoPromptMentions` in `payload-builder.ts` so single-node
     // frontend runs (clicking "Run" on this node) produce the same
@@ -2662,6 +2675,13 @@ export function executeNode(
       const identityClause = collectIdentityLockClause(node.id, nodes, edges);
       if (identityClause) prompt = prompt ? `${prompt} ${identityClause}` : identityClause;
     }
+    // Node-data cinematic direction / structured fields (P4b) — see the i2v
+    // branch. A generate-video node re-typed to t2v lands here.
+    prompt = composeVideoPromptText(
+      prompt,
+      readDirectionFields(t2vData.direction),
+      readStructuredFields(t2vData.structured),
+    );
     // Resolve @-mentions in the t2v prompt. Mirrors the backend
     // `resolveVideoPromptMentions` in `payload-builder.ts`. t2v has no
     // `imageUrl` slot — all resolved URLs become entries in
