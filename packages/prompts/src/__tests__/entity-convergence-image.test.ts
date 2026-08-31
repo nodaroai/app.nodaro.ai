@@ -186,6 +186,33 @@ describe("wired-entity mention locks and element injections", () => {
     expect(forced.prompt.length).toBeGreaterThan(locked.prompt.length)
     expect(forced.prompt).not.toContain("~lock")
     expect(forced.prompt).toContain("reference image A")
+    // The ONCE half: the mention pass emits the lock line INSTEAD of the
+    // suppressed canonical one, never in addition to it. Matched on the stable
+    // prefix of `DEFAULT_LOCK_TEXT["wired-creature"]`, not the em-dashed tail.
+    expect(occurrences(forced.prompt, "Lock the exact identity of the creature")).toBe(1)
+    expect(occurrences(locked.prompt, "Lock the exact identity of the creature")).toBe(0)
+  })
+
+  it("a lock-less mention INHERITS the ref's own lock — emitted ONCE", () => {
+    const out = buildImagePrompt({
+      prompt: "@nessie:1 rises",
+      connectedReferences: [{ ...nessie, identityLock: { enabled: true } } as ConnectedReference],
+      provider: "nano-banana-pro",
+      referenceFormat: "hybrid",
+    })
+    expect(occurrences(out.prompt, "Lock the exact identity of the creature")).toBe(1)
+  })
+
+  it("~nolock forces the lock OFF even when the ref itself enables it", () => {
+    const out = buildImagePrompt({
+      prompt: "@nessie:1~nolock rises",
+      connectedReferences: [{ ...nessie, identityLock: { enabled: true } } as ConnectedReference],
+      provider: "nano-banana-pro",
+      referenceFormat: "hybrid",
+    })
+    expect(out.prompt).not.toContain("Lock the exact identity of the creature")
+    expect(out.prompt).not.toContain("~nolock")
+    expect(out.prompt).toContain("the creature from reference image A")
   })
 
   it("carries the ref's elementInjection ONCE — not once inline and once canonical", () => {
