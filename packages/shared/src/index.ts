@@ -768,6 +768,8 @@ export type {
   WorkflowMediaRef,
   WorkflowPortability,
   WorkflowImportReport,
+  WorkflowImportSkippedAsset,
+  WorkflowAssetKind,
 } from "./workflow-export.js"
 export { stripExportContent } from "./workflow-export.js"
 

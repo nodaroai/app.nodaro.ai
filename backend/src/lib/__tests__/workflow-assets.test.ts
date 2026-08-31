@@ -499,13 +499,15 @@ describe("workflow-assets — creature node round-trip (Phase H)", () => {
     expect(row.poses).toEqual([{ name: "howling", url: "https://r2/crt/howl.png" }])
     expect(row.angles).toEqual([{ name: "side", url: "https://r2/crt/side.png" }])
     expect(row.variations).toEqual([{ name: "snowy", url: "https://r2/crt/snowy.png" }])
-    // The created id (mock returns `new-<n>`) is mapped from the original.
-    const newId = idMap.get("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
-    expect(newId).toBeDefined()
+    // The created ROW (mock returns id `new-<n>`) is mapped from the original.
+    // The map's value is the row, not a bare id, since #1088 — the chip remap
+    // needs the name it landed under and its canonical image too.
+    const created = idMap.get("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+    expect(created).toBeDefined()
 
     // 5. remapNodeAssetIds rewrites the new id onto the node's creatureDbId
     const remapped = remapNodeAssetIds(nodes, idMap)
-    expect((remapped[0].data as Record<string, unknown>).creatureDbId).toBe(newId)
+    expect((remapped[0].data as Record<string, unknown>).creatureDbId).toBe(created!.id)
   })
 
   it("defaults poses/angles/variations when the bundle omits them (legacy import)", async () => {

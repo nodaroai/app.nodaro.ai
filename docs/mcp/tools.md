@@ -445,10 +445,18 @@ storage where reachable (up to 25 distinct files per import; images up to
 | `workflow_json` | string | The full JSON string from `export_workflow` |
 
 **Response:** Returns the new workflow's `id` and `name` in structured content,
-plus `importReport` — `{ rehosted, unreachable[], skipped[] }` — saying which
-media was copied, which points at a private host this instance cannot reach
-(left as-is), and which was skipped with the reason. The text reply repeats the
-same, naming the affected nodes.
+plus `importReport` — `{ rehosted, unreachable[], skipped[], assetIdMap?,
+assetsSkipped? }` — saying which media was copied, which points at a private
+host this instance cannot reach (left as-is), and which was skipped with the
+reason. The text reply repeats the same, naming the affected nodes.
+
+Bundled entities (characters, objects, creatures, locations) are re-created
+under the caller, and both the entity nodes and every `@`-chip in the graph are
+re-pointed at the new rows. An entity's images are copied into the caller's own
+storage even when they already sit on this instance — they are the exporter's
+bytes — so the copies count against the caller's quota; `assetIdMap` maps each
+bundled entity id to the row created for it, and `assetsSkipped` names any
+entity the quota left uncreated (the workflow still lands).
 
 ---
 

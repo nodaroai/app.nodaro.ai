@@ -23,6 +23,7 @@ import {
   remapNodeAssetIds,
   workflowExportSchema,
 } from "../../workflow-assets.js"
+import type { CreatedAssetMap } from "../../workflow-assets.js"
 import { migrateGenerateImageHandles } from "../../generate-image-handle-migration.js"
 import { findUnroutableMedia, rehostForeignMedia } from "../../media-portability.js"
 
@@ -256,8 +257,9 @@ export function registerWorkflows({
           result.assets = assetsResult
         }
 
-        // Same portability note the REST export carries (#866).
-        const unreachableMedia = findUnroutableMedia(result.nodes)
+        // Same portability note the REST export carries (#866), over the graph
+        // and the bundled entities' images alike (#1088).
+        const unreachableMedia = findUnroutableMedia(result.nodes, result.assets)
         if (unreachableMedia.length > 0) result.portability = { unreachableMedia }
 
         return ok(JSON.stringify(result, null, 2))
@@ -585,10 +587,21 @@ export function registerWorkflows({
         const wf = parsed.data
         const mcpProjectId = await ensureMcpProject(session)
 
-        // Re-create bundled assets, mapping old DB id → new DB id (node_id preserved).
-        let assetIdMap: ReadonlyMap<string, string> = new Map()
-        if (wf.assets) {
-          const result = await reCreateAssets(wf.assets, session.userId, mcpProjectId)
+        // Same as the REST import: the bundle's media — the graph's (#866) and
+        // the bundled entities' (#1088) — is copied into the importer's own
+        // storage BEFORE anything is created from it, because the rows
+        // `reCreateAssets` inserts must already point at the copies. One pass,
+        // one decision per URL. Never throws.
+        const {
+          nodes: portableNodes,
+          assets: portableAssets,
+          report: importReport,
+        } = await rehostForeignMedia(wf.nodes, session.userId, wf.assets ? { assets: wf.assets } : {})
+
+        // Re-create bundled assets, mapping old DB id → the new row (node_id preserved).
+        let assetIdMap: CreatedAssetMap = new Map()
+        if (portableAssets) {
+          const result = await reCreateAssets(portableAssets, session.userId, mcpProjectId)
           if (result instanceof Map) {
             assetIdMap = result
           } else {
@@ -598,10 +611,16 @@ export function registerWorkflows({
 
         // Heal impossible provider/parameter pairs on the way in — an imported
         // bundle can carry values authored against a different model (or a
-        // hand-edited JSON), and nothing downstream re-checks them.
+        // hand-edited JSON), and nothing downstream re-checks them. The remap
+        // re-points node entity fields AND the `@`-chips in node data (#1088).
         const remappedNodes = normalizeNodeModelParams(
-          remapNodeAssetIds(wf.nodes, assetIdMap) as Array<{ id?: unknown; type?: unknown; data?: unknown }>,
+          remapNodeAssetIds(portableNodes, assetIdMap) as Array<{ id?: unknown; type?: unknown; data?: unknown }>,
         ).nodes
+        if (assetIdMap.size > 0) {
+          importReport.assetIdMap = Object.fromEntries(
+            [...assetIdMap].map(([bundleId, created]) => [bundleId, created.id]),
+          )
+        }
 
         const migratedEdges = migrateGenerateImageHandles(
           remappedNodes as Array<{ id: string; type?: string }>,
@@ -625,20 +644,6 @@ export function registerWorkflows({
         }
         const row = newWorkflow as Record<string, unknown>
 
-        // Same as the REST import (#866): media the bundle points at elsewhere
-        // is copied onto this instance AFTER the row exists (a failed copy is
-        // never a lost import); what could not be copied is reported below.
-        const { nodes: portableNodes, report: importReport } = await rehostForeignMedia(remappedNodes, session.userId)
-        if (importReport.rehosted > 0) {
-          const { error: updError } = await supabase
-            .from("workflows")
-            .update({ nodes: portableNodes })
-            .eq("id", row.id as string)
-            .eq("user_id", session.userId)
-          if (updError) {
-            importReport.notes = [...(importReport.notes ?? []), `Media was copied onto this instance, but the workflow could not be updated to use the copies (${updError.message}).`]
-          }
-        }
         const mediaNotes = [
           importReport.rehosted > 0 ? `${importReport.rehosted} media file(s) copied onto this instance.` : "",
           importReport.unreachable.length > 0
@@ -646,6 +651,9 @@ export function registerWorkflows({
             : "",
           importReport.skipped.length > 0
             ? `${importReport.skipped.length} media URL(s) skipped: ${importReport.skipped.map((m) => `${m.nodeLabel ?? m.nodeId} (${m.field}): ${m.reason}`).join("; ")}.`
+            : "",
+          importReport.assetsSkipped?.length
+            ? `${importReport.assetsSkipped.length} bundled entit(y/ies) were not created: ${importReport.assetsSkipped.map((a) => `${a.name || a.id} (${a.kind}): ${a.reason}`).join("; ")}.`
             : "",
           ...(importReport.notes ?? []),
         ].filter(Boolean)
