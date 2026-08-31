@@ -882,10 +882,19 @@ interface ResolveEntityMentionsHybridResult {
  * ROLE precedence: the per-mention 3rd segment (VERBATIM — both entity preset
  * lists are single-word, so `normalizeRoleSlug` stays location-only and must NOT
  * be called here) → the node default via `resolveDefaultRole` → the SOURCE
- * default (`"creature"` / `"object"`), which is the same role
- * `renderObjectCreatureCanonicalHybrid` would have used for the trailing line.
- * So a bare `@nessie:4` renders the identical phrase, merely relocated to where
- * the user typed it.
+ * default (`"creature"` / `"object"`).
+ *
+ * That LAST step is the one `renderObjectCreatureCanonicalHybrid` would also have
+ * used for the trailing line — but only that one: the canonical renderer reads
+ * `defaultRoleForSource(r.source)` and ignores `defaultRole` / `defaultUsageMode`
+ * entirely. So a bare `@nessie:4` relocates the IDENTICAL phrase only when the ref
+ * carries neither node field; with a node default the mention honors it and the
+ * phrase CHANGES ("the anatomy from …" rather than "the creature from …"). That is
+ * deliberate — it is what `resolveCharacterMentionsHybrid` and
+ * `resolveImageMentionsHybrid` do, and it is pinned by
+ * `entity-convergence-image.test.ts`. Suppression is
+ * unaffected either way: the mention pass covers the same URL and emits the same
+ * lock line (modulo a `~lock`/`~nolock` sentinel) and the same `elementInjection`.
  *
  * NO LEGACY COUNTERPART — the image-grammar precedent. The Phase-0 arm that
  * reaches this is hybrid-gated, so under the legacy reference format an

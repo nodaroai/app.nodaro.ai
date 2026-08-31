@@ -4,10 +4,11 @@
  * The media analog of `character-mention-slug.ts` / `location-mention-slug.ts`,
  * for a wired image (`wired-image` / `manual` reference) addressed by the slug of
  * its NAME: an upload node's label on the canvas, or the name a thin client puts
- * on the reference. The grammar is the SIMPLEST of the three — 2 or 3 segments,
- * no buckets, no variants, no usage-mode enum — because a media reference has no
- * variant array to select from and no identity mode to override. Every valid 3rd
- * segment is a ROLE.
+ * on the reference. The grammar is the SHORT one — 2 or 3 segments, no buckets, no
+ * variants, no usage-mode enum — because a media reference has no variant array to
+ * select from and no identity mode to override. Every valid 3rd segment is a ROLE.
+ * It is not unique to media: `entity-mention-slug.ts` (creatures/objects) speaks
+ * the identical grammar off the shared core noted below.
  *
  *   @town:3                  — bare mention; renders the reference's binding
  *                              ("reference image C") at the typed position

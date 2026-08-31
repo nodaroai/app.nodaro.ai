@@ -83,8 +83,9 @@ Characters and locations are mentionable because they have names. A **plain imag
 way: give the wired **Upload Image** node a **Label**, and the slug of that label becomes its mention
 name — so a node labelled `Town` is `@town:1`.
 
-The grammar is the simplest of the three — `@<name>:<index>[:<role>]`, two or three segments, no
-variants and no usage modes, because a picture has no variant array to choose from:
+The grammar is the short one — `@<name>:<index>[:<role>]`, two or three segments, no variants and no
+usage modes, because a picture has no variant array to choose from (creatures and objects speak the
+same short grammar — see below):
 
 | Token | Result |
 |-------|--------|
@@ -109,6 +110,10 @@ a plain image — `@<name>:<index>[:<role>]`, plus the `~lock` / `~nolock` senti
 entity's own name (a creature named `Nessie` is `@nessie:1`), and the roles are that asset's sets:
 `creature` · `anatomy` · `markings` · `pose` · `color` · `style`, and `object` · `shape` · `material`
 · `color` · `texture` · `style` — or a custom one.
+
+**Type these by hand.** Unlike character, location and plain-image mentions, creatures and objects
+have no `@` autocomplete row and no pill in the editor yet — the token stays plain text while you
+write, and is resolved when the prompt is generated.
 
 | Token | Result |
 |-------|--------|
