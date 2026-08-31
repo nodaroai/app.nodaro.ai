@@ -1062,7 +1062,9 @@ freezing whatever text your client wrote the day it was saved.
   more than a low-cap model accepts (seedream = 3000 characters), so the
   assembler sheds hint clauses from the END of the fold order, one at a time,
   until the prompt fits: the dimensions the platform folds first outlive the
-  ones it folds last. Everything else outranks a hint — reference directives and
+  ones it folds last. That fold order is the platform's own compatibility order,
+  not a ranking of which dimension matters most — survival is position, not
+  importance. Everything else outranks a hint — reference directives and
   the role phrases that bind them, `@`-mention-resolved text, your prose, the
   `structured` fragment, and the appended `Style:` / `Avoid:` lines all survive
   intact. Nothing is shed while the prompt fits, so an under-cap request is
