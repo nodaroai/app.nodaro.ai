@@ -85,3 +85,45 @@ describe("mention splice — seam whitespace", () => {
     )
   })
 })
+
+// Indentation is structure, not a seam. A run that OPENS a line is the author's
+// layout (a shot list, a numbered beat sheet), so the leading collapse is
+// anchored to prose on the same line via `(?<=\S)`. Without that anchor a
+// mention starting an indented line flattened the indent to a single space —
+// the same class of damage as merging paragraphs, and it would have made the
+// "an already-single-spaced prompt is byte-identical" claim false for every
+// multi-line prompt.
+describe("mention splice — line-initial indentation survives", () => {
+  /** One character ref only, so no unmentioned ref appends a canonical phrase
+   *  and the assertions can be byte-exact on the multi-line shape. */
+  const buildOne = (prompt: string) => buildImagePrompt({
+    prompt,
+    connectedReferences: [panda],
+    provider: "nano-banana-pro",
+    referenceFormat: "hybrid",
+  }).prompt
+
+  it("a mention that opens an indented line keeps the indent verbatim", () => {
+    expect(buildOne("Scene:\n    @panda:1 stands")).toBe(
+      "Scene:\n    the person from reference image A stands",
+    )
+  })
+
+  it("indent preserved AND the trailing seam still collapses on the same mention", () => {
+    expect(buildOne("Scene:\n  @panda:1  stands")).toBe(
+      "Scene:\n  the person from reference image A stands",
+    )
+  })
+
+  it("a leading run at the very start of the prompt is indentation too", () => {
+    expect(buildOne("   @panda:1  stands")).toBe(
+      "   the person from reference image A stands",
+    )
+  })
+
+  it("mid-line prose before the run still collapses (the anchor is `\\S`, not `^`)", () => {
+    expect(buildOne("Scene:\n    a man and  @panda:1 stands")).toBe(
+      "Scene:\n    a man and the person from reference image A stands",
+    )
+  })
+})

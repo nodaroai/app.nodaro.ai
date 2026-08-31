@@ -227,6 +227,16 @@ export function resolveCharacterMentions(
  * it: `\n` / `\n\n` separate the assembled blocks, and a `\s`-based collapse
  * would silently merge paragraphs.
  *
+ * INDENTATION is structure, not a seam. The leading collapse is anchored with a
+ * `(?<=\S)` lookbehind so it only fires on a run that FOLLOWS prose on the same
+ * line. A mention that opens an indented line (`"Scene:\n    @panda:1 stands"` —
+ * a shot list, a numbered beat sheet) keeps its indent verbatim; without the
+ * anchor that run IS the left seam and a 4-space indent flattened to one space,
+ * which is the same class of damage as merging paragraphs and would have made
+ * the "already-single-spaced prompts are byte-identical" claim false for every
+ * multi-line prompt. The trailing collapse stays unconditional: a run AFTER a
+ * chip is the reported bug itself and can never be indentation.
+ *
  * OFFSET SAFETY: callers splice right-to-left over offsets taken against the
  * pre-splice string. The left-hand collapse only ever removes characters from
  * the whitespace run immediately preceding THIS token — positions at or after
@@ -239,7 +249,7 @@ function spliceMentionPhrase(
   tokenLength: number,
   phrase: string,
 ): string {
-  const before = prompt.slice(0, offset).replace(/[^\S\r\n]{2,}$/, " ")
+  const before = prompt.slice(0, offset).replace(/(?<=\S)[^\S\r\n]{2,}$/, " ")
   const after = prompt.slice(offset + tokenLength).replace(/^[^\S\r\n]{2,}/, " ")
   return before + phrase + after
 }
