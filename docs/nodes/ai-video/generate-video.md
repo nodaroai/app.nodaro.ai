@@ -245,6 +245,14 @@ stores ids and the wording is produced fresh each run instead of being frozen
 into the prompt text. The same applies to the legacy standalone Image to Video
 and Text to Video nodes.
 
+**`structured` is node data only.** `direction` is literally the wire field
+documented above — the same object, the same ids. `structured` is not: neither
+`POST /v1/generate-video` nor `POST /v1/text-to-video` declares it, so a
+`structured` key sent to either is dropped by request validation without a 400
+and without reaching the prompt. Only `POST /v1/generate-image` accepts
+`structured` on the wire. On a video **node** it folds as described here; over
+the video wire, put the same content in `prompt`.
+
 The **video** verbosity policy applies exactly as it does on the wire: motion
 dimensions render their compact term, look dimensions their full clause.
 
