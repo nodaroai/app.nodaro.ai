@@ -1072,13 +1072,17 @@ freezing whatever text your client wrote the day it was saved.
   ZERO hints left — very long prose, or many bound references on their own —
   does the last-resort tail clamp cut mid-text and end the prompt with `...`.
   Send the dimensions that carry the shot rather than everything at once and
-  you will never reach either stage.
+  you will never reach either stage. **This ordering is generate-image's alone**
+  — the video routes still clamp order-blind, at much tighter caps; see
+  [the next section](#cinematic-direction-on-the-video-routes).
 
 ### Cinematic direction on the video routes
 
 `POST /v1/generate-video` and `POST /v1/text-to-video` accept the SAME
 `direction` object, with the same tolerance rules, the same wire bounds and the
-same "absent ≠ empty" semantics as generate-image above. Two things differ.
+same "absent ≠ empty" semantics as generate-image above. Three things differ —
+the dimension set and how motion renders, below, and how an over-cap prompt is
+truncated (after the example).
 
 **The dimension set is the video surface.** Every look dimension listed above
 folds here too, minus the seven stills-only ones (`aperture`, `shutterSpeed`,
@@ -1117,10 +1121,14 @@ both halves: `prompt` is what the model received, `userPrompt` is the text you
 submitted (empty string if you sent `direction` with no prompt at all), and
 `direction` is your ids verbatim.
 
-Video prompt ceilings are provider-specific and low (kling clamps at 1000
-characters), and the clamp cuts the TAIL. A maximal direction across every look
-dimension can exceed that on its own, so prefer the dimensions that carry the
-shot.
+**Truncation is the third thing that differs.** Video prompt ceilings are
+provider-specific and low (kling clamps at 1000 characters), and the clamp cuts
+the TAIL of the whole assembled prompt, order-blind — the hint-by-hint shedding
+described for generate-image above does **not** apply here, so a video prompt
+that overflows can lose its references and the end of your prose, not just its
+direction clauses (and it is a bare cut, with no trailing `...`). A maximal
+direction across every look dimension can exceed the ceiling on its own, so
+prefer the dimensions that carry the shot.
 
 `POST /v1/extend-video` deliberately has no `direction` field: its prompt
 continues an existing clip, where re-stating the look is the wrong lever.
