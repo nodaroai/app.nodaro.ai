@@ -1671,12 +1671,18 @@ export interface BuildImagePromptSegmentsResult extends BuildImagePromptResult {
  *   - `bodyBeforeSuffixes`: the prompt string captured immediately BEFORE the
  *     style/avoid suffixes were appended (covers the common no-truncation case).
  *   - `styleSuffix` / `avoidSuffix`: the `\nStyle: …` / `\nAvoid: …` strings.
+ *   - `overflowChars`: how many characters the provider cap forced OFF the tail
+ *     (0 when the assembled prompt fit). Accumulated across every clamp site in
+ *     both assembly paths. Read by {@link buildImagePromptWithOverflow} so a
+ *     cap-aware caller can shed its own lowest-value text and re-assemble
+ *     instead of letting the order-blind tail cut decide.
  */
 interface AssemblyMarks {
   directivesPrefix: string
   bodyBeforeSuffixes: string
   styleSuffix: string
   avoidSuffix: string
+  overflowChars: number
 }
 
 /** Keep `bodySegments` when the assembled body still equals their join;
@@ -1701,6 +1707,47 @@ function reconcileBodySegments(body: string, bodySegments: readonly PromptSegmen
  */
 export function buildImagePrompt(config: BuildImagePromptConfig): BuildImagePromptResult {
   return buildImagePromptInternal(config)
+}
+
+/** {@link buildImagePrompt} plus `overflowChars`. */
+export interface BuildImagePromptOverflowResult extends BuildImagePromptResult {
+  /**
+   * Characters the provider's prompt cap forced off the tail — `0` when the
+   * assembled prompt fit. This is the amount of text that must LEAVE the body
+   * for the prompt to fit without a tail cut, so a caller can shed exactly
+   * enough of its own droppable text and re-assemble.
+   */
+  overflowChars: number
+}
+
+/**
+ * `buildImagePrompt` plus the size of the cap overflow it had to clamp away.
+ *
+ * The prompt (and every other field) is BYTE-IDENTICAL to `buildImagePrompt` —
+ * the marks channel only observes. Exists because the tail clamp is ORDER-BLIND:
+ * it cuts whatever happens to be last, which on a low-cap provider can sever a
+ * reference directive or the user's own prose while a decorative hint clause
+ * survives. `assembleImageInput` uses this to drop its lowest-value text
+ * (direction-folded hint clauses) FIRST and re-assemble; the clamp then stays
+ * the last-resort fallback for a body that overflows on prose alone.
+ */
+export function buildImagePromptWithOverflow(
+  config: BuildImagePromptConfig,
+): BuildImagePromptOverflowResult {
+  const marks = newAssemblyMarks()
+  const result = buildImagePromptInternal(config, marks)
+  return { ...result, overflowChars: marks.overflowChars }
+}
+
+/** Fresh zeroed marks — one construction site so a new field can't be forgotten. */
+function newAssemblyMarks(): AssemblyMarks {
+  return {
+    directivesPrefix: "",
+    bodyBeforeSuffixes: "",
+    styleSuffix: "",
+    avoidSuffix: "",
+    overflowChars: 0,
+  }
 }
 
 /**
@@ -2347,9 +2394,12 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
     // the `Avoid:` negative whenever the body was long. The style/avoid suffixes
     // are RESERVED first so a long body can never drop them (the control text is
     // the most important to keep). Truncate the BODY, THEN append the suffixes.
+    // The cut is ORDER-BLIND — record how much it removed so a cap-aware caller
+    // (`assembleImageInput`) can shed its own lowest-value text and re-assemble.
     const maxLen = getMaxImagePromptChars(provider)
     const reserved = styleSuffix.length + avoidSuffix.length
     if (prompt.length + reserved > maxLen) {
+      if (marks) marks.overflowChars += prompt.length + reserved - maxLen
       prompt = prompt.slice(0, Math.max(0, maxLen - reserved - 3)) + "..."
     }
     // Body span = everything after the captured directive prefix, taken from the
@@ -2360,6 +2410,7 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
     prompt = prompt + styleSuffix + avoidSuffix
     // Safety clamp for a pathological native-less negative that alone overflows.
     if (prompt.length > maxLen) {
+      if (marks) marks.overflowChars += prompt.length - maxLen
       prompt = prompt.slice(0, maxLen - 3) + "..."
     }
 
@@ -2455,10 +2506,12 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
   // Cap at the provider max (default IMAGE_PROMPT_MAX = 5000), reserving the
   // style/avoid suffixes so a long body never severs the appended control text
   // (was a hardcoded 2000 tail-cut that dropped the negative). Truncate the
-  // BODY, THEN append the suffixes.
+  // BODY, THEN append the suffixes. Same order-blind cut as the
+  // connectedReferences path above → same `overflowChars` bookkeeping.
   const maxLen = getMaxImagePromptChars(provider)
   const reserved = styleSuffix.length + avoidSuffix.length
   if (prompt.length + reserved > maxLen) {
+    if (marks) marks.overflowChars += prompt.length + reserved - maxLen
     prompt = prompt.slice(0, Math.max(0, maxLen - reserved - 3)) + "..."
   }
   // Legacy path has no directive prefix; the body is the char-desc-wrapped
@@ -2467,6 +2520,7 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
   prompt = prompt + styleSuffix + avoidSuffix
   // Safety clamp for a pathological native-less negative that alone overflows.
   if (prompt.length > maxLen) {
+    if (marks) marks.overflowChars += prompt.length - maxLen
     prompt = prompt.slice(0, maxLen - 3) + "..."
   }
 
@@ -2499,12 +2553,7 @@ export function buildImagePromptSegments(
   config: BuildImagePromptConfig,
   bodySegments?: readonly PromptSegment[],
 ): BuildImagePromptSegmentsResult {
-  const marks: AssemblyMarks = {
-    directivesPrefix: "",
-    bodyBeforeSuffixes: "",
-    styleSuffix: "",
-    avoidSuffix: "",
-  }
+  const marks = newAssemblyMarks()
 
   const result = buildImagePromptInternal(config, marks)
 

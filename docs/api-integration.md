@@ -1057,9 +1057,20 @@ freezing whatever text your client wrote the day it was saved.
 - **Fold order is the platform's**, not your object's key order, and the
   clauses are appended after your prompt (`". "`-joined), before any
   `structured` fragment. Repeated identical clauses collapse to one.
-- The assembled prompt is still truncated to the provider's verified prompt cap,
-  so a maximal `direction` on a low-cap model can lose its tail clauses — send
-  the dimensions that matter most first-class rather than everything at once.
+- **Over the provider's prompt cap, direction clauses are the first thing to
+  go — never your references or your prose.** A maximal `direction` renders
+  more than a low-cap model accepts (seedream = 3000 characters), so the
+  assembler sheds hint clauses from the END of the fold order, one at a time,
+  until the prompt fits: the dimensions the platform folds first outlive the
+  ones it folds last. Everything else outranks a hint — reference directives and
+  the role phrases that bind them, `@`-mention-resolved text, your prose, the
+  `structured` fragment, and the appended `Style:` / `Avoid:` lines all survive
+  intact. Nothing is shed while the prompt fits, so an under-cap request is
+  byte-for-byte what it always was. Only when the body still overflows with
+  ZERO hints left — very long prose, or many bound references on their own —
+  does the last-resort tail clamp cut mid-text and end the prompt with `...`.
+  Send the dimensions that carry the shot rather than everything at once and
+  you will never reach either stage.
 
 ### Cinematic direction on the video routes
 
