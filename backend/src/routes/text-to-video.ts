@@ -191,25 +191,43 @@ export async function textToVideoRoutes(app: FastifyInstance) {
     // byte-identical. (`prompt` is required on this route, so the composer's
     // absent-prompt branch is dead here — the identical shape is deliberate so
     // the two routes read the same.)
+    // The clamp's EFFECTIVE ceiling, not the raw cap: a non-native negative
+    // prompt is folded in as a "\nAvoid: …" suffix whose room the clamp reserves
+    // FIRST, so budgeting on the cap would shed too little on exactly the runs
+    // that get truncated. Same helper as generate-video, one mirror.
+    const promptCeiling = effectiveVideoPromptCeiling(provider, negativePrompt)
+
+    // The framing the cap is measured through — identical to generate-video's,
+    // and gated the same way as the assembly below. The resolver runs AFTER the
+    // fold and APPENDS binding text, so it must be inside the shed's budget
+    // while staying un-sheddable. Pure: safe to call once per shed iteration.
+    const connectedRefs = parsed.data.connectedReferences
+    const frameWithReferences = (body: string | undefined): string | undefined =>
+      connectedRefs && connectedRefs.length > 0
+        ? assembleVideoConnectedReferences({
+          prompt: body,
+          provider,
+          connectedReferences: connectedRefs,
+          baseReferenceImageUrls: parsed.data.referenceImageUrls,
+          referenceOrder: parsed.data.referenceOrder,
+          referenceVideoCount: parsed.data.referenceVideoUrls?.length ?? 0,
+          referenceAudioCount: parsed.data.referenceAudioUrls?.length ?? 0,
+        }).prompt
+        : body
+
     if (parsed.data.direction) {
-      const composed = composeVideoPromptText(prompt, parsed.data.direction)
+      // TRUNCATION ORDERING: hint clauses shed last-folded-first rather than the
+      // order-blind clamp cutting whatever happens to be last. Under-cap runs
+      // are byte-identical to the capless fold.
+      const composed = composeVideoPromptText(prompt, parsed.data.direction, undefined, {
+        cap: promptCeiling,
+        frame: frameWithReferences,
+      })
       if (composed !== undefined && composed !== prompt) {
         // `input_data.userPrompt` records the SOURCE, never the render.
         parsed.data.userPrompt ??= prompt
         prompt = composed
         parsed.data.prompt = prompt
-      }
-      // The provider clamp slices the tail at this ceiling — make it observable.
-      // `effectiveVideoPromptCeiling` (not the raw cap) because a non-native
-      // negative prompt is folded in as a "\nAvoid: …" suffix whose room the
-      // clamp reserves FIRST; thresholding on the cap would miss exactly the
-      // runs that get truncated. Same helper as generate-video, one mirror.
-      const promptCeiling = effectiveVideoPromptCeiling(provider, negativePrompt)
-      if (prompt.length > promptCeiling) {
-        req.log.warn(
-          { provider, promptLength: prompt.length, promptCeiling },
-          "[text-to-video] composed prompt exceeds the provider ceiling; the tail will be clamped",
-        )
       }
     }
 
@@ -232,6 +250,17 @@ export async function textToVideoRoutes(app: FastifyInstance) {
       // Mirror into parsed.data so buildJobInputData records what the worker gets.
       parsed.data.prompt = prompt
       parsed.data.referenceImageUrls = referenceImageUrls
+    }
+
+    // Truncation warning on the ASSEMBLED prompt — the string the shed budgeted
+    // for and the one the clamp will cut. Reaching here means the overflow was
+    // UNSHEDABLE (prose or bindings alone clear the ceiling). Mirrors
+    // generate-video, including the `direction` gate.
+    if (parsed.data.direction && prompt.length > promptCeiling) {
+      req.log.warn(
+        { provider, promptLength: prompt.length, promptCeiling },
+        "[text-to-video] assembled prompt exceeds the provider ceiling after shedding every hint; the tail will be clamped",
+      )
     }
 
     // B4b: apply any registered video PromptPolicy at the server-authoritative

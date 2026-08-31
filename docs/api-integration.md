@@ -1103,17 +1103,18 @@ freezing whatever text your client wrote the day it was saved.
   ZERO hints left — very long prose, or many bound references on their own —
   does the last-resort tail clamp cut mid-text and end the prompt with `...`.
   Send the dimensions that carry the shot rather than everything at once and
-  you will never reach either stage. **This ordering is generate-image's alone**
-  — the video routes still clamp order-blind, at much tighter caps; see
+  you will never reach either stage. **The video routes shed the same way**, at
+  much tighter caps and with one extra thing in the budget; see
   [the next section](#cinematic-direction-on-the-video-routes).
 
 ### Cinematic direction on the video routes
 
 `POST /v1/generate-video` and `POST /v1/text-to-video` accept the SAME
 `direction` object, with the same tolerance rules, the same wire bounds and the
-same "absent ≠ empty" semantics as generate-image above. Three things differ —
-the dimension set and how motion renders, below, and how an over-cap prompt is
-truncated (after the example).
+same "absent ≠ empty" semantics as generate-image above — including the
+truncation ordering, which sheds direction clauses before your prose or your
+references. Three things differ — the dimension set and how motion renders,
+below, and what the truncation budget has to cover (after the example).
 
 **The dimension set is the video surface.** Every look dimension listed above
 folds here too, minus the seven stills-only ones (`aperture`, `shutterSpeed`,
@@ -1152,14 +1153,35 @@ both halves: `prompt` is what the model received, `userPrompt` is the text you
 submitted (empty string if you sent `direction` with no prompt at all), and
 `direction` is your ids verbatim.
 
-**Truncation is the third thing that differs.** Video prompt ceilings are
-provider-specific and low (kling clamps at 1000 characters), and the clamp cuts
-the TAIL of the whole assembled prompt, order-blind — the hint-by-hint shedding
-described for generate-image above does **not** apply here, so a video prompt
-that overflows can lose its references and the end of your prose, not just its
-direction clauses (and it is a bare cut, with no trailing `...`). A maximal
-direction across every look dimension can exceed the ceiling on its own, so
-prefer the dimensions that carry the shot.
+**Truncation is the third thing that differs — in the budget, not the rule.**
+Video prompt ceilings are provider-specific and far lower than image ones (kling
+clamps at 1000 characters), so a broad `direction` can exceed one on its own.
+The shed described for generate-image applies here too: over the ceiling, the
+route drops hint clauses from the END of the fold order until the prompt fits,
+and your prose, your references and the role phrases that bind them all survive
+intact.
+
+Two video-specific details are worth knowing:
+
+- **The budget includes the reference framing.** The fold runs before reference
+  assembly (above), and the resolver then ADDS text — the `Use these characters:`
+  block, or, in the hybrid format, the lock lines and the trailing canonical role
+  phrases. Those trailing phrases are exactly what an order-blind tail cut
+  destroys first, so the shed is decided on the length AFTER framing. Reference
+  text is never what gets dropped.
+- **The ceiling is the one the negative prompt leaves.** For a provider with no
+  native `negative_prompt` parameter the negative is folded into the prompt as a
+  `"\nAvoid: …"` suffix whose room is reserved FIRST, so the base prompt's real
+  ceiling is `cap − suffix`. The shed budgets against that number, which means a
+  longer `negativePrompt` costs you hint clauses rather than prose.
+
+Two things stay outside the budget and fall back to the order-blind clamp (a
+bare tail cut, with no trailing `...`): the opt-in identity injection
+(`injectCharacterContext`), which appends a character's canonical description
+after assembly, and a body that still overflows with ZERO hints left — very long
+prose, or many bound references on their own. As on the image side, nothing is
+shed while the prompt fits, so an under-cap request is byte-for-byte what it
+always was.
 
 `POST /v1/extend-video` deliberately has no `direction` field: its prompt
 continues an existing clip, where re-stating the look is the wrong lever.
