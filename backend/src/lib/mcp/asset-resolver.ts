@@ -57,6 +57,10 @@ const VIDEO_TYPES = new Set<string>([
 /**
  * Job names that produce an AUDIO file in `output_data.audioUrl`.
  */
+/** Dual-mode generators: audio in → audio out; video in → video out (+ audio
+ *  sidecar). Their job_type alone cannot decide the media kind — the run does. */
+const DUAL_MODE_TYPES = new Set<string>(["voice-changer", "voice-changer-pro", "dubbing"])
+
 const AUDIO_TYPES = new Set<string>([
   "text-to-speech",
   "generate-music",
@@ -118,7 +122,13 @@ export async function resolveAssetId(opts: ResolveOpts): Promise<string | null> 
           ? VIDEO_TYPES
           : AUDIO_TYPES
     const jobType = job.job_type as string | null
-    if (!jobType || !expected.has(jobType)) {
+    // Dual-mode types (voice-changer / voice-changer-pro / dubbing) deliver
+    // audio OR video depending on the run — accept them for either expected
+    // kind and let the output_data field check below be the real validator
+    // (a video-mode row carries videoUrl + the audio sidecar; an audio-mode
+    // row asked for as video fails honestly on the missing videoUrl).
+    const dualModeOk = jobType !== null && DUAL_MODE_TYPES.has(jobType) && expectedKind !== "image"
+    if (!jobType || (!expected.has(jobType) && !dualModeOk)) {
       throw new Error(`expected ${expectedKind}, got job of type ${jobType ?? "unknown"}`)
     }
     const outputData = (job.output_data ?? {}) as Record<string, unknown>

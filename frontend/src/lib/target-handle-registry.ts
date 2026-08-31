@@ -418,6 +418,7 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   ],
   "dubbing": [
     { handleId: "audio", label: AUDIO_TEXT_HANDLE_LABELS["dubbing"].audio, accepts: (s) => isValidDubbingConnection("audio", s) },
+    { handleId: "video", label: "Video",                                   accepts: (s) => isValidDubbingConnection("video", s) },
   ],
   "voice-remix": [
     { handleId: "audio",        label: AUDIO_TEXT_HANDLE_LABELS["voice-remix"].audio,           accepts: (s) => isValidVoiceRemixConnection("audio",        s) },

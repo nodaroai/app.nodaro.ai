@@ -39,7 +39,7 @@ export const NODE_HANDLES: Readonly<Record<string, NodeHandleSpec>> = {
   "creature": { inputs: ["in", "type"], outputs: ["creatureRef", "image"] },
   "deduplicate": { inputs: ["in"], outputs: ["out"] },
   "describe-to-picker": { inputs: ["image"], outputs: ["picker-json"] },
-  "dubbing": { inputs: ["audio"], outputs: ["audio"] },
+  "dubbing": { inputs: ["audio", "video"], outputs: ["audio", "video"] },
   "duration": { inputs: ["in"], outputs: ["duration"] },
   "edit-video-pro": { inputs: ["video", "prompt", "imageReferences"], outputs: ["video"] },
   "era": { inputs: ["in"], outputs: ["out"] },

@@ -130,6 +130,12 @@ export const DYNAMIC_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   // EVERY producer set or its outputs can't connect (was the "cannot connect
   // the outputs of voice-changer-pro" bug). Guarded by producer-types.test.ts.
   "voice-changer-pro",
+  // Dubbing joined the dual-mode family with the full-surface upgrade:
+  // audio in → dubbed audio; video in (or a video sourceUrl) → dubbed VIDEO
+  // (+ audio sidecar). Same wiring contract as voice-changer; stays in
+  // AUDIO_PRODUCER_TYPES as its default. Explicitly asserted in
+  // producer-types.test.ts (the suite does not fail on omission).
+  "dubbing",
   "reduce",
   // Dual-output time chunker (UI label "Split into Chunks"; type id stays
   // "split-media"): video in → video chunks, audio in → audio chunks — two

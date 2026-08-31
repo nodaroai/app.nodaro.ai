@@ -95,7 +95,7 @@ Index covers `pending` too: sync-HTTP routes (§5.8) set `provider_kind` + `prov
 | `kie-llm` | KIE-proxied Claude/Gemini/GPT `messages`/`chat-completions` | **Sync** (single HTTP roundtrip via `lib/llm-client.ts`, not a polled task) | No — sweep + fail | 5 min |
 | `replicate-prediction` | Replicate `/v1/predictions/:id` | Async | Yes | 20 min |
 | `replicate-training` | Replicate `/v1/trainings/:id` | Async | Yes — replaces existing LoRA cron | 30 min |
-| `elevenlabs-async` | ElevenLabs voice-clone / voice-design / dubbing / forced-alignment | Async | Yes | 15 min |
+| `elevenlabs-async` | ElevenLabs voice-clone / voice-design / dubbing / forced-alignment | Async | Yes — and for dubbing it is a NORMAL completion path, not just recovery: the worker PARKS long dubs (projected wait past its 20-min budget, or inline-budget timeout) and this lane delivers them. Video-aware: the mode is re-derived from ElevenLabs' `media_metadata` / the input slot, and delivery goes through the shared `lib/dubbing-delivery.ts` so worker and cron produce byte-identical output (video + audio sidecar + thumbnail). | 15 min |
 | `elevenlabs-sync` | ElevenLabs TTS / SFX / STT (`direct-tts.ts`) | Sync | No — sweep + fail | 5 min |
 | `anthropic-sync` | Direct Anthropic SDK (`llm-client.ts::callAnthropicDirect`) | Sync | No — sweep + fail | 5 min |
 

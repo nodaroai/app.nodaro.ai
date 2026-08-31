@@ -16,9 +16,10 @@ const mocks = vi.hoisted(() => {
   const mockDirectElevenLabsDialogue = vi.fn().mockResolvedValue(Buffer.from("fake-dialogue"))
   const mockStripAudioTags = vi.fn((text: string) => text)
   const mockVoiceChangerFromUrl = vi.fn().mockResolvedValue(Buffer.from("fake-audio"))
-  const mockStartDubbing = vi.fn().mockResolvedValue("dub-id")
-  const mockWaitForDubbing = vi.fn().mockResolvedValue(undefined)
-  const mockDownloadDubbedAudio = vi.fn().mockResolvedValue(Buffer.from("fake-audio"))
+  const mockStartDubbing = vi.fn().mockResolvedValue({ dubbingId: "dub-id", expectedDurationSec: 30 })
+  const mockWaitForDubbing = vi.fn().mockResolvedValue({ dubbing_id: "dub-id", status: "dubbed" })
+  const mockPollDubbingStatus = vi.fn().mockResolvedValue({ dubbing_id: "dub-id", status: "dubbing", media_metadata: { content_type: "audio/mpeg", duration: 30 } })
+  const mockDownloadDubbedMedia = vi.fn().mockResolvedValue(Buffer.from("fake-audio"))
   const mockRemixVoice = vi.fn().mockResolvedValue({ audioUrl: "https://example.com/remix.mp3" })
   const mockDesignVoice = vi.fn().mockResolvedValue({ audioUrl: "https://example.com/design.mp3", generatedVoiceId: "voice-123" })
   const mockForcedAlignment = vi.fn().mockResolvedValue({ words: [] })
@@ -31,6 +32,7 @@ const mocks = vi.hoisted(() => {
   // audio-vs-video mode from this, never from the input slot.
   const mockProbeMediaStreams = vi.fn().mockResolvedValue({ hasVideo: true, hasAudio: true })
   const mockGenerateAndUploadThumbnail = vi.fn().mockResolvedValue("https://r2.example.com/thumb.png")
+  const mockWatermarkLocalVideoAndUpload = vi.fn().mockResolvedValue("https://r2.example.com/video/job-1.mp4")
   const mockCreateAssetFromJob = vi.fn().mockResolvedValue(undefined)
   const mockFsReadFile = vi.fn().mockResolvedValue(Buffer.from("source-audio"))
   const mockIsNodaroConnected = vi.fn().mockResolvedValue(false)
@@ -73,7 +75,8 @@ const mocks = vi.hoisted(() => {
     mockVoiceChangerFromUrl,
     mockStartDubbing,
     mockWaitForDubbing,
-    mockDownloadDubbedAudio,
+    mockPollDubbingStatus,
+    mockDownloadDubbedMedia,
     mockRemixVoice,
     mockDesignVoice,
     mockForcedAlignment,
@@ -84,6 +87,7 @@ const mocks = vi.hoisted(() => {
     mockCleanupWorkDir,
     mockProbeMediaStreams,
     mockGenerateAndUploadThumbnail,
+    mockWatermarkLocalVideoAndUpload,
     mockCreateAssetFromJob,
     mockFsReadFile,
     mockCommitJobCredits,
@@ -113,9 +117,15 @@ vi.mock("@/providers/kie/audio.js", () => ({ KieAudioProvider: mocks.mockKieAudi
 vi.mock("@/providers/elevenlabs/voice-changer.js", () => ({ voiceChangerFromUrl: mocks.mockVoiceChangerFromUrl, directVoiceChanger: mocks.mockDirectVoiceChanger }))
 vi.mock("@/providers/video/extract-audio-track.js", () => ({ extractAudioTrack: mocks.mockExtractAudioTrack }))
 vi.mock("@/providers/video/merge-video-audio.js", () => ({ mergeVideoAudio: mocks.mockMergeVideoAudio }))
-vi.mock("@/providers/video/ffmpeg-utils.js", () => ({ cleanupWorkDir: mocks.mockCleanupWorkDir, probeMediaStreams: mocks.mockProbeMediaStreams }))
-vi.mock("node:fs", () => ({ promises: { readFile: mocks.mockFsReadFile } }))
-vi.mock("@/providers/elevenlabs/dubbing.js", () => ({ startDubbing: mocks.mockStartDubbing, waitForDubbing: mocks.mockWaitForDubbing, downloadDubbedAudio: mocks.mockDownloadDubbedAudio }))
+vi.mock("@/providers/video/ffmpeg-utils.js", () => ({ cleanupWorkDir: mocks.mockCleanupWorkDir, probeMediaStreams: mocks.mockProbeMediaStreams, createWorkDir: vi.fn().mockResolvedValue("/tmp/dub-wd") }))
+vi.mock("node:fs", () => ({ promises: { readFile: mocks.mockFsReadFile, writeFile: vi.fn().mockResolvedValue(undefined) } }))
+vi.mock("@/providers/elevenlabs/dubbing.js", () => ({
+  startDubbing: mocks.mockStartDubbing,
+  waitForDubbing: mocks.mockWaitForDubbing,
+  pollDubbingStatus: mocks.mockPollDubbingStatus,
+  downloadDubbedMedia: mocks.mockDownloadDubbedMedia,
+  DUBBING_MAX_DURATION_SEC: 30 * 60,
+}))
 vi.mock("@/providers/elevenlabs/voice-remix.js", () => ({ remixVoice: mocks.mockRemixVoice }))
 vi.mock("@/providers/elevenlabs/voice-design.js", () => ({ designVoice: mocks.mockDesignVoice }))
 vi.mock("@/providers/elevenlabs/forced-alignment.js", () => ({ forcedAlignment: mocks.mockForcedAlignment }))
@@ -134,6 +144,7 @@ vi.mock("../../shared.js", async (importOriginal) => {
     withProgressRamp: vi.fn(async (_job: unknown, _id: unknown, _opts: unknown, fn: () => Promise<unknown>) => fn()),
     generateAndUploadThumbnail: mocks.mockGenerateAndUploadThumbnail,
     createAssetFromJob: mocks.mockCreateAssetFromJob,
+    watermarkLocalVideoAndUpload: mocks.mockWatermarkLocalVideoAndUpload,
   }
 })
 
@@ -606,6 +617,110 @@ describe("audio-isolation handler", () => {
   })
 })
 
+describe("dubbing handler — modes, parking, post-hoc cap", () => {
+  const handler = audioAIHandlers["dubbing"]
+
+  it("audio upload: classified audio mode, real mime, delivered as mp3", async () => {
+    const job = makeJob("dubbing", { audioUrl: "https://example.com/in.mp3", targetLanguage: "es", probedDurationSec: 60 })
+    await handler(job as never, makeCtx())
+    expect(mocks.mockStartDubbing).toHaveBeenCalledWith(
+      { url: "https://example.com/in.mp3", mime: "audio/mpeg", ext: "mp3" },
+      "es",
+      expect.anything(),
+      expect.anything(),
+    )
+    // Route probed it (probedDurationSec set) → NO post-hoc status probe.
+    expect(mocks.mockPollDubbingStatus).not.toHaveBeenCalled()
+    expect(mocks.mockDownloadDubbedMedia).toHaveBeenCalledWith("dub-id", "es", false)
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
+      expect.objectContaining({ jobType: "text-to-audio", result: expect.objectContaining({ providerUsed: "elevenlabs-dubbing" }) }),
+    )
+  })
+
+  it("video upload: video mode end-to-end — real mime up, .mp4 down, video delivery with sidecar", async () => {
+    const job = makeJob("dubbing", { videoUrl: "https://example.com/clip.mp4", targetLanguage: "fr", probedDurationSec: 90 })
+    await handler(job as never, makeCtx({ shouldWatermark: true }))
+    expect(mocks.mockStartDubbing).toHaveBeenCalledWith(
+      { url: "https://example.com/clip.mp4", mime: "video/mp4", ext: "mp4" },
+      "fr",
+      expect.anything(),
+      expect.anything(),
+    )
+    expect(mocks.mockDownloadDubbedMedia).toHaveBeenCalledWith("dub-id", "fr", true)
+    // Video delivery: nodaro watermark honours ctx, sidecar + thumbnail ride output_data.
+    // stringContaining: path.join is backslashed on Windows checkouts.
+    expect(mocks.mockWatermarkLocalVideoAndUpload).toHaveBeenCalledWith(expect.stringContaining("dubbed.mp4"), "job-1", "user-1", true)
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", {
+      output_data: expect.objectContaining({
+        videoUrl: "https://r2.example.com/video/job-1.mp4",
+        audioUrl: "https://r2.example.com/audio/job-1.mp3",
+        thumbnailUrl: "https://r2.example.com/thumb.png",
+      }),
+    })
+    expect(mocks.mockCommitJobCredits).toHaveBeenCalled()
+    expect(mocks.mockCreateAssetFromJob).toHaveBeenCalled()
+    expect(mocks.mockFinalizeJobWithMedia).not.toHaveBeenCalled()
+  })
+
+  it("sourceUrl: mode + duration come from ElevenLabs' own probe; video content_type → video mode", async () => {
+    mocks.mockPollDubbingStatus.mockResolvedValueOnce({
+      dubbing_id: "dub-id", status: "dubbing",
+      media_metadata: { content_type: "video/mp4", duration: 120 },
+    })
+    const job = makeJob("dubbing", { sourceUrl: "https://youtube.com/watch?v=x", targetLanguage: "de" })
+    await handler(job as never, makeCtx())
+    expect(mocks.mockStartDubbing).toHaveBeenCalledWith(
+      { sourceUrl: "https://youtube.com/watch?v=x" },
+      "de",
+      expect.anything(),
+      expect.anything(),
+    )
+    expect(mocks.mockDownloadDubbedMedia).toHaveBeenCalledWith("dub-id", "de", true)
+  })
+
+  it("sourceUrl race: an EMPTY early probe is corrected by the FINAL status's media_metadata (video not delivered as .mp3)", async () => {
+    // ElevenLabs hadn't fetched the link yet at the post-start poll — no
+    // media_metadata. The final "dubbed" status carries it; the worker must
+    // re-derive the mode there, like the reconcile lane does.
+    mocks.mockPollDubbingStatus.mockResolvedValueOnce({ dubbing_id: "dub-id", status: "dubbing" })
+    mocks.mockWaitForDubbing.mockResolvedValueOnce({
+      dubbing_id: "dub-id", status: "dubbed",
+      media_metadata: { content_type: "video/mp4", duration: 90 },
+    })
+    const job = makeJob("dubbing", { sourceUrl: "https://youtube.com/watch?v=y", targetLanguage: "es" })
+    await handler(job as never, makeCtx())
+    expect(mocks.mockDownloadDubbedMedia).toHaveBeenCalledWith("dub-id", "es", true)
+    expect(mocks.mockWatermarkLocalVideoAndUpload).toHaveBeenCalled()
+  })
+
+  it("post-hoc cap: an un-probeable span past 30 min fails fast BEFORE polling (never strands the envelope)", async () => {
+    mocks.mockPollDubbingStatus.mockResolvedValueOnce({
+      dubbing_id: "dub-id", status: "dubbing",
+      media_metadata: { content_type: "audio/mpeg", duration: 2400 },
+    })
+    const job = makeJob("dubbing", { sourceUrl: "https://youtube.com/watch?v=long", targetLanguage: "es" })
+    await expect(handler(job as never, makeCtx())).rejects.toThrow(/maximum is 30 minutes/)
+    expect(mocks.mockWaitForDubbing).not.toHaveBeenCalled()
+  })
+
+  it("parks (returns without finalize) when the projected wait exceeds the worker budget", async () => {
+    mocks.mockStartDubbing.mockResolvedValueOnce({ dubbingId: "dub-id", expectedDurationSec: 900 })
+    const job = makeJob("dubbing", { audioUrl: "https://example.com/in.mp3", targetLanguage: "es", probedDurationSec: 1500 })
+    await handler(job as never, makeCtx())
+    expect(mocks.mockWaitForDubbing).not.toHaveBeenCalled()
+    expect(mocks.mockDownloadDubbedMedia).not.toHaveBeenCalled()
+    expect(mocks.mockFinalizeJobWithMedia).not.toHaveBeenCalled()
+  })
+
+  it("parks on inline-budget timeout (still dubbing) instead of fail+refund while ElevenLabs bills", async () => {
+    mocks.mockWaitForDubbing.mockResolvedValueOnce({ dubbing_id: "dub-id", status: "dubbing" })
+    const job = makeJob("dubbing", { audioUrl: "https://example.com/in.mp3", targetLanguage: "es", probedDurationSec: 60 })
+    await handler(job as never, makeCtx())
+    expect(mocks.mockDownloadDubbedMedia).not.toHaveBeenCalled()
+    expect(mocks.mockFinalizeJobWithMedia).not.toHaveBeenCalled()
+  })
+})
+
 describe("voice-design handler", () => {
   const handler = audioAIHandlers["voice-design"]
 
@@ -714,7 +829,7 @@ describe("revenue-leak: post-provider upload failure → PostProcessingError (re
     mocks.mockUploadBufferToR2.mockRejectedValueOnce(rawUploadError())
     const job = makeJob("dubbing", { audioUrl: "https://example.com/in.mp3", targetLanguage: "es" })
     const err = await captureThrow(() => audioAIHandlers["dubbing"](job as never, makeCtx()))
-    expect(mocks.mockDownloadDubbedAudio).toHaveBeenCalled() // provider delivered
+    expect(mocks.mockDownloadDubbedMedia).toHaveBeenCalled() // provider delivered
     expect(isPostProcessingError(err)).toBe(true)
   })
 

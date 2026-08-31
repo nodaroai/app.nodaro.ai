@@ -110,7 +110,7 @@ describe("direct-ElevenLabs create funnels default OUR modelKey with no meta", (
     cfg.ELEVENLABS_BASE_URL = srv.base
     vi.resetModules()
     const { startDubbing } = await import("../dubbing.js")
-    const call = await keyFor("dubbing.start", () => startDubbing("https://example.com/a.mp3", "es"))
+    const call = await keyFor("dubbing.start", () => startDubbing({ url: "https://example.com/a.mp3" }, "es"))
     expect(call?.modelKey).toBe("elevenlabs-dubbing")
     await srv.close()
   })

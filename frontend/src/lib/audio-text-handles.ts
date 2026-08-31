@@ -187,8 +187,9 @@ export function isValidVoiceChangerConnection(
   }
 }
 
-/** dubbing: audio (audio + video producers — backend extracts audio from
- *  video inputs natively). */
+/** dubbing: dual-mode like voice-changer — audio in → dubbed audio; video in
+ *  → dubbed VIDEO (+ audio sidecar). The audio handle still accepts video
+ *  producers (legacy wirings: the media decides the mode server-side). */
 export function isValidDubbingConnection(
   targetHandleId: string,
   sourceType: string,
@@ -196,6 +197,8 @@ export function isValidDubbingConnection(
   switch (targetHandleId) {
     case "audio":
       return ACCEPTS_AUDIO_OR_DYN(sourceType) || ACCEPTS_VIDEO_OR_DYN(sourceType)
+    case "video":
+      return ACCEPTS_VIDEO_OR_DYN(sourceType)
     default:
       return false
   }
@@ -626,7 +629,7 @@ export const AUDIO_TEXT_HANDLE_LABELS: Record<string, Record<string, string>> = 
   "audio-isolation":    { audio: "Audio" },
   "text-to-dialogue":   { prompt: "Prompt" },
   "voice-changer":      { audio: "Audio" },
-  "dubbing":            { audio: "Audio" },
+  "dubbing":            { audio: "Audio", video: "Video" },
   "voice-remix":        { audio: "Audio", "audio-style": "Audio style" },
   "voice-design":       { prompt: "Prompt", "audio-style": "Audio style" },
   "forced-alignment":   { audio: "Audio", transcript: "Transcript" },

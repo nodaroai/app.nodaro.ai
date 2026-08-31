@@ -3116,17 +3116,29 @@ Generate speech in a voice described in natural language, without cloning
 
 ```ts
 dub(input: {
-  audioUrl: string
+  audioUrl?: string          // exactly ONE source of the three
+  videoUrl?: string          // video in → the dubbed VIDEO out (+ audio track)
+  sourceUrl?: string         // public YouTube/TikTok/direct link — ElevenLabs fetches it
   targetLanguage: string     // ISO code, e.g. "es", "pt-BR"
   sourceLanguage?: string    // auto-detected when omitted
-  numSpeakers?: number       // 1–20 — improves separation when known
+  numSpeakers?: number       // 0 = auto; 1–20 — improves separation when known
   disableVoiceCloning?: boolean
   dropBackgroundAudio?: boolean
+  startTime?: number         // dub only this window of the source (seconds)
+  endTime?: number
+  highestResolution?: boolean // keep the source resolution on video dubs
+  useProfanityFilter?: boolean
+  targetAccent?: string      // experimental
+  watermark?: boolean        // ElevenLabs' own watermark on video dubs
 }): Promise<{ jobId: string }>
 ```
 
-Dub an audio clip into another language while preserving each speaker's voice
-(`POST /v1/dubbing`).
+Dub audio — or a whole video — into another language while preserving each
+speaker's voice (`POST /v1/dubbing`). Video mode completes with
+`output_data.videoUrl` (the dubbed clip) plus `output_data.audioUrl` (the
+dubbed track alone). Priced per minute of the dubbed span (minimum 1 minute);
+the span is capped at 30 minutes — use `startTime`/`endTime` for longer
+sources.
 
 #### `textToDialogue(input)`
 

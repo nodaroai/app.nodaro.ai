@@ -1119,19 +1119,31 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
     {
       title: "Dubbing",
       description:
-        "Translate audio into another language while preserving the voice " +
-        "and timing (ElevenLabs Dubbing). Provide ONE audio source — " +
-        "audio_url OR audio_asset_id — and a target_language code.\n\n" +
+        "Translate audio OR VIDEO into another language while preserving each " +
+        "speaker's voice and timing (ElevenLabs Dubbing). Provide exactly ONE " +
+        "source — audio_url / audio_asset_id, video_url / video_asset_id " +
+        "(delivers the dubbed VIDEO plus the dubbed audio track), or " +
+        "source_url (a public YouTube/TikTok/direct link ElevenLabs fetches " +
+        "itself) — and a target_language code.\n\n" +
         "Common language codes: en, es, fr, de, it, pt, pl, hi, ja, zh, ko, " +
         "ar, ru, tr, nl, sv, id. Pass num_speakers when the source has " +
-        "multiple distinct voices (improves separation).\n\n" +
+        "multiple distinct voices (improves separation; 0 = auto).\n\n" +
         "By default the dub CLONES the original speaker — they speak the " +
         "target language with their own voice/accent. Pass " +
         "disable_voice_cloning=true for a similar NATIVE-sounding library " +
-        "voice instead (use when the user wants clean target-language speech).",
+        "voice instead (use when the user wants clean target-language speech).\n\n" +
+        "Priced per minute of the dubbed span; max 30 minutes — use " +
+        "start_time/end_time to dub part of a longer source.",
       inputSchema: {
         audio_url: z.string().url().optional(),
         audio_asset_id: z.string().optional(),
+        video_url: z.string().url().optional().describe("Video source — the result is the dubbed VIDEO (+ dubbed audio track)."),
+        video_asset_id: z.string().optional(),
+        source_url: z
+          .string()
+          .url()
+          .optional()
+          .describe("Public page/media URL (YouTube, TikTok, or a direct link) — ElevenLabs fetches it directly."),
         target_language: z
           .string()
           .min(2)
@@ -1146,10 +1158,10 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         num_speakers: z
           .number()
           .int()
-          .min(1)
+          .min(0)
           .max(20)
           .optional()
-          .describe("Number of distinct voices in the source (improves separation)."),
+          .describe("Number of distinct voices in the source (improves separation); 0 = auto-detect."),
         disable_voice_cloning: z
           .boolean()
           .optional()
@@ -1158,6 +1170,12 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           .boolean()
           .optional()
           .describe("Drop background audio — cleaner dubs for speech-only sources."),
+        start_time: z.number().min(0).optional().describe("Dub only from this second of the source."),
+        end_time: z.number().min(0).optional().describe("Dub only up to this second of the source."),
+        highest_resolution: z.boolean().optional().describe("Keep the source resolution on video dubs (slower render)."),
+        use_profanity_filter: z.boolean().optional(),
+        target_accent: z.string().max(50).optional().describe("Experimental: steer dubbed voices toward an accent."),
+        watermark: z.boolean().optional().describe("Apply ElevenLabs' own watermark to video dubs."),
       },
       outputSchema: {
         jobId: z.string(),
@@ -1188,21 +1206,46 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
               expectedKind: "audio",
             })
           : null)
-      if (!audioUrl) {
+      const videoUrl =
+        args.video_url ??
+        (args.video_asset_id
+          ? await resolveAssetId({
+              assetId: args.video_asset_id,
+              userId: session.userId,
+              expectedKind: "video",
+            })
+          : null)
+      // Same precedence as the node: source_url wins, then video, then audio
+      // (the route enforces exactly-one; resolve it here so an over-specified
+      // call still does the obvious thing instead of 400ing).
+      const chosen = args.source_url
+        ? { sourceUrl: args.source_url }
+        : videoUrl
+          ? { videoUrl }
+          : audioUrl
+            ? { audioUrl }
+            : null
+      if (!chosen) {
         return {
           content: [
-            { type: "text", text: "Pass audio_url or audio_asset_id." },
+            { type: "text", text: "Pass one source: audio_url / audio_asset_id, video_url / video_asset_id, or source_url." },
           ],
           isError: true,
         }
       }
       const payload = {
-        audioUrl,
+        ...chosen,
         targetLanguage: args.target_language,
         sourceLanguage: args.source_language,
         numSpeakers: args.num_speakers,
         disableVoiceCloning: args.disable_voice_cloning,
         dropBackgroundAudio: args.drop_background_audio,
+        startTime: args.start_time,
+        endTime: args.end_time,
+        highestResolution: args.highest_resolution,
+        useProfanityFilter: args.use_profanity_filter,
+        targetAccent: args.target_accent,
+        watermark: args.watermark,
         mcp_client: session.clientName,
         userId: session.userId,
       }

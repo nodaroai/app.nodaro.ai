@@ -2148,67 +2148,9 @@ export function VoiceChangerConfig({ data, onUpdate, nodeRefs }: ConfigProps<Voi
   )
 }
 
-export function DubbingConfig({ data, onUpdate, nodeRefs }: ConfigProps<DubbingData>) {
-  const t = useT()
-  return (
-    <div className="flex flex-col gap-3">
-      <div>
-        <Label>{t("field.targetLanguage")}</Label>
-        <Select
-          value={data.targetLanguage || "es"}
-          onValueChange={(v) => onUpdate({ targetLanguage: v })}
-        >
-          <SelectTrigger aria-label={t("field.targetLanguage")}><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {ALL_LANGUAGES.map((l) => (
-              <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <div>
-        <Label>{t("field.sourceLanguageOptional")}</Label>
-        <Select
-          value={data.sourceLanguage || "auto"}
-          onValueChange={(v) => onUpdate({ sourceLanguage: v === "auto" ? undefined : v })}
-        >
-          <SelectTrigger aria-label={t("field.sourceLanguageOptional")}><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="auto">{t("audiocfg.phAutoDetect")}</SelectItem>
-            {ALL_LANGUAGES.map((l) => (
-              <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <div>
-        <Label>{t("audiocfg.numSpeakersOptional")}</Label>
-        <Input
-          type="number"
-          min={1}
-          max={10}
-          value={data.numSpeakers ?? ""}
-          onChange={(e) => onUpdate({ numSpeakers: e.target.value ? parseInt(e.target.value) : undefined })}
-          placeholder={t("audiocfg.phAutoDetect")}
-        />
-      </div>
-      <div className="flex items-center gap-2">
-        <Checkbox id="dubbing-native-voice" checked={data.disableVoiceCloning ?? false} onCheckedChange={(v) => onUpdate({ disableVoiceCloning: !!v })} />
-        <Label htmlFor="dubbing-native-voice" className="text-xs">{t("audiocfg.nativeVoice")}</Label>
-      </div>
-      <p className="text-xs text-muted-foreground -mt-1">
-        {t("audiocfg.hintDubCloneDesc")}
-      </p>
-      <div className="flex items-center gap-2">
-        <Checkbox id="dubbing-drop-bg" checked={data.dropBackgroundAudio ?? false} onCheckedChange={(v) => onUpdate({ dropBackgroundAudio: !!v })} />
-        <Label htmlFor="dubbing-drop-bg" className="text-xs">{t("audiocfg.dropBackgroundAudio")}</Label>
-      </div>
-      <p className="text-xs text-muted-foreground">
-        {t("audiocfg.hintDubTranslate")}
-      </p>
-    </div>
-  )
-}
+// DubbingConfig moved to ./dubbing-config.tsx (file-size cap + the full-surface
+// upgrade: video mode, source links, dub windows, per-minute pricing).
+export { DubbingConfig } from "./dubbing-config"
 
 export function VoiceRemixConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<VoiceRemixData> & { nodeId?: string }) {
   const t = useT()

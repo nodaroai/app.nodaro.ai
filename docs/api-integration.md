@@ -1851,7 +1851,7 @@ until `status` is `completed`, read the result from `output_data`.
 | `DELETE` | `/v1/voice-clones/:id` | Delete a clone. |
 | `POST` | `/v1/voice-design` | Design a synthetic voice from a description (`{ text, voiceDescription, model?, loudness?, guidanceScale?, seed?, quality?, shouldEnhance? }`) → job. |
 | `POST` | `/v1/voice-remix` | Speak a text in a described voice, no cloning (`{ text, voiceDescription }`) → job. |
-| `POST` | `/v1/dubbing` | Translate-and-revoice (`{ audioUrl, targetLanguage, sourceLanguage?, numSpeakers?, disableVoiceCloning?, dropBackgroundAudio? }`) → job. |
+| `POST` | `/v1/dubbing` | Translate-and-revoice audio OR video (`{ audioUrl \| videoUrl \| sourceUrl (exactly one), targetLanguage, sourceLanguage?, numSpeakers? (0=auto), disableVoiceCloning?, dropBackgroundAudio?, startTime?, endTime?, highestResolution?, useProfanityFilter?, targetAccent?, watermark? }`) → job. Video mode delivers `output_data.videoUrl` + the dubbed `audioUrl`. Priced per minute of the dubbed span (min 1); span capped at 30 minutes (413 past it — the start/end window is the lever). |
 
 The id to use everywhere a voice is accepted is the clone's
 `elevenlabsVoiceId` (create/list responses) or the catalog's `voice_id`.

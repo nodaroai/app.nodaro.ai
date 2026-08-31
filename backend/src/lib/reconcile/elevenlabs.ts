@@ -1,7 +1,6 @@
 import { config } from "../config.js"
 import { supabase } from "../supabase.js"
-import { uploadBufferToR2, mediaObjectKey } from "../storage.js"
-import { finalizeJobWithMedia } from "../job-finalize.js"
+import { deliverDubbedMedia } from "../dubbing-delivery.js"
 import type { ReconcileOpts } from "./kie.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
 import { bumpAttemptsOrExhaust } from "./bump-attempts.js"
@@ -21,6 +20,11 @@ interface DubbingMetadata {
   status: "dubbing" | "dubbed" | "failed"
   target_languages?: string[]
   error?: string
+  /** ElevenLabs' probe of the source — the mode authority for sourceUrl dubs. */
+  media_metadata?: {
+    content_type?: string
+    duration?: number
+  }
 }
 
 async function fetchDubbingMetadata(
@@ -44,14 +48,20 @@ async function fetchDubbingMetadata(
   }
 }
 
-async function downloadDubbingAudio(
+async function downloadDubbedMediaBytes(
   dubbingId: string,
   targetLang: string,
+  videoMode: boolean,
 ): Promise<Buffer | null> {
   try {
     const res = await fetch(
       `${ELEVENLABS_BASE_URL}/v1/dubbing/${dubbingId}/audio/${targetLang}`,
-      { headers: { "xi-api-key": config.ELEVENLABS_API_KEY ?? "" } },
+      {
+        headers: {
+          "xi-api-key": config.ELEVENLABS_API_KEY ?? "",
+          Accept: videoMode ? "video/mp4" : "audio/mpeg",
+        },
+      },
     )
     if (!res.ok) return null
     const arrayBuf = await res.arrayBuffer()
@@ -59,6 +69,21 @@ async function downloadDubbingAudio(
   } catch {
     return null
   }
+}
+
+/**
+ * Which mode is this dub? The worker decided from the classified upload (or
+ * ElevenLabs' probe for sourceUrl) — the cron re-derives the same answer from
+ * what persisted: ElevenLabs' media_metadata when present (the authority for
+ * sourceUrl dubs and honest for uploads), else the input slot as recorded in
+ * input_data (a videoUrl submission is a video dub).
+ */
+function resolveVideoMode(meta: DubbingMetadata, inputData: Record<string, unknown> | null): boolean {
+  const contentType = meta.media_metadata?.content_type
+  if (typeof contentType === "string" && contentType.length > 0) {
+    return contentType.startsWith("video/")
+  }
+  return typeof inputData?.videoUrl === "string" && inputData.videoUrl.length > 0
 }
 
 async function markFailed(jobId: string, reason: string): Promise<void> {
@@ -111,13 +136,18 @@ export async function reconcileElevenLabsJob(row: ElevenLabsJobRow, opts?: Recon
     return
   }
 
-  // status=dubbed — fetch the audio + upload to R2
+  // status=dubbed — fetch the media + deliver. Video-aware: with the worker's
+  // park-for-long-sources policy this lane is a NORMAL completion path, so it
+  // must deliver the same shape the worker does — the shared
+  // deliverDubbedMedia is that guarantee (a video dub recovered here used to
+  // land as a mis-typed .mp3).
   const targetLang = (row.input_data?.targetLanguage as string | undefined)
     ?? meta.target_languages?.[0]
     ?? "en"
-  const audioBuffer = await downloadDubbingAudio(row.provider_task_id, targetLang)
-  if (!audioBuffer) {
-    await bumpAttemptsOrExhaust(row.id, "audio download failed")
+  const videoMode = resolveVideoMode(meta, row.input_data)
+  const mediaBuffer = await downloadDubbedMediaBytes(row.provider_task_id, targetLang, videoMode)
+  if (!mediaBuffer) {
+    await bumpAttemptsOrExhaust(row.id, "media download failed")
     return
   }
 
@@ -133,19 +163,15 @@ export async function reconcileElevenLabsJob(row: ElevenLabsJobRow, opts?: Recon
   // deterministic failures exhaust to refund+anomaly instead of looping at
   // every cron tick forever (see kie.ts twin for the full story).
   try {
-    const r2Url = await uploadBufferToR2(
-      audioBuffer,
-      mediaObjectKey(row.id, "audio", "mp3"),
-      "audio/mpeg",
-      userId,
-    )
-
-    await finalizeJobWithMedia({
+    await deliverDubbedMedia({
       jobId: row.id,
-      jobType: "text-to-audio",
+      userId,
+      buffer: mediaBuffer,
+      videoMode,
+      // KIE-reconcile precedent: cron-recovered VIDEO skips the free-tier
+      // watermark step (stated delta in the PR, not an accident).
+      shouldWatermark: false,
       claimant: opts?.claimant ?? "cron",
-      result: { url: r2Url, cost: null, providerUsed: "elevenlabs-dubbing" },
-      mediaUrl: r2Url,
     })
   } catch (err) {
     await bumpAttemptsOrExhaust(row.id, err)

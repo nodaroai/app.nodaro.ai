@@ -3201,6 +3201,7 @@ export type DubbingData = {
   label: string
   targetLanguage: string
   sourceLanguage?: string
+  /** Expected speakers 1-20; 0 or unset = auto-detect (the API default). */
   numSpeakers?: number
   /** Use a similar native Voice Library voice instead of CLONING the original
    *  speaker — the clone (default) keeps the source accent in the target
@@ -3208,10 +3209,25 @@ export type DubbingData = {
   disableVoiceCloning?: boolean
   /** Drop background audio — cleaner dubs for speech-only sources. */
   dropBackgroundAudio?: boolean
+  /** Public link (YouTube/TikTok/direct) dubbed by ElevenLabs directly — set
+   *  in the panel; overrides any wired audio/video input. */
+  sourceUrl?: string
+  /** Dub only this window of the source (seconds). */
+  startTime?: number
+  endTime?: number
+  /** Keep the source resolution on video dubs (slower render). */
+  highestResolution?: boolean
+  useProfanityFilter?: boolean
+  /** Experimental: steer dubbed voices toward an accent. */
+  targetAccent?: string
+  /** ElevenLabs' own watermark on video dubs. */
+  watermark?: boolean
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   generatedAudioUrl?: string
+  /** Video mode (video in / video sourceUrl): the dubbed VIDEO. */
+  generatedVideoUrl?: string
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
   currentJobId?: string
@@ -7217,9 +7233,9 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "dubbing",
     label: "Dubbing",
     category: "ai",
-    creditCost: 8,
-    inputs: ["audio"],
-    outputs: ["audio"],
+    creditCost: 40,
+    inputs: ["audio", "video"],
+    outputs: ["audio", "video"],
     defaultData: {
       label: "Dubbing",
       targetLanguage: "es",

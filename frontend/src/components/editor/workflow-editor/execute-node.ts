@@ -3202,27 +3202,75 @@ export function executeNode(
 
   if (node.type === "dubbing") {
     const d = node.data as DubbingData;
-    const audioUrl = inputs.audioUrl;
-    if (!audioUrl) {
-      toast.error(`Node "${d.label}": no audio input found`);
-      return Promise.reject(new Error("No audio input"));
+    // Source precedence: a panel sourceUrl (ElevenLabs fetches the link) wins
+    // over wired inputs; among wired inputs video wins over audio (matches
+    // the backend + node UI, mirroring voice-changer).
+    const sourceUrl = d.sourceUrl?.trim() || undefined;
+    const videoUrl = sourceUrl ? undefined : inputs.videoUrl;
+    const audioUrl = sourceUrl || videoUrl ? undefined : inputs.audioUrl;
+    if (!sourceUrl && !videoUrl && !audioUrl) {
+      toast.error(`Node "${d.label}": no audio or video input found (or set a source link)`);
+      return Promise.reject(new Error("No input"));
     }
     if (!d.targetLanguage) {
       toast.error(`Node "${d.label}": no target language selected`);
       return Promise.reject(new Error("No target language"));
     }
     setUserPromptTemplate(undefined);
+
+    // Switching modes (audio↔video) drops stale results of the other media
+    // type so the node never shows an audio URL in a video element (or vice
+    // versa) and the results browser stays single-typed. sourceUrl mode is
+    // decided server-side (ElevenLabs probes the link) — treat it as
+    // potentially-video so a stale audio result never fronts a video dub.
+    const targetIsVideo = Boolean(videoUrl || sourceUrl);
+    const curIsVideo = Boolean(d.generatedVideoUrl);
+    if (targetIsVideo !== curIsVideo) {
+      useWorkflowStore.getState().updateNodeData(node.id, {
+        generatedResults: [],
+        activeResultIndex: 0,
+        generatedVideoUrl: undefined,
+        generatedAudioUrl: undefined,
+      });
+    }
+
+    const callApi = () =>
+      dubbingApi(
+        { audioUrl, videoUrl, sourceUrl },
+        d.targetLanguage,
+        ctx.userId,
+        d.sourceLanguage,
+        d.numSpeakers,
+        {
+          disableVoiceCloning: d.disableVoiceCloning,
+          dropBackgroundAudio: d.dropBackgroundAudio,
+          startTime: d.startTime,
+          endTime: d.endTime,
+          highestResolution: d.highestResolution,
+          useProfanityFilter: d.useProfanityFilter,
+          targetAccent: d.targetAccent,
+          watermark: d.watermark,
+        },
+      );
+
+    if (targetIsVideo) {
+      return runProcessingNode(
+        node.id,
+        callApi,
+        // Media-typed completion: the backend decides audio-vs-video from the
+        // media's ACTUAL streams (an audio-only .mp4 delivers audio; a
+        // sourceUrl link can turn out to be either). Video first, audio as
+        // the fallback — the poller writes whichever the job produced.
+        ["generatedVideoUrl", "generatedAudioUrl"],
+        "Dubbing",
+        ctx,
+        // Surface the dubbed-audio sidecar on the audio output handle.
+        (od) => (od.audioUrl ? { generatedAudioUrl: od.audioUrl as string } : {}),
+      );
+    }
     return runProcessingNode(
       node.id,
-      () =>
-        dubbingApi(
-          audioUrl,
-          d.targetLanguage,
-          ctx.userId,
-          d.sourceLanguage,
-          d.numSpeakers,
-          { disableVoiceCloning: d.disableVoiceCloning, dropBackgroundAudio: d.dropBackgroundAudio },
-        ),
+      callApi,
       "generatedAudioUrl",
       "Dubbing",
       ctx,

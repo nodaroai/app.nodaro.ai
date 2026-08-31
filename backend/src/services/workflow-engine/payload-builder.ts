@@ -4298,17 +4298,32 @@ export function buildPayload(
       })
     }
 
-    case "dubbing":
+    case "dubbing": {
+      // Source precedence mirrors the frontend engine: a panel sourceUrl
+      // (ElevenLabs fetches the link) wins over wired inputs; among wired
+      // inputs video wins over audio. Exactly one source reaches the worker.
+      const dubSourceUrl = typeof data.sourceUrl === "string" && data.sourceUrl.trim() ? data.sourceUrl.trim() : undefined
+      const dubVideoUrl = dubSourceUrl ? undefined : (resolvedInputs.videoUrl || (data.videoUrl as string | undefined))
+      const dubAudioUrl = dubSourceUrl || dubVideoUrl ? undefined : (resolvedInputs.audioUrl || (data.audioUrl as string | undefined))
       return simpleResult("dubbing", "elevenlabs-dubbing", {
         jobId,
-        audioUrl: resolvedInputs.audioUrl || data.audioUrl,
+        audioUrl: dubAudioUrl,
+        videoUrl: dubVideoUrl,
+        sourceUrl: dubSourceUrl,
         targetLanguage: data.targetLanguage,
         sourceLanguage: data.sourceLanguage,
         numSpeakers: data.numSpeakers,
         disableVoiceCloning: data.disableVoiceCloning,
         dropBackgroundAudio: data.dropBackgroundAudio,
+        startTime: data.startTime,
+        endTime: data.endTime,
+        highestResolution: data.highestResolution,
+        useProfanityFilter: data.useProfanityFilter,
+        targetAccent: data.targetAccent,
+        watermark: data.watermark,
         usageLogId,
       })
+    }
 
     case "voice-remix":
       return simpleResult("voice-remix", "elevenlabs-voice-remix", {

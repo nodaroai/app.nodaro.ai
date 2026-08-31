@@ -36,10 +36,17 @@ function getOutputType(jobName: string): "image" | "video" | "audio" | null {
   return null
 }
 
+/** Dual-mode generators (voice-changer / voice-changer-pro / dubbing): the RUN
+ *  decides audio vs video — read what the row actually produced, video first. */
+const DUAL_MODE_JOBS = new Set(["voice-changer", "voice-changer-pro", "dubbing"])
+
 function getOutputUrl(
   jobName: string,
   outputData: Record<string, unknown>,
 ): string | null {
+  if (DUAL_MODE_JOBS.has(jobName)) {
+    return (outputData?.videoUrl as string) ?? (outputData?.audioUrl as string) ?? null
+  }
   const type = getOutputType(jobName)
   if (type === "image") return (outputData?.imageUrl as string) ?? null
   if (type === "video") return (outputData?.videoUrl as string) ?? null

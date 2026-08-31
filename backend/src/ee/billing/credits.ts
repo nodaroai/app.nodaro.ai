@@ -1115,7 +1115,12 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "elevenlabs-dialogue": 25,     // per 1K chars
   "voice-clone": 50,              // ElevenLabs instant voice clone
   "elevenlabs-voice-changer": 40,  // ElevenLabs speech-to-speech
-  "elevenlabs-dubbing": 80,        // ElevenLabs dubbing (async)
+  // ElevenLabs dubbing (async) — PER MINUTE of the dubbed span (route
+  // computeCredits: ceil(seconds/60) x this base, min 1 minute; 120s
+  // fallback bucket when un-probeable). Was flat 80; 40/min prices the
+  // typical ~2-min clip identically. The model_pricing row is the same
+  // per-minute base (migration 359).
+  "elevenlabs-dubbing": 40,
   "elevenlabs-voice-remix": 40,    // ElevenLabs voice remix/preview
   "elevenlabs-voice-design": 50,   // ElevenLabs voice design (full controls)
   "elevenlabs-forced-alignment": 30, // ElevenLabs forced alignment

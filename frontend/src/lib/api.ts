@@ -3893,13 +3893,41 @@ export async function voiceChangerProApi(
   })
 }
 
-export async function dubbingApi(audioUrl: string, targetLanguage: string, userId?: string, sourceLanguage?: string, numSpeakers?: number, options?: { disableVoiceCloning?: boolean; dropBackgroundAudio?: boolean }): Promise<{ jobId: string }> {
-  const body: Record<string, unknown> = { audioUrl, targetLanguage }
+export interface DubbingApiOptions {
+  disableVoiceCloning?: boolean
+  dropBackgroundAudio?: boolean
+  startTime?: number
+  endTime?: number
+  highestResolution?: boolean
+  useProfanityFilter?: boolean
+  targetAccent?: string
+  watermark?: boolean
+}
+
+/** Exactly one of source.audioUrl / source.videoUrl / source.sourceUrl. */
+export async function dubbingApi(
+  source: { audioUrl?: string; videoUrl?: string; sourceUrl?: string },
+  targetLanguage: string,
+  userId?: string,
+  sourceLanguage?: string,
+  numSpeakers?: number,
+  options?: DubbingApiOptions,
+): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { targetLanguage }
+  if (source.audioUrl) body.audioUrl = source.audioUrl
+  if (source.videoUrl) body.videoUrl = source.videoUrl
+  if (source.sourceUrl) body.sourceUrl = source.sourceUrl
   if (userId) body.userId = userId
   if (sourceLanguage) body.sourceLanguage = sourceLanguage
-  if (numSpeakers) body.numSpeakers = numSpeakers
+  if (numSpeakers != null) body.numSpeakers = numSpeakers
   if (options?.disableVoiceCloning != null) body.disableVoiceCloning = options.disableVoiceCloning
   if (options?.dropBackgroundAudio != null) body.dropBackgroundAudio = options.dropBackgroundAudio
+  if (options?.startTime != null) body.startTime = options.startTime
+  if (options?.endTime != null) body.endTime = options.endTime
+  if (options?.highestResolution != null) body.highestResolution = options.highestResolution
+  if (options?.useProfanityFilter != null) body.useProfanityFilter = options.useProfanityFilter
+  if (options?.targetAccent) body.targetAccent = options.targetAccent
+  if (options?.watermark != null) body.watermark = options.watermark
   return apiJson("/v1/dubbing", {
     body,
     workflowId: true,
