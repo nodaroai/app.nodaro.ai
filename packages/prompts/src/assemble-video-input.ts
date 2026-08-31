@@ -17,6 +17,12 @@
  * bug this channel exists to fix. The image side is structurally identical
  * (`assembleImageInput` = `composePromptText` → `buildImagePrompt`).
  *
+ * That ordering is also why cap-aware shedding here takes a `frame` callback
+ * rather than a provider id: the shed must run at the FOLD site (before the
+ * resolver) but be decided on the RESOLVED length (after it), so the binding
+ * text the resolver adds is inside the budget and can never be the thing that
+ * gets dropped. See {@link VideoPromptCapOptions}.
+ *
  * THE VERBOSITY POLICY LIVES HERE, NOT IN THE CLIENT: motion dimensions render
  * their compact professional term, look dimensions their full clause
  * (`VIDEO_HINT_MODE_DEFAULT`, resolved per row's `family` by the registry).
@@ -45,10 +51,58 @@ import {
   type DirectionHintMode,
 } from "./direction-registry.js"
 import { joinPromptHints } from "./prompt-hint-join.js"
+import { keepableDirectionHints } from "./hint-shedding.js"
 import {
   renderStructuredFields,
   type StructuredPromptFields,
 } from "./prompt-builder-structured-fields.js"
+
+/**
+ * Cap-aware shedding, opt-in. Absent → the composer is exactly what it always
+ * was (every existing caller stays byte-identical, and the no-op path below is
+ * never even reached differently).
+ *
+ * WHY A NUMBER AND A CALLBACK, NOT A PROVIDER ID — the two halves of the video
+ * surface's problem, which the image half did not have:
+ *
+ *  - `cap` is the caller's EFFECTIVE ceiling, not `getMaxVideoPromptChars` read
+ *    here. The routes compute it with `effectiveVideoPromptCeiling`, which
+ *    mirrors `applyVideoNegativePrompt`'s reservation of the `"\nAvoid: …"`
+ *    suffix for a provider with no native negative param. Re-deriving the cap
+ *    inside this package would put a second copy of that reservation one
+ *    refactor away from drifting from the clamp it is supposed to predict.
+ *
+ *  - `frame` is the REFERENCE RESOLVER, and it is what makes the shed correct
+ *    end-to-end. The fold runs BEFORE `resolveVideoReferenceCore` (see the
+ *    module header — folding afterwards strands the scene description past the
+ *    identity directives). The resolver then ADDS binding text: legacy's
+ *    "Use these characters:" block, hybrid's lock lines and the canonical role
+ *    phrases it APPENDS. That added text is exactly what an order-blind tail cut
+ *    destroys first, so it must be inside the budget — but it must never be
+ *    shed. Measuring THROUGH the caller's framing gives both properties at once:
+ *    the shed decision sees the final length, while the only thing it can drop
+ *    is a hint clause it rendered itself.
+ *
+ * Re-framing a SUBSET of the hints is sound because a hint can never change how
+ * the resolver reads the rest of the body: no registered catalog hint, term or
+ * label contains a `{image:N}` / `{ref:` / `@slug:N` shape
+ * (`__tests__/direction-hint-token-safety.test.ts` pins that for every catalog),
+ * so dropping one cannot renumber or unbind a reference.
+ */
+export interface VideoPromptCapOptions {
+  /**
+   * The maximum length the FRAMED prompt may reach. Sheds only while the framed
+   * body exceeds it; `undefined` (the default) disables shedding entirely.
+   */
+  readonly cap?: number
+  /**
+   * The downstream framing the cap is measured through — the caller's reference
+   * assembly. Identity when omitted (a caller with a cap but no references).
+   * Must be PURE: it is called once per shed iteration, and the caller re-runs
+   * its own real assembly on the returned body afterwards.
+   */
+  readonly frame?: (body: string | undefined) => string | undefined
+}
 
 /**
  * Fold a video run's cinematic-direction ids (and optional structured fields)
@@ -57,6 +111,28 @@ import {
  * The direction hints land first, in the registry's canonical table order
  * (camera motion leads), and the structured fragment lands LAST — the same
  * ordering `composePromptText` uses for stills.
+ *
+ * TRUNCATION ORDERING (opt-in via `opts.cap`): the provider clamp
+ * (`applyVideoNegativePrompt`) slices the prompt TAIL, which is ORDER-BLIND —
+ * on a low-cap provider (kling = 1000) a broad direction renders more than the
+ * whole ceiling and the cut severs reference bindings and the end of the user's
+ * prose while decorative clauses survive. With a cap the composer decides
+ * instead: it knows which clauses are hints because it just rendered them, and
+ * drops them LAST-FOLDED FIRST until the framed prompt fits. Everything else —
+ * the user's prose, the structured fragment (user CONTENT, never a garnish) and
+ * every byte the resolver's framing adds — outranks a hint.
+ *
+ * WHAT THE BUDGET DELIBERATELY EXCLUDES: the route's later opt-in identity
+ * injection (an async DB read that appends a canonical description) and any
+ * registered `applyPromptPolicies` transform both run AFTER the reference
+ * assembly and are not modelled here. Pricing them in would mean folding an
+ * await into this pure composer; instead the provider clamp stays their last
+ * resort, exactly as today. Same for a body that still overflows with ZERO
+ * hints left — long prose, or many bound references on their own.
+ *
+ * UNDER-CAP PARITY: the first pass folds every hint, so a prompt that fits is
+ * byte-identical to a capless call, and a caller with no `direction`/`structured`
+ * takes the same exact no-op path it always did.
  *
  * @param userPrompt The user's prompt. Optional: an image-to-video run may
  *   legitimately have none, and it is returned as-is when nothing folds.
@@ -67,23 +143,51 @@ import {
  *   field today; the canvas orchestrator passes it directly.
  * @param opts.hintMode Override the verbosity policy (a whole-fold
  *   `PickerHintMode`, or a `{ look, motion }` split).
+ * @param opts.cap / `opts.frame` See {@link VideoPromptCapOptions}.
  */
 export function composeVideoPromptText(
   userPrompt: string | undefined,
   direction: DirectionFields | undefined,
   structured?: StructuredPromptFields,
-  opts?: { readonly hintMode?: DirectionHintMode },
+  opts?: { readonly hintMode?: DirectionHintMode } & VideoPromptCapOptions,
 ): string | undefined {
-  const hints = [
-    ...renderDirectionHints(direction, {
-      surface: "video",
-      mode: opts?.hintMode ?? VIDEO_HINT_MODE_DEFAULT,
-    }),
-    structured ? renderStructuredFields(structured) : "",
-  ].filter((p) => p.length > 0)
-  // Nothing to fold → the caller's value straight back, `undefined` included.
-  // Do NOT collapse this into `joinPromptHints(userPrompt ?? "", hints)`: that
-  // would turn an absent prompt into `""` and break the no-op contract above.
-  if (hints.length === 0) return userPrompt
-  return joinPromptHints(userPrompt ?? "", hints)
+  const directionHints = renderDirectionHints(direction, {
+    surface: "video",
+    mode: opts?.hintMode ?? VIDEO_HINT_MODE_DEFAULT,
+  }).filter((p) => p.length > 0)
+  // User CONTENT, not a garnish: never sheddable, always last.
+  const structuredFragment = structured ? renderStructuredFields(structured) : ""
+
+  const composeWith = (kept: number): string | undefined => {
+    const hints = [...directionHints.slice(0, kept), structuredFragment].filter(
+      (p) => p.length > 0,
+    )
+    // Nothing to fold → the caller's value straight back, `undefined` included.
+    // Do NOT collapse this into `joinPromptHints(userPrompt ?? "", hints)`: that
+    // would turn an absent prompt into `""` and break the no-op contract above.
+    // A FULL shed lands here too, which is what keeps the no-op contract intact
+    // at `kept === 0` — the route's `composed !== prompt` guard then correctly
+    // leaves `input_data.userPrompt` unpinned.
+    if (hints.length === 0) return userPrompt
+    return joinPromptHints(userPrompt ?? "", hints)
+  }
+
+  const cap = opts?.cap
+  if (cap === undefined) return composeWith(directionHints.length)
+
+  // Fold everything first (the under-cap byte-parity pass), then shed from the
+  // tail of the fold order while the FRAMED prompt overflows the ceiling.
+  // `keepableDirectionHints` strictly decreases `kept` whenever there is a
+  // deficit, so this terminates at `kept === 0` in the worst case — at which
+  // point nothing droppable is left and the provider clamp stands.
+  const frame = opts?.frame ?? ((body: string | undefined) => body)
+  let kept = directionHints.length
+  let body = composeWith(kept)
+  let framedLength = frame(body)?.length ?? 0
+  while (framedLength > cap && kept > 0) {
+    kept = keepableDirectionHints(directionHints, kept, framedLength - cap)
+    body = composeWith(kept)
+    framedLength = frame(body)?.length ?? 0
+  }
+  return body
 }
