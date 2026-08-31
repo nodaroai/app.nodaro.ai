@@ -1062,7 +1062,8 @@ freezing whatever text your client wrote the day it was saved.
   more than a low-cap model accepts (seedream = 3000 characters), so the
   assembler sheds hint clauses from the END of the fold order, one at a time,
   until the prompt fits: the dimensions the platform folds first outlive the
-  ones it folds last. That fold order is the platform's own compatibility order,
+  ones it folds last. `subject` clauses (below) fold ahead of every direction
+  clause and therefore shed last — who is in the shot outlives how it was lit. That fold order is the platform's own compatibility order,
   not a ranking of which dimension matters most — survival is position, not
   importance. Everything else outranks a hint — reference directives and
   the role phrases that bind them, `@`-mention-resolved text, your prose, the
@@ -1132,6 +1133,78 @@ prefer the dimensions that carry the shot.
 
 `POST /v1/extend-video` deliberately has no `direction` field: its prompt
 continues an existing clip, where re-stating the look is the wrong lever.
+
+### Structured subject (`subject`)
+
+`POST /v1/generate-image`, `POST /v1/generate-video` and
+`POST /v1/text-to-video` accept an optional `subject` object — the same
+doctrine as `direction`, one channel over: a flat map of **catalog ids**
+describing WHO is in the shot (the person, how they are styled, and the props
+in frame) which the platform folds into the prompt as its own clauses.
+
+```json
+{
+  "prompt": "on the seawall at dusk",
+  "provider": "nano-banana",
+  "subject": {
+    "type": "woman",
+    "age": "age-30s",
+    "ethnicity": "east-asian",
+    "hairBase": "base-short-straight",
+    "makeup": "makeup-smoky",
+    "outerwear": "outerwear-trench",
+    "heldProp": "smartphone"
+  }
+}
+```
+
+- **The keys are the platform's own picker field names**, exactly as with
+  `direction` — every Person dimension field (`type`, `age`, `ethnicity`,
+  `frame`, `faceShape`, `eyeColor`, `hairBase`, `hairColor`, `skinTone`,
+  `lipState`, `distinctiveFeature`, …), every Styling dimension field
+  (`makeup`, `hairCut`, `jewelry`, `outfit`, `top`, `bottom`, `outerwear`,
+  `footwear`, `fabric`, `wardrobeState`, …), the three prop keys `heldProp`,
+  `material` and `animal`, and the one number below. Valid ids come from
+  [`GET /v1/picker-catalogs`](#picker-catalogs) — the `person`, `styling`,
+  `held-prop`, `material` and `animal` catalogs.
+- **`subject` and `direction` never overlap.** The two key sets are disjoint by
+  contract, so one selection can never emit two clauses. `pose` rides
+  `direction`.
+- **`customAge` is the one number.** Send `"age": "age-custom"` with
+  `"customAge": 34` for a literal age in years; it is rounded and clamped to
+  0–120. Without `age-custom` it contributes nothing.
+- **Single id or an array**, with per-dimension caps the catalogs define:
+  `jewelry`, `wardrobeState` and `distinctiveFeature` take 3; `ethnicity`,
+  `regionalAesthetic`, `hairColor`, `eyeColor`, `lipState`, `eyeState`,
+  `skinTexture` and `hairState` take 2; every other dimension is single-pick.
+  Over a dimension's cap the extra ids are dropped, not rejected. The wire
+  bounds that DO reject with a `validation_error` are the same shape as
+  direction's: at most **8** entries per key and **100** characters per id,
+  plus at most **128** keys in the object and **64** characters per key.
+- **Unknown keys are stripped and unknown ids are skipped**, never rejected —
+  the same version-skew tolerance as `direction`, and the same reason to deploy
+  the platform before the client that starts sending new fields. What
+  `jobs.input_data.subject` records is your bag after that strip, i.e. exactly
+  the ids that folded.
+- **A deployment-registered person pack folds too.** Unlike `direction` (whose
+  getters read the base catalogs), the person fold reads the pack-composed
+  taxonomy, so a pack dimension's field is accepted and renders its clause.
+- **Fold order is the platform's**, and `subject` lands ahead of `direction`:
+  the subject is the noun phrase the cinematography then modifies. Person
+  arrives as ONE comma-joined clause and Styling as another — those catalogs
+  are authored as compound clauses, not sentences. Overlapping selections
+  collapse rather than doubling (picking the Person `lip-state-bold-red` and
+  the Styling `makeup-bold-lips` emits the lipstick once).
+- **Verbosity is per surface.** generate-image folds the full clause for every
+  dimension; the video routes fold the short professional term, because the
+  start frame already carries the subject's identity into the clip.
+- **Absent ≠ empty**, and a `subject` that renders no clause leaves your
+  `prompt` byte-for-byte untouched. Under a provider's prompt cap on
+  generate-image, subject clauses are the LAST hints to be shed (see the
+  direction section above).
+
+`POST /v1/extend-video` deliberately has no `subject` field, for the same
+reason it has no `direction`.
 
 ### Picker catalogs
 
