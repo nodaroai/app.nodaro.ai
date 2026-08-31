@@ -36,7 +36,7 @@
  * guard (frontend, Studio, route) pass `throwOnEmpty: true`.
  */
 import {
-  buildImagePrompt,
+  buildImagePromptWithOverflow,
   type BuildImagePromptResult,
 } from "./prompt-builder.js"
 import {
@@ -48,7 +48,7 @@ import {
   IMAGE_HINT_MODE_DEFAULT,
   type DirectionFields,
 } from "./direction-registry.js"
-import { joinPromptHints } from "./prompt-hint-join.js"
+import { joinPromptHints, PROMPT_HINT_SEPARATOR } from "./prompt-hint-join.js"
 import type { CharacterDef, ConnectedReference, IdentityMeta } from "@nodaro/shared"
 
 /**
@@ -143,11 +143,47 @@ export interface AssembleImageInput {
 }
 
 /**
+ * The hint pieces a fold contributes, split by whether the assembler may SHED
+ * them under a provider prompt cap.
+ *
+ * `directionHints` are the catalog-rendered cinematic clauses — decorative
+ * garnish next to a reference directive or the user's own prose, and the only
+ * thing this assembler drops when the prompt won't fit. `structuredFragment` is
+ * user CONTENT (a Path-1 structured field the caller populated), so it is
+ * sticky and always lands LAST, exactly as before.
+ */
+interface ImageHintPieces {
+  /** Rendered direction clauses in the registry's canonical fold order. */
+  readonly directionHints: readonly string[]
+  /** The structured-field fragment ("" when nothing is populated). */
+  readonly structuredFragment: string
+}
+
+/**
+ * Render the fold's hint pieces once, so the cap-aware retry can re-join a
+ * SUBSET of them without re-rendering the catalogs. `renderDirectionHints`
+ * folds the `direction` ids in the registry's canonical table order (unknown
+ * keys and unknown ids contribute nothing), and `renderStructuredFields`
+ * returns "" when nothing is populated. Never mutates inputs.
+ */
+function renderImageHintPieces(
+  direction: DirectionFields | undefined,
+  structured: StructuredPromptFields | undefined,
+): ImageHintPieces {
+  return {
+    directionHints: renderDirectionHints(direction, {
+      surface: "image",
+      mode: IMAGE_HINT_MODE_DEFAULT,
+    }).filter((p) => p.length > 0),
+    structuredFragment: structured ? renderStructuredFields(structured) : "",
+  }
+}
+
+/**
  * Compose the cinematic-direction hints + structured-field fragment with the
- * user's prompt. `renderDirectionHints` folds the `direction` ids in the
- * registry's canonical table order (unknown keys and unknown ids contribute
- * nothing), and `renderStructuredFields` returns "" when nothing is populated —
- * so the structured fragment always lands LAST.
+ * user's prompt, keeping the FIRST `keptDirectionHints` direction clauses (the
+ * full count on the first pass; fewer only when the provider cap forced a
+ * shed). The structured fragment always lands LAST.
  *
  * EXACT NO-OP CONTRACT: when there are no cinematic/structured hint pieces (the
  * platform-caller case for a node that carries no stored `direction`/
@@ -164,14 +200,49 @@ export interface AssembleImageInput {
  */
 function composePromptText(
   userPrompt: string,
-  direction: DirectionFields | undefined,
-  structured: StructuredPromptFields | undefined,
+  pieces: ImageHintPieces,
+  keptDirectionHints: number,
 ): string {
   const hints = [
-    ...renderDirectionHints(direction, { surface: "image", mode: IMAGE_HINT_MODE_DEFAULT }),
-    structured ? renderStructuredFields(structured) : "",
+    ...pieces.directionHints.slice(0, keptDirectionHints),
+    pieces.structuredFragment,
   ].filter((p) => p.length > 0)
   return joinPromptHints(userPrompt, hints)
+}
+
+/**
+ * How many of the first `kept` direction clauses may STAY if `overflowChars`
+ * characters have to leave the body. Walks the fold order from the TAIL,
+ * subtracting each clause plus the separator it brought, and stops as soon as
+ * enough has been reclaimed.
+ *
+ * The shed order is therefore `DIRECTION_FIELDS` order REVERSED. Note what that
+ * is and is not: the table's order is a COMPATIBILITY order (grouped by family,
+ * with the legacy `DirectionFields` block pinned last so every pre-registry
+ * caller's fold stays byte-identical) — it is NOT a ranking of how load-bearing
+ * a dimension is, and this function does not claim one. Tail-first is chosen
+ * because it is deterministic, matches the fold order the API documents, and
+ * needs no second ordering to drift out of sync with the table. A caller mixing
+ * legacy keys with the newer ones can therefore lose e.g. `lightingId` before a
+ * decorative `isoValue` clause; if that ever matters, the fix is an explicit
+ * priority column on `DIRECTION_FIELDS`, not a second hand-kept list here.
+ *
+ * Deliberately approximate (assembly is not perfectly additive); the caller
+ * re-assembles and re-checks, and this function strictly decreases `kept`
+ * whenever `overflowChars > 0`, so that loop terminates.
+ */
+function keepableDirectionHints(
+  directionHints: readonly string[],
+  kept: number,
+  overflowChars: number,
+): number {
+  let deficit = overflowChars
+  let next = kept
+  while (next > 0 && deficit > 0) {
+    next -= 1
+    deficit -= directionHints[next]!.length + PROMPT_HINT_SEPARATOR.length
+  }
+  return next
 }
 
 /**
@@ -180,15 +251,30 @@ function composePromptText(
  *
  * Order: (1) compose the prompt text (no-op when no direction/structured),
  * (2) `buildImagePrompt(...)` — exactly the call the three sites make today,
- * (3) optional post-assembly empty-prompt throw (gated by `throwOnEmpty`).
+ * (3) shed direction hints and re-assemble while the provider cap overflows,
+ * (4) optional post-assembly empty-prompt throw (gated by `throwOnEmpty`).
+ *
+ * TRUNCATION ORDERING (step 3): `buildImagePrompt`'s cap clamp cuts the TAIL,
+ * which is ORDER-BLIND — on a low-cap provider (seedream = 3000) a maximal
+ * direction fold renders ~3.3K characters of clauses and the cut can sever a
+ * reference directive, mention-resolved text or the user's own prose while a
+ * decorative clause survives. So the ASSEMBLER decides instead: it knows which
+ * clauses are hints because it just built them, and drops them last-folded
+ * first until the prompt fits. Everything else — references, prose, the
+ * structured fragment, the Style/Avoid suffixes — outranks a hint. A body that
+ * still overflows with ZERO hints (long prose or many directives on its own)
+ * falls back to the builder's clamp, unchanged.
+ *
+ * UNDER-CAP PARITY: the first pass folds every hint, so a prompt that fits is
+ * byte-identical to before — the retry only ever runs on an over-cap assembly.
  */
 export function assembleImageInput(
   input: AssembleImageInput,
 ): BuildImagePromptResult {
-  const prompt = composePromptText(input.userPrompt, input.direction, input.structured)
+  const pieces = renderImageHintPieces(input.direction, input.structured)
 
-  const result = buildImagePrompt({
-    prompt,
+  const assembleWith = (keptDirectionHints: number) => buildImagePromptWithOverflow({
+    prompt: composePromptText(input.userPrompt, pieces, keptDirectionHints),
     provider: input.provider,
     ...(input.connectedReferences !== undefined
       ? { connectedReferences: input.connectedReferences }
@@ -221,6 +307,20 @@ export function assembleImageInput(
       ? { skipCharacterMentions: input.skipCharacterMentions }
       : {}),
   })
+
+  // Fold everything first (the under-cap byte-parity pass), then shed hints
+  // from the tail of the fold order while the assembled prompt overflows the
+  // provider cap. `keepableDirectionHints` strictly decreases `kept` whenever
+  // there IS an overflow, so this terminates at `kept === 0` in the worst case —
+  // at which point the body overflows on its own and the builder's clamp stands.
+  let kept = pieces.directionHints.length
+  let fitted = assembleWith(kept)
+  while (fitted.overflowChars > 0 && kept > 0) {
+    kept = keepableDirectionHints(pieces.directionHints, kept, fitted.overflowChars)
+    fitted = assembleWith(kept)
+  }
+  // `overflowChars` is assembly bookkeeping, not part of the callers' contract.
+  const { overflowChars, ...result } = fitted
 
   // Post-assembly empty-prompt check (opt-in): a bound entity / `@`-mention /
   // direction chip could have filled the assembled prompt even if the user
