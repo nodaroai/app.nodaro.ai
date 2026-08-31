@@ -20,6 +20,7 @@ import { PutObjectCommand } from "@aws-sdk/client-s3"
 import { s3, withObjectAcl } from "../lib/storage.js"
 import { config } from "../lib/config.js"
 import { redis } from "../lib/queue.js"
+import { applyUploadPolicies, uploadBlockedBody, uploadKindFromMime } from "../lib/upload-policy.js"
 
 // Dedicated upload-token signing key, HKDF-derived from the internal secret so
 // the upload-signing purpose is cryptographically separated from the
@@ -161,6 +162,20 @@ export async function uploadProxyRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(400).send({
           error: { code: "empty_body", message: "Empty body." },
         })
+      }
+
+      // B4d: deployment upload policy — the proxy lane's bytes are in hand
+      // here; police before the R2 write. The uploader rides the signed token.
+      const uploadDecision = await applyUploadPolicies({
+        kind: uploadKindFromMime(payload.mime),
+        lane: "upload-proxy",
+        mime: payload.mime,
+        sizeBytes: buffer.length,
+        userId: payload.userId,
+        buffer,
+      })
+      if (!uploadDecision.allow) {
+        return reply.status(422).send(uploadBlockedBody(uploadDecision))
       }
 
       try {

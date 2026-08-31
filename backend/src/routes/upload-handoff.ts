@@ -30,6 +30,7 @@ import { PutObjectCommand } from "@aws-sdk/client-s3"
 import { s3, withObjectAcl } from "../lib/storage.js"
 import { config } from "../lib/config.js"
 import { verifyUploadToken, claimUploadToken } from "./upload-proxy.js"
+import { applyUploadPolicies, uploadBlockedBody, uploadKindFromMime } from "../lib/upload-policy.js"
 
 const MAX_HANDOFF_BYTES = 256 * 1024 * 1024 // 256 MB
 
@@ -285,6 +286,22 @@ export async function uploadHandoffRoutes(app: FastifyInstance): Promise<void> {
             },
           })
         }
+      }
+
+      // B4d: deployment upload policy on the FINAL bytes (post-transcode),
+      // before the token is burned — a policy deny leaves the link reusable
+      // with an acceptable file. The uploader rides the signed token.
+      const uploadDecision = await applyUploadPolicies({
+        kind: uploadKindFromMime(finalMime),
+        lane: "upload-handoff",
+        mime: finalMime,
+        sizeBytes: finalBuffer.length,
+        userId: payload.userId,
+        filename: data.filename,
+        buffer: finalBuffer,
+      })
+      if (!uploadDecision.allow) {
+        return reply.status(422).send(uploadBlockedBody(uploadDecision))
       }
 
       // Single-use: claim AFTER validation (so a wrong-kind/decode failure
