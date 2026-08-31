@@ -1,0 +1,9 @@
+---
+"@nodaro/prompts": minor
+---
+
+New `subject` prompt channel — the platform-owned counterpart of `direction` for WHO is in the shot. `subject-registry.ts` carries the ordered table (`SUBJECT_FIELDS`), the derived wire vocabulary (`SUBJECT_KEYS` — every Person and Styling field, `customAge`, and the `heldProp` / `material` / `animal` props), the exported fold order (`SUBJECT_FOLD_KEYS`), the bounds (`SUBJECT_ID_MAX_CHARS` / `SUBJECT_ARRAY_CEILING`, defined AS the direction constants so one literal governs both channels), and the renderer `renderSubjectHints(subject, { surface, mode })` — exported so a client's "will inject into prompt" preview renders the exact server output instead of re-implementing the fold. Verbosity is a threaded parameter: `SUBJECT_IMAGE_HINT_MODE_DEFAULT` = full clauses, `SUBJECT_VIDEO_HINT_MODE_DEFAULT` = compact terms.
+
+The wire is a FLAT bag of the platform's own field names, and the flatness is load-bearing: the styling builder reads the Person field `lipState` to suppress its `makeup-bold-lips` twin, a dedupe that only fires when both catalogs fold off ONE shared value map. The Person and Styling rows are therefore `kind: "group"` — they receive the whole normalized bag and return ONE comma-joined clause each (their builders emit fragments, which would read as "a woman. in her 30s. East Asian." through the `". "` prompt-hint join). `preText` / `postText` are deliberately off the wire in v1: both catalogs declare them, so a shared bag would emit the same prose twice.
+
+`normalizeSubjectFields` is what makes the channel safe to accept: the builders do NOT cap (only `buildMaterialHints` does, structurally), so it enforces the per-dimension pick limits pack-aware, drops unknown keys, collapses a single-pick dimension's one-element array to the bare string the builder actually reads, and clamps `customAge` to a whole 0..120. Unknown IDS stay inert (every getter resolves a miss to `""`), never a rejection.
