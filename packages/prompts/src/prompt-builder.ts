@@ -477,14 +477,30 @@ function locationModeDirective(mode: LocationUsageMode): string | null {
  * `REFERENCE_ROLE_PRESETS["wired-location"]`, so the phrasing stays curated.
  */
 function locationModeToRole(mode: string | null | undefined): string {
-  switch (mode) {
-    case "style":
-      return "style"
-    case "layout":
-      return "layout"
-    default:
-      return defaultRoleForSource("wired-location")
-  }
+  return roleBearingLocationMode(mode) ?? defaultRoleForSource("wired-location")
+}
+
+/**
+ * The ROLE a location usage mode expresses, or `null` when the mode expresses no
+ * role opinion at all. Splits the 4-mode enum the way the character chain splits
+ * `USAGE_MODES`: `style` / `layout` SAY what the reference is, while `identical`
+ * (which IS `DEFAULT_LOCATION_USAGE_MODE`) and `none` are directive-only — they
+ * say how the LEGACY bullet reads, not what the model should take from the
+ * image. Only a role-bearing mode may outrank a ref-level `defaultRole`; see
+ * `resolveLocationRole`.
+ *
+ * Data-driven rather than a hardcoded pair: a mode is role-bearing exactly when
+ * it is itself a member of `REFERENCE_ROLE_PRESETS["wired-location"]` — the same
+ * test the location pill runs (`LOCATION_ROLE_PRESETS.includes(attrs.usageMode)`)
+ * to decide whether a mode-slot value should surface as the pill's hybrid role,
+ * and the same shape as the character resolver's `presets.includes(segment)`. A
+ * mode added to both lists later is role-bearing on its own, with no list here
+ * to remember to update.
+ */
+function roleBearingLocationMode(mode: string | null | undefined): string | null {
+  const m = mode?.trim()
+  if (!m) return null
+  return REFERENCE_ROLE_PRESETS["wired-location"].includes(m) ? m : null
 }
 
 /**
@@ -497,11 +513,23 @@ function locationModeToRole(mode: string | null | undefined): string {
  *   1. the per-mention token ROLE (`@lib:1:atmosphere`, `@lib:1:x/y:lighting`) —
  *      verbatim, slug-normalized so the non-noun specials still hit
  *      (`empty-background` → `empty background`).
- *   2. the per-mention token MODE (`@lib:1:style`) → `locationModeToRole`.
+ *   2. the per-mention token MODE, but ONLY when it is ROLE-BEARING
+ *      (`@lib:1:style`, `@lib:1:layout` — `roleBearingLocationMode`).
  *   3. the ref's own `defaultRole` — the node/caller's hybrid role pick, same
  *      slug normalization as (1).
  *   4. the ref's legacy `defaultUsageMode` → `locationModeToRole`.
  *   5. the source default (`locationModeToRole`'s fallback — `"location"`).
+ *
+ * Step 2 is GATED for the same reason the character chain gates its segment on
+ * `presets.includes(segment)`: `identical` and `none` express no role opinion —
+ * `identical` IS `DEFAULT_LOCATION_USAGE_MODE`, the un-roled state, and the
+ * location pill's `renderText` emits a mode segment whenever the attr is set, so
+ * an ungated step 2 would let a round-tripped `@lib:1:identical` suppress the
+ * very `defaultRole` this chain exists to honor — on the majority of real
+ * tokens. A directive-only mode therefore falls THROUGH to the ref's role, the
+ * same way a character's `identical` / `name` / `none` segment falls through to
+ * `resolveDefaultRole`. With no `defaultRole` the outcome is unchanged
+ * (`identical` → step 4 → the source default, `"location"`).
  *
  * Step 3 is what this exists for. `ConnectedReference.defaultRole` is on the
  * wire schema for EVERY source, and the character and named-image mention paths
@@ -511,8 +539,9 @@ function locationModeToRole(mode: string | null | undefined): string {
  * mention's 3rd segment is a bucket/variant or a role, so a caller cannot pin a
  * per-mention role AND keep the canonical image, and the character trick of a
  * 4th segment needs a variant to sit in the third. An explicit token role or
- * mode still wins (steps 1–2); with no `defaultRole` the chain collapses to
- * exactly the old `t.usageMode ?? defaultUsageMode ?? DEFAULT` derivation.
+ * role-bearing mode still wins (steps 1–2); with no `defaultRole` the chain
+ * collapses to exactly the old `t.usageMode ?? defaultUsageMode ?? DEFAULT`
+ * derivation.
  */
 function resolveLocationRole(
   tokenRole: string | null | undefined,
@@ -521,7 +550,8 @@ function resolveLocationRole(
 ): string {
   const explicitRole = tokenRole?.trim()
   if (explicitRole) return normalizeRoleSlug(explicitRole)
-  if (tokenUsageMode) return locationModeToRole(tokenUsageMode)
+  const modeRole = roleBearingLocationMode(tokenUsageMode)
+  if (modeRole) return modeRole
   const nodeRole = ref.defaultRole?.trim()
   if (nodeRole) return normalizeRoleSlug(nodeRole)
   return locationModeToRole(ref.defaultUsageMode ?? DEFAULT_LOCATION_USAGE_MODE)
@@ -700,10 +730,11 @@ interface ResolveLocationMentionsHybridResult {
  * diverges between formats — only the rendered phrasing differs.
  *
  * ROLE is `resolveLocationRole(t.role, t.usageMode, ref)` — per-mention role →
- * per-mention mode → the ref's own `defaultRole` → its `defaultUsageMode` → the
- * source default. So a node whose default mode is "style" renders "the style
- * from …" for a bare `@old-library:1`, and one carrying `defaultRole: "atmosphere"`
- * renders "the atmosphere from …".
+ * per-mention ROLE-BEARING mode (`style` / `layout`; the directive-only
+ * `identical` / `none` fall through) → the ref's own `defaultRole` → its
+ * `defaultUsageMode` → the source default. So a node whose default mode is
+ * "style" renders "the style from …" for a bare `@old-library:1`, and one
+ * carrying `defaultRole: "atmosphere"` renders "the atmosphere from …".
  *
  * SLOT/LETTER: a URL's 1-based position in `dedup([...existingUrls,
  * ...mentionUrls])`. The caller passes `existingUrls = [base refs, resolved
@@ -754,8 +785,8 @@ function resolveLocationMentionsHybrid(
     // A bare-slug ROLE (Unified Reference Roles, Phase D — e.g. `background`,
     // `empty-background`, `as-is`, or a curated custom role) is used VERBATIM:
     // it's acting as a role, not selecting a bucket/variant. With no role
-    // segment, the chain falls through the token's mode, then the REF's own
-    // `defaultRole`, then its usage mode — see `resolveLocationRole`.
+    // segment, the chain falls through the token's ROLE-BEARING mode, then the
+    // REF's own `defaultRole`, then its usage mode — see `resolveLocationRole`.
     const role = resolveLocationRole(t.role, t.usageMode, match)
     matched.push({ token: t.token, offset: t.offset, url: match.url, role })
   }

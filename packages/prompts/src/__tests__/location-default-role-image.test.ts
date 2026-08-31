@@ -49,9 +49,47 @@ describe("location @-mention honors the ref defaultRole for un-roled tokens", ()
       .toContain("the lighting from reference image A")
   })
 
-  it("an explicit token MODE still overrides the ref defaultRole", () => {
+  it("an explicit ROLE-BEARING token MODE still overrides the ref defaultRole", () => {
     expect(build("@old-library:1:layout a chase scene", { defaultRole: "atmosphere" }))
       .toContain("the layout from reference image A")
+  })
+
+  it("the other role-bearing mode (style) overrides it too", () => {
+    expect(build("@old-library:1:style a chase scene", { defaultRole: "atmosphere" }))
+      .toContain("the style from reference image A")
+  })
+
+  // `identical` and `none` express no role opinion — `identical` IS
+  // `DEFAULT_LOCATION_USAGE_MODE` (the un-roled state) and the location pill's
+  // `renderText` emits a mode segment whenever the attr is set, so an ungated
+  // mode step would let a round-tripped `@old-library:1:identical` suppress the
+  // ref-level role on the MAJORITY of real tokens. The character chain already
+  // falls through for its directive-only modes (identical / name / none) — this
+  // is the same rule, and `roleBearingLocationMode` runs the same
+  // `presets.includes(...)` test the character resolver and the pill view use.
+  it("a directive-only token mode (:identical) falls THROUGH to the ref defaultRole", () => {
+    expect(build("@old-library:1:identical a chase scene", { defaultRole: "atmosphere" }))
+      .toContain("the atmosphere from reference image A")
+  })
+
+  it("a directive-only token mode (:none) falls THROUGH to the ref defaultRole", () => {
+    expect(build("@old-library:1:none a chase scene", { defaultRole: "atmosphere" }))
+      .toContain("the atmosphere from reference image A")
+  })
+
+  it("matches the character chain: a directive-only segment never beats the ref role", () => {
+    const location = build("@old-library:1:identical a chase scene", { defaultRole: "atmosphere" })
+    const character = buildImagePrompt({
+      provider: "nano-banana-pro",
+      referenceFormat: "hybrid",
+      prompt: "@kira:1:identical a chase scene",
+      connectedReferences: [{
+        id: "c", defaultName: "Kira", source: "wired-character",
+        url: "https://cdn/kira.png", characterSlug: "kira", defaultRole: "clothes",
+      }],
+    }).prompt
+    expect(location).toContain("the atmosphere from reference image A")
+    expect(character).toContain("the clothes from reference image A")
   })
 
   it("defaultRole beats a legacy defaultUsageMode on the same ref", () => {
@@ -79,6 +117,21 @@ describe("location canonical fallback honors the ref defaultRole", () => {
 describe("NO defaultRole → byte-identical to the pre-change derivation", () => {
   it("bare mention, no ref-level defaults → the source default", () => {
     expect(build("@old-library:1 a chase scene")).toBe(
+      "the location from reference image A a chase scene",
+    )
+  })
+
+  // Gating step 2 on role-bearing modes changes nothing when there is no
+  // `defaultRole` to fall through to: `:identical` lands on step 4 → the source
+  // default, the same string the ungated step 2 produced.
+  it("':identical' with no ref-level defaults → the source default, unchanged", () => {
+    expect(build("@old-library:1:identical a chase scene")).toBe(
+      "the location from reference image A a chase scene",
+    )
+  })
+
+  it("':none' with no ref-level defaults → the source default, unchanged", () => {
+    expect(build("@old-library:1:none a chase scene")).toBe(
       "the location from reference image A a chase scene",
     )
   })
