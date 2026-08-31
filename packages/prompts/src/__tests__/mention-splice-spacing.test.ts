@@ -86,6 +86,57 @@ describe("mention splice — seam whitespace", () => {
   })
 })
 
+// The `{image:N:label}` positional pill is a mention chip like any other:
+// `buildRefPillNodes` appends its own trailing space to EVERY pill it builds,
+// the positional `imageRef` node included. Its hybrid expansion used a raw
+// `.replace`, so the same doubled space survived on this path after the three
+// `@`-mention resolvers were fixed.
+describe("mention splice — the {image:N:label} positional pill", () => {
+  const hat: ConnectedReference = {
+    id: "n1", defaultName: "Hat", source: "wired-image", url: "https://cdn/hat.png",
+  }
+  const coat: ConnectedReference = {
+    id: "n2", defaultName: "Coat", source: "wired-image", url: "https://cdn/coat.png",
+  }
+  const buildTokens = (prompt: string, refs: readonly ConnectedReference[]) => buildImagePrompt({
+    prompt,
+    connectedReferences: [...refs],
+    referenceImageUrls: refs.map((r) => r.url!),
+    provider: "nano-banana-pro",
+    referenceFormat: "hybrid",
+  }).prompt
+
+  it("collapses the trailing seam the pill's own space creates", () => {
+    expect(buildTokens("a man wearing {image:1:hat}  in the park", [hat])).toBe(
+      "A man wearing the hat from reference image A in the park",
+    )
+  })
+
+  it("the already-single-spaced prompt is byte-identical", () => {
+    expect(buildTokens("a man wearing {image:1:hat} in the park", [hat])).toBe(
+      "A man wearing the hat from reference image A in the park",
+    )
+  })
+
+  it("two pills in one sentence both splice cleanly (right-to-left offsets stay valid)", () => {
+    expect(buildTokens("a man wearing {image:1:hat}  and  {image:2:coat}  walks", [hat, coat])).toBe(
+      "A man wearing the hat from reference image A and the coat from reference image B walks",
+    )
+  })
+
+  it("leaves a doubled space the author put in their own prose alone", () => {
+    expect(buildTokens("{image:1:hat} worn  loosely", [hat])).toBe(
+      "The hat from reference image A worn  loosely",
+    )
+  })
+
+  it("an out-of-range token stays visible, and its whitespace with it", () => {
+    expect(buildTokens("a man wearing {image:7:hat}  in the park", [hat])).toContain(
+      "{image:7:hat}  in the park",
+    )
+  })
+})
+
 // Indentation is structure, not a seam. A run that OPENS a line is the author's
 // layout (a shot list, a numbered beat sheet), so the leading collapse is
 // anchored to prose on the same line via `(?<=\S)`. Without that anchor a

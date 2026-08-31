@@ -209,7 +209,9 @@ export function resolveCharacterMentions(
 /**
  * Splice one resolved mention phrase in for its token, collapsing the horizontal
  * whitespace ON EITHER SIDE OF THE SEAM to a single space. The single splice
- * primitive for the three HYBRID image mention resolvers.
+ * primitive for every HYBRID image mention splice — the three `@`-mention
+ * resolvers (character, location, named image) and the `{image:N:label}`
+ * positional-pill expansion (`expandImageRefTokensHybrid`).
  *
  * WHY: an editor serializes a mention chip as its token plus its own trailing
  * space, and the prose that follows the chip carries the space the author typed
@@ -3041,21 +3043,48 @@ function hybridRolePhrase(label: string, letter: string): string {
   return `the ${label} from reference image ${letter}`
 }
 
-/** Like `expandImageRefTokensForRefs`, but emits the hybrid lettered phrase
- *  ("the subject from reference image A") instead of the legacy "Image N
- *  (label)". Out-of-range tokens / URL-less refs are left untouched. */
+/**
+ * Like `expandImageRefTokensForRefs`, but emits the hybrid lettered phrase
+ * ("the subject from reference image A") instead of the legacy "Image N
+ * (label)". Out-of-range tokens / URL-less refs are left untouched — visible so
+ * the author can fix them.
+ *
+ * A `{image:N:label}` pill is a mention chip like any other: `buildRefPillNodes`
+ * appends its own trailing space to EVERY pill it builds, the positional
+ * `imageRef` node included, so `a man wearing {image:1:hat}  in the park` is the
+ * ordinary shape and it expanded to "…the hat from reference image A  in the
+ * park". Splice through `spliceMentionPhrase` for the same seam tidy the three
+ * `@`-mention resolvers use, right-to-left over offsets taken against the
+ * pre-splice string (its OFFSET SAFETY note covers exactly this loop). The
+ * legacy `expandImageRefTokensForRefs` keeps its raw `.replace` — legacy output
+ * is pinned byte-identical.
+ */
 function expandImageRefTokensHybrid(
   prompt: string,
   refs: readonly ConnectedReference[],
   finalIndexByUrl: ReadonlyMap<string, number>,
 ): string {
-  return prompt.replace(IMAGE_TOKEN_PATTERN, (match, num, label) => {
-    const n = parseInt(num, 10)
+  const splices: Array<{ offset: number; length: number; phrase: string }> = []
+  for (const m of prompt.matchAll(IMAGE_TOKEN_PATTERN)) {
+    const n = parseInt(m[1], 10)
     const ref = refs[n - 1]
     const finalIdx = ref?.url ? finalIndexByUrl.get(ref.url) : undefined
-    if (!finalIdx) return match
-    return hybridRolePhrase((label ?? "").trim(), slotToLetter(finalIdx))
-  })
+    if (!finalIdx) continue
+    splices.push({
+      offset: m.index ?? 0,
+      length: m[0].length,
+      phrase: hybridRolePhrase((m[2] ?? "").trim(), slotToLetter(finalIdx)),
+    })
+  }
+
+  // `matchAll` yields ascending offsets; splice back-to-front so the
+  // not-yet-applied (smaller) offsets stay valid.
+  let resolved = prompt
+  for (let i = splices.length - 1; i >= 0; i--) {
+    const s = splices[i]
+    resolved = spliceMentionPhrase(resolved, s.offset, s.length, s.phrase)
+  }
+  return resolved
 }
 
 /** Capitalize the first alphabetic character of a string (line-initial). */
