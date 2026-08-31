@@ -974,9 +974,9 @@ the picture belongs instead of relying on the trailing auto-attach block.
 - **`~lock` / `~nolock`** work here exactly as on character and location
   mentions (`@town:1:background~lock`): a trailing sentinel forces that
   reference's identity lock on or off for that mention.
-- **Precedence is character → location → image.** A name shared by a character
-  and an image resolves as the character. Duplicate image names bind
-  first-wins.
+- **Precedence is character → location → image → creature → object.** A name
+  shared by a character and an image resolves as the character. Duplicate names
+  within one kind bind first-wins.
 - **A name that can't be a slug is never mentionable** — `"3D Render"` slugs to
   `3d-render`, which starts with a digit and is outside the grammar, so no
   token can bind it. Rename the reference to mention it.
@@ -988,6 +988,37 @@ the picture belongs instead of relying on the trailing auto-attach block.
 Mentioning a reference **re-seats** it: its URL moves from the trailing
 auto-attach block into the mention block, which re-letters the references after
 it. That is the point of the feature — the letters follow the sentence.
+
+### Naming a creature or object in the prompt (same grammar)
+
+`source: "wired-creature"` and `source: "wired-object"` entries use the **same
+grammar**, the same slug derivation from `defaultName`, the same `~lock` /
+`~nolock` sentinels, and the same hybrid-only, capped-ref and unmentionable-slug
+rules as the media mention above. Two things differ:
+
+- **The roles are the entity sets** — creature: `creature`, `anatomy`,
+  `markings`, `pose`, `color`, `style`; object: `object`, `shape`, `material`,
+  `color`, `texture`, `style` — or any custom single-word role, verbatim. Omit
+  the role and the entry's `defaultRole` applies; with neither you get the
+  source default, `the creature from …` / `the object from …`.
+- **A mention SUPPRESSES that entry's trailing auto-attach phrase.** Unlike a
+  media reference, an unmentioned creature or object already contributes a
+  trailing line (`the creature from reference image D`). Without a mention the
+  entity's *name* sits in your prose as plain text while its binding dangles at
+  the end — two halves of one intent. Mention it and the phrase renders once,
+  inline, where you typed it.
+
+```jsonc
+{
+  "prompt": "a wide shot of @nessie:1 rising beside @dock:2:material",
+  "connectedReferences": [
+    { "id": "cr-1", "defaultName": "Nessie", "source": "wired-creature", "url": "https://…/nessie.png" },
+    { "id": "ob-1", "defaultName": "Dock",   "source": "wired-object",   "url": "https://…/dock.png" }
+  ]
+}
+// → "a wide shot of the creature from reference image A rising beside
+//    the material from reference image B"
+```
 
 ### Reference lock (`referenceLock`) on generate-image
 

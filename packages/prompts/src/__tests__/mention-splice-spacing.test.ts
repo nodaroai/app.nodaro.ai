@@ -178,3 +178,80 @@ describe("mention splice — line-initial indentation survives", () => {
     )
   })
 })
+
+// Wired CREATURE / OBJECT mentions (`@<name-slug>:<index>[:<role>]`) are chips
+// too — `buildRefPillNodes` gives them the same trailing space every other pill
+// gets — so their resolver splices through `spliceMentionPhrase` alongside the
+// character, location and named-image ones. Without that, the seam bug would
+// have been fixed for three mention kinds and reintroduced by the fourth.
+describe("mention splice — wired creature / object mentions", () => {
+  const nessie: ConnectedReference = {
+    id: "cr1", defaultName: "Nessie", source: "wired-creature", url: "https://cdn/nessie.png",
+  }
+  const chair: ConnectedReference = {
+    id: "ob1", defaultName: "Chair", source: "wired-object", url: "https://cdn/chair.png",
+  }
+
+  /** BOTH entities are mentioned in every case, so neither appends a trailing
+   *  canonical phrase and the assertions stay byte-exact on one line. */
+  const buildEntities = (prompt: string) => buildImagePrompt({
+    prompt,
+    connectedReferences: [nessie, chair],
+    provider: "nano-banana-pro",
+    referenceFormat: "hybrid",
+  }).prompt
+
+  const ENTITIES_EXPECTED =
+    "the creature from reference image A looms over "
+    + "the object from reference image B in the fog"
+
+  it("collapses the seam whitespace the chips' own trailing spaces create", () => {
+    expect(buildEntities("@nessie:1  looms over @chair:2  in the fog")).toBe(ENTITIES_EXPECTED)
+  })
+
+  it("the already-single-spaced prompt is byte-identical (the collapse needs a 2+ run)", () => {
+    expect(buildEntities("@nessie:1 looms over @chair:2 in the fog")).toBe(ENTITIES_EXPECTED)
+  })
+
+  it("collapses on the LEADING side of an entity seam too", () => {
+    expect(buildEntities("@nessie:1 looms over  @chair:2 in the fog")).toBe(ENTITIES_EXPECTED)
+  })
+
+  it("never emits a doubled space, whichever side of the chip carries it", () => {
+    for (const prompt of [
+      "@nessie:1  looms over @chair:2 in the fog",
+      "@nessie:1 looms over  @chair:2 in the fog",
+      "@nessie:1   looms over   @chair:2   in the fog",
+    ]) {
+      expect(buildEntities(prompt)).toBe(ENTITIES_EXPECTED)
+    }
+  })
+
+  it("a ROLE segment splices the same way", () => {
+    expect(buildEntities("@nessie:1:markings  over @chair:2:material  in the fog")).toBe(
+      "the markings from reference image A over "
+      + "the material from reference image B in the fog",
+    )
+  })
+
+  it("leaves a doubled space the author put in their own prose alone (seam-scoped)", () => {
+    expect(buildEntities("@nessie:1 looms  slowly over @chair:2 in the fog")).toBe(
+      "the creature from reference image A looms  slowly over "
+      + "the object from reference image B in the fog",
+    )
+  })
+
+  it("preserves newlines — the collapse class is horizontal-only", () => {
+    expect(buildEntities("@nessie:1  looms\n\n@chair:2  in the fog")).toBe(
+      "the creature from reference image A looms\n\n"
+      + "the object from reference image B in the fog",
+    )
+  })
+
+  it("an entity mention that opens an indented line keeps the indent verbatim", () => {
+    expect(buildEntities("Scene:\n    @nessie:1  looms over @chair:2 in the fog")).toBe(
+      "Scene:\n    the creature from reference image A looms over "
+      + "the object from reference image B in the fog",
+    )
+  })
+})
