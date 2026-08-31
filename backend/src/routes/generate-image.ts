@@ -13,7 +13,7 @@ import { insertJobIdempotent } from "../lib/insert-job.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { IMAGE_GEN_PROVIDERS, T2I_TO_I2I_VARIANT, FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING, resolveImageGenCreditIdentifier } from "@nodaro/shared"
-import { assembleImageInput, type AssembleImageInput, type BuildImagePromptResult } from "@nodaro/prompts"
+import { assembleImageInput, REFERENCE_RULES, REFERENCE_RULES_MULTI_PERSON, type AssembleImageInput, type BuildImagePromptResult } from "@nodaro/prompts"
 import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
 import { directionSchema } from "../lib/direction-schema.js"
 import { backendHybridRoles } from "../lib/reference-format.js"
@@ -124,6 +124,16 @@ export const generateImageBody = z.object({
   referenceOrder: z.array(z.string()).max(14).optional(),
   direction: directionSchema.optional(),
   structured: structuredPromptFieldsSchema.optional(),
+  // Reference-lock TOKEN (D5, studio spec 2026-08-30-structured-prompt-assembly):
+  // an id, not text — the route maps it to the platform's MEASURED lock wording
+  // (reference-rules.ts), so improved wording reaches every client without a
+  // client release. "standard" = REFERENCE_RULES (default-deny + likeness +
+  // compose; the population winner); "multi-person" = the face-clause variant
+  // (reach for it when two faces are in play). Honored by the HYBRID format's
+  // lock-snippet slot; inert under legacy (which has no snippet slot) and
+  // without references to govern. Free-text lock wording is deliberately NOT
+  // accepted on the wire — the wording is platform-owned (D2).
+  referenceLock: z.enum(["standard", "multi-person"]).optional(),
   characterDescriptions: z.array(z.string().max(500)).max(10).optional(),
   // `flux-lora-character` is an internal-only provider id selected when a
   // single trained @character is mentioned. It does NOT appear in
@@ -232,6 +242,7 @@ function buildAssembleInput(
     referenceOrder?: AssembleImageInput["referenceOrder"]
     direction?: AssembleImageInput["direction"]
     structured?: AssembleImageInput["structured"]
+    referenceLock?: "standard" | "multi-person"
     referenceImageUrls?: string[]
     negativePrompt?: string
   },
@@ -253,6 +264,14 @@ function buildAssembleInput(
     ...(body.referenceOrder !== undefined ? { referenceOrder: body.referenceOrder } : {}),
     ...(body.direction !== undefined ? { direction: body.direction } : {}),
     ...(body.structured !== undefined ? { structured: body.structured } : {}),
+    // The lock TOKEN resolves to the measured constant HERE, server-side —
+    // clients never carry the wording (see the schema comment).
+    ...(body.referenceLock !== undefined
+      ? {
+          referenceLockSnippet:
+            body.referenceLock === "multi-person" ? REFERENCE_RULES_MULTI_PERSON : REFERENCE_RULES,
+        }
+      : {}),
     // The flat `referenceImageUrls` doubles as `extraReferenceImageUrls` so it
     // rides the SAME per-provider reference gate + ordering as
     // `connectedReferences`.
