@@ -122,15 +122,18 @@ describe("getLanguagesForModel", () => {
     expect(langs).toHaveLength(32)
   })
 
-  it("first language is always English", () => {
+  it("every list is alphabetical by label — release order was unfindable at 46 entries", () => {
+    // Replaces "first language is always English": ABC ordering (user request,
+    // 2026-08-31) puts English under E, predictably, instead of pinning it first.
     for (const provider of [
       "elevenlabs-multilingual",
       "elevenlabs-turbo",
       "elevenlabs-v3",
       undefined,
     ]) {
-      const langs = getLanguagesForModel(provider)
-      expect(langs[0]).toEqual({ value: "en", label: "English" })
+      const labels = getLanguagesForModel(provider).map((l) => l.label)
+      expect(labels).toEqual([...labels].sort((a, b) => a.localeCompare(b)))
+      expect(labels).toContain("English")
     }
   })
 })
@@ -150,6 +153,11 @@ describe("ALL_LANGUAGES", () => {
 
   it("contains Hungarian (hu) - Flash v2.5 extra language", () => {
     expect(ALL_LANGUAGES.some((l) => l.value === "hu")).toBe(true)
+  })
+
+  it("is alphabetical by label — the dropdowns render it verbatim", () => {
+    const labels = ALL_LANGUAGES.map((l) => l.label)
+    expect(labels).toEqual([...labels].sort((a, b) => a.localeCompare(b)))
   })
 })
 

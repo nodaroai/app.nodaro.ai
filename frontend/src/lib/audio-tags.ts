@@ -182,16 +182,23 @@ const V3_EXTRA_LANGUAGES: LanguageOption[] = [
   { value: "sw", label: "Swahili" },
 ]
 
+/** Display order is ALPHABETICAL BY LABEL, everywhere a language list renders —
+ *  the per-model blocks above stay in capability order (that grouping is their
+ *  meaning), but a 46-item dropdown in release order is unfindable (user
+ *  report, 2026-08-31). Always sort a COPY: two of the returns below would
+ *  otherwise mutate the source blocks. */
+const byLabel = (a: LanguageOption, b: LanguageOption) => a.label.localeCompare(b.label)
+
 /** Get languages supported by the given TTS provider */
 export function getLanguagesForModel(provider?: string): LanguageOption[] {
   if (provider === "elevenlabs-v3") {
-    return [...MULTILINGUAL_V2_LANGUAGES, ...FLASH_V25_EXTRA, ...V3_EXTRA_LANGUAGES]
+    return [...MULTILINGUAL_V2_LANGUAGES, ...FLASH_V25_EXTRA, ...V3_EXTRA_LANGUAGES].sort(byLabel)
   }
   if (provider === "elevenlabs-multilingual") {
-    return MULTILINGUAL_V2_LANGUAGES
+    return [...MULTILINGUAL_V2_LANGUAGES].sort(byLabel)
   }
   // Default: elevenlabs-turbo (Flash v2.5)
-  return [...MULTILINGUAL_V2_LANGUAGES, ...FLASH_V25_EXTRA]
+  return [...MULTILINGUAL_V2_LANGUAGES, ...FLASH_V25_EXTRA].sort(byLabel)
 }
 
 /** All languages across all models — used for voice browser library filter */
@@ -199,4 +206,4 @@ export const ALL_LANGUAGES: LanguageOption[] = [
   ...MULTILINGUAL_V2_LANGUAGES,
   ...FLASH_V25_EXTRA,
   ...V3_EXTRA_LANGUAGES,
-]
+].sort(byLabel)

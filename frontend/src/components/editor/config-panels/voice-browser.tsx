@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { FitText } from "@/components/ui/fit-text"
 import { ALL_LANGUAGES } from "@/lib/audio-tags"
+import { LanguageSearchSelect } from "@/components/editor/config-panels/language-search-select"
 import { useVoices } from "@/hooks/use-voices"
 import { useVoiceLibraryInfinite } from "@/hooks/use-voices"
 import { useVoiceClones, useCreateVoiceClone, useDeleteVoiceClone } from "@/hooks/use-voice-clones"
@@ -125,7 +126,10 @@ function capitalize(s: string): string {
 
 export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomVoices, triggerAriaLabel }: VoiceBrowserProps) {
   const [open, setOpen] = useState(false)
-  const [tab, setTab] = useState<TabId>(showCustomVoices ? "my-voices" : "premade")
+  // The Voice Library opens first: thousands of voices with the full filter set
+  // (language, tone, …) against a couple dozen premades — it is where the right
+  // voice actually gets found.
+  const [tab, setTab] = useState<TabId>("library")
 
   // -- Premade tab state --
   const [premadeSearch, setPremadeSearch] = useState("")
@@ -145,7 +149,10 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
   const [libraryLanguage, setLibraryLanguage] = useState("All")
   const [libraryUseCase, setLibraryUseCase] = useState("All")
   const [libraryDescriptive, setLibraryDescriptive] = useState("All")
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
+  // OPEN by default: accent / age / language / use-case / tone are how the right
+  // voice is found — hiding them behind a toggle read as "no language filter".
+  // The toggle stays so the block can be collapsed on small screens.
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(true)
 
   const hasActiveAdvancedFilters = libraryAccent !== "All" || libraryAge !== "All" || libraryLanguage !== "All" || libraryUseCase !== "All" || libraryDescriptive !== "All"
 
@@ -294,7 +301,7 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
 
   const displayLabel = valueLabel || value || "Select voice"
 
-  const tabs: TabId[] = showCustomVoices ? ["my-voices", "premade", "library"] : ["premade", "library"]
+  const tabs: TabId[] = showCustomVoices ? ["library", "my-voices", "premade"] : ["library", "premade"]
   const tabLabels: Record<TabId, string> = {
     "my-voices": "My Voices",
     premade: "Premade",
@@ -538,17 +545,17 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
                       ))}
                     </SelectContent>
                   </Select>
-                  <Select value={libraryLanguage} onValueChange={(v) => { setLibraryLanguage(v) }}>
-                    <SelectTrigger className="h-7 text-xs flex-1">
-                      <SelectValue placeholder="Language" />
-                    </SelectTrigger>
-                    <SelectContent className={FILTER_SELECT_Z}>
-                      <SelectItem value="All">All languages</SelectItem>
-                      {ALL_LANGUAGES.map((l) => (
-                        <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {/* Searchable — 46 languages is past what a plain menu can offer;
+                      the portal rides FILTER_SELECT_Z like the sibling menus so it
+                      clears this dialog (see the stacking note at the top). */}
+                  <LanguageSearchSelect
+                    value={libraryLanguage}
+                    onChange={setLibraryLanguage}
+                    options={ALL_LANGUAGES}
+                    allLabel="All languages"
+                    className="flex-1"
+                    zClassName={FILTER_SELECT_Z}
+                  />
                 </div>
                 <div className="flex gap-2">
                   <Select value={libraryUseCase} onValueChange={(v) => { setLibraryUseCase(v) }}>
