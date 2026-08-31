@@ -11,9 +11,10 @@ import type { ConnectedReference } from "@nodaro/shared"
  * the provider cap's ORDER-BLIND tail cut can reach anything that matters.
  *
  * The failure this pins (filed as a follow-up on the direction-registry PR): a
- * maximal image-surface `direction` renders ~1.2K characters of clauses, which
- * on a low-cap provider (seedream = 3000) pushes the assembled prompt past the
- * cap. `buildImagePrompt` then cuts the TAIL — and in the hybrid reference
+ * TRULY maximal image-surface `direction` renders ~3.3K characters of clauses —
+ * the broad-but-not-maximal fold below renders ~1.2K, which is already enough
+ * to push the assembled prompt past a low-cap provider (seedream = 3000).
+ * `buildImagePrompt` then cuts the TAIL — and in the hybrid reference
  * format the trailing canonical role phrase ("the location from reference image
  * B") sits AFTER the folded hints, so the cut severs a REFERENCE BINDING while
  * decorative hint clauses survive. The assembler knows which clauses are hints
