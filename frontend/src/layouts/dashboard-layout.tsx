@@ -7,6 +7,8 @@ import { SidebarProvider } from "@/components/layout/sidebar-context"
 import { useLoadUserSettings } from "@/hooks/use-load-user-settings"
 import { useAuth } from "@/hooks/use-auth"
 import { useEmbedSessionHandoff, isEmbedded } from "@/hooks/use-embed-session-handoff"
+import { loadSurfaceAvailability } from "@/lib/surface-availability"
+import { getAuthHeaders } from "@/lib/api"
 
 export default function DashboardLayout() {
   const { user, loading: authLoading } = useAuth()
@@ -38,6 +40,14 @@ export default function DashboardLayout() {
       navigate("/login", { replace: true })
     }
   }, [authLoading, user, awaitingHandoff, navigate])
+
+  // B5: fetch the effective node/model availability once per session — the
+  // admin runtime override can't ride the static /config.js profile, so the
+  // picker / model-dropdown filters read this fetched set (profile deny is
+  // their pre-fetch fallback; the backend refuses denied types regardless).
+  useEffect(() => {
+    if (!authLoading && user) void loadSurfaceAvailability(getAuthHeaders)
+  }, [authLoading, user])
 
   // After OAuth login, check for a pending plan selection and redirect to pricing
   useEffect(() => {

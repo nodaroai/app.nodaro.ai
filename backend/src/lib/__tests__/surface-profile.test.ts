@@ -126,7 +126,7 @@ describe("refineSurfaceEdition — narrows, never widens", () => {
   it("leaves deny/hide (subtractive fields) untouched — they can only narrow", () => {
     const refined = refineSurfaceEdition({
       ...SURFACE_PROFILE_DEFAULT,
-      nodes: { deny: ["social-publish"] },
+      nodes: { deny: ["social-publish"], allow: [] },
       nav: { hide: ["gallery"] },
     })
     expect(refined.nodes.deny).toEqual(["social-publish"])

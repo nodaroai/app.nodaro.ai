@@ -64,8 +64,8 @@ export interface SurfaceBilling {
 export interface SurfaceProfile {
   nav: { hide: NavKey[] }
   dashboard: { tabs: DashboardTabKey[] }
-  nodes: { deny: string[] }
-  models: { deny: string[] }
+  nodes: { deny: string[]; allow: string[] }
+  models: { deny: string[]; allow: string[] }
   auth: { methods: AuthMethod[]; ssoLabel?: string }
   siblings: { apps: SurfaceSibling[] }
   brand: { productName: string; description?: string; wordmark?: string }
@@ -79,8 +79,8 @@ export interface SurfaceProfile {
 export const SURFACE_PROFILE_DEFAULT: SurfaceProfile = {
   nav: { hide: [] },
   dashboard: { tabs: [] },
-  nodes: { deny: [] },
-  models: { deny: [] },
+  nodes: { deny: [], allow: [] },
+  models: { deny: [], allow: [] },
   auth: { methods: [] },
   siblings: { apps: [] },
   brand: { productName: "Nodaro" },
@@ -218,8 +218,8 @@ function coherentBilling(raw: { costTab: "inherit" | "hidden"; sidebarCard: "inh
 export const SurfaceProfileSchema: z.ZodType<SurfaceProfile> = z.object({
   nav: z.object({ hide: knownEnumArray(NAV_KEYS.options) }).catch({ hide: [] }),
   dashboard: z.object({ tabs: knownEnumArray(TAB_KEYS.options) }).catch({ tabs: [] }),
-  nodes: z.object({ deny: stringArray() }).catch({ deny: [] }),
-  models: z.object({ deny: stringArray() }).catch({ deny: [] }),
+  nodes: z.object({ deny: stringArray(), allow: stringArray() }).catch({ deny: [], allow: [] }),
+  models: z.object({ deny: stringArray(), allow: stringArray() }).catch({ deny: [], allow: [] }),
   auth: z
     .object({ methods: knownEnumArray(AUTH_METHODS.options), ssoLabel: z.string().optional() })
     .catch({ methods: [] }),

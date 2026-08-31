@@ -31,6 +31,7 @@ import {
   Blocks,
   Building2,
   Inbox,
+  ToggleRight,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -55,6 +56,7 @@ const ADMIN_NAV = [
   { href: "/admin/alerts", label: "Alerts", icon: Bell },
   { href: "/admin/models", label: "Models", icon: Cpu },
   { href: "/admin/node-defaults", label: "Node Defaults", icon: Sliders },
+  { href: "/admin/availability", label: "Availability", icon: ToggleRight },
   { href: "/admin/llm-models", label: "LLM Models", icon: BrainCircuit },
   { href: "/admin/miniapps", label: "MiniApps", icon: AppWindow },
   { href: "/admin/client-apps", label: "Client Apps", icon: Blocks },

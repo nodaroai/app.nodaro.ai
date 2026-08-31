@@ -123,6 +123,7 @@ import { generateLocationAssetRoutes } from "./routes/generate-location-asset.js
 import { generateSurroundContinuationRoutes } from "./routes/generate-surround-continuation.js"
 import { generateLocationMotionRoutes } from "./routes/generate-location-motion.js"
 import { adminSettingsRoutes } from "./ee/routes/admin-settings.js"
+import { adminAvailabilityRoutes } from "./ee/routes/admin-availability.js"
 import { motionTransferRoutes } from "./routes/motion-transfer.js"
 import { videoUpscaleRoutes } from "./routes/video-upscale.js"
 import { faceSwapRoutes } from "./routes/face-swap.js"
@@ -151,6 +152,8 @@ import { billingRoutes } from "./ee/routes/billing.js"
 import { connectedInstancesRoutes } from "./ee/routes/connected-instances.js"
 import { galleryRoutes } from "./routes/gallery.js"
 import { runtimeSurfaceProfile, surfaceProfileFailedToLoad } from "./lib/surface-profile.js"
+import { loadAvailabilityOverrides } from "./lib/availability-override.js"
+import { surfaceAvailabilityRoutes } from "./routes/surface-availability.js"
 import { userSettingsRoutes } from "./routes/user-settings.js"
 import { meRoutes } from "./routes/me.js"
 import { adminGalleryReportsRoutes } from "./ee/routes/admin-gallery-reports.js"
@@ -314,6 +317,12 @@ export async function buildApp() {
     )
     process.exit(1)
   }
+
+  // B5: warm the admin availability-override cache. Non-blocking by design —
+  // a dead settings DB must not hang boot; until the read lands, requests
+  // serve the surface profile's FACTORY set (the deployment's safe baseline,
+  // same guarantee class as the 60s TTL drift between sibling instances).
+  await loadAvailabilityOverrides()
 
   const app = Fastify({
     // Same defaults as `logger: true`, plus a req serializer that redacts
@@ -487,6 +496,7 @@ export async function buildApp() {
   await app.register(generateSurroundContinuationRoutes)
   await app.register(generateLocationMotionRoutes)
   if (hasAdmin()) await app.register(adminSettingsRoutes)
+  if (hasAdmin()) await app.register(adminAvailabilityRoutes)
   await app.register(motionTransferRoutes)
   await app.register(videoUpscaleRoutes)
   await app.register(faceSwapRoutes)
@@ -561,6 +571,7 @@ export async function buildApp() {
   await app.register(llmStructuredRoutes)
   await app.register(shotsRoutes)
   await app.register(modelsRoutes)
+  await app.register(surfaceAvailabilityRoutes)
   await app.register(voicesRoutes)
   await app.register(heygenCatalogRoutes)
   await app.register(voiceCloneRoutes)

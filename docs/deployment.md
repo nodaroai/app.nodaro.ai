@@ -500,6 +500,15 @@ array empty = "keep the default"):
 - `nodes.deny` / `models.deny`: node types / model ids to remove everywhere — the
   picker, `GET /v1/nodes`, `GET /v1/models`, the MCP tools, and at run time (a
   denied node fails with `node_not_available`)
+- `nodes.allow` / `models.allow`: WHITELISTS — when non-empty, ONLY the listed
+  node types / model ids are offered (then `deny` still subtracts). The safer,
+  recommended shape for a curated deployment: a new platform node or model is
+  unavailable until the deployment lists it, instead of available by omission.
+  The inversion is scoped to gateable ids — utility nodes (`sticky-note`,
+  `preview`) and workflow-internal pseudo-types are never denied by omission,
+  only by an explicit `deny` entry. An admin can further adjust availability at
+  runtime from **Admin → Availability** (full list with per-item toggles); a
+  stored runtime override replaces this factory set until "Reset to factory".
 - `auth.methods`: `["email","google","sso"]` (plus `auth.ssoLabel`)
 - `siblings.apps`: `[{ "label": "...", "url": "..." }]` — replaces the Nodaro
   family links in the product switcher

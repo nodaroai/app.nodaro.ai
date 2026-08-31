@@ -1,6 +1,6 @@
 import { hasCredits } from "@/lib/edition"
 import { creditUnits, creditUnitLabel, formatCreditUnits } from "@/lib/credit-units"
-import { runtimeSurfaceProfile } from "@/lib/surface-profile"
+import { isModelUnavailable } from "@/lib/surface-availability"
 import { aspectRatioOptionsByKind, resolutionOptionsByKind, qualityOptionsByKind, durationsByMode, creditRangesAll, modelsWithFeature, isFlux2Model, isGvpSupportedProvider, isSeedance2Provider, GVP_SUPPORTED_PROVIDERS, VIDEO_GEN_COLLAPSED_T2V_IDS, type LabeledOption } from "@nodaro/shared"
 import { STYLES } from "@nodaro/prompts"
 import type { ImageGenProvider, ImageI2IProvider, ImageToVideoProvider, LipSyncProvider, MotionTransferProviderType, TextToVideoProvider, VideoGenProvider, VideoToVideoProvider } from "@nodaro/shared"
@@ -8,14 +8,15 @@ export { MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_
 export type { ImageMaskMode } from "@nodaro/shared"
 
 /**
- * Drop models the deployment surface profile denies (B1). Applied where a config
- * panel reads a `*_MODELS` registry, so a denied provider never renders in a
- * dropdown — the backend also hides it from discovery and rejects it at run.
- * Single source: never re-derive the deny list per dropdown.
+ * Drop models the deployment does not offer (B1 + B5). Applied where a config
+ * panel reads a `*_MODELS` registry, so an unavailable provider never renders
+ * in a dropdown — the backend also hides it from discovery and rejects it at
+ * run. Single source: never re-derive availability per dropdown. Reads the
+ * fetched EFFECTIVE set (surface-availability.ts: profile factory + admin
+ * override) with the static profile deny as the pre-fetch fallback.
  */
 export function withoutDeniedModels<T extends { value: string }>(models: readonly T[]): readonly T[] {
-  const deny = runtimeSurfaceProfile().models.deny
-  return deny.length ? models.filter((m) => !deny.includes(m.value)) : models
+  return models.filter((m) => !isModelUnavailable(m.value))
 }
 
 export const IMAGE_GEN_MODELS: readonly { value: ImageGenProvider; label: string; desc: string }[] = [
