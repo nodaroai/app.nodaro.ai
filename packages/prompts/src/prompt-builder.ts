@@ -476,6 +476,46 @@ function locationModeToRole(mode: string | null | undefined): string {
 }
 
 /**
+ * The effective HYBRID role for a wired LOCATION reference — the location analog
+ * of `resolveDefaultRole`, and the single source of truth for the location role
+ * chain (read by the mention resolver AND the canonical-fallback renderer, so a
+ * location cannot phrase itself one way mentioned and another way unmentioned).
+ *
+ * Precedence:
+ *   1. the per-mention token ROLE (`@lib:1:atmosphere`, `@lib:1:x/y:lighting`) —
+ *      verbatim, slug-normalized so the non-noun specials still hit
+ *      (`empty-background` → `empty background`).
+ *   2. the per-mention token MODE (`@lib:1:style`) → `locationModeToRole`.
+ *   3. the ref's own `defaultRole` — the node/caller's hybrid role pick, same
+ *      slug normalization as (1).
+ *   4. the ref's legacy `defaultUsageMode` → `locationModeToRole`.
+ *   5. the source default (`locationModeToRole`'s fallback — `"location"`).
+ *
+ * Step 3 is what this exists for. `ConnectedReference.defaultRole` is on the
+ * wire schema for EVERY source, and the character and named-image mention paths
+ * have always consulted it via `resolveDefaultRole` — but the location paths
+ * read only the usage mode, so a ref-level default role was silently dropped.
+ * It is the ONLY channel a location has for a custom default role: a location
+ * mention's 3rd segment is a bucket/variant or a role, so a caller cannot pin a
+ * per-mention role AND keep the canonical image, and the character trick of a
+ * 4th segment needs a variant to sit in the third. An explicit token role or
+ * mode still wins (steps 1–2); with no `defaultRole` the chain collapses to
+ * exactly the old `t.usageMode ?? defaultUsageMode ?? DEFAULT` derivation.
+ */
+function resolveLocationRole(
+  tokenRole: string | null | undefined,
+  tokenUsageMode: string | null | undefined,
+  ref: Pick<ConnectedReference, "defaultRole" | "defaultUsageMode">,
+): string {
+  const explicitRole = tokenRole?.trim()
+  if (explicitRole) return normalizeRoleSlug(explicitRole)
+  if (tokenUsageMode) return locationModeToRole(tokenUsageMode)
+  const nodeRole = ref.defaultRole?.trim()
+  if (nodeRole) return normalizeRoleSlug(nodeRole)
+  return locationModeToRole(ref.defaultUsageMode ?? DEFAULT_LOCATION_USAGE_MODE)
+}
+
+/**
  * Resolve `@oldlibrary:1:weather/rain` mentions in the prompt against the
  * pre-expanded `wired-location` ConnectedReferences (from
  * `expandWiredLocationRefs` / `expandLocationNodeIntoRefs`). Mirrors
@@ -647,9 +687,11 @@ interface ResolveLocationMentionsHybridResult {
  * fallback on a variant miss) so the set of attached URLs / matched tokens never
  * diverges between formats — only the rendered phrasing differs.
  *
- * ROLE is `locationModeToRole(mode)` with `mode = perMentionOverride ?? the
- * location node's defaultUsageMode ?? DEFAULT_LOCATION_USAGE_MODE` — so a node
- * whose default is "style" renders "the style from …" for a bare `@old-library:1`.
+ * ROLE is `resolveLocationRole(t.role, t.usageMode, ref)` — per-mention role →
+ * per-mention mode → the ref's own `defaultRole` → its `defaultUsageMode` → the
+ * source default. So a node whose default mode is "style" renders "the style
+ * from …" for a bare `@old-library:1`, and one carrying `defaultRole: "atmosphere"`
+ * renders "the atmosphere from …".
  *
  * SLOT/LETTER: a URL's 1-based position in `dedup([...existingUrls,
  * ...mentionUrls])`. The caller passes `existingUrls = [base refs, resolved
@@ -697,15 +739,12 @@ function resolveLocationMentionsHybrid(
     mentionedLocationSlugs.add(t.locationSlug)
     refByUrl.set(match.url, match)
     if (t.lock !== undefined) lockOverrideByUrl.set(match.url, t.lock)
-    const mode = t.usageMode ?? match.defaultUsageMode ?? DEFAULT_LOCATION_USAGE_MODE
     // A bare-slug ROLE (Unified Reference Roles, Phase D — e.g. `background`,
     // `empty-background`, `as-is`, or a curated custom role) is used VERBATIM:
-    // it's acting as a role, not selecting a bucket/variant. `t.role` is the
-    // token slug; map it back to the phrase key so `roleToPhrase` hits the
-    // non-noun specials (`empty-background` → `empty background`). With no role
-    // segment, derive the role from the usage mode (mode-aware default) —
-    // byte-identical to the prior behavior for every non-role mention.
-    const role = t.role ? normalizeRoleSlug(t.role) : locationModeToRole(mode)
+    // it's acting as a role, not selecting a bucket/variant. With no role
+    // segment, the chain falls through the token's mode, then the REF's own
+    // `defaultRole`, then its usage mode — see `resolveLocationRole`.
+    const role = resolveLocationRole(t.role, t.usageMode, match)
     matched.push({ token: t.token, offset: t.offset, url: match.url, role })
   }
 
@@ -1232,8 +1271,9 @@ function renderExtraRefsHybrid(
  * Render the hybrid canonical convergence for UNMENTIONED wired locations (the
  * location analog of `renderCanonicalFallbackHybrid`). Each unmentioned
  * `wired-location` ref → the inline role phrase
- * `roleToPhrase(locationModeToRole(defaultUsageMode), binding)` (the caller
- * appends these as trailing scene directives) + its opt-in identity-lock line
+ * `roleToPhrase(resolveLocationRole(null, null, ref), binding)` — the SAME role
+ * chain the mention path runs, minus the token steps (the caller appends these as
+ * trailing scene directives) + its opt-in identity-lock line
  * (null unless the ref enables one — locations have no built-in lock wording) +
  * its wired `elementInjection` as a trailing directive.
  *
@@ -1267,7 +1307,10 @@ function renderLocationCanonicalHybrid(
     if (!slot) continue
     seenUrls.add(r.url)
     const binding = `reference image ${slotToLetter(slot)}`
-    phrases.push(roleToPhrase(locationModeToRole(r.defaultUsageMode), binding))
+    // Same role chain as the mention path (there is no token here, so it starts
+    // at the ref's own `defaultRole`) — one helper, so a location cannot phrase
+    // itself one way mentioned and another way unmentioned.
+    phrases.push(roleToPhrase(resolveLocationRole(null, null, r), binding))
     const lock = buildIdentityLockLine(r, binding)
     if (lock) lockLines.push(lock)
     const inject = r.elementInjection?.trim()
