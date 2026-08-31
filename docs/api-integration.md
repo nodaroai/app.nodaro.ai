@@ -989,6 +989,23 @@ Mentioning a reference **re-seats** it: its URL moves from the trailing
 auto-attach block into the mention block, which re-letters the references after
 it. That is the point of the feature — the letters follow the sentence.
 
+### Reference lock (`referenceLock`) on generate-image
+
+`POST /v1/generate-image` accepts an optional `referenceLock` token — an id,
+not text — that opts a run into the platform's measured reference-compliance
+wording, prepended ahead of the scene it governs (hybrid reference format):
+
+- `"standard"` — default-deny + likeness + compose (the population winner in
+  the platform's measurements). Reach for it on multi-reference composition.
+- `"multi-person"` — adds the face clauses (never alter face structure, never
+  blend faces). Reach for it when two or more faces are in play and elements
+  cross between them; on a single subject it is dead weight.
+
+Free-text lock wording is deliberately not accepted: the wording is
+platform-owned and improves without a client release. Omitting the field keeps
+the platform-wide default — no lock is ever injected unrequested. Under the
+legacy reference format the token is accepted but inert.
+
 ### Cinematic direction (`direction`) on generate-image
 
 `POST /v1/generate-image` accepts an optional `direction` object: a flat map of
