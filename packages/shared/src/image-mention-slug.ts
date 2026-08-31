@@ -16,6 +16,13 @@
  *   @town:3~lock             — additive identity-lock sentinel (also `~nolock`)
  *   @town:1:a:b              — NULL. A 4-part token is never an image mention.
  *
+ * GRAMMAR CORE. The slug shape, the parser and the finder (including BOTH
+ * collision guards) live in `mention-token-grammar.ts` and are shared verbatim
+ * with `entity-mention-slug.ts` (creatures/objects), which speaks the identical
+ * 2-or-3-segment grammar. This module is the MEDIA view of that core: the
+ * per-kind field names, and the part that genuinely differs — WHICH refs
+ * contribute a slug.
+ *
  * NO WIRE FIELD. Unlike `characterSlug` / `locationSlug`, there is no `imageSlug`
  * on `ConnectedReference`: the slug is DERIVED from `defaultName` at resolve time
  * (`knownImageSlugsFromRefs`), so a client cannot drift from the grammar and the
@@ -27,30 +34,20 @@
  */
 
 import type { ConnectedReference } from "./types.js"
-
-/**
- * Grammar-valid slug shape — the exact shape `findImageMentionTokens`' regex can
- * produce, and therefore the gate on BOTH sides of the match.
- *
- * Emptiness is NOT the gate: `imageMentionSlug("3D Render")` → `"3d-render"` is
- * non-empty yet UNPARSEABLE (a leading digit), so a ref named "3D Render" must be
- * dropped from the known-slug set even though its slug is truthy. This pattern is
- * what drops it.
- */
-const IMAGE_SLUG_PATTERN = /^[a-z][a-z0-9-]*$/
+import {
+  MENTION_SLUG_PATTERN,
+  findMentionTokens,
+  mentionNameSlug,
+  parseMentionToken,
+} from "./mention-token-grammar.js"
 
 /**
  * Slugify an image reference's display name for `@`-mention tokens. Byte-
  * identical algorithm to `characterMentionSlug` / `locationMentionSlug`; kept as
- * a separate export to make the call site's intent explicit and to allow future
- * divergence.
+ * a separate export to make the call site's intent explicit.
  */
 export function imageMentionSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "")
+  return mentionNameSlug(name)
 }
 
 export interface ImageMentionTokenInfo {
@@ -91,6 +88,11 @@ export interface ImageMentionTokenInfo {
  * Segment count is 2 or 3 — NOT 2–4 like the character/location parsers. A media
  * reference has no variant/bucket slot, so there is nothing for a 4th segment to
  * mean, and claiming one would let this parser swallow a character token.
+ *
+ * Delegates to the shared `parseMentionToken` and renames its kind-neutral
+ * `slug` / `index` to this module's `imageSlug` / `imageIndex`. The optional
+ * `role` / `lock` keys are re-emitted CONDITIONALLY so the documented shape rule
+ * survives the rename: a 2-part token has no `role` key at all.
  */
 export function parseImageMentionToken(text: string): {
   imageSlug: string
@@ -100,87 +102,35 @@ export function parseImageMentionToken(text: string): {
   /** Present ONLY when a sentinel was found; omitted otherwise (shape rule). */
   lock?: boolean
 } | null {
-  if (!text.startsWith("@")) return null
-  let rest = text.slice(1)
-  if (rest.length === 0 || !/^[a-z]/.test(rest)) return null
-
-  // Strip a trailing `~nolock` (force OFF) or `~lock` (force ON) BEFORE splitting
-  // so the segment grammar is untouched (a `~` never appears inside a segment).
-  // Check `~nolock` FIRST — `~lock` is its suffix. A token with NEITHER sentinel
-  // gains NO `lock` key.
-  let lockField: { lock?: boolean } = {}
-  if (rest.endsWith("~nolock")) {
-    rest = rest.slice(0, -"~nolock".length)
-    lockField = { lock: false }
-  } else if (rest.endsWith("~lock")) {
-    rest = rest.slice(0, -"~lock".length)
-    lockField = { lock: true }
+  const parsed = parseMentionToken(text)
+  if (!parsed) return null
+  return {
+    imageSlug: parsed.slug,
+    imageIndex: parsed.index,
+    ...(parsed.role !== undefined ? { role: parsed.role } : {}),
+    ...(parsed.lock !== undefined ? { lock: parsed.lock } : {}),
   }
-
-  const parts = rest.split(":")
-  if (parts.length < 2 || parts.length > 3) return null
-
-  const [imageSlug, indexStr, third] = parts
-  if (!IMAGE_SLUG_PATTERN.test(imageSlug)) return null
-  if (!/^\d+$/.test(indexStr)) return null
-  const imageIndex = parseInt(indexStr, 10)
-  if (!Number.isInteger(imageIndex) || imageIndex < 1) return null
-
-  if (parts.length === 2) return { imageSlug, imageIndex, ...lockField }
-  if (!IMAGE_SLUG_PATTERN.test(third)) return null
-  return { imageSlug, imageIndex, role: third, ...lockField }
 }
 
 /**
  * Find every image `@-mention` in a prompt whose slug is a known image slug.
  *
  * `knownImageSlugs` (from `knownImageSlugsFromRefs`) is what keeps this parser
- * off the other two grammars' tokens — all three finders match the same
- * `@slug:N…` surface and only the known-slug set separates them.
+ * off the other grammars' tokens — every finder matches the same `@slug:N…`
+ * surface and only the known-slug set separates them.
  */
 export function findImageMentionTokens(
   prompt: string,
   knownImageSlugs: readonly string[],
 ): ImageMentionTokenInfo[] {
-  const tokens: ImageMentionTokenInfo[] = []
-  // ONE optional segment (the role) — images have no variant/bucket slot.
-  //
-  // The trailing `(?![:a-z0-9-])` is the DELIBERATE divergence from the character
-  // and location finders. Without it, a 4-part CHARACTER token that the character
-  // pass failed to resolve (`@kira:1:smile:face`) would be captured here as the
-  // 3-part `@kira:1:smile`, leaving `:face` dangling in the prompt. The lookahead
-  // makes the regex backtrack and match nothing, so a 4-part token is NEVER an
-  // image mention. `~lock` still matches (`~` is outside the class), and its own
-  // `(?![a-z0-9-])` keeps `~locked` / `~nolockx` literal.
-  //
-  // Linear-scan shape (a fixed prefix then bounded optional groups, no nested
-  // quantifiers) — matching the sibling finders, and ReDoS-free.
-  const regex =
-    /(?:^|[^a-zA-Z0-9])(@[a-z][a-z0-9-]*:\d+(?::[a-z][a-z0-9-]*)?(?:~(?:no)?lock(?![a-z0-9-]))?)(?![:a-z0-9-])/g
-  const knownSet = new Set(knownImageSlugs)
-  for (const match of prompt.matchAll(regex)) {
-    const token = match[1]
-    const offset = (match.index ?? 0) + (match[0].length - token.length)
-    // SLASH GUARD — the second half of the collision guard, and the reason it
-    // is a post-match check instead of another lookahead in the regex. `/` is
-    // the LOCATION grammar's bucket/variant separator (`@lib:1:weather/rain`),
-    // so a token immediately followed by `/<segment>` is a sibling-grammar
-    // token, never an image mention. A lookahead cannot express this: the
-    // engine would just BACKTRACK to a shorter prefix (`@lib:1:weather` →
-    // `@lib:1`, or `@town:1~lock` → `@town:1`) and splice THAT, which is the
-    // very corruption being prevented. Rejecting the whole match here leaves
-    // the token literal, exactly as the character/location finders do.
-    //
-    // `/` alone is NOT the signal — `@town:1/@barn:2` (two mentions separated
-    // by a slash) must keep matching, and a location segment always starts
-    // `[a-z]`. So the guard is `/` + a segment start.
-    if (/^\/[a-z]/.test(prompt.slice(offset + token.length))) continue
-    const parsed = parseImageMentionToken(token)
-    if (parsed && knownSet.has(parsed.imageSlug)) {
-      tokens.push({ token, ...parsed, offset })
-    }
-  }
-  return tokens
+  return findMentionTokens(prompt, knownImageSlugs).map((t) => ({
+    token: t.token,
+    imageSlug: t.slug,
+    imageIndex: t.index,
+    ...(t.role !== undefined ? { role: t.role } : {}),
+    ...(t.lock !== undefined ? { lock: t.lock } : {}),
+    offset: t.offset,
+  }))
 }
 
 /**
@@ -193,14 +143,14 @@ export function findImageMentionTokens(
  * admit exactly the same refs: a slug the finder accepts but the resolver drops
  * would splice a token with nothing to bind, and a ref the resolver keys under
  * a slug no token can match is dead weight. Emptiness is NOT the gate (see
- * `IMAGE_SLUG_PATTERN`).
+ * `MENTION_SLUG_PATTERN`).
  */
 export function imageMentionSlugForRef(r: ConnectedReference): string | null {
   if (r.source !== "wired-image" && r.source !== "manual") return null
   if (r.isExtraRef === true) return null
   if (!r.url || !r.defaultName) return null
   const slug = imageMentionSlug(r.defaultName)
-  return IMAGE_SLUG_PATTERN.test(slug) ? slug : null
+  return MENTION_SLUG_PATTERN.test(slug) ? slug : null
 }
 
 /**
@@ -210,13 +160,13 @@ export function imageMentionSlugForRef(r: ConnectedReference): string | null {
  * whether a prompt carries a resolvable image mention.
  *
  * Only MEDIA refs (`wired-image` / `manual`) with a URL participate — the other
- * sources have their own mention grammars (characters, locations) or no mention
- * path at all (objects, creatures).
+ * sources have their own mention grammars: characters, locations, and — since the
+ * creature/object leg — wired entities via `knownEntitySlugsFromRefs`.
  *
  * `isExtraRef` refs are EXCLUDED: an extra renders through the extras path with
  * its own body line, so letting a mention also bind one would double-emit prose.
  *
- * Grammar-invalid slugs are DROPPED (see `IMAGE_SLUG_PATTERN`) — a ref named
+ * Grammar-invalid slugs are DROPPED (see `MENTION_SLUG_PATTERN`) — a ref named
  * "3D Render" slugs to the non-empty but unparseable `"3d-render"`, and admitting
  * it would put a slug in the set that no token can ever match.
  *
