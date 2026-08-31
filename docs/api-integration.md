@@ -1173,11 +1173,13 @@ in frame) which the platform folds into the prompt as its own clauses.
 - **`customAge` is the one number.** Send `"age": "age-custom"` with
   `"customAge": 34` for a literal age in years; it is rounded and clamped to
   0–120. Without `age-custom` it contributes nothing.
-- **Single id or an array**, with per-dimension caps the catalogs define:
-  `jewelry`, `wardrobeState` and `distinctiveFeature` take 3; `ethnicity`,
-  `regionalAesthetic`, `hairColor`, `eyeColor`, `lipState`, `eyeState`,
-  `skinTexture` and `hairState` take 2; every other dimension is single-pick.
-  Over a dimension's cap the extra ids are dropped, not rejected. The wire
+- **Single id or an array**, with per-dimension caps the catalogs and the
+  prop rows define: `jewelry`, `wardrobeState` and `distinctiveFeature` take 3;
+  `ethnicity`, `regionalAesthetic`, `hairColor`, `eyeColor`, `lipState`,
+  `eyeState`, `skinTexture`, `hairState`, `heldProp` and `material` take 2
+  (two held props read as two clauses, two materials fold into one "made of A
+  and B"); every other dimension — `animal` included — is single-pick. Over a
+  dimension's cap the extra ids are dropped, not rejected. The wire
   bounds that DO reject with a `validation_error` are the same shape as
   direction's: at most **8** entries per key and **100** characters per id,
   plus at most **128** keys in the object and **64** characters per key.
