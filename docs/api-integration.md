@@ -1150,7 +1150,7 @@ bare tail cut, with no trailing `...`): the opt-in identity injection
 after assembly, and a body that still overflows with ZERO hints left — very long
 prose, or many bound references on their own. As on the image side, nothing is
 shed while the prompt fits, so an under-cap request is byte-for-byte what it
-always was. `POST /v1/extend-video` has no `direction` field and is unaffected.
+always was.
 
 `POST /v1/extend-video` deliberately has no `direction` field: its prompt
 continues an existing clip, where re-stating the look is the wrong lever.
