@@ -16,6 +16,7 @@ import { IMAGE_GEN_PROVIDERS, T2I_TO_I2I_VARIANT, FLUX_LORA_CHARACTER_MODEL_ID, 
 import { assembleImageInput, REFERENCE_RULES, REFERENCE_RULES_MULTI_PERSON, type AssembleImageInput, type BuildImagePromptResult } from "@nodaro/prompts"
 import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
 import { directionSchema } from "../lib/direction-schema.js"
+import { subjectSchema } from "../lib/subject-schema.js"
 import { backendHybridRoles } from "../lib/reference-format.js"
 import { formatZodError } from "../lib/zod-error.js"
 
@@ -123,6 +124,13 @@ export const generateImageBody = z.object({
   // generate-video. No-op without `connectedReferences` (nothing to reorder).
   referenceOrder: z.array(z.string()).max(14).optional(),
   direction: directionSchema.optional(),
+  // Structured SUBJECT: catalog IDS for WHO is in the shot (Person / Styling /
+  // props), rendered server-side by `renderSubjectHints` and folded AHEAD of
+  // the direction clauses — the subject is the noun phrase the cinematography
+  // modifies. Same doctrine as `direction`: the wire carries ids, the platform
+  // owns the wording, and a client stops baking catalog text it can never
+  // un-bake. Absent → byte-identical to today.
+  subject: subjectSchema.optional(),
   structured: structuredPromptFieldsSchema.optional(),
   // Reference-lock TOKEN (D5, studio spec 2026-08-30-structured-prompt-assembly):
   // an id, not text — the route maps it to the platform's MEASURED lock wording
@@ -199,16 +207,19 @@ const IDENTITY_PRESERVE_SUFFIX =
 /**
  * WI-1b structured-mode detection. The route enters structured mode (server-side
  * assembly via `assembleImageInput`) when ANY of `connectedReferences` /
- * `direction` / `structured` is present. When all are absent the request takes
- * the unchanged pre-assembled flat-prompt path.
+ * `direction` / `subject` / `structured` is present. When all are absent the
+ * request takes the unchanged pre-assembled flat-prompt path.
  *
  * Accepts a loose shape so BOTH callers can share it: the preHandler (raw,
  * pre-Zod `req.body`) and the handler (Zod-parsed data). It only checks for
- * the presence of the three structured channels.
+ * the presence of the four structured channels — which is why `subjectSchema`
+ * normalizes an all-unknown bag to `{}` rather than dropping it: the two
+ * callers must reach the same verdict for the same body.
  */
 function isStructuredImageMode(body: {
   connectedReferences?: unknown
   direction?: unknown
+  subject?: unknown
   structured?: unknown
 } | null | undefined): boolean {
   // Defensive null/non-object guard (mirrors the preHandler's `:320` check). A
@@ -221,6 +232,7 @@ function isStructuredImageMode(body: {
   return (
     (Array.isArray(body.connectedReferences) && body.connectedReferences.length > 0) ||
     (body.direction != null && typeof body.direction === "object") ||
+    (body.subject != null && typeof body.subject === "object") ||
     (body.structured != null && typeof body.structured === "object")
   )
 }
@@ -241,6 +253,7 @@ function buildAssembleInput(
     connectedReferences?: AssembleImageInput["connectedReferences"]
     referenceOrder?: AssembleImageInput["referenceOrder"]
     direction?: AssembleImageInput["direction"]
+    subject?: AssembleImageInput["subject"]
     structured?: AssembleImageInput["structured"]
     referenceLock?: "standard" | "multi-person"
     referenceImageUrls?: string[]
@@ -263,6 +276,10 @@ function buildAssembleInput(
     ...(body.connectedReferences !== undefined ? { connectedReferences: body.connectedReferences } : {}),
     ...(body.referenceOrder !== undefined ? { referenceOrder: body.referenceOrder } : {}),
     ...(body.direction !== undefined ? { direction: body.direction } : {}),
+    // Carried by the SHARED builder, not by the handler alone: the pricing
+    // preHandler and the handler must assemble the same input or the
+    // CHECK===DEBIT invariant stops holding.
+    ...(body.subject !== undefined ? { subject: body.subject } : {}),
     ...(body.structured !== undefined ? { structured: body.structured } : {}),
     // The lock TOKEN resolves to the measured constant HERE, server-side —
     // clients never carry the wording (see the schema comment).
@@ -297,6 +314,7 @@ function assembledRefCountForPricing(body: {
   provider?: string
   connectedReferences?: AssembleImageInput["connectedReferences"]
   direction?: AssembleImageInput["direction"]
+  subject?: AssembleImageInput["subject"]
   structured?: AssembleImageInput["structured"]
   referenceImageUrls?: string[]
   negativePrompt?: string
@@ -354,6 +372,7 @@ export function resolveImageCreditIdentifier(req: FastifyRequest): string {
   const structured = isStructuredImageMode(body as {
     connectedReferences?: unknown
     direction?: unknown
+    subject?: unknown
     structured?: unknown
   })
   const refCount = structured

@@ -32,7 +32,8 @@
  *    token, not a bare id. A single-id channel cannot carry it.
  *  - Subject / Styling / prop dimensions (`animal`, `heldProp`, `material`,
  *    Person, Styling) — a separate `subject` channel, deliberately out of scope
- *    here.
+ *    here. It now exists: `subject-registry.ts`, same table-driven shape, its
+ *    key set DISJOINT from this one (pinned by a test) so nothing folds twice.
  *
  * PACK BLINDNESS (parity, not a regression): `get*PromptHint` reads the frozen
  * base arrays, so ids added by a deployment-registered catalog pack resolve to

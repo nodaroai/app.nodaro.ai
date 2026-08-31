@@ -19,12 +19,17 @@
  *
  * THE VERBOSITY POLICY LIVES HERE, NOT IN THE CLIENT: motion dimensions render
  * their compact professional term, look dimensions their full clause
- * (`VIDEO_HINT_MODE_DEFAULT`, resolved per row's `family` by the registry).
+ * (`VIDEO_HINT_MODE_DEFAULT`, resolved per row's `family` by the registry). The
+ * SUBJECT fold has its own policy — compact on video
+ * (`SUBJECT_VIDEO_HINT_MODE_DEFAULT`), because a fully specified person at full
+ * verbosity is ~30 paragraph clauses and the start frame already carries the
+ * subject's identity into the clip.
  * It is a threaded PARAMETER with a pure default — never deployment state:
  * `__tests__/content-free-contract.test.ts` hard-fails any environment read
  * under `packages/prompts/src`, and this module has nothing to read anyway.
  *
- * EXACT NO-OP CONTRACT: with no direction and no structured fields the caller's
+ * EXACT NO-OP CONTRACT: with no subject, no direction and no structured fields
+ * the caller's
  * `userPrompt` comes back VERBATIM AND UNTRIMMED — `undefined` included, since
  * a video prompt is optional on the route. That is what keeps every existing
  * caller byte-identical (the "backward-compatible: no connectedReferences →
@@ -44,6 +49,12 @@ import {
   type DirectionFields,
   type DirectionHintMode,
 } from "./direction-registry.js"
+import {
+  renderSubjectHints,
+  SUBJECT_VIDEO_HINT_MODE_DEFAULT,
+  type SubjectFields,
+  type SubjectHintMode,
+} from "./subject-registry.js"
 import { joinPromptHints } from "./prompt-hint-join.js"
 import {
   renderStructuredFields,
@@ -51,12 +62,18 @@ import {
 } from "./prompt-builder-structured-fields.js"
 
 /**
- * Fold a video run's cinematic-direction ids (and optional structured fields)
- * into its prompt body.
+ * Fold a video run's subject and cinematic-direction ids (and optional
+ * structured fields) into its prompt body.
  *
- * The direction hints land first, in the registry's canonical table order
- * (camera motion leads), and the structured fragment lands LAST — the same
- * ordering `composePromptText` uses for stills.
+ * The SUBJECT hints land first (who is in the shot — the noun phrase the
+ * cinematography modifies), then the direction hints in the registry's
+ * canonical table order (camera motion leads), and the structured fragment
+ * lands LAST — the same ordering `composePromptText` uses for stills.
+ *
+ * `subject` rides `opts` rather than a fourth positional parameter on purpose:
+ * every existing caller passes `(prompt, direction)` or
+ * `(prompt, direction, structured)` positionally, and a new positional would
+ * have made the two levers' order a memorization test.
  *
  * @param userPrompt The user's prompt. Optional: an image-to-video run may
  *   legitimately have none, and it is returned as-is when nothing folds.
@@ -65,16 +82,27 @@ import {
  *   nothing — never a throw.
  * @param structured Path-1 structured fields. Not a `/v1/generate-video` wire
  *   field today; the canvas orchestrator passes it directly.
- * @param opts.hintMode Override the verbosity policy (a whole-fold
+ * @param opts.hintMode Override the direction verbosity policy (a whole-fold
  *   `PickerHintMode`, or a `{ look, motion }` split).
+ * @param opts.subject Flat subject ids (Person / Styling / props), same
+ *   inertness contract as `direction`.
+ * @param opts.subjectHintMode Override the subject verbosity policy.
  */
 export function composeVideoPromptText(
   userPrompt: string | undefined,
   direction: DirectionFields | undefined,
   structured?: StructuredPromptFields,
-  opts?: { readonly hintMode?: DirectionHintMode },
+  opts?: {
+    readonly hintMode?: DirectionHintMode
+    readonly subject?: SubjectFields
+    readonly subjectHintMode?: SubjectHintMode
+  },
 ): string | undefined {
   const hints = [
+    ...renderSubjectHints(opts?.subject, {
+      surface: "video",
+      mode: opts?.subjectHintMode ?? SUBJECT_VIDEO_HINT_MODE_DEFAULT,
+    }),
     ...renderDirectionHints(direction, {
       surface: "video",
       mode: opts?.hintMode ?? VIDEO_HINT_MODE_DEFAULT,

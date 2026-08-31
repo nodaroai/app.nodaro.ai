@@ -15,6 +15,7 @@ import { TEXT_TO_VIDEO_PROVIDERS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, 
 import { composeVideoPromptText } from "@nodaro/prompts"
 import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
 import { directionSchema } from "../lib/direction-schema.js"
+import { subjectSchema } from "../lib/subject-schema.js"
 import { assembleVideoConnectedReferences } from "./generate-video.js"
 import { formatZodError } from "../lib/zod-error.js"
 
@@ -49,6 +50,10 @@ export const textToVideoBody = z.object({
   // /v1/generate-video, same shared schema). Rendered server-side with the
   // platform's verbosity policy; absent → byte-identical to the flat path.
   direction: directionSchema.optional(),
+  // Structured SUBJECT ids (parity with /v1/generate-image and
+  // /v1/generate-video, same shared schema). Folded ahead of the direction
+  // clauses; absent → byte-identical to the flat path.
+  subject: subjectSchema.optional(),
   webSearch: z.boolean().optional(),
   nsfwChecker: z.boolean().optional(),
   // VEO 3.x: opt out of KIE's auto-translate-to-English (default true
@@ -184,15 +189,18 @@ export async function textToVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    // Cinematic direction fold — catalog IDS → prompt text, server-side. Same
+    // Subject + cinematic direction fold — catalog IDS → prompt text,
+    // server-side. Same
     // shape and same fold SITE as generate-video: before the reference
-    // assembly below, because the resolver frames the body. No `direction` →
+    // assembly below, because the resolver frames the body. Neither channel →
     // `composeVideoPromptText` returns `prompt` verbatim, so the flat path is
     // byte-identical. (`prompt` is required on this route, so the composer's
     // absent-prompt branch is dead here — the identical shape is deliberate so
     // the two routes read the same.)
-    if (parsed.data.direction) {
-      const composed = composeVideoPromptText(prompt, parsed.data.direction)
+    if (parsed.data.direction || parsed.data.subject) {
+      const composed = composeVideoPromptText(prompt, parsed.data.direction, undefined, {
+        ...(parsed.data.subject !== undefined ? { subject: parsed.data.subject } : {}),
+      })
       if (composed !== undefined && composed !== prompt) {
         // `input_data.userPrompt` records the SOURCE, never the render.
         parsed.data.userPrompt ??= prompt

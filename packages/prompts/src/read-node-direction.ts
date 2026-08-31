@@ -1,7 +1,8 @@
 /**
  * Narrow readers turning UNTRUSTED persisted node data (`workflows.nodes`
  * JSONB — import, MCP write, node preset, a Studio-emitted graph) into the
- * typed `direction` / `structured` levers `assembleImageInput` accepts.
+ * typed `subject` / `direction` / `structured` levers `assembleImageInput`
+ * accepts.
  * `buildPayload` has no zod and workflow writes are
  * `z.record(z.string(), z.unknown())`, so this blob may have been written years
  * ago by any client.
@@ -46,6 +47,13 @@ import {
   DIRECTION_ID_MAX_CHARS,
   type DirectionFields,
 } from "./direction-registry.js"
+import {
+  SUBJECT_ARRAY_CEILING,
+  SUBJECT_CUSTOM_AGE_KEY,
+  SUBJECT_ID_MAX_CHARS,
+  getRegisteredSubjectKeys,
+  type SubjectFields,
+} from "./subject-registry.js"
 import type { StructuredPromptFields } from "./prompt-builder-structured-fields.js"
 
 /**
@@ -85,6 +93,57 @@ export function readDirectionFields(value: unknown): DirectionFields | undefined
     }
   }
   return Object.keys(out).length > 0 ? (out as DirectionFields) : undefined
+}
+
+// ── subject ──────────────────────────────────────────────────────────────────
+
+/**
+ * Read a node's stored SUBJECT ids — the flat Person / Styling / prop bag the
+ * `subject` channel carries. Same three contracts as `readDirectionFields`:
+ * drop-never-throw, `undefined` never `{}`, and bounds shared with the wire
+ * door by CONSTANT (`SUBJECT_ID_MAX_CHARS` / `SUBJECT_ARRAY_CEILING`, which are
+ * defined AS the direction constants) so a body the route accepts and the same
+ * node re-run from the canvas cannot disagree about which strings are ids.
+ *
+ * DERIVED from `getRegisteredSubjectKeys()`, never a hand-authored field list —
+ * that is the whole lesson of `readStructuredFields` below, whose hand table is
+ * only viable because `StructuredPromptFields` is a small hand-authored type.
+ * The subject vocabulary is ~54 catalog-derived fields PLUS deployment-registered
+ * pack dimensions unknown at compile time, so it is read from the registry at
+ * call time. Iterating the KEY SET (never `Object.keys(value)`) is also what
+ * keeps an adversarial blob's key count off the hot path.
+ *
+ * The SEMANTIC per-dimension cap stays the renderer's job
+ * (`normalizeSubjectFields`), exactly as `maxPicks` does for direction: this
+ * reader bounds cardinality only. `customAge` is the one number on the wire and
+ * is passed through finite-only — the renderer clamps it.
+ */
+export function readSubjectFields(value: unknown): SubjectFields | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined
+  const src = value as Record<string, unknown>
+  const out: Record<string, string | string[] | number> = {}
+  for (const key of getRegisteredSubjectKeys()) {
+    const v = src[key]
+    if (key === SUBJECT_CUSTOM_AGE_KEY) {
+      if (typeof v === "number" && Number.isFinite(v)) out[key] = v
+      continue
+    }
+    if (typeof v === "string") {
+      if (v.length > 0 && v.length <= SUBJECT_ID_MAX_CHARS) out[key] = v
+    } else if (Array.isArray(v)) {
+      // Junk is filtered BEFORE the cap, so valid ids sitting behind malformed
+      // entries survive rather than being crowded out by them.
+      const kept: string[] = []
+      for (const x of v) {
+        if (kept.length >= SUBJECT_ARRAY_CEILING) break
+        if (typeof x === "string" && x.length > 0 && x.length <= SUBJECT_ID_MAX_CHARS) {
+          kept.push(x)
+        }
+      }
+      if (kept.length > 0) out[key] = kept
+    }
+  }
+  return Object.keys(out).length > 0 ? (out as SubjectFields) : undefined
 }
 
 // ── structured ───────────────────────────────────────────────────────────────

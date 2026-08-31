@@ -75,7 +75,7 @@ import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
 import { FLUX_LORA_CHARACTER_MODEL_ID, PROMPT_HARD_CEILING, getMaxImagePromptChars, type ConnectedReference } from "@nodaro/shared"
-import { assembleImageInput, buildMoodHints, getFramingPromptHint, getStylePromptHint, REFERENCE_RULES, REFERENCE_RULES_MULTI_PERSON } from "@nodaro/prompts"
+import { assembleImageInput, buildMoodHints, getFramingPromptHint, getPersonPromptHint, getStylePromptHint, getStylingPromptHint, REFERENCE_RULES, REFERENCE_RULES_MULTI_PERSON } from "@nodaro/prompts"
 import { registerPromptPolicy, clearPromptPolicies } from "../../lib/prompt-policy.js"
 
 // ---------------------------------------------------------------------------
@@ -904,6 +904,66 @@ describe("POST /v1/generate-image", () => {
       const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>
       // The top 2 win — the renderer's slice, not a wire rejection.
       expect(queued.prompt).toContain(buildMoodHints({ mood: ["happy", "joyful"] }, "full")[0])
+    })
+
+    // ── The subject channel rides the same wire ─────────────────────────────
+    it("folds `subject` ids into the queued prompt, AHEAD of the direction clauses", async () => {
+      setupSupabaseMock({})
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "a hero shot",
+          userId: VALID_UUID,
+          provider: "nano-banana",
+          subject: { type: "woman", makeup: "makeup-smoky" },
+          direction: { style: "anime" },
+        },
+      })
+      expect(res.statusCode).toBe(200)
+      const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>
+      const prompt = queued.prompt as string
+      expect(prompt).toContain(getPersonPromptHint("woman"))
+      expect(prompt).toContain(getStylingPromptHint("makeup-smoky"))
+      expect(prompt.indexOf(getPersonPromptHint("woman"))).toBeLessThan(
+        prompt.indexOf(getStylePromptHint("anime")),
+      )
+    })
+
+    it("emits the Person/Styling lipstick twins ONCE — the flat bag's dedupe, through the route", async () => {
+      setupSupabaseMock({})
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "a hero shot",
+          userId: VALID_UUID,
+          provider: "nano-banana",
+          subject: { lipState: "lip-state-bold-red", makeup: "makeup-bold-lips" },
+        },
+      })
+      expect(res.statusCode).toBe(200)
+      const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>
+      expect(queued.prompt).toContain(getPersonPromptHint("lip-state-bold-red"))
+      expect(queued.prompt).not.toContain(getStylingPromptHint("makeup-bold-lips"))
+    })
+
+    it("STRIPS an unknown subject key — 200, the hint simply missing (the non-strict rollout behavior)", async () => {
+      setupSupabaseMock({})
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "a hero shot",
+          userId: VALID_UUID,
+          provider: "nano-banana",
+          subject: { type: "woman", notAField: "whatever" },
+        },
+      })
+      expect(res.statusCode).toBe(200)
+      const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>
+      expect(queued.prompt).not.toContain("whatever")
+      expect(queued.prompt).toContain(getPersonPromptHint("woman"))
     })
 
     it("STRIPS an unknown direction key — 200, hints simply missing (documents the non-strict rollout behavior)", async () => {

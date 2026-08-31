@@ -19,6 +19,7 @@ import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, PR
 import { resolveVideoReferenceCore, resolveReferenceTokens, resolveRefIdTokens, composeVideoPromptText, type VideoExtraRef, type CharacterMeta } from "@nodaro/prompts"
 import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
 import { directionSchema } from "../lib/direction-schema.js"
+import { subjectSchema } from "../lib/subject-schema.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { backendHybridRoles } from "../lib/reference-format.js"
 
@@ -87,6 +88,13 @@ export const generateVideoBody = z.object({
   // dimension is accepted here and simply contributes no video hint (filtering
   // is a render concern), and unknown keys/ids are stripped/skipped, never 400.
   direction: directionSchema.optional(),
+  // Structured SUBJECT: the same doctrine one channel over — catalog IDS for
+  // WHO is in the shot (Person / Styling / props) instead of the client baking
+  // their wording. Folded ahead of the direction clauses by the same composer,
+  // at the platform's video verbosity policy (compact terms: the start frame
+  // already carries the subject's identity into the clip). Absent → the flat
+  // path is byte-identical.
+  subject: subjectSchema.optional(),
   webSearch: z.boolean().optional(),
   nsfwChecker: z.boolean().optional(),
   generationType: z.enum(["TEXT_2_VIDEO", "FIRST_AND_LAST_FRAMES_2_VIDEO", "REFERENCE_2_VIDEO"]).optional(),
@@ -580,12 +588,14 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     // scene/look description past the identity directives — a worse version of
     // the bug this channel exists to fix.
     //
-    // No `direction` → `composeVideoPromptText` returns `prompt` verbatim
+    // No `subject`/`direction` → `composeVideoPromptText` returns `prompt` verbatim
     // (`undefined` included), so the flat path stays byte-identical (the
     // "backward-compatible: no connectedReferences → prompt + flat refs pass
     // through unchanged" oracle in generate-video.test.ts).
-    if (parsed.data.direction) {
-      const composed = composeVideoPromptText(prompt, parsed.data.direction)
+    if (parsed.data.direction || parsed.data.subject) {
+      const composed = composeVideoPromptText(prompt, parsed.data.direction, undefined, {
+        ...(parsed.data.subject !== undefined ? { subject: parsed.data.subject } : {}),
+      })
       if (composed !== prompt) {
         // `input_data.userPrompt` records the SOURCE, never the render.
         // `buildJobInputData` only mirrors prompt→userPrompt when userPrompt is

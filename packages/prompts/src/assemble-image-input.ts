@@ -16,17 +16,17 @@
  * This wrapper collapses them into one.
  *
  * THE NO-OP CONTRACT (load-bearing — the platform-caller parity relies on it):
- * a node that carries NO stored `direction` / `structured` (every workflow
- * authored before the canvas honored them) still reaches here with both absent,
- * and `composePromptText` MUST return the caller's `userPrompt` byte-for-byte
- * unchanged, so the wrapper degenerates to exactly the `buildImagePrompt(...)`
- * call those sites made before. The platform callers (`execute-node` /
- * `payload-builder`) compose their prompt from the canvas GRAPH themselves and
- * ALSO forward a node's STORED `direction` / `structured` when it carries them
- * (`readDirectionFields` / `readStructuredFields`); those nodes get the id-hint
- * composition on top, ADDITIVE to the graph-wired cinematography hints the
- * caller already folded into `userPrompt`. Studio and the MCP route supply the
- * same two levers directly.
+ * a node that carries NO stored `subject` / `direction` / `structured` (every
+ * workflow authored before the canvas honored them) still reaches here with all
+ * three absent, and `composePromptText` MUST return the caller's `userPrompt`
+ * byte-for-byte unchanged, so the wrapper degenerates to exactly the
+ * `buildImagePrompt(...)` call those sites made before. The platform callers
+ * (`execute-node` / `payload-builder`) compose their prompt from the canvas GRAPH themselves and
+ * ALSO forward a node's STORED `subject` / `direction` / `structured` when it
+ * carries them (`readSubjectFields` / `readDirectionFields` /
+ * `readStructuredFields`); those nodes get the id-hint composition on top,
+ * ADDITIVE to the graph-wired cinematography hints the caller already folded
+ * into `userPrompt`. Studio and the MCP route supply the levers directly.
  *
  * THE EMPTY-CHECK FLAG (also load-bearing for parity): `execute-node` rejects a
  * truly-empty assembled prompt (its "type one, mention a character, or connect
@@ -48,6 +48,11 @@ import {
   IMAGE_HINT_MODE_DEFAULT,
   type DirectionFields,
 } from "./direction-registry.js"
+import {
+  renderSubjectHints,
+  SUBJECT_IMAGE_HINT_MODE_DEFAULT,
+  type SubjectFields,
+} from "./subject-registry.js"
 import { joinPromptHints, PROMPT_HINT_SEPARATOR } from "./prompt-hint-join.js"
 import type { CharacterDef, ConnectedReference, IdentityMeta } from "@nodaro/shared"
 
@@ -61,6 +66,14 @@ import type { CharacterDef, ConnectedReference, IdentityMeta } from "@nodaro/sha
  * spec D3).
  */
 export type { DirectionFields }
+
+/**
+ * Flat SUBJECT ids (Person / Styling / prop catalogs) — the companion channel
+ * to `direction`, describing WHO is in the shot rather than how it is shot. Its
+ * table, fold order and per-catalog rendering live in `subject-registry.ts`;
+ * this re-export keeps one import path for a consumer that takes both levers.
+ */
+export type { SubjectFields }
 
 /**
  * Input to `assembleImageInput`. A faithful SUPERSET of what the two platform
@@ -86,6 +99,13 @@ export interface AssembleImageInput {
    * is a no-op for it and the result is byte-identical to today).
    */
   direction?: DirectionFields
+  /**
+   * Flat subject ids (Person / Styling / props) → folded into the prompt AHEAD
+   * of the direction clauses: the subject is the noun phrase the cinematography
+   * then modifies. Same provenance as `direction` — Studio / MCP-route, or the
+   * platform callers' narrow-read of a node's STORED `data.subject`.
+   */
+  subject?: SubjectFields
   /** Path-1 structured fields → composed fragment appended to the prompt. */
   structured?: StructuredPromptFields
   /**
@@ -146,48 +166,63 @@ export interface AssembleImageInput {
  * The hint pieces a fold contributes, split by whether the assembler may SHED
  * them under a provider prompt cap.
  *
- * `directionHints` are the catalog-rendered cinematic clauses — decorative
- * garnish next to a reference directive or the user's own prose, and the only
- * thing this assembler drops when the prompt won't fit. `structuredFragment` is
- * user CONTENT (a Path-1 structured field the caller populated), so it is
- * sticky and always lands LAST, exactly as before.
+ * `hintClauses` are the catalog-rendered clauses — the SUBJECT fold first, then
+ * the cinematic direction fold — decorative garnish next to a reference
+ * directive or the user's own prose, and the only thing this assembler drops
+ * when the prompt won't fit. They are ONE list because the shed walks it from
+ * the TAIL: direction leaves before subject, which is the right order (who is
+ * in the shot outranks how it is lit). `structuredFragment` is user CONTENT (a
+ * Path-1 structured field the caller populated), so it is sticky and always
+ * lands LAST, exactly as before.
  */
 interface ImageHintPieces {
-  /** Rendered direction clauses in the registry's canonical fold order. */
-  readonly directionHints: readonly string[]
+  /** Subject clauses then direction clauses, each in its registry's fold order. */
+  readonly hintClauses: readonly string[]
   /** The structured-field fragment ("" when nothing is populated). */
   readonly structuredFragment: string
 }
 
 /**
  * Render the fold's hint pieces once, so the cap-aware retry can re-join a
- * SUBSET of them without re-rendering the catalogs. `renderDirectionHints`
- * folds the `direction` ids in the registry's canonical table order (unknown
- * keys and unknown ids contribute nothing), and `renderStructuredFields`
- * returns "" when nothing is populated. Never mutates inputs.
+ * SUBSET of them without re-rendering the catalogs. Each renderer folds its own
+ * channel in its registry's canonical table order (unknown keys and unknown ids
+ * contribute nothing), and `renderStructuredFields` returns "" when nothing is
+ * populated. Never mutates inputs.
+ *
+ * SUBJECT LEADS DIRECTION: the subject is the noun phrase ("a woman in her
+ * 30s, …") the cinematographic clauses then modify. With no `subject` the list
+ * IS the direction fold, so every existing caller's prompt is byte-identical.
  */
 function renderImageHintPieces(
+  subject: SubjectFields | undefined,
   direction: DirectionFields | undefined,
   structured: StructuredPromptFields | undefined,
 ): ImageHintPieces {
   return {
-    directionHints: renderDirectionHints(direction, {
-      surface: "image",
-      mode: IMAGE_HINT_MODE_DEFAULT,
-    }).filter((p) => p.length > 0),
+    hintClauses: [
+      ...renderSubjectHints(subject, {
+        surface: "image",
+        mode: SUBJECT_IMAGE_HINT_MODE_DEFAULT,
+      }),
+      ...renderDirectionHints(direction, {
+        surface: "image",
+        mode: IMAGE_HINT_MODE_DEFAULT,
+      }),
+    ].filter((p) => p.length > 0),
     structuredFragment: structured ? renderStructuredFields(structured) : "",
   }
 }
 
 /**
- * Compose the cinematic-direction hints + structured-field fragment with the
- * user's prompt, keeping the FIRST `keptDirectionHints` direction clauses (the
- * full count on the first pass; fewer only when the provider cap forced a
+ * Compose the subject + cinematic-direction hints and the structured-field
+ * fragment with the user's prompt, keeping the FIRST `keptHintClauses` clauses
+ * (the full count on the first pass; fewer only when the provider cap forced a
  * shed). The structured fragment always lands LAST.
  *
- * EXACT NO-OP CONTRACT: when there are no cinematic/structured hint pieces (the
- * platform-caller case for a node that carries no stored `direction`/
- * `structured` — every workflow authored before the canvas honored them), the
+ * EXACT NO-OP CONTRACT: when there are no subject/cinematic/structured hint
+ * pieces (the platform-caller case for a node that carries no stored `subject`/
+ * `direction`/`structured` — every workflow authored before the canvas honored
+ * them), the
  * user's prompt is returned **verbatim, untrimmed** by `joinPromptHints`. This
  * is load-bearing for parity: the old platform path passed the prompt straight
  * to `buildImagePrompt`, which never trims, so trimming here would change the
@@ -201,22 +236,29 @@ function renderImageHintPieces(
 function composePromptText(
   userPrompt: string,
   pieces: ImageHintPieces,
-  keptDirectionHints: number,
+  keptHintClauses: number,
 ): string {
   const hints = [
-    ...pieces.directionHints.slice(0, keptDirectionHints),
+    ...pieces.hintClauses.slice(0, keptHintClauses),
     pieces.structuredFragment,
   ].filter((p) => p.length > 0)
   return joinPromptHints(userPrompt, hints)
 }
 
 /**
- * How many of the first `kept` direction clauses may STAY if `overflowChars`
+ * How many of the first `kept` hint clauses may STAY if `overflowChars`
  * characters have to leave the body. Walks the fold order from the TAIL,
  * subtracting each clause plus the separator it brought, and stops as soon as
  * enough has been reclaimed.
  *
- * The shed order is therefore `DIRECTION_FIELDS` order REVERSED. Note what that
+ * Tail-first over the COMBINED list means the direction fold sheds before the
+ * subject fold — deliberate: a fully specified person is ~30 clauses and, left
+ * unsheddable, would push the overflow into `buildImagePrompt`'s order-blind
+ * tail clamp, severing references or the user's prose while decorative clauses
+ * survive. That is precisely the bug this machinery exists to prevent.
+ *
+ * Within the direction block the shed order is `DIRECTION_FIELDS` order
+ * REVERSED. Note what that
  * is and is not: the table's order is a COMPATIBILITY order (grouped by family,
  * with the legacy `DirectionFields` block pinned last so every pre-registry
  * caller's fold stays byte-identical) — it is NOT a ranking of how load-bearing
@@ -231,8 +273,8 @@ function composePromptText(
  * re-assembles and re-checks, and this function strictly decreases `kept`
  * whenever `overflowChars > 0`, so that loop terminates.
  */
-function keepableDirectionHints(
-  directionHints: readonly string[],
+function keepableHintClauses(
+  hintClauses: readonly string[],
   kept: number,
   overflowChars: number,
 ): number {
@@ -240,7 +282,7 @@ function keepableDirectionHints(
   let next = kept
   while (next > 0 && deficit > 0) {
     next -= 1
-    deficit -= directionHints[next]!.length + PROMPT_HINT_SEPARATOR.length
+    deficit -= hintClauses[next]!.length + PROMPT_HINT_SEPARATOR.length
   }
   return next
 }
@@ -249,9 +291,9 @@ function keepableDirectionHints(
  * Assemble a node's image-generation inputs into a `BuildImagePromptResult`
  * (`{ prompt, nativeNegativePrompt, referenceImageUrls }`).
  *
- * Order: (1) compose the prompt text (no-op when no direction/structured),
+ * Order: (1) compose the prompt text (no-op when no subject/direction/structured),
  * (2) `buildImagePrompt(...)` — exactly the call the three sites make today,
- * (3) shed direction hints and re-assemble while the provider cap overflows,
+ * (3) shed hint clauses and re-assemble while the provider cap overflows,
  * (4) optional post-assembly empty-prompt throw (gated by `throwOnEmpty`).
  *
  * TRUNCATION ORDERING (step 3): `buildImagePrompt`'s cap clamp cuts the TAIL,
@@ -271,10 +313,10 @@ function keepableDirectionHints(
 export function assembleImageInput(
   input: AssembleImageInput,
 ): BuildImagePromptResult {
-  const pieces = renderImageHintPieces(input.direction, input.structured)
+  const pieces = renderImageHintPieces(input.subject, input.direction, input.structured)
 
-  const assembleWith = (keptDirectionHints: number) => buildImagePromptWithOverflow({
-    prompt: composePromptText(input.userPrompt, pieces, keptDirectionHints),
+  const assembleWith = (keptHintClauses: number) => buildImagePromptWithOverflow({
+    prompt: composePromptText(input.userPrompt, pieces, keptHintClauses),
     provider: input.provider,
     ...(input.connectedReferences !== undefined
       ? { connectedReferences: input.connectedReferences }
@@ -310,20 +352,20 @@ export function assembleImageInput(
 
   // Fold everything first (the under-cap byte-parity pass), then shed hints
   // from the tail of the fold order while the assembled prompt overflows the
-  // provider cap. `keepableDirectionHints` strictly decreases `kept` whenever
+  // provider cap. `keepableHintClauses` strictly decreases `kept` whenever
   // there IS an overflow, so this terminates at `kept === 0` in the worst case —
   // at which point the body overflows on its own and the builder's clamp stands.
-  let kept = pieces.directionHints.length
+  let kept = pieces.hintClauses.length
   let fitted = assembleWith(kept)
   while (fitted.overflowChars > 0 && kept > 0) {
-    kept = keepableDirectionHints(pieces.directionHints, kept, fitted.overflowChars)
+    kept = keepableHintClauses(pieces.hintClauses, kept, fitted.overflowChars)
     fitted = assembleWith(kept)
   }
   // `overflowChars` is assembly bookkeeping, not part of the callers' contract.
   const { overflowChars, ...result } = fitted
 
   // Post-assembly empty-prompt check (opt-in): a bound entity / `@`-mention /
-  // direction chip could have filled the assembled prompt even if the user
+  // subject or direction chip could have filled the assembled prompt even if the user
   // typed nothing — so only reject when the FINAL prompt is truly empty.
   if (input.throwOnEmpty && !result.prompt.trim()) {
     throw new Error(

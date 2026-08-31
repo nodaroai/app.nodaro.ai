@@ -66,7 +66,10 @@ import {
   type PersonDimension,
   type PersonValue,
 } from "./person.js"
-import { getRegisteredPersonFieldByDimension } from "./person-packs.js"
+import {
+  getRegisteredPersonDimensionOrder,
+  getRegisteredPersonFieldByDimension,
+} from "./person-packs.js"
 import {
   buildStylingHints,
   getStylingDimensionLimit,
@@ -240,6 +243,29 @@ export const SUBJECT_KEYS: ReadonlyArray<string> = [
   ...IDS_ROWS.map((f) => f.key),
 ]
 
+/**
+ * `SUBJECT_KEYS` plus whatever a deployment-registered person pack added — the
+ * set the DOORS accept (`readSubjectFields`, and any route-side normalize).
+ *
+ * Rebuilt per call because pack registration happens at boot, after this module
+ * is imported. With no packs registered it is `SUBJECT_KEYS` exactly, pinned by
+ * a test.
+ */
+export function getRegisteredSubjectKeys(): ReadonlyArray<string> {
+  const fieldByDimension = getRegisteredPersonFieldByDimension()
+  const personFields: string[] = []
+  for (const dimension of getRegisteredPersonDimensionOrder()) {
+    const field = fieldByDimension[dimension]
+    if (field) personFields.push(field)
+  }
+  return [
+    ...personFields,
+    SUBJECT_CUSTOM_AGE_KEY,
+    ...STYLING_DIMENSION_ORDER.map((d) => STYLING_FIELD_BY_DIMENSION[d]),
+    ...IDS_ROWS.map((f) => f.key),
+  ]
+}
+
 /** Verbosity for a whole subject fold. No family split — subject is one family. */
 export type SubjectHintMode = PickerHintMode
 
@@ -313,7 +339,7 @@ function normalizeIds(value: unknown, maxPicks: number): string[] {
 function limitByField(): Map<string, number> {
   const out = new Map<string, number>()
   const personFieldByDimension = getRegisteredPersonFieldByDimension()
-  for (const dimension of Object.keys(personFieldByDimension)) {
+  for (const dimension of getRegisteredPersonDimensionOrder()) {
     const field = personFieldByDimension[dimension]
     if (field) out.set(field, getPersonDimensionLimit(dimension as PersonDimension))
   }
