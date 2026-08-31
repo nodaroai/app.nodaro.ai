@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { sendInternalError } from "../lib/http-errors.js"
 import { insertJob } from "../lib/insert-job.js"
+import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
@@ -162,6 +163,15 @@ export async function switchXRoutes(app: FastifyInstance): Promise<void> {
         })
       }
 
+      // B4b: deployment prompt policy at this route's assembly point — only
+      // when a prompt exists (a promptless relight must not gain a policy
+      // clause as its entire prompt). Mirrored into parsed.data so input_data
+      // persists the policed text. No policy registered = identity.
+      const finalPrompt = prompt
+        ? applyPromptPolicies({ prompt, negativePrompt: "", kind: "video" }).prompt
+        : prompt
+      parsed.data.prompt = finalPrompt
+
       const mcpClient = extractMcpClient(req.body)
       const { data: job, error } = await insertJob(req, {
           workflow_id: extractWorkflowId(req.body),
@@ -192,7 +202,7 @@ export async function switchXRoutes(app: FastifyInstance): Promise<void> {
         jobId: job.id,
         videoUrl,
         referenceImageUrl,
-        prompt,
+        prompt: finalPrompt,
         alphaMode,
         maskUrl,
         alphaKeyframeIndex,

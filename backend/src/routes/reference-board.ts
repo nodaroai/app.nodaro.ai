@@ -6,6 +6,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { insertJobIdempotent } from "../lib/insert-job.js"
+import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { buildCreditModelIdentifier, REFERENCE_BOARD_PROVIDERS, buildBoardPrompt } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
@@ -69,6 +70,14 @@ export async function referenceBoardRoutes(app: FastifyInstance): Promise<void> 
         .status(400)
         .send({ error: { code: "invalid_board_template", message: `Unknown board template: ${body.boardTemplate}` } })
     }
+
+    // B4b: deployment prompt policy at this route's assembly point (covers
+    // both the user-supplied prompt and the template-seeded one). The policed
+    // negative is written back onto `body` so the queue payload below carries
+    // it. No policy registered = identity.
+    const boardPoliced = applyPromptPolicies({ prompt, negativePrompt: body.negativePrompt ?? "", kind: "image" })
+    prompt = boardPoliced.prompt
+    body.negativePrompt = boardPoliced.negativePrompt || undefined
 
     const modelIdentifier = resolveBoardCreditIdentifier(req)
     const workflowId = extractWorkflowId(req.body)

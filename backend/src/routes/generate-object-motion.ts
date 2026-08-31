@@ -8,6 +8,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractProvider } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { OBJECT_MOTION_PROVIDERS, resolveObjectAspectRatio, OBJECT_ASPECT_OPTIONS, getDurationsForModel, buildVideoCreditModelIdentifier } from "@nodaro/shared"
@@ -161,7 +162,7 @@ export async function generateObjectMotionRoutes(app: FastifyInstance) {
               undefined, undefined, Boolean(parsed.data.refineFromVideoUrl),
             )
 
-      const prompt = buildObjectMotionPrompt({
+      const builtPrompt = buildObjectMotionPrompt({
         name: parsed.data.name,
         category: parsed.data.category,
         style: parsed.data.style,
@@ -169,6 +170,10 @@ export async function generateObjectMotionRoutes(app: FastifyInstance) {
         canonicalDescription: parsed.data.canonicalDescription,
         seedPromptHint: parsed.data.seedPromptHint,
       })
+      // B4b: deployment prompt policy at this route's assembly point — the
+      // single-node motion lane's only policing site (the DAG lane polices in
+      // payload-builder). No policy registered = identity.
+      const prompt = applyPromptPolicies({ prompt: builtPrompt, negativePrompt: "", kind: "video" }).prompt
 
       // Objects default to 1:1 (product-showcase framing). Explicit override
       // wins via `resolveObjectAspectRatio`'s precedence (explicit > node >

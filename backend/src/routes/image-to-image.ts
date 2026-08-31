@@ -9,6 +9,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { llmComplete } from "../lib/llm-client.js"
 import { MODIFY_IMAGE_PROVIDERS, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING, resolveImageGenCreditIdentifier } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
@@ -231,6 +232,17 @@ export async function imageToImageRoutes(app: FastifyInstance) {
       }
     }
 
+    // B4b: apply any registered PromptPolicy to the final single-node i2i
+    // prompt + native negative — this route's only policing site (the DAG lane
+    // polices in payload-builder). Mirrored into parsed.data so the persisted
+    // input_data carries the policed text the worker dispatches. No policy
+    // registered = identity.
+    const policed = applyPromptPolicies({ prompt, negativePrompt: negativePrompt ?? "", kind: "image" })
+    prompt = policed.prompt
+    const finalNegativePrompt = policed.negativePrompt || undefined
+    parsed.data.prompt = prompt
+    parsed.data.negativePrompt = finalNegativePrompt
+
     const mcpClient = extractMcpClient(req.body)
     const forcePrivate = isStudioPath ? true : (extractForcePrivate(req.body) || undefined)
     const { data: job, error } = await insertJob(req, {
@@ -261,7 +273,7 @@ export async function imageToImageRoutes(app: FastifyInstance) {
       quality,
       strength,
       aspectRatio,
-      negativePrompt,
+      negativePrompt: finalNegativePrompt,
       seed,
       renderingSpeed,
       guidanceScale,

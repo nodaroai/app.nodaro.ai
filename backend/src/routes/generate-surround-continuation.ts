@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
+import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { hasCredits } from "../lib/config.js"
@@ -154,7 +155,13 @@ export async function generateSurroundContinuationRoutes(app: FastifyInstance) {
       }
 
       const modelIdentifier = parsed.data.provider
-      const prompt = buildSurroundFillPrompt(direction, userPrompt)
+      // B4b: deployment prompt policy at this route's assembly point — the
+      // surround-fill lane's only policing site. No policy registered = identity.
+      const prompt = applyPromptPolicies({
+        prompt: buildSurroundFillPrompt(direction, userPrompt),
+        negativePrompt: "",
+        kind: "image",
+      }).prompt
 
       const mcpClient = extractMcpClient(req.body)
       const { data: job, error } = await insertJob(req, {

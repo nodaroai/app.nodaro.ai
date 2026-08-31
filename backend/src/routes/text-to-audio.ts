@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { insertJob } from "../lib/insert-job.js"
+import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
@@ -39,6 +40,14 @@ export async function textToAudioRoutes(app: FastifyInstance) {
       })
     }
 
+    // B4b: deployment prompt policy at this route's assembly point (kind
+    // "audio": the SFX description is a generative prompt, unlike TTS text,
+    // which is spoken content and deliberately not policed). Mirrored into
+    // parsed.data so input_data persists the policed text. No policy
+    // registered = identity.
+    const finalPrompt = applyPromptPolicies({ prompt, negativePrompt: "", kind: "audio" }).prompt
+    parsed.data.prompt = finalPrompt
+
     // Determine model identifier for credit check (default to tangoflux)
     const modelIdentifier = provider ?? "tangoflux"
     const mcpClient = extractMcpClient(req.body)
@@ -64,7 +73,7 @@ export async function textToAudioRoutes(app: FastifyInstance) {
 
     await videoQueue.add("text-to-audio", {
       jobId: job.id,
-      prompt,
+      prompt: finalPrompt,
       provider,
       duration,
       loop,

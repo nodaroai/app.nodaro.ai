@@ -8,6 +8,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractProvider } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { llmComplete } from "../lib/llm-client.js"
 import { extractJsonFromAIResponse } from "../lib/json-utils.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -273,7 +274,7 @@ export async function generateCharacterMotionRoutes(app: FastifyInstance) {
         portraitImageUrl ??
         undefined
 
-      const prompt = buildMotionPrompt({
+      const builtPrompt = buildMotionPrompt({
         name: parsed.data.name,
         description: parsed.data.description,
         gender: parsed.data.gender,
@@ -281,6 +282,10 @@ export async function generateCharacterMotionRoutes(app: FastifyInstance) {
         baseOutfit: parsed.data.baseOutfit,
         motionPrompt: parsed.data.motionPrompt,
       })
+      // B4b: deployment prompt policy at this route's assembly point — the
+      // single-node motion lane's only policing site (the DAG lane polices in
+      // payload-builder). No policy registered = identity.
+      const prompt = applyPromptPolicies({ prompt: builtPrompt, negativePrompt: "", kind: "video" }).prompt
 
       // ───────────────────────────────────────────────────────────────────
       // 5. DB insert. `force_private: true` is unconditional — generated

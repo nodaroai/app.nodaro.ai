@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
+import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
@@ -52,6 +53,15 @@ export async function videoToVideoRoutes(app: FastifyInstance) {
       })
     }
 
+    // B4b: deployment prompt policy at this route's assembly point — only when
+    // a prompt exists. Mirrored into parsed.data so input_data persists the
+    // policed text. No policy registered = identity.
+    const policed = prompt ? applyPromptPolicies({ prompt, negativePrompt: negativePrompt ?? "", kind: "video" }) : undefined
+    const finalPrompt = policed ? policed.prompt : prompt
+    const finalNegativePrompt = policed ? policed.negativePrompt || undefined : negativePrompt
+    parsed.data.prompt = finalPrompt
+    parsed.data.negativePrompt = finalNegativePrompt
+
     const mcpClient = extractMcpClient(req.body)
 
     const { data: job, error } = await insertJob(req, {
@@ -76,7 +86,7 @@ export async function videoToVideoRoutes(app: FastifyInstance) {
     await videoQueue.add("video-to-video", {
       jobId: job.id,
       videoUrl,
-      prompt,
+      prompt: finalPrompt,
       provider: modelIdentifier,
       duration,
       resolution,
@@ -85,7 +95,7 @@ export async function videoToVideoRoutes(app: FastifyInstance) {
       aspectRatio,
       seed,
       referenceImageUrl,
-      negativePrompt,
+      negativePrompt: finalNegativePrompt,
       videoEditDuration,
       audioSetting,
       promptExtend,

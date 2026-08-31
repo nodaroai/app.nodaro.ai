@@ -4,6 +4,7 @@ import { z } from "zod"
 import { probeVideoSource } from "../providers/video/ffmpeg-utils.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
+import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { videoQueue } from "../lib/queue.js"
 import { supabase } from "../lib/supabase.js"
@@ -125,6 +126,17 @@ export default async function videoSfxRoutes(app: FastifyInstance): Promise<void
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
       })
+    }
+
+    // B4b: deployment prompt policy at this route's assembly point (kind
+    // "audio" — the SFX description is a generative prompt). Only when a
+    // prompt exists; written back onto `body` so every per-version inputData
+    // and the queue payloads below carry the policed text. No policy
+    // registered = identity.
+    if (body.prompt) {
+      const policed = applyPromptPolicies({ prompt: body.prompt, negativePrompt: body.negativePrompt ?? "", kind: "audio" })
+      body.prompt = policed.prompt
+      body.negativePrompt = policed.negativePrompt
     }
 
     const duration = req.probedDuration ?? 8

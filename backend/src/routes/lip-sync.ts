@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
+import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
@@ -149,6 +150,15 @@ export async function lipSyncRoutes(app: FastifyInstance) {
       })
     }
 
+    // B4b: deployment prompt policy at this route's assembly point — only when
+    // a prompt exists (most lip-sync providers run promptless). Mirrored into
+    // parsed.data so input_data persists the policed text. No policy
+    // registered = identity.
+    const finalPrompt = prompt
+      ? applyPromptPolicies({ prompt, negativePrompt: "", kind: "video" }).prompt
+      : prompt
+    parsed.data.prompt = finalPrompt
+
     const mcpClient = extractMcpClient(req.body)
 
     const { data: job, error } = await insertJob(req, {
@@ -176,7 +186,7 @@ export async function lipSyncRoutes(app: FastifyInstance) {
       imageUrl,
       videoUrl,
       audioUrl,
-      prompt,
+      prompt: finalPrompt,
       provider: baseProvider,
       resolution,
       audioDurationSec,

@@ -3,6 +3,7 @@ import { z } from "zod"
 import { PROMPT_HARD_CEILING } from "@nodaro/shared"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
+import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
@@ -58,6 +59,15 @@ export async function speechToVideoRoutes(app: FastifyInstance) {
       })
     }
 
+    // B4b: deployment prompt policy at this route's assembly point. Mirrored
+    // into parsed.data so input_data persists the policed text. No policy
+    // registered = identity.
+    const policed = applyPromptPolicies({ prompt, negativePrompt: negativePrompt ?? "", kind: "video" })
+    const finalPrompt = policed.prompt
+    const finalNegativePrompt = policed.negativePrompt || undefined
+    parsed.data.prompt = finalPrompt
+    parsed.data.negativePrompt = finalNegativePrompt
+
     const mcpClient = extractMcpClient(req.body)
 
     const { data: job, error } = await insertJob(req, {
@@ -86,8 +96,8 @@ export async function speechToVideoRoutes(app: FastifyInstance) {
 
     await videoQueue.add("speech-to-video", {
       jobId: job.id,
-      imageUrl, audioUrl, prompt, resolution,
-      negativePrompt, seed, numFrames, fps, inferenceSteps, guidanceScale, shift,
+      imageUrl, audioUrl, prompt: finalPrompt, resolution,
+      negativePrompt: finalNegativePrompt, seed, numFrames, fps, inferenceSteps, guidanceScale, shift,
       usageLogId,
     })
 
