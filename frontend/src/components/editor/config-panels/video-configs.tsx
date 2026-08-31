@@ -344,6 +344,11 @@ export function toRefImageItems(entries: ReadonlyArray<VideoRefAutocompleteEntry
       : "character",
     index: i + 1,
     defaultLabel: DEFAULT_LABEL_BY_SOURCE[ref.source],
+    // NB deliberately NO `isExtraRef` here: this list is built from wired graph
+    // EDGES only (`buildVideoRefAutocomplete`), so an extra ref can never reach
+    // it — unlike the image path, which appends
+    // `expandExtraRefsToConnectedReferences`. Leaving it undefined is correct,
+    // not an omission.
     characterSlug: ref.characterSlug,
     variantSlug: ref.variantSlug,
     variantDisplayName: ref.variantDisplayName,

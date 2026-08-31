@@ -1,5 +1,6 @@
 import { Node, mergeAttributes } from "@tiptap/core"
-import { nodeInputRule, nodePasteRule } from "@tiptap/core"
+import { nodePasteRule } from "@tiptap/core"
+import { gatedNodeInputRule } from "./lib/gated-node-input-rule"
 import { ReactNodeViewRenderer } from "@tiptap/react"
 import { DEFAULT_LOCATION_USAGE_MODE, isLocationUsageMode, parseLocationMentionToken, type LocationUsageMode } from "@nodaro/shared"
 import { IMAGE_REFERENCE_FORMAT } from "./lib/image-reference-format"
@@ -281,11 +282,16 @@ export const LocationRefExtension = Node.create({
    * `attrs.locationSlug` is a known location wired into the consumer node.
    * The character extension is gated by the analogous character-storage
    * check in `character-ref-extension.ts` (added in this same slice).
+   *
+   * `gatedNodeInputRule` is what makes that gate real: the raw `nodeInputRule`
+   * coerces a `false` from `getAttributes` to `{}` and builds an empty-slug
+   * pill anyway, which both corrupts the typed token AND stops the sibling
+   * rule that should have owned it. See the helper's docstring.
    */
   addInputRules() {
     const self = this
     return [
-      nodeInputRule({
+      gatedNodeInputRule({
         find: new RegExp(`${LOCATION_REF_PATTERN_CORE}\\s$`),
         type: this.type,
         // Promotion is gated by `resolvePromotableAttrs`: known-slug only

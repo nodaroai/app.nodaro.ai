@@ -29,7 +29,12 @@ export interface RefImageItem {
   /**
    * Discriminator for how the autocomplete renders this row and what kind of
    * pill `selectSuggestion` inserts:
-   *   - "uploaded" / "wired": legacy `{image:N:label}` ref (TipTap `imageRef` node)
+   *   - "uploaded" / "wired": media ref. Offers TWO pills, not one: the
+   *     POSITIONAL `{image:N:label}` (TipTap `imageRef`) and — when the ref's
+   *     name yields a grammar-valid slug — the NAME-addressed
+   *     `@<name-slug>:N(:role)` (TipTap `imageMention`). Siblings, not
+   *     replacements: the slot form survives a rename, the named form survives
+   *     a re-order.
    *   - "character": violet `@<charSlug>:N(:variant)(:mode)` pill (TipTap `characterRef` node)
    *   - "location":  cyan   `@<locSlug>:N(:bucket/variant)(:mode)`  pill (TipTap `locationRef` node)
    *   - "video" / "audio": `{video:N:label}` / `{audio:N:label}` ref (TipTap
@@ -41,6 +46,15 @@ export interface RefImageItem {
   readonly index: number
   /** Default role label inserted by the "@" trigger (e.g. "object", "person"). */
   readonly defaultLabel: string
+  /**
+   * Mirrors `ConnectedReference.isExtraRef`. An extra renders through the
+   * extras path with its own body line, so it can NEVER carry a named-image
+   * `@<name-slug>:N` mention — the shared `imageMentionSlugForRef` excludes it
+   * for exactly that reason (a mention binding an extra would double-emit
+   * prose). Carried here so the editor's mentionable set is the same set the
+   * resolver will bind.
+   */
+  readonly isExtraRef?: boolean
   /** When source === "character", the slug for the character (e.g. "kira"). */
   readonly characterSlug?: string
   /** When source === "character", the slug for the variant (e.g. "smile"). undefined = canonical. */

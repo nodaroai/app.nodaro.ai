@@ -1245,6 +1245,11 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
         : "character",
       index: i + 1,
       defaultLabel: DEFAULT_LABEL_BY_SOURCE[ref.source],
+      // Extras render through their own body line, so they can never carry a
+      // named-image `@<name-slug>:N` mention (shared `imageMentionSlugForRef`
+      // excludes them). Carried so the editor offers the same set the
+      // resolver will bind.
+      isExtraRef: ref.isExtraRef,
       characterSlug: ref.characterSlug,
       variantSlug: ref.variantSlug,
       variantDisplayName: ref.variantDisplayName,

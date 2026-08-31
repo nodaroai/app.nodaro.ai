@@ -1059,6 +1059,119 @@ html, body {
   opacity: 1;
 }
 
+/* ── Image-mention pill (@name:N) ───────────────────────────────────
+   NAME-addressed media mention — the sibling of the POSITIONAL pink
+   {image:N} pill, not its replacement, so it gets its own amber accent:
+   at a glance you can see which references in a prompt survive a
+   re-order (named) and which survive a rename (positional). Structure
+   mirrors .character-ref-pill — selector names are parallel. */
+.image-mention-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 4px 1px 2px;
+  margin: 0 -2px;
+  border-radius: 4px;
+  background: color-mix(in srgb, #f59e0b 16%, transparent);
+  color: #b45309;
+  vertical-align: middle;
+  line-height: 1;
+}
+.dark .image-mention-pill {
+  background: color-mix(in srgb, #f59e0b 24%, transparent);
+  color: #fcd34d;
+}
+.image-mention-pill--selected {
+  outline: 2px solid currentColor;
+  outline-offset: 1px;
+}
+/* No wired reference answers to this name any more (upstream renamed or
+   unwired). The token is still in the prompt text, so the pill stays
+   visible and calls the mismatch out rather than quietly vanishing. */
+.image-mention-pill--broken {
+  background: color-mix(in srgb, #f43f5e 12%, transparent);
+  color: #e11d48;
+  outline: 1px dashed color-mix(in srgb, #f43f5e 55%, transparent);
+  outline-offset: 0;
+}
+.dark .image-mention-pill--broken {
+  background: color-mix(in srgb, #f43f5e 22%, transparent);
+  color: #fda4af;
+}
+.image-mention-pill__thumb {
+  width: 1.1em;
+  height: 1.1em;
+  border-radius: 3px;
+  object-fit: cover;
+  cursor: zoom-in;
+  pointer-events: auto;
+  border: 1px solid color-mix(in srgb, #f59e0b 45%, transparent);
+  flex-shrink: 0;
+}
+.image-mention-pill__thumb:hover {
+  outline: 2px solid #f59e0b;
+  outline-offset: 1px;
+}
+.image-mention-pill__thumb-broken {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1em;
+  height: 1.1em;
+  border-radius: 3px;
+  background: color-mix(in srgb, #f43f5e 20%, transparent);
+  color: #e11d48;
+  font-size: 0.8em;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.image-mention-pill__label {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0;
+  font-size: 0.85em;
+  font-weight: 500;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  letter-spacing: -0.02em;
+  color: inherit;
+}
+.image-mention-pill__name {
+  font-weight: 600;
+}
+.image-mention-pill__index {
+  opacity: 0.7;
+}
+.image-mention-pill__role {
+  opacity: 0.85;
+}
+.image-mention-pill__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1em;
+  height: 1.1em;
+  margin-left: 1px;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font-size: 0.95em;
+  line-height: 1;
+  pointer-events: auto;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.1s ease, background-color 0.1s ease;
+  border: none;
+  padding: 0;
+  flex-shrink: 0;
+}
+.image-mention-pill:hover .image-mention-pill__remove {
+  opacity: 0.85;
+}
+.image-mention-pill__remove:hover {
+  background: color-mix(in srgb, #f59e0b 35%, transparent);
+  opacity: 1;
+}
+
 /* ── Location-ref pill ──────────────────────────────────────────────
    Cyan theme to match the Location node card color (#22D3EE) used on
    the canvas (see frontend/CLAUDE.md MiniMap palette). Visually distinct

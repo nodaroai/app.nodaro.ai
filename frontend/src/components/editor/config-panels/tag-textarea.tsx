@@ -124,6 +124,20 @@ export interface RefImageItem {
   readonly index: number
   /** Default role label inserted by the "@" trigger (e.g. "object", "person"). */
   readonly defaultLabel: string
+  /**
+   * Mirrors `ConnectedReference.isExtraRef`, and mirrored again on picker-ui's
+   * own `RefImageItem` (`packages/picker-ui/src/prompt-editor/editor-types.ts`),
+   * which is where it is READ. An extra renders through the extras path with its
+   * own body line, so it can NEVER carry a named-image `@<name-slug>:N` mention —
+   * the shared `imageMentionSlugForRef` excludes it for exactly that reason (a
+   * mention binding an extra would double-emit prose). Declared here because the
+   * producers that set it (`connected-references.ts`, `image-configs.tsx`,
+   * `video-configs.tsx`) are annotated with THIS type — without the member it
+   * only survives on an excess-property inference accident that a later refactor
+   * would silently drop, and the editor would start offering "by name" rows for
+   * extras.
+   */
+  readonly isExtraRef?: boolean
   /** When source === "character", the slug for the character (e.g. "kira"). */
   readonly characterSlug?: string
   /** When source === "character", the slug for the variant (e.g. "smile"). undefined = canonical. */
