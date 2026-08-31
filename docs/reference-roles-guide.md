@@ -24,8 +24,8 @@ with zero configuration:
 |--------------|---------------|
 | Character | `person` |
 | Location | `background` |
-| Object | `object` |
-| Animal / Creature | `creature` |
+| Object | `object` — nameable, see [Mentioning a creature or an object](#mentioning-a-creature-or-an-object) |
+| Animal / Creature | `creature` — nameable, see [Mentioning a creature or an object](#mentioning-a-creature-or-an-object) |
 | Face | `face` |
 | Plain image / upload | **`ref-only`** (bare reference) — nameable, see [Naming a plain image](#naming-a-plain-image-so-you-can-mention-it) |
 | Video / audio | **`ref-only`** (bare reference) |
@@ -102,6 +102,34 @@ to address. Two notes: a label starting with a digit (`3D Render`) can't form a 
 if you want to address it inline; and when a name is shared with a character or location, the
 **character or location wins** — those resolve first.
 
+### Mentioning a creature or an object
+
+**Object** and **Animal / Creature** assets are mentionable by name too, with the **same grammar** as
+a plain image — `@<name>:<index>[:<role>]`, plus the `~lock` / `~nolock` sentinels. The name is the
+entity's own name (a creature named `Nessie` is `@nessie:1`), and the roles are that asset's sets:
+`creature` · `anatomy` · `markings` · `pose` · `color` · `style`, and `object` · `shape` · `material`
+· `color` · `texture` · `style` — or a custom one.
+
+| Token | Result |
+|-------|--------|
+| `@nessie:1` | `the creature from reference image A`, placed where you typed it |
+| `@nessie:1:markings` | `the markings from reference image A` |
+| `@dock:2:material` | `the material from reference image B` |
+| `@nessie:1~lock` / `@nessie:1~nolock` | force the identity-lock on / off for this mention |
+
+This is the one place mentioning changes more than *where* the phrase lands. A wired creature or
+object you **don't** mention still contributes a phrase, appended at the end of the prompt — so
+writing the creature's name in your sentence leaves the name as plain prose while its binding dangles
+in a trailing line, and the model has no reason to connect the two. **Mentioning binds them:** the
+phrase renders once, inline, and the trailing line for that reference goes away.
+
+> Before: *"a wide shot of Nessie rising from the lake"* … `the creature from reference image A`
+>
+> After (`@nessie:1`): *"a wide shot of **the creature from reference image A** rising from the lake"*
+
+Full precedence when a name is shared across kinds: **character → location → image → creature →
+object**. The earlier kind wins and the later mention never fires.
+
 ### Custom labels
 
 Pick **Custom…** and type anything (e.g. `dragon`, `Danny`, `hoodie`). Custom labels are sanitized
@@ -123,8 +151,8 @@ built-in wording (tuned per type — person / face / creature / location) or rep
 Left off, your prompt stays terse and you remain in full control of any fidelity language.
 
 **In the editor** you can also flip the lock **per `@`-mention**: open a character or location pill's
-menu and toggle **Identity lock** (a named plain image takes the same trailing sentinel, typed
-directly — `@town:1~lock`). That mention then serializes a trailing `~lock`
+menu and toggle **Identity lock** (a named plain image, creature or object takes the same trailing
+sentinel, typed directly — `@town:1~lock`, `@nessie:1~lock`). That mention then serializes a trailing `~lock`
 (`@kira:1:face~lock`, `@old-library:1:background~lock`) and its reference gets the lock line — even
 when the source's default lock is off. Locations use their own built-in wording:
 
