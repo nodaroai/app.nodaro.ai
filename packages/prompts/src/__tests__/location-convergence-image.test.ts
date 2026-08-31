@@ -45,6 +45,34 @@ describe("location reference converges onto the image hybrid form", () => {
     expect(out.prompt).not.toContain("Use these locations:")
   })
 
+  // A PLACE, NOT A BACKDROP — the `identical` usage mode (which IS
+  // `DEFAULT_LOCATION_USAGE_MODE`, i.e. what a bare `@old-library:1` resolves to)
+  // used to render "the background from reference image A". That is the exact
+  // wording measured on gpt-image-2 to produce cut-out composites, and the reason
+  // `DEFAULT_LABEL_BY_SOURCE["wired-location"]` became "location" on 2026-08-05;
+  // the mode map missed that fix. An EXPLICIT `:background` token still renders
+  // the backdrop wording (pinned in the Phase-D guard below).
+  it("bare @-mention (identical = the default mode) → 'the location from reference image A'", () => {
+    const out = buildImagePrompt({
+      prompt: "@old-library:1 a chase scene",
+      connectedReferences: [library],
+      provider: "nano-banana-pro", referenceFormat: "hybrid",
+    })
+    expect(out.prompt).toContain("the location from reference image A")
+    expect(out.prompt).not.toContain("the background from reference image")
+    expect(out.prompt).not.toContain("Use these locations:")
+  })
+
+  it("explicit :identical mode → the same 'the location from …' phrase", () => {
+    const out = buildImagePrompt({
+      prompt: "@old-library:1:identical a chase scene",
+      connectedReferences: [library],
+      provider: "nano-banana-pro", referenceFormat: "hybrid",
+    })
+    expect(out.prompt).toContain("the location from reference image A")
+    expect(out.prompt).not.toContain("the background from reference image")
+  })
+
   it("opt-in identity lock surfaces a lock line; default OFF emits none", () => {
     const locked = buildImagePrompt({
       prompt: "@old-library:1 a chase scene",
@@ -54,7 +82,7 @@ describe("location reference converges onto the image hybrid form", () => {
       } as ConnectedReference],
       provider: "nano-banana-pro", referenceFormat: "hybrid",
     })
-    expect(locked.prompt).toContain("the background from reference image A")
+    expect(locked.prompt).toContain("the location from reference image A")
     expect(locked.prompt).toContain("Lock the exact setting in reference image A.")
 
     const unlocked = buildImagePrompt({

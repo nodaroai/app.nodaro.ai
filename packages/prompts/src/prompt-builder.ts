@@ -399,21 +399,34 @@ function locationModeDirective(mode: LocationUsageMode): string | null {
  * `roleToPhrase` renders into "the {role} from reference image {LETTER}". The
  * location analog of the character mention's role segment, for the 4-mode
  * location enum:
- *   - identical → "background"  (lock the scene to this image)
- *   - style     → "style"       (borrow look / mood / palette)
- *   - layout    → "layout"      (borrow compositional framing)
- *   - none / undefined / anything else → the source default (`"background"`).
+ *   - identical → the source default (`"location"`) — lock the scene to this image
+ *   - style     → "style"   (borrow look / mood / palette)
+ *   - layout    → "layout"  (borrow compositional framing)
+ *   - none / undefined / anything else → the source default (`"location"`).
+ *
+ * A PLACE, NOT A BACKDROP — `identical` used to map to `"background"`, which is
+ * the exact word `DEFAULT_LABEL_BY_SOURCE["wired-location"]` stopped emitting on
+ * 2026-08-05 after it was measured harmful: `roleToPhrase` renders it as "the
+ * background from reference image B", and image models read that as *paste this
+ * behind the subject* — on gpt-image-2 (character + location, 4 draws per arm,
+ * only the role word varying) every `background` draw came back a cut-out
+ * composite with no shared light and no ground contact, while `location` put the
+ * subject inside the scene. That fix changed the SOURCE default but missed this
+ * branch, so `identical` — the DEFAULT location usage mode
+ * (`DEFAULT_LOCATION_USAGE_MODE`) — kept handing every un-roled location mention
+ * the harmful word. Both defaults now read from `defaultRoleForSource`, so the
+ * source default is the single source of truth and the two cannot drift again.
+ * `"background"` stays a curated pick in `REFERENCE_ROLE_PRESETS` for the genuine
+ * backdrop case — an explicit `@lib:1:background` token is untouched.
  *
  * Accepts a loose `string` so a `ConnectedReference.defaultUsageMode` (typed as
  * the CHARACTER `UsageMode`, which can't express `"layout"`) flows in without a
  * cast — unknown / non-location modes fall through to the safe source default
- * instead of throwing. The three real roles are members of
+ * instead of throwing. The two mode-specific roles are members of
  * `REFERENCE_ROLE_PRESETS["wired-location"]`, so the phrasing stays curated.
  */
 function locationModeToRole(mode: string | null | undefined): string {
   switch (mode) {
-    case "identical":
-      return "background"
     case "style":
       return "style"
     case "layout":

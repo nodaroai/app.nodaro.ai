@@ -1,0 +1,7 @@
+---
+"@nodaro/prompts": minor
+---
+
+**A location mention is a PLACE, not a backdrop.** `locationModeToRole`'s `identical` branch — which is `DEFAULT_LOCATION_USAGE_MODE`, i.e. what a bare `@old-library:1` and every un-roled location mention resolve to — still hardcoded the role `"background"`. That is the exact word `DEFAULT_LABEL_BY_SOURCE["wired-location"]` stopped emitting on 2026-08-05: `roleToPhrase` renders it as `"the background from reference image B"`, and image models read that as _paste this behind the subject_. Measured on gpt-image-2 (one character + one location, 4 draws per arm, only the role word varying), every `background` draw came back a cut-out composite — an indoor-lit subject over the location, no cast shadow, no ground contact, the asked-for action ignored; with `location` the subject rendered inside the scene under one sun. The source default was fixed then, this branch was missed.
+
+**This changes live prompt bytes**: an identical-mode / un-roled location mention now assembles `"the location from reference image B"` where it previously assembled `"the background from reference image B"`. Both defaults now read from `defaultRoleForSource("wired-location")`, so they cannot drift apart again. Nothing else moves — `"background"` remains a curated pick in `REFERENCE_ROLE_PRESETS["wired-location"]`, an explicit `@old-library:1:background` token renders the backdrop wording unchanged, the `style` / `layout` modes are untouched, and the legacy reference format (which never emitted role phrases) is byte-identical.
