@@ -13,15 +13,16 @@ import type { ImageMentionAttrs } from "./image-mention-extension"
  * `imageRef` view indexes `list[imageIndex - 1]`; this one matches the slug,
  * because `imageIndex` here is a correlation counter, not a slot.
  *
- * `revision` is read so the view re-renders when the parent pushes a new
- * reference list (a renamed or re-wired upstream image changes what this pill
- * points at).
+ * Storage is read plainly on each render, exactly as `ImageRefView` does: the
+ * parent dispatches a no-op `refs-changed` transaction after every reference-
+ * list push, which re-renders the node views — so a renamed or re-wired
+ * upstream image is picked up without subscribing to `revision` here.
  */
 function useMentionedRef(props: NodeViewProps): RefImageItem | undefined {
   const attrs = props.node.attrs as ImageMentionAttrs
   const storage = props.editor.storage as unknown as Record<
     string,
-    { referenceImages?: readonly RefImageItem[]; revision?: number }
+    { referenceImages?: readonly RefImageItem[] }
   >
   const list = storage.imageMention?.referenceImages ?? []
   return findItemByImageMentionSlug(list, attrs.imageSlug)
