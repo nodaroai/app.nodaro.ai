@@ -206,6 +206,44 @@ export function resolveCharacterMentions(
   return { prompt: resolvedPrompt, additionalUrls, mentionedCharacterSlugs }
 }
 
+/**
+ * Splice one resolved mention phrase in for its token, collapsing the horizontal
+ * whitespace ON EITHER SIDE OF THE SEAM to a single space. The single splice
+ * primitive for the three HYBRID image mention resolvers.
+ *
+ * WHY: an editor serializes a mention chip as its token plus its own trailing
+ * space, and the prose that follows the chip carries the space the author typed
+ * — so a perfectly ordinary sentence arrives as `@panda:1  and @panda2:2 …` and
+ * assembles to "the person from reference image A  and reference image C …",
+ * with the doubled space sitting exactly where the model is being told what the
+ * reference IS. The VIDEO core never shows this because `resolveReferenceTokens`
+ * runs a `[^\S\r\n]{2,}` collapse over its fully-assembled prompt on every
+ * return; the image path has no such tidy. This is that collapse, SCOPED to the
+ * seam: a doubled space the author put elsewhere in their prose is theirs to
+ * keep, and a prompt whose seams are already single-spaced is byte-identical
+ * (the run must be 2+ to match).
+ *
+ * The class is `[^\S\r\n]` (NOT `\s`) for the same reason the video tidy uses
+ * it: `\n` / `\n\n` separate the assembled blocks, and a `\s`-based collapse
+ * would silently merge paragraphs.
+ *
+ * OFFSET SAFETY: callers splice right-to-left over offsets taken against the
+ * pre-splice string. The left-hand collapse only ever removes characters from
+ * the whitespace run immediately preceding THIS token — positions at or after
+ * the end of any earlier token (tokens are non-whitespace and never overlap) —
+ * so every not-yet-applied (smaller) offset stays valid.
+ */
+function spliceMentionPhrase(
+  prompt: string,
+  offset: number,
+  tokenLength: number,
+  phrase: string,
+): string {
+  const before = prompt.slice(0, offset).replace(/[^\S\r\n]{2,}$/, " ")
+  const after = prompt.slice(offset + tokenLength).replace(/^[^\S\r\n]{2,}/, " ")
+  return before + phrase + after
+}
+
 interface ResolveCharacterMentionsHybridResult {
   /** Body with each `@`-mention replaced INLINE by its role phrase
    *  ("the {role} from reference image {LETTER}"). No directive block. */
@@ -249,6 +287,7 @@ interface ResolveCharacterMentionsHybridResult {
  * parsed as a variant slug (e.g. `@kira:1:person`) still attaches the canonical
  * reference instead of being dropped (the legacy resolver skips variant misses).
  */
+
 function resolveCharacterMentionsHybrid(
   prompt: string,
   tokens: readonly CharacterMentionTokenInfo[],
@@ -327,12 +366,12 @@ function resolveCharacterMentionsHybrid(
     return slot ? `reference image ${slotToLetter(slot)}` : "the reference image"
   }
 
-  // Replace mention tokens right-to-left so earlier offsets stay valid.
+  // Replace mention tokens right-to-left so earlier offsets stay valid;
+  // `spliceMentionPhrase` also tidies the horizontal whitespace at each seam.
   let resolvedPrompt = prompt
   for (const m of [...matched].sort((a, b) => b.offset - a.offset)) {
     const phrase = roleToPhrase(m.role, bindingFor(m.url))
-    resolvedPrompt =
-      resolvedPrompt.slice(0, m.offset) + phrase + resolvedPrompt.slice(m.offset + m.token.length)
+    resolvedPrompt = spliceMentionPhrase(resolvedPrompt, m.offset, m.token.length, phrase)
   }
 
   // One identity-lock + one element directive per UNIQUE attached URL (a
@@ -681,12 +720,12 @@ function resolveLocationMentionsHybrid(
     return slot ? `reference image ${slotToLetter(slot)}` : "the reference image"
   }
 
-  // Replace mention tokens right-to-left so earlier offsets stay valid.
+  // Replace mention tokens right-to-left so earlier offsets stay valid;
+  // `spliceMentionPhrase` also tidies the horizontal whitespace at each seam.
   let resolvedPrompt = prompt
   for (const m of [...matched].sort((a, b) => b.offset - a.offset)) {
     const phrase = roleToPhrase(m.role, bindingFor(m.url))
-    resolvedPrompt =
-      resolvedPrompt.slice(0, m.offset) + phrase + resolvedPrompt.slice(m.offset + m.token.length)
+    resolvedPrompt = spliceMentionPhrase(resolvedPrompt, m.offset, m.token.length, phrase)
   }
 
   // One opt-in lock + one element directive per UNIQUE attached URL.
@@ -806,12 +845,12 @@ function resolveImageMentionsHybrid(
     return slot ? `reference image ${slotToLetter(slot)}` : "the reference image"
   }
 
-  // Replace mention tokens right-to-left so earlier offsets stay valid.
+  // Replace mention tokens right-to-left so earlier offsets stay valid;
+  // `spliceMentionPhrase` also tidies the horizontal whitespace at each seam.
   let resolvedPrompt = prompt
   for (const m of [...matched].sort((a, b) => b.offset - a.offset)) {
     const phrase = roleToPhrase(m.role, bindingFor(m.url))
-    resolvedPrompt =
-      resolvedPrompt.slice(0, m.offset) + phrase + resolvedPrompt.slice(m.offset + m.token.length)
+    resolvedPrompt = spliceMentionPhrase(resolvedPrompt, m.offset, m.token.length, phrase)
   }
 
   // One lock + one element directive per UNIQUE attached URL.
