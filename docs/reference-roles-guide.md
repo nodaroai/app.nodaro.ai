@@ -23,7 +23,7 @@ with zero configuration:
 | Wired source | Default label |
 |--------------|---------------|
 | Character | `person` |
-| Location | `background` |
+| Location | `location` |
 | Object | `object` — nameable, see [Mentioning a creature or an object](#mentioning-a-creature-or-an-object) |
 | Animal / Creature | `creature` — nameable, see [Mentioning a creature or an object](#mentioning-a-creature-or-an-object) |
 | Face | `face` |
@@ -40,7 +40,7 @@ default is **bold**). **Custom…** is always available for anything not listed.
 | Source | Preset roles |
 |--------|--------------|
 | **Character / Person** | ref-only · **person** · face · clothes · hair · pose · expression · style |
-| **Location** | ref-only · **background** · atmosphere · as-is · empty background · layout · lighting · style |
+| **Location** | ref-only · **location** · background · atmosphere · as-is · empty background · layout · lighting · style |
 | **Object** | **object** · shape · material · color · texture · style |
 | **Animal / Creature** | **creature** · anatomy · markings · pose · color · style |
 | **Plain image** (wired / uploaded) | **ref-only** · object · person · face · clothes · background · style · pose · texture |
@@ -60,7 +60,7 @@ reference without being told what to take from it. It's the top entry of every r
 and the **default** for plain image, video, and audio references.
 
 For **Character / Location / Object / Animal** assets, ref-only is an explicit choice (their described
-defaults — person / background / object / creature — are unchanged). A Character or Location pill set
+defaults — person / location / object / creature — are unchanged). A Character or Location pill set
 to ref-only serializes as a plain role (`@kira:1:ref-only`) and shows a compact **ref** badge to set
 it apart from its described default.
 

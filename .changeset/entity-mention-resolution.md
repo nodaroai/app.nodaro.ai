@@ -22,3 +22,8 @@ double-render this leg exists to remove.
 The pass is gated on token presence, so every mention-free prompt keeps its
 exact branch and byte output, and the legacy reference format is untouched
 (an `@name:N` token stays literal text and the entity attaches as it does today).
+
+Like the character, location and named-image resolvers, the entity pass splices
+through `spliceMentionPhrase`, so an entity chip's own trailing space cannot
+leave a doubled space at the seam where the model is being told what the
+reference is.
