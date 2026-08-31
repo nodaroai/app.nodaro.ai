@@ -1,6 +1,7 @@
 import { Node, mergeAttributes } from "@tiptap/core"
-import { nodeInputRule, nodePasteRule } from "@tiptap/core"
+import { nodePasteRule } from "@tiptap/core"
 import { ReactNodeViewRenderer } from "@tiptap/react"
+import { gatedNodeInputRule } from "./lib/gated-node-input-rule"
 import { parseImageMentionToken } from "@nodaro/shared"
 import { IMAGE_REFERENCE_FORMAT } from "./lib/image-reference-format"
 import { knownImageMentionSlugs } from "./lib/image-mention-refs"
@@ -93,9 +94,11 @@ function knownSlugsFromStorage(extension: { editor: unknown }): Set<string> {
  * the gate can be unit-tested without driving TipTap end-to-end (mirrors the
  * location extension's `resolvePromotableAttrs`).
  *
- * Returns `false` — nodeInputRule/nodePasteRule's "skip this rule" — whenever
- * the token isn't a promotable image mention, leaving the text literal, which
- * is exactly the downstream resolver's fallback.
+ * Returns `false` — the "skip this rule" sentinel `nodePasteRule` honors
+ * natively and `gatedNodeInputRule` restores for the input path — whenever the
+ * token isn't a promotable image mention. The token is then left to the
+ * sibling grammars' rules, and if none claims it, to literal text, which is
+ * exactly the downstream resolver's fallback.
  */
 export function resolvePromotableAttrs(
   token: string,
@@ -196,11 +199,18 @@ export const ImageMentionExtension = Node.create({
    * snatched mid-word. `match[1]` is the token without that boundary, which is
    * what `nodeInputRule` uses to compute the replaced slice — so the boundary
    * character survives as plain text.
+   *
+   * `gatedNodeInputRule`, not the raw `nodeInputRule`: this extension is
+   * registered LAST, and TipTap runs input rules in REVERSE registration order
+   * (`ExtensionManager.plugins` reverses the list), so this rule sees every
+   * typed `@<slug>:N ` FIRST — including the character and location grammars'
+   * tokens, which share the surface. Declining has to actually decline, or the
+   * sibling rules never run. See the helper's docstring.
    */
   addInputRules() {
     const self = this
     return [
-      nodeInputRule({
+      gatedNodeInputRule({
         find: new RegExp(`${IMAGE_MENTION_PATTERN_CORE}\\s$`),
         type: this.type,
         getAttributes: (match) =>

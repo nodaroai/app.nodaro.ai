@@ -39,7 +39,13 @@ vi.mock("../lib/image-reference-format", () => ({
 // eslint-disable-next-line import/first
 import { ImageMentionExtension, resolvePromotableAttrs } from "../image-mention-extension"
 // eslint-disable-next-line import/first
-import { imageMentionSlugForItem, knownImageMentionSlugs } from "../lib/image-mention-refs"
+import {
+  findItemByImageMentionSlug,
+  imageMentionSlugForItem,
+  imageMentionSlugOwners,
+  knownImageMentionSlugs,
+  mentionNamespaceSlugs,
+} from "../lib/image-mention-refs"
 // eslint-disable-next-line import/first
 import { collectTokens, type KnownSlugSets } from "../index"
 // eslint-disable-next-line import/first
@@ -252,5 +258,44 @@ describe("imageMentionSlugForItem — the mentionable-ref gate", () => {
       item({ label: "3D Render" }),
       item({ label: "Extra", isExtraRef: true }),
     ])).toEqual(new Set(["town", "barn"]))
+  })
+})
+
+describe("imageMentionSlugOwners — the list-level mentionable set", () => {
+  it("drops a media name contested by a wired CHARACTER or LOCATION slug", () => {
+    // All three grammars share `@<slug>:N` and the prompt-builder resolves
+    // character → location → image, so a contested slug binds the ENTITY. The
+    // editor must not offer (or promote) it as an image mention, or the pill
+    // would carry a thumbnail for a reference the prompt never binds.
+    const refs = [
+      item({ label: "Kira" }),
+      item({ source: "character", characterSlug: "kira" }),
+      item({ label: "Old Library" }),
+      item({ source: "location", locationSlug: "old-library" }),
+      item({ label: "Town" }),
+    ]
+    expect(knownImageMentionSlugs(refs)).toEqual(new Set(["town"]))
+    expect(imageMentionSlugOwners(refs).has("kira")).toBe(false)
+    expect(findItemByImageMentionSlug(refs, "old-library")).toBeUndefined()
+  })
+
+  it("gives a slug shared by two media refs to the FIRST — the one the resolver binds", () => {
+    const first = item({ label: "Town", index: 1 })
+    const second = item({ label: "Town", index: 2 })
+    const owners = imageMentionSlugOwners([first, second])
+    expect(owners.get("town")).toBe(first)
+    expect(findItemByImageMentionSlug([first, second], "town")).toBe(first)
+  })
+})
+
+describe("mentionNamespaceSlugs — the two entity namespaces", () => {
+  it("collects character + location slugs and ignores media refs", () => {
+    expect(
+      mentionNamespaceSlugs([
+        item({ source: "character", characterSlug: "kira" }),
+        item({ source: "location", locationSlug: "old-library" }),
+        item({ label: "Town" }),
+      ]),
+    ).toEqual({ characters: new Set(["kira"]), locations: new Set(["old-library"]) })
   })
 })

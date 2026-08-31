@@ -1,5 +1,6 @@
 import { Node, mergeAttributes } from "@tiptap/core"
-import { nodeInputRule, nodePasteRule } from "@tiptap/core"
+import { nodePasteRule } from "@tiptap/core"
+import { gatedNodeInputRule } from "./lib/gated-node-input-rule"
 import { ReactNodeViewRenderer } from "@tiptap/react"
 import { DEFAULT_USAGE_MODE, isUsageMode, type UsageMode } from "@nodaro/shared"
 import { IMAGE_REFERENCE_FORMAT } from "./lib/image-reference-format"
@@ -283,11 +284,16 @@ export const CharacterRefExtension = Node.create({
    * mirrored gate against its own storage. Unknown slugs fall through to
    * literal text, matching the downstream resolver's literal-text
    * fallback.
+   *
+   * `gatedNodeInputRule` is what makes that fall-through real: the raw
+   * `nodeInputRule` coerces a `false` from `getAttributes` to `{}` and builds
+   * an empty-slug pill anyway, which both corrupts the typed token AND stops
+   * the sibling rule that should have owned it. See the helper's docstring.
    */
   addInputRules() {
     const self = this
     return [
-      nodeInputRule({
+      gatedNodeInputRule({
         // Lowercase-only — uppercase slugs would not round-trip through the
         // shared `parseCharacterMentionToken` (which rejects any non-lowercase
         // character in the slug). Drop the `i` flag so we never promote a
@@ -307,9 +313,10 @@ export const CharacterRefExtension = Node.create({
           // sentinel never sets a legacy pill's (hidden) lock.
           const lock = lockHonored() ? matchLockState(match[1]) : undefined
           const attrs = parseMatchAttrs(characterWithAt, indexStr, third, fourth, lock)
-          // Returning false tells `nodeInputRule` to skip the rule — leaves
-          // the typed text alone (e.g. a 3-part token whose 3rd segment is
-          // neither a known usage mode nor a valid variant slug shape).
+          // Returning false tells `gatedNodeInputRule` to skip the rule —
+          // leaves the typed text to the sibling grammars and, failing those,
+          // alone (e.g. a 3-part token whose 3rd segment is neither a known
+          // usage mode nor a valid variant slug shape).
           if (!attrs) return false
           // Only auto-promote when the slug is known to the editor's
           // character storage. This is the surgical fix that lets the

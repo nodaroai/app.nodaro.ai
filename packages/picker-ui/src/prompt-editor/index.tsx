@@ -14,7 +14,7 @@ import { VideoRefExtension, AudioRefExtension } from "./video-audio-ref-extensio
 import { CharacterRefExtension, parseCharacterRefMatch } from "./character-ref-extension"
 import { LocationRefExtension, parseLocationRefMatch } from "./location-ref-extension"
 import { ImageMentionExtension } from "./image-mention-extension"
-import { knownImageMentionSlugs } from "./lib/image-mention-refs"
+import { knownImageMentionSlugs, mentionNamespaceSlugs } from "./lib/image-mention-refs"
 import { findImageMentionTokens } from "@nodaro/shared"
 import { IMAGE_REFERENCE_FORMAT } from "./lib/image-reference-format"
 import { SuggestionList, type SuggestionCommandPayload } from "./suggestion-list"
@@ -415,12 +415,10 @@ function buildKnownSlugSets(
   refs: readonly RefImageItem[],
   snippets: readonly MatchableSnippet[],
 ): KnownSlugSets {
-  const characters = new Set<string>()
-  const locations = new Set<string>()
-  for (const r of refs) {
-    if (r.source === "character" && r.characterSlug) characters.add(r.characterSlug)
-    else if (r.source === "location" && r.locationSlug) locations.add(r.locationSlug)
-  }
+  // The two entity namespaces come from `mentionNamespaceSlugs`, which is also
+  // what `knownImageMentionSlugs` subtracts — so a slug can never be counted as
+  // both a character/location AND an image mention.
+  const { characters, locations } = mentionNamespaceSlugs(refs)
   // Media name-slugs come from the SAME predicate the autocomplete rows and the
   // extension's input/paste rules use, so all three views of "which refs are
   // mentionable by name" are one view.

@@ -6,7 +6,7 @@ import type { RefImageItem } from "./editor-types"
 import { TrainedPill } from "./trained-pill"
 import { optimizedImageUrl } from "./lib/image"
 import { IMAGE_REFERENCE_FORMAT } from "./lib/image-reference-format"
-import { imageMentionSlugForItem } from "./lib/image-mention-refs"
+import { imageMentionSlugForItem, imageMentionSlugOwners } from "./lib/image-mention-refs"
 import { characterSwapMenuRoles, sanitizeRole } from "./character-ref-roles"
 import { locationSwapMenuRoles, sanitizeLocationRole } from "./location-ref-roles"
 import { useScrollActiveOptionIntoView } from "./use-scroll-active-option-into-view"
@@ -152,14 +152,26 @@ type DisplayRow =
  * `@town:1` it would insert stays literal text in the built prompt — the same
  * gate the pill's promotion rules apply.
  *
+ * `owners` is the list-level `imageMentionSlugOwners` map — the SAME one the
+ * promotion gates read — so a row is offered exactly when the typed token would
+ * promote. It also settles the two list-level cases a per-item predicate can't
+ * see: a slug contested with a wired character/location is absent from the map
+ * (the entity wins at build time, so the pill would show an image thumbnail on
+ * a mention the server binds elsewhere), and of two refs sharing a display name
+ * only the FIRST owns its slug (the second would silently bind the first's
+ * image, since the resolver keeps the first match).
+ *
  * Called from BOTH the root view and the flat-search view so the pair can never
  * appear in one and not the other.
  */
-function mediaRefRows(item: RefImageItem): DisplayRow[] {
+function mediaRefRows(
+  item: RefImageItem,
+  owners: ReadonlyMap<string, RefImageItem>,
+): DisplayRow[] {
   const rows: DisplayRow[] = [{ kind: "image-ref", item }]
   if (IMAGE_REFERENCE_FORMAT !== "hybrid") return rows
   const slug = imageMentionSlugForItem(item)
-  if (slug) rows.push({ kind: "image-mention", item, slug })
+  if (slug && owners.get(slug) === item) rows.push({ kind: "image-mention", item, slug })
   return rows
 }
 
@@ -307,6 +319,11 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
       return { characterGroups: charGroups, locationGroups: locGroups, nonCharacterItems: others }
     }, [items])
 
+    // Which media ref owns each name-addressed mention slug — computed over the
+    // FULL list (not `nonCharacterItems`), because the entity namespaces it
+    // subtracts live on the character/location entries.
+    const mentionOwners = useMemo(() => imageMentionSlugOwners(items), [items])
+
     // Compute the rows to display based on drill state + query.
     const displayRows = useMemo<DisplayRow[]>(() => {
       const q = query.trim().toLowerCase()
@@ -445,7 +462,7 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
             || r.defaultLabel.toLowerCase().includes(q)
             || (imageMentionSlugForItem(r) ?? "").includes(q)
           ) {
-            rows.push(...mediaRefRows(r))
+            rows.push(...mediaRefRows(r, mentionOwners))
           }
         }
         return rows
@@ -486,7 +503,7 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
       // one row per location.
       const rows: DisplayRow[] = []
       for (const r of nonCharacterItems) {
-        rows.push(...mediaRefRows(r))
+        rows.push(...mediaRefRows(r, mentionOwners))
       }
       for (const [slug, group] of characterGroups) {
         const canonical = group.find((i) => !i.variantSlug) ?? group[0]
@@ -501,6 +518,7 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
       characterGroups,
       locationGroups,
       nonCharacterItems,
+      mentionOwners,
       drillCharacterSlug,
       drillVariant,
       drillLocationSlug,
