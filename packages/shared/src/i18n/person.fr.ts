@@ -616,6 +616,9 @@ const map: LocaleCatalogMap = {
   "lips-full-lower": { label: "Lèvre inférieure pleine", description: "Lèvres pleines avec une lèvre inférieure plus pleine" },
   "lips-natural": { label: "Naturelle", description: "Forme de lèvres naturelle" },
   "lips-heart": { label: "Cœur", description: "Lèvres en forme de cœur avec un arc de Cupidon défini" },
+  // --- picker-gaps 2026-09-01 ---
+  "samarkand-silk-road": { label: "Route de la soie de Samarcande", description: "Esthétique de bazar de la Route de la soie ouzbek (Samarcande / Boukhara)" },
+  "tashkent-modern": { label: "Tachkent moderne", description: "Esthétique métropolitaine ouzbèke contemporaine d'Asie centrale" },
 }
 
 export default map

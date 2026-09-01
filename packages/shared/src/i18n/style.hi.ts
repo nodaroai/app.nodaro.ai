@@ -49,6 +49,8 @@ const map: LocaleCatalogMap = {
   "acrylic-paint": { label: "Acrylic Paint", description: "तेज़ी से सूखने वाला opaque medium, तीखे edges" },
   "mixed-media": { label: "Mixed Media", description: "मिश्रित media, heterogeneous textures" },
   "manga": { label: "Manga", description: "Inked B&W panel कला, screen-tone shading" },
+  // --- picker-gaps 2026-09-01 ---
+  "early-color-photo": { label: "प्रारंभिक रंगीन फ़ोटो", description: "Prokudin-Gorsky / autochrome शैली का 1900 के दशक का आरंभिक रंगीन फ़ोटो लुक" },
 }
 
 export default map

@@ -649,6 +649,9 @@ const map: LocaleCatalogMap = {
   "lips-full-lower": { label: "भरा निचला होंठ", description: "भरे होंठ जिनमें निचला होंठ अधिक भरा" },
   "lips-natural": { label: "प्राकृतिक", description: "प्राकृतिक होंठों का आकार" },
   "lips-heart": { label: "दिल", description: "दिल-आकार के होंठ जिनमें परिभाषित cupid's bow" },
+  // --- picker-gaps 2026-09-01 ---
+  "samarkand-silk-road": { label: "समरकंद सिल्क रोड", description: "उज़्बेक सिल्क रोड बाज़ार सौंदर्यबोध (समरकंद / बुखारा)" },
+  "tashkent-modern": { label: "ताशकंद मॉडर्न", description: "समकालीन उज़्बेक महानगरीय मध्य एशियाई सौंदर्यबोध" },
 }
 
 export default map

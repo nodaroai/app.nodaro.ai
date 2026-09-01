@@ -640,6 +640,10 @@ const map: LocaleCatalogMap = {
   "lips-full-lower": { label: "Labio Inferior Lleno", description: "Labios llenos con un labio inferior más lleno" },
   "lips-natural": { label: "Natural", description: "Forma de labios natural" },
   "lips-heart": { label: "Corazón", description: "Labios en forma de corazón con un arco de cupido definido" },
+
+  // --- picker-gaps 2026-09-01 ---
+  "samarkand-silk-road": { label: "Ruta de la Seda de Samarcanda", description: "Estética de bazar uzbeka de la Ruta de la Seda (Samarcanda / Bujará)" },
+  "tashkent-modern": { label: "Taskent Moderno", description: "Estética centroasiática metropolitana uzbeka contemporánea" },
 }
 
 export default map

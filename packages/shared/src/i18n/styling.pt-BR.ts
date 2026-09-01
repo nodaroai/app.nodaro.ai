@@ -303,6 +303,11 @@ const map: LocaleCatalogMap = {
   "state-unbuttoned": { label: "Desabotoada", description: "Aberta / desabotoada" },
   "state-rolled-sleeves": { label: "Mangas Dobradas", description: "Mangas dobradas até o antebraço" },
   "state-layered": { label: "Sobreposta", description: "Várias camadas sobrepostas" },
+
+  // --- picker-gaps 2026-09-01 ---
+  "outfit-workwear-overalls": { label: "Macacão Jardineira", description: "Jardineira jeans sobre camisa xadrez de flanela" },
+  "outfit-chapan": { label: "Manto Chapan", description: "Manto ikat acolchoado longo da Ásia Central" },
+  "outfit-caftan": { label: "Cafetã", description: "Manto longo e fluido do Oriente Médio / Norte da África" },
 }
 
 export default map

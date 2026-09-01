@@ -300,6 +300,9 @@ export const STYLINGS: ReadonlyArray<Styling> = [
   { id: "outfit-fairy",            label: "Fairy",            dimension: "outfit", description: "Fantasy fairy: gauzy wings, flower crown, ethereal dress", promptHint: "wearing a fantasy fairy costume — gauzy translucent wings, a flower crown, and an ethereal flowing dress", term: "fairy costume with wings" },
   { id: "outfit-mermaid",          label: "Mermaid",          dimension: "outfit", description: "Fantasy mermaid: scaled tail/skirt, shell top, flowing hair", promptHint: "wearing a fantasy mermaid costume — a scaled tail or fitted scaled skirt, a shell top, and long flowing hair", term: "mermaid costume" },
   { id: "outfit-pharaoh",          label: "Pharaoh Regalia",  dimension: "outfit", description: "Ancient Egyptian royalty: usekh collar, pectoral, pleated kilt", promptHint: "wearing ancient Egyptian pharaoh regalia — a broad beaded usekh collar, a jeweled falcon pectoral, and a pleated linen shendyt kilt with golden arm cuffs" },
+  { id: "outfit-workwear-overalls", label: "Workwear Overalls", dimension: "outfit", description: "Denim bib overalls over a plaid flannel shirt", promptHint: "dressed in a farmer's workwear outfit — denim bib overalls over a checked plaid flannel shirt, sturdy and worn-in", term: "denim overalls and plaid shirt" },
+  { id: "outfit-chapan",           label: "Chapan Robe",      dimension: "outfit", description: "Central Asian long quilted ikat robe", promptHint: "dressed in a traditional Central Asian chapan — a long quilted robe with an ikat-striped weave, tied at the waist with a sash" },
+  { id: "outfit-caftan",           label: "Caftan",           dimension: "outfit", description: "Long flowing Middle-Eastern / North-African robe", promptHint: "dressed in a long flowing caftan robe, a full-length garment worn across the Middle East and North Africa" },
 
   // -------------------- Top (upper-body garment) --------------------
   { id: "top-tshirt",        label: "T-Shirt",        dimension: "top", description: "Plain crewneck t-shirt",         promptHint: "wearing a fitted plain crewneck t-shirt with short sleeves" },
@@ -507,6 +510,7 @@ export const STYLING_FIELD_BY_DIMENSION: Record<
  *  (necklace + earrings + rings), wardrobe-state: 3 (oversized + wet + ripped),
  *  hair-state: 2 (wet + windswept). All others single-select (absent → 1). */
 export const MAX_SELECTED_BY_STYLING_DIMENSION: Partial<Record<StylingDimension, number>> = {
+  headwear: 2, // a hat layered over a wrap/turban
   jewelry: 3,
   "wardrobe-state": 3,
   "hair-state": 2,
@@ -520,7 +524,7 @@ export function getStylingDimensionLimit(dimension: StylingDimension): number {
 export interface StylingValue {
   makeup?: string
   eyewear?: string
-  headwear?: string
+  headwear?: string | ReadonlyArray<string>
   /** Hair cut / styling choice — bob, wolf cut, braids, ponytail, etc.
    *  Pairs with Person.hair-base (texture + length). */
   hairCut?: string

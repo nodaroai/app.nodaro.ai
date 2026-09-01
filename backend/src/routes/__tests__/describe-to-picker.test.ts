@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { resolveTargetPickers, buildGapRecords, buildMissingPickerReport } from "../describe-to-picker.js"
+import { resolveTargetPickers, buildGapRecords, buildMissingPickerReport, buildSystemPrompt } from "../describe-to-picker.js"
 
 describe("resolveTargetPickers", () => {
   it("prefers the targetPickers array", () => {
@@ -90,5 +90,25 @@ describe("buildMissingPickerReport", () => {
     )
     expect(report?.appSlug).toBeNull()
     expect(report?.title).toBe("1 unmatched attribute in image analysis")
+  })
+})
+
+describe("buildSystemPrompt", () => {
+  const otherLegend = "- setting: Setting\n- exposure-settings: Exposure Settings — Aperture, Shutter Speed, ISO"
+
+  it("appends the OTHER PICKERS reference (with its text) when otherPickersLegend is non-empty", () => {
+    const out = buildSystemPrompt("WIRED LEGEND", undefined, otherLegend)
+    expect(out).toContain("OTHER PICKERS")
+    expect(out).toContain(otherLegend)
+    // The appended reference lands AFTER the wired legend.
+    expect(out.indexOf("OTHER PICKERS")).toBeGreaterThan(out.indexOf("WIRED LEGEND"))
+  })
+
+  it("omits the OTHER PICKERS section entirely when otherPickersLegend is empty", () => {
+    const out = buildSystemPrompt("WIRED LEGEND", undefined, "")
+    expect(out).not.toContain("OTHER PICKERS")
+    // The wired legend + gap guidance are still present.
+    expect(out).toContain("WIRED LEGEND")
+    expect(out).toContain("GAPS (catalog feedback)")
   })
 })

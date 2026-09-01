@@ -71,6 +71,9 @@ const map: LocaleCatalogMap = {
   "locker-room": { label: "חדר הלבשה", description: "חדר הלבשה של חדר כושר / ספורט, קרמיקה, ספסלים, מראות" },
   "music-studio": { label: "אולפן הקלטות", description: "אולפן הקלטות, מיקרופונים, ספוג, קונסולת בקרה" },
   "conservatory": { label: "חממה זכוכית", description: "חממה עם קירות זכוכית, צמחים טרופיים, שמש מסוננת" },
+
+  // --- picker-gaps 2026-09-01 ---
+  "open-air-market": { label: "שוק פתוח", description: "שוק שוקק של דוכני מוכרים תחת סככות" },
 }
 
 export default map

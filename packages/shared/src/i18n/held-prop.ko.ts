@@ -79,6 +79,9 @@ const map: LocaleCatalogMap = {
   "compass": { label: "나침반", description: "탐험을 위한 손에 든 항해용 나침반입니다" },
   "bow-and-arrow": { label: "활과 화살", description: "화살을 메긴 채 당겨진 양궁 활입니다" },
   "shield": { label: "방패", description: "중세 / 판타지 분위기의 손에 든 방패입니다" },
+
+  // --- picker-gaps 2026-09-01 ---
+  "work-gloves": { label: "작업용 장갑", description: "손에 든 낡은 가죽 작업용 장갑입니다" },
 }
 
 export default map

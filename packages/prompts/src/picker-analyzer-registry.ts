@@ -454,9 +454,45 @@ export interface MultiPickerAnalyzerSpec {
   readonly schema: z.ZodType<Record<string, unknown>, unknown>
   readonly toolName: string
   readonly legend: string
+  /** Compact bullet list of the pickers NOT wired into this spec (PICKER_TYPES
+   *  minus `types`), keyed by picker-type key so the LLM can ATTRIBUTE a gap to
+   *  the right picker even when it was not wired. Names + dimension labels only,
+   *  never catalog ids. Empty string when every picker is already wired. */
+  readonly otherPickersLegend: string
 }
 
 const MULTI_CACHE = new Map<string, MultiPickerAnalyzerSpec>()
+
+/** Title-case a picker-type key for display, e.g. "person" → "Person",
+ *  "exposure-settings" → "Exposure Settings". */
+function pickerDisplayName(type: string): string {
+  return type
+    .split("-")
+    .map((w) => (w.length > 0 ? w[0].toUpperCase() + w.slice(1) : w))
+    .join(" ")
+}
+
+/** One compact bullet per non-wired picker so the LLM can attribute a gap to a
+ *  picker it wasn't handed. Flat pickers show their registry `label` (one axis);
+ *  discriminated pickers show a title-cased name plus their dimension labels.
+ *  Never lists catalog ids. Empty string when every PICKER_TYPES member is
+ *  wired. */
+function buildOtherPickersLegend(sorted: ReadonlyArray<PickerType>): string {
+  const otherTypes = PICKER_TYPES.filter((t) => !sorted.includes(t))
+  if (otherTypes.length === 0) return ""
+  const lines = otherTypes.map((type) => {
+    const descriptor = PICKER_ANALYZER_REGISTRY[type as PickerType] as PickerAnalyzerDescriptor
+    if (descriptor.kind === "flat") {
+      return `- ${type}: ${descriptor.label}`
+    }
+    const dims = descriptor.order
+      .map((k) => descriptor.labels[k])
+      .filter(Boolean)
+      .join(", ")
+    return `- ${type}: ${pickerDisplayName(type)}${dims ? ` — ${dims}` : ""}`
+  })
+  return `Non-wired pickers — use one of these keys in a gap's \`picker\` when an attribute belongs to it:\n${lines.join("\n")}`
+}
 
 /** Build ONE forced-tool schema spanning the given pickers (each section
  *  optional so an omitted picker doesn't trigger a validation retry) plus the
@@ -479,6 +515,7 @@ export function buildMultiPickerAnalyzerSpec(types: ReadonlyArray<PickerType>): 
     schema: z.object(shape).strict() as unknown as MultiPickerAnalyzerSpec["schema"],
     toolName: "emit_pickers",
     legend: legendParts.join("\n\n"),
+    otherPickersLegend: buildOtherPickersLegend(sorted),
   }
   MULTI_CACHE.set(key, result)
   return result

@@ -313,6 +313,11 @@ const map: LocaleCatalogMap = {
   "top-mesh-top": { label: "메쉬 톱", description: "비치는 메쉬 원단의 톱입니다" },
   "top-sheer-top": { label: "시어 톱", description: "투명한 원단의 톱입니다" },
   "top-bandeau": { label: "밴도", description: "스트랩리스 튜브 톱입니다" },
+
+  // --- picker-gaps 2026-09-01 ---
+  "outfit-workwear-overalls": { label: "워크웨어 멜빵바지", description: "격자무늬 플란넬 셔츠 위에 입은 데님 멜빵바지입니다" },
+  "outfit-chapan": { label: "차판 로브", description: "중앙아시아의 길고 누빔 처리된 이카트 로브입니다" },
+  "outfit-caftan": { label: "카프탄", description: "길고 하늘하늘한 중동 / 북아프리카 로브입니다" },
 }
 
 export default map

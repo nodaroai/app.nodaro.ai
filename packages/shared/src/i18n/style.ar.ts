@@ -50,6 +50,8 @@ const map: LocaleCatalogMap = {
   "acrylic-paint": { label: "طلاء أكريليك", description: "وسيط معتم سريع الجفاف بحواف حادة" },
   "mixed-media": { label: "وسائط مختلطة", description: "وسائط مدمجة بأنسجة متغايرة" },
   "manga": { label: "مانغا", description: "فن لوحات مرسومة بالحبر أبيض وأسود بتظليل Screen-tone" },
+  // --- picker-gaps 2026-09-01 ---
+  "early-color-photo": { label: "صورة ملونة مبكرة", description: "ألوان مطلع القرن العشرين بأسلوب بروكودين-غورسكي / أوتوكروم" },
 }
 
 export default map

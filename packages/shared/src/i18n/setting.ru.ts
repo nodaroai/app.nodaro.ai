@@ -71,6 +71,8 @@ const map: LocaleCatalogMap = {
   "locker-room": { label: "Раздевалка", description: "Раздевалка спортзала, плитка, скамейки, зеркала" },
   "music-studio": { label: "Музыкальная студия", description: "Студия звукозаписи, микрофоны, поролон, пульт управления" },
   "conservatory": { label: "Зимний сад", description: "Стеклянная оранжерея, тропические растения, рассеянный солнечный свет" },
+  // --- picker-gaps 2026-09-01 ---
+  "open-air-market": { label: "Рынок под открытым небом", description: "Оживлённый рынок с торговыми лотками под навесами" },
 }
 
 export default map

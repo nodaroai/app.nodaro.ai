@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { buildMultiPickerAnalyzerSpec, buildPickerAnalyzerSpec, pickerFanoutTargets } from "../index.js"
+import { buildMultiPickerAnalyzerSpec, buildPickerAnalyzerSpec, pickerFanoutTargets, PICKER_TYPES } from "../index.js"
 
 describe("buildMultiPickerAnalyzerSpec", () => {
   it("composes one section per wired picker plus gaps, order-independent", () => {
@@ -21,6 +21,26 @@ describe("buildMultiPickerAnalyzerSpec", () => {
       gaps: { missingItems: [{ picker: "lens", dimension: "lens", observed: "tilt-shift macro hybrid" }] },
     })
     expect(withGaps.gaps.missingItems).toHaveLength(1)
+  })
+
+  it("otherPickersLegend names the non-wired pickers by key, excluding the wired ones", () => {
+    const { otherPickersLegend } = buildMultiPickerAnalyzerSpec(["person", "styling"])
+    expect(otherPickersLegend.length).toBeGreaterThan(0)
+    // non-wired pickers are attributable by their exact key
+    expect(otherPickersLegend).toContain("- era:")
+    expect(otherPickersLegend).toContain("- setting:")
+    expect(otherPickersLegend).toContain("- held-prop:")
+    // wired pickers must NOT appear as their own bullet lines
+    expect(otherPickersLegend).not.toContain("- person:")
+    expect(otherPickersLegend).not.toContain("- styling:")
+    // discriminated pickers carry their dimension labels; flat ones carry the label
+    expect(otherPickersLegend).toContain("Era / Period") // flat `era` label
+    expect(otherPickersLegend).toMatch(/- exposure-settings: Exposure Settings — .*Aperture/) // title-cased key + dims
+  })
+
+  it("otherPickersLegend is empty when every picker is wired", () => {
+    const { otherPickersLegend } = buildMultiPickerAnalyzerSpec(PICKER_TYPES)
+    expect(otherPickersLegend).toBe("")
   })
 
   it("FUZZ: arbitrary gaps content never alters the enum-validated picker sections", () => {

@@ -49,6 +49,9 @@ const map: LocaleCatalogMap = {
   "acrylic-paint": { label: "צבע אקריליק", description: "מדיה אטומה מתייבשת מהר, קצוות חדים" },
   "mixed-media": { label: "מדיה מעורבת", description: "שילוב מדיות, טקסטורות הטרוגניות" },
   "manga": { label: "מאנגה", description: "אמנות פאנלים בדיו שחור-לבן עם הצללת screen-tone" },
+
+  // --- picker-gaps 2026-09-01 ---
+  "early-color-photo": { label: "צילום צבע מוקדם", description: "צבע מוקדם של תחילת המאה ה-20 בסגנון פרוקודין-גורסקי / אוטוכרום" },
 }
 
 export default map

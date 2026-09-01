@@ -657,6 +657,10 @@ const map: LocaleCatalogMap = {
   "lips-full-lower": { label: "下唇が厚い", description: "下唇がより厚い、ふっくらした唇" },
   "lips-natural": { label: "ナチュラル", description: "自然な唇の形" },
   "lips-heart": { label: "ハート型", description: "はっきりとしたキューピッドボウのあるハート型の唇" },
+
+  // --- picker-gaps 2026-09-01 ---
+  "samarkand-silk-road": { label: "サマルカンド・シルクロード", description: "ウズベキスタンのシルクロードのバザール美学（サマルカンド／ブハラ）" },
+  "tashkent-modern": { label: "タシケント・モダン", description: "現代ウズベキスタンの大都市的な中央アジア美学" },
 }
 
 export default map

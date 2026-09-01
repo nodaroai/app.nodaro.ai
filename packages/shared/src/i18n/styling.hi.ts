@@ -325,6 +325,10 @@ const map: LocaleCatalogMap = {
   "top-mesh-top": { label: "Mesh Top", description: "Sheer mesh कपड़े का top" },
   "top-sheer-top": { label: "Sheer Top", description: "पारभासी कपड़े का top" },
   "top-bandeau": { label: "Bandeau", description: "Strapless tube top" },
+  // --- picker-gaps 2026-09-01 ---
+  "outfit-workwear-overalls": { label: "वर्कवियर ओवरऑल्स", description: "प्लेड फ़लालैन शर्ट के ऊपर डेनिम bib ओवरऑल्स" },
+  "outfit-chapan": { label: "चपन चोग़ा", description: "मध्य एशियाई लंबा रजाईदार इकत चोग़ा" },
+  "outfit-caftan": { label: "कैफ़्तान", description: "लंबा बहता मध्य पूर्वी / उत्तरी अफ़्रीकी चोग़ा" },
 }
 
 export default map

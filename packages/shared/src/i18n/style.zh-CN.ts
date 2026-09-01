@@ -49,6 +49,9 @@ const map: LocaleCatalogMap = {
   "acrylic-paint":  { label: "丙烯画",         description: "速干不透明介质,边缘锐利" },
   "mixed-media":    { label: "综合材料",       description: "混合多种介质,异质肌理交织" },
   "manga":          { label: "漫画",           description: "黑白勾线分镜,网点纸阴影" },
+
+  // --- picker-gaps 2026-09-01 ---
+  "early-color-photo": { label: "早期彩色照片", description: "普罗库金-戈尔斯基 / Autochrome 微粒彩屏,1900 年代早期彩色" },
 }
 
 export default map

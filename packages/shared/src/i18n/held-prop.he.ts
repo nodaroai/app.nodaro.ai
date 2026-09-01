@@ -68,6 +68,9 @@ const map: LocaleCatalogMap = {
   "compass": { label: "מצפן", description: "מצפן ימי מוחזק ביד, חקירה" },
   "bow-and-arrow": { label: "קשת וחץ", description: "קשת קשתות דרוכה עם חץ על המיתר" },
   "shield": { label: "מגן", description: "מגן מוחזק ביד, ימי הביניים / פנטזיה" },
+
+  // --- picker-gaps 2026-09-01 ---
+  "work-gloves": { label: "כפפות עבודה", description: "כפפות עבודה שחוקות מעור, מוחזקות ביד" },
 }
 
 export default map

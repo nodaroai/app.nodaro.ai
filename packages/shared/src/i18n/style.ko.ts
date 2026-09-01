@@ -49,6 +49,9 @@ const map: LocaleCatalogMap = {
   "acrylic-paint": { label: "아크릴화", description: "빠르게 마르고 불투명한 매체로 가장자리가 또렷합니다" },
   "mixed-media": { label: "믹스드 미디어", description: "다양한 매체가 결합된 이질적인 텍스처입니다" },
   "manga": { label: "망가", description: "잉크로 그린 흑백 패널 아트와 스크린톤 셰이딩입니다" },
+
+  // --- picker-gaps 2026-09-01 ---
+  "early-color-photo": { label: "초기 컬러 사진", description: "프로쿠딘-고르스키 / 오토크롬 방식의 1900년대 초 컬러입니다" },
 }
 
 export default map

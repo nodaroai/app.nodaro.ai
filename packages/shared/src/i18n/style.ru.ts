@@ -49,6 +49,8 @@ const map: LocaleCatalogMap = {
   "acrylic-paint": { label: "Акрил", description: "Быстросохнущий укрывистый материал, чёткие края" },
   "mixed-media": { label: "Смешанная техника", description: "Сочетание материалов, разнородные текстуры" },
   "manga": { label: "Манга", description: "Чёрно-белые панели тушью с тонированием скринтонами" },
+  // --- picker-gaps 2026-09-01 ---
+  "early-color-photo": { label: "Ранняя цветная фотография", description: "Цвет начала 1900-х в духе Прокудина-Горского / автохрома" },
 }
 
 export default map

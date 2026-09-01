@@ -71,6 +71,8 @@ const map: LocaleCatalogMap = {
   "haunted-mansion": { label: "Haunted Mansion", description: "टूटा-फूटा gothic घर" },
   "dreamscape": { label: "Dreamscape", description: "Surreal तैरते द्वीप" },
   "wasteland": { label: "Post-Apocalyptic Wasteland", description: "जंग लगा बादल भरा wasteland" },
+  // --- picker-gaps 2026-09-01 ---
+  "open-air-market": { label: "खुला बाज़ार", description: "शामियानों के नीचे विक्रेता स्टॉलों का हलचल भरा बाज़ार" },
 }
 
 export default map

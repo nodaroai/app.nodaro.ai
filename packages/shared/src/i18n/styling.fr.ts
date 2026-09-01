@@ -287,6 +287,10 @@ const map: LocaleCatalogMap = {
   "state-unbuttoned": { label: "Déboutonné", description: "Ouvert / déboutonné" },
   "state-rolled-sleeves": { label: "Manches retroussées", description: "Manches retroussées sur l'avant-bras" },
   "state-layered": { label: "Superposé", description: "Plusieurs couches superposées" },
+  // --- picker-gaps 2026-09-01 ---
+  "outfit-workwear-overalls": { label: "Salopette de travail", description: "Salopette en jean par-dessus une chemise à carreaux en flanelle" },
+  "outfit-chapan": { label: "Robe chapan", description: "Longue robe matelassée en ikat d'Asie centrale" },
+  "outfit-caftan": { label: "Caftan", description: "Longue robe fluide du Moyen-Orient / d'Afrique du Nord" },
 }
 
 export default map

@@ -319,6 +319,11 @@ const map: LocaleCatalogMap = {
   "top-mesh-top": { label: "メッシュトップ", description: "シアーなメッシュ生地のトップ" },
   "top-sheer-top": { label: "シアートップ", description: "半透明な生地のトップ" },
   "top-bandeau": { label: "バンドゥ", description: "ストラップレスのチューブトップ" },
+
+  // --- picker-gaps 2026-09-01 ---
+  "outfit-workwear-overalls": { label: "ワークウェア・オーバーオール", description: "チェックのフランネルシャツの上に着るデニムのビブオーバーオール" },
+  "outfit-chapan": { label: "チャパン（ローブ）", description: "中央アジアの長いキルティングのイカット織りローブ" },
+  "outfit-caftan": { label: "カフタン", description: "中東／北アフリカの流れるような長いローブ" },
 }
 
 export default map

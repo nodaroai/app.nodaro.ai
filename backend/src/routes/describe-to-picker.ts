@@ -139,19 +139,30 @@ export function buildMissingPickerReport(
   }
 }
 
-function buildSystemPrompt(legend: string, instructions?: string): string {
+/** Compose the analyzer system prompt. `otherPickersLegend` (from the spec) is
+ *  the compact reference of NON-wired pickers — appended so a gap can be
+ *  attributed to the right picker even when it wasn't wired for filling; empty
+ *  string means every picker is already wired and the section is omitted.
+ *  Exported for unit testing. */
+export function buildSystemPrompt(legend: string, instructions?: string, otherPickersLegend?: string): string {
+  const hasOther = !!otherPickersLegend && otherPickersLegend.length > 0
   return [
     "You are analyzing the primary subject and scene of an image to fill one or more structured pickers.",
     "Call the emit tool exactly once. For EACH picker section below, choose the closest-matching option id(s) from that picker's lists.",
     "Fill as many dimensions as possible across all sections; OMIT a dimension only when it is not visible or not determinable. Never exceed a dimension's stated maximum. Only use ids from the lists below.",
     "",
-    "GAPS (catalog feedback): Leave `gaps` empty unless the closest available id clearly misrepresents what you see — most images need none.",
-    "- Each entry in missingItems { picker, dimension, observed }: within an existing dimension, no id is a good match (still pick the closest id for the result).",
-    "- Each entry in missingCategories { picker, suggestedDimension, observed }: a salient visible attribute is covered by NO dimension of any wired picker.",
+    "GAPS (catalog feedback): Leave `gaps` empty unless a salient attribute has no good catalog home — most images need none. A gap's `picker` may name ANY picker, whether wired as a fill section above or not; attribute each gap to the picker it TRULY belongs to, and never force a cross-domain attribute into a wired picker just because it happens to be wired.",
+    "A gap's `picker` is ALWAYS the lowercase, hyphenated picker key exactly as written (e.g. `person`, `exposure-settings`, `held-prop`) — never a display name or an uppercased section header.",
+    "- Each entry in missingItems { picker, dimension, observed }: the attribute fits an existing dimension of some picker, but no catalog id in that dimension is a good match. When that picker is wired above, still pick its closest id for the result.",
+    "- Each entry in missingCategories { picker, suggestedDimension, observed }: NO picker has a dimension covering the attribute — record it against the closest picker with a suggested new dimension name.",
     instructions ? `Additional guidance: ${instructions}` : "",
     "",
     "PICKERS AND ALLOWED VALUES:",
     legend,
+    hasOther
+      ? "OTHER PICKERS (NOT wired — for gap attribution ONLY; never emit a fill section for these): if a salient attribute belongs to one of these, record it as a gap whose `picker` is the exact key shown here."
+      : "",
+    hasOther ? (otherPickersLegend as string) : "",
   ]
     .filter(Boolean)
     .join("\n")
@@ -213,14 +224,14 @@ export async function describeToPickerRoutes(app: FastifyInstance) {
       await markProviderCallStart(job.id, "anthropic-sync")
 
       try {
-        const { schema, toolName, legend } = buildMultiPickerAnalyzerSpec(targetPickers)
+        const { schema, toolName, legend, otherPickersLegend } = buildMultiPickerAnalyzerSpec(targetPickers)
         const imageBlock = await prefetchAsBase64(imageUrl)
         const content: LlmContentBlock[] = [imageBlock, { type: "text", text: "Analyze the subject and emit the picker JSON." }]
 
         const { output, inputTokens, outputTokens } = await llmCompleteStructured(
           {
             modelId: model.id,
-            system: buildSystemPrompt(legend, instructions),
+            system: buildSystemPrompt(legend, instructions, otherPickersLegend),
             messages: [{ role: "user", content }],
             reasoningEffort: parsed.data.reasoningEffort,
             ...resolveLlmParams(parsed.data),

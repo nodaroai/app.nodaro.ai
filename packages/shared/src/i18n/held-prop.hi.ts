@@ -77,6 +77,8 @@ const map: LocaleCatalogMap = {
   "compass": { label: "कम्पास", description: "हाथ का nautical कम्पास, अन्वेषण" },
   "bow-and-arrow": { label: "धनुष-बाण", description: "तीर लगाया हुआ खींचा हुआ archery धनुष" },
   "shield": { label: "ढाल", description: "हाथ की ढाल, मध्यकालीन / fantasy" },
+  // --- picker-gaps 2026-09-01 ---
+  "work-gloves": { label: "काम के दस्ताने", description: "हाथ में पकड़े हुए घिसे चमड़े के काम के दस्ताने" },
 }
 
 export default map

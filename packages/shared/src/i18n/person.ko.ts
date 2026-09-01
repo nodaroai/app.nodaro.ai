@@ -657,6 +657,10 @@ const map: LocaleCatalogMap = {
   "lips-full-lower": { label: "도톰한 아랫입술", description: "아랫입술이 더 도톰한 풍성한 입술입니다" },
   "lips-natural": { label: "자연스러운", description: "자연스러운 입술 모양입니다" },
   "lips-heart": { label: "하트형", description: "또렷한 큐피드 보우가 있는 하트 모양 입술입니다" },
+
+  // --- picker-gaps 2026-09-01 ---
+  "samarkand-silk-road": { label: "사마르칸트 실크로드", description: "우즈베크 실크로드 바자르 미감 (사마르칸트 / 부하라)" },
+  "tashkent-modern": { label: "타슈켄트 모던", description: "현대적인 우즈베크 대도시 중앙아시아 미감" },
 }
 
 export default map

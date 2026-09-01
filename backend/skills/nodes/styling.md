@@ -1,7 +1,7 @@
 ---
 node_type: styling
-generated_at: 2026-08-28T10:30:57.531Z
-generated_from: ae8d76277
+generated_at: 2026-09-01T14:41:53.694Z
+generated_from: 36ffac616
 ---
 
 # Styling
@@ -19,7 +19,7 @@ generated_from: ae8d76277
 **Optional data fields:**
 - `makeup?: string`
 - `eyewear?: string`
-- `headwear?: string`
+- `headwear?: string | ReadonlyArray<string>`
 - `hairCut?: string`
 - `hairTreatment?: string`
 - `hairState?: string | ReadonlyArray<string>`

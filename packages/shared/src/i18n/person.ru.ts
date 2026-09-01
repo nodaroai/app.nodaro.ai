@@ -651,6 +651,9 @@ const map: LocaleCatalogMap = {
   "lips-full-lower": { label: "Полная нижняя губа", description: "Полные губы с более полной нижней губой" },
   "lips-natural": { label: "Натуральная", description: "Натуральная форма губ" },
   "lips-heart": { label: "Сердечком", description: "Губы в форме сердца с выраженной «лук Купидона»" },
+  // --- picker-gaps 2026-09-01 ---
+  "samarkand-silk-road": { label: "Самаркандский Шёлковый путь", description: "Эстетика узбекского базара Шёлкового пути (Самарканд / Бухара)" },
+  "tashkent-modern": { label: "Современный Ташкент", description: "Современная узбекская столичная центральноазиатская эстетика" },
 }
 
 export default map

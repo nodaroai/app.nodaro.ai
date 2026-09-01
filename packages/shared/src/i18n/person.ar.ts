@@ -633,6 +633,9 @@ const map: LocaleCatalogMap = {
   "lips-full-lower": { label: "شفة سفلى ممتلئة", description: "شفاه ممتلئة مع شفة سفلى أكثر امتلاء" },
   "lips-natural": { label: "طبيعي", description: "شكل شفاه طبيعي" },
   "lips-heart": { label: "قلب", description: "شفاه على شكل قلب مع قوس كيوبيد محدد" },
+  // --- picker-gaps 2026-09-01 ---
+  "samarkand-silk-road": { label: "طريق حرير سمرقند", description: "جمالية بازار طريق الحرير الأوزبكي (سمرقند / بخارى)" },
+  "tashkent-modern": { label: "طشقند الحديثة", description: "جمالية آسيا الوسطى الأوزبكية الحضرية المعاصرة" },
 }
 
 export default map

@@ -71,6 +71,9 @@ const map: LocaleCatalogMap = {
   "locker-room": { label: "라커룸", description: "타일과 벤치, 거울이 있는 헬스장 / 스포츠 라커룸입니다" },
   "music-studio": { label: "음악 스튜디오", description: "마이크, 흡음 폼, 콘솔 보드가 있는 녹음 스튜디오입니다" },
   "conservatory": { label: "온실", description: "유리벽으로 둘러싸인 온실, 열대 식물과 여과된 햇빛입니다" },
+
+  // --- picker-gaps 2026-09-01 ---
+  "open-air-market": { label: "노천 시장", description: "차양 아래 노점들이 늘어선 북적이는 시장입니다" },
 }
 
 export default map

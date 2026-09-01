@@ -26,7 +26,7 @@ describe("regional-aesthetic dimension — wiring", () => {
 
 describe("regional-aesthetic catalog — coverage and structure", () => {
   it("ships the expected total entry count", () => {
-    expect(REGIONAL_ENTRIES.length).toBe(86)
+    expect(REGIONAL_ENTRIES.length).toBe(88)
   })
 
   it.each([
@@ -34,6 +34,7 @@ describe("regional-aesthetic catalog — coverage and structure", () => {
     ["USA — African-American", 6],
     ["Europe", 16],
     ["Asia", 12],
+    ["Central Asia", 2],
     ["Latin America", 7],
     ["Middle East", 7],
     ["North Africa", 3],
