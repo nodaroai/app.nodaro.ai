@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useCallback, useRef, useEffect, useMemo } from "react"
+import { useSurfaceAvailability } from "@/lib/surface-availability"
 import { ImageIcon, FileText, Plus, Loader2, Trash2, ChevronUp, ChevronDown, Users, X } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -35,6 +36,10 @@ import type { ConfigProps } from "./types"
 type Kling3Tab = "scene" | "shots" | "elements"
 
 export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onMapField, onUpdateNode, nodes, edges, nodeId }: ConfigProps<ImageToVideoData> & { nodeId?: string }) {
+  // Re-render when the deployment's availability sets arrive: they land
+  // after the first paint, and without a subscription this dropdown would
+  // keep showing every model for the rest of the session.
+  useSurfaceAvailability()
   useEffect(() => { prefetchModelCredits(VIDEO_I2V_MODELS.map((m) => m.value)) }, [])
   const { user } = useAuth()
   const promptSnippets = useSnippetPool("video", "prompt")

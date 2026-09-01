@@ -1,6 +1,7 @@
 "use client"
 
-import { Plus, Search, ScanSearch, Package, Film, StickyNote, Wand2, PanelLeft, Undo2, Redo2, ChevronLeft, Puzzle, Keyboard, History } from "lucide-react"
+import { Plus, Search, ScanSearch, Package, Film, StickyNote, Wand2, PanelLeft, Undo2, Redo2, ChevronLeft, Puzzle, Keyboard, History, GripHorizontal } from "lucide-react"
+import { useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { cn } from "@/lib/utils"
 import { SHORTCUTS, formatBinding, isMacPlatform } from "@/lib/shortcuts"
@@ -123,6 +124,10 @@ function ToolbarDivider() {
 
 const isMac = isMacPlatform()
 
+/** Where a dragged toolbar position is remembered. Per-device by nature —
+ *  it is a viewport pixel coordinate — so localStorage, not user settings. */
+const TOOLBAR_POS_KEY = "nodaro:canvas-toolbar-pos"
+
 export function CanvasToolbar({
   onAddNode,
   onComponents,
@@ -151,6 +156,71 @@ export function CanvasToolbar({
   const copilotRailWidth = useCopilotRailWidth()
   // Position to the right of the sidebar and the rail + 12px gap
   const leftPosition = sidebarWidth + copilotRailWidth + 12
+
+  // Draggable rail. Once the user drags it, `pos` (viewport coordinates) takes
+  // over from the sidebar-anchored, vertically-centered default and survives a
+  // reload. Drag by the grip at the top; double-click the grip to reset.
+  //
+  // A dragged bar DELIBERATELY ignores `leftPosition`, so it can be parked over
+  // the Copilot rail — the overlap the automatic placement exists to avoid.
+  // That is the point: an explicit placement by the user outranks the default.
+  // Do not "fix" this by clamping x to leftPosition.
+  const railRef = useRef<HTMLDivElement>(null)
+  const dragRef = useRef<{ px: number; py: number; ox: number; oy: number } | null>(null)
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(() => {
+    try {
+      const raw = localStorage.getItem(TOOLBAR_POS_KEY)
+      return raw ? (JSON.parse(raw) as { x: number; y: number }) : null
+    } catch {
+      return null
+    }
+  })
+  const onDragStart = (e: React.PointerEvent) => {
+    const rect = railRef.current?.getBoundingClientRect()
+    if (!rect) return
+    e.preventDefault()
+    ;(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)
+    dragRef.current = { px: e.clientX, py: e.clientY, ox: rect.left, oy: rect.top }
+  }
+  const onDragMove = (e: React.PointerEvent) => {
+    if (!dragRef.current) return
+    const rect = railRef.current?.getBoundingClientRect()
+    const w = rect?.width ?? 56
+    const h = rect?.height ?? 400
+    const nx = dragRef.current.ox + (e.clientX - dragRef.current.px)
+    const ny = dragRef.current.oy + (e.clientY - dragRef.current.py)
+    // Clamped to a 4px viewport inset so the bar cannot be thrown off-screen
+    // in the direction being dragged.
+    setPos({
+      x: Math.max(4, Math.min(nx, window.innerWidth - w - 4)),
+      y: Math.max(4, Math.min(ny, window.innerHeight - h - 4)),
+    })
+  }
+  const onDragEnd = (e: React.PointerEvent) => {
+    if (!dragRef.current) return
+    dragRef.current = null
+    ;(e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId)
+    // Persist on release only — writing every pointermove would hammer
+    // localStorage for a value nothing reads until the next mount.
+    setPos((p) => {
+      if (p) {
+        try {
+          localStorage.setItem(TOOLBAR_POS_KEY, JSON.stringify(p))
+        } catch {
+          /* a storage-blocked browser still drags, it just does not remember */
+        }
+      }
+      return p
+    })
+  }
+  const resetPos = () => {
+    setPos(null)
+    try {
+      localStorage.removeItem(TOOLBAR_POS_KEY)
+    } catch {
+      /* ignore */
+    }
+  }
 
   return (
     <>
@@ -219,22 +289,41 @@ export function CanvasToolbar({
         />
       </div>
 
-      {/* Desktop: vertical left bar */}
+      {/* Desktop: vertical left bar (draggable by the grip at the top) */}
       <div
+        ref={railRef}
         className={cn(
-          "fixed top-1/2 -translate-y-1/2 z-50",
+          "fixed z-50",
+          // The centered default and its transition apply only until the user
+          // drags: afterwards `pos` drives placement and the transition would
+          // make every pointermove lag behind the cursor.
+          !pos && "top-1/2 -translate-y-1/2 transition-all duration-300 ease-in-out",
           "hidden md:flex",
           "p-2 rounded-2xl",
           "flex-col gap-1",
           "backdrop-blur-md",
-          "transition-all duration-300 ease-in-out",
           // Light mode: frosted white glass with subtle shadow
           "bg-white/80 border border-[#E2E8F0] shadow-xl shadow-slate-200/50",
           // Dark mode: dark glass with deeper shadow
           "dark:bg-[#1E1E1E]/90 dark:border-[#2D2D2D] dark:shadow-2xl dark:shadow-black/20"
         )}
-        style={{ left: `${leftPosition}px` }}
+        style={pos ? { left: `${pos.x}px`, top: `${pos.y}px` } : { left: `${leftPosition}px` }}
       >
+        {/* Drag handle */}
+        <button
+          type="button"
+          onPointerDown={onDragStart}
+          onPointerMove={onDragMove}
+          onPointerUp={onDragEnd}
+          onPointerCancel={onDragEnd}
+          onDoubleClick={resetPos}
+          className="flex items-center justify-center h-4 mb-0.5 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-foreground transition-colors touch-none"
+          aria-label="Drag toolbar (double-click to reset)"
+          title="Drag to move the toolbar · double-click to reset"
+        >
+          <GripHorizontal className="w-4 h-4" />
+        </button>
+
         {/* Primary actions */}
         <ToolbarButton
           icon={<Plus className="w-5 h-5" />}

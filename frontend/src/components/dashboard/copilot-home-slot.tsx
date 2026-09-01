@@ -12,11 +12,12 @@
  */
 import { Suspense, lazy, type ComponentType } from "react"
 import { hasCredits } from "@/lib/edition"
+import { surfaceFeatureHidden } from "@/lib/surface-selectors"
 
 let lazyComposer: ComponentType<Record<string, never>> | null = null
 
 function resolveComposer() {
-  if (!hasCredits()) return null
+  if (!hasCredits() || surfaceFeatureHidden("copilot")) return null
   lazyComposer ??= lazy(() => import("@/ee/components/copilot/copilot-home-composer")) as unknown as ComponentType<
     Record<string, never>
   >

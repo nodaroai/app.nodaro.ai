@@ -19,6 +19,7 @@ import { hasCredits } from "@/lib/edition"
 import { SHORTCUTS, formatBinding, isMacPlatform, matchShortcut } from "@/lib/shortcuts"
 import { COPILOT_RAIL_WIDTH, COPILOT_TAB_WIDTH, useCopilotUiStore } from "@/hooks/use-copilot-ui-store"
 import { useIsMobile } from "@/hooks/use-is-mobile"
+import { surfaceFeatureHidden } from "@/lib/surface-selectors"
 
 /**
  * Resolved on first render rather than at module load: the `import()` factory
@@ -26,9 +27,20 @@ import { useIsMobile } from "@/hooks/use-is-mobile"
  * never requests the chunk — and the gate stays observable to a test instead of
  * being frozen into module scope.
  */
+/**
+ * Is the Copilot surfaced at all here? Two independent questions, answered
+ * once: the EDITION must have credits (the copilot spends them), and the
+ * DEPLOYMENT must not have switched the feature off. Every entry point below
+ * asks this — a site that asked only `hasCredits()` would keep rendering a
+ * button whose backend answers 503.
+ */
+function copilotSurfaced(): boolean {
+  return hasCredits() && !surfaceFeatureHidden("copilot")
+}
+
 let lazyPanel: ComponentType<CopilotPanelSlotProps & { onClose: () => void; fullScreen?: boolean }> | null = null
 function resolvePanel() {
-  if (!hasCredits()) return null
+  if (!copilotSurfaced()) return null
   lazyPanel ??= lazy(() => import("@/ee/components/copilot/copilot-panel")) as unknown as ComponentType<
     CopilotPanelSlotProps & { onClose: () => void; fullScreen?: boolean }
   >
@@ -106,7 +118,7 @@ export function CopilotPanelSlot(props: CopilotPanelSlotProps) {
 /** The always-visible way back in when the rail is closed. */
 export function CopilotCollapsedTab() {
   const openPanel = useCopilotUiStore((s) => s.openPanel)
-  if (!hasCredits()) return null
+  if (!copilotSurfaced()) return null
   return (
     <button
       type="button"
@@ -141,7 +153,7 @@ export function CopilotToolbarButton() {
   const togglePanel = useCopilotUiStore((s) => s.togglePanel)
 
   useEffect(() => {
-    if (!hasCredits()) return
+    if (!copilotSurfaced()) return
     const onKey = (e: KeyboardEvent) => {
       if (!matchShortcut(e, SHORTCUTS.copilot)) return
       e.preventDefault()
@@ -151,7 +163,7 @@ export function CopilotToolbarButton() {
     return () => window.removeEventListener("keydown", onKey)
   }, [])
 
-  if (!hasCredits()) return null
+  if (!copilotSurfaced()) return null
 
   return (
     <button

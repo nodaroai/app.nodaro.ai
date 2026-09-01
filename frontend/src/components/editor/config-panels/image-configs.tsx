@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect, Suspense, useMemo, memo } from "react"
+import { useSurfaceAvailability } from "@/lib/surface-availability"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { optimizedImageUrl } from "@/lib/image"
 import { RefineRegionsSection } from "./refine-regions-section"
@@ -147,6 +148,10 @@ function expandLocationSourceForAutocomplete(
 // REF_IMAGE_MAX_LIMITS / DEFAULT_REF_IMAGE_MAX live in @nodaro/shared (model-constants).
 
 function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, variableDisplayMode, nodeId }: ConfigProps<GenerateImageData> & { nodeId?: string }) {
+  // Re-render when the deployment's availability sets arrive: they land
+  // after the first paint, and without a subscription this dropdown would
+  // keep showing every model for the rest of the session.
+  useSurfaceAvailability()
   const t = useT()
   useEffect(() => { prefetchModelCredits(IMAGE_GEN_MODELS.map((m) => m.value)) }, [])
 

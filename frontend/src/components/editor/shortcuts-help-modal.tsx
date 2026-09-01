@@ -1,3 +1,5 @@
+import { surfaceFeatureHidden } from "@/lib/surface-selectors"
+import { hasCredits } from "@/lib/edition"
 import { Keyboard } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Kbd } from "@/components/ui/kbd"
@@ -16,7 +18,14 @@ interface ShortcutsHelpModalProps {
 
 export function ShortcutsHelpModal({ open, onOpenChange }: ShortcutsHelpModalProps) {
   const isMac = isMacPlatform()
-  const defs = (Object.values(SHORTCUTS) as ShortcutDef[]).filter((d) => !d.hidden)
+  // `hidden` is a static property, but two shortcuts only exist on some
+  // deployments. ⌘J has been listed here on every build including community,
+  // where the Copilot does not exist at all — a documented shortcut for a
+  // feature with no UI.
+  const copilotGone = !hasCredits() || surfaceFeatureHidden("copilot")
+  const defs = (Object.values(SHORTCUTS) as ShortcutDef[]).filter(
+    (d) => !d.hidden && !(copilotGone && d.id === "copilot"),
+  )
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

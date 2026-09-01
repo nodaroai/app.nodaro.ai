@@ -535,6 +535,16 @@ array empty = "keep the default"):
   Suno vocal-gender tags in the editor hide the disallowed side. Pair with
   `nodes.deny: ["voice-clone","voice-design","voice-remix"]` to remove the
   voice-creation nodes (whose output gender is not knowable up front).
+- `features` — whole features this deployment switches off:
+  `{"features":{"hide":["copilot","presentation"]}}`. `copilot` removes the
+  Workflow Copilot everywhere — the canvas rail and its collapsed tab, the
+  toolbar button and its ⌘J shortcut, the dashboard composer — and the backend
+  answers its routes with the same 503 the client already handles.
+  `presentation` hides the canvas **Present** tab. Share links and published
+  apps that already exist keep working; what goes with the tab is the only UI
+  for *minting* a new share link or publishing a workflow as an app or
+  template, so hide it only where that is intended. Empty (the default)
+  inherits everything the code renders.
 - `billing` — the billing display surface (a dedicated hosted instance meters
   in the platform's credits but shows its customer's own unit):
   - `billing.unitLabel` + `billing.unitRate` (+ optional `billing.unitDecimals`,

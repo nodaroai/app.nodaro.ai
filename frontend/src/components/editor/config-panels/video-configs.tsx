@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState, useCallback, useEffect, Suspense, memo } from "react"
+import { useSurfaceAvailability } from "@/lib/surface-availability"
 import { hasCredits } from "@/lib/edition"
 import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
 import { lazyWithRetry } from "@/lib/lazy-with-retry"
@@ -363,6 +364,10 @@ export function toRefImageItems(entries: ReadonlyArray<VideoRefAutocompleteEntry
 }
 
 function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, onUpdateNode, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ImageToVideoData> & { nodeId?: string }) {
+  // Re-render when the deployment's availability sets arrive: they land
+  // after the first paint, and without a subscription this dropdown would
+  // keep showing every model for the rest of the session.
+  useSurfaceAvailability()
   const t = useT()
   const promptSnippets = useSnippetPool("video", "prompt")
   const negativeSnippets = useSnippetPool("video", "negative")
@@ -2010,6 +2015,10 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
 }
 
 function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<TextToVideoData> & { nodeId?: string }) {
+  // Re-render when the deployment's availability sets arrive: they land
+  // after the first paint, and without a subscription this dropdown would
+  // keep showing every model for the rest of the session.
+  useSurfaceAvailability()
   const t = useT()
   const promptSnippets = useSnippetPool("video", "prompt")
   const negativeSnippets = useSnippetPool("video", "negative")
@@ -2482,6 +2491,10 @@ export const TextToVideoConfig = memo(TextToVideoConfigImpl)
 //   - Kling 3.0 dispatches to Kling3StudioConfig (same as i2v/t2v).
 // ---------------------------------------------------------------------------
 function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources, fieldMappings, onMapField, nodes, edges, onUpdateNode, variableDisplayMode, nodeId }: ConfigProps<GenerateVideoNodeData> & { nodeId?: string }) {
+  // Re-render when the deployment's availability sets arrive: they land
+  // after the first paint, and without a subscription this dropdown would
+  // keep showing every model for the rest of the session.
+  useSurfaceAvailability()
   const t = useT()
   // Single source for the prompt editor's @-refs / variables / snippets — shared
   // with the inline canvas editor + quick-edit modal so they never drift. Supplies

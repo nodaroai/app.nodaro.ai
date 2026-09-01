@@ -20,6 +20,19 @@ import { isBusiness, isCloud } from "./config.js"
  */
 
 export type NavKey = "gallery" | "explore" | "pricing" | "templates" | "apps" | "community" | "integrations"
+
+/**
+ * Whole FEATURES a deployment can switch off, as opposed to a nav entry or a
+ * dashboard tab. Same narrowing contract: `[]` inherits, a member removes.
+ *   copilot      — the whole Workflow Copilot surface: the canvas rail and its
+ *                  collapsed tab, the toolbar button and its ⌘J shortcut, the
+ *                  dashboard composer dock, and the backend routes (which
+ *                  answer the 503 the client already models).
+ *   presentation — the canvas top bar's Present tab. NOT the /present/:token
+ *                  share pages or the app runner, which serve links already
+ *                  minted and stay reachable; this hides the tab only.
+ */
+export type FeatureKey = "copilot" | "presentation"
 export const DASHBOARD_TAB_KEYS = [
   "workflows",
   "projects",
@@ -74,6 +87,7 @@ export interface SurfaceBilling {
 
 export interface SurfaceProfile {
   nav: { hide: NavKey[] }
+  features: { hide: FeatureKey[] }
   dashboard: { tabs: DashboardTabKey[] }
   nodes: { deny: string[]; allow: string[] }
   models: { deny: string[]; allow: string[] }
@@ -89,6 +103,7 @@ export interface SurfaceProfile {
 
 export const SURFACE_PROFILE_DEFAULT: SurfaceProfile = {
   nav: { hide: [] },
+  features: { hide: [] },
   dashboard: { tabs: [] },
   nodes: { deny: [], allow: [] },
   models: { deny: [], allow: [] },
@@ -102,6 +117,7 @@ export const SURFACE_PROFILE_DEFAULT: SurfaceProfile = {
 }
 
 const NAV_KEYS = z.enum(["gallery", "explore", "pricing", "templates", "apps", "community", "integrations"])
+const FEATURE_KEYS = z.enum(["copilot", "presentation"])
 const TAB_KEYS = z.enum([...DASHBOARD_TAB_KEYS])
 const AUTH_METHODS = z.enum(["email", "google", "sso"])
 
@@ -239,6 +255,7 @@ function coherentBilling(raw: { costTab: "inherit" | "hidden"; sidebarCard: "inh
  */
 export const SurfaceProfileSchema: z.ZodType<SurfaceProfile> = z.object({
   nav: z.object({ hide: knownEnumArray(NAV_KEYS.options) }).catch({ hide: [] }),
+  features: z.object({ hide: knownEnumArray(FEATURE_KEYS.options) }).catch({ hide: [] }),
   dashboard: z.object({ tabs: knownEnumArray(TAB_KEYS.options) }).catch({ tabs: [] }),
   nodes: z.object({ deny: stringArray(), allow: stringArray() }).catch({ deny: [], allow: [] }),
   models: z.object({ deny: stringArray(), allow: stringArray() }).catch({ deny: [], allow: [] }),
@@ -275,6 +292,7 @@ function mergeOverDefault(override: Partial<SurfaceProfile>): SurfaceProfile {
   const d = SURFACE_PROFILE_DEFAULT
   return {
     nav: { ...d.nav, ...override.nav },
+    features: { ...d.features, ...override.features },
     dashboard: { ...d.dashboard, ...override.dashboard },
     nodes: { ...d.nodes, ...override.nodes },
     models: { ...d.models, ...override.models },
