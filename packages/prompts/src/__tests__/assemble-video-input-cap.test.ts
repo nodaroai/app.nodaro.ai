@@ -164,6 +164,16 @@ describe("composeVideoPromptText — cap-aware hint shedding", () => {
     expect(starved).not.toContain("[style]")
   })
 
+  it("survives the reference resolver byte-intact", () => {
+    // The resolver is why the section is written flush-left: it collapses 2+
+    // HORIZONTAL spaces unanchored, and it rewrites mentions and appends role
+    // phrases around the body. None of that may touch the section's bytes.
+    const body = composeVideoPromptText(PROSE, DIRECTION)!
+    const section = body.slice(body.indexOf("\n\n[style]:\n"))
+    expect(section).toContain("[style]:\n")
+    expect(frame(body)!).toContain(section)
+  })
+
   it("reclaims the header only when the LAST look clause sheds", () => {
     // Budgets derived from what the composer actually builds, so they track
     // catalog wording instead of pinning it.
