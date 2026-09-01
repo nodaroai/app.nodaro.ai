@@ -95,6 +95,7 @@ export const ENTRY_BY_LINK: readonly string[] = [
   "miniapps",
   "minapps",
   "apps",
+  "availability",
   "credit-audit",
   "credit-anomalies",
   "picker-gaps",

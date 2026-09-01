@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { insertJob } from "../lib/insert-job.js"
+import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
@@ -45,6 +46,13 @@ export async function voiceRemixRoutes(app: FastifyInstance) {
       })
     }
 
+    // B4b: deployment prompt policy on the GENERATIVE half of this lane — the
+    // voice description (kind "audio"). `text` is spoken sample content (TTS
+    // posture: deliberately not policed). Mirrored into parsed.data so
+    // input_data persists the policed text. No policy registered = identity.
+    const finalVoiceDescription = applyPromptPolicies({ prompt: voiceDescription, negativePrompt: "", kind: "audio" }).prompt
+    parsed.data.voiceDescription = finalVoiceDescription
+
     const mcpClient = extractMcpClient(req.body)
 
     const { data: job, error } = await insertJob(req, {
@@ -68,7 +76,7 @@ export async function voiceRemixRoutes(app: FastifyInstance) {
     await videoQueue.add("voice-remix", {
       jobId: job.id,
       text,
-      voiceDescription,
+      voiceDescription: finalVoiceDescription,
       usageLogId,
     })
 

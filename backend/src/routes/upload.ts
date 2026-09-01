@@ -21,6 +21,7 @@ import {
   processAudio,
   type FileMetadata,
 } from "../utils/thumbnail.js"
+import { applyUploadPolicies, uploadBlockedBody, uploadKindFromMime } from "../lib/upload-policy.js"
 
 // ============================================================
 // Legacy Constants (kept for backward-compatible endpoints)
@@ -151,6 +152,22 @@ export async function uploadRoutes(app: FastifyInstance) {
           error: { code: "validation_error", message: `Failed to decode ${mimeType} image: ${(err as Error).message}` },
         })
       }
+    }
+
+    // B4d: deployment upload policy — the server-authoritative gate, on the
+    // FINAL bytes (post-transcode), before any quota reserve or storage
+    // write. No policy registered = allow (mainline byte-identical).
+    const uploadDecision = await applyUploadPolicies({
+      kind: uploadKindFromMime(mimeTypeFinal),
+      lane: "upload",
+      mime: mimeTypeFinal,
+      sizeBytes: buffer.length,
+      userId,
+      filename: filenameOverride ?? originalFilename,
+      buffer,
+    })
+    if (!uploadDecision.allow) {
+      return reply.status(422).send(uploadBlockedBody(uploadDecision))
     }
 
     // Step 2: Atomically reserve storage quota (cloud edition). The atomic
@@ -294,6 +311,20 @@ export async function uploadRoutes(app: FastifyInstance) {
       })
     }
 
+    // B4d: deployment upload policy (see /v1/upload).
+    const uploadDecision = await applyUploadPolicies({
+      kind: "audio",
+      lane: "upload-audio",
+      mime: file.mimetype,
+      sizeBytes: buffer.length,
+      userId: req.userId,
+      filename: file.filename,
+      buffer,
+    })
+    if (!uploadDecision.allow) {
+      return reply.status(422).send(uploadBlockedBody(uploadDecision))
+    }
+
     const ext = file.filename.split(".").pop() ?? "mp3"
     const key = `uploads/${randomUUID()}.${ext}`
 
@@ -336,6 +367,20 @@ export async function uploadRoutes(app: FastifyInstance) {
       }
     }
 
+    // B4d: deployment upload policy on the FINAL bytes (post-transcode).
+    const uploadDecision = await applyUploadPolicies({
+      kind: "image",
+      lane: "upload-image",
+      mime,
+      sizeBytes: buffer.length,
+      userId: req.userId,
+      filename: file.filename,
+      buffer,
+    })
+    if (!uploadDecision.allow) {
+      return reply.status(422).send(uploadBlockedBody(uploadDecision))
+    }
+
     const MIME_TO_EXT: Record<string, string> = { "image/png": "png", "image/webp": "webp", "image/avif": "avif" }
     const ext = MIME_TO_EXT[mime] ?? "jpg"
     const key = `uploads/${randomUUID()}.${ext}`
@@ -370,6 +415,18 @@ export async function uploadRoutes(app: FastifyInstance) {
     const MAX_JSON_BYTES = 25 * 1024 * 1024
     if (buffer.length > MAX_JSON_BYTES) {
       return reply.status(413).send({ error: { code: "payload_too_large", message: "JSON exceeds 25MB limit" } })
+    }
+    // B4d: deployment upload policy (kind "json" — policies scope by kind).
+    const uploadDecision = await applyUploadPolicies({
+      kind: "json",
+      lane: "upload-json",
+      mime: "application/json",
+      sizeBytes: buffer.length,
+      userId,
+      buffer,
+    })
+    if (!uploadDecision.allow) {
+      return reply.status(422).send(uploadBlockedBody(uploadDecision))
     }
     const key = `projects/${randomUUID()}.json`
     const publicUrl = await uploadBufferToS3(buffer, key, "application/json")

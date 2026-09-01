@@ -59,13 +59,24 @@ export interface SurfaceBilling {
   unitDecimals?: number
   /** false removes self-serve purchase (pricing page, buy-packs, billing routes). */
   selfServe: boolean
+  /**
+   * Deployment payer (SAI item 9): the ONE account that pays for every action
+   * on this instance — a uuid or the account's email. When set, the billing
+   * context resolves every request to `payer: "deployment"` and the debit
+   * lands on this account instead of the requester (lib/deployment-payer.ts).
+   * BACKEND-ONLY: surface-profile-runtime-config.ts strips it from /config.js
+   * — the browser must never see the payer's identity, only the
+   * `deploymentPayer` flag on GET /v1/billing/surface. Absent = every payer
+   * rule unchanged (requester pays), byte-identical to pre-payer behavior.
+   */
+  payerAccount?: string
 }
 
 export interface SurfaceProfile {
   nav: { hide: NavKey[] }
   dashboard: { tabs: DashboardTabKey[] }
-  nodes: { deny: string[] }
-  models: { deny: string[] }
+  nodes: { deny: string[]; allow: string[] }
+  models: { deny: string[]; allow: string[] }
   auth: { methods: AuthMethod[]; ssoLabel?: string }
   siblings: { apps: SurfaceSibling[] }
   brand: { productName: string; description?: string; wordmark?: string }
@@ -79,8 +90,8 @@ export interface SurfaceProfile {
 export const SURFACE_PROFILE_DEFAULT: SurfaceProfile = {
   nav: { hide: [] },
   dashboard: { tabs: [] },
-  nodes: { deny: [] },
-  models: { deny: [] },
+  nodes: { deny: [], allow: [] },
+  models: { deny: [], allow: [] },
   auth: { methods: [] },
   siblings: { apps: [] },
   brand: { productName: "Nodaro" },
@@ -177,8 +188,19 @@ const BILLING_DEFAULT: SurfaceBilling = { costTab: "inherit", sidebarCard: "inhe
  * requires the unit (the hosted overlay's register() asserts it and the loader
  * turns that into exit(1)); parseSurfaceProfile never throws, by contract.
  */
-function coherentBilling(raw: { costTab: "inherit" | "hidden"; sidebarCard: "inherit" | "hidden"; selfServe: boolean; unitLabel?: unknown; unitRate?: unknown; unitDecimals?: unknown }): SurfaceBilling {
+function coherentBilling(raw: { costTab: "inherit" | "hidden"; sidebarCard: "inherit" | "hidden"; selfServe: boolean; unitLabel?: unknown; unitRate?: unknown; unitDecimals?: unknown; payerAccount?: unknown }): SurfaceBilling {
   const out: SurfaceBilling = { costTab: raw.costTab, sidebarCard: raw.sidebarCard, selfServe: raw.selfServe }
+  // Independent of the unit trio: a malformed payerAccount drops ALONE (the
+  // unit keeps working), and vice versa. The fail-LOUD half — "configured but
+  // the account doesn't resolve" — belongs to configureDeploymentPayer at
+  // boot; here a non-string only degrades to "no payer", warned.
+  if (raw.payerAccount !== undefined) {
+    if (typeof raw.payerAccount === "string" && raw.payerAccount.trim().length > 0) {
+      out.payerAccount = raw.payerAccount.trim()
+    } else {
+      console.warn("[surface-profile] billing.payerAccount dropped — must be a non-empty string (uuid or email)")
+    }
+  }
   const hasLabel = raw.unitLabel !== undefined
   const hasRate = raw.unitRate !== undefined
   if (!hasLabel && !hasRate && raw.unitDecimals === undefined) return out
@@ -218,8 +240,8 @@ function coherentBilling(raw: { costTab: "inherit" | "hidden"; sidebarCard: "inh
 export const SurfaceProfileSchema: z.ZodType<SurfaceProfile> = z.object({
   nav: z.object({ hide: knownEnumArray(NAV_KEYS.options) }).catch({ hide: [] }),
   dashboard: z.object({ tabs: knownEnumArray(TAB_KEYS.options) }).catch({ tabs: [] }),
-  nodes: z.object({ deny: stringArray() }).catch({ deny: [] }),
-  models: z.object({ deny: stringArray() }).catch({ deny: [] }),
+  nodes: z.object({ deny: stringArray(), allow: stringArray() }).catch({ deny: [], allow: [] }),
+  models: z.object({ deny: stringArray(), allow: stringArray() }).catch({ deny: [], allow: [] }),
   auth: z
     .object({ methods: knownEnumArray(AUTH_METHODS.options), ssoLabel: z.string().optional() })
     .catch({ methods: [] }),
@@ -240,6 +262,7 @@ export const SurfaceProfileSchema: z.ZodType<SurfaceProfile> = z.object({
       unitLabel: z.unknown().optional(),
       unitRate: z.unknown().optional(),
       unitDecimals: z.unknown().optional(),
+      payerAccount: z.unknown().optional(),
     })
     .transform(coherentBilling)
     .catch(BILLING_DEFAULT),

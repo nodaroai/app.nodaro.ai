@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
 import { requireAdmin } from "../middleware/require-admin.js"
+import { requirePlatformOperator } from "../middleware/require-platform-operator.js"
 import { LLM_MODELS, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
 import type { LlmFeature } from "@nodaro/shared"
 /** Derive credit features from the shared LlmFeature type (single source of truth) */
@@ -77,7 +78,7 @@ export async function adminLlmModelsRoutes(app: FastifyInstance) {
   })
 
   // PATCH /v1/admin/llm-models/:modelId — toggle enabled/disabled
-  app.patch("/v1/admin/llm-models/:modelId", { preHandler: requireAdmin }, async (req, reply) => {
+  app.patch("/v1/admin/llm-models/:modelId", { preHandler: requirePlatformOperator }, async (req, reply) => {
     const { modelId } = req.params as { modelId: string }
 
     const bodyResult = toggleBody.safeParse(req.body)

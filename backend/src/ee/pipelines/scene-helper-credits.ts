@@ -74,8 +74,11 @@ export async function reserveHelperCredits(
   // P14/W4e: the resolved payer rides p_workspace_id — conditional spread, a
   // personal call's wire shape stays byte-identical to pre-P14.
   const ws = args.billingContext?.payer === "workspace" ? args.billingContext : undefined
+  // Deployment payer (SAI item 9): debit the payer account through the RPC's
+  // personal branch (the CreditsService.reserveCredits mirror).
+  const dep = args.billingContext?.payer === "deployment" ? args.billingContext : undefined
   const { data: usageLogId, error } = await args.supabase.rpc("reserve_credits", {
-    p_user_id: args.userId,
+    p_user_id: dep ? dep.payerId : args.userId,
     p_credits: credits,
     p_job_id: null,
     p_model_identifier: modelIdentifier,
@@ -102,8 +105,23 @@ export async function reserveHelperCredits(
   // Reserve succeeded — balance dropped; auto-recharge check (fire-and-
   // forget, never blocks the pipeline). Covers the direct-RPC reserve lane
   // the CreditsService hook can't see (audit F2.2). NEVER for a workspace
-  // payer — class work must not pump a member's saved card.
-  if (!ws) void attemptAutoRecharge(args.userId)
+  // payer — class work must not pump a member's saved card. NEVER for a
+  // deployment payer — prepaid-only, no card to pump.
+  if (!ws && !dep) void attemptAutoRecharge(args.userId)
+  // Deployment payer: requester attribution (migration 362) — never
+  // settlement; loud-but-tolerated pre-column (the 361 degrade class).
+  if (dep) {
+    const { error: attributionError } = await args.supabase
+      .from("usage_logs")
+      .update({ on_behalf_of: args.userId } as Record<string, unknown>)
+      .eq("id", usageLogId)
+    if (attributionError) {
+      console.error(
+        `[scene-helper-credits] on_behalf_of attribution failed for usage log ${usageLogId}:`,
+        attributionError.message,
+      )
+    }
+  }
   return { ok: true, usageLogId: usageLogId as string }
 }
 

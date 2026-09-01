@@ -123,6 +123,7 @@ import { generateLocationAssetRoutes } from "./routes/generate-location-asset.js
 import { generateSurroundContinuationRoutes } from "./routes/generate-surround-continuation.js"
 import { generateLocationMotionRoutes } from "./routes/generate-location-motion.js"
 import { adminSettingsRoutes } from "./ee/routes/admin-settings.js"
+import { adminAvailabilityRoutes } from "./ee/routes/admin-availability.js"
 import { motionTransferRoutes } from "./routes/motion-transfer.js"
 import { videoUpscaleRoutes } from "./routes/video-upscale.js"
 import { faceSwapRoutes } from "./routes/face-swap.js"
@@ -151,6 +152,10 @@ import { billingRoutes } from "./ee/routes/billing.js"
 import { connectedInstancesRoutes } from "./ee/routes/connected-instances.js"
 import { galleryRoutes } from "./routes/gallery.js"
 import { runtimeSurfaceProfile, surfaceProfileFailedToLoad } from "./lib/surface-profile.js"
+import { loadAvailabilityOverrides } from "./lib/availability-override.js"
+import { configureDeploymentPayer, payerSsoLinkConflict } from "./lib/deployment-payer.js"
+import { ssoLinkExistingEnabled } from "./lib/sso-providers.js"
+import { surfaceAvailabilityRoutes } from "./routes/surface-availability.js"
 import { userSettingsRoutes } from "./routes/user-settings.js"
 import { meRoutes } from "./routes/me.js"
 import { adminGalleryReportsRoutes } from "./ee/routes/admin-gallery-reports.js"
@@ -312,6 +317,38 @@ export async function buildApp() {
         "(unreadable @file, invalid JSON, or failed validation). Refusing to boot a " +
         "narrowing deployment mainline-open. Fix the profile and redeploy.",
     )
+    process.exit(1)
+  }
+
+  // B5: warm the admin availability-override cache. Non-blocking by design —
+  // a dead settings DB must not hang boot; until the read lands, requests
+  // serve the surface profile's FACTORY set (the deployment's safe baseline,
+  // same guarantee class as the 60s TTL drift between sibling instances).
+  await loadAvailabilityOverrides()
+
+  // SAI item 9 — deployment payer. BLOCKING and fail-loud, the opposite
+  // posture from the availability warm above: a payer that is configured but
+  // does not resolve means every job this boot accepted would silently bill
+  // requesters the deployment promised to cover — refuse to boot instead.
+  // Inert (zero queries) when `billing.payerAccount` is absent.
+  const payerBoot = await configureDeploymentPayer()
+  if (!payerBoot.ok) {
+    console.error(
+      `[deployment-payer] FATAL: billing.payerAccount is configured but did not resolve — ${payerBoot.reason}. ` +
+        "Refusing to boot a deployment-payer instance requester-billed. Fix the profile (or the payer account) and redeploy.",
+    )
+    process.exit(1)
+  }
+
+  // A deployment payer means the CUSTOMER runs the identity provider, and
+  // EXTERNAL_SSO_LINK_EXISTING lets a verified assertion adopt a pre-existing
+  // local account. Together they are account takeover of every local admin —
+  // including whichever account the operator allowlist names, which would hand
+  // the money routes (require-platform-operator.ts) straight back to the
+  // customer. Neither is wrong alone; the combination has no safe use.
+  const payerSsoConflict = payerSsoLinkConflict(ssoLinkExistingEnabled())
+  if (payerSsoConflict) {
+    console.error(`[deployment-payer] FATAL: ${payerSsoConflict}`)
     process.exit(1)
   }
 
@@ -487,6 +524,7 @@ export async function buildApp() {
   await app.register(generateSurroundContinuationRoutes)
   await app.register(generateLocationMotionRoutes)
   if (hasAdmin()) await app.register(adminSettingsRoutes)
+  if (hasAdmin()) await app.register(adminAvailabilityRoutes)
   await app.register(motionTransferRoutes)
   await app.register(videoUpscaleRoutes)
   await app.register(faceSwapRoutes)
@@ -561,6 +599,7 @@ export async function buildApp() {
   await app.register(llmStructuredRoutes)
   await app.register(shotsRoutes)
   await app.register(modelsRoutes)
+  await app.register(surfaceAvailabilityRoutes)
   await app.register(voicesRoutes)
   await app.register(heygenCatalogRoutes)
   await app.register(voiceCloneRoutes)

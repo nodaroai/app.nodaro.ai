@@ -17,6 +17,7 @@
 import type { FastifyInstance } from "fastify"
 import { sendInternalError } from "../lib/http-errors.js"
 import { insertJob } from "../lib/insert-job.js"
+import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
@@ -67,6 +68,16 @@ export async function motionTransferRoutes(app: FastifyInstance) {
       })
     }
 
+    // B4b: deployment prompt policy at this route's assembly point — only when
+    // a prompt exists (policing "" would inject a policy clause as the entire
+    // prompt). Mirrored into parsed.data so input_data persists the policed
+    // text. No policy registered = identity.
+    const policed = prompt ? applyPromptPolicies({ prompt, negativePrompt: negativePrompt ?? "", kind: "video" }) : undefined
+    const finalPrompt = policed ? policed.prompt : prompt
+    const finalNegativePrompt = policed ? policed.negativePrompt || undefined : negativePrompt
+    parsed.data.prompt = finalPrompt
+    parsed.data.negativePrompt = finalNegativePrompt
+
     const modelIdentifier = buildMotionCreditModelIdentifier(provider, resolution, videoDuration)
     const mcpClient = extractMcpClient(req.body)
 
@@ -92,8 +103,8 @@ export async function motionTransferRoutes(app: FastifyInstance) {
       jobId: job.id,
       imageUrl,
       videoUrl,
-      prompt,
-      negativePrompt,
+      prompt: finalPrompt,
+      negativePrompt: finalNegativePrompt,
       characterOrientation,
       resolution,
       provider,

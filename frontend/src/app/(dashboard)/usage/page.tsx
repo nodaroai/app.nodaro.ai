@@ -36,7 +36,9 @@ export default function UsagePage() {
           {t("usage.empty")}
         </div>
       ) : account ? (
-        <BillingAccountSummary account={account} />
+        // Deployment-payer instances: consumption-only — no balance exists at
+        // user grain, and the payer pool is not this user's number to see.
+        <BillingAccountSummary account={account} consumptionOnly={surface.deploymentPayer === true} />
       ) : (
         <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-card p-5">
           <div className="text-sm text-muted-foreground">{t("usage.spent")}</div>

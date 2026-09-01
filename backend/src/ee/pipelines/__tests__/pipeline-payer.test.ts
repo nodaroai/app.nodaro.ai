@@ -109,3 +109,42 @@ describe("stampPipelineConfig — the ONE strip-then-stamp rule (create/seed/bra
     expect(stampPipelineConfig(undefined, undefined)).toEqual({})
   })
 })
+
+describe("getPipelineBillingContext — deployment payer stamps (SAI item 9)", () => {
+  const DEP_CTX: BillingContext = {
+    payer: "deployment",
+    userId: "creator-1",
+    payerId: "payer-acct",
+    entitlements: { watermark: false, dailyCapCredits: null, parallelism: 4, tierForGates: "basic" },
+  }
+
+  it("a stamped DEPLOYMENT payer is honored verbatim — never degraded to the creator's pocket", async () => {
+    // isBillingContext guards the PLUGIN boundary and rejects this shape;
+    // without the second guard every pipeline on a deployment-payer
+    // instance would silently bill the requester's frozen grant.
+    const { client } = makeSupabase({ user_id: "creator-1", config: { billingContext: DEP_CTX } })
+    const ctx = await getPipelineBillingContext(client, "p-1", "caller-1")
+    expect(ctx).toEqual(DEP_CTX)
+  })
+
+  it("a FORGED deployment stamp that relaxes a literal degrades to personal", async () => {
+    for (const relaxed of [{ watermark: true }, { dailyCapCredits: 500 }, { parallelism: "lots" }]) {
+      clearPipelineBillingContextCache()
+      const { client } = makeSupabase({
+        user_id: "creator-1",
+        config: { billingContext: { ...DEP_CTX, entitlements: { ...DEP_CTX.entitlements, ...relaxed } } },
+      })
+      const ctx = await getPipelineBillingContext(client, "p-1", "caller-1")
+      expect(ctx, JSON.stringify(relaxed)).toEqual({ payer: "user", userId: "creator-1" })
+    }
+  })
+
+  it("a deployment stamp missing payerId degrades to personal", async () => {
+    const { client } = makeSupabase({
+      user_id: "creator-1",
+      config: { billingContext: { payer: "deployment", userId: "creator-1" } },
+    })
+    const ctx = await getPipelineBillingContext(client, "p-1", "caller-1")
+    expect(ctx).toEqual({ payer: "user", userId: "creator-1" })
+  })
+})

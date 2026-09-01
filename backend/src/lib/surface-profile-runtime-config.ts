@@ -29,5 +29,14 @@ export function renderSurfaceProfileForRuntimeConfig(): string {
   if (!surfaceGateOpen()) return ""
   const profile = runtimeSurfaceProfile()
   if (profile === SURFACE_PROFILE_DEFAULT) return ""
+  // REDACTION: `billing.payerAccount` is the deployment payer's identity (a
+  // uuid or email) — backend-only by contract. /config.js is world-readable,
+  // so the key is stripped here, at the ONE render point, rather than trusted
+  // to a frontend that must never receive it. The browser learns "one account
+  // pays" through GET /v1/billing/surface's `deploymentPayer` flag instead.
+  if (profile.billing.payerAccount !== undefined) {
+    const { payerAccount: _redacted, ...billing } = profile.billing
+    return JSON.stringify({ ...profile, billing })
+  }
   return JSON.stringify(profile)
 }

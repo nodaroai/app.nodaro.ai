@@ -1,4 +1,8 @@
-import { NATIVE_NEGATIVE_VIDEO_PROVIDERS, getMaxVideoPromptChars } from "@nodaro/shared"
+import {
+  NATIVE_NEGATIVE_VIDEO_PROVIDERS,
+  getMaxVideoPromptChars,
+  videoNegativeSuffix,
+} from "@nodaro/shared"
 
 /**
  * The number of characters of BASE prompt a provider will actually keep.
@@ -21,6 +25,13 @@ import { NATIVE_NEGATIVE_VIDEO_PROVIDERS, getMaxVideoPromptChars } from "@nodaro
  * (a prompt under the cap but over `cap - suffix` loses its tail silently). This
  * is the one place the reservation is mirrored, so the two video routes cannot
  * drift from each other — and a change to the suffix shape has one call site to fix.
+ *
+ * The suffix is measured by `videoNegativeSuffix` — the clamp's own helper —
+ * with NO base prompt, which yields its WIDEST form. The separator widens to a
+ * blank line for a prompt that ends inside a `[style]` section (the common case
+ * once a `direction` folds), and this ceiling is computed before that prompt
+ * exists. Budgeting the narrow form instead would under-shed by the one byte the
+ * clamp then cuts off the end of the last look clause.
  */
 export function effectiveVideoPromptCeiling(
   provider: string,
@@ -29,6 +40,7 @@ export function effectiveVideoPromptCeiling(
   const promptMax = getMaxVideoPromptChars(provider)
   const neg = negativePrompt?.trim()
   if (!neg || NATIVE_NEGATIVE_VIDEO_PROVIDERS.has(provider)) return promptMax
-  // Mirrors `applyVideoNegativePrompt`'s non-native branch verbatim.
-  return Math.max(0, promptMax - `\nAvoid: ${neg}`.length)
+  // Mirrors `applyVideoNegativePrompt`'s non-native branch, through its own
+  // suffix helper so the two cannot disagree about the shape.
+  return Math.max(0, promptMax - videoNegativeSuffix(neg).length)
 }

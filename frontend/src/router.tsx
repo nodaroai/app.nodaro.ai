@@ -99,6 +99,7 @@ const AdminKieCredits = lazy(() => import("@/ee/app/(admin)/admin/kie-credits/pa
 const AdminSubscriptions = lazy(() => import("@/ee/app/(admin)/admin/subscriptions/page"))
 const AdminLlmModels = lazy(() => import("@/ee/app/(admin)/admin/llm-models/page"))
 const AdminNodeDefaults = lazy(() => import("@/ee/app/(admin)/admin/node-defaults/page"))
+const AdminAvailability = lazy(() => import("@/ee/app/(admin)/admin/availability/page"))
 const AdminTutorials = lazy(() => import("@/ee/app/(admin)/admin/tutorials/page"))
 const AdminStuckPipelines = lazy(() => import("@/ee/app/(admin)/admin/stuck-pipelines/page"))
 const AdminOrganizations = lazy(() => import("@/ee/app/(admin)/admin/organizations/page"))
@@ -146,6 +147,7 @@ const adminRoutes: RouteObject[] = hasAdmin() ? [
       { path: "subscriptions", element: <SuspenseWrapper><AdminSubscriptions /></SuspenseWrapper> },
       { path: "llm-models", element: <SuspenseWrapper><AdminLlmModels /></SuspenseWrapper> },
       { path: "node-defaults", element: <SuspenseWrapper><AdminNodeDefaults /></SuspenseWrapper> },
+      { path: "availability", element: <SuspenseWrapper><AdminAvailability /></SuspenseWrapper> },
       { path: "tutorial-categories", element: <SuspenseWrapper><AdminTutorialCategories /></SuspenseWrapper> },
       { path: "tutorials", element: <SuspenseWrapper><AdminTutorials /></SuspenseWrapper> },
       { path: "stuck-pipelines", element: <SuspenseWrapper><AdminStuckPipelines /></SuspenseWrapper> },

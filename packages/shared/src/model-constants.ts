@@ -296,6 +296,35 @@ export const NATIVE_NEGATIVE_VIDEO_PROVIDERS = new Set<string>([
 ])
 
 /**
+ * The `[style]` section header, verbatim. A composed prompt that ends with that
+ * section has NO terminator (`@nodaro/prompts`' `prompt-style-section.ts` owns
+ * the shape and the reasoning), so a `"\n"`-joined `Avoid:` would read as one
+ * more look clause under its header. Duplicated rather than imported because
+ * `@nodaro/prompts` depends on THIS package and never the reverse; the two are
+ * pinned together behaviourally by that package's
+ * `__tests__/style-section-boundary.test.ts`, which runs the real composer
+ * through this clamp.
+ */
+const STYLE_SECTION_HEADER_LINE = "[style]:\n"
+
+/**
+ * The `Avoid: …` suffix `applyVideoNegativePrompt` folds into a prompt, with the
+ * separator the base prompt calls for: a blank line when the base ends INSIDE an
+ * unterminated `[style]` section, a single newline otherwise.
+ *
+ * `base` omitted = the WIDEST form, which is what a caller reserving room before
+ * the prompt exists must budget for (`effectiveVideoPromptCeiling`).
+ */
+export function videoNegativeSuffix(negativePrompt: string, base?: string): string {
+  const gapAt = base?.lastIndexOf("\n\n") ?? -1
+  const lastBlock = base === undefined ? undefined : (gapAt >= 0 ? base.slice(gapAt + 2) : base)
+  const separator = lastBlock === undefined || lastBlock.startsWith(STYLE_SECTION_HEADER_LINE)
+    ? "\n\n"
+    : "\n"
+  return `${separator}Avoid: ${negativePrompt}`
+}
+
+/**
  * Apply the negative prompt to a video-provider request.
  *
  * If the provider natively accepts `negative_prompt` (Kling / Wan families),
@@ -306,6 +335,8 @@ export const NATIVE_NEGATIVE_VIDEO_PROVIDERS = new Set<string>([
  * Otherwise, the helper appends `Avoid: <negativePrompt>` to the prompt
  * (consistent with `buildImagePrompt` in `prompt-builder.ts`) so the model
  * still sees the negative intent, and returns `nativeNegativePrompt = undefined`.
+ * The line is separated by {@link videoNegativeSuffix}, which closes an open
+ * `[style]` section with a blank line rather than reading as a look clause.
  *
  * Empty / missing negative is a no-op.
  *
@@ -338,7 +369,10 @@ export function applyVideoNegativePrompt(
   // assembler), then clamp the whole to the model cap.
   const base = prompt && prompt.trim().length > 0 ? prompt : ""
   if (!base) return { prompt: `Avoid: ${neg}`.slice(0, promptMax), nativeNegativePrompt: undefined }
-  const avoid = `\nAvoid: ${neg}`
+  // The separator is decided on the WHOLE base: the clamp below can only cut the
+  // tail, and a cut either leaves the `[style]` section behind or lands inside
+  // it, so the suffix never needs to grow after the reservation.
+  const avoid = videoNegativeSuffix(neg, base)
   const room = Math.max(0, promptMax - avoid.length)
   const injected = `${base.slice(0, room)}${avoid}`.slice(0, promptMax)
   return { prompt: injected, nativeNegativePrompt: undefined }

@@ -15,6 +15,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
+import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
@@ -83,6 +84,15 @@ export async function videoRetakeRoutes(app: FastifyInstance) {
       })
     }
 
+    // B4b: deployment prompt policy at this route's assembly point — only when
+    // a prompt exists (a promptless retake must not gain a policy clause as
+    // its entire prompt). Mirrored into parsed.data so input_data persists the
+    // policed text. No policy registered = identity.
+    const finalPrompt = prompt
+      ? applyPromptPolicies({ prompt, negativePrompt: "", kind: "video" }).prompt
+      : prompt
+    parsed.data.prompt = finalPrompt
+
     const mcpClient = extractMcpClient(req.body)
     // job_type powers the reconcile cron's correct finalization path —
     // see lib/reconcile/replicate.ts (defaults to "generate-image" when
@@ -115,7 +125,7 @@ export async function videoRetakeRoutes(app: FastifyInstance) {
       jobId: job.id,
       provider: "ltx-2.3-pro",
       video: videoUrl,
-      prompt: prompt ?? "",
+      prompt: finalPrompt ?? "",
       retake_start_time: retakeStartTime,
       retake_duration: retakeDuration,
       retake_mode: retakeMode,

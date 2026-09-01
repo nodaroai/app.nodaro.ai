@@ -8,6 +8,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractProvider } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { resolveLocationAspectRatio } from "../lib/aspect-ratio.js"
@@ -101,13 +102,17 @@ export async function generateLocationMotionRoutes(app: FastifyInstance) {
 
       const modelIdentifier = parsed.data.provider
 
-      const prompt = buildLocationMotionPrompt({
+      const builtPrompt = buildLocationMotionPrompt({
         name: parsed.data.name,
         category: parsed.data.category,
         style: parsed.data.style,
         motionPrompt: parsed.data.motionPrompt,
         canonicalDescription: parsed.data.canonicalDescription,
       })
+      // B4b: deployment prompt policy at this route's assembly point — the
+      // single-node motion lane's only policing site (the DAG lane polices in
+      // payload-builder). No policy registered = identity.
+      const prompt = applyPromptPolicies({ prompt: builtPrompt, negativePrompt: "", kind: "video" }).prompt
 
       // Locations default to 16:9 (cinematic establishing shots). Explicit
       // override wins. Mirrors the character motion route's call site shape

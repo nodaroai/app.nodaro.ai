@@ -434,15 +434,23 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       .single()
 
     // Effective tier — payg users run at basic-equivalent parallelism (4).
-    const concurrencyLimit = getParallelismLimit(
-      userProfile
-        ? resolveEffectiveTier({
-            tier: (userProfile.tier as string | null) ?? null,
-            subscription_tier: (userProfile.subscription_tier as string | null) ?? null,
-            lifetime_topup_credits: (userProfile.lifetime_topup_credits as number) ?? 0,
-          })
-        : undefined
-    )
+    // Deployment payer (SAI item 9, D2): the limit is the PAYER's grade,
+    // stamped into the context at resolve — per EXECUTION, so every requester
+    // gets their own budget at that grade rather than the instance sharing
+    // one; the requester's own tier (a signup default no one ever upgrades on
+    // a deployment-payer instance) prices nothing. Env ceiling still applies.
+    const concurrencyLimit =
+      ctx.billingContext.payer === "deployment"
+        ? Math.min(ctx.billingContext.entitlements.parallelism, MAX_CONCURRENT_NODES_CEILING)
+        : getParallelismLimit(
+            userProfile
+              ? resolveEffectiveTier({
+                  tier: (userProfile.tier as string | null) ?? null,
+                  subscription_tier: (userProfile.subscription_tier as string | null) ?? null,
+                  lifetime_topup_credits: (userProfile.lifetime_topup_credits as number) ?? 0,
+                })
+              : undefined
+          )
 
     ctx.workflowSettings = {
       ...((workflowData.settings as Record<string, unknown>) ?? {}),

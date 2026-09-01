@@ -58,6 +58,29 @@ export function applyOrgEntitlements(
   derived: ProfileDerivedGates,
   ctx?: BillingContext,
 ): EffectiveBillingGates {
+  // Deployment payer (SAI item 9): the payer ACCOUNT's grade replaces the
+  // requester's, read from the context the resolver stamped — same
+  // no-second-copy rule as the workspace branch below. `personalBalance`
+  // stays TRUE on purpose: the balance that gates the run is a real personal
+  // pool (the PAYER's — the guard fetches that profile), unlike a workspace
+  // budget whose ceiling lives in the RPC. Free semantics and the app
+  // allowance are off — deployment work is prepaid class work, never
+  // free-tier work.
+  if (ctx?.payer === "deployment") {
+    const ent = ctx.entitlements
+    const capIsAlwaysNull: null = ent.dailyCapCredits
+    return {
+      workspacePayer: false,
+      tierForGates: ent.tierForGates,
+      webFree: false,
+      freeSemantics: false,
+      personalBalance: true,
+      appAllowance: false,
+      dailyCapOff: capIsAlwaysNull === null,
+      watermarkable: ent.watermark,
+    }
+  }
+
   // Personal payer — including the DEGRADED personal fallback and an absent
   // context — keeps today's derivation exactly. This branch must stay
   // byte-equivalent to the pre-P14 site logic: with the flag off, nothing

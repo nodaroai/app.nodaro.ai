@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest"
 import { composeVideoPromptText } from "../assemble-video-input.js"
-import { directionFieldsForSurface } from "../direction-registry.js"
+import {
+  FILM_STYLE_KEYS,
+  VIDEO_HINT_MODE_DEFAULT,
+  directionFieldsForSurface,
+  renderDirectionHints,
+} from "../direction-registry.js"
 import { getStylePromptHint, getStyleTerm } from "../style.js"
 import { getTransitionPromptHint, getTransitionTerm } from "../transitions.js"
 import { getCameraMotionPromptHint, getCameraMotionTerm } from "../camera-motions.js"
@@ -25,6 +30,10 @@ import { renderStructuredFields } from "../prompt-builder-structured-fields.js"
  *  2. THE VERBOSITY POLICY — look dimensions render their full clause, motion
  *     dimensions their compact professional term. That split moved from the
  *     client to the platform, so it is pinned in both directions.
+ *  3. THE `[style]` SECTION — the look clauses read in a trailing block, not
+ *     inline; the motion family and the structured fragment stay in the body.
+ *     The header is written as a LITERAL in every expectation here so a typo in
+ *     `STYLE_SECTION_HEADER` fails rather than redefining the contract.
  *
  * Real catalog ids throughout: every `get*PromptHint` returns `""` on a miss,
  * so a made-up id would make most assertions vacuously pass.
@@ -62,9 +71,9 @@ describe("composeVideoPromptText — the no-op contract", () => {
 })
 
 describe("composeVideoPromptText — the verbosity policy", () => {
-  it("renders a LOOK dimension as its full clause", () => {
+  it("renders a LOOK dimension as its full clause, in the section", () => {
     expect(composeVideoPromptText("a knight", { style: STYLE })).toBe(
-      `a knight. ${getStylePromptHint(STYLE)}`,
+      `a knight\n\n[style]:\n${getStylePromptHint(STYLE)}`,
     )
   })
 
@@ -91,12 +100,41 @@ describe("composeVideoPromptText — the verbosity policy", () => {
         hintMode: "full",
       }),
     ).toBe(`a knight. ${getTransitionPromptHint(TRANSITION)}`)
-    // …and "compact" demotes the look family to its term.
+    // …and "compact" demotes the look family to its term. Verbosity does not
+    // move a clause: the look term still reads in the section.
     expect(
       composeVideoPromptText("a knight", { style: STYLE }, undefined, {
         hintMode: "compact",
       }),
-    ).toBe(`a knight. ${getStyleTerm(STYLE)}`)
+    ).toBe(`a knight\n\n[style]:\n${getStyleTerm(STYLE)}`)
+  })
+})
+
+/**
+ * THE BODY/SECTION BOUNDARY. Tal's rule: camera motion is part of the shot
+ * prose, not the style — so the WHOLE motion family stays in the body, and the
+ * boundary is the registry's `family` column, the same column the verbosity
+ * policy above splits on. Coupling them is deliberate; a row cannot be shot
+ * prose for one and look for the other.
+ */
+describe("composeVideoPromptText — what stays in the body", () => {
+  it("keeps every motion clause inline and emits no header for a motion-only fold", () => {
+    const out = composeVideoPromptText("a knight", {
+      cameraMotion: CAMERA_MOTION,
+      transition: TRANSITION,
+    })
+    expect(out).toBe(
+      `a knight. ${getCameraMotionTerm(CAMERA_MOTION)}. ${getTransitionTerm(TRANSITION)}`,
+    )
+    expect(out).not.toContain("[style]")
+  })
+
+  it("splits a mixed fold: motion inline, look in the section", () => {
+    expect(
+      composeVideoPromptText("a knight", { cameraMotion: CAMERA_MOTION, style: STYLE }),
+    ).toBe(
+      `a knight. ${getCameraMotionTerm(CAMERA_MOTION)}\n\n[style]:\n${getStylePromptHint(STYLE)}`,
+    )
   })
 })
 
@@ -114,22 +152,38 @@ describe("composeVideoPromptText — ordering", () => {
   })
 
   it("folds in TABLE order, not the caller's object order", () => {
-    // `shotSize` (row 2) precedes `style` (row 22) however the object is written.
+    // `shotSize` (row 2) precedes `lightingStyle` (row 15) on the scene line
+    // however the object is written.
     const out = composeVideoPromptText("a knight", {
-      style: STYLE,
+      lightingStyle: LIGHTING_STYLE,
       shotSize: SHOT_SIZE,
     })!
     expect(out.indexOf(getFramingPromptHint(SHOT_SIZE))).toBeLessThan(
-      out.indexOf(getStylePromptHint(STYLE)),
+      out.indexOf(getLightingPromptHint(LIGHTING_STYLE)),
     )
   })
 
-  it("appends the structured fragment AFTER every direction hint", () => {
+  it("groups before it orders: the film line leads the scene line", () => {
+    // `shotSize` folds at row 2 and `style` at row 22, so table order alone
+    // would read the framing clause first. The section's two lines outrank it.
+    expect(composeVideoPromptText("a knight", { style: STYLE, shotSize: SHOT_SIZE })).toBe(
+      `a knight\n\n[style]:\n${getStylePromptHint(STYLE)}\n${getFramingPromptHint(SHOT_SIZE)}`,
+    )
+  })
+
+  it("ends the BODY with the structured fragment, then hangs the section off it", () => {
     const structured = { mood: "wistful" }
     const fragment = renderStructuredFields(structured)
     expect(fragment.length).toBeGreaterThan(0)
-    const out = composeVideoPromptText("a knight", { style: STYLE }, structured)!
-    expect(out).toBe(`a knight. ${getStylePromptHint(STYLE)}. ${fragment}`)
+    const out = composeVideoPromptText(
+      "a knight",
+      { style: STYLE, cameraMotion: CAMERA_MOTION },
+      structured,
+    )!
+    expect(out).toBe(
+      `a knight. ${getCameraMotionTerm(CAMERA_MOTION)}. ${fragment}` +
+        `\n\n[style]:\n${getStylePromptHint(STYLE)}`,
+    )
   })
 })
 
@@ -138,7 +192,7 @@ describe("composeVideoPromptText — multi-pick doctrine", () => {
     const blended = buildMoodHints({ mood: ["happy", "serene"] }, "full")
     expect(blended).toHaveLength(1)
     expect(composeVideoPromptText("a knight", { mood: ["happy", "serene"] })).toBe(
-      `a knight. ${blended[0]}`,
+      `a knight\n\n[style]:\n${blended[0]}`,
     )
   })
 
@@ -147,7 +201,7 @@ describe("composeVideoPromptText — multi-pick doctrine", () => {
     expect(blended.length).toBeGreaterThan(0)
     expect(
       composeVideoPromptText("a knight", { aesthetic: ["y2k", "cottagecore"] }),
-    ).toBe(`a knight. ${blended}`)
+    ).toBe(`a knight\n\n[style]:\n${blended}`)
   })
 
   it("slices an over-cap array to the dimension's maxPicks (atmosphere = 2)", () => {
@@ -156,7 +210,9 @@ describe("composeVideoPromptText — multi-pick doctrine", () => {
     })!
     const kept = buildAtmosphereHints(["clear", "cloudy"], "full")
     expect(kept).toHaveLength(2)
-    expect(out).toBe(`a knight. ${kept.join(". ")}`)
+    // Both survivors share the scene line, `. `-joined exactly as an inline
+    // fold joined them.
+    expect(out).toBe(`a knight\n\n[style]:\n${kept.join(". ")}`)
     expect(out).not.toContain(buildAtmosphereHints("overcast", "full")[0])
   })
 
@@ -164,7 +220,7 @@ describe("composeVideoPromptText — multi-pick doctrine", () => {
     // The legacy `V2LookPicker` shape: a single-pick dimension that stored an
     // array. Must degrade to one hint, never throw and never drop the key.
     const out = composeVideoPromptText("a knight", { style: [STYLE, "anime"] })
-    expect(out).toBe(`a knight. ${getStylePromptHint(STYLE)}`)
+    expect(out).toBe(`a knight\n\n[style]:\n${getStylePromptHint(STYLE)}`)
   })
 })
 
@@ -191,12 +247,31 @@ describe("composeVideoPromptText — tolerance", () => {
 
 describe("composeVideoPromptText — an empty or absent body", () => {
   it("returns the hints alone for an empty prompt (never a leading '. ')", () => {
-    expect(composeVideoPromptText("", { style: STYLE })).toBe(getStylePromptHint(STYLE))
+    expect(composeVideoPromptText("", { transition: TRANSITION })).toBe(
+      getTransitionTerm(TRANSITION),
+    )
   })
 
   it("returns the hints alone for an ABSENT prompt", () => {
-    expect(composeVideoPromptText(undefined, { style: STYLE })).toBe(
-      getStylePromptHint(STYLE),
+    expect(composeVideoPromptText(undefined, { transition: TRANSITION })).toBe(
+      getTransitionTerm(TRANSITION),
+    )
+  })
+
+  it("drops the section's blank line with the body (never a leading newline)", () => {
+    const sectionOnly = `[style]:\n${getStylePromptHint(STYLE)}`
+    expect(composeVideoPromptText("", { style: STYLE })).toBe(sectionOnly)
+    expect(composeVideoPromptText(undefined, { style: STYLE })).toBe(sectionOnly)
+    expect(composeVideoPromptText("   ", { style: STYLE })).toBe(sectionOnly)
+  })
+
+  it("TRIMS a prompt the section is the only thing folded onto", () => {
+    // The section counts as "something folded", so the body is trimmed exactly
+    // as the hint-join branch trims it — otherwise the blank line would inherit
+    // the prompt's trailing whitespace. (With NO fold at all the prompt still
+    // comes back untrimmed: the no-op contract above.)
+    expect(composeVideoPromptText("  a knight \n", { style: STYLE })).toBe(
+      `a knight\n\n[style]:\n${getStylePromptHint(STYLE)}`,
     )
   })
 })
@@ -208,30 +283,49 @@ describe("composeVideoPromptText — the dedupe invariant", () => {
   it("emits ONE clause when a legacy and a canonical key carry the SAME id", () => {
     expect(
       composeVideoPromptText("a knight", { framingId: SHOT_SIZE, shotSize: SHOT_SIZE }),
-    ).toBe(`a knight. ${getFramingPromptHint(SHOT_SIZE)}`)
+    ).toBe(`a knight\n\n[style]:\n${getFramingPromptHint(SHOT_SIZE)}`)
   })
 
   it("emits BOTH clauses for two DIFFERENT ids of one catalog", () => {
     // The case an alias table would have wrongly collapsed: `lightingId` is
     // whole-catalog, so a time-of-day pick beside a lighting-style pick is two
-    // legitimate selections.
+    // legitimate selections. Both are scene-line clauses, so they share a line.
     const out = composeVideoPromptText("a knight", {
       lightingStyle: LIGHTING_STYLE,
       lightingId: TIME_OF_DAY,
     })
     expect(out).toBe(
-      `a knight. ${getLightingPromptHint(LIGHTING_STYLE)}. ${getLightingPromptHint(TIME_OF_DAY)}`,
+      `a knight\n\n[style]:\n` +
+        `${getLightingPromptHint(LIGHTING_STYLE)}. ${getLightingPromptHint(TIME_OF_DAY)}`,
     )
+  })
+
+  it("emits NO header when every look clause deduped away", () => {
+    // The section's existence follows the clause COUNT after dedupe, not the
+    // caller's key count: two keys, one clause, one line — and a fold whose
+    // every look clause vanished would take the no-header path.
+    const out = composeVideoPromptText("a knight", {
+      framingId: SHOT_SIZE,
+      shotSize: SHOT_SIZE,
+    })!
+    expect(out.split("[style]:")).toHaveLength(2)
+    expect(composeVideoPromptText("a knight", { style: NO_SUCH_ID })).not.toContain("[style]")
   })
 })
 
 /**
- * ORDER TOTALITY — every video-surface dimension, folded in one call.
+ * ORDER TOTALITY — every video-surface dimension, folded in one call, and the
+ * slot each one lands in.
  *
  * The fixture is keyed in `directionFieldsForSurface("video")` order and pinned
  * against it, so adding, removing or reordering a video row fails HERE as well
  * as in the registry test. Each id was chosen to render a clause distinct from
  * every other row's, so the dedupe pass cannot mask a mis-ordering.
+ *
+ * The expectation is an INDEPENDENT recomputation off the registry (per-row
+ * clauses, classified by `family` + `FILM_STYLE_KEYS`, re-assembled by hand),
+ * not a second call through the composer — so a composer that slotted a row
+ * wrongly would have to be wrong in the registry to pass.
  */
 const EVERY_VIDEO_DIMENSION: Record<string, string> = {
   cameraMotion: "static",
@@ -284,18 +378,58 @@ describe("composeVideoPromptText — order totality over every video dimension",
     }
   })
 
-  it("folds all 35 dimensions in registry order, one clause each", () => {
-    // Per-dimension renders, composed in isolation through the same public
-    // entry point, then concatenated in table order: the whole fold must equal
-    // exactly that. Any reorder, drop or duplicate shows up as a diff.
-    const expected = Object.entries(EVERY_VIDEO_DIMENSION).map(
-      ([key, id]) => composeVideoPromptText("", { [key]: id })!,
-    )
-    expect(new Set(expected).size, "fixture ids must render distinct clauses").toBe(
-      expected.length,
-    )
+  it("folds all 35 dimensions into body, film line and scene line", () => {
+    const filmKeys: readonly string[] = FILM_STYLE_KEYS
+    const bySlot: Record<"body" | "film" | "scene", string[]> = { body: [], film: [], scene: [] }
+    for (const row of directionFieldsForSurface("video")) {
+      const slot =
+        row.family === "motion" ? "body" : filmKeys.includes(row.key) ? "film" : "scene"
+      bySlot[slot].push(
+        ...renderDirectionHints(
+          { [row.key]: EVERY_VIDEO_DIMENSION[row.key] },
+          { surface: "video", mode: VIDEO_HINT_MODE_DEFAULT },
+        ),
+      )
+    }
+    const every = [...bySlot.body, ...bySlot.film, ...bySlot.scene]
+    expect(new Set(every).size, "fixture ids must render distinct clauses").toBe(every.length)
+    // Every slot has to be occupied or the assembly below proves less than it
+    // looks (an empty film line would collapse the section to one line).
+    for (const slot of ["body", "film", "scene"] as const) {
+      expect(bySlot[slot].length, slot).toBeGreaterThan(0)
+    }
+
     expect(composeVideoPromptText("a knight", EVERY_VIDEO_DIMENSION)).toBe(
-      ["a knight", ...expected].join(". "),
+      `${["a knight", ...bySlot.body].join(". ")}` +
+        `\n\n[style]:\n${bySlot.film.join(". ")}\n${bySlot.scene.join(". ")}`,
+    )
+  })
+
+  it("puts the five film rows on the film line and nothing else", () => {
+    expect(FILM_STYLE_KEYS).toEqual([
+      "cameraFormat",
+      "colorLook",
+      "style",
+      "era",
+      "cameraFormatId",
+    ])
+    const filmLine = composeVideoPromptText("a knight", EVERY_VIDEO_DIMENSION)!
+      .split("\n\n[style]:\n")[1]!
+      .split("\n")[0]!
+    for (const key of FILM_STYLE_KEYS) {
+      if (!(key in EVERY_VIDEO_DIMENSION)) continue
+      const [clause] = renderDirectionHints(
+        { [key]: EVERY_VIDEO_DIMENSION[key] },
+        { surface: "video", mode: VIDEO_HINT_MODE_DEFAULT },
+      )
+      expect(filmLine, key).toContain(clause)
+    }
+    // …and a scene-line dimension never leaks onto it.
+    expect(filmLine).not.toContain(
+      renderDirectionHints(
+        { setting: EVERY_VIDEO_DIMENSION.setting },
+        { surface: "video", mode: VIDEO_HINT_MODE_DEFAULT },
+      )[0],
     )
   })
 })

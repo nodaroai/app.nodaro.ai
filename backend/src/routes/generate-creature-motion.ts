@@ -8,6 +8,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractProvider } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { // Reuse the entity-agnostic video-motion helpers (the object names are the
   // canonical home for these — they produce a generic "Motion: …, // product-showcase quality" string + resolve aspect ratios; nothing in them
@@ -164,7 +165,7 @@ export async function generateCreatureMotionRoutes(app: FastifyInstance) {
               undefined, undefined, Boolean(parsed.data.refineFromVideoUrl),
             )
 
-      const prompt = buildObjectMotionPrompt({
+      const builtPrompt = buildObjectMotionPrompt({
         name: parsed.data.name,
         category: parsed.data.category,
         style: parsed.data.style,
@@ -172,6 +173,10 @@ export async function generateCreatureMotionRoutes(app: FastifyInstance) {
         canonicalDescription: parsed.data.canonicalDescription,
         seedPromptHint: parsed.data.seedPromptHint,
       })
+      // B4b: deployment prompt policy at this route's assembly point — the
+      // single-node motion lane's only policing site (the DAG lane polices in
+      // payload-builder). No policy registered = identity.
+      const prompt = applyPromptPolicies({ prompt: builtPrompt, negativePrompt: "", kind: "video" }).prompt
 
       // Creatures default to 1:1 (centered reference framing). Explicit
       // override wins via `resolveObjectAspectRatio`'s precedence (explicit >

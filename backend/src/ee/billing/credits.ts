@@ -2135,6 +2135,11 @@ export class CreditsService {
     // Workspace ⇒ the RPC's workspace branch pays (p_workspace_id below) and
     // the org entitlement grade replaces every profile-derived gate.
     const ws = options?.billingContext?.payer === "workspace" ? options.billingContext : undefined
+    // Deployment payer (SAI item 9): the DEBIT user becomes the payer account
+    // — the RPC's ordinary personal branch runs against the payer's pools —
+    // while the positional `userId` (the requester) keeps owning the job.
+    const dep = options?.billingContext?.payer === "deployment" ? options.billingContext : undefined
+    const debitUserId = dep ? dep.payerId : userId
 
     // Get credit cost: route-supplied override or DB lookup.
     const dbPricing = await getModelCreditCostFromDB(modelIdentifier)
@@ -2142,11 +2147,13 @@ export class CreditsService {
       ? { ...dbPricing, creditCost: creditOverride }
       : dbPricing
     // Fetch tier once — needed for the atomic daily cap below, and (unless
-    // overridden) for the watermark decision.
+    // overridden) for the watermark decision. Under a deployment payer this
+    // is the PAYER's row: its grade is what the entitlement gates ran on at
+    // resolve, and the requester's tier prices nothing here.
     const { data: tierProfile } = await supabase
       .from("profiles")
       .select("tier, subscription_tier, lifetime_topup_credits")
-      .eq("id", userId)
+      .eq("id", debitUserId)
       .single()
     const userTier = tierProfile
       ? effectiveTierOf(tierProfile as { tier: string | null; subscription_tier: string | null; lifetime_topup_credits: number })
@@ -2169,8 +2176,10 @@ export class CreditsService {
       : ((userTier === "free" || derivedWebFree) && FREE_TIER_RESTRICTIONS.watermark)
     // A workspace payer never watermarks — the entitlement grade decides, and
     // it outranks even an explicit watermarkOverride (a stale personal-derived
-    // override from a caller must not watermark class work).
-    const watermark = ws ? (gates.watermarkable && FREE_TIER_RESTRICTIONS.watermark) : personalWatermark
+    // override from a caller must not watermark class work). A deployment
+    // payer rides the same rule: its grade (watermark: false, literal-typed)
+    // decides, not the requester's free tier.
+    const watermark = ws || dep ? (gates.watermarkable && FREE_TIER_RESTRICTIONS.watermark) : personalWatermark
 
     // Daily credit cap, enforced atomically inside reserve_credits (closes the
     // TOCTOU the read-only creditGuard preHandler left open). Free tier uses
@@ -2213,6 +2222,7 @@ export class CreditsService {
             // Mirrors the RPC's payer shape (migration 351) minus
             // `member_spend` — no spend row was touched, nothing to reverse.
             ...(ws ? { payer: { kind: "workspace", workspace_id: ws.workspaceId, org_id: ws.orgId } } : {}),
+            ...(dep ? { payer: { kind: "deployment", account: dep.payerId } } : {}),
           },
         })
         .select("id")
@@ -2221,7 +2231,13 @@ export class CreditsService {
       return {
         usageLogId: usageLog?.id ?? "log-failed",
         creditsReserved: 0,
-        watermark: personalWatermark,
+        // Workspace keeps the personal derivation ("no override without
+        // payment" — the RPC's workspace guards never ran on a free row). A
+        // DEPLOYMENT payer's grade applies even here: it is boot
+        // configuration, not per-request authorization — there is no guard
+        // whose absence would make the override unearned, and a white-label
+        // instance must not watermark a free-tier requester's zero-cost job.
+        watermark: dep ? watermark : personalWatermark,
       }
     }
 
@@ -2231,7 +2247,7 @@ export class CreditsService {
     // headroom under FOR UPDATE. The key is spread conditionally so the
     // personal call's wire shape stays byte-identical to pre-P14.
     const { data: usageLogId, error: reserveError } = await supabase.rpc("reserve_credits", {
-      p_user_id: userId,
+      p_user_id: debitUserId,
       p_credits: pricing.creditCost,
       p_job_id: jobId,
       p_model_identifier: modelIdentifier,
@@ -2259,6 +2275,26 @@ export class CreditsService {
       return { usageLogId: "log-failed", creditsReserved: pricing.creditCost, watermark }
     }
 
+    // Deployment payer: the RPC wrote the row under the PAYER's user_id (it
+    // is the debit user) — stamp the requester into `on_behalf_of` (migration
+    // 362) so per-user consumption stays attributable (the /usage page keys
+    // on it). Best-effort ATTRIBUTION, never settlement: settlement keys off
+    // the row id alone. Loud on failure — on a DB that predates 362 this is
+    // a 42703 until the migration lands, and attribution for the window is
+    // accepted as lost (the 361 degrade class).
+    if (dep) {
+      const { error: attributionError } = await supabase
+        .from("usage_logs")
+        .update({ on_behalf_of: userId } as Record<string, unknown>)
+        .eq("id", usageLogId)
+      if (attributionError) {
+        console.error(
+          `[credits] on_behalf_of attribution failed for usage log ${usageLogId} (requester ${userId}):`,
+          attributionError.message,
+        )
+      }
+    }
+
     // Fetch usage_log metadata (from_sub/from_topup) for accurate creditType,
     // and current user balance for accurate balanceAfter (C3 + H6 fix).
     // Workspace payer: SKIPPED — the money moved in the workspace budget, the
@@ -2276,7 +2312,10 @@ export class CreditsService {
           supabase
             .from("profiles")
             .select("subscription_credits, topup_credits")
-            .eq("id", userId)
+            // The DEBIT user's pools — under a deployment payer the money
+            // moved on the payer account, and a requester-keyed balanceAfter
+            // would report a pool this reservation never touched.
+            .eq("id", debitUserId)
             .single(),
         ])
         const meta = usageLog?.metadata as Record<string, unknown> | null
@@ -2301,14 +2340,20 @@ export class CreditsService {
     // balance did not move, and the workspace budget lives in
     // workspace_budgets, not here.
     await CreditsService.logTransaction({
-      userId,
+      // The ledger row belongs to whoever's money moved: the payer account
+      // under a deployment payer (its transactions page is the instance
+      // owner's audit trail; the requester's shows nothing — their balance
+      // did not move), the requester otherwise.
+      userId: debitUserId,
       amount: -pricing.creditCost,
       creditType,
       // org_usage (a 351 CHECK value, prepared for exactly these rows) so
       // org usage is distinguishable from personal usage by source as well
       // as by the pair — P15's reporting convention starts here.
       source: ws ? "org_usage" : "usage",
-      description: `Job ${jobId}: ${modelIdentifier}`,
+      description: dep
+        ? `Job ${jobId}: ${modelIdentifier} (on behalf of ${userId})`
+        : `Job ${jobId}: ${modelIdentifier}`,
       jobId,
       balanceAfter,
       ...(ws ? { workspaceId: ws.workspaceId, orgId: ws.orgId } : {}),
@@ -2319,8 +2364,9 @@ export class CreditsService {
     // attributed operations are excluded via skipAutoRecharge. A WORKSPACE
     // payer is excluded as an invariant, not a call-site flag: the member's
     // personal balance did not move, and class work must never charge a
-    // member's saved card.
-    if (!options?.skipAutoRecharge && !ws) {
+    // member's saved card. A DEPLOYMENT payer is excluded the same way —
+    // prepaid-only by contract; the payer account must never pump a card.
+    if (!options?.skipAutoRecharge && !ws && !dep) {
       void attemptAutoRecharge(userId)
     }
     return { usageLogId: usageLogId as string, creditsReserved: pricing.creditCost, watermark }

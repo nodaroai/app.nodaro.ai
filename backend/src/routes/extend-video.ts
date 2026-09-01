@@ -13,6 +13,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
+import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { supabase } from "../lib/supabase.js"
 import { kieTaskOwnedByAnother } from "../lib/kie-task-ownership.js"
 import { videoQueue } from "../lib/queue.js"
@@ -221,14 +222,23 @@ export async function extendVideoRoutes(app: FastifyInstance) {
         })
       : undefined
 
+    // B4b: deployment prompt policy between reference assembly and negative
+    // injection — the policy's folded negative then rides the "Avoid: …"
+    // clause below, which stays the prompt's last line. Only when a prompt
+    // exists (LTX extends promptless). No policy registered = identity.
+    const assembledPrompt = assembled?.prompt ?? prompt
+    const policed = assembledPrompt
+      ? applyPromptPolicies({ prompt: assembledPrompt, negativePrompt: negativePrompt ?? "", kind: "video" })
+      : undefined
+
     // None of the current extend providers (veo-extend / runway-extend / ltx-2.3-pro)
     // support `negative_prompt` natively, so the helper appends "Avoid: …" to
     // the user prompt before it reaches the queue. LTX doesn't consume the
     // prompt at all — the negative is silently dropped for that provider,
     // matching its existing prompt-ignored behavior.
     const { prompt: effectivePrompt } = applyVideoNegativePrompt(
-      assembled?.prompt ?? prompt,
-      negativePrompt,
+      policed ? policed.prompt : assembledPrompt,
+      policed ? policed.negativePrompt || undefined : negativePrompt,
       provider,
     )
 

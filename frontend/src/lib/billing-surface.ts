@@ -13,6 +13,10 @@ export interface BillingSurface {
   canQuote: boolean
   canAccount: boolean
   mountCostTab: boolean
+  /** One designated account pays for every action on this instance (SAI item
+   *  9) — /usage renders consumption-only (no balance; the payer's identity
+   *  never reaches the browser). Optional: an older backend omits it. */
+  deploymentPayer?: boolean
 }
 
 export const BILLING_SURFACE_DEFAULT: BillingSurface = {
@@ -23,6 +27,7 @@ export const BILLING_SURFACE_DEFAULT: BillingSurface = {
   canQuote: false,
   canAccount: false,
   mountCostTab: false,
+  deploymentPayer: false,
 }
 
 export interface MoneyAmount {

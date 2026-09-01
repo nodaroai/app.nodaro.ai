@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
 import { requireAdmin } from "../middleware/require-admin.js"
+import { requirePlatformOperator } from "../middleware/require-platform-operator.js"
 import { getStripe } from "../billing/stripe-client.js"
 import { getTierFromPriceId } from "../billing/stripe-config.js"
 import { tierColumns } from "../billing/tier-columns.js"
@@ -153,7 +154,7 @@ export async function adminSubscriptionHealthRoutes(app: FastifyInstance) {
    */
   const syncBody = z.object({ userId: z.string().uuid() })
 
-  app.post("/v1/admin/subscription-health/sync", { preHandler: requireAdmin }, async (req, reply) => {
+  app.post("/v1/admin/subscription-health/sync", { preHandler: requirePlatformOperator }, async (req, reply) => {
     const parsedBody = syncBody.safeParse(req.body)
     if (!parsedBody.success) {
       return reply.status(400).send({ error: parsedBody.error.flatten().fieldErrors })

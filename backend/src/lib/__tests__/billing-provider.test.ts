@@ -20,6 +20,7 @@ describe("billing-provider core seam", () => {
     expect(s).toEqual({
       contract: BILLING_CONTRACT_VERSION, providerId: "none", displayUnit: "usd",
       canReport: false, canQuote: false, canAccount: false, mountCostTab: false,
+      deploymentPayer: false,
     })
   })
   it("registering a provider flips the surface to mount + its unit + capabilities", () => {
@@ -91,5 +92,21 @@ describe("billing-provider core seam", () => {
     const a = await getBillingProvider().account("u")
     expect(a).toEqual({ plan: "pro", balance: 42, dailyAllowance: 100, unit: "credits" })
     expect(a?.payg).toBeUndefined()
+  })
+})
+
+describe("billingSurface — deploymentPayer flag (SAI item 9)", () => {
+  it("mirrors deploymentPayerActive(), and is ALL the browser learns (no identity)", async () => {
+    const { __setDeploymentPayerForTests, __resetDeploymentPayerForTests } = await import("../deployment-payer.js")
+    try {
+      expect(billingSurface().deploymentPayer).toBe(false)
+      __setDeploymentPayerForTests("payer-acct")
+      const s = billingSurface()
+      expect(s.deploymentPayer).toBe(true)
+      // The payer's identity must not appear anywhere in the projection.
+      expect(JSON.stringify(s)).not.toContain("payer-acct")
+    } finally {
+      __resetDeploymentPayerForTests()
+    }
   })
 })

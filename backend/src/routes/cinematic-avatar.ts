@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { insertJob } from "../lib/insert-job.js"
+import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
@@ -96,6 +97,13 @@ export async function cinematicAvatarRoutes(app: FastifyInstance) {
         })
       }
 
+      // B4b: deployment prompt policy at this route's assembly point (no
+      // native negative on this lane — the positive clause is the
+      // enforcement). Mirrored into parsed.data so input_data persists the
+      // policed text. No policy registered = identity.
+      const finalPrompt = applyPromptPolicies({ prompt, negativePrompt: "", kind: "video" }).prompt
+      parsed.data.prompt = finalPrompt
+
       const { data: job, error } = await insertJob(req, {
           workflow_id: extractWorkflowId(req.body),
           node_id: extractNodeId(req.body),
@@ -119,7 +127,7 @@ export async function cinematicAvatarRoutes(app: FastifyInstance) {
 
       await videoQueue.add("cinematic-avatar", {
         jobId: job.id,
-        prompt,
+        prompt: finalPrompt,
         avatarLooks,
         duration,
         autoDuration,

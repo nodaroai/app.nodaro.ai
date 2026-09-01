@@ -37,8 +37,8 @@ export interface SurfaceBilling {
 export interface SurfaceProfile {
   nav: { hide: NavKey[] }
   dashboard: { tabs: DashboardTabKey[] }
-  nodes: { deny: string[] }
-  models: { deny: string[] }
+  nodes: { deny: string[]; allow: string[] }
+  models: { deny: string[]; allow: string[] }
   auth: { methods: AuthMethod[]; ssoLabel?: string }
   siblings: { apps: SurfaceSibling[] }
   brand: { productName: string; description?: string; wordmark?: string }
@@ -52,8 +52,8 @@ export interface SurfaceProfile {
 export const SURFACE_PROFILE_DEFAULT: SurfaceProfile = {
   nav: { hide: [] },
   dashboard: { tabs: [] },
-  nodes: { deny: [] },
-  models: { deny: [] },
+  nodes: { deny: [], allow: [] },
+  models: { deny: [], allow: [] },
   auth: { methods: [] },
   siblings: { apps: [] },
   brand: { productName: "Nodaro" },

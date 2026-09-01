@@ -1,6 +1,77 @@
 import { resolveEffectiveTier } from "@nodaro/shared"
-import type { BillingProvider, Charge, AccountSummary } from "../../lib/billing-provider.js"
+import type { BillingProvider, Charge, AccountSummary, UsageCategory } from "../../lib/billing-provider.js"
 import { supabase } from "../../lib/supabase.js"
+import { deploymentPayerActive } from "../../lib/deployment-payer.js"
+
+/** Display-only bucketing of a usage_logs `action` (a model identifier) into
+ *  the /usage breakdown's categories. ORDER MATTERS: "image-to-video" is
+ *  video work, so video outranks image. Unknown actions land in "other" —
+ *  never dropped. */
+function usageCategoryOf(action: string): string {
+  const a = action.toLowerCase()
+  if (/video|motion|animate|lip|kling|veo|runway/.test(a)) return "video"
+  if (/audio|speech|music|suno|voice|tts|eleven|sound|dub/.test(a)) return "audio"
+  if (/image|flux|imagen|photo|upscale|edit|collage|mask/.test(a)) return "image"
+  return "other"
+}
+
+/**
+ * D3(a) — the per-user answer on a deployment-payer instance: the requester's
+ * CONSUMPTION this calendar month (attributed via usage_logs.on_behalf_of,
+ * migration 362) and nothing about balances. The payer pool is the instance
+ * owner's number — surfacing it here would leak it to every user; the
+ * requester's own balance is a frozen signup grant nothing debits — showing
+ * it would lie. When the deployment wires its own billing provider's
+ * `account()` (D3(c)), that registration replaces this whole answer.
+ */
+async function deploymentConsumptionAccount(userId: string): Promise<AccountSummary | null> {
+  const periodStart = new Date()
+  periodStart.setUTCDate(1)
+  periodStart.setUTCHours(0, 0, 0, 0)
+  // Client-side aggregation, capped: no sum() without an RPC, and a
+  // deployment instance's per-user monthly row count sits far below the cap.
+  // At the cap the figures under-report and say so in the log.
+  const CAP = 5000
+  const { data, error } = await supabase
+    .from("usage_logs")
+    .select("action, credits_used, status")
+    .eq("on_behalf_of", userId)
+    .in("status", ["reserved", "committed"]) // refunded rows are not consumption
+    .gte("created_at", periodStart.toISOString())
+    .limit(CAP)
+  if (error) {
+    // Includes 42703 on a DB that predates migration 362 — unavailable, never zeros.
+    console.error("[nodaro-cloud-provider] consumption read failed:", error.message)
+    return null
+  }
+  const rows = (data ?? []) as ReadonlyArray<{ action: string | null; credits_used: number | null }>
+  if (rows.length === CAP) {
+    console.warn(`[nodaro-cloud-provider] consumption for ${userId} hit the ${CAP}-row cap — figures under-report`)
+  }
+  const byKey = new Map<string, { count: number; amount: number }>()
+  for (const r of rows) {
+    const key = usageCategoryOf(r.action ?? "")
+    const agg = byKey.get(key) ?? { count: 0, amount: 0 }
+    agg.count += 1
+    agg.amount += r.credits_used ?? 0
+    byKey.set(key, agg)
+  }
+  const byCategory: UsageCategory[] = [...byKey.entries()].map(([category, agg]) => ({
+    category,
+    count: agg.count,
+    amount: agg.amount,
+    spent: null,
+  }))
+  return {
+    plan: "",
+    balance: null, // deliberate: no balance exists at user grain here
+    dailyAllowance: null,
+    unit: "credits",
+    periodStart: periodStart.toISOString(),
+    generations: rows.length,
+    byCategory,
+  }
+}
 
 /**
  * The credit-bearing billing adapter for the Nodaro cloud edition. Registered
@@ -43,6 +114,7 @@ export const nodaroCloudBillingProvider: BillingProvider = {
   },
 
   async account(userId: string): Promise<AccountSummary | null> {
+    if (deploymentPayerActive()) return deploymentConsumptionAccount(userId)
     const { data, error } = await supabase
       .from("profiles")
       .select("tier, subscription_tier, lifetime_topup_credits, subscription_credits, topup_credits, app_credits_allowance")

@@ -169,9 +169,11 @@ up improved phrasing instead of freezing the text your client wrote.
   per id) do reject.
 - **Absent ≠ empty.** A missing key means "no hint", never a default; a
   `direction` that renders nothing leaves your prompt byte-for-byte untouched.
-- The clauses are appended after your prompt in the platform's canonical order
-  (not your object's key order), and the assembled prompt is still truncated to
-  the provider's verified prompt cap.
+- The clauses land in a trailing `[style]:` section — a blank line after your
+  prompt, then a film line (`cameraFormat`, `colorLook`, `style`, `era`) and a
+  scene line for everything else, each in the platform's canonical order (not
+  your object's key order). Nothing selected means no section at all. The
+  assembled prompt is still truncated to the provider's verified prompt cap.
 
 Full semantics: [API integration guide](../../api-integration.md#cinematic-direction-direction-on-generate-image).
 

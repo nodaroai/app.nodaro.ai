@@ -10,6 +10,15 @@
  * ("prompt. hint", not "prompt . hint"), and drop a blank body so the result
  * never starts with ". ".
  *
+ * WHAT THIS JOIN COVERS NOW: the prompt BODY only. A LOOK clause no longer
+ * reaches this function from either composer — it lifts into the trailing
+ * `[style]` section (`prompt-style-section.ts`), which is `". "`-joined WITHIN a
+ * line but hung off the body by a blank line. So "every folded clause is one
+ * `". "` further along the same string" stopped being true for a look-carrying
+ * call, deliberately; `composeSectionedPrompt` is the whole-prompt shape and
+ * this is the piece of it that assembles the body. The zero-hint no-op branch is
+ * untouched and still the thing the routes' `composed !== prompt` guard reads.
+ *
  * Never mutates its inputs.
  */
 

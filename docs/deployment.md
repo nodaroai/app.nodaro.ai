@@ -161,6 +161,7 @@ added to `config.ts` without a row here.
 | `MCP_DYNAMIC_REGISTRATION` · `MCP_DCR_ALLOWLIST` | off · `""` | RFC 7591 dynamic client registration for MCP clients, and its allowlist |
 | `COMMUNITY_CONNECT_ENABLED` | off | **Cloud side only** — accept community-instance connections |
 | `PLATFORM_OWNER_EMAIL` | `""` | Business/Cloud — the super_admin no other admin can demote; empty = none |
+| `PLATFORM_OPERATOR_EMAILS` | `""` | Comma-separated emails allowed to reach the **money** admin routes (credit grants, tier/role changes, model pricing and cost settings) on a deployment that sets `billing.payerAccount`. Those routes additionally require a non-federated account, so an identity the deployment's own SSO provider asserts can never reach them. Empty falls back to `PLATFORM_OWNER_EMAIL`; empty with no owner closes the money routes to everyone. Inert on deployments with no payer account. |
 | `EXTERNAL_SSO_PROVIDERS` | `""` (SSO off) | Trusted external identity providers, as inline JSON or `@/path/to/file.json`. Unset ⇒ no SSO button, `/v1/sso/*` 404s. A malformed value **fails the boot loud** (never silently disables auth). Shape + linking rules: [External SSO](./sso.md) |
 | `EXTERNAL_SSO_LINK_EXISTING` | `false` | Whether a verified-email assertion may link to a **pre-existing** account not already SSO-linked. Default `false` is takeover-safe; `true` links only when the IdP also asserts a verified email. See [External SSO](./sso.md#account-linking-rules) |
 | `KIE_UNIQUE_ID` | `""` | Cloud — KIE account id for the credit audit |
@@ -500,6 +501,15 @@ array empty = "keep the default"):
 - `nodes.deny` / `models.deny`: node types / model ids to remove everywhere — the
   picker, `GET /v1/nodes`, `GET /v1/models`, the MCP tools, and at run time (a
   denied node fails with `node_not_available`)
+- `nodes.allow` / `models.allow`: WHITELISTS — when non-empty, ONLY the listed
+  node types / model ids are offered (then `deny` still subtracts). The safer,
+  recommended shape for a curated deployment: a new platform node or model is
+  unavailable until the deployment lists it, instead of available by omission.
+  The inversion is scoped to gateable ids — utility nodes (`sticky-note`,
+  `preview`) and workflow-internal pseudo-types are never denied by omission,
+  only by an explicit `deny` entry. An admin can further adjust availability at
+  runtime from **Admin → Availability** (full list with per-item toggles); a
+  stored runtime override replaces this factory set until "Reset to factory".
 - `auth.methods`: `["email","google","sso"]` (plus `auth.ssoLabel`)
 - `siblings.apps`: `[{ "label": "...", "url": "..." }]` — replaces the Nodaro
   family links in the product switcher
@@ -547,6 +557,20 @@ array empty = "keep the default"):
     card (default `true`; a present `false` is never flipped open). A prepaid
     billing instance renders a **Usage & Cost** sidebar entry (`/usage`) in
     their place.
+  - `billing.payerAccount`: the **deployment payer** — one designated account
+    (a user uuid, or the account's email) that pays for *every* action on the
+    instance instead of the requester. For reseller-style deployments: the
+    operator tops up this one prepaid account; end users never hold balances.
+    Consequences when set: every reservation debits the payer account
+    (ownership and galleries stay the requester's); requester tier gates run
+    at the payer account's grade, with watermarking and daily caps off;
+    per-user storage quotas stop enforcing (usage is still tracked); the
+    payer is never auto-recharged; and `/usage` shows each user their own
+    consumption for the period — never any balance. The value is
+    backend-only: it is stripped from `/config.js`, and the browser learns
+    only a boolean `deploymentPayer` flag from `GET /v1/billing/surface`.
+    **Fail-loud:** if set but the account does not resolve at boot, the
+    instance refuses to start. Unset = requesters pay, exactly as before.
 
 Example:
 

@@ -6,6 +6,7 @@ describe("billing surface frontend/backend contract", () => {
     expect(BILLING_SURFACE_DEFAULT).toEqual({
       contract: 2, providerId: "none", displayUnit: "usd",
       canReport: false, canQuote: false, canAccount: false, mountCostTab: false,
+      deploymentPayer: false,
     })
   })
 })

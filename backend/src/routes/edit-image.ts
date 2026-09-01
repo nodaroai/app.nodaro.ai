@@ -8,6 +8,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { IMAGE_EDIT_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS, PROMPT_HARD_CEILING, buildCreditModelIdentifier } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
@@ -93,6 +94,16 @@ export async function editImageRoutes(app: FastifyInstance) {
     const baseProvider = provider ?? "recraft-upscale"
     const modelIdentifier = buildCreditModelIdentifier(baseProvider, undefined, undefined, undefined, targetResolution)
 
+    // B4b: deployment prompt policy on the prompt-driven edit lane — only when
+    // a prompt exists (upscale/remove-bg edits carry none, and policing ""
+    // would inject a policy clause as the entire prompt). The DAG lane polices
+    // in payload-builder. No policy registered = identity.
+    const policed = prompt ? applyPromptPolicies({ prompt, negativePrompt: negativePrompt ?? "", kind: "image" }) : undefined
+    const finalPrompt = policed ? policed.prompt : prompt
+    const finalNegativePrompt = policed ? policed.negativePrompt || undefined : negativePrompt
+    parsed.data.prompt = finalPrompt
+    parsed.data.negativePrompt = finalNegativePrompt
+
     const mcpClient = extractMcpClient(req.body)
     const { data: job, error } = await insertJob(req, {
         workflow_id: extractWorkflowId(req.body),
@@ -116,12 +127,12 @@ export async function editImageRoutes(app: FastifyInstance) {
       jobId: job.id,
       imageUrl,
       taskId,
-      prompt,
+      prompt: finalPrompt,
       provider,
       upscaleFactor,
       targetResolution,
       aspectRatio,
-      negativePrompt,
+      negativePrompt: finalNegativePrompt,
       style,
       seed,
       referenceImageUrls,

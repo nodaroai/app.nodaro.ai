@@ -12,6 +12,20 @@ import {
   updateAdminNodeDefault,
   deleteAdminNodeDefault,
 } from "@/lib/api"
+
+/**
+ * The server's own message, when it has one to give.
+ *
+ * These hooks all threw a hardcoded string, so a refusal that took the trouble
+ * to explain itself — the platform-operator gate's `operator_required`, which
+ * tells an admin that adminship alone is not enough on this deployment — reached
+ * the screen as "Failed to adjust credits". The fallback stays for responses
+ * with no body (a proxy 502, a network-shaped failure).
+ */
+async function adminError(res: Response, fallback: string): Promise<Error> {
+  const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null
+  return new Error(body?.error?.message || fallback)
+}
 import type { AppSettings } from "@/hooks/queries/use-app-settings-queries"
 
 // --- Types ---
@@ -264,7 +278,7 @@ export function useAdminJobs(
       const res = await fetch(`/v1/admin/jobs?${params.toString()}`, {
         headers: await getAuthHeaders(),
       })
-      if (!res.ok) throw new Error("Failed to fetch jobs")
+      if (!res.ok) throw await adminError(res, "Failed to fetch jobs")
       const { data: jobs } = (await res.json()) as { data: JobRow[] }
       if (!jobs || jobs.length === 0) return []
       const userIds = [...new Set(jobs.map((j) => j.user_id))]
@@ -492,7 +506,7 @@ export function useAdminModels() {
       const res = await fetch(`/v1/admin/models`, {
         headers: await getAuthHeaders(),
       })
-      if (!res.ok) throw new Error("Failed to fetch models")
+      if (!res.ok) throw await adminError(res, "Failed to fetch models")
       return res.json() as Promise<{ data: unknown[] }>
     },
     enabled: hasAdmin(),
@@ -515,7 +529,7 @@ export function useAdminReports(page: number, status?: string) {
       const res = await fetch(`/v1/admin/gallery-reports?${params.toString()}`, {
         headers: await getAuthHeaders(),
       })
-      if (!res.ok) throw new Error("Failed to fetch reports")
+      if (!res.ok) throw await adminError(res, "Failed to fetch reports")
       return res.json()
     },
     enabled: hasAdmin(),
@@ -530,7 +544,7 @@ export function useAdminAlerts() {
       const res = await fetch(`/v1/admin/alerts`, {
         headers: await getAuthHeaders(),
       })
-      if (!res.ok) throw new Error("Failed to fetch alerts")
+      if (!res.ok) throw await adminError(res, "Failed to fetch alerts")
       return res.json()
     },
     enabled: hasAdmin(),
@@ -545,7 +559,7 @@ export function useAdminSettings() {
       const res = await fetch(`/v1/admin/settings`, {
         headers: await getAuthHeaders(),
       })
-      if (!res.ok) throw new Error("Failed to fetch settings")
+      if (!res.ok) throw await adminError(res, "Failed to fetch settings")
       const data = await res.json()
       const settings = data.settings as Record<string, unknown>
       return {
@@ -591,7 +605,7 @@ export function useAdminUserSubscription(userId: string) {
       const res = await fetch(`/v1/admin/users/${userId}/subscription`, {
         headers: await getAuthHeaders(),
       })
-      if (!res.ok) throw new Error("Failed to fetch subscription")
+      if (!res.ok) throw await adminError(res, "Failed to fetch subscription")
       const json = await res.json()
       return json.data ?? null
     },
@@ -607,7 +621,7 @@ export function useAdminUserTransactions(userId: string) {
       const res = await fetch(`/v1/admin/users/${userId}/transactions?limit=20`, {
         headers: await getAuthHeaders(),
       })
-      if (!res.ok) throw new Error("Failed to fetch transactions")
+      if (!res.ok) throw await adminError(res, "Failed to fetch transactions")
       return res.json()
     },
     enabled: hasAdmin() && !!userId,
@@ -629,7 +643,7 @@ export function useUpdateModelPricingMutation() {
         },
         body: JSON.stringify(pricing),
       })
-      if (!res.ok) throw new Error("Failed to update pricing")
+      if (!res.ok) throw await adminError(res, "Failed to update pricing")
       return res.json()
     },
     onSuccess: () => {
@@ -650,7 +664,7 @@ export function useAdminAdjustCreditsMutation() {
         },
         body: JSON.stringify({ amount: params.amount, creditType: params.creditType, description: params.description, adminUserId: params.adminUserId }),
       })
-      if (!res.ok) throw new Error("Failed to adjust credits")
+      if (!res.ok) throw await adminError(res, "Failed to adjust credits")
       return res.json()
     },
     onSuccess: (_data, { userId }) => {
@@ -672,7 +686,7 @@ export function useResolveReportMutation() {
         },
         body: JSON.stringify({ action }),
       })
-      if (!res.ok) throw new Error("Failed to resolve report")
+      if (!res.ok) throw await adminError(res, "Failed to resolve report")
       return res.json()
     },
     onSuccess: () => {
@@ -695,7 +709,7 @@ export function useCreateAlertMutation() {
         },
         body: JSON.stringify(alert),
       })
-      if (!res.ok) throw new Error("Failed to create alert")
+      if (!res.ok) throw await adminError(res, "Failed to create alert")
       return res.json()
     },
     onSuccess: () => {
@@ -716,7 +730,7 @@ export function useUpdateAlertMutation() {
         },
         body: JSON.stringify(updates),
       })
-      if (!res.ok) throw new Error("Failed to update alert")
+      if (!res.ok) throw await adminError(res, "Failed to update alert")
       return res.json()
     },
     onSuccess: () => {
@@ -733,7 +747,7 @@ export function useDeleteAlertMutation() {
         method: "DELETE",
         headers: await getAuthHeaders(),
       })
-      if (!res.ok) throw new Error("Failed to delete alert")
+      if (!res.ok) throw await adminError(res, "Failed to delete alert")
       return res.json()
     },
     onSuccess: () => {
@@ -754,7 +768,7 @@ export function useAdminChangeTierMutation() {
         },
         body: JSON.stringify({ tier }),
       })
-      if (!res.ok) throw new Error("Failed to change tier")
+      if (!res.ok) throw await adminError(res, "Failed to change tier")
       return res.json()
     },
     onSuccess: () => {
@@ -775,7 +789,7 @@ export function useAdminChangeStorageMutation() {
         },
         body: JSON.stringify({ storageLimitBytes }),
       })
-      if (!res.ok) throw new Error("Failed to change storage limit")
+      if (!res.ok) throw await adminError(res, "Failed to change storage limit")
       return res.json()
     },
     onSuccess: (_data, { userId }) => {
@@ -797,7 +811,7 @@ export function useAdminChangeRoleMutation() {
         },
         body: JSON.stringify({ role }),
       })
-      if (!res.ok) throw new Error("Failed to change role")
+      if (!res.ok) throw await adminError(res, "Failed to change role")
       return res.json()
     },
     onSuccess: () => {
@@ -841,7 +855,7 @@ export function useAdminCreditAnomaliesSummary() {
       const res = await fetch("/v1/admin/credit-anomalies/summary", {
         headers: await getAuthHeaders(),
       })
-      if (!res.ok) throw new Error("Failed to fetch summary")
+      if (!res.ok) throw await adminError(res, "Failed to fetch summary")
       return res.json()
     },
     enabled: hasAdmin(),
@@ -860,7 +874,7 @@ export function useAdminCreditAnomalies(offset: number, status: string, anomalyT
       const res = await fetch(`/v1/admin/credit-anomalies?${params}`, {
         headers: await getAuthHeaders(),
       })
-      if (!res.ok) throw new Error("Failed to fetch anomalies")
+      if (!res.ok) throw await adminError(res, "Failed to fetch anomalies")
       return res.json()
     },
     enabled: hasAdmin(),
@@ -879,7 +893,7 @@ export function usePatchCreditAnomalyMutation() {
         headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
         body: JSON.stringify({ status }),
       })
-      if (!res.ok) throw new Error("Failed to update anomaly")
+      if (!res.ok) throw await adminError(res, "Failed to update anomaly")
       return res.json()
     },
     onSuccess: () => {
@@ -896,7 +910,7 @@ export function useDeleteCreditAnomalyMutation() {
         method: "DELETE",
         headers: await getAuthHeaders(),
       })
-      if (!res.ok) throw new Error("Failed to delete anomaly")
+      if (!res.ok) throw await adminError(res, "Failed to delete anomaly")
       return res.json()
     },
     onSuccess: () => {
@@ -932,7 +946,7 @@ export async function fetchAdminPickerGapsPage(
   if (gapType !== "all") params.set("gapType", gapType)
   if (status !== "all") params.set("status", status)
   const res = await fetch(`/v1/admin/picker-gaps?${params}`, { headers: await getAuthHeaders() })
-  if (!res.ok) throw new Error("Failed to fetch picker gaps")
+  if (!res.ok) throw await adminError(res, "Failed to fetch picker gaps")
   return res.json()
 }
 
@@ -954,7 +968,7 @@ export function usePatchPickerGapMutation() {
         headers: { "Content-Type": "application/json", ...(await getAuthHeaders()) },
         body: JSON.stringify({ status }),
       })
-      if (!res.ok) throw new Error("Failed to update gap")
+      if (!res.ok) throw await adminError(res, "Failed to update gap")
       return res.json()
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "picker-gaps"] }),
@@ -1032,7 +1046,7 @@ export async function fetchAdminAppReportsPage(
     params.set("excludeUserIds", userScope.excludeUserIds.join(","))
   }
   const res = await fetch(`/v1/admin/app-reports?${params}`, { headers: await getAuthHeaders() })
-  if (!res.ok) throw new Error("Failed to fetch app reports")
+  if (!res.ok) throw await adminError(res, "Failed to fetch app reports")
   return res.json()
 }
 
@@ -1061,7 +1075,7 @@ export function usePatchAppReportMutation() {
         headers: { "Content-Type": "application/json", ...(await getAuthHeaders()) },
         body: JSON.stringify({ status }),
       })
-      if (!res.ok) throw new Error("Failed to update report")
+      if (!res.ok) throw await adminError(res, "Failed to update report")
       return res.json()
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "app-reports"] }),
@@ -1091,7 +1105,7 @@ export function useAdminLlmModels() {
       const res = await fetch("/v1/admin/llm-models", {
         headers: await getAuthHeaders(),
       })
-      if (!res.ok) throw new Error("Failed to fetch LLM models")
+      if (!res.ok) throw await adminError(res, "Failed to fetch LLM models")
       const json = await res.json()
       return (json.data ?? { models: [], tierCosts: {}, featureCosts: {} }) as AdminLlmModelsResponse
     },
@@ -1112,7 +1126,7 @@ export function useToggleLlmModelMutation() {
         },
         body: JSON.stringify({ isEnabled }),
       })
-      if (!res.ok) throw new Error("Failed to update LLM model")
+      if (!res.ok) throw await adminError(res, "Failed to update LLM model")
       return res.json()
     },
     onSuccess: () => {
@@ -1192,7 +1206,7 @@ export function useAdminClientApps() {
       const res = await fetch("/v1/admin/client-apps", {
         headers: await getAuthHeaders(),
       })
-      if (!res.ok) throw new Error("Failed to fetch client apps")
+      if (!res.ok) throw await adminError(res, "Failed to fetch client apps")
       const json = await res.json()
       return (json.data ?? []) as AdminClientApp[]
     },
@@ -1213,7 +1227,7 @@ export function useToggleClientAppMutation() {
         },
         body: JSON.stringify({ workflowsListed }),
       })
-      if (!res.ok) throw new Error("Failed to update client app")
+      if (!res.ok) throw await adminError(res, "Failed to update client app")
       return res.json()
     },
     onSuccess: () => {

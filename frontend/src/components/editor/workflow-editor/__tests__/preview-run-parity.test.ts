@@ -678,7 +678,7 @@ describe("preview↔run parity — video", () => {
         expect(previewPrompt).toBe(runPrompt)
       })
 
-      it(`(m) ${mode.name}: a look id folds as its FULL clause, and structured lands last`, async () => {
+      it(`(m) ${mode.name}: a look id folds as its FULL clause into [style], structured ends the body`, async () => {
         const structured = { mood: "brooding" }
         const { runPrompt, previewPrompt } = await runGenerateVideo(
           { prompt: "a knight", direction: { style: STYLE }, structured },
@@ -688,7 +688,9 @@ describe("preview↔run parity — video", () => {
         const fragment = renderStructuredFields(structured)
         expect(styleHint.length).toBeGreaterThan(0)
         expect(fragment.length).toBeGreaterThan(0)
-        expect(runPrompt).toBe(`a knight. ${styleHint}. ${fragment}`)
+        // The section is what the preview has to reproduce byte-for-byte too —
+        // the header and both newlines, not just the clause.
+        expect(runPrompt).toBe(`a knight. ${fragment}\n\n[style]:\n${styleHint}`)
         expect(previewPrompt).toBe(runPrompt)
       })
     }

@@ -19,6 +19,14 @@
  * prose instead — precisely the bug this machinery exists to prevent. Never
  * sheddable: the user's prose, the bound references and the framing text the
  * reference resolver adds, and the structured fragment (user CONTENT).
+ *
+ * THE LIST IS A SURVIVAL ORDER, NOT A STRING ORDER. It was both until the
+ * `[style]` section landed; now a look clause is lifted out of the body and
+ * reads after every motion clause however early it folds
+ * (`prompt-style-section.ts`). Position here still answers exactly one question
+ * — who leaves first — and `clauseCosts` is how the caller tells this function
+ * what a clause actually costs in a shape it can no longer infer from the
+ * clause text alone.
  */
 import { PROMPT_HINT_SEPARATOR } from "./prompt-hint-join.js"
 
@@ -49,20 +57,31 @@ import { PROMPT_HINT_SEPARATOR } from "./prompt-hint-join.js"
  * decorative `isoValue` clause; if that ever matters, the fix is an explicit
  * priority column on `DIRECTION_FIELDS`, not a second hand-kept list here.
  *
- * Deliberately approximate (assembly is not perfectly additive); the caller
- * re-assembles and re-checks, and this function strictly decreases `kept`
- * whenever `deficit > 0`, so that loop terminates.
+ * `clauseCosts[i]` is what clause `i` really adds to the assembled prompt.
+ * Without it each clause is charged its text plus one separator, which is what
+ * a clause folded inline costs — but a clause that lands in the `[style]`
+ * section carries section bytes too (the first one carries the whole header),
+ * and under-charging it makes this walk cover the deficit with MORE clauses
+ * than it needs. Both in-package callers pass exact composed-length deltas
+ * (`sectionedClauseCosts`); the default keeps the pre-section arithmetic for
+ * anyone else.
+ *
+ * Still deliberately approximate (assembly is not perfectly additive — a
+ * downstream frame can grow or shrink around the body); the caller re-assembles
+ * and re-checks, and this function strictly decreases `kept` whenever
+ * `deficit > 0`, so that loop terminates however the costs are priced.
  */
 export function keepableDirectionHints(
   hintClauses: readonly string[],
   kept: number,
   deficit: number,
+  clauseCosts?: readonly number[],
 ): number {
   let remaining = deficit
   let next = kept
   while (next > 0 && remaining > 0) {
     next -= 1
-    remaining -= hintClauses[next]!.length + PROMPT_HINT_SEPARATOR.length
+    remaining -= clauseCosts?.[next] ?? hintClauses[next]!.length + PROMPT_HINT_SEPARATOR.length
   }
   return next
 }

@@ -126,9 +126,9 @@ describe("payload-builder: stored direction folds into the prompt", () => {
     expect(getLightingPromptHint(LIGHTING_ID).length).toBeGreaterThan(0)
   })
 
-  it("folds on the flat branch", () => {
+  it("folds on the flat branch, into the [style] section", () => {
     const prompt = promptFor({ prompt: "a knight on a hill", direction: { framingId: FRAMING_ID } })
-    expect(prompt).toBe(`a knight on a hill. ${hint}`)
+    expect(prompt).toBe(`a knight on a hill\n\n[style]:\n${hint}`)
   })
 
   it("folds on the connected-refs branch too (both branches assemble the same)", () => {
@@ -161,7 +161,7 @@ describe("payload-builder: stored direction folds into the prompt", () => {
 
   it("accepts an array of ids (the multi-pick shape) on a dimension", () => {
     const prompt = promptFor({ prompt: "a knight", direction: { framingId: [FRAMING_ID] } })
-    expect(prompt).toBe(`a knight. ${hint}`)
+    expect(prompt).toBe(`a knight\n\n[style]:\n${hint}`)
   })
 
   it("is ADDITIVE with a wired picker node — wired hint first, stored second", () => {
@@ -196,7 +196,10 @@ describe("payload-builder: stored structured fields fold into the prompt", () =>
     expect(occurrences(prompt, fragment)).toBe(1)
   })
 
-  it("folds direction before structured, both exactly once", () => {
+  it("folds direction before structured, both exactly once — structured ends the BODY", () => {
+    // Fold order is unchanged (direction first); string position is not the same
+    // question any more. The structured fragment is the last thing in the body,
+    // and the look clause reads after it in the `[style]` section.
     const structured = { mood: "brooding" }
     const prompt = promptFor({
       prompt: "a portrait",
@@ -204,6 +207,8 @@ describe("payload-builder: stored structured fields fold into the prompt", () =>
       structured,
     })
     const fragment = renderStructuredFields(structured)
-    expect(prompt).toBe(`a portrait. ${getFramingPromptHint(FRAMING_ID)}. ${fragment}`)
+    expect(prompt).toBe(
+      `a portrait. ${fragment}\n\n[style]:\n${getFramingPromptHint(FRAMING_ID)}`,
+    )
   })
 })

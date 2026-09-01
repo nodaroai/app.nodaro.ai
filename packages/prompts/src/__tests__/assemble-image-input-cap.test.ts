@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest"
 import { assembleImageInput } from "../assemble-image-input.js"
 import { buildImagePrompt, buildImagePromptWithOverflow } from "../prompt-builder.js"
 import { renderDirectionHints, IMAGE_HINT_MODE_DEFAULT } from "../direction-registry.js"
-import { joinPromptHints } from "../prompt-hint-join.js"
+import { renderStyleSection } from "../prompt-style-section.js"
 import { getMaxImagePromptChars } from "@nodaro/shared"
 import type { ConnectedReference } from "@nodaro/shared"
 
@@ -14,11 +14,15 @@ import type { ConnectedReference } from "@nodaro/shared"
  * TRULY maximal image-surface `direction` renders ~3.3K characters of clauses —
  * the broad-but-not-maximal fold below renders ~1.2K, which is already enough
  * to push the assembled prompt past a low-cap provider (seedream = 3000).
- * `buildImagePrompt` then cuts the TAIL — and in the hybrid reference
- * format the trailing canonical role phrase ("the location from reference image
- * B") sits AFTER the folded hints, so the cut severs a REFERENCE BINDING while
- * decorative hint clauses survive. The assembler knows which clauses are hints
- * (it just rendered them), so it drops them last-folded-first and re-assembles.
+ * `buildImagePrompt` then cuts the TAIL, order-blind and mid-word.
+ *
+ * WHAT THE CUT REACHES FIRST is the `[style]` section: the hybrid role phrases
+ * splice into the BODY ahead of it (`insertBeforeStyleSection`), so the
+ * casualty is a look clause the user picked, severed halfway through, rather
+ * than a whole clause dropped cleanly. The assembler knows which clauses are
+ * hints (it just rendered them), so it drops them last-folded-first and
+ * re-assembles. A larger fold walks the same cut back into the bindings and the
+ * prose, which is what the shed keeps out of reach entirely.
  */
 
 // A broad but ordinary image direction — the kind a "set every picker" UI
@@ -45,6 +49,18 @@ const IMAGE_HINTS = renderDirectionHints(DIRECTION, {
   mode: IMAGE_HINT_MODE_DEFAULT,
 })
 
+/**
+ * The UNSHED body for a prompt — the oracle for "what the assembler composes
+ * before any cap thinking". Every image-surface direction row is `look`, so the
+ * whole fold lands in the `[style]` section and the body is the prose alone,
+ * trimmed (something folded).
+ */
+const unshedBody = (prompt: string): string =>
+  `${prompt.trim()}\n\n${renderStyleSection(DIRECTION, {
+    surface: "image",
+    mode: IMAGE_HINT_MODE_DEFAULT,
+  })}`
+
 /** The mentioned character — its directive is the FIRST binding in the prompt. */
 const KIRA: ConnectedReference = {
   id: "kira-id",
@@ -58,8 +74,8 @@ const KIRA: ConnectedReference = {
   variantDisplayName: "canonical",
 }
 
-/** An UNMENTIONED wired location — hybrid renders its role phrase at the very
- *  END of the prompt, behind every folded hint. The order-blind casualty. */
+/** An UNMENTIONED wired location — hybrid renders its role phrase as the last
+ *  line of the BODY, just ahead of the `[style]` section. */
 const PIER: ConnectedReference = {
   id: "pier-id",
   defaultName: "Pier",
@@ -70,8 +86,14 @@ const PIER: ConnectedReference = {
 
 /** The mention-resolved character binding, in the middle of the prose. */
 const CHARACTER_BINDING = "the person from reference image A"
-/** The binding the tail cut destroys when nothing sheds the hints first. */
+/** The binding the tail cut used to destroy when nothing shed the hints first. */
 const LOCATION_BINDING = "the location from reference image B"
+
+/** The whole look section, unshed — what an order-blind cut severs first. */
+const FULL_SECTION = renderStyleSection(DIRECTION, {
+  surface: "image",
+  mode: IMAGE_HINT_MODE_DEFAULT,
+})
 
 /** Prose long enough that prose + directives + the full fold clears 3000. */
 const PROSE = "@kira:1 walks the seawall at dusk. " + "The waves are loud. ".repeat(90)
@@ -93,14 +115,16 @@ describe("assembleImageInput — cap-aware hint shedding", () => {
     // ever shrinks enough that this no longer truncates, the scenario below is
     // vacuous and this assertion says so loudly.
     const naive = buildImagePrompt({
-      prompt: joinPromptHints(PROSE, IMAGE_HINTS),
+      prompt: unshedBody(PROSE),
       provider: "seedream",
       connectedReferences: [KIRA, PIER],
       referenceFormat: "hybrid",
     })
     expect(naive.prompt.endsWith("...")).toBe(true)
-    // …and what it cut was the reference binding, not the decorative tail.
-    expect(naive.prompt).not.toContain(LOCATION_BINDING)
+    // …and what it cut was the look section, mid-clause — the binding spliced
+    // into the body ahead of it and survives the cut it used to die to.
+    expect(naive.prompt).toContain(LOCATION_BINDING)
+    expect(naive.prompt).not.toContain(FULL_SECTION)
   })
 
   it("keeps every reference binding and the full prose, dropping trailing hints", () => {
@@ -154,7 +178,7 @@ describe("assembleImageInput — under-cap byte parity", () => {
   for (const { name, provider, prompt } of parityCases) {
     it(`is byte-identical to the unordered fold — ${name}`, () => {
       const expected = buildImagePrompt({
-        prompt: joinPromptHints(prompt, IMAGE_HINTS),
+        prompt: unshedBody(prompt),
         provider,
         connectedReferences: [KIRA, PIER],
         referenceFormat: "hybrid",

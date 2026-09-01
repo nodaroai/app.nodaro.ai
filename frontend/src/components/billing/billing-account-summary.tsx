@@ -19,7 +19,7 @@ function categoryIcon(c: string): typeof ImageIcon { return CATEGORY_ICON[c] ?? 
 /** Rule 1: a null amount renders as an em-dash, never a fabricated 0. */
 function amountOrDash(n: number | null): string { return n == null ? "—" : n.toLocaleString() }
 
-export function BillingAccountSummary({ account, className = "" }: { account: BillingAccount; className?: string }) {
+export function BillingAccountSummary({ account, className = "", consumptionOnly = false }: { account: BillingAccount; className?: string; consumptionOnly?: boolean }) {
   const t = useT()
   const money = (m: MoneyAmount) => formatMoney(m)
   // The account's figures arrive in the display unit and carry it (`unit`);
@@ -31,7 +31,28 @@ export function BillingAccountSummary({ account, className = "" }: { account: Bi
 
   return (
     <div className={cn("space-y-4", className)}>
-      {/* Plan + balance + optional spend/reserve cards */}
+      {/* Deployment-payer instances (consumptionOnly): no balance exists at
+          user grain — one card with the period's spend replaces the pair. */}
+      {consumptionOnly ? (
+        <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-card p-5">
+          <div className="text-sm text-muted-foreground">{t("usage.spent")}</div>
+          <div className="mt-1 text-3xl font-bold" style={{ color: ACCENT }}>
+            {totalForPct.toLocaleString()}
+            <span className="ml-2 text-base font-medium text-muted-foreground">{unit}</span>
+          </div>
+          {account.generations != null && (
+            <div className="mt-1 text-xs text-muted-foreground">
+              {t("usage.generations")}: {account.generations.toLocaleString()}
+            </div>
+          )}
+          {account.periodStart && (
+            <div className="mt-1 text-xs text-muted-foreground">
+              {t("usage.periodFrom", { date: new Date(account.periodStart).toLocaleDateString() })}
+            </div>
+          )}
+        </div>
+      ) : (
+      /* Plan + balance + optional spend/reserve cards */
       <div className="grid grid-cols-2 gap-4">
         <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-card p-5">
           <div className="text-sm text-muted-foreground">{account.spent ? t("usage.spent") : t("usage.balance")}</div>
@@ -75,6 +96,7 @@ export function BillingAccountSummary({ account, className = "" }: { account: Bi
           )}
         </div>
       </div>
+      )}
 
       {/* Daily cap — prefer structured `daily`, else scalar `dailyAllowance`.
           limit 0 is a BLOCK, never "no limit" (rule: 0 ≠ absent). */}
