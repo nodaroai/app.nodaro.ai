@@ -4,6 +4,7 @@ import {
   type PickerCatalog,
   type PickerOption,
 } from "../picker-catalogs.js"
+import { STYLE_SECTION_HEADER } from "../prompt-style-section.js"
 
 /**
  * THE GUARD THAT MAKES "FOLD BEFORE THE REFERENCE RESOLVER" SAFE.
@@ -43,6 +44,14 @@ import {
  * a dimension can join the direction channel at any time, and the guard must
  * already hold when it does.
  *
+ * A FIFTH pattern is the `[style]` section boundary. It runs in the other
+ * direction from the four above: those keep catalog text out of grammar the
+ * RESOLVER parses, this keeps catalog text out of grammar the ASSEMBLER emits.
+ * A catalog entry containing `[style]` would forge a section boundary inside a
+ * clause — enough to stop `buildImagePrompt`'s hybrid line-capitalizer early on
+ * an otherwise section-free prompt. Scanned case-insensitively for the same
+ * reason as `MENTION`: `buildMoodHint` lower-cases the labels it folds.
+ *
  * A failure here is a CATALOG fix (reword the entry), never a fold-site change.
  */
 
@@ -61,12 +70,15 @@ const REF_ID_TOKEN = /\{ref:/i
 const MENTION = /(?:^|[^A-Za-z0-9])@[a-z][a-z0-9-]*:\d+/i
 /** The resolver's OUTPUT binding form (`video-reference-resolver.ts` emits `@${kind}_${n}`). */
 const BINDING_FORM = /@(?:image|video|audio)_\d+/i
+/** The `[style]` section boundary (`prompt-style-section.ts`'s header, colon-free so `[style]` alone trips). */
+const STYLE_SECTION = /\[style\]/i
 
 const FORBIDDEN: ReadonlyArray<{ name: string; re: RegExp }> = [
   { name: "reference slot token ({image:N} / {video:N} / {audio:N})", re: SLOT_TOKEN },
   { name: "id-addressed reference token ({ref:…})", re: REF_ID_TOKEN },
   { name: "character/named-image mention (@slug:N)", re: MENTION },
   { name: "reference binding form (@image_N / @video_N / @audio_N)", re: BINDING_FORM },
+  { name: "style-section boundary ([style])", re: STYLE_SECTION },
 ]
 
 /** Every option of a catalog, single-dim and multi-dim alike. */
@@ -109,5 +121,14 @@ describe("direction hint token safety", () => {
       }
     }
     expect(offenders).toEqual([])
+  })
+
+  it("has a section header that is not itself reference grammar", () => {
+    // The header rides in the assembled prompt alongside catalog text, so it
+    // has to clear the same four resolver patterns the catalogs do — and it has
+    // to trip the fifth, or that guard is scanning for the wrong string.
+    for (const { name, re } of FORBIDDEN) {
+      expect(re.test(STYLE_SECTION_HEADER), name).toBe(re === STYLE_SECTION)
+    }
   })
 })

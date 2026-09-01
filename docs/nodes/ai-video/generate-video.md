@@ -207,12 +207,17 @@ hint text your client wrote, and re-generating it never double-bakes.
   come from `GET /v1/picker-catalogs`; on a deployment with registered catalog
   **packs** that endpoint also lists pack-added ids, which are accepted but
   render no clause.
-- **Camera motion leads**, then the look clauses in the platform's canonical
-  order — not your object's key order.
+- **Camera motion leads**, then the rest in the platform's canonical order —
+  not your object's key order.
 - **Motion dimensions render as short terms, look dimensions as full clauses.**
   `transition: "cross-dissolve"` injects the term, not the sentence explaining
   it: terse motion cues read better to a video model, and video prompt ceilings
   are tight.
+- **Motion stays in the prompt body; the look moves to a `[style]:` section.**
+  Camera motion is part of the shot, so it reads with your prose. The look
+  clauses land after a blank line under a `[style]:` header — a film line
+  (`cameraFormat`, `colorLook`, `style`, `era`) and a scene line for the rest.
+  Select no look dimension and there is no section at all.
 - **Stills-only dimensions are accepted and ignored here** (`aperture`,
   `shutterSpeed`, `isoValue`, `postProcess`, `photoGenre`, `photographer`,
   `renderQuality`), so one client-side look map can be sent to either surface

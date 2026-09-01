@@ -15,6 +15,7 @@ import { composeVideoPromptText } from "../assemble-video-input.js"
 import { buildImagePrompt } from "../prompt-builder.js"
 import { joinPromptHints, PROMPT_HINT_SEPARATOR } from "../prompt-hint-join.js"
 import { renderDirectionHints, IMAGE_HINT_MODE_DEFAULT, VIDEO_HINT_MODE_DEFAULT } from "../direction-registry.js"
+import { renderStyleSection } from "../prompt-style-section.js"
 import {
   renderSubjectHints,
   SUBJECT_IMAGE_HINT_MODE_DEFAULT,
@@ -95,12 +96,15 @@ describe("the no-subject oracle — the fold is dark until a caller opts in", ()
   })
 
   it("matches an independent recomputation of the direction-only fold", () => {
+    // Every image-surface direction row is `look`, so a direction-only fold
+    // adds NOTHING to the body: the prompt is trimmed (something folded) and
+    // the whole fold reads in the section.
     const userPrompt = "a knight on a hill"
     const expected = buildImagePrompt({
-      prompt: joinPromptHints(
-        userPrompt,
-        renderDirectionHints(DIRECTION, { surface: "image", mode: IMAGE_HINT_MODE_DEFAULT }),
-      ),
+      prompt: `${userPrompt}\n\n${renderStyleSection(DIRECTION, {
+        surface: "image",
+        mode: IMAGE_HINT_MODE_DEFAULT,
+      })}`,
       provider: "nano-banana",
     })
     expect(assembleImageInput({ userPrompt, provider: "nano-banana", direction: DIRECTION })).toEqual(
@@ -121,7 +125,7 @@ describe("the no-subject oracle — the fold is dark until a caller opts in", ()
 })
 
 describe("the subject fold — position and content", () => {
-  it("lands the subject clauses AHEAD of the direction clauses", () => {
+  it("lands the subject clauses in the BODY, ahead of the direction section", () => {
     const userPrompt = "on the seawall"
     const subjectHints = renderSubjectHints(SUBJECT, {
       surface: "image",
@@ -137,9 +141,14 @@ describe("the subject fold — position and content", () => {
       subject: SUBJECT,
       direction: DIRECTION,
     })
+    // The subject is the noun phrase the look modifies, so it stays inline with
+    // the prose; the direction fold lifts out behind it.
     expect(result.prompt).toBe(
       buildImagePrompt({
-        prompt: joinPromptHints(userPrompt, [...subjectHints, ...directionHints]),
+        prompt: `${joinPromptHints(userPrompt, subjectHints)}\n\n${renderStyleSection(DIRECTION, {
+          surface: "image",
+          mode: IMAGE_HINT_MODE_DEFAULT,
+        })}`,
         provider: "nano-banana",
       }).prompt,
     )
@@ -161,16 +170,19 @@ describe("the subject fold — position and content", () => {
     expect(sentences[1]).toContain(", ")
   })
 
-  it("folds the subject on the video surface, compact, ahead of direction", () => {
+  it("folds the subject on the video surface, compact, in the body", () => {
     const composed = composeVideoPromptText("she walks", DIRECTION, undefined, { subject: SUBJECT })
     expect(composed).toBe(
-      joinPromptHints("she walks", [
-        ...renderSubjectHints(SUBJECT, {
+      `${joinPromptHints(
+        "she walks",
+        renderSubjectHints(SUBJECT, {
           surface: "video",
           mode: SUBJECT_VIDEO_HINT_MODE_DEFAULT,
         }),
-        ...renderDirectionHints(DIRECTION, { surface: "video", mode: VIDEO_HINT_MODE_DEFAULT }),
-      ]),
+      )}\n\n${renderStyleSection(DIRECTION, {
+        surface: "video",
+        mode: VIDEO_HINT_MODE_DEFAULT,
+      })}`,
     )
   })
 
@@ -212,9 +224,16 @@ describe("the subject fold — under the provider cap", () => {
       surface: "image",
       mode: IMAGE_HINT_MODE_DEFAULT,
     })
-    // Non-vacuity: the un-shed fold really does overflow.
+    // Non-vacuity: the un-shed fold really does overflow. Measured through a
+    // high-cap provider so the oracle is the assembler's own composition, not a
+    // hand-rebuilt approximation of it.
     expect(
-      joinPromptHints(PROSE, [...subjectHints, ...directionHints]).length,
+      assembleImageInput({
+        userPrompt: PROSE,
+        provider: "nano-banana-pro",
+        subject: SUBJECT,
+        direction: BIG_DIRECTION,
+      }).prompt.length,
     ).toBeGreaterThan(SEEDREAM_CAP)
 
     const result = assembleImageInput({

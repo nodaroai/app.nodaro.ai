@@ -177,9 +177,9 @@ describe("payload-builder video: stored direction folds into the prompt", () => 
       expect(occurrences(prompt, motionTerm)).toBe(1)
     })
 
-    it(`${site}: folds a look id as its full clause`, () => {
+    it(`${site}: folds a look id as its full clause, into the [style] section`, () => {
       expect(run({ prompt: "a knight rides at dusk", direction: { style: STYLE } })).toBe(
-        `a knight rides at dusk. ${styleHint}`,
+        `a knight rides at dusk\n\n[style]:\n${styleHint}`,
       )
     })
 
@@ -190,7 +190,9 @@ describe("payload-builder video: stored direction folds into the prompt", () => 
     })
 
     it(`${site}: assembles a prompt from direction alone (the orchestrator never throws)`, () => {
-      expect(run({ direction: { style: STYLE } })).toBe(styleHint)
+      // No prose to separate from: the section is the whole prompt, and it must
+      // not open on the blank line that would normally precede it.
+      expect(run({ direction: { style: STYLE } })).toBe(`[style]:\n${styleHint}`)
     })
 
     it(`${site}: appends the rendered structured fragment exactly once`, () => {

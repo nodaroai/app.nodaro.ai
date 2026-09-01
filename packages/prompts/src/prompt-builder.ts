@@ -7,6 +7,13 @@
 import { resolveTemplate, applyTemplate } from "./prompt-templates.js"
 import { NATIVE_NEGATIVE_PROMPT_MODELS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, imageReferenceLimit, getMaxImagePromptChars, getMaxNegativePromptChars } from "@nodaro/shared"
 import { getStylePromptHint } from "./style.js"
+import {
+  STYLE_SECTION_GAP,
+  STYLE_SECTION_HEADER,
+  endsInsideStyleSection,
+  insertBeforeStyleSection,
+  splitStyleSection,
+} from "./prompt-style-section.js"
 import { findCharacterMentionTokens, type CharacterMentionTokenInfo } from "@nodaro/shared"
 import { usageModeDirective, DEFAULT_USAGE_MODE, type UsageMode } from "@nodaro/shared"
 import { roleToPhrase, defaultRoleForSource, REFERENCE_ROLE_PRESETS, normalizeRoleSlug, resolveDefaultRole } from "@nodaro/shared"
@@ -2026,6 +2033,32 @@ function reconcileBodySegments(body: string, bodySegments: readonly PromptSegmen
 }
 
 /**
+ * The `Style:` / `Avoid:` control lines with the separator each one needs.
+ *
+ * They are self-labeling and stay at the very END of the prompt, which makes
+ * them the only text that can still land under an open `[style]` header — the
+ * section has no terminator, so a blank line is what closes its scope. `Avoid:`
+ * reads the body WITH `Style:` already on it, so once the first control line has
+ * closed the section the second rejoins on a single newline, exactly as before.
+ *
+ * Derived from the body they are appended to, because the cap's tail cut moves
+ * that boundary. The cut can only NARROW the separator — the section is the last
+ * block, so a cut either drops it entirely or lands inside it — which is what
+ * lets the caller reserve on the pre-cut body and re-derive afterwards.
+ */
+function controlSuffixes(
+  body: string,
+  styleLine: string,
+  avoidLine: string,
+): { styleSuffix: string; avoidSuffix: string } {
+  const separator = (text: string): string =>
+    endsInsideStyleSection(text) ? STYLE_SECTION_GAP : "\n"
+  const styleSuffix = styleLine ? `${separator(body)}${styleLine}` : ""
+  const avoidSuffix = avoidLine ? `${separator(body + styleSuffix)}${avoidLine}` : ""
+  return { styleSuffix, avoidSuffix }
+}
+
+/**
  * Build the final image generation prompt from config.
  * Handles character description wrapping, style appending, negative prompt routing,
  * truncation, and reference image filtering.
@@ -2585,8 +2618,9 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
           ...extrasRendered.elementDirectives,
         ]
         const lockBlock = allLockLines.length > 0 ? `${allLockLines.join("\n")}\n\n` : ""
-        const trailingBlock = trailingLines.length > 0 ? `\n${trailingLines.join("\n")}` : ""
-        promptForNext = `${lockBlock}${promptForNext}${trailingBlock}`
+        // Scene content, so it extends the BODY: appended flat it would land
+        // under a `[style]` header the composer left open.
+        promptForNext = `${lockBlock}${insertBeforeStyleSection(promptForNext, trailingLines)}`
       }
 
       // Mutate the config locals (NOT the original passed config).
@@ -2731,8 +2765,10 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
         ...locCanon.phrases, ...objCanon.phrases,
         ...locCanon.elementDirectives, ...objCanon.elementDirectives,
       ]
-      const canonTrailingBlock = canonTrailingLines.length > 0 ? `\n${canonTrailingLines.join("\n")}` : ""
-      const composedScene = `${canonLockBlock}${scene}${canonTrailingBlock}`
+      // Role phrases and element injections are scene content → they extend the
+      // BODY, ahead of the `[style]` section (which has no terminator, so a flat
+      // append would read as one more look clause).
+      const composedScene = `${canonLockBlock}${insertBeforeStyleSection(scene, canonTrailingLines)}`
       prompt = config.referenceLockSnippet
         ? `${config.referenceLockSnippet}\n${composedScene}`
         : composedScene
@@ -2776,23 +2812,19 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
     }
 
     const styleText = style?.trim()
-    const styleSuffix = styleText ? `\nStyle: ${getStylePromptHint(styleText) || styleText}` : ""
+    const styleLine = styleText ? `Style: ${getStylePromptHint(styleText) || styleText}` : ""
 
     const negPrompt = negativePrompt?.trim()
     let nativeNegativePrompt: string | undefined
-    let avoidSuffix = ""
+    let avoidLine = ""
     if (negPrompt) {
       if (NATIVE_NEGATIVE_PROMPT_MODELS.has(provider)) {
         // Clamp native negatives to the provider's verified cap (e.g. ideogram /
         // qwen = 500) so an over-long negative can't trigger a provider reject.
         nativeNegativePrompt = negPrompt.slice(0, getMaxNegativePromptChars(provider))
       } else {
-        avoidSuffix = `\nAvoid: ${negPrompt}`
+        avoidLine = `Avoid: ${negPrompt}`
       }
-    }
-    if (marks) {
-      marks.styleSuffix = styleSuffix
-      marks.avoidSuffix = avoidSuffix
     }
 
     // Cap the assembled prompt at the PROVIDER's max (default IMAGE_PROMPT_MAX =
@@ -2804,10 +2836,18 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
     // The cut is ORDER-BLIND — record how much it removed so a cap-aware caller
     // (`assembleImageInput`) can shed its own lowest-value text and re-assemble.
     const maxLen = getMaxImagePromptChars(provider)
-    const reserved = styleSuffix.length + avoidSuffix.length
+    // Reserved on the PRE-cut body; the cut can only NARROW the separator (see
+    // `controlSuffixes`), so the re-derived suffixes always fit the reservation.
+    const preCut = controlSuffixes(prompt, styleLine, avoidLine)
+    const reserved = preCut.styleSuffix.length + preCut.avoidSuffix.length
     if (prompt.length + reserved > maxLen) {
       if (marks) marks.overflowChars += prompt.length + reserved - maxLen
       prompt = prompt.slice(0, Math.max(0, maxLen - reserved - 3)) + "..."
+    }
+    const { styleSuffix, avoidSuffix } = controlSuffixes(prompt, styleLine, avoidLine)
+    if (marks) {
+      marks.styleSuffix = styleSuffix
+      marks.avoidSuffix = avoidSuffix
     }
     // Body span = everything after the captured directive prefix, taken from the
     // possibly-truncated body so the segment join still reconstructs (empty in the
@@ -2878,36 +2918,37 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
       })
     })
 
-  // Assemble prompt
+  // Assemble prompt. The wrapper template composes the BODY only — a `[style]`
+  // section is lifted off first and re-attached after, so a description can
+  // never land under its header (and a user-overridden template, which may put
+  // the descriptions anywhere, still only ever rearranges the body).
   let prompt = config.prompt
   if (charDescs.length > 0) {
     const wrapperTemplate = resolveTemplate("generate-image-wrapper", userTemplates, flowTemplates)
-    prompt = applyTemplate(wrapperTemplate, {
-      userPrompt: prompt,
+    const { body, section } = splitStyleSection(prompt)
+    const wrapped = applyTemplate(wrapperTemplate, {
+      userPrompt: body,
       assetDescriptions: charDescs.join(" "),
     })
+    prompt = section.length > 0 ? `${wrapped}${STYLE_SECTION_GAP}${section}` : wrapped
   }
 
   // Append style — if the inline `style` is a known STYLES catalog id, inject
   // the richer promptHint; otherwise fall back to the raw text (covers custom
   // free-text styles that don't match a preset).
   const styleText = style?.trim()
-  const styleSuffix = styleText ? `\nStyle: ${getStylePromptHint(styleText) || styleText}` : ""
+  const styleLine = styleText ? `Style: ${getStylePromptHint(styleText) || styleText}` : ""
 
   // Handle negative prompt: native support vs prompt-appended
   const negPrompt = negativePrompt?.trim()
   let nativeNegativePrompt: string | undefined
-  let avoidSuffix = ""
+  let avoidLine = ""
   if (negPrompt) {
     if (NATIVE_NEGATIVE_PROMPT_MODELS.has(provider)) {
       nativeNegativePrompt = negPrompt.slice(0, getMaxNegativePromptChars(provider))
     } else {
-      avoidSuffix = `\nAvoid: ${negPrompt}`
+      avoidLine = `Avoid: ${negPrompt}`
     }
-  }
-  if (marks) {
-    marks.styleSuffix = styleSuffix
-    marks.avoidSuffix = avoidSuffix
   }
 
   // Cap at the provider max (default IMAGE_PROMPT_MAX = 5000), reserving the
@@ -2916,10 +2957,16 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
   // BODY, THEN append the suffixes. Same order-blind cut as the
   // connectedReferences path above → same `overflowChars` bookkeeping.
   const maxLen = getMaxImagePromptChars(provider)
-  const reserved = styleSuffix.length + avoidSuffix.length
+  const preCut = controlSuffixes(prompt, styleLine, avoidLine)
+  const reserved = preCut.styleSuffix.length + preCut.avoidSuffix.length
   if (prompt.length + reserved > maxLen) {
     if (marks) marks.overflowChars += prompt.length + reserved - maxLen
     prompt = prompt.slice(0, Math.max(0, maxLen - reserved - 3)) + "..."
+  }
+  const { styleSuffix, avoidSuffix } = controlSuffixes(prompt, styleLine, avoidLine)
+  if (marks) {
+    marks.styleSuffix = styleSuffix
+    marks.avoidSuffix = avoidSuffix
   }
   // Legacy path has no directive prefix; the body is the char-desc-wrapped
   // (possibly-truncated) prompt right before the style/avoid suffixes.
@@ -3394,15 +3441,25 @@ function capitalizeLineInitial(line: string): string {
 
 /** Render the user prompt as the hybrid scene: each `{image:N:label}` token
  *  expanded to its uniform lettered phrase, each line's first letter
- *  capitalized. No per-role special-casing — the label drives the phrase. */
+ *  capitalized. No per-role special-casing — the label drives the phrase.
+ *
+ *  The capitalizer STOPS at the `[style]` section and everything after it: the
+ *  header would become `[Style]:`, and every catalog clause under it would gain
+ *  a capital it was not written with. The header line is matched EXACTLY — the
+ *  composer never indents it, and the whitespace collapses on this path are
+ *  horizontal-only (`[^\S\r\n]`), so nothing can pad it before this runs. */
 function buildHybridScene(
   prompt: string,
   refs: readonly ConnectedReference[],
   finalIndexByUrl: ReadonlyMap<string, number>,
 ): string {
-  return prompt
-    .split("\n")
-    .map((line) => capitalizeLineInitial(expandImageRefTokensHybrid(line, refs, finalIndexByUrl)))
+  const lines = prompt.split("\n")
+  const sectionAt = lines.indexOf(STYLE_SECTION_HEADER)
+  return lines
+    .map((line, i) => {
+      const expanded = expandImageRefTokensHybrid(line, refs, finalIndexByUrl)
+      return sectionAt >= 0 && i >= sectionAt ? expanded : capitalizeLineInitial(expanded)
+    })
     .join("\n")
 }
 

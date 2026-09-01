@@ -350,7 +350,7 @@ describe("POST /v1/text-to-video — the direction channel", () => {
       payload: { prompt: "a sunset timelapse", userId: USER, direction: { style: STYLE } },
     })
     expect(res.statusCode).toBe(200)
-    const folded = `a sunset timelapse. ${getStylePromptHint(STYLE)}`
+    const folded = `a sunset timelapse\n\n[style]:\n${getStylePromptHint(STYLE)}`
     expect(vi.mocked(videoQueue.add).mock.calls.at(-1)![1].prompt).toBe(folded)
     expect(mockInsert.mock.calls.at(-1)![0].input_data).toEqual(
       expect.objectContaining({

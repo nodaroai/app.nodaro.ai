@@ -72,8 +72,23 @@ import { getLoopSubjectPromptHint, getLoopSubjectTerm } from "./loop-subject.js"
 
 /** Which generation stages fold a dimension. */
 export type DirectionSurface = "image" | "video" | "both"
-/** Verbosity family — the video policy folds `motion` compact, `look` full. */
+/**
+ * Verbosity family — the video policy folds `motion` compact, `look` full.
+ *
+ * It is ALSO the body/section split (`prompt-style-section.ts`): `motion` stays
+ * in the prompt body as shot prose, `look` moves to the `[style]` section. The
+ * two meanings are deliberately the same column: camera motion is part of the
+ * shot, not part of the look, on both axes, and a second column would let the
+ * verbosity policy and the section boundary drift apart one row at a time.
+ */
 export type DirectionFamily = "look" | "motion"
+/**
+ * Which `[style]` line a LOOK row renders on. `"film"` = the four dimensions
+ * that describe the CAPTURE (stock, grade, style, era) plus the legacy camera
+ * format key; every other look row falls to the scene line. Absent on `motion`
+ * rows, which never reach the section at all.
+ */
+export type DirectionStyleGroup = "film"
 
 export interface DirectionFieldSpec {
   /**
@@ -89,6 +104,12 @@ export interface DirectionFieldSpec {
   readonly surface: DirectionSurface
   /** Verbosity family. The video policy folds `motion` compact, `look` full. */
   readonly family: DirectionFamily
+  /**
+   * `[style]`-section line for a `look` row. Omitted = the scene line. Meaningless
+   * on a `motion` row (those stay in the body), which is why it is optional
+   * rather than a required column with a null member.
+   */
+  readonly styleGroup?: DirectionStyleGroup
   /** Ids honored per dimension. Extras are SLICED at render, never a 400. */
   readonly maxPicks: number
   /**
@@ -160,16 +181,20 @@ const temporal = perId(getTemporalPromptHint, getTemporalTerm)
  * would wrongly suppress a legal second selection. Overlap is handled instead
  * by the exact-string dedupe in `renderDirectionHints`.
  *
- * SECOND MEANING OF POSITION: BOTH cap-aware assemblers — `assembleImageInput`
- * (stills) and `composeVideoPromptText` (video) — shed hint clauses from the
- * TAIL of this order when a provider's prompt cap overflows, through the one
- * shared arithmetic in `hint-shedding.ts`. So a row's position is also its
- * survival order under the cap on EVERY surface: reordering rows for one
- * surface silently changes what the other drops first, and the row a
- * video-surface reorder would most likely touch (`cameraMotion`) leads the
- * fold. That is a consequence of reusing the fold order, not a ranking — this
- * table stays a compatibility order; anything that needs a real importance
- * ranking should add an explicit priority column rather than reorder these rows.
+ * SECOND MEANING OF POSITION — SURVIVAL, NOT STRING POSITION: BOTH cap-aware
+ * assemblers — `assembleImageInput` (stills) and `composeVideoPromptText`
+ * (video) — shed hint clauses from the TAIL of this order when a provider's
+ * prompt cap overflows, through the one shared arithmetic in
+ * `hint-shedding.ts`. So a row's position is its survival order under the cap on
+ * EVERY surface: reordering rows for one surface silently changes what the other
+ * drops first, and the row a video-surface reorder would most likely touch
+ * (`cameraMotion`) leads the fold. What position is NOT any more is the clause's
+ * place in the assembled STRING: every `look` row is lifted out of the body into
+ * the trailing `[style]` section (`prompt-style-section.ts`), so a look clause
+ * reads after every motion clause however early it folds. That is a consequence
+ * of reusing the fold order, not a ranking — this table stays a compatibility
+ * order; anything that needs a real importance ranking should add an explicit
+ * priority column rather than reorder these rows.
  *
  * WHERE THIS TABLE SITS IN THE COMBINED ORDER: both assemblers fold the SUBJECT
  * channel (`subject-registry.ts`) BEFORE this one and shed the combined list
@@ -189,7 +214,7 @@ export const DIRECTION_FIELDS = [
   { key: "compositionEffect", surface: "both", family: "look", maxPicks: 1, render: perId(getCompositionEffectPromptHint, getCompositionEffectTerm) },
 
   // Camera.
-  { key: "cameraFormat", surface: "both", family: "look", maxPicks: 1, render: perId(getCameraFormatPromptHint, getCameraFormatTerm) },
+  { key: "cameraFormat", surface: "both", family: "look", styleGroup: "film", maxPicks: 1, render: perId(getCameraFormatPromptHint, getCameraFormatTerm) },
   { key: "lens", surface: "both", family: "look", maxPicks: 1, render: perId(getLensPromptHint, getLensTerm) },
 
   // Exposure (stills only — a video's exposure rides its own temporal levers).
@@ -203,12 +228,12 @@ export const DIRECTION_FIELDS = [
   { key: "lightingDirection", surface: "both", family: "look", maxPicks: 1, render: lighting },
   { key: "lightingRatio", surface: "both", family: "look", maxPicks: 1, render: lighting },
   { key: "colorTemperature", surface: "both", family: "look", maxPicks: 1, render: lighting },
-  { key: "colorLook", surface: "both", family: "look", maxPicks: 1, render: perId(getColorLookPromptHint, getColorLookTerm) },
+  { key: "colorLook", surface: "both", family: "look", styleGroup: "film", maxPicks: 1, render: perId(getColorLookPromptHint, getColorLookTerm) },
   { key: "atmosphere", surface: "both", family: "look", maxPicks: 2, render: viaListBuilder(buildAtmosphereHints) },
   { key: "postProcess", surface: "image", family: "look", maxPicks: 2, render: viaListBuilder(buildPostProcessHints) },
 
   // Style.
-  { key: "style", surface: "both", family: "look", maxPicks: 1, render: perId(getStylePromptHint, getStyleTerm) },
+  { key: "style", surface: "both", family: "look", styleGroup: "film", maxPicks: 1, render: perId(getStylePromptHint, getStyleTerm) },
   { key: "mood", surface: "both", family: "look", maxPicks: 2, render: viaMood },
   { key: "aesthetic", surface: "both", family: "look", maxPicks: 2, render: viaStringBuilder(buildAestheticHints) },
   { key: "photoGenre", surface: "image", family: "look", maxPicks: 1, render: perId(getPhotoGenrePromptHint, getPhotoGenreTerm) },
@@ -217,7 +242,7 @@ export const DIRECTION_FIELDS = [
 
   // Scene.
   { key: "setting", surface: "both", family: "look", maxPicks: 1, render: perId(getSettingPromptHint, getSettingTerm) },
-  { key: "era", surface: "both", family: "look", maxPicks: 1, render: perId(getEraPromptHint, getEraTerm) },
+  { key: "era", surface: "both", family: "look", styleGroup: "film", maxPicks: 1, render: perId(getEraPromptHint, getEraTerm) },
   { key: "backdrop", surface: "both", family: "look", maxPicks: 1, render: perId(getBackdropPromptHint, getBackdropTerm) },
 
   // Motion & time.
@@ -235,8 +260,16 @@ export const DIRECTION_FIELDS = [
   { key: "framingAngleId", surface: "both", family: "look", maxPicks: 1, render: framing },
   { key: "lightingId", surface: "both", family: "look", maxPicks: 1, render: lighting },
   { key: "lensId", surface: "both", family: "look", maxPicks: 1, render: perId(getLensPromptHint, getLensTerm) },
-  { key: "cameraFormatId", surface: "both", family: "look", maxPicks: 1, render: perId(getCameraFormatPromptHint, getCameraFormatTerm) },
+  { key: "cameraFormatId", surface: "both", family: "look", styleGroup: "film", maxPicks: 1, render: perId(getCameraFormatPromptHint, getCameraFormatTerm) },
 ] as const satisfies ReadonlyArray<DirectionFieldSpec>
+
+/**
+ * The table read at its DECLARED type. `styleGroup` is optional, so on the
+ * `as const` tuple only the rows that carry it have the property at all — a
+ * member-wise read would not compile. Every walk over the table goes through
+ * this binding.
+ */
+const DIRECTION_SPECS: ReadonlyArray<DirectionFieldSpec> = DIRECTION_FIELDS
 
 export type DirectionFieldRow = (typeof DIRECTION_FIELDS)[number]
 export type DirectionKey = DirectionFieldRow["key"]
@@ -259,6 +292,16 @@ export type DirectionFields = { readonly [K in DirectionKey]?: string | readonly
  * re-deriving one.
  */
 export const DIRECTION_KEYS: ReadonlyArray<DirectionKey> = DIRECTION_FIELDS.map((f) => f.key)
+
+/**
+ * The rows that render on the `[style]` section's FILM line, in table order —
+ * derived from the table's `styleGroup` column so the grouping has exactly one
+ * definition. Exported for clients that render the section themselves; the
+ * platform's own renderer reads the column, not this list.
+ */
+export const FILM_STYLE_KEYS: ReadonlyArray<DirectionKey> = DIRECTION_SPECS.filter(
+  (f) => f.styleGroup === "film",
+).map((f) => f.key as DirectionKey)
 
 /** Verbosity for a whole fold, or split per family. */
 export type DirectionHintMode =
@@ -321,7 +364,51 @@ function normalizeDirectionIds(value: unknown, maxPicks: number): string[] {
 export function directionFieldsForSurface(
   surface: "image" | "video",
 ): ReadonlyArray<DirectionFieldSpec> {
-  return DIRECTION_FIELDS.filter((f) => f.surface === "both" || f.surface === surface)
+  return DIRECTION_SPECS.filter((f) => f.surface === "both" || f.surface === surface)
+}
+
+/** One rendered clause, still carrying the table attributes it came from. */
+export interface DirectionHintClause {
+  readonly key: DirectionKey
+  readonly family: DirectionFamily
+  readonly styleGroup?: DirectionStyleGroup
+  readonly text: string
+}
+
+/**
+ * `renderDirectionHints` with the row each clause came from still attached —
+ * what the `[style]` section needs to decide which line a clause belongs on
+ * without a second table. Same order, same surface filter, same dedupe; the
+ * plain renderer is this one's `.text` projection, so the two cannot drift.
+ */
+export function renderDirectionHintClauses(
+  direction: DirectionFields | undefined,
+  opts: { surface: "image" | "video"; mode?: DirectionHintMode },
+): DirectionHintClause[] {
+  if (!direction) return []
+  const mode = opts.mode ?? "full"
+  const out: DirectionHintClause[] = []
+  const seen = new Set<string>()
+  for (const spec of DIRECTION_SPECS) {
+    if (spec.surface !== "both" && spec.surface !== opts.surface) continue
+    const ids = normalizeDirectionIds(
+      (direction as Record<string, unknown>)[spec.key],
+      spec.maxPicks,
+    )
+    if (ids.length === 0) continue
+    for (const hint of spec.render(ids, modeForFamily(mode, spec.family))) {
+      if (hint.length > 0 && !seen.has(hint)) {
+        seen.add(hint)
+        out.push({
+          key: spec.key as DirectionKey,
+          family: spec.family,
+          ...(spec.styleGroup !== undefined ? { styleGroup: spec.styleGroup } : {}),
+          text: hint,
+        })
+      }
+    }
+  }
+  return out
 }
 
 /**
@@ -343,29 +430,13 @@ export function directionFieldsForSurface(
  * exactly as two wired picker nodes of one family behave today.
  *
  * Exported so a client's "will inject into prompt" preview renders the exact
- * server output instead of re-implementing the fold.
+ * clauses the server does instead of re-implementing the fold. A preview of the
+ * assembled STRING needs `prompt-style-section.ts` on top: the look clauses in
+ * this list do not read in this position any more.
  */
 export function renderDirectionHints(
   direction: DirectionFields | undefined,
   opts: { surface: "image" | "video"; mode?: DirectionHintMode },
 ): string[] {
-  if (!direction) return []
-  const mode = opts.mode ?? "full"
-  const out: string[] = []
-  const seen = new Set<string>()
-  for (const spec of DIRECTION_FIELDS) {
-    if (spec.surface !== "both" && spec.surface !== opts.surface) continue
-    const ids = normalizeDirectionIds(
-      (direction as Record<string, unknown>)[spec.key],
-      spec.maxPicks,
-    )
-    if (ids.length === 0) continue
-    for (const hint of spec.render(ids, modeForFamily(mode, spec.family))) {
-      if (hint.length > 0 && !seen.has(hint)) {
-        seen.add(hint)
-        out.push(hint)
-      }
-    }
-  }
-  return out
+  return renderDirectionHintClauses(direction, opts).map((c) => c.text)
 }

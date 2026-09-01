@@ -11,8 +11,9 @@
  *
  * WHERE IT RUNS (load-bearing): on the prompt BODY, BEFORE
  * `resolveVideoReferenceCore`. That resolver FRAMES the body — legacy prepends
- * its `Use these characters:` block, hybrid prepends the lock lines and APPENDS
- * the canonical role phrases and extras. Folding afterwards would push the
+ * its `Use these characters:` block, hybrid prepends the lock lines and extends
+ * the body's END with the canonical role phrases and extras (spliced in ahead of
+ * the `[style]` section, which stays last). Folding afterwards would push the
  * scene/look description PAST the identity directives, a worse version of the
  * bug this channel exists to fix. The image side is structurally identical
  * (`assembleImageInput` = `composePromptText` → `buildImagePrompt`).
@@ -23,6 +24,13 @@
  * text the resolver adds is inside the budget and can never be the thing that
  * gets dropped. See {@link VideoPromptCapOptions}. Both catalog channels —
  * SUBJECT and direction — fold into the one sheddable list that budget walks.
+ *
+ * THE SHAPE IT EMITS: the body (prose, subject fold, MOTION clauses, structured
+ * fragment) and then a trailing `[style]` section carrying every LOOK clause —
+ * `prompt-style-section.ts` owns those bytes. Camera motion is shot prose, not
+ * style, so the whole motion family stays in the body; the boundary is the
+ * registry's `family` column, deliberately the same column the verbosity policy
+ * below splits on.
  *
  * THE VERBOSITY POLICY LIVES HERE, NOT IN THE CLIENT: motion dimensions render
  * their compact professional term, look dimensions their full clause
@@ -49,10 +57,10 @@
  * `subject-registry.ts` for the subject channel) — ONE renderer per channel
  * serves both surfaces, so the image and video folds cannot drift.
  * Clients render their "will inject into prompt" preview by importing
- * `renderDirectionHints` + `joinPromptHints` directly.
+ * `renderSubjectHints` + `partitionStyleClauses` + `composeSectionedPrompt`
+ * directly (or `renderStyleSection` for the section alone).
  */
 import {
-  renderDirectionHints,
   VIDEO_HINT_MODE_DEFAULT,
   type DirectionFields,
   type DirectionHintMode,
@@ -63,7 +71,12 @@ import {
   type SubjectFields,
   type SubjectHintMode,
 } from "./subject-registry.js"
-import { joinPromptHints } from "./prompt-hint-join.js"
+import {
+  asBodyClauses,
+  composeSectionedPrompt,
+  partitionStyleClauses,
+  sectionedClauseCosts,
+} from "./prompt-style-section.js"
 import { keepableDirectionHints } from "./hint-shedding.js"
 import {
   renderStructuredFields,
@@ -90,9 +103,10 @@ import {
  *    module header — folding afterwards strands the scene description past the
  *    identity directives). The resolver then ADDS binding text: legacy's
  *    "Use these characters:" block, hybrid's lock lines and the canonical role
- *    phrases it APPENDS. That added text is exactly what an order-blind tail cut
- *    destroys first, so it must be inside the budget — but it must never be
- *    shed. Measuring THROUGH the caller's framing gives both properties at once:
+ *    phrases that end its body. None of it is sheddable and all of it is inside
+ *    what the clamp measures, so a budget blind to it under-sheds and hands the
+ *    remainder to the order-blind cut. Measuring THROUGH the caller's framing
+ *    gives both properties at once:
  *    the shed decision sees the final length, while the only thing it can drop
  *    is a hint clause it rendered itself.
  *
@@ -121,10 +135,11 @@ export interface VideoPromptCapOptions {
  * Fold a video run's subject and cinematic-direction ids (and optional
  * structured fields) into its prompt body.
  *
- * The SUBJECT hints land first (who is in the shot — the noun phrase the
- * cinematography modifies), then the direction hints in the registry's
- * canonical table order (camera motion leads), and the structured fragment
- * lands LAST — the same ordering `composePromptText` uses for stills.
+ * IN THE BODY: the SUBJECT hints first (who is in the shot — the noun phrase the
+ * cinematography modifies), then the MOTION direction hints in the registry's
+ * canonical table order (camera motion leads), then the structured fragment —
+ * the same ordering `composePromptText` uses for stills. The LOOK hints leave
+ * the body for the `[style]` section that follows it.
  *
  * `subject` rides `opts` rather than a fourth positional parameter on purpose:
  * every existing caller passes `(prompt, direction)` or
@@ -194,33 +209,33 @@ export function composeVideoPromptText(
   // side uses (`renderImageHintPieces`): the subject is the noun phrase the
   // cinematography modifies, so losing "who is in the shot" to keep a
   // decorative grade would be the wrong trade. With no `subject` the list IS
-  // the direction fold, so every pre-subject caller is byte-identical.
+  // the direction fold, so every pre-subject caller sheds identically.
+  //
+  // Each clause carries the SLOT it reads in, because survival order and string
+  // order are two different things once the look clauses lift into `[style]`.
   const hintClauses = [
-    ...renderSubjectHints(opts?.subject, {
-      surface: "video",
-      mode: opts?.subjectHintMode ?? SUBJECT_VIDEO_HINT_MODE_DEFAULT,
-    }),
-    ...renderDirectionHints(direction, {
+    ...asBodyClauses(
+      renderSubjectHints(opts?.subject, {
+        surface: "video",
+        mode: opts?.subjectHintMode ?? SUBJECT_VIDEO_HINT_MODE_DEFAULT,
+      }),
+    ),
+    ...partitionStyleClauses(direction, {
       surface: "video",
       mode: opts?.hintMode ?? VIDEO_HINT_MODE_DEFAULT,
     }),
-  ].filter((p) => p.length > 0)
-  // User CONTENT, not a garnish: never sheddable, always last.
+  ].filter((c) => c.text.length > 0)
+  // User CONTENT, not a garnish: never sheddable, always last IN THE BODY (the
+  // `[style]` section reads after it).
   const structuredFragment = structured ? renderStructuredFields(structured) : ""
 
-  const composeWith = (kept: number): string | undefined => {
-    const hints = [...hintClauses.slice(0, kept), structuredFragment].filter(
-      (p) => p.length > 0,
-    )
-    // Nothing to fold → the caller's value straight back, `undefined` included.
-    // Do NOT collapse this into `joinPromptHints(userPrompt ?? "", hints)`: that
-    // would turn an absent prompt into `""` and break the no-op contract above.
-    // A FULL shed lands here too, which is what keeps the no-op contract intact
-    // at `kept === 0` — the route's `composed !== prompt` guard then correctly
-    // leaves `input_data.userPrompt` unpinned.
-    if (hints.length === 0) return userPrompt
-    return joinPromptHints(userPrompt ?? "", hints)
-  }
+  // Nothing folded — no body hint AND no section — returns the caller's value
+  // straight back, `undefined` included. A FULL shed lands there too, which is
+  // what keeps the no-op contract intact at `kept === 0`: the route's
+  // `composed !== prompt` guard then correctly leaves `input_data.userPrompt`
+  // unpinned.
+  const composeWith = (kept: number): string | undefined =>
+    composeSectionedPrompt(userPrompt, hintClauses.slice(0, kept), structuredFragment)
 
   const cap = opts?.cap
   if (cap === undefined) return composeWith(hintClauses.length)
@@ -235,8 +250,13 @@ export function composeVideoPromptText(
   let kept = hintClauses.length
   let body = composeWith(kept)
   let framedLength = frame(body)?.length ?? 0
+  if (framedLength <= cap) return body
+  // Priced only on the overflow path: the deltas cost a composition per clause
+  // and the fits-first-time case is the common one.
+  const costs = sectionedClauseCosts(userPrompt, hintClauses, structuredFragment)
+  const texts = hintClauses.map((c) => c.text)
   while (framedLength > cap && kept > 0) {
-    kept = keepableDirectionHints(hintClauses, kept, framedLength - cap)
+    kept = keepableDirectionHints(texts, kept, framedLength - cap, costs)
     body = composeWith(kept)
     framedLength = frame(body)?.length ?? 0
   }

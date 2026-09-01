@@ -35,6 +35,7 @@ import { buildIdentityLockLine, withForcedIdentityLock } from "./identity-lock.j
 import type { ConnectedReference } from "@nodaro/shared"
 import { REF_BINDING } from "./ref-binding.js"
 import { resolveRefIdTokens } from "./ref-id-tokens.js"
+import { insertBeforeStyleSection } from "./prompt-style-section.js"
 
 // The binding surface string and the id-addressed token resolver live in their
 // own modules (see them for the contracts); re-exported here so every existing
@@ -775,8 +776,10 @@ export function resolveVideoReferenceCore(
       ...extraHybridElementDirectives,
     ]
     const lockBlock = lockLines.length > 0 ? `${lockLines.join("\n")}\n\n` : ""
-    const trailingBlock = trailingLines.length > 0 ? `\n${trailingLines.join("\n")}` : ""
-    finalPrompt = `${lockBlock}${finalPrompt}${trailingBlock}`
+    // The trailing lines are scene content, so they extend the BODY: a `[style]`
+    // section has no terminator, and appended flat they would read as look
+    // clauses under its header instead of as the bindings they are.
+    finalPrompt = `${lockBlock}${insertBeforeStyleSection(finalPrompt, trailingLines)}`
   } else {
     const allFallbackLines = [...fallbackDirectiveLines, ...extraDirectiveLines]
     if (allFallbackLines.length > 0) {

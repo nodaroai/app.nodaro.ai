@@ -1,5 +1,37 @@
 import { describe, it, expect } from "vitest"
-import { applyVideoNegativePrompt, NATIVE_NEGATIVE_VIDEO_PROVIDERS } from "../model-constants.js"
+import {
+  applyVideoNegativePrompt,
+  videoNegativeSuffix,
+  NATIVE_NEGATIVE_VIDEO_PROVIDERS,
+} from "../model-constants.js"
+
+/**
+ * A composed prompt that ends with the `[style]` section — what
+ * `@nodaro/prompts` emits for any run that picks a look dimension. The section
+ * has no terminator, so a `"\n"`-joined `Avoid:` reads as one more look clause
+ * under its header.
+ */
+const SECTIONED = "a knight rides\n\n[style]:\nanime style\nwide shot"
+
+describe("videoNegativeSuffix", () => {
+  it("joins on one newline for an ordinary prompt", () => {
+    expect(videoNegativeSuffix("blurry", "a knight rides")).toBe("\nAvoid: blurry")
+  })
+
+  it("closes an open `[style]` section with a blank line", () => {
+    expect(videoNegativeSuffix("blurry", SECTIONED)).toBe("\n\nAvoid: blurry")
+  })
+
+  it("joins on one newline once something else closed the section", () => {
+    expect(videoNegativeSuffix("blurry", `${SECTIONED}\n\nthe person from @image_1`))
+      .toBe("\nAvoid: blurry")
+  })
+
+  it("is the WIDEST form with no base — what a caller reserving room must budget", () => {
+    // `effectiveVideoPromptCeiling` reserves before the prompt exists.
+    expect(videoNegativeSuffix("blurry")).toBe("\n\nAvoid: blurry")
+  })
+})
 
 describe("applyVideoNegativePrompt", () => {
   it("returns prompt unchanged + nativeNegativePrompt when provider is native", () => {
@@ -12,6 +44,11 @@ describe("applyVideoNegativePrompt", () => {
     const result = applyVideoNegativePrompt("a cat dancing", "blurry, distorted", "wan-animate-move")
     expect(result.prompt).toBe("a cat dancing\nAvoid: blurry, distorted")
     expect(result.nativeNegativePrompt).toBeUndefined()
+  })
+
+  it("separates 'Avoid: …' from an unterminated `[style]` section", () => {
+    const result = applyVideoNegativePrompt(SECTIONED, "blurry", "wan-animate-move")
+    expect(result.prompt).toBe(`${SECTIONED}\n\nAvoid: blurry`)
   })
 
   it("returns 'Avoid: …' alone when prompt is empty and provider is non-native", () => {
