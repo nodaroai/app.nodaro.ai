@@ -197,6 +197,12 @@ export interface UserBalance {
   periodEnd: string | null
   /** Credits earned for app usage (free tier only — earned by running flows) */
   appCreditsAllowance: number
+  /**
+   * Free signup grant state. 'withheld' means the account works but the grant
+   * did not land — the client shows the activation path. Absent until the
+   * gate's column exists (a dev deploy can run ahead of the migration).
+   */
+  freeGrantState?: "unclaimed" | "granted" | "withheld"
 }
 
 export interface ReserveResult {

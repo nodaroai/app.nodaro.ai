@@ -26,6 +26,7 @@ REST-first; the included visual editor is one of many possible clients.
 - **Script Character Studio (REST / SDK / CLI / MCP)** → [Character Platform](./character-platform.md)
 - **Browse & clone the shared community library** (admin-curated characters / locations / objects; Business + Cloud) → [Community Library](./community-library.md)
 - **Build a workflow by describing it** (in-app chat that edits your canvas; Cloud) → [Workflow Copilot](./features/workflow-copilot.md)
+- **Free credits on a new account** (what the signup grant is, and when activation asks for a card; Cloud) → [Free credits](./features/free-credits.md)
 - **Connect an AI client (Claude.ai, Cursor, Cline, Continue, Goose) via MCP** → [MCP](./mcp/index.md)
 - **Contribute to Nodaro** → [Architecture](./architecture.md) → [Contributing](./contributing.md)
 

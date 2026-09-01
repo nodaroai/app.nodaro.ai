@@ -6,17 +6,19 @@ import Fastify, { type FastifyInstance } from "fastify"
 // Mocks — hoisted before any route/lib import
 // ---------------------------------------------------------------------------
 
-const { mockFrom, mockRpc, mockLogTransaction, mockInvalidateBalanceCache } = vi.hoisted(() => ({
+const { mockFrom, mockRpc, mockLogTransaction, mockInvalidateBalanceCache, mockGetUserById } = vi.hoisted(() => ({
   mockFrom: vi.fn(),
   mockRpc: vi.fn(),
   mockLogTransaction: vi.fn().mockResolvedValue(true),
   mockInvalidateBalanceCache: vi.fn(),
+  mockGetUserById: vi.fn(),
 }))
 
 vi.mock("@/lib/supabase.js", () => ({
   supabase: {
     from: (...args: unknown[]) => mockFrom(...args),
     rpc: (...args: unknown[]) => mockRpc(...args),
+    auth: { admin: { getUserById: (...args: unknown[]) => mockGetUserById(...args) } },
   },
 }))
 
@@ -52,22 +54,63 @@ type Result = { data: unknown; error: unknown }
 
 interface Doubles {
   profiles: { select: ReturnType<typeof vi.fn>; eq: ReturnType<typeof vi.fn>; single: ReturnType<typeof vi.fn> }
-  signals: { upsert: ReturnType<typeof vi.fn> }
+  signals: { upsert: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn>; select: ReturnType<typeof vi.fn> }
+  /** Every (column, value) pair passed to `.neq()` across all head counts. */
+  neqCalls: Array<[string, unknown]>
+}
+
+/** Per-rule head counts the policy reads back; every rule defaults to "nobody else". */
+interface Counts {
+  browser?: number
+  deviceSameIp?: number
+  device?: number
+  ip?: number
 }
 
 function wireSupabase(opts: {
   profile?: Result
   signal?: Result
   rpc?: Result
+  providers?: string[] | null
+  counts?: Counts
 }): Doubles {
+  mockGetUserById.mockResolvedValue(
+    opts.providers === null
+      ? { data: null, error: { message: "gotrue unreachable" } }
+      : { data: { user: { app_metadata: { providers: opts.providers ?? ["google"] } } }, error: null },
+  )
   const profiles = {
     select: vi.fn(() => profiles),
     eq: vi.fn(() => profiles),
     single: vi.fn().mockResolvedValue(opts.profile ?? { data: { free_grant_state: "unclaimed" }, error: null }),
   } as unknown as Doubles["profiles"]
 
+  // A thenable filter chain: the policy awaits `.eq(...).neq(...)` directly.
+  // Which rule is being counted is recoverable from the filters applied.
+  const neqCalls: Array<[string, unknown]> = []
+  function headChain() {
+    const filters: Record<string, unknown> = {}
+    const chain = {
+      eq: (col: string, v: unknown) => { filters[col] = v; return chain },
+      neq: (col: string, v: unknown) => { neqCalls.push([col, v]); return chain },
+      gte: () => chain,
+      then: (resolve: (r: { count: number; error: null }) => void) => {
+        const c = opts.counts ?? {}
+        let count = 0
+        if ("browser_key" in filters) count = c.browser ?? 0
+        else if ("device_key" in filters && "ip_hash" in filters) count = c.deviceSameIp ?? 0
+        else if ("device_key" in filters) count = c.device ?? 0
+        else if ("ip_hash" in filters) count = c.ip ?? 0
+        resolve({ count, error: null })
+      },
+    }
+    return chain
+  }
+  const updateChain = { eq: vi.fn(() => updateChain), then: (r: (x: Result) => void) => r({ data: null, error: null }) }
   const signals = {
     upsert: vi.fn().mockResolvedValue(opts.signal ?? { data: null, error: null }),
+    select: vi.fn(() => headChain()),
+    update: vi.fn(() => updateChain),
   }
 
   mockFrom.mockImplementation((table: string) => {
@@ -81,7 +124,7 @@ function wireSupabase(opts: {
     opts.rpc ?? { data: [{ did_claim: true, old_credits: 0, new_credits: TIER_CREDITS.free, state: "granted" }], error: null },
   )
 
-  return { profiles, signals }
+  return { profiles, signals, neqCalls }
 }
 
 // ---------------------------------------------------------------------------
@@ -175,14 +218,17 @@ describe("POST /v1/credits/claim-signup-grant — the claim", () => {
       ip_hash: EXPECTED_IP_HASH,
       source: "claim",
     })
+    // A KEYED claim may overwrite a keyless row the balance-read fallback
+    // left first — the fingerprints are the observation worth keeping.
     expect(doubles.signals.upsert.mock.calls[0]![1]).toEqual({
       onConflict: "user_id,source",
-      ignoreDuplicates: true,
+      ignoreDuplicates: false,
     })
 
     expect(mockRpc).toHaveBeenCalledWith("claim_signup_grant", {
       p_user_id: TEST_USER_ID,
       p_grant_amount: TIER_CREDITS.free,
+      p_withhold: false,
     })
   })
 
@@ -284,6 +330,15 @@ describe("POST /v1/credits/claim-signup-grant — fingerprints are signals, neve
     expect(row.device_key).toBe(OTHER_HEX64)
   })
 
+  it("a KEYLESS claim never overwrites an existing signal row", async () => {
+    const doubles = wireSupabase({})
+    await claim({})
+    expect(doubles.signals.upsert.mock.calls[0]![1]).toEqual({
+      onConflict: "user_id,source",
+      ignoreDuplicates: true,
+    })
+  })
+
   it("claims with no fingerprints at all", async () => {
     const doubles = wireSupabase({})
     const res = await claim({})
@@ -348,5 +403,66 @@ describe("POST /v1/credits/claim-signup-grant — failure modes", () => {
     expect(JSON.stringify(res.json())).not.toContain("free_grant_state")
     expect(doubles.signals.upsert).not.toHaveBeenCalled()
     expect(mockRpc).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// PR 2 — the decision reaches the RPC, and the response never explains itself
+// ---------------------------------------------------------------------------
+
+const WITHHELD_ROW = { data: [{ did_claim: false, old_credits: 0, new_credits: 0, state: "withheld" }], error: null }
+
+describe("POST /v1/credits/claim-signup-grant — withholding", () => {
+  it("withholds an email-only account: RPC told to withhold, no ledger row, state reported", async () => {
+    const doubles = wireSupabase({ providers: ["email"], rpc: WITHHELD_ROW })
+    const res = await claim({ browserKey: HEX64 })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ state: "withheld", granted: false })
+    expect(mockRpc).toHaveBeenCalledWith("claim_signup_grant", {
+      p_user_id: TEST_USER_ID,
+      p_grant_amount: TIER_CREDITS.free,
+      p_withhold: true,
+    })
+    expect(mockLogTransaction).not.toHaveBeenCalled()
+    // The reasons land on the signal row for admin review …
+    expect(doubles.signals.update).toHaveBeenCalledWith(
+      expect.objectContaining({ decision: "withheld", reasons: ["email_only_provider"] }),
+    )
+    // … and NEVER in the response body.
+    expect(JSON.stringify(res.json())).not.toContain("email_only_provider")
+  })
+
+  it("withholds a Google account whose browser already claimed for someone else", async () => {
+    wireSupabase({ providers: ["google"], counts: { browser: 1 }, rpc: WITHHELD_ROW })
+    const res = await claim({ browserKey: HEX64, deviceKey: OTHER_HEX64 })
+    expect(res.json()).toEqual({ state: "withheld", granted: false })
+    expect(mockRpc.mock.calls[0]![1]).toMatchObject({ p_withhold: true })
+  })
+
+  it("grants a Google account with clean signals", async () => {
+    wireSupabase({ providers: ["google"] })
+    const res = await claim({ browserKey: HEX64, deviceKey: OTHER_HEX64 })
+    expect(res.json()).toEqual({ state: "granted", granted: true })
+    expect(mockRpc.mock.calls[0]![1]).toMatchObject({ p_withhold: false })
+  })
+
+  it("FAILS OPEN when GoTrue cannot be asked about the providers", async () => {
+    wireSupabase({ providers: null })
+    const res = await claim({})
+    expect(res.json()).toEqual({ state: "granted", granted: true })
+    expect(mockRpc.mock.calls[0]![1]).toMatchObject({ p_withhold: false })
+  })
+
+  it("counts only OTHER accounts — the claimant's own fresh row is excluded", async () => {
+    // A count that included the row just upserted would withhold every first
+    // claim from every device. The chain double resolves counts from the
+    // filters, so this pins that the policy applies neq(user_id) at all.
+    const doubles = wireSupabase({ providers: ["google"] })
+    await claim({ browserKey: HEX64, deviceKey: OTHER_HEX64 })
+    expect(doubles.signals.select).toHaveBeenCalledWith("user_id", { count: "exact", head: true })
+    // browser, device+ip, device, ip velocity — four counts, four exclusions.
+    expect(doubles.neqCalls).toHaveLength(4)
+    for (const call of doubles.neqCalls) expect(call).toEqual(["user_id", TEST_USER_ID])
   })
 })
