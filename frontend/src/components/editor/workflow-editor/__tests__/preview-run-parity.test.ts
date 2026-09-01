@@ -561,6 +561,44 @@ describe("preview↔run parity — video", () => {
     expect(previewPrompt).toBe(runPrompt)
   })
 
+  it("(i2) generate-video + gemini-omni-flash source clip → i2v in BOTH run and preview (family parity)", async () => {
+    // The Gemini Omni FAMILY's V2V override is the one place a wired reference
+    // VIDEO (not a frame) flips the unified node to image-to-video. It lives in
+    // TWO places — execute-node's dispatch and video-prompt-assembly's
+    // resolveGenerateVideoMode — and this case is what fails if only one of them
+    // learns the family: the run would fold the motion hint while the preview
+    // composed it as t2v (or vice versa).
+    const srcClip = { id: "src-clip", type: "upload-video", position: { x: 0, y: 0 }, data: { label: "Clip" } }
+    const genVidNode = makeNode("generate-video", {
+      prompt: "circle {image:1:object}",
+      provider: "gemini-omni-flash",
+      motion: "slow zoom",
+      motionEnabled: true,
+    })
+    mockNodes = [refImageNode(), srcClip, genVidNode]
+    mockEdges = [
+      { id: "e1", source: "ref-img", target: "n1", targetHandle: "imageReferences" },
+      { id: "e2", source: "src-clip", target: "n1", targetHandle: "videoReferences" },
+    ]
+    // No frame — only the source clip + a reference image. Refs alone do NOT
+    // flip the mode, so reaching i2v is proof the VIDEO ref did it.
+    mockResolveNodeInputs.mockReturnValue({
+      referenceVideoUrls: ["http://cdn.example/source.mp4"],
+      referenceImageUrls: ["http://cdn.example/look.png"],
+    })
+    mockRunVideoGeneration.mockResolvedValue(undefined)
+
+    await executeNode(genVidNode as any, makeCtx())
+
+    expect(mockRunTextToVideoGeneration).not.toHaveBeenCalled()
+    expect(mockRunVideoGeneration).toHaveBeenCalledTimes(1)
+    const runPrompt = mockRunVideoGeneration.mock.calls[0][8] as string
+    const previewPrompt = assembleVideoPrompt("generate-video", assemblerArgs(genVidNode))
+
+    expect(runPrompt).toContain("slow zoom motion")
+    expect(previewPrompt).toBe(runPrompt)
+  })
+
   // ── D5 unified-asset-references: an Assets-handle ENTITY (object/animal/
   // location) auto-attaches and is referenceable via {image:N}, identically in
   // preview and run. ──

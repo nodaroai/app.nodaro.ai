@@ -240,3 +240,71 @@ describe("POST /v1/generate-video — gemini-omni-video V2V", () => {
     expect(res.json().jobId).toBeTruthy()
   })
 })
+
+// ---------------------------------------------------------------------------
+// The references-only exemption from the `imageUrl is required` 400 is
+// CATALOG-driven (VIDEO_REF_LIMITS_BY_PROVIDER), not a hardcoded provider pair.
+// These cases pin that a model gets the exemption purely by declaring caps —
+// the sibling SKU and the Wan family inherit it with no route edit.
+// ---------------------------------------------------------------------------
+
+describe("POST /v1/generate-video — catalog-driven references-only exemption", () => {
+  for (const provider of ["gemini-omni-flash", "wan-3", "wan-3-prime"]) {
+    it(`${provider}: reference videos with no imageUrl are accepted`, async () => {
+      mockJobInsert({ data: { id: `job-${provider}` }, error: null })
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-video",
+        payload: {
+          provider,
+          referenceVideoUrls: ["https://example.com/v.mp4"],
+          prompt: "edit it",
+          userId: "00000000-0000-4000-8000-000000000001",
+        },
+      })
+
+      expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+      expect(res.json().jobId).toBeTruthy()
+    })
+
+    it(`${provider}: still rejects with neither an imageUrl nor any refs`, async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-video",
+        payload: {
+          provider,
+          prompt: "make a video",
+          userId: "00000000-0000-4000-8000-000000000001",
+        },
+      })
+
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.message).toBe("imageUrl is required")
+    })
+  }
+
+  it("wan-3 threads its adaptive aspect + 30s duration through to the queue payload", async () => {
+    mockJobInsert({ data: { id: "job-wan-30" }, error: null })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-video",
+      payload: {
+        provider: "wan-3",
+        imageUrl: "https://example.com/first.png",
+        prompt: "slow dolly",
+        aspectRatio: "adaptive",
+        duration: 30,
+        resolution: "1080p",
+        userId: "00000000-0000-4000-8000-000000000001",
+      },
+    })
+
+    expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+    const queuePayload = vi.mocked(videoQueue.add).mock.calls[0]?.[1] as Record<string, unknown>
+    expect(queuePayload.aspectRatio).toBe("adaptive")
+    expect(queuePayload.duration).toBe(30)
+    expect(queuePayload.resolution).toBe("1080p")
+  })
+})

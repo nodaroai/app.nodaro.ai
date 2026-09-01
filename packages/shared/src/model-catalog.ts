@@ -228,6 +228,12 @@ const VIDEO_RATIOS_SEEDANCE_2 = ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "a
 // portrait-social and 21:9/9:21 cinematic (docs.kie.ai/market/happyhorse-1-1).
 // Kept separate so the wider set can't leak to models that don't support it.
 const VIDEO_RATIOS_HAPPYHORSE_11 = ["16:9", "9:16", "1:1", "4:3", "3:4", "4:5", "5:4", "21:9", "9:21"] as const
+// Wan 3.0 (standard + Prime) — the model's own six-ratio enum, `adaptive` first
+// because that is the KIE default ("automatically selects the ratio based on the
+// input media and intent"). Deliberately NO 21:9 — the Wan 3.0 enum rejects it,
+// so VIDEO_RATIOS_SEEDANCE_2 must NOT be reused here
+// (docs.kie.ai/market/wan/3-0-video and /3-0-video-prime — identical schemas).
+const VIDEO_RATIOS_WAN_3 = ["adaptive", "16:9", "4:3", "1:1", "3:4", "9:16"] as const
 
 // =============================================================================
 // IMAGE MODELS
@@ -1179,6 +1185,41 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "gemini-omni-video:4k:vref", credits: 900, note: "video-edit 4K" },
     ],
   },
+  // Gemini Omni Flash 1.1 — the faster/cheaper Omni SKU (KIE
+  // `google/gemini-omni-flash-1-1`). Identical request surface to
+  // gemini-omni-video, so every capability below is deliberate PARITY with the
+  // sibling: same 4/6/8/10s ladder, same 720p/1080p + 4K bands, same
+  // features (the KIE schema also exposes first/last frame, but the pro
+  // sibling's frame path is unwired here too — no "end-frame" until it is).
+  // 360p is on the KIE enum but NOT exposed: it sits in the same credit band as
+  // 720p/1080p, so it could only hand the user a worse render at the same price.
+  "gemini-omni-flash": {
+    id: "gemini-omni-flash",
+    kind: "video",
+    modes: ["i2v", "t2v"] as const,   // V2V is served via the i2v handle, not a catalog mode
+    family: "Google",
+    label: "Gemini Omni Flash",
+    series: "Gemini",
+    description: "Google Gemini Omni Flash — faster/cheaper Omni tier: multimodal video with native audio, text/image-to-video + video-edit.",
+    useCases: ["cinematic", "fast"],
+    features: ["audio", "reference-image"],
+    aspectRatios: VIDEO_RATIOS_HV,
+    resolutions: ["720p", "1080p", "4k"],
+    durations: [4, 6, 8, 10],
+    pricing: [
+      { identifier: "gemini-omni-flash", credits: 270, note: "default — 8s 720p/1080p (the credit builder's duration fallback)" },
+      { identifier: "gemini-omni-flash:4", credits: 160, note: "720p/1080p 4s" },
+      { identifier: "gemini-omni-flash:6", credits: 210, note: "720p/1080p 6s" },
+      { identifier: "gemini-omni-flash:8", credits: 270, note: "720p/1080p 8s" },
+      { identifier: "gemini-omni-flash:10", credits: 320, note: "720p/1080p 10s" },
+      { identifier: "gemini-omni-flash:4k:4", credits: 370, note: "4K 4s" },
+      { identifier: "gemini-omni-flash:4k:6", credits: 420, note: "4K 6s" },
+      { identifier: "gemini-omni-flash:4k:8", credits: 480, note: "4K 8s" },
+      { identifier: "gemini-omni-flash:4k:10", credits: 530, note: "4K 10s" },
+      { identifier: "gemini-omni-flash:vref", credits: 420, note: "video-edit 720p/1080p" },
+      { identifier: "gemini-omni-flash:4k:vref", credits: 630, note: "video-edit 4K" },
+    ],
+  },
 
   // ── Kling ──
   "kling": {
@@ -1450,6 +1491,66 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   },
 
   // ── Wan ──
+  // Wan 3.0 (standard + Prime) — a NEW generation, not a tier of the 2.x ladder.
+  // One id per SKU serves BOTH modes (no t2v twin, no alias): first/last frame
+  // OR an all-purpose reference mode (images/videos/audio, bound in the prompt
+  // as Image1/Video1/Audio1 — no space, unlike Wan 2.x), native audio behind a
+  // boolean `audio` lever, 2-30s at 480p/720p/1080p.
+  // `video-reference` is deliberately NOT declared: KIE accepts reference videos,
+  // but the extend chain is unwired and KIE caps input-video + output at 30s,
+  // which the segment bounds cannot express. Precedent: gemini-omni-video carries
+  // ref limits without the feature. The ref CAPS still live in
+  // VIDEO_REF_LIMITS_BY_PROVIDER (model-constants).
+  // `resolutions` is ascending (repo convention); the DEFAULT tier (720p) is
+  // declared explicitly in PRICING_DEFAULT_RESOLUTION, never by array position.
+  "wan-3": {
+    id: "wan-3",
+    kind: "video",
+    modes: ["i2v", "t2v"] as const,
+    family: "Alibaba",
+    label: "Wan 3.0",
+    series: "Wan",
+    description: "Wan 3.0 — multimodal: first/last frame or image/video/audio references, native audio, 2-30s at 480p/720p/1080p.",
+    useCases: ["motion", "narrative", "long-form"],
+    features: ["end-frame", "audio", "reference-image"],
+    aspectRatios: VIDEO_RATIOS_WAN_3,
+    durations: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+    resolutions: ["480p", "720p", "1080p"],
+    pricing: [
+      { identifier: "wan-3", credits: 200, note: "default 5s 720p — see :Ns:res variants for exact" },
+      { identifier: "wan-3:5s:720p", credits: 200, note: "5s 720p (the default tier)" },
+      { identifier: "wan-3:8s:480p", credits: 160, note: "8s 480p" },
+      { identifier: "wan-3:8s:720p", credits: 320, note: "8s 720p" },
+      { identifier: "wan-3:8s:1080p", credits: 640, note: "8s 1080p" },
+      { identifier: "wan-3:30s:480p", credits: 600, note: "30s 480p (max)" },
+      { identifier: "wan-3:30s:720p", credits: 1200, note: "30s 720p (max)" },
+      { identifier: "wan-3:30s:1080p", credits: 2400, note: "30s 1080p (max)" },
+    ],
+  },
+  "wan-3-prime": {
+    id: "wan-3-prime",
+    kind: "video",
+    modes: ["i2v", "t2v"] as const,
+    family: "Alibaba",
+    label: "Wan 3.0 Prime",
+    series: "Wan",
+    description: "Wan 3.0 Prime — Alibaba's high-speed Wan 3.0 tier: same multimodal surface and 2-30s range, faster turnaround at a higher per-second rate.",
+    useCases: ["fast", "motion", "narrative"],
+    features: ["end-frame", "audio", "reference-image"],
+    aspectRatios: VIDEO_RATIOS_WAN_3,
+    durations: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+    resolutions: ["480p", "720p", "1080p"],
+    pricing: [
+      { identifier: "wan-3-prime", credits: 320, note: "default 5s 720p — see :Ns:res variants for exact" },
+      { identifier: "wan-3-prime:5s:720p", credits: 320, note: "5s 720p (the default tier)" },
+      { identifier: "wan-3-prime:8s:480p", credits: 250, note: "8s 480p" },
+      { identifier: "wan-3-prime:8s:720p", credits: 510, note: "8s 720p" },
+      { identifier: "wan-3-prime:8s:1080p", credits: 1010, note: "8s 1080p" },
+      { identifier: "wan-3-prime:30s:480p", credits: 920, note: "30s 480p (max)" },
+      { identifier: "wan-3-prime:30s:720p", credits: 1890, note: "30s 720p (max)" },
+      { identifier: "wan-3-prime:30s:1080p", credits: 3780, note: "30s 1080p (max)" },
+    ],
+  },
   "wan-i2v": {
     id: "wan-i2v",
     kind: "video",

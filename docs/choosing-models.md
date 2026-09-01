@@ -121,7 +121,9 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Topaz Video Upscale | Topaz | Premium | 190 | video-upscale | High-quality video upscale and enhancement. |
 | VEO Extend | Google | Premium | 190 | extend | Extend an existing VEO 3.1 clip by another segment. |
 | Hailuo 2.3 Pro | MiniMax | Premium | 200 | i2v | Hailuo 2.3 Pro — newer Hailuo with 768P / 1080P resolutions. |
+| Wan 3.0 | Alibaba | Premium | 200 | i2v, t2v | Wan 3.0 — multimodal: first/last frame or image/video/audio references, native audio, 2-30s at 480p/720p/1080p. |
 | Kling 3 Omni | Kuaishou | Premium | 250 | i2v | Kling 3 Omni via Replicate — 3-15s, 720p/1080p, end frame + reference images, native audio. |
+| Gemini Omni Flash | Google | Premium | 270 | i2v, t2v | Google Gemini Omni Flash — faster/cheaper Omni tier: multimodal video with native audio, text/image-to-video + video-edit. |
 | Kling 2.6 | Kuaishou | Premium | 280 | i2v, t2v | Kling 2.6 I2V — strong motion realism. 5s/10s, optional native audio. |
 | Kling Avatar Standard | Kuaishou | Premium | 280 | lip-sync | Lip-sync a still portrait to driving audio. Standard quality. |
 | HappyHorse 1.1 | HappyHorse | Premium | 282 | t2v | HappyHorse 1.1 text-to-video — 3–15s at 720p/1080p, 9 aspect ratios incl. 21:9/9:21, per-second pricing. |
@@ -133,6 +135,7 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Gemini Omni | Google | Premium | 315 | i2v, t2v | Google multimodal video with native audio; text/image-to-video + video-edit. |
 | Runway Extend | Runway | Premium | 320 | extend | Extend a Runway video by another clip. |
 | Wan 2.7 VideoEdit | Alibaba | Premium | 320 | v2v | Guided video editing with optional reference image, audio control, and prompt expansion. |
+| Wan 3.0 Prime | Alibaba | Premium | 320 | i2v, t2v | Wan 3.0 Prime — Alibaba's high-speed Wan 3.0 tier: same multimodal surface and 2-30s range, faster turnaround at a higher per-second rate. |
 | HappyHorse Edit | HappyHorse | Premium | 350 | v2v | HappyHorse video-edit — video-to-video transformation, up to 60s input, 720p/1080p output. |
 | Runway Aleph V2V | Runway | Premium | 350 | v2v | Runway Aleph — video-to-video conversion. |
 | Seedance 2 | Bytedance | Premium | 380 | i2v, t2v | Seedance 2 — premium tier with native audio. Per-second pricing by resolution. |

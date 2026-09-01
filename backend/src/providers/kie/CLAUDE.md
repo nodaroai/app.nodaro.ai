@@ -83,6 +83,9 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `sora2-pro` | `sora-2-pro-image-to-video` | [sora2 pro i2v](https://docs.kie.ai/market/sora2/sora-2-pro-image-to-video.md) |
 | `seedance` | `bytedance/seedance-1.5-pro` | [seedance 1.5 pro](https://docs.kie.ai/market/bytedance/seedance-1.5-pro.md) |
 | `minimax-h3` | `minimax-h3/image-to-video` (swaps to `minimax-h3/reference-to-video` when refs are wired — see `minimaxH3TaskModel`) | [minimax-h3 i2v](https://docs.kie.ai/market/minimax-h3/image-to-video.md) / [r2v](https://docs.kie.ai/market/minimax-h3/reference-to-video.md) |
+| `wan-3` | `wan/3-0-video` (bespoke `runWan3`) | [wan 3.0](https://docs.kie.ai/market/wan/3-0-video.md) |
+| `wan-3-prime` | `wan/3-0-video-prime` (bespoke `runWan3`) | [wan 3.0 prime](https://docs.kie.ai/market/wan/3-0-video-prime.md) |
+| `gemini-omni-flash` | `google/gemini-omni-flash-1-1` (via `runGeminiOmni`; the pro sibling's id is the bare `gemini-omni-video`) | [gemini omni flash](https://docs.kie.ai/market/google/gemini-omni-flash-1-1.md) |
 | `wan-i2v` | `wan/2-6-image-to-video` | [wan 2.6 i2v](https://docs.kie.ai/market/wan/2-6-image-to-video.md) |
 | `wan-turbo` | `wan/2-2-a14b-image-to-video-turbo` | [wan turbo i2v](https://docs.kie.ai/market/wan/2-2-a14b-image-to-video-turbo.md) |
 | `hailuo-2.3-pro` | `hailuo/2-3-image-to-video-pro` | [hailuo 2.3 pro](https://docs.kie.ai/market/hailuo/2-3-image-to-video-pro.md) |
@@ -107,6 +110,9 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `kling-3.0` | `kling-3.0/video` | [kling 3.0](https://docs.kie.ai/market/kling/kling-3.0.md) |
 | `seedance` | `bytedance/seedance-1.5-pro` | [seedance t2v](https://docs.kie.ai/market/bytedance/seedance-1.5-pro.md) |
 | `minimax-h3` | `minimax-h3/text-to-video` (swaps to `minimax-h3/reference-to-video` when refs are wired) | [minimax-h3 t2v](https://docs.kie.ai/market/minimax-h3/text-to-video.md) |
+| `wan-3` | `wan/3-0-video` (ONE KIE id serves both modes) | [wan 3.0](https://docs.kie.ai/market/wan/3-0-video.md) |
+| `wan-3-prime` | `wan/3-0-video-prime` (ONE KIE id serves both modes) | [wan 3.0 prime](https://docs.kie.ai/market/wan/3-0-video-prime.md) |
+| `gemini-omni-flash` | `google/gemini-omni-flash-1-1` (ONE KIE id serves both modes) | [gemini omni flash](https://docs.kie.ai/market/google/gemini-omni-flash-1-1.md) |
 | `wan` | `wan/2-6-text-to-video` | [wan 2.6 t2v](https://docs.kie.ai/market/wan/2-6-text-to-video.md) |
 | `sora2` | `sora-2-text-to-video` | [sora2 t2v](https://docs.kie.ai/market/sora2/sora-2-text-to-video.md) |
 | `hailuo-standard` | `hailuo/02-text-to-video-standard` | [hailuo std t2v](https://docs.kie.ai/market/hailuo/02-text-to-video-standard.md) |
@@ -131,6 +137,42 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `elevenlabs-multilingual` | `elevenlabs/text-to-speech-multilingual-v2` | [11labs multilingual](https://docs.kie.ai/market/elevenlabs/text-to-speech-multilingual-v2.md) |
 | `elevenlabs-sfx` | `elevenlabs/sound-effect-v2` | [11labs sfx](https://docs.kie.ai/market/elevenlabs/sound-effect-v2.md) |
 | `elevenlabs-stt` | `elevenlabs/speech-to-text` | [11labs stt](https://docs.kie.ai/market/elevenlabs/speech-to-text.md) |
+
+### Wan 3.0 wire notes (`wan-3` / `wan-3-prime`, bespoke `runWan3`)
+
+Wan 3.0 is the first KIE video model whose wire vocabulary diverges from ours,
+which is why it has a bespoke runner instead of the generic `createTask` builder:
+
+- `duration` is an **integer** (2–30), not the string the generic path emits.
+- `resolution` is the **UPPERCASE** enum `480P` / `720P` / `1080P`. Everything on
+  our side (catalog, credit composites, config panels) is lowercase, so
+  `normalizeWan3Resolution` (`@nodaro/shared`) is the single case-conversion
+  point. An absent or unknown value pins **720P** — deliberately NOT KIE's own
+  1080P default, which would render (and under-bill) the top tier.
+  **`buildVideoCreditModelIdentifier` collapses through the SAME normalizer**
+  for the wan family — the tier list is lowercase and `Array.includes` is
+  case-sensitive, so an integrator sending KIE's own `"1080P"` used to render
+  1080P and bill the 720p row.
+- `aspect_ratio` defaults to `adaptive`, which is special-cased before any ratio
+  snapping.
+- `audio` (boolean) is the native-audio lever — not `sound` / `generate_audio`.
+  It is the `field: "audio"` branch of `applyVideoAudioToggle`.
+- `first_frame_url` / `last_frame_url` are **mutually exclusive** with the
+  `reference_*_urls` arrays; `resolveSeedance2Inputs` demotes a frame into
+  `reference_image_urls` (bound in prose) rather than rejecting the run.
+- Reference caps are 10 images / 5 videos / 5 audio
+  (`VIDEO_REF_LIMITS_BY_PROVIDER`). Reference videos are each 1–15s, ≤15s
+  combined, and input seconds + output duration ≤ 30s — documented, not
+  pre-flighted (same as `seedance-2` / `minimax-h3`). Reference **audio** is the
+  exception: the ≤15s per-clip cap runs in `validateSeedance2AudioPreHandler`
+  (`SEEDANCE_2_R2V_MAX_AUDIO_SEC_BY_PROVIDER`), so an over-long clip 400s with
+  `audio_too_long` before credits are reserved.
+- `duration: -1`, `reference_file_urls`, `reference_link_urls` and
+  `nsfw_checker` are deliberately never emitted.
+
+`gemini-omni-flash` shares the pro sibling's request shape through
+`runGeminiOmni`, with one difference: its schema marks `duration` **required**,
+so the emitted body always carries it (`requiresDuration` on the model config).
 
 
 ---

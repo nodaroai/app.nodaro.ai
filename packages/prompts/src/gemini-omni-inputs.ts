@@ -40,6 +40,11 @@ export interface GeminiOmniI2vInputsArgs {
   refImageUrls?: Array<string | undefined>
   /** A connected source video occupies 2 of the 7 input slots (KIE quota). */
   videoConnected?: boolean
+  /** The Omni SKU this run targets — defaults to `gemini-omni-video` for
+   *  back-compat. Both SKUs cap at 7 today, so passing it is behaviour-neutral;
+   *  it stops the flash path from silently reading the pro model's quota if the
+   *  two ever diverge. */
+  provider?: string
 }
 
 export interface GeminiOmniI2vInputsResult {
@@ -51,13 +56,16 @@ export interface GeminiOmniI2vInputsResult {
   droppedRefImages: number
 }
 
-/** The catalog-declared cap (7) — read from the shared limits map so the
+/** The catalog-declared cap (7) — read PER SKU from the shared limits map so the
  *  wire-contract number has one home; the literal is only the safety net. */
-const GEMINI_OMNI_INPUT_SLOTS = VIDEO_REF_LIMITS_BY_PROVIDER["gemini-omni-video"]?.images ?? 7
+const DEFAULT_GEMINI_OMNI_PROVIDER = "gemini-omni-video"
+function geminiOmniInputSlots(provider: string | undefined): number {
+  return VIDEO_REF_LIMITS_BY_PROVIDER[provider ?? DEFAULT_GEMINI_OMNI_PROVIDER]?.images ?? 7
+}
 
 export function resolveGeminiOmniI2vInputs(args: GeminiOmniI2vInputsArgs): GeminiOmniI2vInputsResult {
   const refs = (args.refImageUrls ?? []).filter((u): u is string => typeof u === "string" && u.length > 0)
-  const slots = GEMINI_OMNI_INPUT_SLOTS - (args.videoConnected ? 2 : 0)
+  const slots = geminiOmniInputSlots(args.provider) - (args.videoConnected ? 2 : 0)
   const refSlots = Math.max(0, slots - 1)
   const kept = refs.slice(0, refSlots)
   const droppedRefImages = refs.length - kept.length

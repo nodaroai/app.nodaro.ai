@@ -548,3 +548,86 @@ describe("KieVideoProvider — gemini-omni-video per-tier cost", () => {
     expect(r.cost).toBe(0.45) // snapped to 4s
   })
 })
+
+// ---------------------------------------------------------------------------
+// Gemini Omni Flash 1.1 — the sibling SKU served by the SAME runGeminiOmni.
+// Every assertion above keeps exercising the pro model; these pin the four
+// things that must differ per SKU (KIE id, resolution list, tier cost, the
+// required `duration`) and the two family behaviours flash must inherit.
+// ---------------------------------------------------------------------------
+
+describe("KieVideoProvider — gemini-omni-flash", () => {
+  it("dispatches to the PREFIXED KIE id (the pro sibling's is the bare id)", async () => {
+    await provider.textToVideo("a prompt", "gemini-omni-flash", 8, "16:9", { resolution: "720p" })
+
+    expect(mocks.mockRunKieTask).toHaveBeenCalledOnce()
+    expect(mocks.mockRunKieTask.mock.calls[0][0]).toBe("google/gemini-omni-flash-1-1")
+  })
+
+  it("T2V/I2V body carries the mandatory aspect_ratio and a string duration", async () => {
+    await provider.imageToVideo("https://x/start.png", "a prompt", "gemini-omni-flash", 8, undefined, {})
+
+    const capturedInput = mocks.mockRunKieTask.mock.calls[0][1] as Record<string, unknown>
+    expect(capturedInput.duration).toBe("8")
+    expect(capturedInput.aspect_ratio).toBe("16:9") // never omitted — 422 otherwise
+    expect(capturedInput.resolution).toBe("720p")
+  })
+
+  it("V2V still carries `duration` (flash's schema lists it as REQUIRED)", async () => {
+    await provider.imageToVideo("https://x/start.png", "a prompt", "gemini-omni-flash", 8, undefined, {
+      referenceVideoUrls: ["https://x/v.mp4"],
+    })
+
+    const capturedInput = mocks.mockRunKieTask.mock.calls[0][1] as Record<string, unknown>
+    expect(capturedInput.video_list).toBeDefined()
+    expect(capturedInput.duration).toBe("8")
+  })
+
+  it("360p is NOT exposed on flash — an off-catalog tier collapses to 720p", async () => {
+    // The KIE schema lists 360p, but it shares the 720p/1080p credit band, so
+    // the catalog deliberately stops at 720p and the runtime allowlist (which is
+    // derived from that catalog) must agree.
+    await provider.textToVideo("a prompt", "gemini-omni-flash", 8, "16:9", { resolution: "360p" })
+
+    const capturedInput = mocks.mockRunKieTask.mock.calls[0][1] as Record<string, unknown>
+    expect(capturedInput.resolution).toBe("720p")
+  })
+
+  it("4k survives on flash (a tier the catalog DOES declare)", async () => {
+    await provider.textToVideo("a prompt", "gemini-omni-flash", 8, "16:9", { resolution: "4k" })
+
+    const capturedInput = mocks.mockRunKieTask.mock.calls[0][1] as Record<string, unknown>
+    expect(capturedInput.resolution).toBe("4k")
+  })
+
+  it("reports the FLASH tier cost, never the pro model's", async () => {
+    const r4 = await provider.textToVideo("p", "gemini-omni-flash", 4, "16:9", { resolution: "720p" })
+    expect(r4.cost).toBeCloseTo(0.315, 6) // pro is 0.45 at the same tier
+    const r10 = await provider.imageToVideo("https://x/s.png", "p", "gemini-omni-flash", 10, undefined, { resolution: "4k" })
+    expect(r10.cost).toBeCloseTo(1.05, 6) // pro is 1.5
+    const vref = await provider.imageToVideo("https://x/s.png", "p", "gemini-omni-flash", 8, undefined, {
+      resolution: "1080p",
+      referenceVideoUrls: ["https://x/v.mp4"],
+    })
+    expect(vref.cost).toBeCloseTo(0.84, 6) // pro is 1.2
+    const vref4k = await provider.imageToVideo("https://x/s.png", "p", "gemini-omni-flash", 8, undefined, {
+      resolution: "4k",
+      referenceVideoUrls: ["https://x/v.mp4"],
+    })
+    expect(vref4k.cost).toBeCloseTo(1.26, 6) // pro is 1.8
+  })
+
+  it("inherits the family rejects: >1 source video and the 7-unit input quota", async () => {
+    await expect(
+      provider.textToVideo("p", "gemini-omni-flash", 8, "16:9", {
+        referenceVideoUrls: ["https://x/v1.mp4", "https://x/v2.mp4"],
+      }),
+    ).rejects.toThrow(/only one source video/)
+
+    await expect(
+      provider.textToVideo("p", "gemini-omni-flash", 8, "16:9", {
+        referenceImageUrls: Array.from({ length: 8 }, (_, i) => `https://x/r${i}.png`),
+      }),
+    ).rejects.toThrow(/too many inputs/)
+  })
+})

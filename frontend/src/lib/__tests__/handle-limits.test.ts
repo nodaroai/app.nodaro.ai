@@ -228,6 +228,53 @@ describe("getHandleConnectionLimit — Seedance 2 imageReferences shared budget"
     ).toBe(5)
   })
 
+  it("wan-3 / wan-3-prime: flat 10 images / 5 videos / 5 audio, budget ignored", () => {
+    // Wan 3.0 declares its own reference caps in VIDEO_REF_LIMITS_BY_PROVIDER
+    // (10 images) AND runs the same resolveSeedance2Inputs resolver as
+    // Seedance 2 / MiniMax H3 — a wired start/end frame is DEMOTED into
+    // `reference_image_urls`, so it consumes a slot from the same 10-image
+    // pool. The handle cap must therefore subtract the consumed slots, or the
+    // 10th user ref is silently dropped off the tail at run time. end-frame
+    // comes from the catalog `end-frame` feature. These are the SAME numbers
+    // the config panel's trays show.
+    for (const provider of ["wan-3", "wan-3-prime"]) {
+      const wan = {
+        id: "n",
+        type: "generate-video",
+        data: { provider },
+      } as unknown as WorkflowNode
+      expect(
+        getHandleConnectionLimit(wan, "imageReferences", { seedance2ImagePoolConsumed: 3 })?.limit,
+      ).toBe(7)
+      expect(
+        getHandleConnectionLimit(wan, "imageReferences", { seedance2ImagePoolConsumed: 0 })?.limit,
+      ).toBe(10)
+      // Never negative — an over-full pool floors at 0 ("N of 0 max").
+      expect(
+        getHandleConnectionLimit(wan, "imageReferences", { seedance2ImagePoolConsumed: 14 })?.limit,
+      ).toBe(0)
+      expect(getHandleConnectionLimit(wan, "videoReferences")?.limit).toBe(5)
+      expect(getHandleConnectionLimit(wan, "audioReferences")?.limit).toBe(5)
+      expect(getHandleConnectionLimit(wan, "endFrame")?.limit).toBe(1)
+    }
+  })
+
+  it("gemini-omni-flash inherits the sibling's flat 7-image / 1-video caps", () => {
+    const flash = {
+      id: "n",
+      type: "generate-video",
+      data: { provider: "gemini-omni-flash" },
+    } as unknown as WorkflowNode
+    expect(
+      getHandleConnectionLimit(flash, "imageReferences", { seedance2ImagePoolConsumed: 3 })?.limit,
+    ).toBe(7)
+    expect(getHandleConnectionLimit(flash, "videoReferences")?.limit).toBe(1)
+    // No audio-reference capability row and no `end-frame` catalog feature —
+    // exact parity with gemini-omni-video (its frame path is unwired too).
+    expect(getHandleConnectionLimit(flash, "audioReferences")?.limit).toBe(0)
+    expect(getHandleConnectionLimit(flash, "endFrame")?.limit).toBe(0)
+  })
+
   it("does NOT apply the budget to non-Seedance-2 ref providers (flat cap)", () => {
     // gemini-omni-video is in PROVIDERS_WITH_REFERENCES (cap 7) but is NOT a
     // Seedance 2 provider — it has no frame/asset reference_image_urls pool

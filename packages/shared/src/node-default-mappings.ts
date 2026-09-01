@@ -187,6 +187,10 @@ const QUALITY_MAP: Record<string, QualityMapping> = {
   // Seedance 2.5 spans 480p/720p/1080p on KIE (1080p accepted since the
   // 2026-08-17 re-probe; 4k still rejected), so each quality rung gets its own tier.
   "seedance-2-5":        { field: "resolution", values: { low: "480p", mid: "720p", high: "1080p" } },
+  // Wan 3.0 family — 480p / 720p / 1080p (lowercase catalog spellings; the
+  // uppercase KIE wire form is produced only by normalizeWan3Resolution).
+  "wan-3":               { field: "resolution", values: { low: "480p", mid: "720p", high: "1080p" } },
+  "wan-3-prime":         { field: "resolution", values: { low: "480p", mid: "720p", high: "1080p" } },
   "wan-2.7-i2v":         { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
   "wan-2.7-t2v":         { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
   "happyhorse":          { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
@@ -200,6 +204,7 @@ const QUALITY_MAP: Record<string, QualityMapping> = {
   "ltx-2.3-pro":         { field: "resolution", values: { low: "1080p", mid: "2k", high: "4k" } },
   "ltx-2.3-fast":        { field: "resolution", values: { low: "1080p", mid: "2k", high: "4k" } },
   "gemini-omni-video":   { field: "resolution", values: { low: "720p", mid: "1080p", high: "4k" } },
+  "gemini-omni-flash":   { field: "resolution", values: { low: "720p", mid: "1080p", high: "4k" } },
   // Grok Imagine Video 1.5 — only 480p/720p (no 1080p tier); high clamps to 720p.
   "grok-imagine-video-1.5": { field: "resolution", values: { low: "480p", mid: "720p", high: "720p" } },
   // Replicate Flux 2 family — MP-based resolution (matching IMAGE_RESOLUTION_OPTIONS["flux-2-*"]).

@@ -28,7 +28,10 @@ import { IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, IMAGE_GEN_PROVIDERS,
 // Plausible-input matrices for each builder
 // ---------------------------------------------------------------------------
 
-const VIDEO_DURATIONS: Array<number | undefined> = [undefined, 4, 5, 6, 8, 10, 12, 15]
+// Spans the widest ladder any video SKU exposes: the Wan 3.0 family is priced
+// per second from 2 to 30, so the ends (2, 3, 30) and a mid-range off-tier (7,
+// 20) must be probed or a missing row at either end ships green.
+const VIDEO_DURATIONS: Array<number | undefined> = [undefined, 2, 3, 4, 5, 6, 7, 8, 10, 12, 15, 20, 30]
 const VIDEO_SOUNDS: Array<boolean | undefined> = [undefined, true, false]
 const VIDEO_NODE_TYPES: Array<"image-to-video" | "text-to-video" | undefined> = [
   undefined,

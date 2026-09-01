@@ -87,6 +87,21 @@ describe("detectCategory", () => {
     expect(detectCategory("runway")).toBe("video")
   })
 
+  it("detects the newer video SKUs and their composites", () => {
+    expect(detectCategory("wan-3")).toBe("video")
+    expect(detectCategory("wan-3-prime:30s:1080p")).toBe("video")
+    expect(detectCategory("gemini-omni-video")).toBe("video")
+    expect(detectCategory("gemini-omni-flash:4k:vref")).toBe("video")
+    expect(detectCategory("happyhorse:5s:720p")).toBe("video")
+  })
+
+  it("does NOT sweep the Gemini LLM ids into the video bucket", () => {
+    // The pattern is "gemini-omni", not a bare "gemini" — the Omni SKUs are
+    // video models, the rest of the Gemini family are LLMs.
+    expect(detectCategory("gemini-2.5-flash")).not.toBe("video")
+    expect(detectCategory("gemini-3-pro")).not.toBe("video")
+  })
+
   it("detects audio models", () => {
     expect(detectCategory("suno-generate")).toBe("audio")
     expect(detectCategory("elevenlabs-turbo")).toBe("audio")

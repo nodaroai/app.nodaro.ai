@@ -69,6 +69,53 @@ function extractInsertedIdentifiers(): Set<string> {
 
 const INSERTED_IDENTIFIERS = extractInsertedIdentifiers()
 
+/**
+ * Same walk, but keeping the credit_cost column too (LAST seeded value wins,
+ * mirroring the append-only migration order).
+ *
+ * The presence check above cannot see a transposed digit, and a wrong DB row
+ * OUTRANKS STATIC_CREDIT_COSTS at reservation time (`getModelCreditBaseCost`
+ * reads model_pricing first) — so the static table would be right and every
+ * charge wrong, with nothing red. Scoped to the families listed in
+ * VALUE_SYNCED_FAMILIES rather than applied globally, because the legacy
+ * migrations carry pre-re-denomination values they never corrected (167's
+ * image-to-video rows, for one).
+ */
+function extractInsertedValues(): Map<string, number> {
+  const values = new Map<string, number>()
+  const migrationFiles = readdirSync(MIGRATIONS_DIR)
+    .filter((f) => f.endsWith(".sql"))
+    .sort()
+  for (const file of migrationFiles) {
+    const sql = readFileSync(join(MIGRATIONS_DIR, file), "utf8")
+    const inserts = sql.matchAll(
+      /INSERT\s+INTO\s+(?:public\.)?model_pricing[\s\S]*?VALUES([\s\S]*?)(?:ON\s+CONFLICT|;\s*$)/gim,
+    )
+    for (const match of inserts) {
+      const rowMatches = (match[1] ?? "").matchAll(/\(\s*'([^']+)'\s*,\s*(\d+)/g)
+      for (const m of rowMatches) values.set(m[1]!, Number(m[2]))
+    }
+  }
+  return values
+}
+
+const INSERTED_VALUES = extractInsertedValues()
+
+/**
+ * Families whose migration VALUES are held byte-identical to
+ * STATIC_CREDIT_COSTS. Add a family here when you seed it fresh — it is the
+ * only thing standing between a mistyped migration row and a wrong charge.
+ * (`wan-3` is matched with an explicit `:` / end-of-string boundary so it does
+ * NOT swallow `wan-3-prime`'s rows into the wrong bucket, and `wan-i2v` /
+ * `wan-2.7-t2v` are untouched.)
+ */
+const VALUE_SYNCED_FAMILIES = ["wan-3", "wan-3-prime", "gemini-omni-flash"] as const
+const VALUE_SYNCED_ROW_COUNT = 187 // 88 wan-3 + 88 wan-3-prime + 11 gemini-omni-flash
+
+function familyOf(key: string): string | undefined {
+  return VALUE_SYNCED_FAMILIES.find((f) => key === f || key.startsWith(`${f}:`))
+}
+
 // ---------------------------------------------------------------------------
 // Sanity check on the migration walk itself.
 // ---------------------------------------------------------------------------
@@ -226,6 +273,47 @@ describe("model_pricing migrations have no undocumented ghosts", () => {
     expect(
       stale,
       `These KNOWN_GHOST_IDENTIFIERS entries are no longer in any migration — remove them from the ghost list (the migration has been cleaned up): ${stale.join(", ")}`,
+    ).toEqual([])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Test 3 — VALUE equality for freshly seeded families. Presence is not enough:
+// the DB row wins over STATIC_CREDIT_COSTS at reservation time.
+// ---------------------------------------------------------------------------
+
+describe("freshly seeded families are value-synced with their migration rows", () => {
+  const scopedStaticKeys = Object.keys(STATIC_CREDIT_COSTS)
+    .filter((k) => familyOf(k) !== undefined)
+    .sort()
+
+  it("the scope is non-empty (the family list did not silently stop matching)", () => {
+    expect(scopedStaticKeys.length).toBe(VALUE_SYNCED_ROW_COUNT)
+  })
+
+  it.each(scopedStaticKeys)(
+    'model_pricing row for "%s" carries the STATIC_CREDIT_COSTS value',
+    (key) => {
+      const migrationValue = INSERTED_VALUES.get(key)
+      expect(
+        migrationValue,
+        `"${key}" is in STATIC_CREDIT_COSTS but no model_pricing INSERT in supabase/migrations/ carries a credit_cost for it.`,
+      ).toBeDefined()
+      expect(
+        migrationValue,
+        `model_pricing seeds ${migrationValue} for "${key}" but STATIC_CREDIT_COSTS says ${STATIC_CREDIT_COSTS[key]}. The DB row WINS at reservation time (getModelCreditBaseCost reads model_pricing first), so this charges the wrong amount while the static table looks correct.`,
+      ).toBe(STATIC_CREDIT_COSTS[key])
+    },
+  )
+
+  it("the migrations seed no EXTRA row in these families", () => {
+    const staticKeys = new Set(scopedStaticKeys)
+    const extra = [...INSERTED_VALUES.keys()].filter(
+      (k) => familyOf(k) !== undefined && !staticKeys.has(k),
+    )
+    expect(
+      extra,
+      `These identifiers are seeded into model_pricing but have no STATIC_CREDIT_COSTS entry — a truncated or over-eager copy-paste: ${extra.join(", ")}`,
     ).toEqual([])
   })
 })

@@ -20,7 +20,7 @@ import type {
   ProviderOptions,
   ReconcileOpts,
 } from "../provider.interface.js"
-import { FRAME_MODE_ADAPTIVE_ONLY_ASPECT, isSeedance2Provider, isMinimaxH3Provider, normalizeMinimaxH3Resolution, isVeoProvider, getLipSyncMaxAudioSeconds, applyVideoNegativePrompt, applyVideoAudioToggle, getModel, DEFAULT_VIDEO_PROVIDER, SEEDANCE_2_REF_LIMITS, VIDEO_REF_LIMITS_BY_PROVIDER } from "@nodaro/shared"
+import { FRAME_MODE_ADAPTIVE_ONLY_ASPECT, isSeedance2Provider, isMinimaxH3Provider, normalizeMinimaxH3Resolution, isGeminiOmniProvider, isWan3Provider, normalizeWan3Resolution, isVeoProvider, getLipSyncMaxAudioSeconds, applyVideoNegativePrompt, applyVideoAudioToggle, getModel, DEFAULT_VIDEO_PROVIDER, SEEDANCE_2_REF_LIMITS, VIDEO_REF_LIMITS_BY_PROVIDER } from "@nodaro/shared"
 import { resolveSeedance2Inputs, resolveGeminiOmniI2vInputs, resolveVeoI2vInputs } from "@nodaro/prompts"
 import {
   createSanitizedError,
@@ -726,13 +726,21 @@ async function runKling3(
   return { url: result.videoUrl, cost: modelConfig.cost }
 }
 
-/** KIE Gemini Omni Video accepted resolution values (lowercase, per the API). */
-const GEMINI_OMNI_RESOLUTIONS = ["720p", "1080p", "4k"]
+/** KIE Gemini Omni accepted resolution values (lowercase, per the API) for THIS
+ *  model — sourced from MODEL_CATALOG so the runtime allowlist can't drift from
+ *  the dropdown the user actually sees, and so a sibling SKU whose tiers differ
+ *  is served its own list instead of the pro model's. Anything off-list (a
+ *  non-UI caller sending "2k"/"480p", or a tier we deliberately don't expose)
+ *  falls back to 720p in runGeminiOmni rather than failing at the API. */
+function geminiOmniResolutions(modelKey: string): readonly string[] {
+  return getModel(modelKey)?.resolutions ?? ["720p", "1080p", "4k"]
+}
 
-/** Aspect ratios KIE accepts for gemini-omni-video. Sourced from MODEL_CATALOG
+/** Aspect ratios KIE accepts for a Gemini Omni SKU. Sourced from MODEL_CATALOG
  *  so this can't drift from the dropdown the user actually sees. */
-const GEMINI_OMNI_ASPECT_RATIOS: readonly string[] =
-  getModel("gemini-omni-video")?.aspectRatios ?? ["16:9", "9:16"]
+function geminiOmniAspectRatios(modelKey: string): readonly string[] {
+  return getModel(modelKey)?.aspectRatios ?? ["16:9", "9:16"]
+}
 
 /**
  * Resolve the aspect_ratio Gemini Omni will accept — ALWAYS a value, never
@@ -753,8 +761,8 @@ const GEMINI_OMNI_ASPECT_RATIOS: readonly string[] =
  * "adaptive") and a missing value fall back to landscape — the same value the
  * config panel displays, so what the user sees is what gets rendered.
  */
-function resolveGeminiOmniAspect(requested: string | undefined): string {
-  return snapAspectRatioToken(requested, GEMINI_OMNI_ASPECT_RATIOS) ?? "16:9"
+function resolveGeminiOmniAspect(modelKey: string, requested: string | undefined): string {
+  return snapAspectRatioToken(requested, geminiOmniAspectRatios(modelKey)) ?? "16:9"
 }
 
 /** Wholesale USD cost for a Gemini Omni tier (KIE-published; KIE bills $0.005/credit).
@@ -763,13 +771,39 @@ function resolveGeminiOmniAspect(requested: string | undefined): string {
  *  under-charged 4K / long / video-edit jobs. 720p and 1080p share a price band.
  *  NOTE: this is an interim, per-tier-cost fix; the proper system-wide
  *  pricing-convention cleanup is tracked separately. */
-function geminiOmniTierCostUsd(resolution: string, durationSec: number, videoConnected: boolean): number {
+interface GeminiOmniTierTable {
+  /** flat per-generation video-edit price: [720p/1080p band, 4K] */
+  vref: readonly [number, number]
+  /** per-duration price in the 720p/1080p band */
+  byDuration: Record<number, number>
+  /** per-duration price in the 4K band */
+  byDuration4k: Record<number, number>
+}
+
+/** Per-SKU tier tables. Flash is ~30% cheaper than the pro model at every tier,
+ *  so reusing the pro table would over-report flash's provider cost on every
+ *  run. Keyed by OUR model id (never by the KIE id). */
+const GEMINI_OMNI_TIER_COSTS: Record<string, GeminiOmniTierTable> = {
+  "gemini-omni-video": {
+    vref: [1.2, 1.8],
+    byDuration: { 4: 0.45, 6: 0.6, 8: 0.75, 10: 0.9 },
+    byDuration4k: { 4: 1.05, 6: 1.2, 8: 1.35, 10: 1.5 },
+  },
+  // KIE credits × $0.005: 63/84/105/126 (720p/1080p), 147/168/189/210 (4K),
+  // 168 video-edit, 252 video-edit 4K.
+  "gemini-omni-flash": {
+    vref: [0.84, 1.26],
+    byDuration: { 4: 0.315, 6: 0.42, 8: 0.525, 10: 0.63 },
+    byDuration4k: { 4: 0.735, 6: 0.84, 8: 0.945, 10: 1.05 },
+  },
+}
+
+function geminiOmniTierCostUsd(modelKey: string, resolution: string, durationSec: number, videoConnected: boolean): number {
+  const table = GEMINI_OMNI_TIER_COSTS[modelKey] ?? GEMINI_OMNI_TIER_COSTS["gemini-omni-video"]!
   const is4k = resolution === "4k"
-  if (videoConnected) return is4k ? 1.8 : 1.2 // video-edit is a flat per-generation price
-  const byDuration: Record<number, number> = is4k
-    ? { 4: 1.05, 6: 1.2, 8: 1.35, 10: 1.5 }
-    : { 4: 0.45, 6: 0.6, 8: 0.75, 10: 0.9 }
-  return byDuration[durationSec] ?? (is4k ? 1.05 : 0.45)
+  if (videoConnected) return is4k ? table.vref[1] : table.vref[0] // video-edit is a flat per-generation price
+  const byDuration = is4k ? table.byDuration4k : table.byDuration
+  return byDuration[durationSec] ?? (is4k ? table.byDuration4k[4]! : table.byDuration[4]!)
 }
 
 /** Shared helper for Gemini Omni Video calls from both imageToVideo and textToVideo.
@@ -778,7 +812,7 @@ function geminiOmniTierCostUsd(resolution: string, durationSec: number, videoCon
  *  Defensively validates duration / resolution / trim-window / video-count here because
  *  this is the single choke point both the single-node route AND the orchestrator reach. */
 async function runGeminiOmni(
-  modelConfig: { model: string; cost: number; allowedDurations?: number[] },
+  modelConfig: { model: string; cost: number; allowedDurations?: number[]; requiresDuration?: boolean },
   /** OUR Nodaro key (NOT modelConfig.model, the KIE id) for the egress seam. */
   modelKey: string,
   prompt: string,
@@ -800,17 +834,21 @@ async function runGeminiOmni(
   }
   const videoConnected = videoUrls.length > 0
   // KIE quota: images + videos*2 (+ character_ids, none in Phase 1) ≤ 7.
-  // Check the RAW count and reject overflow (do NOT silently truncate).
-  if (imageUrls.length + (videoConnected ? 2 : 0) > 7) {
+  // Check the RAW count and reject overflow (do NOT silently truncate). The cap
+  // is the model's OWN declared image budget (both SKUs are 7 today) so a future
+  // divergence needs no edit here — the same map resolveGeminiOmniI2vInputs
+  // budgets against.
+  const inputQuota = VIDEO_REF_LIMITS_BY_PROVIDER[modelKey]?.images ?? 7
+  if (imageUrls.length + (videoConnected ? 2 : 0) > inputQuota) {
     throw createSanitizedError(
-      "Gemini Omni: too many inputs (images + 2×videos must be ≤ 7)",
+      `Gemini Omni: too many inputs (images + 2×videos must be ≤ ${inputQuota})`,
       "Video generation",
     )
   }
   // Validate resolution against KIE's allowed set; default off-list values (e.g. a
   // non-UI caller sending "2k"/"480p"/"4K") to 720p rather than failing at the API.
   const reqResolution = options?.resolution
-  const resolution = reqResolution && GEMINI_OMNI_RESOLUTIONS.includes(reqResolution) ? reqResolution : "720p"
+  const resolution = reqResolution && geminiOmniResolutions(modelKey).includes(reqResolution) ? reqResolution : "720p"
   let videoList: Array<Record<string, unknown>> | undefined
   if (videoConnected) {
     // Clamp the trim window to KIE's contract (integer seconds, 0 ≤ start < ends,
@@ -825,15 +863,19 @@ async function runGeminiOmni(
   const snappedDuration = snapToAllowedDuration(duration ?? 8, modelConfig.allowedDurations ?? [4, 6, 8, 10])
   // Report the ACTUAL per-tier provider cost (resolution band × duration, or flat for V2V)
   // so the credit-commit charges the right tier instead of the flat cheapest-tier cost.
-  const tierCostUsd = geminiOmniTierCostUsd(resolution, snappedDuration, videoConnected)
+  const tierCostUsd = geminiOmniTierCostUsd(modelKey, resolution, snappedDuration, videoConnected)
   const geminiInput: Record<string, unknown> = {
     prompt,
     resolution,
     // Mandatory — see resolveGeminiOmniAspect. Never make this conditional again.
-    aspect_ratio: resolveGeminiOmniAspect(aspectRatioValue),
+    aspect_ratio: resolveGeminiOmniAspect(modelKey, aspectRatioValue),
     // V2V auto-determines duration from the clip; for t2v/i2v send the snapped tier so the
-    // value sent to KIE matches the tier the credit identifier billed.
-    ...(videoList ? { video_list: videoList } : { duration: String(snappedDuration) }),
+    // value sent to KIE matches the tier the credit identifier billed. A model whose schema
+    // lists `duration` as REQUIRED (gemini-omni-flash) gets it in EVERY body — KIE ignores
+    // it alongside a video_list, but rejects the task outright when it is missing.
+    ...(videoList
+      ? { video_list: videoList, ...(modelConfig.requiresDuration ? { duration: String(snappedDuration) } : {}) }
+      : { duration: String(snappedDuration) }),
     ...(imageUrls.length ? { image_urls: imageUrls } : {}),
     // Omit the -1 "random" sentinel (and any negative); only forward real seeds.
     ...(options?.seed != null && options.seed >= 0 ? { seed: options.seed } : {}),
@@ -849,6 +891,163 @@ async function runGeminiOmni(
   }
   console.log(`[KIE.ai] ${logLabel} completed: ${videoUrl} (tier cost: $${tierCostUsd.toFixed(4)})`)
   return { url: videoUrl, cost: tierCostUsd, ...(gTaskId && { kieTaskId: gTaskId }), ...(providerMs !== undefined && { providerMs }) }
+}
+
+/**
+ * Per-second KIE wholesale rate (USD) for the Wan 3.0 family, by WIRE
+ * resolution tier. KIE publishes credits/second — 8 / 16 / 32 for wan-3 and
+ * 12.2 / 25.2 / 50.4 for wan-3-prime — and bills $0.005 per credit. Reported as
+ * ProviderResult.cost so the credit-commit / audit path records the tier that
+ * actually rendered instead of a flat default-tier figure. The USER-facing
+ * charge is the seeded (duration × resolution) composite, not this.
+ */
+const WAN_3_RATE_USD_PER_SEC: Record<string, Record<string, number>> = {
+  "wan-3": { "480P": 0.04, "720P": 0.08, "1080P": 0.16 },
+  "wan-3-prime": { "480P": 0.061, "720P": 0.126, "1080P": 0.252 },
+}
+
+/**
+ * Resolve the aspect_ratio Wan 3 will accept.
+ *
+ * `adaptive` is the enum DEFAULT and the match-the-input option, and it is NOT
+ * a ratio — `snapAspectRatioToken` returns undefined for non-ratio tokens and
+ * `closestAspectRatio` skips unparseable candidates, so "adaptive" can never be
+ * PRODUCED by a snap. It is therefore special-cased BEFORE any snapping: a
+ * missing value, "Auto"/"auto" and "adaptive" itself all resolve to "adaptive".
+ * A ratio the model declares passes through untouched; anything else (21:9,
+ * 4:5, 5:4, 9:21 all pass the route's Zod enum) snaps to the nearest RATIO the
+ * catalog declares — the non-ratio member is filtered out of the candidates so
+ * the snap can only return a real ratio.
+ */
+function resolveWan3Aspect(modelKey: string, requested: string | undefined): string {
+  const token = requested?.trim()
+  if (!token || token === "Auto" || token === "auto" || token === "adaptive") return "adaptive"
+  const declared = getModel(modelKey)?.aspectRatios ?? []
+  if (declared.includes(token)) return token
+  return snapAspectRatioToken(token, declared.filter((r) => r !== "adaptive")) ?? "adaptive"
+}
+
+/**
+ * Shared builder for the Wan 3.0 family (wan-3 / wan-3-prime), reached from BOTH
+ * imageToVideo and textToVideo. One KIE id serves every mode, so the mode is
+ * expressed purely by which input keys the body carries.
+ *
+ * The generic createTask builder cannot serve Wan 3 on four axes, which is why
+ * this runner exists:
+ *   - `duration` must be an INTEGER (the generic path sends `String(snapped)`,
+ *     which the Wan schema rejects);
+ *   - `resolution` is an UPPERCASE enum (480P/720P/1080P) while every Nodaro
+ *     vocabulary — catalog, credit composites, config panels — is lowercase, so
+ *     the case normalization lives HERE, at the wire, and nowhere else;
+ *   - the native-audio lever is `audio`, not `sound`/`generate_audio`;
+ *   - frames and reference arrays are mutually exclusive and need assembling.
+ *
+ * The default tier is 5s @ 720P — deliberately NOT KIE's own 1080P default,
+ * which would silently render (and under-bill) the top tier. This fallback is
+ * the mechanism that keeps render == billed: `modelConfig.extraParams` is
+ * declarative only, because only the generic builder spreads it and this runner
+ * is dispatched before it.
+ */
+async function runWan3(
+  modelConfig: KieModelConfig,
+  /** OUR Nodaro key (NOT modelConfig.model, the KIE id) for the egress seam. */
+  modelKey: string,
+  prompt: string,
+  duration: number | undefined,
+  aspectRatioValue: string | undefined,
+  firstFrameUrl: string | undefined,
+  lastFrameUrl: string | undefined,
+  options: ProviderOptions | undefined,
+  reconcileOpts: ReconcileOpts | undefined,
+  logLabel: string,
+): Promise<ProviderResult> {
+  // Case-insensitive normalize; an unknown or absent value pins the 720P default
+  // tier, so the render can never exceed the tier the credit identifier billed
+  // (billing collapses through the SAME shared default).
+  const resolution = normalizeWan3Resolution(options?.resolution)
+  // A missing / 0 / -1 request takes the documented 5s default. Guarded rather
+  // than `?? 5` so a falsy 0 can't snap to the bottom of the 2..30 ladder, and
+  // the model-chosen `-1` sentinel is deliberately not exposed.
+  const requested = duration !== undefined && duration > 0 ? duration : 5
+  const snapped = snapToAllowedDuration(requested, modelConfig.allowedDurations ?? [])
+  if (duration !== undefined && duration > 0 && snapped !== duration) {
+    console.log(`[KIE.ai] ${logLabel}: duration ${duration}s not allowed, snapped to ${snapped}s`)
+  }
+
+  const input: Record<string, unknown> = {
+    prompt,
+    resolution,
+    aspect_ratio: resolveWan3Aspect(modelKey, aspectRatioValue),
+    // INTEGER on purpose — see the docstring.
+    duration: snapped,
+    // KIE's own default is `true`; sent explicitly so the audit log and
+    // deriveKieEgressDimensions see the value that actually rendered.
+    audio: true,
+  }
+  // Neutral sound/generateAudio intent → Wan's own `audio` boolean, via the
+  // single VIDEO_AUDIO_CAPABILITY dispatch point (field: "audio"). No intent
+  // leaves the explicit `true` above in place.
+  applyVideoAudioToggle(input, modelKey, options)
+
+  // Frames and the reference_* arrays are MUTUALLY EXCLUSIVE on the Wan wire —
+  // exactly the contract resolveSeedance2Inputs already encodes. Reusing it
+  // means a frame is DEMOTED into reference_image_urls (after the user's own
+  // images, so their ordinals don't shift) and bound in prose, rather than the
+  // run being rejected for combining the two. Reference images are size-
+  // normalized first (the resolver is synchronous); the frame URLs the caller
+  // passes are already normalized by imageToVideo.
+  const normalizedOptions = await normalizeSeedance2ReferenceImages(modelKey, options)
+  const limits = {
+    ...SEEDANCE_2_REF_LIMITS,
+    ...(VIDEO_REF_LIMITS_BY_PROVIDER[modelKey] ?? {}),
+  }
+  const resolved = resolveSeedance2Inputs({
+    prompt,
+    firstFrameUrl,
+    lastFrameUrl,
+    refImageUrls: normalizedOptions?.referenceImageUrls,
+    refVideoUrls: normalizedOptions?.referenceVideoUrls,
+    refAudioUrls: normalizedOptions?.referenceAudioUrls,
+    limits,
+  })
+  if (resolved.droppedRefImages > 0) {
+    console.log(
+      `[KIE.ai] ${logLabel}: dropped ${resolved.droppedRefImages} trailing reference image(s) to fit the ${limits.images}-image cap`,
+    )
+  }
+
+  if (resolved.firstFrameUrl) input.first_frame_url = resolved.firstFrameUrl
+  if (resolved.lastFrameUrl) input.last_frame_url = resolved.lastFrameUrl
+  if (resolved.referenceImageUrls.length > 0) input.reference_image_urls = resolved.referenceImageUrls
+  if (resolved.referenceVideoUrls.length > 0) input.reference_video_urls = resolved.referenceVideoUrls
+  if (resolved.referenceAudioUrls.length > 0) input.reference_audio_urls = resolved.referenceAudioUrls
+  if (resolved.promptSuffix) {
+    const base = typeof input.prompt === "string" ? input.prompt : ""
+    input.prompt = base ? `${base}\n\n${resolved.promptSuffix}` : resolved.promptSuffix
+  }
+
+  // Omit the -1 "random" sentinel (and any negative); only forward real seeds.
+  if (!modelConfig.omitSeed && options?.seed !== undefined && options.seed >= 0) {
+    input.seed = options.seed
+  }
+
+  // `reference_file_urls`, `reference_link_urls` and `nsfw_checker` are
+  // deliberately never emitted (declared out of scope for this launch).
+
+  const rate = WAN_3_RATE_USD_PER_SEC[modelKey]?.[resolution]
+  const tierCostUsd = rate !== undefined ? rate * snapped : modelConfig.cost
+
+  console.log(`[KIE.ai] ${logLabel} input:`, JSON.stringify(input, null, 2))
+  const { resultJson, taskId, providerMs } = await runKieTask(
+    modelConfig.model, input, MAX_POLL_ATTEMPTS_VIDEO, options?.onProgress,
+    { ...reconcileOpts, modelKey, dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(input) } },
+  )
+  const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
+  if (!videoUrl) {
+    throw createSanitizedError(`${logLabel} task succeeded but no URL found`, "Video generation")
+  }
+  console.log(`[KIE.ai] ${logLabel} completed: ${videoUrl} (tier cost: $${tierCostUsd.toFixed(4)})`)
+  return { url: videoUrl, cost: tierCostUsd, ...(taskId && { kieTaskId: taskId }), ...(providerMs !== undefined && { providerMs }) }
 }
 
 export class KieVideoProvider
@@ -939,6 +1138,14 @@ export class KieVideoProvider
       i2vConstraints.maxAspectRatio = 2.5
     }
     if (provider === "happyhorse-ref2v") i2vConstraints.minDimension = 400
+    // Wan 3.0 documented input contract: each side [240, 8000] px, aspect ratio
+    // ≤ 8:1 (the 2048px cap above already satisfies the upper side bound, and
+    // the module-level 10MB byte cap is stricter than Wan's 20MB).
+    if (isWan3Provider(provider)) {
+      i2vConstraints.minDimension = 240
+      i2vConstraints.minAspectRatio = 0.125
+      i2vConstraints.maxAspectRatio = 8
+    }
     // MiniMax H3 documented input floors — reject early with a clear message
     // instead of an opaque KIE 422: sides 256-5760px, aspect within 0.4-2.5
     // (the 2048px cap already satisfies the upper side bound).
@@ -1078,9 +1285,12 @@ export class KieVideoProvider
       return { url: videoUrl, cost: modelConfig.cost, kieTaskId: runwayTaskId }
     }
 
-    // Gemini Omni Video — multimodal input + native audio. imageToVideo has no
-    // top-level aspectRatio param (unlike textToVideo); read from options only.
-    if (provider === "gemini-omni-video") {
+    // Gemini Omni family (pro + flash) — multimodal input + native audio.
+    // imageToVideo has no top-level aspectRatio param (unlike textToVideo);
+    // read from options only. Family-keyed, never a literal id: every branch
+    // below is model-agnostic and each SKU's own KIE id, resolution list,
+    // aspect list, input quota and tier cost are looked up per model.
+    if (isGeminiOmniProvider(provider)) {
       // With a start frame, the list is OURS to describe and budget
       // (resolveGeminiOmniI2vInputs): image 1 is bound as the opening frame
       // and the rest as identity references — a multimodal model treats an
@@ -1095,10 +1305,12 @@ export class KieVideoProvider
           firstFrameUrl: effectiveImageUrl,
           refImageUrls: options?.referenceImageUrls,
           videoConnected: (options?.referenceVideoUrls ?? []).length > 0,
+          // Budget against THIS SKU's own input quota (both are 7 today).
+          provider,
         })
         if (resolved.droppedRefImages > 0) {
           console.log(
-            `[KIE.ai] Gemini Omni: dropped ${resolved.droppedRefImages} trailing reference image(s) to fit the 7-input quota`,
+            `[KIE.ai] Gemini Omni (${provider}): dropped ${resolved.droppedRefImages} trailing reference image(s) to fit the input quota`,
           )
         }
         const basePrompt = effectivePrompt ?? "smooth cinematic motion"
@@ -1111,7 +1323,7 @@ export class KieVideoProvider
           resolved.imageUrls,
           options,
           reconcileOpts,
-          "Gemini Omni",
+          `Gemini Omni (${provider})`,
         )
       }
       const imageUrls = (options?.referenceImageUrls ?? []).filter((u): u is string => !!u)
@@ -1124,7 +1336,26 @@ export class KieVideoProvider
         imageUrls,
         options,
         reconcileOpts,
-        "Gemini Omni",
+        `Gemini Omni (${provider})`,
+      )
+    }
+
+    // Wan 3.0 family — bespoke builder (integer duration, uppercase resolution,
+    // `audio` lever, frames-vs-references assembly). MUST stay above the generic
+    // createTask path: that path would send `duration: "5"` and a lowercase
+    // resolution, both of which the Wan schema rejects.
+    if (isWan3Provider(provider)) {
+      return runWan3(
+        modelConfig,
+        provider,
+        effectivePrompt ?? "smooth cinematic motion",
+        duration,
+        options?.aspectRatio,
+        effectiveImageUrl,
+        effectiveEndFrameUrl,
+        options,
+        reconcileOpts,
+        `Wan 3 (${provider})`,
       )
     }
 
@@ -1473,8 +1704,9 @@ export class KieVideoProvider
       return { url: videoUrl, cost: modelConfig.cost, kieTaskId: runwayTaskId }
     }
 
-    // Gemini Omni Video — text-to-video (defensive V2V/I2V if refs present).
-    if (provider === "gemini-omni-video") {
+    // Gemini Omni family (pro + flash) — text-to-video (defensive V2V/I2V if
+    // refs present). Family-keyed so a sibling SKU inherits the whole branch.
+    if (isGeminiOmniProvider(provider)) {
       const imageUrls = (options?.referenceImageUrls ?? []).filter((u): u is string => !!u)
       return runGeminiOmni(
         modelConfig,
@@ -1485,7 +1717,26 @@ export class KieVideoProvider
         imageUrls,
         options,
         reconcileOpts,
-        "Gemini Omni (t2v)",
+        `Gemini Omni t2v (${provider})`,
+      )
+    }
+
+    // Wan 3.0 family — bespoke builder, same reasons as the i2v path. Image-less
+    // runs (including reference-video-only runs) are dispatched here by the
+    // unified Generate Video node, so the resolver picks reference mode when
+    // refs are wired and the degenerate no-input mode when they are not.
+    if (isWan3Provider(provider)) {
+      return runWan3(
+        modelConfig,
+        provider,
+        effectivePrompt,
+        duration,
+        aspectRatio ?? options?.aspectRatio,
+        undefined,
+        undefined,
+        options,
+        reconcileOpts,
+        `Wan 3 t2v (${provider})`,
       )
     }
 

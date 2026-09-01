@@ -43,7 +43,7 @@ describe("resolveVideoModeForInputs", () => {
     // (generate-video.md mode table). kling-3-omni is i2v-only and keeps its
     // documented orchestrator behavior (image_required on the t2v path) —
     // whether refs alone should satisfy it is a separate question from #861.
-    for (const id of ["seedance-2", "gemini-omni-video", "veo3.1", "kling-3-omni"]) {
+    for (const id of ["seedance-2", "gemini-omni-video", "gemini-omni-flash", "veo3.1", "kling-3-omni", "wan-3", "wan-3-prime"]) {
       expect(resolveVideoModeForInputs(id, { hasStartFrame: false, hasImageRefs: true })).toBe(T2V)
     }
   })

@@ -303,7 +303,9 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     category: "ai-video",
     description: "Animate a still image into a video.",
     outputType: "video",
-    creditCost: "10-125",
+    // Measured band over STATIC_CREDIT_COSTS for IMAGE_TO_VIDEO_PROVIDERS:
+    // floor runway-kie (30), ceiling seedance-2-5:30s:1080p (8550).
+    creditCost: "30-8550",
     providers: [...IMAGE_TO_VIDEO_PROVIDERS],
     capabilities: ["supports-end-frame", "supports-duration"],
     inputSchema: {
@@ -321,7 +323,9 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     category: "ai-video",
     description: "Generate video from a text prompt.",
     outputType: "video",
-    creditCost: "10-125",
+    // Measured band over STATIC_CREDIT_COSTS for TEXT_TO_VIDEO_PROVIDERS:
+    // floor grok (10), ceiling seedance-2-5:30s:1080p (8550).
+    creditCost: "10-8550",
     providers: [...TEXT_TO_VIDEO_PROVIDERS],
     inputSchema: {
       fields: [
@@ -339,7 +343,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     outputType: "video",
     // Inherits the i2v/t2v range — payload-builder routes to the same worker
     // handlers and STATIC_CREDIT_COSTS entries based on mode.
-    creditCost: "10-125",
+    creditCost: "10-8550",
     providers: [...VIDEO_GEN_PROVIDERS],
     capabilities: ["supports-end-frame", "supports-duration", "supports-reference-image", "supports-reference-video", "supports-reference-audio"],
     inputSchema: {

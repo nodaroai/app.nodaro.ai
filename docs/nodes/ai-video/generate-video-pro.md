@@ -88,7 +88,10 @@ Generate Video Pro offers every video model that can drive the engine's **keyfra
 | `veo3.1` | VEO 3.1 Fast | 4 / 6 / 8s | 720p / 1080p / 4K | Keyframes |
 | `veo3_lite` | VEO 3.1 Lite | 4 / 6 / 8s | 720p / 1080p / 4K | Keyframes |
 | `gemini-omni-video` | Gemini Omni | 4 / 6 / 8 / 10s | 720p / 1080p / 4K | Keyframes |
+| `gemini-omni-flash` | Gemini Omni Flash | 4 / 6 / 8 / 10s | 720p / 1080p / 4K | Keyframes |
 | `grok-i2v` | Grok I2V | 6 / 10s | 480p / 720p | Keyframes |
+| `wan-3` | Wan 3.0 | 2–30s | 480p / 720p / 1080p | Keyframes |
+| `wan-3-prime` | Wan 3.0 Prime | 2–30s | 480p / 720p / 1080p | Keyframes |
 | `happyhorse-ref2v` | HappyHorse 1.1 Ref2V | 3–15s | 720p / 1080p | Keyframes |
 
 ### Render methods and why the list differs
@@ -96,20 +99,20 @@ Generate Video Pro offers every video model that can drive the engine's **keyfra
 - **Keyframes** — every segment is generated from its own anchor still (plus a closing still on models that honour an end frame), and every seam is a hard cut. Nothing conditions on another segment's video, which is why single-scene retakes don't cascade. The only thing a model needs for this is start-frame conditioning plus reference images, so it is available on **every** provider above.
 - **Extend** — each segment continues from the previous one via a short context tail sent as a *reference video*. That transport exists only on models with a reference-to-video mode (the Seedance 2 family and Hailuo 3), so the Render method control is disabled with a reason on the others. Selecting a keyframes-only provider never silently downgrades an extend run — the request is rejected.
 
-Note that Gemini Omni does accept a video input, but as a video-to-video **source** clip (with its own trim window and flat pricing), not as a continuation reference — so it is keyframes-only here.
+Note that Gemini Omni (both Pro and Flash) does accept a video input, but as a video-to-video **source** clip (with its own trim window and flat pricing), not as a continuation reference — so it is keyframes-only here. Wan 3.0 is keyframes-only for a different reason: the provider does take reference videos, but its `input video duration + output duration ≤ 30 s` ceiling cannot be expressed in the engine's segment bounds, so the continuation transport is not wired for `wan-3` / `wan-3-prime`.
 
 **Segment lengths are per-model.** A request longer than the model's single-segment maximum is split into several segments; models with a sparse set of allowed lengths (VEO's 4/6/8s, Grok's 6/10s) can only land on those values, so the delivered duration snaps to the nearest total the model can actually produce and the node reports what you will get.
 
 Two consequences worth knowing on the sparse-length models:
 
-- **A run is capped at 24 segments**, which on a short-segment model binds before the duration limit does. VEO renders at most 8 seconds per segment, so a VEO run tops out around 185 seconds however long you ask for; Gemini Omni and Grok top out around 233. The run is shortened to fit and the delivered duration is reported — it is never padded or silently failed.
-- **Scene-aligned splitting snaps onto the model's menu.** That mode supplies an explicit per-segment length list; on a sparse-length model each off-menu duration is snapped to the nearest value the model actually offers (count and order preserved), and the response declares it with `segmentDurationsSnapped: true` so a caller can see the plan moved. Exact scene timing needs a dense-menu model (Seedance / Hailuo 3); the snap keeps sparse-menu models usable for scene-aligned work at the cost of slightly shifted cuts.
+- **A run is capped at 24 segments**, which on a short-segment model binds before the duration limit does. VEO renders at most 8 seconds per segment, so a VEO run tops out around 185 seconds however long you ask for; Gemini Omni (Pro and Flash) and Grok top out around 233. The run is shortened to fit and the delivered duration is reported — it is never padded or silently failed.
+- **Scene-aligned splitting snaps onto the model's menu.** That mode supplies an explicit per-segment length list; on a sparse-length model each off-menu duration is snapped to the nearest value the model actually offers (count and order preserved), and the response declares it with `segmentDurationsSnapped: true` so a caller can see the plan moved. Exact scene timing needs a dense-menu model — Seedance, Hailuo 3, or Wan 3.0, whose 2–30 s menu is contiguous end to end; the snap keeps sparse-menu models usable for scene-aligned work at the cost of slightly shifted cuts.
 
 **Off-grid resolutions snap to the nearest priced tier.** An API/MCP caller sending a resolution the selected model doesn't offer (e.g. `480p` on VEO's 720p/1080p/4k) is priced and rendered at the model's **nearest** tier — ties go to the **cheaper** one, never the priciest — and the clamped value is echoed on the pricing response (`resolution`), so what is billed and what renders are the same by construction. Display names also differ from wire values on some models: send minimax-h3's cheap tier as the literal `768P` (the per-model wire spelling is served by `GET /v1/nodes` under `providerResolutionWire`).
 
 Hailuo 3 shares Seedance 2's multimodal reference surface (the same 9-image / 3-video / 3-audio reference semantics), so the whole continuation transport carries over unchanged. Its per-second price has no with-reference axis; both segment rates derive from the one 8s composite of the selected resolution tier (`minimax-h3:8s` @2K, `minimax-h3:8s:768p` @768P — see [Credit cost](#credit-cost)).
 
-Models that take only a bare start frame with no reference-image forwarding (Wan, Hailuo 2.3, Bytedance Pro, Grok Imagine 1.5) stay out — the anchor wave's identity references would be silently dropped. Workflows saved with a since-withdrawn provider keep running, and the editor snaps their selection to `seedance-2` the next time the panel is opened.
+Models that take only a bare start frame with no reference-image forwarding (Wan 2.6 / 2.7, Hailuo 2.3, Bytedance Pro, Grok Imagine 1.5) stay out — the anchor wave's identity references would be silently dropped. Workflows saved with a since-withdrawn provider keep running, and the editor snaps their selection to `seedance-2` the next time the panel is opened.
 
 For the full Seedance 2 capability write-up (multimodal image/video/audio references, `{image:N}`-style prompt tokens, unified frames+references wiring) see [Generate Video → Providers](./generate-video.md#providers). Generate Video Pro forwards the full reference surface — `startFrame`, `endFrame`, `imageReferences`, `audioReferences`, `assets` (with `@mention` / `{image:N}` token resolution), and the Extend Source (`videoReferences`) — into generation.
 
@@ -254,9 +257,9 @@ reserve = 100 (fee) + ceil(noRefPerSec × 15) + ceil(refPerSec × ((N − 1) × 
 
 **Hailuo 3 (`minimax-h3`) rates.** The same formula applies, but Hailuo 3 has no with-reference rate axis: **noRefPerSec = refPerSec**, both derived from the one 8s composite of the selected resolution tier — **91.25** credits/sec @2K (`minimax-h3:8s` = 730 ÷ 8; the default, and what any non-768P resolution value collapses to) or **56.25** credits/sec @768P (`minimax-h3:8s:768p` = 450 ÷ 8). Its reference-to-video rate equals its base rate; each continuation's T-second context tail is billed as input seconds at that same rate, which is exactly the formula's `refPerSec × (N − 1) × T` term. A 60s request (5 segments, S = 62) reserves `100 + ceil(91.25 × 15) + ceil(91.25 × (4 × 2 + 47)) = 100 + 1369 + 5019 = 6488` credits @2K, or `100 + ceil(56.25 × 15) + ceil(56.25 × 55) = 100 + 844 + 3094 = 4038` @768P.
 
-#### Flat-priced providers (VEO 3.1 family, Gemini Omni, Grok, HappyHorse)
+#### Flat-priced providers (VEO 3.1 family, Gemini Omni Pro & Flash, Grok, HappyHorse, Wan 3.0)
 
-The per-second formula above applies only to models that publish a per-second rate — the Seedance 2 family and Hailuo 3. The remaining providers are priced **per generation**, so there is no rate to multiply. They render keyframes-only, where each segment is exactly one ordinary image-to-video generation, so each segment is billed at that model's own published price for its length and resolution:
+The per-second formula above applies only to models that publish a per-second rate the engine can multiply — the Seedance 2 family and Hailuo 3. The remaining providers are priced **per generation**: a flat price on some models, a published price per duration tier on others, but either way there is no rate to multiply. They render keyframes-only, where each segment is exactly one ordinary image-to-video generation, so each segment is billed at that model's own published price for its length and resolution:
 
 ```
 reserve = feeBase + Σ segmentPrice(provider, resolution, dᵢ) + anchorBudget
@@ -267,7 +270,9 @@ reserve = feeBase + Σ segmentPrice(provider, resolution, dᵢ) + anchorBudget
 
 **Worked example (`veo3` @ 720p, three 8-second segments).** VEO is flat per generation regardless of clip length, so all three segments cost the same: `feeBase + 3 × veo3 + 3 × 2 × anchor`. The delivered duration is 23 seconds, not 24 — the 0.3s seam allowance per join is deducted from the raw 24s of footage. VEO offers 4/6/8s only, all even, so a total that needs an odd number of seconds simply isn't reachable; the node reports the length you will actually get.
 
-**Worked example (`gemini-omni-video` @ 720p, segments of 10 + 8 + 6s).** Gemini Omni is priced by duration tier rather than flat, so each segment bills at its own tier (`gemini-omni-video:10`, `:8`, `:6`) and the reserve is their sum plus the fee and anchor budget.
+**Worked example (`gemini-omni-video` @ 720p, segments of 10 + 8 + 6s).** Gemini Omni is priced by duration tier rather than flat, so each segment bills at its own tier (`gemini-omni-video:10`, `:8`, `:6`) and the reserve is their sum plus the fee and anchor budget. `gemini-omni-flash` prices identically in structure on its own cheaper tiers — the same split is `gemini-omni-flash:10` + `:8` + `:6` = 320 + 270 + 210 = **800** credits of segment cost, plus the fee and anchor budget.
+
+**Worked example (`wan-3` @ 720p, segments of 30 + 15s).** Wan 3.0 publishes a per-second ladder in single-shot pricing, but Generate Video Pro prices it per segment rather than through the per-second formula — each segment bills at the very `wan-3:<N>s:<resolution>` composite a single-shot run of that length would use, so this split is `wan-3:30s:720p` + `wan-3:15s:720p` = 1200 + 600 = **1800** credits of segment cost, plus the fee and anchor budget. `wan-3-prime` follows the same shape on its own ladder (1890 + 950 = **2840** for the same split). Wan's 2–30 s menu is contiguous, so any split the planner picks lands on a real tier.
 
 #### Worked examples (720p, `seedance-2`)
 

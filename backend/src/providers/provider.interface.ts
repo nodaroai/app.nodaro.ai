@@ -95,9 +95,12 @@ export interface ProviderOptions {
   acceleration?: boolean   // Wan Turbo acceleration
   enablePromptExpansion?: boolean // Wan Turbo prompt expansion
   promptOptimizer?: boolean // Hailuo prompt optimizer
-  referenceImageUrls?: string[] // Reference images for generation (e.g., VEO 3 reference-to-video, Seedance 2 max 9)
-  referenceVideoUrls?: string[] // Reference videos for generation (Seedance 2, max 3)
-  referenceAudioUrls?: string[] // Reference audio tracks for generation (Seedance 2, max 3)
+  // Reference media. The per-provider CAPS are data, not prose: they live in
+  // VIDEO_REF_LIMITS_BY_PROVIDER (@nodaro/shared) and are applied by each
+  // provider's input resolver — the examples below are orientation only.
+  referenceImageUrls?: string[] // Reference images (VEO 3 ref2v 3, Seedance 2 9, Wan 3 10, Gemini Omni 7)
+  referenceVideoUrls?: string[] // Reference videos (Seedance 2 3, Wan 3 5, Gemini Omni V2V 1)
+  referenceAudioUrls?: string[] // Reference audio tracks (Seedance 2 3, Wan 3 5)
   videoTrimStart?: number  // Gemini Omni V2V: source-clip trim start (seconds)
   videoTrimEnd?: number    // Gemini Omni V2V: source-clip trim end (seconds, ends-start ≤ 10)
   // Seedance 2.5 ONLY: request the `mov` container (H.264 yuv444p + PCM)

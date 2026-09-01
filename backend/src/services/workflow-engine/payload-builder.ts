@@ -7,7 +7,7 @@ import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState, Workfl
 import { normalizeCollageLabels } from "../../providers/image/collage-badges.js"
 
 // Shared logic from packages/shared — single source of truth
-import { resolveSlideshowTransition, collectAncestorRefs as sharedCollectAncestorRefs, applyDefaultVideoSelection, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionableAssetArrays, buildCreditModelIdentifier, resolveImageGenCreditIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, resolveVideoModeForInputs, videoProviderRequiresImage, isVeoProvider, buildLipSyncCreditId, isPerSecondLipSyncProvider, resolveAiAvatarCreditId, resolveSwitchXCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, buildVideoAuditCreditId, resolveVideoAnalysisModel, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName, validateAiAvatarPayload, validateCinematicAvatarPayload, resolveNodeRefs, resolveEffectiveSourceType, PARAMETER_NODE_TYPES, characterMentionSlug, expandExtraRefsToConnectedReferences, PLATFORM_SPECS, isSeedance2Provider, isMinimaxH3Provider, supportsExtendRender, MODEL_CATALOG, hasFeature, referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality, COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS, buildLlmCreditIdentifier, motionGraphicsFeature, FLUX_LORA_CHARACTER_MODEL_ID, extractCharacterLoraFields, clampSmartCutWindow, resolveGvpAnchorWire, normalizeModelInput, readPromptAffixes, findImageMentionTokens, knownImageSlugsFromRefs, findEntityMentionTokens, knownEntitySlugsFromRefs } from "@nodaro/shared"
+import { resolveSlideshowTransition, collectAncestorRefs as sharedCollectAncestorRefs, applyDefaultVideoSelection, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionableAssetArrays, buildCreditModelIdentifier, resolveImageGenCreditIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, resolveVideoModeForInputs, videoProviderRequiresImage, isVeoProvider, buildLipSyncCreditId, isPerSecondLipSyncProvider, resolveAiAvatarCreditId, resolveSwitchXCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, buildVideoAuditCreditId, resolveVideoAnalysisModel, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName, validateAiAvatarPayload, validateCinematicAvatarPayload, resolveNodeRefs, resolveEffectiveSourceType, PARAMETER_NODE_TYPES, characterMentionSlug, expandExtraRefsToConnectedReferences, PLATFORM_SPECS, isSeedance2Provider, isMinimaxH3Provider, isWan3Provider, isGeminiOmniProvider, PRICING_DEFAULT_RESOLUTION, supportsExtendRender, MODEL_CATALOG, hasFeature, referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality, COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS, buildLlmCreditIdentifier, motionGraphicsFeature, FLUX_LORA_CHARACTER_MODEL_ID, extractCharacterLoraFields, clampSmartCutWindow, resolveGvpAnchorWire, normalizeModelInput, readPromptAffixes, findImageMentionTokens, knownImageSlugsFromRefs, findEntityMentionTokens, knownEntitySlugsFromRefs, uiAspectRatioFill, uiResolutionFill } from "@nodaro/shared"
 import { composeNegative, resolveTemplate, applyTemplate, computeNodePrompt, assembleImageInput, readDirectionFields, readStructuredFields, readSubjectFields, buildImagePrompt, buildScenePrompt, collectIdentityLockClause as sharedCollectIdentityLockClause, getParameterPromptHint, characterLockToRefLock, buildCharacterPrompt, buildObjectPrompt, buildCreaturePrompt, buildLocationPrompt, buildFaceTemplateInputs, appendMusicMeta, composeSoundHintFromConnections, truncateForField, appendField, assembleSunoInput, type SoundConsumerType, type SoundComposition, resolveVideoReferenceCore, applyPromptAffixes, composeVideoPromptText, type DirectionFields, type StructuredPromptFields, type SubjectFields } from "@nodaro/prompts"
 import type { CharacterDef, ConnectedReference, SceneData, ExtraRefInput, ExtraRefCharacterContext } from "@nodaro/shared"
 import type { CharacterMeta } from "@nodaro/prompts"
@@ -2852,8 +2852,8 @@ export function buildPayload(
           // Fill the defaults here so the request matches the UI. (H3 has no
           // resolution lever — its catalog declares no resolutions, so the
           // resolution fallback stays undefined by construction.)
-          aspectRatio: (data.aspectRatio as string | undefined) ?? (isSeedance2Provider(provider) || isMinimaxH3Provider(provider) ? "adaptive" : undefined),
-          resolution: (data.resolution as string | undefined) ?? (isSeedance2Provider(provider) ? MODEL_CATALOG[provider]?.resolutions?.[0] : undefined),
+          aspectRatio: (data.aspectRatio as string | undefined) ?? uiAspectRatioFill(provider),
+          resolution: (data.resolution as string | undefined) ?? uiResolutionFill(provider),
           seed: data.seed,
           cameraFixed: data.cameraFixed,
           multiShot: data.multiShot,
@@ -2957,7 +2957,7 @@ export function buildPayload(
           mode: data.mode ?? data.kling3Mode,
           sound: data.sound ?? data.kling3Sound,
           // See i2v note above — Seedance 2 / MiniMax H3 UI default fallbacks.
-          aspectRatio: (data.aspectRatio as string | undefined) ?? (isSeedance2Provider(provider) || isMinimaxH3Provider(provider) ? "adaptive" : undefined),
+          aspectRatio: (data.aspectRatio as string | undefined) ?? uiAspectRatioFill(provider),
           negativePrompt: data.negativePrompt,
           cfgScale: data.cfgScale,
           multiShot: data.multiShot,
@@ -2965,7 +2965,7 @@ export function buildPayload(
           elements: data.elements,
           removeWatermark: data.removeWatermark,
           seed: data.seed,
-          resolution: (data.resolution as string | undefined) ?? (isSeedance2Provider(provider) ? MODEL_CATALOG[provider]?.resolutions?.[0] : undefined),
+          resolution: (data.resolution as string | undefined) ?? uiResolutionFill(provider),
           generateAudio: data.generateAudio,
           referenceImageUrls: t2vReferenceImageUrls,
           referenceVideoUrls: resolvedInputs.referenceVideoUrls,
@@ -2995,8 +2995,6 @@ export function buildPayload(
       // (`collectCinematographyHints`); stored direction is node-local look
       // data and folds regardless, additively, exactly like the image side.
       const gvDirectionLevers = readNodeDirectionLevers(data)
-      const isS2 = isSeedance2Provider(provider)
-      const isH3 = isMinimaxH3Provider(provider)
 
       // ─── LTX 2.3 task dispatch ───────────────────────────────────────────
       // LTX has a single Replicate endpoint per variant that switches behavior
@@ -3089,10 +3087,12 @@ export function buildPayload(
       // twin cannot carry them (Grok Imagine 1, #861).
       const mode = resolveVideoModeForInputs(provider, { hasStartFrame: hasStart, hasImageRefs: hasImageRef })
 
-      // Gemini Omni: a connected source video is a video-edit (V2V) job, routed
-      // through the image-to-video worker path (one handler serves all modes).
+      // Gemini Omni family (video + flash): a connected source video is a
+      // video-edit (V2V) job, routed through the image-to-video worker path (one
+      // handler serves all modes). Family predicate, never a literal id — a new
+      // Omni SKU inherits the V2V routing (and the vref credit row) for free.
       const effectiveMode: "image-to-video" | "text-to-video" =
-        (provider === "gemini-omni-video" && hasVideoRef) ? "image-to-video" : mode
+        (isGeminiOmniProvider(provider) && hasVideoRef) ? "image-to-video" : mode
 
       // Split-id video models (Grok Imagine 1, Wan 2.6/2.7) use a different KIE
       // id per mode but are one user-facing model in the unified picker. Remap
@@ -3235,8 +3235,8 @@ export function buildPayload(
           // Seedance 2 config pickers render defaults in the UI without
           // persisting them to data until the user explicitly picks; fill
           // them in here so the worker request matches the visible UI state.
-          aspectRatio: (data.aspectRatio as string | undefined) ?? (isS2 || isH3 ? "adaptive" : undefined),
-          resolution: (data.resolution as string | undefined) ?? (isS2 ? MODEL_CATALOG[provider]?.resolutions?.[0] : undefined),
+          aspectRatio: (data.aspectRatio as string | undefined) ?? uiAspectRatioFill(provider),
+          resolution: (data.resolution as string | undefined) ?? uiResolutionFill(provider),
           seed: data.seed,
           cameraFixed: data.cameraFixed,
           multiShot: data.multiShot,

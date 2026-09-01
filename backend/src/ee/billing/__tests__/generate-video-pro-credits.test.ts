@@ -41,6 +41,7 @@ vi.mock("../../../lib/supabase.js", () => ({
 
 import { computeGenerateVideoProPricing, computeGenerateVideoProContinuationPricing } from "../generate-video-pro-credits.js"
 import { STATIC_CREDIT_COSTS, PriceNotConfiguredError, invalidateModelPricingCache } from "../credits.js"
+import { GVP_EXTEND_PROVIDERS, MODEL_CATALOG } from "@nodaro/shared"
 
 beforeEach(() => {
   invalidateModelPricingCache()
@@ -881,6 +882,49 @@ describe("computeGenerateVideoProPricing — flat-priced providers", () => {
     )
   })
 
+  it("wan-3 prices each keyframes segment at its own (duration x resolution) row", async () => {
+    // Wan is per-second priced but has no `-ref` twin, so it takes the FLAT
+    // segmentCost path — each segment resolves the same composite a normal
+    // single-shot i2v run would. This is also the probe that segmentCost
+    // forwards `resolution`: a 720p answer here means the 1080p lever is
+    // being dropped and every 1080p pro run under-reserves by 2x.
+    const p = await computeGenerateVideoProPricing({
+      provider: "wan-3",
+      resolution: "1080p",
+      // 23s delivered as 3 segments: sum(10,8,6) == ceil(23 + 0.3 x 2), the
+      // stitch-loss identity explicitSplit enforces.
+      durationSec: 23,
+      segmentDurations: [10, 8, 6],
+      renderMethod: "keyframes",
+      aspectRatio: "16:9",
+    })
+    expect(p.segmentCosts).toEqual([
+      STATIC_CREDIT_COSTS["wan-3:10s:1080p"]!,
+      STATIC_CREDIT_COSTS["wan-3:8s:1080p"]!,
+      STATIC_CREDIT_COSTS["wan-3:6s:1080p"]!,
+    ])
+    expect(p.segmentCosts).toEqual([800, 640, 480])
+    expect(p.noRefPerSec).toBe(0)
+    expect(p.refPerSec).toBe(0)
+  })
+
+  it("gemini-omni-flash prices per DURATION TIER, like its sibling", async () => {
+    const p = await computeGenerateVideoProPricing({
+      provider: "gemini-omni-flash",
+      resolution: "720p",
+      durationSec: 24,
+      segmentDurations: [10, 8, 6],
+      renderMethod: "keyframes",
+      aspectRatio: "16:9",
+    })
+    expect(p.segmentCosts).toEqual([
+      STATIC_CREDIT_COSTS["gemini-omni-flash:10"]!,
+      STATIC_CREDIT_COSTS["gemini-omni-flash:8"]!,
+      STATIC_CREDIT_COSTS["gemini-omni-flash:6"]!,
+    ])
+    expect(p.segmentCosts).toEqual([320, 270, 210])
+  })
+
   it("gemini-omni-video prices per DURATION TIER, not flat", async () => {
     const p = await computeGenerateVideoProPricing({
       provider: "gemini-omni-video",
@@ -927,10 +971,33 @@ describe("computeGenerateVideoProPricing — flat-priced providers", () => {
   it("refuses to price EXTEND on a provider with no reference-video transport", async () => {
     // The money-side backstop for the render-method gate: reserving credits for
     // a run whose transport does not exist is worse than a 400.
-    for (const provider of ["veo3", "gemini-omni-video", "kling-3-omni", "grok-i2v", "happyhorse-ref2v"]) {
+    for (const provider of ["veo3", "gemini-omni-video", "gemini-omni-flash", "wan-3", "wan-3-prime", "kling-3-omni", "grok-i2v", "happyhorse-ref2v"]) {
       await expect(
         computeGenerateVideoProPricing({ provider, resolution: "720p", durationSec: 30 }),
       ).rejects.toThrow(/renderMethod "keyframes" only/)
+    }
+  })
+
+  it("every extend-eligible SKU really has a per-second axis at every catalog resolution", async () => {
+    // The durable twin of the literal list above. GVP_EXTEND_PROVIDERS is
+    // DERIVED from the catalog's "video-reference" feature, so a catalog edit
+    // alone can open the multi-segment arm for a model that has no
+    // `<id>:8s:<res>-ref` row. When that happens `hasPerSecRate` is false, both
+    // rates are 0, and reserveBase collapses to the plan fee — a plausible
+    // successful quote for a run that can cost thousands of credits, which
+    // commit_credits can only refund, never top up.
+    for (const provider of GVP_EXTEND_PROVIDERS) {
+      const resolutions = MODEL_CATALOG[provider]?.resolutions ?? []
+      expect(resolutions.length, `${provider} declares no catalog resolutions`).toBeGreaterThan(0)
+      for (const resolution of resolutions) {
+        const p = await computeGenerateVideoProPricing({ provider, resolution, durationSec: 60 })
+        expect(p.mode, `${provider}@${resolution}`).toBe("multi")
+        expect(p.noRefPerSec, `${provider}@${resolution} has no no-ref 8s anchor`).toBeGreaterThan(0)
+        expect(p.refPerSec, `${provider}@${resolution} has no -ref 8s anchor`).toBeGreaterThan(0)
+        expect(p.reserveBase, `${provider}@${resolution}`).toBeGreaterThan(
+          STATIC_CREDIT_COSTS["generate-video-pro"]!,
+        )
+      }
     }
   })
 
@@ -1014,7 +1081,7 @@ describe("computeGenerateVideoProPricing — flat-priced providers", () => {
   })
 
   it("never throws for any blessed sparse provider across the whole cap range", async () => {
-    for (const provider of ["veo3", "veo3.1", "veo3_lite", "gemini-omni-video", "grok-i2v"]) {
+    for (const provider of ["veo3", "veo3.1", "veo3_lite", "gemini-omni-video", "gemini-omni-flash", "grok-i2v"]) {
       for (const durationSec of [4, 10, 60, 120, 185, 240, 300]) {
         const p = await computeGenerateVideoProPricing({
           provider, resolution: "720p", durationSec, renderMethod: "keyframes", aspectRatio: "16:9",

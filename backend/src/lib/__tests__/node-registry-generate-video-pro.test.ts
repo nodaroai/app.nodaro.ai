@@ -41,7 +41,10 @@ describe("generate-video-pro node registry", () => {
       "veo3.1",
       "veo3_lite",
       "gemini-omni-video",
+      "gemini-omni-flash",
       "grok-i2v",
+      "wan-3",
+      "wan-3-prime",
       "happyhorse-ref2v",
     ])
     // kling-3-omni is deliberately absent: it passes every capability check
@@ -54,7 +57,14 @@ describe("generate-video-pro node registry", () => {
     // lengths, so its parts cannot land exactly on the scene cuts. Derived
     // from the catalog, never hand-kept — same rule as `providers` above.
     const d = NODE_REGISTRY.find((n) => n.type === "generate-video-pro")
-    expect(d?.sparseProviders).toEqual(["veo3", "veo3.1", "veo3_lite", "gemini-omni-video", "grok-i2v"])
+    expect(d?.sparseProviders).toEqual([
+      "veo3",
+      "veo3.1",
+      "veo3_lite",
+      "gemini-omni-video",
+      "gemini-omni-flash",
+      "grok-i2v",
+    ])
     // Every entry is actually offered, and actually sparse...
     for (const id of d!.sparseProviders!) {
       expect(d!.providers).toContain(id)

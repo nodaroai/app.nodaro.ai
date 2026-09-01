@@ -804,6 +804,85 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "gemini-omni-video:4k:10": 750,
   "gemini-omni-video:vref": 600,    // (video-edit, flat)
   "gemini-omni-video:4k:vref": 900,// (video-edit 4K, flat)
+  // ── Gemini Omni Flash (KIE google/gemini-omni-flash-1-1) — sibling of
+  //    gemini-omni-video: same request shape and the same 4/6/8/10s ladder,
+  //    cheaper at every tier. Priced by (resolution band × duration), flat per
+  //    generation when a source video is supplied (":vref"). Lowercase 4k.
+  //    Nodaro credits = ceil(KIE cr × 2.5 ÷ 10) × 10. ──
+  "gemini-omni-flash": 270,        // base = the 8s default render (720p/1080p band)
+  "gemini-omni-flash:4":       160,
+  "gemini-omni-flash:6":       210,
+  "gemini-omni-flash:8":       270,
+  "gemini-omni-flash:10":      320,
+  "gemini-omni-flash:4k:4":    370,
+  "gemini-omni-flash:4k:6":    420,
+  "gemini-omni-flash:4k:8":    480,
+  "gemini-omni-flash:4k:10":   530,
+  "gemini-omni-flash:vref":    420,
+  "gemini-omni-flash:4k:vref": 630,
+  // ── Wan 3.0 (KIE wan/3-0-video) and Wan 3.0 Prime (wan/3-0-video-prime) ──
+  //    True per-second billing at three published resolution rates. Nodaro
+  //    credits = ceil(KIE cr/s × duration ÷ 4) × 10 — the same conversion as
+  //    happyhorse and minimax-h3 (CREDIT_BASE_USD 0.002 makes 1 KIE credit 2.5
+  //    Nodaro credits, rounded up to the next 10). KIE cr/s at 480P/720P/1080P:
+  //    wan-3 8 / 16 / 32, wan-3-prime 12.2 / 25.2 / 50.4.
+  //    Prime is KIE's HIGH-SPEED tier (faster turnaround, higher rate) — NOT a
+  //    quality tier.
+  //    ONE ROW PER SECOND across 2-30s rather than a coarse ladder: the tier
+  //    lookup snaps UP and falls back to the LAST tier, and commit_credits only
+  //    ever refunds a surplus — a coarse ladder would price a 30s render at a
+  //    shorter tier permanently.
+  //    The bare id is the DEFAULT render (5s @ 720p): the duration falls back to
+  //    the global 5s and the resolution to PRICING_DEFAULT_RESOLUTION["wan-3"] =
+  //    "720p" (@nodaro/shared), which is what runWan3 sends when the request
+  //    omits `resolution`. KIE's own default is 1080P — the provider layer pins
+  //    720P so the rendered tier equals the billed tier.
+  //    Reference-video runs bill OUTPUT seconds only, so there is no "-ref"
+  //    dimension and no computeCredits hook (unlike seedance-2 / minimax-h3).
+  "wan-3": 200,                   // (5s 720p default render)
+  // 480p — ceil(8 × s ÷ 4) × 10
+  "wan-3:2s:480p": 40, "wan-3:3s:480p": 60, "wan-3:4s:480p": 80, "wan-3:5s:480p": 100, "wan-3:6s:480p": 120,
+  "wan-3:7s:480p": 140, "wan-3:8s:480p": 160, "wan-3:9s:480p": 180, "wan-3:10s:480p": 200, "wan-3:11s:480p": 220,
+  "wan-3:12s:480p": 240, "wan-3:13s:480p": 260, "wan-3:14s:480p": 280, "wan-3:15s:480p": 300, "wan-3:16s:480p": 320,
+  "wan-3:17s:480p": 340, "wan-3:18s:480p": 360, "wan-3:19s:480p": 380, "wan-3:20s:480p": 400, "wan-3:21s:480p": 420,
+  "wan-3:22s:480p": 440, "wan-3:23s:480p": 460, "wan-3:24s:480p": 480, "wan-3:25s:480p": 500, "wan-3:26s:480p": 520,
+  "wan-3:27s:480p": 540, "wan-3:28s:480p": 560, "wan-3:29s:480p": 580, "wan-3:30s:480p": 600,
+  // 720p — ceil(16 × s ÷ 4) × 10
+  "wan-3:2s:720p": 80, "wan-3:3s:720p": 120, "wan-3:4s:720p": 160, "wan-3:5s:720p": 200, "wan-3:6s:720p": 240,
+  "wan-3:7s:720p": 280, "wan-3:8s:720p": 320, "wan-3:9s:720p": 360, "wan-3:10s:720p": 400, "wan-3:11s:720p": 440,
+  "wan-3:12s:720p": 480, "wan-3:13s:720p": 520, "wan-3:14s:720p": 560, "wan-3:15s:720p": 600, "wan-3:16s:720p": 640,
+  "wan-3:17s:720p": 680, "wan-3:18s:720p": 720, "wan-3:19s:720p": 760, "wan-3:20s:720p": 800, "wan-3:21s:720p": 840,
+  "wan-3:22s:720p": 880, "wan-3:23s:720p": 920, "wan-3:24s:720p": 960, "wan-3:25s:720p": 1000, "wan-3:26s:720p": 1040,
+  "wan-3:27s:720p": 1080, "wan-3:28s:720p": 1120, "wan-3:29s:720p": 1160, "wan-3:30s:720p": 1200,
+  // 1080p — ceil(32 × s ÷ 4) × 10
+  "wan-3:2s:1080p": 160, "wan-3:3s:1080p": 240, "wan-3:4s:1080p": 320, "wan-3:5s:1080p": 400, "wan-3:6s:1080p": 480,
+  "wan-3:7s:1080p": 560, "wan-3:8s:1080p": 640, "wan-3:9s:1080p": 720, "wan-3:10s:1080p": 800, "wan-3:11s:1080p": 880,
+  "wan-3:12s:1080p": 960, "wan-3:13s:1080p": 1040, "wan-3:14s:1080p": 1120, "wan-3:15s:1080p": 1200, "wan-3:16s:1080p": 1280,
+  "wan-3:17s:1080p": 1360, "wan-3:18s:1080p": 1440, "wan-3:19s:1080p": 1520, "wan-3:20s:1080p": 1600, "wan-3:21s:1080p": 1680,
+  "wan-3:22s:1080p": 1760, "wan-3:23s:1080p": 1840, "wan-3:24s:1080p": 1920, "wan-3:25s:1080p": 2000, "wan-3:26s:1080p": 2080,
+  "wan-3:27s:1080p": 2160, "wan-3:28s:1080p": 2240, "wan-3:29s:1080p": 2320, "wan-3:30s:1080p": 2400,
+  "wan-3-prime": 320,             // (5s 720p default render)
+  // 480p — ceil(12.2 × s ÷ 4) × 10
+  "wan-3-prime:2s:480p": 70, "wan-3-prime:3s:480p": 100, "wan-3-prime:4s:480p": 130, "wan-3-prime:5s:480p": 160, "wan-3-prime:6s:480p": 190,
+  "wan-3-prime:7s:480p": 220, "wan-3-prime:8s:480p": 250, "wan-3-prime:9s:480p": 280, "wan-3-prime:10s:480p": 310, "wan-3-prime:11s:480p": 340,
+  "wan-3-prime:12s:480p": 370, "wan-3-prime:13s:480p": 400, "wan-3-prime:14s:480p": 430, "wan-3-prime:15s:480p": 460, "wan-3-prime:16s:480p": 490,
+  "wan-3-prime:17s:480p": 520, "wan-3-prime:18s:480p": 550, "wan-3-prime:19s:480p": 580, "wan-3-prime:20s:480p": 610, "wan-3-prime:21s:480p": 650,
+  "wan-3-prime:22s:480p": 680, "wan-3-prime:23s:480p": 710, "wan-3-prime:24s:480p": 740, "wan-3-prime:25s:480p": 770, "wan-3-prime:26s:480p": 800,
+  "wan-3-prime:27s:480p": 830, "wan-3-prime:28s:480p": 860, "wan-3-prime:29s:480p": 890, "wan-3-prime:30s:480p": 920,
+  // 720p — ceil(25.2 × s ÷ 4) × 10
+  "wan-3-prime:2s:720p": 130, "wan-3-prime:3s:720p": 190, "wan-3-prime:4s:720p": 260, "wan-3-prime:5s:720p": 320, "wan-3-prime:6s:720p": 380,
+  "wan-3-prime:7s:720p": 450, "wan-3-prime:8s:720p": 510, "wan-3-prime:9s:720p": 570, "wan-3-prime:10s:720p": 630, "wan-3-prime:11s:720p": 700,
+  "wan-3-prime:12s:720p": 760, "wan-3-prime:13s:720p": 820, "wan-3-prime:14s:720p": 890, "wan-3-prime:15s:720p": 950, "wan-3-prime:16s:720p": 1010,
+  "wan-3-prime:17s:720p": 1080, "wan-3-prime:18s:720p": 1140, "wan-3-prime:19s:720p": 1200, "wan-3-prime:20s:720p": 1260, "wan-3-prime:21s:720p": 1330,
+  "wan-3-prime:22s:720p": 1390, "wan-3-prime:23s:720p": 1450, "wan-3-prime:24s:720p": 1520, "wan-3-prime:25s:720p": 1580, "wan-3-prime:26s:720p": 1640,
+  "wan-3-prime:27s:720p": 1710, "wan-3-prime:28s:720p": 1770, "wan-3-prime:29s:720p": 1830, "wan-3-prime:30s:720p": 1890,
+  // 1080p — ceil(50.4 × s ÷ 4) × 10
+  "wan-3-prime:2s:1080p": 260, "wan-3-prime:3s:1080p": 380, "wan-3-prime:4s:1080p": 510, "wan-3-prime:5s:1080p": 630, "wan-3-prime:6s:1080p": 760,
+  "wan-3-prime:7s:1080p": 890, "wan-3-prime:8s:1080p": 1010, "wan-3-prime:9s:1080p": 1140, "wan-3-prime:10s:1080p": 1260, "wan-3-prime:11s:1080p": 1390,
+  "wan-3-prime:12s:1080p": 1520, "wan-3-prime:13s:1080p": 1640, "wan-3-prime:14s:1080p": 1770, "wan-3-prime:15s:1080p": 1890, "wan-3-prime:16s:1080p": 2020,
+  "wan-3-prime:17s:1080p": 2150, "wan-3-prime:18s:1080p": 2270, "wan-3-prime:19s:1080p": 2400, "wan-3-prime:20s:1080p": 2520, "wan-3-prime:21s:1080p": 2650,
+  "wan-3-prime:22s:1080p": 2780, "wan-3-prime:23s:1080p": 2900, "wan-3-prime:24s:1080p": 3030, "wan-3-prime:25s:1080p": 3150, "wan-3-prime:26s:1080p": 3280,
+  "wan-3-prime:27s:1080p": 3410, "wan-3-prime:28s:1080p": 3530, "wan-3-prime:29s:1080p": 3660, "wan-3-prime:30s:1080p": 3780,
   "wan-i2v": 175,                 // (5s 720p fallback)
   // Wan I2V duration-tiered pricing (720p default)
   "wan-i2v:5s": 180,
@@ -2910,11 +2989,20 @@ function getNodeModelIdentifier(node: { type: string; data?: Record<string, unkn
     )
   }
 
-  // Video nodes with duration/audio-based variable pricing
+  // Video nodes with duration/audio-based variable pricing.
+  // `resolution` is forwarded so a resolution-priced family (wan-3, seedance-2,
+  // happyhorse, ...) is ESTIMATED at the tier the node is configured for.
+  // Without it the identifier collapses to the provider's default tier —
+  // wan-3-prime at 1080p would quote 320 against a real 630, and the estimate
+  // is what a published app advertises. Ignored by every provider with no
+  // resolution axis. The reference-video flag is deliberately NOT forwarded:
+  // reference videos arrive over EDGES, which this pre-execution estimate
+  // cannot see (payload-builder recomputes the identifier at reservation time
+  // from the resolved inputs).
   if (nodeType === "image-to-video" || nodeType === "text-to-video") {
     const duration = data.duration as number | string | undefined
     const sound = (data.sound ?? data.kling3Sound) as boolean | undefined
-    return buildVideoCreditModelIdentifier(provider, duration, sound, nodeType as "image-to-video" | "text-to-video", (data.videoSize ?? data.mode) as string | undefined)
+    return buildVideoCreditModelIdentifier(provider, duration, sound, nodeType as "image-to-video" | "text-to-video", (data.videoSize ?? data.mode) as string | undefined, data.resolution as string | undefined)
   }
 
   // Unified generate-video node — mode dispatch (i2v vs t2v) happens at
@@ -2925,7 +3013,7 @@ function getNodeModelIdentifier(node: { type: string; data?: Record<string, unkn
   if (nodeType === "generate-video") {
     const duration = data.duration as number | string | undefined
     const sound = (data.sound ?? data.kling3Sound) as boolean | undefined
-    return buildVideoCreditModelIdentifier(provider, duration, sound, "image-to-video", (data.videoSize ?? data.mode ?? data.kling3Mode) as string | undefined)
+    return buildVideoCreditModelIdentifier(provider, duration, sound, "image-to-video", (data.videoSize ?? data.mode ?? data.kling3Mode) as string | undefined, data.resolution as string | undefined)
   }
 
   // Image/edit nodes with quality/resolution variable pricing

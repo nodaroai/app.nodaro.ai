@@ -5,9 +5,15 @@ import { KIE_VIDEO_MODELS, KIE_TEXT_TO_VIDEO_MODELS } from "../models.js"
 /**
  * Drift guard — the shared `VIDEO_AUDIO_CAPABILITY` single source of truth must
  * stay in sync with the KIE model configs it consolidates. A new audio-capable
- * model (declaring `extraParams.sound` / `generate_audio`) added to `models.ts`
- * without a matching capability entry fails HERE rather than silently disabling
- * the audio toggle in the UI + skipping the Story→Video dialogue auto-pick.
+ * model (declaring `extraParams.sound` / `generate_audio` / `audio`) added to
+ * `models.ts` without a matching capability entry fails HERE rather than
+ * silently disabling the audio toggle in the UI + skipping the Story→Video
+ * dialogue auto-pick.
+ *
+ * The three lever names must be kept in step with `applyVideoAudioToggle`'s
+ * three-way write in @nodaro/shared: a lever the guard doesn't know about is a
+ * lever a model can declare while the capability table stays silent, and the
+ * suite passes vacuously (the Wan 3.0 `audio` case, 2026-09).
  */
 const ALL_VIDEO_MODELS = [
   ...Object.entries(KIE_VIDEO_MODELS),
@@ -16,7 +22,7 @@ const ALL_VIDEO_MODELS = [
 
 function declaresAudioParam(extraParams: Record<string, unknown> | undefined): boolean {
   const ep = extraParams ?? {}
-  return "sound" in ep || "generate_audio" in ep
+  return "sound" in ep || "generate_audio" in ep || "audio" in ep
 }
 
 describe("VIDEO_AUDIO_CAPABILITY drift guard vs KIE model configs", () => {
@@ -89,6 +95,9 @@ describe("VIDEO_AUDIO_CAPABILITY drift guard vs KIE model configs", () => {
           "generate_audio" in (cfg.extraParams ?? {}),
           `${model} claims field "generateAudio"`,
         ).toBe(true)
+      }
+      if (cap.field === "audio") {
+        expect("audio" in (cfg.extraParams ?? {}), `${model} claims field "audio"`).toBe(true)
       }
     }
   })

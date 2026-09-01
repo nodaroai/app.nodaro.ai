@@ -117,6 +117,12 @@ export {
   isMinimaxH3Provider,
   MINIMAX_H3_DEFAULT_RESOLUTION,
   normalizeMinimaxH3Resolution,
+  WAN_3_PROVIDERS,
+  isWan3Provider,
+  WAN_3_DEFAULT_RESOLUTION,
+  normalizeWan3Resolution,
+  GEMINI_OMNI_PROVIDERS,
+  isGeminiOmniProvider,
   VIDEO_PROVIDERS_WITHOUT_DISPATCH,
   GVP_DEFAULT_PROVIDER,
   GVP_SUPPORTED_PROVIDERS,
@@ -987,6 +993,9 @@ export * from "./video-analysis.js"
 // Also hosts video-audit's sibling pricing (VIDEO_AUDIT_BUCKET_CREDITS +
 // buildVideoAuditCreditId / videoAuditCreditsForBucket / bucketSecondsFromAuditCreditId).
 export * from "./video-analysis-pricing.js"
+
+// --- Unified video node UI-default fills (panel snap == strip == DAG payload) ---
+export * from "./video-ui-defaults.js"
 
 // --- Smart-cut best-pair search windows (shared bound + clamp) ---
 export * from "./smart-cut-windows.js"

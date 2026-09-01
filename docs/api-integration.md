@@ -856,10 +856,37 @@ so a value the model doesn't support is ignored, never a 400:
   needs a concrete ratio (adaptive coerces to 16:9 there). Reference audio
   must ride with an image or video reference; input images beyond the first 5
   add a per-image surcharge.
-- **Frames + references coexist.** When any reference (image / video / audio)
-  is wired alongside a start/end frame, the frames become prompt-directed
-  `Image N` references rather than pinned endpoints — the resolver decides the
-  mode, there is no toggle.
+- **`wan-3` / `wan-3-prime`** (Wan 3.0 / Wan 3.0 Prime) take
+  `referenceImageUrls` (≤ 10), `referenceVideoUrls` (≤ 5) and
+  `referenceAudioUrls` (≤ 5); every reference video and audio clip is 1–15 s
+  with a ≤ 15 s combined cap per media type (the per-clip **audio** cap is the
+  only one checked before submission; the video caps are the provider's and
+  surface mid-run). On the Wan wire the reference arrays are mutually exclusive
+  with the start/end frame fields (`imageUrl` / `endFrameUrl`), so — exactly as
+  on Seedance 2 and Hailuo 3 — sending both **folds** rather than fails: the
+  frame is appended to `referenceImageUrls` after your own images (their
+  ordinals are unchanged) and named in the prompt as the opening/closing frame.
+  The two are never sent together and the call is not rejected.
+  `duration` is a whole number of seconds from **2 to 30** (default 5); with
+  a reference video wired, input duration + output duration must be ≤ 30 s.
+  `resolution` is `480p` / `720p` / `1080p` —
+  send the lowercase display value like every other model; the provider's own
+  enum is uppercase and the platform normalizes it for you, and an omitted or
+  unsupported value renders and bills at **720p**. `aspectRatio` defaults to
+  `"adaptive"` and the model's own set is `adaptive` / `16:9` / `4:3` / `1:1` /
+  `3:4` / `9:16` (no `21:9`). Prime is the faster, pricier SKU on an identical
+  schema. Reference-video runs bill output seconds only — there is no
+  input-duration surcharge on Wan 3.0.
+- **`gemini-omni-flash`** takes exactly the same fields as
+  `gemini-omni-video` on the same 720p / 1080p / 4K tiers, the same 4 / 6 / 8 /
+  10 `duration` menu (an omitted duration renders and bills as 8 s), the same
+  16:9 / 9:16-only `aspectRatio`, and the same 7-unit input quota (each image
+  1 unit, a source video 2). It is the cheaper, faster SKU of the pair.
+- **Frames + references coexist** (Seedance 2 and Hailuo 3 — **not** Wan 3.0,
+  whose arrays are exclusive, see above). When any reference (image / video /
+  audio) is wired alongside a start/end frame, the frames become
+  prompt-directed `Image N` references rather than pinned endpoints — the
+  resolver decides the mode, there is no toggle.
 - **Reference videos are billed `unit × (input + output)` duration.** The
   runtime ffprobes each `referenceVideoUrls` clip and scales the per-second
   `-ref` rate (see the [Generate Video node](nodes/ai-video/generate-video.md)

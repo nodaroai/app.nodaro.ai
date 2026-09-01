@@ -43,7 +43,7 @@ import type {
   VideoAuditNodeData,
 } from "@/types/nodes"
 import { GENERATE_VIDEO_PRO_MAX_DURATION_FALLBACK, VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, GVP_PROVIDERS, EVP_PROVIDERS, MOTION_TRANSFER_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, EXTEND_VIDEO_MODELS, getVideoResolutionOptions, getAspectRatiosForVideoModel, getVideoModelCapabilitiesTooltip, withoutDeniedModels } from "./model-options"
-import { isSeedance2Provider, isMinimaxH3Provider, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, MODEL_CATALOG, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, buildVideoCreditModelIdentifier, characterMentionSlug, characterMentionableAssetArrays, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug, resolveEffectiveSourceType, FRAME_TARGET_HANDLES, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, VIDEO_ANALYSIS_TIERS, VIDEO_ANALYSIS_LEGACY_MODELS, DEFAULT_VIDEO_ANALYSIS_TIER, isVideoAnalysisTier, VIDEO_AUDIT_BUCKET_CREDITS, LLM_MODELS, clampSmartCutWindow, SMART_CUT_WINDOW_MIN, SMART_CUT_WINDOW_MAX, SMART_CUT_WINDOW_DEFAULT, GVP_ANCHOR_CHOICES, type GvpAnchorChoice } from "@nodaro/shared"
+import { isSeedance2Provider, isMinimaxH3Provider, isGeminiOmniProvider, isWan3Provider, VIDEO_REF_LIMITS_BY_PROVIDER, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, MODEL_CATALOG, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, buildVideoCreditModelIdentifier, characterMentionSlug, characterMentionableAssetArrays, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug, resolveEffectiveSourceType, FRAME_TARGET_HANDLES, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, VIDEO_ANALYSIS_TIERS, VIDEO_ANALYSIS_LEGACY_MODELS, DEFAULT_VIDEO_ANALYSIS_TIER, isVideoAnalysisTier, VIDEO_AUDIT_BUCKET_CREDITS, LLM_MODELS, clampSmartCutWindow, SMART_CUT_WINDOW_MIN, SMART_CUT_WINDOW_MAX, SMART_CUT_WINDOW_DEFAULT, GVP_ANCHOR_CHOICES, uiResolutionFill, uiDurationFill, type GvpAnchorChoice } from "@nodaro/shared"
 import type { ReferenceSource, ConnectedReference } from "@nodaro/shared"
 import { resolveSeedance2Inputs } from "@nodaro/prompts"
 import { probeVideoAnalysis } from "@/lib/api"
@@ -407,7 +407,14 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
     const opts = getVideoResolutionOptions(currentI2VProvider)
     if (opts) {
       if (data.resolution && !opts.some((o) => o.value === data.resolution)) {
-        updates.resolution = opts[0]?.value
+        // Snap to the tier the provider actually RENDERS and BILLS for an
+        // unset value, not to `opts[0]`. They coincide for every family whose
+        // catalog list starts at its default, but NOT for Wan 3.0, whose
+        // ascending ladder starts at 480p while the credit identifier, the
+        // DAG payload fill and `runWan3` all default to 720p — snapping to
+        // opts[0] silently dropped a switched-over node to the cheapest tier.
+        // Same shared helper the backend payload builder uses.
+        updates.resolution = uiResolutionFill(currentI2VProvider) ?? opts[0]?.value
       }
     } else if (data.resolution !== undefined) {
       updates.resolution = undefined
@@ -524,13 +531,20 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
       </MappableField>
       <ModelDescriptionHint modelId={data.provider} />
 
-      {(isSeedance2Provider(currentI2VProvider) || isMinimaxH3Provider(currentI2VProvider)) && (() => {
+      {/* Resolved-mode indicator — see the twin in GenerateVideoConfigImpl.
+          Wan 3.0 runs the SAME resolveSeedance2Inputs resolver, so it folds a
+          frame into the reference pool exactly like Seedance 2 / MiniMax H3
+          and needs the same preview; `limits` keeps the drop count on the
+          provider's own image cap (wan-3 = 10, not Seedance's 9). */}
+      {(isSeedance2Provider(currentI2VProvider) || isMinimaxH3Provider(currentI2VProvider) || isWan3Provider(currentI2VProvider)) && (() => {
+        const modeLimits = { ...SEEDANCE_2_REF_LIMITS, ...(VIDEO_REF_LIMITS_BY_PROVIDER[currentI2VProvider] ?? {}) }
         const s2 = resolveSeedance2Inputs({
           firstFrameUrl: connectedImages.some((img) => img.targetHandle !== "endFrame") ? "first" : undefined,
           lastFrameUrl: hasEndFrame ? "last" : undefined,
           refImageUrls: Array.from({ length: connectedRefImages.length }, (_, i) => `r${i}`),
           refVideoUrls: Array.from({ length: ((data.referenceVideoUrls as readonly unknown[] | undefined) ?? []).length }, (_, i) => `v${i}`),
           refAudioUrls: Array.from({ length: ((data.referenceAudioUrls as readonly unknown[] | undefined) ?? []).length }, (_, i) => `a${i}`),
+          limits: modeLimits,
         })
         const label = s2.mode === "reference"
           ? "Reference — frames used as prompt-directed references"
@@ -545,7 +559,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
             )}
             {s2.droppedRefImages > 0 && (
               <span className="text-[10px] leading-snug text-amber-500">
-                {s2.droppedRefImages} reference image{s2.droppedRefImages > 1 ? "s" : ""} over the {SEEDANCE_2_REF_LIMITS.images}-image limit will be dropped (frames kept).
+                {s2.droppedRefImages} reference image{s2.droppedRefImages > 1 ? "s" : ""} over the {modeLimits.images}-image limit will be dropped (frames kept).
               </span>
             )}
           </div>
@@ -1126,6 +1140,54 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           <p className="text-[10px] text-muted-foreground px-1">
             2K (default) or 768P output — 768P bills at the cheaper per-second rate. “adaptive” matches the wired input; pure text-to-video renders 16:9 unless a concrete ratio is picked. Audio is always generated — lip-synced to reference audio when connected.
           </p>
+        </>
+      )}
+
+      {/* Wan 3.0 — the same three levers the unified Generate Video panel
+          exposes. `wan-3` / `wan-3-prime` are offered in VIDEO_I2V_MODELS, so
+          this node must be able to configure them; without the block the
+          model rendered at defaults with no visible control. The displayed
+          resolution default is `uiResolutionFill` (720p), never opts[0] —
+          the catalog list is ascending and 480p is neither what the credit
+          identifier bills nor what `runWan3` renders. */}
+      {isWan3Provider(currentI2VProvider) && (
+        <>
+          {(() => {
+            const opts = getVideoResolutionOptions(currentI2VProvider)
+            return opts && opts.length > 0 ? (
+              <MappableField field="resolution" label={t("field.resolution")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+                <Select
+                  value={(data.resolution as string) || uiResolutionFill(currentI2VProvider) || opts[0].value}
+                  onValueChange={(v) => onUpdate({ resolution: v })}
+                >
+                  <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {opts.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </MappableField>
+            ) : null
+          })()}
+          <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <AspectRatioSelector
+              options={getAspectRatiosForVideoModel(currentI2VProvider)}
+              value={data.aspectRatio || defaultVideoAspectRatio(currentI2VProvider)}
+              onValueChange={(v) => onUpdate({ aspectRatio: v as ImageToVideoData["aspectRatio"] })}
+            />
+          </MappableField>
+          <div className="flex items-center gap-2 px-1">
+            <input
+              type="checkbox"
+              id="i2v-wan3Audio"
+              checked={data.generateAudio ?? true}
+              onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
+              className="rounded border-muted-foreground/40"
+            />
+            <label htmlFor="i2v-wan3Audio" className="text-xs">{t("vidcfg.generateAudioDefaultOn")}</label>
+          </div>
+          <p className="text-[10px] text-muted-foreground px-1">{t("vidcfg.wan3Note")}</p>
         </>
       )}
 
@@ -2052,7 +2114,9 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
     const opts = getVideoResolutionOptions(currentProvider)
     if (opts) {
       if (data.resolution && !opts.some((o) => o.value === data.resolution)) {
-        updates.resolution = opts[0]?.value
+        // See ImageToVideoConfig — snap to the rendered/billed default
+        // (uiResolutionFill), never to the cheapest tier at opts[0].
+        updates.resolution = uiResolutionFill(currentProvider) ?? opts[0]?.value
       }
     } else if (data.resolution !== undefined) {
       updates.resolution = undefined
@@ -2343,6 +2407,52 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
         </>
       )}
 
+      {/* Wan 3.0 — same three levers as the unified Generate Video panel.
+          `wan-3` / `wan-3-prime` are offered in VIDEO_T2V_MODELS, so this node
+          must be able to configure them. Displayed resolution default is
+          `uiResolutionFill` (720p), never opts[0]: the catalog list is
+          ascending and 480p is neither the billed nor the rendered tier. */}
+      {isWan3Provider(currentProvider) && (
+        <>
+          {(() => {
+            const opts = getVideoResolutionOptions(currentProvider)
+            return opts && opts.length > 0 ? (
+              <MappableField field="resolution" label={t("field.resolution")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+                <Select
+                  value={(data.resolution as string) || uiResolutionFill(currentProvider) || opts[0].value}
+                  onValueChange={(v) => onUpdate({ resolution: v })}
+                >
+                  <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {opts.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </MappableField>
+            ) : null
+          })()}
+          <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <AspectRatioSelector
+              options={getAspectRatiosForVideoModel(currentProvider)}
+              value={data.aspectRatio || defaultVideoAspectRatio(currentProvider)}
+              onValueChange={(v) => onUpdate({ aspectRatio: v as TextToVideoData["aspectRatio"] })}
+            />
+          </MappableField>
+          <div className="flex items-center gap-2 px-1">
+            <input
+              type="checkbox"
+              id="t2v-wan3Audio"
+              checked={data.generateAudio ?? true}
+              onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
+              className="rounded border-muted-foreground/40"
+            />
+            <label htmlFor="t2v-wan3Audio" className="text-xs">{t("vidcfg.generateAudioDefaultOn")}</label>
+          </div>
+          <p className="text-[10px] text-muted-foreground px-1">{t("vidcfg.wan3Note")}</p>
+        </>
+      )}
+
       {isMinimaxH3 && (
         <>
           {/* Two-rate resolution lever (2K default / 768P cheaper) — catalog-
@@ -2549,6 +2659,16 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
     [sources],
   )
 
+  // Provider FAMILY flags — set-based predicates from @nodaro/shared, never a
+  // prefix match (`startsWith("wan")` would swallow wan-i2v / wan-turbo /
+  // wan-2.7-*). Declared here, above the fail-safe effect, because the effect
+  // body branches on them. `refCaps` is the single source of truth for
+  // reference-input caps — the SAME map `handle-limits.ts` reads, so the panel
+  // denominators and the handle popover can no longer disagree.
+  const isGeminiOmni = isGeminiOmniProvider(currentProvider)
+  const isWan3 = isWan3Provider(currentProvider)
+  const refCaps = VIDEO_REF_LIMITS_BY_PROVIDER[currentProvider]
+
   // Fail-safe: snap stale resolution + duration + fps values that don't apply
   // to the current provider. Same Provider-Enum-Sync step-12b pattern as
   // i2v/t2v — without this, persisted values + admin defaults leak across
@@ -2590,13 +2710,41 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
     if (data.aspectRatio && !aspectOpts.some((o) => o.value === data.aspectRatio)) {
       updates.aspectRatio = aspectOpts[0]?.value as ImageToVideoData["aspectRatio"]
     }
-    if (currentProvider === "gemini-omni-video") {
+    if (isGeminiOmni) {
       // Persist the 8s default when duration is unset so the dropdown, the credit
       // identifier, and the KIE payload all agree (the credit id + provider both
       // default to 8 when undefined, while the dropdown would otherwise show the
       // first option, 4s). The generic snap above handles non-tier values (e.g. 5→4).
+      // Family-scoped so gemini-omni-flash inherits it — same 4/6/8/10 tiers and
+      // the same 8s bare-identifier default.
       if (data.duration == null) {
         updates.duration = 8
+      }
+    }
+    if (isWan3) {
+      // Wan 3.0 is priced on a duration × resolution ladder and its BARE credit
+      // identifier is the 5s @ 720p tier (PRICING_DEFAULT_RESOLUTION + the
+      // credit-identifier fallback + runWan3's own wire default all agree).
+      // Persist those two values explicitly so the dropdown, the credit badge
+      // and the KIE payload quote the same render — never `opts[0]`, which is
+      // 480p under the catalog's ascending resolution convention.
+      //
+      // One rule for BOTH an unset and an unsupported resolution (a stale "2K"
+      // carried in from minimax-h3, a FieldMapping-injected "4k"): the shared
+      // credit identifier collapses both to the declared 720p default, so the
+      // panel must too — this deliberately overrides the generic snap's 480p.
+      if (!opts?.some((o) => o.value === data.resolution)) {
+        updates.resolution = uiResolutionFill(currentProvider) ?? "720p"
+      }
+      if (data.duration == null) {
+        updates.duration = uiDurationFill(currentProvider) ?? 5
+      }
+      // `adaptive` is Wan 3.0's own default aspect ratio and it is what the
+      // backend DAG path fills for an untouched node, so persist it here too —
+      // otherwise a single-node run submits `aspectRatio: undefined` while a
+      // workflow run submits "adaptive" and the two job rows disagree.
+      if (data.aspectRatio == null) {
+        updates.aspectRatio = "adaptive" as ImageToVideoData["aspectRatio"]
       }
     }
     if (Object.keys(updates).length > 0) {
@@ -2691,8 +2839,17 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
   const geminiVideoCount = connectedRefVideos.length
   const geminiHasStartFrame = connectedImages.some((i) => i.targetHandle === "startFrame")
   const geminiQuotaUsed = (geminiHasStartFrame ? 1 : 0) + connectedRefImages.length + geminiVideoCount * 2
-  const geminiQuotaExceeded = currentProvider === "gemini-omni-video" && geminiQuotaUsed > 7
-  const maxRefImages = currentProvider === "grok-i2v" ? 6 : currentProvider === "kling-3-omni" ? 7 : currentProvider === "gemini-omni-video" ? Math.max(0, 7 - geminiVideoCount * 2 - (geminiHasStartFrame ? 1 : 0)) : 3
+  const geminiQuotaExceeded = isGeminiOmni && geminiQuotaUsed > 7
+  // Capability-first: the Gemini Omni family's budget is DYNAMIC (images +
+  // startFrame + 2×videos ≤ 7) so it stays a computed branch; everything else
+  // reads its flat cap from the shared VIDEO_REF_LIMITS_BY_PROVIDER map that
+  // handle-limits.ts already honours, so a new ref-capable model needs no edit
+  // here. grok-i2v/kling-3-omni keep their pre-map literals.
+  const maxRefImages = isGeminiOmni
+    ? Math.max(0, 7 - geminiVideoCount * 2 - (geminiHasStartFrame ? 1 : 0))
+    : currentProvider === "grok-i2v" ? 6
+    : currentProvider === "kling-3-omni" ? 7
+    : (refCaps?.images ?? 3)
 
   const hasEndFrame = connectedImages.some((img) => img.targetHandle === "endFrame")
 
@@ -2724,18 +2881,26 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
       </MappableField>
       <ModelDescriptionHint modelId={currentProvider} />
 
-      {/* Seedance 2 / MiniMax H3 resolved-mode indicator — the backend
-          resolver (resolveSeedance2Inputs, shared by both families) decides
-          frames-vs-references from the connected inputs at run time, so the
-          panel only DISPLAYS the resolved mode + the prompt directive it
-          appends. Mirror of the indicator in ImageToVideoConfigImpl. */}
-      {(isSeedance2 || isMinimaxH3) && (() => {
+      {/* Seedance 2 / MiniMax H3 / Wan 3.0 resolved-mode indicator — the
+          backend resolver (resolveSeedance2Inputs, shared by all three
+          families) decides frames-vs-references from the connected inputs at
+          run time, so the panel only DISPLAYS the resolved mode + the prompt
+          directive it appends. Wan 3.0 belongs here for the same reason the
+          others do: its frame is folded into `reference_image_urls` and bound
+          in prose whenever a reference is wired, and the preview is the only
+          place the user sees that before spending credits. `limits` is passed
+          so the drop count uses the PROVIDER's image cap (wan-3 = 10) instead
+          of the Seedance default (9). Mirror of the indicator in
+          ImageToVideoConfigImpl. */}
+      {(isSeedance2 || isMinimaxH3 || isWan3) && (() => {
+        const modeLimits = { ...SEEDANCE_2_REF_LIMITS, ...(refCaps ?? {}) }
         const s2 = resolveSeedance2Inputs({
           firstFrameUrl: connectedImages.some((img) => img.targetHandle !== "endFrame") ? "first" : undefined,
           lastFrameUrl: hasEndFrame ? "last" : undefined,
           refImageUrls: Array.from({ length: connectedRefImages.length }, (_, i) => `r${i}`),
           refVideoUrls: Array.from({ length: connectedRefVideos.length }, (_, i) => `v${i}`),
           refAudioUrls: Array.from({ length: connectedRefAudio.length }, (_, i) => `a${i}`),
+          limits: modeLimits,
         })
         const label = s2.mode === "reference"
           ? "Reference — frames used as prompt-directed references"
@@ -2750,7 +2915,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
             )}
             {s2.droppedRefImages > 0 && (
               <span className="text-[10px] leading-snug text-amber-500">
-                {s2.droppedRefImages} reference image{s2.droppedRefImages > 1 ? "s" : ""} over the {SEEDANCE_2_REF_LIMITS.images}-image limit will be dropped (frames kept).
+                {s2.droppedRefImages} reference image{s2.droppedRefImages > 1 ? "s" : ""} over the {modeLimits.images}-image limit will be dropped (frames kept).
               </span>
             )}
           </div>
@@ -2779,7 +2944,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
       {/* Reference images section (Grok / VEO reference mode / Seedance 2). */}
       {(supportsReferences && (!isVeo || isVeoRefMode)) && connectedRefImages.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">{t("vidcfg.referenceImages")} ({connectedRefImages.length}/{isSeedance2 ? SEEDANCE_2_REF_LIMITS.images : maxRefImages})</Label>
+          <Label className="text-xs">{t("vidcfg.referenceImages")} ({connectedRefImages.length}/{maxRefImages})</Label>
           <ConnectedMediaList
             sources={refSources}
             mediaOrder={data.referenceImageOrder ?? []}
@@ -2787,15 +2952,18 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
             mediaType="image"
           />
           <p className="text-[10px] text-muted-foreground px-1">
-            Connect image nodes to the References handle. Up to {isSeedance2 || isMinimaxH3 ? SEEDANCE_2_REF_LIMITS.images : maxRefImages} additional reference images.
+            Connect image nodes to the References handle. Up to {maxRefImages} additional reference images.
           </p>
         </div>
       )}
 
-      {/* Seedance 2 / MiniMax H3 reference videos */}
-      {(isSeedance2 || isMinimaxH3) && connectedRefVideos.length > 0 && (
+      {/* Reference videos — shown for ANY provider whose shared capability row
+          declares a video-reference cap (Seedance 2 family, MiniMax H3, Wan 3,
+          the Gemini Omni family). Family-gating this tray is what hid Wan 3's
+          five source-clip slots and Gemini's single one. */}
+      {(refCaps?.videos ?? 0) > 0 && connectedRefVideos.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">{t("vidcfg.referenceVideos")} ({connectedRefVideos.length}/{SEEDANCE_2_REF_LIMITS.videos})</Label>
+          <Label className="text-xs">{t("vidcfg.referenceVideos")} ({connectedRefVideos.length}/{refCaps?.videos})</Label>
           <div className="flex flex-col gap-1">
             {connectedRefVideos.map((s) => (
               <div key={s.id} className="text-[10px] px-2 py-1 rounded bg-muted/50 text-muted-foreground truncate">
@@ -2803,13 +2971,16 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               </div>
             ))}
           </div>
+          {isWan3 && (
+            <p className="text-[10px] leading-snug text-muted-foreground px-1">{t("vidcfg.wan3VideoRefLimits")}</p>
+          )}
         </div>
       )}
 
-      {/* Seedance 2 / MiniMax H3 reference audio */}
-      {(isSeedance2 || isMinimaxH3) && connectedRefAudio.length > 0 && (
+      {/* Reference audio — same capability gate as the video tray above. */}
+      {(refCaps?.audio ?? 0) > 0 && connectedRefAudio.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">{t("vidcfg.referenceAudio")} ({connectedRefAudio.length}/{SEEDANCE_2_REF_LIMITS.audio})</Label>
+          <Label className="text-xs">{t("vidcfg.referenceAudio")} ({connectedRefAudio.length}/{refCaps?.audio})</Label>
           <div className="flex flex-col gap-1">
             {connectedRefAudio.map((s) => (
               <div key={s.id} className="text-[10px] px-2 py-1 rounded bg-muted/50 text-muted-foreground truncate">
@@ -2817,6 +2988,9 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               </div>
             ))}
           </div>
+          {isWan3 && (
+            <p className="text-[10px] leading-snug text-muted-foreground px-1">{t("vidcfg.wan3AudioRefLimits")}</p>
+          )}
         </div>
       )}
 
@@ -2900,9 +3074,12 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
         label={t("field.injectedReferences")}
       />
       <SeedanceReferenceTip provider={data.provider} />
+      {/* Any reference modality triggers the fold — `resolveSeedance2Inputs`
+          demotes the frame when images OR videos OR audio are wired, so the
+          hint must not test images alone. */}
       <FramesAndReferencesTip
         hasFrame={connectedImages.some((img) => img.targetHandle === "startFrame" || img.targetHandle === "endFrame")}
-        hasReference={connectedRefImages.length > 0}
+        hasReference={connectedRefImages.length > 0 || connectedRefVideos.length > 0 || connectedRefAudio.length > 0}
       />
 
       <ExtraRefsSection
@@ -2995,7 +3172,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           <Select
             value={String(allowedDurations.includes(data.duration as number) ? data.duration : allowedDurations[0])}
             onValueChange={(v) => onUpdate({ duration: parseInt(v, 10) })}
-            disabled={currentProvider === "gemini-omni-video" && connectedRefVideos.length > 0}
+            disabled={isGeminiOmni && connectedRefVideos.length > 0}
           >
             <SelectTrigger aria-label={t("field.durationSeconds")}><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -3014,7 +3191,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           />
         )}
       </MappableField>
-      {currentProvider === "gemini-omni-video" && connectedRefVideos.length > 0 && (
+      {isGeminiOmni && connectedRefVideos.length > 0 && (
         <p className="text-[11px] text-muted-foreground">{t("vidcfg.durationAutoFromClip")}</p>
       )}
       {allowedDurations && allowedDurations.length === 1 && (
@@ -3356,6 +3533,62 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
         </>
       )}
 
+      {isWan3 && (
+        <>
+          {/* No frame-vs-reference warning here on purpose. Wan 3.0's frame and
+              reference arrays are mutually exclusive ON THE WIRE, but the
+              platform never sends the pair: `runWan3` reuses
+              `resolveSeedance2Inputs`, which DEMOTES a wired start/end frame
+              into `reference_image_urls` (appended after the user's own images,
+              so their ordinals don't shift) and names it in the prompt — the
+              same fold Seedance 2, MiniMax H3 and Gemini Omni do. The generic
+              <FramesAndReferencesTip> rendered above already tells the user the
+              frame becomes an approximation rather than a pixel-exact endpoint,
+              for every provider; a wan-only "the run will be rejected" note
+              would contradict both it and the runner. */}
+          {/* Resolution — catalog-driven (480p/720p/1080p, ascending). The
+              displayed default is 720p, NOT opts[0]: 720p is the tier the bare
+              credit identifier, the fail-safe persist above and the KIE runner
+              all default to, so panel, badge and render agree. */}
+          {(() => {
+            const opts = getVideoResolutionOptions(currentProvider)
+            return opts && opts.length > 0 ? (
+              <MappableField field="resolution" label={t("field.resolution")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+                <Select
+                  value={(data.resolution as string) || "720p"}
+                  onValueChange={(v) => onUpdate({ resolution: v })}
+                >
+                  <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {opts.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </MappableField>
+            ) : null
+          })()}
+          <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <AspectRatioSelector
+              options={getAspectRatiosForVideoModel(currentProvider)}
+              value={(data.aspectRatio as string) || defaultVideoAspectRatio(currentProvider)}
+              onValueChange={(v) => onUpdate({ aspectRatio: v as ImageToVideoData["aspectRatio"] })}
+            />
+          </MappableField>
+          <div className="flex items-center gap-2 px-1">
+            <input
+              type="checkbox"
+              id="gv-wan3Audio"
+              checked={data.generateAudio ?? true}
+              onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
+              className="rounded border-muted-foreground/40"
+            />
+            <label htmlFor="gv-wan3Audio" className="text-xs">{t("vidcfg.generateAudioDefaultOn")}</label>
+          </div>
+          <p className="text-[10px] text-muted-foreground px-1">{t("vidcfg.wan3Note")}</p>
+        </>
+      )}
+
       {(currentProvider === "wan-i2v" || currentProvider === "wan-turbo") && (
         <div>
           <Label className="text-xs">{t("field.resolution")}</Label>
@@ -3468,7 +3701,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
         </div>
       )}
 
-      {currentProvider === "gemini-omni-video" && (
+      {isGeminiOmni && (
         <>
           {geminiQuotaExceeded && (
             <div className="rounded border border-red-500/40 bg-red-500/10 p-2 text-[11px] leading-snug text-red-300">
@@ -3479,7 +3712,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
             <Select value={(data.resolution as string) || "720p"} onValueChange={(v) => onUpdate({ resolution: v })}>
               <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
               <SelectContent>
-                {(getVideoResolutionOptions("gemini-omni-video") ?? []).map((o) => (
+                {(getVideoResolutionOptions(currentProvider) ?? []).map((o) => (
                   <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
                 ))}
               </SelectContent>
@@ -3487,7 +3720,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           </MappableField>
           <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <AspectRatioSelector
-              options={getAspectRatiosForVideoModel("gemini-omni-video")}
+              options={getAspectRatiosForVideoModel(currentProvider)}
               value={(data.aspectRatio as string) || "16:9"}
               onValueChange={(v) => onUpdate({ aspectRatio: v as ImageToVideoData["aspectRatio"] })}
             />
