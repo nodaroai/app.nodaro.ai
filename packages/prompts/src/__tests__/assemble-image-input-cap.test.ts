@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest"
 import { assembleImageInput } from "../assemble-image-input.js"
 import { buildImagePrompt, buildImagePromptWithOverflow } from "../prompt-builder.js"
 import { renderDirectionHints, IMAGE_HINT_MODE_DEFAULT } from "../direction-registry.js"
-import { joinPromptHints } from "../prompt-hint-join.js"
+import { renderStyleSection } from "../prompt-style-section.js"
 import { getMaxImagePromptChars } from "@nodaro/shared"
 import type { ConnectedReference } from "@nodaro/shared"
 
@@ -44,6 +44,18 @@ const IMAGE_HINTS = renderDirectionHints(DIRECTION, {
   surface: "image",
   mode: IMAGE_HINT_MODE_DEFAULT,
 })
+
+/**
+ * The UNSHED body for a prompt — the oracle for "what the assembler composes
+ * before any cap thinking". Every image-surface direction row is `look`, so the
+ * whole fold lands in the `[style]` section and the body is the prose alone,
+ * trimmed (something folded).
+ */
+const unshedBody = (prompt: string): string =>
+  `${prompt.trim()}\n\n${renderStyleSection(DIRECTION, {
+    surface: "image",
+    mode: IMAGE_HINT_MODE_DEFAULT,
+  })}`
 
 /** The mentioned character — its directive is the FIRST binding in the prompt. */
 const KIRA: ConnectedReference = {
@@ -93,7 +105,7 @@ describe("assembleImageInput — cap-aware hint shedding", () => {
     // ever shrinks enough that this no longer truncates, the scenario below is
     // vacuous and this assertion says so loudly.
     const naive = buildImagePrompt({
-      prompt: joinPromptHints(PROSE, IMAGE_HINTS),
+      prompt: unshedBody(PROSE),
       provider: "seedream",
       connectedReferences: [KIRA, PIER],
       referenceFormat: "hybrid",
@@ -154,7 +166,7 @@ describe("assembleImageInput — under-cap byte parity", () => {
   for (const { name, provider, prompt } of parityCases) {
     it(`is byte-identical to the unordered fold — ${name}`, () => {
       const expected = buildImagePrompt({
-        prompt: joinPromptHints(prompt, IMAGE_HINTS),
+        prompt: unshedBody(prompt),
         provider,
         connectedReferences: [KIRA, PIER],
         referenceFormat: "hybrid",

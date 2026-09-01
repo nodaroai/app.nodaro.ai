@@ -4,6 +4,7 @@ import { resolveVideoReferenceCore } from "../video-reference-resolver.js"
 import { renderDirectionHints, VIDEO_HINT_MODE_DEFAULT } from "../direction-registry.js"
 import { renderSubjectHints, SUBJECT_VIDEO_HINT_MODE_DEFAULT } from "../subject-registry.js"
 import { renderStructuredFields } from "../prompt-builder-structured-fields.js"
+import { composeSectionedPrompt, partitionStyleClauses } from "../prompt-style-section.js"
 import { joinPromptHints } from "../prompt-hint-join.js"
 import { getMaxVideoPromptChars } from "@nodaro/shared"
 import type { ConnectedReference } from "@nodaro/shared"
@@ -46,6 +47,15 @@ const VIDEO_HINTS = renderDirectionHints(DIRECTION, {
   surface: "video",
   mode: VIDEO_HINT_MODE_DEFAULT,
 })
+
+/** The same clauses, slotted — the shed keeps a PREFIX of exactly this list. */
+const DIRECTION_CLAUSES = partitionStyleClauses(DIRECTION, {
+  surface: "video",
+  mode: VIDEO_HINT_MODE_DEFAULT,
+})
+
+/** Everything before the `[style]` section — the half the shed budget grows. */
+const bodyOf = (composed: string): string => composed.split("\n\n[style]:\n")[0]!
 
 /** The mentioned character — hybrid replaces the mention INLINE, mid-prose. */
 const KIRA: ConnectedReference = {
@@ -148,6 +158,40 @@ describe("composeVideoPromptText — cap-aware hint shedding", () => {
     const starved = composeVideoPromptText(PROSE, DIRECTION, undefined, { cap: 10, frame })
     expect(starved).toBe(PROSE)
     for (const hint of VIDEO_HINTS) expect(starved).not.toContain(hint)
+    // A FULL shed takes the header with it — byte-identical to the prompt, not
+    // an empty section hanging off it. This is what keeps the routes'
+    // `composed !== prompt` guard reading false when nothing survived.
+    expect(starved).not.toContain("[style]")
+  })
+
+  it("reclaims the header only when the LAST look clause sheds", () => {
+    // Budgets derived from what the composer actually builds, so they track
+    // catalog wording instead of pinning it.
+    const capForKept = (n: number): number =>
+      frame(composeSectionedPrompt(PROSE, DIRECTION_CLAUSES.slice(0, n), ""))!.length
+    // The first clause is `cameraMotion` (motion → body), the second the first
+    // LOOK clause — so `kept = 2` is "body plus exactly one section clause".
+    expect(DIRECTION_CLAUSES[0]!.slot).toBe("body")
+    expect(DIRECTION_CLAUSES[1]!.slot).not.toBe("body")
+
+    const atTwo = composeVideoPromptText(PROSE, DIRECTION, undefined, {
+      cap: capForKept(2),
+      frame,
+    })!
+    expect(atTwo).toBe(composeSectionedPrompt(PROSE, DIRECTION_CLAUSES.slice(0, 2), ""))
+    expect(atTwo).toContain("[style]:")
+
+    // ONE byte tighter, and the section's last clause goes — taking the whole
+    // 11-byte `"\n\n[style]:\n"` with it, so the body drops all the way back to
+    // the prose. (The cost of under-pricing that header instead shows up as an
+    // over-shed in "sheds the whole direction fold before a single subject
+    // clause" below, which is where a flat per-clause charge fails.)
+    const justUnder = composeVideoPromptText(PROSE, DIRECTION, undefined, {
+      cap: capForKept(2) - 1,
+      frame,
+    })!
+    expect(justUnder).toBe(composeSectionedPrompt(PROSE, DIRECTION_CLAUSES.slice(0, 1), ""))
+    expect(justUnder).not.toContain("[style]")
   })
 
   it("reserves the caller's budget rather than re-deriving a provider cap", () => {
@@ -166,12 +210,25 @@ describe("composeVideoPromptText — cap-aware hint shedding", () => {
   })
 
   it("never sheds the structured fragment — it is user content, not a garnish", () => {
-    const structured = { subject: "a lighthouse keeper", action: "hauls a rope hand over hand" }
+    const structured = { person: { profession: "a lighthouse keeper", expression: "focused" } }
     const fragment = renderStructuredFields(structured)
+    expect(fragment.length, "an empty fragment makes every claim below vacuous").toBeGreaterThan(0)
     const body = composeVideoPromptText(PROSE, DIRECTION, structured, { cap: 700, frame })!
     expect(body).toContain(fragment)
-    // …and it still lands LAST, behind the surviving hints.
-    expect(body.endsWith(fragment)).toBe(true)
+    // …and it still ends the BODY, behind every surviving body hint.
+    expect(bodyOf(body).endsWith(fragment)).toBe(true)
+  })
+
+  it("ends the BODY with the fragment even when the section survives above it", () => {
+    // The capless fold, where every clause lives: the fragment is the last
+    // thing in the body and the section reads after it, so the composed prompt
+    // does NOT end with the fragment any more.
+    const structured = { person: { profession: "a lighthouse keeper", expression: "focused" } }
+    const fragment = renderStructuredFields(structured)
+    const body = composeVideoPromptText(PROSE, DIRECTION, structured)!
+    expect(body).toContain("\n\n[style]:\n")
+    expect(bodyOf(body).endsWith(fragment)).toBe(true)
+    expect(body.endsWith(fragment)).toBe(false)
   })
 })
 
@@ -316,17 +373,19 @@ describe("composeVideoPromptText — the subject fold under the cap", () => {
   it("never sheds the structured fragment to save a subject clause", () => {
     // Ordering across ALL THREE pieces at once: user content outranks both
     // catalog channels and still lands last.
-    const structured = { subject: "a lighthouse keeper", action: "hauls a rope" }
+    const structured = { person: { profession: "a lighthouse keeper", expression: "focused" } }
     const fragment = renderStructuredFields(structured)
     const body = composeVideoPromptText(PROSE, DIRECTION, structured, {
       subject: SUBJECT,
       cap: framedWithSubjectClauses(0),
       frame,
     })!
-    expect(body.endsWith(fragment)).toBe(true)
+    expect(bodyOf(body).endsWith(fragment)).toBe(true)
     for (const hint of [...SUBJECT_HINTS, ...VIDEO_HINTS]) {
       expect(body).not.toContain(hint)
     }
+    // Everything droppable went, so there is no section left to end with.
+    expect(body).not.toContain("[style]")
   })
 
   it("is byte-identical to the capless subject fold when it fits", () => {

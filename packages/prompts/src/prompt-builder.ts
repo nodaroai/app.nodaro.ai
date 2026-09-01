@@ -7,6 +7,7 @@
 import { resolveTemplate, applyTemplate } from "./prompt-templates.js"
 import { NATIVE_NEGATIVE_PROMPT_MODELS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, imageReferenceLimit, getMaxImagePromptChars, getMaxNegativePromptChars } from "@nodaro/shared"
 import { getStylePromptHint } from "./style.js"
+import { STYLE_SECTION_HEADER } from "./prompt-style-section.js"
 import { findCharacterMentionTokens, type CharacterMentionTokenInfo } from "@nodaro/shared"
 import { usageModeDirective, DEFAULT_USAGE_MODE, type UsageMode } from "@nodaro/shared"
 import { roleToPhrase, defaultRoleForSource, REFERENCE_ROLE_PRESETS, normalizeRoleSlug, resolveDefaultRole } from "@nodaro/shared"
@@ -3394,15 +3395,25 @@ function capitalizeLineInitial(line: string): string {
 
 /** Render the user prompt as the hybrid scene: each `{image:N:label}` token
  *  expanded to its uniform lettered phrase, each line's first letter
- *  capitalized. No per-role special-casing — the label drives the phrase. */
+ *  capitalized. No per-role special-casing — the label drives the phrase.
+ *
+ *  The capitalizer STOPS at the `[style]` section and everything after it: the
+ *  header would become `[Style]:`, and every catalog clause under it would gain
+ *  a capital it was not written with. The header line is matched EXACTLY — the
+ *  composer never indents it, and the whitespace collapses on this path are
+ *  horizontal-only (`[^\S\r\n]`), so nothing can pad it before this runs. */
 function buildHybridScene(
   prompt: string,
   refs: readonly ConnectedReference[],
   finalIndexByUrl: ReadonlyMap<string, number>,
 ): string {
-  return prompt
-    .split("\n")
-    .map((line) => capitalizeLineInitial(expandImageRefTokensHybrid(line, refs, finalIndexByUrl)))
+  const lines = prompt.split("\n")
+  const sectionAt = lines.indexOf(STYLE_SECTION_HEADER)
+  return lines
+    .map((line, i) => {
+      const expanded = expandImageRefTokensHybrid(line, refs, finalIndexByUrl)
+      return sectionAt >= 0 && i >= sectionAt ? expanded : capitalizeLineInitial(expanded)
+    })
     .join("\n")
 }
 

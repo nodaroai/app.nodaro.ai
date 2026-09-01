@@ -49,7 +49,9 @@ describe("assembleImageInput — id-based composition (Studio oracle)", () => {
       connectedReferences: [ref],
       direction: { framingId: "medium-shot" },
     })
-    expect(result.prompt).toBe(`a knight. ${getFramingPromptHint("medium-shot")}`)
+    expect(result.prompt).toBe(
+      `a knight\n\n[style]:\n${getFramingPromptHint("medium-shot")}`,
+    )
     expect(result.referenceImageUrls).toEqual(["https://r2.example/hero.png"])
   })
 
@@ -59,8 +61,10 @@ describe("assembleImageInput — id-based composition (Studio oracle)", () => {
       provider: REF_PROVIDER,
       direction: { framingId: "medium-shot", framingAngleId: "low-angle" },
     })
+    // Two scene-line clauses share one line, `. `-joined.
     expect(result.prompt).toBe(
-      `a knight. ${getFramingPromptHint("medium-shot")}. ${getFramingPromptHint("low-angle")}`,
+      `a knight\n\n[style]:\n` +
+        `${getFramingPromptHint("medium-shot")}. ${getFramingPromptHint("low-angle")}`,
     )
   })
 
@@ -120,7 +124,7 @@ describe("assembleImageInput — id-based composition (Studio oracle)", () => {
       provider: REF_PROVIDER,
       direction: { style: "anime" },
     })
-    expect(result.prompt).toBe(`a knight. ${getStylePromptHint("anime")}`)
+    expect(result.prompt).toBe(`a knight\n\n[style]:\n${getStylePromptHint("anime")}`)
   })
 
   it("blends a multi-pick dimension into ONE clause", () => {
@@ -131,21 +135,37 @@ describe("assembleImageInput — id-based composition (Studio oracle)", () => {
       provider: REF_PROVIDER,
       direction: { mood: ["happy", "joyful"] },
     })
-    expect(result.prompt).toBe(`a knight. ${blended[0]}`)
+    expect(result.prompt).toBe(`a knight\n\n[style]:\n${blended[0]}`)
   })
 
-  it("folds in TABLE order, not the caller's object-literal order", () => {
+  it("groups before it orders: the film line leads the scene line", () => {
+    // `shotSize` folds at row 2 and `style` at row 22, so table order alone
+    // would read the framing clause first; the section's two lines outrank it.
     const result = assembleImageInput({
       userPrompt: "a knight",
       provider: REF_PROVIDER,
       direction: { style: "anime", shotSize: "wide-shot" },
     })
     expect(result.prompt).toBe(
-      `a knight. ${getFramingPromptHint("wide-shot")}. ${getStylePromptHint("anime")}`,
+      `a knight\n\n[style]:\n` +
+        `${getStylePromptHint("anime")}\n${getFramingPromptHint("wide-shot")}`,
     )
   })
 
-  it("keeps the five pre-registry keys byte-identical to the old inlined fold", () => {
+  it("folds in TABLE order within a line, not the caller's object-literal order", () => {
+    // `shotSize` (row 2) precedes `timeOfDay` (row 14) on the scene line.
+    const result = assembleImageInput({
+      userPrompt: "a knight",
+      provider: REF_PROVIDER,
+      direction: { timeOfDay: "golden-hour", shotSize: "wide-shot" },
+    })
+    expect(result.prompt).toBe(
+      `a knight\n\n[style]:\n` +
+        `${getFramingPromptHint("wide-shot")}. ${getLightingPromptHint("golden-hour")}`,
+    )
+  })
+
+  it("splits the five pre-registry keys across the section's two lines", () => {
     const direction = {
       framingId: "wide-shot",
       framingAngleId: "low-angle",
@@ -158,21 +178,21 @@ describe("assembleImageInput — id-based composition (Studio oracle)", () => {
       provider: REF_PROVIDER,
       direction,
     })
-    // The exact string the pre-registry `composePromptText` produced: the same
-    // five clauses, in the same order, joined with the same ". ".
+    // `cameraFormatId` is the one film row in the legacy block; the other four
+    // fall to the scene line, in the same relative order they always folded in.
     expect(result.prompt).toBe(
-      [
-        "a knight",
-        getFramingPromptHint("wide-shot"),
-        getFramingPromptHint("low-angle"),
-        getLightingPromptHint("golden-hour"),
-        getLensPromptHint("wide-24mm"),
-        getCameraFormatPromptHint("16mm-film"),
-      ].join(". "),
+      "a knight\n\n[style]:\n" +
+        `${getCameraFormatPromptHint("16mm-film")}\n` +
+        [
+          getFramingPromptHint("wide-shot"),
+          getFramingPromptHint("low-angle"),
+          getLightingPromptHint("golden-hour"),
+          getLensPromptHint("wide-24mm"),
+        ].join(". "),
     )
   })
 
-  it("keeps the structured fragment LAST, after every direction clause", () => {
+  it("keeps the structured fragment LAST IN THE BODY, ahead of the section", () => {
     const result = assembleImageInput({
       userPrompt: "a portrait",
       provider: REF_PROVIDER,
@@ -180,8 +200,69 @@ describe("assembleImageInput — id-based composition (Studio oracle)", () => {
       structured: { person: { age: 30, gender: "woman", expression: "calm" } },
     })
     expect(result.prompt).toBe(
-      `a portrait. ${getStylePromptHint("anime")}. Subject: 30 years old, woman, calm expression.`,
+      "a portrait. Subject: 30 years old, woman, calm expression." +
+        `\n\n[style]:\n${getStylePromptHint("anime")}`,
     )
+  })
+
+  it("emits no section on the image surface only when nothing look-family folds", () => {
+    // Every image-surface direction row is `look` (the registry has no
+    // image-surface motion row), so a direction that renders ANY clause always
+    // opens a section — and a structured-only fold never does.
+    expect(
+      assembleImageInput({
+        userPrompt: "a portrait",
+        provider: REF_PROVIDER,
+        structured: { person: { age: 30 } },
+      }).prompt,
+    ).not.toContain("[style]")
+    expect(
+      assembleImageInput({
+        userPrompt: "a portrait",
+        provider: REF_PROVIDER,
+        direction: { isoValue: "iso-100" },
+      }).prompt,
+    ).toContain("[style]:\n")
+  })
+})
+
+/**
+ * THE HYBRID LINE-CAPITALIZER. On the hybrid reference format with connected
+ * references and NO converged `@`-mention, `buildHybridScene` capitalizes the
+ * first alphabetic character of EVERY line of the body. Run over the section
+ * that would rewrite the header to `[Style]:` and give every catalog clause a
+ * capital it was not written with — so the capitalizer stops at the header.
+ */
+describe("assembleImageInput — the hybrid capitalizer stops at the section", () => {
+  // A plain wired image: no mention to converge and no canonical role phrase to
+  // render, which is what leaves the body UNCONVERGED — the only path where the
+  // capitalizer runs at all. (A wired CHARACTER converges via its canonical
+  // phrase and skips the capitalizer entirely.)
+  const plate: ConnectedReference = {
+    id: "plate-id",
+    defaultName: "Plate",
+    source: "wired-image",
+    url: "https://r2.example/plate.png",
+  }
+
+  const hybridInput = {
+    userPrompt: "a knight on a hill",
+    provider: REF_PROVIDER,
+    connectedReferences: [plate],
+    referenceFormat: "hybrid" as const,
+    direction: { style: "anime", shotSize: "wide-shot" },
+  }
+
+  it("capitalizes the body line (non-vacuity: the capitalizer really runs here)", () => {
+    expect(assembleImageInput(hybridInput).prompt).toContain("A knight on a hill")
+  })
+
+  it("leaves the header and every clause line byte-intact", () => {
+    const result = assembleImageInput(hybridInput)
+    expect(result.prompt).toContain(
+      `[style]:\n${getStylePromptHint("anime")}\n${getFramingPromptHint("wide-shot")}`,
+    )
+    expect(result.prompt).not.toContain("[Style]")
   })
 })
 

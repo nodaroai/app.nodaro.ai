@@ -44,7 +44,6 @@ import {
   type StructuredPromptFields,
 } from "./prompt-builder-structured-fields.js"
 import {
-  renderDirectionHints,
   IMAGE_HINT_MODE_DEFAULT,
   type DirectionFields,
 } from "./direction-registry.js"
@@ -53,7 +52,13 @@ import {
   SUBJECT_IMAGE_HINT_MODE_DEFAULT,
   type SubjectFields,
 } from "./subject-registry.js"
-import { joinPromptHints } from "./prompt-hint-join.js"
+import {
+  asBodyClauses,
+  composeSectionedPrompt,
+  partitionStyleClauses,
+  sectionedClauseCosts,
+  type SlottedPromptClause,
+} from "./prompt-style-section.js"
 import { keepableDirectionHints } from "./hint-shedding.js"
 import type { CharacterDef, ConnectedReference, IdentityMeta } from "@nodaro/shared"
 
@@ -174,17 +179,23 @@ export interface AssembleImageInput {
  * the TAIL: direction leaves before subject, which is the right order (who is
  * in the shot outranks how it is lit). `structuredFragment` is user CONTENT (a
  * Path-1 structured field the caller populated), so it is sticky and always
- * lands LAST, exactly as before.
+ * ends the BODY, exactly as before — the `[style]` section reads after it.
+ *
+ * Each clause carries the SLOT it reads in. The list order is the SURVIVAL
+ * order; it stopped being the string order when the look clauses lifted into
+ * the section (`prompt-style-section.ts`). On this surface every direction row
+ * is `look` — the registry has no image-surface motion row — so an image
+ * `[style]` section carries the whole direction fold.
  */
 interface ImageHintPieces {
   /** Subject clauses then direction clauses, each in its registry's fold order. */
-  readonly hintClauses: readonly string[]
+  readonly hintClauses: readonly SlottedPromptClause[]
   /** The structured-field fragment ("" when nothing is populated). */
   readonly structuredFragment: string
 }
 
 /**
- * Render the fold's hint pieces once, so the cap-aware retry can re-join a
+ * Render the fold's hint pieces once, so the cap-aware retry can re-compose a
  * SUBSET of them without re-rendering the catalogs. Each renderer folds its own
  * channel in its registry's canonical table order (unknown keys and unknown ids
  * contribute nothing), and `renderStructuredFields` returns "" when nothing is
@@ -192,7 +203,7 @@ interface ImageHintPieces {
  *
  * SUBJECT LEADS DIRECTION: the subject is the noun phrase ("a woman in her
  * 30s, …") the cinematographic clauses then modify. With no `subject` the list
- * IS the direction fold, so every existing caller's prompt is byte-identical.
+ * IS the direction fold, so every existing caller sheds identically.
  */
 function renderImageHintPieces(
   subject: SubjectFields | undefined,
@@ -201,15 +212,17 @@ function renderImageHintPieces(
 ): ImageHintPieces {
   return {
     hintClauses: [
-      ...renderSubjectHints(subject, {
-        surface: "image",
-        mode: SUBJECT_IMAGE_HINT_MODE_DEFAULT,
-      }),
-      ...renderDirectionHints(direction, {
+      ...asBodyClauses(
+        renderSubjectHints(subject, {
+          surface: "image",
+          mode: SUBJECT_IMAGE_HINT_MODE_DEFAULT,
+        }),
+      ),
+      ...partitionStyleClauses(direction, {
         surface: "image",
         mode: IMAGE_HINT_MODE_DEFAULT,
       }),
-    ].filter((p) => p.length > 0),
+    ].filter((c) => c.text.length > 0),
     structuredFragment: structured ? renderStructuredFields(structured) : "",
   }
 }
@@ -218,32 +231,34 @@ function renderImageHintPieces(
  * Compose the subject + cinematic-direction hints and the structured-field
  * fragment with the user's prompt, keeping the FIRST `keptHintClauses` clauses
  * (the full count on the first pass; fewer only when the provider cap forced a
- * shed). The structured fragment always lands LAST.
+ * shed). The structured fragment always ends the body; the look clauses that
+ * survived follow it in the `[style]` section.
  *
  * EXACT NO-OP CONTRACT: when there are no subject/cinematic/structured hint
  * pieces (the platform-caller case for a node that carries no stored `subject`/
  * `direction`/`structured` — every workflow authored before the canvas honored
  * them), the
- * user's prompt is returned **verbatim, untrimmed** by `joinPromptHints`. This
- * is load-bearing for parity: the old platform path passed the prompt straight
- * to `buildImagePrompt`, which never trims, so trimming here would change the
+ * user's prompt is returned **verbatim, untrimmed**. This is load-bearing for
+ * parity: the old platform path passed the prompt straight to
+ * `buildImagePrompt`, which never trims, so trimming here would change the
  * assembled prompt (and the recorded `jobs.input_data`) byte-for-byte. Never
  * mutates inputs.
  *
- * A node that DOES carry `direction`/`structured` takes the join branch and is
- * therefore trimmed + `". "`-joined — intended, and asserted at the caller
- * level by the payload-builder before/after test.
+ * A node that DOES carry `direction`/`structured` takes the fold branch and is
+ * therefore trimmed — a `[style]` section counts as folded even when the body
+ * gained nothing. Intended, and asserted at the caller level by the
+ * payload-builder before/after test.
  */
 function composePromptText(
   userPrompt: string,
   pieces: ImageHintPieces,
   keptHintClauses: number,
 ): string {
-  const hints = [
-    ...pieces.hintClauses.slice(0, keptHintClauses),
+  return composeSectionedPrompt(
+    userPrompt,
+    pieces.hintClauses.slice(0, keptHintClauses),
     pieces.structuredFragment,
-  ].filter((p) => p.length > 0)
-  return joinPromptHints(userPrompt, hints)
+  )
 }
 
 /**
@@ -318,9 +333,19 @@ export function assembleImageInput(
   // point the body overflows on its own and the builder's clamp stands.
   let kept = pieces.hintClauses.length
   let fitted = assembleWith(kept)
-  while (fitted.overflowChars > 0 && kept > 0) {
-    kept = keepableDirectionHints(pieces.hintClauses, kept, fitted.overflowChars)
-    fitted = assembleWith(kept)
+  if (fitted.overflowChars > 0) {
+    // Priced only on the overflow path: the deltas cost a composition per
+    // clause and the fits-first-time case is the common one.
+    const costs = sectionedClauseCosts(
+      input.userPrompt,
+      pieces.hintClauses,
+      pieces.structuredFragment,
+    )
+    const texts = pieces.hintClauses.map((c) => c.text)
+    while (fitted.overflowChars > 0 && kept > 0) {
+      kept = keepableDirectionHints(texts, kept, fitted.overflowChars, costs)
+      fitted = assembleWith(kept)
+    }
   }
   // `overflowChars` is assembly bookkeeping, not part of the callers' contract.
   const { overflowChars, ...result } = fitted
