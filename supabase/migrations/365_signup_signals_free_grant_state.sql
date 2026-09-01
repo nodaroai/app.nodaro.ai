@@ -175,3 +175,104 @@ $$;
 REVOKE EXECUTE ON FUNCTION public.claim_signup_grant(uuid, integer) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.claim_signup_grant(uuid, integer) FROM anon;
 REVOKE EXECUTE ON FUNCTION public.claim_signup_grant(uuid, integer) FROM authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 5. free_grant_state joins the profiles UPDATE denylist.
+--
+-- The profiles UPDATE policy is a DENYLIST: check_profiles_update_allowed
+-- pins named columns IS NOT DISTINCT FROM their stored values, and any column
+-- it does not name is freely writable by the row's owner through PostgREST
+-- (270 and 310 both record this property; 270 also records that column-level
+-- REVOKE UPDATE does not help while a table-level grant stands).
+--
+-- Without this section the REVOKEs above gate the wrong thing: the function
+-- is locked, but the STATE deciding whether the endpoint calls it belongs to
+-- the attacker. A user at zero balance resets their own free_grant_state to
+-- 'unclaimed' from the browser console, hits the claim endpoint, and the
+-- service-role RPC re-mints the grant — repeatable after every spend-down,
+-- and invisible on signup_signals (the upsert ignores the duplicate).
+--
+-- Same shape as 310: drop the policy first (it binds the old overload), drop
+-- the old 18-arg overload explicitly (no orphan), recreate with the new
+-- column, recreate the policy. One file = one transaction, so there is no
+-- policy-less window. The search_path pin is restated inline (the migration
+-- 176 lesson: CREATE OR REPLACE drops function-level SET unless restated).
+-- ---------------------------------------------------------------------------
+DROP POLICY IF EXISTS "Users can update own safe columns" ON public.profiles;
+DROP FUNCTION IF EXISTS check_profiles_update_allowed(UUID, TEXT, TEXT, TEXT, INTEGER, INTEGER, INTEGER, INTEGER, BIGINT, INTEGER, TIMESTAMPTZ, BOOLEAN, INTEGER, INTEGER, INTEGER, TIMESTAMPTZ, INTEGER, DATE);
+
+CREATE OR REPLACE FUNCTION check_profiles_update_allowed(
+  p_user_id UUID,
+  p_role TEXT,
+  p_tier TEXT,
+  p_subscription_tier TEXT,
+  p_subscription_credits INTEGER,
+  p_topup_credits INTEGER,
+  p_daily_spent_credits INTEGER,
+  p_credits_balance INTEGER,
+  p_storage_limit_bytes BIGINT,
+  p_lifetime_topup_credits INTEGER,
+  p_last_topup_at TIMESTAMPTZ,
+  p_auto_recharge_enabled BOOLEAN,
+  p_auto_recharge_threshold_credits INTEGER,
+  p_auto_recharge_amount_usd INTEGER,
+  p_auto_recharge_failure_count INTEGER,
+  p_auto_recharge_last_attempt_at TIMESTAMPTZ,
+  p_auto_recharge_daily_count INTEGER,
+  p_auto_recharge_daily_date DATE,
+  p_free_grant_state TEXT
+) RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v RECORD;
+BEGIN
+  SELECT role, tier, subscription_tier, subscription_credits, topup_credits,
+         daily_spent_credits, credits_balance, storage_limit_bytes,
+         lifetime_topup_credits, last_topup_at,
+         auto_recharge_enabled, auto_recharge_threshold_credits,
+         auto_recharge_amount_usd, auto_recharge_failure_count,
+         auto_recharge_last_attempt_at, auto_recharge_daily_count,
+         auto_recharge_daily_date, free_grant_state
+  INTO v FROM profiles WHERE id = p_user_id;
+
+  IF NOT FOUND THEN RETURN FALSE; END IF;
+
+  RETURN (p_role IS NOT DISTINCT FROM v.role)
+    AND (p_tier IS NOT DISTINCT FROM v.tier)
+    AND (p_subscription_tier IS NOT DISTINCT FROM v.subscription_tier)
+    AND (p_subscription_credits IS NOT DISTINCT FROM v.subscription_credits)
+    AND (p_topup_credits IS NOT DISTINCT FROM v.topup_credits)
+    AND (p_daily_spent_credits IS NOT DISTINCT FROM v.daily_spent_credits)
+    AND (p_credits_balance IS NOT DISTINCT FROM v.credits_balance)
+    AND (p_storage_limit_bytes IS NOT DISTINCT FROM v.storage_limit_bytes)
+    AND (p_lifetime_topup_credits IS NOT DISTINCT FROM v.lifetime_topup_credits)
+    AND (p_last_topup_at IS NOT DISTINCT FROM v.last_topup_at)
+    AND (p_auto_recharge_enabled IS NOT DISTINCT FROM v.auto_recharge_enabled)
+    AND (p_auto_recharge_threshold_credits IS NOT DISTINCT FROM v.auto_recharge_threshold_credits)
+    AND (p_auto_recharge_amount_usd IS NOT DISTINCT FROM v.auto_recharge_amount_usd)
+    AND (p_auto_recharge_failure_count IS NOT DISTINCT FROM v.auto_recharge_failure_count)
+    AND (p_auto_recharge_last_attempt_at IS NOT DISTINCT FROM v.auto_recharge_last_attempt_at)
+    AND (p_auto_recharge_daily_count IS NOT DISTINCT FROM v.auto_recharge_daily_count)
+    AND (p_auto_recharge_daily_date IS NOT DISTINCT FROM v.auto_recharge_daily_date)
+    AND (p_free_grant_state IS NOT DISTINCT FROM v.free_grant_state);
+END;
+$$;
+
+CREATE POLICY "Users can update own safe columns" ON public.profiles
+  FOR UPDATE USING (auth.uid() = id)
+  WITH CHECK (
+    auth.uid() = id
+    AND check_profiles_update_allowed(
+      id, role, tier, subscription_tier,
+      subscription_credits, topup_credits, daily_spent_credits,
+      credits_balance, storage_limit_bytes,
+      lifetime_topup_credits, last_topup_at,
+      auto_recharge_enabled, auto_recharge_threshold_credits,
+      auto_recharge_amount_usd, auto_recharge_failure_count,
+      auto_recharge_last_attempt_at, auto_recharge_daily_count,
+      auto_recharge_daily_date, free_grant_state
+    )
+  );

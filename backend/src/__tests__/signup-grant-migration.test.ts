@@ -26,6 +26,12 @@
  *      RAW text of every migration for that statement — so even a COMMENT
  *      using the SQL spelling would make this file the "latest seed" and
  *      redden a test that has nothing to do with this change.
+ *   6. `free_grant_state` is in the profiles UPDATE denylist. The policy's
+ *      guard (check_profiles_update_allowed) pins named columns; a column it
+ *      does not name is freely writable by the row's owner through PostgREST
+ *      (migrations 270 and 310 both document this). Left out, a user resets
+ *      their own state to 'unclaimed' from the browser console and drives the
+ *      service-role RPC to re-mint the grant after every spend-down.
  */
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
@@ -126,9 +132,12 @@ describe("365 — signup_signals is service-role only", () => {
     expect(sql).toMatch(/ALTER TABLE public\.signup_signals\s+ENABLE ROW LEVEL SECURITY;/i)
   })
 
-  it("creates ZERO policies — no client may read another person's signals", () => {
-    const policies = [...sql.matchAll(/CREATE\s+POLICY[\s\S]*?;/gi)].map((m) => m[0])
-    expect(policies).toEqual([])
+  it("creates no policy on signup_signals — no client may read another person's signals", () => {
+    const policies = [...sql.matchAll(/CREATE\s+POLICY\s+"([^"]+)"\s+ON\s+(\S+)/gi)]
+    expect(policies.filter((m) => m[2].includes("signup_signals"))).toEqual([])
+    // The ONLY policy this file may create is the recreation of the profiles
+    // UPDATE guard (the denylist extension below) — nothing else.
+    expect(policies.map((m) => m[1])).toEqual(["Users can update own safe columns"])
   })
 
   it("revokes the table from anon and authenticated", () => {
@@ -182,6 +191,73 @@ describe("365 — credit_transactions.source admits the grant", () => {
     // re-typed, so a value added there and forgotten here fails right away.
     const previous = sourceValues(readFileSync(join(MIGRATIONS_DIR, "351_orgs_billing.sql"), "utf8"))
     expect(sourceValues(RAW)).toEqual([...previous, "signup_grant"].sort())
+  })
+})
+
+describe("365 — free_grant_state joins the profiles UPDATE denylist", () => {
+  // The profiles UPDATE policy is a DENYLIST: check_profiles_update_allowed
+  // pins named columns IS NOT DISTINCT FROM their stored values, and any
+  // column it does not name is freely writable by the row's owner through
+  // PostgREST. free_grant_state is the idempotency key of a credit grant —
+  // writable, it is a self-serve mint: reset to 'unclaimed', re-claim, repeat.
+
+  /** 310's guard — the previous definition whose columns 365 must carry. */
+  const previous = readFileSync(join(MIGRATIONS_DIR, "310_auto_recharge.sql"), "utf8")
+
+  /** p_-parameters of a guard definition, in order, identity arg included. */
+  function guardParams(text: string): string[] {
+    const start = text.indexOf("CREATE OR REPLACE FUNCTION check_profiles_update_allowed(")
+    expect(start, "no guard definition found").toBeGreaterThanOrEqual(0)
+    const sig = text.slice(start, text.indexOf(") RETURNS BOOLEAN", start))
+    return [...sig.matchAll(/p_(\w+)/g)].map((m) => m[1])
+  }
+
+  /** 365's guard block: from the policy drop through the policy recreation. */
+  const block = sql.slice(sql.indexOf('DROP POLICY IF EXISTS "Users can update own safe columns"'))
+
+  it("drops the policy, then the OLD 18-arg overload, then recreates function and policy — in that order", () => {
+    // Policy depends on the old overload; dropping the function first would
+    // fail, and creating the new signature without dropping the old would
+    // leave an orphan overload the policy might still bind to.
+    const dropPolicy = lineOf(/DROP POLICY IF EXISTS "Users can update own safe columns" ON public\.profiles/)
+    const dropFn = lineOf(
+      /DROP FUNCTION IF EXISTS check_profiles_update_allowed\(UUID, TEXT, TEXT, TEXT, INTEGER, INTEGER, INTEGER, INTEGER, BIGINT, INTEGER, TIMESTAMPTZ, BOOLEAN, INTEGER, INTEGER, INTEGER, TIMESTAMPTZ, INTEGER, DATE\)/,
+    )
+    const createFn = lineOf(/CREATE OR REPLACE FUNCTION check_profiles_update_allowed\(/)
+    const createPolicy = lineOf(/CREATE POLICY "Users can update own safe columns" ON public\.profiles/)
+    expect(dropPolicy, "no policy drop").toBeGreaterThanOrEqual(0)
+    expect(dropFn, "the old 18-arg overload must be dropped explicitly").toBeGreaterThan(dropPolicy)
+    expect(createFn, "guard recreation must follow the drops").toBeGreaterThan(dropFn)
+    expect(createPolicy, "policy recreation must come last").toBeGreaterThan(createFn)
+  })
+
+  it("carries EVERY column 310 pinned, plus free_grant_state — derived, not re-typed", () => {
+    expect(guardParams(sql)).toEqual([...guardParams(previous), "free_grant_state"])
+  })
+
+  it("pins free_grant_state IS NOT DISTINCT FROM the stored value", () => {
+    expect(block).toMatch(/p_free_grant_state IS NOT DISTINCT FROM v\.free_grant_state/)
+  })
+
+  it("keeps every previous IS NOT DISTINCT FROM pin (none silently dropped)", () => {
+    for (const c of guardParams(previous)) {
+      if (c === "user_id") continue // identity arg, not a pinned column
+      expect(block, `pin for ${c} lost in the recreation`).toMatch(
+        new RegExp(`p_${c} IS NOT DISTINCT FROM v\\.${c}`),
+      )
+    }
+  })
+
+  it("restates the search_path pin inline — CREATE OR REPLACE drops SET config otherwise", () => {
+    const fn = block.slice(0, block.indexOf("$$"))
+    expect(fn).toContain("SECURITY DEFINER")
+    expect(fn).toContain("SET search_path = public")
+  })
+
+  it("recreates the policy passing free_grant_state through to the guard", () => {
+    const policy = block.slice(block.indexOf('CREATE POLICY "Users can update own safe columns"'))
+    expect(policy).toMatch(/free_grant_state/)
+    expect(policy).toMatch(/auth\.uid\(\) = id/)
   })
 })
 
