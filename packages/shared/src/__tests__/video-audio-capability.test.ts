@@ -63,6 +63,21 @@ describe("getVideoAudioCapability", () => {
     expect(cap.field).toBe("generateAudio")
   })
 
+  it("returns ambient with the `audio` field for the Wan 3.0 family", () => {
+    // Wan 3.0's lever is literally `input.audio` — neither `sound` nor
+    // `generate_audio`. Classified "ambient", NOT audio_driven: the KIE schema
+    // documents no dialogue guarantee, and reference audio is a generic
+    // conditioning array rather than a verified lip-sync transport.
+    for (const m of ["wan-3", "wan-3-prime"]) {
+      const cap = getVideoAudioCapability(m)
+      expect(cap.mode, m).toBe("ambient")
+      expect(cap.field, m).toBe("audio")
+      expect(cap.defaultOn, m).toBe(true)
+      // Audio is priced into the uniform per-second rate — no `:audio` composite.
+      expect(cap.affectsCost, m).toBeUndefined()
+    }
+  })
+
   it("defaults to none for silent / unknown / undefined models", () => {
     for (const m of [
       "minimax",
@@ -70,6 +85,9 @@ describe("getVideoAudioCapability", () => {
       "wan-i2v",
       "grok-i2v",
       "gemini-omni-video",
+      // Gemini Omni Flash mirrors its sibling: deliberately unlisted, so both
+      // Omni SKUs report the same audio capability.
+      "gemini-omni-flash",
       "runway",
       "pika",
       "totally-unknown-model",
@@ -190,6 +208,31 @@ describe("applyVideoAudioToggle — neutral audio intent → per-model KIE field
     const v1: Record<string, unknown> = {}
     applyVideoAudioToggle(v1, "seedance", { sound: true })
     expect(v1.generate_audio).toBe(true)
+  })
+
+  it("maps the neutral toggle onto Wan 3.0's `audio` field", () => {
+    // The dispatcher used to be a two-way if/else whose `else` wrote
+    // `input.sound` — a field the Wan 3.0 contract does not have, so the
+    // toggle would have been silently dropped.
+    const on: Record<string, unknown> = {}
+    applyVideoAudioToggle(on, "wan-3", { sound: true })
+    expect(on.audio).toBe(true)
+    expect(on.sound).toBeUndefined()
+    expect(on.generate_audio).toBeUndefined()
+
+    const off: Record<string, unknown> = {}
+    applyVideoAudioToggle(off, "wan-3-prime", { sound: false })
+    expect(off.audio).toBe(false)
+
+    // Not cost-affecting, so the legacy alias is honoured too.
+    const alias: Record<string, unknown> = {}
+    applyVideoAudioToggle(alias, "wan-3", { generateAudio: true })
+    expect(alias.audio).toBe(true)
+
+    // No intent → the model's own default (KIE `audio: true`) is left alone.
+    const neutral: Record<string, unknown> = {}
+    applyVideoAudioToggle(neutral, "wan-3", {})
+    expect(neutral).toEqual({})
   })
 
   it("accepts `generateAudio` as a legacy alias on FREE models (Seedance)", () => {

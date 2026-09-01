@@ -1756,6 +1756,47 @@ describe("generate-video — reference images + mode-alias dispatch", () => {
     expect(passedOptions.referenceImageUrls).toEqual(["http://cdn.example/character.png"])
   })
 
+  it("gemini-omni-flash with a wired source VIDEO routes to image-to-video (its V2V mode)", async () => {
+    // The Gemini Omni FAMILY override: a reference video is a V2V source, so it
+    // flips the dispatch to i2v exactly as it does for gemini-omni-video. Left
+    // as a literal id, a flash node with a source clip fell to text-to-video,
+    // `video_list` never reached the payload and the trim inputs were ignored.
+    // A reference IMAGE rides along so the i2v arm's start-frame guard is
+    // satisfied (video-only refs still hard-fail there — a pre-existing gap
+    // shared with gemini-omni-video, unrelated to the family swap). Reference
+    // images alone do NOT flip the mode, so this run reaching i2v is proof the
+    // VIDEO ref did it.
+    mockResolveNodeInputs.mockReturnValue({
+      prompt: "restyle this shot",
+      referenceVideoUrls: ["http://cdn.example/source.mp4"],
+      referenceImageUrls: ["http://cdn.example/look.png"],
+    })
+    mockRunVideoGeneration.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("generate-video", { provider: "gemini-omni-flash" }),
+      makeCtx(),
+    )
+    expect(mockRunTextToVideoGeneration).not.toHaveBeenCalled()
+    expect(mockRunVideoGeneration).toHaveBeenCalled()
+  })
+
+  it("wan-3 with a wired reference VIDEO stays text-to-video (NOT a V2V source)", async () => {
+    // Wan 3.0's reference videos are a t2v-compatible reference ARRAY, not a
+    // V2V source clip, so it must keep the standard start-frame-only split.
+    // Pins that wan was deliberately excluded from the gemini override.
+    mockResolveNodeInputs.mockReturnValue({
+      prompt: "a drifting camera",
+      referenceVideoUrls: ["http://cdn.example/ref.mp4"],
+    })
+    mockRunTextToVideoGeneration.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("generate-video", { provider: "wan-3" }),
+      makeCtx(),
+    )
+    expect(mockRunVideoGeneration).not.toHaveBeenCalled()
+    expect(mockRunTextToVideoGeneration.mock.calls[0][3]).toBe("wan-3")
+  })
+
   it("happyhorse-i2v without an image remaps to its t2v twin instead of crashing the route", async () => {
     // happyhorse-i2v/happyhorse are mode twins of one model (VIDEO_MODE_ALIASES).
     // Pre-alias, the image-less run sent 'happyhorse-i2v' to /v1/text-to-video

@@ -16,7 +16,7 @@
  */
 
 import type { WorkflowNode, WorkflowEdge, CharacterNodeData, ExtraRef } from "@/types/nodes"
-import { characterMentionSlug, extractCharacterLoraFields, characterMentionableAssetArrays, resolveEffectiveSourceType, resolveVideoProviderForMode, hasFeature, countRefModalityEdges, type ReferenceModality } from "@nodaro/shared"
+import { characterMentionSlug, isGeminiOmniProvider, extractCharacterLoraFields, characterMentionableAssetArrays, resolveEffectiveSourceType, resolveVideoProviderForMode, hasFeature, countRefModalityEdges, type ReferenceModality } from "@nodaro/shared"
 import { computeNodePrompt, characterLockToRefLock, collectIdentityLockClause, composeVideoPromptText, readDirectionFields, readStructuredFields, readSubjectFields, resolveVideoReferenceCore, type CharacterMeta } from "@nodaro/prompts"
 import type { ConnectedReference } from "@nodaro/shared"
 import { collectCinematographyHints } from "@/lib/cinematography-hints"
@@ -394,9 +394,10 @@ export interface AssembleVideoPromptArgs {
  * text-to-video. Reference-handle images (`imageReferences` / `videoReferences` /
  * `audioReferences`) are NOT frames — they feed the `{image:N}` body tokens — so
  * they never flip the mode, matching the run where they resolve to
- * `referenceImageUrls`/etc., not `startFrameUrl`. `gemini-omni-video`'s V2V mode
- * is the one provider-scoped exception that routes a wired reference VIDEO to i2v,
- * mirroring the run's gemini-scoped override.
+ * `referenceImageUrls`/etc., not `startFrameUrl`. The Gemini Omni FAMILY's V2V mode
+ * (gemini-omni-video + gemini-omni-flash) is the one provider-scoped exception
+ * that routes a wired reference VIDEO to i2v, mirroring the run's gemini-scoped
+ * override.
  *
  * `generate-video`'s only image-input handles are `startFrame`/`endFrame` (the
  * node defines no generic image target — references live on their own handles),
@@ -414,7 +415,7 @@ function resolveGenerateVideoMode(
   )
   const provider = (node.data as { provider?: string }).provider
   const hasGeminiVideoRef =
-    provider === "gemini-omni-video" &&
+    isGeminiOmniProvider(provider) &&
     incoming.some((e) => e.targetHandle === "videoReferences")
   return hasFrame || hasGeminiVideoRef ? "image-to-video" : "text-to-video"
 }

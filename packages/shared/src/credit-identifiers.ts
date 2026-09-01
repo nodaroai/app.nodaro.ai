@@ -21,7 +21,10 @@ import {
   T2I_TO_I2I_VARIANT,
   isVeoProvider,
   isMinimaxH3Provider,
+  isGeminiOmniProvider,
+  isWan3Provider,
   normalizeMinimaxH3Resolution,
+  normalizeWan3Resolution,
   getVideoAudioCapability,
 } from "./model-constants.js"
 import { isFlux2Model } from "./flux2-pricing.js"
@@ -137,9 +140,11 @@ const T2V_CREDIT_OVERRIDES: Record<string, string> = {
  * @param resolution - Output resolution (used by Seedance 2 for 480p/720p pricing)
  * @param hasVideoRef - Whether a reference video is connected (Seedance 2 uses a lower per-second rate when true)
  */
-/** Gemini Omni Video duration tiers (seconds). Mirrors `MODEL_CATALOG["gemini-omni-video"].durations`
- *  and `KIE_VIDEO_MODELS["gemini-omni-video"].allowedDurations`. Hoisted to module scope so the
- *  nearest-tier snap below doesn't reallocate on every (hot-path) call. */
+/** Gemini Omni duration tiers (seconds). Mirrors the `durations` of BOTH
+ *  `MODEL_CATALOG["gemini-omni-video"]` and `MODEL_CATALOG["gemini-omni-flash"]`
+ *  (and their `KIE_VIDEO_MODELS[*].allowedDurations`) — the family shares one
+ *  ladder. Hoisted to module scope so the nearest-tier snap below doesn't
+ *  reallocate on every (hot-path) call. */
 const GEMINI_OMNI_DURATIONS = [4, 6, 8, 10]
 
 /**
@@ -191,17 +196,21 @@ export function buildVideoCreditModelIdentifier(
     return effectiveProvider
   }
 
-  // Gemini Omni Video: priced by (resolution-band × duration), with a flat
-  // per-generation rate when a source video is supplied (V2V). Lowercase "4k".
-  if (effectiveProvider === "gemini-omni-video") {
+  // Gemini Omni family (gemini-omni-video + gemini-omni-flash): priced by
+  // (resolution-band × duration), with a flat per-generation rate when a source
+  // video is supplied (V2V). Lowercase "4k". The prefix is TEMPLATED from the
+  // provider id, so a further Omni SKU needs no edit here — it only has to join
+  // GEMINI_OMNI_PROVIDERS and seed its rows. These models are deliberately NOT
+  // in DURATION_PRICED_PROVIDERS; this branch early-returns before that gate.
+  if (isGeminiOmniProvider(effectiveProvider)) {
     if (hasVideoRef) {
-      return resolution === "4k" ? "gemini-omni-video:4k:vref" : "gemini-omni-video:vref"
+      return resolution === "4k" ? `${effectiveProvider}:4k:vref` : `${effectiveProvider}:vref`
     }
     // Snap to nearest allowed tier (NOT a min/max clamp) so off-tier durations
     // map to a SEEDED composite; default 8 when unset.
     const raw = parseInt(String(duration ?? 8), 10)
     const d = Number.isNaN(raw) ? 8 : GEMINI_OMNI_DURATIONS.reduce((b, a) => (Math.abs(a - raw) < Math.abs(b - raw) ? a : b))
-    return resolution === "4k" ? `gemini-omni-video:4k:${d}` : `gemini-omni-video:${d}`
+    return resolution === "4k" ? `${effectiveProvider}:4k:${d}` : `${effectiveProvider}:${d}`
   }
 
   // LTX 2.3: priced by (resolution-band × duration-seconds). The RESERVE must be
@@ -281,7 +290,31 @@ export function buildVideoCreditModelIdentifier(
   // guard fuzzes the whole resolution space.
   const resTiers = RESOLUTION_DURATION_PRICING[effectiveProvider]
   if (resTiers) {
-    const res = resolution && resTiers.includes(resolution) ? resolution : resTiers[0]!
+    // The "default tier" is the provider's DECLARED default when it has one
+    // (PRICING_DEFAULT_RESOLUTION — wan-3 renders 720p, not the cheapest tier),
+    // otherwise the first listed tier. Declaring it explicitly means a cosmetic
+    // reorder of the tier list can never reprice a live model, and an OMITTED
+    // *or* unsupported resolution both land on what actually renders instead of
+    // on the cheapest row (commit_credits refunds a surplus but can never
+    // collect a shortfall). Behaviour-neutral for every member without a
+    // declared default.
+    const declaredDefault = PRICING_DEFAULT_RESOLUTION[effectiveProvider]
+    const fallback = declaredDefault && resTiers.includes(declaredDefault) ? declaredDefault : resTiers[0]!
+    // Wan 3.0 renders through `normalizeWan3Resolution`, which is CASE-INSENSITIVE
+    // ("1080P" — KIE's own OpenAPI enum spelling, and the natural value for an
+    // integrator reading the provider docs — renders 1080P). The tier list here is
+    // lowercase and `Array.includes` is case-sensitive, so without this the render
+    // path and the billing path disagree: "1080P" rendered the top tier and billed
+    // the 720p row, a shortfall `commit_credits` (refund-only) can never collect.
+    // Collapsing through the SAME normalizer the runner uses makes render == billed
+    // by construction for every spelling, including garbage (→ the declared 720p).
+    // Scoped to the wan family on purpose: the other RESOLUTION_DURATION_PRICING
+    // members pass `resolution` to their wire verbatim, so case-folding their
+    // billing without probing their wire would reprice live models.
+    const requested = isWan3Provider(effectiveProvider)
+      ? normalizeWan3Resolution(resolution).toLowerCase()
+      : resolution
+    const res = requested && resTiers.includes(requested) ? requested : fallback
     identifier += `:${res}`
   }
 

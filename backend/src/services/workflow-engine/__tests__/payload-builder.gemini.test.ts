@@ -1,9 +1,10 @@
 /**
- * Gemini Omni Video dispatch in the unified `generate-video` payload-builder case.
+ * Gemini Omni family dispatch in the unified `generate-video` payload-builder case.
  *
  * Tests:
  * 1. A connected source video (referenceVideoUrls) routes through the
- *    image-to-video worker path (effectiveMode = "image-to-video").
+ *    image-to-video worker path (effectiveMode = "image-to-video") — for EVERY
+ *    member of the family, not just the id the branch was written for.
  * 2. videoTrimStart / videoTrimEnd are threaded into the payload.
  */
 import { describe, it, expect } from "vitest"
@@ -65,6 +66,27 @@ describe("Gemini Omni Video dispatch in generate-video", () => {
     const result = buildPayload(n, JOB_ID, inputs, undefined, { nodes: [n], edges: [], nodeStates: {} })
     // No startFrame → mode = text-to-video, effectiveMode stays text-to-video
     expect(result.jobName).toBe("text-to-video")
+  })
+
+  it("routes gemini-omni-flash through the same V2V path (family predicate, not a literal)", () => {
+    // The V2V swap is keyed off isGeminiOmniProvider, so a new Omni SKU
+    // inherits it. A literal `=== "gemini-omni-video"` here would enqueue the
+    // t2v handler for flash and build the credit identifier with nodeType
+    // "text-to-video" instead of the i2v-category :vref row.
+    const n = gv("gemini-omni-flash")
+    const inputs: ResolvedInputs = {
+      referenceVideoUrls: ["https://cdn.example/source.mp4"],
+    }
+    const result = buildPayload(n, JOB_ID, inputs, undefined, { nodes: [n], edges: [], nodeStates: {} })
+    expect(result.jobName).toBe("image-to-video")
+    expect(result.modelIdentifier).toBe("gemini-omni-flash:vref")
+  })
+
+  it("gemini-omni-flash with no source video stays on the t2v path", () => {
+    const n = gv("gemini-omni-flash")
+    const result = buildPayload(n, JOB_ID, {}, undefined, { nodes: [n], edges: [], nodeStates: {} })
+    expect(result.jobName).toBe("text-to-video")
+    expect(result.modelIdentifier).toBe("gemini-omni-flash:8")
   })
 
   it("includes referenceVideoUrls in the payload", () => {

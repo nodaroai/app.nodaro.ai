@@ -823,3 +823,50 @@ describe("gemini-omni-video", () => {
     expect(id({ duration: 6, resolution: "720p", nodeType: "text-to-video" })).toBe("gemini-omni-video:6")
   })
 })
+
+// ---------------------------------------------------------------------------
+// gemini-omni-flash credit identifier — the family branch reaches the sibling
+// ---------------------------------------------------------------------------
+// The Omni branch used to compare against the literal "gemini-omni-video" and
+// hardcode that prefix in every returned string. It now asks
+// isGeminiOmniProvider() and TEMPLATES the prefix, so this block is the proof
+// that the refactor actually reaches the second SKU (the block above proves it
+// stayed behaviour-neutral for the first). A flash run that fell through to the
+// DURATION_PRICED gate would return the BARE id and reserve 270 credits for a
+// 4K 10s render.
+describe("gemini-omni-flash", () => {
+  const id = (opts: { duration?: number | string; resolution?: string; hasVideoRef?: boolean; nodeType?: "image-to-video" | "text-to-video" }) =>
+    buildVideoCreditModelIdentifier("gemini-omni-flash", opts.duration, undefined, opts.nodeType ?? "image-to-video", undefined, opts.resolution, opts.hasVideoRef)
+
+  it("prices 720p/1080p by duration tier", () => {
+    expect(id({ duration: 4, resolution: "720p" })).toBe("gemini-omni-flash:4")
+    expect(id({ duration: 6, resolution: "1080p" })).toBe("gemini-omni-flash:6")
+    expect(id({ duration: 8, resolution: "720p" })).toBe("gemini-omni-flash:8")
+    expect(id({ duration: 10, resolution: "1080p" })).toBe("gemini-omni-flash:10")
+  })
+  it("prices 4k by duration tier", () => {
+    expect(id({ duration: 4, resolution: "4k" })).toBe("gemini-omni-flash:4k:4")
+    expect(id({ duration: 10, resolution: "4k" })).toBe("gemini-omni-flash:4k:10")
+  })
+  it("prices V2V flat, ignoring duration", () => {
+    expect(id({ duration: 8, resolution: "1080p", hasVideoRef: true })).toBe("gemini-omni-flash:vref")
+    expect(id({ duration: 8, resolution: "4k", hasVideoRef: true })).toBe("gemini-omni-flash:4k:vref")
+  })
+  it("snaps off-tier durations to nearest allowed tier (never :5)", () => {
+    expect(id({ duration: 5, resolution: "720p" })).toBe("gemini-omni-flash:4")
+    expect(id({ duration: 12, resolution: "720p" })).toBe("gemini-omni-flash:10")
+  })
+  it("defaults to tier 8 when duration is undefined", () => {
+    expect(id({ resolution: "720p" })).toBe("gemini-omni-flash:8")
+  })
+  it("works on the text-to-video path too", () => {
+    expect(id({ duration: 6, resolution: "720p", nodeType: "text-to-video" })).toBe("gemini-omni-flash:6")
+  })
+  it("never falls through to the bare id (the pre-refactor failure mode)", () => {
+    for (const d of [undefined, 4, 6, 8, 10, 5, 12]) {
+      for (const r of [undefined, "720p", "1080p", "4k"]) {
+        expect(id({ duration: d, resolution: r })).not.toBe("gemini-omni-flash")
+      }
+    }
+  })
+})

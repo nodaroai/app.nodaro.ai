@@ -66,6 +66,10 @@ describe("per-model prompt length limits", () => {
     it("returns verified higher caps", () => {
       expect(getMaxVideoPromptChars("seedance-2")).toBe(20000)
       expect(getMaxVideoPromptChars("gemini-omni-video")).toBe(20000)
+      expect(getMaxVideoPromptChars("gemini-omni-flash")).toBe(20000)
+      // Wan 3.0 family — 20000 chars, truncated by the provider beyond that.
+      expect(getMaxVideoPromptChars("wan-3")).toBe(20000)
+      expect(getMaxVideoPromptChars("wan-3-prime")).toBe(20000)
       expect(getMaxVideoPromptChars("bytedance-pro")).toBe(10000)
     })
     it("falls back to VIDEO_PROMPT_MAX for UNVERIFIED + unknown providers", () => {

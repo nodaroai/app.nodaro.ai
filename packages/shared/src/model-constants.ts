@@ -139,6 +139,13 @@ export const MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
   // (docs.kie.ai/market/bytedance/seedance-2-5).
   "seedance-2-5": 30000,
   "gemini-omni-video": 20000,
+  // Gemini Omni Flash 1.1 — same 20000-char prompt surface as the pro sibling
+  // (docs.kie.ai/market/google/gemini-omni-flash-1-1).
+  "gemini-omni-flash": 20000,
+  // Wan 3.0 / 3.0 Prime — 20000 chars, excess truncated by the provider
+  // (docs.kie.ai/market/wan/3-0-video and /3-0-video-prime).
+  "wan-3": 20000,
+  "wan-3-prime": 20000,
   "bytedance-lite": 10000,
   "bytedance-pro": 10000,
   "bytedance-pro-fast": 10000,
@@ -750,6 +757,11 @@ export const IMAGE_TO_VIDEO_PROVIDERS = [
   "runway-kie",
   "kling-3-omni",
   "gemini-omni-video",
+  "gemini-omni-flash",
+  // Wan 3.0 family — one id per SKU serves BOTH modes (no t2v twin, no alias),
+  // so each id is listed in this array AND in TEXT_TO_VIDEO_PROVIDERS.
+  "wan-3",
+  "wan-3-prime",
   "ltx-2.3-pro",
   "ltx-2.3-fast",
   // xAI Grok Imagine Video 1.5 — KIE i2v (image_urls required). Also listed in
@@ -788,6 +800,12 @@ export const TEXT_TO_VIDEO_PROVIDERS = [
   "happyhorse",
   "runway-kie",
   "gemini-omni-video",
+  "gemini-omni-flash",
+  // Wan 3.0 family — REAL t2v (prompt-only runs are the documented default
+  // mode), so they belong in this main section and must NOT be gated by
+  // VIDEO_PROVIDERS_REQUIRING_IMAGE.
+  "wan-3",
+  "wan-3-prime",
   "ltx-2.3-pro",
   "ltx-2.3-fast",
   // ── i2v-only providers (image required) ──────────────────────────────────
@@ -1245,6 +1263,12 @@ export const DURATION_PRICED_PROVIDERS = new Set([
   "happyhorse",
   "happyhorse-i2v",
   "happyhorse-ref2v",
+  // Wan 3.0 family — per-second billing at three resolution rates. NOTE:
+  // gemini-omni-flash is deliberately ABSENT (like gemini-omni-video): the
+  // Gemini Omni branch in buildVideoCreditModelIdentifier early-returns before
+  // this gate is consulted.
+  "wan-3",
+  "wan-3-prime",
 ])
 
 /**
@@ -1300,6 +1324,75 @@ export const MINIMAX_H3_DEFAULT_RESOLUTION = "2K"
  */
 export function normalizeMinimaxH3Resolution(resolution: string | undefined): "768P" | "2K" {
   return resolution?.trim().toLowerCase() === "768p" ? "768P" : MINIMAX_H3_DEFAULT_RESOLUTION
+}
+
+/**
+ * Wan 3.0 family — the KIE "wan/3-0-video" market model and its high-speed
+ * "wan/3-0-video-prime" sibling. The two share a BYTE-IDENTICAL input schema
+ * (first/last frame OR an all-purpose reference mode with images/videos/audio,
+ * native `audio` boolean, 2-30s, 480P/720P/1080P, six aspect ratios with
+ * `adaptive` as the default); only the per-second rate differs. Prime is the
+ * FASTER tier at a higher rate — never describe it as "higher quality".
+ *
+ * Exact-membership set — NEVER match on a "wan" prefix: "wan", "wan-i2v",
+ * "wan-turbo", "wan-flash", "wan-videoedit" and the "wan-2.7-*" ids are
+ * unrelated 2.x models with a different surface (and a different reference
+ * token format — see WAN_3_DOCTRINE in @nodaro/prompts).
+ */
+export const WAN_3_PROVIDERS = new Set<string>([
+  "wan-3",
+  "wan-3-prime",
+])
+
+export function isWan3Provider(provider: string | undefined): boolean {
+  return !!provider && WAN_3_PROVIDERS.has(provider)
+}
+
+/** Wan 3.0 resolution the PLATFORM renders when the param is omitted or unknown.
+ *  Deliberately NOT KIE's own default (1080P): 720p is the tier the bare credit
+ *  identifier prices, so the provider layer pins it to keep render == billed. */
+export const WAN_3_DEFAULT_RESOLUTION = "720P"
+
+/**
+ * SINGLE normalization for the Wan 3.0 resolution lever (KIE wire enum
+ * "480P" | "720P" | "1080P"). Everything INTERNAL — the catalog, QUALITY_MAP,
+ * dropdowns, RESOLUTION_DURATION_PRICING keys and every emitted credit
+ * identifier — stays LOWERCASE; this helper is the ONE place the uppercase wire
+ * form is produced (backend KIE payload build), the twin of
+ * {@link normalizeMinimaxH3Resolution}.
+ *
+ * Case-insensitive. Anything else (undefined, garbage, a stale "4k") collapses
+ * to {@link WAN_3_DEFAULT_RESOLUTION} — the tier the default credit identifier
+ * reserves — so the billed tier can never undercut the rendered one.
+ */
+export function normalizeWan3Resolution(resolution: string | undefined): "480P" | "720P" | "1080P" {
+  switch (resolution?.trim().toLowerCase()) {
+    case "480p": return "480P"
+    case "1080p": return "1080P"
+    case "720p": return "720P"
+    default: return WAN_3_DEFAULT_RESOLUTION
+  }
+}
+
+/**
+ * Google Gemini Omni family — the KIE "gemini-omni-video" market model and its
+ * faster/cheaper "google/gemini-omni-flash-1-1" sibling. Both take the SAME
+ * request shape (prompt + image_urls references, video-edit through the i2v
+ * handle, 4/6/8/10s, 720p/1080p or a 4K band) and are dispatched through the
+ * same runner, so every behavioural branch that used to compare against the
+ * literal "gemini-omni-video" must ask this predicate instead — V2V routing,
+ * the 7-slot reference quota, the mode swap and the aspect-ratio panels.
+ *
+ * Exact-membership set — NEVER match on a "gemini" prefix (the Gemini LLM ids
+ * would collide).
+ */
+export const GEMINI_OMNI_PROVIDERS = new Set<string>([
+  "gemini-omni-video",
+  "gemini-omni-flash",
+])
+
+export function isGeminiOmniProvider(provider: string | undefined): boolean {
+  return !!provider && GEMINI_OMNI_PROVIDERS.has(provider)
 }
 
 /**
@@ -1553,9 +1646,15 @@ export function maxSegmentsFor(provider: string | undefined, capSec: number): nu
  * param at all (inferred from the frame). Only the pure-t2v endpoint requires
  * a concrete ratio — the KIE provider layer coerces `adaptive` → `16:9` there
  * (see applyMinimaxH3Params in backend kie/video.ts).
+ *
+ * Wan 3.0 also defaults to `adaptive` — it is the model's own KIE default and
+ * the first value in its aspect enum, so an un-set node must not silently run
+ * at 16:9 while the panel displays Adaptive.
  */
 export function defaultVideoAspectRatio(provider: string | undefined): string {
-  return isSeedance2Provider(provider) || isMinimaxH3Provider(provider) ? "adaptive" : "16:9"
+  return isSeedance2Provider(provider) || isMinimaxH3Provider(provider) || isWan3Provider(provider)
+    ? "adaptive"
+    : "16:9"
 }
 
 /**
@@ -1656,6 +1755,10 @@ export const SEEDANCE_2_R2V_MAX_AUDIO_SEC_BY_PROVIDER: Record<string, number> = 
   // MiniMax Hailuo 3 — documented hard limit: each reference audio segment
   // 2-15s, ≤15s total (docs.kie.ai/market/minimax-h3/reference-to-video).
   "minimax-h3": 15,
+  // Wan 3.0 family — documented hard limit: each reference audio clip 1-15s,
+  // ≤15s combined (docs.kie.ai/market/wan/3-0-video).
+  "wan-3": 15,
+  "wan-3-prime": 15,
 }
 
 /** The verified r2v reference-audio cap (seconds) for a provider, or null when
@@ -1711,8 +1814,17 @@ export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
   // bills input images beyond the first 5 (11 KIE cr each) — see the
   // minimax-h3 credit helper in backend ee/billing.
   "minimax-h3": { ...SEEDANCE_2_REF_LIMITS },
+  // Wan 3.0 family — all-purpose reference mode: up to 10 images / 5 videos
+  // (each 1-15s, ≤15s combined) / 5 audio clips (each 1-15s, ≤15s combined).
+  // The reference arrays are mutually EXCLUSIVE with first/last frame at the
+  // provider (docs.kie.ai/market/wan/3-0-video).
+  "wan-3": { images: 10, videos: 5, audio: 5 },
+  "wan-3-prime": { images: 10, videos: 5, audio: 5 },
   // Multi-image reference providers.
   "gemini-omni-video": { images: 7, videos: 1 },
+  // Gemini Omni Flash 1.1 — identical quota to the pro sibling
+  // (images + 2×videos + character_ids ≤ 7).
+  "gemini-omni-flash": { images: 7, videos: 1 },
   "kling-3-omni": { images: 7 },     // catalog/docs: "end frame + up to 7 reference images"
   "grok-i2v": { images: 7 },         // backend kie/models.ts maxRefImages: 7
   "happyhorse-ref2v": { images: 9 }, // backend kie/models.ts maxRefImages: 9
@@ -1738,10 +1850,15 @@ export const RESOLUTION_VIDEO_REF_PRICING = SEEDANCE_2_PROVIDERS
 /**
  * Video models priced by (duration × resolution) WITHOUT a video-ref dimension.
  * Identifier suffix: `:{resolution}`, appended after the duration tier; value =
- * the provider's PRICED resolution tiers. Any resolution outside the list
- * (or undefined) collapses to the FIRST entry — the provider's default tier —
- * so the builder can never emit an unpriced composite (the hard-fail guard
- * fuzzes the full resolution space). Distinct from
+ * the provider's PRICED resolution tiers.
+ *
+ * Any resolution outside the list (or undefined) collapses to the provider's
+ * DEFAULT tier, so the builder can never emit an unpriced composite (the
+ * hard-fail guard fuzzes the full resolution space). That default is
+ * {@link PRICING_DEFAULT_RESOLUTION} when the provider declares one, and
+ * otherwise the FIRST entry here — so a member with a declared default (wan-3)
+ * can list its tiers in the repo-standard ascending order without index 0
+ * silently becoming the billed default. Distinct from
  * RESOLUTION_VIDEO_REF_PRICING (Seedance gen), which also adds `-ref` variants.
  */
 export const RESOLUTION_DURATION_PRICING: Record<string, readonly string[]> = {
@@ -1757,6 +1874,12 @@ export const RESOLUTION_DURATION_PRICING: Record<string, readonly string[]> = {
   "happyhorse": ["720p", "1080p"],
   "happyhorse-i2v": ["720p", "1080p"],
   "happyhorse-ref2v": ["720p", "1080p"],
+  // Wan 3.0 / Prime — per-second billing at three published resolution rates.
+  // Ascending, matching the catalog; the BILLED default is declared explicitly
+  // in PRICING_DEFAULT_RESOLUTION ("720p") rather than carried by index 0, and
+  // the provider layer pins the same 720P so render == billed.
+  "wan-3": ["480p", "720p", "1080p"],
+  "wan-3-prime": ["480p", "720p", "1080p"],
 }
 
 /**
@@ -1779,6 +1902,13 @@ export const NATIVE_ADAPTIVE_ASPECT: Record<string, string> = {
   "seedance-2-fast": "adaptive",
   "seedance-2-mini": "adaptive",
   "seedance-2-5": "adaptive",
+  // Wan 3.0 family: `adaptive` is the enum DEFAULT and KIE documents it as
+  // "automatically selects the ratio based on the input media and intent"
+  // (docs.kie.ai/market/wan/3-0-video) — i.e. match-the-input, not merely
+  // "provider default" (the grok `auto` trap). DOC-verified only; re-confirm
+  // with a live job before relying on it for off-catalog ratios.
+  "wan-3": "adaptive",
+  "wan-3-prime": "adaptive",
 }
 
 /**
@@ -1877,8 +2007,9 @@ export type VideoAudioMode = "none" | "ambient" | "native_speech" | "audio_drive
 
 export interface VideoAudioCapability {
   mode: VideoAudioMode
-  /** Provider-option field carrying the on/off toggle, when user-controllable. */
-  field?: "generateAudio" | "sound"
+  /** Provider-option field carrying the on/off toggle, when user-controllable.
+   *  `audio` is Wan 3.0's own boolean lever (KIE `input.audio`, default true). */
+  field?: "generateAudio" | "sound" | "audio"
   /** Audio is always produced and can't be turned off by the user (VEO 3.x). */
   alwaysOn?: boolean
   /** Enabling audio raises the credit cost (Kling — see AUDIO_ADDON_PROVIDERS). */
@@ -1937,6 +2068,19 @@ export const VIDEO_AUDIO_CAPABILITY: Record<string, VideoAudioCapability> = {
   // KIE API exposes NO audio on/off parameter (audio is always produced), so
   // there is no toggle field — alwaysOn, like VEO.
   "minimax-h3": { mode: "audio_driven", alwaysOn: true },
+  // Wan 3.0 family — a single boolean `audio` lever (KIE default true) produces
+  // an ambient/SFX track with the clip. Classified "ambient", NOT
+  // "native_speech" or "audio_driven": the schema documents no dialogue
+  // guarantee, and reference audio is a generic conditioning array, not a
+  // verified lip-sync transport. Upgrade only on a live probe (the kling-3.0
+  // standard) — `audio_driven` would reroute the Story→Video dialogue pipeline
+  // and skip the lip-sync pass. `defaultOn` mirrors the KIE default so an
+  // intent-less request is described honestly; audio is priced into the uniform
+  // per-second rate, so NOT cost-affecting (no `:audio` composite).
+  // gemini-omni-flash is deliberately ABSENT — gemini-omni-video is absent too
+  // (mode "none"), and the siblings must not disagree.
+  "wan-3": { mode: "ambient", field: "audio", defaultOn: true },
+  "wan-3-prime": { mode: "ambient", field: "audio", defaultOn: true },
 }
 
 const VIDEO_AUDIO_NONE: VideoAudioCapability = { mode: "none" }
@@ -2008,6 +2152,7 @@ export function applyVideoAudioToggle(
   const enabled = cap.affectsCost ? opts?.sound : (opts?.sound ?? opts?.generateAudio)
   if (enabled === undefined) return // no intent — keep the model's own default
   if (cap.field === "generateAudio") input.generate_audio = enabled
+  else if (cap.field === "audio") input.audio = enabled
   else input.sound = enabled
 }
 
@@ -2063,6 +2208,11 @@ export const VIDEO_VARIABLE_PRICING: Record<string, "duration" | "duration+audio
   "minimax-h3": "duration+resolution",
   // Grok Imagine Video 1.5 — per-second billing split 480p/720p (no video-ref dimension).
   "grok-imagine-video-1.5": "duration+resolution",
+  // Wan 3.0 family — per-second billing at three resolution rates (no video-ref
+  // dimension: reference runs bill output seconds only). No gemini-omni-flash
+  // entry, mirroring gemini-omni-video which has none either.
+  "wan-3": "duration+resolution",
+  "wan-3-prime": "duration+resolution",
 }
 
 /**
@@ -2098,6 +2248,14 @@ export const PRICING_DEFAULT_DURATION_SEC: Record<string, number> = {
 export const PRICING_DEFAULT_RESOLUTION: Record<string, string> = {
   // KIE renders 720p when `resolution` is omitted (kie/models.ts extraParams).
   "seedance-2-5": "720p",
+  // Wan 3.0 family — KIE's OWN default is 1080P, but the provider layer pins
+  // 720P (normalizeWan3Resolution / WAN_3_DEFAULT_RESOLUTION) so the rendered
+  // tier equals the tier the bare identifier bills. This declaration is what
+  // makes the billed default explicit instead of an array ordering: the
+  // RESOLUTION_DURATION_PRICING branch consults it before falling back to the
+  // first tier, so the catalog can stay ascending without repricing anything.
+  "wan-3": "720p",
+  "wan-3-prime": "720p",
 }
 
 /** HappyHorse 1.1 per-second tiers — one per allowed duration (3–15s), shared
@@ -2120,6 +2278,21 @@ const HAPPYHORSE_DURATION_TIERS: Array<{ maxSeconds: number; suffix: string }> =
 const SEEDANCE_2_5_DURATION_TIERS: Array<{ maxSeconds: number; suffix: string }> = Array.from(
   { length: 27 },
   (_, i) => ({ maxSeconds: i + 4, suffix: `${i + 4}s` }),
+)
+
+/**
+ * Wan 3.0 per-second tiers — one per allowed duration (2-30s), shared by both
+ * SKUs (the ladder shape is identical; only the seeded rates differ).
+ *
+ * Per-second is REQUIRED, not a nicety: the ladder snaps a request UP to the
+ * first tier whose `maxSeconds` covers it and falls back to the LAST tier when
+ * none does, so a coarse ladder over a 29-value range would reserve a
+ * short-clip price for a 30s render. `commit_credits` only ever refunds a
+ * surplus and can never collect an upward delta.
+ */
+const WAN_3_DURATION_TIERS: Array<{ maxSeconds: number; suffix: string }> = Array.from(
+  { length: 29 },
+  (_, i) => ({ maxSeconds: i + 2, suffix: `${i + 2}s` }),
 )
 
 /**
@@ -2202,6 +2375,8 @@ export const VIDEO_DURATION_TIERS: Record<string, Array<{ maxSeconds: number; su
     { maxSeconds: 15, suffix: "15s" },
   ],
   "seedance-2-5": SEEDANCE_2_5_DURATION_TIERS,
+  "wan-3": WAN_3_DURATION_TIERS,
+  "wan-3-prime": WAN_3_DURATION_TIERS,
   // MiniMax Hailuo 3 — true per-second billing (KIE 36.5 cr/s @2K, 22.5 cr/s
   // @768P). One tier per allowed second (4-15s) so the composite identifier
   // maps 1:1 to the seeded price — no rounding/overcharge for any on-menu

@@ -59,7 +59,7 @@ Generate Video covers the union of the legacy image-to-video and text-to-video c
 | Family | Models | Modes | Notes |
 |---|---|---|---|
 | VEO 3.x | `veo3` (Quality), `veo3.1` (Fast), `veo3_lite` (Lite) | T2V, I2V, first+last, reference | 4 / 6 / 8s; 720p / 1080p; generate-audio default on; auto-translate |
-| Gemini Omni | `gemini-omni-video` | T2V, I2V, video-edit (V2V) | 4 / 6 / 8 / 10s; 720p / 1080p / 4K (4K not on free tier); no prompt-baked audio (external `audio_ids` only — see section); up to 7 reference images; V2V uses trim window ≤ 10 s |
+| Gemini Omni | `gemini-omni-video` (Pro), `gemini-omni-flash` (Flash) | T2V, I2V, video-edit (V2V) | 4 / 6 / 8 / 10s; 720p / 1080p / 4K (4K not on free tier); no prompt-baked audio (external `audio_ids` only — see section); up to 7 reference images; V2V uses trim window ≤ 10 s. `gemini-omni-flash` is the cheaper, faster sibling on an **identical** request shape — same duration menu, same resolution tiers, same 16:9 / 9:16-only aspect, same 7-unit input quota (a wired source video takes 2 units) |
 | Kling | `kling`, `kling-turbo`, `kling-3.0`, `kling-master` | T2V, I2V (`kling-master` is I2V-only) | 5 / 10s (Kling 3.0: continuous 3–15s) |
 | Seedance / Seedance 2 | `seedance`, `seedance-2`, `seedance-2-fast`, `seedance-2-mini`, `seedance-2-5` | T2V, I2V, reference (S2) | S2: 4–15s; **`seedance-2-5`: 4–30s in one shot**. Aspect 16:9 / 9:16 / 1:1 / 4:3 / 3:4 / **21:9** / **adaptive** — **`adaptive` is the default** (output matches the wired input; was `16:9`); on `seedance-2-5` a wired start frame forces `adaptive` (any explicit ratio is rejected, so the frame sets the ratio). Resolution by variant (separate KIE models): `seedance-2` (full) **480p / 720p / 1080p / 4K**; `seedance-2-fast` **480p / 720p only** (no 1080p, no 4K); `seedance-2-mini` **480p / 720p only**; `seedance-2-5` **480p / 720p / 1080p** (no 4K; 1080p added 2026-08-17). Refs: up to 9 image + 3 video + 3 audio (**`seedance-2-5`: 30 / 10 / 10**) |
 | MiniMax Hailuo 3 | `minimax-h3` | T2V, I2V (first/last frame), reference | 4–15s (any second, default 6); resolution **2K (default) / 768P** (768P is the cheaper per-second rate); aspect 21:9 / 16:9 / 4:3 / 1:1 / 3:4 / 9:16 + **adaptive** (default; pure T2V requires a concrete ratio and renders 16:9 when left on adaptive). Up to 9 image + 3 video + 3 audio refs; audio always on |
@@ -69,6 +69,7 @@ Generate Video covers the union of the legacy image-to-video and text-to-video c
 | Grok Imagine 1 | `grok-i2v` (one picker row; remaps to `grok` for T2V) | T2V + I2V — mode auto-selected by image presence | 6 / 10s; resolution + mode (fun/normal/spicy) |
 | Grok Imagine 1.5 | `grok-imagine-video-1.5` | I2V (input image required) | 1–15s; 480p / 720p; per-second pricing; offered in the T2V picker too but returns "requires an input image" without one |
 | Wan | `wan-i2v` (Wan 2.6), `wan-2.7-i2v` (Wan 2.7), `wan-turbo` | T2V + I2V — Wan 2.6/2.7 are one picker row each (remap to `wan` / `wan-2.7-t2v` for T2V); `wan-turbo` fixed 5s | 5 / 10 / 15s |
+| Wan 3.0 | `wan-3` (Wan 3.0), `wan-3-prime` (Wan 3.0 Prime) | T2V, I2V (first/last frame), reference | **2–30s, any whole second** (default 5); 480p / 720p / 1080p (default **720p**); aspect **adaptive** (default) / 16:9 / 4:3 / 1:1 / 3:4 / 9:16 — no 21:9; up to 10 image + 5 video + 5 audio refs (a wired first/last frame **folds into the reference pool** — the provider takes frames or references, never both); ambient audio on by default (switchable off). `wan-3-prime` is the **high-speed** variant — faster turnaround at a higher per-second price, not a higher-quality tier |
 | HappyHorse 1.1 | `happyhorse-i2v` (one picker row; remaps to `happyhorse` for T2V), `happyhorse-ref2v` | T2V + I2V — mode auto-selected by image presence; Ref2V is reference-only (image required) | 3–15s; 720p / 1080p; per-second pricing; 9 aspect ratios (T2V/Ref2V) incl. 4:5 / 5:4 / 21:9 / 9:21 |
 | Runway (KIE) | `runway-kie` | T2V, I2V | Fixed configurations |
 | Kling 3 Omni | `kling-3-omni` | I2V (input image required) | 3–15s; 720p / 1080p; end frame + up to 7 reference images; native audio; runs on Replicate |
@@ -76,15 +77,15 @@ Generate Video covers the union of the legacy image-to-video and text-to-video c
 
 Source of truth: `IMAGE_TO_VIDEO_PROVIDERS` + `TEXT_TO_VIDEO_PROVIDERS` in `packages/shared/src/model-constants.ts`. Full per-provider pricing and parameters: `/admin/models` in the admin panel, or the `model_pricing` table.
 
-> **Unified picker collapse.** A few models expose a *different* provider id per mode but are one user-facing model — Grok Imagine 1 (`grok-i2v` / `grok`), Wan 2.6 (`wan-i2v` / `wan`), Wan 2.7 (`wan-2.7-i2v` / `wan-2.7-t2v`), HappyHorse (`happyhorse-i2v` / `happyhorse`). The picker shows a **single row** for each (keyed by the image-to-video id); execution remaps it to the correct mode-specific endpoint based on image presence via `resolveVideoProviderForMode` (driven by `VIDEO_MODE_ALIASES` in `@nodaro/shared`). Picking one row therefore works in both text-to-video and image-to-video. Single-id models (VEO, Kling, Seedance, Grok Imagine 1.5, …) are unaffected.
+> **Unified picker collapse.** A few models expose a *different* provider id per mode but are one user-facing model — Grok Imagine 1 (`grok-i2v` / `grok`), Wan 2.6 (`wan-i2v` / `wan`), Wan 2.7 (`wan-2.7-i2v` / `wan-2.7-t2v`), HappyHorse (`happyhorse-i2v` / `happyhorse`). The picker shows a **single row** for each (keyed by the image-to-video id); execution remaps it to the correct mode-specific endpoint based on image presence via `resolveVideoProviderForMode` (driven by `VIDEO_MODE_ALIASES` in `@nodaro/shared`). Picking one row therefore works in both text-to-video and image-to-video. Single-id models (VEO, Kling, Seedance, Grok Imagine 1.5, …) are unaffected. **Wan 3.0 does not collapse** — `wan-3` and `wan-3-prime` are each a single id serving both text-to-video and image-to-video on one endpoint, so there is no `wan-3-t2v` twin and nothing remaps.
 
 ### End-frame support
 
-Providers that accept a paired last frame: `veo3`, `veo3.1`, `veo3_lite` (`imageUrls: [start, end]`), `minimax` (`end_image_url`), `hailuo-standard` (`end_image_url`), `bytedance-lite` (`end_image_url`), `kling-turbo` (`tail_image_url`), `kling-3.0`, `wan-2.7-i2v`, `ltx-2.3-pro` / `ltx-2.3-fast` (`last_frame_image`). Other providers ignore the `endFrame` handle.
+Providers that accept a paired last frame: `veo3`, `veo3.1`, `veo3_lite` (`imageUrls: [start, end]`), `minimax` (`end_image_url`), `hailuo-standard` (`end_image_url`), `bytedance-lite` (`end_image_url`), `kling-turbo` (`tail_image_url`), `kling-3.0`, `wan-2.7-i2v`, `wan-3` / `wan-3-prime` (`last_frame_url`, which the provider accepts only alongside a start frame), `ltx-2.3-pro` / `ltx-2.3-fast` (`last_frame_image`). Other providers ignore the `endFrame` handle.
 
 ### Multimodal references
 
-Seedance 2 (`seedance-2` / `seedance-2-fast` / `seedance-2-mini`) accepts up to 9 image refs, 3 video refs, and 3 audio refs in a single call; **`seedance-2-5` raises those caps to 30 / 10 / 10** and accepts reference audio up to 30 s per clip. **`seedance-2-fast` requires each reference audio clip to be ≤ 15.2 seconds** (audio-driven r2v mode) — longer clips are rejected before the job is created with an `audio_too_long` error. MiniMax Hailuo 3 (`minimax-h3`) mirrors the same 9 / 3 / 3 caps through the same input resolver (frames fold into the reference pool when any reference is wired): reference videos are 2–15s each and ≤ 15s combined, reference audio is ≤ 15s per clip (enforced pre-submit with the same `audio_too_long` error) and **cannot be used alone** — it must ride with an image or video reference. HappyHorse Ref2V accepts 1–9 image refs, addressed in its own `[Image N]` vocabulary. VEO 3.x (`veo3` / `veo3.1`) flips to `REFERENCE_2_VIDEO` mode whenever image references are wired — **with or without a start frame** — under a 3-ingredient cap: a wired start frame takes seat 1 and is bound in the prompt as the opening frame, the first two references fill the remaining seats, and a wired **end frame is surrendered** in this mode (reference conditioning and a pinned last frame are mutually exclusive on VEO; the node reports the dropped input). Gemini Omni (`gemini-omni-video`) accepts up to 7 image inputs in both modes — with a start frame (i2v) or without one (reference-conditioned t2v). In i2v the start frame occupies input 1 (`@image_1`, bound in the prompt as the opening frame) and references fill the remaining slots as **identity references, not frames** (`@image_2..N`); wiring a source video reserves 2 of the 7 slots, and references beyond the quota are **dropped, not rejected** (the node reports how many).
+Seedance 2 (`seedance-2` / `seedance-2-fast` / `seedance-2-mini`) accepts up to 9 image refs, 3 video refs, and 3 audio refs in a single call; **`seedance-2-5` raises those caps to 30 / 10 / 10** and accepts reference audio up to 30 s per clip. **`seedance-2-fast` requires each reference audio clip to be ≤ 15.2 seconds** (audio-driven r2v mode) — longer clips are rejected before the job is created with an `audio_too_long` error. MiniMax Hailuo 3 (`minimax-h3`) mirrors the same 9 / 3 / 3 caps through the same input resolver (frames fold into the reference pool when any reference is wired): reference videos are 2–15s each and ≤ 15s combined, reference audio is ≤ 15s per clip (enforced pre-submit with the same `audio_too_long` error) and **cannot be used alone** — it must ride with an image or video reference. HappyHorse Ref2V accepts 1–9 image refs, addressed in its own `[Image N]` vocabulary. VEO 3.x (`veo3` / `veo3.1`) flips to `REFERENCE_2_VIDEO` mode whenever image references are wired — **with or without a start frame** — under a 3-ingredient cap: a wired start frame takes seat 1 and is bound in the prompt as the opening frame, the first two references fill the remaining seats, and a wired **end frame is surrendered** in this mode (reference conditioning and a pinned last frame are mutually exclusive on VEO; the node reports the dropped input). Gemini Omni (`gemini-omni-video` / `gemini-omni-flash`) accepts up to 7 image inputs in both modes — with a start frame (i2v) or without one (reference-conditioned t2v). In i2v the start frame occupies input 1 (`@image_1`, bound in the prompt as the opening frame) and references fill the remaining slots as **identity references, not frames** (`@image_2..N`); wiring a source video reserves 2 of the 7 slots, and references beyond the quota are **dropped, not rejected** (the node reports how many). Wan 3.0 (`wan-3` / `wan-3-prime`) accepts up to **10 image + 5 video + 5 audio** references. Each reference video and audio clip is **1–15 s** with a **≤ 15 s combined** cap per media type, and with a reference video wired the provider additionally requires **input video duration + output duration ≤ 30 s**. On the Wan wire the reference arrays are **mutually exclusive** with the first/last frame parameters — so, exactly like Seedance 2 and Hailuo 3, the platform **folds** rather than rejects: with any reference wired, a start/end frame is appended to `reference_image_urls` **after** your own images (leaving their ordinals unchanged) and named in the prompt as the opening/closing frame. The pair is never sent together, and the run is never rejected for the combination.
 
 **Seedance 2 unified inputs (frames + references together).** Seedance 2 no longer has a Frames-vs-References toggle (`data.seedance2InputMode` was removed) — first/last frames and references can all be connected at once, and the dispatch mode is derived from the wiring:
 
@@ -139,9 +140,9 @@ LTX 2.3 exposes five task modes on Replicate; Generate Video picks one automatic
 
 LTX 2.3 Fast has its audio handle visually muted because Fast does not accept audio. Wiring an `endFrame` enables LTX's `last_frame_image` parameter for end-frame interpolation.
 
-### Gemini Omni — modes and capabilities
+### Gemini Omni (Pro & Flash) — modes and capabilities
 
-`gemini-omni-video` supports three generation modes, all selected automatically from wired inputs:
+`gemini-omni-video` (Pro) and `gemini-omni-flash` (Flash) share one request shape and both support the same three generation modes, all selected automatically from wired inputs:
 
 | Mode | Dispatch condition | Notes |
 |---|---|---|
@@ -150,29 +151,30 @@ LTX 2.3 Fast has its audio handle visually muted because Fast does not accept au
 | Video-edit (V2V) | `video` input wired | Source clip trimmed to ≤ 10 s; see trim fields below |
 
 **Key characteristics:**
-- **Audio** — Gemini Omni Video does **not** bake audio from the prompt the way VEO does. Per [KIE's model docs](https://docs.kie.ai/market/gemini-omni-video.md), audio is supplied externally via an `audio_ids` array (clips generated by the separate `gemini-omni-audio` model — narration, dialogue, music, or guidance); the video model documents no native audio output and no lip-sync. The Nodaro integration does **not** currently forward audio for Gemini Omni (`runGeminiOmni` in `backend/src/providers/kie/video.ts` sends no `generate_audio` / `audio_ids`), so generated clips carry no platform-managed soundtrack. Consequently Gemini Omni is excluded from [Character voice](#character-voice) — it is neither `native_speech` nor `audio_driven` in the audio-capability SSOT.
-- **Resolutions** — 720p, 1080p, and 4K. **4K is not available on the free tier.**
+- **Audio** — Gemini Omni Video does **not** bake audio from the prompt the way VEO does. Per [KIE's model docs](https://docs.kie.ai/market/gemini-omni-video.md), audio is supplied externally via an `audio_ids` array (clips generated by the separate `gemini-omni-audio` model — narration, dialogue, music, or guidance); the video model documents no native audio output and no lip-sync. The Nodaro integration does **not** currently forward audio for Gemini Omni (`runGeminiOmni` in `backend/src/providers/kie/video.ts` sends no `generate_audio` / `audio_ids`), so generated clips carry no platform-managed soundtrack. Consequently Gemini Omni is excluded from [Character voice](#character-voice) — it is neither `native_speech` nor `audio_driven` in the audio-capability SSOT. `gemini-omni-flash` behaves identically: it forwards no `audio_ids` either, and is excluded from Character voice for the same reason.
+- **Resolutions** — 720p, 1080p, and 4K on **both** SKUs. **4K is not available on the free tier.** (Flash's API also lists a 360p tier; Nodaro does not expose it — it falls in the same credit band as 720p/1080p, so it could only hand you a worse render at the same price.)
 - **Durations** — 4 / 6 / 8 / 10 seconds for 720p / 1080p; 4 / 6 / 8 / 10 seconds for 4K.
 - **Aspect ratio** — **16:9 or 9:16 only**, and the model requires one on every call (it does not pick a default of its own). Nodaro always sends one: leave the field untouched and you get **16:9**; any other ratio reaching the API (`1:1`, `4:3`, `21:9`, `Auto`, …) is snapped to whichever of 16:9 / 9:16 is closest rather than rejected.
-- **Reference images** — up to 7 images can be wired into the `imageReferences` handle.
+- **Reference images** — up to 7 images can be wired into the `imageReferences` handle (both SKUs).
+- **Choosing between them** — **Flash** is the cheaper, faster SKU; **Pro** is the higher-cost tier. Everything else — the 4 / 6 / 8 / 10 s menu, the resolution tiers, the aspect constraint, the reference quota and the V2V trim window — is identical, so the choice is purely price and turnaround.
 - **V2V trim window** — when a source video is connected, the fields `videoTrimStart` and `videoTrimEnd` (integer seconds) define the trim window, which must span ≤ 10 seconds. The duration is derived automatically from the wired clip; override manually in the config panel if needed.
 
 #### Gemini Omni credit pricing
 
-Composite credit identifier: `gemini-omni-video:<resolution_prefix>:<duration>` (e.g. `gemini-omni-video:4k:8`). Video-edit uses a flat per-call price regardless of output duration.
+Composite credit identifier: `<model>:<resolution_prefix>:<duration>` — e.g. `gemini-omni-video:4k:8`, `gemini-omni-flash:6`. The 720p / 1080p band carries no resolution prefix; 4K adds `4k:`. Video-edit uses a flat per-call price regardless of output duration (`:vref`, or `:4k:vref` at 4K). **A request that omits `duration` is priced and rendered at the 8 s tier** — so it bills the `:8` row, 270 for `gemini-omni-flash` and 380 for `gemini-omni-video`. (The credit builder always emits a `:N` composite on this family, so neither model's bare identifier is reachable from the generate path; `gemini-omni-video`'s legacy bare row of 315 is never charged.)
 
-| Setting | Credits |
-|---|---|
-| 720p / 1080p · 4 s | 23 |
-| 720p / 1080p · 6 s | 30 |
-| 720p / 1080p · 8 s | 38 |
-| 720p / 1080p · 10 s | 45 |
-| 4K · 4 s | 53 |
-| 4K · 6 s | 60 |
-| 4K · 8 s | 68 |
-| 4K · 10 s | 75 |
-| Video-edit · 720p / 1080p (flat) | 60 |
-| Video-edit · 4K (flat) | 90 |
+| Setting | `gemini-omni-flash` (Flash) | `gemini-omni-video` (Pro) |
+|---|---:|---:|
+| 720p / 1080p · 4 s | 160 | 230 |
+| 720p / 1080p · 6 s | 210 | 300 |
+| 720p / 1080p · 8 s (default) | 270 | 380 |
+| 720p / 1080p · 10 s | 320 | 450 |
+| 4K · 4 s | 370 | 530 |
+| 4K · 6 s | 420 | 600 |
+| 4K · 8 s | 480 | 680 |
+| 4K · 10 s | 530 | 750 |
+| Video-edit · 720p / 1080p (flat) | 420 | 600 |
+| Video-edit · 4K (flat) | 630 | 900 |
 
 > **Note:** 4K is blocked on the free tier. Free-tier requests at 4K resolution are rejected with a `tier_restriction` error — upgrade to Basic or higher to use 4K output.
 
@@ -320,6 +322,17 @@ If neither has the identifier, the route returns HTTP 503 `price_not_configured`
 | `happyhorse-i2v` | 5s | 720p | i2v | — | 290 |
 | `happyhorse-i2v` | 5s | 1080p | i2v | — | 370 |
 | `happyhorse-ref2v` | 15s | 1080p | i2v | 1–9 ref images | 1090 |
+| `wan-3` | 2s | 480p | any | no ref | 40 |
+| `wan-3` | 5s | 720p (default) | any | no ref | 200 |
+| `wan-3` | 8s | 1080p | any | no ref | 640 |
+| `wan-3` | 30s | 1080p | any | no ref | 2400 |
+| `wan-3-prime` | 2s | 480p | any | no ref | 70 |
+| `wan-3-prime` | 5s | 720p (default) | any | no ref | 320 |
+| `wan-3-prime` | 8s | 1080p | any | no ref | 1010 |
+| `wan-3-prime` | 30s | 1080p | any | no ref | 3780 |
+| `gemini-omni-flash` | 8s | 720p | any | no ref | 270 |
+| `gemini-omni-flash` | 10s | 4K | any | no ref | 530 |
+| `gemini-omni-flash` | — | 720p | video-edit | 1 source video | 420 |
 
 **Grok Imagine 1.5** uses true per-second pricing via the composite identifier `grok-imagine-video-1.5:<N>s:<resolution>` (N = 1–15, resolution = `480p` / `720p`). Credits = `ceil((rate × seconds + 2) / 4) × 10`, where the per-second KIE rate is 14.5 @ 480p and 25 @ 720p and the `+2` covers the required input image. Examples: 4s/480p = 150, 8s/480p = 300, 8s/720p = 510, 15s/720p = 950.
 
@@ -352,6 +365,20 @@ So at 8s: 1080p = `ceil(114×8/4) × 10` = **2280** no-ref / `ceil(68.5×8/4) ×
 - **Input images beyond the first 5** (counting frames folded into the reference pool) add 27.5 base credits each (11 KIE cr/image, resolution-independent). Example @2K: 6s output with 8 pool images = `ceil(91.25 × 6 + 3 × 27.5)` = **630**. Reference audio is free.
 
 **Reference videos bill input + output duration.** KIE bills "with video input" runs as `per_sec × (input_video_duration + output_duration)`, not output alone. When one or more reference videos are wired, the runtime ffprobes their durations at reservation time and reserves the full scaled base up front (per-second base rate = the provider's 8s composite ÷ 8, on the `-ref` ladder for Seedance 2 and the selected resolution tier's ladder for MiniMax H3) — credits can only be refunded (never up-charged) at commit, so the full duration is reserved. A probe failure assumes the 15s cap (KIE limits total reference video to ≤ 15s) so a blip never under-charges. Reference **images** and **audio** do not add input duration — only reference **videos** do (and for `minimax-h3`, images beyond the first 5 add the per-image surcharge above).
+
+**Wan 3.0** (`wan-3`) and **Wan 3.0 Prime** (`wan-3-prime`) are per-second priced via the composite identifier `<id>:<N>s:<resolution>` (N = 2–30, resolution = `480p` / `720p` / `1080p` — lowercase in the identifier even though the provider's own wire enum is uppercase; the platform normalizes it). Credits = `ceil(rate × seconds / 10) × 10` — the per-second credit rate times the duration, rounded up to the next 10:
+
+| Resolution | `wan-3` credits/sec | `wan-3-prime` credits/sec |
+|---|---:|---:|
+| 480p | 20 | 30.5 |
+| 720p | 40 | 63 |
+| 1080p | 80 | 126 |
+
+Examples — `wan-3` @480p: 2s = 40, 5s = 100, 8s = 160, 30s = 600; @720p: 5s = 200, 8s = 320, 10s = 400, 30s = 1200; @1080p: 5s = 400, 8s = 640, 30s = 2400. `wan-3-prime` @480p: 2s = 70, 5s = 160, 8s = 250, 30s = 920; @720p: 5s = 320, 8s = 510, 10s = 630, 30s = 1890; @1080p: 5s = 630, 8s = 1010, 30s = 3780. There is no `-ref` dimension — wiring a reference does not select a different ladder. **When `resolution` is omitted (or set to a tier Wan 3.0 doesn't offer) the run renders *and* bills at 720p**, so the bare identifiers `wan-3` (200) and `wan-3-prime` (320) are that default tier at the default 5s duration.
+
+**Reference videos on Wan 3.0 bill output seconds only.** The `input + output` rule above does **not** apply to `wan-3` / `wan-3-prime` — a wired reference video adds no input seconds to the reserve. The provider's own reference-video limits — each clip 1–15 s, ≤ 15 s combined, and input video duration + output duration ≤ 30 s — are **documented, not pre-flighted**: an over-long reference video is rejected by the provider mid-run, after credits are reserved (the reservation is refunded). Reference **audio** is the exception: the ≤ 15 s per-clip cap is checked before the job is submitted, with the same `audio_too_long` error as the Seedance / Hailuo family.
+
+**Not forwarded (out of scope).** Wan 3.0's `duration: -1` (model-chosen length), its document-to-video (`reference_file_urls`) and webpage-to-video (`reference_link_urls`) modes, and its `nsfw_checker` switch are not exposed. On both Gemini Omni SKUs, `audio_ids` and `character_ids` are likewise not forwarded.
 
 Cross-check the runtime table in `/admin/models` for the live numbers — the worked examples above match the `STATIC_CREDIT_COSTS` snapshot at the time of this writing.
 
@@ -390,6 +417,8 @@ A request is **voiced** only when a spec is present **and** the model can carry 
 | `audio_driven` | `seedance-2`, `seedance-2-fast`, `seedance-2-mini`, `seedance-2-5`, `minimax-h3` (audio always on — no toggle) | Synthesize the dialogue (each line in its own voice) via ElevenLabs Dialogue v3 (direct API — any voice mix works: premade, Voice Library, and cloned voices, no premade-only restriction) → feed as reference audio → the model lip-syncs to it. |
 | `native_speech` | `veo3`, `veo3.1`, `veo3_lite` (always on); `kling`, `kling-3.0` (behind the `sound` toggle — enabling it on Kling raises the credit cost, see the `:audio` composites below); `kling-3-omni` (audio included in the flat rate) | Bake the line during generation, then revoice the baked audio to the primary character voice (ElevenLabs voice-changer, keeping the music/SFX bed). |
 
+**Wan 3.0** (`wan-3` / `wan-3-prime`) carries an ambient audio track (on by default, switchable off) but is not a dialogue model in the audio-capability SSOT — it is neither `native_speech` nor `audio_driven`, so a character-voice spec on it is ignored with the non-fatal `voice_unsupported_for_provider` warning and no audio add-on is charged.
+
 Kling models speak scripted dialogue natively: quote the line in the prompt (optionally with a voice description, e.g. `[Anna: warm calm voice]: "good morning"`) and enable sound. Kling 2.6 voices are English/Chinese; other languages are auto-translated to English by the model.
 
 **Speaker mapping.** Each `dialogue[].speaker` is matched (case-insensitive) to a `characterVoices[].speaker` to pick that line's `voiceId`. An unmatched speaker falls back to the default (first) voice, mirroring the pipeline's non-fatal missing-voice behavior. Total dialogue text is capped at 5,000 characters (the shared Dialogue v3 limit); lines over the budget are dropped with a log entry.
@@ -407,7 +436,7 @@ Example: `veo3.1` 8s / 1080p i2v voiced = 17 (base) + 4 (revoice) = **21 credits
 
 ### Fallback behavior
 
-- **Provider can't voice dialogue** (`none` / `ambient` models — minimax, kling, hailuo, …): the spec is **ignored**, the clip still generates (never failed), and the response carries a non-fatal warning `{ code: "voice_unsupported_for_provider" }`. No audio add-on is charged. Clients should gate the voice UI on `videoModelCanSpeakDialogue` and confirm with the user before sending.
+- **Provider can't voice dialogue** (`none` / `ambient` models — minimax, kling, hailuo, Gemini Omni, Wan 3.0, …): the spec is **ignored**, the clip still generates (never failed), and the response carries a non-fatal warning `{ code: "voice_unsupported_for_provider" }`. No audio add-on is charged. Clients should gate the voice UI on `videoModelCanSpeakDialogue` and confirm with the user before sending.
 - **No voice resolves** (dialogue / voices empty or unparseable): the clip generates silently and the reserved audio add-on is refunded automatically (committed at the video provider cost only).
 - **A chain step fails** (TTS / revoice / generation): the whole job fails and credits are fully refunded.
 

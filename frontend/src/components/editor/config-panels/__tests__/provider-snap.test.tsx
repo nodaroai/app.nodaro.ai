@@ -21,7 +21,7 @@ import { render } from "@testing-library/react"
 import { GenerateImageConfig, ModifyImageConfig } from "../image-configs"
 import { ImageToVideoConfig, TextToVideoConfig, GenerateVideoConfig } from "../video-configs"
 import { LipSyncConfig } from "../audio-configs"
-import { getAspectRatiosForVideoModel } from "../model-options"
+import { getAspectRatiosForVideoModel, getVideoResolutionOptions } from "../model-options"
 
 // =============================================================================
 // Module-level mocks — keep these as thin as possible. We only care about the
@@ -866,6 +866,117 @@ describe("GenerateVideoConfig — provider-snap useEffect", () => {
 })
 
 // =============================================================================
+// Wan 3.0 + Gemini Omni Flash — render == billed defaults
+// =============================================================================
+// Wan 3.0's catalog `resolutions` are ASCENDING (480p first), but its BARE
+// credit identifier — and `runWan3`'s own wire default — are the 5s @ 720p
+// tier. If the panel persisted `opts[0]` the node would carry 480p while the
+// badge quoted (and the runner rendered) 720p. These pin the explicit persist.
+//
+// Gemini Omni Flash inherits the family branches from `isGeminiOmniProvider`;
+// before that swap it fell through to the generic path and showed the 4s
+// dropdown default while the credit id and the KIE payload both used 8s.
+
+describe("GenerateVideoConfig — Wan 3 / Gemini Omni Flash defaults", () => {
+  const optionValues = (container: HTMLElement): string[] =>
+    Array.from(container.querySelectorAll("option")).map((o) => o.getAttribute("value") ?? "")
+
+  for (const provider of ["wan-3", "wan-3-prime"]) {
+    it(`${provider}: persists duration 5 + resolution "720p" + aspectRatio "adaptive" when all are unset`, () => {
+      const onUpdate = vi.fn()
+      const data = baseGenerateVideoData({ provider, duration: undefined, resolution: undefined, aspectRatio: undefined })
+      render(<GenerateVideoConfig {...commonProps(onUpdate, data)} />)
+      const merged: Record<string, unknown> = onUpdate.mock.calls.reduce((acc: any, [u]: any) => ({ ...acc, ...u }), {})
+      expect(merged.duration).toBe(5)
+      expect(merged.resolution).toBe("720p")
+      // The backend DAG path fills "adaptive" for an untouched Wan node, so the
+      // panel must too — otherwise a single-node run and a workflow run submit
+      // different aspect ratios for the same untouched node.
+      expect(merged.aspectRatio).toBe("adaptive")
+    })
+
+    it(`${provider}: an UNSUPPORTED resolution lands on 720p, not opts[0] (480p)`, () => {
+      // Same rule the shared credit identifier applies: unsupported and omitted
+      // both collapse to the declared 720p default, so a stale "2K" carried in
+      // from minimax-h3 must not silently become the cheapest 480p tier.
+      const onUpdate = vi.fn()
+      const data = baseGenerateVideoData({ provider, duration: 5, resolution: "2K" })
+      render(<GenerateVideoConfig {...commonProps(onUpdate, data)} />)
+      const merged: Record<string, unknown> = onUpdate.mock.calls.reduce((acc: any, [u]: any) => ({ ...acc, ...u }), {})
+      expect(merged.resolution).toBe("720p")
+    })
+
+    it(`${provider}: preserves an explicitly picked valid resolution (480p)`, () => {
+      const onUpdate = vi.fn()
+      const data = baseGenerateVideoData({ provider, duration: 8, resolution: "480p" })
+      render(<GenerateVideoConfig {...commonProps(onUpdate, data)} />)
+      for (const [u] of onUpdate.mock.calls) {
+        expect("resolution" in u).toBe(false)
+      }
+    })
+
+    it(`${provider}: preserves "adaptive" (its catalog default ratio)`, () => {
+      const onUpdate = vi.fn()
+      const data = baseGenerateVideoData({ provider, duration: 5, resolution: "720p", aspectRatio: "adaptive" })
+      render(<GenerateVideoConfig {...commonProps(onUpdate, data)} />)
+      for (const [u] of onUpdate.mock.calls) {
+        expect("aspectRatio" in u).toBe(false)
+      }
+    })
+
+    it(`${provider}: renders its own resolution lever (the isWan3 block exists)`, () => {
+      // GenerateVideoConfigImpl has NO generic resolution control — every
+      // family owns a bespoke block. Without one, Wan 3 would ship with no
+      // resolution UI at all and every run would take the wire default.
+      const { container } = render(
+        <GenerateVideoConfig {...commonProps(vi.fn(), baseGenerateVideoData({ provider, duration: 5, resolution: "720p" }))} />,
+      )
+      const values = optionValues(container)
+      expect(values).toEqual(expect.arrayContaining(["480p", "720p", "1080p"]))
+    })
+
+    it(`${provider}: offers the full contiguous 2-30s duration ladder`, () => {
+      const { container } = render(
+        <GenerateVideoConfig {...commonProps(vi.fn(), baseGenerateVideoData({ provider, duration: 5, resolution: "720p" }))} />,
+      )
+      const values = optionValues(container)
+      for (const d of [2, 5, 15, 30]) expect(values).toContain(String(d))
+    })
+  }
+
+  it("gemini-omni-flash: persists the 8s default when duration is unset", () => {
+    const onUpdate = vi.fn()
+    const data = baseGenerateVideoData({ provider: "gemini-omni-flash", duration: undefined })
+    render(<GenerateVideoConfig {...commonProps(onUpdate, data)} />)
+    const merged: Record<string, unknown> = onUpdate.mock.calls.reduce((acc: any, [u]: any) => ({ ...acc, ...u }), {})
+    expect(merged.duration).toBe(8)
+  })
+
+  it("gemini-omni-flash: renders the family resolution block from its OWN catalog row", () => {
+    // Pins the two hardcoded `"gemini-omni-video"` arguments that used to sit
+    // inside this block: the gate alone would render the SIBLING's option list.
+    const { container } = render(
+      <GenerateVideoConfig
+        {...commonProps(vi.fn(), baseGenerateVideoData({ provider: "gemini-omni-flash", duration: 8, resolution: "1080p" }))}
+      />,
+    )
+    const values = optionValues(container)
+    for (const r of (getVideoResolutionOptions("gemini-omni-flash") ?? [])) {
+      expect(values).toContain(r.value)
+    }
+  })
+
+  it("gemini-omni-flash: preserves a valid 4K resolution", () => {
+    const onUpdate = vi.fn()
+    const data = baseGenerateVideoData({ provider: "gemini-omni-flash", duration: 8, resolution: "4k" })
+    render(<GenerateVideoConfig {...commonProps(onUpdate, data)} />)
+    for (const [u] of onUpdate.mock.calls) {
+      expect("resolution" in u).toBe(false)
+    }
+  })
+})
+
+// =============================================================================
 // Aspect-ratio snap on provider switch (adaptive-default safety net)
 // =============================================================================
 // Seedance 2 defaults aspectRatio to "adaptive" and also exposes the wider
@@ -925,6 +1036,65 @@ describe("video configs — aspectRatio snap on provider switch", () => {
       render(<Config {...commonProps(onUpdate, data)} />)
       for (const [u] of onUpdate.mock.calls) {
         expect("aspectRatio" in u).toBe(false)
+      }
+    })
+  }
+})
+
+describe("ImageToVideoConfig / TextToVideoConfig — Wan 3.0 parity with the unified panel", () => {
+  // `wan-3` / `wan-3-prime` are listed in BOTH VIDEO_I2V_MODELS and
+  // VIDEO_T2V_MODELS, so the two dedicated nodes must be able to configure
+  // them. Two regressions are pinned here:
+  //   1. the generic fail-safe snap wrote `opts[0]` = "480p" — the CHEAPEST
+  //      tier — for a stale resolution, while the credit identifier, the DAG
+  //      payload fill and `runWan3` all resolve an unset value to 720p. The
+  //      snap now routes through the shared `uiResolutionFill`.
+  //   2. neither panel had a wan block at all, so the model rendered at wire
+  //      defaults with no visible resolution / aspect / audio control.
+  const optionValues = (container: HTMLElement): string[] =>
+    Array.from(container.querySelectorAll("option")).map((o) => o.getAttribute("value") ?? "")
+
+  for (const provider of ["wan-3", "wan-3-prime"]) {
+    it(`${provider}: ImageToVideoConfig snaps a stale resolution to 720p, never opts[0] (480p)`, () => {
+      const onUpdate = vi.fn()
+      const data = baseImageToVideoData({ provider, resolution: "2K" })
+      render(<ImageToVideoConfig {...commonProps(onUpdate, data)} />)
+      const merged: Record<string, unknown> = onUpdate.mock.calls.reduce((acc: any, [u]: any) => ({ ...acc, ...u }), {})
+      expect(merged.resolution).toBe("720p")
+    })
+
+    it(`${provider}: TextToVideoConfig snaps a stale resolution to 720p, never opts[0] (480p)`, () => {
+      const onUpdate = vi.fn()
+      const data = baseTextToVideoData({ provider, resolution: "2K" })
+      render(<TextToVideoConfig {...commonProps(onUpdate, data)} />)
+      const merged: Record<string, unknown> = onUpdate.mock.calls.reduce((acc: any, [u]: any) => ({ ...acc, ...u }), {})
+      expect(merged.resolution).toBe("720p")
+    })
+
+    it(`${provider}: ImageToVideoConfig renders the full resolution ladder`, () => {
+      const { container } = render(
+        <ImageToVideoConfig {...commonProps(vi.fn(), baseImageToVideoData({ provider, resolution: "720p" }))} />,
+      )
+      expect(optionValues(container)).toEqual(expect.arrayContaining(["480p", "720p", "1080p"]))
+    })
+
+    it(`${provider}: TextToVideoConfig renders the full resolution ladder`, () => {
+      const { container } = render(
+        <TextToVideoConfig {...commonProps(vi.fn(), baseTextToVideoData({ provider, resolution: "720p" }))} />,
+      )
+      expect(optionValues(container)).toEqual(expect.arrayContaining(["480p", "720p", "1080p"]))
+    })
+
+    it(`${provider}: both panels preserve an explicitly picked 480p`, () => {
+      for (const [Panel, base] of [
+        [ImageToVideoConfig, baseImageToVideoData],
+        [TextToVideoConfig, baseTextToVideoData],
+      ] as const) {
+        const onUpdate = vi.fn()
+        render(<Panel {...commonProps(onUpdate, base({ provider, resolution: "480p" }))} />)
+        for (const [u] of onUpdate.mock.calls) {
+          expect("resolution" in u).toBe(false)
+        }
       }
     })
   }

@@ -51,7 +51,10 @@ describe("GVP_SUPPORTED_PROVIDERS", () => {
       "veo3.1",
       "veo3_lite",
       "gemini-omni-video",
+      "gemini-omni-flash",
       "grok-i2v",
+      "wan-3",
+      "wan-3-prime",
       "happyhorse-ref2v",
     ])
   })
@@ -154,8 +157,20 @@ describe("GVP_EXTEND_PROVIDERS", () => {
     expect(supportsExtendRender("gemini-omni-video")).toBe(false)
   })
 
+  it("excludes wan-3 — reference videos are accepted but the extend chain is unwired", () => {
+    // Wan 3.0 takes reference_video_urls, but (a) there is no wan-3 r2v
+    // forwarding path yet and (b) KIE caps input-video seconds + output
+    // duration at 30, which the segment bounds cannot express. So the catalog
+    // deliberately withholds the `video-reference` feature: blessed for
+    // keyframes, not for extend. Same precedent as gemini-omni-video.
+    for (const p of ["wan-3", "wan-3-prime"]) {
+      expect(isGvpSupportedProvider(p)).toBe(true)
+      expect(supportsExtendRender(p)).toBe(false)
+    }
+  })
+
   it("keyframes-only SKUs reject extend", () => {
-    for (const p of ["veo3", "veo3.1", "veo3_lite", "gemini-omni-video", "grok-i2v", "happyhorse-ref2v"]) {
+    for (const p of ["veo3", "veo3.1", "veo3_lite", "gemini-omni-video", "gemini-omni-flash", "grok-i2v", "happyhorse-ref2v", "wan-3", "wan-3-prime"]) {
       expect(isGvpSupportedProvider(p)).toBe(true)
       expect(supportsExtendRender(p)).toBe(false)
     }
@@ -174,6 +189,8 @@ describe("GVP_END_FRAME_PROVIDERS", () => {
       "veo3",
       "veo3.1",
       "veo3_lite",
+      "wan-3",
+      "wan-3-prime",
     ])
   })
 
@@ -186,6 +203,10 @@ describe("GVP_END_FRAME_PROVIDERS", () => {
 
   it("excludes SKUs with no closing-frame support", () => {
     expect(supportsEndAnchor("gemini-omni-video")).toBe(false)
+    // Gemini Omni Flash mirrors its sibling exactly — the KIE schema exposes
+    // first/last frame but the path is unwired for BOTH Omni SKUs, so neither
+    // declares the catalog `end-frame` feature.
+    expect(supportsEndAnchor("gemini-omni-flash")).toBe(false)
     expect(supportsEndAnchor("grok-i2v")).toBe(false)
     expect(supportsEndAnchor("happyhorse-ref2v")).toBe(false)
     expect(supportsEndAnchor(undefined)).toBe(false)

@@ -66,4 +66,43 @@ describe("PROVIDER_PROMPT_DOCTRINES", () => {
     expect(tips).toMatch(/2\.0 SKUs ignore timestamps/)
     expect(tips).toMatch(/seedance-2-5 honours integer-second timestamps/)
   })
+
+  it("Wan 3.0 has its OWN doctrine — the 2.x token format must not leak onto it", () => {
+    // WAN_DOCTRINE teaches "Image 1" / "Video 1" (capitalised, WITH a space),
+    // which is the Wan 2.x format. The Wan 3.0 KIE contract binds Image1 /
+    // Video1 / Audio1 (no space). Folding 3.0 into the 2.x entry would ship a
+    // token format the model does not use — a prompt-quality regression that
+    // costs real generations, so the split is the point of this test.
+    const d = getPromptDoctrine("wan-3")!
+    expect(d.providers).toEqual(["wan-3", "wan-3-prime"])
+    expect(getPromptDoctrine("wan-3-prime")).toBe(d)
+    expect(d.doctrine).toContain("Image1")
+    expect(d.doctrine).toContain("Audio1")
+    // The 2.x spelling may appear ONLY as an explicit contrast, never as the
+    // instruction — so the body must say the format has no space.
+    expect(d.doctrine).toMatch(/NO space/)
+    expect(d.doctrine).toMatch(/Wan 2\.x's "Image 1"/)
+
+    // The 2.x doctrine must stay the 2.x doctrine.
+    const wan2 = getPromptDoctrine("wan-i2v")!
+    expect(wan2).not.toBe(d)
+    expect(wan2.providers).not.toContain("wan-3")
+    expect(wan2.doctrine).toContain("Image 1")
+
+    // KIE contract facts the body is required to carry.
+    expect(d.doctrine).toMatch(/mutually exclusive|CANNOT be combined/i)
+    expect(d.doctrine).toMatch(/20,000 characters/)
+    expect(d.doctrine).toMatch(/≤ 30 seconds/)
+    // Prime is the SPEED tier — never described as higher quality.
+    expect(d.doctrine).toMatch(/faster turnaround/i)
+    expect(d.doctrine).not.toMatch(/higher quality/i)
+  })
+
+  it("Gemini Omni Flash rides the sibling's doctrine (identical request surface)", () => {
+    const d = getPromptDoctrine("gemini-omni-flash")!
+    expect(d).toBe(getPromptDoctrine("gemini-omni-video"))
+    expect(d.providers).toEqual(["gemini-omni-video", "gemini-omni-flash"])
+    expect(d.heading).toContain("gemini-omni-flash")
+    expect(d.doctrine).toMatch(/gemini-omni-flash is the faster\/cheaper tier/)
+  })
 })

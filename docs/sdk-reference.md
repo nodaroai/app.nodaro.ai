@@ -1011,6 +1011,22 @@ if ("jobId" in result) {
 > seconds bill like Seedance 2 at the selected tier's rate, and input images
 > beyond the first 5 add a per-image surcharge (audio refs are free but must
 > accompany an image/video ref).
+> **Wan 3.0** (`wan-3`, `wan-3-prime`) takes 10 image / 5 video / 5 audio
+> references, each video and audio clip 1–15 s and ≤ 15 s combined per type —
+> but its reference arrays are **mutually exclusive with the start/end frame
+> fields (`imageUrl` / `endFrameUrl`)**, so sending both is a conflict rather
+> than the Seedance-style fold-in. `duration` is a whole number 2–30
+> (default 5); `resolution` is `480p` / `720p` / `1080p` (send the lowercase
+> display value — the platform
+> normalizes to the provider's uppercase enum, and an omitted or unsupported
+> value renders and bills at 720p); `aspectRatio` defaults to `"adaptive"`.
+> Reference videos bill output seconds only here, and input + output duration
+> must stay ≤ 30 s. `wan-3-prime` is the high-speed, higher-priced SKU on the
+> same schema.
+> **Gemini Omni Flash** (`gemini-omni-flash`) is the cheaper, faster sibling of
+> `gemini-omni-video` on an identical request shape — same 4 / 6 / 8 / 10
+> `duration` menu (8 s when omitted), same 720p / 1080p / 4K tiers, same
+> 16:9 / 9:16-only aspect, same 7-unit input quota.
 > `resolution` / `aspectRatio` are pass-through strings — an unsupported value
 > is ignored, never a 400. Start/end frames and references can coexist (the
 > frames become prompt-directed `Image N` references; the resolver picks the

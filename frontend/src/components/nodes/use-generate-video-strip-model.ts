@@ -6,6 +6,7 @@ import {
   getDurationsForVideoModel,
   getVideoModelCapabilitiesTooltip,
 } from "@/components/editor/config-panels/model-options"
+import { uiResolutionFill, uiDurationFill } from "@nodaro/shared"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { shortenLabel } from "./strip-label"
 import type { GenerateVideoNodeData } from "@/types/nodes"
@@ -47,10 +48,24 @@ export function useGenerateVideoStripModel(nodeId: string, data: GenerateVideoNo
   // string at the read boundary; the dropdowns + payload builders all
   // expect strings.
   const currentAspect: string = (typeof data.aspectRatio === "string" ? data.aspectRatio : undefined) ?? aspectOptions[0]?.value ?? ""
+  // An UNSET duration/resolution must display the value the node actually
+  // renders and bills, which is `durations[0]` / `resolutions[0]` only for the
+  // families whose credit-identifier fallback happens to be the first tier.
+  // Wan 3.0 is the counter-example this launch introduced: it renders and bills
+  // 5s @ 720p while its ascending ladders start at 2s / 480p, so a bare index-0
+  // read showed "480p" on a node the badge priced (and `runWan3` rendered) at
+  // 720p. `uiResolutionFill` / `uiDurationFill` are the SAME shared helpers the
+  // DAG payload builder and the config-panel fail-safe use, so the strip, the
+  // panel, the credit badge and the wire cannot drift apart.
   const currentDuration: number | undefined =
     (typeof data.duration === "number" ? data.duration : undefined) ??
+    uiDurationFill(currentProvider) ??
     durationOptions[0]?.value
-  const currentResolution: string = (typeof data.resolution === "string" ? data.resolution : undefined) ?? resolutionOptions?.[0]?.value ?? ""
+  const currentResolution: string =
+    (typeof data.resolution === "string" ? data.resolution : undefined) ??
+    (resolutionOptions ? uiResolutionFill(currentProvider) : undefined) ??
+    resolutionOptions?.[0]?.value ??
+    ""
 
   // Short labels for the pill — strips the parenthetical descriptor that
   // option labels often carry ("1080p (High)" → "1080p", "16:9 (Landscape)" →

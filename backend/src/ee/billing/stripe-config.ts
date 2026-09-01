@@ -119,7 +119,14 @@ export const FREE_TIER_RESTRICTIONS = {
   // tier_config.daily_credit_limit for 'free' in a migration —
   // free-tier-config.test.ts enforces that pairing.
   dailyCreditCap: null as number | null,
-  blockedModels: ["veo3", "veo3.1", "gemini-omni-video:4k:4", "gemini-omni-video:4k:6", "gemini-omni-video:4k:8", "gemini-omni-video:4k:10", "gemini-omni-video:4k:vref"],
+  // Exact-string match (credits.ts checkCredits). Two shapes only: a whole
+  // model (veo3 family) and the 4K tier of an otherwise-allowed model — the
+  // Gemini Omni family's 4K composites, gated identically for both SKUs.
+  blockedModels: [
+    "veo3", "veo3.1",
+    "gemini-omni-video:4k:4", "gemini-omni-video:4k:6", "gemini-omni-video:4k:8", "gemini-omni-video:4k:10", "gemini-omni-video:4k:vref",
+    "gemini-omni-flash:4k:4", "gemini-omni-flash:4k:6", "gemini-omni-flash:4k:8", "gemini-omni-flash:4k:10", "gemini-omni-flash:4k:vref",
+  ],
   watermark: true,
 } as const
 

@@ -27,8 +27,13 @@ const {
   mockReserveCredits,
   mockQueueAdd,
   mockHasCreditsRef,
+  mockBuiltVideo,
 } = vi.hoisted(() => {
   const mockHasCreditsRef = { value: true }
+  // What the (stubbed) payload-builder emits for the node under test. Mutable
+  // so a case can swap in a different provider/composite and assert the gate
+  // preflights THAT identifier rather than a hardcoded one.
+  const mockBuiltVideo = { provider: "gemini-omni-video", modelIdentifier: "gemini-omni-video:4k:8" }
 
   // Supabase chain mock
   const mockJobDelete = vi.fn().mockResolvedValue({ error: null })
@@ -52,6 +57,7 @@ const {
     mockReserveCredits,
     mockQueueAdd,
     mockHasCreditsRef,
+    mockBuiltVideo,
   }
 })
 
@@ -112,12 +118,12 @@ vi.mock("@/workers/shared.js", () => ({
 
 // Minimal payload-builder stub for a generate-video node
 vi.mock("../payload-builder.js", () => ({
-  buildPayload: vi.fn().mockReturnValue({
+  buildPayload: vi.fn(() => ({
     jobName: "image-to-video",
     queueName: "video-generation",
-    modelIdentifier: "gemini-omni-video:4k:8",
-    payload: { jobId: "test-job-id", provider: "gemini-omni-video" },
-  }),
+    modelIdentifier: mockBuiltVideo.modelIdentifier,
+    payload: { jobId: "test-job-id", provider: mockBuiltVideo.provider },
+  })),
 }))
 
 vi.mock("../output-extractor.js", () => ({
@@ -168,7 +174,7 @@ import { supabase } from "@/lib/supabase.js"
 // ---------------------------------------------------------------------------
 
 function makeNode(): SimpleNode {
-  return { id: "n1", type: "generate-video", data: { provider: "gemini-omni-video", resolution: "4k" } }
+  return { id: "n1", type: "generate-video", data: { provider: mockBuiltVideo.provider, resolution: "4k" } }
 }
 
 function makeCtx(): OrchestratorContext {
@@ -190,6 +196,8 @@ function makeCtx(): OrchestratorContext {
 describe("node-executor free-tier blocked-models gate (Part B, Task 7)", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockBuiltVideo.provider = "gemini-omni-video"
+    mockBuiltVideo.modelIdentifier = "gemini-omni-video:4k:8"
 
     // Default: supabase insert returns a job id
     const mockSingle = vi.fn().mockResolvedValue({ data: { id: "test-job-id" }, error: null })
@@ -283,5 +291,28 @@ describe("node-executor free-tier blocked-models gate (Part B, Task 7)", () => {
     expect(mockCheckCredits.mock.invocationCallOrder[0]).toBeLessThan(
       mockReserveCredits.mock.invocationCallOrder[0],
     )
+  })
+
+  it("preflights the COMPOSITE the payload builder emitted — gemini-omni-flash 4K included", async () => {
+    // The gate is identifier-agnostic by design: whatever composite
+    // buildPayload emitted is exactly what checkCredits (and therefore the
+    // blockedModels list) sees. Pinned with the flash sibling because its 4K
+    // composites are free-tier blocked the same way the pro model's are — a
+    // gate that preflighted a hardcoded or bare id would silently let a
+    // blocked 4K flash run through the orchestrator path.
+    mockBuiltVideo.provider = "gemini-omni-flash"
+    mockBuiltVideo.modelIdentifier = "gemini-omni-flash:4k:8"
+    mockCheckCredits.mockResolvedValue({
+      allowed: false,
+      error: "This model requires a paid subscription. Upgrade to Basic or higher.",
+    })
+
+    await expect(executeNode(makeNode(), {}, [], [], {}, makeCtx())).rejects.toThrow(
+      /Credit reservation failed|paid subscription|blocked/,
+    )
+
+    expect(mockCheckCredits).toHaveBeenCalledTimes(1)
+    expect(mockCheckCredits.mock.calls[0]?.[1]).toBe("gemini-omni-flash:4k:8")
+    expect(mockReserveCredits).not.toHaveBeenCalled()
   })
 })

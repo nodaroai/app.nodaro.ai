@@ -324,8 +324,12 @@ export function estimateGenerateVideoProCredits(data: GenerateVideoProNodeData):
 
   const fee = getCachedCredits("generate-video-pro") ?? GVP_FEE_FALLBACK
 
-  // FLAT-PRICED providers (veo3 family, gemini-omni-video, grok-i2v,
-  // happyhorse-ref2v) have no per-second axis, and they render keyframes-only:
+  // FLAT-PRICED providers (veo3 family, the Gemini Omni family, grok-i2v,
+  // happyhorse-ref2v, wan-3/wan-3-prime) have no per-second axis HERE — GVP
+  // prices them per SEGMENT composite, matching the backend's `segmentCost`
+  // reserve. (Wan is duration-priced on the plain generate-video path, but it
+  // is deliberately out of GVP_EXTEND_PROVIDERS, so the pro engine renders it
+  // keyframes-only like the rest of this branch.) They render keyframes-only:
   // every segment is an independent image-to-video generation, so the estimate
   // is the fee plus each segment's own composite. Mirrors the backend's
   // `segmentCosts` reserve; the per-second formula below would multiply a

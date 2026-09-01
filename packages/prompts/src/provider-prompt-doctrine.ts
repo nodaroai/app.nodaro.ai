@@ -239,8 +239,8 @@ KIE VEO API docs (docs.kie.ai/veo3-api/generate-veo-3-video). Captured 2026-08-0
 }
 
 const GEMINI_OMNI_DOCTRINE: ProviderPromptDoctrine = {
-  providers: ["gemini-omni-video"],
-  heading: "Gemini Omni Video (gemini-omni-video)",
+  providers: ["gemini-omni-video", "gemini-omni-flash"],
+  heading: "Gemini Omni (gemini-omni-video, gemini-omni-flash)",
   tips: [
     "Multimodal Google video with native audio: text-to-video, image-to-video, and video-edit through the same prompt surface. 4/6/8/10s; 720p/1080p or 4K tier.",
     "Structure like the platform default: subject → action → scene → lighting → camera → style. Quote dialogue lines to have them spoken; describe SFX/ambience plainly in the prompt.",
@@ -262,6 +262,7 @@ subject → action → scene/environment → lighting → camera movement → st
 
 **Duration & tiers**
 - 4 / 6 / 8 / 10 seconds. 720p/1080p tier or the pricier 4K tier — pick 4K only when the deliverable needs it (nearly 2× the credits).
+- gemini-omni-flash is the faster/cheaper tier with the identical request surface — same 4/6/8/10s, same 720p/1080p and 4K tiers, same video-edit path. Everything above applies verbatim.
 
 Source: KIE gemini-omni-video market contract (parameters + live behavior probed for the
 aspect-ratio hard-reject, see providers/kie/video.ts). Captured 2026-08-09.`,
@@ -334,6 +335,53 @@ Source: Alibaba Cloud Model Studio — "Text-to-video / image-to-video prompt gu
 (alibabacloud.com/help/en/model-studio/text-to-video-prompt). Captured 2026-08-09.`,
 }
 
+// Wan 3.0 is a SEPARATE doctrine from WAN_DOCTRINE on purpose: Wan 2.x binds
+// references as "Image 1" / "Video 1" (capitalised, WITH a space) while the Wan
+// 3.0 contract uses "Image1" / "Video1" / "Audio1" (no space), and 3.0's surface
+// (adaptive aspect, boolean audio, 30s, mutually-exclusive frame vs reference
+// modes) is different. Folding them together would ship a token format the model
+// does not use. There is no published Wan 3.0 prompt guide, so the body below is
+// KIE contract facts only — no invented vendor style claims.
+const WAN_3_DOCTRINE: ProviderPromptDoctrine = {
+  providers: ["wan-3", "wan-3-prime"],
+  heading: "Wan 3.0 (wan-3, wan-3-prime)",
+  tips: [
+    "Two INPUT MODES, exclusive on the wire: first/last frame, OR reference mode (images + videos + audio). With any reference wired the platform folds the frame into the references and names it in the prompt.",
+    "References bind by ordinal token in array order: Image1, Image2, Video1, Audio1 — no space, unlike Wan 2.x's \"Image 1\". Name every wired asset or it may be ignored.",
+    "Reference caps: 10 images / 5 videos / 5 audio clips; each video and each audio clip 1-15s, with ≤15s combined per array. With reference videos, input seconds + output duration ≤ 30.",
+    "2-30 seconds (default 5); 480p/720p/1080p; aspect adaptive (default, matches the input media) or 16:9 / 4:3 / 1:1 / 3:4 / 9:16. Prompt cap 20,000 chars — excess is truncated silently.",
+    "`audio` is a boolean, ON by default: the clip comes back with an ambient/SFX track. Cue the sound you want in the prompt, or state the exclusion (\"no music\") — it is not a dialogue guarantee.",
+    "wan-3-prime is the HIGH-SPEED tier: identical surface and limits, faster turnaround at a higher per-second rate. It is not a quality upgrade — choose it for latency, not for looks.",
+  ],
+  doctrine: `Prompt structure (no public Wan 3.0 prompt guide exists — the KIE API contract is the
+doctrine source, like MiniMax H3 and HappyHorse; platform-standard structure applies):
+subject → action → scene/environment → lighting → camera movement → style → constraints.
+
+**Modes (mutually exclusive at the provider)**
+- Frame mode: first_frame_url, optionally with last_frame_url, and NO references — the frames anchor the shot exactly, so describe MOTION and camera, not the still.
+- Reference mode: image / video / audio reference arrays. The provider CANNOT take these together with the first/last frame parameters, so when both are wired the platform folds — the frame is appended to the reference images (after the caller's own, ordinals unchanged) and bound in the prompt as the opening/closing frame. Write for reference mode whenever a reference is attached.
+- Text-only runs are supported and are the model's default mode.
+
+**Reference binding**
+- Assets bind by ORDINAL TOKEN in array order: Image1, Image2, …, Video1, …, Audio1, …. Note the format has NO space — Wan 2.x's "Image 1" is a different generation and does not apply here.
+- Write the binding into the prompt explicitly ("Image1 walks into the room described in Image2"); an unnamed reference may simply be ignored.
+- Caps: up to 10 images, 5 videos, 5 audio clips. Each video and each audio clip must be 1-15s with ≤15s combined per array. Audio should not be the only media input — pair it with an image or a video.
+
+**Duration, resolution, aspect**
+- 2-30 seconds (provider default 5). With reference videos there is an extra ceiling: input video duration + output duration ≤ 30 seconds.
+- 480p / 720p / 1080p. Aspect "adaptive" (the default — the model selects the ratio from the input media and intent) or 16:9 / 4:3 / 1:1 / 3:4 / 9:16. There is no 21:9.
+- Prompts accept Chinese and English, up to 20,000 characters; anything beyond is truncated silently, so front-load the load-bearing content.
+
+**Audio**
+- The "audio" boolean defaults ON and produces an ambient/SFX track with the clip. Describe the soundscape you want plainly ("rain on glass, distant traffic"), or state the exclusion, or turn the toggle off. The contract documents no lip-synced dialogue guarantee — plan spoken lines as a separate TTS + lip-sync pass.
+
+**Tiers**
+- wan-3 and wan-3-prime take identical inputs. Prime trades a higher per-second rate for faster turnaround; it is not documented as a quality tier.
+
+Source: KIE Wan 3.0 market contract (docs.kie.ai/market/wan/3-0-video,
+docs.kie.ai/market/wan/3-0-video-prime). Captured 2026-09-01.`,
+}
+
 const HAPPYHORSE_DOCTRINE: ProviderPromptDoctrine = {
   providers: ["happyhorse", "happyhorse-i2v", "happyhorse-ref2v", "happyhorse-edit"],
   heading: "HappyHorse 1.1 (happyhorse, happyhorse-i2v, happyhorse-ref2v)",
@@ -391,6 +439,7 @@ export const PROVIDER_PROMPT_DOCTRINES: readonly ProviderPromptDoctrine[] = [
   GEMINI_OMNI_DOCTRINE,
   GROK_IMAGINE_DOCTRINE,
   WAN_DOCTRINE,
+  WAN_3_DOCTRINE,
   HAPPYHORSE_DOCTRINE,
   RUNWAY_KIE_DOCTRINE,
 ]

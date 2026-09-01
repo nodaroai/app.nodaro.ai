@@ -152,7 +152,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             "Identity/reference images (URLs or Nodaro asset IDs), capped at the model's own " +
-            "limit (seedance-2-5 30, seedance-2 family + minimax-h3 9, veo3/veo3.1 3, ...). " +
+            "limit (seedance-2-5 30, seedance-2 family + minimax-h3 9, wan-3 / wan-3-prime 10, " +
+            "gemini-omni-video / gemini-omni-flash 7, veo3/veo3.1 3, ...). " +
             "Dropped on models with no reference path. Accepts an array; a lone URL or " +
             "JSON-stringified array is coerced.",
           ),
@@ -161,15 +162,18 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             "Reference videos for style/motion transfer, capped at the model's own limit " +
-            "(seedance-2-5 10, seedance-2 family + minimax-h3 3). Dropped on models without " +
-            "video-reference support.",
+            "(seedance-2-5 10, seedance-2 family + minimax-h3 3, wan-3 / wan-3-prime 5, " +
+            "gemini-omni-video / gemini-omni-flash 1). Wan 3.0 takes each clip at 1-15s and " +
+            "≤15s combined, and input video seconds + output duration must stay ≤30s. " +
+            "Dropped on models without video-reference support.",
           ),
         reference_audio_urls: z
           .union([z.array(z.string()), z.string()])
           .optional()
           .describe(
             "Reference audio for soundtrack-driven motion, capped at the model's own limit " +
-            "(seedance-2-5 10, seedance-2 family + minimax-h3 3). Dropped on models without " +
+            "(seedance-2-5 10, seedance-2 family + minimax-h3 3, wan-3 / wan-3-prime 5). " +
+            "Wan 3.0 takes each clip at 1-15s and ≤15s combined. Dropped on models without " +
             "audio-reference support.",
           ),
       },
@@ -362,8 +366,11 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "(style/motion transfer), and/or audio clips via `reference_audio_urls` " +
         "(soundtrack-driven motion). Every model takes refs at its OWN caps — " +
         "seedance-2-5 30/10/10, seedance-2 family + minimax-h3 9/3/3, " +
-        "gemini-omni-video 7 images (first image = opening frame, the rest are " +
-        "identity refs), kling-3-omni/grok-i2v 7, veo3/veo3.1 3 images. " +
+        "wan-3 / wan-3-prime 10/5/5 (each reference video and audio clip 1-15s, " +
+        "≤15s combined; input video seconds + output duration ≤30s), " +
+        "gemini-omni-video / gemini-omni-flash 7 images (first image = opening frame, " +
+        "the rest are identity refs; images + 2×videos ≤ 7), " +
+        "kling-3-omni/grok-i2v 7, veo3/veo3.1 3 images. " +
         "`image_url` / `end_frame_url` are ignored in this mode. Reference " +
         "videos/audio cannot be combined with `end_frame_url`.\n" +
         "  • Reference order = priority: put the identity-critical image FIRST " +
@@ -443,8 +450,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             "Identity/reference images (URLs or Nodaro asset IDs), capped at the model's own " +
-            "limit: seedance-2-5 30, seedance-2 family + minimax-h3 9, gemini-omni-video / " +
-            "kling-3-omni / grok-i2v 7, happyhorse-ref2v 9, veo3/veo3.1 3. Resolved server-side; " +
+            "limit: seedance-2-5 30, seedance-2 family + minimax-h3 9, wan-3 / wan-3-prime 10, " +
+            "gemini-omni-video / gemini-omni-flash / kling-3-omni / grok-i2v 7, " +
+            "happyhorse-ref2v 9, veo3/veo3.1 3. Resolved server-side; " +
             "silently dropped on models with no reference path. " +
             "Accepts an array; a lone URL or JSON-stringified array is coerced.",
           ),
@@ -453,7 +461,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             "Reference videos for style/motion transfer (URLs or Nodaro asset IDs). " +
-            "seedance-2-5 up to 10, seedance-2 family + minimax-h3 up to 3, gemini-omni-video 1; " +
+            "seedance-2-5 up to 10, seedance-2 family + minimax-h3 up to 3, wan-3 / wan-3-prime " +
+            "up to 5 (each clip 1-15s, ≤15s combined; input seconds + output duration ≤30s), " +
+            "gemini-omni-video / gemini-omni-flash 1; " +
             "dropped on models without video-reference support. Ignored in 'frames' mode. " +
             "Accepts an array; a lone URL or JSON-stringified array is coerced.",
           ),
@@ -462,7 +472,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             "Reference audio for soundtrack-driven motion (URLs or Nodaro asset IDs). " +
-            "seedance-2-5 up to 10, seedance-2 family + minimax-h3 up to 3; dropped on models " +
+            "seedance-2-5 up to 10, seedance-2 family + minimax-h3 up to 3, wan-3 / wan-3-prime " +
+            "up to 5 (each clip 1-15s, ≤15s combined); dropped on models " +
             "without audio-reference support. Ignored in 'frames' mode. " +
             "Accepts an array; a lone URL or JSON-stringified array is coerced.",
           ),

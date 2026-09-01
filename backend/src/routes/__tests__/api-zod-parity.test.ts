@@ -30,6 +30,7 @@
  */
 
 import { describe, it, expect } from "vitest"
+import { MODEL_CATALOG, VIDEO_GEN_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS } from "@nodaro/shared"
 import { generateImageBody } from "../generate-image.js"
 import { generateVideoBody } from "../generate-video.js"
 import { textToVideoBody } from "../text-to-video.js"
@@ -162,6 +163,40 @@ describe("generate-video (i2v) — frontend payload × backend Zod", () => {
       referenceAudioUrls: ["https://r2.test/voice.mp3"],
     })
     expect(result.success).toBe(true)
+  })
+
+  it("wan-3 / wan-3-prime: adaptive aspect + the 2-30s duration ladder ends", () => {
+    for (const provider of ["wan-3", "wan-3-prime"]) {
+      for (const duration of [2, 5, 30]) {
+        const result = generateVideoBody.safeParse({
+          imageUrl: "https://r2.test/start.png",
+          provider,
+          duration,
+          aspectRatio: "adaptive",
+          resolution: "720p",
+          referenceImageUrls: ["https://r2.test/ref1.png"],
+          referenceVideoUrls: ["https://r2.test/refvid.mp4"],
+          referenceAudioUrls: ["https://r2.test/voice.mp3"],
+        })
+        expect(
+          result.success,
+          `${provider} @ ${duration}s: ${result.success ? "" : JSON.stringify(result.error.issues)}`,
+        ).toBe(true)
+      }
+    }
+  })
+
+  it("gemini-omni-flash: 4K resolution + the sparse duration menu", () => {
+    for (const duration of [4, 6, 8, 10]) {
+      const result = generateVideoBody.safeParse({
+        imageUrl: "https://r2.test/start.png",
+        provider: "gemini-omni-flash",
+        duration,
+        resolution: "4k",
+        referenceVideoUrls: ["https://r2.test/source.mp4"],
+      })
+      expect(result.success, result.success ? "" : JSON.stringify(result.error.issues)).toBe(true)
+    }
   })
 
   it("rejects: unknown provider", () => {
@@ -375,5 +410,73 @@ describe("generate-character-motion — frontend payload × backend Zod", () => 
         name: "Alex",
       }).success,
     ).toBe(false)
+  })
+})
+
+
+// ---------------------------------------------------------------------------
+// Catalog ↔ route-Zod TOTALITY (root CLAUDE.md pitfall 2)
+//
+// The recurring outage: a model declares a capability in MODEL_CATALOG that the
+// route's hand-written Zod enum does not list, so every run of that combination
+// 400s (or, worse, is only discovered mid-run after credits are reserved). The
+// per-model fixtures above catch the models somebody remembered to add; this
+// sweep catches the ones nobody did — it walks EVERY video catalog entry and
+// pushes its own declared aspect ratios and durations through both video route
+// schemas. Declare the capability honestly in the catalog and this passes for
+// free; add one the enum lacks and it fails HERE, in CI, before the model ships.
+//
+// `resolution` is deliberately not swept: both schemas type it `z.string()` and
+// the catalog-derived normalizers (normalizeModelInput / normalizeNodeModelParams)
+// are the invariant there, not an enum.
+// ---------------------------------------------------------------------------
+
+describe("video MODEL_CATALOG × route Zod totality", () => {
+  const videoEntries = Object.values(MODEL_CATALOG).filter((e) => e.kind === "video")
+
+  it("has video entries to sweep (guards against a vacuous pass)", () => {
+    expect(videoEntries.length).toBeGreaterThan(10)
+  })
+
+  it("every declared aspect ratio parses on both video routes", () => {
+    const rejected: string[] = []
+    for (const entry of videoEntries) {
+      for (const aspectRatio of entry.aspectRatios ?? []) {
+        if ((VIDEO_GEN_PROVIDERS as readonly string[]).includes(entry.id)) {
+          const r = generateVideoBody.safeParse({ imageUrl: "https://r2.test/s.png", provider: entry.id, aspectRatio })
+          if (!r.success) rejected.push(`generate-video ${entry.id} aspectRatio=${aspectRatio}`)
+        }
+        if ((TEXT_TO_VIDEO_PROVIDERS as readonly string[]).includes(entry.id)) {
+          const r = textToVideoBody.safeParse({ prompt: "x", provider: entry.id, aspectRatio })
+          if (!r.success) rejected.push(`text-to-video ${entry.id} aspectRatio=${aspectRatio}`)
+        }
+      }
+    }
+    expect(rejected).toEqual([])
+  })
+
+  it("every declared duration parses on both video routes", () => {
+    const rejected: string[] = []
+    for (const entry of videoEntries) {
+      for (const duration of entry.durations ?? []) {
+        if ((VIDEO_GEN_PROVIDERS as readonly string[]).includes(entry.id)) {
+          const r = generateVideoBody.safeParse({ imageUrl: "https://r2.test/s.png", provider: entry.id, duration })
+          if (!r.success) rejected.push(`generate-video ${entry.id} duration=${duration}`)
+        }
+        if ((TEXT_TO_VIDEO_PROVIDERS as readonly string[]).includes(entry.id)) {
+          const r = textToVideoBody.safeParse({ prompt: "x", provider: entry.id, duration })
+          if (!r.success) rejected.push(`text-to-video ${entry.id} duration=${duration}`)
+        }
+      }
+    }
+    expect(rejected).toEqual([])
+  })
+
+  it("covers the three 2026-09 additions", () => {
+    for (const id of ["wan-3", "wan-3-prime", "gemini-omni-flash"]) {
+      expect(videoEntries.some((e) => e.id === id), id).toBe(true)
+      expect((VIDEO_GEN_PROVIDERS as readonly string[]).includes(id), `${id} in VIDEO_GEN_PROVIDERS`).toBe(true)
+      expect((TEXT_TO_VIDEO_PROVIDERS as readonly string[]).includes(id), `${id} in TEXT_TO_VIDEO_PROVIDERS`).toBe(true)
+    }
   })
 })

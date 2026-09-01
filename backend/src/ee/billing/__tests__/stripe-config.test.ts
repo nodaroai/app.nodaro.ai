@@ -118,6 +118,21 @@ describe("stripe-config", () => {
     it("blockedModels includes veo3", () => {
       expect(FREE_TIER_RESTRICTIONS.blockedModels).toContain("veo3")
     })
+
+    it("blocks the 4K tier of BOTH Gemini Omni SKUs (video + flash)", () => {
+      // The gate is an exact-string match, so every 4K composite the credit
+      // identifier can emit needs its own entry — a missing one is silently
+      // free-tier-available. gemini-omni-flash mirrors its sibling exactly.
+      for (const provider of ["gemini-omni-video", "gemini-omni-flash"]) {
+        for (const suffix of ["4", "6", "8", "10", "vref"]) {
+          expect(FREE_TIER_RESTRICTIONS.blockedModels).toContain(`${provider}:4k:${suffix}`)
+        }
+      }
+    })
+
+    it("blocks no wan-3 composite (per-second family, bounded by the signup grant)", () => {
+      expect(FREE_TIER_RESTRICTIONS.blockedModels.filter((m) => m.startsWith("wan-3"))).toEqual([])
+    })
   })
 
   describe("getTierFromPriceId", () => {

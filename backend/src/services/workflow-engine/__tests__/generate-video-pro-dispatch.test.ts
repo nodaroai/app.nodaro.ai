@@ -111,6 +111,7 @@ vi.mock("@/ee/billing/generate-video-pro-credits.js", () => ({
 // Import SUT after mocks
 // ---------------------------------------------------------------------------
 
+import { GVP_SUPPORTED_PROVIDERS, supportsExtendRender } from "@nodaro/shared"
 import { buildPayload } from "../payload-builder.js"
 import { executeNode, computeGenerateVideoProCreditOverride } from "../node-executor.js"
 import { WORKFLOW_TIMEOUT_MS } from "../types.js"
@@ -215,15 +216,28 @@ describe("payload-builder: generate-video-pro dispatch", () => {
     // HappyHorse) failed on its first run: "no reference-video transport".
     // The editor's fail-safe snap only covers nodes whose panel was opened —
     // imported workflows and API callers had no such chance.
-    for (const provider of ["veo3", "veo3.1", "veo3_lite", "gemini-omni-video", "grok-i2v", "happyhorse-ref2v"]) {
+    // DERIVED, not hand-kept: every offered GVP model that is not extend-capable.
+    // A hand list goes stale the day a model is blessed (wan-3 / wan-3-prime and
+    // gemini-omni-flash joined on 2026-09-01 and would have shipped uncovered),
+    // and "uncovered" here means the model's very FIRST GVP run fails.
+    const nonExtend = GVP_SUPPORTED_PROVIDERS.filter((p) => !supportsExtendRender(p))
+    expect(nonExtend.length).toBeGreaterThan(5)
+    for (const provider of nonExtend) {
       const n = gvpNode({ prompt: "a cat", provider })
       const result = buildPayload(n, JOB_ID, {}, undefined, { nodes: [n], edges: [], nodeStates: {} })
       expect(result.payload.renderMethod, provider).toBe("keyframes")
     }
+    // The three 2026-09 additions are genuinely in that set (they declare no
+    // `video-reference` feature, so they are not extend-capable).
+    for (const id of ["wan-3", "wan-3-prime", "gemini-omni-flash"]) {
+      expect(nonExtend, id).toContain(id)
+    }
   })
 
   it("leaves an r2v provider's absent renderMethod alone (extend stays the default)", () => {
-    for (const provider of ["seedance-2", "seedance-2-fast", "seedance-2-mini", "minimax-h3"]) {
+    const extendCapable = GVP_SUPPORTED_PROVIDERS.filter((p) => supportsExtendRender(p))
+    expect(extendCapable.length).toBeGreaterThan(0)
+    for (const provider of extendCapable) {
       const n = gvpNode({ prompt: "a cat", provider })
       const result = buildPayload(n, JOB_ID, {}, undefined, { nodes: [n], edges: [], nodeStates: {} })
       expect(result.payload.renderMethod, provider).toBeUndefined()

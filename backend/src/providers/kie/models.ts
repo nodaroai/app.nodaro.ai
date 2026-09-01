@@ -37,6 +37,7 @@ export interface KieModelConfig {
   supportsFastMode?: boolean               // emit pe_fast_mode from options
   supportsSeed?: boolean                   // emit seed from options
   omitSeed?: boolean                       // NEVER send seed — model schema rejects it (additionalProperties: false)
+  requiresDuration?: boolean               // Model schema lists `duration` as REQUIRED — bespoke runners must emit it even in modes where it is ignored (gemini-omni-flash)
 }
 
 // =============================================================================
@@ -885,6 +886,66 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     cost: 0.45,                // USD display fallback only — real cost via STATIC composites
     allowedDurations: [4, 6, 8, 10],
   },
+
+  // Wan 3.0 — Alibaba's multimodal Wan generation. Two mutually-exclusive input
+  // families (docs.kie.ai/market/wan/3-0-video): first/last FRAME, or the
+  // all-purpose REFERENCE mode (10 images / 5 videos / 5 audio clips, each clip
+  // 1-15s and ≤15s combined). Native audio, 2-30s, 480P/720P/1080P.
+  //
+  // Dispatched through the bespoke `runWan3` in video.ts, NOT the generic
+  // createTask builder — Wan wants an INTEGER duration and an UPPERCASE
+  // resolution, and its audio lever is `audio` (not `sound`/`generate_audio`).
+  // `extraParams` below is therefore DECLARATIVE ONLY (documentation + the
+  // `audio` cross-check in video-audio-capability.test.ts): the generic builder
+  // is the only thing that spreads it, and runWan3 is dispatched before it.
+  // runWan3's own 720P/5s/adaptive defaults are the real mechanism.
+  //
+  // Per-second billing (KIE): 8 / 16 / 32 cr/s at 480P / 720P / 1080P. The
+  // Nodaro charge is seeded per (duration × resolution) in STATIC_CREDIT_COSTS
+  // + model_pricing; `credits`/`cost` here are the KIE-side DEFAULT tier
+  // (5s @720P) for audit logging only.
+  "wan-3": {
+    model: "wan/3-0-video",
+    credits: 80,             // KIE: 16 cr/s × 5 (5s @720P default tier)
+    cost: 0.40,
+    imageParam: "first_frame_url",
+    supportsEndFrame: true,
+    endFrameParam: "last_frame_url",
+    extraParams: { resolution: "720p", aspect_ratio: "adaptive", duration: 5, audio: true },
+    allowedDurations: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+  },
+
+  // Wan 3.0 Prime — KIE's HIGH-SPEED Wan 3.0 tier (faster turnaround at a higher
+  // per-second rate, NOT a higher-quality tier). Identical request surface to
+  // wan-3; same bespoke runWan3 dispatch and the same declarative-only
+  // extraParams. KIE per-second: 12.2 / 25.2 / 50.4 cr/s at 480P / 720P / 1080P.
+  // See: docs.kie.ai/market/wan/3-0-video-prime.md
+  "wan-3-prime": {
+    model: "wan/3-0-video-prime",
+    credits: 126,            // KIE: 25.2 cr/s × 5 (5s @720P default tier)
+    cost: 0.63,
+    imageParam: "first_frame_url",
+    supportsEndFrame: true,
+    endFrameParam: "last_frame_url",
+    extraParams: { resolution: "720p", aspect_ratio: "adaptive", duration: 5, audio: true },
+    allowedDurations: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+  },
+
+  // Gemini Omni Flash 1.1 — the faster/cheaper Omni tier. Same multimodal
+  // request shape as gemini-omni-video (runGeminiOmni builds `image_urls` +
+  // `video_list` itself, so no imageParam), but note the KIE id carries the
+  // `google/` prefix where the pro sibling's is the bare `gemini-omni-video`.
+  // `duration` is REQUIRED on this schema (the pro sibling's is optional), so
+  // requiresDuration pins it into every body — including the V2V one, where KIE
+  // documents it as ignored.
+  // See: docs.kie.ai/market/google/gemini-omni-flash-1-1.md
+  "gemini-omni-flash": {
+    model: "google/gemini-omni-flash-1-1",
+    credits: 63,               // KIE credits for the cheapest tier (audit display)
+    cost: 0.315,               // USD display fallback only — real cost via the per-tier table in video.ts
+    allowedDurations: [4, 6, 8, 10],
+    requiresDuration: true,
+  },
 }
 
 // =============================================================================
@@ -1113,6 +1174,37 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     credits: 90,               // KIE credits for the cheapest tier (audit display)
     cost: 0.45,                // USD display fallback only — real cost via STATIC composites
     allowedDurations: [4, 6, 8, 10],
+  },
+
+  // Gemini Omni Flash 1.1 T2V — see the i2v entry above for the id/`duration`
+  // notes. One KIE id serves every mode, so the key is the same in both maps.
+  "gemini-omni-flash": {
+    model: "google/gemini-omni-flash-1-1",
+    credits: 63,               // KIE credits for the cheapest tier (audit display)
+    cost: 0.315,               // USD display fallback only — real cost via the per-tier table in video.ts
+    allowedDurations: [4, 6, 8, 10],
+    requiresDuration: true,
+  },
+
+  // Wan 3.0 T2V — ONE KIE id serves every mode (unlike wan-2.7, whose split
+  // t2v/i2v ids needed a VIDEO_MODE_ALIASES entry), so the same Nodaro key is
+  // registered in both maps. Dispatched through the bespoke runWan3; see the
+  // i2v entry above for why extraParams here is declarative only.
+  "wan-3": {
+    model: "wan/3-0-video",
+    credits: 80,             // KIE: 16 cr/s × 5 (5s @720P default tier)
+    cost: 0.40,
+    extraParams: { resolution: "720p", aspect_ratio: "adaptive", duration: 5, audio: true },
+    allowedDurations: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+  },
+
+  // Wan 3.0 Prime T2V — the high-speed tier (faster, higher per-second rate).
+  "wan-3-prime": {
+    model: "wan/3-0-video-prime",
+    credits: 126,            // KIE: 25.2 cr/s × 5 (5s @720P default tier)
+    cost: 0.63,
+    extraParams: { resolution: "720p", aspect_ratio: "adaptive", duration: 5, audio: true },
+    allowedDurations: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
   },
 
   // Wan 2.7 T2V — 2–15s, 720p/1080p

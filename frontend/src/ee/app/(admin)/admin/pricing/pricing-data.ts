@@ -65,7 +65,9 @@ export type DBCategory = "image" | "video" | "audio" | "processing" | "other"
 
 const CATEGORY_PATTERNS: ReadonlyArray<readonly [DBCategory, ReadonlyArray<string>]> = [
   ["image", ["nano", "flux", "grok", "gpt-image", "recraft", "ideogram", "midjourney", "imagen", "seedream", "qwen", "z-image", "topaz-image"]],
-  ["video", ["veo", "kling", "minimax", "wan", "grok-i2v", "runway", "pika", "hailuo", "topaz-video", "motion-transfer", "speech-to-video", "bytedance", "seedance"]],
+  // "gemini-omni" (NOT bare "gemini") matches the video SKUs gemini-omni-video
+  // and gemini-omni-flash while leaving the Gemini LLM ids alone.
+  ["video", ["veo", "kling", "minimax", "wan", "grok-i2v", "runway", "pika", "hailuo", "topaz-video", "motion-transfer", "speech-to-video", "bytedance", "seedance", "gemini-omni", "happyhorse"]],
   ["audio", ["suno", "elevenlabs", "infinitalk", "tango", "musicgen", "audioldm", "bark"]],
   ["processing", ["ffmpeg", "topaz"]],
 ]

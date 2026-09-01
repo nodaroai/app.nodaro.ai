@@ -102,7 +102,8 @@ export interface GenerateVideoProPricing {
    *  credit cost of each segment, index-aligned with `segmentDurations`.
    *
    *  Set ONLY when the provider has no linear `${id}:8s:${res}` composite to
-   *  divide (veo3 family, gemini-omni-video, kling-3-omni, grok-i2v,
+   *  divide (veo3 family, the Gemini Omni family — gemini-omni-video and
+   *  gemini-omni-flash — the Wan 3.0 family, kling-3-omni, grok-i2v,
    *  happyhorse-ref2v — all priced flat per generation). For those runs
    *  `noRefPerSec`/`refPerSec` are 0 and carry no meaning, so the plugin's
    *  metered `commitBase` MUST bill from this array; multiplying a 0 rate by a
@@ -586,9 +587,17 @@ function perSecRate(provider: string, resolution: string, ref: boolean): number 
  * True for the Seedance-2 family and minimax-h3, which is why the per-second
  * closed-form is the ONLY path those runs ever take: their reserve stays
  * byte-identical to what it was before the pro node opened up. Every other
- * blessed SKU (veo3 family, gemini-omni-video, kling-3-omni, grok-i2v,
+ * blessed SKU (veo3 family, the Gemini Omni family — gemini-omni-video and
+ * gemini-omni-flash — the Wan 3.0 family, kling-3-omni, grok-i2v,
  * happyhorse-ref2v) prices FLAT per generation, so there is no `:8s:` row to
  * divide — those take {@link segmentCost} instead.
+ *
+ * Wan 3.0 is the subtle one: it DOES seed a per-second `wan-3:8s:<res>` row,
+ * but reference-video runs bill OUTPUT seconds only, so there is deliberately
+ * no `-ref` twin — which keeps it off this axis AND out of
+ * GVP_EXTEND_PROVIDERS (the catalog `video-reference` feature is what gates
+ * that, and wan does not declare it). Adding the feature without seeding the
+ * `-ref` rows would make the multi-segment arm reserve the plan fee alone.
  */
 function hasPerSecRate(provider: string, resolution: string): boolean {
   return (

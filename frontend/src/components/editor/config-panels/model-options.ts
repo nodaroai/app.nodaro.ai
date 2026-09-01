@@ -130,6 +130,9 @@ export const VIDEO_I2V_MODELS = [
   { value: "ltx-2.3-fast", label: "LTX 2.3 Fast", desc: "Lightricks LTX 2.3 Fast — text/image→video, durations up to 20s" },
   { value: "gemini-omni-video", label: "Gemini Omni", desc: "Google, 4–10s, 720p/1080p/4K, native audio, refs + video-edit" },
   { value: "grok-imagine-video-1.5", label: "Grok Imagine 1.5", desc: "xAI Grok, 1–15s, 480p/720p, per-second pricing" },
+  { value: "wan-3", label: "Wan 3.0", desc: "Alibaba Wan 3.0, 2–30s, 480p/720p/1080p, native audio, image/video/audio refs" },
+  { value: "wan-3-prime", label: "Wan 3.0 Prime", desc: "High-speed Wan 3.0, 2–30s, 480p/720p/1080p, native audio, image/video/audio refs" },
+  { value: "gemini-omni-flash", label: "Gemini Omni Flash", desc: "Google, 4–10s, 720p/1080p/4K, native audio, refs + video-edit" },
 ]
 
 export const VIDEO_T2V_MODELS: readonly { value: TextToVideoProvider; label: string; desc: string }[] = [
@@ -159,6 +162,9 @@ export const VIDEO_T2V_MODELS: readonly { value: TextToVideoProvider; label: str
   { value: "ltx-2.3-fast", label: "LTX 2.3 Fast", desc: "Lightricks LTX 2.3 Fast — text/image→video, durations up to 20s" },
   { value: "gemini-omni-video", label: "Gemini Omni", desc: "Google, 4–10s, 720p/1080p/4K, native audio, refs + video-edit" },
   { value: "grok-imagine-video-1.5", label: "Grok Imagine 1.5", desc: "xAI Grok, 1–15s, 480p/720p (image required)" },
+  { value: "wan-3", label: "Wan 3.0", desc: "Alibaba Wan 3.0, 2–30s, 480p/720p/1080p, native audio, image/video/audio refs" },
+  { value: "wan-3-prime", label: "Wan 3.0 Prime", desc: "High-speed Wan 3.0, 2–30s, 480p/720p/1080p, native audio, image/video/audio refs" },
+  { value: "gemini-omni-flash", label: "Gemini Omni Flash", desc: "Google, 4–10s, 720p/1080p/4K, native audio, refs + video-edit" },
 ]
 
 /** Unified generate-video model list — VIDEO_I2V_MODELS ∪ VIDEO_T2V_MODELS,
@@ -571,20 +577,6 @@ export const PROVIDERS_WITH_REFERENCES: string[] = modelsWithFeature("reference-
     // appear there.
     return id in KIE_VIDEO_DURATIONS
   })
-
-/** Fallback credit cost per video provider — shown in node badge until `useModelCredits` resolves. */
-export const VIDEO_PROVIDER_FALLBACKS: Record<string, number> = {
-  minimax: 18, veo3: 79, "veo3.1": 19, "veo3_lite": 10, kling: 28, "kling-turbo": 14,
-  "kling-3.0": 63, "grok-i2v": 7, seedance: 7,
-  "seedance-2": 82, "seedance-2-fast": 66, "seedance-2-mini": 41, "seedance-2-5": 126,
-  "wan-i2v": 22, "wan-turbo": 13, "hailuo-2.3-pro": 20, "hailuo-2.3": 10,
-  "hailuo-standard": 10, "bytedance-lite": 6, "bytedance-pro": 18,
-  "bytedance-pro-fast": 9, "kling-master": 50, "runway-kie": 4,
-  "wan-2.7-i2v": 24, "wan-2.7-t2v": 24,
-  "happyhorse": 29, "happyhorse-i2v": 29, "happyhorse-ref2v": 29, "happyhorse-edit": 35,
-  "kling-3-omni": 32,
-  "gemini-omni-video": 47,
-}
 
 /** Aspect ratio options supported by Seedance 2.0 (includes 4:3, 3:4, 21:9, adaptive). */
 export const SEEDANCE_2_VIDEO_RATIOS = [
