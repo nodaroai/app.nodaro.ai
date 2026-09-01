@@ -10,6 +10,7 @@ import { getStylePromptHint } from "./style.js"
 import {
   STYLE_SECTION_GAP,
   STYLE_SECTION_HEADER,
+  endsInsideStyleSection,
   insertBeforeStyleSection,
   splitStyleSection,
 } from "./prompt-style-section.js"
@@ -2032,6 +2033,32 @@ function reconcileBodySegments(body: string, bodySegments: readonly PromptSegmen
 }
 
 /**
+ * The `Style:` / `Avoid:` control lines with the separator each one needs.
+ *
+ * They are self-labeling and stay at the very END of the prompt, which makes
+ * them the only text that can still land under an open `[style]` header — the
+ * section has no terminator, so a blank line is what closes its scope. `Avoid:`
+ * reads the body WITH `Style:` already on it, so once the first control line has
+ * closed the section the second rejoins on a single newline, exactly as before.
+ *
+ * Derived from the body they are appended to, because the cap's tail cut moves
+ * that boundary. The cut can only NARROW the separator — the section is the last
+ * block, so a cut either drops it entirely or lands inside it — which is what
+ * lets the caller reserve on the pre-cut body and re-derive afterwards.
+ */
+function controlSuffixes(
+  body: string,
+  styleLine: string,
+  avoidLine: string,
+): { styleSuffix: string; avoidSuffix: string } {
+  const separator = (text: string): string =>
+    endsInsideStyleSection(text) ? STYLE_SECTION_GAP : "\n"
+  const styleSuffix = styleLine ? `${separator(body)}${styleLine}` : ""
+  const avoidSuffix = avoidLine ? `${separator(body + styleSuffix)}${avoidLine}` : ""
+  return { styleSuffix, avoidSuffix }
+}
+
+/**
  * Build the final image generation prompt from config.
  * Handles character description wrapping, style appending, negative prompt routing,
  * truncation, and reference image filtering.
@@ -2785,23 +2812,19 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
     }
 
     const styleText = style?.trim()
-    const styleSuffix = styleText ? `\nStyle: ${getStylePromptHint(styleText) || styleText}` : ""
+    const styleLine = styleText ? `Style: ${getStylePromptHint(styleText) || styleText}` : ""
 
     const negPrompt = negativePrompt?.trim()
     let nativeNegativePrompt: string | undefined
-    let avoidSuffix = ""
+    let avoidLine = ""
     if (negPrompt) {
       if (NATIVE_NEGATIVE_PROMPT_MODELS.has(provider)) {
         // Clamp native negatives to the provider's verified cap (e.g. ideogram /
         // qwen = 500) so an over-long negative can't trigger a provider reject.
         nativeNegativePrompt = negPrompt.slice(0, getMaxNegativePromptChars(provider))
       } else {
-        avoidSuffix = `\nAvoid: ${negPrompt}`
+        avoidLine = `Avoid: ${negPrompt}`
       }
-    }
-    if (marks) {
-      marks.styleSuffix = styleSuffix
-      marks.avoidSuffix = avoidSuffix
     }
 
     // Cap the assembled prompt at the PROVIDER's max (default IMAGE_PROMPT_MAX =
@@ -2813,10 +2836,18 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
     // The cut is ORDER-BLIND — record how much it removed so a cap-aware caller
     // (`assembleImageInput`) can shed its own lowest-value text and re-assemble.
     const maxLen = getMaxImagePromptChars(provider)
-    const reserved = styleSuffix.length + avoidSuffix.length
+    // Reserved on the PRE-cut body; the cut can only NARROW the separator (see
+    // `controlSuffixes`), so the re-derived suffixes always fit the reservation.
+    const preCut = controlSuffixes(prompt, styleLine, avoidLine)
+    const reserved = preCut.styleSuffix.length + preCut.avoidSuffix.length
     if (prompt.length + reserved > maxLen) {
       if (marks) marks.overflowChars += prompt.length + reserved - maxLen
       prompt = prompt.slice(0, Math.max(0, maxLen - reserved - 3)) + "..."
+    }
+    const { styleSuffix, avoidSuffix } = controlSuffixes(prompt, styleLine, avoidLine)
+    if (marks) {
+      marks.styleSuffix = styleSuffix
+      marks.avoidSuffix = avoidSuffix
     }
     // Body span = everything after the captured directive prefix, taken from the
     // possibly-truncated body so the segment join still reconstructs (empty in the
@@ -2906,22 +2937,18 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
   // the richer promptHint; otherwise fall back to the raw text (covers custom
   // free-text styles that don't match a preset).
   const styleText = style?.trim()
-  const styleSuffix = styleText ? `\nStyle: ${getStylePromptHint(styleText) || styleText}` : ""
+  const styleLine = styleText ? `Style: ${getStylePromptHint(styleText) || styleText}` : ""
 
   // Handle negative prompt: native support vs prompt-appended
   const negPrompt = negativePrompt?.trim()
   let nativeNegativePrompt: string | undefined
-  let avoidSuffix = ""
+  let avoidLine = ""
   if (negPrompt) {
     if (NATIVE_NEGATIVE_PROMPT_MODELS.has(provider)) {
       nativeNegativePrompt = negPrompt.slice(0, getMaxNegativePromptChars(provider))
     } else {
-      avoidSuffix = `\nAvoid: ${negPrompt}`
+      avoidLine = `Avoid: ${negPrompt}`
     }
-  }
-  if (marks) {
-    marks.styleSuffix = styleSuffix
-    marks.avoidSuffix = avoidSuffix
   }
 
   // Cap at the provider max (default IMAGE_PROMPT_MAX = 5000), reserving the
@@ -2930,10 +2957,16 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
   // BODY, THEN append the suffixes. Same order-blind cut as the
   // connectedReferences path above → same `overflowChars` bookkeeping.
   const maxLen = getMaxImagePromptChars(provider)
-  const reserved = styleSuffix.length + avoidSuffix.length
+  const preCut = controlSuffixes(prompt, styleLine, avoidLine)
+  const reserved = preCut.styleSuffix.length + preCut.avoidSuffix.length
   if (prompt.length + reserved > maxLen) {
     if (marks) marks.overflowChars += prompt.length + reserved - maxLen
     prompt = prompt.slice(0, Math.max(0, maxLen - reserved - 3)) + "..."
+  }
+  const { styleSuffix, avoidSuffix } = controlSuffixes(prompt, styleLine, avoidLine)
+  if (marks) {
+    marks.styleSuffix = styleSuffix
+    marks.avoidSuffix = avoidSuffix
   }
   // Legacy path has no directive prefix; the body is the char-desc-wrapped
   // (possibly-truncated) prompt right before the style/avoid suffixes.

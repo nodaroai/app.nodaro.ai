@@ -1,9 +1,11 @@
 import { describe, it, expect } from "vitest"
-import { applyVideoNegativePrompt } from "@nodaro/shared"
+import { applyVideoNegativePrompt, getMaxImagePromptChars } from "@nodaro/shared"
 import type { CharacterDef, ConnectedReference } from "@nodaro/shared"
+import { buildImagePrompt } from "../prompt-builder.js"
 import { assembleImageInput } from "../assemble-image-input.js"
 import { composeVideoPromptText } from "../assemble-video-input.js"
 import { resolveVideoReferenceCore } from "../video-reference-resolver.js"
+import { getStylePromptHint } from "../style.js"
 
 /**
  * WHERE THE `[style]` SECTION ENDS. The section has no terminator and every
@@ -13,10 +15,13 @@ import { resolveVideoReferenceCore } from "../video-reference-resolver.js"
  * ENDS with the section, each of them reads as one more look clause under the
  * header, which is exactly the confusion the section exists to remove.
  *
- * BODY content — a reference binding, an element directive, a character
- * description — is SPLICED in ahead of the section instead, where the prose it
- * belongs with already is. The look tail stays last, which is where it was
- * measured to be free.
+ * Two shapes keep them out, one per kind of text:
+ *  - BODY content — a reference binding, an element directive, a character
+ *    description — is SPLICED in ahead of the section, where the prose it
+ *    belongs with already is. The look tail stays last, which is where it was
+ *    measured to be free.
+ *  - The self-labeling control lines (`Style:` / `Avoid:`) stay at the end and
+ *    close the header's scope with a blank line instead.
  *
  * Assertions read the header as a LITERAL and the clause wording through the
  * catalogs, so this suite pins the BOUNDARY, not the catalog copy.
@@ -47,6 +52,9 @@ const KIRA_DEF: CharacterDef = {
 /** Look on both lines: `style` is a film clause, `shotSize` a scene clause. */
 const DIRECTION = { style: "anime", shotSize: "wide-shot" } as const
 
+/** What the inline `style` text renders as in the `Style:` control line. */
+const CINEMATIC = getStylePromptHint("cinematic")
+
 /** The trailing role phrase a canonical (unmentioned) wired location renders. */
 const LOCATION_PHRASE = "the location from reference image A"
 /** The video twin, bound to the resolver's `@image_N` shape. */
@@ -71,6 +79,14 @@ describe("image assembly — nothing lands under the `[style]` header", () => {
     expect(styleBlockOf(hybrid)).not.toContain(LOCATION_PHRASE)
     expect(hybrid.indexOf(LOCATION_PHRASE)).toBeGreaterThan(-1)
     expect(hybrid.indexOf(LOCATION_PHRASE)).toBeLessThan(hybrid.indexOf("[style]:"))
+  })
+
+  it("closes the section with a blank line before `Style:` / `Avoid:`", () => {
+    expect(styleBlockOf(hybrid)).not.toContain("Style:")
+    expect(styleBlockOf(hybrid)).not.toContain("Avoid:")
+    // The control lines stay together at the very end, one block of their own:
+    // the blank line is `Style:`'s to add, and `Avoid:` sees a closed section.
+    expect(hybrid.endsWith(`\n\nStyle: ${CINEMATIC}\nAvoid: blurry`)).toBe(true)
   })
 
   it("splices the LEGACY character description into the body too", () => {
@@ -98,6 +114,27 @@ describe("image assembly — nothing lands under the `[style]` header", () => {
     expect(styleBlockOf(legacy)).not.toContain("Kira")
   })
 
+  it("re-derives the separator after the cap's tail cut, within the reservation", () => {
+    // The control lines are reserved BEFORE the cut and rendered AFTER it, and
+    // the cut moves the boundary they read. Both directions, one cap:
+    const cap = getMaxImagePromptChars("seedream")
+    const cut = (prompt: string) =>
+      buildImagePrompt({ prompt, provider: "seedream", style: "cinematic", negativePrompt: "blurry" }).prompt
+    const tail = `\nStyle: ${CINEMATIC}\nAvoid: blurry`
+
+    // (a) a short section, cut away entirely → the separator narrows to `\n`.
+    const shortSection = cut(`${"a man walks. ".repeat(400)}\n\n[style]:\nanime style`)
+    expect(shortSection.length).toBeLessThanOrEqual(cap)
+    expect(shortSection.endsWith(`...${tail}`)).toBe(true)
+
+    // (b) a section longer than the reservation, so the cut lands INSIDE it →
+    // the separator stays a blank line, exactly what was reserved.
+    const look = "anime style, ".repeat(24)
+    const longSection = cut(`${"x".repeat(cap - look.length - 60)}\n\n[style]:\n${look}`)
+    expect(longSection.length).toBeLessThanOrEqual(cap)
+    expect(longSection.endsWith(`...\n${tail}`)).toBe(true)
+  })
+
   it("keeps the no-section shapes byte-identical (the append fallback)", () => {
     const noSection = assembleImageInput({
       userPrompt: "a man walks",
@@ -108,7 +145,7 @@ describe("image assembly — nothing lands under the `[style]` header", () => {
       negativePrompt: "blurry",
     }).prompt
     expect(noSection).toBe(
-      `A man walks\n${LOCATION_PHRASE}\nStyle: cinematic film style, dramatic lighting with cinematic color grading, widescreen aesthetic and film-like depth of field\nAvoid: blurry`,
+      `A man walks\n${LOCATION_PHRASE}\nStyle: ${CINEMATIC}\nAvoid: blurry`,
     )
   })
 })
@@ -127,6 +164,12 @@ describe("video assembly — nothing lands under the `[style]` header", () => {
     expect(framed.indexOf(CHARACTER_PHRASE)).toBeLessThan(framed.indexOf("[style]:"))
     // The look tail really is the tail: nothing follows the section.
     expect(framed.endsWith(styleBlockOf(framed))).toBe(true)
+  })
+
+  it("closes the section with a blank line before the folded `Avoid:`", () => {
+    const withNeg = applyVideoNegativePrompt(framed, "blurry, watermark", "seedance-2").prompt!
+    expect(styleBlockOf(withNeg)).not.toContain("Avoid:")
+    expect(withNeg.endsWith("\n\nAvoid: blurry, watermark")).toBe(true)
   })
 
   it("keeps the sectionless `Avoid:` join byte-identical", () => {

@@ -1200,15 +1200,16 @@ Two video-specific details are worth knowing:
 
 - **The budget includes the reference framing.** The fold runs before reference
   assembly (above), and the resolver then ADDS text — the `Use these characters:`
-  block, or, in the hybrid format, the lock lines and the trailing canonical role
-  phrases. Those trailing phrases are exactly what an order-blind tail cut
-  destroys first, so the shed is decided on the length AFTER framing. Reference
-  text is never what gets dropped.
+  block, or, in the hybrid format, the lock lines and the canonical role phrases
+  that end the body. None of it is sheddable and all of it counts, so the shed is
+  decided on the length AFTER framing. Reference text is never what gets dropped.
 - **The ceiling is the one the negative prompt leaves.** For a provider with no
-  native `negative_prompt` parameter the negative is folded into the prompt as a
-  `"\nAvoid: …"` suffix whose room is reserved FIRST, so the base prompt's real
+  native `negative_prompt` parameter the negative is folded into the prompt as an
+  `Avoid: …` suffix whose room is reserved FIRST, so the base prompt's real
   ceiling is `cap − suffix`. The shed budgets against that number, which means a
-  longer `negativePrompt` costs you hint clauses rather than prose.
+  longer `negativePrompt` costs you hint clauses rather than prose. The suffix is
+  separated by a blank line when the prompt ends with the `[style]` section, so
+  the negative never reads as a look clause.
 
 Two things stay outside the budget and fall back to the order-blind clamp (a
 bare tail cut, with no trailing `...`): the opt-in identity injection
