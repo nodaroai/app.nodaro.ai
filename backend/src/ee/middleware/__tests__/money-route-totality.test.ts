@@ -47,6 +47,9 @@ const MONEY_MARKERS: ReadonlyArray<{ re: RegExp; what: string }> = [
   { re: /storage_limit_bytes/, what: "writes a storage quota" },
   { re: /invalidateAdminCache/, what: "changes a role" },
   { re: /rpc\("reserve_credits"|from\("credit_transactions"\)\s*\n?\s*\.insert/, what: "writes the credit ledger" },
+  // Restores a withheld signup grant: 'withheld' → 'granted' plus a top-up to
+  // TIER_CREDITS.free through the activate_signup_grant RPC.
+  { re: /activateSignupGrant\(/, what: "grants credits (signup grant restore)" },
 ]
 
 /**

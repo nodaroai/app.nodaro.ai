@@ -8,7 +8,35 @@ import { CreditsService } from "../services/credits.js"
 import { supabase } from "../../lib/supabase.js"
 import { formatZodError } from "../../lib/zod-error.js"
 import { handlePriceNotConfigured } from "../lib/credit-guard-impl.js"
-import { PriceNotConfiguredError } from "../billing/credits.js"
+import { PriceNotConfiguredError, type UserBalance } from "../billing/credits.js"
+import { callerKeyHash } from "../../routes/oauth-register.js"
+import { fallbackClaimDue, readFreeGrant, runSignupGrantClaim } from "../billing/signup-grant.js"
+
+/**
+ * Resolve the account's free-grant state for the balance read, claiming on
+ * the spot when it is still 'unclaimed'. `undefined` when the column is not
+ * there yet (dormant) or anything failed — the balance read must not care.
+ */
+async function settleFreeGrant(
+  userId: string,
+  req: FastifyRequest,
+): Promise<{ state: "unclaimed" | "granted" | "withheld"; moved: boolean } | undefined> {
+  try {
+    const grant = await readFreeGrant(userId)
+    if (!grant) return undefined
+    if (grant.state !== "unclaimed") return { state: grant.state, moved: false }
+    // Fresh account: the browser's keyed claim is on its way. Leave it be.
+    if (!fallbackClaimDue(grant.createdAt)) return { state: "unclaimed", moved: false }
+    const outcome = await runSignupGrantClaim(
+      { userId, browserKey: null, deviceKey: null, ipHash: callerKeyHash(req) },
+      req.log,
+    )
+    return { state: outcome.state, moved: outcome.granted }
+  } catch (err) {
+    req.log.warn({ err, userId }, "free grant fallback claim failed")
+    return undefined
+  }
+}
 
 /**
  * Internal-only gate for the credit-mutation routes (/reserve, /commit, /refund).
@@ -125,9 +153,21 @@ export async function creditsRoutes(app: FastifyInstance) {
     }
 
     try {
-      const balance = await CreditsService.getBalance(userId)
-      setCachedBalance(userId, balance)
-      return { data: balance }
+      let balance = await CreditsService.getBalance(userId)
+
+      // Free-grant fallback. The boot-time claim lives in the browser bundle,
+      // so a tab still running a build from before the gate never sends it —
+      // and once the signup default is zero, that user sits at zero credits
+      // until they reload. Every client reads its balance, so this is where
+      // an 'unclaimed' account gets its decision made regardless of bundle.
+      // Arrives with no fingerprints; the policy scores what it has.
+      // Best-effort end to end: nothing here may break a balance read.
+      const grant = await settleFreeGrant(userId, req)
+      if (grant?.moved) balance = await CreditsService.getBalance(userId)
+      const data: UserBalance = grant ? { ...balance, freeGrantState: grant.state } : balance
+
+      setCachedBalance(userId, data)
+      return { data }
     } catch (error) {
       console.error("[credits] Failed to get balance:", error)
       return reply.status(500).send({

@@ -12,9 +12,10 @@ Self-hosted community instances can connect to Nodaro Cloud and use it as a
 or KIE. You keep your own provider keys for anything you already run
 locally; the Nodaro connection adds:
 
-- **One-click start, no credit card.** Connecting signs you into (or
-  creates) a Nodaro Cloud account. New accounts receive the standard
-  one-time 1,500-credit signup grant. Free-account outputs are
+- **One-click start.** Connecting signs you into (or creates) a Nodaro
+  Cloud account. New accounts receive the standard one-time 1,500-credit
+  signup grant on first sign-in (see [Free credits](features/free-credits.md)
+  for when activation asks for a payment method). Free-account outputs are
   watermarked; the first credit purchase lifts the watermark and unlocks
   every model. Connected-instance usage has **no daily spending cap**.
 - **Standard models without wrangling keys** — image and video generation,

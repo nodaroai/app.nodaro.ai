@@ -70,26 +70,30 @@ describe("free tier_config row matches the code constants", () => {
   })
 })
 
-// THE THIRD HOME OF THE FREE GRANT — and the one that broke.
+// THE THIRD HOME OF THE FREE GRANT — and the one that broke, twice.
 //
 // `handle_new_user()` (migration 001) inserts a profile without naming
 // subscription_credits, so a new account's opening balance is decided ENTIRELY
-// by that column's DEFAULT. The tests above pin the code constants against the
-// tier_config row and caught drift there twice (067, 281) — but neither of them
-// can see the column default, and the 2026-07-30 x10 re-denomination moved
-// every free-tier number EXCEPT that one. It sat at 150 against 10x prices
-// until 295 repaired it, which meant a new user could not afford a single
-// `smart` analysis (333 credits) with their entire balance.
-describe("profiles.subscription_credits default matches the free grant", () => {
+// by that column's DEFAULT. For years that default WAS the free grant, and the
+// 2026-07-30 x10 re-denomination moved every free-tier number except it (295
+// repaired it). Then it was the whole abuse surface: a row that exists has
+// been paid, and nothing in the application ever got to decide.
+//
+// Since migration 366 the default is ZERO and the grant is delivered by the
+// claim path (`ee/billing/signup-grant.ts`), which tops the balance up to
+// TIER_CREDITS.free for an account it decides to grant. So the invariant is
+// now two-sided: the default must stay at zero (a re-raised default would
+// silently pay every account BEFORE the decision, gated or not), and the
+// amount the claim pays must be the advertised grant.
+describe("profiles.subscription_credits default vs. the claim-delivered grant", () => {
   /** The default as the LATEST migration to set it leaves it. */
   function latestSeededDefault(): { value: number; migration: string } {
-    const dir = join(import.meta.dirname, "../../../../../supabase/migrations")
-    const hits = readdirSync(dir)
+    const hits = readdirSync(MIGRATIONS_DIR)
       .filter((f) => f.endsWith(".sql"))
       .sort() // NNN_ prefix sorts chronologically
       .flatMap((f) => {
         const m = /ALTER\s+COLUMN\s+subscription_credits\s+SET\s+DEFAULT\s+(\d+)/i.exec(
-          readFileSync(join(dir, f), "utf8"),
+          readFileSync(join(MIGRATIONS_DIR, f), "utf8"),
         )
         return m ? [{ value: Number(m[1]), migration: f }] : []
       })
@@ -97,12 +101,20 @@ describe("profiles.subscription_credits default matches the free grant", () => {
     return hits[hits.length - 1]!
   }
 
-  it("equals TIER_CREDITS.free — a new signup gets the advertised grant", () => {
+  it("is ZERO — a new signup is paid by the claim decision, never by the column", () => {
     const { value, migration } = latestSeededDefault()
     expect(
       value,
-      `${migration} leaves the signup default at ${value}, but TIER_CREDITS.free is ${TIER_CREDITS.free}. ` +
-        `handle_new_user() relies on this default, so every new account would start at the wrong balance.`,
-    ).toBe(TIER_CREDITS.free)
+      `${migration} leaves the signup default at ${value}. Since 366 the grant is claim-delivered; ` +
+        `a non-zero default pays every account before the abuse gate can decide.`,
+    ).toBe(0)
+  })
+
+  it("the claim pays TIER_CREDITS.free — the advertised grant, from the one constant", () => {
+    const src = readFileSync(join(import.meta.dirname, "../signup-grant.ts"), "utf8")
+    // Both transitions (claim and activate) pass the constant, never a literal.
+    expect(src).toMatch(/p_grant_amount:\s*TIER_CREDITS\.free/)
+    expect(src).not.toMatch(/p_grant_amount:\s*\d+/)
+    expect(TIER_CREDITS.free).toBe(1500)
   })
 })
