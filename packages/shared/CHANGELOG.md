@@ -1,5 +1,23 @@
 # @nodaro/shared
 
+## 2.18.0
+
+### Minor Changes
+
+- 1c2c224: Sectioned prompt shape — the LOOK clauses leave the prompt body for a trailing `[style]` block, on both surfaces. An assembled prompt is now `<body>\n\n[style]:\n<film line>\n<scene line>`: the body carries the user's prose, the subject fold, the whole MOTION direction family and the structured fragment last; the section carries every look clause, film line first. Folded inline, a broad direction buried the shot — a dozen grade/lighting/era sentences in the same register as the action, with nothing telling the model which was which. The section says it structurally instead.
+
+  `prompt-style-section.ts` owns the grammar and exports it whole, so a client preview renders the same bytes the server does: `STYLE_SECTION_HEADER` (exactly `[style]:`, lowercase, never indented — the video reference resolver collapses 2+ horizontal spaces unanchored), `partitionStyleClauses` / `styleSlotFor` / `asBodyClauses` for the body-vs-look split, `styleSectionFromClauses` and `renderStyleSection(direction, { surface, mode })` for the block, `composeSectionedPrompt` for the whole prompt, and `sectionedClauseCosts` for the shed budget. The film/scene grouping is a `styleGroup: "film"` column on `DIRECTION_FIELDS` (`cameraFormat`, `colorLook`, `style`, `era`, `cameraFormatId`, derived as `FILM_STYLE_KEYS`) — one definition, and the line order falls out of table order. `renderDirectionHintClauses` is `renderDirectionHints` with the row attached; the plain renderer is now its `.text` projection.
+
+  The body/section boundary IS the registry's `family` column, the same column the video verbosity policy splits on: camera motion is part of the shot prose, not the look, so the whole motion family stays inline. Coupling the two is deliberate — a row cannot be shot prose for one and look for the other.
+
+  ZERO look clauses (none selected, all shed, or all deduped away) emits no header and no extra newline, so the verbatim-and-untrimmed no-op is byte-identical: zero hints AND zero section returns the caller's prompt unchanged, `undefined` included, which is what the routes' `composed !== prompt` guard reads. When the section IS present the prompt is trimmed even if the body gained nothing, and a blank body drops the gap with it rather than opening on a newline.
+
+  Shedding is unchanged in ORDER — one flat list, tail-first, look clauses before subject — but list position is no longer string position, so `keepableDirectionHints` takes an optional exact per-clause cost array. A flat "clause + separator" charge under-prices the clause that holds the 11-byte header and over-sheds past it; both composers now pass composed-length deltas, computed once and only on the overflow path.
+
+  `buildImagePrompt`'s hybrid line-initial capitalizer stops at the header, which would otherwise rewrite it to `[Style]:` and capitalize every catalog clause under it.
+
+  THE SECTION HAS NO TERMINATOR, so every assembler downstream of the composer is section-aware or its text reads as one more look clause. Scene content is SPLICED into the body ahead of the section — `insertBeforeStyleSection` (with `splitStyleSection` and `endsInsideStyleSection` alongside it) is what the hybrid image path, the video reference resolver and the legacy character-description wrapper now use for their trailing role phrases, element directives and descriptions. The splice is length-preserving, so the shed arithmetic is untouched, and the look tail stays last. The self-labeling control lines stay at the end instead and close the header's scope with a blank line: `Style:` / `Avoid:` on the image side, and `@nodaro/shared`'s `applyVideoNegativePrompt` on the video side, through its new `videoNegativeSuffix(negativePrompt, base?)` — omit `base` for the widest form, which is what a caller reserving room before the prompt exists (the backend's `effectiveVideoPromptCeiling`) must budget. A prompt with no section keeps its exact previous bytes on every one of those paths.
+
 ## 2.17.0
 
 ### Minor Changes
