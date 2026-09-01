@@ -11,8 +11,9 @@
  *
  * WHERE IT RUNS (load-bearing): on the prompt BODY, BEFORE
  * `resolveVideoReferenceCore`. That resolver FRAMES the body — legacy prepends
- * its `Use these characters:` block, hybrid prepends the lock lines and APPENDS
- * the canonical role phrases and extras. Folding afterwards would push the
+ * its `Use these characters:` block, hybrid prepends the lock lines and extends
+ * the body's END with the canonical role phrases and extras (spliced in ahead of
+ * the `[style]` section, which stays last). Folding afterwards would push the
  * scene/look description PAST the identity directives, a worse version of the
  * bug this channel exists to fix. The image side is structurally identical
  * (`assembleImageInput` = `composePromptText` → `buildImagePrompt`).
@@ -102,9 +103,10 @@ import {
  *    module header — folding afterwards strands the scene description past the
  *    identity directives). The resolver then ADDS binding text: legacy's
  *    "Use these characters:" block, hybrid's lock lines and the canonical role
- *    phrases it APPENDS. That added text is exactly what an order-blind tail cut
- *    destroys first, so it must be inside the budget — but it must never be
- *    shed. Measuring THROUGH the caller's framing gives both properties at once:
+ *    phrases that end its body. None of it is sheddable and all of it is inside
+ *    what the clamp measures, so a budget blind to it under-sheds and hands the
+ *    remainder to the order-blind cut. Measuring THROUGH the caller's framing
+ *    gives both properties at once:
  *    the shed decision sees the final length, while the only thing it can drop
  *    is a hint clause it rendered itself.
  *

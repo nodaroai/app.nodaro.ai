@@ -3,9 +3,12 @@ import {
   STYLE_SECTION_HEADER,
   asBodyClauses,
   composeSectionedPrompt,
+  endsInsideStyleSection,
+  insertBeforeStyleSection,
   partitionStyleClauses,
   renderStyleSection,
   sectionedClauseCosts,
+  splitStyleSection,
   styleSectionFromClauses,
 } from "../prompt-style-section.js"
 import {
@@ -289,5 +292,54 @@ describe("sectionedClauseCosts — what each clause really costs", () => {
     expect(costs[2]).toBe(getFramingPromptHint(SHOT_SIZE).length + "\n".length)
     // A body clause brings the ". " it was joined with.
     expect(costs[0]).toBe("a knight rides".length + ". ".length)
+  })
+})
+
+describe("the section boundary — what a later assembler may append", () => {
+  const FILM = getStylePromptHint(STYLE)
+  const clauses = [{ text: FILM, slot: "film" }] as const
+  const composed = composeSectionedPrompt("a knight", clauses, "")!
+  const bodyless = composeSectionedPrompt("", clauses, "")!
+
+  it("splits a composed prompt into its body and its section", () => {
+    expect(splitStyleSection(composed)).toEqual({ body: "a knight", section: `[style]:\n${FILM}` })
+  })
+
+  it("splits the body-less form, where the section IS the prompt", () => {
+    expect(splitStyleSection(bodyless)).toEqual({ body: "", section: `[style]:\n${FILM}` })
+  })
+
+  it("reports no section for a prompt that carries none", () => {
+    expect(splitStyleSection("a knight")).toEqual({ body: "a knight", section: "" })
+  })
+
+  it("inserts body lines AHEAD of the section, keeping the look clauses last", () => {
+    expect(insertBeforeStyleSection(composed, ["the person from reference image A"])).toBe(
+      `a knight\nthe person from reference image A\n\n[style]:\n${FILM}`,
+    )
+    expect(insertBeforeStyleSection(bodyless, ["the person from reference image A"])).toBe(
+      `the person from reference image A\n\n[style]:\n${FILM}`,
+    )
+  })
+
+  it("is the plain `\\n` join with no section — the byte-parity path", () => {
+    // What every appender emitted before the section existed, including the
+    // leading newline an empty prompt produces. Anything else would move bytes
+    // on the look-free runs, which are most of them.
+    expect(insertBeforeStyleSection("a knight", ["a", "b"])).toBe("a knight\na\nb")
+    expect(insertBeforeStyleSection("", ["a"])).toBe("\na")
+  })
+
+  it("is a no-op with no lines to add", () => {
+    expect(insertBeforeStyleSection(composed, [])).toBe(composed)
+  })
+
+  it("knows when a prompt ends INSIDE the section", () => {
+    expect(endsInsideStyleSection(composed)).toBe(true)
+    expect(endsInsideStyleSection(bodyless)).toBe(true)
+    // A blank line closes the header's scope, and the next appender sees it.
+    expect(endsInsideStyleSection(`${composed}\n\nStyle: cinematic`)).toBe(false)
+    expect(endsInsideStyleSection("a knight")).toBe(false)
+    expect(endsInsideStyleSection("")).toBe(false)
   })
 })

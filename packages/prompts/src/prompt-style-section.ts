@@ -23,6 +23,15 @@
  * is deliberate: one row cannot be shot-prose for the verbosity policy and look
  * for the section.
  *
+ * THE SECTION HAS NO TERMINATOR, so "after the section" is not a shape a caller
+ * can reach by appending: every assembler downstream of the composer (both
+ * reference resolvers, the legacy character-description wrapper, `Style:` /
+ * `Avoid:`) joins its text with a single `\n`, which lands it UNDER the header.
+ * Two helpers below are how they stay out — `insertBeforeStyleSection` for body
+ * content, `endsInsideStyleSection` for the self-labeling control lines that
+ * must stay last. A terminator instead would dangle whenever nothing follows,
+ * and would break the byte parity below.
+ *
  * THE ZERO-CLAUSE CONTRACT (load-bearing): with no look clause — none selected,
  * all shed, or all deduped away — there is NO header and NO extra newline, and
  * the output is byte-identical to the plain hint join. That keeps the
@@ -56,6 +65,61 @@ export const STYLE_SECTION_HEADER = "[style]:"
 
 /** The blank line between the body and the section. Omitted for an empty body. */
 export const STYLE_SECTION_GAP = "\n\n"
+
+/** The section's opening bytes — the gap, the header and the newline before its
+ *  first clause line (the section is never emitted without one). */
+const STYLE_SECTION_OPENING = `${STYLE_SECTION_GAP}${STYLE_SECTION_HEADER}\n`
+
+/**
+ * Split a composed prompt into the BODY and the `[style]` section it ends with
+ * (`section: ""` when it carries none, the body then being the whole string;
+ * the section comes back WITHOUT the gap).
+ *
+ * Matched from the RIGHT: the composer always emits the section last, and a
+ * user's own prose is free to contain the same characters. A blank body drops
+ * the gap with it, so the section-only form is matched on its own.
+ */
+export function splitStyleSection(prompt: string): { body: string; section: string } {
+  const at = prompt.lastIndexOf(STYLE_SECTION_OPENING)
+  if (at >= 0) {
+    return { body: prompt.slice(0, at), section: prompt.slice(at + STYLE_SECTION_GAP.length) }
+  }
+  return prompt.startsWith(`${STYLE_SECTION_HEADER}\n`)
+    ? { body: "", section: prompt }
+    : { body: prompt, section: "" }
+}
+
+/**
+ * Extend a composed prompt's BODY with more lines, AHEAD of the `[style]`
+ * section — what every assembler downstream of the composer needs, because the
+ * section has no terminator: a plain append lands under the header and reads as
+ * one more look clause. Reference bindings, element directives and character
+ * descriptions are scene content that belongs with the prose, and leaving the
+ * look clauses last is where a look tail was measured to cost nothing.
+ *
+ * With no section this IS the plain `"\n"` join every caller emitted before —
+ * the byte-parity path, down to the leading newline an empty prompt produces.
+ */
+export function insertBeforeStyleSection(prompt: string, lines: readonly string[]): string {
+  if (lines.length === 0) return prompt
+  const block = lines.join("\n")
+  const { body, section } = splitStyleSection(prompt)
+  if (section.length === 0) return `${prompt}\n${block}`
+  return `${body.length > 0 ? `${body}\n${block}` : block}${STYLE_SECTION_GAP}${section}`
+}
+
+/**
+ * True when `prompt` ends INSIDE the section — its last `\n\n`-delimited block
+ * opens with the header. What the self-labeling control lines (`Style:`,
+ * `Avoid:`) read: they stay at the END of the prompt by design, so a blank line
+ * of their own is the only thing that can close the header's scope ahead of
+ * them.
+ */
+export function endsInsideStyleSection(prompt: string): boolean {
+  const at = prompt.lastIndexOf(STYLE_SECTION_GAP)
+  const lastBlock = at >= 0 ? prompt.slice(at + STYLE_SECTION_GAP.length) : prompt
+  return lastBlock.startsWith(`${STYLE_SECTION_HEADER}\n`)
+}
 
 /** Where a rendered clause reads in the assembled prompt. */
 export type PromptClauseSlot = "body" | "film" | "scene"

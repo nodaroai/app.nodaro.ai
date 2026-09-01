@@ -268,7 +268,7 @@ describe("POST /v1/generate-video — the fold SITE relative to reference assemb
     expect(prompt.indexOf("Use these characters:")).toBeLessThan(prompt.indexOf(hint))
   })
 
-  it("HYBRID: the hints sit in the body, before the trailing role phrases", async () => {
+  it("HYBRID: the body fold leads the role phrases, and only look clauses sit under `[style]`", async () => {
     const prevNodeEnv = process.env.NODE_ENV
     const prevFmt = process.env.IMAGE_REFERENCE_FORMAT
     try {
@@ -277,7 +277,7 @@ describe("POST /v1/generate-video — the fold SITE relative to reference assemb
       const { queued } = await post({
         ...BASE,
         prompt: "she walks",
-        direction: { style: STYLE },
+        direction: { style: STYLE, transition: TRANSITION },
         connectedReferences: [
           {
             id: "r1",
@@ -290,15 +290,20 @@ describe("POST /v1/generate-video — the fold SITE relative to reference assemb
         ],
       })
       const prompt = queued!.prompt as string
-      const hint = getStylePromptHint(STYLE)
-      expect(prompt).toContain(hint)
+      const look = getStylePromptHint(STYLE)
+      const motion = getTransitionTerm(TRANSITION)
+      expect(prompt).toContain(look)
       expect(prompt).not.toContain("Use these characters:")
-      // The canonical role phrase (`the person from @image_1`) is APPENDED by
-      // the resolver, so it must come after the folded body — the whole reason
-      // the fold runs first.
+      // The canonical role phrase (`the person from @image_1`) ends the BODY the
+      // resolver was handed, so the body fold precedes it — the whole reason the
+      // fold runs first. A LOOK clause cannot show that: it lifts into the
+      // section, which reads last either way.
       const roleAt = prompt.search(/the \w+ from @image_\d/)
       expect(roleAt).toBeGreaterThan(-1)
-      expect(prompt.indexOf(hint)).toBeLessThan(roleAt)
+      expect(prompt.indexOf(motion)).toBeLessThan(roleAt)
+      // …and the section carries look clauses ONLY: the binding is body content,
+      // and an unterminated header would otherwise swallow it.
+      expect(prompt.split("\n\n[style]:\n")[1]).toBe(look)
     } finally {
       if (prevNodeEnv === undefined) delete process.env.NODE_ENV
       else process.env.NODE_ENV = prevNodeEnv
@@ -694,11 +699,16 @@ describe("POST /v1/generate-video — over-cap direction sheds hints, never bind
     expect(prompt.length).toBeLessThanOrEqual(CAP)
 
     // Both bindings survive — the mention resolved INLINE and Ray's
-    // canonical-fallback role phrase, which the resolver APPENDS last and which
-    // an order-blind tail cut destroys first.
+    // canonical-fallback role phrase, which the resolver splices in at the end
+    // of the BODY, after the folded hints and ahead of the `[style]` section.
     expect(prompt).toContain("@image_1")
     expect(prompt).toContain("@image_2")
     expect(prompt.lastIndexOf("@image_2")).toBeGreaterThan(prompt.indexOf(HINTS[0]))
+    // …and it reads as a BINDING, not as a look clause: nothing under the
+    // header but the clauses the fold put there. (The ordering assertion above
+    // cannot tell "after the section" from "the first line inside it" — the
+    // section has no terminator, so that distinction is exactly the bug.)
+    expect(prompt.split("\n\n[style]:\n")[1]).not.toContain("@image_2")
     expect(queued!.referenceImageUrls).toEqual([
       "https://cdn.example/kira.png",
       "https://cdn.example/ray.png",

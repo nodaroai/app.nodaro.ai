@@ -7,7 +7,12 @@
 import { resolveTemplate, applyTemplate } from "./prompt-templates.js"
 import { NATIVE_NEGATIVE_PROMPT_MODELS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, imageReferenceLimit, getMaxImagePromptChars, getMaxNegativePromptChars } from "@nodaro/shared"
 import { getStylePromptHint } from "./style.js"
-import { STYLE_SECTION_HEADER } from "./prompt-style-section.js"
+import {
+  STYLE_SECTION_GAP,
+  STYLE_SECTION_HEADER,
+  insertBeforeStyleSection,
+  splitStyleSection,
+} from "./prompt-style-section.js"
 import { findCharacterMentionTokens, type CharacterMentionTokenInfo } from "@nodaro/shared"
 import { usageModeDirective, DEFAULT_USAGE_MODE, type UsageMode } from "@nodaro/shared"
 import { roleToPhrase, defaultRoleForSource, REFERENCE_ROLE_PRESETS, normalizeRoleSlug, resolveDefaultRole } from "@nodaro/shared"
@@ -2586,8 +2591,9 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
           ...extrasRendered.elementDirectives,
         ]
         const lockBlock = allLockLines.length > 0 ? `${allLockLines.join("\n")}\n\n` : ""
-        const trailingBlock = trailingLines.length > 0 ? `\n${trailingLines.join("\n")}` : ""
-        promptForNext = `${lockBlock}${promptForNext}${trailingBlock}`
+        // Scene content, so it extends the BODY: appended flat it would land
+        // under a `[style]` header the composer left open.
+        promptForNext = `${lockBlock}${insertBeforeStyleSection(promptForNext, trailingLines)}`
       }
 
       // Mutate the config locals (NOT the original passed config).
@@ -2732,8 +2738,10 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
         ...locCanon.phrases, ...objCanon.phrases,
         ...locCanon.elementDirectives, ...objCanon.elementDirectives,
       ]
-      const canonTrailingBlock = canonTrailingLines.length > 0 ? `\n${canonTrailingLines.join("\n")}` : ""
-      const composedScene = `${canonLockBlock}${scene}${canonTrailingBlock}`
+      // Role phrases and element injections are scene content → they extend the
+      // BODY, ahead of the `[style]` section (which has no terminator, so a flat
+      // append would read as one more look clause).
+      const composedScene = `${canonLockBlock}${insertBeforeStyleSection(scene, canonTrailingLines)}`
       prompt = config.referenceLockSnippet
         ? `${config.referenceLockSnippet}\n${composedScene}`
         : composedScene
@@ -2879,14 +2887,19 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
       })
     })
 
-  // Assemble prompt
+  // Assemble prompt. The wrapper template composes the BODY only — a `[style]`
+  // section is lifted off first and re-attached after, so a description can
+  // never land under its header (and a user-overridden template, which may put
+  // the descriptions anywhere, still only ever rearranges the body).
   let prompt = config.prompt
   if (charDescs.length > 0) {
     const wrapperTemplate = resolveTemplate("generate-image-wrapper", userTemplates, flowTemplates)
-    prompt = applyTemplate(wrapperTemplate, {
-      userPrompt: prompt,
+    const { body, section } = splitStyleSection(prompt)
+    const wrapped = applyTemplate(wrapperTemplate, {
+      userPrompt: body,
       assetDescriptions: charDescs.join(" "),
     })
+    prompt = section.length > 0 ? `${wrapped}${STYLE_SECTION_GAP}${section}` : wrapped
   }
 
   // Append style — if the inline `style` is a known STYLES catalog id, inject

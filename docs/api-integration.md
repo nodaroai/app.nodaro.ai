@@ -1176,11 +1176,11 @@ rules read the same column, deliberately, so they cannot drift apart.
 
 The fold happens **before** reference assembly, so your direction clauses sit
 inside the body that the reference resolver frames — the identity directives for
-a bound character still wrap the whole description. One consequence to expect
-rather than be surprised by: in the hybrid reference format the resolver APPENDS
-a bound character's canonical role phrase after the body it was handed, so there
-the phrase reads after the `[style]` section rather than before it. (The legacy
-format PREPENDS its character block instead, ahead of everything.)
+a bound character still wrap the whole description. In the hybrid reference
+format the resolver extends the END of that body with a bound character's
+canonical role phrase, inserted ahead of the `[style]` section: the section
+stays last and carries look clauses only, so a binding never reads as one. (The
+legacy format PREPENDS its character block instead, ahead of everything.)
 `jobs.input_data` records both
 halves: `prompt` is what the model received, `userPrompt` is the text you
 submitted (empty string if you sent `direction` with no prompt at all), and
