@@ -8,8 +8,11 @@ import { join } from "node:path"
  * Text-level pins for the properties that make the enforcement SAFE rather
  * than merely present: the default drops to zero, both transitions stay
  * service-role-only, the card fingerprint is actually unique, and a deleted
- * account cannot free its card. The behavioral half (does the RPC lock?) runs
- * against a real Postgres in CI's migration-behavior job.
+ * account cannot free its card. The behavioral half — does a fresh profile
+ * open at zero, is a signed-in user refused both RPCs and both tables, does a
+ * second claim no-op, does the card index refuse a second account — is
+ * `supabase/tests/free-grant.behavior.sql`, run against a real Postgres by
+ * CI's migration-behavior job.
  */
 
 const MIGRATION = join(import.meta.dirname, "../../../supabase/migrations/366_free_grant_enforce.sql")
