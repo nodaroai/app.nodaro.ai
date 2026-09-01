@@ -121,3 +121,21 @@ describe("deploymentBillingContext — misuse guard", () => {
     expect(() => deploymentBillingContext("u-1")).toThrow(/inactive/)
   })
 })
+
+describe("payerSsoLinkConflict — the combination that must not boot", () => {
+  it("refuses ONLY when a payer is active AND link-existing is on", async () => {
+    const { payerSsoLinkConflict, __setDeploymentPayerForTests } = await import("../deployment-payer.js")
+
+    // No payer: the flag is the deployment's own business either way.
+    expect(payerSsoLinkConflict(false)).toBeNull()
+    expect(payerSsoLinkConflict(true)).toBeNull()
+
+    __setDeploymentPayerForTests("payer-acct")
+    // Payer + flag off: the supported configuration.
+    expect(payerSsoLinkConflict(false)).toBeNull()
+    // Payer + flag on: takeover of every local admin, including the operator.
+    const reason = payerSsoLinkConflict(true)
+    expect(reason).toMatch(/EXTERNAL_SSO_LINK_EXISTING/)
+    expect(reason).toMatch(/platform-operator gate/)
+  })
+})

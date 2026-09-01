@@ -213,6 +213,17 @@ export const envSchema = z.object({
   MCP_PUBLIC_URL: z.string().default(""),
   /** Email of the platform owner whose super_admin role is protected from changes by other admins. Empty = no protected owner (self-host default). */
   PLATFORM_OWNER_EMAIL: z.string().default(""),
+  /**
+   * Comma-separated emails allowed to reach the MONEY admin routes (credit
+   * grants, tier/role changes, model pricing, markup settings) on a deployment
+   * that has a `billing.payerAccount` — i.e. one whose identity provider the
+   * CUSTOMER runs, where `profiles.role` is downstream of the customer and
+   * cannot protect spend. ANDed with a non-federated account in
+   * `ee/middleware/require-platform-operator.ts`. Empty falls back to
+   * PLATFORM_OWNER_EMAIL; empty with no owner set closes those routes to
+   * everyone (fail-closed). INERT on a deployment with no payer configured.
+   */
+  PLATFORM_OPERATOR_EMAILS: z.string().default(""),
   /** Max nodes a single workflow execution can run concurrently (default 3). Prevents one large workflow from starving other users. */
   MAX_CONCURRENT_NODES_PER_EXECUTION: z.coerce.number().int().min(1).max(20).default(6),
   /** BullMQ concurrency for the video worker (default 50). Safe to set high — work is I/O-bound (external API calls). */

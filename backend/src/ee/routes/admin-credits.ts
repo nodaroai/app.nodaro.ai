@@ -5,6 +5,7 @@ import { config } from "../../lib/config.js"
 import { CreditsService, invalidateModelPricingCache } from "../billing/credits.js"
 import { invalidateBalanceCache } from "../routes/credits.js"
 import { requireAdmin } from "../middleware/require-admin.js"
+import { requirePlatformOperator } from "../middleware/require-platform-operator.js"
 import { invalidateAuthCache } from "../../middleware/auth.js"
 import { invalidateAdminCache } from "../../lib/admin-check.js"
 import { TIER_CREDITS } from "../billing/stripe-config.js"
@@ -79,7 +80,7 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
   })
 
   // POST /v1/admin/users/:id/credits - Admin adjust credits
-  app.post("/v1/admin/users/:id/credits", { preHandler: requireAdmin }, async (request, reply) => {
+  app.post("/v1/admin/users/:id/credits", { preHandler: requirePlatformOperator }, async (request, reply) => {
     const { id } = request.params as { id: string }
     const parsed = adjustCreditsBody.safeParse(request.body)
     if (!parsed.success) {
@@ -154,7 +155,7 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
   })
 
   // PUT /v1/admin/users/:id/tier - Admin change user tier
-  app.put("/v1/admin/users/:id/tier", { preHandler: requireAdmin }, async (request, reply) => {
+  app.put("/v1/admin/users/:id/tier", { preHandler: requirePlatformOperator }, async (request, reply) => {
     const { id } = request.params as { id: string }
     const tierBody = z.object({
       tier: z.enum(["free", "basic", "standard", "pro", "business"]),
@@ -218,7 +219,7 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
   })
 
   // PUT /v1/admin/users/:id/storage - Admin change user storage limit
-  app.put("/v1/admin/users/:id/storage", { preHandler: requireAdmin }, async (request, reply) => {
+  app.put("/v1/admin/users/:id/storage", { preHandler: requirePlatformOperator }, async (request, reply) => {
     const { id } = request.params as { id: string }
     const storageBody = z.object({
       storageLimitBytes: z.number().int().positive(),
@@ -254,7 +255,7 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
   })
 
   // PUT /v1/admin/users/:id/role - Admin change user role (super_admin only)
-  app.put("/v1/admin/users/:id/role", { preHandler: requireAdmin }, async (request, reply) => {
+  app.put("/v1/admin/users/:id/role", { preHandler: requirePlatformOperator }, async (request, reply) => {
     const { id } = request.params as { id: string }
     const roleBody = z.object({
       role: z.enum(["user", "admin", "super_admin"]),
@@ -334,7 +335,7 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
   })
 
   // PUT /v1/admin/models/:identifier/pricing - Update model pricing
-  app.put("/v1/admin/models/:identifier/pricing", { preHandler: requireAdmin }, async (request, reply) => {
+  app.put("/v1/admin/models/:identifier/pricing", { preHandler: requirePlatformOperator }, async (request, reply) => {
     const { identifier } = request.params as { identifier: string }
     const pricingBody = z.object({
       creditCost: z.number().int().min(0).optional(),

@@ -161,6 +161,7 @@ added to `config.ts` without a row here.
 | `MCP_DYNAMIC_REGISTRATION` · `MCP_DCR_ALLOWLIST` | off · `""` | RFC 7591 dynamic client registration for MCP clients, and its allowlist |
 | `COMMUNITY_CONNECT_ENABLED` | off | **Cloud side only** — accept community-instance connections |
 | `PLATFORM_OWNER_EMAIL` | `""` | Business/Cloud — the super_admin no other admin can demote; empty = none |
+| `PLATFORM_OPERATOR_EMAILS` | `""` | Comma-separated emails allowed to reach the **money** admin routes (credit grants, tier/role changes, model pricing and cost settings) on a deployment that sets `billing.payerAccount`. Those routes additionally require a non-federated account, so an identity the deployment's own SSO provider asserts can never reach them. Empty falls back to `PLATFORM_OWNER_EMAIL`; empty with no owner closes the money routes to everyone. Inert on deployments with no payer account. |
 | `EXTERNAL_SSO_PROVIDERS` | `""` (SSO off) | Trusted external identity providers, as inline JSON or `@/path/to/file.json`. Unset ⇒ no SSO button, `/v1/sso/*` 404s. A malformed value **fails the boot loud** (never silently disables auth). Shape + linking rules: [External SSO](./sso.md) |
 | `EXTERNAL_SSO_LINK_EXISTING` | `false` | Whether a verified-email assertion may link to a **pre-existing** account not already SSO-linked. Default `false` is takeover-safe; `true` links only when the IdP also asserts a verified email. See [External SSO](./sso.md#account-linking-rules) |
 | `KIE_UNIQUE_ID` | `""` | Cloud — KIE account id for the credit audit |

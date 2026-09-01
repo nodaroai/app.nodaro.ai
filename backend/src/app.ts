@@ -153,7 +153,8 @@ import { connectedInstancesRoutes } from "./ee/routes/connected-instances.js"
 import { galleryRoutes } from "./routes/gallery.js"
 import { runtimeSurfaceProfile, surfaceProfileFailedToLoad } from "./lib/surface-profile.js"
 import { loadAvailabilityOverrides } from "./lib/availability-override.js"
-import { configureDeploymentPayer } from "./lib/deployment-payer.js"
+import { configureDeploymentPayer, payerSsoLinkConflict } from "./lib/deployment-payer.js"
+import { ssoLinkExistingEnabled } from "./lib/sso-providers.js"
 import { surfaceAvailabilityRoutes } from "./routes/surface-availability.js"
 import { userSettingsRoutes } from "./routes/user-settings.js"
 import { meRoutes } from "./routes/me.js"
@@ -336,6 +337,18 @@ export async function buildApp() {
       `[deployment-payer] FATAL: billing.payerAccount is configured but did not resolve — ${payerBoot.reason}. ` +
         "Refusing to boot a deployment-payer instance requester-billed. Fix the profile (or the payer account) and redeploy.",
     )
+    process.exit(1)
+  }
+
+  // A deployment payer means the CUSTOMER runs the identity provider, and
+  // EXTERNAL_SSO_LINK_EXISTING lets a verified assertion adopt a pre-existing
+  // local account. Together they are account takeover of every local admin —
+  // including whichever account the operator allowlist names, which would hand
+  // the money routes (require-platform-operator.ts) straight back to the
+  // customer. Neither is wrong alone; the combination has no safe use.
+  const payerSsoConflict = payerSsoLinkConflict(ssoLinkExistingEnabled())
+  if (payerSsoConflict) {
+    console.error(`[deployment-payer] FATAL: ${payerSsoConflict}`)
     process.exit(1)
   }
 

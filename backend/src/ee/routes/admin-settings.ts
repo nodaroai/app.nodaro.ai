@@ -3,6 +3,7 @@ import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
 import { invalidateSettingsCache } from "../../lib/app-settings.js"
 import { requireAdmin } from "../middleware/require-admin.js"
+import { requirePlatformOperator } from "../middleware/require-platform-operator.js"
 
 const updateSettingBody = z.object({
   value: z.union([z.string(), z.number(), z.boolean(), z.array(z.unknown()), z.record(z.string(), z.unknown())]),
@@ -74,7 +75,7 @@ export async function adminSettingsRoutes(app: FastifyInstance) {
   })
 
   // Update setting (upsert)
-  app.put("/v1/admin/settings/:key", { preHandler: requireAdmin }, async (req, reply) => {
+  app.put("/v1/admin/settings/:key", { preHandler: requirePlatformOperator }, async (req, reply) => {
     const paramsResult = settingKeyParams.safeParse(req.params)
     if (!paramsResult.success) {
       return reply.status(400).send({

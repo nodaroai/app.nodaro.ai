@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
 import { requireAdmin } from "../middleware/require-admin.js"
+import { requirePlatformOperator } from "../middleware/require-platform-operator.js"
 import { collectAppR2Keys } from "../../lib/collect-app-r2-keys.js"
 import { batchDeleteFromR2 } from "../../lib/storage.js"
 import { formatZodError } from "../../lib/zod-error.js"
@@ -245,7 +246,7 @@ export async function adminRoutes(app: FastifyInstance) {
    * POST /v1/admin/model-pricing
    * Create or update model pricing (upsert on model_identifier)
    */
-  app.post("/v1/admin/model-pricing", { preHandler: requireAdmin }, async (req, reply) => {
+  app.post("/v1/admin/model-pricing", { preHandler: requirePlatformOperator }, async (req, reply) => {
     const parsed = upsertModelPricingBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -287,7 +288,7 @@ export async function adminRoutes(app: FastifyInstance) {
    */
   app.put<{
     Params: { id: string }
-  }>("/v1/admin/model-pricing/:id/toggle", { preHandler: requireAdmin }, async (req, reply) => {
+  }>("/v1/admin/model-pricing/:id/toggle", { preHandler: requirePlatformOperator }, async (req, reply) => {
     const paramsResult = modelIdParams.safeParse(req.params)
     if (!paramsResult.success) {
       return reply.status(400).send({
@@ -338,7 +339,7 @@ export async function adminRoutes(app: FastifyInstance) {
    */
   app.delete<{
     Params: { id: string }
-  }>("/v1/admin/model-pricing/:id", { preHandler: requireAdmin }, async (req, reply) => {
+  }>("/v1/admin/model-pricing/:id", { preHandler: requirePlatformOperator }, async (req, reply) => {
     const paramsResult = modelIdParams.safeParse(req.params)
     if (!paramsResult.success) {
       return reply.status(400).send({

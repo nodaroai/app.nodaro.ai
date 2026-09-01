@@ -149,6 +149,29 @@ export function deploymentPayerActive(): boolean {
   return payerId !== null
 }
 
+/**
+ * The one combination that must never boot: a deployment payer (⇒ the CUSTOMER
+ * runs the identity provider) together with SSO link-existing (⇒ a verified
+ * assertion may adopt a pre-existing local account). Either alone is fine.
+ * Together, the customer's IdP can assert a local admin's email and assume
+ * that account — including the one the platform-operator allowlist names,
+ * which hands back every money route the gate was built to hold.
+ *
+ * Returns the refusal REASON, or null when the combination is absent. The
+ * predicate lives here (testable, no env or process surgery) and app.ts owns
+ * the exit(1) — the same split `configureDeploymentPayer` already uses. The
+ * flag is passed in rather than read here so this module stays free of the
+ * SSO import graph; it is in the import path of every money route.
+ */
+export function payerSsoLinkConflict(ssoLinkExistingOn: boolean): string | null {
+  if (!deploymentPayerActive() || !ssoLinkExistingOn) return null
+  return (
+    "EXTERNAL_SSO_LINK_EXISTING is on for an instance with a billing.payerAccount. " +
+    "The customer's IdP could then assert an existing admin's email and assume that account, " +
+    "defeating the platform-operator gate on every money route. Set EXTERNAL_SSO_LINK_EXISTING=false and redeploy."
+  )
+}
+
 /** The payer's user id (uuid) when active, else null. */
 export function deploymentPayerId(): string | null {
   return payerId
