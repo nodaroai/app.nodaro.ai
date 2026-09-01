@@ -188,8 +188,9 @@ describe("POST /v1/generate-video — the direction channel", () => {
       direction: { style: STYLE },
     })
     expect(res.statusCode).toBe(200)
-    expect(queued!.prompt).toBe(`a knight rides. ${getStylePromptHint(STYLE)}`)
-    expect(inputData!.prompt).toBe(`a knight rides. ${getStylePromptHint(STYLE)}`)
+    const folded = `a knight rides\n\n[style]:\n${getStylePromptHint(STYLE)}`
+    expect(queued!.prompt).toBe(folded)
+    expect(inputData!.prompt).toBe(folded)
   })
 
   it("is byte-identical when `direction` is absent (the parity oracle, restated)", async () => {
@@ -206,15 +207,17 @@ describe("POST /v1/generate-video — the direction channel", () => {
       direction: { style: STYLE },
     })
     expect(inputData!.userPrompt).toBe("a knight rides")
-    expect(inputData!.prompt).toBe(`a knight rides. ${getStylePromptHint(STYLE)}`)
+    expect(inputData!.prompt).toBe(`a knight rides\n\n[style]:\n${getStylePromptHint(STYLE)}`)
   })
 
   it("keeps userPrompt empty on a direction-only run with no submitted prompt", async () => {
     // Without the route's `?? ""`, buildJobInputData would mirror the RENDER
     // into userPrompt and the channel would forge words the user never typed.
+    // With no prose the section is the whole render — no leading blank line.
     const { queued, inputData } = await post({ ...BASE, direction: { style: STYLE } })
-    expect(queued!.prompt).toBe(getStylePromptHint(STYLE))
-    expect(inputData!.prompt).toBe(getStylePromptHint(STYLE))
+    const render = `[style]:\n${getStylePromptHint(STYLE)}`
+    expect(queued!.prompt).toBe(render)
+    expect(inputData!.prompt).toBe(render)
     expect(inputData!.userPrompt).toBe("")
   })
 
@@ -392,7 +395,8 @@ describe("POST /v1/generate-video — wire tolerance", () => {
     })
     expect(res.statusCode).toBe(200)
     const kept = buildAtmosphereHints(["clear", "cloudy"], "full")
-    expect(queued!.prompt).toBe(`a knight rides. ${kept.join(". ")}`)
+    // Both survivors are scene-line look clauses, so they share the one line.
+    expect(queued!.prompt).toBe(`a knight rides\n\n[style]:\n${kept.join(". ")}`)
     expect(queued!.prompt).not.toContain(buildAtmosphereHints("overcast", "full")[0])
   })
 
@@ -413,7 +417,7 @@ describe("POST /v1/generate-video — wire tolerance", () => {
       direction: { __not_a_dimension__: "x", style: STYLE },
     })
     expect(res.statusCode).toBe(200)
-    expect(queued!.prompt).toBe(`a knight rides. ${getStylePromptHint(STYLE)}`)
+    expect(queued!.prompt).toBe(`a knight rides\n\n[style]:\n${getStylePromptHint(STYLE)}`)
     expect(inputData!.direction).toEqual({ style: STYLE })
   })
 
@@ -448,7 +452,7 @@ describe("POST /v1/generate-video — wire tolerance", () => {
  * schema normalizes at the door), and a body without `subject` is untouched.
  */
 describe("POST /v1/generate-video — the subject channel", () => {
-  it("folds subject ids into the queued prompt, COMPACT, ahead of the direction clause", async () => {
+  it("folds subject ids into the queued prompt, COMPACT, in the BODY the section follows", async () => {
     const { res, queued, inputData } = await post({
       ...BASE,
       prompt: "a knight rides",
@@ -456,9 +460,10 @@ describe("POST /v1/generate-video — the subject channel", () => {
       direction: { style: STYLE },
     })
     expect(res.statusCode).toBe(200)
-    // The video policy is compact for subject, full for the look family.
+    // The video policy is compact for subject, full for the look family. Who is
+    // in the shot is body prose; the look leaves for the `[style]` section.
     expect(queued!.prompt).toBe(
-      `a knight rides. ${getPersonTerm("woman")}. ${getStylePromptHint(STYLE)}`,
+      `a knight rides. ${getPersonTerm("woman")}\n\n[style]:\n${getStylePromptHint(STYLE)}`,
     )
     expect(inputData!.prompt).toBe(queued!.prompt)
     // Non-vacuity: the compact term really is a different string from the clause.
@@ -584,11 +589,13 @@ describe("POST /v1/generate-video — over-cap direction sheds hints, never bind
     mood: ["happy", "joyful"],
     setting: "forest",
   }
-  // 219 is TUNED, not arbitrary: it puts the shed decision inside the window
+  // 239 is TUNED, not arbitrary: it puts the shed decision inside the window
   // where the resolver's appended role phrases are what tips the prompt over the
   // ceiling. Drop the frame from the route wiring and this case really does
-  // overflow (and severs the trailing binding) rather than passing by luck.
-  const TAIL = "The waves are loud. ".repeat(219)
+  // overflow (and severs the trailing binding) rather than passing by luck. The
+  // window is not an interval — shedding is clause-granular, so neighbouring
+  // counts miss it; retune by scanning, not by nudging.
+  const TAIL = "The waves are loud. ".repeat(239)
   const PROSE = `@kira:1 walks the seawall at dusk. ${TAIL}`
   const REFS = [
     {
@@ -639,8 +646,8 @@ describe("POST /v1/generate-video — over-cap direction sheds hints, never bind
    * not vacuous: how much a frame-BLIND shed would still overflow by is the
    * entire signal that `frame` (as opposed to `cap` alone) is wired at all.
    *
-   * On this provider that margin is THIN — 40 characters in the plain hybrid
-   * case and 1 in the `Avoid` one (hybrid framing appends only short role
+   * On this provider that margin is THIN — 36 characters in the plain hybrid
+   * case and 22 in the `Avoid` one (hybrid framing appends only short role
    * phrases, ~21 chars each, and `TAIL`'s repeat count is tuned to land inside
    * that window). Thin is fine as long as it is ASSERTED: a catalog wording
    * change that closes it now fails here, loudly, instead of quietly
