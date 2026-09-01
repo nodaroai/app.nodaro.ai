@@ -3,6 +3,7 @@ import { resolveEffectiveTier } from "@nodaro/shared"
 import { useNavigate } from "react-router-dom"
 import type { User } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase"
+import { hasCredits } from "@/lib/edition"
 import { hydrateWorkspaces, resetWorkspaceState } from "@/lib/workspace-context"
 
 export type UserRole = "user" | "admin" | "super_admin"
@@ -58,7 +59,7 @@ async function loadRoleAndTier(user: User | null): Promise<void> {
   const supabase = createClient()
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role, tier, subscription_tier, lifetime_topup_credits")
+    .select("role, tier, subscription_tier, lifetime_topup_credits, free_grant_state")
     .eq("id", user.id)
     .single()
   cachedRole = (profile?.role as UserRole) ?? "user"
@@ -69,6 +70,20 @@ async function loadRoleAndTier(user: User | null): Promise<void> {
         lifetime_topup_credits: (profile.lifetime_topup_credits as number) ?? 0,
       })
     : "free"
+  // The free signup grant is claimed from the SESSION, not from /signup: a
+  // Google OAuth signup never renders that page, so it is not something every
+  // new account passes through. This read is.
+  //
+  // Fire-and-forget for two reasons that are both load bearing: a static
+  // `@/ee/` import from core fails the check-ee-imports guard (and would put
+  // the fingerprint agent in the community bundle), and awaiting it would sit
+  // a canvas/WebGL probe in front of first paint. The module holds its own
+  // once-per-page-load latch — this runs on every session change.
+  if (hasCredits() && profile?.free_grant_state === "unclaimed") {
+    void import("@/ee/lib/ensure-signup-grant")
+      .then((m) => m.ensureSignupGrant())
+      .catch(() => {})
+  }
 }
 
 function initAuth() {

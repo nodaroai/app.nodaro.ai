@@ -1743,7 +1743,7 @@ export class CreditsService {
      *  budget, never the personal pools. The personal-history views filter
      *  these out; the org reporting joins on them (P15). */
     creditType: "subscription" | "topup" | "org"
-    source: "subscription_created" | "subscription_renewal" | "one_time_purchase" | "admin_adjustment" | "usage" | "org_usage" | "refund" | "stripe_refund" | "expiry"
+    source: "subscription_created" | "subscription_renewal" | "one_time_purchase" | "admin_adjustment" | "usage" | "org_usage" | "refund" | "stripe_refund" | "expiry" | "signup_grant"
     description?: string
     jobId?: string
     stripeTransactionId?: string
