@@ -3,6 +3,7 @@ import { hasCredits } from "@/lib/edition"
 import { useLocation, useNavigate, Outlet } from "react-router-dom"
 import { Loader2 } from "lucide-react"
 import { AppSidebar, MobileHeader } from "@/components/layout/app-sidebar"
+import { FreeGrantBannerSlot } from "@/components/layout/free-grant-banner-slot"
 import { SidebarProvider } from "@/components/layout/sidebar-context"
 import { useLoadUserSettings } from "@/hooks/use-load-user-settings"
 import { useAuth } from "@/hooks/use-auth"
@@ -92,6 +93,8 @@ export default function DashboardLayout() {
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Only show mobile header on non-editor pages (and never when embedded) */}
           {!isEditor && !embedded && <MobileHeader onMenuClick={() => setMobileMenuOpen(true)} />}
+          {/* Withheld free grant → activation path. Self-hiding; cloud only. */}
+          {!embedded && <FreeGrantBannerSlot />}
           <main className="flex-1 overflow-auto">
             <Outlet />
           </main>

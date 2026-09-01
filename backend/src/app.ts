@@ -133,6 +133,9 @@ import { cancelJobsRoutes } from "./routes/cancel-jobs.js"
 import { creditsRoutes } from "./ee/routes/credits.js"
 import { registerCreditsBalanceRoutes } from "./ee/routes/credits-balance.js"
 import { registerCopilotRoutes } from "./ee/routes/copilot.js"
+import { claimSignupGrantRoutes } from "./ee/routes/claim-signup-grant.js"
+import { freeGrantActivationRoutes } from "./ee/routes/free-grant-activation.js"
+import { adminFreeGrantRoutes } from "./ee/routes/admin-free-grants.js"
 import { adminRoutes } from "./ee/routes/admin.js"
 import { libraryRoutes } from "./routes/library.js"
 import { storageStatusRoutes } from "./routes/storage-status.js"
@@ -535,6 +538,10 @@ export async function buildApp() {
   if (hasCredits()) await app.register(creditsRoutes)
   if (hasCredits()) await registerCreditsBalanceRoutes(app)
   if (hasCredits()) await registerCopilotRoutes(app)
+  if (hasCredits()) await app.register(claimSignupGrantRoutes)
+  if (hasCredits()) await app.register(freeGrantActivationRoutes)
+  // The review surface only means something where the grant exists.
+  if (hasCredits()) await app.register(adminFreeGrantRoutes)
   if (hasAdmin()) await app.register(adminRoutes)
   if (hasAdmin()) await app.register(adminJobsRoutes)
   if (hasAdmin()) await app.register(adminSsoRoutes)

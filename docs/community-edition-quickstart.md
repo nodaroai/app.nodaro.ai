@@ -102,7 +102,8 @@ key powers and where to get one.
 
 **Connect nodaro.ai (no keys to manage).** On the same page, step 2 →
 **Connect nodaro.ai**. Your browser opens the nodaro.ai consent screen; sign
-in or create a free account there (1,500 free credits, no card), approve, and
+in or create a free account there (1,500 free credits on first sign-in — see
+[Free credits](features/free-credits.md)), approve, and
 you land back on your install connected — image, video, speech and LLM models
 route through your nodaro.ai account — including the vendor-direct nodes
 (AI Avatar / Cinematic Avatar, Relight & Switch, Web Scrape), which run on the

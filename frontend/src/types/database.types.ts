@@ -873,6 +873,7 @@ export type Database = {
           daily_credits_used: number | null
           daily_spent_credits: number | null
           email: string
+          free_grant_state: string
           full_name: string | null
           id: string
           last_daily_reset: string | null
@@ -903,6 +904,7 @@ export type Database = {
           daily_credits_used?: number | null
           daily_spent_credits?: number | null
           email: string
+          free_grant_state?: string
           full_name?: string | null
           id: string
           last_daily_reset?: string | null
@@ -933,6 +935,7 @@ export type Database = {
           daily_credits_used?: number | null
           daily_spent_credits?: number | null
           email?: string
+          free_grant_state?: string
           full_name?: string | null
           id?: string
           last_daily_reset?: string | null

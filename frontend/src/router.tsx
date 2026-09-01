@@ -93,6 +93,7 @@ const AdminSettings = lazy(() => import("@/ee/app/(admin)/admin/settings/page"))
 const AdminApps = lazy(() => import("@/ee/app/(admin)/admin/apps/page"))
 const AdminCreditAudit = lazy(() => import("@/ee/app/(admin)/admin/credit-audit/page"))
 const AdminCreditAnomalies = lazy(() => import("@/ee/app/(admin)/admin/credit-anomalies/page"))
+const AdminFreeGrants = lazy(() => import("@/ee/app/(admin)/admin/free-grants/page"))
 const AdminPickerGaps = lazy(() => import("@/ee/app/(admin)/admin/picker-gaps/page"))
 const AdminCopilotGaps = lazy(() => import("@/ee/app/(admin)/admin/copilot-gaps/page"))
 const AdminKieCredits = lazy(() => import("@/ee/app/(admin)/admin/kie-credits/page"))
@@ -141,6 +142,7 @@ const adminRoutes: RouteObject[] = hasAdmin() ? [
       { path: "apps", element: <Navigate to="/admin/miniapps" replace /> },
       { path: "credit-audit", element: <SuspenseWrapper><AdminCreditAudit /></SuspenseWrapper> },
       { path: "credit-anomalies", element: <SuspenseWrapper><AdminCreditAnomalies /></SuspenseWrapper> },
+      { path: "free-grants", element: <SuspenseWrapper><AdminFreeGrants /></SuspenseWrapper> },
       { path: "picker-gaps", element: <SuspenseWrapper><AdminPickerGaps /></SuspenseWrapper> },
       { path: "copilot-gaps", element: <SuspenseWrapper><AdminCopilotGaps /></SuspenseWrapper> },
       { path: "kie-credits", element: <SuspenseWrapper><AdminKieCredits /></SuspenseWrapper> },

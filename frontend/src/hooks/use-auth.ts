@@ -3,6 +3,7 @@ import { resolveEffectiveTier } from "@nodaro/shared"
 import { useNavigate } from "react-router-dom"
 import type { User } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase"
+import { hasCredits } from "@/lib/edition"
 import { hydrateWorkspaces, resetWorkspaceState } from "@/lib/workspace-context"
 
 export type UserRole = "user" | "admin" | "super_admin"
@@ -69,6 +70,39 @@ async function loadRoleAndTier(user: User | null): Promise<void> {
         lifetime_topup_credits: (profile.lifetime_topup_credits as number) ?? 0,
       })
     : "free"
+  maybeClaimSignupGrant(user.id)
+}
+
+/**
+ * The free signup grant is claimed from the SESSION, not from /signup: a
+ * Google OAuth signup never renders that page, so this — the path every
+ * entry point shares — is where the claim decision anchors. It runs on every
+ * session change; the ee module holds its own once-per-page-load latch.
+ *
+ * It rides its OWN profile read, deliberately decoupled from the role/tier
+ * select above: migrations reach the shared database only on a push to main,
+ * so a dev deploy runs ahead of the free_grant_state column for the whole
+ * staging soak, and a widened shared select would 400 there — collapsing
+ * every staging user to user/free. Here the pre-migration read just returns
+ * nothing and the claim stays dormant until the column lands.
+ *
+ * Fire-and-forget end to end, for reasons that are all load bearing: a
+ * static `@/ee/` import from core fails the check-ee-imports guard (and
+ * would put the fingerprint agent in the community bundle), and awaiting any
+ * of this would sit a second profile read plus a canvas/WebGL probe in front
+ * of first paint.
+ */
+function maybeClaimSignupGrant(userId: string): void {
+  if (!hasCredits()) return
+  const supabase = createClient()
+  void Promise.resolve(
+    supabase.from("profiles").select("free_grant_state").eq("id", userId).single(),
+  )
+    .then(({ data }) => {
+      if (data?.free_grant_state !== "unclaimed") return
+      return import("@/ee/lib/ensure-signup-grant").then((m) => m.ensureSignupGrant())
+    })
+    .catch(() => {})
 }
 
 function initAuth() {

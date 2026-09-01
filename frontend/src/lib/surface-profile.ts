@@ -5,6 +5,10 @@
  * here; the backend is the authority.
  */
 export type NavKey = "gallery" | "explore" | "pricing" | "templates" | "apps" | "community" | "integrations"
+/** Mirror of the backend's FeatureKey — whole features a deployment switches
+ *  off. `presentation` hides the canvas Present TAB only; already-minted
+ *  /present links and the app runner keep working. */
+export type FeatureKey = "copilot" | "presentation"
 export const DASHBOARD_TAB_KEYS = [
   "workflows",
   "projects",
@@ -36,6 +40,7 @@ export interface SurfaceBilling {
 
 export interface SurfaceProfile {
   nav: { hide: NavKey[] }
+  features: { hide: FeatureKey[] }
   dashboard: { tabs: DashboardTabKey[] }
   nodes: { deny: string[]; allow: string[] }
   models: { deny: string[]; allow: string[] }
@@ -51,6 +56,7 @@ export interface SurfaceProfile {
 
 export const SURFACE_PROFILE_DEFAULT: SurfaceProfile = {
   nav: { hide: [] },
+  features: { hide: [] },
   dashboard: { tabs: [] },
   nodes: { deny: [], allow: [] },
   models: { deny: [], allow: [] },
@@ -73,6 +79,7 @@ export function runtimeSurfaceProfile(): SurfaceProfile {
   const d = SURFACE_PROFILE_DEFAULT
   return {
     nav: { ...d.nav, ...o.nav },
+    features: { ...d.features, ...o.features },
     dashboard: { ...d.dashboard, ...o.dashboard },
     nodes: { ...d.nodes, ...o.nodes },
     models: { ...d.models, ...o.models },

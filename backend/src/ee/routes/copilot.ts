@@ -44,6 +44,7 @@ import {
 import { refundReservedCreditsForJob } from "../../lib/credits-job-lifecycle.js"
 import { deleteMemory, listMemories } from "../copilot/memories.js"
 import { toDisplayMessages } from "../copilot/display.js"
+import { runtimeSurfaceProfile } from "../../lib/surface-profile.js"
 
 const createThreadBody = z
   .object({
@@ -117,6 +118,12 @@ async function accessGate(req: FastifyRequest, reply: FastifyReply): Promise<voi
 
 async function copilotEnabled(): Promise<boolean> {
   if (!config.COPILOT_ENABLED) return false
+  // A deployment that hides the Copilot surface must not serve it either:
+  // the UI is gone, so anything still calling these routes is a stale tab or
+  // a hand-made request. Checked here rather than by skipping registration in
+  // app.ts, so callers get the 503 the client already models instead of a 404
+  // it has never seen.
+  if (runtimeSurfaceProfile().features.hide.includes("copilot")) return false
   const settings = await getAppSettings()
   return settings.copilot_enabled
 }
@@ -124,7 +131,7 @@ async function copilotEnabled(): Promise<boolean> {
 async function requireEnabled(reply: FastifyReply): Promise<boolean> {
   if (await copilotEnabled()) return true
   reply.status(503).send({
-    error: { code: "feature_disabled", message: "The Workflow Copilot is temporarily unavailable." },
+    error: { code: "feature_disabled", message: "The Workflow Copilot is not available on this deployment." },
   })
   return false
 }

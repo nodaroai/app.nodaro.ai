@@ -197,6 +197,12 @@ export interface UserBalance {
   periodEnd: string | null
   /** Credits earned for app usage (free tier only — earned by running flows) */
   appCreditsAllowance: number
+  /**
+   * Free signup grant state. 'withheld' means the account works but the grant
+   * did not land — the client shows the activation path. Absent until the
+   * gate's column exists (a dev deploy can run ahead of the migration).
+   */
+  freeGrantState?: "unclaimed" | "granted" | "withheld"
 }
 
 export interface ReserveResult {
@@ -1743,7 +1749,7 @@ export class CreditsService {
      *  budget, never the personal pools. The personal-history views filter
      *  these out; the org reporting joins on them (P15). */
     creditType: "subscription" | "topup" | "org"
-    source: "subscription_created" | "subscription_renewal" | "one_time_purchase" | "admin_adjustment" | "usage" | "org_usage" | "refund" | "stripe_refund" | "expiry"
+    source: "subscription_created" | "subscription_renewal" | "one_time_purchase" | "admin_adjustment" | "usage" | "org_usage" | "refund" | "stripe_refund" | "expiry" | "signup_grant"
     description?: string
     jobId?: string
     stripeTransactionId?: string

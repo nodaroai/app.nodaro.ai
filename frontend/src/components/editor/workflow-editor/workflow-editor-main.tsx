@@ -107,6 +107,7 @@ import { runtimeSupabaseAnonKey, runtimeSupabaseUrl } from "@/lib/runtime-config
 import { ConnectProviderWatcher } from "./connect-provider-watcher"
 import { CopilotPanelSlot, CopilotToolbarButton } from "./copilot-panel-slot"
 import { useT } from "@/lib/i18n";
+import { surfaceFeatureHidden } from "@/lib/surface-selectors"
 const FreeCutEditorModal = lazy(() => import("../freecut-editor-modal").then(m => ({ default: m.FreeCutEditorModal })));
 const FilerobotEditorModal = lazy(() => import("../filerobot-editor-modal").then(m => ({ default: m.FilerobotEditorModal })));
 const PresentationViewLazy = lazy(() => import("../../presentation/presentation-view").then(m => ({ default: m.PresentationView })));
@@ -1253,6 +1254,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               <Layers className="w-4 h-4" />
               {t("editorTab.editor")}
             </button>
+            {/* Hiding this tab also removes the only UI for minting a share
+                link and for publishing a workflow as an app or template —
+                ShareDialog and PublishDialog live inside the presentation
+                view and are reachable from nowhere else. Links and apps
+                already published keep working; only the mint path goes. */}
+            {!surfaceFeatureHidden("presentation") && (
             <button
               type="button"
               onClick={() => setActiveTab("present")}
@@ -1265,6 +1272,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               <Monitor className="w-4 h-4" />
               {t("editorTab.present")}
             </button>
+            )}
             <button
               type="button"
               onClick={() => setActiveTab("executions")}

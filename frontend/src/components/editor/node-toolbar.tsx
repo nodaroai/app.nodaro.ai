@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useMemo, Suspense } from "react"
+import { useSurfaceAvailability } from "@/lib/surface-availability"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import {
   Plus,
@@ -29,6 +30,9 @@ export { getNodeOptions }
 
 
 function NodeList({ onAdd }: { readonly onAdd: (type: SceneNodeType) => void }) {
+  // The availability sets arrive after first paint; without this the picker
+  // keeps offering nodes this deployment does not allow.
+  const availability = useSurfaceAvailability()
   const t = useT()
   const { isAdmin } = useAuth()
   // Every node type, Parameter pickers included — the same pool the popup
@@ -36,7 +40,7 @@ function NodeList({ onAdd }: { readonly onAdd: (type: SceneNodeType) => void }) 
   // filtered out of getNodeOptions() when !hasCredits().
   const visibleNodes = useMemo(
     () => getNodeOptions().filter((n) => !n.adminOnly || isAdmin),
-    [isAdmin],
+    [isAdmin, availability],
   )
   const sections = useMemo(() => sidebarSections(visibleNodes), [visibleNodes])
 

@@ -2,6 +2,7 @@ import {
   runtimeSurfaceProfile,
   runtimeConfiguredBrandName,
   type NavKey,
+  type FeatureKey,
   type DashboardTabKey,
   type AuthMethod,
   type SurfaceSibling,
@@ -13,6 +14,14 @@ import {
  * "inherit the code default"; a non-empty one narrows to exactly that set. A
  * selector can only hide/deny/whitelist relative to what the code renders.
  */
+
+/**
+ * True when the deployment switched this whole feature off. Narrowing only:
+ * an empty `features.hide` inherits whatever the code renders.
+ */
+export function surfaceFeatureHidden(key: FeatureKey): boolean {
+  return runtimeSurfaceProfile().features.hide.includes(key)
+}
 
 export function surfaceNavHidden(key: NavKey): boolean {
   return runtimeSurfaceProfile().nav.hide.includes(key)

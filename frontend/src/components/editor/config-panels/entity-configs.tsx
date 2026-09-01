@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useRef, useMemo, useEffect } from "react"
+import { useSurfaceAvailability } from "@/lib/surface-availability"
 import { Play, Loader2, Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -142,6 +143,10 @@ export function CharacterConfig({ data, onUpdate, sources, fieldMappings, onMapF
 }
 
 export function FaceConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<FaceNodeData>) {
+  // Re-render when the deployment's availability sets arrive: they land
+  // after the first paint, and without a subscription this dropdown would
+  // keep showing every model for the rest of the session.
+  useSurfaceAvailability()
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
   const nodes = useWorkflowStore((s) => s.nodes)

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo, useCallback, Suspense, lazy, type ReactNode } from "react";
+import { useSurfaceAvailability } from "@/lib/surface-availability"
 import {
   ArrowLeft,
   BookOpen,
@@ -424,13 +425,17 @@ export function AddNodePopup({
     searchInputRef.current?.focus();
   }, []);
 
+  // The availability sets arrive after first paint; without this the picker
+  // keeps offering nodes this deployment does not allow.
+  const availability = useSurfaceAvailability()
+
   // Compatibility pool. Parameter-category nodes stay OUT of it: edge-drop
   // reaches them through the typed-handle pool below, and letting them into
   // the generic compatibility tiers would offer a Duration node on handles
   // that cannot consume one.
   const visibleNodes = useMemo(
     () => getNodeOptions().filter((n) => (!n.adminOnly || isAdmin) && n.category !== "Parameter"),
-    [isAdmin],
+    [isAdmin, availability],
   );
 
   // Browse + search pool. Unlike `visibleNodes` this DOES include the seven
@@ -438,7 +443,7 @@ export function AddNodePopup({
   // Settings instead of leaving them reachable only by dragging a wire.
   const browsePool = useMemo(
     () => getNodeOptions().filter((n) => !n.adminOnly || isAdmin),
-    [isAdmin],
+    [isAdmin, availability],
   );
 
   // Typed-handle pool: Parameter-category nodes are normally hidden from
@@ -457,7 +462,7 @@ export function AddNodePopup({
   // graphics, after-effects, transcribe, etc.) — false-positive UX.
   const typedHandlePool = useMemo(
     () => getNodeOptions().filter((n) => !n.adminOnly || isAdmin),
-    [isAdmin],
+    [isAdmin, availability],
   );
 
   // Compatibility filtering for per-handle edge-drop (connectionContext): render
