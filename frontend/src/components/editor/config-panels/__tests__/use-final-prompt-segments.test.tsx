@@ -1217,6 +1217,56 @@ describe("useFinalPromptSegments — a node's stored direction folds into the pr
     expect(result.current.promptText).toContain(hint)
   })
 
+  it("tints the directive block only, with a [style] section in the body below it", () => {
+    // The directive-block prefix is read back off the FINAL string as everything
+    // before its first blank line. The `[style]` section introduces a SECOND
+    // blank line further down, so the two must not be confused: reading to the
+    // last blank line instead of the first would swallow the whole body and tint
+    // it as reference text. Safe by construction (a directive block contains no
+    // blank line before its own terminator) — pinned because the shape it rests
+    // on now lives in another package.
+    const consumer = {
+      id: "n1",
+      type: "generate-image",
+      position: { x: 0, y: 0 },
+      data: { prompt: "a duel", direction: { framingId: "medium-shot" } },
+    }
+    const borin = {
+      id: "char2",
+      type: "character",
+      position: { x: 0, y: 0 },
+      data: {
+        characterName: "Borin",
+        sourceImageUrl: "https://x/b.png",
+        canonicalDescription: "a stout dwarf",
+      },
+    }
+    const nodes = [consumer, borin] as never[]
+    const edges = [{ id: "e2", source: "char2", target: "n1" }] as never[]
+    const { result } = renderHook(() =>
+      useFinalPromptSegments({
+        userPrompt: "a duel",
+        consumerNodeId: "n1",
+        nodes,
+        edges,
+        provider: "gpt-image",
+      }),
+    )
+    const text = result.current.promptText
+    // Non-vacuity: both blocks really are in this prompt.
+    expect(text).toContain("Borin")
+    expect(text).toContain(`\n\n[style]:\n${getFramingPromptHint("medium-shot")}`)
+
+    const mentionSeg = result.current.promptSegments.find((s) => s.origin === "mention")
+    expect(mentionSeg).toBeDefined()
+    expect(mentionSeg!.text).toContain("Borin")
+    expect(mentionSeg!.text).not.toContain("[style]:")
+    // …and it stopped at the FIRST blank line, ahead of the section's.
+    expect(mentionSeg!.text).toBe(text.slice(0, text.indexOf("\n\n")))
+    expect(text.indexOf("\n\n[style]:")).toBeGreaterThan(text.indexOf("\n\n"))
+    expect(result.current.promptSegments.map((s) => s.text).join("")).toBe(text)
+  })
+
   it("leaves a node without stored direction byte-identical", () => {
     const node = {
       id: "n1",

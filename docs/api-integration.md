@@ -1085,9 +1085,28 @@ freezing whatever text your client wrote the day it was saved.
   client on an older API degrades to fewer hints rather than erroring, which is
   why you should deploy the platform before the client that starts sending new
   dimensions.
-- **Fold order is the platform's**, not your object's key order, and the
-  clauses are appended after your prompt (`". "`-joined), before any
-  `structured` fragment. Repeated identical clauses collapse to one.
+- **The clauses land in a trailing `[style]` section**, not inline in your
+  prose. The assembled prompt is your prompt (plus any `subject` clauses and
+  the `structured` fragment, `". "`-joined, in that order) — then a blank line,
+  then:
+
+  ```
+  [style]:
+  <film line>
+  <scene line>
+  ```
+
+  The **film line** carries the dimensions that describe the capture —
+  `cameraFormat`, `colorLook`, `style`, `era` (and the legacy `cameraFormatId`)
+  — and the **scene line** every other selected dimension. Both are
+  `". "`-joined, and a line with nothing on it is omitted entirely. Telling the
+  model structurally which sentences are the LOOK stops a broad direction from
+  burying the shot in a dozen same-register sentences.
+- **Fold order is the platform's**, not your object's key order: it decides
+  which clause is rendered first within a line, and it is also the order things
+  shed in (below). Repeated identical clauses collapse to one. A direction that
+  renders no clause emits **no section at all** — no header, no extra newline —
+  so your `prompt` comes back byte-for-byte untouched.
 - **Over the provider's prompt cap, direction clauses are the first thing to
   go — never your references or your prose.** A maximal `direction` renders
   more than a low-cap model accepts (seedream = 3000 characters), so the
@@ -1122,16 +1141,24 @@ folds here too, minus the seven stills-only ones (`aperture`, `shutterSpeed`,
 `isoValue`, `postProcess`, `photoGenre`, `photographer`, `renderQuality`), plus
 the motion dimensions: `cameraMotion`, `actionFx`, `temporalSpeed`,
 `temporalFreeze`, `temporalDirection`, `temporalShutter`, `transition`,
-`loopSubject`. `cameraMotion` folds FIRST, ahead of every look clause. A
+`loopSubject`. `cameraMotion` folds FIRST, ahead of every look clause — and,
+being motion, it also READS first, in the body. A
 stills-only key sent to a video route is **accepted and simply contributes no
 clause** — surface is a rendering concern, not a validation one — so one
 client-side look map can be sent to either route unchanged.
 
-**Motion dimensions render compact.** Look dimensions inject their full clause;
-motion dimensions inject their short professional term (`"cross-dissolve"`, not
-the sentence describing what a cross-dissolve does). Motion cues read better to
-a video model as terse directives, and video prompt ceilings are far tighter
-than image ones.
+**Motion dimensions render compact, and stay in the body.** Look dimensions
+inject their full clause; motion dimensions inject their short professional term
+(`"cross-dissolve"`, not the sentence describing what a cross-dissolve does).
+Motion cues read better to a video model as terse directives, and video prompt
+ceilings are far tighter than image ones.
+
+That same split decides WHERE a clause reads. Camera motion is part of the
+shot, not part of the look, so the motion clauses stay in the prompt body with
+your prose — `". "`-joined, after it, before the `structured` fragment — and
+only the look clauses lift into the trailing `[style]` section described above.
+One dimension is never compact in the body and full in the section: the two
+rules read the same column, deliberately, so they cannot drift apart.
 
 ```json
 {
@@ -1149,8 +1176,11 @@ than image ones.
 
 The fold happens **before** reference assembly, so your direction clauses sit
 inside the body that the reference resolver frames — the identity directives for
-a bound character still wrap the whole description. `jobs.input_data` records
-both halves: `prompt` is what the model received, `userPrompt` is the text you
+a bound character still wrap the whole description. One consequence to expect
+rather than be surprised by: the resolver APPENDS a bound character's canonical
+role phrase after the body it was handed, so on that path the phrase reads after
+the `[style]` section rather than before it. `jobs.input_data` records both
+halves: `prompt` is what the model received, `userPrompt` is the text you
 submitted (empty string if you sent `direction` with no prompt at all), and
 `direction` is your ids verbatim.
 
@@ -1247,7 +1277,9 @@ in frame) which the platform folds into the prompt as its own clauses.
   getters read the base catalogs), the person fold reads the pack-composed
   taxonomy, so a pack dimension's field is accepted and renders its clause.
 - **Fold order is the platform's**, and `subject` lands ahead of `direction`:
-  the subject is the noun phrase the cinematography then modifies. Person
+  the subject is the noun phrase the cinematography then modifies. Subject
+  clauses are BODY text — they read in your prose, never in the `[style]`
+  section, because who is in the shot is not part of the look. Person
   arrives as ONE comma-joined clause and Styling as another — those catalogs
   are authored as compound clauses, not sentences. Overlapping selections
   collapse rather than doubling (picking the Person `lip-state-bold-red` and

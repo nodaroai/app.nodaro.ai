@@ -1064,7 +1064,9 @@ if ("jobId" in result) {
 > **Cinematic direction by id.** `run("generate-image" | "generate-video" |
 > "text-to-video", …)` also takes an optional `direction` object — a flat map of **catalog ids** (`shotSize`,
 > `lightingStyle`, `style`, `mood`, `photographer`, `era`, …) the platform folds
-> into the prompt as its own hint clauses, so you send ids and the wording stays
+> into the prompt as its own hint clauses — the look ones into a trailing
+> `[style]:` section (a film line then a scene line), so you send ids and the
+> wording stays
 > platform-owned. Values are a single id or an array (multi-pick dimensions honor
 > their own cap; exceeding a dimension's cap truncates rather than 400ing, while
 > the wire bounds — 8 entries per key, 100 characters per id — do reject).
@@ -1076,7 +1078,8 @@ if ("jobId" in result) {
 > render no clause — only base-catalog ids fold). The video runs take the same
 > object and add the motion dimensions (`cameraMotion`, which folds first,
 > `actionFx`, the `temporal*` keys, `transition`, `loopSubject`); motion
-> dimensions render as short terms where look dimensions render full clauses, and
+> dimensions render as short terms and stay in the prompt body, where look
+> dimensions render full clauses in the `[style]:` section, and
 > a stills-only key sent to a video run is accepted and simply contributes
 > nothing, so one look map serves both surfaces. `run("extend-video", …)` has no
 > `direction` — its prompt continues an existing clip. Full key list and
