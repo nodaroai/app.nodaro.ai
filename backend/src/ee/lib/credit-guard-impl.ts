@@ -234,6 +234,25 @@ export function creditGuardImpl(
           sendSubscriptionRequired(reply)
           return
         }
+        // Deployment payer: the wallet that came up short is the OPERATOR's,
+        // not this requester's. Two things must not happen here. Echoing
+        // `balance` would hand every user the operator's pool size — the same
+        // figure the consumption-only /usage page exists to keep private, and
+        // this response reaches anyone who can press Generate. And the
+        // requester cannot resolve this at all: they hold no wallet, and a
+        // prepaid instance withholds self-serve purchase, so the stock
+        // "insufficient credits" copy sends them to a dead end. Name the real
+        // condition and the real fixer instead.
+        if (dep) {
+          reply.status(402).send({
+            error: {
+              code: "insufficient_credits",
+              message: "This deployment is out of credits. Contact your administrator.",
+            },
+            required: creditCheck.required,
+          })
+          return
+        }
         reply.status(402).send({
           error: {
             code: "insufficient_credits",
