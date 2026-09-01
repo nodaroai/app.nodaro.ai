@@ -287,6 +287,11 @@ const map: LocaleCatalogMap = {
   "state-unbuttoned": { label: "Aufgeknöpft", description: "Offen / aufgeknöpft" },
   "state-rolled-sleeves": { label: "Hochgekrempelte Ärmel", description: "Ärmel zum Unterarm hochgerollt" },
   "state-layered": { label: "Geschichtet", description: "Mehrere gestapelte Schichten" },
+
+  // --- picker-gaps 2026-09-01 ---
+  "outfit-workwear-overalls": { label: "Arbeits-Latzhose", description: "Latzhose aus Denim über einem karierten Flanellhemd" },
+  "outfit-chapan": { label: "Chapan-Robe", description: "Langer gesteppter zentralasiatischer Ikat-Mantel" },
+  "outfit-caftan": { label: "Kaftan", description: "Langes, fließendes nahöstliches / nordafrikanisches Gewand" },
 }
 
 export default map

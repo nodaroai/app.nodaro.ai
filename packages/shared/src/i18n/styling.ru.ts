@@ -303,6 +303,10 @@ const map: LocaleCatalogMap = {
   "top-mesh-top": { label: "Сетчатый топ", description: "Топ из прозрачной сетчатой ткани" },
   "top-sheer-top": { label: "Прозрачный топ", description: "Топ из полупрозрачной ткани" },
   "top-bandeau": { label: "Бандо", description: "Топ-труба без бретелей" },
+  // --- picker-gaps 2026-09-01 ---
+  "outfit-workwear-overalls": { label: "Рабочий комбинезон", description: "Джинсовый полукомбинезон поверх клетчатой фланелевой рубашки" },
+  "outfit-chapan": { label: "Чапан", description: "Центральноазиатский длинный стёганый халат из икат-ткани" },
+  "outfit-caftan": { label: "Кафтан", description: "Длинный струящийся ближневосточный / североафриканский халат" },
 }
 
 export default map

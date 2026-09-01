@@ -77,6 +77,8 @@ const map: LocaleCatalogMap = {
   "compass": { label: "Компас", description: "Ручной морской компас, исследование" },
   "bow-and-arrow": { label: "Лук со стрелой", description: "Натянутый лук с наложенной стрелой" },
   "shield": { label: "Щит", description: "Ручной щит, средневековый или фэнтезийный" },
+  // --- picker-gaps 2026-09-01 ---
+  "work-gloves": { label: "Рабочие перчатки", description: "Поношенные кожаные рабочие перчатки в руке" },
 }
 
 export default map

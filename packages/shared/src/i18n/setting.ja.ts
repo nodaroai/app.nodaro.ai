@@ -73,6 +73,9 @@ const map: LocaleCatalogMap = {
   "locker-room": { label: "ロッカールーム", description: "ジム／スポーツ用ロッカールーム、タイル、ベンチ、鏡" },
   "music-studio": { label: "音楽スタジオ", description: "レコーディングスタジオ、マイク、防音材、ミキシングコンソール" },
   "conservatory": { label: "コンサバトリー（温室）", description: "ガラス張りの温室、熱帯植物、漉した光" },
+
+  // --- picker-gaps 2026-09-01 ---
+  "open-air-market": { label: "野外市場", description: "天蓋の下に露店が並ぶ賑やかな市場" },
 }
 
 export default map

@@ -309,6 +309,11 @@ const map: LocaleCatalogMap = {
   "state-unbuttoned":    { label: "敞开",         description: "敞开 / 不扣扣子" },
   "state-rolled-sleeves":{ label: "卷起袖子",     description: "袖子卷至前臂" },
   "state-layered":       { label: "叠搭",         description: "多层叠搭" },
+
+  // --- picker-gaps 2026-09-01 ---
+  "outfit-workwear-overalls": { label: "工装背带裤", description: "格纹法兰绒衬衫外搭牛仔背带裤" },
+  "outfit-chapan":            { label: "恰潘长袍",   description: "中亚风格的绗缝伊卡特长袍" },
+  "outfit-caftan":            { label: "卡夫坦长袍", description: "飘逸的中东 / 北非长袍" },
 }
 
 export default map

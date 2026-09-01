@@ -79,6 +79,9 @@ const map: LocaleCatalogMap = {
   "compass": { label: "コンパス", description: "手持ちの航海用コンパス、探検" },
   "bow-and-arrow": { label: "弓矢", description: "矢をつがえて引き絞った弓" },
   "shield": { label: "盾", description: "手持ちの盾、中世／ファンタジー" },
+
+  // --- picker-gaps 2026-09-01 ---
+  "work-gloves": { label: "作業用手袋", description: "手に持った使い込まれた革の作業用手袋" },
 }
 
 export default map

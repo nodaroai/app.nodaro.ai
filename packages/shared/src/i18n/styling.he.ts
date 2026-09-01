@@ -309,6 +309,11 @@ const map: LocaleCatalogMap = {
   "state-unbuttoned": { label: "פתוח", description: "פתוח / לא מכופתר" },
   "state-rolled-sleeves": { label: "שרוולים מגולגלים", description: "שרוולים מגולגלים עד האמה" },
   "state-layered": { label: "בשכבות", description: "מספר שכבות מוערמות" },
+
+  // --- picker-gaps 2026-09-01 ---
+  "outfit-workwear-overalls": { label: "אוברול עבודה", description: "אוברול ג'ינס עם כתפיות מעל חולצת פלנל משובצת" },
+  "outfit-chapan": { label: "גלימת צ'אפאן", description: "גלימת איקאט ארוכה ומרופדת של מרכז אסיה" },
+  "outfit-caftan": { label: "קפטן", description: "גלימה ארוכה ומתעופפת מזרח-תיכונית / צפון-אפריקאית" },
 }
 
 export default map

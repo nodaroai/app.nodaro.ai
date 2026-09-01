@@ -624,6 +624,10 @@ const map: LocaleCatalogMap = {
   "lips-full-lower": { label: "Volle Unterlippe", description: "Volle Lippen mit vollerer Unterlippe" },
   "lips-natural": { label: "Natürlich", description: "Natürliche Lippenform" },
   "lips-heart": { label: "Herzförmig", description: "Herzförmige Lippen mit ausgeprägtem Amorbogen" },
+
+  // --- picker-gaps 2026-09-01 ---
+  "samarkand-silk-road": { label: "Samarkand Seidenstraße", description: "Usbekische Seidenstraßen-Basar-Ästhetik (Samarkand / Buchara)" },
+  "tashkent-modern": { label: "Taschkent Modern", description: "Zeitgenössische usbekische, großstädtische zentralasiatische Ästhetik" },
 }
 
 export default map

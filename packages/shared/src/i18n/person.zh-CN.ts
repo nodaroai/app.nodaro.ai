@@ -651,6 +651,10 @@ const map: LocaleCatalogMap = {
   "lips-full-lower":   { label: "下唇丰满",   description: "下唇更为丰满的丰润嘴唇" },
   "lips-natural":      { label: "自然",       description: "自然的唇形" },
   "lips-heart":        { label: "心形唇",     description: "唇峰分明的心形嘴唇" },
+
+  // --- picker-gaps 2026-09-01 ---
+  "samarkand-silk-road": { label: "撒马尔罕丝绸之路", description: "乌兹别克丝绸之路集市美学(撒马尔罕 / 布哈拉)" },
+  "tashkent-modern":     { label: "现代塔什干",       description: "当代乌兹别克都市中亚美学" },
 }
 
 export default map

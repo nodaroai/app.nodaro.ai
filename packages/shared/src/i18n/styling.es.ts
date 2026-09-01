@@ -319,6 +319,11 @@ const map: LocaleCatalogMap = {
   "top-mesh-top": { label: "Top de Malla", description: "Top de tela de malla transparente" },
   "top-sheer-top": { label: "Top Transparente", description: "Top de tela translúcida" },
   "top-bandeau": { label: "Bandeau", description: "Top tubo sin tirantes" },
+
+  // --- picker-gaps 2026-09-01 ---
+  "outfit-workwear-overalls": { label: "Overol de Trabajo", description: "Overol con peto de mezclilla sobre una camisa de franela a cuadros" },
+  "outfit-chapan": { label: "Túnica Chapan", description: "Larga túnica acolchada de ikat de Asia Central" },
+  "outfit-caftan": { label: "Caftán", description: "Larga túnica fluida de Medio Oriente / Norte de África" },
 }
 
 export default map

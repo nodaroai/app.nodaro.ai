@@ -297,6 +297,10 @@ const map: LocaleCatalogMap = {
   "top-mesh-top": { label: "أعلى شبكي", description: "أعلى من قماش شبكي شفاف" },
   "top-sheer-top": { label: "أعلى شفاف", description: "أعلى من قماش شفاف" },
   "top-bandeau": { label: "Bandeau", description: "أعلى أنبوبي بدون حمالات" },
+  // --- picker-gaps 2026-09-01 ---
+  "outfit-workwear-overalls": { label: "أفرول عمل", description: "أفرول جينز بصدرية فوق قميص فلانيل مربعات" },
+  "outfit-chapan": { label: "رداء شابان", description: "رداء آسيا الوسطى الطويل المبطن من قماش الإيكات" },
+  "outfit-caftan": { label: "قفطان", description: "رداء شرق أوسطي / شمال أفريقي طويل وفضفاض" },
 }
 
 export default map

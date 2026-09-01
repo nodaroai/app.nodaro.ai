@@ -135,6 +135,7 @@ export const HELD_PROPS: ReadonlyArray<HeldProp> = [
   { id: "compass",            label: "Compass",            category: "occupational",    description: "Vintage handheld nautical compass", promptHint: "holding a vintage brass nautical compass open in one cupped palm at chest height, the needle clearly visible as the eyes drift down to read the bearing", term: "holding an open brass nautical compass" },
   { id: "bow-and-arrow",      label: "Bow and Arrow",      category: "occupational",    description: "Drawn archery bow with arrow nocked", promptHint: "holding an archery bow drawn at full tension with one hand on the grip and the other pulling the string back to the cheek, an arrow nocked and aimed forward", term: "drawing an archery bow with a nocked arrow" },
   { id: "shield",             label: "Shield",             category: "occupational",    description: "Handheld medieval shield",          promptHint: "holding a medieval shield raised across the body with one arm strapped through the back, the front face angled forward in a defensive stance", term: "holding a raised medieval shield" },
+  { id: "work-gloves",        label: "Work Gloves",        category: "occupational",    description: "Worn leather work gloves held in hand", promptHint: "holding a worn pair of tan leather work gloves in both hands at waist height, the thick weathered leather clearly visible", term: "holding a pair of leather work gloves" },
 ] as const
 
 const heldPropById = new Map<string, HeldProp>(HELD_PROPS.map((p) => [p.id, p]))

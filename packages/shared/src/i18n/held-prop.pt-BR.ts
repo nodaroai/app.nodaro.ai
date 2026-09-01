@@ -79,6 +79,9 @@ const map: LocaleCatalogMap = {
   "compass": { label: "Bússola", description: "Bússola náutica de mão, exploração" },
   "bow-and-arrow": { label: "Arco e Flecha", description: "Arco de arquearia esticado com flecha encaixada" },
   "shield": { label: "Escudo", description: "Escudo de mão, medieval ou fantasia" },
+
+  // --- picker-gaps 2026-09-01 ---
+  "work-gloves": { label: "Luvas de Trabalho", description: "Luvas de couro de trabalho gastas seguradas na mão" },
 }
 
 export default map

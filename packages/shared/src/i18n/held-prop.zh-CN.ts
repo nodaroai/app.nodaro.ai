@@ -77,6 +77,9 @@ const map: LocaleCatalogMap = {
   "compass":       { label: "指南针",     description: "手持航海指南针,探险感" },
   "bow-and-arrow": { label: "弓与箭",     description: "拉满的弓,搭着箭" },
   "shield":        { label: "盾牌",       description: "手持的盾牌,中世纪 / 奇幻风" },
+
+  // --- picker-gaps 2026-09-01 ---
+  "work-gloves":   { label: "工作手套",   description: "手中拿着的磨旧皮革工作手套" },
 }
 
 export default map

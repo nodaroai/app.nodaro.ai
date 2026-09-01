@@ -68,6 +68,8 @@ const map: LocaleCatalogMap = {
   "locker-room": { label: "غرفة خزائن", description: "غرفة خزائن صالة رياضية ببلاط ومقاعد ومرايا" },
   "music-studio": { label: "استوديو موسيقي", description: "استوديو تسجيل بميكروفونات وإسفنج ولوحة تحكم" },
   "conservatory": { label: "بيت زجاجي", description: "بيت زجاجي بجدران زجاجية ونباتات استوائية وشمس مفلترة" },
+  // --- picker-gaps 2026-09-01 ---
+  "open-air-market": { label: "سوق مكشوف", description: "سوق صاخب من أكشاك الباعة تحت المظلات" },
 }
 
 export default map

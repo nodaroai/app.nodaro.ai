@@ -843,7 +843,9 @@ export interface StylingData extends PickerConsumerData, PickerHintModeFields {
   label: string
   makeup?: string
   eyewear?: string
-  headwear?: string
+  /** Headwear. Single id or up to 2 for a layered look (e.g. a sun hat over
+   *  a turban / head wrap). Mirrors the multi-pick shape of jewelry/hairState. */
+  headwear?: string | ReadonlyArray<string>
   /** Hair cut / style (bob, wolf cut, braids, ponytail, dreadlocks…).
    *  Pairs with Person.hairBase (natural texture + length). */
   hairCut?: string

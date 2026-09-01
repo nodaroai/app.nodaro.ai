@@ -73,6 +73,9 @@ const map: LocaleCatalogMap = {
   "locker-room": { label: "Vestiário", description: "Vestiário de academia ou esporte, azulejos, bancos e espelhos" },
   "music-studio": { label: "Estúdio de Música", description: "Estúdio de gravação, microfones, espuma e mesa de controle" },
   "conservatory": { label: "Estufa", description: "Estufa com paredes de vidro, plantas tropicais e luz filtrada" },
+
+  // --- picker-gaps 2026-09-01 ---
+  "open-air-market": { label: "Mercado ao Ar Livre", description: "Mercado agitado de barracas de vendedores sob toldos" },
 }
 
 export default map

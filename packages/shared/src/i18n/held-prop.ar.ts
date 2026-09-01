@@ -69,6 +69,8 @@ const map: LocaleCatalogMap = {
   "compass": { label: "بوصلة", description: "بوصلة بحرية محمولة، استكشاف" },
   "bow-and-arrow": { label: "قوس وسهم", description: "قوس مشدود بسهم متأهب" },
   "shield": { label: "درع", description: "درع محمول، عصور وسطى / خيال" },
+  // --- picker-gaps 2026-09-01 ---
+  "work-gloves": { label: "قفازات عمل", description: "قفازات عمل جلدية بالية ممسوكة باليد" },
 }
 
 export default map

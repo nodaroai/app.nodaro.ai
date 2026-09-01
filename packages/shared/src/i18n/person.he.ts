@@ -651,6 +651,10 @@ const map: LocaleCatalogMap = {
   "lips-full-lower": { label: "שפה תחתונה מלאה", description: "שפתיים מלאות עם שפה תחתונה מלאה יותר" },
   "lips-natural": { label: "טבעי", description: "צורת שפתיים טבעית" },
   "lips-heart": { label: "לב", description: "שפתיים בצורת לב עם קשת קופידון מוגדרת" },
+
+  // --- picker-gaps 2026-09-01 ---
+  "samarkand-silk-road": { label: "דרך המשי סמרקנד", description: "אסתטיקת בזאר אוזבקית של דרך המשי (סמרקנד / בוכרה)" },
+  "tashkent-modern": { label: "טשקנט מודרני", description: "אסתטיקה מרכז-אסייתית אוזבקית מטרופוליטנית עכשווית" },
 }
 
 export default map

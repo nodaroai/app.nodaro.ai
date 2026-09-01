@@ -60,6 +60,9 @@ const map: LocaleCatalogMap = {
   "compass": { label: "Kompass", description: "Handgehaltener nautischer Kompass, Erkundung" },
   "bow-and-arrow": { label: "Pfeil und Bogen", description: "Gespannter Bogen mit eingelegtem Pfeil" },
   "shield": { label: "Schild", description: "Handgehaltenes Schild, mittelalterlich / Fantasy" },
+
+  // --- picker-gaps 2026-09-01 ---
+  "work-gloves": { label: "Arbeitshandschuhe", description: "Abgetragene lederne Arbeitshandschuhe in der Hand gehalten" },
 }
 
 export default map

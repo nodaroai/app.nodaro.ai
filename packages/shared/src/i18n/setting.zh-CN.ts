@@ -71,6 +71,9 @@ const map: LocaleCatalogMap = {
   "haunted-mansion":   { label: "鬼屋",             description: "腐朽的哥特庄园" },
   "dreamscape":        { label: "梦境",             description: "超现实的漂浮岛屿" },
   "wasteland":         { label: "末日废土",         description: "锈迹斑斑的阴沉废土" },
+
+  // --- picker-gaps 2026-09-01 ---
+  "open-air-market":   { label: "露天市场",         description: "遮阳棚下摊位林立的繁忙市集" },
 }
 
 export default map

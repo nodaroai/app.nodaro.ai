@@ -49,6 +49,9 @@ const map: LocaleCatalogMap = {
   "acrylic-paint": { label: "アクリル絵具", description: "速乾性の不透明メディア、シャープなエッジ" },
   "mixed-media": { label: "ミクストメディア", description: "複数の素材を組み合わせた不均質な質感" },
   "manga": { label: "漫画", description: "インクで描かれた白黒のコマ漫画、スクリーントーン" },
+
+  // --- picker-gaps 2026-09-01 ---
+  "early-color-photo": { label: "初期のカラー写真", description: "プロクジン＝ゴルスキー／オートクロームによる1900年代初頭のカラー" },
 }
 
 export default map
