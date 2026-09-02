@@ -10,6 +10,9 @@ import { creditUnits } from "@/lib/credit-units"
 interface GenerateButtonProps {
   onClick: () => void
   disabled?: boolean
+  /** Tooltip explaining why `disabled` is set (unmet precondition). Rendered
+   *  through the same Tooltip wrapper the insufficient-credits case uses. */
+  disabledReason?: string
   isRunning?: boolean
   modelIdentifier: string
   userId: string
@@ -26,6 +29,7 @@ interface GenerateButtonProps {
 export function GenerateButton({
   onClick,
   disabled = false,
+  disabledReason,
   isRunning = false,
   modelIdentifier,
   userId,
@@ -83,6 +87,17 @@ export function GenerateButton({
         <TooltipContent>
           {t("credits.insufficientTooltip", { need: shownCost, have: creditUnits(totalBalance) })}
         </TooltipContent>
+      </Tooltip>
+    )
+  }
+
+  if (disabled && disabledReason) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="w-full">{button}</span>
+        </TooltipTrigger>
+        <TooltipContent>{disabledReason}</TooltipContent>
       </Tooltip>
     )
   }

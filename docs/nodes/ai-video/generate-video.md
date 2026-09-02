@@ -48,6 +48,8 @@ The backend orchestrator inspects the wired inputs at job-build time and dispatc
 `endFrame` only (no `startFrame`) is swapped server-side — the end frame is promoted to `imageUrl` so providers that take a single image (`veo3`, `minimax`, `kling-turbo`, ...) get a usable input.
 
 > **Image-required models.** Models with no text-to-video mode — `kling-3-omni`, `kling-master`, `hailuo-2.3`, `hailuo-2.3-pro`, `bytedance-pro-fast`, `happyhorse-ref2v`, `grok-imagine-video-1.5` — return a clean `image_required` error when run without a `startFrame` image. On the text-to-video path, reference images alone do **not** satisfy this; they are conditioning inputs, not the start frame. (The split-id exception above — Grok Imagine 1 — never reaches that path with references wired.) (Derived from the model catalog: `VIDEO_PROVIDERS_REQUIRING_IMAGE` in `@nodaro/shared`.)
+>
+> On the image-to-video endpoint (`POST /v1/generate-video`) the same models now return an `image_required` error too — and for a model that carries image references (Kling 3 Omni, HappyHorse Ref2V, Grok i2v) the message says references are an accepted alternative *on that endpoint*, while a model with no reference capability is told it needs a start frame. Every other provider gets a `validation_error` naming `/v1/text-to-video` as the prompt-only lane. In the editor, Run is disabled on a Generate Video node whose model has no text-to-video mode and no image wired, and the button's tooltip names the model.
 
 ## Providers
 

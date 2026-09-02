@@ -12,6 +12,7 @@ import { insertJobIdempotent } from "../lib/insert-job.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { TEXT_TO_VIDEO_PROVIDERS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, videoProviderRequiresImage, isSeedance2Provider, isMinimaxH3Provider, applyDefaultVideoSelection, buildVideoCreditModelIdentifier, type ConnectedReference } from "@nodaro/shared"
+import { imageRequiredError } from "../lib/video-image-required.js"
 import { composeVideoPromptText } from "@nodaro/prompts"
 import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
 import { directionSchema } from "../lib/direction-schema.js"
@@ -181,12 +182,7 @@ export async function textToVideoRoutes(app: FastifyInstance) {
     // reach the provider. The creditGuard preHandler only checks balance — no
     // reservation happens until reserveCreditsForJob below, so returning here is clean.
     if (videoProviderRequiresImage(provider)) {
-      return reply.status(400).send({
-        error: {
-          code: "image_required",
-          message: `${provider} requires an input image — connect an image to the node's image input (reference images alone are not enough).`,
-        },
-      })
+      return reply.status(400).send(imageRequiredError(provider, "text-to-video"))
     }
 
     // Subject + cinematic direction fold — catalog IDS → prompt text,

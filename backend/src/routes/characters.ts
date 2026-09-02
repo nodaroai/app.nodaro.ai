@@ -122,7 +122,9 @@ export const upsertCharacterBody = z.object({
   // 500 from Postgres. `referencePhotos` further enforces "at most one per
   // non-`other` kind"; `realLifeRefsByVariant` caps total keys + per-key URLs
   // so a runaway client can't blow up the row.
-  seedPrompt: z.string().max(2000).optional(),
+  // 4000 since migration 371 (was 2000, migration 114/117). CHARACTER ONLY —
+  // the entity family's seedPromptHint stays at 2000 by design.
+  seedPrompt: z.string().max(4000).optional(),
   canonicalDescription: z.string().max(4000).optional(),
   // Identity-lock strength for Character Studio asset generation (reuses the
   // shared IdentityLockMode). The DB column defaults to 'strict'.

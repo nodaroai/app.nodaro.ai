@@ -111,14 +111,36 @@ export const VIDEO_PROMPT_MAX = 8000
 
 /**
  * Suno prompt / lyrics / content ceiling — the LARGEST any Suno version accepts
- * in custom mode (V4.5 / V4.5PLUS / V4.5ALL / V5 / V5.5 = 5000). The route Zod
- * uses this as a generous ceiling; the handler clamps to the per-version cap via
- * {@link getMaxSunoPromptChars} (V4/V3.5 = 3000, non-custom = 500). Shared with
- * the editor `maxLength` / counter (warn-don't-block at the per-version cap).
- * `style` and `title` have their own caps ({@link getMaxSunoStyleChars} /
- * {@link SUNO_TITLE_MAX}).
+ * in custom mode (V4.5 / V4.5PLUS / V4.5ALL / V5 / V5.5 = 5000). NOT the route
+ * Zod bound — the routes bind at {@link SUNO_HARD_CEILING} and clamp to the
+ * per-version cap via {@link getMaxSunoPromptChars} (3000 non-custom for every
+ * version; in custom mode 3000 for V4/V3.5, 5000 for V4.5+/V5) before the job
+ * is built. This constant is shared with the editor `maxLength` / counter
+ * (warn-don't-block at the per-version cap). `style` and `title` have their
+ * own caps ({@link getMaxSunoStyleChars} / {@link SUNO_TITLE_MAX}).
  */
 export const SUNO_TEXT_MAX = 5000
+
+/**
+ * Absolute ceiling for every Suno text field on the route Zod schemas
+ * (`prompt`, `lyrics`, `fullLyrics`, `content`, `userPrompt`).
+ *
+ * WARN-DON'T-BLOCK. The per-version caps ({@link getMaxSunoPromptChars} /
+ * {@link getMaxSunoStyleChars}) do the real work — the routes CLAMP to them
+ * before building the job. The Zod bound only exists to stop abuse, so it must
+ * stay generous: until 2026-09 the routes bounded these fields at
+ * {@link SUNO_TEXT_MAX} (5000), which meant a programmatically-set prompt (an
+ * agent, an app run, a FieldMapping) was hard-REJECTED with a 400 before the
+ * clamp could trim it — three app-report rows on 2026-08-19..31.
+ *
+ * DISTINCT FROM {@link PROMPT_HARD_CEILING} on purpose: that one is an
+ * image/video budget pinned to MAX_IMAGE/VIDEO_PROMPT_CHARS_BY_PROVIDER by its
+ * own drift guard. Coupling them would let one modality's limits move the
+ * other's. This one has a single invariant, enforced in
+ * `__tests__/prompt-length-limits.test.ts`: it MUST stay >= every value
+ * getMaxSunoPromptChars / getMaxSunoStyleChars can return.
+ */
+export const SUNO_HARD_CEILING = 30000
 
 /**
  * Absolute ceiling for the `prompt` / `negativePrompt` fields on the image and
@@ -274,9 +296,11 @@ export function getMaxTtsChars(provider: string | undefined): number {
 }
 
 /**
- * Suno per-version field caps (from docs.kie.ai/suno-api/generate-music). The old
- * flat {@link SUNO_TEXT_MAX} (3000) was simultaneously too low for V4.5+/V5
- * prompts (5000) and too high for `style` (1000) and `title` (80).
+ * Suno per-version field caps (from docs.kie.ai/suno-api/generate-music). The
+ * original flat 3000 cap was simultaneously too low for V4.5+/V5 prompts
+ * (5000) and too high for `style` (1000) and `title` (80). ({@link
+ * SUNO_TEXT_MAX} is 5000 today — the largest per-version prompt cap; the
+ * route Zod bound is {@link SUNO_HARD_CEILING}.)
  *   - prompt / lyrics: 3000 in non-custom mode (all versions); in custom mode
  *     3000 for V4/V3.5 and 5000 for V4.5 / V4.5PLUS / V4.5ALL / V5 / V5.5.
  *   - style: 200 for V4/V3.5, 1000 for V4.5+.

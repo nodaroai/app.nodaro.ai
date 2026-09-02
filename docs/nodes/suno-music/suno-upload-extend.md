@@ -11,10 +11,9 @@ Suno Upload Extend takes any audio file via URL and extends it using Suno AI. Un
 |-------|------|---------|-------------|
 | Model | enum | `"V5"` | Suno model version: `V5`, `V4_5ALL`, `V4_5PLUS`, `V4_5`, `V4`. |
 | Continue At | number (seconds) | `0` | Timestamp in seconds from which to continue the extension. Must be greater than 0; leave it empty and the node extends using Suno's own parameters instead of the custom ones. |
-| Prompt | string (max 3000) | `""` | Optional prompt describing the desired continuation. |
 | Use Default Parameters | boolean | `true` | When true, the extension uses your own Style, Title, Negative Style, and Continue At instead of Suno's defaults; when false, Suno applies its own default extension parameters (the same fallback that happens when Continue At is left empty). |
-| Title | string (max 200) | `""` | Title for the extended track. |
-| Style | string (max 500) | `""` | Genre and style tags for the extension. |
+| Title | string (max 80) | `""` | Title for the extended track. |
+| Style | string (max 1000) | `""` | Genre and style tags for the extension. Max **1000** for V4.5+/V5, **200** for V4. |
 | Negative Style | string (max 500) | `""` | Styles to avoid in the extension. |
 | Vocal Gender | enum | auto | `"male"`, `"female"`, or unset for automatic selection. |
 | `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |

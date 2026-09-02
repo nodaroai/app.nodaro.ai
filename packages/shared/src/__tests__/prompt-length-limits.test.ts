@@ -6,6 +6,9 @@ import {
   NEGATIVE_PROMPT_MAX,
   TTS_TEXT_MAX,
   SUNO_TITLE_MAX,
+  SUNO_HARD_CEILING,
+  SUNO_TEXT_MAX,
+  SUNO_MODELS,
   MAX_IMAGE_PROMPT_CHARS_BY_PROVIDER,
   MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER,
   MAX_NEGATIVE_PROMPT_CHARS_BY_PROVIDER,
@@ -122,6 +125,39 @@ describe("per-model prompt length limits", () => {
       expect(getMaxSunoStyleChars("V4")).toBe(200)
       expect(getMaxSunoStyleChars("V5")).toBe(1000)
       expect(SUNO_TITLE_MAX).toBe(80)
+    })
+    it("SUNO_HARD_CEILING is a generous route ceiling that can never reject a valid prompt", () => {
+      // The routes accept up to the ceiling and CLAMP to the per-version cap;
+      // a ceiling below any real cap would hard-reject before the clamp ran.
+      // The list is SUNO_MODELS plus `undefined` (schemas without a `model`
+      // field, e.g. replace-section). `V3_5` is NOT a route-accepted model —
+      // getMaxSunoPromptChars still names it, but do not add it here.
+      const versions = [...SUNO_MODELS, undefined]
+      for (const v of versions) {
+        for (const custom of [true, false]) {
+          expect(getMaxSunoPromptChars(v, custom)).toBeLessThanOrEqual(SUNO_HARD_CEILING)
+        }
+        expect(getMaxSunoStyleChars(v)).toBeLessThanOrEqual(SUNO_HARD_CEILING)
+      }
+      expect(SUNO_TEXT_MAX).toBeLessThanOrEqual(SUNO_HARD_CEILING)
+      expect(SUNO_HARD_CEILING).toBe(30000)
+    })
+    it("SUNO_TEXT_MAX pins the max prompt cap across every version × custom-mode combo and is >= every style cap", () => {
+      // SUNO_TEXT_MAX is the shared editor-side ceiling (maxLength / warn
+      // counter) for prompt-shaped Suno fields. Derive the expected value
+      // from the real version list so a future Suno version raising its
+      // custom-mode cap above today's 5000 fails this test instead of
+      // silently under-capping the editor.
+      let maxPromptCap = 0
+      for (const v of SUNO_MODELS) {
+        for (const custom of [true, false]) {
+          maxPromptCap = Math.max(maxPromptCap, getMaxSunoPromptChars(v, custom))
+        }
+      }
+      expect(SUNO_TEXT_MAX).toBe(maxPromptCap)
+      for (const v of SUNO_MODELS) {
+        expect(SUNO_TEXT_MAX).toBeGreaterThanOrEqual(getMaxSunoStyleChars(v))
+      }
     })
   })
 

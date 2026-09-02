@@ -35,7 +35,7 @@ The `characters` table stores one row per character. Highlights:
 | `gender` / `style` / `base_outfit` | text | Identity scaffolding for prompts. |
 | `source_image_url` | text | The **anchor portrait** — set by `approve-portrait`. |
 | `image_provider` | text | MODEL_CATALOG image-model id the main image was generated with (nullable). Set on create (the provider you generated with) + editable via `upsert`; validated server-side — unknown / non-image → `null`. |
-| `seed_prompt` | text | Short prompt fragment that scaffolds portrait gen. |
+| `seed_prompt` | text | Short prompt fragment that scaffolds portrait gen. Max 4000 characters (object / creature / location `seedPromptHint` stays at 2000). |
 | `canonical_description` | text | LLM-authored ~80–120-word visual description set when the portrait is approved. |
 | `expressions` / `poses` / `motions` / `angles` / `body_angles` / `lighting_variations` | jsonb[] | Six asset buckets — each entry is `{ name, url }`. |
 | `reference_photos` | jsonb[] | Real-life reference photos, one per kind (`frontFace`, `sideLeft`, …). |
@@ -444,7 +444,8 @@ identity across many generations:
 
 - **`seedPrompt`** — short scaffold (typically 1-2 sentences) that frames the
   portrait. Should evoke camera/lighting/mood ("kira portrait, warm natural
-  lighting, intimate framing").
+  lighting, intimate framing"). Up to 4000 characters; longer values are
+  rejected with a 400.
 - **`referencePhotos`** — up to 20 real-life-photo URLs tagged with their
   framing (`frontFace`, `sideLeft`, `sideRight`, `threeQuarterLeft`,
   `threeQuarterRight`, `frontBody`, `other`). Each non-`other` kind may

@@ -11,8 +11,8 @@ Suno Mashup takes two audio tracks and blends them together into a cohesive mash
 |-------|------|---------|-------------|
 | Model | enum | `"V5"` | Suno model version: `V5`, `V4_5ALL`, `V4_5PLUS`, `V4_5`, `V4`. |
 | Custom Mode | boolean | `false` | Enables style, title, negative style, and vocal gender controls. |
-| Title | string (max 200) | `""` | Title for the mashup (requires Custom Mode). |
-| Style | string (max 500) | `""` | Genre and style tags for the mashup (requires Custom Mode). |
+| Title | string (max 80) | `""` | Title for the mashup (requires Custom Mode). |
+| Style | string (max 1000) | `""` | Genre and style tags for the mashup (requires Custom Mode). Max **1000** for V4.5+/V5, **200** for V4. |
 | Negative Style | string (max 500) | `""` | Styles to avoid in the mashup (requires Custom Mode). |
 | Vocal Gender | enum | auto | `"male"`, `"female"`, or unset for automatic selection (requires Custom Mode). |
 

@@ -208,6 +208,41 @@ describe("POST /v1/generate-video", () => {
     expect(body.error.code).toBe("validation_error")
   })
 
+  it("returns image_required naming a model that cannot use references either", async () => {
+    // hailuo-2.3 is in VIDEO_PROVIDERS_REQUIRING_IMAGE and has NO entry in
+    // VIDEO_REF_LIMITS_BY_PROVIDER, so the message denies references outright.
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-video",
+      payload: {
+        prompt: "a cat",
+        provider: "hailuo-2.3",
+        userId: "00000000-0000-4000-8000-000000000001",
+      },
+    })
+    expect(res.statusCode).toBe(400)
+    const body = res.json() as { error: { code: string; message: string } }
+    expect(body.error.code).toBe("image_required")
+    expect(body.error.message).toContain("hailuo-2.3")
+    expect(body.error.message).toContain("cannot use reference images")
+  })
+
+  it("points a text-capable provider at the text-to-video lane instead", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-video",
+      payload: {
+        prompt: "a cat",
+        provider: "veo3",
+        userId: "00000000-0000-4000-8000-000000000001",
+      },
+    })
+    expect(res.statusCode).toBe(400)
+    const body = res.json() as { error: { code: string; message: string } }
+    expect(body.error.code).toBe("validation_error")
+    expect(body.error.message).toContain("/v1/text-to-video")
+  })
+
   it("returns 400 when provider is invalid", async () => {
     const res = await app.inject({
       method: "POST",
@@ -1111,7 +1146,10 @@ describe("POST /v1/generate-video — references-only (catalog-driven imageUrl e
       },
     })
     expect(res.statusCode).toBe(400)
-    expect(res.json().error.message).toBe("imageUrl is required")
+    // wan-i2v HAS a text-to-video path, so it is not image_required — it is on
+    // the wrong endpoint.
+    expect(res.json().error.code).toBe("validation_error")
+    expect(res.json().error.message).toContain("/v1/text-to-video")
   })
 
   it("rejects audio-only references on an images-only provider (kind not carryable)", async () => {
@@ -1126,7 +1164,11 @@ describe("POST /v1/generate-video — references-only (catalog-driven imageUrl e
       },
     })
     expect(res.statusCode).toBe(400)
-    expect(res.json().error.message).toBe("imageUrl is required")
+    expect(res.json().error.code).toBe("image_required")
+    expect(res.json().error.message).toContain("kling-3-omni")
+    // kling-3-omni carries IMAGE refs, so on this endpoint the message offers
+    // them as an alternative rather than denying references outright.
+    expect(res.json().error.message).toContain("image references")
   })
 
   it("keeps the Seedance 2 audio-only exemption (audio IS a carryable kind there)", async () => {

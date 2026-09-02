@@ -505,6 +505,7 @@ export const en = {
   "node.hintModeFull": "Full",
   "node.hintModeCompact": "Compact",
   "node.hintModeSwitch": "Prompt hint: {label}",
+  "node.imageRequiredHint": "{model} has no text-to-video mode — wire an image into Start Frame to run this node. Reference images alone are not enough.",
 
   // ── Config panel (shared chrome for the selected node) ──────────────────
   "configPanel.nodeSettingsTitle": "{name} Node Settings",

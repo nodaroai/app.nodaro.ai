@@ -68,7 +68,12 @@ const generateCharacterBody = z
     skipPortraitAttach: z.boolean().optional(),
 
     // Character Studio Identity Foundation (v2):
-    seedPrompt: z.string().max(2000).optional(),
+    // 4000 (migration 371), CHARACTER ONLY. The object / creature / location
+    // family keeps `seedPromptHint: z.string().max(2000)` — that asymmetry is
+    // deliberate (spec 2026-09-01-app-reports-triage-design.md decision 7); do
+    // not "fix" it. Mirrors the characters.seed_prompt CHECK exactly, so an
+    // over-long value is a clean 400 instead of a Postgres 23514.
+    seedPrompt: z.string().max(4000).optional(),
     referencePhotos: z
       .array(
         z.object({

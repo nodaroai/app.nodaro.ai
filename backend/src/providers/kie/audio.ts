@@ -22,6 +22,7 @@ import { deriveKieEgressDimensions } from "./egress-dimensions.js"
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
 import { defaultAllowedVoiceId } from "../../lib/voice-policy.js"
 import { FALLBACK_VOICES } from "../../lib/premade-voices.js"
+import { languageCodeForModel } from "../elevenlabs/language-code.js"
 
 // ---------------------------------------------------------------------------
 // KIE.ai voice resolution
@@ -196,7 +197,11 @@ export class KieAudioProvider
     if (options?.similarityBoost != null) input.similarity_boost = options.similarityBoost
     if (options?.style != null) input.style = options.style
     if (options?.speed != null) input.speed = options.speed
-    if (options?.languageCode) input.language_code = options.languageCode
+    // Same funnel as the direct API — this is the KIE ElevenLabs TTS proxy, so
+    // the provider's constraints apply identically. (`speechToText` below is
+    // deliberately NOT funnelled: Scribe speaks ISO 639-3.)
+    const languageCode = languageCodeForModel(provider, options?.languageCode)
+    if (languageCode) input.language_code = languageCode
 
     const { resultJson, providerMs } = await runKieTask(
       modelConfig.model,
