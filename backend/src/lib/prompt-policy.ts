@@ -24,6 +24,11 @@ export interface PromptAssembly {
   kind: "image" | "video" | "audio"
   /** Suno vocal gender (audio only); a policy may force it. undefined elsewhere. */
   vocalGender?: string
+  /** W1-a: true when the subject of an IMAGE assembly is a minor (catalog age,
+   *  custom age < 20, or a minor-implying type — `isMinorAge` in
+   *  @nodaro/prompts). Set by the entity image handler from the character row;
+   *  undefined on every other lane, where the floor is the identity. */
+  subjectMinor?: boolean
 }
 
 export interface PromptPolicy {
@@ -41,6 +46,11 @@ export function registerPromptPolicy(policy: PromptPolicy): void {
 /** Test/bootstrap hook: drop all registered policies. */
 export function clearPromptPolicies(): void {
   policies.length = 0
+}
+
+/** Ids of the registered policies, in order (idempotent registration checks). */
+export function getRegisteredPromptPolicyIds(): readonly string[] {
+  return policies.map((p) => p.id)
 }
 
 /** Run every registered policy in order. No policy registered = identity. */

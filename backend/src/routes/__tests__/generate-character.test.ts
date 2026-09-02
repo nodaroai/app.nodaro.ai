@@ -103,6 +103,9 @@ import { generateCharacterRoutes } from "../generate-character.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
+import { PORTRAIT_SCAFFOLDING, CLOTHED_DEFAULT } from "../../lib/character-prompts.js"
+import { MODEST_ATTIRE_CLAUSE, registerMainlinePromptPolicies } from "../../lib/prompt-policies/index.js"
+import { applyPromptPolicies, clearPromptPolicies } from "../../lib/prompt-policy.js"
 
 // ---------------------------------------------------------------------------
 // Test app setup
@@ -1173,5 +1176,243 @@ describe("row-description fallback (attach-and-regenerate)", () => {
     })
     expect(res.statusCode).toBe(400)
     expect(res.json().error.code).toBe("validation_error")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// W1-a minor-age floor — the route decides the subject's age ONCE from the
+// character row's `person` value and rides the decision to the worker.
+// ---------------------------------------------------------------------------
+describe("POST /v1/generate-character — minor-age floor (W1-a)", () => {
+  it("adult byte-identity pin: the enqueued prompt is the pre-change string", async () => {
+    const { insert } = mockJobsInsertChain()
+    vi.mocked(supabase.from).mockReturnValue({
+      insert,
+      ...charSelectChain({ person: { age: "age-30s" }, wardrobe: null, description: null }),
+    } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-character",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { name: "Kira", seedPrompt: "young woman", attachToCharacterId: TEST_CHARACTER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    const enqueued = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+    expect(enqueued.prompt).toBe(`young woman, in their 30s. ${PORTRAIT_SCAFFOLDING}.`)
+  })
+
+  it("adult: subjectMinor rides the job as false", async () => {
+    const { insert } = mockJobsInsertChain()
+    vi.mocked(supabase.from).mockReturnValue({
+      insert,
+      ...charSelectChain({ person: { age: "age-30s" }, wardrobe: null, description: null }),
+    } as never)
+
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-character",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { name: "Kira", seedPrompt: "young woman", attachToCharacterId: TEST_CHARACTER_ID },
+    })
+
+    expect(videoQueue.add).toHaveBeenCalledWith(
+      "generate-character",
+      expect.objectContaining({ subjectMinor: false }),
+    )
+  })
+
+  it("minor: subjectMinor rides the job as true and the scaffolding carries the modest clause once", async () => {
+    const { insert } = mockJobsInsertChain()
+    vi.mocked(supabase.from).mockReturnValue({
+      insert,
+      ...charSelectChain({ person: { age: "age-child", bust: "bust-full" }, wardrobe: null, description: null }),
+    } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-character",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { name: "Kira", seedPrompt: "a child in a red coat", attachToCharacterId: TEST_CHARACTER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    const enqueued = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+    expect(enqueued.subjectMinor).toBe(true)
+    const prompt = enqueued.prompt as string
+    expect(prompt.split(MODEST_ATTIRE_CLAUSE).length - 1).toBe(1)
+    expect(prompt).not.toContain(CLOTHED_DEFAULT)
+    // Layer 1 already dropped the flagged picker hint from the person value.
+    expect(prompt).not.toMatch(/full bust/)
+  })
+
+  // ───────────────────────────────────────────────────────────────────────
+  // The incident path. person.nodaro.ai creates the character row with
+  // `{nodeId, name, projectId}` and never persists the picker `person` value,
+  // so on arrival `row.person === null` and the ONLY age evidence is the
+  // client-assembled seedPrompt. `isMinorAge` alone reads false here — which
+  // is exactly how the 2026-07-30 prompt reached the provider un-floored.
+  // ───────────────────────────────────────────────────────────────────────
+  describe("row.person is null — the age lives only in the client-assembled text", () => {
+    afterEach(() => clearPromptPolicies())
+
+    const INCIDENT_SEED =
+      "a young child around 5 years old, the clothing fitted and form-conscious, hugging the contours of the body, with lips slightly parted, taking a soft breath"
+
+    it("INCIDENT REPRO: subjectMinor is true and the worker policy floors the prompt", async () => {
+      const { insert } = mockJobsInsertChain()
+      vi.mocked(supabase.from).mockReturnValue({
+        insert,
+        ...charSelectChain({ person: null, wardrobe: null, description: null }),
+      } as never)
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-character",
+        headers: { "x-user-id": TEST_USER_ID },
+        payload: { name: "Kira", seedPrompt: INCIDENT_SEED, attachToCharacterId: TEST_CHARACTER_ID },
+      })
+
+      expect(res.statusCode).toBe(200)
+      const enqueued = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+      expect(enqueued.subjectMinor).toBe(true)
+
+      // …and the floored job is auditable on the jobs row.
+      const inserted = insert.mock.calls[0][0] as { input_data: Record<string, unknown> }
+      expect(inserted.input_data.subjectMinor).toBe(true)
+
+      // What the entity handler then does with it (same call, same args).
+      registerMainlinePromptPolicies()
+      const policed = applyPromptPolicies({
+        prompt: enqueued.prompt as string,
+        negativePrompt: "",
+        kind: "image",
+        subjectMinor: enqueued.subjectMinor === true,
+      }).prompt
+
+      expect(policed).not.toContain("hugging the contours")
+      expect(policed).not.toContain("lips slightly parted")
+      expect(policed).not.toContain(CLOTHED_DEFAULT)
+      expect(policed.split(MODEST_ATTIRE_CLAUSE).length - 1).toBe(1)
+      // The subject survives the repair.
+      expect(policed).toContain("a young child around 5 years old")
+    })
+
+    it("ADULT MIRROR: the same prompt about an adult is untouched — subjectMinor false, prompt byte-identical", async () => {
+      const { insert } = mockJobsInsertChain()
+      vi.mocked(supabase.from).mockReturnValue({
+        insert,
+        ...charSelectChain({ person: null, wardrobe: null, description: null }),
+      } as never)
+
+      const adultSeed = INCIDENT_SEED.replace("a young child around 5 years old", "a woman in her 30s")
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-character",
+        headers: { "x-user-id": TEST_USER_ID },
+        payload: { name: "Kira", seedPrompt: adultSeed, attachToCharacterId: TEST_CHARACTER_ID },
+      })
+
+      expect(res.statusCode).toBe(200)
+      const enqueued = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+      expect(enqueued.subjectMinor).toBe(false)
+      expect(enqueued.prompt).toBe(`${adultSeed}. ${PORTRAIT_SCAFFOLDING}.`)
+
+      // The policy is the identity for an adult: the wording it would strip for
+      // a minor stays exactly where the user put it.
+      registerMainlinePromptPolicies()
+      const policed = applyPromptPolicies({
+        prompt: enqueued.prompt as string,
+        negativePrompt: "",
+        kind: "image",
+        subjectMinor: enqueued.subjectMinor === true,
+      }).prompt
+      expect(policed).toBe(enqueued.prompt)
+    })
+
+    it("the text signal reads the legacy `description` field too (no seedPrompt at all)", async () => {
+      const { insert } = mockJobsInsertChain()
+      vi.mocked(supabase.from).mockReturnValue({
+        insert,
+        ...charSelectChain({ person: null, wardrobe: null, description: null }),
+      } as never)
+
+      await app.inject({
+        method: "POST",
+        url: "/v1/generate-character",
+        headers: { "x-user-id": TEST_USER_ID },
+        payload: { name: "Kira", description: "a 7 year old on a swing", attachToCharacterId: TEST_CHARACTER_ID },
+      })
+
+      expect(videoQueue.add).toHaveBeenCalledWith(
+        "generate-character",
+        expect.objectContaining({ subjectMinor: true }),
+      )
+    })
+
+    it("the text signal reads the ROW's persisted description (deferred-portrait regen path)", async () => {
+      const { insert } = mockJobsInsertChain()
+      vi.mocked(supabase.from).mockReturnValue({
+        insert,
+        ...charSelectChain({ person: null, wardrobe: null, description: "a child around 8 years old, red raincoat" }),
+      } as never)
+
+      await app.inject({
+        method: "POST",
+        url: "/v1/generate-character",
+        headers: { "x-user-id": TEST_USER_ID },
+        payload: { name: "Kira", attachToCharacterId: TEST_CHARACTER_ID },
+      })
+
+      expect(videoQueue.add).toHaveBeenCalledWith(
+        "generate-character",
+        expect.objectContaining({ subjectMinor: true }),
+      )
+    })
+
+    it("a bare mention of a child by an adult subject does NOT flip the floor", async () => {
+      const { insert } = mockJobsInsertChain()
+      vi.mocked(supabase.from).mockReturnValue({
+        insert,
+        ...charSelectChain({ person: null, wardrobe: null, description: null }),
+      } as never)
+
+      await app.inject({
+        method: "POST",
+        url: "/v1/generate-character",
+        headers: { "x-user-id": TEST_USER_ID },
+        payload: {
+          name: "Kira",
+          seedPrompt: "a mother in her 30s holding her child",
+          attachToCharacterId: TEST_CHARACTER_ID,
+        },
+      })
+
+      expect(videoQueue.add).toHaveBeenCalledWith(
+        "generate-character",
+        expect.objectContaining({ subjectMinor: false }),
+      )
+    })
+  })
+
+  it("minor: the legacy (non-scaffolded) prompt path still rides subjectMinor — the worker floor is its only cover", async () => {
+    const { insert } = mockJobsInsertChain()
+    vi.mocked(supabase.from).mockReturnValue({
+      insert,
+      ...charSelectChain({ person: { age: "age-child" }, wardrobe: null, description: null }),
+    } as never)
+
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-character",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { name: "Kira", description: "a child in a red coat", attachToCharacterId: TEST_CHARACTER_ID },
+    })
+
+    expect(videoQueue.add).toHaveBeenCalledWith(
+      "generate-character",
+      expect.objectContaining({ subjectMinor: true }),
+    )
   })
 })

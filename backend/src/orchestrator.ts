@@ -7,6 +7,7 @@
 
 import { createOrchestratorWorker } from "./workers/orchestrator-worker.js"
 import { loadOverlay } from "./lib/overlay/load.js"
+import { registerMainlinePromptPolicies } from "./lib/prompt-policies/index.js"
 
 process.on("unhandledRejection", (err) => {
   console.error("[orchestrator] Unhandled rejection:", err)
@@ -22,6 +23,10 @@ process.on("uncaughtException", (err) => {
 // orchestrator worker in server.ts is already covered by buildApp's loadOverlay.
 // No-op + byte-identical when NODARO_OVERLAY_PACKAGE is unset.
 await loadOverlay()
+
+// Mainline prompt policies run AFTER the overlay's (registration order):
+// the minor-age floor is a platform safety invariant, not deployment content.
+registerMainlinePromptPolicies()
 
 const worker = createOrchestratorWorker()
 

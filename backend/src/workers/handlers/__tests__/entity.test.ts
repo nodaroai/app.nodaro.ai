@@ -92,6 +92,7 @@ vi.mock("../../shared.js", () => ({
 
 import { entityHandlers } from "../entity.js"
 import { registerPromptPolicy, clearPromptPolicies } from "../../../lib/prompt-policy.js"
+import { registerMainlinePromptPolicies, MODEST_ATTIRE_CLAUSE } from "../../../lib/prompt-policies/index.js"
 
 function makeJob(name: string, data: Record<string, unknown> = {}) {
   return { name, data: { jobId: "job-1", ...data }, id: "bull-1", updateProgress: vi.fn() }
@@ -1285,5 +1286,56 @@ describe("SAI-2/H5: the deployment prompt policy is applied at the entity image 
     // No policy registered → applyPromptPolicies is identity → the raw prompt
     // reaches the provider unchanged.
     expect(mocks.mockGenerateImage.mock.calls[0]?.[0]).toBe("a person")
+  })
+})
+
+
+describe("W1-a: subjectMinor arms the minor-age floor at the entity image chokepoint", () => {
+  // The mainline floor, not a stand-in policy — the registry is shared, so
+  // register/clear inside THIS block only (the SAI-2 block above registers its
+  // own `test-modesty` policy and assumes a clean registry).
+  beforeEach(() => registerMainlinePromptPolicies())
+  afterEach(() => clearPromptPolicies())
+
+  // The route-assembled prompt for a minor: a flagged catalog phrase that
+  // arrived as free text (the client assembles seedPrompt), plus the studio
+  // scaffolding tail.
+  const MINOR_PROMPT =
+    "a child around 8 years old, the clothing fitted and form-conscious, hugging the contours of the body. 4k portrait."
+
+  it("subjectMinor: true — the provider gets the floored prompt (flagged wording gone, modest clause present)", async () => {
+    const job = makeJob("generate-character", { prompt: MINOR_PROMPT, subjectMinor: true })
+    await entityHandlers["generate-character"](job as never, makeCtx())
+
+    const prompt = mocks.mockGenerateImage.mock.calls[0]?.[0] as string
+    expect(prompt).toContain(MODEST_ATTIRE_CLAUSE)
+    expect(prompt.split(MODEST_ATTIRE_CLAUSE).length - 1).toBe(1)
+    expect(prompt).not.toContain("hugging the contours")
+    // The subject survives — the floor repairs the clause, it does not erase
+    // the person the job is about.
+    expect(prompt).toContain("a child around 8 years old")
+  })
+
+  it("an already-floored ASSET prompt survives the policy unchanged (no doubled clause at the provider)", async () => {
+    // The asset route already writes the modest clause INTO the base (it
+    // replaces CLOTHED_MATCH_REFERENCES there), so the worker policy must
+    // recognise it and append nothing — even though the clause carries an
+    // internal comma that the policy's clause-splitting walks straight
+    // through. A second copy is what a naive "always append" would produce.
+    const assetPrompt =
+      "Portrait headshot of the person from reference image A, gentle warm smile, looking at camera. " +
+      `Single character character Kira, a child around 8 years old. realistic art style, 4k, highly detailed, ${MODEST_ATTIRE_CLAUSE}, white/plain background, no text, no labels, no watermarks.`
+    const job = makeJob("generate-character-asset", { prompt: assetPrompt, subjectMinor: true })
+    await entityHandlers["generate-character-asset"](job as never, makeCtx())
+
+    const prompt = mocks.mockGenerateImage.mock.calls[0]?.[0] as string
+    expect(prompt.split(MODEST_ATTIRE_CLAUSE).length - 1).toBe(1)
+    expect(prompt).toBe(assetPrompt)
+  })
+
+  it("subjectMinor absent — the prompt is passed through byte-identical (the floor is the identity)", async () => {
+    const job = makeJob("generate-character", { prompt: MINOR_PROMPT })
+    await entityHandlers["generate-character"](job as never, makeCtx())
+    expect(mocks.mockGenerateImage.mock.calls[0]?.[0]).toBe(MINOR_PROMPT)
   })
 })

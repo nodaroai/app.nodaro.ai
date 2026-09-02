@@ -11,8 +11,8 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { llmComplete } from "../lib/llm-client.js"
 import { CHARACTER_ASPECT_OPTIONS, resolveCharacterAspectRatio, type CharacterAssetTypeForAspect, PLACEHOLDER_CHARACTER_NAME, CHARACTER_ASSET_TYPES, CHARACTER_ASSET_VARIANTS, CHARACTER_ATTACH_COLUMNS } from "@nodaro/shared"
-import { type WardrobeValue, type PersonValue, characterLockToRefLock, toIdentityLockMode, DEFAULT_IDENTITY_LOCK, type IdentityLockMode } from "@nodaro/prompts"
-import { buildEntityHints, CLOTHED_DEFAULT, CLOTHED_MATCH_REFERENCES } from "../lib/character-prompts.js"
+import { type WardrobeValue, type PersonValue, characterLockToRefLock, toIdentityLockMode, DEFAULT_IDENTITY_LOCK, type IdentityLockMode, isMinorAge, containsMinorAgeHint } from "@nodaro/prompts"
+import { buildEntityHints, CLOTHED_DEFAULT, CLOTHED_MATCH_REFERENCES, MODEST_ATTIRE_CLAUSE } from "../lib/character-prompts.js"
 import {
   assembleCharacterReferenceSet,
   characterPriorAssetsFromRow,
@@ -117,6 +117,9 @@ function buildVariantPrompt(
   wardrobe?: WardrobeValue,
   hasReferences: boolean = false,
   identityLockMode?: IdentityLockMode,
+  /** W1-a: the subject is a minor — decided ONCE at the call site from the
+   *  character row's person value. Default false → byte-identical output. */
+  subjectMinor: boolean = false,
 ): string {
   // Derive structured Person + Wardrobe hints once and fold them into the
   // assembled prompt for EVERY asset-type branch (the inner buildBase covers
@@ -173,7 +176,15 @@ function buildVariantPrompt(
   // outfit as the refs (outfit continuity across the identity sheet); without
   // them it's the plain everyday-attire default. A described outfit
   // (outfitPart / wardrobe hints) precedes either clause and wins.
-  const clothing = hasReferences ? CLOTHED_MATCH_REFERENCES : CLOTHED_DEFAULT
+  // W1-a: for a minor, NEITHER self-disabling floor is acceptable — both yield
+  // to preceding outfit text (and CLOTHED_MATCH_REFERENCES additionally defers
+  // to whatever the reference images show). The modest clause has no such
+  // escape, so it takes precedence over the reference-continuity clause.
+  const clothing = subjectMinor
+    ? MODEST_ATTIRE_CLAUSE
+    : hasReferences
+      ? CLOTHED_MATCH_REFERENCES
+      : CLOTHED_DEFAULT
   const base = `Single ${genderDesc} character${namePart}${descPart}${outfitPart}. ${styleDesc} art style, 4k, highly detailed, ${clothing}, white/plain background, no text, no labels, no watermarks.`
 
   if (assetType === "custom") {
@@ -426,6 +437,32 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
     )
     const modelIdentifier = resolveEntityImageCreditIdentifier(parsed.data, effectiveRefCount)
 
+    // W1-a minor-age floor — TWO signals, decided ONCE, before assembly.
+    // `isMinorAge` reads the row's picker value; `containsMinorAgeHint` reads
+    // the text, because the picker value is absent on the incident path (a thin
+    // client never persists it). The text set is every field `buildVariantPrompt`
+    // consumes, PLUS `canonicalDescription`: it is the row's own description of
+    // this subject and the source the LLM drafts `description` from, so on a
+    // `person: null` row it is often the only age-bearing text there is. It can
+    // only ever flip a subject the row itself describes as a minor — an adult
+    // row's "in their 30s" cannot fire.
+    const subjectMinor =
+      isMinorAge(characterPerson as { age?: string; customAge?: number; type?: string } | null) ||
+      containsMinorAgeHint(
+        [
+          variant,
+          name,
+          parsed.data.description,
+          gender,
+          style,
+          baseOutfit,
+          parsed.data.userPrompt,
+          canonicalDescription,
+        ]
+          .filter((t): t is string => typeof t === "string" && t.length > 0)
+          .join(". "),
+      )
+
     const prompt = buildVariantPrompt(
       assetType,
       variant,
@@ -439,6 +476,7 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
       characterWardrobe ?? undefined,
       assembledReferenceUrls.length > 0,
       characterIdentityLock,
+      subjectMinor,
     )
 
     // ─────────────────────────────────────────────────────────────────────
@@ -453,7 +491,9 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
         force_private: true,
         user_id: userId,
         status: "pending",
-        input_data: { ...buildJobInputData(parsed.data, "generate-character-asset"), prompt },
+        // `subjectMinor` is persisted, not just enqueued — a floored job has to
+        // be auditable after the fact from the jobs row alone.
+        input_data: { ...buildJobInputData(parsed.data, "generate-character-asset"), prompt, subjectMinor },
         ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
 
@@ -499,6 +539,8 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
       aspectRatio,
       resolution: parsed.data.resolution,
       quality: parsed.data.quality,
+      // W1-a: arms the minor-age-floor policy at the entity image chokepoint.
+      subjectMinor,
       usageLogId,
     })
 

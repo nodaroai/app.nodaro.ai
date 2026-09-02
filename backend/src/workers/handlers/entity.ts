@@ -105,6 +105,12 @@ interface EntityImageJobData {
   // route, gated per-provider, never rejected here).
   resolution?: string
   quality?: string
+  // W1-a: the subject is a MINOR. Route-computed (once, via `isMinorAge` over
+  // the character row's / node's person value) rather than re-derived here —
+  // the worker has no person value, only the assembled prompt. Drives the
+  // minor-age-floor prompt policy below, which is what covers the free-text
+  // path the catalog-level Layer 1 can't reach. Absent → identity.
+  subjectMinor?: boolean
 }
 
 function makeEntityImageHandler(
@@ -132,6 +138,7 @@ function makeEntityImageHandler(
       aspectRatio,
       resolution,
       quality,
+      subjectMinor,
     } = data
     // SAI-2 / H5 — apply the deployment's prompt policy (e.g. SAI's modesty
     // clause) at the entity IMAGE chokepoint. All four person/scene entity types
@@ -144,7 +151,14 @@ function makeEntityImageHandler(
     // before this. Inert on mainline (no policy registered = identity). Entity
     // generation carries no negative-prompt field, so the positive clause is the
     // enforcement.
-    const prompt = applyPromptPolicies({ prompt: promptRaw, negativePrompt: "", kind: "image" }).prompt
+    // W1-a rides in on `subjectMinor` (see the field's note): the minor-age
+    // floor is the identity for every job that does not carry it.
+    const prompt = applyPromptPolicies({
+      prompt: promptRaw,
+      negativePrompt: "",
+      kind: "image",
+      subjectMinor: subjectMinor === true,
+    }).prompt
     const resolvedProvider = provider ?? "nano-banana"
 
     if (opts?.includeAssetType) {

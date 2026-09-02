@@ -96,6 +96,8 @@ export interface PickerOption {
   /** The group id (matches `categoryOrder` / `categoryLabels`). */
   readonly category?: string
   readonly promptHint: string
+  /** W1-a: see Person.adultOnly. Carried verbatim through packs. */
+  readonly adultOnly?: true
   /**
    * The short professional term this id injects in COMPACT hint mode ("whip
    * pan left" where `promptHint` is the full mechanism sentence). Always
@@ -156,6 +158,8 @@ interface BaseCatalogEntry {
   readonly promptHint: string
   /** Optional authored compact term (see `term.ts` for the convention). */
   readonly term?: string
+  /** W1-a: see Person.adultOnly. Propagated verbatim into the flattened option. */
+  readonly adultOnly?: true
 }
 
 /**
@@ -183,6 +187,7 @@ function toOptions<T extends BaseCatalogEntry>(
     }
     if (e.description) opt.description = e.description
     if (categoryField) opt.category = e[categoryField] as unknown as string
+    if (e.adultOnly) opt.adultOnly = true
     return opt as PickerOption
   })
 }

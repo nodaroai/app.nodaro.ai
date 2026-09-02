@@ -40,6 +40,16 @@ export interface Pose {
   readonly description: string
   readonly promptHint: string
   /**
+   * W1-a minor-age floor (spec 2026-09-01 §3.3). `true` marks an entry whose
+   * hint describes body exposure, sheer/wet clothing, swimwear/lingerie, a
+   * seductive expression or gaze, or a body-placed tattoo. The fragment
+   * collectors DROP flagged entries for a minor subject (`isMinorAge`), the
+   * picker hides their tiles, the analyzer never emits them, and the backend
+   * policy strips their wording from free text. Hand-curated; the
+   * `adult-only-ratchet` test only ratchets. Never set on neutral defaults.
+   */
+  readonly adultOnly?: true
+  /**
    * Compact professional term injected instead of `promptHint` in compact hint
    * mode. Authored only where the lowercased label is not what a photographer
    * would write for the pose — bare sub-dimension modifiers ("Tilted Side"),
@@ -68,8 +78,8 @@ export const POSES: ReadonlyArray<Pose> = [
   { id: "cross-legged",       label: "Cross-legged",       category: "seated",   description: "Seated cross-legged on floor", promptHint: "sitting cross-legged on the ground", term: "sitting cross-legged" },
   { id: "kneeling",           label: "Kneeling",           category: "seated",   description: "Kneeling on the ground",      promptHint: "kneeling on one or both knees" },
   { id: "crouching",          label: "Crouching",          category: "seated",   description: "Crouched low",                promptHint: "crouched low with knees bent" },
-  { id: "lounging",           label: "Lounging",           category: "seated",   description: "Reclined, relaxed sitting",   promptHint: "lounging in a relaxed, reclined position" },
-  { id: "sitting-edge-of-bed", label: "Sitting on Edge of Bed", category: "seated", description: "Perched on the edge of a bed", promptHint: "perched on the edge of a bed, hands resting on the mattress", term: "sitting on the edge of a bed" },
+  { id: "lounging",           label: "Lounging",           category: "seated",   description: "Reclined, relaxed sitting",   promptHint: "lounging in a relaxed, reclined position" , adultOnly: true },
+  { id: "sitting-edge-of-bed", label: "Sitting on Edge of Bed", category: "seated", description: "Perched on the edge of a bed", promptHint: "perched on the edge of a bed, hands resting on the mattress", term: "sitting on the edge of a bed" , adultOnly: true },
   { id: "chair-arm-drape",    label: "Legs Draped Over Chair", category: "seated", description: "Legs draped over chair arm", promptHint: "sitting sideways in a chair with legs draped casually over one arm", term: "legs draped over the chair arm" },
   { id: "elbow-propped",      label: "Cheek on Propped Elbow", category: "seated", description: "Cheek resting on a propped elbow", promptHint: "seated with cheek resting against a propped-up elbow, contemplative", term: "cheek resting on a propped elbow" },
   { id: "lying-on-stomach-reading", label: "Lying Prone Reading", category: "seated", description: "Lying prone, propped on elbows reading", promptHint: "lying on the stomach, propped up on elbows while reading", term: "lying prone propped on elbows, reading" },
@@ -94,14 +104,14 @@ export const POSES: ReadonlyArray<Pose> = [
   { id: "throwing",           label: "Throwing",           category: "action",   description: "Mid-throw motion",            promptHint: "caught mid-throw, body coiled and releasing", term: "caught mid-throw" },
   { id: "leaping",            label: "Leaping",            category: "action",   description: "Leaping forward dynamically", promptHint: "leaping forward dynamically with body extended" },
   { id: "dramatic-action",    label: "Dramatic Action",    category: "action",   description: "Exaggerated action pose",     promptHint: "in a dramatic, exaggerated action pose full of motion", term: "dramatic exaggerated action pose" },
-  { id: "biting-lip",         label: "Biting Lip",         category: "action",   description: "Slight playful lip-bite",     promptHint: "biting the lower lip with a subtle playful expression", term: "biting the lower lip" },
+  { id: "biting-lip",         label: "Biting Lip",         category: "action",   description: "Slight playful lip-bite",     promptHint: "biting the lower lip with a subtle playful expression", term: "biting the lower lip" , adultOnly: true },
   { id: "mid-laugh",          label: "Mid-Laugh",          category: "action",   description: "Caught mid-laugh, head back", promptHint: "caught mid-laugh with head tipped back, eyes crinkled" },
   { id: "pointing-at-camera", label: "Pointing at Camera", category: "action",   description: "Pointing directly at camera", promptHint: "pointing one finger directly at the camera, arm extended", term: "pointing directly at the camera" },
   { id: "tongue-out",         label: "Sticking Tongue Out", category: "action",  description: "Playful tongue-out expression", promptHint: "sticking the tongue out playfully" },
   { id: "thinking",           label: "Thinking",           category: "action",   description: "Hand on chin, contemplative", promptHint: "in a thinking pose with hand on chin, gaze contemplative", term: "thinking pose, hand on chin" },
 
   // -------------------- Resting --------------------
-  { id: "lying-down",         label: "Lying Down",         category: "resting",  description: "Lying flat",                  promptHint: "lying down flat, relaxed" },
+  { id: "lying-down",         label: "Lying Down",         category: "resting",  description: "Lying flat",                  promptHint: "lying down flat, relaxed" , adultOnly: true },
   { id: "sleeping",           label: "Sleeping",           category: "resting",  description: "Eyes closed, sleeping",       promptHint: "sleeping peacefully with eyes closed" },
   { id: "hugging",            label: "Hugging",            category: "resting",  description: "Embracing another",           promptHint: "hugging or embracing another person" },
   { id: "looking-away",       label: "Looking Away",       category: "resting",  description: "Head turned, looking away",   promptHint: "head turned, looking off away from the camera" },
@@ -125,7 +135,7 @@ export const POSES: ReadonlyArray<Pose> = [
   { id: "leaning-back",            label: "Leaning Back",            category: "body-lean",     description: "Torso leaning back slightly",         promptHint: "with the torso leaning back at a slight backward angle", term: "torso leaning slightly back" },
   { id: "leaning-forward",         label: "Leaning Forward",         category: "body-lean",     description: "Torso leaning toward camera",         promptHint: "with the torso leaning forward toward the camera", term: "torso leaning forward" },
   { id: "body-lean-contrapposto",  label: "Contrapposto",            category: "body-lean",     description: "Weight on one leg, hip pushed out",   promptHint: "with the weight on one leg and one hip pushed out, classical contrapposto", term: "contrapposto, hip pushed out" },
-  { id: "arched-back",             label: "Arched Back",             category: "body-lean",     description: "Back gently arched, chest forward",   promptHint: "with the back gently arched, chest forward" },
+  { id: "arched-back",             label: "Arched Back",             category: "body-lean",     description: "Back gently arched, chest forward",   promptHint: "with the back gently arched, chest forward" , adultOnly: true },
   { id: "shoulder-rolled-forward", label: "Shoulder Rolled Forward", category: "body-lean",     description: "One shoulder rolled forward",         promptHint: "with one shoulder rolled forward, asymmetric stance", term: "one shoulder rolled forward" },
 
   // -------------------- Head Tilt --------------------

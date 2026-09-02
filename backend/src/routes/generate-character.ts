@@ -10,6 +10,7 @@ import { resolveEntityImageCreditIdentifier } from "../lib/entity-credit-identif
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { buildPortraitPrompt } from "../lib/character-prompts.js"
+import { isMinorAge, containsMinorAgeHint } from "@nodaro/prompts"
 import { resolveFacetInjections } from "../lib/character-facet-extract.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { hasCredits } from "../lib/config.js"
@@ -230,6 +231,37 @@ export async function generateCharacterRoutes(app: FastifyInstance) {
       // prose render. Body fields always win, preserving exact legacy
       // semantics (including the empty-string edge `?? ` keeps) for every
       // caller that sends them.
+      // ──────────────────────────────────────────────────────────────────────
+      // W1-a minor-age floor — TWO signals, decided ONCE, here, before the
+      // prompt is assembled and before anything is enqueued.
+      //
+      // The structured signal (`isMinorAge` over the row's picker value) is the
+      // primary one, but it is ABSENT on the path that caused the incident: a
+      // thin client creates the character row with `{nodeId, name, projectId}`
+      // and never persists the `person` selection, so `characterPerson` is null
+      // while the client-assembled `seedPrompt` says "a young child around 5
+      // years old". `containsMinorAgeHint` reads that text — every free-text
+      // field that can reach `promptText` below, joined with a sentence break so
+      // no needle can be formed across a field boundary.
+      //
+      // Either signal floors. Neither is a bare-word check, so an adult prompt
+      // that merely mentions a child stays byte-identical.
+      // ──────────────────────────────────────────────────────────────────────
+      const subjectMinor =
+        isMinorAge(characterPerson as { age?: string; customAge?: number; type?: string } | null) ||
+        containsMinorAgeHint(
+          [
+            data.seedPrompt,
+            data.userPrompt,
+            data.description,
+            characterDescription,
+            injectedAssets,
+            data.name,
+          ]
+            .filter((t): t is string => typeof t === "string" && t.length > 0)
+            .join(". "),
+        )
+
       const hasBodyLegacyPrompt =
         data.userPrompt !== undefined || data.description !== undefined
       const promptText = data.seedPrompt
@@ -238,6 +270,7 @@ export async function generateCharacterRoutes(app: FastifyInstance) {
             person: characterPerson ?? undefined,
             wardrobe: characterWardrobe ?? undefined,
             injectedAssets,
+            subjectMinor,
           })
         : hasBodyLegacyPrompt
           ? [data.userPrompt ?? data.description, injectedAssets]
@@ -249,6 +282,7 @@ export async function generateCharacterRoutes(app: FastifyInstance) {
                 person: characterPerson ?? undefined,
                 wardrobe: characterWardrobe ?? undefined,
                 injectedAssets,
+                subjectMinor,
               })
             : [data.name, injectedAssets]
                 .filter((s): s is string => !!s && s.length > 0)
@@ -289,7 +323,9 @@ export async function generateCharacterRoutes(app: FastifyInstance) {
             force_private: true,
             user_id: userId,
             status: "pending",
-            input_data: { ...inputData, prompt: promptText },
+            // `subjectMinor` is persisted, not just enqueued: a floored job has
+            // to be auditable after the fact from the jobs row alone.
+            input_data: { ...inputData, prompt: promptText, subjectMinor },
             ...(mcpClient ? { mcp_client: mcpClient } : {}),
           })
 
@@ -419,6 +455,12 @@ export async function generateCharacterRoutes(app: FastifyInstance) {
           aspectRatio,
           resolution: data.resolution,
           quality: data.quality,
+          // W1-a: arms the minor-age-floor policy at the entity image
+          // chokepoint. The legacy (userPrompt/description) prompt path is
+          // NOT scaffolded here, so for those requests the worker floor is
+          // the only cover — which is exactly why this rides every job, not
+          // just the scaffolded ones.
+          subjectMinor,
           usageLogId: r.usageLogId,
         })
       }

@@ -6,6 +6,7 @@ import { isOriginAllowedDynamic } from "./lib/dynamic-origins.js"
 import { config, hasAdmin, hasCredits, isCloud, isMultiUser } from "./lib/config.js"
 import { registerNodaroCloudBillingProvider } from "./lib/billing-provider.js"
 import { loadOverlay } from "./lib/overlay/load.js"
+import { registerMainlinePromptPolicies } from "./lib/prompt-policies/index.js"
 import { CLIENT_HEADER } from "./lib/job-source.js"
 import { WORKSPACE_HEADER } from "@nodaro/shared"
 
@@ -307,6 +308,10 @@ export async function buildApp() {
   // NODARO_OVERLAY_PACKAGE is unset (spec §7.2 / G1). Fatal (exit 1) if a named
   // overlay fails to load.
   await loadOverlay()
+
+  // Mainline prompt policies run AFTER the overlay's (registration order):
+  // the minor-age floor is a platform safety invariant, not deployment content.
+  registerMainlinePromptPolicies()
 
   // SAI-4 / H8 — fail closed. If a surface profile was configured but did not
   // load, refuse to boot rather than silently serving the un-narrowed mainline

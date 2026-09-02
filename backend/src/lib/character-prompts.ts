@@ -31,11 +31,52 @@ export const CLOTHED_DEFAULT =
 export const CLOTHED_MATCH_REFERENCES =
   "wearing the same outfit as shown in the reference images unless a different outfit is described; if no outfit is visible or described, fully clothed in simple everyday attire"
 
-export const PORTRAIT_SCAFFOLDING =
-  `4k portrait, plain background, studio lighting, neutral expression unless described otherwise, ${CLOTHED_DEFAULT}, no text, no labels, no watermarks`
+/**
+ * The minor-age clothing floor (W1-a). Unlike the two clauses above it is NOT
+ * self-disabling: it carries no "unless otherwise described" escape, because
+ * yielding to a preceding outfit description is exactly the risk the floor
+ * exists to close for a minor subject.
+ *
+ * It lives HERE, next to the two clauses it replaces, for one structural
+ * reason: BOTH layers need it — assembly (the scaffolding functions below,
+ * which pick the clothing clause from the subject's age) and the Layer-2
+ * `minor-age-floor` policy (which appends it to free text). The policy already
+ * imports the two self-disabling floors from this module, so defining the
+ * clause here keeps ONE import direction (policy → character-prompts) and no
+ * cycle; `prompt-policies/index.ts` re-exports it from `minor-age-floor.ts`, so
+ * every existing import site is unchanged. Still backend-owned deployment
+ * content, never a package — the content-free guard on `@nodaro/prompts` holds.
+ */
+export const MODEST_ATTIRE_CLAUSE = "fully clothed in modest, age-appropriate everyday attire"
 
-export const ASSET_STILL_SCAFFOLDING =
-  `The subject must remain exactly the same person — preserve facial identity, bone structure, eye color, hair color, skin tone, proportions, and unique features. Do not alter eyes, nose, mouth, or facial shape. Maintain natural skin texture. Ultra-detailed, 8K quality, cinematic framing, plain background, ${CLOTHED_DEFAULT}, no text, no labels, no watermarks`
+/**
+ * Portrait scaffolding as a function of the SUBJECT'S AGE (W1-a). For a minor
+ * the self-disabling `CLOTHED_DEFAULT` is not merely insufficient, it is the
+ * hazard: it hands control of the clothing back to any outfit text that
+ * precedes it. A minor gets the non-negotiable modest clause instead.
+ *
+ * The adult branch is the pre-W1-a string verbatim — `PORTRAIT_SCAFFOLDING`
+ * below IS `portraitScaffolding(false)`, so every adult prompt is
+ * byte-identical to what it was before the age became a parameter.
+ */
+export function portraitScaffolding(subjectMinor: boolean): string {
+  const clothing = subjectMinor ? MODEST_ATTIRE_CLAUSE : CLOTHED_DEFAULT
+  return `4k portrait, plain background, studio lighting, neutral expression unless described otherwise, ${clothing}, no text, no labels, no watermarks`
+}
+
+/** The ADULT portrait scaffolding — kept as a named export for the call sites
+ *  and tests that pin the adult string. */
+export const PORTRAIT_SCAFFOLDING = portraitScaffolding(false)
+
+/** Asset-still scaffolding as a function of the subject's age — see
+ *  `portraitScaffolding` for why a minor gets a different clothing clause. */
+export function assetStillScaffolding(subjectMinor: boolean): string {
+  const clothing = subjectMinor ? MODEST_ATTIRE_CLAUSE : CLOTHED_DEFAULT
+  return `The subject must remain exactly the same person — preserve facial identity, bone structure, eye color, hair color, skin tone, proportions, and unique features. Do not alter eyes, nose, mouth, or facial shape. Maintain natural skin texture. Ultra-detailed, 8K quality, cinematic framing, plain background, ${clothing}, no text, no labels, no watermarks`
+}
+
+/** The ADULT asset-still scaffolding. */
+export const ASSET_STILL_SCAFFOLDING = assetStillScaffolding(false)
 
 export const ASSET_MOTION_SCAFFOLDING =
   "The subject must remain exactly the same person — preserve facial identity, bone structure, eye color, hair color, skin tone, and proportions. Smooth motion, natural movement, no text, no labels, no watermarks"
@@ -89,6 +130,10 @@ export function buildPortraitPrompt(args: {
    *  (element/asset injection). Appended after seed+hints, before the studio
    *  scaffolding. Empty/absent → byte-identical to the pre-injection prompt. */
   injectedAssets?: string
+  /** W1-a: the subject is a minor — decided ONCE by the caller from the same
+   *  person value the hints are derived from (`isMinorAge`, @nodaro/prompts).
+   *  Absent/false → byte-identical to the pre-W1-a prompt. */
+  subjectMinor?: boolean
 }): string {
   const hints = buildEntityHints(args.person, args.wardrobe).join(", ")
   const injected = nonEmpty(args.injectedAssets)
@@ -97,7 +142,7 @@ export function buildPortraitPrompt(args: {
     hints,
     injected ? stripTrailingPeriod(injected) : null,
   ].filter(Boolean).join(", ")
-  return `${seed}. ${PORTRAIT_SCAFFOLDING}.`
+  return `${seed}. ${portraitScaffolding(args.subjectMinor === true)}.`
 }
 
 export function buildAssetPromptText(args: {
@@ -105,6 +150,8 @@ export function buildAssetPromptText(args: {
   assetDescription: string
   variantOrPrompt: string
   assetType: string
+  /** W1-a: see `buildPortraitPrompt`. Absent/false → byte-identical output. */
+  subjectMinor?: boolean
 }): string {
   const canonical = nonEmpty(args.canonicalDescription)
   const framing = ASSET_FRAMING_BY_TYPE[args.assetType] ?? ""
@@ -113,7 +160,7 @@ export function buildAssetPromptText(args: {
     args.assetDescription.trim(),
     args.variantOrPrompt.trim(),
     framing,
-    ASSET_STILL_SCAFFOLDING,
+    assetStillScaffolding(args.subjectMinor === true),
   ]
     .filter((p): p is string => p !== null && p.length > 0)
     .map(stripTrailingPeriod)

@@ -8,7 +8,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { resolveTemplate, applyTemplate } from "../config/prompt-templates.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { buildFaceTemplateInputs } from "@nodaro/prompts"
+import { buildFaceTemplateInputs, containsMinorAgeHint } from "@nodaro/prompts"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 
@@ -66,13 +66,43 @@ export async function generateFaceRoutes(app: FastifyInstance) {
       prompt = applyTemplate(template, buildFaceTemplateInputs({ name, description, style }))
     }
 
+    // ────────────────────────────────────────────────────────────────────────
+    // W1-a minor-age floor — the generate-face lane.
+    //
+    // This route feeds `makeEntityImageHandler("generate-face")`, the SAME
+    // entity-image chokepoint the character lanes use, with a prompt the CLIENT
+    // built. It had no age signal at all, so a face request carrying the
+    // incident wording reached the provider with the floor switched off while
+    // the character lane next to it was covered.
+    //
+    // There is no structured picker value on this lane (a face has no `person`
+    // field on the row or in the body), so the text signal is the whole signal
+    // — `containsMinorAgeHint` over the assembled prompt PLUS every free-text
+    // field the assembly consumes. The raw fields ride along rather than
+    // relying on `prompt` alone because the "face-generation" template is
+    // user- and flow-overridable: an override that drops `{description}` would
+    // otherwise hide the age from the detector while the description still
+    // reaches the model through some other surface. Joined with a sentence
+    // break so no needle can be formed ACROSS a field boundary.
+    //
+    // Not a bare-word check (see `containsMinorAgeHint`), so an adult face
+    // request stays byte-identical.
+    // ────────────────────────────────────────────────────────────────────────
+    const subjectMinor = containsMinorAgeHint(
+      [prompt, name, description, parsed.data.userPrompt, style]
+        .filter((t): t is string => typeof t === "string" && t.length > 0)
+        .join(". "),
+    )
+
     const { data: job, error } = await insertJob(req, {
         workflow_id: extractWorkflowId(req.body),
         node_id: extractNodeId(req.body),
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: { ...buildJobInputData(parsed.data, "generate-face"), prompt },
+        // `subjectMinor` is persisted, not just enqueued: a floored job has to
+        // be auditable from the row alone.
+        input_data: { ...buildJobInputData(parsed.data, "generate-face"), prompt, subjectMinor },
       })
 
     if (error) {
@@ -89,6 +119,10 @@ export async function generateFaceRoutes(app: FastifyInstance) {
       prompt,
       sourceImageUrl,
       provider: parsed.data.provider,
+      // W1-a: arms the minor-age-floor policy at the entity image chokepoint
+      // (`makeEntityImageHandler` destructures `subjectMinor` for every job
+      // name it serves, this one included). Absent → identity.
+      subjectMinor,
       usageLogId,
     })
 

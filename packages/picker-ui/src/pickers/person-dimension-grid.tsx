@@ -1,7 +1,7 @@
 "use client"
 
 import { useId, useMemo, useState, type JSX } from "react"
-import { getRegisteredPeople, getRegisteredPersonFieldByDimension, getRegisteredPersonDimensionLabels, PERSON_FIELD_BY_DIMENSION, getPersonDimensionLimit, type Person, type PersonDimension, type PersonValue } from "@nodaro/prompts"
+import { getRegisteredPeople, getRegisteredPersonFieldByDimension, getRegisteredPersonDimensionLabels, PERSON_FIELD_BY_DIMENSION, getPersonDimensionLimit, isMinorAge, type Person, type PersonDimension, type PersonValue } from "@nodaro/prompts"
 
 // The precise per-dimension field-name union (a key of PersonValue for every
 // BASE dimension). Pack dimensions add new fields outside this union at run
@@ -440,9 +440,10 @@ export function PersonDimensionGrid({
   const query = search ?? ""
   const isSearching = Boolean(query)
 
+  const minor = isMinorAge(value)
   const entries = useMemo(
-    () => (getRegisteredPeople() as readonly Person[]).filter((p) => p.dimension === dimension && matches(p.id, p.label, p.description, query)),
-    [dimension, matches, query],
+    () => (getRegisteredPeople() as readonly Person[]).filter((p) => p.dimension === dimension && !(minor && p.adultOnly) && matches(p.id, p.label, p.description, query)),
+    [dimension, matches, query, minor],
   )
 
   const checked = enabled ?? true

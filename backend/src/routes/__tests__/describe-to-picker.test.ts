@@ -1,5 +1,53 @@
-import { describe, it, expect } from "vitest"
-import { resolveTargetPickers, buildGapRecords, buildMissingPickerReport, buildSystemPrompt } from "../describe-to-picker.js"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import Fastify, { type FastifyInstance } from "fastify"
+
+const mocks = vi.hoisted(() => ({
+  maybeProxyLlmRouteToCloud: vi.fn(),
+  insertJob: vi.fn(),
+  jobUpdate: vi.fn(),
+  reserveCreditsForJob: vi.fn(),
+  commitReservedCreditsForJob: vi.fn(),
+  refundReservedCreditsForJob: vi.fn(),
+  markProviderCallStart: vi.fn(),
+  llmCompleteStructured: vi.fn(),
+  prefetchAsBase64: vi.fn(),
+}))
+
+vi.mock("@/lib/config.js", () => ({
+  config: { EDITION: "cloud", ANTHROPIC_API_KEY: "test-key", KIE_API_KEY: "", SUPABASE_URL: "https://test.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "test" },
+  isCloud: () => true, hasCredits: () => true, isCommunity: () => false, isBusiness: () => false, hasAdmin: () => true,
+}))
+vi.mock("@/lib/cloud-llm-proxy.js", () => ({ maybeProxyLlmRouteToCloud: mocks.maybeProxyLlmRouteToCloud }))
+vi.mock("@/lib/insert-job.js", () => ({ insertJob: mocks.insertJob }))
+vi.mock("@/middleware/credit-guard.js", () => ({
+  creditGuard: () => async () => {},
+  reserveCreditsForJob: mocks.reserveCreditsForJob,
+}))
+vi.mock("@/lib/credits-job-lifecycle.js", () => ({
+  commitReservedCreditsForJob: mocks.commitReservedCreditsForJob,
+  refundReservedCreditsForJob: mocks.refundReservedCreditsForJob,
+}))
+vi.mock("@/lib/reconcile/persistence.js", () => ({ markProviderCallStart: mocks.markProviderCallStart }))
+vi.mock("@/lib/llm-client.js", () => ({ llmCompleteStructured: mocks.llmCompleteStructured }))
+vi.mock("@/lib/anthropic-image.js", () => ({ prefetchAsBase64: mocks.prefetchAsBase64 }))
+vi.mock("@/lib/supabase.js", () => {
+  // .update({...}).eq("id", …).eq("user_id", …) — the exact chain the route uses.
+  const second = vi.fn().mockResolvedValue({ data: null, error: null })
+  const first = vi.fn(() => ({ eq: second }))
+  return {
+    supabase: {
+      from: vi.fn(() => ({
+        update: (row: Record<string, unknown>) => {
+          mocks.jobUpdate(row)
+          return { eq: first }
+        },
+      })),
+      rpc: vi.fn().mockResolvedValue({ error: null }),
+    },
+  }
+})
+
+import { resolveTargetPickers, buildGapRecords, buildMissingPickerReport, buildSystemPrompt, describeToPickerRoutes } from "../describe-to-picker.js"
 
 describe("resolveTargetPickers", () => {
   it("prefers the targetPickers array", () => {
@@ -110,5 +158,71 @@ describe("buildSystemPrompt", () => {
     // The wired legend + gap guidance are still present.
     expect(out).toContain("WIRED LEGEND")
     expect(out).toContain("GAPS (catalog feedback)")
+  })
+})
+
+describe("POST /v1/describe-to-picker — W1-a minor-age floor", () => {
+  const USER_ID = "00000000-0000-4000-8000-000000000001"
+
+  let app: FastifyInstance
+
+  async function post(payload: Record<string, unknown>) {
+    return app.inject({ method: "POST", url: "/v1/describe-to-picker", payload })
+  }
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    mocks.maybeProxyLlmRouteToCloud.mockResolvedValue(false)
+    mocks.insertJob.mockResolvedValue({ data: { id: "job-1" }, error: null })
+    mocks.reserveCreditsForJob.mockResolvedValue({ usageLogId: "usage-1" })
+    mocks.commitReservedCreditsForJob.mockResolvedValue(undefined)
+    mocks.refundReservedCreditsForJob.mockResolvedValue(0)
+    mocks.markProviderCallStart.mockResolvedValue(undefined)
+    mocks.prefetchAsBase64.mockResolvedValue({ type: "image", url: "https://cdn.example/img.png" })
+
+    app = Fastify({ logger: false })
+    app.addHook("preHandler", async (req) => {
+      const body = req.body as Record<string, unknown> | undefined
+      if (typeof body?.userId === "string") req.userId = body.userId
+    })
+    await app.register(async (instance) => { await describeToPickerRoutes(instance) })
+    await app.ready()
+  })
+
+  afterEach(async () => { await app.close() })
+
+  const VALID = {
+    imageUrl: "https://cdn.example/img.png",
+    targetPickers: ["person", "styling"],
+    userId: USER_ID,
+  }
+
+  it("a minor person value floors adult-only ids from the same analysis's styling before the response", async () => {
+    mocks.llmCompleteStructured.mockResolvedValue({
+      output: { person: { age: "age-pre-teen" }, styling: { top: "top-bra-top" } },
+      inputTokens: 100,
+      outputTokens: 50,
+    })
+    const res = await post(VALID)
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.pickerJson.styling).toEqual({})
+    expect(body.pickerJson.person).toEqual({ age: "age-pre-teen" })
+    // The floored value is also what gets persisted on the job row and fed to gap recording.
+    expect(mocks.jobUpdate).toHaveBeenCalledWith({
+      status: "completed",
+      output_data: { json: { person: { age: "age-pre-teen" }, styling: {} }, targetPickers: ["person", "styling"], usage: { inputTokens: 100, outputTokens: 50 } },
+    })
+  })
+
+  it("is unaffected for an adult person value", async () => {
+    mocks.llmCompleteStructured.mockResolvedValue({
+      output: { person: { age: "age-30s" }, styling: { top: "top-bra-top" } },
+      inputTokens: 100,
+      outputTokens: 50,
+    })
+    const res = await post(VALID)
+    expect(res.statusCode).toBe(200)
+    expect(res.json().pickerJson.styling).toEqual({ top: "top-bra-top" })
   })
 })

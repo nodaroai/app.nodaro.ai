@@ -1,5 +1,6 @@
 import { createRenderWorker } from "./workers/render-worker.js"
 import { loadOverlay } from "./lib/overlay/load.js"
+import { registerMainlinePromptPolicies } from "./lib/prompt-policies/index.js"
 
 process.on("unhandledRejection", (err) => {
   console.error("Unhandled rejection:", err)
@@ -12,6 +13,10 @@ process.on("uncaughtException", (err) => {
 // Load any deployment-supplied overlay (e.g. egress decorator) before the
 // render worker starts consuming jobs. No-op when NODARO_OVERLAY_PACKAGE unset.
 await loadOverlay()
+
+// Mainline prompt policies run AFTER the overlay's (registration order):
+// the minor-age floor is a platform safety invariant, not deployment content.
+registerMainlinePromptPolicies()
 
 const worker = createRenderWorker()
 

@@ -45,6 +45,16 @@ export interface PhotoGenre {
   readonly description: string
   readonly promptHint: string
   /**
+   * W1-a minor-age floor (spec 2026-09-01 §3.3). `true` marks an entry whose
+   * hint describes body exposure, sheer/wet clothing, swimwear/lingerie, a
+   * seductive expression or gaze, or a body-placed tattoo. The fragment
+   * collectors DROP flagged entries for a minor subject (`isMinorAge`), the
+   * picker hides their tiles, the analyzer never emits them, and the backend
+   * policy strips their wording from free text. Hand-curated; the
+   * `adult-only-ratchet` test only ratchets. Never set on neutral defaults.
+   */
+  readonly adultOnly?: true
+  /**
    * Compact professional term (see `term.ts`). Authored only where the
    * lowercased label is not what a photographer would write in a prompt —
    * UI compounds ("Campaign / Ad"), the "Signature" brand framing, and bare
@@ -70,7 +80,7 @@ export const PHOTO_GENRES: ReadonlyArray<PhotoGenre> = [
   { id: "brand-jil-sander",       label: "Jil Sander Minimalism",  category: "editorial",      description: "Jil Sander — minimalist architectural muted", promptHint: "shot in the language of a Jil Sander editorial, minimalist composition, muted ecru and stone palette, architectural wardrobe with clean unbroken lines and the brand's quiet austere mood" },
   { id: "brand-vivienne-tam",     label: "Vivienne Tam Style",     category: "editorial",      description: "Vivienne Tam — orientalist ornate fashion", promptHint: "shot in the language of a Vivienne Tam editorial, orientalist motifs and dragon embroidery, ornate East-Asian fashion detailing and a saturated jewel-toned palette" },
   { id: "brand-jacquemus",        label: "Jacquemus Style",        category: "editorial",      description: "Jacquemus — sun-soaked surrealist playful", promptHint: "shot in the language of a Jacquemus campaign, sun-soaked Mediterranean light, surrealist scale play with oversized hats and miniature bags, terracotta and ochre palette and a playful French Riviera mood" },
-  { id: "brand-helmut-newton",    label: "Helmut Newton Style",    category: "editorial",      description: "Helmut Newton — high-contrast B&W provocation", promptHint: "shot in the signature language of Helmut Newton, high-contrast black-and-white, hard direct flash carving every line, statuesque pose, glamorous wardrobe and the cool confrontational eroticism of his 1970s editorial work" },
+  { id: "brand-helmut-newton",    label: "Helmut Newton Style",    category: "editorial",      description: "Helmut Newton — high-contrast B&W provocation", promptHint: "shot in the signature language of Helmut Newton, high-contrast black-and-white, hard direct flash carving every line, statuesque pose, glamorous wardrobe and the cool confrontational eroticism of his 1970s editorial work" , adultOnly: true },
   { id: "brand-harpers-bazaar",   label: "Harper's Bazaar Style",  category: "editorial",      description: "Harper's Bazaar — high-fashion glossy",  promptHint: "shot in the signature language of a Harper's Bazaar editorial, high-fashion glossy production, bold graphic backdrops, dramatic single-source key light and the brand's distinctively confident composition" },
 
   // -------------------- Documentary / Candid --------------------
@@ -89,7 +99,7 @@ export const PHOTO_GENRES: ReadonlyArray<PhotoGenre> = [
   { id: "mugshot",                label: "Mugshot",                category: "studio-formal",  description: "Police booking-style portrait",     promptHint: "shot as a police booking mugshot, harsh fluorescent overhead lighting, height chart on the wall behind, dead-square frontal framing and a flat institutional color cast" },
   { id: "wedding-portrait",       label: "Wedding Portrait",       category: "studio-formal",  description: "Romantic bridal-style portrait",    promptHint: "shot as a wedding portrait, soft golden-hour backlight, romantic shallow depth of field, dreamy pastel color grade and an intimate posed embrace or solo bridal stance" },
   { id: "family-portrait",        label: "Family Portrait",        category: "studio-formal",  description: "Posed family group shot",           promptHint: "shot as a posed family portrait, warm even studio lighting, neutral backdrop, coordinated wardrobe and the group arranged in a balanced pyramid composition" },
-  { id: "glamour-portrait",       label: "Glamour Portrait",       category: "studio-formal",  description: "Soft-focus glamour portrait",       promptHint: "shot as a glamour portrait with soft diffused beauty lighting, a high-key warm tone, gentle skin retouch, voluminous hair and a sultry over-the-shoulder pose" },
+  { id: "glamour-portrait",       label: "Glamour Portrait",       category: "studio-formal",  description: "Soft-focus glamour portrait",       promptHint: "shot as a glamour portrait with soft diffused beauty lighting, a high-key warm tone, gentle skin retouch, voluminous hair and a sultry over-the-shoulder pose" , adultOnly: true },
   { id: "film-noir",              label: "Film Noir",              category: "studio-formal",  description: "Hard-shadow noir portrait",         promptHint: "shot in a film-noir portrait idiom, hard single-source key light casting deep shadows, venetian-blind shadow patterns, monochrome high-contrast palette and a brooding closed-off pose" },
 
   // -------------------- Selfie sub-types --------------------

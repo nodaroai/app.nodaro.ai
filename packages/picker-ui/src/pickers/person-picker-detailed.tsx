@@ -1,8 +1,8 @@
 "use client"
 
-import { memo, useMemo, useState } from "react"
+import { memo, useEffect, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { getRegisteredPeople, getRegisteredPersonDimensionOrder, getRegisteredPersonFieldByDimension, getPersonDimensionLimit, type Person, type PersonDimension, type PersonValue } from "@nodaro/prompts"
+import { getRegisteredPeople, getRegisteredPersonDimensionOrder, getRegisteredPersonFieldByDimension, getPersonDimensionLimit, applyMinorAgeFloorToPickerValues, isMinorAge, type Person, type PersonDimension, type PersonValue } from "@nodaro/prompts"
 import { pickIds } from "@nodaro/shared"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
@@ -40,12 +40,15 @@ export const PersonPickerDetailed = memo(function PersonPickerDetailed({
   const [enabledMulti, setEnabledMulti] = useState<Set<PersonDimension>>(new Set())
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("person")
 
+  const minor = isMinorAge(value)
+
   const grouped = useMemo(() => {
     // Read the REGISTERED (pack-composed) person set + dimension order so a
     // deployment's person packs (e.g. B7) enumerate here. Pack dimensions widen
     // to string outside the closed union; the casts round-trip them safely.
     const byDimension = new Map<PersonDimension, Person[]>()
     for (const person of getRegisteredPeople() as readonly Person[]) {
+      if (minor && person.adultOnly) continue
       if (!matches(person.id, person.label, person.description, query)) {
         continue
       }
@@ -57,7 +60,31 @@ export const PersonPickerDetailed = memo(function PersonPickerDetailed({
       dimension: dim as PersonDimension,
       entries: byDimension.get(dim as PersonDimension) ?? [],
     }))
-  }, [query, matches])
+  }, [query, matches, minor])
+
+  // Same predicate (isMinorAge) as the hide above, and the SAME stripping
+  // logic as every other minor-age-floor consumer — routed through
+  // `applyMinorAgeFloorToPickerValues` (single source of truth for which ids
+  // get dropped) rather than reimplementing the strip inline. A stale flagged
+  // pick is cleared the moment the age flips to a minor (including on
+  // mount, if the initial value already carries one), so the client never
+  // assembles a flagged fragment for a minor.
+  useEffect(() => {
+    if (!minor) return
+    const floored = applyMinorAgeFloorToPickerValues({ person: value }).person
+    if (floored === value) return
+    const patch: Record<string, unknown> = {}
+    const keys = new Set([...Object.keys(value), ...Object.keys(floored)])
+    for (const key of keys) {
+      const before = (value as Record<string, unknown>)[key]
+      const after = (floored as Record<string, unknown>)[key]
+      const changed = Array.isArray(before) && Array.isArray(after)
+        ? before.length !== after.length || before.some((x, i) => x !== after[i])
+        : before !== after
+      if (changed) patch[key] = after
+    }
+    if (Object.keys(patch).length > 0) onChange(patch as Partial<PersonValue>)
+  }, [minor, value, onChange])
 
   const anyVisible = grouped.some((g) => g.entries.length > 0)
 
