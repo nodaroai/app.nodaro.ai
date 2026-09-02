@@ -57,7 +57,7 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
           p_max: cfg.maxAsks,
         })
         if (error) {
-          // Table/RPC not present yet (staging runs ahead of migration 371) or a
+          // Table/RPC not present yet (staging runs ahead of migration 372) or a
           // transient DB error — stay dormant, never 500 the read the client polls.
           req.log.warn({ err: error.message }, "consent_try_show unavailable")
           return { shouldShow: false, status: "unavailable" }

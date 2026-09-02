@@ -7,7 +7,7 @@ import { supabase } from "../../lib/supabase.js"
  * core AppSettings object, because the whole feature is Cloud-only ee/ code.
  *
  * `enabled` defaults FALSE on purpose. Staging shares the production database,
- * so a dev deploy runs ahead of migration 371 landing on main; until an admin
+ * so a dev deploy runs ahead of migration 372 landing on main; until an admin
  * turns this on (after the table exists) the prompt stays dormant and every
  * read degrades to "don't show". That is the migrate-then-enable safety window.
  */
