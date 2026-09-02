@@ -1,5 +1,57 @@
 # @nodaro/shared
 
+## 2.20.0
+
+### Minor Changes
+
+- 1e9e962: `stripDerivedAnalysisFields(json)` — a video analysis with its server-derived fields removed (top-level `warnings` / `variationFolds`; per-scene `visualResolved` / `slotRefs` / `oversized`; `refImageUrl` kept): the compact form an LLM is handed when the analysis is the brief. One strip list for the async structured-draft worker (`POST /v1/llm/structured/jobs` with `videoUrl`) and the Nodaro Studio job-id loader.
+- 158b2e6: Organizations: usage reports (rollout-gated). `client.organizations.usage(orgId, query)` and `client.workspaces.usage(workspaceId, query)` return credits by workspace, member, model or day for an inclusive date range (`from`/`to`, IANA `tz`), with in-flight vs settled credits split out and the platform-absorbed overrun listed separately; `usageRows` pages the underlying runs; `usageCsv` returns the same report as CSV. The CLI gains `nodaro org usage` and `nodaro workspace usage` (`--csv`). `@nodaro/shared` adds the `UsageReport`, `UsageReportRow`, `UsageVarianceRow`, `UsageLogEntry`, `UsageQuery` wire types, the `USAGE_GROUP_BYS` list and the `audit_unavailable` error code.
+- c6be4ac: `sunoCreditType(model, operation)`, `SUNO_VERSION_PRICED_OPERATIONS`, and `SUNO_SELECT_OPERATIONS` are now public. This is the single implementation of the Suno credit-key contract: `/v1/suno/generate|cover|extend` are priced by model version (`V5_5` → `suno-v5_5`, `V5` → `suno-v5`), and every other Suno operation charges a flat per-operation key regardless of version. `SUNO_SELECT_OPERATIONS` is the readonly tuple of the seven Suno operations that appear behind a select/dropdown UI (model pickers, node badges, the credit estimator), so those call sites can iterate or count the full set without redeclaring it and drifting from this one. Previously a private backend helper, `sunoCreditType` is exported because the editor's model dropdowns, node badges and workflow-credit estimator all have to quote the key the route actually charges — quoting a bare Suno version instead made every Suno model dropdown ask for an unpriced identifier and render no price at all.
+- 4c5dedb: New `SUNO_HARD_CEILING` (30000) — the absolute Zod bound for Suno text fields on the `/v1/suno/*` routes. The per-version caps (`getMaxSunoPromptChars` / `getMaxSunoStyleChars`) still decide what reaches the provider; the routes clamp to them. Previously the routes bounded these fields at `SUNO_TEXT_MAX` (5000), so a programmatically-set prompt was hard-rejected with a 400 before the clamp could trim it. Deliberately separate from `PROMPT_HARD_CEILING`, which is an image/video budget with its own drift guard.
+- 703d5ae: Add `resolveNormalizedImageGen` (and its `NormalizedImageGen` result type) to
+  the public API. It snaps an image request's catalog-governed levers
+  (`aspectRatio` / `resolution` / `quality`) to a combination the model actually
+  accepts via `normalizeModelInput`, applied against the post-T2I→I2I-swap model
+  id, and computes the credit identifier from the **snapped** values.
+
+  `adjustments` is the disclosure contract: one entry per lever that changed,
+  each carrying `field`, `from`, `to` and a human-readable `reason`. `to` is
+  `undefined` when the lever was dropped because the model has no such setting.
+  The array is empty when the caller's values were already valid, and unknown
+  model ids pass through untouched.
+
+  `resolveImageGenCreditIdentifier` keeps its exact signature and return type and
+  now delegates to the new primitive, so the credit identifier is identical for
+  every already-valid input. Because both image routes compute the identifier
+  twice — the `creditGuard` CHECK and the `reserveCreditsForJob` DEBIT — and a
+  commit never collects an upward delta, putting the snap inside the primitive
+  keeps those two sites and the workflow orchestrator in agreement by
+  construction instead of by convention.
+
+  Also adds `IMAGE_ASPECT_RATIO_VALUES` (and its `ImageAspectRatio` element type)
+  — the ONE image aspect-ratio vocabulary the `/v1/generate-image`,
+  `/v1/image-to-image` and `/v1/edit-image` Zod enums are now built from, instead
+  of three literal lists that drifted. It is the union of every ratio any
+  `kind: "image"` catalog entry declares, so a ratio the picker offers can no
+  longer 400 at the route (that gap shipped twice — Wan 2.7's `8:1`/`1:8` and
+  Nano Banana 2 Lite's `4:1`/`1:4`), and a superset test fails the build if a new
+  model declares a ratio the tuple is missing. It bounds the VOCABULARY only; the
+  per-model gate stays the catalog snap, which corrects and discloses rather than
+  rejects.
+
+  Widens `MODEL_PARAM_NODE_TYPES` — the node-type gate `normalizeNodeModelParams`
+  reads at the workflow-JSON write boundary — to cover `modify-image` and
+  `edit-image` alongside `generate-image` and `image-to-image`. A node written
+  straight into workflow JSON by an agent, an import or a template never meets
+  the config panel's provider-aware dropdown or its stale-value effect, so those
+  two types carried the same un-healable invalid pairs the other two used to.
+  `edit-image`'s `targetResolution` is an upscale target, a field the normalizer
+  never reads, so its price is untouched by the widening.
+
+  The image node routes (`generate-image`, `image-to-image`, `edit-image`) now
+  return an optional `adjustments[]` alongside `jobId` when a parameter was
+  corrected; `RunNodeResult` types it as `RunNodeAdjustment[]`.
+
 ## 2.19.0
 
 ### Minor Changes

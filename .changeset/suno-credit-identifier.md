@@ -1,5 +1,0 @@
----
-"@nodaro/shared": minor
----
-
-`sunoCreditType(model, operation)`, `SUNO_VERSION_PRICED_OPERATIONS`, and `SUNO_SELECT_OPERATIONS` are now public. This is the single implementation of the Suno credit-key contract: `/v1/suno/generate|cover|extend` are priced by model version (`V5_5` → `suno-v5_5`, `V5` → `suno-v5`), and every other Suno operation charges a flat per-operation key regardless of version. `SUNO_SELECT_OPERATIONS` is the readonly tuple of the seven Suno operations that appear behind a select/dropdown UI (model pickers, node badges, the credit estimator), so those call sites can iterate or count the full set without redeclaring it and drifting from this one. Previously a private backend helper, `sunoCreditType` is exported because the editor's model dropdowns, node badges and workflow-credit estimator all have to quote the key the route actually charges — quoting a bare Suno version instead made every Suno model dropdown ask for an unpriced identifier and render no price at all.
