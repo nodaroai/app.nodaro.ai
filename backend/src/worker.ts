@@ -1,6 +1,6 @@
 import { createVideoWorker } from "./workers/video-worker.js"
 import { logFfmpegVersion } from "./providers/video/ffmpeg-utils.js"
-import { beginWorkerDrain } from "./lib/worker-drain.js"
+import { beginWorkerDrain, SHUTDOWN_DRAIN_MS } from "./lib/worker-drain.js"
 import { loadOverlay } from "./lib/overlay/load.js"
 import { registerMainlinePromptPolicies } from "./lib/prompt-policies/index.js"
 
@@ -28,15 +28,14 @@ console.log("Worker started, waiting for jobs...")
 // version-dependent (see the Dockerfile FFMPEG_VERSION pin).
 logFfmpegVersion("worker")
 
-// Railway's SIGTERM grace window before SIGKILL is ~30s. We drain for at
-// most 25s so logs flush and we exit cleanly before the kill lands.
+// SHUTDOWN_DRAIN_MS (lib/worker-drain.ts) is the shared Railway grace-window
+// deadline: drain, then force the exit before SIGKILL lands.
 //
 // NOTE (incident 2026-07-15): this handler only runs if the signal actually
 // REACHES this process — start.sh must forward SIGTERM to its background
 // children (it previously exec'd Caddy as PID 1, so node processes were
 // SIGKILLed without ever draining and their BullMQ locks dangled for the
 // full lockDuration). Keep worker.ts + start.sh in sync when touching either.
-const SHUTDOWN_DRAIN_MS = 25_000
 
 let shuttingDown = false
 const shutdown = async (signal: NodeJS.Signals) => {

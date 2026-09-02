@@ -1,7 +1,7 @@
 import { variantJobId } from "@nodaro/shared"
 import { supabase } from "../supabase.js"
 import { uploadToR2 } from "../storage.js"
-import { providerDetailOf } from "../provider-error-detail.js"
+import { providerDetailOf, logProviderFailure } from "../provider-error-detail.js"
 import {
   pollKieTask,
   pollVeoTask,
@@ -13,7 +13,12 @@ import { pollKontextTask } from "../../providers/kie/kontext-client.js"
 import { pollLumaTask } from "../../providers/kie/luma-client.js"
 import { pollRunwayTask, pollAlephTask } from "../../providers/kie/runway-client.js"
 import { pollSunoTask, type SunoTaskResult } from "../../providers/kie/suno-client.js"
-import { finalizeJobWithMedia, type FinalizeJobType, type FinalizeClaimant } from "../job-finalize.js"
+import {
+  finalizeJobWithMedia,
+  isFinalizeJobType,
+  NOT_GENERIC_RECOVERABLE,
+  type FinalizeClaimant,
+} from "../job-finalize.js"
 import { loopTrimAddonForReconcile } from "./loop-trim-refund.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
 import { bumpAttemptsOrExhaust } from "./bump-attempts.js"
@@ -233,6 +238,9 @@ async function reconcileKieSunoJob(row: KieJobRow, opts?: ReconcileOpts): Promis
 }
 
 async function markFailed(jobId: string, reason: string, detail: string | null = null): Promise<void> {
+  // Log BEFORE the write: this module had no per-job output at all, so a
+  // cron-failed job was invisible in Railway (spec §11.3).
+  logProviderFailure("reconcile/kie", jobId, reason, detail)
   // CAS on the non-terminal precondition (not just `.neq("cancelled")`) so a job
   // the worker concurrently flipped to `completed` (or `cancelled`/`failed`) is
   // never trampled to `failed`. Matches sweepStaleSyncJob / forceFailExhausted.
@@ -289,6 +297,22 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
     return
   }
 
+  // Types with their own completion writer, and unknown/NULL types, must not
+  // reach finalize. DELIBERATELY AFTER the poll (M-4a): the catch above
+  // fails-fast + refunds a genuinely-failed task on tick 1, and skipping the
+  // poll to "save a provider call" would instead ride all 18 reconcile ticks
+  // (~90 min of a stuck `processing` row) because the bump reason below
+  // matches no DETERMINISTIC_RECONCILE_ERRORS pattern. Same bump-with-reason
+  // shape as reconcileKieSunoJob's variant guard (:148-152).
+  if (NOT_GENERIC_RECOVERABLE.has(row.job_type ?? "")) {
+    await bumpAttemptsOrExhaust(row.id, `not generically recoverable: ${row.job_type}`)
+    return
+  }
+  if (!isFinalizeJobType(row.job_type)) {
+    await bumpAttemptsOrExhaust(row.id, `unknown job_type for finalize: ${row.job_type ?? "null"}`)
+    return
+  }
+
   // P0.1 (audit Blocker B1): the post-poll completion phase MUST bump
   // reconcile_attempts on failure. Without this, a poll-success-but-
   // finalize-failure propagated to the cron's per-row catch (errors++ only)
@@ -306,7 +330,7 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
 
     await finalizeJobWithMedia({
       jobId: row.id,
-      jobType: (row.job_type ?? "generate-image") as FinalizeJobType,
+      jobType: row.job_type,
       claimant: opts?.claimant ?? "cron",
       ...(loopTrimAddon > 0 && { loopTrimAddonRefundCredits: loopTrimAddon }),
       result: {

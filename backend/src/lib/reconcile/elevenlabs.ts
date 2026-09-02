@@ -1,7 +1,7 @@
 import { config } from "../config.js"
 import { supabase } from "../supabase.js"
 import { deliverDubbedMedia } from "../dubbing-delivery.js"
-import { redactProviderDetail } from "../provider-error-detail.js"
+import { redactProviderDetail, logProviderFailure } from "../provider-error-detail.js"
 import type { ReconcileOpts } from "./kie.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
 import { bumpAttemptsOrExhaust } from "./bump-attempts.js"
@@ -87,13 +87,28 @@ function resolveVideoMode(meta: DubbingMetadata, inputData: Record<string, unkno
   return typeof inputData?.videoUrl === "string" && inputData.videoUrl.length > 0
 }
 
-async function markFailed(jobId: string, reason: string): Promise<void> {
+/**
+ * `reason` is the USER-FACING string (it lands in `jobs.error_message`, which
+ * `GET /v1/jobs/:id` and the app-report sweep both read). `detail` is the raw
+ * provider text — redacted by the CALLER via `redactProviderDetail` /
+ * `providerDetailOf` and written to the admin-only `jobs.error_detail` (W0,
+ * migration 368). Never pass raw provider text as `reason`: that is exactly
+ * how vendor stack traces and signed URLs reached job owners.
+ *
+ * Written UNCONDITIONALLY, matching `reconcile/kie.ts:244` — one shape for
+ * one column (M-2b). `null` means "this writer had no provider text", and
+ * recording that null is the honest answer.
+ */
+async function markFailed(jobId: string, reason: string, detail: string | null = null): Promise<void> {
+  // Log BEFORE the write: this module had no per-job output at all, so a
+  // cron-failed job was invisible in Railway (spec §11.3).
+  logProviderFailure("reconcile/elevenlabs", jobId, reason, detail)
   await supabase
     .from("jobs")
     .update({
       status: "failed",
       error_message: reason.slice(0, 500),
-      error_detail: redactProviderDetail(reason),
+      error_detail: detail,
       completed_at: new Date().toISOString(),
       reconcile_last_error: "upstream_failed",
     })
@@ -133,7 +148,13 @@ export async function reconcileElevenLabsJob(row: ElevenLabsJobRow, opts?: Recon
     return
   }
   if (meta.status === "failed") {
-    await markFailed(row.id, meta.error ?? "elevenlabs dubbing failed")
+    await markFailed(
+      row.id,
+      "Generation failed on the provider. Please try again.",
+      // meta.error is raw provider text — redact it before it reaches
+      // error_detail (M-2b); never pass it through as-is.
+      redactProviderDetail(meta.error) ?? "elevenlabs dubbing failed",
+    )
     await refundReservedCreditsForJob(row.id)
     return
   }

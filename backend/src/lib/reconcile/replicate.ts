@@ -1,12 +1,19 @@
 import { config } from "../config.js"
 import { supabase } from "../supabase.js"
-import { finalizeJobWithMedia, type FinalizeJobType } from "../job-finalize.js"
-import { redactProviderDetail } from "../provider-error-detail.js"
+import { finalizeJobWithMedia, isFinalizeJobType, NOT_GENERIC_RECOVERABLE, loadUsageLogId } from "../job-finalize.js"
+import { redactProviderDetail, logProviderFailure } from "../provider-error-detail.js"
 import type { ReconcileOpts } from "./kie.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
 import { deleteCharacterLora } from "../../providers/replicate/training.js"
 import { bumpAttemptsOrExhaust } from "./bump-attempts.js"
 import { loopTrimAddonForReconcile } from "./loop-trim-refund.js"
+import {
+  mapWhisperOutput,
+  mapFastWhisperOutput,
+  type WhisperOutput,
+  type FastWhisperOutput,
+} from "../../providers/audio/transcribe-output.js"
+import { markJobCompleted, commitJobCredits } from "../../workers/shared.js"
 
 export interface ReplicateJobRow {
   id: string
@@ -141,11 +148,17 @@ async function applyTrainingTerminalStatus(
     }
   } else if (remote.status === "failed" || remote.status === "canceled") {
     const finalStatus = remote.status === "canceled" ? "cancelled" : "failed"
+    // remote.error is raw provider text. Redact it once, then use the SAME
+    // redacted text everywhere a training owner can read it: jobs.error_detail
+    // (admin-only) AND characters.lora_training_error, which the owner reads
+    // directly via GET /v1/character-training/:id/status (M-2b — never raw
+    // provider text on a user-visible surface).
+    const detail = redactProviderDetail(remote.error) ?? `upstream ${remote.status}`
     await supabase
       .from("characters")
       .update({
         lora_training_status: finalStatus,
-        lora_training_error: remote.error ?? null,
+        lora_training_error: detail,
       })
       .eq("id", character.id)
       .eq("user_id", character.user_id)
@@ -155,7 +168,10 @@ async function applyTrainingTerminalStatus(
       .from("jobs")
       .update({
         status: finalStatus,
-        error_message: remote.error ?? null,
+        error_message: finalStatus === "cancelled"
+          ? "Character training was cancelled."
+          : "Character training failed. Please try again.",
+        error_detail: detail,
         completed_at: new Date().toISOString(),
       })
       .eq("id", jobId)
@@ -166,13 +182,28 @@ async function applyTrainingTerminalStatus(
   // starting/processing → still in flight, caller bumps attempts
 }
 
-async function markFailed(jobId: string, reason: string): Promise<void> {
+/**
+ * `reason` is the USER-FACING string (it lands in `jobs.error_message`, which
+ * `GET /v1/jobs/:id` and the app-report sweep both read). `detail` is the raw
+ * provider text — redacted by the CALLER via `redactProviderDetail` /
+ * `providerDetailOf` and written to the admin-only `jobs.error_detail` (W0,
+ * migration 368). Never pass raw provider text as `reason`: that is exactly
+ * how vendor stack traces and signed URLs reached job owners.
+ *
+ * Written UNCONDITIONALLY, matching `reconcile/kie.ts:244` — one shape for
+ * one column (M-2b). `null` means "this writer had no provider text", and
+ * recording that null is the honest answer.
+ */
+async function markFailed(jobId: string, reason: string, detail: string | null = null): Promise<void> {
+  // Log BEFORE the write: this module had no per-job output at all, so a
+  // cron-failed job was invisible in Railway (spec §11.3).
+  logProviderFailure("reconcile/replicate", jobId, reason, detail)
   await supabase
     .from("jobs")
     .update({
       status: "failed",
       error_message: reason.slice(0, 500),
-      error_detail: redactProviderDetail(reason),
+      error_detail: detail,
       completed_at: new Date().toISOString(),
       reconcile_last_error: "upstream_failed",
     })
@@ -238,8 +269,84 @@ export async function reconcileReplicateJob(row: ReplicateJobRow, opts?: Reconci
   }
 
   if (pred.status === "failed" || pred.status === "canceled") {
-    await markFailed(row.id, pred.error ?? `upstream ${pred.status}`)
+    await markFailed(
+      row.id,
+      pred.status === "canceled"
+        ? "Generation was cancelled by the provider."
+        : "Generation failed on the provider. Please try again.",
+      // pred.error is raw provider text — redact it before it reaches
+      // error_detail (M-2b); never pass it through as-is.
+      redactProviderDetail(pred.error) ?? `upstream ${pred.status}`,
+    )
     await refundReservedCreditsForJob(row.id)
+    return
+  }
+
+  // Text-output predictions (transcribe). `audio-ai.ts:279` persists the
+  // prediction id under provider_kind="replicate-prediction", but the handler
+  // writes {text, language, segments} — no URL. The generic path below found
+  // none, called markFailed("succeeded but no output URLs") and refunded a job
+  // the provider had already produced. Recover it through the SAME shape the
+  // handler writes; never through finalizeJobWithMedia (it would try to upload
+  // text as audio). transcribe stays a NOT_GENERIC_RECOVERABLE member (the
+  // denylist below is the backstop for every OTHER caller of this function),
+  // but this branch runs and unconditionally returns (success OR empty-
+  // transcript failure) before that denylist is ever reached, so the two
+  // paths never double-handle the same row.
+  if (row.job_type === "transcribe") {
+    const provider = (row.input_data?.provider as string | undefined) ?? "whisper"
+    const wordTimestamps = row.input_data?.wordTimestamps === true
+    const raw = pred.output as Record<string, unknown> | null | undefined
+    const shaped = raw
+      ? provider === "incredibly-fast-whisper"
+        ? mapFastWhisperOutput(raw as FastWhisperOutput, {
+            language: row.input_data?.language as string | undefined,
+            wordTimestamps,
+          })
+        : mapWhisperOutput(raw as WhisperOutput, { wordTimestamps })
+      : null
+    if (!shaped || shaped.text.length === 0) {
+      await markFailed(
+        row.id,
+        "The provider returned no transcript. Your credits were refunded.",
+        `transcribe recovery: empty output (provider=${provider})`,
+      )
+      await refundReservedCreditsForJob(row.id)
+      return
+    }
+    const ok = await markJobCompleted(row.id, { output_data: shaped as unknown as Record<string, unknown> })
+    if (!ok) return
+    await commitJobCredits(await loadUsageLogId(row.id), row.id)
+    return
+  }
+
+  // Types with their own completion writer, and unknown/NULL types, must not
+  // reach finalize (same rationale as kie.ts's twin guard, M-4a/M-4b).
+  if (NOT_GENERIC_RECOVERABLE.has(row.job_type ?? "")) {
+    // A NOT_GENERIC_RECOVERABLE row (e.g. an entity/DAG handler dispatched
+    // through a Replicate image model — image-ai.ts / entity.ts via
+    // providerKindForImageModel) can still reach this point with a genuinely
+    // EMPTY succeeded output: an empty string or an empty array. (An object
+    // output — transcribe's shape above — still counts as "has output", but
+    // transcribe already returned above and never reaches this branch.) That
+    // is just as unrecoverable as "no output URLs" below, so fail it the same
+    // way immediately instead of bumping it for up to 18 ticks first.
+    const out = pred.output
+    const isEmptyOutput = out === "" || (Array.isArray(out) && out.length === 0)
+    if (isEmptyOutput) {
+      await markFailed(
+        row.id,
+        "The provider returned a result we could not read. Your credits were refunded.",
+        `empty provider output for ${row.job_type}`,
+      )
+      await refundReservedCreditsForJob(row.id)
+      return
+    }
+    await bumpAttemptsOrExhaust(row.id, `not generically recoverable: ${row.job_type}`)
+    return
+  }
+  if (!isFinalizeJobType(row.job_type)) {
+    await bumpAttemptsOrExhaust(row.id, `unknown job_type for finalize: ${row.job_type ?? "null"}`)
     return
   }
 
@@ -251,7 +358,11 @@ export async function reconcileReplicateJob(row: ReplicateJobRow, opts?: Reconci
       ? [out]
       : []
   if (urls.length === 0) {
-    await markFailed(row.id, "succeeded but no output URLs")
+    await markFailed(
+      row.id,
+      "The provider returned a result we could not read. Your credits were refunded.",
+      `succeeded but no output URLs (job_type=${row.job_type ?? "null"})`,
+    )
     await refundReservedCreditsForJob(row.id)
     return
   }
@@ -268,7 +379,7 @@ export async function reconcileReplicateJob(row: ReplicateJobRow, opts?: Reconci
 
     await finalizeJobWithMedia({
       jobId: row.id,
-      jobType: (row.job_type ?? "generate-image") as FinalizeJobType,
+      jobType: row.job_type,
       claimant: opts?.claimant ?? "cron",
       ...(loopTrimAddon > 0 && { loopTrimAddonRefundCredits: loopTrimAddon }),
       result: {

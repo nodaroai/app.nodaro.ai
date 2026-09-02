@@ -50,6 +50,10 @@ export function canonicalVarName(label: string): string {
  * SUPPRESS auto-injection of a connected node the author already placed
  * explicitly via `{label}` (so it isn't injected twice). `matchAll` over the
  * global pattern does not mutate its lastIndex, so sharing the constant is safe.
+ *
+ * Deliberately NOT `REF_TOKEN_NAMESPACE_PREFIXES`: widening this changes
+ * run-time auto-injection on BOTH engines (follow-up ticket), not just the
+ * editor.
  */
 export function extractReferencedLabels(
   ...texts: ReadonlyArray<string | undefined | null>
@@ -250,4 +254,82 @@ export function resolveNodeRefs(
     result = next
   }
   return result
+}
+
+/**
+ * Token namespaces that are NOT node-label references. `{image:1:face}` is the
+ * unified-reference grammar, `{slot:x}` is recast's, `{video:N}`/`{audio:N}`
+ * are reference handles, and `{ref:<id>}` is the id-addressed reference form —
+ * all five are substituted by their own resolvers (`resolveReferenceTokens`,
+ * `resolveRefIdTokens`, the recast slot pass), not by resolveNodeRefs. Before
+ * this list existed, only `image:` was excluded, so `{video:1}` classified as a
+ * MISSING node ref.
+ *
+ * Compared against the LOWERCASED token name: `REFERENCE_TOKEN_RE` is `/gi` and
+ * `REF_ID_TOKEN_RE` spells `[rR][eE][fF]`, so `{Image:1}` / `{Ref:x}` really do
+ * resolve downstream and must never read as a missing node ref.
+ */
+export const REF_TOKEN_NAMESPACE_PREFIXES: readonly string[] = [
+  "image:", "video:", "audio:", "slot:", "ref:",
+]
+
+export type RefTokenKind = "wired" | "reserved" | "missing" | "skip" | "unknown"
+
+/**
+ * Classify a parsed `{...}` token name against the resolvable label set.
+ * `resolvable === null` means the caller has no ref data at all — such tokens
+ * classify `unknown` and must render like wired, so "no data" never
+ * masquerades as "nothing wired".
+ *
+ * Single source of truth for the editor decoration, the missing-refs chip
+ * (frontend/src/lib/prompt-ref-scan.ts delegates here) and the execution
+ * engine's dispatch guard.
+ */
+export function classifyRefToken(
+  name: string,
+  resolvable: ReadonlySet<string> | null,
+): RefTokenKind {
+  const lower = name.toLowerCase()
+  if (name === "" || REF_TOKEN_NAMESPACE_PREFIXES.some((p) => lower.startsWith(p))) return "skip"
+  if (RESERVED_TEMPLATE_VARS.has(name)) return "reserved"
+  if (resolvable === null) return "unknown"
+  return resolvable.has(canonicalVarName(name)) ? "wired" : "missing"
+}
+
+/**
+ * The `{Label}` tokens in `text` that `resolveNodeRefs` would leave LITERAL and
+ * that no upstream node can explain — i.e. exactly what would reach a provider
+ * as the characters `{Label}`. Evidence for why this matters: `{Describe Image}`
+ * ×2 (gpt-image-2) and `{gravity flip}` / `{rewind}` (seedance-2-5) in the
+ * 2026-09-01 app-reports export.
+ *
+ * `resolvable` — labels with a value in the ref map (canonical/lowercase).
+ * `known`      — canonical labels of the nodes the caller considers to EXIST
+ *                (no state requirement; the backend passes every node in the
+ *                run's graph).
+ *
+ * A token whose label is in `known` but not `resolvable` PASSES: the node
+ * exists and simply produced nothing, which is the caller's to substitute (the
+ * backend resolves it to empty text), not this function's to refuse. A token
+ * with an explicit `|| fallback` passes too — the fallback is substituted.
+ * Returns original-cased names, de-duplicated by canonical form, for the
+ * user-facing message.
+ */
+export function unresolvedRefTokens(
+  text: string,
+  opts: { resolvable: ReadonlySet<string>; known: ReadonlySet<string> },
+): string[] {
+  if (typeof text !== "string" || text.length === 0) return []
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const m of text.matchAll(NODE_REF_PATTERN)) {
+    const { name, fallback } = parseNodeRef(m[1] ?? "")
+    if (fallback !== null) continue
+    if (classifyRefToken(name, opts.resolvable) !== "missing") continue
+    const canon = canonicalVarName(name)
+    if (opts.known.has(canon) || seen.has(canon)) continue
+    seen.add(canon)
+    out.push(name)
+  }
+  return out
 }

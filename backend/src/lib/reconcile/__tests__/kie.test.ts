@@ -128,9 +128,16 @@ vi.mock("../../storage.js", () => ({
   uploadFileWithKeyToR2: vi.fn(),
 }))
 
-vi.mock("../../job-finalize.js", () => ({
-  finalizeJobWithMedia: mocks.finalizeMock,
-}))
+vi.mock("../../job-finalize.js", async (importOriginal) => {
+  // isFinalizeJobType + NOT_GENERIC_RECOVERABLE are pure lookups over static
+  // sets — keep the REAL ones so the narrowing under test is the real thing,
+  // not a re-declared copy that could drift from job-finalize.ts.
+  const actual = await importOriginal<typeof import("../../job-finalize.js")>()
+  return {
+    ...actual,
+    finalizeJobWithMedia: mocks.finalizeMock,
+  }
+})
 
 vi.mock("../../credits-job-lifecycle.js", () => ({
   refundReservedCreditsForJob: mocks.refundMock,
@@ -532,5 +539,134 @@ describe("reconcileKieJob pollAttempts threading", () => {
       { claimant: "worker", pollAttempts: 60 },
     )
     expect(mocks.pollLumaTaskMock).toHaveBeenCalledWith("t-l", 60)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// NOT_GENERIC_RECOVERABLE (Task 4, B2b): DAG-node-type, entity-handler, and
+// unknown/NULL job_type rows must bump reconcile_attempts with a NAMED reason
+// instead of being cast into finalizeJobWithMedia (the old
+// `(row.job_type ?? "generate-image") as FinalizeJobType`), which threw
+// "unknown jobType" and rode the exhaustion path to a bogus refund.
+//
+// G-7 harness note: this file has no `bumpMock`/`lastBumpReason` — only
+// fal.test.ts mocks `../bump-attempts.js`. Rather than invent a second,
+// parallel bump-attempts harness here, `bumpAttemptsOrExhaust` stays the REAL
+// implementation (as it already is for every other test in this file) and
+// `lastBumpReason` reads the reason back off the same `jobsUpdateMock` every
+// other test in this file already asserts against.
+// ---------------------------------------------------------------------------
+describe("NOT_GENERIC_RECOVERABLE rows", () => {
+  const row = (over: Partial<KieJobRow> = {}): KieJobRow => ({
+    id: "j-row",
+    provider_kind: "kie-standard",
+    provider_task_id: "t-row",
+    reconcile_attempts: 0,
+    job_type: "generate-image",
+    ...over,
+  })
+
+  const lastJobsUpdate = (): Record<string, unknown> =>
+    (mocks.jobsUpdateMock.mock.calls.at(-1)?.[0] as Record<string, unknown> | undefined) ?? {}
+
+  const lastBumpReason = (): string => {
+    const last = lastJobsUpdate()
+    return typeof last.reconcile_last_error === "string" ? last.reconcile_last_error : ""
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.finalizeMock.mockResolvedValue({ ok: true })
+    mocks.refundMock.mockResolvedValue(undefined)
+    mocks.jobsSingleMock.mockResolvedValue({ data: { reconcile_attempts: 0 }, error: null })
+    // The guard sits AFTER the poll (M-4a), so every test here except the
+    // "still fails fast" one needs the poll to succeed to reach it.
+    mocks.pollKieTaskMock.mockResolvedValue({
+      resultJson: { resultUrls: ["https://kie.example/should-not-reach-finalize.png"] },
+      providerMs: 100,
+      taskId: "t-default",
+    })
+  })
+
+  it("bumps with a named reason instead of calling finalize for a DAG character row", async () => {
+    await reconcileKieJob(row({
+      id: "job-dag-char",
+      provider_kind: "kie-standard",
+      provider_task_id: "task-dag-char",
+      job_type: "character",
+    }))
+    expect(mocks.finalizeMock).not.toHaveBeenCalled()
+    // The poll DOES run — the guard sits after it on purpose (M-4a), so a
+    // genuinely-failed provider task still fails fast + refunds on tick 1.
+    expect(mocks.pollKieTaskMock).toHaveBeenCalled()
+    expect(lastBumpReason()).toMatch(/not generically recoverable: character/)
+  })
+
+  it("still fails fast and refunds when the provider task itself failed", async () => {
+    mocks.pollKieTaskMock.mockRejectedValue(
+      new mocks.FakeKieError("Generation failed. Please try again.", true),
+    )
+    await reconcileKieJob(row({
+      id: "job-dag-char-failed",
+      provider_kind: "kie-standard",
+      provider_task_id: "task-dag-char-failed",
+      job_type: "character",
+    }))
+    // This is what the after-the-poll placement buys: tick 1 instead of 18.
+    expect(mocks.refundMock).toHaveBeenCalled()
+    expect(lastJobsUpdate().status).toBe("failed")
+  })
+
+  it("bumps with a named reason for a route-origin generate-character row", async () => {
+    await reconcileKieJob(row({
+      id: "job-entity-char",
+      provider_kind: "kie-standard",
+      provider_task_id: "task-entity-char",
+      job_type: "generate-character",
+    }))
+    expect(mocks.finalizeMock).not.toHaveBeenCalled()
+    expect(lastBumpReason()).toMatch(/not generically recoverable: generate-character/)
+  })
+
+  it("bumps rather than finalizing as an image when job_type is null", async () => {
+    await reconcileKieJob(row({
+      id: "job-null-type",
+      provider_kind: "kie-standard",
+      provider_task_id: "task-null-type",
+      job_type: null,
+    }))
+    expect(mocks.finalizeMock).not.toHaveBeenCalled()
+    expect(lastBumpReason()).toMatch(/unknown job_type/)
+  })
+
+  it("still finalizes a genuine media row", async () => {
+    mocks.pollKieTaskMock.mockResolvedValue({
+      resultJson: { resultUrls: ["https://cdn.example/out.png"] },
+      providerMs: 50,
+      taskId: "t-img",
+    })
+    await reconcileKieJob(row({
+      id: "job-img",
+      provider_kind: "kie-standard",
+      provider_task_id: "task-img",
+      job_type: "generate-image",
+    }))
+    expect(mocks.finalizeMock).toHaveBeenCalledWith(expect.objectContaining({ jobType: "generate-image" }))
+  })
+
+  it("logs one line when the cron fails a job, so a burst is traceable in Railway", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.pollKieTaskMock.mockRejectedValue(
+      new mocks.FakeKieError("Generation failed. Please try again.", true),
+    )
+    await reconcileKieJob(row({
+      id: "job-silent-1",
+      provider_kind: "kie-standard",
+      provider_task_id: "task-silent-1",
+      job_type: "generate-image",
+    }))
+    const lines = spy.mock.calls.map((c) => String(c[0]))
+    expect(lines.some((l) => l.includes("[reconcile/kie]") && l.includes("job-silent-1"))).toBe(true)
+    spy.mockRestore()
   })
 })

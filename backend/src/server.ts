@@ -5,6 +5,7 @@ import { startCleanupCron } from "./ee/billing/cleanup-cron.js"
 import { startReconcileCron } from "./lib/reconcile/start.js"
 import { startAppReportSweepCron } from "./lib/app-report-sweep.js"
 import { startScheduleCron, stopScheduleCron } from "./lib/schedule-cron.js"
+import { SHUTDOWN_DRAIN_MS } from "./lib/worker-drain.js"
 import { seedTutorialTemplates } from "./lib/tutorial-seed/index.js"
 import { startScheduledPostsCron, stopScheduledPostsCron } from "./lib/scheduled-posts-cron.js"
 import { startRecastDriverCron, stopRecastDriverCron } from "./lib/recast-driver-cron.js"
@@ -182,19 +183,43 @@ async function main() {
     }
   }
 
-  // Graceful shutdown
+  // Graceful shutdown, capped at the shared SHUTDOWN_DRAIN_MS so logs flush
+  // before Railway's SIGKILL. Deliberately NO drain flag set here: this
+  // process also serves HTTP, and the drain flag is process-global — flipping
+  // it would make in-flight provider polls inside request handlers throw
+  // DrainAbortError, which lib/http-errors.ts files as a 500 and the sweep
+  // files as an `internal-error` app-report row (the B5 class W0 just fixed).
+  // The in-process orchestrator worker recovers instead through the short,
+  // auto-renewed lock + 60s stall checks (ORCHESTRATOR_LOCK_MS).
+  let shuttingDown = false
   const shutdown = async () => {
-    stopScheduleCron()
-    stopScheduledPostsCron()
-    stopRecastDriverCron()
-    stopWorkflowExecutionsReconcileCron()
-    stopPipelinesReconcileCron()
-    await orchestratorWorker.close()
-    if (videoDirectorWorker) await videoDirectorWorker.close()
-    if (pipelineWorker) await pipelineWorker.close()
-    await socialPublishWorker.close()
-    await app.close()
-    process.exit(0)
+    if (shuttingDown) return
+    shuttingDown = true
+    const hardExit = setTimeout(() => {
+      console.error("[server] Shutdown timed out, forcing exit")
+      process.exit(1)
+    }, SHUTDOWN_DRAIN_MS)
+    // Deliberately NOT unref'd (mirrors worker.ts): the in-flight closes below
+    // hold ioredis/HTTP handles open anyway, so the timer fires regardless —
+    // and a ref'd timer GUARANTEES the "timed out → exit 1" diagnostic
+    // instead of a silent exit 0.
+    try {
+      stopScheduleCron()
+      stopScheduledPostsCron()
+      stopRecastDriverCron()
+      stopWorkflowExecutionsReconcileCron()
+      stopPipelinesReconcileCron()
+      await orchestratorWorker.close()
+      if (videoDirectorWorker) await videoDirectorWorker.close()
+      if (pipelineWorker) await pipelineWorker.close()
+      await socialPublishWorker.close()
+      await app.close()
+    } catch (err) {
+      console.error("[server] Error during shutdown:", err)
+    } finally {
+      clearTimeout(hardExit)
+      process.exit(0)
+    }
   }
   process.on("SIGTERM", shutdown)
   process.on("SIGINT", shutdown)

@@ -418,8 +418,10 @@ export const NODE_TIMEOUT_MS = 90 * 60 * 1000 // 90 minutes
  *  generate-video-pro multi-segment stitch (each segment a full KIE
  *  generation, up to NODE_TIMEOUT_MS=90min for the node itself) landing
  *  inside a workflow alongside other nodes, with headroom beyond the
- *  per-node ceiling — mirrors orchestrator-worker.ts's BullMQ `lockDuration`,
- *  which MUST match this value (see the comment there). */
+ *  per-node ceiling. This is the EXECUTION ceiling only —
+ *  it no longer mirrors the BullMQ `lockDuration`, which is short and
+ *  auto-renewed (ORCHESTRATOR_LOCK_MS in orchestrator-worker.ts). Shrinking
+ *  the lock does NOT shrink how long an execution may run. */
 export const WORKFLOW_TIMEOUT_MS = 120 * 60 * 1000 // 120 minutes
 
 /** Polling interval for checking job completion (ms) */

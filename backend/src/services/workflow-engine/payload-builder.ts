@@ -8,8 +8,8 @@ import { normalizeCollageLabels } from "../../providers/image/collage-badges.js"
 
 // Shared logic from packages/shared — single source of truth
 import { resolveVideoRequestNorm } from "../../lib/video-request-norm.js"
-import { resolveSlideshowTransition, collectAncestorRefs as sharedCollectAncestorRefs, applyDefaultVideoSelection, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionableAssetArrays, buildCreditModelIdentifier, resolveImageGenCreditIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, resolveVideoModeForInputs, videoProviderRequiresImage, isVeoProvider, buildLipSyncCreditId, isPerSecondLipSyncProvider, resolveAiAvatarCreditId, resolveSwitchXCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, buildVideoAuditCreditId, resolveVideoAnalysisModel, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName, validateAiAvatarPayload, validateCinematicAvatarPayload, resolveNodeRefs, resolveEffectiveSourceType, PARAMETER_NODE_TYPES, characterMentionSlug, expandExtraRefsToConnectedReferences, PLATFORM_SPECS, isSeedance2Provider, isMinimaxH3Provider, isWan3Provider, isGeminiOmniProvider, PRICING_DEFAULT_RESOLUTION, supportsExtendRender, MODEL_CATALOG, hasFeature, referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality, COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS, buildLlmCreditIdentifier, motionGraphicsFeature, FLUX_LORA_CHARACTER_MODEL_ID, extractCharacterLoraFields, clampSmartCutWindow, resolveGvpAnchorWire, normalizeModelInput, readPromptAffixes, findImageMentionTokens, knownImageSlugsFromRefs, findEntityMentionTokens, knownEntitySlugsFromRefs, uiAspectRatioFill, uiResolutionFill, resolveTopazUpscale } from "@nodaro/shared"
-import { composeNegative, resolveTemplate, applyTemplate, computeNodePrompt, assembleImageInput, readDirectionFields, readStructuredFields, readSubjectFields, buildImagePrompt, buildScenePrompt, collectIdentityLockClause as sharedCollectIdentityLockClause, getParameterPromptHint, characterLockToRefLock, buildCharacterPrompt, buildObjectPrompt, buildCreaturePrompt, buildLocationPrompt, buildFaceTemplateInputs, appendMusicMeta, composeSoundHintFromConnections, truncateForField, appendField, assembleSunoInput, type SoundConsumerType, type SoundComposition, resolveVideoReferenceCore, applyPromptAffixes, composeVideoPromptText, isMinorAge, containsMinorAgeHint, type DirectionFields, type StructuredPromptFields, type SubjectFields } from "@nodaro/prompts"
+import { resolveSlideshowTransition, collectAncestorRefs as sharedCollectAncestorRefs, applyDefaultVideoSelection, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionableAssetArrays, buildCreditModelIdentifier, resolveImageGenCreditIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, resolveVideoModeForInputs, videoProviderRequiresImage, isVeoProvider, buildLipSyncCreditId, isPerSecondLipSyncProvider, resolveAiAvatarCreditId, resolveSwitchXCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, buildVideoAuditCreditId, resolveVideoAnalysisModel, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName, validateAiAvatarPayload, validateCinematicAvatarPayload, resolveNodeRefs, resolveEffectiveSourceType, PARAMETER_NODE_TYPES, characterMentionSlug, expandExtraRefsToConnectedReferences, PLATFORM_SPECS, isSeedance2Provider, isMinimaxH3Provider, isWan3Provider, isGeminiOmniProvider, PRICING_DEFAULT_RESOLUTION, supportsExtendRender, MODEL_CATALOG, hasFeature, referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality, COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS, buildLlmCreditIdentifier, motionGraphicsFeature, FLUX_LORA_CHARACTER_MODEL_ID, extractCharacterLoraFields, clampSmartCutWindow, resolveGvpAnchorWire, normalizeModelInput, readPromptAffixes, findImageMentionTokens, knownImageSlugsFromRefs, findEntityMentionTokens, knownEntitySlugsFromRefs, uiAspectRatioFill, uiResolutionFill, resolveTopazUpscale, unresolvedRefTokens, classifyRefToken, parseNodeRef, NODE_REF_PATTERN, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY } from "@nodaro/shared"
+import { composeNegative, resolveTemplate, applyTemplate, computeNodePrompt, assembleImageInput, readDirectionFields, readStructuredFields, readSubjectFields, buildImagePrompt, buildScenePrompt, collectIdentityLockClause as sharedCollectIdentityLockClause, getParameterPromptHint, characterLockToRefLock, buildCharacterPrompt, buildObjectPrompt, buildCreaturePrompt, buildLocationPrompt, buildFaceTemplateInputs, appendMusicMeta, composeSoundHintFromConnections, truncateForField, appendField, assembleSunoInput, type SoundConsumerType, type SoundComposition, resolveVideoReferenceCore, applyPromptAffixes, composeVideoPromptText, isMinorAge, containsMinorAgeHint, type DirectionFields, type StructuredPromptFields, type SubjectFields, NODE_PROMPT_CANDIDATE_FIELDS } from "@nodaro/prompts"
 import type { CharacterDef, ConnectedReference, SceneData, ExtraRefInput, ExtraRefCharacterContext } from "@nodaro/shared"
 import type { CharacterMeta } from "@nodaro/prompts"
 import { resolveEntityImageCreditIdentifier } from "../../lib/entity-credit-identifier.js"
@@ -51,7 +51,359 @@ export interface PayloadBuildContext {
   nodes?: SimpleNode[]
   edges?: SimpleEdge[]
   nodeStates?: Record<string, NodeExecutionState>
+  /** `node.data` as the AUTHOR left it — snapshotted by `node-executor.ts`
+   *  BEFORE `resolveFieldMappings` rewrites `data.<field>` with an upstream
+   *  node's output. Only the §4.6 settle pass reads it, to tell an authored
+   *  prompt field from one a mapping / `{}` injection filled with DATA (see
+   *  `settleAuthoredPromptFields`). Absent for direct callers (single-node
+   *  parity, tests), where every field is authored by definition. */
+  authoredData?: Record<string, unknown>
 }
+
+// ---------------------------------------------------------------------------
+// Required media inputs (B3) — DAG/single-node parity
+// ---------------------------------------------------------------------------
+
+export interface RequiredMediaInput {
+  /** Resolved-input keys, in precedence order. The node's `data[key]` is
+   *  checked as the fallback for each, matching the `resolvedInputs.x || data.x`
+   *  shape the cases already use. Satisfied when ANY of them yields a non-empty
+   *  string OR a non-empty array (the accumulate lanes — `videoUrls`,
+   *  `imageUrls`, `audioUrlsWithSourceIds`, …). */
+  readonly anyOf: readonly string[]
+  /** Drives the error code: `<kind>_required`. */
+  readonly kind: "video" | "audio" | "image"
+  /** What to tell the user to connect ("a video", "an audio track", …). */
+  readonly noun: string
+}
+
+/**
+ * Media inputs a node cannot run without — the DAG-side twin of the frontend's
+ * per-node refusals in `execute-node.ts` (`"no video input"`, `"no audio
+ * input"`, `"Connect a video to edit"`, …).
+ *
+ * WHY A TABLE AND NOT 70-ODD EDITS. The `resolvedInputs.x || data.x` shape
+ * appears at ~72 sites and `upscale-image` / `remove-background` have no
+ * fallback at all. Guarding each case by hand is the drift the root CLAUDE.md
+ * warns about; a table consulted ONCE before the switch means a new media node
+ * is covered by adding one row, and the parity test in
+ * __tests__/payload-builder-media-required.test.ts fails the build when the
+ * frontend guards a node this table neither covers nor exempts by name.
+ *
+ * WHY BEFORE THE SWITCH. `node-executor.ts` deletes the placeholder `jobs` row
+ * when buildPayload throws, and the credit reservation happens AFTER the build
+ * — so a throw here costs the user nothing. The old behaviour enqueued the job,
+ * reserved credits, and failed at ffmpeg with "Invalid URL" (the two 2026-08-18
+ * merge-video-audio rows).
+ *
+ * ONE ROW PER NODE, ONE OR MORE REQUIREMENTS. A row is a single requirement or
+ * an array of them (AND: every entry must be satisfied). The five two-input
+ * nodes (merge-video-audio, still-to-video, speech-to-video, motion-transfer,
+ * lip-sync) carry both halves, mirroring the frontend, which refuses both.
+ * face-swap deliberately stays single: its face half reads only
+ * `data.faceImageUrl` (no resolved-input lane), so guarding it would refuse a
+ * wired handle — that is the audit-dag wiring gap, ticketed separately.
+ *
+ * KEYS ARE READ FROM THE CASE. Every `anyOf` key below is a source the matching
+ * case actually consults, INCLUDING its non-media alternatives (`youtubeUrl`,
+ * `sourceUrl`, `kieTaskId`) — a media-only row for those nodes would refuse
+ * graphs that run today, the one failure mode a regression-guard must not have
+ * (M-12b). Nodes whose media is assembled from a graph traversal or a mention
+ * lane are deliberately absent and exempted by name in the test.
+ */
+export const REQUIRED_MEDIA_INPUTS: Readonly<Record<string, RequiredMediaInput | readonly RequiredMediaInput[]>> = {
+  // --- Image in ---
+  "upscale-image": { anyOf: ["imageUrl"], kind: "image", noun: "an image" },
+  "remove-background": { anyOf: ["imageUrl"], kind: "image", noun: "an image" },
+  "generate-mask": { anyOf: ["imageUrl", "generatedImageUrl"], kind: "image", noun: "an image" },
+  "image-collage": { anyOf: ["imageUrls", "imageUrlsWithSourceIds"], kind: "image", noun: "at least one image" },
+  "slideshow": { anyOf: ["imageUrls"], kind: "image", noun: "at least one image" },
+  // BOTH halves — the still AND the audio that sets the output length.
+  "still-to-video": [
+    { anyOf: ["imageUrl"], kind: "image", noun: "an image" },
+    { anyOf: ["audioUrl"], kind: "audio", noun: "an audio track" },
+  ],
+  "gif-to-video": { anyOf: ["imageUrl", "gifUrl"], kind: "image", noun: "a GIF" },
+  "speech-to-video": [
+    { anyOf: ["imageUrl"], kind: "image", noun: "an image" },
+    { anyOf: ["audioUrl"], kind: "audio", noun: "an audio track" },
+  ],
+  "motion-transfer": [
+    { anyOf: ["imageUrl"], kind: "image", noun: "a character image" },
+    { anyOf: ["videoUrl"], kind: "video", noun: "a motion video" },
+  ],
+  "lip-sync": [
+    { anyOf: ["imageUrl", "videoUrl"], kind: "image", noun: "a portrait image or a video" },
+    { anyOf: ["audioUrl"], kind: "audio", noun: "an audio track" },
+  ],
+
+  // --- Video in ---
+  // BOTH halves. The audio half names the two keys the case actually reads
+  // (`resolvedInputs.audioSources` then `resolvedInputs.audioUrl`); the shared
+  // predicate also accepts the node's own `data.*`, which can only be more
+  // permissive, never refuse a graph the case would have built.
+  "merge-video-audio": [
+    { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
+    { anyOf: ["audioSources", "audioUrl"], kind: "audio", noun: "an audio track" },
+  ],
+  "extract-audio": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
+  "remove-audio": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
+  "trim-video": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
+  "extract-frame": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
+  "resize-video": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
+  "speed-ramp": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
+  "loop-video": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
+  "fade-video": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
+  "transcode-video": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
+  "add-captions": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
+  "edit-video-pro": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
+  "video-to-video": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
+  "switchx": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
+  "video-sfx": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
+  "video-retake": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
+  "face-swap": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
+  "combine-videos": { anyOf: ["videoUrls", "videoUrlsWithSourceIds"], kind: "video", noun: "at least one video" },
+  "assemble-narrated-video": { anyOf: ["videoUrls"], kind: "video", noun: "at least one video" },
+  "split-media": { anyOf: ["videoUrl", "audioUrl"], kind: "video", noun: "a video or audio input" },
+  "social-media-format": { anyOf: ["videoUrl", "imageUrl", "mediaUrl"], kind: "video", noun: "a video or image" },
+  // Non-media alternative: an upstream VEO/Runway task id runs without a URL.
+  "video-upscale": { anyOf: ["videoUrl", "kieTaskId"], kind: "video", noun: "a video (or an upstream VEO task)" },
+  "extend-video": { anyOf: ["videoUrl", "kieTaskId"], kind: "video", noun: "a video (or an upstream VEO/Runway task)" },
+  // Non-media alternative: the node's own YouTube URL.
+  "video-analysis": { anyOf: ["videoUrl", "youtubeUrl"], kind: "video", noun: "a video or a YouTube URL" },
+
+  // --- Audio in ---
+  "audio-isolation": { anyOf: ["audioUrl"], kind: "audio", noun: "an audio track" },
+  "audio-separation": { anyOf: ["audioUrl"], kind: "audio", noun: "an audio track" },
+  "audio-fx": { anyOf: ["audioUrl"], kind: "audio", noun: "an audio track" },
+  "forced-alignment": { anyOf: ["audioUrl"], kind: "audio", noun: "an audio track" },
+  "trim-audio": { anyOf: ["videoUrl", "audioUrl"], kind: "audio", noun: "an audio or video track" },
+  "adjust-volume": { anyOf: ["audioUrl", "videoUrl"], kind: "audio", noun: "an audio or video track" },
+  "voice-changer": { anyOf: ["audioUrl", "videoUrl"], kind: "audio", noun: "an audio or video track" },
+  "voice-changer-pro": { anyOf: ["audioUrl", "videoUrl"], kind: "audio", noun: "an audio or video track" },
+  // Non-media alternative: a panel-set source link wins over both wires.
+  "dubbing": { anyOf: ["sourceUrl", "videoUrl", "audioUrl"], kind: "audio", noun: "an audio or video input (or a source link)" },
+  "mix-audio": { anyOf: ["audioUrlsWithSourceIds", "audioUrls"], kind: "audio", noun: "at least one audio track" },
+  "combine-audio": { anyOf: ["audioUrlsWithSourceIds", "audioUrls"], kind: "audio", noun: "at least one audio track" },
+  "suno-mashup": { anyOf: ["uploadUrlList", "audioUrl", "audioUrl2"], kind: "audio", noun: "at least one audio track" },
+}
+
+/** Throw a coded, node-named refusal when a required media input is absent on
+ *  BOTH the resolved inputs and the node data. Mirrors the shape of the
+ *  existing `video_required` throw at the AI Audit case. */
+export function assertRequiredMediaInputs(
+  type: string,
+  resolvedInputs: ResolvedInputs,
+  data: WorkflowNodeData,
+): void {
+  const req = REQUIRED_MEDIA_INPUTS[type]
+  if (!req) return
+  // A row is one requirement or a LIST of them. A list is an AND: every entry
+  // must be satisfied, mirroring the frontend, which refuses each half of a
+  // two-input node separately (merge-video-audio "no video input" AND "no audio
+  // input"). Each entry's own `anyOf` stays an OR.
+  const reqs: readonly RequiredMediaInput[] = Array.isArray(req) ? req : [req as RequiredMediaInput]
+  const ri = (resolvedInputs ?? {}) as unknown as Record<string, unknown>
+  const nd = (data ?? {}) as unknown as Record<string, unknown>
+  const label = typeof nd.label === "string" && nd.label.trim() ? nd.label : type
+  for (const entry of reqs) {
+    // `||`, NOT `??` (M-12a): every case this mirrors writes
+    // `resolvedInputs.x || data.x`, so an EMPTY-STRING resolved input must fall
+    // through to the node's own value. With `??` an upstream that resolved to ""
+    // would shadow a real `data.videoUrl` and the guard would refuse a graph
+    // that runs fine today — a regression introduced by a regression-guard.
+    const satisfied = entry.anyOf.some((key) => {
+      const v = (ri[key] as unknown) || (nd[key] as unknown)
+      if (typeof v === "string") return v.trim().length > 0
+      return Array.isArray(v) && v.length > 0
+    })
+    if (satisfied) continue
+    const err = new Error(
+      `${entry.kind}_required: node "${label}" needs ${entry.noun} — connect one upstream, or the run will fail at the provider.`,
+    ) as Error & { code?: string }
+    err.code = `${entry.kind}_required`
+    throw err
+  }
+}
+/** The three cases that keep their own node-specific wording still carry the
+ *  same coded shape as the table guard, so a caller can branch on `code`
+ *  regardless of which of the two refusals fired. Message is unchanged. */
+function codedMediaRefusal(code: `${"video" | "audio" | "image"}_required`, detail: string): Error {
+  const err = new Error(`${code}: ${detail}`) as Error & { code?: string }
+  err.code = code
+  return err
+}
+
+
+// ---------------------------------------------------------------------------
+// Unresolved `{Label}` references (§4.6) — DAG dispatch refusal
+// ---------------------------------------------------------------------------
+
+/** Canonical labels of EVERY node in the run's graph — the set a `{Label}`
+ *  token is allowed to name. A token whose label is here passes the guard; only
+ *  a label naming no node at all is a genuine authoring mistake.
+ *
+ *  GRAPH-DERIVED, deliberately NOT "nodes that have a nodeStates entry". The
+ *  orchestrator gives a source node a state entry only `if (output)`
+ *  (`orchestrator-worker.ts` — the `isSourceNode` branch of the pre-resolve
+ *  pass), so a deliberately-EMPTY `text-prompt` / `list` / upload node has NO
+ *  state entry at all. Keying the guard on state would therefore refuse
+ *  `{Notes}` for a blank optional input — including a published app's blank
+ *  input, where the app user cannot edit the prompt to add the
+ *  `{name || fallback}` escape. An empty upstream resolves to empty text (or
+ *  its `|| fallback`) in `finalizeRefTokens` below — never the literal, never a
+ *  refusal. */
+function knownGraphLabels(buildCtx: PayloadBuildContext | undefined): ReadonlySet<string> {
+  const known = new Set<string>()
+  for (const n of buildCtx?.nodes ?? []) {
+    known.add(canonicalVarName((n.data.label as string) || n.type || n.id))
+  }
+  return known
+}
+
+/** Refuse to dispatch a prompt still carrying an unresolvable `{Label}` (§4.6).
+ *  `resolveNodeRefs` leaves the literal token when the upstream is absent and
+ *  there is no `|| fallback`, and those characters then reached the provider
+ *  ({Describe Image} on gpt-image-2, {gravity flip} / {rewind} on seedance-2-5
+ *  in the 2026-09-01 export) — every one of them naming a node that does not
+ *  exist. Coded + node-named, and thrown from buildPayload so it lands BEFORE
+ *  the credit reservation: node-executor.ts builds at :1314 (deleting the
+ *  placeholder jobs row on throw) and only reserves at :1419.
+ *  The reference/recast grammars (`{image:N}`, `{video:N}`, `{audio:N}`,
+ *  `{slot:x}`, `{ref:id}`) are excluded by REF_TOKEN_NAMESPACE_PREFIXES — they
+ *  are substituted further down the pipeline, not by resolveNodeRefs. */
+function assertNoUnresolvedRefs(
+  text: string | undefined,
+  refMap: ReadonlyMap<string, string>,
+  buildCtx: PayloadBuildContext | undefined,
+  nodeLabel: string,
+): void {
+  if (!text) return
+  const missing = unresolvedRefTokens(text, {
+    resolvable: new Set(refMap.keys()),
+    known: knownGraphLabels(buildCtx),
+  })
+  if (missing.length === 0) return
+  const err = new Error(
+    `unresolved_reference: node "${nodeLabel}" references ${missing.map((m) => `{${m}}`).join(", ")}, ` +
+    `which no connected node provides. Connect the source node, or give the reference a default with {name || fallback}.`,
+  ) as Error & { code?: string }
+  err.code = "unresolved_reference"
+  throw err
+}
+
+/**
+ * Substitute-then-refuse, run at the two prompt-composition points (§4.6).
+ *
+ * `resolveNodeRefs` leaves `{Label}` LITERAL when the label has no value, and
+ * `resolvePrompt`'s `rr` helper skips ref resolution entirely when the ref map
+ * is EMPTY — so a `{Label}` naming a node that exists but produced nothing
+ * shipped the characters `{Label}` to the provider ({Describe Image} on
+ * gpt-image-2). Neither refusing it (the app user who left a blank optional
+ * input cannot edit the prompt to add an escape) nor sending it is acceptable,
+ * so the token resolves to EMPTY TEXT here — exactly as if the author had
+ * written `{Label || }`.
+ *
+ * Order, and why: REFUSE first (a label naming no node at all is an authoring
+ * mistake worth failing on — the only case left after this pass), then
+ * SUBSTITUTE every remaining unresolved token with its `|| fallback` if it has
+ * one, else "". That is `resolveNodeRefs`' own absent-value policy minus the
+ * literal fall-through, applied HERE rather than in `@nodaro/shared` — the
+ * shared resolver has other consumers whose policy is not ours to change.
+ *
+ * Whitespace is tidied only when a token was actually dropped, so a prompt that
+ * needed no substitution is returned byte-identical.
+ */
+function finalizeRefTokens(
+  text: string | undefined,
+  refMap: ReadonlyMap<string, string>,
+  buildCtx: PayloadBuildContext | undefined,
+  nodeLabel: string,
+): string | undefined {
+  if (!text) return text
+  assertNoUnresolvedRefs(text, refMap, buildCtx, nodeLabel)
+  const resolvable = new Set(refMap.keys())
+  let dropped = false
+  const out = text.replace(NODE_REF_PATTERN, (match, raw: string) => {
+    const { name, fallback } = parseNodeRef(typeof raw === "string" ? raw : "")
+    // Only genuinely-unresolved NODE refs are touched: `skip` (the reference /
+    // recast grammars), `reserved` (applyTemplate's vars) and `wired` (already
+    // substituted upstream) all pass through untouched.
+    if (classifyRefToken(name, resolvable) !== "missing") return match
+    if (fallback !== null) return fallback
+    dropped = true
+    return ""
+  })
+  if (!dropped) return out
+  // Best-effort tidy, and only on a DROP: an author-written `{X || }` keeps its
+  // own spacing (nothing was dropped), while a drop also collapses double
+  // spaces the prompt already had elsewhere. Legibility, not a formatter.
+  return out
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/[ \t]+([,.;:!?)])/g, "$1")
+    .replace(/[ \t]+\n/g, "\n")
+    .trim()
+}
+
+/** The `data` keys `computeNodePrompt` reads as AUTHOR-TYPED prompt text for
+ *  this node type — the only text the §4.6 pass may touch.
+ *
+ *  Derived from `NODE_PROMPT_CANDIDATE_FIELDS` (the SAME registry
+ *  `computeNodePrompt` consults) plus the two affix keys it folds in through
+ *  `applyPromptAffixes` — so a node type registered there is covered for free
+ *  and this cannot drift onto a field the composer never reads.
+ *  `text-to-speech` is the one branch `computeNodePrompt` hard-codes
+ *  (`data.text` is a phantom field there; only `directText` is real). */
+function authoredPromptFields(nodeType: string): readonly string[] {
+  const typed = nodeType === "text-to-speech"
+    ? ["directText"]
+    : NODE_PROMPT_CANDIDATE_FIELDS[nodeType] ?? ["prompt"]
+  return [...typed, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY]
+}
+
+/** Shallow copy of `data` with every AUTHOR-TYPED prompt field settled (§4.6),
+ *  ready to hand to `computeNodePrompt`.
+ *
+ *  Settling BEFORE composition rather than after is the whole point: the
+ *  composed string also carries the WIRED / override value, and that is DATA —
+ *  a `{` in it is a character the upstream node emitted, not a reference anyone
+ *  authored, and `{name || fallback}` is unreachable for text nobody typed.
+ *  `finalizeRefTokens` only ever rewrites tokens the shared classifier calls
+ *  `missing`, so a `{Label}` that DOES resolve is left for `resolveNodeRefs`
+ *  to substitute downstream exactly as before.
+ *
+ *  `buildCtx.authoredData` is `data` as the AUTHOR left it — the snapshot taken
+ *  before `resolveFieldMappings` ran. That resolver rewrites `data.<field>`
+ *  with an upstream node's output (a field mapping, a wired `field-<key>`
+ *  handle, or a `{}` injection), so a field it touched holds text nobody typed
+ *  and is DATA by the same rule as the wired prompt. A field whose value no
+ *  longer equals its authored one is therefore skipped, not settled —
+ *  otherwise JSON a mapping injected into `data.prompt` refuses with an escape
+ *  no one can reach.
+ *
+ *  Returns `data` itself (same reference) when nothing needed settling, so an
+ *  untouched node composes byte-identically to before this guard existed. */
+function settleAuthoredPromptFields(
+  nodeType: string,
+  data: Record<string, unknown>,
+  refMap: ReadonlyMap<string, string>,
+  buildCtx: PayloadBuildContext | undefined,
+  nodeLabel: string,
+): Record<string, unknown> {
+  const authored = buildCtx?.authoredData ?? data
+  let settled: Record<string, unknown> | undefined
+  for (const field of authoredPromptFields(nodeType)) {
+    const raw = data[field]
+    if (typeof raw !== "string" || raw.length === 0) continue
+    if (authored[field] !== raw) continue
+    const out = finalizeRefTokens(raw, refMap, buildCtx, nodeLabel)
+    if (out === raw) continue
+    settled ??= { ...data }
+    settled[field] = out
+  }
+  return settled ?? data
+}
+
 
 // ---------------------------------------------------------------------------
 // Seedance 2 frame-numbering guard (shared by the image-to-video AND
@@ -1833,13 +2185,37 @@ export function buildPayload(
   // override > typed candidate fields > wired). Shared with the frontend
   // executor via @nodaro/shared so field-selection + precedence are
   // structurally identical. Each single-prompt case below calls promptFor(type).
-  const promptFor = (nodeType: string, appendWired?: boolean) =>
-    computeNodePrompt(nodeType, data, {
-      wired: resolvedInputs.prompt,
-      override: resolvedInputs.overridePrompt,
-      refMap,
-      appendWired,
-    })
+  const nodeLabel = (data.label as string | undefined) || type
+  const promptFor = (nodeType: string, appendWired?: boolean) => {
+    // §4.6: settle the node's OWN typed fields (and its promptPrefix /
+    // promptSuffix) BEFORE composing. The wired / override values below are
+    // DATA and flow through untouched — see settleAuthoredPromptFields.
+    return computeNodePrompt(
+      nodeType,
+      settleAuthoredPromptFields(nodeType, data, refMap, buildCtx, nodeLabel),
+      {
+        wired: resolvedInputs.prompt,
+        override: resolvedInputs.overridePrompt,
+        refMap,
+        appendWired,
+      },
+    )
+  }
+
+  // Required media inputs (B3): refuse an empty upstream HERE, before the
+  // credit reservation, instead of letting `undefined` reach ffmpeg / the
+  // provider. Mirrors the frontend single-node engine's per-node refusals.
+  assertRequiredMediaInputs(type, resolvedInputs, data)
+
+  // §4.6 DELIBERATELY STOPS HERE for `resolvedInputs.prompt`. It arrived as
+  // DATA — the wired output of an upstream node — so a `{` in it is a character
+  // that node emitted, not a reference anyone typed. Running the refusal over it
+  // blocked the everyday "Generate Text emits JSON -> LLM Chat reformats it"
+  // flow with an escape (`{name || fallback}`) nobody could reach. Only the
+  // node's OWN typed fields are settled, inside `promptFor` above — which stays
+  // AFTER the media guard: a run that is both missing a required input and
+  // carrying a dangling typed reference reports the missing media first (the
+  // input the user must supply), and both fire before any reservation.
 
   switch (type) {
     // --- Image generation ---
@@ -3488,7 +3864,7 @@ export function buildPayload(
       // pending job row and never reserves credits for a run that can't work.
       const videoUrl = resolvedInputs.videoUrl ?? (data.videoUrl as string | undefined)
       if (!videoUrl) {
-        throw new Error("video_required: connect a video to the AI Audit node")
+        throw codedMediaRefusal("video_required", "connect a video to the AI Audit node")
       }
       // The upstream analysis, resolved by input-resolver's `analysis`-handle
       // interceptor (a video-analysis OR video-audit source — an audited
@@ -4632,7 +5008,7 @@ export function buildPayload(
       const coverUploadUrl =
         resolvedInputs.uploadUrl || resolvedInputs.audioUrl || data.uploadUrl || data.audioUrl
       if (!coverUploadUrl) {
-        throw new Error("audio_required: connect an audio track to the Suno Cover node")
+        throw codedMediaRefusal("audio_required", "connect an audio track to the Suno Cover node")
       }
       return simpleResult("suno-cover", sunoCoverCreditId, {
         jobId,
@@ -4777,7 +5153,7 @@ export function buildPayload(
       // the request reach KIE.
       const uploadExtendUrl = resolvedInputs.audioUrl || data.uploadUrl || data.audioUrl
       if (!uploadExtendUrl) {
-        throw new Error("audio_required: connect an audio track to the Suno Upload Extend node")
+        throw codedMediaRefusal("audio_required", "connect an audio track to the Suno Upload Extend node")
       }
       return simpleResult("suno-upload-extend", "suno-upload-extend", {
         jobId,

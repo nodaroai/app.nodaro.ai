@@ -14,9 +14,18 @@
  */
 import { supabase } from "../supabase.js"
 import { orchestrationQueue } from "../orchestration-queue.js"
+import { ORCHESTRATOR_ALIVE_STATES } from "../orchestration-queue-config.js"
 import { reconcileNodeStatesFromJobs } from "./node-states.js"
 import { updateExecutionWithRetry } from "../execution-writes.js"
+import { redactProviderDetail } from "../provider-error-detail.js"
 import type { NodeExecutionState } from "../../services/workflow-engine/types.js"
+
+/** Every queued-or-running BullMQ state for the orchestration queue — defined
+ *  in the Redis-free leaf `../orchestration-queue-config.js` so
+ *  `orchestrator-worker.ts`'s boot sweep (and both files' tests) can read it
+ *  without opening this module's queue connection. Re-exported here because
+ *  this module's orphan gate is its oldest consumer. */
+export { ORCHESTRATOR_ALIVE_STATES } from "../orchestration-queue-config.js"
 
 /**
  * 90 seconds. Pipelines and workflow executions take minutes, so this is
@@ -201,11 +210,46 @@ export async function reconcileWorkflowExecutionsTick(): Promise<void> {
     const orchJob = await orchestrationQueue.getJob(row.id)
     if (orchJob) {
       const state = await orchJob.getState()
-      if (state === "active" || state === "waiting" || state === "delayed") {
-        // Orchestrator alive (or BullMQ has a stalled lock that will
-        // expire). Leave alone — let the orchestrator (or BullMQ
-        // stalled-retry) handle it.
+      if (ORCHESTRATOR_ALIVE_STATES.has(state)) {
+        // Orchestrator alive (or BullMQ has a stalled lock that will expire).
+        // Leave alone — let the orchestrator (or the stalled re-pick) handle it.
         skipped++
+        continue
+      }
+      if (state === "failed") {
+        // The job is PRESENT and terminal-failed — the opposite of orphaned.
+        // `workflow_executions.error_message` is rendered verbatim to users
+        // (executions page tooltip, editor executions tab, published-app
+        // runners) and has no `error_detail` sibling to hold raw diagnostic
+        // text the way `jobs` does (migration 368). `redactProviderDetail`
+        // only strips secrets/URLs — it would leave a BullMQ string like
+        // "job stalled more than allowable limit" fully intact — so the
+        // reason is NOT embedded in `error_message`; it goes to the log
+        // (admin/ops diagnosis) and the user sees a plain, honest sentence.
+        // This is what made the six 2026-08-23..09-01 rows undiagnosable —
+        // the log line now carries the reason a log crawl needs.
+        const attempts = orchJob.attemptsMade ?? 0
+        // A job BullMQ fails for exceeding `maxStalledCount` never actually
+        // re-attempts (it dies mid-run, repeatedly, without the worker
+        // function returning) — `attemptsMade` stays 0. "after 0 attempt(s)"
+        // reads as a bug report, not a diagnosis, so the phrase is dropped
+        // entirely rather than naming a count that never happened.
+        const attemptsSuffix = attempts > 0 ? ` after ${attempts} attempt(s)` : ""
+        const reason = redactProviderDetail(orchJob.failedReason) ?? "unknown"
+        console.error(
+          `[reconcile/workflow-executions] execution ${row.id}: orchestrator job failed${attemptsSuffix}: ${reason}`,
+        )
+        await tryTerminalWrite(
+          row.id,
+          {
+            status: "failed",
+            error_message:
+              `Execution failed — orchestrator job failed${attemptsSuffix} and could not be recovered (reconciled by cron)`,
+            completed_at: new Date().toISOString(),
+          },
+          "mark orchestrator-job-failed",
+          () => { abandoned++ },
+        )
         continue
       }
     }

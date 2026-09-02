@@ -581,10 +581,15 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
     try {
       result = await textToVideo(prompt, resolvedT2vProvider, duration, aspectRatio, t2vOpts, { onTaskCreated: t2vOnTaskCreated })
     } catch (err) {
+      // W4/M-19b: allow-list the ONE class the rewriter can actually help.
       // The rewrite prompt (lib/content-policy-rewrite.ts) is copyright-aware
-      // only; asking it to fix a real-person-likeness block is a no-op that
-      // burns an LLM call and a paid retry — throw those straight through.
-      if (!(err instanceof KieError) || !err.contentPolicy || err.contentPolicyClass === "likeness") throw err
+      // only, so every other class is a no-op that burns an LLM call and a
+      // paid retry. This was a deny-list naming a single excluded class, which
+      // let SAFETY blocks through — and the moderation-vocabulary widening in
+      // providers/kie/client.ts (log pull §11.3) makes safety blocks far more
+      // common. A new class added later is excluded by default, which is the
+      // safe direction for a paid retry.
+      if (!(err instanceof KieError) || err.contentPolicyClass !== "copyright") throw err
       const rewritten = await rewriteForContentPolicy(prompt)
       if (!rewritten) throw err
       result = await textToVideo(rewritten, resolvedT2vProvider, duration, aspectRatio, t2vOpts, { onTaskCreated: t2vOnTaskCreated })

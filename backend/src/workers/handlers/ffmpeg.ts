@@ -46,6 +46,7 @@ import {
 } from "../shared.js"
 import { isKineticCaptionStyle } from "@nodaro/shared"
 import { attachAssetToCharacter, resolveAssetColumn } from "../../lib/character-auto-attach.js"
+import { DrainAbortError } from "../../lib/worker-drain.js"
 
 const handleCombineVideos: HandlerFn = async function handleCombineVideos(job, ctx) {
   const { videoUrls, transition, transitionDuration, audioMode, audioCrossfadeCurve, audioCrossfadeDuration, smartCutEnabled, smartCutMode, smartCutFramesPrev, smartCutFramesNext, trimStartFrames, trimEndFrames, transitions, edgeFades } = job.data as {
@@ -557,6 +558,12 @@ async function dispatchKineticCaptions(
     captions = data.captions
   } else if (needTranscribe) {
     if (transcribeResult.status === "rejected") {
+      // Identity invariant (B6b): a DrainAbortError must never be rewrapped —
+      // every drain hatch matches on `instanceof DrainAbortError`, and the
+      // rewrap below would flatten it into a plain Error. No drain check sits
+      // on the transcribe path today, so this guards a future one rather than
+      // a live bug; it costs one line and keeps the invariant local.
+      if (transcribeResult.reason instanceof DrainAbortError) throw transcribeResult.reason
       throw new Error(
         `transcribe failed: ${transcribeResult.reason instanceof Error ? transcribeResult.reason.message : String(transcribeResult.reason)}`,
       )

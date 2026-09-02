@@ -137,7 +137,8 @@ vi.mock("../../../lib/llm-client.js", () => ({
 // ---------------------------------------------------------------------------
 
 import { videoAIHandlers } from "../video-ai.js"
-import { KieError, CONTENT_POLICY_MESSAGE } from "../../../providers/kie/client.js"
+import { KieError, CONTENT_POLICY_MESSAGE, createUpstreamFailureError } from "../../../providers/kie/client.js"
+import { UNCLASSIFIED_MODERATION_MESSAGES } from "../../../providers/kie/__tests__/__fixtures__/log-pull-fail-messages.js"
 
 const handler = videoAIHandlers["text-to-video"]
 
@@ -174,8 +175,22 @@ const VIDEO_RESULT = {
 const ORIGINAL_PROMPT = "A red sports car drifting through a neon-lit futuristic city at night."
 const REWRITTEN_PROMPT = "A red sports car drifting through a generic, brightly lit futuristic city street at night."
 
+/** A COPYRIGHT-classified terminal block — the one class the rewriter can
+ *  help. The class is now passed explicitly: production never produces
+ *  `contentPolicy: true` with a null class (createUpstreamFailureError always
+ *  classifies), and the rewrite gate is an allow-list on the class (M-19b), so
+ *  a classless fixture would no longer describe anything reachable. Its
+ *  internalDetails is copyright text, which is exactly what the real
+ *  classifier would tag "copyright". */
 function makePolicyError(message = CONTENT_POLICY_MESSAGE): KieError {
-  return new KieError(message, "task failed: [500] may be related to copyright restrictions", "Generation", true, true)
+  return new KieError(
+    message,
+    "task failed: [500] may be related to copyright restrictions",
+    "Generation",
+    true,
+    true,
+    "copyright",
+  )
 }
 
 function makeNonPolicyError(): KieError {
@@ -313,6 +328,37 @@ describe("text-to-video handler — content-policy rewrite-once", () => {
     // boundary is mocked), so "the LLM was never called" IS "never rewritten".
     expect(mocks.mockLlmCompleteStructured).not.toHaveBeenCalled()
     expect(mocks.mockFinalizeJobWithMedia).not.toHaveBeenCalled()
+  })
+
+  it("safety-classified policy KieError: rethrows immediately, no rewrite attempted (M-19b)", async () => {
+    // Built through the REAL classifier from a verbatim log-pull failMsg, so
+    // this test fails if EITHER half regresses: the moderation-vocabulary
+    // widening (the class must come out "safety") or the allow-list gate (a
+    // safety block must never reach the copyright-only rewriter).
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const safetyError = createUpstreamFailureError(
+      `task failed: [400] ${UNCLASSIFIED_MODERATION_MESSAGES[0].failMsg}`,
+      "Generation",
+    )
+    expect(safetyError.contentPolicy).toBe(true)
+    expect(safetyError.contentPolicyClass).toBe("safety")
+    mocks.mockTextToVideo.mockRejectedValueOnce(safetyError)
+
+    const job = makeJob({ prompt: ORIGINAL_PROMPT })
+    await expect(handler(job as never, makeCtx())).rejects.toBe(safetyError)
+
+    expect(mocks.mockTextToVideo).toHaveBeenCalledTimes(1)
+    expect(mocks.mockLlmCompleteStructured).not.toHaveBeenCalled()
+    expect(mocks.mockFinalizeJobWithMedia).not.toHaveBeenCalled()
+  })
+
+  it("the copyright rewrite gate fires only for contentPolicyClass 'copyright'", async () => {
+    const src = await import("node:fs/promises").then((fs) =>
+      fs.readFile(new URL("../video-ai.ts", import.meta.url), "utf8"),
+    )
+    expect(src).toMatch(/err\.contentPolicyClass\s*!==\s*"copyright"/)
+    // The old deny-list shape must be gone, not merely supplemented.
+    expect(src).not.toMatch(/contentPolicyClass\s*===\s*"likeness"/)
   })
 
   it("null rewrite (guard rejects a too-short output): rethrows the original error, no second textToVideo call", async () => {

@@ -94,8 +94,8 @@ import {
 import { applyWebScrapeFailure, applyWebScrapeResult, webScrapeRunStartPatch } from "@/components/nodes/web-scrape-run-state";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
 import {
-  readPromptAffixes, resolveSlideshowTransition, ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, supportsExtendRender, isMinimaxH3Provider, isVeoProvider, isGeminiOmniProvider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS, resolveVideoProviderForMode, resolveVideoModeForInputs, VIDEO_REF_LIMITS_BY_PROVIDER, resolveEffectiveSourceType, sourceRefKey, hasFeature, countRefModalityEdges, type ReferenceModality, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionSlug, characterMentionableAssetArrays, selectLoraRoutingForMentions, expandExtraRefsToConnectedReferences, resolveSeparator, evaluateJsonPath, stringifyPathResults, spreadJsonArrayIfSingleton, zipMergeLists, evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, tryParseJson, evaluateCondition, evaluateConditionGroup, resolveConditionValue, sortListItems, runSelector, resolveSelectorRefs, buildConditionVariables, VARIABLES_HANDLE_ID, clampSmartCutWindow, resolveGvpAnchorWire, resolveTopazUpscale } from "@nodaro/shared"
-import { applyPromptAffixes, composeNegative, computeNodePrompt, computeLlmChatFields, pickerFanoutTargets, buildImagePrompt, assembleImageInput, composeVideoPromptText, readDirectionFields, readStructuredFields, readSubjectFields, collectIdentityLockClause, characterLockToRefLock, assembleSunoInput, type AssembleSunoResult } from "@nodaro/prompts"
+  readPromptAffixes, resolveSlideshowTransition, ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, supportsExtendRender, isMinimaxH3Provider, isVeoProvider, isGeminiOmniProvider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS, resolveVideoProviderForMode, resolveVideoModeForInputs, VIDEO_REF_LIMITS_BY_PROVIDER, resolveEffectiveSourceType, sourceRefKey, hasFeature, countRefModalityEdges, type ReferenceModality, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionSlug, characterMentionableAssetArrays, selectLoraRoutingForMentions, expandExtraRefsToConnectedReferences, resolveSeparator, evaluateJsonPath, stringifyPathResults, spreadJsonArrayIfSingleton, zipMergeLists, evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, tryParseJson, evaluateCondition, evaluateConditionGroup, resolveConditionValue, sortListItems, runSelector, resolveSelectorRefs, buildConditionVariables, VARIABLES_HANDLE_ID, clampSmartCutWindow, resolveGvpAnchorWire, resolveTopazUpscale, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, unresolvedRefTokens, classifyRefToken, canonicalVarName, parseNodeRef, NODE_REF_PATTERN } from "@nodaro/shared"
+import { applyPromptAffixes, composeNegative, computeNodePrompt, computeLlmChatFields, pickerFanoutTargets, buildImagePrompt, assembleImageInput, composeVideoPromptText, readDirectionFields, readStructuredFields, readSubjectFields, collectIdentityLockClause, characterLockToRefLock, assembleSunoInput, type AssembleSunoResult, NODE_PROMPT_CANDIDATE_FIELDS } from "@nodaro/prompts"
 import type { CharacterDef, ConnectedReference, ReferenceSource, ExtraRefCharacterContext } from "@nodaro/shared"
 import { ANALYZABLE_PICKER_HINT } from "@/lib/picker-labels";
 import { getGenerateTextTemplate } from "@/lib/generate-text-templates";
@@ -836,6 +836,198 @@ function hasUploadAncestor(nodeId: string, nodes: readonly { id: string; type: s
   return false;
 }
 
+// ---------------------------------------------------------------------------
+// Unresolved `{Label}` references (§4.6b) — single-node dispatch refusal
+//
+// Twin of the DAG engine's guard in
+// `backend/src/services/workflow-engine/payload-builder.ts`
+// (`knownGraphLabels` / `assertNoUnresolvedRefs` / `finalizeRefTokens`). Keep
+// the two in step: `packages/shared`'s `unresolvedRefTokens` is the shared
+// classifier, and the backend twin is pinned by
+// `payload-builder-unresolved-refs.test.ts` with test names identical to
+// `__tests__/unresolved-refs-guard.test.ts`.
+// ---------------------------------------------------------------------------
+
+/** Canonical labels of EVERY node on the canvas — the set a `{Label}` token is
+ *  allowed to name. A token whose label is here passes; only a label naming no
+ *  node at all is a genuine authoring mistake.
+ *
+ *  GRAPH-DERIVED, deliberately NOT "nodes that produced an output": a
+ *  deliberately-EMPTY text-prompt / list / upload node contributes no ref-map
+ *  entry, so keying the guard on the ref map would refuse `{Notes}` for a blank
+ *  optional input — including a published app's blank input, whose user cannot
+ *  edit the prompt to add the `{name || fallback}` escape. Such a token becomes
+ *  empty text in `finalizeRefTokens` below — never the literal, never a
+ *  refusal. The label expression is character-for-character the one
+ *  `buildNodeRefMap` keys the ref map with (`@/lib/node-refs`), so `known` and
+ *  `resolvable` can never disagree about what a node is called. */
+function knownGraphLabels(nodes: ReadonlyArray<WorkflowNode>): ReadonlySet<string> {
+  const known = new Set<string>();
+  for (const n of nodes) {
+    known.add(canonicalVarName(((n.data as { label?: string } | undefined)?.label as string) || n.type || n.id));
+  }
+  return known;
+}
+
+/** Refuse to dispatch a prompt still carrying an unresolvable `{Label}`.
+ *  `resolveNodeRefs` leaves the literal token when the upstream is absent and
+ *  there is no `|| fallback`, and those characters then reached the provider
+ *  ({Describe Image} on gpt-image-2, {gravity flip} / {rewind} on seedance-2-5
+ *  in the 2026-09-01 export) — every one of them naming a node that does not
+ *  exist. Toasts in this file's refusal style and throws; `executeNode`'s
+ *  wrapper normalizes the throw to a rejected promise.
+ *  SCOPE — AUTHOR-TYPED TEXT ONLY. Never run on a value that ARRIVED through a
+ *  wired edge or a list fan-out item: that is DATA, and JSON, LaTeX or any
+ *  other brace-bearing payload legitimately contains `{...}`. Refusing it would
+ *  block a Generate Text -> LLM Chat run with no escape available to anyone (the
+ *  `{name || fallback}` hatch needs an author, and nobody typed that text).
+ *  The reference/recast grammars (`{image:N}`, `{video:N}`, `{audio:N}`,
+ *  `{slot:x}`, `{ref:id}`) are excluded by the shared classifier — they are
+ *  substituted further down the pipeline, not by resolveNodeRefs. */
+function assertNoUnresolvedRefs(
+  text: string | undefined,
+  refMap: ReadonlyMap<string, string>,
+  nodes: ReadonlyArray<WorkflowNode>,
+  nodeLabel: string,
+): void {
+  if (!text) return;
+  const missing = unresolvedRefTokens(text, {
+    resolvable: new Set(refMap.keys()),
+    known: knownGraphLabels(nodes),
+  });
+  if (missing.length === 0) return;
+  const tokens = missing.map((m) => `{${m}}`).join(", ");
+  toast.error(
+    `Node "${nodeLabel}": unresolved reference ${tokens} — connect the source node, or add a default with {name || fallback}.`,
+  );
+  const err = new Error(`Unresolved reference: ${tokens}`) as Error & { code?: string };
+  // Same stable, non-retryable code the DAG engine throws, so a report from
+  // either engine is one search away.
+  err.code = "unresolved_reference";
+  throw err;
+}
+
+/**
+ * Substitute-then-refuse, run at the prompt-composition points.
+ *
+ * `resolveNodeRefs` leaves `{Label}` LITERAL when the label has no value, and
+ * `resolvePrompt`'s `rr` helper skips ref resolution ENTIRELY when the ref map
+ * is empty — so a `{Label}` naming a node that exists but produced nothing (and
+ * even an explicitly-escaped `{x || y}` on a graph where nothing ran) shipped
+ * the raw characters to the provider. Neither refusing it (the app user who
+ * left a blank optional input cannot edit the prompt to add an escape) nor
+ * sending it is acceptable, so the token resolves to EMPTY TEXT here — exactly
+ * as if the author had written `{Label || }`.
+ *
+ * Order, and why: REFUSE first (a label naming no node at all is the only case
+ * left after this pass), then SUBSTITUTE every remaining unresolved token with
+ * its `|| fallback` if it has one, else "". That is `resolveNodeRefs`' own
+ * absent-value policy minus the literal fall-through, applied HERE rather than
+ * in `@nodaro/shared` — the shared resolver has other consumers whose policy is
+ * not ours to change.
+ *
+ * Whitespace is tidied only when a token was actually dropped, so a prompt that
+ * needed no substitution is returned byte-identical.
+ *
+ * Applied to AUTHOR-TYPED fields only — see the scope note on
+ * assertNoUnresolvedRefs.
+ */
+function finalizeRefTokens(
+  text: string | undefined,
+  refMap: ReadonlyMap<string, string>,
+  nodes: ReadonlyArray<WorkflowNode>,
+  nodeLabel: string,
+): string | undefined {
+  if (!text) return text;
+  assertNoUnresolvedRefs(text, refMap, nodes, nodeLabel);
+  const resolvable = new Set(refMap.keys());
+  let dropped = false;
+  const out = text.replace(NODE_REF_PATTERN, (match, raw: string) => {
+    const { name, fallback } = parseNodeRef(typeof raw === "string" ? raw : "");
+    // Only genuinely-unresolved NODE refs are touched: `skip` (the reference /
+    // recast grammars), `reserved` (applyTemplate's vars) and `wired` (already
+    // substituted upstream) all pass through untouched.
+    if (classifyRefToken(name, resolvable) !== "missing") return match;
+    if (fallback !== null) return fallback;
+    dropped = true;
+    return "";
+  });
+  if (!dropped) return out;
+  // Best-effort tidy, and only on a DROP: an author-written `{X || }` keeps its
+  // own spacing (nothing was dropped). Legibility, not a formatter.
+  return out
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/[ \t]+([,.;:!?)])/g, "$1")
+    .replace(/[ \t]+\n/g, "\n")
+    .trim();
+}
+
+/** The `node.data` keys `computeNodePrompt` reads as AUTHOR-TYPED prompt text
+ *  for this node type — the only text the §4.6b pass may touch.
+ *
+ *  Derived from `NODE_PROMPT_CANDIDATE_FIELDS`, the SAME registry
+ *  `computeNodePrompt` consults, plus the two affix keys it folds in through
+ *  `applyPromptAffixes` — so a node type registered there is covered for free
+ *  and this cannot drift into checking a field the composer never reads.
+ *  `text-to-speech` is the one branch `computeNodePrompt` hard-codes
+ *  (`data.text` is a phantom field; only `directText` is real). */
+function authoredPromptFields(nodeType: string): readonly string[] {
+  const typed = nodeType === "text-to-speech"
+    ? ["directText"]
+    : NODE_PROMPT_CANDIDATE_FIELDS[nodeType] ?? ["prompt"];
+  return [...typed, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY];
+}
+
+/** Shallow copy of `data` with every AUTHOR-TYPED prompt field settled (§4.6b),
+ *  ready to hand to `computeNodePrompt`.
+ *
+ *  Settling BEFORE composition rather than after is the whole point: the
+ *  composed string also carries the wired / fan-out value, and those are DATA —
+ *  a `{` in them is a brace the upstream node emitted, not a reference anyone
+ *  authored. `finalizeRefTokens` only ever rewrites tokens the shared classifier
+ *  calls `missing`, so a `{Label}` that DOES resolve is left for
+ *  `resolveNodeRefs` to substitute downstream exactly as before.
+ *
+ *  `authored` is `node.data` as the AUTHOR left it — the snapshot taken BEFORE
+ *  `resolveFieldMappings` ran. That resolver rewrites `data.<field>` with an
+ *  upstream node's output (a field mapping, a wired `field-<key>` handle, or a
+ *  `{}` injection), so a field it touched holds text nobody typed and is DATA
+ *  by the same rule as the wired prompt. A field whose value no longer equals
+ *  its authored one is therefore skipped, not settled — otherwise JSON a
+ *  mapping injected into `data.prompt` refuses with an escape no one can reach.
+ *
+ *  Returns `data` itself (same reference) when nothing needed settling, so an
+ *  untouched node composes byte-identically to before this guard existed. */
+function settleAuthoredPromptFields(
+  nodeType: string,
+  data: Record<string, unknown>,
+  authored: Record<string, unknown>,
+  refMap: ReadonlyMap<string, string>,
+  nodes: ReadonlyArray<WorkflowNode>,
+  nodeLabel: string,
+): Record<string, unknown> {
+  let settled: Record<string, unknown> | undefined;
+  for (const field of authoredPromptFields(nodeType)) {
+    const raw = data[field];
+    if (typeof raw !== "string" || raw.length === 0) continue;
+    if (authored[field] !== raw) continue;
+    const out = finalizeRefTokens(raw, refMap, nodes, nodeLabel);
+    if (out === raw) continue;
+    settled ??= { ...data };
+    settled[field] = out;
+  }
+  return settled ?? data;
+}
+
+/**
+ * Run ONE node. Thin wrapper over `executeNodeCore` that normalizes a
+ * SYNCHRONOUS throw into a rejected promise: the unresolved-`{Label}` guard
+ * above fires from inside a lazily-composed `switch` case, and callers chain
+ * off the returned promise (`run-handlers.ts` → `.then().catch()`,
+ * `auto-execute.ts` likewise), so a sync throw would escape their `.catch` and
+ * strand the node in its optimistic "pending" flip. Returning the inner promise
+ * directly keeps the call tick-for-tick identical to before.
+ */
 export function executeNode(
   node: WorkflowNode,
   ctx: ExecutionContext,
@@ -843,6 +1035,23 @@ export function executeNode(
   overrideMediaUrl?: string,
   listIterationIndex?: number,
   runId?: string,
+  authoredOverride?: Record<string, unknown>,
+): Promise<string> {
+  try {
+    return executeNodeCore(node, ctx, overridePrompt, overrideMediaUrl, listIterationIndex, runId, authoredOverride);
+  } catch (err) {
+    return Promise.reject(err);
+  }
+}
+
+function executeNodeCore(
+  node: WorkflowNode,
+  ctx: ExecutionContext,
+  overridePrompt?: string,
+  overrideMediaUrl?: string,
+  listIterationIndex?: number,
+  runId?: string,
+  authoredOverride?: Record<string, unknown>,
 ): Promise<string> {
   const { nodes, edges } = useWorkflowStore.getState();
   const inputs = resolveNodeInputs(node, nodes, edges, listIterationIndex);
@@ -871,6 +1080,7 @@ export function executeNode(
 
   // Build label→output map for resolving {Node Label} references in text fields
   const refMap = buildNodeRefMap(node.id, nodes, edges);
+  const nodeLabel = ((node.data as { label?: string } | undefined)?.label as string) || node.type || node.id;
   // Resolve refs in upstream-provided prompt so downstream code sees clean text
   if (inputs.prompt && refMap.size > 0) {
     inputs.prompt = resolveTextRefs(inputs.prompt, refMap) ?? inputs.prompt;
@@ -879,18 +1089,54 @@ export function executeNode(
   if (overridePrompt && refMap.size > 0) {
     overridePrompt = resolveTextRefs(overridePrompt, refMap) ?? overridePrompt;
   }
+  // §4.6b DELIBERATELY STOPS HERE for `inputs.prompt` and `overridePrompt`.
+  // Both arrived as DATA — the wired output of an upstream node, or one item of
+  // a list fan-out — so a `{` in them is a character that node emitted, not a
+  // reference anyone typed. Running the refusal over them blocked the everyday
+  // "Generate Text emits JSON -> LLM Chat reformats it" canvas flow with an
+  // escape (`{name || fallback}`) that no one could reach, because no one
+  // authored that text. Whatever `resolveTextRefs` left literal above therefore
+  // survives untouched; only the node's OWN typed fields are settled, inside
+  // `promptOf` below.
+
+  // `node.data` as the AUTHOR left it, captured BEFORE the field-mapping block
+  // below reassigns `node` with resolved data. `promptOf` reads `node.data`
+  // lazily (so a mapped value IS composed), but the §4.6b settle pass may only
+  // touch fields this snapshot still matches — everything a mapping wrote is
+  // upstream DATA. Same reason `userPromptTemplate` is captured pre-mapping on
+  // the backend twin.
+  //
+  // `authoredOverride` lets a caller that already captured the TRUE authored
+  // snapshot pass it down instead of re-deriving one from `node.data` — the
+  // `generate-video` case below re-types the node and recurses into
+  // `executeNode`; without this, the inner call would re-snapshot the ALREADY
+  // field-mapped data as "authored," so a mapping-injected literal (e.g. a
+  // JSON blob) would wrongly match its own snapshot and get treated as an
+  // author-typed `{Label}` reference — refusing on the canvas a run the
+  // backend accepts.
+  const authoredData = authoredOverride ?? (node.data as Record<string, unknown>);
 
   // Typed-primary prompt resolution for single-prompt nodes (precedence:
   // override > typed candidate fields > wired). Shared with the backend
   // orchestrator via @nodaro/shared so field-selection + precedence are
   // structurally identical. Each single-prompt case below calls promptOf(type).
+  // §4.6b (lazily, at the case that composes): the node's OWN typed prompt
+  // fields and its promptPrefix / promptSuffix are settled on a shallow copy of
+  // `node.data` BEFORE composition — a `{Label}` naming a node on the canvas
+  // becomes empty text (or its `|| fallback`), one naming NO node refuses with a
+  // toast before any API call. The wired / fan-out values passed below flow into
+  // computeNodePrompt untouched (see the note above the ref-map build).
   const promptOf = (nodeType: string, appendWired?: boolean) =>
-    computeNodePrompt(nodeType, node.data as Record<string, unknown>, {
-      wired: typeof inputs.prompt === "string" ? inputs.prompt : undefined,
-      override: overridePrompt,
-      refMap,
-      appendWired,
-    });
+    computeNodePrompt(
+      nodeType,
+      settleAuthoredPromptFields(nodeType, node.data as Record<string, unknown>, authoredData, refMap, nodes, nodeLabel),
+      {
+        wired: typeof inputs.prompt === "string" ? inputs.prompt : undefined,
+        override: overridePrompt,
+        refMap,
+        appendWired,
+      },
+    );
 
   // --- Field mapping resolution + {} injection (centralized) ---
   const mappableFields = NODE_MAPPABLE_FIELDS[node.type ?? ""]
@@ -1906,7 +2152,11 @@ export function executeNode(
         __appendWired: true,
       },
     } as WorkflowNode;
-    return executeNode(syntheticNode, ctx, overridePrompt, overrideMediaUrl, listIterationIndex, runId);
+    // Pass the OUTER `authoredData` snapshot through — taken before the
+    // field-mapping block above ran, so a mapping-injected value in
+    // `syntheticNode.data` doesn't re-qualify as "authored" inside the inner
+    // call (see the comment on `authoredData`'s declaration).
+    return executeNode(syntheticNode, ctx, overridePrompt, overrideMediaUrl, listIterationIndex, runId, authoredData);
   }
 
   // Generate Video Pro — Seedance-2-family multi-segment stitch (Task 13).
@@ -4120,6 +4370,12 @@ export function executeNode(
       );
       return Promise.reject(new Error("Missing taskId/audioId"));
     }
+    // Hoisted out of the thunk below deliberately: `promptOf` can REFUSE
+    // (§4.6b unresolved `{Label}`), and evaluated inside the thunk that refusal
+    // would fire after runProcessingNode has already flipped the node to
+    // running — stacking a second, generic failure toast on top of ours. Every
+    // other promptOf case resolves before the call; this one now matches.
+    const replaceSectionPrompt = promptOf("suno-replace-section");
     setUserPromptTemplate(d.prompt?.trim() || undefined);
     return runProcessingNode(
       node.id,
@@ -4129,7 +4385,7 @@ export function executeNode(
           audioId: ids.audioId,
           infillStartS: d.infillStartS ?? 0,
           infillEndS: d.infillEndS ?? 30,
-          prompt: promptOf("suno-replace-section"),
+          prompt: replaceSectionPrompt,
           tags: d.tags?.trim() || "",
           title: d.title?.trim() || undefined,
           fullLyrics: d.fullLyrics?.trim() || undefined,

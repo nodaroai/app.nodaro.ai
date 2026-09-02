@@ -38,17 +38,77 @@ export interface ProviderFinalizeResult {
 }
 
 /**
+ * The three `as const` arrays below are the SINGLE declaration each finalize
+ * job-type category derives from: `FinalizeJobType` is `typeof` their union,
+ * and the runtime `IMAGE_TYPES`/`VIDEO_TYPES`/`AUDIO_TYPES` sets are built
+ * from the same arrays — so a job type added here updates the compile-time
+ * union and the runtime set together, and cannot drift between them.
+ * Exported so `job-finalize-types.test.ts` can assert the three arrays are
+ * pairwise disjoint and jointly cover `FINALIZE_JOB_TYPES`.
+ */
+export const IMAGE_JOB_TYPES = [
+  "generate-image", "image-to-image", "edit-image",
+  // `reference-board` is handleGenerateImage under another name
+  // (image-ai.ts:372) and finalizes as "generate-image" (:135); the reconcile
+  // crons read the ROW's job_type, which is the alias.
+  "reference-board",
+] as const
+
+export const VIDEO_JOB_TYPES = [
+  "image-to-video", "text-to-video", "video-to-video",
+  "motion-transfer", "video-upscale", "lip-sync", "extend-video",
+  "video-retake", "video-sfx", "ai-avatar", "cinematic-avatar", "switchx",
+  // Handlers whose job_type differs from the jobType they pass to finalize:
+  // speech-to-video → "image-to-video" (video-ai.ts:891);
+  // face-swap → "video-to-video" (video-ai.ts:1404);
+  // voiced-video → "image-to-video" (video-ai.ts:1679) — handleVoicedVideo
+  // (character-voice orchestration) has exactly ONE completion path, always
+  // through finalizeJobWithMedia with this hardcoded jobType (no branch calls
+  // its own markJobCompleted), so the alias is safe (Task 5 coverage guard).
+  // Sync today: none of its imageToVideo calls registers a reconcile task
+  // (video-ai.ts:1462-1469 — the 30-min pre-task sweep is the backstop), so
+  // no reconcile tick reaches it. If it ever gains async wiring, settle the
+  // voicedAudioAddon refund question (loop-trim P0.3 precedent) at that point:
+  // a generic recovery would deliver the raw pre-mux clip.
+  "speech-to-video", "face-swap", "voiced-video",
+] as const
+
+export const AUDIO_JOB_TYPES = [
+  "text-to-speech", "text-to-audio", "generate-music", "voice-clone",
+  // NB: "speech-to-text" has no producer today — `transcribe` is the job_type
+  // the route and handler map use (routes/transcribe.ts:71,
+  // audio-ai.ts:800). Kept for the union's shape; the coverage guard in
+  // reconcile/__tests__/finalize-job-type-coverage.test.ts asserts the
+  // producer→set direction ONLY, never the reverse.
+  "audio-isolation", "speech-to-text", "generate-dialogue",
+  // `text-to-dialogue` is handleTextToDialogue under another name
+  // (audio-ai.ts:804) and finalizes as "generate-dialogue" (:405). Sync today
+  // (no makeOnTaskCreated → no provider_kind), so no reconcile tick reaches
+  // it — but it is an ALIAS, not a denial, and listing it here rather than in
+  // NOT_GENERIC_RECOVERABLE keeps that honest (M-3a).
+  "text-to-dialogue",
+  // voice-remix (audio-ai.ts:684) and voice-design (audio-ai.ts:713) are each
+  // a single unconditional completion path through finalizeJobWithMedia with
+  // jobType "voice-clone" hardcoded — no branch writes its own
+  // markJobCompleted, so both are safe aliases (same M-3a shape; found by the
+  // Task 5 coverage guard). Contrast with voice-changer and dubbing below,
+  // which branch into an OWN markJobCompleted for video-mode output and so
+  // are NOT safe generic-finalize aliases. Both are sync today: voice-remix
+  // stamps no provider_kind at all; voice-design stamps "elevenlabs-sync"
+  // (audio-ai.ts:701), a SYNC kind — so no reconcile tick reaches either.
+  "voice-remix", "voice-design",
+] as const
+
+/**
  * The set of job types this function knows how to finalize. Anything outside
  * this union throws — by design, since the dispatch table has to know whether
- * to upload as image / video / audio.
+ * to upload as image / video / audio. Derived from the three `as const`
+ * arrays above via `typeof … [number]` so it cannot drift from them.
  */
 export type FinalizeJobType =
-  | "generate-image" | "image-to-image" | "edit-image"
-  | "image-to-video" | "text-to-video" | "video-to-video"
-  | "motion-transfer" | "video-upscale" | "lip-sync" | "extend-video"
-  | "video-retake" | "video-sfx" | "ai-avatar" | "cinematic-avatar" | "switchx"
-  | "text-to-speech" | "text-to-audio" | "generate-music" | "voice-clone"
-  | "audio-isolation" | "speech-to-text" | "generate-dialogue"
+  | (typeof IMAGE_JOB_TYPES)[number]
+  | (typeof VIDEO_JOB_TYPES)[number]
+  | (typeof AUDIO_JOB_TYPES)[number]
 
 /**
  * Row shape we read from `jobs`. The orchestrator records the per-node owner
@@ -70,19 +130,130 @@ interface JobRow {
   input_data: Record<string, unknown> | null
 }
 
-const IMAGE_TYPES: ReadonlySet<FinalizeJobType> = new Set<FinalizeJobType>([
-  "generate-image", "image-to-image", "edit-image",
+const IMAGE_TYPES: ReadonlySet<FinalizeJobType> = new Set(IMAGE_JOB_TYPES)
+
+const VIDEO_TYPES: ReadonlySet<FinalizeJobType> = new Set(VIDEO_JOB_TYPES)
+
+const AUDIO_TYPES: ReadonlySet<FinalizeJobType> = new Set(AUDIO_JOB_TYPES)
+
+/** Every job type `finalizeJobWithMedia` can dispatch — the runtime twin of
+ *  `FinalizeJobType`. Reconcile writers narrow through `isFinalizeJobType`
+ *  instead of casting `row.job_type`. */
+export const FINALIZE_JOB_TYPES: ReadonlySet<string> = new Set<string>([
+  ...IMAGE_TYPES, ...VIDEO_TYPES, ...AUDIO_TYPES,
 ])
 
-const VIDEO_TYPES: ReadonlySet<FinalizeJobType> = new Set<FinalizeJobType>([
-  "image-to-video", "text-to-video", "video-to-video",
-  "motion-transfer", "video-upscale", "lip-sync", "extend-video",
-  "video-retake", "video-sfx", "ai-avatar", "cinematic-avatar", "switchx",
-])
+export function isFinalizeJobType(v: string | null | undefined): v is FinalizeJobType {
+  return typeof v === "string" && FINALIZE_JOB_TYPES.has(v)
+}
 
-const AUDIO_TYPES: ReadonlySet<FinalizeJobType> = new Set<FinalizeJobType>([
-  "text-to-speech", "text-to-audio", "generate-music", "voice-clone",
-  "audio-isolation", "speech-to-text", "generate-dialogue",
+/**
+ * Job types that MUST NOT take the generic `finalizeJobWithMedia` path even if
+ * their provider result could be re-fetched. Four reasons, all load-bearing:
+ *
+ *  - ENTITY handlers are their own completion writers (`workers/handlers/
+ *    entity.ts:199-300`, map at `:781-796`): they call `markJobCompleted` and then
+ *    `setCharacterPortrait` / `attachAssetToCharacter` / `autoAttach*Asset`.
+ *    Generic finalize writes `buildImageOutputData` + `createAssetFromJob` and
+ *    NONE of the entity-row writes — the Studio would never see the result.
+ *  - DAG rows carry `job_type = node.type` (`node-executor.ts:1290`),
+ *    while payload-builder dispatches under a different `jobName`
+ *    (`scene`→generate-image, `upscale-image`→edit-image, …). The node type is
+ *    what a reconcile tick reads, and it is not a finalize type.
+ *  - COMPOSITE writers shape their own `output_data`: generate-mask
+ *    `{imageUrl, maskUrl}` (the repo says so at `video-ai.ts:1438-1440`),
+ *    transcribe `{text, language, segments}` (`audio-ai.ts:279-280`), and
+ *    generate-surround-continuation `{imageUrl: <composited>, direction, …}`
+ *    (`surround.ts:128-138`) — the provider URL is an intermediate there.
+ *  - Task 5 (B2c) coverage-guard additions: every remaining STATICALLY
+ *    REGISTERED worker handler key (`ffmpeg.ts`, `suno.ts`, `reference-
+ *    sheet.ts`, `motion-graphics-lottie.ts`, and the `audio-ai.ts`
+ *    stragglers below) that is its own completion writer, or that branches
+ *    into its own writer on at least one code path — see the block below
+ *    for the per-handler evidence. `finalize-job-type-coverage.test.ts`
+ *    fails the build if a new handler key lands in neither set.
+ *
+ * Membership means "bump with a named reason", never "cast and hope". The
+ * previous cast (`(row.job_type ?? "generate-image") as FinalizeJobType`) sent
+ * these rows into finalize, which threw, which rode `bumpAttemptsOrExhaust` to
+ * 18 attempts and REFUNDED a job whose provider call had succeeded.
+ */
+export const NOT_GENERIC_RECOVERABLE: ReadonlySet<string> = new Set<string>([
+  // Entity handlers — all 14 keys of workers/handlers/entity.ts:781-796.
+  // `generate-script` is in that map too (it produces text, not media) and is
+  // listed here for the same reason as the rest: the coverage guard in Task 5
+  // requires a decision for every handler name (M-D8).
+  "generate-character", "generate-face", "generate-character-asset",
+  "generate-object", "generate-object-asset",
+  "generate-creature", "generate-creature-asset",
+  "generate-location", "generate-location-asset",
+  "generate-script",
+  "generate-character-motion", "generate-location-motion",
+  "generate-object-motion", "generate-creature-motion",
+  // DAG node types (node-executor.ts:1290 writes job_type = node.type)
+  "character", "face", "object", "creature", "location", "scene",
+  "modify-image", "upscale-image", "remove-background", "motion-graphics",
+  // Composite / non-media completion writers
+  "generate-mask", "transcribe", "generate-surround-continuation",
+
+  // --- Task 5 (B2c) coverage-guard additions below ---------------------------
+  // Handlers that never persist a recoverable provider task id, or that write
+  // their own non-media output_data. Listed so the coverage guard has an
+  // explicit decision for every handler name rather than an implicit gap.
+
+  // ffmpeg.ts — all 24 keys of workers/handlers/ffmpeg.ts:968-991. Local
+  // CPU-bound ffmpeg processing: no onTaskCreated is ever called, so no
+  // async provider_kind is stamped and a reconcile tick never needs to
+  // recover one of these by re-fetching a provider result. Each calls its
+  // own markJobCompleted with a handler-specific output_data shape (e.g.
+  // combine-videos → {videoUrl, thumbnailUrl}; trim-audio → {audioUrl}) —
+  // never finalizeJobWithMedia.
+  "combine-videos", "assemble-narrated-video", "image-collage",
+  "merge-video-audio", "trim-audio", "trim-video", "extract-frame",
+  "speed-ramp", "loop-video", "fade-video", "still-to-video",
+  "gif-to-video", "slideshow", "resize-video", "adjust-volume",
+  "audio-fx", "add-captions", "mix-audio", "combine-audio",
+  "transcode-video", "social-media-format", "split-media",
+  "extract-audio", "remove-audio",
+
+  // suno.ts — all 12 keys of workers/handlers/suno.ts:580-593. None call
+  // finalizeJobWithMedia (own markJobCompleted per handler); the async
+  // "kie-suno" provider_kind IS recoverable, but reconcile/kie.ts:194
+  // hardcodes the finalize jobType to "generate-music" regardless of which
+  // suno-* job_type the row carries — the row's own job_type is never used
+  // to dispatch, so it must not be treated as a generic-finalize type.
+  "suno-generate", "suno-cover", "suno-extend", "suno-lyrics",
+  "suno-separate", "suno-music-video", "suno-mashup",
+  "suno-replace-section", "suno-add-instrumental", "suno-add-vocals",
+  "suno-convert-wav", "suno-upload-extend",
+
+  // reference-sheet.ts:181 and motion-graphics-lottie.ts:173 — single-key
+  // maps, each handler calls its own markJobCompleted with a bespoke
+  // output_data shape (never finalizeJobWithMedia).
+  "reference-sheet", "motion-graphics-lottie",
+
+  // audio-ai.ts stragglers:
+  //  - extract-youtube-audio: own markJobCompleted ({audioUrl}).
+  //  - audio-separation: own markJobCompleted with per-stem output_data
+  //    (vocalUrl/instrumentalUrl/drumsUrl/...); no onTaskCreated (a crash
+  //    fails+refunds rather than reconcile-recovering, which would flatten
+  //    the stems — design §C(c)). Confirmed "verified not at risk" (audit).
+  //  - forced-alignment: own markJobCompleted ({alignment, text}); sync
+  //    provider_kind ("elevenlabs-sync") only.
+  //  - voice-changer and dubbing: BRANCHING completion — the audio-only path
+  //    finalizes via finalizeJobWithMedia (voice-changer → "voice-clone",
+  //    audio-ai.ts:472; dubbing's shared deliverDubbedMedia → "text-to-audio",
+  //    dubbing-delivery.ts:72), but the video-mode branch writes its own
+  //    markJobCompleted ({videoUrl, audioUrl, thumbnailUrl}) instead. Because
+  //    the row's job_type stays "voice-changer"/"dubbing" in BOTH modes, a
+  //    generic reconcile recovery cannot know which branch would have run —
+  //    unlike voice-remix/voice-design above, these are NOT safe aliases.
+  //    dubbing is separately confirmed "verified not at risk" (audit): its
+  //    async "elevenlabs-async" provider_kind is recovered by the DEDICATED
+  //    reconcileElevenLabsJob → deliverDubbedMedia path, never by a generic
+  //    row.job_type-keyed finalize.
+  "extract-youtube-audio", "audio-separation", "forced-alignment",
+  "voice-changer", "dubbing",
 ])
 
 /**
@@ -90,8 +261,12 @@ const AUDIO_TYPES: ReadonlySet<FinalizeJobType> = new Set<FinalizeJobType>([
  * column on `jobs` today (see D7 in `docs/design/external-call-reconciliation.md`),
  * so we query `usage_logs` directly. Returns `null` when no reserved row exists
  * — `commitJobCredits` then no-ops gracefully.
+ *
+ * Exported (Task 6, app-reports W4) so the transcribe reconcile-recovery
+ * branch in `reconcile/replicate.ts` can reuse this exact lookup instead of
+ * writing a second copy.
  */
-async function loadUsageLogId(jobId: string): Promise<string | null> {
+export async function loadUsageLogId(jobId: string): Promise<string | null> {
   const { data } = await supabase
     .from("usage_logs")
     .select("id")

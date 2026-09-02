@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => {
   //   - SELECT jobs.reconcile_attempts
   //   - UPDATE jobs SET reconcile_attempts=N (sub-cap path)
   //   - UPDATE jobs SET status=failed ... .in("status",[...]).select("id")  (exhaust path)
-  //   - SELECT jobs (user_id, model_identifier, provider, provider_kind)     (anomaly log)
+  //   - SELECT jobs (user_id, provider, provider_kind, provider_task_id)     (anomaly log)
   //   - SELECT usage_logs (id, credits_used)                                  (anomaly log)
   //   - INSERT credit_anomalies                                               (anomaly log)
   //
@@ -32,7 +32,13 @@ const mocks = vi.hoisted(() => {
       { in: jobsUpdateInMock },
     ),
   )
-  const jobsUpdateMock = vi.fn(() => ({ eq: jobsUpdateEqMock }))
+  // G-7: capture every jobs.update(payload) so tests can assert on the exact
+  // recorded update (lastJobsUpdate below), not just individual fields.
+  const jobsUpdates: Array<Record<string, unknown>> = []
+  const jobsUpdateMock = vi.fn((arg: Record<string, unknown>) => {
+    jobsUpdates.push(arg)
+    return { eq: jobsUpdateEqMock }
+  })
 
   // usage_logs SELECT (anomaly log)
   const usageLogsMaybeSingleMock = vi.fn().mockResolvedValue({
@@ -47,7 +53,12 @@ const mocks = vi.hoisted(() => {
   // credit_anomalies INSERT
   const anomaliesInsertMock = vi.fn().mockResolvedValue({ data: null, error: null })
 
-  // jobs SELECT for anomaly log (user_id, model_identifier, provider, provider_kind)
+  // jobs SELECT for anomaly log (user_id, provider, provider_kind, provider_task_id).
+  // `model_identifier` is deliberately left in this fixture's data even though
+  // the real `jobs` table has no such column and the real select no longer
+  // names it — a stray `"veo3"` surviving into the insert would prove the
+  // fix regressed to reading a field PostgREST would have nulled the whole
+  // row for. See the "still discriminates" test below.
   const jobsAnomalySingleMock = vi.fn().mockResolvedValue({
     data: {
       user_id: "user-1",
@@ -61,16 +72,20 @@ const mocks = vi.hoisted(() => {
   // Tracks which `select()` the test is in (first call = reconcile_attempts,
   // second = anomaly job lookup). Per-from-call closure handles the rest.
   let jobsSelectCallCount = 0
+  // Records the exact column-list string passed to every `jobs.select(...)`,
+  // in call order, so a test can pin the anomaly lookup's select shape.
+  const recordedJobsSelects: string[] = []
 
   const fromMock = vi.fn((table: string) => {
     if (table === "jobs") {
       return {
-        select: vi.fn((_cols: string) => {
+        select: vi.fn((cols: string) => {
           jobsSelectCallCount++
+          recordedJobsSelects.push(cols)
           if (jobsSelectCallCount === 1) {
             return { eq: jobsSelectEqMock }
           }
-          // anomaly log path — SELECT user_id, model_identifier, etc.
+          // anomaly log path — SELECT user_id, provider, provider_kind, provider_task_id
           return { eq: vi.fn(() => ({ single: jobsAnomalySingleMock })) }
         }),
         update: jobsUpdateMock,
@@ -87,7 +102,10 @@ const mocks = vi.hoisted(() => {
 
   const refundMock = vi.fn().mockResolvedValue(undefined)
 
-  function resetSelectCounter() { jobsSelectCallCount = 0 }
+  function resetSelectCounter() {
+    jobsSelectCallCount = 0
+    recordedJobsSelects.length = 0
+  }
 
   return {
     fromMock,
@@ -101,6 +119,8 @@ const mocks = vi.hoisted(() => {
     anomaliesInsertMock,
     refundMock,
     resetSelectCounter,
+    recordedJobsSelects,
+    jobsUpdates,
   }
 })
 
@@ -112,9 +132,15 @@ vi.mock("../../credits-job-lifecycle.js", () => ({
 import { bumpAttemptsOrExhaust } from "../bump-attempts.js"
 import { MAX_ATTEMPTS } from "../types.js"
 
+// G-7 harness accessors (did not exist before this task).
+const lastJobsUpdate = (): Record<string, unknown> => mocks.jobsUpdates.at(-1) ?? {}
+const setReconcileAttempts = (n: number) =>
+  mocks.jobsSelectSingleMock.mockResolvedValueOnce({ data: { reconcile_attempts: n }, error: null })
+
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.resetSelectCounter()
+  mocks.jobsUpdates.length = 0
   mocks.jobsUpdateSelectMock.mockResolvedValue({ data: [{ id: "j-1" }], error: null })
   mocks.jobsAnomalySingleMock.mockResolvedValue({
     data: {
@@ -186,12 +212,15 @@ describe("bumpAttemptsOrExhaust", () => {
       new Error("upload-size-exceeded: Content-Length 33239469 > cap 26214400"),
     )
 
+    // Task 2 (app-reports W4): error_message is the fixed user-safe sentence;
+    // the raw provider string now lives in error_detail, admin-only.
     expect(mocks.jobsUpdateMock).toHaveBeenCalledWith(
       expect.objectContaining({
         status: "failed",
         reconcile_attempts: 1,
         reconcile_last_error: "exhausted",
-        error_message: expect.stringContaining("upload-size-exceeded"),
+        error_message: "Generation could not be recovered.",
+        error_detail: expect.stringContaining("upload-size-exceeded"),
       }),
     )
     expect(mocks.refundMock).toHaveBeenCalledWith("j-1")
@@ -222,14 +251,16 @@ describe("bumpAttemptsOrExhaust", () => {
 
     await bumpAttemptsOrExhaust("j-1", new Error("upstream URL expired"))
 
-    // Force-fail UPDATE: status=failed, error_message prefixed, .in("status", [pending,processing])
+    // Force-fail UPDATE: status=failed, error_message is the fixed user-safe
+    // sentence (Task 2, app-reports W4), the raw reason moved to error_detail,
+    // .in("status", [pending,processing])
     expect(mocks.jobsUpdateMock).toHaveBeenCalledWith(
       expect.objectContaining({
         status: "failed",
         reconcile_attempts: MAX_ATTEMPTS,
         reconcile_last_error: "exhausted",
-        error_message: expect.stringContaining("reconcile_exhausted"),
-        error_detail: null,
+        error_message: "Generation could not be recovered.",
+        error_detail: expect.stringContaining("reconcile_exhausted: upstream URL expired"),
       }),
     )
     expect(mocks.jobsUpdateInMock).toHaveBeenCalledWith(
@@ -370,5 +401,76 @@ describe("bumpAttemptsOrExhaust", () => {
     const firstCall = mocks.jobsUpdateMock.mock.calls[0] as unknown[] | undefined
     const updateArg = firstCall?.[0] as { reconcile_last_error: string } | undefined
     expect(updateArg?.reconcile_last_error.length).toBe(500)
+  })
+
+  it("force-fail writes a fixed user message and keeps the raw reason in error_detail", async () => {
+    setReconcileAttempts(17) // next = 18 = MAX_ATTEMPTS
+    await bumpAttemptsOrExhaust("job-exhaust-1", new Error("upstream 500: <html>gateway</html> https://api.vendor.io/x?key=zz"))
+    const update = lastJobsUpdate()
+    expect(update.error_message).toBe("Generation could not be recovered.")
+    expect(update.error_detail).toContain("upstream 500")
+    expect(update.error_detail).not.toContain("key=zz")
+    expect(update.reconcile_last_error).toBe("exhausted")
+  })
+
+  // M-2a: the load-bearing pin. W0 routes KieError.internalDetails into
+  // error_detail via providerDetailOf(err); this PR must not trade that richer
+  // text for something re-derived from the sanitized message.
+  it("prefers KieError.internalDetails over the re-derived machine string", async () => {
+    setReconcileAttempts(17)
+    const err = Object.assign(new Error("Generation failed. Please try again."), {
+      name: "KieError",
+      internalDetails: "task failed: [500] upstream pod evicted (node-7) during decode",
+    })
+    await bumpAttemptsOrExhaust("job-exhaust-2", err)
+    const update = lastJobsUpdate()
+    expect(update.error_detail).toContain("upstream pod evicted")
+    expect(update.error_detail).not.toContain("reconcile_exhausted:")
+    expect(update.error_message).toBe("Generation could not be recovered.")
+  })
+
+  it("falls back to the redacted machine string when the error carries no provider text", async () => {
+    setReconcileAttempts(17)
+    await bumpAttemptsOrExhaust("job-exhaust-3", new Error("still processing"))
+    expect(lastJobsUpdate().error_detail).toContain("reconcile_exhausted: still processing")
+  })
+})
+
+describe("logExhaustedAnomaly column safety", () => {
+  it("never selects jobs.model_identifier (the column does not exist; PostgREST nulls the whole row)", async () => {
+    const src = await import("node:fs/promises").then((fs) =>
+      fs.readFile(new URL("../bump-attempts.ts", import.meta.url), "utf8"),
+    )
+    // The anomaly lookup is the only `from("jobs").select(...)` in this module
+    // besides the reconcile_attempts read. Neither may name model_identifier.
+    expect(src).not.toMatch(/select\(\s*"[^"]*model_identifier/)
+  })
+
+  it("still records the model identity on the anomaly row from provider_kind", async () => {
+    const src = await import("node:fs/promises").then((fs) =>
+      fs.readFile(new URL("../bump-attempts.ts", import.meta.url), "utf8"),
+    )
+    expect(src).toContain("model_identifier: jobRow.provider_kind")
+  })
+
+  it("mocked supabase client: anomaly lookup selects only real jobs columns and the insert carries provider_kind, not the stale model_identifier field", async () => {
+    mocks.jobsSelectSingleMock.mockResolvedValueOnce({
+      data: { reconcile_attempts: MAX_ATTEMPTS - 1 },
+      error: null,
+    })
+
+    await bumpAttemptsOrExhaust("j-1", new Error("upstream URL expired"))
+
+    // Second jobs.select() call is the anomaly lookup (first is reconcile_attempts).
+    expect(mocks.recordedJobsSelects[1]).toBe(
+      "user_id, provider, provider_kind, provider_task_id",
+    )
+
+    // The fixture's jobsAnomalySingleMock data still carries a `model_identifier:
+    // "veo3"` field (see its declaration) purely as a trap: if the insert below
+    // read `jobRow.model_identifier` it would see "veo3", not "kie-veo".
+    expect(mocks.anomaliesInsertMock).toHaveBeenCalledWith(
+      expect.objectContaining({ model_identifier: "kie-veo", provider: "kie" }),
+    )
   })
 })

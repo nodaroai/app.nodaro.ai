@@ -54,6 +54,15 @@ describe("classifyPromptToken", () => {
     expect(classifyPromptToken("image:1", labels)).toBe("skip")
     expect(classifyPromptToken("image:2:person", labels)).toBe("skip")
   })
+  // M-13b: the exclusion set is the shared REF_TOKEN_NAMESPACE_PREFIXES, not
+  // `image:` alone, and it matches case-insensitively (the resolvers' own
+  // regexes are /i). These tokens therefore stop rendering as missing-reference
+  // chips and stop counting as an explicit placement in unused-prompt-edges.
+  it("skip for every reference namespace, case-insensitively (M-13b)", () => {
+    expect(classifyPromptToken("video:1", labels)).toBe("skip")
+    expect(classifyPromptToken("slot:x", labels)).toBe("skip")
+    expect(classifyPromptToken("Image:1", labels)).toBe("skip")
+  })
   it("null label set suppresses amber: labels classify unknown (rendered cyan)", () => {
     expect(classifyPromptToken("Anything", null)).toBe("unknown")
     expect(classifyPromptToken("name", null)).toBe("reserved")

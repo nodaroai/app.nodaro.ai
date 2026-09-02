@@ -205,6 +205,20 @@ export function createSanitizedError(
     lowerMsg.includes("content policy") ||
     lowerMsg.includes("safety filter") ||
     lowerMsg.includes("safety policy") ||
+    // Log pull 2026-09-02 (spec §11.3): three phrasings, 10 rows, that reached
+    // the generic fallback. "safety system" (4), "flagged as sensitive" (5),
+    // and the weak "input was rejected" (1) — the last is safe HERE because
+    // the `invalid`/`validation` branch above already claims the parameter
+    // case before control reaches this group.
+    lowerMsg.includes("safety system") ||
+    lowerMsg.includes("flagged by the safety") ||
+    lowerMsg.includes("flagged as sensitive") ||
+    // M-19a: the weak signal carries the SAME parameter guard the classifier
+    // uses. Relying on the `invalid`/`validation` branch above is not enough —
+    // "Your input was rejected — duration out of range" matches neither, so
+    // without this the two layers disagree on one string: classifier `null`
+    // (retryable), sanitizer "Content policy violation" (permanent).
+    (lowerMsg.includes("input was rejected") && !PARAM_REJECT_RE.test(internalMessage)) ||
     lowerMsg.includes("moderation") ||
     lowerMsg.includes("violat") ||
     lowerMsg.includes("nsfw") ||
@@ -281,7 +295,40 @@ export type ContentPolicyClass = "copyright" | "likeness" | "safety"
 
 const COPYRIGHT_RE = /copyright|intellectual.?property|trademark/i
 const LIKENESS_RE = /public.?figure|celebrit|real.?person|likeness/i
-const SAFETY_RE = /content.?polic|prohibited.?content|sensitive.?content|safety.?(?:filter|policy)|moderation|nsfw|inappropriate/i
+/**
+ * Unambiguous safety/moderation vocabulary. Widened 2026-09-02 by the
+ * app-reports log pull (spec §11.3): ten G1 rows carried moderation text that
+ * matched NOTHING here and landed on the generic "Generation failed, please
+ * try again" fallback — actively wrong advice for a block that is permanent on
+ * the same input.
+ *   - `safety.?(?:filter|policy|system)` — the provider says "safety system",
+ *     not "safety filter" (4 rows).
+ *   - `flagged.?as.?sensitive` — `sensitive.?content` required the word
+ *     "content" to FOLLOW "sensitive", which this phrasing never does (5 rows).
+ * `flagged.?by.?the.?safety` is belt-and-braces for the first group; keeping
+ * both means a provider that drops the noun still classifies.
+ */
+const SAFETY_RE = /content.?polic|prohibited.?content|sensitive.?content|safety.?(?:filter|policy|system)|flagged.?by.?the.?safety|flagged.?as.?sensitive|moderation|nsfw|inappropriate/i
+
+/**
+ * The one WEAK signal from the log pull (1 row): "Your input was rejected."
+ * On its own that is a moderation refusal, but the same sentence carrying a
+ * parameter complaint is a fixable validation error — and classifying THAT as
+ * `safety` would hand the user a permanent "blocked" verdict plus
+ * `retryable: false` (via _job-error.ts) on something they can just correct.
+ * So it fires only when no parameter vocabulary is present.
+ *
+ * Exported for the table-driven test only — production code goes through
+ * `classifyContentPolicyClass` / `createSanitizedError`, never these directly.
+ */
+export const SAFETY_WEAK_RE = /\binput was rejected\b/i
+
+/** Parameter-reject vocabulary. Drawn from the log pull's own PR 5 strings
+ *  (§11.3: seedance ratio/duration, minimax-h3 reference duration, suno
+ *  missing-required-param) so the guard is calibrated against real text.
+ *  Exported for the same test-only reason as SAFETY_WEAK_RE. */
+export const PARAM_REJECT_RE =
+  /invalid|not valid|validation|not within the range|out of range|not supported|cannot be (?:empty|null)|expected \[|duration|resolution|\bratio\b|aspect/i
 
 /** Classifies a provider `failMsg` into a content-policy class, or null when it
  *  is not a content block (timeout, 5xx, bad parameter…). */
@@ -289,6 +336,9 @@ export function classifyContentPolicyClass(failMsg: string): ContentPolicyClass 
   if (COPYRIGHT_RE.test(failMsg)) return "copyright"
   if (LIKENESS_RE.test(failMsg)) return "likeness"
   if (SAFETY_RE.test(failMsg)) return "safety"
+  // Weak signal last, and only when nothing in the message reads like a
+  // fixable parameter (see SAFETY_WEAK_RE).
+  if (SAFETY_WEAK_RE.test(failMsg) && !PARAM_REJECT_RE.test(failMsg)) return "safety"
   return null
 }
 

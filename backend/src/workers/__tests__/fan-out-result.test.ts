@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { assembleFanOutResult, type FanOutIterationValue } from "../fan-out-result.js"
+import { DrainAbortError } from "../../lib/worker-drain.js"
 
 // --- builders -------------------------------------------------------------
 
@@ -27,6 +28,11 @@ const fail = (msg: string): PromiseSettledResult<FanOutIterationValue> => ({
   status: "rejected",
   reason: new Error(msg),
 })
+
+/** A deploy drain aborting one iteration's wait (node-executor's job poll). */
+const drain = (
+  reason: DrainAbortError = new DrainAbortError(),
+): PromiseSettledResult<FanOutIterationValue> => ({ status: "rejected", reason })
 
 // --- tests ----------------------------------------------------------------
 
@@ -94,5 +100,37 @@ describe("assembleFanOutResult", () => {
     const r = assembleFanOutResult([ok(0, "a", { jobId: "only" })], 1)
     expect(r.jobId).toBe("only")
     expect(r.jobIds).toBeUndefined()
+  })
+
+  // --- B6b: deploy drain is never a tolerated iteration failure ------------
+
+  it("DRAIN: throws even when other iterations succeeded (never a partial result)", () => {
+    // Money rule: the drained iteration's child job is still running in the
+    // video worker and WILL finalize its charge. Tolerating it would persist
+    // the node `completed` with "" for that item — the user pays for output
+    // the execution discarded — and the orchestrator's drain hatch would
+    // never see the abort.
+    expect(() =>
+      assembleFanOutResult([ok(0, "https://img/0.png"), drain(), fail("Execution cancelled")], 3),
+    ).toThrow(DrainAbortError)
+  })
+
+  it("DRAIN: rethrows the SAME instance, so hatch A's instanceof check still matches", () => {
+    const reason = new DrainAbortError()
+    let caught: unknown
+    try {
+      assembleFanOutResult([ok(0, "a"), drain(reason)], 2)
+    } catch (err) {
+      caught = err
+    }
+    expect(caught).toBe(reason)
+  })
+
+  it("DRAIN: an ordinary Error is STILL tolerated when something succeeded (unchanged)", () => {
+    const r = assembleFanOutResult([ok(0, "a"), fail("provider 503")], 2)
+    expect(r.succeededCount).toBe(1)
+    expect(r.genuineFailure).toBeInstanceOf(Error)
+    expect(r.genuineFailure).not.toBeInstanceOf(DrainAbortError)
+    expect(r.output.listResults).toEqual(["a", ""])
   })
 })
