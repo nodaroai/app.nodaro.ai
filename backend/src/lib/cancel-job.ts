@@ -45,11 +45,16 @@ const CANCELLABLE_STATUSES = ["pending", "queued", "processing"] as const
  */
 export async function refundReservedHolds(jobIds: string[]): Promise<void> {
   if (jobIds.length === 0) return
-  const { data: usageLogs } = await supabase
+  const { data: usageLogs, error } = await supabase
     .from("usage_logs")
     .select("id")
     .in("job_id", jobIds)
     .eq("status", "reserved")
+  if (error) {
+    // Silently refunding nothing would leave the hold `reserved` forever.
+    console.error(`[cancel-job] Failed to read reserved holds for ${jobIds.join(",")}:`, error)
+    return
+  }
   if (!usageLogs || usageLogs.length === 0) return
   const { CreditsService } = await import("../ee/billing/credits.js")
   await Promise.all(
