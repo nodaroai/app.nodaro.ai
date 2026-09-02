@@ -23,13 +23,24 @@ import {
 const REJECTED = {
   id: "job-1",
   error_message: "Content policy violation: The output was blocked by the provider's safety filter.",
+  error_detail: null,
   user_id: "u1",
   provider: null,
   provider_kind: "kie-image",
   source: null,
   source_detail: null,
   completed_at: "2026-07-18T00:00:00Z",
-  input_data: { model: "seedream-5-pro", type: "image-generate", prompt: "portrait of …" },
+  input_data: {
+    model: "seedream-5-pro",
+    type: "image-generate",
+    prompt: "portrait of …",
+    aspectRatio: "3:2",
+    resolution: "2K",
+    referenceImageUrls: ["https://cdn.nodaro.ai/a.png", "https://cdn.nodaro.ai/b.png"],
+    imageUrl: "https://cdn.nodaro.ai/c.png",
+    executionId: "exec-9",
+    origin: "studio",
+  },
 }
 const TIMEOUT = { ...REJECTED, id: "job-2", error_message: "Provider timeout after 30s" }
 
@@ -164,6 +175,14 @@ describe("sweepFailedExecutions", () => {
   })
 })
 
+const COPYRIGHT = {
+  ...TIMEOUT,
+  id: "job-3",
+  error_message:
+    "The provider declined this generation: the output may resemble protected (copyrighted) content. Rephrasing the prompt usually resolves this.",
+  error_detail: "task failed: [400] output video may be related to copyright restrictions",
+}
+
 describe("report builders", () => {
   it("rejectionReportFor builds the report payload from the jobs row", () => {
     const report = rejectionReportFor(REJECTED)
@@ -230,5 +249,47 @@ describe("report builders", () => {
     expect(report.title).toContain("nano-banana")
     expect(report.appSlug).toBe("person")
     expect(report.payload).toMatchObject({ model: "nano-banana" })
+  })
+
+  it("both payloads carry the fixed params subset, never the URLs themselves", () => {
+    const report = failureReportFor(REJECTED)
+    expect(report.payload!.params).toEqual({
+      aspectRatio: "3:2",
+      resolution: "2K",
+      referenceImageUrls: 2,
+      imageUrl: true,
+      executionId: "exec-9",
+      origin: "studio",
+    })
+    expect(JSON.stringify(report.payload)).not.toContain("cdn.nodaro.ai/a.png")
+    expect(report.payload!.providerKind).toBe("kie-image")
+    expect(report.payload!.errorDetail).toBeNull()
+  })
+
+  it("a copyright message is a model-rejection with rejectionClass and provenance", async () => {
+    const jobsChain = chain({ data: [COPYRIGHT] })
+    const reportsChain = chain({ data: [] })
+    vi.mocked(supabase.from).mockImplementation(
+      (table: string) => (table === "jobs" ? jobsChain : reportsChain) as never,
+    )
+    await sweepFailedJobs()
+    expect(reportsChain.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "model-rejection",
+        payload: expect.objectContaining({
+          rejectionClass: "copyright",
+          errorDetail: "task failed: [400] output video may be related to copyright restrictions",
+          source: null,
+          sourceDetail: null,
+        }),
+      }),
+    )
+  })
+
+  it("the sweep selects error_detail from jobs", async () => {
+    const jobsChain = chain({ data: [] })
+    vi.mocked(supabase.from).mockImplementation(() => jobsChain as never)
+    await sweepFailedJobs()
+    expect(jobsChain.select).toHaveBeenCalledWith(expect.stringContaining("error_detail"))
   })
 })

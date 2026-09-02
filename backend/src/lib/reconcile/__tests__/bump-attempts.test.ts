@@ -229,6 +229,7 @@ describe("bumpAttemptsOrExhaust", () => {
         reconcile_attempts: MAX_ATTEMPTS,
         reconcile_last_error: "exhausted",
         error_message: expect.stringContaining("reconcile_exhausted"),
+        error_detail: null,
       }),
     )
     expect(mocks.jobsUpdateInMock).toHaveBeenCalledWith(

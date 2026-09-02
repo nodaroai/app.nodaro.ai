@@ -9,6 +9,7 @@ import {
   sendInternalError,
   registerInternalErrorSanitizer,
   registerErrorTelemetry,
+  isClientAbort,
   __flushHttpErrorTelemetry,
   __resetHttpErrorTelemetry,
 } from "../http-errors.js"
@@ -439,6 +440,75 @@ describe("structured-failure telemetry (402 / 400 / 503) — observe-only", () =
     await app.inject({ method: "POST", url: "/generate", payload: {} })
     await new Promise((resolve) => setImmediate(resolve))
     expect(insertAppReport).not.toHaveBeenCalled()
+    await app.close()
+  })
+})
+
+describe("client aborts (W0)", () => {
+  function abortedReq() {
+    const { req } = makeReq()
+    ;(req as unknown as { raw: { destroyed: boolean } }).raw = { destroyed: true }
+    return req
+  }
+  function liveReq() {
+    const { req } = makeReq()
+    ;(req as unknown as { raw: { destroyed: boolean } }).raw = { destroyed: false }
+    return req
+  }
+  const premature = Object.assign(new Error("Premature close"), { code: "ERR_STREAM_PREMATURE_CLOSE" })
+  const reset = Object.assign(new Error("read ECONNRESET"), { code: "ECONNRESET" })
+
+  it("isClientAbort needs BOTH a destroyed request and an abort code", () => {
+    expect(isClientAbort(abortedReq(), premature)).toBe(true)
+    expect(isClientAbort(abortedReq(), reset)).toBe(true)
+    expect(isClientAbort(liveReq(), reset)).toBe(false) // an outbound provider reset — a real 5xx
+    expect(isClientAbort(abortedReq(), new Error("boom"))).toBe(false)
+  })
+
+  it("sendInternalError files no internal-error report for a client abort", async () => {
+    const reply = makeReply()
+    sendInternalError(reply as unknown as FastifyReply, abortedReq(), premature)
+    await __flushHttpErrorTelemetry()
+    expect(insertAppReport).not.toHaveBeenCalled()
+    expect(reply.statusCode).toBe(500)
+  })
+
+  it("the onError hook files no report for a client abort but still does for a real throw", async () => {
+    const app = Fastify()
+    registerErrorTelemetry(app)
+    app.get("/abort", async (req) => {
+      ;(req.raw as { destroyed: boolean }).destroyed = true
+      throw premature
+    })
+    app.get("/real", async () => {
+      throw new Error("db exploded")
+    })
+    await app.ready()
+    await app.inject({ method: "GET", url: "/abort" })
+    await __flushHttpErrorTelemetry()
+    expect(insertAppReport).not.toHaveBeenCalled()
+    await app.inject({ method: "GET", url: "/real" })
+    await __flushHttpErrorTelemetry()
+    expect(insertAppReport).toHaveBeenCalledTimes(1)
+    await app.close()
+  })
+})
+
+describe("image-proxy 400s are not validation-reject reports (W0)", () => {
+  it("skips /v1/image-proxy, still reports other routes", async () => {
+    const app = Fastify()
+    registerInternalErrorSanitizer(app)
+    const reject = async (_req: unknown, reply: { status: (c: number) => { send: (b: unknown) => unknown } }) =>
+      reply.status(400).send({ error: { code: "validation_error", message: "Missing or invalid 'url' query parameter" } })
+    app.get("/v1/image-proxy", reject as never)
+    app.get("/v1/other", reject as never)
+    await app.ready()
+    await app.inject({ method: "GET", url: "/v1/image-proxy" })
+    await __flushHttpErrorTelemetry()
+    expect(insertAppReport).not.toHaveBeenCalled()
+    await app.inject({ method: "GET", url: "/v1/other" })
+    await __flushHttpErrorTelemetry()
+    expect(insertAppReport).toHaveBeenCalledTimes(1)
     await app.close()
   })
 })

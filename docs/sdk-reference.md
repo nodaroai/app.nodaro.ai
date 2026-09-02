@@ -687,11 +687,16 @@ get(id: string): Promise<{ data: Job }>
 const { data: job } = await client.jobs.get(jobId)
 ```
 
-The returned `Job` uses snake_case fields to match the wire format. Sensitive
-fields (`provider`, `provider_cost`, `display_cost`, `credits_actual`) are
-stripped server-side for non-admin callers. Server-only values inside job JSON,
-including Recast's private pre-watermark remux base, are removed recursively
-for every caller, including administrators.
+The returned `Job` uses snake_case fields to match the wire format. Non-admin
+callers receive an explicit allowlist of job fields — `id`, `status`,
+`progress`, `input_data`, `output_data`, `error_message`, `created_at`,
+`started_at`, `completed_at`, `user_id`, `credits`, `job_type`, `source`,
+`source_detail`, plus `recovering` while a processing job is being recovered.
+Admin callers additionally receive `provider`, `provider_cost`, `display_cost`,
+`credits_actual`, `error_detail` (the provider's redacted raw error) and
+`reconcile_attempts`. Any other column never reaches any caller. Server-only
+values inside job JSON, including Recast's private pre-watermark remux base,
+are removed recursively for every caller, including administrators.
 
 #### `getStatus(id)`
 

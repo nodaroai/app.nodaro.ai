@@ -117,6 +117,8 @@ export interface JobRecord {
   input_data: unknown
   output_data: unknown
   error_message: string | null
+  /** W0: redacted raw provider error. Admin-only — see sanitizeJobForPublic. */
+  error_detail?: string | null
   created_at: string
   started_at: string | null
   completed_at: string | null
@@ -134,80 +136,62 @@ export interface JobRecord {
   source_detail?: string | null
 }
 
-// Public job type (for regular users). USD-denominated `cost` removed
-// per the api/sdk/mcp-wide policy: regular callers see only `credits`.
-// Admins keep the full JobRecord shape (with provider / provider_cost /
-// display_cost / credits_actual).
-export interface PublicJob {
-  id: string
-  status: string
-  progress: number
-  input_data: unknown
-  output_data: unknown
-  error_message: string | null
-  created_at: string
-  started_at: string | null
-  completed_at: string | null
-  user_id: string
-  credits: number | null
-  job_type: string | null
-  source?: string | null
-  source_detail?: string | null
+/** Every key a NON-admin caller may see. An ALLOWLIST (W0, 2026-09-01):
+ *  `jobs` gains columns over time (error_detail, cost columns, reconcile
+ *  counters) and a denylist made each one owner-visible by default. Adding a
+ *  column now requires adding it here on purpose. `recovering` is derived. */
+export const PUBLIC_JOB_KEYS = [
+  "id", "status", "progress", "input_data", "output_data", "error_message",
+  "created_at", "started_at", "completed_at", "user_id", "credits", "job_type",
+  "source", "source_detail",
+] as const
+
+/** Keys admins see in addition — provider internals, USD costs, the raw
+ *  provider error, the reconcile counter. */
+export const ADMIN_ONLY_JOB_KEYS = [
+  "provider", "provider_cost", "display_cost", "credits_actual", "error_detail", "reconcile_attempts",
+] as const
+
+export type PublicJob = Pick<JobRecord, Extract<(typeof PUBLIC_JOB_KEYS)[number], keyof JobRecord>> & { recovering?: true }
+
+function pickKeys(row: Record<string, unknown>, keys: readonly string[]): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const k of keys) if (k in row) out[k] = row[k]
+  return out
 }
 
 /**
  * Sanitize job data for public API response.
  *
- * Non-admin callers see only the credits abstraction — USD pricing
- * (display_cost / provider_cost) is admin-only, same pattern as the
- * frontend's `sanitizeJobForPublic` filter. Provider id is also hidden
- * (internal implementation detail; the user only knows the model id
- * they picked, which is preserved in input_data).
- *
- * Admins (req.userRole === 'admin') see the cost/provider fields, but the
- * private Recast remux base is server-only for every caller.
+ * Non-admin callers get exactly PUBLIC_JOB_KEYS (credits, never USD; never the
+ * provider id, never the raw provider error). Admins get PUBLIC + ADMIN_ONLY.
+ * Nobody gets a key outside those two lists, and the private Recast remux
+ * base is redacted for every caller (redactPrivateJobData).
  */
 export function sanitizeJobForPublic(job: JobRecord, isAdmin: boolean): JobRecord | PublicJob {
-  const publicJob = redactPrivateJobData(job)
+  const redacted = redactPrivateJobData(job) as unknown as Record<string, unknown>
+  const picked = pickKeys(redacted, isAdmin ? [...PUBLIC_JOB_KEYS, ...ADMIN_ONLY_JOB_KEYS] : PUBLIC_JOB_KEYS)
 
-  // Admin users retain operational and cost fields after server-only data is
-  // removed. Returning the original row here would leak Recast's remux base.
-  if (isAdmin) {
-    return publicJob
-  }
+  // Recovery visibility (audit UX): a processing row the reconcile system has
+  // touched is self-healing, not just slow — expose a boolean, never the counter.
+  const attempts = (redacted.reconcile_attempts as number | null | undefined) ?? 0
+  if (!isAdmin && redacted.status === "processing" && attempts > 0) picked.recovering = true
 
-  // Regular users: strip ALL USD-denominated cost fields. Credits stay
-  // (that's the abstraction the user is billed in). The previous
-  // version renamed display_cost → cost, which still leaked USD; user
-  // explicitly asked for USD to be admin-only across api/sdk/mcp.
-  const {
-    provider: _provider,
-    provider_cost: _providerCost,
-    display_cost: _displayCost,
-    credits_actual: _creditsActual,
-    reconcile_attempts: _reconcileAttempts,
-    ...rest
-  } = publicJob as JobRecord & { reconcile_attempts?: number | null }
-
-  // Recovery visibility (audit UX): expose a boolean instead of the raw
-  // internal counter — a processing row the reconcile system has touched is
-  // self-healing, not just slow.
-  if (publicJob.status === "processing" && ((_reconcileAttempts as number | null) ?? 0) > 0) {
-    ;(rest as Record<string, unknown>).recovering = true
-  }
-
-  // Also strip internal fields from input_data (orchestrator stores full payload)
-  if (rest.input_data && typeof rest.input_data === "object") {
-    const cleaned = { ...(rest.input_data as Record<string, unknown>) }
+  // Strip internal fields from input_data (the orchestrator stores the full
+  // payload). NON-ADMIN ONLY — parity with the pre-allowlist sanitizer, whose
+  // admin branch returned before this block: `input_data.provider` is the model
+  // id on character/entity jobs and admins read it for forensics.
+  if (!isAdmin && picked.input_data && typeof picked.input_data === "object") {
+    const cleaned = { ...(picked.input_data as Record<string, unknown>) }
     delete cleaned.userId
     delete cleaned.jobId
     delete cleaned.usageLogId
     delete cleaned.force_private
     delete cleaned.provider
-    rest.input_data = cleaned
+    picked.input_data = cleaned
   }
 
-  return rest
+  return picked as unknown as JobRecord | PublicJob
 }
 
 /**
@@ -309,7 +293,7 @@ export async function jobRoutes(app: FastifyInstance) {
 
     let query = supabase
       .from("jobs")
-      .select("id, status, progress, input_data, output_data, error_message, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, reconcile_attempts, source, source_detail")
+      .select("id, status, progress, input_data, output_data, error_message, error_detail, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, reconcile_attempts, source, source_detail")
       .eq("id", id)
 
     if (!isAdmin) {

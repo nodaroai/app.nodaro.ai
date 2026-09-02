@@ -1,6 +1,7 @@
 import { variantJobId } from "@nodaro/shared"
 import { supabase } from "../supabase.js"
 import { uploadToR2 } from "../storage.js"
+import { providerDetailOf } from "../provider-error-detail.js"
 import {
   pollKieTask,
   pollVeoTask,
@@ -169,7 +170,7 @@ async function reconcileKieSunoJob(row: KieJobRow, opts?: ReconcileOpts): Promis
     // instead of riding to the 18-attempt exhaustion (the old msg.includes match
     // never matched the sanitized message).
     if (isUpstreamKieFailure(err)) {
-      await markFailed(row.id, msg)
+      await markFailed(row.id, msg, providerDetailOf(err))
       await refundReservedCreditsForJob(row.id)
     } else {
       await bumpAttemptsOrExhaust(row.id, err)
@@ -231,7 +232,7 @@ async function reconcileKieSunoJob(row: KieJobRow, opts?: ReconcileOpts): Promis
   }
 }
 
-async function markFailed(jobId: string, reason: string): Promise<void> {
+async function markFailed(jobId: string, reason: string, detail: string | null = null): Promise<void> {
   // CAS on the non-terminal precondition (not just `.neq("cancelled")`) so a job
   // the worker concurrently flipped to `completed` (or `cancelled`/`failed`) is
   // never trampled to `failed`. Matches sweepStaleSyncJob / forceFailExhausted.
@@ -240,6 +241,7 @@ async function markFailed(jobId: string, reason: string): Promise<void> {
     .update({
       status: "failed",
       error_message: reason.slice(0, 500),
+      error_detail: detail,
       completed_at: new Date().toISOString(),
       reconcile_last_error: "upstream_failed",
     })
@@ -278,7 +280,7 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
     // poll clients now set the flag (createUpstreamFailureError), so every
     // provider fails fast here — not just kie-standard.
     if (isUpstreamKieFailure(err)) {
-      await markFailed(row.id, msg)
+      await markFailed(row.id, msg, providerDetailOf(err))
       await refundReservedCreditsForJob(row.id)
     } else {
       // still pending / transient / unsupported kind — try again next tick

@@ -78,6 +78,30 @@ function requestContext(req: FastifyRequest): { route: string; path: string; use
   }
 }
 
+/** Node stream / socket error codes a client can cause by going away
+ *  mid-request (tab closed during an upload, connection dropped). */
+const CLIENT_ABORT_CODES = new Set(["ERR_STREAM_PREMATURE_CLOSE", "ECONNRESET", "ECONNABORTED"])
+
+/**
+ * True when the error is the CLIENT's disconnect, not ours. Both conditions
+ * are required: the request socket must be gone (`req.raw.destroyed` — the
+ * documented replacement for the deprecated `req.raw.aborted`, DEP0156) AND
+ * the error must carry an abort code. Either alone misfires: an ECONNRESET
+ * from an OUTBOUND provider fetch inside a handler is a genuine 5xx and must
+ * keep filing a report (W0, 2026-09-01: 8 "Premature close" rows on
+ * /v1/upload were filed as internal errors).
+ */
+export function isClientAbort(req: FastifyRequest, err: unknown): boolean {
+  const destroyed = (req.raw as { destroyed?: boolean } | undefined)?.destroyed === true
+  const code = (err as { code?: unknown } | null)?.code
+  return destroyed && typeof code === "string" && CLIENT_ABORT_CODES.has(code)
+}
+
+/** Unauthenticated, bot-shaped 400s that carry no product signal. The skip is
+ *  ROUTE-WIDE, so it also drops image-proxy's SSRF "URL resolves to a blocked
+ *  address" 400 — which `routes/image-proxy.ts` still `req.log.warn`s. */
+const STRUCTURED_FAILURE_ROUTE_SKIP = new Set(["/v1/image-proxy"])
+
 /** Throttle-checked, fail-safe report of one HTTP incident into `app_reports`. */
 function fileHttpReport(
   req: FastifyRequest,
@@ -127,6 +151,7 @@ function reportServerError(
   err?: unknown,
 ): void {
   try {
+    if (isClientAbort(req, err)) return
     const { route } = requestContext(req)
     fileHttpReport(req, {
       kind: "internal-error",
@@ -225,7 +250,7 @@ function reportStructuredFailure(
       throttleKey: `${req.method} ${route} :: ${userId ?? "anon"}`,
       payload: { message, required: body.required ?? null, balance: body.balance ?? null },
     })
-  } else if (statusCode === 400 && code === "validation_error") {
+  } else if (statusCode === 400 && code === "validation_error" && !STRUCTURED_FAILURE_ROUTE_SKIP.has(route)) {
     // Wrong parameters that never reach the provider — from our own UI these
     // are OUR bugs (the recurring stale-enum / Zod-reject class).
     fileHttpReport(req, {
@@ -289,7 +314,10 @@ export function registerInternalErrorSanitizer(app: FastifyInstance): void {
       req.log.error({ rawMessage: raw, path: req.url }, "sanitized internal_error response body")
     }
     // Marked replies were already reported at the sendInternalError site; this
-    // covers routes that composed an internal_error 500 by hand.
+    // covers routes that composed an internal_error 500 by hand. No throwable
+    // reaches here, so `isClientAbort` can never match on this path — a
+    // hand-composed internal_error 500 during a client abort is still reported
+    // (the 8 observed abort rows arrived via "uncaught", which IS covered).
     reportServerError(req, raw ?? GENERIC_INTERNAL_MESSAGE, "sanitizer-net")
     body.error.message = GENERIC_INTERNAL_MESSAGE
 

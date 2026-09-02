@@ -37,6 +37,13 @@ const CONTENT_REJECTION_PATTERNS = [
   "was filtered",
   "filtered by",
   "filtered due",
+  // W0 (2026-09-01): the KIE copyright / likeness messages
+  // (providers/kie/client.ts CONTENT_POLICY_MESSAGES + the sanitizer's
+  // "Blocked for copyright") were filed as plain job failures. Match the
+  // short discriminating fragments, never the full sentences.
+  "declined this generation",
+  "blocked for copyright",
+  "real person's likeness",
 ]
 
 // Input-shape limits (permanent until the caller changes the input).
@@ -70,6 +77,19 @@ export function isContentRejection(errorMessage: string | null | undefined): boo
   const lower = errorMessage.toLowerCase()
   if (isLocalFfmpegError(lower)) return false
   return CONTENT_REJECTION_PATTERNS.some((p) => lower.includes(p))
+}
+
+export type RejectionClass = "copyright" | "likeness" | "safety"
+
+/** Which kind of content block a rejection message describes. Copyright is
+ *  tested first (its messages also say "violation"), then likeness, then any
+ *  other rejection is safety/moderation. Null when not a rejection at all. */
+export function rejectionClassOf(errorMessage: string | null | undefined): RejectionClass | null {
+  if (!isContentRejection(errorMessage)) return null
+  const lower = errorMessage!.toLowerCase()
+  if (lower.includes("copyright") || lower.includes("intellectual property") || lower.includes("trademark")) return "copyright"
+  if (lower.includes("likeness") || lower.includes("public figure") || lower.includes("celebrit")) return "likeness"
+  return "safety"
 }
 
 /**

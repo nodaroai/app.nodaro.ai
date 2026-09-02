@@ -12,6 +12,7 @@
  */
 
 import { supabase } from "../supabase.js"
+import { redactProviderDetail } from "../provider-error-detail.js"
 import { finalizeExclusiveCloudOutput } from "../../workers/handlers/nodaro-exclusive-relay.js"
 import { bumpAttemptsOrExhaust } from "./bump-attempts.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
@@ -26,6 +27,7 @@ async function markFailed(jobId: string, reason: string): Promise<void> {
     .update({
       status: "failed",
       error_message: reason.slice(0, 500),
+      error_detail: redactProviderDetail(reason),
       completed_at: new Date().toISOString(),
       reconcile_last_error: "upstream_failed",
     })

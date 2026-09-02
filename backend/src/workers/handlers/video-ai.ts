@@ -581,7 +581,10 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
     try {
       result = await textToVideo(prompt, resolvedT2vProvider, duration, aspectRatio, t2vOpts, { onTaskCreated: t2vOnTaskCreated })
     } catch (err) {
-      if (!(err instanceof KieError) || !err.contentPolicy) throw err
+      // The rewrite prompt (lib/content-policy-rewrite.ts) is copyright-aware
+      // only; asking it to fix a real-person-likeness block is a no-op that
+      // burns an LLM call and a paid retry — throw those straight through.
+      if (!(err instanceof KieError) || !err.contentPolicy || err.contentPolicyClass === "likeness") throw err
       const rewritten = await rewriteForContentPolicy(prompt)
       if (!rewritten) throw err
       result = await textToVideo(rewritten, resolvedT2vProvider, duration, aspectRatio, t2vOpts, { onTaskCreated: t2vOnTaskCreated })

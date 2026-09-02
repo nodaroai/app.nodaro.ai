@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { isContentRejection, isRetryableFailure } from "../_job-error.js"
+import { isContentRejection, isRetryableFailure, rejectionClassOf } from "../_job-error.js"
 
 describe("isRetryableFailure", () => {
   it("marks content-policy / safety failures NON-retryable", () => {
@@ -77,5 +77,32 @@ describe("local ffmpeg failures are never content rejections (2026-07-20 sweep f
     expect(isContentRejection("Your image was filtered by the safety system")).toBe(true)
     expect(isContentRejection("Prompt content filtered")).toBe(true)
     expect(isContentRejection("Output filtered due to policy")).toBe(true)
+  })
+})
+
+describe("copyright / likeness messages are rejections (W0)", () => {
+  const COPYRIGHT_A =
+    "The provider declined this generation: the output may resemble protected (copyrighted) content. Rephrasing the prompt usually resolves this."
+  const COPYRIGHT_B =
+    "Blocked for copyright: the provider refused this generation because the output may contain copyrighted material (recognizable characters, footage, music, or logos)."
+  const LIKENESS =
+    "The provider declined this generation because it may depict a real person's likeness. Use a stylized or non-photoreal reference, or switch to a model that allows likeness edits."
+  const SAFETY =
+    "Content policy violation: The output was blocked by the provider's safety filter. Try modifying your prompt or input image."
+
+  it("all three classes are content rejections and non-retryable", () => {
+    for (const m of [COPYRIGHT_A, COPYRIGHT_B, LIKENESS, SAFETY]) {
+      expect(isContentRejection(m)).toBe(true)
+      expect(isRetryableFailure(m)).toBe(false)
+    }
+  })
+
+  it("rejectionClassOf names the class", () => {
+    expect(rejectionClassOf(COPYRIGHT_A)).toBe("copyright")
+    expect(rejectionClassOf(COPYRIGHT_B)).toBe("copyright")
+    expect(rejectionClassOf(LIKENESS)).toBe("likeness")
+    expect(rejectionClassOf(SAFETY)).toBe("safety")
+    expect(rejectionClassOf("Provider timeout after 30s")).toBeNull()
+    expect(rejectionClassOf(null)).toBeNull()
   })
 })

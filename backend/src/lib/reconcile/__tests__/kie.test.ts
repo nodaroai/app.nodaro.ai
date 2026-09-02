@@ -18,10 +18,12 @@ const mocks = vi.hoisted(() => {
   // check `err instanceof KieError` works inside the handler.
   class FakeKieError extends Error {
     isUpstreamFailure: boolean
-    constructor(message: string, isUpstreamFailure = false) {
+    internalDetails: string
+    constructor(message: string, isUpstreamFailure = false, internalDetails = "task failed: [500] raw provider text") {
       super(message)
       this.name = "KieError"
       this.isUpstreamFailure = isUpstreamFailure
+      this.internalDetails = internalDetails
     }
   }
 
@@ -288,6 +290,10 @@ describe("reconcileKieJob", () => {
     await reconcileKieJob(row)
     expect(mocks.refundMock).toHaveBeenCalledWith("j-failed")
     expect(mocks.finalizeMock).not.toHaveBeenCalled()
+    // W0: the redacted raw provider text rides along with the sanitized reason.
+    expect(mocks.jobsUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "failed", error_detail: expect.any(String) }),
+    )
   })
 
   it("kie-veo upstream failure → markFailed + refund (fail-fast for non-kie-standard kinds)", async () => {

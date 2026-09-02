@@ -1,7 +1,7 @@
 import cron from "node-cron"
 import { supabase } from "./supabase.js"
 import { insertAppReport } from "./app-reports.js"
-import { isContentRejection } from "./mcp/tools/_job-error.js"
+import { isContentRejection, rejectionClassOf } from "./mcp/tools/_job-error.js"
 
 /**
  * Failed-work sweeps → `app_reports`.
@@ -38,6 +38,7 @@ const ERROR_EXCERPT_MAX = 500
 interface FailedJobRow {
   id: string
   error_message: string | null
+  error_detail: string | null
   user_id: string | null
   provider: string | null
   provider_kind: string | null
@@ -65,6 +66,32 @@ export function excerptPrompt(inputData: Record<string, unknown> | null): string
   return typeof p === "string" && p.length > 0 ? p.slice(0, PROMPT_EXCERPT_MAX) : null
 }
 
+/** The parameters that decide whether a provider accepts a request — read from
+ *  `input_data` (buildJobInputData spreads the whole parsed body; the
+ *  orchestrator writes the built payload back after buildPayload). Media URLs
+ *  are reduced to presence/count: the report is admin-only but the payload is
+ *  copied around, and a URL is never needed to triage a parameter reject. */
+const PARAM_KEYS = ["aspectRatio", "resolution", "quality", "duration", "mode", "size", "generationType", "customMode", "executionId", "origin"] as const
+const URL_ARRAY_KEYS = ["referenceImageUrls", "imageUrls", "videoUrls", "audioUrls"] as const
+const URL_KEYS = ["imageUrl", "videoUrl", "audioUrl", "firstFrameUrl", "lastFrameUrl"] as const
+
+export function paramsOf(inputData: Record<string, unknown> | null): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  if (!inputData) return out
+  for (const k of PARAM_KEYS) {
+    const v = inputData[k]
+    if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") out[k] = v
+  }
+  for (const k of URL_ARRAY_KEYS) {
+    const v = inputData[k]
+    if (Array.isArray(v)) out[k] = v.length
+  }
+  for (const k of URL_KEYS) {
+    if (typeof inputData[k] === "string" && (inputData[k] as string).length > 0) out[k] = true
+  }
+  return out
+}
+
 /** The model id key varies by job type: generate-image stores `model`,
  *  character/entity assets store it as `provider` (legacy naming — it holds a
  *  MODEL_CATALOG id), LLM jobs store `llmModel`. First string wins. */
@@ -83,6 +110,22 @@ function jobReportBasics(job: FailedJobRow) {
   return { model, jobType, origin }
 }
 
+function commonPayload(job: FailedJobRow, model: string | null, jobType: string | null) {
+  return {
+    model,
+    jobType,
+    provider: job.provider ?? job.provider_kind,
+    providerKind: job.provider_kind,
+    source: job.source,
+    sourceDetail: job.source_detail,
+    error: job.error_message,
+    errorDetail: job.error_detail,
+    params: paramsOf(job.input_data),
+    prompt: excerptPrompt(job.input_data),
+    failedAt: job.completed_at,
+  }
+}
+
 export function rejectionReportFor(job: FailedJobRow): Parameters<typeof insertAppReport>[0] {
   const { model, jobType, origin } = jobReportBasics(job)
   return {
@@ -91,14 +134,7 @@ export function rejectionReportFor(job: FailedJobRow): Parameters<typeof insertA
     kind: "model-rejection",
     severity: "warning",
     title: `${model ?? jobType ?? "A generation"} was rejected by the provider's content filter`,
-    payload: {
-      model,
-      jobType,
-      provider: job.provider ?? job.provider_kind,
-      error: job.error_message,
-      prompt: excerptPrompt(job.input_data),
-      failedAt: job.completed_at,
-    },
+    payload: { ...commonPayload(job, model, jobType), rejectionClass: rejectionClassOf(job.error_message) },
     userId: job.user_id,
     jobId: job.id,
   }
@@ -113,16 +149,7 @@ export function failureReportFor(job: FailedJobRow): Parameters<typeof insertApp
     kind: "job-failure",
     severity: "error",
     title: `${model ?? jobType ?? "A job"} failed: ${error.slice(0, 200)}`,
-    payload: {
-      model,
-      jobType,
-      provider: job.provider ?? job.provider_kind,
-      source: job.source,
-      sourceDetail: job.source_detail,
-      error: job.error_message,
-      prompt: excerptPrompt(job.input_data),
-      failedAt: job.completed_at,
-    },
+    payload: commonPayload(job, model, jobType),
     userId: job.user_id,
     jobId: job.id,
   }
@@ -135,7 +162,7 @@ export async function sweepFailedJobs(): Promise<{ scanned: number; reported: nu
     // reject the whole query and this sweep silently scanned nothing from the
     // day it shipped (prod: "column jobs.model_identifier does not exist").
     // The model id lives inside input_data (see modelOf).
-    .select("id, error_message, user_id, provider, provider_kind, source, source_detail, completed_at, input_data")
+    .select("id, error_message, error_detail, user_id, provider, provider_kind, source, source_detail, completed_at, input_data")
     .eq("status", "failed")
     .gte("completed_at", since)
     .order("completed_at", { ascending: false })

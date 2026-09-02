@@ -8,6 +8,7 @@ import { runWithJobCancellation, JobCancelledError } from "../lib/job-cancellati
 // NOTE: imported from their CORE modules, not re-exported through ./shared.js —
 // the test harness mocks shared.js wholesale and would undefine them.
 import { isPostProcessingError } from "../lib/post-processing-error.js"
+import { providerDetailOf } from "../lib/provider-error-detail.js"
 import { isReconcileRecoverable } from "../lib/reconcile/types.js"
 import { DrainAbortError } from "../lib/worker-drain.js"
 import { resolveIsPublicOutput, mcpClientForcesPrivate } from "./output-visibility.js"
@@ -355,7 +356,7 @@ export function createVideoWorker() {
         // usage_log). On non-final attempts we just rethrow so BullMQ retries
         // with the reservation intact.
         if (finalAttempt) {
-          // Save only the sanitized message to DB (internal details already logged above).
+          // Save the sanitized message (user-facing) plus the redacted provider detail (operator-facing).
           // CAS on status so a job a concurrent writer already moved to a terminal
           // state (inflight-reconcile cron completing it, or a stall re-pick) is NOT
           // trampled from "completed"/"cancelled" → "failed" (which would orphan its
@@ -366,6 +367,9 @@ export function createVideoWorker() {
             .update({
               status: "failed",
               error_message: message,
+              // W0: the provider's own error, redacted — the sanitized message
+              // above is what the user sees; this is what the operator needs.
+              error_detail: providerDetailOf(err),
               completed_at: new Date().toISOString(),
             })
             .eq("id", jobId)

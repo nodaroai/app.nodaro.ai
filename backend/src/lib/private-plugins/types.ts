@@ -859,8 +859,10 @@ export interface PluginJobsToolkit {
    *
    * OPTIONAL (additive-contract convention): absent → 503 "backend update
    * required" from the consuming route.
+   *
+   * `detail` (optional, W0): the provider's raw error; the toolkit redacts it (lib/provider-error-detail.ts) into `jobs.error_detail`. Omit when there is no provider text.
    */
-  markJobFailed?(jobId: string, errorMessage: string): Promise<boolean>
+  markJobFailed?(jobId: string, errorMessage: string, detail?: string | null): Promise<boolean>
   /**
    * Exposes the worker-layer refund (`workers/shared.ts` `refundJobCredits`)
    * to routes. Falsy usageLogId no-ops; a string reason always refunds

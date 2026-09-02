@@ -1,6 +1,7 @@
 import { config } from "../config.js"
 import { supabase } from "../supabase.js"
 import { finalizeJobWithMedia, type FinalizeJobType } from "../job-finalize.js"
+import { redactProviderDetail } from "../provider-error-detail.js"
 import type { ReconcileOpts } from "./kie.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
 import { deleteCharacterLora } from "../../providers/replicate/training.js"
@@ -171,6 +172,7 @@ async function markFailed(jobId: string, reason: string): Promise<void> {
     .update({
       status: "failed",
       error_message: reason.slice(0, 500),
+      error_detail: redactProviderDetail(reason),
       completed_at: new Date().toISOString(),
       reconcile_last_error: "upstream_failed",
     })

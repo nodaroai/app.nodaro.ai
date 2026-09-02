@@ -64,6 +64,9 @@ export class KieError extends Error {
    *  cross-repo contract (the private plugin toolkit's `isContentPolicyError`
    *  checks `err.contentPolicy === true`) — do not rename. */
   public readonly contentPolicy: boolean
+  /** Which kind of content block, when `contentPolicy` is true; null otherwise.
+   *  Additive beside the boolean — the boolean is the cross-repo contract. */
+  public readonly contentPolicyClass: ContentPolicyClass | null
 
   constructor(
     sanitizedMessage: string,
@@ -71,6 +74,7 @@ export class KieError extends Error {
     context: string,
     isUpstreamFailure = false,
     contentPolicy = false,
+    contentPolicyClass: ContentPolicyClass | null = null,
   ) {
     super(sanitizedMessage)
     this.name = "KieError"
@@ -78,6 +82,7 @@ export class KieError extends Error {
     this.context = context
     this.isUpstreamFailure = isUpstreamFailure
     this.contentPolicy = contentPolicy
+    this.contentPolicyClass = contentPolicy ? contentPolicyClass : null
   }
 
   /** Get full error message including internal details (for logging/debugging) */
@@ -222,23 +227,36 @@ export function createSanitizedError(
  *  throw in the poll clients — a transient/timeout/no-result error must NOT use
  *  it (those should keep bumping for the next cron tick).
  *
- *  `options.contentPolicy` / `options.userMessage` let a caller that has
- *  already classified the failure (see `classifyContentPolicy`) override the
- *  generic sanitized-message pattern matching with a real, specific
- *  user-facing reason. Omitting `options` (every existing call site) is
- *  behavior-identical to before this param was added. */
+ *  Classification happens HERE by default (W0): omitting `options` no longer
+ *  means "not a content block" — it means "classify `internalMessage` for me"
+ *  (`classifyContentPolicyClass`), so every client throwing through this helper
+ *  gets the class + the honest message. A caller that has already classified
+ *  passes `options.contentPolicy` (authoritative) and optionally
+ *  `options.contentPolicyClass` / `options.userMessage` to override the message. */
 export function createUpstreamFailureError(
   internalMessage: string,
   context: string,
-  options?: { contentPolicy?: boolean; userMessage?: string },
+  options?: { contentPolicy?: boolean; contentPolicyClass?: ContentPolicyClass | null; userMessage?: string },
 ): KieError {
-  const contentPolicy = options?.contentPolicy ?? false
-  if (options?.userMessage) {
+  // W0: every terminal upstream failure is classified HERE, so the 9
+  // non-`pollKieTask` throw sites across six client files (kie/veo in this file,
+  // suno, kling3, luma, runway, kontext) all get the class + the honest message
+  // — not just pollKieTask. An explicit `contentPolicy` from the caller is
+  // authoritative.
+  const cls: ContentPolicyClass | null =
+    options?.contentPolicy === undefined
+      ? (options?.contentPolicyClass ?? classifyContentPolicyClass(internalMessage))
+      : options.contentPolicy
+        ? (options.contentPolicyClass ?? classifyContentPolicyClass(internalMessage) ?? "safety")
+        : null
+  const contentPolicy = cls !== null
+  const userMessage = options?.userMessage ?? (cls ? CONTENT_POLICY_MESSAGES[cls] : undefined)
+  if (userMessage) {
     // Mirrors createSanitizedError's debug logging — we skip calling it below
     // (its generic pattern matching would clobber the caller-supplied
     // userMessage), so log here instead to keep the same Railway visibility.
     console.error(`[KIE.ai INTERNAL ERROR] ${context}: ${internalMessage}`)
-    return new KieError(options.userMessage, internalMessage, context, true, contentPolicy)
+    return new KieError(userMessage, internalMessage, context, true, contentPolicy, cls)
   }
   return createSanitizedError(internalMessage, context, true, contentPolicy)
 }
@@ -255,28 +273,42 @@ export function isUpstreamKieFailure(err: unknown): boolean {
 // CONTENT POLICY CLASSIFICATION
 // =============================================================================
 
-/** Matches a KIE `failMsg` classified as a content-policy failure: copyright/
- *  IP, public figure or celebrity likeness, or a generic content-policy/
- *  prohibited/sensitive-content moderation block. Deliberately loose (no word
- *  boundaries) — a false positive here just picks the more specific, still
- *  correct message; a false negative falls back to the generic sanitized
- *  fallback, which is worse (a canned "try again" for a request that will
- *  fail again deterministically on retry). */
-const CONTENT_POLICY_RE = /copyright|intellectual.?property|public.?figure|celebrit|content.?polic|prohibited.?content|sensitive.?content/i
+/** Three classes of provider content block, each with its own honest message.
+ *  Order matters in `classifyContentPolicyClass`: copyright text often also
+ *  contains "violation" (a safety word), so copyright is tested first, then
+ *  likeness, then the generic safety/moderation vocabulary. */
+export type ContentPolicyClass = "copyright" | "likeness" | "safety"
 
-/** Classifies a KIE `failMsg` string as a content-policy failure. Used at the
- *  `state:"fail"` terminal-failure site (`pollKieTask`) to set
- *  `KieError.contentPolicy` and pick between `CONTENT_POLICY_MESSAGE` and the
- *  generic sanitized fallback. */
-export function classifyContentPolicy(failMsg: string): boolean {
-  return CONTENT_POLICY_RE.test(failMsg)
+const COPYRIGHT_RE = /copyright|intellectual.?property|trademark/i
+const LIKENESS_RE = /public.?figure|celebrit|real.?person|likeness/i
+const SAFETY_RE = /content.?polic|prohibited.?content|sensitive.?content|safety.?(?:filter|policy)|moderation|nsfw|inappropriate/i
+
+/** Classifies a provider `failMsg` into a content-policy class, or null when it
+ *  is not a content block (timeout, 5xx, bad parameter…). */
+export function classifyContentPolicyClass(failMsg: string): ContentPolicyClass | null {
+  if (COPYRIGHT_RE.test(failMsg)) return "copyright"
+  if (LIKENESS_RE.test(failMsg)) return "likeness"
+  if (SAFETY_RE.test(failMsg)) return "safety"
+  return null
 }
 
-/** User-facing message for a classified content-policy failure — replaces the
- *  generic "please try again" fallback with the real reason, since retrying
- *  the identical prompt/input will fail again deterministically. */
-export const CONTENT_POLICY_MESSAGE =
-  "The provider declined this generation: the output may resemble protected (copyrighted) content. Rephrasing the prompt usually resolves this."
+/** Boolean twin, kept for the existing call sites and the plugin contract. */
+export function classifyContentPolicy(failMsg: string): boolean {
+  return classifyContentPolicyClass(failMsg) !== null
+}
+
+export const CONTENT_POLICY_MESSAGES: Readonly<Record<ContentPolicyClass, string>> = {
+  copyright:
+    "The provider declined this generation: the output may resemble protected (copyrighted) content. Rephrasing the prompt usually resolves this.",
+  likeness:
+    "The provider declined this generation because it may depict a real person's likeness. Use a stylized or non-photoreal reference, or switch to a model that allows likeness edits.",
+  safety:
+    "Content policy violation: The output was blocked by the provider's safety filter. Try modifying your prompt or input image.",
+}
+
+/** Legacy alias — the copyright message. Kept so existing imports and tests
+ *  keep compiling; new code reads CONTENT_POLICY_MESSAGES[cls]. */
+export const CONTENT_POLICY_MESSAGE = CONTENT_POLICY_MESSAGES.copyright
 
 // =============================================================================
 // TYPES
@@ -639,13 +671,15 @@ export async function pollKieTask(
       )
       // Terminal upstream failure → reconcile fails fast + refunds.
       // Content-policy failures are a SUBSET of upstream failures (both flags
-      // end up true) — classify so the thrown error carries a real,
-      // actionable reason instead of the generic sanitized fallback.
-      const contentPolicy = classifyContentPolicy(failMsg)
+      // end up true). Classify the BARE failMsg here rather than letting the
+      // helper classify the `[failCode] failMsg` wrapper, so the class is
+      // decided on the provider's own words; the helper would reach the same
+      // answer, this just keeps the input honest.
+      const cls = classifyContentPolicyClass(failMsg)
       throw createUpstreamFailureError(
         `task failed: [${failCode}] ${failMsg}`,
         "Generation",
-        { contentPolicy, userMessage: contentPolicy ? CONTENT_POLICY_MESSAGE : undefined },
+        { contentPolicy: cls !== null, contentPolicyClass: cls },
       )
     }
 
