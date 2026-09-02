@@ -191,7 +191,12 @@ export async function llmStructuredJobsRoutes(app: FastifyInstance) {
         ...workerPayload(parsed.data),
         ...(analysisJobId ? { analysisJobId } : {}),
       }
-      await videoQueue.add(LLM_STRUCTURED_JOB_TYPE, payload as unknown as Record<string, unknown>, { attempts: 1 })
+      // A tighter fail window than the shared queue's 5000: the full system
+      // prompt (≤ 100k chars) + jsonSchema (≤ 64 KB) ride job.data into Redis.
+      await videoQueue.add(LLM_STRUCTURED_JOB_TYPE, payload as unknown as Record<string, unknown>, {
+        attempts: 1,
+        removeOnFail: { count: 200 },
+      })
 
       return { jobId: job.id }
     },

@@ -128,7 +128,7 @@ describe("a story run", () => {
 
     const [name, payload, opts] = mocks.queueAdd.mock.calls[0]
     expect(name).toBe("llm-structured")
-    expect(opts).toEqual({ attempts: 1 })
+    expect(opts).toEqual({ attempts: 1, removeOnFail: { count: 200 } })
     expect(payload).toMatchObject({ jobId: "parent-1", usageLogId: "usage-1", system: VALID.system, input: VALID.input, jsonSchema: SCHEMA, origin: "studio" })
     expect(payload).not.toHaveProperty("analysisJobId")
     expect(payload).not.toHaveProperty("userId")
