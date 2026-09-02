@@ -9,6 +9,9 @@
 import { ChevronRight } from "lucide-react"
 import { NodaroMark, showNodaroMark } from "@/components/nodes/nodaro-exclusive-mark"
 import { cn } from "@/lib/utils"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
+import { useAppDir } from "@/lib/locale-store"
+import { usePickerSectionLabel, usePickerTabLabel } from "@/lib/node-picker-i18n"
 import type { SidebarSection as Section } from "@/lib/node-picker-sections"
 import type { SceneNodeType } from "@/types/nodes"
 
@@ -21,6 +24,13 @@ interface SidebarSectionProps {
 
 export function SidebarSection({ section, open, onToggle, onAdd }: SidebarSectionProps) {
   const panelId = `sidebar-section-${section.id}`
+  // Same tables the add-node popup renders through, so both surfaces name a
+  // node and its family identically in every locale.
+  const tabLabel = usePickerTabLabel()
+  const familyLabel = usePickerSectionLabel()
+  const localizeNode = useLocalizeNodeLabel()
+  // Conditional rather than a `rtl:` variant — see rtl-direction-guards.test.ts.
+  const isRtl = useAppDir() === "rtl"
   return (
     <div className="mb-1.5 flex flex-col gap-0.5">
       <button
@@ -28,17 +38,19 @@ export function SidebarSection({ section, open, onToggle, onAdd }: SidebarSectio
         onClick={() => onToggle(section.id)}
         aria-expanded={open}
         aria-controls={panelId}
-        className="flex items-center gap-2 rounded-md px-1 py-1.5 text-left transition-colors hover:bg-[var(--npk-hover)]"
+        className="flex items-center gap-2 rounded-md px-1 py-1.5 text-start transition-colors hover:bg-[var(--npk-hover)]"
       >
+        {/* Collapsed, the chevron points along the reading direction (right in
+            LTR, left in RTL); open, it points down in both. */}
         <ChevronRight
           aria-hidden
           className={cn(
             "h-3 w-3 shrink-0 text-[var(--npk-icon)] transition-transform",
-            open && "rotate-90",
+            open ? "rotate-90" : isRtl && "rotate-180",
           )}
         />
         <span className="flex-1 font-sans text-[10px] font-semibold uppercase tracking-wider text-[var(--npk-accent)]">
-          {section.label}
+          {tabLabel(section.tab)}
         </span>
         <span className="font-sans text-[10px] font-semibold tabular-nums text-[var(--npk-faint)]">
           {section.count}
@@ -51,8 +63,8 @@ export function SidebarSection({ section, open, onToggle, onAdd }: SidebarSectio
       <div id={panelId} hidden={!open}>
         {open && section.families.map((family) => (
           <div key={family.id}>
-            <div className="px-2.5 pb-1 pl-4 pt-2 text-[10px] font-medium uppercase tracking-wider text-[var(--npk-dim)]">
-              {family.label}
+            <div className="px-2.5 pb-1 ps-4 pt-2 text-[10px] font-medium uppercase tracking-wider text-[var(--npk-dim)]">
+              {familyLabel(family)}
             </div>
             {family.options.map((node) => (
               <button
@@ -60,15 +72,15 @@ export function SidebarSection({ section, open, onToggle, onAdd }: SidebarSectio
                 type="button"
                 onClick={() => onAdd(node.type)}
                 className={cn(
-                  "group flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 pl-6",
-                  "text-left transition-colors touch-manipulation",
+                  "group flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 ps-6",
+                  "text-start transition-colors touch-manipulation",
                   "hover:bg-[var(--npk-hover)]",
                 )}
               >
                 <span className="text-[var(--npk-icon)] transition-colors group-hover:text-[var(--npk-accent)]">
                   {node.icon}
                 </span>
-                <span className="min-w-0 flex-1 truncate text-sm text-[var(--npk-t1)]">{node.label}</span>
+                <span className="min-w-0 flex-1 truncate text-sm text-[var(--npk-t1)]">{localizeNode(node.label)}</span>
                 {showNodaroMark(node.type) && <NodaroMark />}
               </button>
             ))}

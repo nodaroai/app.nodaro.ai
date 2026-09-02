@@ -105,17 +105,20 @@ describe("HANDLE_LABELS_HE coverage", () => {
  * `types/nodes.ts` dependency) into the test.
  */
 function nodeFamilyGroupLabels(): string[] {
-  const src = read("lib/node-families.ts")
   // Matches both `NODE_FAMILIES`'s own-line `label: "X",` entries and
   // `COMMON_SECTIONS`'s single-line `{ id: "...", label: "X", types: [...] }`
-  // entries — the only `label: "..."` occurrences in this file are these two
-  // arrays' data, so a plain scan (no end-of-line anchor) is safe.
+  // entries — the only `label: "..."` occurrences in node-families.ts are
+  // these two arrays' data, so a plain scan (no end-of-line anchor) is safe.
+  // node-picker-sections.ts contributes the synthetic section headers it
+  // mints itself (`Popular`); its `label: family.label` / template-literal
+  // forms carry no quote and are skipped by construction.
+  const src = read("lib/node-families.ts") + read("lib/node-picker-sections.ts")
   return [...src.matchAll(/label: "([^"]+)"/g)].map((m) => m[1])
 }
 
 describe("NODE_GROUPS_HE coverage", () => {
   it(
-    "every NODE_FAMILIES / COMMON_SECTIONS label in node-families.ts has a Hebrew entry",
+    "every NODE_FAMILIES / COMMON_SECTIONS label in node-families.ts, plus the synthetic picker sections, has a Hebrew entry",
     () => {
       const mapped = mappedLabels("NODE_GROUPS_HE")
       const extracted = nodeFamilyGroupLabels()

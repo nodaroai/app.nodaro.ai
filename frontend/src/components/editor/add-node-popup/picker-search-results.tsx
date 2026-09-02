@@ -8,13 +8,16 @@
  * filed elsewhere.
  */
 import { cn } from "@/lib/utils"
+import { useT } from "@/lib/i18n"
+import { usePickerSectionLabel, usePickerTabLabel } from "@/lib/node-picker-i18n"
 import type { NodeOption } from "@/lib/node-compatibility"
 import type { SceneNodeType } from "@/types/nodes"
-import { familyLabel, tabBadgeForType } from "@/lib/node-families"
+import { familyLabel, tabForType } from "@/lib/node-families"
 import { PickerNodeRow } from "./picker-section-list"
 
 export interface SearchNodeGroup {
   readonly id: string
+  /** English family name; the header localizes it like any other section. */
   readonly label: string
   readonly options: readonly NodeOption[]
 }
@@ -46,10 +49,11 @@ function Header({ label }: { label: string }) {
 
 /** The labelled hairline that opens the cross-tab block. */
 export function FromOtherTabsSeparator() {
+  const t = useT()
   return (
     <div className="mt-4 flex items-center gap-2.5 px-2.5 pb-1.5">
       <span className="text-[10.5px] font-semibold uppercase tracking-[1.3px] text-[var(--npk-dim)]">
-        From other tabs
+        {t("addnode.blockOther")}
       </span>
       <span className="h-px flex-1 bg-[var(--npk-border)]" />
     </div>
@@ -74,12 +78,13 @@ export function SearchOwnBlock({
   onSelect,
   badgeFor,
 }: OwnBlockProps) {
+  const sectionLabel = usePickerSectionLabel()
   let nav = startIndex
   return (
     <>
       {groupHitsByFamily(hits).map((group) => (
         <div key={group.id} className="mb-2.5">
-          <Header label={group.label} />
+          <Header label={sectionLabel({ family: group.label })} />
           {group.options.map((node) => {
             const index = nav++
             return (
@@ -113,7 +118,14 @@ export function SearchOtherBlock({
   onSelect,
   directBadge,
 }: OtherBlockProps) {
+  const tabLabel = usePickerTabLabel()
   let nav = startIndex
+  // The owning-tab badge reads as a small-caps chip in English ("IMAGE");
+  // toUpperCase is a no-op for Hebrew, which has no case.
+  const tabBadge = (node: NodeOption): string | undefined => {
+    const tab = tabForType(node.type)
+    return tab ? tabLabel(tab).toUpperCase() : undefined
+  }
   return (
     <>
       <FromOtherTabsSeparator />
@@ -125,7 +137,7 @@ export function SearchOtherBlock({
             node={node}
             index={index}
             highlighted={index === highlightedIndex}
-            badge={directBadge?.(node) ?? tabBadgeForType(node.type)}
+            badge={directBadge?.(node) ?? tabBadge(node)}
             onHover={onHover}
             onSelect={onSelect}
           />
@@ -136,13 +148,14 @@ export function SearchOtherBlock({
 }
 
 export function SearchEmptyState({ query }: { query: string }) {
+  const t = useT()
   return (
     <div className={cn("px-4 py-10 text-center")}>
       <div className="text-[13.5px] text-[var(--npk-t2)]">
-        No node matches &ldquo;{query}&rdquo; anywhere
+        {t("addnode.noMatch", { query })}
       </div>
       <div className="mt-1 text-[12px] text-[var(--npk-muted)]">
-        Try a shorter word, or browse every node in the All tab.
+        {t("addnode.noMatchHint")}
       </div>
     </div>
   )

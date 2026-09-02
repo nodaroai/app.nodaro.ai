@@ -1192,6 +1192,27 @@ export const en = {
   "addnode.noNodesEdition": "No nodes available here in this edition.",
   "addnode.unitNode": "node",
   "addnode.unitNodes": "nodes",
+  // Picker tablist + section-header prefixes (PICKER_TAB_LABEL_KEY in
+  // lib/node-picker-i18n.ts). "Creative Controls" doubles as the toggle
+  // caption and the All-tab prefix for control families.
+  "addnode.tabCommon": "Common",
+  "addnode.tabImage": "Image",
+  "addnode.tabVideo": "Video",
+  "addnode.tabAudio": "Audio",
+  "addnode.tabModels": "Models",
+  "addnode.tabAssets": "Assets",
+  "addnode.tabAutomate": "Automate",
+  "addnode.tabPublish": "Publish",
+  "addnode.tabAll": "All",
+  "addnode.tablistAria": "Node menu mode",
+  "addnode.creativeControls": "Creative Controls",
+  "addnode.show": "Show",
+  "addnode.hide": "Hide",
+  "addnode.noMatch": "No node matches “{query}” anywhere",
+  "addnode.noMatchHint": "Try a shorter word, or browse every node in the All tab.",
+  "addnode.noModelsFound": "No models found",
+  "addnode.modelCount": "{count} models",
+  "addnode.createsNode": "creates {node}",
   "nodecat.Models": "Models",
 
   // ── Node presets (dropdown + manage dialog) ──
@@ -1270,6 +1291,7 @@ export const en = {
   "toolbar.addNode": "Add Node",
   "toolbar.expandAll": "Expand all",
   "toolbar.collapseAll": "Collapse all",
+  "toolbar.myLibrary": "My Library",
   "crumb.dashboard": "Dashboard",
   "crumb.subWorkflowNav": "Sub-workflow navigation",
   "crumb.backToOriginal": "Back to original workflow",
@@ -2016,6 +2038,7 @@ export const en = {
   "node.moderation.blockedTitle": "This image can't be used",
   "node.moderation.blockedReason": "It may violate our content policy",
   "node.moderation.ready": "Ready to use",
+  "node.runsOnNodaro": "Runs on nodaro.ai",
   "node.moderation.remove": "Remove image",
 } as const
 

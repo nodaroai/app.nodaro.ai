@@ -1,3 +1,4 @@
+import { useT } from "@/lib/i18n"
 import { useState, useCallback, useMemo, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { createPortal } from "react-dom"
@@ -805,6 +806,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
 }
 
 export function UnifiedAssetLibraryButton() {
+  const t = useT()
   const [open, setOpen] = useState(false)
   const { assets, projects, loading, error, invalidateAssets } = useAssetData()
 
@@ -1103,9 +1105,9 @@ export function UnifiedAssetLibraryButton() {
         onClick={() => setOpen(true)}
       >
         <Grid3X3 className="h-4 w-4" />
-        My Library
+        {t("toolbar.myLibrary")}
         {totalCount > 0 && (
-          <span className="ml-auto text-[10px] bg-violet-500/10 text-violet-600 px-1.5 py-0.5 rounded-full">
+          <span className="ms-auto text-[10px] bg-violet-500/10 text-violet-600 px-1.5 py-0.5 rounded-full">
             {totalCount}
           </span>
         )}
