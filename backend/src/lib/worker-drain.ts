@@ -16,9 +16,24 @@
  * replacement process re-picks it seconds after boot and the stall guard's
  * inline reconcile recovers it immediately.
  *
- * Only worker entrypoints ever set the flag; the API server and cron paths
- * share these modules but never drain, so their behavior is unchanged.
+ * WHO SETS IT. Worker entrypoints only: `worker.ts` (video worker) and
+ * `orchestrator.ts` (the dedicated orchestrator process started by
+ * Dockerfile's `supervise orchestrator`). The API server (`server.ts`) hosts
+ * an orchestrator worker too but must NOT set the flag — it also serves HTTP,
+ * and aborting an in-flight request's provider poll would surface as a 500 and
+ * an `internal-error` app-report row. Cron paths never drain.
  */
+
+/**
+ * How long a process may drain before its hard-exit timer fires.
+ *
+ * Railway sends SIGTERM and SIGKILLs ~30s later, so 25s leaves the final logs
+ * room to flush before the kill lands. ONE definition for all three
+ * entrypoints (`worker.ts`, `orchestrator.ts`, `server.ts`) — they share a
+ * deadline set by the platform, so a change to that platform window must not
+ * depend on someone remembering three separate literals.
+ */
+export const SHUTDOWN_DRAIN_MS = 25_000
 
 export class DrainAbortError extends Error {
   constructor(message = "worker draining (deploy restart) — provider wait aborted") {

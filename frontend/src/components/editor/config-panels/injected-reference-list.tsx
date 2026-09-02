@@ -236,7 +236,7 @@ export function InjectedReferenceList(props: InjectedReferenceListProps) {
     onRemoveWiredSource,
     onRemoveMention,
     onSuppressCanonical,
-    label = t("cfgshared.injectedReferences"),
+    label = t("field.injectedReferences"),
     emptyMessage,
     primaryLabel,
     testId,

@@ -53,4 +53,13 @@ describe("registerMainlinePromptPolicies registration totality", () => {
 
     expect(missing.map((f) => relative(SRC_DIR, f))).toEqual([])
   })
+
+  it("the dedicated orchestrator entrypoint registers the mainline policies", () => {
+    // M-9a: PR 7 rewrites orchestrator.ts's shutdown. This process runs the
+    // workflow DAG, so losing the minor-age floor here loses it for every
+    // orchestrated generation — with no startup error and no other test.
+    const src = stripComments(readFileSync(join(SRC_DIR, "orchestrator.ts"), "utf-8"))
+    expect(src).toMatch(/\bloadOverlay\s*\(\s*\)/)
+    expect(src).toMatch(/\bregisterMainlinePromptPolicies\s*\(\s*\)/)
+  })
 })

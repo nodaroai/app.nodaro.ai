@@ -1,7 +1,7 @@
 import { supabase } from "../supabase.js"
-import { finalizeJobWithMedia, type FinalizeJobType } from "../job-finalize.js"
+import { finalizeJobWithMedia, isFinalizeJobType, NOT_GENERIC_RECOVERABLE } from "../job-finalize.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
-import { redactProviderDetail } from "../provider-error-detail.js"
+import { redactProviderDetail, logProviderFailure } from "../provider-error-detail.js"
 import { bumpAttemptsOrExhaust } from "./bump-attempts.js"
 import { fetchFalRequestStatus, extractFalUrl } from "../../providers/fal/client.js"
 import { FAL_LIP_SYNC_CONFIGS } from "../../providers/fal/lip-sync.js"
@@ -44,7 +44,22 @@ function resolveFalEndpoint(inputData: Record<string, unknown> | null | undefine
   return cfg?.endpoint ?? null
 }
 
-async function markFailed(jobId: string, reason: string): Promise<void> {
+/**
+ * `reason` is the USER-FACING string (it lands in `jobs.error_message`, which
+ * `GET /v1/jobs/:id` and the app-report sweep both read). `detail` is the raw
+ * provider text — redacted by the CALLER via `redactProviderDetail` /
+ * `providerDetailOf` and written to the admin-only `jobs.error_detail` (W0,
+ * migration 368). Never pass raw provider text as `reason`: that is exactly
+ * how vendor stack traces and signed URLs reached job owners.
+ *
+ * Written UNCONDITIONALLY, matching `reconcile/kie.ts:244` — one shape for
+ * one column (M-2b). `null` means "this writer had no provider text", and
+ * recording that null is the honest answer.
+ */
+async function markFailed(jobId: string, reason: string, detail: string | null = null): Promise<void> {
+  // Log BEFORE the write: this module had no per-job output at all, so a
+  // cron-failed job was invisible in Railway (spec §11.3).
+  logProviderFailure("reconcile/fal", jobId, reason, detail)
   // CAS on the live (non-terminal) states only — never trample a job the worker
   // concurrently flipped to `completed`. Matches kie.ts / replicate.ts.
   await supabase
@@ -52,7 +67,7 @@ async function markFailed(jobId: string, reason: string): Promise<void> {
     .update({
       status: "failed",
       error_message: reason.slice(0, 500),
-      error_detail: redactProviderDetail(reason),
+      error_detail: detail,
       completed_at: new Date().toISOString(),
       reconcile_last_error: "upstream_failed",
     })
@@ -85,7 +100,11 @@ export async function reconcileFalJob(row: FalJobRow, opts?: ReconcileOpts): Pro
   if (!endpoint) {
     // No endpoint recoverable → the queue can't be re-polled. Fail+refund rather
     // than bump toward a 90-min exhaustion that would never succeed.
-    await markFailed(row.id, "fal endpoint unresolvable (missing/unknown input_data.provider)")
+    await markFailed(
+      row.id,
+      "Generation could not be recovered. Your credits were refunded.",
+      "fal endpoint unresolvable (missing/unknown input_data.provider)",
+    )
     await refundReservedCreditsForJob(row.id)
     return
   }
@@ -98,8 +117,26 @@ export async function reconcileFalJob(row: FalJobRow, opts?: ReconcileOpts): Pro
   }
 
   if (remote.status === "ERROR") {
-    await markFailed(row.id, remote.error ?? "fal request failed")
+    await markFailed(
+      row.id,
+      "Generation failed on the provider. Please try again.",
+      // remote.error is raw provider text — redact it before it reaches
+      // error_detail (M-2b); never pass it through as-is.
+      redactProviderDetail(remote.error) ?? "fal request failed",
+    )
     await refundReservedCreditsForJob(row.id)
+    return
+  }
+
+  // Types with their own completion writer, and unknown/NULL types, must not
+  // reach finalize (same rationale as kie.ts's twin guard, M-4a/M-4b). fal is
+  // used only for lip-sync today, so this is a backstop, not a live path.
+  if (NOT_GENERIC_RECOVERABLE.has(row.job_type ?? "")) {
+    await bumpAttemptsOrExhaust(row.id, `not generically recoverable: ${row.job_type}`)
+    return
+  }
+  if (!isFinalizeJobType(row.job_type)) {
+    await bumpAttemptsOrExhaust(row.id, `unknown job_type for finalize: ${row.job_type ?? "null"}`)
     return
   }
 
@@ -110,7 +147,7 @@ export async function reconcileFalJob(row: FalJobRow, opts?: ReconcileOpts): Pro
     const url = extractFalUrl(remote.output)
     await finalizeJobWithMedia({
       jobId: row.id,
-      jobType: (row.job_type ?? "lip-sync") as FinalizeJobType,
+      jobType: row.job_type,
       claimant: opts?.claimant ?? "cron",
       result: {
         url,

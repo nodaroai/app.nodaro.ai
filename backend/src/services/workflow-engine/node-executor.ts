@@ -42,6 +42,7 @@ import { JOB_POLL_INTERVAL_MS, NODE_TIMEOUT_MS, POLL_ABSOLUTE_TIMEOUT_MS } from 
 import { isSourceNode, isSkipNode } from "./execution-graph.js"
 import { cancelInFlightChildJobs } from "../../lib/reconcile/cancel-inflight-jobs.js"
 import { refundReservedCreditsForJob } from "../../lib/credits-job-lifecycle.js"
+import { isWorkerDraining, DrainAbortError } from "../../lib/worker-drain.js"
 
 // ---------------------------------------------------------------------------
 // Sync HTTP node types — called via internal fetch
@@ -330,6 +331,15 @@ export async function executeNode(
   // `setUserPromptTemplate` value (the raw template, not the resolved one).
   const userPromptTemplate = extractUserPromptTemplate(node)
 
+  // Same reason, one field wider: `node.data` as the AUTHOR left it, captured
+  // BEFORE the mapping block below reassigns `node` with resolved data. The
+  // §4.6 settle pass in `payload-builder.ts` may only refuse / substitute
+  // `{Label}` tokens on fields this snapshot still matches — anything a
+  // mapping wrote is upstream DATA, not an authored prompt. Travels down as
+  // `PayloadBuildContext.authoredData` (executeWorkerNode is the only
+  // buildPayload caller).
+  const authoredData = node.data
+
   // --- Field mapping resolution + {} injection (centralized) ---
   const mappableFields = NODE_MAPPABLE_FIELDS[node.type]
   if (mappableFields?.length) {
@@ -413,11 +423,11 @@ export async function executeNode(
   // worker-queued compose, which re-fetches the entity and finds the new panels.
   if (node.type === "reference-sheet") {
     await ensureWorkflowSheetPanels(node, ctx, { nodes: allNodes, edges, nodeStates })
-    return executeWorkerNode(node, resolvedInputs, ctx, edges, allNodes, nodeStates, userPromptTemplate, iterationIndex)
+    return executeWorkerNode(node, resolvedInputs, ctx, edges, allNodes, nodeStates, userPromptTemplate, iterationIndex, authoredData)
   }
 
   // Worker-queued nodes (default)
-  return executeWorkerNode(node, resolvedInputs, ctx, edges, allNodes, nodeStates, userPromptTemplate, iterationIndex)
+  return executeWorkerNode(node, resolvedInputs, ctx, edges, allNodes, nodeStates, userPromptTemplate, iterationIndex, authoredData)
 }
 
 // ---------------------------------------------------------------------------
@@ -1269,6 +1279,10 @@ async function executeWorkerNode(
   nodeStates?: Record<string, NodeExecutionState>,
   userPromptTemplate?: string,
   iterationIndex?: number,
+  // `node.data` before `resolveFieldMappings` rewrote it — see the snapshot in
+  // `executeNode`. Handed to buildPayload as `PayloadBuildContext.authoredData`
+  // so its §4.6 settle pass can tell an authored prompt field from a mapped one.
+  authoredData?: Record<string, unknown>,
 ): Promise<ExecuteNodeResult> {
   // 0. Adoption (audit A2): a prior orchestrator attempt's in-flight job for
   // THIS node whose provider call already went out. Poll it to completion
@@ -1336,6 +1350,7 @@ async function executeWorkerNode(
         nodes: allNodes,
         edges,
         nodeStates,
+        authoredData,
       },
     )
   } catch (err) {
@@ -1767,6 +1782,14 @@ async function pollJobToCompletion(
       return await cancelJobAndThrow(jobId, usageLogId, `Node timeout after ${NODE_TIMEOUT_MS / 1000}s of processing`, nodeType, creditsUsed)
     }
 
+    // Deploy drain (SIGTERM): abort the wait so worker.close() returns inside
+    // the drain window instead of sitting on a 90-minute node poll. THROW —
+    // never cancelJobAndThrow: the child job is running in the video worker's
+    // own process, is recoverable, and cancelling it here would refund a live
+    // provider call. The orchestrator's BullMQ job is requeued (attempt not
+    // spent) and `reconcileNodeStatesFromJobs` picks the child up on resume.
+    if (isWorkerDraining()) throw new DrainAbortError()
+
     // Wait before next poll
     await sleep(JOB_POLL_INTERVAL_MS)
   }
@@ -1899,6 +1922,10 @@ async function executeComponentNode(
     if (job.status === "failed") {
       throw new Error(job.error_message ?? "Component execution failed")
     }
+
+    // Same drain contract as the job poll above: THROW, never cancel. The inner
+    // component execution is its own orchestrator job and resumes on its own.
+    if (isWorkerDraining()) throw new DrainAbortError()
 
     await sleep(COMPONENT_POLL_INTERVAL_MS)
   }

@@ -18,10 +18,18 @@ import {
   CONTENT_POLICY_MESSAGE,
   CONTENT_POLICY_MESSAGES,
   KieError,
+  createSanitizedError,
   createUpstreamFailureError,
   isUpstreamKieFailure,
+  PARAM_REJECT_RE,
   pollKieTask,
+  SAFETY_WEAK_RE,
 } from "../client.js"
+import {
+  UNCLASSIFIED_MODERATION_MESSAGES,
+  TRANSIENT_UPSTREAM_500_MESSAGES,
+  PARAMETER_REJECT_MESSAGES,
+} from "./__fixtures__/log-pull-fail-messages.js"
 
 describe("KIE content-policy classification", () => {
   it("matches copyright/IP/policy failMsgs", () => {
@@ -229,5 +237,107 @@ describe("the three messages", () => {
     expect(CONTENT_POLICY_MESSAGES.likeness).toContain("real person")
     expect(CONTENT_POLICY_MESSAGES.safety).toContain("safety filter")
     expect(new Set(Object.values(CONTENT_POLICY_MESSAGES)).size).toBe(3)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// §11.3 log-pull follow-up: the 10 G1 rows whose provider text matched NEITHER
+// the three-way classifier NOR createSanitizedError's keyword list, so a
+// permanent content block was reported as "Generation failed, please try
+// again". The fixture is shared with log-pull-classification.test.ts (Task 18),
+// which is the regression control for the widening below.
+// ---------------------------------------------------------------------------
+
+describe("log-pull moderation texts (§11.3) — 10 rows that matched neither regex", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+  })
+
+  it.each(UNCLASSIFIED_MODERATION_MESSAGES)(
+    "classifies $failMsg as safety ($rows rows)",
+    ({ failMsg }) => {
+      expect(classifyContentPolicyClass(failMsg)).toBe("safety")
+      expect(classifyContentPolicy(failMsg)).toBe(true)
+    },
+  )
+
+  it.each(UNCLASSIFIED_MODERATION_MESSAGES)(
+    "gives $failMsg the safety message, never the copyright one",
+    ({ failMsg }) => {
+      const err = createUpstreamFailureError(`task failed: [400] ${failMsg}`, "Generation")
+      expect(err.contentPolicy).toBe(true)
+      expect(err.contentPolicyClass).toBe("safety")
+      expect(err.message).toBe(CONTENT_POLICY_MESSAGES.safety)
+      expect(err.message).not.toBe(CONTENT_POLICY_MESSAGES.copyright)
+      // W0's other half: the raw provider text still rides along for
+      // `error_detail` / Railway logs — classifying it never replaces it.
+      expect(err.internalDetails).toContain(failMsg)
+    },
+  )
+
+  it.each(UNCLASSIFIED_MODERATION_MESSAGES)(
+    "sanitizes $failMsg to the safety message even without the upstream helper",
+    ({ failMsg }) => {
+      expect(createSanitizedError(failMsg, "Generation", true).message)
+        .toBe(CONTENT_POLICY_MESSAGES.safety)
+    },
+  )
+})
+
+describe("the widening does not over-reach", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+  })
+
+  it("leaves the copyright class and message exactly as they were", () => {
+    const copyrightText =
+      "The request failed because the output video may be related to copyright restrictions."
+    expect(classifyContentPolicyClass(copyrightText)).toBe("copyright")
+    expect(CONTENT_POLICY_MESSAGE).toBe(CONTENT_POLICY_MESSAGES.copyright)
+    expect(createSanitizedError(copyrightText, "Generation", true).message)
+      .toContain("Blocked for copyright")
+  })
+
+  it("keeps likeness ahead of safety", () => {
+    expect(classifyContentPolicyClass("public figure detected")).toBe("likeness")
+    expect(classifyContentPolicyClass("this resembles a real person's likeness")).toBe("likeness")
+  })
+
+  it.each(TRANSIENT_UPSTREAM_500_MESSAGES)("does not swallow the transient 500 %s", (failMsg) => {
+    expect(classifyContentPolicyClass(failMsg)).toBeNull()
+  })
+
+  it.each(PARAMETER_REJECT_MESSAGES)("does not reclassify the parameter reject %s", (failMsg) => {
+    expect(classifyContentPolicyClass(failMsg)).toBeNull()
+  })
+
+  it("the sanitizer applies the same parameter guard as the classifier (M-19a)", () => {
+    // Both layers must agree on this one string. Before the guard, the
+    // classifier said `null` (retryable) and the sanitizer said "Content
+    // policy violation" (permanent) for the same message.
+    expect(createSanitizedError("Your input was rejected. Please try again.", "Generation", true).message)
+      .toBe(CONTENT_POLICY_MESSAGES.safety)
+    expect(createSanitizedError("Your input was rejected — duration out of range", "Generation", true).message)
+      .not.toBe(CONTENT_POLICY_MESSAGES.safety)
+  })
+
+  it("the weak `input was rejected` signal yields to parameter vocabulary", () => {
+    // The bare sentence is a block; the same sentence carrying a fixable
+    // parameter is not. Without the guard, a user with a bad resolution would
+    // be told their content was blocked and that retrying is pointless.
+    expect(classifyContentPolicyClass("Your input was rejected. Please try again.")).toBe("safety")
+    expect(classifyContentPolicyClass("Your input was rejected: invalid resolution")).toBeNull()
+    expect(classifyContentPolicyClass("Your input was rejected — duration out of range")).toBeNull()
+  })
+
+  it("exports the two halves of the weak signal so the split is assertable directly", () => {
+    // Test-only exports: the strong vocabulary is asserted through the public
+    // classifier above; these two exist so the WEAK path's two conditions can
+    // be pinned independently of each other.
+    expect(SAFETY_WEAK_RE.test("Your input was rejected. Please try again.")).toBe(true)
+    expect(SAFETY_WEAK_RE.test("Content was flagged by the safety system.")).toBe(false)
+    expect(PARAM_REJECT_RE.test("duration out of range")).toBe(true)
+    expect(PARAM_REJECT_RE.test("invalid resolution")).toBe(true)
+    expect(PARAM_REJECT_RE.test("Content was flagged by the safety system.")).toBe(false)
   })
 })

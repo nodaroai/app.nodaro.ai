@@ -1,5 +1,10 @@
-import { describe, it, expect } from "vitest"
-import { redactProviderDetail, providerDetailOf, ERROR_DETAIL_MAX } from "../provider-error-detail.js"
+import { describe, it, expect, vi } from "vitest"
+import {
+  redactProviderDetail,
+  providerDetailOf,
+  logProviderFailure,
+  ERROR_DETAIL_MAX,
+} from "../provider-error-detail.js"
 
 describe("redactProviderDetail", () => {
   it("keeps the diagnostic text and the URL host, drops path and query", () => {
@@ -47,5 +52,41 @@ describe("providerDetailOf", () => {
     expect(providerDetailOf(new Error("boom"))).toBeNull()
     expect(providerDetailOf("boom")).toBeNull()
     expect(providerDetailOf(undefined)).toBeNull()
+  })
+})
+
+describe("logProviderFailure", () => {
+  it("emits ONE line carrying the job id, the user message and the redacted provider text", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {})
+    logProviderFailure(
+      "reconcile/kie",
+      "11111111-2222-3333-4444-555555555555",
+      "Generation failed. Please try again.",
+      "task failed: [500] Internal Error at https://api.kie.ai/v1/x?token=abc",
+    )
+    expect(spy).toHaveBeenCalledTimes(1)
+    const line = spy.mock.calls[0]![0] as string
+    expect(line.split("\n")).toHaveLength(1)
+    expect(line).toContain("[reconcile/kie]")
+    expect(line).toContain("11111111-2222-3333-4444-555555555555")
+    expect(line).toContain("Internal Error")
+    expect(line).not.toContain("token=abc")
+    expect(line).not.toContain("https://api.kie.ai/v1/x")
+    spy.mockRestore()
+  })
+
+  it("still logs when there is no provider text, so the failure is never silent", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {})
+    logProviderFailure("reconcile/fal", "job-1", "Generation failed on the provider.", null)
+    expect(spy).toHaveBeenCalledTimes(1)
+    expect(spy.mock.calls[0]![0]).toContain("<none>")
+    spy.mockRestore()
+  })
+
+  it("is safe on already-redacted text (the writers redact before markFailed sees it)", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {})
+    logProviderFailure("reconcile/kie", "job-2", "msg", "boom at api.kie.ai/… Bearer <redacted>")
+    expect(spy.mock.calls[0]![0]).toContain("api.kie.ai/…")
+    spy.mockRestore()
   })
 })

@@ -11,6 +11,7 @@ import { PARAMETER_NODE_TYPES } from "@nodaro/shared"
 import { getParameterPromptHint, findForeignCatalogIds, foreignCatalogIdMessage } from "@nodaro/prompts"
 import { config } from "../../lib/config.js"
 import { settledWithLimit } from "../../lib/settled-with-limit.js"
+import { DrainAbortError } from "../../lib/worker-drain.js"
 import { supabase } from "../../lib/supabase.js"
 import {
   buildExecutionLevels,
@@ -296,6 +297,12 @@ export async function executeSubWorkflow(
     for (let i = 0; i < results.length; i++) {
       const result = results[i]
       if (result.status === "rejected") {
+        // Deploy drain (B6b): propagate the abort with its IDENTITY intact.
+        // The rewrap below would turn it into a plain Error, and the
+        // orchestrator's drain hatch (`result.reason instanceof
+        // DrainAbortError`) would then miss it and write status='failed' on a
+        // healthy execution — the exact harm B6b exists to prevent.
+        if (result.reason instanceof DrainAbortError) throw result.reason
         const error = result.reason instanceof Error
           ? result.reason.message
           : String(result.reason)

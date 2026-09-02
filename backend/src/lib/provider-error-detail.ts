@@ -44,3 +44,31 @@ export function providerDetailOf(err: unknown): string | null {
   const details = (err as { internalDetails?: unknown }).internalDetails
   return typeof details === "string" ? redactProviderDetail(details) : null
 }
+
+/**
+ * One line, at failure time, from a path that otherwise says nothing.
+ *
+ * WHY THIS EXISTS (spec §11.3, log pull 2026-09-02): nine G1 rows — six from a
+ * single ~7-minute burst, one user, all gpt-image-2 — produced NO log line at
+ * all while the same deployment logged other traffic in the window.
+ * `lib/reconcile/kie.ts` had zero `console.*` calls, and `bump-attempts.ts`
+ * logged only at exhaustion, so a job the cron failed left no trace anywhere
+ * and the raw provider text was unrecoverable even from historical logs.
+ *
+ * ONE line on purpose: Railway log filters match single lines, so an
+ * id-filtered search must surface the actual error rather than a bare prefix
+ * (same rationale as workers/video-worker.ts's single-line failure log).
+ * Redaction happens HERE so no call site can forget it; it is idempotent on
+ * text a writer already passed through `redactProviderDetail`/`providerDetailOf`.
+ */
+export function logProviderFailure(
+  scope: string,
+  jobId: string,
+  userMessage: string,
+  detail: string | null | undefined,
+): void {
+  const redacted = redactProviderDetail(detail) ?? "<none>"
+  console.error(
+    `[${scope}] job ${jobId} failed: ${userMessage.slice(0, 200)} | provider: ${redacted}`,
+  )
+}

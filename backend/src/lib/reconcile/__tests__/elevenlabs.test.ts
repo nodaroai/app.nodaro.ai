@@ -14,18 +14,24 @@ const mocks = vi.hoisted(() => {
   const jobsSelectEqMock = vi.fn(() => ({ single: jobsSingleMock }))
   const jobsSelectMock = vi.fn(() => ({ eq: jobsSelectEqMock }))
   const jobsUpdateInMock = vi.fn().mockResolvedValue({ data: null, error: null })
-  const jobsUpdateMock = vi.fn((_arg: Record<string, unknown>) => ({
-    eq: vi.fn((col: string, _val: string) => {
-      if (col === "id") {
-        // bumpAttempts awaits .update().eq(); markFailed chains .in([...]).
-        return Object.assign(
-          Promise.resolve({ data: null, error: null }),
-          { in: jobsUpdateInMock },
-        )
-      }
-      return { in: jobsUpdateInMock }
-    }),
-  }))
+  // G-7: capture every jobs.update(payload) so tests can assert on the exact
+  // recorded update (lastJobsUpdate below), not just individual fields.
+  const jobsUpdates: Array<Record<string, unknown>> = []
+  const jobsUpdateMock = vi.fn((arg: Record<string, unknown>) => {
+    jobsUpdates.push(arg)
+    return {
+      eq: vi.fn((col: string, _val: string) => {
+        if (col === "id") {
+          // bumpAttempts awaits .update().eq(); markFailed chains .in([...]).
+          return Object.assign(
+            Promise.resolve({ data: null, error: null }),
+            { in: jobsUpdateInMock },
+          )
+        }
+        return { in: jobsUpdateInMock }
+      }),
+    }
+  })
   // usage_logs: deliver's video path loads the reserved usage log itself
   // (.select().eq().eq().limit() chain).
   const usageLogsLimitMock = vi.fn().mockResolvedValue({ data: [{ id: "ul-1" }], error: null })
@@ -46,6 +52,7 @@ const mocks = vi.hoisted(() => {
   return {
     fetchMock, finalizeMock, refundMock, uploadBufferMock, jobsSingleMock, jobsUpdateMock, fromMock,
     markCompletedMock, shouldSaveMock, watermarkUploadMock, commitMock, createAssetMock, thumbnailMock, extractAudioMock,
+    jobsUpdates,
   }
 })
 
@@ -97,9 +104,13 @@ function mockDubbedFetches() {
     })
 }
 
+// G-7 harness accessor (did not exist before this task).
+const lastJobsUpdate = (): Record<string, unknown> => mocks.jobsUpdates.at(-1) ?? {}
+
 describe("reconcileElevenLabsJob", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.jobsUpdates.length = 0
     global.fetch = mocks.fetchMock as unknown as typeof fetch
     mocks.finalizeMock.mockResolvedValue({ ok: true })
     mocks.uploadBufferMock.mockResolvedValue("https://r2.example/audio/j1.mp3")
@@ -181,5 +192,30 @@ describe("reconcileElevenLabsJob", () => {
       (c) => (c[0] as Record<string, unknown>).reconcile_attempts === 1,
     )
     expect(bumpCall).toBeTruthy()
+  })
+
+  // Task 2 (app-reports W4): jobs.error_message is user-visible — it must never
+  // carry raw provider text. The raw text belongs in error_detail (admin-only),
+  // redacted through redactProviderDetail. The failed branch returns before the
+  // audio download, so only one fetch (dubbing metadata) is needed.
+  it("dubbing failed → puts a user-safe sentence in error_message and the raw provider text in error_detail", async () => {
+    mocks.fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        dubbing_id: "dub-1",
+        status: "failed",
+        error: "source rejected https://api.elevenlabs.io/v1/x?key=zz",
+      }),
+    })
+
+    await reconcileElevenLabsJob(row({ id: "j-el-fail" }))
+
+    const update = lastJobsUpdate()
+    expect(update.status).toBe("failed")
+    expect(update.error_message).toBe("Generation failed on the provider. Please try again.")
+    expect(update.error_message).not.toContain("source rejected")
+    expect(update.error_detail).toContain("source rejected")
+    expect(update.error_detail).not.toContain("key=zz")
+    expect(mocks.refundMock).toHaveBeenCalledWith("j-el-fail")
   })
 })

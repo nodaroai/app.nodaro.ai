@@ -1,5 +1,6 @@
 import type { NodeOutput } from "../services/workflow-engine/types.js"
 import type { ExecuteNodeResult } from "../services/workflow-engine/node-executor.js"
+import { DrainAbortError } from "../lib/worker-drain.js"
 
 /** The fulfilled value of one fan-out iteration task. */
 export interface FanOutIterationValue {
@@ -49,6 +50,8 @@ function isCancellationReason(reason: unknown): boolean {
  *   - succeededCount === 0 AND only cancellations           -> pure cancellation
  *     (user stop); return empty output and let the orchestrator's between-level
  *     cancellation check handle status. genuineFailure is undefined.
+ *   - ANY iteration rejected with DrainAbortError           -> THROW it, always
+ *     (deploy drain — never tolerated; see the branch below for why).
  *   - succeededCount > 0 with some failures                 -> partial success:
  *     keep the successful results, set genuineFailure for the caller to log,
  *     and hydrate the primary output from the first successful iteration so a
@@ -81,6 +84,17 @@ export function assembleFanOutResult(
         allJobIds.push(result.jobId)
       }
       if (result.usageLogId) lastUsageLogId = result.usageLogId
+    } else if (entry.reason instanceof DrainAbortError) {
+      // Deploy drain (B6b): NEVER a tolerated iteration failure, whatever
+      // succeededCount is. The drained iteration's child job is still running
+      // in the video worker's own process and WILL complete and finalize its
+      // charge — tolerating it here would persist this fan-out node
+      // `completed` with "" for that item, so the user pays for output the
+      // execution discarded, and the orchestrator's drain hatch
+      // (`result.reason instanceof DrainAbortError`) would never see the
+      // abort. Rethrow with its identity intact so the whole execution is
+      // requeued untouched instead.
+      throw entry.reason
     } else if (!isCancellationReason(entry.reason) && genuineFailure === undefined) {
       genuineFailure = entry.reason
     }

@@ -812,16 +812,21 @@ describe("buildPayload", () => {
       expect(result.payload.audioUrl).toBe("https://a.mp3")
     })
 
+    // B3: speech-to-video is in REQUIRED_MEDIA_INPUTS, so buildPayload now
+    // refuses a node with no image AND no audio wired — the frontend
+    // single-node path always did ("no image input found" / "no audio track
+    // found"). These two assert the CREDIT IDENTIFIER, so they wire both and
+    // keep their pricing assertions.
     it("speech-to-video", () => {
       const n = node("n1", "speech-to-video", { resolution: "720p" })
-      const result = buildPayload(n, jobId, {})
+      const result = buildPayload(n, jobId, { imageUrl: "https://still.png", audioUrl: "https://vo.mp3" })
       expect(result.jobName).toBe("speech-to-video")
       expect(result.modelIdentifier).toBe("speech-to-video:720p")
     })
 
     it("speech-to-video default resolution", () => {
       const n = node("n1", "speech-to-video", {})
-      const result = buildPayload(n, jobId, {})
+      const result = buildPayload(n, jobId, { imageUrl: "https://still.png", audioUrl: "https://vo.mp3" })
       expect(result.modelIdentifier).toBe("speech-to-video")
     })
 

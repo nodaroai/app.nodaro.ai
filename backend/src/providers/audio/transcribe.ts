@@ -1,7 +1,12 @@
 import type { Caption } from "@remotion/captions"
 import { replicate, extractCost } from "../replicate/client.js"
 import { directSpeechToText } from "../elevenlabs/direct-stt.js"
-import { fastWhisperWordsToCaptions, whisperWordsToCaptions } from "./captions-mappers.js"
+import {
+  mapWhisperOutput,
+  mapFastWhisperOutput,
+  type WhisperOutput,
+  type FastWhisperOutput,
+} from "./transcribe-output.js"
 
 function extractVersion(modelString: string): string {
   const parts = modelString.split(":")
@@ -12,25 +17,6 @@ function extractVersion(modelString: string): string {
 }
 
 export type TranscribeProvider = "whisper" | "incredibly-fast-whisper" | "elevenlabs-stt"
-
-interface WhisperOutput {
-  transcription: string
-  detected_language: string
-  segments?: Array<{
-    id: number
-    start: number
-    end: number
-    text: string
-  }>
-}
-
-interface FastWhisperOutput {
-  text: string
-  chunks?: Array<{
-    text: string
-    timestamp: [number, number]
-  }>
-}
 
 interface TranscribeResult {
   text: string
@@ -123,23 +109,11 @@ export async function transcribe(
     const cost = extractCost(completed.metrics as Record<string, unknown> | undefined, "incredibly-fast-whisper")
     const output = completed.output as FastWhisperOutput
 
-    const segments = output.chunks?.map((chunk) => ({
-      start: chunk.timestamp[0],
-      end: chunk.timestamp[1],
-      text: chunk.text,
-    }))
-
     console.log(`[transcribe] Output text length: ${output.text?.length ?? 0}`)
-    const result: TranscribeResult = {
-      text: output.text ?? "",
-      language: language && language !== "auto" ? language : "auto",
+    return {
+      ...mapFastWhisperOutput(output, { language, wordTimestamps: options?.wordTimestamps }),
       cost: cost ?? undefined,
-      segments,
     }
-    if (options?.wordTimestamps) {
-      result.words = fastWhisperWordsToCaptions(output)
-    }
-    return result
   }
 
   // Default: openai/whisper
@@ -163,22 +137,10 @@ export async function transcribe(
   const cost = extractCost(completed.metrics as Record<string, unknown> | undefined, "whisper")
   const output = completed.output as WhisperOutput
 
-  const segments = output.segments?.map((seg) => ({
-    start: seg.start,
-    end: seg.end,
-    text: seg.text,
-  }))
-
   console.log(`[transcribe] Detected language: ${output.detected_language}`)
   console.log(`[transcribe] Output text length: ${output.transcription?.length ?? 0}`)
-  const result: TranscribeResult = {
-    text: output.transcription ?? "",
-    language: output.detected_language ?? "unknown",
+  return {
+    ...mapWhisperOutput(output, { wordTimestamps: options?.wordTimestamps }),
     cost: cost ?? undefined,
-    segments,
   }
-  if (options?.wordTimestamps) {
-    result.words = whisperWordsToCaptions(output)
-  }
-  return result
 }

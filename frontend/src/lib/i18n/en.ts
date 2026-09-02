@@ -532,7 +532,6 @@ export const en = {
   "cfgshared.noModelsMatch": "No models match.",
   "cfgshared.custom": "Custom",
   "cfgshared.add": "Add",
-  "cfgshared.injectedReferences": "Injected references",
   // cfgshared: config-panel copy localized 2026-09-02 (keys in source order)
   "cfgshared.promptInjection": "Prompt Injection",
   "cfgshared.injectPrompt": "Inject Prompt",

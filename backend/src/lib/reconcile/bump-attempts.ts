@@ -1,6 +1,6 @@
 import { supabase } from "../supabase.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
-import { providerDetailOf } from "../provider-error-detail.js"
+import { providerDetailOf, redactProviderDetail } from "../provider-error-detail.js"
 import { MAX_ATTEMPTS } from "./types.js"
 
 /**
@@ -34,6 +34,14 @@ const DETERMINISTIC_RECONCILE_ERRORS: readonly RegExp[] = [
   /^upload-size-exceeded/,
 ]
 
+/** What a job owner sees when reconciliation gives up. The machine detail
+ *  goes to the admin-only `error_detail` (W0) and `reconcile_last_error`
+ *  keeps its `"exhausted"` tag for the admin Jobs page, so nothing is lost by
+ *  making the user-visible half a plain sentence. No refund claim here: A5's
+ *  `refundedLogs === 0` case means the hold was already committed elsewhere,
+ *  so the user may still be charged — this message must stay true either way. */
+const EXHAUSTED_USER_MESSAGE = "Generation could not be recovered."
+
 export async function bumpAttemptsOrExhaust(
   jobId: string,
   err: unknown,
@@ -55,6 +63,14 @@ export async function bumpAttemptsOrExhaust(
   }
 
   if (next < MAX_ATTEMPTS) {
+    // Only the FIRST bump: one line marks the moment a job entered the stuck
+    // state (the burst signal the 2026-09-01 log pull could not find), while
+    // the remaining 17 ticks stay quiet. Exhaustion has its own line below.
+    if (next === 1) {
+      console.warn(
+        `[reconcile/bump] job ${jobId} entered reconcile backoff (attempt 1/${MAX_ATTEMPTS}): ${redactProviderDetail(msg) ?? "<none>"}`,
+      )
+    }
     await supabase
       .from("jobs")
       .update({
@@ -78,8 +94,12 @@ async function forceFailExhausted(
     .from("jobs")
     .update({
       status: "failed",
-      error_message: `reconcile_exhausted: ${lastError}`.slice(0, 500),
-      error_detail: detail,
+      error_message: EXHAUSTED_USER_MESSAGE,
+      // W0's `detail` (providerDetailOf(err) = KieError.internalDetails,
+      // already redacted) stays authoritative. Fall back to the redacted
+      // machine string only when the thrown error carried no provider text,
+      // so an exhausted job is never left with NO diagnostic at all.
+      error_detail: detail ?? redactProviderDetail(`reconcile_exhausted: ${lastError}`),
       completed_at: new Date().toISOString(),
       reconcile_attempts: finalAttempts,
       reconcile_last_error: "exhausted",
@@ -112,14 +132,21 @@ async function logExhaustedAnomaly(
   finalAttempts: number,
   refunded: boolean,
 ): Promise<void> {
+  // `jobs` has NO `model_identifier` column — naming it makes PostgREST reject
+  // the WHOLE select (`column jobs.model_identifier does not exist`), which
+  // returned `data: null`, tripped the `!jobRow?.user_id` guard below, and
+  // silently suppressed EVERY `reconcile_exhausted` anomaly row since this
+  // helper shipped. Same mistake, same symptom as the app-report sweep's
+  // documented prod incident ("column jobs.model_identifier does not exist",
+  // lib/app-report-sweep.ts:163). The model identity we can record is
+  // `provider_kind`; the precise model id lives in `usage_logs`/`input_data`.
   const { data: job } = await supabase
     .from("jobs")
-    .select("user_id, model_identifier, provider, provider_kind, provider_task_id")
+    .select("user_id, provider, provider_kind, provider_task_id")
     .eq("id", jobId)
     .single()
   const jobRow = job as {
     user_id?: string
-    model_identifier?: string
     provider?: string
     provider_kind?: string
     provider_task_id?: string
@@ -141,7 +168,7 @@ async function logExhaustedAnomaly(
     job_id: jobId,
     user_id: jobRow.user_id,
     usage_log_id: logRow?.id ?? null,
-    model_identifier: jobRow.model_identifier ?? jobRow.provider_kind ?? "unknown",
+    model_identifier: jobRow.provider_kind ?? "unknown",
     provider: jobRow.provider ?? jobRow.provider_kind ?? null,
     credits_estimated: reservedCredits,
     credits_actual: 0,

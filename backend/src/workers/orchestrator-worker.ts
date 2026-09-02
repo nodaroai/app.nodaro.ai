@@ -5,9 +5,10 @@
  * Started as a separate BullMQ worker alongside video-worker and render-worker.
  */
 
-import { Worker, type Job } from "bullmq"
+import { Worker, DelayedError, type Job } from "bullmq"
 import IORedis from "ioredis"
 import { config, hasCredits } from "../lib/config.js"
+import { DrainAbortError, isWorkerDraining } from "../lib/worker-drain.js"
 import { TIER_PARALLELISM } from "../ee/billing/stripe-config.js"
 import { executionEvents, type ExecutionEvent } from "../lib/execution-events.js"
 import { supabase } from "../lib/supabase.js"
@@ -16,6 +17,10 @@ import { monetizationRpcArgs } from "../services/workflow-engine/monetization-ar
 import { reconcileNodeStatesFromJobs } from "../lib/reconcile/node-states.js"
 import { cancelInFlightChildJobs } from "../lib/reconcile/cancel-inflight-jobs.js"
 import { updateExecutionWithRetry } from "../lib/execution-writes.js"
+// Redis-free leaf (M-10a): the constants only, so importing THIS module never
+// opens the orchestration queue connection. The live queue below is still
+// loaded lazily, inside the one sweep that needs it.
+import { ORCHESTRATION_JOB_ATTEMPTS, ORCHESTRATOR_ALIVE_STATES } from "../lib/orchestration-queue-config.js"
 import {
   buildExecutionLevels,
   getEffectivelySkippedIds,
@@ -89,7 +94,7 @@ const STALE_EXECUTION_THRESHOLD_MS = 4 * 60 * 60 * 1000 // 4 hours
  *  remainder on subsequent ticks. */
 const STARTUP_RECONCILE_BATCH_LIMIT = 100
 
-async function cleanupStaleExecutions(): Promise<void> {
+export async function cleanupStaleExecutions(): Promise<void> {
   const { data: rows, error } = await supabase
     .from("workflow_executions")
     .select("id, started_at, node_states")
@@ -112,7 +117,10 @@ async function cleanupStaleExecutions(): Promise<void> {
   //   abandoned           — write succeeded with status='failed' (>4h stale or null started_at)
   //   cancelledRaces      — write returned cancelledRace=true (user cancelled mid-flight)
   //   writeFailures       — write threw after 3-retry exhaustion
-  //   skipped             — row didn't meet any terminal-write condition (genuinely-active execution)
+  //   skipped             — row was left alone: either its orchestration job is
+  //                         still in a live queue state (the queue gate below)
+  //                         or it met no terminal-write condition (genuinely-
+  //                         active execution)
   // Invariant: every row increments exactly one counter; rows.length == sum.
   let reconciledCompleted = 0
   let reconciledFailed = 0
@@ -154,7 +162,39 @@ async function cleanupStaleExecutions(): Promise<void> {
     }
   }
 
+  // Lazily imported: merely IMPORTING this module (7 importers — 5 test files,
+  // plus orchestrator.ts and the API server's worker-registration path) must
+  // not open the orchestration queue's Redis connection — only an actual sweep
+  // needs it. `ORCHESTRATOR_ALIVE_STATES` used to be lazy for the same reason
+  // and no longer is: it moved to the Redis-free leaf imported at the top.
+  const { orchestrationQueue } = await import("../lib/orchestration-queue.js")
+
   for (const row of rows) {
+    // QUEUE GATE — mirrors the state set the orphan gate in
+    // `lib/reconcile/workflow-executions-cron.ts` uses (both read
+    // ORCHESTRATOR_ALIVE_STATES from the queue-config leaf); the two sweeps'
+    // surrounding logic is otherwise their own. This sweep runs at container
+    // BOOT and sees every `running` row, including ones a deploy drain just
+    // parked in the queue's DELAYED set with their node_states intact. Without
+    // this check a parked execution is either flipped `completed` early (its
+    // child job finished while the execution waited) or written off as
+    // abandoned — either way the drain-safety work above is undone on the very
+    // next boot. Jobs are enqueued with `jobId: execution.id` at all 8
+    // `orchestrationQueue.add(` sites, so the row id IS the job id.
+    //
+    // Alive-state set comes from `lib/orchestration-queue-config.ts` — a single
+    // source of truth for "orchestrator alive" so `prioritized` /
+    // `waiting-children` additions can't drift out of sync between the cron's
+    // gate and this sweep.
+    const orchJob = await orchestrationQueue.getJob(row.id)
+    if (orchJob) {
+      const state = await orchJob.getState()
+      if (ORCHESTRATOR_ALIVE_STATES.has(state)) {
+        skipped++
+        continue
+      }
+    }
+
     const rawStates = (row.node_states ?? {}) as Record<string, NodeExecutionState>
 
     // Reconcile node_states from the jobs table before deciding what to do.
@@ -244,6 +284,117 @@ async function cleanupStaleExecutions(): Promise<void> {
 // Worker creation
 // ---------------------------------------------------------------------------
 
+/**
+ * Lock/stall geometry — ported from `video-worker.ts:400-409` (incident
+ * 2026-07-15) after the six "Execution orphaned" rows of 2026-08-23..09-01.
+ *
+ * The old 120-minute lock was chosen to "match WORKFLOW_TIMEOUT_MS and prevent
+ * stalled-job retries". Both halves were wrong: BullMQ renews an ACTIVE job's
+ * lock every lockDuration/2 on its own (bullmq 5.76.3,
+ * dist/cjs/classes/worker.js:63-64), so a two-hour execution is safe under a
+ * five-minute lock; and stalled retries are the RECOVERY path, not a hazard —
+ * `processWorkflowExecution` is resume-aware (the `// 2. Initialize node
+ * states — RESUME-AWARE.` block re-reads node_states, early-returns when the
+ * execution row is already terminal, and carries forward only nodes whose
+ * state is completed/skipped, without re-charging).
+ *
+ * What the old geometry actually produced: a SIGKILLed orchestrator left its
+ * job `active` under a live 120-minute lock. The executions cron skips
+ * `active` (`lib/reconcile/workflow-executions-cron.ts:204-209`), so nothing
+ * recovered the run; and with maxStalledCount at its default of 1, the first
+ * stall moved the job to failed-permanent instead of re-picking it.
+ *
+ * CAVEAT (spec §7, stated deliberately): a 5-minute lock means an event-loop
+ * block longer than 2.5 minutes stops renewal and a second orchestrator may
+ * re-pick the execution. Terminal nodes are carried forward, but nodes still
+ * IN FLIGHT are dropped by the `completed || skipped` carry-forward filter and
+ * re-attempt — `cancelInFlightChildJobs` adopts post-provider children and
+ * refunds pre-provider ones first, so the residual exposure is the
+ * concurrent-live-orchestrator race that function documents, not a bare
+ * double charge. The orchestrator is I/O-bound
+ * (Supabase reads + a 3s poll sleep, node-executor.ts:1726), so a block that
+ * long is itself a bug; this is the same bet video-worker.ts makes at 300s.
+ */
+export const ORCHESTRATOR_LOCK_MS = 300_000
+export const ORCHESTRATOR_STALLED_INTERVAL_MS = 60_000
+export const ORCHESTRATOR_MAX_STALLED = 3
+
+/** Short delay before the requeued execution becomes visible again. Railway
+ *  brings the new container up BEFORE draining the old one, so a fresh
+ *  orchestrator is already listening. Mirrors video-worker.ts's
+ *  `DrainAbortError` branch (which uses 2s for the shorter child jobs). */
+export const ORCHESTRATOR_DRAIN_REQUEUE_DELAY_MS = 5_000
+
+/**
+ * Hand a drain-interrupted job back to the queue AT ZERO COST.
+ *
+ * `moveToDelayed` + `DelayedError` is BullMQ's in-processor requeue: the job
+ * lands in the DELAYED set with its lock released, and the worker does NOT run
+ * its failure path — so nothing is written to `workflow_executions`, no child
+ * job is cancelled, no reservation is refunded, and no attempt is consumed.
+ *
+ * Always throws: `DelayedError` on success, the drain error on the fallback.
+ */
+async function parkForDrain(
+  job: Job<WorkflowExecutionJob>,
+  token: string | undefined,
+  what: string,
+  cause?: DrainAbortError,
+): Promise<never> {
+  const drainErr = cause ?? new DrainAbortError()
+  try {
+    await job.moveToDelayed(Date.now() + ORCHESTRATOR_DRAIN_REQUEUE_DELAY_MS, token)
+  } catch (moveErr) {
+    // THE FALLBACK IS A BOUNDED RETRY, NOT TERMINAL. `orchestrationQueue`
+    // (lib/orchestration-queue.ts) sets `attempts: ORCHESTRATION_JOB_ATTEMPTS`
+    // with exponential backoff, and no `.add()` site overrides it — so this
+    // rethrow is retried up to that many times before BullMQ marks the job
+    // `failed`. The resume path is idempotent (re-reads node_states, carries
+    // completed/skipped forward), so a retry of an in-flight execution is
+    // safe. Only once attempts are exhausted does the execution row sit
+    // `running` until the workflow_executions cron sweeps it and writes
+    // "Execution orphaned — no orchestrator job in queue". That is still
+    // better than a false `status='failed'` (node_states survive and the run
+    // is re-runnable), but it IS user-visible. Only a lost lock or a Redis
+    // connection closing under us gets here.
+    //
+    console.warn(
+      `[orchestrator] Execution ${job.data.executionId} ${what} — moveToDelayed failed (${moveErr instanceof Error ? moveErr.message : String(moveErr)}); rethrowing, which is retried up to ${ORCHESTRATION_JOB_ATTEMPTS} attempts on this queue before BullMQ marks it failed and the executions cron marks the row orphaned`,
+    )
+    throw drainErr
+  }
+  console.warn(
+    `[orchestrator] Execution ${job.data.executionId} ${what} — moved back to the queue (no attempt consumed; a fresh orchestrator re-picks it in ${ORCHESTRATOR_DRAIN_REQUEUE_DELAY_MS}ms)`,
+  )
+  throw new DelayedError()
+}
+
+/**
+ * BullMQ processor for one orchestration job. Exported so the drain contract is
+ * testable without standing up a live Worker; `createOrchestratorWorker` below
+ * is a one-line adapter over it.
+ */
+export async function runOrchestratorJob(
+  job: Job<WorkflowExecutionJob>,
+  token?: string,
+): Promise<void> {
+  // ENTRY GATE: this worker is already draining, so do not START an execution —
+  // no workflow load, no `jobs` row insert, no credit reservation, and no churn
+  // in the waiting set. Park it for the replacement container, which Railway
+  // brought up before draining this one and which is already listening.
+  if (isWorkerDraining()) {
+    await parkForDrain(job, token, "not started — worker already draining")
+  }
+  try {
+    await processWorkflowExecution(job)
+  } catch (err) {
+    if (err instanceof DrainAbortError) {
+      await parkForDrain(job, token, "interrupted by worker drain", err)
+    }
+    throw err
+  }
+}
+
 export function createOrchestratorWorker() {
   const connection = new IORedis(config.REDIS_URL, {
     maxRetriesPerRequest: null,
@@ -251,18 +402,22 @@ export function createOrchestratorWorker() {
 
   const worker = new Worker<WorkflowExecutionJob>(
     "workflow-orchestration",
-    async (job) => {
-      await processWorkflowExecution(job)
+    async (job, token) => {
+      await runOrchestratorJob(job, token)
     },
     {
       connection,
       concurrency: config.ORCHESTRATOR_CONCURRENCY,
-      lockDuration: 7_200_000, // 120 min — must match WORKFLOW_TIMEOUT_MS to prevent stalled-job retries
-      stalledInterval: 900_000, // 15 min
+      lockDuration: ORCHESTRATOR_LOCK_MS,
+      stalledInterval: ORCHESTRATOR_STALLED_INTERVAL_MS,
+      maxStalledCount: ORCHESTRATOR_MAX_STALLED,
     },
   )
 
   worker.on("failed", (job, err) => {
+    // A drain requeue surfaces here as DelayedError — logging it as a failure
+    // would make every deploy look like a batch of broken executions.
+    if (err instanceof DelayedError || err instanceof DrainAbortError) return
     console.error(
       `[orchestrator] Execution ${job?.data.executionId} failed:`,
       err.message,
@@ -1035,6 +1190,15 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         const result = results[i]
         const node = executableNodes[i]
 
+        // Deploy drain: this rejection is not a node failure. Propagate it
+        // WITHOUT touching node_states or failExecution — every state stays
+        // exactly as it was, the BullMQ job is requeued below, and the resume
+        // path (the `// 2. Initialize node states — RESUME-AWARE.` block)
+        // reconciles the in-flight children from `jobs`.
+        if (result.status === "rejected" && result.reason instanceof DrainAbortError) {
+          throw result.reason
+        }
+
         if (result.status === "rejected") {
           const error = result.reason instanceof Error
             ? result.reason.message
@@ -1182,6 +1346,10 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       }
     }
   } catch (err) {
+    // A drain is not an execution failure — rethrow so the worker wrapper can
+    // requeue this job. Writing `failed` here would turn every deploy into a
+    // batch of falsely-failed executions.
+    if (err instanceof DrainAbortError) throw err
     const message = err instanceof Error ? err.message : String(err)
     console.error(`[orchestrator] Execution ${executionId} error:`, message)
     await failExecution(executionId, message)

@@ -35,6 +35,7 @@ vi.mock("../node-executor.js", () => ({
 
 import { executeSubWorkflow } from "../sub-workflow-handler.js"
 import { executeNode } from "../node-executor.js"
+import { DrainAbortError } from "../../../lib/worker-drain.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -164,6 +165,44 @@ describe("executeSubWorkflow", () => {
         ctx({ userId: "viewer-1", workflowOwnerId: "owner-1" }),
       ),
     ).rejects.toThrow("not found")
+  })
+
+  it("DRAIN: rethrows a DrainAbortError with its identity intact (never rewrapped)", async () => {
+    // The rejection loop wraps every failure in `Sub-workflow node X failed: …`.
+    // For a deploy drain that rewrap is fatal: the orchestrator's hatch matches
+    // on `instanceof DrainAbortError`, so a flattened Error would be treated as
+    // a node failure and write status='failed' on a healthy execution.
+    const n = node("sw", "sub-workflow", { workflowId: "ref-wf" })
+    const subNodes: SimpleNode[] = [
+      node("gen", "generate-image", { prompt: "x" }),
+      node("out", "sub-workflow-output"),
+    ]
+    mockSingle.mockResolvedValue({
+      data: { nodes: subNodes, edges: [edge("gen", "out")] },
+      error: null,
+    })
+
+    const reason = new DrainAbortError()
+    vi.mocked(executeNode).mockRejectedValueOnce(reason)
+
+    await expect(executeSubWorkflow(n, {}, ctx())).rejects.toBe(reason)
+  })
+
+  it("an ordinary iteration error is STILL rewrapped with the node id (unchanged)", async () => {
+    const n = node("sw", "sub-workflow", { workflowId: "ref-wf" })
+    mockSingle.mockResolvedValue({
+      data: {
+        nodes: [node("gen", "generate-image", { prompt: "x" }), node("out", "sub-workflow-output")],
+        edges: [edge("gen", "out")],
+      },
+      error: null,
+    })
+
+    vi.mocked(executeNode).mockRejectedValueOnce(new Error("provider 503"))
+
+    await expect(executeSubWorkflow(n, {}, ctx())).rejects.toThrow(
+      "Sub-workflow node gen failed: provider 503",
+    )
   })
 
   it("executes a simple sub-workflow with source + inline nodes", async () => {

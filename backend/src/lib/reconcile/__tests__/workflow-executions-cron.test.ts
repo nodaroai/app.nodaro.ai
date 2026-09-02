@@ -19,7 +19,10 @@ const mocks = vi.hoisted(() => ({
   jobs: [] as JobRow[],
   updates: [] as Array<{ id: string; updates: Record<string, unknown> }>,
   // BullMQ orchestration-job state per executionId. undefined = no job.
-  orchJob: new Map<string, { state: string } | undefined>(),
+  orchJob: new Map<
+    string,
+    { state: string; failedReason?: string; attemptsMade?: number } | undefined
+  >(),
 }))
 
 vi.mock("../../supabase.js", () => {
@@ -99,7 +102,12 @@ vi.mock("../../orchestration-queue.js", () => ({
     getJob: (jobId: string) => {
       const j = mocks.orchJob.get(jobId)
       if (!j) return Promise.resolve(null)
-      return Promise.resolve({ id: jobId, getState: () => Promise.resolve(j.state) })
+      return Promise.resolve({
+        id: jobId,
+        getState: () => Promise.resolve(j.state),
+        failedReason: j.failedReason,
+        attemptsMade: j.attemptsMade,
+      })
     },
   },
 }))
@@ -113,6 +121,22 @@ describe("reconcileWorkflowExecutionsTick", () => {
     mocks.updates.length = 0
     mocks.orchJob.clear()
   })
+
+  /**
+   * A `running` execution whose `started_at` is older than
+   * `BACKOFF_FROM_START_MS` (2 min) but newer than
+   * `STALE_EXECUTION_THRESHOLD_MS` (4h), with node states that are neither
+   * all-completed nor any-failed — control reaches the final
+   * orchestration-queue fallback rather than an earlier branch.
+   */
+  const seedRunningExecution = (id: string) => {
+    mocks.executions.push({
+      id,
+      started_at: new Date(Date.now() - 10 * 60_000).toISOString(), // 10 min ago
+      node_states: { n1: { status: "running", jobId: `${id}-n1` } },
+    })
+    mocks.jobs.push({ id: `${id}-n1`, status: "processing", error_message: null })
+  }
 
   it("marks an execution completed when all child jobs are completed in DB", async () => {
     mocks.executions.push({
@@ -393,5 +417,109 @@ describe("reconcileWorkflowExecutionsTick", () => {
     // Execution still marks completed (skipped + completed both count as
     // "done" for allCompleted).
     expect(mocks.updates[0].updates.status).toBe("completed")
+  })
+
+  it("leaves a prioritized orchestration job alone instead of orphaning its execution", async () => {
+    seedRunningExecution("exec-prio")
+    mocks.orchJob.set("exec-prio", { state: "prioritized" })
+    await reconcileWorkflowExecutionsTick()
+    expect(mocks.updates.find((u) => u.id === "exec-prio")).toBeUndefined()
+  })
+
+  it("leaves a waiting-children orchestration job alone", async () => {
+    seedRunningExecution("exec-wc")
+    mocks.orchJob.set("exec-wc", { state: "waiting-children" })
+    await reconcileWorkflowExecutionsTick()
+    expect(mocks.updates.find((u) => u.id === "exec-wc")).toBeUndefined()
+  })
+
+  it("leaves a delayed orchestration job alone", async () => {
+    seedRunningExecution("exec-delayed")
+    mocks.orchJob.set("exec-delayed", { state: "delayed" })
+    await reconcileWorkflowExecutionsTick()
+    expect(mocks.updates.find((u) => u.id === "exec-delayed")).toBeUndefined()
+  })
+
+  it("reports a BullMQ-failed orchestration job as a crash, not as orphaned — the reason stays out of error_message", async () => {
+    // workflow_executions.error_message is rendered verbatim to users
+    // (executions page tooltip, editor executions tab, published-app
+    // runners) and has no error_detail sibling (unlike jobs, migration 368)
+    // to hold raw diagnostic text. redactProviderDetail only strips
+    // secrets/URLs, so a BullMQ string like "job stalled more than
+    // allowable limit" would reach the user completely intact — it must
+    // not be embedded in error_message at all. The plain sentence is what
+    // the user sees; the reason goes to the log for admin/ops diagnosis.
+    seedRunningExecution("exec-failed")
+    mocks.orchJob.set("exec-failed", {
+      state: "failed",
+      failedReason: "job stalled more than allowable limit",
+      attemptsMade: 3,
+    })
+    await reconcileWorkflowExecutionsTick()
+    const update = mocks.updates.find((u) => u.id === "exec-failed")!.updates
+    expect(update.status).toBe("failed")
+    expect(update.error_message).toContain("orchestrator job failed")
+    expect(update.error_message).not.toContain("job stalled")
+    expect(update.error_message).not.toContain("orphaned")
+  })
+
+  // Minor 1 (2026-09-01 triage report): a job BullMQ fails for exceeding
+  // `maxStalledCount` never actually re-attempts — `attemptsMade` stays 0 —
+  // so "after 0 attempt(s)" read as a bug report rather than a diagnosis.
+  it("drops the attempt count entirely when the job never attempted (maxStalledCount trip)", async () => {
+    seedRunningExecution("exec-stalled")
+    mocks.orchJob.set("exec-stalled", {
+      state: "failed",
+      failedReason: "job stalled more than allowable limit",
+      attemptsMade: 0,
+    })
+    await reconcileWorkflowExecutionsTick()
+    const update = mocks.updates.find((u) => u.id === "exec-stalled")!.updates
+    expect(update.status).toBe("failed")
+    expect(update.error_message).toContain("orchestrator job failed")
+    expect(update.error_message).not.toContain("attempt")
+  })
+
+  it("still orphans an execution whose orchestration job is genuinely gone", async () => {
+    seedRunningExecution("exec-gone")
+    mocks.orchJob.set("exec-gone", undefined)
+    await reconcileWorkflowExecutionsTick()
+    const update = mocks.updates.find((u) => u.id === "exec-gone")!.updates
+    expect(update.error_message).toContain("Execution orphaned")
+  })
+
+  it("logs the redacted failedReason for ops but keeps the raw reason and secrets out of error_message", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    try {
+      seedRunningExecution("exec-failed-secret")
+      mocks.orchJob.set("exec-failed-secret", {
+        state: "failed",
+        failedReason:
+          "fetch failed: https://r2.example.com/bucket/secret-key.png?token=abc123 unexpectedly",
+        attemptsMade: 2,
+      })
+      await reconcileWorkflowExecutionsTick()
+      const update = mocks.updates.find((u) => u.id === "exec-failed-secret")!.updates
+
+      // error_message never carries the raw reason at all — not the URL,
+      // not the secret, not even the redacted form.
+      expect(update.error_message).not.toContain("secret-key")
+      expect(update.error_message).not.toContain("token=abc123")
+      expect(update.error_message).not.toContain("r2.example.com")
+      expect(update.error_message).not.toContain("fetch failed")
+
+      // The redacted reason DOES reach the log (admin/ops diagnosis), and
+      // the log line itself never carries the un-redacted secret.
+      const loggedCall = errorSpy.mock.calls.find((call) =>
+        String(call[0]).includes("exec-failed-secret"),
+      )
+      expect(loggedCall).toBeDefined()
+      const logged = String(loggedCall![0])
+      expect(logged).toContain("r2.example.com/…")
+      expect(logged).not.toContain("secret-key")
+      expect(logged).not.toContain("token=abc123")
+    } finally {
+      errorSpy.mockRestore()
+    }
   })
 })

@@ -1,28 +1,32 @@
-import { NODE_REF_PATTERN, RESERVED_TEMPLATE_VARS, parseNodeRef, canonicalVarName } from "@nodaro/shared"
+import { NODE_REF_PATTERN, parseNodeRef, canonicalVarName, classifyRefToken, type RefTokenKind } from "@nodaro/shared"
 
 /** How a `{...}` token (parsed name) renders/behaves. Single source of truth for
- *  the editor decoration AND the missing-refs chip — predicate-level identity. */
-export type PromptTokenKind = "wired" | "reserved" | "missing" | "skip" | "unknown"
+ *  the editor decoration AND the missing-refs chip — predicate-level identity.
+ *  Name kept for the existing call sites; the classifier itself now lives in
+ *  `@nodaro/shared` (`classifyRefToken`) so the editor and the backend dispatch
+ *  guard can never drift on what counts as a reference. */
+export type PromptTokenKind = RefTokenKind
 
 /**
  * Classify a parsed token name against the resolvable upstream label set.
  * `resolvable === null` means the consumer has no ref data at all (PromptEditor
  * without a `nodeRefs` prop) — such tokens classify `unknown` and render like
  * wired (cyan), never amber, so "no data" never masquerades as "nothing wired".
+ *
+ * Delegates to `@nodaro/shared`: node-name variables are matched
+ * case-insensitively there, and the excluded namespaces are the shared
+ * `REF_TOKEN_NAMESPACE_PREFIXES` (`image:` / `video:` / `audio:` / `slot:` /
+ * `ref:`), not `image:` alone.
  */
 export function classifyPromptToken(
   name: string,
   resolvable: ReadonlySet<string> | null,
 ): PromptTokenKind {
-  if (name === "" || name.startsWith("image:")) return "skip"
-  if (RESERVED_TEMPLATE_VARS.has(name)) return "reserved"
-  if (resolvable === null) return "unknown"
-  // Case-insensitive: node-name variables are lowercase-canonical (every producer
-  // builds the resolvable set canonical), so `{MyNode}`/`{MYNODE}` both match.
-  return resolvable.has(canonicalVarName(name)) ? "wired" : "missing"
+  return classifyRefToken(name, resolvable)
 }
 
-/** Tokens never treated as a real reference: empty, image-ref tokens, reserved vars. */
+/** Tokens never treated as a real reference: empty, reference-namespace tokens
+ *  (`image:` / `video:` / `audio:` / `slot:` / `ref:`), reserved vars. */
 export function isExcludedToken(raw: string): boolean {
   const kind = classifyPromptToken(raw, null)
   return kind === "skip" || kind === "reserved"
