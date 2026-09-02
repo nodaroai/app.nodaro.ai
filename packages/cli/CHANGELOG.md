@@ -1,5 +1,24 @@
 # @nodaro/cli
 
+## 1.18.0
+
+### Minor Changes
+
+- 158b2e6: Organizations: usage reports (rollout-gated). `client.organizations.usage(orgId, query)` and `client.workspaces.usage(workspaceId, query)` return credits by workspace, member, model or day for an inclusive date range (`from`/`to`, IANA `tz`), with in-flight vs settled credits split out and the platform-absorbed overrun listed separately; `usageRows` pages the underlying runs; `usageCsv` returns the same report as CSV. The CLI gains `nodaro org usage` and `nodaro workspace usage` (`--csv`). `@nodaro/shared` adds the `UsageReport`, `UsageReportRow`, `UsageVarianceRow`, `UsageLogEntry`, `UsageQuery` wire types, the `USAGE_GROUP_BYS` list and the `audit_unavailable` error code.
+
+### Patch Changes
+
+- Updated dependencies [1e9e962]
+- Updated dependencies [5a67501]
+- Updated dependencies [158b2e6]
+- Updated dependencies [dfd4fed]
+- Updated dependencies [c6be4ac]
+- Updated dependencies [4c5dedb]
+- Updated dependencies [703d5ae]
+  - @nodaro/shared@2.20.0
+  - @nodaro/prompts@1.15.0
+  - @nodaro/sdk@1.26.0
+
 ## 1.17.0
 
 ### Minor Changes
