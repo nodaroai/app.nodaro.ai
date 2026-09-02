@@ -321,6 +321,16 @@ export const queryKeys = {
       ["orgs", "workspaces", orgId, includeArchived ? "with-archived" : "live"] as const,
     audit: (orgId: string, cursor?: string) =>
       cursor ? (["orgs", "audit", orgId, cursor] as const) : (["orgs", "audit", orgId] as const),
+    // P15 usage reports. scope-key-ok: object-addressed report; the id in the
+    // path is the scope, so these are not filtered by useWorkspaceScope().
+    usage: (orgId: string, params: Record<string, string | number | undefined>) =>
+      ["orgs", "usage", orgId, params] as const,
+    usageRows: (orgId: string, params: Record<string, string | number | undefined>, cursor?: string) =>
+      ["orgs", "usage-rows", orgId, params, cursor ?? ""] as const,
+    workspaceUsage: (workspaceId: string, params: Record<string, string | number | undefined>) =>
+      ["orgs", "workspace-usage", workspaceId, params] as const,
+    workspaceUsageRows: (workspaceId: string, params: Record<string, string | number | undefined>, cursor?: string) =>
+      ["orgs", "workspace-usage-rows", workspaceId, params, cursor ?? ""] as const,
     workspace: (workspaceId: string) => ["orgs", "workspace", workspaceId] as const,
     workspaceMembers: (workspaceId: string, cursor?: string) =>
       cursor
