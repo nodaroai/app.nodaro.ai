@@ -5,9 +5,10 @@
  * revoked from PUBLIC *and* anon (Supabase grants anon through default
  * privileges, so `FROM PUBLIC` alone leaves an anonymous oracle), and then be
  * one of exactly two things: an RLS-facing helper granted to `authenticated`,
- * or a mutating RPC granted to `service_role` only. A function that is
- * neither — or a migration this file does not know — fails here, so a new
- * organizations migration cannot ship an unclassified definer.
+ * or a `service_role`-only definer — a mutating RPC, OR a read-only STABLE
+ * reader the browser must not reach (369's usage reporters are the latter). A
+ * function that is neither — or a migration this file does not know — fails
+ * here, so a new organizations migration cannot ship an unclassified definer.
  *
  * The per-file invariants (kind presets, the transfer RPC's ordering, CHECK
  * enums) stay in the file-specific guards; this one is the family rule.
@@ -110,7 +111,7 @@ const CLASSIFICATION: Record<string, { authenticated: string[]; serviceRole: str
   // (org admin+ / workspace role) and relays; nothing here is an RLS helper.
   "369_orgs_usage_reporting.sql": {
     authenticated: [],
-    serviceRole: ["org_usage_report", "org_usage_rows", "org_usage_variance", "org_usage_window"],
+    serviceRole: ["org_usage_report", "org_usage_rows", "org_usage_totals", "org_usage_variance", "org_usage_window"],
   },
 }
 

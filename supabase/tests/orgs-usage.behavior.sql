@@ -66,7 +66,8 @@ INSERT INTO auth.users (id, email) VALUES
   ('00000000-0000-4000-8000-000000000934', 'usage-outsider@example.com'),
   ('00000000-0000-4000-8000-000000000935', 'usage-c@example.com'),
   ('00000000-0000-4000-8000-000000000936', 'usage-d@example.com'),
-  ('00000000-0000-4000-8000-000000000937', 'usage-e@example.com');
+  ('00000000-0000-4000-8000-000000000937', 'usage-e@example.com'),
+  ('00000000-0000-4000-8000-000000000938', 'usage-f@example.com');
 
 INSERT INTO organizations (id, slug, name, kind, owner_user_id, status, settings) VALUES
   ('a0000000-0000-4000-8000-000000000931', 'usage-org', 'Usage School', 'school',
@@ -82,7 +83,8 @@ INSERT INTO organization_members (org_id, user_id, role, status) VALUES
   ('a0000000-0000-4000-8000-000000000931', '00000000-0000-4000-8000-000000000933', 'member', 'active'),
   ('a0000000-0000-4000-8000-000000000931', '00000000-0000-4000-8000-000000000935', 'member', 'active'),
   ('a0000000-0000-4000-8000-000000000931', '00000000-0000-4000-8000-000000000936', 'member', 'active'),
-  ('a0000000-0000-4000-8000-000000000931', '00000000-0000-4000-8000-000000000937', 'member', 'active');
+  ('a0000000-0000-4000-8000-000000000931', '00000000-0000-4000-8000-000000000937', 'member', 'active'),
+  ('a0000000-0000-4000-8000-000000000931', '00000000-0000-4000-8000-000000000938', 'member', 'active');
 
 INSERT INTO workspace_members (workspace_id, org_id, user_id, role, status, credit_cap) VALUES
   ('b0000000-0000-4000-8000-000000000931', 'a0000000-0000-4000-8000-000000000931', '00000000-0000-4000-8000-000000000932', 'member', 'active', NULL),
@@ -90,6 +92,7 @@ INSERT INTO workspace_members (workspace_id, org_id, user_id, role, status, cred
   ('b0000000-0000-4000-8000-000000000931', 'a0000000-0000-4000-8000-000000000931', '00000000-0000-4000-8000-000000000935', 'member', 'active', NULL),
   ('b0000000-0000-4000-8000-000000000931', 'a0000000-0000-4000-8000-000000000931', '00000000-0000-4000-8000-000000000936', 'member', 'active', NULL),
   ('b0000000-0000-4000-8000-000000000931', 'a0000000-0000-4000-8000-000000000931', '00000000-0000-4000-8000-000000000937', 'member', 'active', NULL),
+  ('b0000000-0000-4000-8000-000000000931', 'a0000000-0000-4000-8000-000000000931', '00000000-0000-4000-8000-000000000938', 'member', 'active', NULL),
   ('b0000000-0000-4000-8000-000000000932', 'a0000000-0000-4000-8000-000000000931', '00000000-0000-4000-8000-000000000932', 'member', 'active', NULL);
 
 UPDATE profiles SET subscription_credits = 1000, topup_credits = 0, daily_spent_credits = 0
@@ -141,6 +144,13 @@ BEGIN
     reserve_credits('00000000-0000-4000-8000-000000000937', 6, NULL, NULL, NULL, NULL, FALSE, NULL, FALSE, 'b0000000-0000-4000-8000-000000000931'), 6);
 END $$;
 
+-- F (938): exactly one APP run (7th arg p_is_app_run = TRUE) — pins app_run_count / is_app_run.
+DO $$
+BEGIN
+  PERFORM commit_credits(
+    reserve_credits('00000000-0000-4000-8000-000000000938', 4, NULL, NULL, NULL, NULL, TRUE, NULL, FALSE, 'b0000000-0000-4000-8000-000000000931'), 4);
+END $$;
+
 -- Archived workspace (932): A runs one committed 30, THEN we archive it.
 DO $$
 BEGIN
@@ -159,6 +169,22 @@ END $$;
 -- deployment-payer shape (behavior #23): on_behalf_of set, workspace/org NULL.
 INSERT INTO usage_logs (user_id, on_behalf_of, action, provider, credits_used, credits_charged, status, workspace_id, org_id, created_at, metadata)
 VALUES ('00000000-0000-4000-8000-000000000932', '00000000-0000-4000-8000-000000000933', 'generate', 'kie', 10, 10, 'committed', NULL, NULL, now(), '{}'::jsonb);
+
+-- App-markup variance row (behavior #kind): the 352-shaped ledger row that
+-- SHARES source='org_usage_variance' with the metered overrun but has NO
+-- usage_logs counterpart. Hand-inserted with 352's exact description prefix
+-- (calling process_app_monetization would need approved-app fixtures).
+INSERT INTO credit_transactions (user_id, amount, credit_type, source, description, org_id, workspace_id, job_id, created_at)
+VALUES ('00000000-0000-4000-8000-000000000932', 9, 'org', 'org_usage_variance',
+        'App markup beyond workspace headroom, absorbed by the platform (run test-markup)',
+        'a0000000-0000-4000-8000-000000000931', 'b0000000-0000-4000-8000-000000000931', NULL, now());
+
+-- COALESCE-pin row (behavior #model-coalesce): action <> metadata.model, in its
+-- own April window, to prove the reader takes metadata->>'model' first.
+INSERT INTO usage_logs (user_id, action, provider, credits_used, credits_charged, status, workspace_id, org_id, created_at, metadata)
+VALUES ('00000000-0000-4000-8000-000000000932', 'generate', 'kie', 2, 2, 'committed',
+        'b0000000-0000-4000-8000-000000000931', 'a0000000-0000-4000-8000-000000000931', '2026-04-10T12:00:00Z',
+        '{"model": "x-model"}'::jsonb);
 
 -- Hand-inserted, controlled-created_at rows live in their OWN date windows so
 -- the recent-window (real-RPC) assertions never see them and vice versa.
@@ -187,8 +213,8 @@ FROM generate_series(1, 1001) g;
 -- inside a 3-day window, well under the 366-day cap.
 
 -- #4 metered overrun -> variance line = 15; the log kept the true actual 45.
-SELECT pg_temp.assert_eq('#4 variance for live ws = 15',
-  (SELECT credits::text FROM org_usage_variance('workspace', 'b0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC')), '15');
+SELECT pg_temp.assert_eq('#4 metered-overrun variance for live ws = 15',
+  (SELECT credits::text FROM org_usage_variance('workspace', 'b0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC') WHERE kind = 'metered_overrun'), '15');
 SELECT pg_temp.assert_eq('#4 org_usage_report settled for A''s overrun row = 45',
   (SELECT settled_credits::text FROM org_usage_report('workspace', 'b0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC', 'member', NULL, '00000000-0000-4000-8000-000000000932')), '45');
 -- chargedToBudget = settled (45) - platformAbsorbed (15) = 30 (the budget slice,
@@ -227,7 +253,7 @@ SELECT pg_temp.assert_eq('#5 no NULL-user row in member grouping',
 -- #6 workspace scope ignores the sibling; org scope by workspace sees both.
 SELECT pg_temp.assert_eq('#6 live-ws member grouping has no archived-ws runner rows',
   (SELECT count(*)::text FROM org_usage_report('workspace', 'b0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC', 'member')
-     WHERE user_id NOT IN ('00000000-0000-4000-8000-000000000932','00000000-0000-4000-8000-000000000933','00000000-0000-4000-8000-000000000935','00000000-0000-4000-8000-000000000936','00000000-0000-4000-8000-000000000937')), '0');
+     WHERE user_id NOT IN ('00000000-0000-4000-8000-000000000932','00000000-0000-4000-8000-000000000933','00000000-0000-4000-8000-000000000935','00000000-0000-4000-8000-000000000936','00000000-0000-4000-8000-000000000937','00000000-0000-4000-8000-000000000938')), '0');
 SELECT pg_temp.assert_eq('#6 org grouping by workspace lists both workspaces',
   (SELECT count(*)::text FROM org_usage_report('org', 'a0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC', 'workspace')), '2');
 
@@ -301,23 +327,23 @@ SELECT pg_temp.assert_raises('#19 NULL to raises RANGE_TOO_LARGE (report)',
 -- #14 grants + volatility.
 SELECT pg_temp.assert_eq('#14 authenticated cannot execute the readers',
   (SELECT bool_or(has_function_privilege('authenticated', p.oid, 'EXECUTE'))::text FROM pg_proc p
-    WHERE proname IN ('org_usage_report','org_usage_rows','org_usage_variance','org_usage_window')), 'false');
+    WHERE proname IN ('org_usage_report','org_usage_rows','org_usage_totals','org_usage_variance','org_usage_window')), 'false');
 SELECT pg_temp.assert_eq('#14 anon cannot execute the readers',
   (SELECT bool_or(has_function_privilege('anon', p.oid, 'EXECUTE'))::text FROM pg_proc p
-    WHERE proname IN ('org_usage_report','org_usage_rows','org_usage_variance','org_usage_window')), 'false');
-SELECT pg_temp.assert_eq('#14 service_role can execute all four',
+    WHERE proname IN ('org_usage_report','org_usage_rows','org_usage_totals','org_usage_variance','org_usage_window')), 'false');
+SELECT pg_temp.assert_eq('#14 service_role can execute all five',
   (SELECT bool_and(has_function_privilege('service_role', p.oid, 'EXECUTE'))::text FROM pg_proc p
-    WHERE proname IN ('org_usage_report','org_usage_rows','org_usage_variance','org_usage_window')), 'true');
-SELECT pg_temp.assert_eq('#14 all four are STABLE (provolatile s)',
+    WHERE proname IN ('org_usage_report','org_usage_rows','org_usage_totals','org_usage_variance','org_usage_window')), 'true');
+SELECT pg_temp.assert_eq('#14 all five are STABLE (provolatile s)',
   (SELECT bool_and(provolatile = 's')::text FROM pg_proc
-    WHERE proname IN ('org_usage_report','org_usage_rows','org_usage_variance','org_usage_window')), 'true');
-SELECT pg_temp.assert_eq('#14 all four pin search_path with pg_temp',
+    WHERE proname IN ('org_usage_report','org_usage_rows','org_usage_totals','org_usage_variance','org_usage_window')), 'true');
+SELECT pg_temp.assert_eq('#14 all five pin search_path with pg_temp',
   (SELECT count(*)::text FROM pg_proc
-    WHERE proname IN ('org_usage_report','org_usage_rows','org_usage_variance','org_usage_window')
-      AND prosecdef AND array_to_string(proconfig, ',') LIKE '%search_path=public, pg_temp%'), '4');
+    WHERE proname IN ('org_usage_report','org_usage_rows','org_usage_totals','org_usage_variance','org_usage_window')
+      AND prosecdef AND array_to_string(proconfig, ',') LIKE '%search_path=public, pg_temp%'), '5');
 SELECT pg_temp.assert_eq('#14 each reader has exactly one overload',
   (SELECT bool_and(c = 1)::text FROM (SELECT proname, count(*) c FROM pg_proc
-    WHERE proname IN ('org_usage_report','org_usage_rows','org_usage_variance','org_usage_window') GROUP BY proname) q), 'true');
+    WHERE proname IN ('org_usage_report','org_usage_rows','org_usage_totals','org_usage_variance','org_usage_window') GROUP BY proname) q), 'true');
 
 -- #15 the variance index is present and partial.
 SELECT pg_temp.assert_eq('#15 idx_credit_tx_variance_org_created is partial on source',
@@ -331,7 +357,7 @@ SELECT pg_temp.assert_eq('#16 outsider is invisible to org scope',
 -- #17 no cost/usd token in any reader's argument or OUT column names.
 SELECT pg_temp.assert_eq('#17 no cost/usd/price name on any reader',
   (SELECT count(*)::text FROM pg_proc, unnest(COALESCE(proargnames, '{}')) AS an
-    WHERE proname IN ('org_usage_report','org_usage_rows','org_usage_variance') AND an ~* '(cost|usd|price|dollar|margin|markup)'), '0');
+    WHERE proname IN ('org_usage_report','org_usage_rows','org_usage_totals','org_usage_variance') AND an ~* '(cost|usd|price|dollar|margin|markup)'), '0');
 
 -- #20 p_workspace_id narrows an org report + its variance to one workspace.
 SELECT pg_temp.assert_eq('#20 org report narrowed to the archived ws has A''s run only',
@@ -360,17 +386,91 @@ SELECT pg_temp.assert_eq('#23 no on_behalf_of row surfaces in the org rows reade
   (SELECT count(*)::text FROM org_usage_rows('org', 'a0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC') ur
      JOIN usage_logs ul ON ul.id = ur.id WHERE ul.on_behalf_of IS NOT NULL), '0');
 
+-- #kind the variance line is split by origin: metered overrun (15) vs app markup (9).
+SELECT pg_temp.assert_eq('#kind app-markup variance for live ws = 9',
+  (SELECT credits::text FROM org_usage_variance('workspace', 'b0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC') WHERE kind = 'app_markup'), '9');
+SELECT pg_temp.assert_eq('#kind org-scope variance returns both kinds on the live ws',
+  (SELECT string_agg(kind, ',' ORDER BY kind) FROM org_usage_variance('org', 'a0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC')), 'app_markup,metered_overrun');
+
+-- #totals org_usage_totals aggregates the WHOLE window and equals the column-wise
+-- sum of the (grouped) member report — totals never come from the capped rows.
+SELECT pg_temp.assert_eq('#totals credits == sum of member report credits',
+  (SELECT credits::text FROM org_usage_totals('workspace', 'b0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC')),
+  (SELECT sum(credits)::text FROM org_usage_report('workspace', 'b0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC', 'member')));
+SELECT pg_temp.assert_eq('#totals settled + in_flight == credits',
+  (SELECT (settled_credits + in_flight_credits = credits)::text FROM org_usage_totals('workspace', 'b0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC')), 'true');
+SELECT pg_temp.assert_eq('#totals app_run_count = 1 (F''s one app run)',
+  (SELECT app_run_count::text FROM org_usage_totals('workspace', 'b0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC')), '1');
+SELECT pg_temp.assert_eq('#totals empty window is all zeros (one row, not none)',
+  (SELECT run_count::text || ':' || credits::text FROM org_usage_totals('workspace', 'b0000000-0000-4000-8000-000000000931', '2020-01-01', '2020-01-02', 'UTC')), '0:0');
+
+-- #rows-values the flat-rows reader carries the right money columns (a column
+-- swap or COALESCE inversion in the rows SELECT ships wrong CSV numbers).
+SELECT pg_temp.assert_eq('#rows-values C reserved row = 20:null:20, job NULL, not app',
+  (SELECT credits_reserved || ':' || COALESCE(credits_settled::text, 'null') || ':' || credits || ':' || COALESCE(job_id::text, 'null') || ':' || is_app_run
+     FROM org_usage_rows('workspace', 'b0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC', NULL, '00000000-0000-4000-8000-000000000935') WHERE status = 'reserved'),
+  '20:null:20:null:false');
+SELECT pg_temp.assert_eq('#rows-values C committed row = 10:7:7',
+  (SELECT credits_reserved || ':' || credits_settled || ':' || credits
+     FROM org_usage_rows('workspace', 'b0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC', NULL, '00000000-0000-4000-8000-000000000935') WHERE status = 'committed'),
+  '10:7:7');
+
+-- #model-coalesce the reader takes metadata->>'model' before action.
+SELECT pg_temp.assert_eq('#model-coalesce a row whose action<>model groups under model',
+  (SELECT group_key FROM org_usage_report('workspace', 'b0000000-0000-4000-8000-000000000931', '2026-04-01', '2026-04-30', 'UTC', 'model') LIMIT 1), 'x-model');
+SELECT pg_temp.assert_eq('#model-coalesce the rows reader shows model, not action',
+  (SELECT model FROM org_usage_rows('workspace', 'b0000000-0000-4000-8000-000000000931', '2026-04-01', '2026-04-30', 'UTC') LIMIT 1), 'x-model');
+
+-- #6b non-vacuous scope isolation across all readers.
+SELECT pg_temp.assert_eq('#6b live-ws rows reader emits no sibling-ws row',
+  (SELECT count(*)::text FROM org_usage_rows('workspace', 'b0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC') WHERE workspace_id <> 'b0000000-0000-4000-8000-000000000931'), '0');
+SELECT pg_temp.assert_eq('#6b archived-ws rows reader returns exactly A''s 30-credit run',
+  (SELECT count(*)::text || ':' || sum(credits)::text FROM org_usage_rows('workspace', 'b0000000-0000-4000-8000-000000000932', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC')), '1:30');
+SELECT pg_temp.assert_eq('#6b archived-ws report (member) is one row, credits 30',
+  (SELECT count(*)::text || ':' || sum(credits)::text FROM org_usage_report('workspace', 'b0000000-0000-4000-8000-000000000932', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC', 'member')), '1:30');
+
+-- #app F's app run surfaces on both readers.
+SELECT pg_temp.assert_eq('#app F member row app_run_count = 1',
+  (SELECT app_run_count::text FROM org_usage_report('workspace', 'b0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC', 'member', NULL, '00000000-0000-4000-8000-000000000938')), '1');
+SELECT pg_temp.assert_eq('#app F rows reader marks is_app_run true',
+  (SELECT bool_and(is_app_run)::text FROM org_usage_rows('workspace', 'b0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC', NULL, '00000000-0000-4000-8000-000000000938')), 'true');
+
+-- #5b member group_key set equals the runner set; exactly one grouping column is set.
+SELECT pg_temp.assert_eq('#5b member group_key set = runner set',
+  (SELECT count(*)::text FROM org_usage_report('workspace', 'b0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC', 'member') WHERE group_key <> user_id::text), '0');
+SELECT pg_temp.assert_eq('#5b member grouping sets exactly one of workspace/user/model/day',
+  (SELECT count(*)::text FROM org_usage_report('workspace', 'b0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC', 'member')
+     WHERE (workspace_id IS NOT NULL)::int + (user_id IS NOT NULL)::int + (model IS NOT NULL)::int + (day IS NOT NULL)::int <> 1), '0');
+
+-- #cursor a half cursor is refused loudly, not paged past.
+SELECT pg_temp.assert_raises('#cursor after_created without after_id raises BAD_CURSOR',
+  $q$SELECT * FROM org_usage_rows('workspace', 'b0000000-0000-4000-8000-000000000931', '2026-02-01', '2026-02-28', 'UTC', NULL, NULL, now(), NULL, 2)$q$, 'BAD_CURSOR:');
+SELECT pg_temp.assert_raises('#cursor after_id without after_created raises BAD_CURSOR',
+  $q$SELECT * FROM org_usage_rows('workspace', 'b0000000-0000-4000-8000-000000000931', '2026-02-01', '2026-02-28', 'UTC', NULL, NULL, NULL, gen_random_uuid(), 2)$q$, 'BAD_CURSOR:');
+
+-- #rows-narrow p_workspace_id and p_user_id narrow the rows reader.
+SELECT pg_temp.assert_eq('#rows-narrow org scope + p_workspace_id=archived returns only that ws',
+  (SELECT count(*)::text || ':' || count(*) FILTER (WHERE workspace_id = 'b0000000-0000-4000-8000-000000000932')::text
+     FROM org_usage_rows('org', 'a0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC', 'b0000000-0000-4000-8000-000000000932')), '1:1');
+SELECT pg_temp.assert_eq('#rows-narrow workspace scope + p_user_id returns only that member',
+  (SELECT count(*) FILTER (WHERE user_id <> '00000000-0000-4000-8000-000000000936')::text
+     FROM org_usage_rows('workspace', 'b0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC', NULL, '00000000-0000-4000-8000-000000000936')), '0');
+
+-- #tznull a NULL p_tz defaults to UTC (same bucket as the explicit 'UTC' call).
+SELECT pg_temp.assert_eq('#tznull NULL tz buckets the 23:30Z run to 2026-03-01 (UTC default)',
+  (SELECT group_key FROM org_usage_report('workspace', 'b0000000-0000-4000-8000-000000000931', '2026-03-01', '2026-03-02', NULL, 'day') LIMIT 1), '2026-03-01');
+
 -- #13 deleted member takes their usage rows, NOT the platform-absorbed line.
 -- LAST, because it cascade-deletes A's rows (needed by #1/#9/#20/#21/#23 above).
 DO $$
 DECLARE v_runs_before BIGINT; v_runs_after BIGINT; v_var_before BIGINT; v_var_after BIGINT; v_var_user UUID;
 BEGIN
   SELECT run_count INTO v_runs_before FROM org_usage_report('workspace', 'b0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC', 'member', NULL, '00000000-0000-4000-8000-000000000932');
-  SELECT credits INTO v_var_before FROM org_usage_variance('workspace', 'b0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC');
-  DELETE FROM profiles WHERE id = '00000000-0000-4000-8000-000000000932';   -- cascades usage_logs, SET NULL on the variance row
+  SELECT credits INTO v_var_before FROM org_usage_variance('workspace', 'b0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC') WHERE kind = 'metered_overrun';
+  DELETE FROM profiles WHERE id = '00000000-0000-4000-8000-000000000932';   -- cascades usage_logs, SET NULL on the variance rows
   SELECT COALESCE(sum(run_count), 0) INTO v_runs_after FROM org_usage_report('workspace', 'b0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC', 'member', NULL, '00000000-0000-4000-8000-000000000932');
-  SELECT credits INTO v_var_after FROM org_usage_variance('workspace', 'b0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC');
-  SELECT user_id INTO v_var_user FROM credit_transactions WHERE source = 'org_usage_variance' AND workspace_id = 'b0000000-0000-4000-8000-000000000931';
+  SELECT credits INTO v_var_after FROM org_usage_variance('workspace', 'b0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC') WHERE kind = 'metered_overrun';
+  SELECT user_id INTO v_var_user FROM credit_transactions WHERE source = 'org_usage_variance' AND workspace_id = 'b0000000-0000-4000-8000-000000000931' AND description LIKE 'Metered overrun%';
   PERFORM pg_temp.assert_eq('#13 A had runs before delete', (v_runs_before > 0)::text, 'true');
   PERFORM pg_temp.assert_eq('#13 A''s runs are gone after delete', v_runs_after::text, '0');
   PERFORM pg_temp.assert_eq('#13 the platform-absorbed line is unchanged', v_var_after::text, v_var_before::text);

@@ -221,10 +221,11 @@ export interface OrgPage<T> {
 }
 
 /**
- * Usage reporting (P15). What `GET /v1/orgs/:id/usage` and
+ * Usage reporting. What `GET /v1/orgs/:id/usage` and
  * `GET /v1/workspaces/:id/usage` return. No cost/USD field appears anywhere —
  * a report shows CREDITS a class or team spent, never the platform's own rates
- * (pricing-leak class, guarded by a source test).
+ * (pricing-leak class, guarded by organizations-types.test.ts and the
+ * migration guard).
  */
 
 /** One bucket of a usage report. Exactly one of workspace/member/model/day is set. */
@@ -244,21 +245,42 @@ export interface UsageReportRow {
   inFlightRuns: number
 }
 
-/** The platform-absorbed overrun for one workspace (never attributed to a member). */
+/**
+ * A platform-absorbed line for one workspace, split by ORIGIN (never attributed
+ * to a member). Two ledgers share the `org_usage_variance` source: a
+ * `metered_overrun` (a metered run's overrun beyond the budget — it HAS a
+ * settled usage_logs counterpart) and an `app_markup` shortfall (an
+ * approved-app markup the budget could not cover — it has NO usage_logs row).
+ * `other` is a future/unrecognised origin.
+ */
 export interface UsageVarianceRow {
   workspace: { id: string; name: string | null; slug: string | null } | null
+  kind: "metered_overrun" | "app_markup" | "other"
   credits: number
   rowCount: number
 }
 
+/**
+ * Totals over the WHOLE window — every usage_logs row in [from, to] after the
+ * scope / userId / workspaceId narrowing — never over the returned `rows`.
+ * Unaffected by `truncated`; equals a `groupBy=day` report's column-wise sum.
+ */
 export interface UsageReportTotals {
   runCount: number
   credits: number
   settledCredits: number
   inFlightCredits: number
-  /** Sum of org_usage_variance rows in the window — paid by the platform, not the budget. */
+  /** Metered-overrun variance in the window — a run's overrun the platform absorbed. */
   platformAbsorbedCredits: number
-  /** settledCredits − platformAbsorbedCredits: what actually left the workspace budget(s). */
+  /** Approved-app markup shortfall the platform absorbed. It has NO usage_logs run, so it is not in the figures above. */
+  appMarkupAbsorbedCredits: number
+  /**
+   * settledCredits − platformAbsorbedCredits: the METERED settlement that
+   * reached the workspace budget(s). App markup charged to a budget (migration
+   * 352) is not a usage_logs row and is not included here; when a markup
+   * shortfall is absorbed this figure under-reports and may go negative — it is
+   * NOT `workspace_budgets.spent_credits`.
+   */
   chargedToBudget: number
 }
 
@@ -276,7 +298,11 @@ export interface UsageReport {
   rows: UsageReportRow[]
   variance: UsageVarianceRow[]
   totals: UsageReportTotals
-  /** True when more than 5000 buckets existed and the tail was dropped — narrow the window. */
+  /**
+   * True when more than 5000 buckets existed and the tail of `rows` was dropped
+   * — narrow the window. Only `rows` is incomplete; `totals` and `variance`
+   * cover the whole window regardless.
+   */
   truncated: boolean
 }
 
