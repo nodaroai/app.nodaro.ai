@@ -1,6 +1,6 @@
 import type { WorkflowNode, WorkflowEdge, FieldMappings } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
-import { buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS, motionGraphicsFeature, buildScraperCreditId, isScraperActor, isKineticCaptionStyle, resolveAiAvatarCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, buildVideoAuditCreditId } from "@nodaro/shared"
+import { buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS, motionGraphicsFeature, buildScraperCreditId, isScraperActor, isKineticCaptionStyle, resolveAiAvatarCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, buildVideoAuditCreditId, sunoCreditType } from "@nodaro/shared"
 import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/types"
 import type { LlmFeature } from "@nodaro/shared"
 /** Every node type whose output is prose/text. Used to build the compatible
@@ -308,9 +308,14 @@ export function getModelIdentifier(node: WorkflowNode, edges?: ReadonlyArray<Wor
 
   const nodeType = node.type ?? "unknown"
 
-  // Suno generate/cover/extend use "model" field (V4/V5), not "provider"
-  if (nodeType.startsWith("suno-") && nodeType !== "suno-lyrics" && nodeType !== "suno-separate" && nodeType !== "suno-music-video") {
-    return (data.model as string) === "V5" ? "suno-v5" : nodeType
+  // Suno: the ROUTE contract decides which operations are version-priced
+  // (routes/suno.ts — generate/cover/extend only). `sunoCreditType` gates on
+  // the operation, and the node type IS the operation key, so this one call
+  // covers every Suno node. Identical to the backend estimator's branch in
+  // ee/billing/credits.ts — same function, no second copy to drift.
+  // suno-separate is excluded because its branch below is a different axis.
+  if (nodeType.startsWith("suno-") && nodeType !== "suno-separate") {
+    return sunoCreditType(data.model as string | undefined, nodeType)
   }
 
   // Suno separate: "split_stem" costs more than "separate_vocal"

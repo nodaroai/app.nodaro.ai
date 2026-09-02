@@ -231,6 +231,7 @@ const sunoUploadExtendBody = z.object({
   uploadUrl: safeUrlSchema,
   continueAt: z.number().min(0),
   defaultParamFlag: z.boolean().optional().default(false),
+  instrumental: z.boolean().optional().default(false),
   model: sunoModelEnum,
   style: z.string().max(1000).optional(),
   title: z.string().max(SUNO_TITLE_MAX).optional(),
@@ -1024,7 +1025,7 @@ export async function sunoRoutes(app: FastifyInstance) {
       }
 
       const {
-        uploadUrl, continueAt, defaultParamFlag, model,
+        uploadUrl, continueAt, defaultParamFlag, instrumental, model,
         style, title, negativeStyle, vocalGender,
       } = parsed.data
       const userId = req.userId
@@ -1060,6 +1061,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         uploadUrl,
         continueAt,
         defaultParamFlag,
+        instrumental,
         model,
         style,
         title,

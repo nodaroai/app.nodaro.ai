@@ -365,3 +365,66 @@ export function buildMotionCreditModelIdentifier(
   const resSuffix = resolution === "1080p" ? ":1080p" : ""
   return `${base}${resSuffix}:${tier.suffix}`
 }
+
+/**
+ * The Suno operations whose credit key depends on the model VERSION.
+ *
+ * `/v1/suno/generate`, `/cover` and `/extend` resolve their creditGuard
+ * identifier through `sunoCreditType(model, <operation>)` (routes/suno.ts
+ * :247-249, :335-337, :407-409). EVERY other Suno route charges a flat
+ * per-operation key and ignores the version the node carries — mashup (:648),
+ * add-instrumental (:852), add-vocals (:907), upload-extend (:1016),
+ * replace-section (:710), style-boost (:771), convert-wav (:962),
+ * lyrics (:482), music-video (:594), voice (:1218).
+ *
+ * Anything that QUOTES a Suno price — a dropdown row, a node badge, the
+ * workflow-credit estimator — must follow the same split, or it displays a
+ * credit key the route never charges.
+ */
+export const SUNO_VERSION_PRICED_OPERATIONS = [
+  "suno-generate",
+  "suno-cover",
+  "suno-extend",
+] as const
+
+/**
+ * The seven Suno operations that appear behind a select/dropdown UI (model
+ * pickers, node badges, the credit estimator) — the three version-priced
+ * operations above, plus the four flat-key operations exercised by
+ * `sunoCreditType`'s own test suite. A readonly tuple so later tasks (the
+ * model dropdowns, node badges) can iterate or count it without redeclaring
+ * the list and drifting from this one.
+ */
+export const SUNO_SELECT_OPERATIONS = [
+  "suno-generate",
+  "suno-cover",
+  "suno-extend",
+  "suno-mashup",
+  "suno-add-instrumental",
+  "suno-add-vocals",
+  "suno-upload-extend",
+] as const
+
+/**
+ * OUR Nodaro credit key for a Suno operation, given the model version and the
+ * operation (which is also the node type and the BullMQ job name).
+ *
+ * This is the single source of truth for the Suno pricing contract, shared by
+ * the reservation path (routes/suno.ts creditGuard), the egress seam
+ * (workers/handlers/suno.ts `modelKey`, which must match what was reserved),
+ * both workflow-credit estimators (ee/billing/credits.ts and the frontend
+ * config-panels/helpers.ts), the seven Suno model dropdowns and the three Suno
+ * node badges. It is a billing key — NEVER a KIE provider id — which is what
+ * satisfies the B3 egress invariant.
+ *
+ * V5_5 → "suno-v5_5", V5 → "suno-v5", any other version → the operation key.
+ * A non-version-priced operation is returned unchanged.
+ */
+export function sunoCreditType(model: string | undefined, operation: string): string {
+  if (!(SUNO_VERSION_PRICED_OPERATIONS as readonly string[]).includes(operation)) {
+    return operation
+  }
+  if (model === "V5_5") return "suno-v5_5"
+  if (model === "V5") return "suno-v5"
+  return operation
+}

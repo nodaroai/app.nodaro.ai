@@ -28,21 +28,19 @@ const DEBUG = config.NODE_ENV === "development"
 const SUNO_MAX_POLL_ATTEMPTS = 60 // 5 minutes (60 * 5s)
 
 /**
- * OUR Nodaro credit key for a Suno music create, given the version + a
- * per-operation fallback. Mirrors the route's reservation identifier
- * (`sunoModelCreditType` in `routes/suno.ts`) EXACTLY so the egress-seam
- * modelKey matches what was reserved: V5_5 → "suno-v5_5", V5 → "suno-v5",
- * else the operation key ("suno-generate" / "suno-cover" / "suno-extend").
- * The worker handlers own this axis (the model is a job-data field, not
- * visible at the shared `createSunoTask` funnel), so they call this to
- * thread the key rather than duplicating the map. This is a billing key
- * (never the KIE provider id) so it satisfies the B3 egress invariant.
+ * OUR Nodaro credit key for a Suno operation. The implementation lives in
+ * `@nodaro/shared` (`credit-identifiers.ts`) because the editor's model
+ * dropdowns, node badges and credit estimator need the SAME contract that
+ * `routes/suno.ts` reserves with; re-exported here so the worker handlers,
+ * the plugin toolkit and `__tests__/suno-credit-type.test.ts` keep their
+ * existing import path.
+ *
+ * Contract: generate / cover / extend are priced by model version
+ * (`routes/suno.ts:247-249, :335-337, :407-409`); every other Suno route
+ * charges a flat per-operation key. This is a billing key (never the KIE
+ * provider id), which is what satisfies the B3 egress invariant.
  */
-export function sunoCreditType(model: string | undefined, fallback: string): string {
-  if (model === "V5_5") return "suno-v5_5"
-  if (model === "V5") return "suno-v5"
-  return fallback
-}
+export { sunoCreditType } from "@nodaro/shared"
 
 // =============================================================================
 // TYPES
@@ -289,6 +287,10 @@ export interface SunoUploadExtendParams {
   negativeStyle?: string
   /** Vocal gender */
   vocalGender?: string
+  /** Whether the extension is instrumental (no vocals). KIE's validator
+   *  rejects an absent value ("instrumental cannot be null"), so the client
+   *  always sends an explicit boolean. */
+  instrumental?: boolean
 }
 
 export interface SunoTrack {
@@ -617,7 +619,11 @@ export async function sunoCover(
 
   const body: Record<string, unknown> = {
     prompt: params.prompt,
-    upload_url: params.uploadUrl,
+    // KIE's upload-cover schema names this `uploadUrl` (camelCase) and calls it
+    // required "regardless of whether customMode and instrumental are true or
+    // false". We sent `upload_url`, so the field arrived absent and KIE answered
+    // "uploadUrl cannot be null" (spec §11.3).
+    uploadUrl: params.uploadUrl,
     model,
     customMode: params.customMode ?? false,
     instrumental: params.instrumental ?? false,
@@ -658,9 +664,25 @@ export async function sunoExtend(
 ): Promise<SunoTaskResult> {
   const model = params.model ?? "V5_5"
 
+  // KIE requires `continueAt` whenever `defaultParamFlag` is true, with a value
+  // range of "greater than 0" — and rejects the whole request otherwise
+  // ("continueAt cannot be empty or less than 1"). The Suno Extend node's own
+  // default ships exactly that illegal pair (defaultParamFlag: true,
+  // continueAt: 0), so this was reachable with no user error at all.
+  //
+  // We cannot invent a legal value (it must also be below the track's total
+  // duration, which we do not know request-side), so COERCE rather than reject:
+  // with no usable continuation point there is nothing to be custom about, and
+  // KIE's non-custom mode does not require the field. Same doctrine as
+  // normalizeModelInput — produce a legal request instead of a mid-run provider
+  // reject after credits are reserved. This is the invariant, not the config
+  // panel's min: workflow JSON written by an agent, an import, a template, or a
+  // run-time FieldMapping on `continueAt` all pass through here too.
+  const hasContinueAt = typeof params.continueAt === "number" && params.continueAt > 0
+
   const body: Record<string, unknown> = {
     audioId: params.audioId,
-    defaultParamFlag: params.defaultParamFlag ?? true,
+    defaultParamFlag: hasContinueAt ? (params.defaultParamFlag ?? true) : false,
     model,
     callBackUrl: "https://callback.placeholder",
   }
@@ -668,7 +690,7 @@ export async function sunoExtend(
   if (params.prompt) body.prompt = params.prompt
   if (params.style) body.style = params.style
   if (params.title) body.title = params.title
-  if (params.continueAt != null) body.continueAt = params.continueAt
+  if (hasContinueAt) body.continueAt = params.continueAt
   if (params.negativeStyle) body.negativeTags = params.negativeStyle
   if (params.vocalGender) body.vocal_gender = params.vocalGender
   if (params.styleWeight != null) body.style_weight = params.styleWeight
@@ -1469,14 +1491,21 @@ export async function sunoUploadExtend(
 ): Promise<SunoTaskResult> {
   const model = params.model ?? "V5_5"
 
+  // Same KIE rule as sunoExtend — see the note there. This endpoint's own
+  // defaultParamFlag default is false, but the node data and payload-builder
+  // both pass true, so the illegal pair reaches here as well.
+  const hasContinueAt = typeof params.continueAt === "number" && params.continueAt > 0
+
   const body: Record<string, unknown> = {
-    upload_url: params.uploadUrl,
-    continueAt: params.continueAt,
-    defaultParamFlag: params.defaultParamFlag ?? false,
+    // Same camelCase requirement as upload-cover — see the note there.
+    uploadUrl: params.uploadUrl,
+    defaultParamFlag: hasContinueAt ? (params.defaultParamFlag ?? false) : false,
+    instrumental: params.instrumental ?? false,
     model,
     callBackUrl: "https://callback.placeholder",
   }
 
+  if (hasContinueAt) body.continueAt = params.continueAt
   if (params.style) body.style = params.style
   if (params.title) body.title = params.title
   if (params.negativeStyle) body.negative_style = params.negativeStyle

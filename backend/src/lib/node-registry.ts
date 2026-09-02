@@ -1,4 +1,4 @@
-import { IMAGE_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, LIP_SYNC_PROVIDERS, VOICE_CHANGER_MODEL_IDS, GVP_SUPPORTED_PROVIDERS, SEEDANCE_2_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, hasContiguousSegmentDurations, isMinimaxH3Provider, MODEL_CATALOG, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY } from "@nodaro/shared"
+import { IMAGE_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, LIP_SYNC_PROVIDERS, VOICE_CHANGER_MODEL_IDS, GVP_SUPPORTED_PROVIDERS, SEEDANCE_2_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, MUSIC_PROVIDERS, hasContiguousSegmentDurations, isMinimaxH3Provider, MODEL_CATALOG, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY } from "@nodaro/shared"
 import type { OutputType } from "@nodaro/shared"
 import { nodeSupportsPromptAffixes } from "@nodaro/prompts"
 import { STATIC_CREDIT_COSTS } from "../ee/billing/credits.js"
@@ -519,13 +519,18 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     },
   },
   {
+    // Suno is NOT reachable through this node — it runs through the dedicated
+    // suno-* nodes on a separate client path (docs/nodes/ai-audio/generate-music.md:30).
+    // `providers` is derived from the shared MUSIC_PROVIDERS list, and NO literal
+    // creditCost is declared: a declared one short-circuits getEnrichedRegistry()
+    // (:1253), which is how /v1/nodes came to advertise "7-13" for a
+    // 180-credit node.
     type: "generate-music",
     label: "Generate Music",
     category: "ai-audio",
-    description: "Generate music with Suno.",
+    description: "Generate music from a text prompt with MiniMax.",
     outputType: "audio",
-    creditCost: "7-13",
-    providers: ["suno-v4", "suno-v5"],
+    providers: [...MUSIC_PROVIDERS],
   },
   {
     type: "suno-voice",

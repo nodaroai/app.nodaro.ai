@@ -3,6 +3,7 @@
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Disc3, Loader2, AlertCircle, Volume2, LayoutGrid, Type, Mic } from "lucide-react"
+import { sunoCreditType } from "@nodaro/shared"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { NodeQuickStrip } from "./node-quick-strip"
@@ -35,8 +36,9 @@ function SunoCoverNodeComponent({ id, data, selected }: NodeProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [showThumbnails, setShowThumbnails] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
-  const creditModel = nodeData.model === "V5" ? "suno-v5" : "suno-cover"
-  const credits = useModelCredits(creditModel, nodeData.model === "V5" ? 13 : 7)
+  // Same contract the route reserves with (routes/suno.ts:335-337); no
+  // hardcoded fallback rate — see suno-generate-node.tsx.
+  const credits = useModelCredits(sunoCreditType(nodeData.model, "suno-cover"))
 
   function handleDeleteResult(indexToDelete: number) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedAudioUrl"))

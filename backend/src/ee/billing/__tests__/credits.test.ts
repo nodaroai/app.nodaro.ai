@@ -830,6 +830,31 @@ describe("CreditsService", () => {
       ])).toBe(30) // base
     })
 
+    it("resolves suno-generate V5_5 to the version key", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "suno-generate", data: { model: "V5_5" } },
+      ])).toBe(30) // suno-v5_5
+    })
+
+    // The flat-priced Suno operations charge a per-operation key no matter
+    // which version the node carries (routes/suno.ts:648, :710, :771, :852,
+    // :907, :1016) — and the four with a model select all default to V5_5
+    // (frontend/src/types/nodes.ts:7076, 7103, 7112, 7130). The estimator must
+    // quote that flat key, not the version key.
+    it("resolves a flat-priced Suno operation by its own key, not the version key", () => {
+      // suno-style-boost is 10 and suno-replace-section 20; suno-v5 is 30.
+      // Before the contract fix both resolved to suno-v5 and over-quoted.
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "suno-style-boost", data: { model: "V5" } },
+      ])).toBe(10)
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "suno-replace-section", data: { model: "V5" } },
+      ])).toBe(20)
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "suno-mashup", data: { model: "V5_5" } },
+      ])).toBe(30)
+    })
+
     it("resolves suno-lyrics (exempted from V5 check)", () => {
       expect(CreditsService.estimateWorkflowCredits([
         { type: "suno-lyrics", data: { model: "V5" } },

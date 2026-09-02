@@ -1683,6 +1683,7 @@ export const he: ChromeDict = {
   "audiocfg.endTime": "זמן סיום (שניות)",
   "audiocfg.continueFrom": "המשך מ־ (שניות)",
   "audiocfg.continueAt": "המשך ב־ (שניות)",
+  "audiocfg.continueAtPlaceholder": "השאירו ריק כדי להאריך מהסוף",
   "audiocfg.templateStartTime": "זמן התחלת התבנית (שניות)",
   "audiocfg.durationSeconds": "משך (שניות)",
   "audiocfg.vcpEngine": "מנוע המרה",

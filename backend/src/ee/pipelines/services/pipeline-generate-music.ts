@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { sunoCreditType } from "@nodaro/shared"
 import { runPipelineWorkerJob } from "./_run-worker-job.js"
 
 export interface PipelineGenerateMusicArgs {
@@ -70,17 +71,13 @@ export async function pipelineGenerateMusic(
 
   // Suno path — enqueue the dedicated `suno-generate` worker (KIE Suno) rather
   // than the legacy `generate-music` handler (which only knows musicgen/minimax/
-  // lyria/bark). Output shape matches: `output_data.audioUrl`. Credit identifier
-  // mirrors `sunoModelCreditType` in routes/suno.ts (V5_5 → suno-v5_5, V5 →
-  // suno-v5, else suno-generate). Instrumental score unless lyrics are supplied.
+  // lyria/bark). Output shape matches: `output_data.audioUrl`. The credit
+  // identifier comes from the shared contract so this reservation can never
+  // drift from what routes/suno.ts charges. Instrumental score unless lyrics
+  // are supplied.
   if (provider === "suno") {
     const sunoModel = modelVersion ?? "V5_5"
-    const sunoCreditId =
-      sunoModel === "V5_5"
-        ? "suno-v5_5"
-        : sunoModel === "V5"
-          ? "suno-v5"
-          : "suno-generate"
+    const sunoCreditId = sunoCreditType(sunoModel, "suno-generate")
     return runPipelineWorkerJob({
       supabase,
       pipelineId,

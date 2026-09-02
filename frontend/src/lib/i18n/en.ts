@@ -1689,6 +1689,7 @@ export const en = {
   "audiocfg.endTime": "End Time (seconds)",
   "audiocfg.continueFrom": "Continue From (seconds)",
   "audiocfg.continueAt": "Continue At (seconds)",
+  "audiocfg.continueAtPlaceholder": "Leave empty to extend from the end",
   "audiocfg.templateStartTime": "Template start time (seconds)",
   "audiocfg.durationSeconds": "Duration (seconds)",
   "audiocfg.vcpEngine": "Conversion Engine",

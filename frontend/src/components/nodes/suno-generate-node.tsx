@@ -3,7 +3,7 @@
 import { memo, useState, useEffect, useMemo } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Music, Loader2, AlertCircle, Volume2, Type, LayoutGrid, Sparkles, Mic, Copy, Check } from "lucide-react"
-import { SUNO_FIELD_HANDLE_FIELDS } from "@nodaro/shared"
+import { SUNO_FIELD_HANDLE_FIELDS, sunoCreditType } from "@nodaro/shared"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { NodeQuickStrip } from "./node-quick-strip"
@@ -125,8 +125,11 @@ function SunoGenerateNodeComponent({ id, data, selected }: NodeProps) {
   const [showThumbnails, setShowThumbnails] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [editField, setEditField] = useState<SunoEditField | null>(null)
-  const creditModel = nodeData.model === "V5" ? "suno-v5" : "suno-generate"
-  const credits = useModelCredits(creditModel, nodeData.model === "V5" ? 13 : 7)
+  // Same contract the route reserves with (routes/suno.ts:247-249). No numeric
+  // fallback: a hardcoded rate rots (these two were pre-redenomination 13/7 for
+  // a 30-credit call), and useModelCredits' default 0 simply hides the badge
+  // until the fetch resolves (RunNodeButton gates on credits > 0).
+  const credits = useModelCredits(sunoCreditType(nodeData.model, "suno-generate"))
 
   function handleDeleteResult(indexToDelete: number) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedAudioUrl"))

@@ -481,7 +481,7 @@ describe("sunoGenerate — pollSunoTask behaviour (via sunoGenerate)", () => {
 // ===========================================================================
 
 describe("sunoCover", () => {
-  it("posts to /api/v1/generate/upload-cover with upload_url + prompt", async () => {
+  it("posts to /api/v1/generate/upload-cover with uploadUrl + prompt", async () => {
     fetchMock
       .mockResolvedValueOnce(jsonResponse({ code: 0, data: { taskId: "t" } }))
       .mockResolvedValueOnce(recordInfoSuccess())
@@ -492,7 +492,7 @@ describe("sunoCover", () => {
 
     expect(fetchMock.mock.calls[0][0]).toBe(`${KIE_API_BASE}/api/v1/generate/upload-cover`)
     const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
-    expect(body.upload_url).toBe("https://src.mp3")
+    expect(body.uploadUrl).toBe("https://src.mp3")
     expect(body.prompt).toBe("p")
   })
 
@@ -527,6 +527,21 @@ describe("sunoCover", () => {
     expect(body.negative_style).toBe("N")
     expect(body.vocal_gender).toBe("male")
   })
+
+  // KIE's /api/v1/generate/upload-cover requires `uploadUrl` (camelCase). We
+  // sent `upload_url`, so KIE saw no source track and answered
+  // "uploadUrl cannot be null" (production log pull 2026-09-02, spec §11.3).
+  it("sends the source track as uploadUrl (camelCase), the name KIE requires", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ code: 0, data: { taskId: "t" } }))
+      .mockResolvedValueOnce(recordInfoSuccess())
+
+    await withTimers(() => sunoCover({ prompt: "p", uploadUrl: "https://src.mp3" }))
+
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
+    expect(body.uploadUrl).toBe("https://src.mp3")
+    expect(body.upload_url).toBeUndefined()
+  })
 })
 
 // ===========================================================================
@@ -534,7 +549,7 @@ describe("sunoCover", () => {
 // ===========================================================================
 
 describe("sunoExtend", () => {
-  it("posts to /api/v1/generate/extend with audioId + default flag", async () => {
+  it("posts to /api/v1/generate/extend with audioId, coerced to non-custom with no continueAt", async () => {
     fetchMock
       .mockResolvedValueOnce(jsonResponse({ code: 0, data: { taskId: "t" } }))
       .mockResolvedValueOnce(recordInfoSuccess())
@@ -544,7 +559,9 @@ describe("sunoExtend", () => {
     expect(fetchMock.mock.calls[0][0]).toBe(`${KIE_API_BASE}/api/v1/generate/extend`)
     const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
     expect(body.audioId).toBe("a-1")
-    expect(body.defaultParamFlag).toBe(true) // default
+    // No continueAt supplied -> nothing to be custom about; see the
+    // "drops to defaultParamFlag:false when continueAt is absent" case below.
+    expect(body.defaultParamFlag).toBe(false)
   })
 
   it("respects defaultParamFlag: false", async () => {
@@ -583,6 +600,47 @@ describe("sunoExtend", () => {
     await withTimers(() => sunoExtend({ audioId: "a", continueAt: 30 }))
 
     const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
+    expect(body.continueAt).toBe(30)
+  })
+
+  // KIE: continueAt is "Required when defaultParamFlag is true" and its value
+  // range is "greater than 0". The Suno Extend node ships defaultParamFlag:
+  // true + continueAt: 0, which KIE rejects with "continueAt cannot be empty
+  // or less than 1". With no usable continuation point there is nothing to be
+  // custom about, so drop to the non-custom mode that does not require it.
+  it("drops to defaultParamFlag:false when continueAt is 0", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ code: 0, data: { taskId: "t" } }))
+      .mockResolvedValueOnce(recordInfoSuccess())
+
+    await withTimers(() => sunoExtend({ audioId: "a", defaultParamFlag: true, continueAt: 0 }))
+
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
+    expect(body.defaultParamFlag).toBe(false)
+    expect(body.continueAt).toBeUndefined()
+  })
+
+  it("drops to defaultParamFlag:false when continueAt is absent", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ code: 0, data: { taskId: "t" } }))
+      .mockResolvedValueOnce(recordInfoSuccess())
+
+    await withTimers(() => sunoExtend({ audioId: "a", defaultParamFlag: true }))
+
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
+    expect(body.defaultParamFlag).toBe(false)
+    expect(body.continueAt).toBeUndefined()
+  })
+
+  it("keeps custom mode when continueAt is a positive number", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ code: 0, data: { taskId: "t" } }))
+      .mockResolvedValueOnce(recordInfoSuccess())
+
+    await withTimers(() => sunoExtend({ audioId: "a", defaultParamFlag: true, continueAt: 30 }))
+
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
+    expect(body.defaultParamFlag).toBe(true)
     expect(body.continueAt).toBe(30)
   })
 })
@@ -1119,7 +1177,7 @@ describe("sunoConvertWav", () => {
 // ===========================================================================
 
 describe("sunoUploadExtend", () => {
-  it("posts to /api/v1/generate/upload-extend with upload_url + continueAt", async () => {
+  it("posts to /api/v1/generate/upload-extend with uploadUrl + continueAt", async () => {
     fetchMock
       .mockResolvedValueOnce(jsonResponse({ code: 0, data: { taskId: "t" } }))
       .mockResolvedValueOnce(recordInfoSuccess())
@@ -1130,7 +1188,7 @@ describe("sunoUploadExtend", () => {
 
     expect(fetchMock.mock.calls[0][0]).toBe(`${KIE_API_BASE}/api/v1/generate/upload-extend`)
     const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
-    expect(body.upload_url).toBe("https://src.mp3")
+    expect(body.uploadUrl).toBe("https://src.mp3")
     expect(body.continueAt).toBe(45)
     expect(body.defaultParamFlag).toBe(false) // default for upload-extend (different from sunoExtend!)
   })
@@ -1142,12 +1200,52 @@ describe("sunoUploadExtend", () => {
 
     await withTimers(() =>
       sunoUploadExtend({
-        uploadUrl: "u", continueAt: 0, defaultParamFlag: true,
+        uploadUrl: "u", continueAt: 45, defaultParamFlag: true,
       }),
     )
 
     const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
     expect(body.defaultParamFlag).toBe(true)
+  })
+
+  // KIE's upload-extend validator rejects an absent `instrumental`
+  // ("instrumental cannot be null", 2 production rows). The field did not
+  // exist anywhere in this chain — params, body, route Zod, worker or
+  // payload-builder — so it was never sent.
+  it("always sends an explicit instrumental boolean", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ code: 0, data: { taskId: "t" } }))
+      .mockResolvedValueOnce(recordInfoSuccess())
+
+    await withTimers(() => sunoUploadExtend({ uploadUrl: "https://src.mp3", continueAt: 45 }))
+
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
+    expect(body.instrumental).toBe(false)
+  })
+
+  it("forwards instrumental: true when set", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ code: 0, data: { taskId: "t" } }))
+      .mockResolvedValueOnce(recordInfoSuccess())
+
+    await withTimers(() =>
+      sunoUploadExtend({ uploadUrl: "u", continueAt: 45, instrumental: true }),
+    )
+
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
+    expect(body.instrumental).toBe(true)
+  })
+
+  it("sends the source track as uploadUrl (camelCase), the name KIE requires", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ code: 0, data: { taskId: "t" } }))
+      .mockResolvedValueOnce(recordInfoSuccess())
+
+    await withTimers(() => sunoUploadExtend({ uploadUrl: "https://src.mp3", continueAt: 45 }))
+
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
+    expect(body.uploadUrl).toBe("https://src.mp3")
+    expect(body.upload_url).toBeUndefined()
   })
 })
 
