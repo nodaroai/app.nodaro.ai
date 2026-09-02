@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/select"
 import { CachedImage } from "@/components/ui/cached-image"
 import { uploadAudio, downloadYouTubeAudio } from "@/lib/api"
+import { useT } from "@/lib/i18n"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import type { GenerateMusicData, WorkflowEdge } from "@/types/nodes"
 import { MappableField } from "./mappable-field"
 import { TagTextarea } from "./tag-textarea"
@@ -32,6 +34,8 @@ import type { ConfigProps } from "./types"
 const EMPTY_EDGES: ReadonlyArray<WorkflowEdge> = []
 
 export function GenerateMusicConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<GenerateMusicData> & { nodeId?: string }) {
+  const t = useT()
+  const localizeNode = useLocalizeNodeLabel()
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "error">("idle")
   const promptSnippets = useSnippetPool("audio", "prompt")
   // Edit⇄Final toggle for the music prompt. Provider-less; key = "prompt".
@@ -86,16 +90,16 @@ export function GenerateMusicConfig({ data, onUpdate, sources, fieldMappings, on
         edges={edges ?? EMPTY_EDGES}
       />
       <div>
-        <Label>Provider</Label>
+        <Label>{t("cfgshared.provider")}</Label>
         <Select
           value={data.provider || "suno"}
           onValueChange={(v) => onUpdate({ provider: v as GenerateMusicData["provider"], referenceSource: "none", referenceAudioUrl: "", referenceYouTubeUrl: "" })}
         >
-          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("cfgshared.provider")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {/* Replicate disabled */}
             {/* <SelectItem value="musicgen">MusicGen (Meta) - instrumental (default)</SelectItem> */}
-            <SelectItem value="minimax">MiniMax Music - vocals & lyrics</SelectItem>
+            <SelectItem value="minimax">{t("cfgext.musicMinimaxOption")}</SelectItem>
             {/* TODO: add Suno V5 here once backend routes generate-music
                 with provider=suno-v5 through suno-client.ts. Today Suno is
                 reachable via the standalone Suno Generate node. */}
@@ -105,7 +109,7 @@ export function GenerateMusicConfig({ data, onUpdate, sources, fieldMappings, on
           </SelectContent>
         </Select>
       </div>
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+      <MappableField field="prompt" label={t("node.prompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
         <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
         <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="audio" />
         <PromptHelperButton nodeType="generate-music" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
@@ -114,14 +118,14 @@ export function GenerateMusicConfig({ data, onUpdate, sources, fieldMappings, on
           <PromptFieldFinalView
             segments={finalPrompt.promptSegments}
             plainText={finalPrompt.promptText}
-            placeholder="Final prompt preview — node has no prompt yet"
+            placeholder={t("imgcfg.promptPreviewEmpty")}
             minHeightRem={3 * 1.5}
           />
         ) : (
           <TagTextarea
             value={data.prompt}
             onChange={(v) => onUpdate({ prompt: v })}
-            placeholder="Describe the music you want... (use {} to inject input)"
+            placeholder={t("cfgext.musicPromptPlaceholder")}
             rows={3}
             tagMode="none"
             nodeRefs={nodeRefs}
@@ -134,7 +138,7 @@ export function GenerateMusicConfig({ data, onUpdate, sources, fieldMappings, on
       {/* Replicate disabled: was musicgen/lyria/!provider, now just non-minimax */}
       {!isMinimax && (
         <div>
-          <Label htmlFor="music-duration">Duration (seconds)</Label>
+          <Label htmlFor="music-duration">{t("field.durationSeconds")}</Label>
           <Input
             id="music-duration"
             type="number"
@@ -146,24 +150,24 @@ export function GenerateMusicConfig({ data, onUpdate, sources, fieldMappings, on
         </div>
       )}
       {isMinimax && (
-        <MappableField field="lyrics" label="Lyrics" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <MappableField field="lyrics" label={t("inputcfg.lyrics")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
           <Textarea
             id="music-lyrics"
             value={data.lyrics || ""}
             onChange={(e) => onUpdate({ lyrics: e.target.value })}
-            placeholder="Write lyrics for the song... (use {} to inject input)"
+            placeholder={t("cfgext.musicLyricsPlaceholder")}
             rows={4}
           />
         </MappableField>
       )}
       {isMinimax && (
         <div className="flex flex-col gap-2">
-          <Label>Reference Audio</Label>
+          <Label>{t("vidcfg.referenceAudio")}</Label>
           {connectedRef ? (
             <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs flex flex-col gap-1.5">
               <div>
-                <span className="text-muted-foreground">From: </span>
-                <span className="font-medium">{connectedRef.label}</span>
+                <span className="text-muted-foreground">{t("cfgext.musicFromPrefix")}</span>
+                <span className="font-medium">{localizeNode(connectedRef.label)}</span>
               </div>
               {typeof connectedRef.nodeData?.videoThumbnail === "string" && connectedRef.nodeData.videoThumbnail && (
                 <div className="rounded overflow-hidden bg-muted">
@@ -174,27 +178,27 @@ export function GenerateMusicConfig({ data, onUpdate, sources, fieldMappings, on
                 <p className="text-foreground truncate">{connectedRef.nodeData.videoTitle}</p>
               )}
               {connectedRef.nodeData?.extractedAudioUrl ? (
-                <p className="text-green-600">Audio ready</p>
+                <p className="text-green-600">{t("inputcfg.audioReady")}</p>
               ) : (
-                <p className="text-amber-500">No audio extracted yet</p>
+                <p className="text-amber-500">{t("cfgext.musicNoAudioExtracted")}</p>
               )}
             </div>
           ) : (
           <>
           {!hasReference && (
-            <p className="text-xs text-amber-500">MiniMax works best with a reference song</p>
+            <p className="text-xs text-amber-500">{t("cfgext.musicMinimaxNeedsReference")}</p>
           )}
           <div className="flex flex-col gap-2">
             <label className="flex items-center gap-2 text-sm cursor-pointer">
               <input type="radio" name="ref-source" checked={data.referenceSource === "none" || !data.referenceSource} onChange={() => onUpdate({ referenceSource: "none", referenceAudioUrl: "" })} />
-              None
+              {t("pubDialog.noneOption")}
             </label>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
               <input type="radio" name="ref-source" checked={data.referenceSource === "upload"} onChange={() => onUpdate({ referenceSource: "upload" })} />
-              Upload file
+              {t("cfgext.musicRefUploadFile")}
             </label>
             {data.referenceSource === "upload" && (
-              <div className="ml-6 flex flex-col gap-1">
+              <div className="ms-6 flex flex-col gap-1">
                 <Input
                   type="file"
                   accept="audio/mpeg,audio/wav,audio/mp4,audio/aac,audio/flac,audio/x-flac,.mp3,.wav,.m4a,.aac,.flac"
@@ -203,17 +207,17 @@ export function GenerateMusicConfig({ data, onUpdate, sources, fieldMappings, on
                     if (file) handleFileUpload(file)
                   }}
                 />
-                {uploadStatus === "uploading" && <p className="text-xs text-muted-foreground">Uploading...</p>}
-                {uploadStatus === "error" && <p className="text-xs text-red-500">Upload failed</p>}
-                {data.referenceSource === "upload" && hasReference && <p className="text-xs text-green-600">Uploaded</p>}
+                {uploadStatus === "uploading" && <p className="text-xs text-muted-foreground">{t("inputcfg.uploading")}</p>}
+                {uploadStatus === "error" && <p className="text-xs text-red-500">{t("pipe.uploadFailed")}</p>}
+                {data.referenceSource === "upload" && hasReference && <p className="text-xs text-green-600">{t("cfgext.musicRefUploaded")}</p>}
               </div>
             )}
             <label className="flex items-center gap-2 text-sm cursor-pointer">
               <input type="radio" name="ref-source" checked={data.referenceSource === "youtube"} onChange={() => onUpdate({ referenceSource: "youtube" })} />
-              YouTube URL
+              {t("vidcfg.youtubeUrl")}
             </label>
             {data.referenceSource === "youtube" && (
-              <div className="ml-6 flex flex-col gap-1">
+              <div className="ms-6 flex flex-col gap-1">
                 <div className="flex gap-1">
                   <Input
                     value={data.referenceYouTubeUrl || ""}
@@ -222,12 +226,12 @@ export function GenerateMusicConfig({ data, onUpdate, sources, fieldMappings, on
                     className="flex-1"
                   />
                   <Button size="sm" variant="outline" onClick={handleYouTubeDownload} disabled={ytStatus === "downloading" || !data.referenceYouTubeUrl?.trim()}>
-                    {ytStatus === "downloading" ? "..." : "Get"}
+                    {ytStatus === "downloading" ? "..." : t("cfgext.musicGet")}
                   </Button>
                 </div>
-                {ytStatus === "downloading" && <p className="text-xs text-muted-foreground">Downloading audio...</p>}
-                {ytStatus === "error" && <p className="text-xs text-red-500">Download failed</p>}
-                {data.referenceSource === "youtube" && hasReference && <p className="text-xs text-green-600">Ready</p>}
+                {ytStatus === "downloading" && <p className="text-xs text-muted-foreground">{t("cfgext.musicDownloadingAudio")}</p>}
+                {ytStatus === "error" && <p className="text-xs text-red-500">{t("inputcfg.downloadFailed")}</p>}
+                {data.referenceSource === "youtube" && hasReference && <p className="text-xs text-green-600">{t("cfgext.musicReady")}</p>}
               </div>
             )}
           </div>
@@ -235,15 +239,15 @@ export function GenerateMusicConfig({ data, onUpdate, sources, fieldMappings, on
           )}
         </div>
       )}
-      <MappableField field="genre" label="Genre" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Input id="music-genre" value={data.genre} onChange={(e) => onUpdate({ genre: e.target.value })} placeholder="e.g. rock, jazz, electronic (use {} to inject input)" />
+      <MappableField field="genre" label={t("vd.genre")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Input id="music-genre" value={data.genre} onChange={(e) => onUpdate({ genre: e.target.value })} placeholder={t("cfgext.musicGenrePlaceholder")} />
       </MappableField>
-      <MappableField field="mood" label="Mood" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Input id="music-mood" value={data.mood} onChange={(e) => onUpdate({ mood: e.target.value })} placeholder="e.g. upbeat, melancholic, epic (use {} to inject input)" />
+      <MappableField field="mood" label={t("scriptcfg.sceneMood")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Input id="music-mood" value={data.mood} onChange={(e) => onUpdate({ mood: e.target.value })} placeholder={t("cfgext.musicMoodPlaceholder")} />
       </MappableField>
       <div className="flex items-center gap-2">
         <input type="checkbox" id="music-instrumental" checked={data.instrumental} onChange={(e) => onUpdate({ instrumental: e.target.checked })} className="h-4 w-4" />
-        <Label htmlFor="music-instrumental">Instrumental (no vocals)</Label>
+        <Label htmlFor="music-instrumental">{t("audiocfg.instrumentalNoVocals")}</Label>
       </div>
     </div>
   )

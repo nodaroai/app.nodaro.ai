@@ -2,75 +2,15 @@ import { describe, it, expect, vi } from "vitest"
 
 // ---------------------------------------------------------------------------
 // config-panel.tsx has many heavy transitive imports (Supabase, Zustand,
-// config-panel components, etc.). Instead of importing the actual module
-// and mocking all 20+ dependencies, we duplicate the three simple exports
-// here and test them in isolation. This is safe because the values are
-// defined as top-level constants / pure functions with no runtime deps.
+// config-panel components, etc.). The display-name lookup is imported from
+// config-panel-label.ts (its real home); the two type Sets are still
+// duplicated here and tested in isolation — they are top-level constants
+// with no runtime deps.
 // ---------------------------------------------------------------------------
 
-// Exact copy of NODE_TYPE_DISPLAY_NAMES + getNodeTypeDisplayName from config-panel.tsx
-const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
-  "text-prompt": "Text",
-  "upload-image": "Upload Image",
-  "upload-video": "Upload Video",
-  "upload-audio": "Upload Audio",
-  "rss-feed": "RSS Feed",
-  "youtube-video": "Video URL",
-  "reference-audio": "Reference Audio",
-  "tone": "Tone",
-  "style-guide": "Style Guide",
-  "provider": "Provider",
-  "scene-count": "Scene Count",
-  "duration": "Duration",
-  "aspect-ratio": "Aspect Ratio",
-  "motion": "Motion",
-  "camera-motion": "Camera Motion",
-  "generate-script": "Generate Script",
-  "generate-image": "Generate Image",
-  "edit-image": "Edit Image",
-  "image-to-video": "Image to Video",
-  "video-to-video": "Video to Video",
-  "text-to-video": "Text to Video",
-  "text-to-speech": "Text to Speech",
-  "qa-check": "QA Check",
-  "generate-music": "Generate Music",
-  "text-to-audio": "Text to Audio",
-  "audio-isolation": "Voice Extractor",
-  "suno-generate": "Suno Generate",
-  "suno-cover": "Suno Cover",
-  "suno-extend": "Suno Extend",
-  "suno-lyrics": "Suno Lyrics",
-  "suno-separate": "Suno Separate",
-  "suno-music-video": "Music Video",
-  "transcribe": "Transcribe",
-  "image-to-text": "Describe Image",
-  "llm-chat": "Generate Text",
-  "combine-videos": "Combine Videos",
-  "merge-video-audio": "Merge Video & Audio",
-  "add-captions": "Add Captions",
-  "resize-video": "Resize Video",
-  "trim-audio": "Trim Audio",
-  "mix-audio": "Mix Audio",
-  "adjust-volume": "Adjust Volume",
-  "trim-video": "Trim Video",
-  "speed-ramp": "Adjust Speed",
-  "loop-video": "Loop Video",
-  "fade-video": "Fade In/Out",
-  "transcode-video": "Transcode Video",
-  "manual-edit": "Manual Edit",
-  "combine-text": "Combine Text",
-  "split-text": "Split Text",
-  "save-to-storage": "Save to Storage",
-  "webhook-output": "Webhook Output",
-  "character": "Character",
-  "object": "Object/Props",
-  "location": "Location",
-  "scene": "Scene",
-}
-
-function getNodeTypeDisplayName(type: string): string {
-  return NODE_TYPE_DISPLAY_NAMES[type] || type.split("-").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")
-}
+// The display-name table + getNodeTypeDisplayName are imported from their
+// real, dependency-light home (config-panel-label.ts) — no copy to drift.
+import { getNodeTypeDisplayName } from "../config-panel-label"
 
 const GENERATE_BUTTON_TYPES = new Set([
   "generate-script", "generate-image", "edit-image", "image-to-image",

@@ -1,3 +1,4 @@
+import { useLocalizeOptionLabel } from "@/lib/i18n/labels"
 import { useEffect, useState } from "react"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
@@ -5,45 +6,50 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AlertCircle, ExternalLink } from "lucide-react"
 import { TagTextarea } from "./tag-textarea"
 import { MappableField } from "./mappable-field"
+import { useT, tx } from "@/lib/i18n"
 import type { SocialPostData, SocialPlatformType, SocialConnection } from "@/types/nodes"
 import type { ConfigProps } from "./types"
 import { getSocialConnections } from "@/lib/api"
 import { PLATFORM_LABELS } from "@/lib/social-media-specs"
 
-const PLATFORM_ACTIONS: Record<SocialPlatformType, Array<{ value: string; label: string }>> = {
-  instagram: [
-    { value: "post-image", label: "Post Image" },
-    { value: "post-reel", label: "Post Reel" },
-    { value: "post-story", label: "Post Story" },
-    { value: "post-carousel", label: "Post Carousel" },
-  ],
-  tiktok: [
-    { value: "post-video", label: "Post Video" },
-  ],
-  youtube: [
-    { value: "upload-video", label: "Upload Video" },
-    { value: "upload-short", label: "Upload Short" },
-  ],
-  linkedin: [
-    { value: "post-text", label: "Post Text" },
-    { value: "post-image", label: "Post Image" },
-    { value: "post-video", label: "Post Video" },
-  ],
-  x: [
-    { value: "post-tweet", label: "Post Tweet" },
-  ],
-  facebook: [
-    { value: "post-text", label: "Post Text" },
-    { value: "post-image", label: "Post Image" },
-    { value: "post-video", label: "Post Video" },
-    { value: "post-story", label: "Post Story" },
-  ],
-  telegram: [
-    { value: "send-message", label: "Send Message" },
-    { value: "send-photo", label: "Send Photo" },
-    { value: "send-video", label: "Send Video" },
-    { value: "send-audio", label: "Send Audio" },
-  ],
+// A function, not a module const: a table built at import time would freeze
+// its labels to whatever locale happened to boot first.
+function PLATFORM_ACTIONS(): Record<SocialPlatformType, Array<{ value: string; label: string }>> {
+  return {
+    instagram: [
+      { value: "post-image", label: tx("cfgext.socialPostImage") },
+      { value: "post-reel", label: tx("cfgext.socialPostReel") },
+      { value: "post-story", label: tx("cfgext.socialPostStory") },
+      { value: "post-carousel", label: tx("cfgext.socialPostCarousel") },
+    ],
+    tiktok: [
+      { value: "post-video", label: tx("cfgext.socialPostVideo") },
+    ],
+    youtube: [
+      { value: "upload-video", label: tx("cfgext.socialUploadVideo") },
+      { value: "upload-short", label: tx("cfgext.socialUploadShort") },
+    ],
+    linkedin: [
+      { value: "post-text", label: tx("cfgext.socialPostText") },
+      { value: "post-image", label: tx("cfgext.socialPostImage") },
+      { value: "post-video", label: tx("cfgext.socialPostVideo") },
+    ],
+    x: [
+      { value: "post-tweet", label: tx("cfgext.socialPostTweet") },
+    ],
+    facebook: [
+      { value: "post-text", label: tx("cfgext.socialPostText") },
+      { value: "post-image", label: tx("cfgext.socialPostImage") },
+      { value: "post-video", label: tx("cfgext.socialPostVideo") },
+      { value: "post-story", label: tx("cfgext.socialPostStory") },
+    ],
+    telegram: [
+      { value: "send-message", label: tx("cfgext.socialSendMessage") },
+      { value: "send-photo", label: tx("cfgext.socialSendPhoto") },
+      { value: "send-video", label: tx("cfgext.socialSendVideo") },
+      { value: "send-audio", label: tx("cfgext.socialSendAudio") },
+    ],
+  }
 }
 
 const CAPTION_LIMITS: Record<SocialPlatformType, number> = {
@@ -83,7 +89,7 @@ export function useSocialConnections(platform?: SocialPlatformType) {
  *  Phase-2 additions: bluesky, reddit, devto, …) publish text+media via
  *  "post-text". */
 function defaultActionFor(platform: string): string {
-  return PLATFORM_ACTIONS[platform as SocialPlatformType]?.[0]?.value ?? "post-text"
+  return PLATFORM_ACTIONS()[platform as SocialPlatformType]?.[0]?.value ?? "post-text"
 }
 
 /** Human label for any of the 19 networks (falls back to a capitalized id). */
@@ -92,6 +98,8 @@ function platformLabel(platform: string): string {
 }
 
 function SocialConfigBase({ data, onUpdate, platform, allAccounts, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<SocialPostData> & { platform?: SocialPlatformType; allAccounts?: boolean }) {
+  const localizeOption = useLocalizeOptionLabel()
+  const t = useT()
   const [chatIdHelpOpen, setChatIdHelpOpen] = useState(false)
   const d = data as SocialPostData
   // Unified node: list ALL accounts and derive the platform from the chosen
@@ -101,8 +109,9 @@ function SocialConfigBase({ data, onUpdate, platform, allAccounts, sources, fiel
   // string), not just the original 7 SocialPlatformType — guard the 7-keyed
   // maps below.
   const effectivePlatform: string | undefined = allAccounts ? d.platform : platform
-  const actions = (effectivePlatform && effectivePlatform in PLATFORM_ACTIONS)
-    ? PLATFORM_ACTIONS[effectivePlatform as SocialPlatformType]
+  const platformActions = PLATFORM_ACTIONS()
+  const actions = (effectivePlatform && effectivePlatform in platformActions)
+    ? platformActions[effectivePlatform as SocialPlatformType]
     : []
   const charLimit = (effectivePlatform && effectivePlatform in CAPTION_LIMITS)
     ? CAPTION_LIMITS[effectivePlatform as SocialPlatformType]
@@ -142,9 +151,9 @@ function SocialConfigBase({ data, onUpdate, platform, allAccounts, sources, fiel
         <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
           <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
           <div className="text-xs text-amber-700 dark:text-amber-400">
-            <p className="font-medium">Account not connected</p>
+            <p className="font-medium">{t("cfgext.socialNotConnected")}</p>
             <a href="/integrations" className="underline inline-flex items-center gap-1 mt-1">
-              Connect in Integrations <ExternalLink className="h-3 w-3" />
+              {t("cfgext.socialConnectIn", { surface: t("nav.integrations") })} <ExternalLink className="h-3 w-3" />
             </a>
           </div>
         </div>
@@ -153,19 +162,19 @@ function SocialConfigBase({ data, onUpdate, platform, allAccounts, sources, fiel
       {/* Account selector */}
       {!loading && connections.length > 0 && (
         <div>
-          <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Account</Label>
+          <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">{t("cfgext.socialAccount")}</Label>
           <Select
             value={d.connectionId || ""}
             onValueChange={onSelectConnection}
           >
             <SelectTrigger className="mt-1.5">
-              <SelectValue placeholder="Select account">
+              <SelectValue placeholder={t("cfgext.socialSelectAccount")}>
                 {selectedConnection && (
                   <div className="flex items-center gap-2">
                     {selectedConnection.platform_avatar_url && (
                       <img src={selectedConnection.platform_avatar_url} alt="" className="h-4 w-4 rounded-full" />
                     )}
-                    <span>{selectedConnection.display_name || selectedConnection.platform_username || "Connected"}</span>
+                    <span>{selectedConnection.display_name || selectedConnection.platform_username || t("integ.connected")}</span>
                     {allAccounts && <span className="text-[10px] text-muted-foreground">· {platformLabel(selectedConnection.platform)}</span>}
                   </div>
                 )}
@@ -178,7 +187,7 @@ function SocialConfigBase({ data, onUpdate, platform, allAccounts, sources, fiel
                     {conn.platform_avatar_url && (
                       <img src={conn.platform_avatar_url} alt="" className="h-4 w-4 rounded-full" />
                     )}
-                    <span>{conn.display_name || conn.platform_username || "Connected"}</span>
+                    <span>{conn.display_name || conn.platform_username || t("integ.connected")}</span>
                     {allAccounts && <span className="text-[10px] text-muted-foreground">· {platformLabel(conn.platform)}</span>}
                   </div>
                 </SelectItem>
@@ -191,14 +200,14 @@ function SocialConfigBase({ data, onUpdate, platform, allAccounts, sources, fiel
       {/* Action selector (hidden for Telegram — auto-detected from connected media) */}
       {actions.length > 1 && effectivePlatform !== "telegram" && (
         <div>
-          <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Action</Label>
+          <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">{t("scriptcfg.sceneAction")}</Label>
           <Select value={d.action} onValueChange={(v) => onUpdate({ action: v })}>
             <SelectTrigger className="mt-1.5">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               {actions.map((a) => (
-                <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>
+                <SelectItem key={a.value} value={a.value}>{localizeOption(a.label)}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -210,44 +219,43 @@ function SocialConfigBase({ data, onUpdate, platform, allAccounts, sources, fiel
       {effectivePlatform === "telegram" && (
         <div>
           <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">
-            Chat ID <span className="text-red-500">*</span>
+            {t("cfgext.socialChatId")} <span className="text-red-500">*</span>
           </Label>
           <Input
             value={d.chatId || ""}
             onChange={(e) => onUpdate({ chatId: e.target.value })}
-            placeholder="@channelname or -100..."
+            placeholder={t("cfgext.socialChatIdPh")}
             className={`mt-1.5${(d.chatId || "").trim() ? "" : " border-red-400 dark:border-red-500 focus-visible:ring-red-400"}`}
           />
           <div className="flex items-center justify-between mt-1 gap-2">
             <p className={`text-[10px] ${(d.chatId || "").trim() ? "text-muted-foreground" : "text-red-500 dark:text-red-400"}`}>
               {(d.chatId || "").trim()
-                ? "Channel: @username or -100xxx. Group/DM: numeric ID."
-                : "Required — e.g. @yourchannel."}
+                ? t("cfgext.socialChatIdHint")
+                : t("cfgext.socialChatIdRequired")}
             </p>
             <button
               type="button"
               onClick={() => setChatIdHelpOpen((v) => !v)}
               className="text-[10px] text-[#ff0073] hover:text-[#e0005f] underline underline-offset-2 shrink-0"
             >
-              How to find your Chat ID
+              {t("cfgext.socialChatIdHelpToggle")}
             </button>
           </div>
           {chatIdHelpOpen && (
             <div className="mt-2 rounded-lg border border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#252525] p-3 text-[11px] leading-relaxed text-gray-600 dark:text-gray-300 space-y-2">
+              {/* Keyed per text run so the <code> tokens (identifiers, never
+                  translated) keep their styling and their place in the sentence. */}
               <p>
-                <b>Public channel:</b> use its <code>@username</code> — the part after{" "}
-                <code>t.me/</code>. Example: <code>t.me/mychannel</code> → <code>@mychannel</code>.
+                <b>{t("cfgext.socialHelpPublicChannel")}</b> {t("cfgext.socialHelpUseIts")} <code>@username</code> {t("cfgext.socialHelpPartAfter")}{" "}
+                <code>t.me/</code>. {t("cfgext.kling3ExampleLabel")} <code>t.me/mychannel</code> → <code>@mychannel</code>.
               </p>
               <p>
-                <b>Private channel / group:</b> you need the numeric <code>-100…</code> id. Add
-                your bot to the chat, post any message there, then open{" "}
-                <code className="break-all">api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code> in
-                a browser and copy <code>"chat":&#123;"id":-100…&#125;</code>. (Or forward a
-                message from the chat to <code>@getidsbot</code>.)
+                <b>{t("cfgext.socialHelpPrivateChannel")}</b> {t("cfgext.socialHelpNumericId")} <code>-100…</code> {t("cfgext.socialHelpAddBot")}{" "}
+                <code className="break-all">api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code> {t("cfgext.socialHelpInBrowser")} <code>"chat":&#123;"id":-100…&#125;</code>. {t("cfgext.socialHelpOrForward")} <code>@getidsbot</code>.)
               </p>
               <p className="text-amber-600 dark:text-amber-400">
-                Either way, the bot must be added to that channel/group — for channels, as an{" "}
-                <b>admin</b> with permission to post.
+                {t("cfgext.socialHelpEitherWay")}{" "}
+                <b>{t("cfgext.socialHelpAdmin")}</b> {t("cfgext.socialHelpWithPermission")}
               </p>
             </div>
           )}
@@ -257,7 +265,7 @@ function SocialConfigBase({ data, onUpdate, platform, allAccounts, sources, fiel
       {/* Caption */}
       <MappableField
         field="caption"
-        label={effectivePlatform === "youtube" ? "Description" : "Caption"}
+        label={effectivePlatform === "youtube" ? t("settings.descriptionTab") : t("cfgext.socialCaption")}
         sources={sources}
         fieldMappings={fieldMappings}
         onMapField={onMapField}
@@ -265,7 +273,7 @@ function SocialConfigBase({ data, onUpdate, platform, allAccounts, sources, fiel
         <TagTextarea
           value={d.caption || ""}
           onChange={(v) => onUpdate({ caption: v })}
-          placeholder={`Write your ${platform === "x" ? "tweet" : "caption"}...`}
+          placeholder={platform === "x" ? t("cfgext.socialWriteTweet") : t("cfgext.socialWriteCaption")}
           className="min-h-[80px]"
           maxLength={charLimit}
           rows={3}
@@ -283,7 +291,7 @@ function SocialConfigBase({ data, onUpdate, platform, allAccounts, sources, fiel
         <>
           <MappableField
             field="title"
-            label="Title"
+            label={t("scriptcfg.scriptTitle")}
             sources={sources}
             fieldMappings={fieldMappings}
             onMapField={onMapField}
@@ -291,7 +299,7 @@ function SocialConfigBase({ data, onUpdate, platform, allAccounts, sources, fiel
             <TagTextarea
               value={d.title || ""}
               onChange={(v) => onUpdate({ title: v })}
-              placeholder="Video title..."
+              placeholder={t("cfgext.socialVideoTitlePh")}
               className="mt-1.5"
               maxLength={100}
               rows={1}
@@ -301,7 +309,7 @@ function SocialConfigBase({ data, onUpdate, platform, allAccounts, sources, fiel
             />
           </MappableField>
           <div>
-            <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Tags</Label>
+            <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">{t("apps.tagsLabel")}</Label>
             <Input
               value={(d.tags || []).join(", ")}
               onChange={(e) => onUpdate({ tags: e.target.value.split(",").map((t) => t.trim()).filter(Boolean) })}
@@ -310,15 +318,15 @@ function SocialConfigBase({ data, onUpdate, platform, allAccounts, sources, fiel
             />
           </div>
           <div>
-            <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Privacy</Label>
+            <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">{t("cfgext.socialPrivacy")}</Label>
             <Select value={d.privacy || "private"} onValueChange={(v) => onUpdate({ privacy: v })}>
               <SelectTrigger className="mt-1.5">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="private">Private</SelectItem>
-                <SelectItem value="unlisted">Unlisted</SelectItem>
-                <SelectItem value="public">Public</SelectItem>
+                <SelectItem value="private">{t("cfgext.socialPrivate")}</SelectItem>
+                <SelectItem value="unlisted">{t("apps.unlisted")}</SelectItem>
+                <SelectItem value="public">{t("cfgext.socialPublic")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -334,7 +342,7 @@ function SocialConfigBase({ data, onUpdate, platform, allAccounts, sources, fiel
             rel="noopener noreferrer"
             className="text-xs text-green-700 dark:text-green-400 underline inline-flex items-center gap-1"
           >
-            View post <ExternalLink className="h-3 w-3" />
+            {t("cfgext.socialViewPost")} <ExternalLink className="h-3 w-3" />
           </a>
         </div>
       )}

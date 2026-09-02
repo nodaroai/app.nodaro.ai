@@ -44,40 +44,46 @@ import {
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { CachedImage } from "@/components/ui/cached-image"
+import { useT, tx } from "@/lib/i18n"
+import { useLocalizeHandleLabel } from "@/lib/i18n/labels"
 import { computeInjectedRefs, type InjectedRefTile } from "@/lib/compute-injected-refs"
 import type { ConnectedReference, UsageMode } from "@nodaro/shared"
 
-const USAGE_MODE_LABEL: Record<UsageMode, string> = {
-  identical: "match",
-  "face-pose": "face+pose",
-  face: "face",
-  pose: "pose",
-  emotion: "emotion",
-  style: "style",
-  name: "name",
-  none: "none",
+function USAGE_MODE_LABEL(): Record<UsageMode, string> {
+  return {
+    identical: tx("cfgext.injRefModeMatch"),
+    "face-pose": tx("cfgext.injRefModeFacePose"),
+    face: tx("cfgext.injRefModeFace"),
+    pose: tx("cfgext.injRefModePose"),
+    emotion: tx("cfgext.injRefModeEmotion"),
+    style: tx("audiocfg.style"),
+    name: tx("utilcfg.phParamName"),
+    none: tx("cfgext.injRefModeNone"),
+  }
 }
 
-const ORIGIN_BADGE: Record<
+function ORIGIN_BADGE(): Record<
   InjectedRefTile["origin"],
   { label: string; className: string }
-> = {
-  "wired-raw": {
-    label: "Wired",
-    className: "bg-cyan-500/10 text-cyan-500",
-  },
-  "wired-character-canonical": {
-    label: "Char",
-    className: "bg-pink-500/10 text-pink-500",
-  },
-  "mention-variant": {
-    label: "@",
-    className: "bg-violet-500/10 text-violet-500",
-  },
-  "canonical-fallback": {
-    label: "Char",
-    className: "bg-pink-500/10 text-pink-500",
-  },
+> {
+  return {
+    "wired-raw": {
+      label: tx("cfgshared.refImgWired"),
+      className: "bg-cyan-500/10 text-cyan-500",
+    },
+    "wired-character-canonical": {
+      label: tx("cfgshared.badgeChar"),
+      className: "bg-pink-500/10 text-pink-500",
+    },
+    "mention-variant": {
+      label: "@",
+      className: "bg-violet-500/10 text-violet-500",
+    },
+    "canonical-fallback": {
+      label: tx("cfgshared.badgeChar"),
+      className: "bg-pink-500/10 text-pink-500",
+    },
+  }
 }
 
 export interface InjectedReferenceListProps {
@@ -127,6 +133,8 @@ function SortableInjectedRefItem({
   primaryLabel?: string
   onRemove?: () => void
 }) {
+  const t = useT()
+  const localizeHandle = useLocalizeHandleLabel()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: tile.id,
   })
@@ -136,7 +144,7 @@ function SortableInjectedRefItem({
     opacity: isDragging ? 0.5 : 1,
     zIndex: isDragging ? 10 : undefined,
   }
-  const badge = ORIGIN_BADGE[tile.origin]
+  const badge = ORIGIN_BADGE()[tile.origin]
   const usageMode = tile.usageMode ?? null
 
   // Caption: "Image N — Kira / smile" (variant) or "Image N — Kira" (canonical)
@@ -148,7 +156,11 @@ function SortableInjectedRefItem({
     if (tile.characterName) return tile.characterName
     return tile.description ?? ""
   })()
-  const caption = `Image ${tile.imageIndex}${captionRight ? ` — ${captionRight}` : ""}`
+  const captionBase = t("cfgext.injRefImageN", {
+    handle: localizeHandle("Image"),
+    n: tile.imageIndex,
+  })
+  const caption = `${captionBase}${captionRight ? ` — ${captionRight}` : ""}`
 
   return (
     <div
@@ -163,7 +175,7 @@ function SortableInjectedRefItem({
       <span
         {...listeners}
         className="cursor-grab active:cursor-grabbing shrink-0 touch-none"
-        aria-label="Drag to reorder"
+        aria-label={t("cfgext.injRefDragAria")}
       >
         <GripVertical className="w-3.5 h-3.5 text-muted-foreground/40" />
       </span>
@@ -191,7 +203,7 @@ function SortableInjectedRefItem({
       </div>
       {usageMode && usageMode !== "identical" ? (
         <span className="text-[9px] px-1 py-0.5 rounded shrink-0 bg-amber-500/10 text-amber-500">
-          {USAGE_MODE_LABEL[usageMode]}
+          {USAGE_MODE_LABEL()[usageMode]}
         </span>
       ) : null}
       <span className={`text-[9px] px-1 py-0.5 rounded shrink-0 ${badge.className}`}>
@@ -202,7 +214,7 @@ function SortableInjectedRefItem({
           type="button"
           onClick={onRemove}
           className="p-0.5 rounded hover:bg-destructive/10 hover:text-destructive shrink-0"
-          aria-label={`Remove ${caption}`}
+          aria-label={t("cfgext.injRefRemove", { caption })}
         >
           <X className="w-3 h-3" />
         </button>
@@ -212,6 +224,8 @@ function SortableInjectedRefItem({
 }
 
 export function InjectedReferenceList(props: InjectedReferenceListProps) {
+  const t = useT()
+  const localizeHandle = useLocalizeHandleLabel()
   const {
     connectedReferences,
     prompt,
@@ -222,7 +236,7 @@ export function InjectedReferenceList(props: InjectedReferenceListProps) {
     onRemoveWiredSource,
     onRemoveMention,
     onSuppressCanonical,
-    label = "Injected references",
+    label = t("cfgshared.injectedReferences"),
     emptyMessage,
     primaryLabel,
     testId,
@@ -344,7 +358,7 @@ export function InjectedReferenceList(props: InjectedReferenceListProps) {
 
       {tiles.length > 1 ? (
         <p className="text-[10px] text-muted-foreground mt-1.5">
-          Drag to reorder — #1 is Image 1 in the assembled prompt.
+          {t("cfgext.injRefReorderHint", { handle: localizeHandle("Image") })}
         </p>
       ) : null}
     </div>

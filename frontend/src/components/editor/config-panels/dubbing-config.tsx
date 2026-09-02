@@ -3,6 +3,7 @@
 // Extracted from audio-configs.tsx (2,700+ lines, over the 800-line cap) when
 // dubbing grew the full ElevenLabs surface — video mode, source links, dub
 // windows, per-minute pricing.
+import { useLocalizeOptionLabel } from "@/lib/i18n/labels"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -19,6 +20,7 @@ import type { DubbingData } from "@/types/nodes"
 import type { ConfigProps } from "./types"
 
 export function DubbingConfig({ data, onUpdate }: ConfigProps<DubbingData>) {
+  const localizeOption = useLocalizeOptionLabel()
   const t = useT()
   return (
     <div className="flex flex-col gap-3">
@@ -31,7 +33,7 @@ export function DubbingConfig({ data, onUpdate }: ConfigProps<DubbingData>) {
           <SelectTrigger aria-label={t("field.targetLanguage")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {ALL_LANGUAGES.map((l) => (
-              <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+              <SelectItem key={l.value} value={l.value}>{localizeOption(l.label)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -46,7 +48,7 @@ export function DubbingConfig({ data, onUpdate }: ConfigProps<DubbingData>) {
           <SelectContent>
             <SelectItem value="auto">{t("audiocfg.phAutoDetect")}</SelectItem>
             {ALL_LANGUAGES.map((l) => (
-              <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+              <SelectItem key={l.value} value={l.value}>{localizeOption(l.label)}</SelectItem>
             ))}
           </SelectContent>
         </Select>

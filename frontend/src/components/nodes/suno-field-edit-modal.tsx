@@ -62,7 +62,7 @@ export function SunoFieldEditModal({
     return escapePromptEditorFocusTrap()
   }, [field])
 
-  const meta = field ? SUNO_FIELD_EDIT_META[field] : null
+  const meta = field ? SUNO_FIELD_EDIT_META()[field] : null
   // Wired via the SHARED predicate (edge into the field's handle OR a legacy
   // fieldMappings entry) — the SAME derivation the config panel + AI button use,
   // so this modal's read-only state can never drift from them.

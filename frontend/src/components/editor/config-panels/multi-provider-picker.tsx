@@ -1,6 +1,7 @@
 import type { ReactNode } from "react"
 import { Plus, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useT } from "@/lib/i18n"
 import { ModelSearchSelect } from "./model-search-select"
 
 export type MultiProviderPickerProps<P extends string> = {
@@ -23,6 +24,7 @@ export function MultiProviderPicker<P extends string>({
   getTooltip,
   renderHint,
 }: MultiProviderPickerProps<P>) {
+  const t = useT()
   const minOne = providers.length === 1
   const allValues = options.map((o) => o.value)
   const addable = allValues.filter((o) => !providers.includes(o))
@@ -54,7 +56,7 @@ export function MultiProviderPicker<P extends string>({
                   onChange={(v) => change(idx, v as P)}
                   options={rowOptions}
                   getTooltip={getTooltip}
-                  ariaLabel="Provider"
+                  ariaLabel={t("cfgshared.provider")}
                 />
               </div>
               <Button
@@ -64,7 +66,7 @@ export function MultiProviderPicker<P extends string>({
                 className="h-9 w-9 shrink-0 disabled:opacity-30"
                 disabled={minOne}
                 onClick={() => remove(idx)}
-                aria-label={`Remove ${labelOf(p)}`}
+                aria-label={t("cfgshared.removeModel", { name: labelOf(p) })}
               >
                 <X className="h-3.5 w-3.5" />
               </Button>
@@ -82,8 +84,8 @@ export function MultiProviderPicker<P extends string>({
         disabled={addable.length === 0}
         onClick={add}
       >
-        <Plus className="h-3.5 w-3.5 mr-1" />
-        Add another model
+        <Plus className="h-3.5 w-3.5 me-1" />
+        {t("cfgshared.addAnotherModel")}
       </Button>
     </div>
   )

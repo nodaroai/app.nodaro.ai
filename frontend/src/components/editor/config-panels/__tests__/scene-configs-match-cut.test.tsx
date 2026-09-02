@@ -3,6 +3,12 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { SceneConfig } from "../scene-configs"
 import type { SceneNodeFrontendData } from "@/types/nodes"
 import type { MatchCutVerdict, ShotSpec } from "@nodaro/shared"
+import { translate } from "@/lib/i18n"
+
+// Negative assertions keep their old substring breadth: an exact-string
+// matcher would let a renamed or extended string satisfy "must not be present".
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+const rx = (key: Parameters<typeof translate>[1]) => new RegExp(escapeRegExp(translate("en", key)), "i")
 
 // ── Minimal mocks for heavy dependencies ────────────────────────────────────
 
@@ -229,7 +235,7 @@ describe("SceneConfig match-cut verdict surface (Phase 1D.1)", () => {
     // Red chip with 'break' text
     expect(screen.getByText("break")).toBeInTheDocument()
     // Accept break button visible
-    expect(screen.getByRole("button", { name: /accept break/i })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: translate("en", "cfgext.sceneAcceptBreak") })).toBeInTheDocument()
     // Suggested adjustments text
     expect(
       screen.getByText(/Consider adjusting framing for continuity/i),
@@ -245,7 +251,7 @@ describe("SceneConfig match-cut verdict surface (Phase 1D.1)", () => {
       match_cut_verdicts: { shot_01: BREAK_VERDICT },
     })
 
-    fireEvent.click(screen.getByRole("button", { name: /accept break/i }))
+    fireEvent.click(screen.getByRole("button", { name: translate("en", "cfgext.sceneAcceptBreak") }))
 
     expect(mockAcceptMatchCutBreak).toHaveBeenCalledWith("pipe_01", "entity_01", "shot_01")
 
@@ -265,8 +271,8 @@ describe("SceneConfig match-cut verdict surface (Phase 1D.1)", () => {
       { match_cut_verdicts: { shot_01: BREAK_VERDICT } },
     )
 
-    expect(screen.getByText(/break accepted/i)).toBeInTheDocument()
-    expect(screen.queryByRole("button", { name: /accept break/i })).not.toBeInTheDocument()
+    expect(screen.getByText(translate("en", "cfgext.sceneBreakAccepted"))).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: rx("cfgext.sceneAcceptBreak") })).not.toBeInTheDocument()
   })
 
   // ── Bonus test: pending state when stageOutput has no verdict ───────────────
@@ -274,6 +280,6 @@ describe("SceneConfig match-cut verdict surface (Phase 1D.1)", () => {
   it("shows pending text when stageOutput is absent", () => {
     renderPanel(makeDataWithMatchCut())
 
-    expect(screen.getByText(/pending critic verdict/i)).toBeInTheDocument()
+    expect(screen.getByText(translate("en", "cfgext.scenePendingVerdict"))).toBeInTheDocument()
   })
 })

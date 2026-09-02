@@ -9,6 +9,7 @@ import { appendSnippetText, filterSnippets, groupSnippetsByCategory, type Snippe
 import { SnippetCategoryHeader, SnippetRowContent } from "./snippet-row"
 import { SnippetManageDialog } from "./snippet-manage-dialog"
 import { escapeScrollLock } from "@/lib/scroll-lock-escape"
+import { useT } from "@/lib/i18n"
 import type { SnippetMedia, SnippetTarget } from "@nodaro/prompts"
 
 interface SnippetMenuButtonProps {
@@ -29,6 +30,7 @@ interface SnippetMenuButtonProps {
  * selection, captured on mousedown before focus moves).
  */
 export function SnippetMenuButton({ pool, value, onInsert, target, media }: SnippetMenuButtonProps) {
+  const t = useT()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
   const [manageOpen, setManageOpen] = useState(false)
@@ -52,8 +54,8 @@ export function SnippetMenuButton({ pool, value, onInsert, target, media }: Snip
         <PopoverTrigger asChild>
           <button
             type="button"
-            aria-label="Insert snippet"
-            title="Insert snippet (or type / in the field)"
+            aria-label={t("cfgext.snipMenuInsertAria")}
+            title={t("cfgext.snipMenuInsertTitle")}
             className="inline-flex items-center justify-center rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             onMouseDown={() => {
               // Capture the selection BEFORE the popover steals focus.
@@ -69,13 +71,13 @@ export function SnippetMenuButton({ pool, value, onInsert, target, media }: Snip
               autoFocus
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search snippets…"
+              placeholder={t("cfgext.snipMenuSearchPh")}
               className="h-8 text-xs"
             />
           </div>
           <div ref={scrollListRef} className="max-h-72 overflow-y-auto py-1">
             {groups.length === 0 && (
-              <p className="px-3 py-2 text-[11px] text-muted-foreground">No snippets match.</p>
+              <p className="px-3 py-2 text-[11px] text-muted-foreground">{t("cfgext.snipMenuNoMatch")}</p>
             )}
             {groups.map((g) => (
               <div key={g.category}>
@@ -84,7 +86,7 @@ export function SnippetMenuButton({ pool, value, onInsert, target, media }: Snip
                   <button
                     key={item.source + item.id}
                     type="button"
-                    className="w-full text-left px-2.5 py-1.5 hover:bg-muted transition-colors flex items-start gap-2"
+                    className="w-full text-start px-2.5 py-1.5 hover:bg-muted transition-colors flex items-start gap-2"
                     onClick={() => {
                       onInsert(appendSnippetText(value, item.text))
                       setOpen(false)
@@ -108,7 +110,7 @@ export function SnippetMenuButton({ pool, value, onInsert, target, media }: Snip
                 setOpen(false)
               }}
             >
-              <Plus className="w-3 h-3 mr-1" /> New snippet
+              <Plus className="w-3 h-3 me-1" /> {t("cfgext.snipMenuNew")}
             </Button>
             <Button
               variant="ghost"
@@ -120,7 +122,7 @@ export function SnippetMenuButton({ pool, value, onInsert, target, media }: Snip
                 setOpen(false)
               }}
             >
-              <Settings2 className="w-3 h-3 mr-1" /> Manage
+              <Settings2 className="w-3 h-3 me-1" /> {t("cfgext.snipMenuManage")}
             </Button>
           </div>
         </PopoverContent>

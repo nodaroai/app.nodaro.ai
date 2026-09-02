@@ -1,8 +1,9 @@
+import { useT } from "@/lib/i18n"
 import { useEffect } from "react"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { supportsAdvancedMode, ADVANCED_MODE_UNAVAILABLE_REASON, LLM_FEATURE_DEFAULTS, llmRouteDefaults } from "@nodaro/shared"
+import { supportsAdvancedMode, LLM_FEATURE_DEFAULTS, llmRouteDefaults } from "@nodaro/shared"
 import type { LlmFeature } from "@nodaro/shared"
 
 /** Mirrors `LLM_ADVANCED_SHAPE.maxTokens` in the backend. A number input's
@@ -43,6 +44,7 @@ export function AdvancedModeToggle({
   temperature,
   maxTokens,
 }: AdvancedModeToggleProps) {
+  const t = useT()
   // Seeded from the SAME table the routes read, so the sliders open on the
   // value that actually runs. These used to be props no panel passed, so every
   // node displayed 0.7/2048 while its route used e.g. 0.3/3072 — and one
@@ -65,7 +67,7 @@ export function AdvancedModeToggle({
     <div className="space-y-1">
       <div className="flex items-center justify-between">
         <Label htmlFor={`advanced-${feature}`} className="text-xs font-medium text-muted-foreground">
-          Advanced mode
+          {t("cfgshared.advancedMode")}
         </Label>
         <Switch
           id={`advanced-${feature}`}
@@ -78,17 +80,16 @@ export function AdvancedModeToggle({
       </div>
 
       {!supported ? (
-        <p className="text-[11px] text-muted-foreground">{ADVANCED_MODE_UNAVAILABLE_REASON}</p>
+        <p className="text-[11px] text-muted-foreground">{t("cfgshared.advancedUnavailable")}</p>
       ) : !on ? (
         <p className="text-[11px] text-muted-foreground">
-          Run this model on the provider directly to control temperature, output length and reasoning
-          depth. Costs one credit tier more.
+          {t("cfgshared.advancedModeHint")}
         </p>
       ) : (
         <div className="space-y-2 pt-1">
           <div>
             <Label className="text-xs text-muted-foreground">
-              Temperature: {(temperature ?? defaultTemperature ?? 0.7).toFixed(1)}
+              {t("audiocfg.temperature")}: {(temperature ?? defaultTemperature ?? 0.7).toFixed(1)}
             </Label>
             <input
               type="range"
@@ -101,12 +102,12 @@ export function AdvancedModeToggle({
             />
             {structuredOutput && (
               <p className="text-[11px] text-muted-foreground mt-1">
-                This node asks the model for structured output — above about 0.5 it starts breaking format.
+                {t("cfgshared.structuredOutputTempWarn")}
               </p>
             )}
           </div>
           <div>
-            <Label className="text-xs text-muted-foreground">Max Tokens</Label>
+            <Label className="text-xs text-muted-foreground">{t("cfgshared.maxTokens")}</Label>
             <Input
               type="number"
               min={MAX_TOKENS_MIN}

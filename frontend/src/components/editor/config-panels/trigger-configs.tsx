@@ -14,6 +14,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { useT, tx } from "@/lib/i18n"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import type { WebhookParam, TelegramTriggerData, TelegramChannelFeedData } from "@/types/nodes"
 import type { ConfigProps } from "./types"
 import { useSocialConnections } from "./social-configs"
@@ -28,6 +30,7 @@ interface WebhookTriggerData {
 }
 
 export function WebhookTriggerConfig({ data, onUpdate }: ConfigProps<WebhookTriggerData>) {
+  const t = useT()
   const [copied, setCopied] = useState(false)
 
   const webhookUrl = data.webhookUrl || ""
@@ -59,7 +62,7 @@ export function WebhookTriggerConfig({ data, onUpdate }: ConfigProps<WebhookTrig
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label>Webhook URL</Label>
+        <Label>{t("utilcfg.webhookUrl")}</Label>
         {hasToken ? (
           <div className="flex items-center gap-2 mt-1">
             <Input
@@ -72,7 +75,7 @@ export function WebhookTriggerConfig({ data, onUpdate }: ConfigProps<WebhookTrig
               size="sm"
               className="shrink-0 h-9 w-9 p-0"
               onClick={handleCopy}
-              title="Copy URL"
+              title={t("cfgshared.copyUrl")}
             >
               {copied ? (
                 <Check className="h-3.5 w-3.5 text-green-500" />
@@ -83,38 +86,38 @@ export function WebhookTriggerConfig({ data, onUpdate }: ConfigProps<WebhookTrig
           </div>
         ) : (
           <p className="text-xs text-muted-foreground mt-1 p-2 bg-muted/30 rounded-md border border-dashed border-border">
-            Create a trigger in Workflow Settings to generate a webhook URL.
+            {t("cfgext.trigWebhookSettingsHint")}
           </p>
         )}
       </div>
 
       {hasToken && (
         <div className="text-xs text-muted-foreground bg-muted/30 rounded-lg px-3 py-2 border border-border">
-          <span className="font-medium">Token:</span>{" "}
+          <span className="font-medium">{t("cfgext.trigTokenLabel")}</span>{" "}
           <span className="font-mono">{data.webhookToken!.slice(0, 8)}{"••••••••"}</span>
           <Button
             variant="ghost"
             size="sm"
-            className="h-5 text-[10px] ml-2 px-1.5"
+            className="h-5 text-[10px] ms-2 px-1.5"
             onClick={() => navigator.clipboard.writeText(data.webhookToken!)}
           >
-            Copy
+            {t("apiTok.copy")}
           </Button>
         </div>
       )}
 
       <div className="border-t border-border pt-3">
         <div className="flex items-center justify-between mb-2">
-          <Label>Output Parameters</Label>
+          <Label>{t("cfgext.trigOutputParameters")}</Label>
           <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={addParam}>
             <Plus className="h-3 w-3" />
-            Add
+            {t("cfgshared.add")}
           </Button>
         </div>
 
         {params.length === 0 && (
           <p className="text-[10px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border">
-            No parameters defined. The entire payload will be available as a single output.
+            {t("cfgext.trigNoParams")}
           </p>
         )}
 
@@ -124,7 +127,7 @@ export function WebhookTriggerConfig({ data, onUpdate }: ConfigProps<WebhookTrig
               <Input
                 value={param.name}
                 onChange={(e) => updateParam(i, { name: e.target.value })}
-                placeholder="name"
+                placeholder={t("utilcfg.phParamName")}
                 className="text-xs h-8 flex-1"
               />
               <Select
@@ -135,10 +138,10 @@ export function WebhookTriggerConfig({ data, onUpdate }: ConfigProps<WebhookTrig
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="text">Text</SelectItem>
-                  <SelectItem value="imageUrl">Image URL</SelectItem>
-                  <SelectItem value="videoUrl">Video URL</SelectItem>
-                  <SelectItem value="audioUrl">Audio URL</SelectItem>
+                  <SelectItem value="text">{t("out.text")}</SelectItem>
+                  <SelectItem value="imageUrl">{t("inputcfg.imageUrl")}</SelectItem>
+                  <SelectItem value="videoUrl">{t("inputcfg.videoUrl")}</SelectItem>
+                  <SelectItem value="audioUrl">{t("inputcfg.audioUrl")}</SelectItem>
                 </SelectContent>
               </Select>
               <Button
@@ -167,18 +170,23 @@ interface ScheduleTriggerData {
   label?: string
 }
 
-const INTERVAL_OPTIONS = [
-  { value: "*/5 * * * *", label: "Every 5 minutes" },
-  { value: "*/15 * * * *", label: "Every 15 minutes" },
-  { value: "0 * * * *", label: "Every hour" },
-  { value: "0 0 * * *", label: "Every day (midnight)" },
-  { value: "custom", label: "Custom cron..." },
-]
+// A function, not a const: a module-level table built at import time would
+// freeze the labels to whatever locale booted first.
+function INTERVAL_OPTIONS(): ReadonlyArray<{ value: string; label: string }> {
+  return [
+    { value: "*/5 * * * *", label: tx("cfgext.trigEvery5Minutes") },
+    { value: "*/15 * * * *", label: tx("cfgext.trigEvery15Minutes") },
+    { value: "0 * * * *", label: tx("cfgext.trigEveryHour") },
+    { value: "0 0 * * *", label: tx("cfgext.trigEveryDayMidnight") },
+    { value: "custom", label: tx("cfgext.trigCustomCron") },
+  ]
+}
 
 export function ScheduleTriggerConfig({ data, onUpdate }: ConfigProps<ScheduleTriggerData>) {
+  const t = useT()
   const currentInterval = data.interval || ""
   const isCustom = currentInterval === "custom" || (
-    currentInterval !== "" && !INTERVAL_OPTIONS.some((o) => o.value === currentInterval)
+    currentInterval !== "" && !INTERVAL_OPTIONS().some((o) => o.value === currentInterval)
   )
   const selectValue = isCustom ? "custom" : currentInterval || ""
 
@@ -193,13 +201,13 @@ export function ScheduleTriggerConfig({ data, onUpdate }: ConfigProps<ScheduleTr
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label>Interval</Label>
+        <Label>{t("cfgext.trigInterval")}</Label>
         <Select value={selectValue} onValueChange={handleIntervalChange}>
           <SelectTrigger>
-            <SelectValue placeholder="Select interval..." />
+            <SelectValue placeholder={t("cfgext.trigSelectInterval")} />
           </SelectTrigger>
           <SelectContent>
-            {INTERVAL_OPTIONS.map((opt) => (
+            {INTERVAL_OPTIONS().map((opt) => (
               <SelectItem key={opt.value} value={opt.value}>
                 {opt.label}
               </SelectItem>
@@ -210,7 +218,7 @@ export function ScheduleTriggerConfig({ data, onUpdate }: ConfigProps<ScheduleTr
 
       {isCustom && (
         <div>
-          <Label htmlFor="cron-expression">Cron Expression</Label>
+          <Label htmlFor="cron-expression">{t("cfgext.trigCronExpression")}</Label>
           <Input
             id="cron-expression"
             value={data.cronExpression || ""}
@@ -219,13 +227,13 @@ export function ScheduleTriggerConfig({ data, onUpdate }: ConfigProps<ScheduleTr
             className="font-mono text-sm"
           />
           <p className="text-[10px] text-muted-foreground mt-1">
-            Format: minute hour day-of-month month day-of-week
+            {t("cfgext.trigCronFormat")}
           </p>
         </div>
       )}
 
       <div>
-        <Label htmlFor="timezone">Timezone</Label>
+        <Label htmlFor="timezone">{t("cfgext.trigTimezone")}</Label>
         <Input
           id="timezone"
           value={data.timezone || ""}
@@ -235,7 +243,7 @@ export function ScheduleTriggerConfig({ data, onUpdate }: ConfigProps<ScheduleTr
       </div>
 
       <div>
-        <Label htmlFor="max-executions">Max Executions</Label>
+        <Label htmlFor="max-executions">{t("cfgext.trigMaxExecutions")}</Label>
         <Input
           id="max-executions"
           type="number"
@@ -245,10 +253,10 @@ export function ScheduleTriggerConfig({ data, onUpdate }: ConfigProps<ScheduleTr
             const val = e.target.value
             onUpdate({ maxExecutions: val === "" ? undefined : parseInt(val, 10) })
           }}
-          placeholder="Unlimited"
+          placeholder={t("cfgext.trigUnlimited")}
         />
         <p className="text-[10px] text-muted-foreground mt-1">
-          Leave empty for unlimited executions.
+          {t("cfgext.trigLeaveEmptyUnlimited")}
         </p>
       </div>
     </div>
@@ -257,17 +265,23 @@ export function ScheduleTriggerConfig({ data, onUpdate }: ConfigProps<ScheduleTr
 
 // ── Telegram Trigger ────────────────────────────────────────────
 
-const TELEGRAM_MESSAGE_TYPES = [
-  { value: "text", label: "Text" },
-  { value: "photo", label: "Photo" },
-  { value: "video", label: "Video" },
-  { value: "audio", label: "Audio" },
-  { value: "document", label: "Document" },
-]
+// Same rule as INTERVAL_OPTIONS: a live getter, never a frozen module const.
+function TELEGRAM_MESSAGE_TYPES(): ReadonlyArray<{ value: string; label: string }> {
+  return [
+    { value: "text", label: tx("out.text") },
+    { value: "photo", label: tx("cfgext.trigPhoto") },
+    { value: "video", label: tx("common.video") },
+    { value: "audio", label: tx("usage.catAudio") },
+    { value: "document", label: tx("cfgext.trigDocument") },
+  ]
+}
 
-const DEFAULT_MESSAGE_TYPE_FILTERS = TELEGRAM_MESSAGE_TYPES.map((t) => t.value)
+// Spelled out rather than derived from the table above: deriving it would call
+// tx() at import time — exactly the boot-locale freeze the getter avoids.
+const DEFAULT_MESSAGE_TYPE_FILTERS = ["text", "photo", "video", "audio", "document"]
 
 export function TelegramTriggerConfig({ data, onUpdate }: ConfigProps<TelegramTriggerData>) {
+  const t = useT()
   const d = data as TelegramTriggerData
   const { connections, loading: loadingConnections } = useSocialConnections("telegram")
 
@@ -295,16 +309,16 @@ export function TelegramTriggerConfig({ data, onUpdate }: ConfigProps<TelegramTr
           : "bg-gray-50 dark:bg-[#2D2D2D] border-gray-200 dark:border-[#2D2D2D] text-gray-500 dark:text-[#64748B]"
       }`}>
         <div className={`h-2 w-2 rounded-full ${isActive ? "bg-green-500" : "bg-gray-400"}`} />
-        {isActive ? "Active — listening for messages" : "Inactive"}
+        {isActive ? t("cfgext.trigActiveListening") : t("apps.inactive")}
       </div>
 
       {/* Connection selector */}
       <div>
-        <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Telegram Bot</Label>
+        <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">{t("cfgext.trigTelegramBot")}</Label>
         {!loadingConnections && connections.length === 0 ? (
           <p className="text-xs text-muted-foreground mt-1.5 p-2 bg-muted/30 rounded-md border border-dashed border-border">
-            No Telegram bot connected.{" "}
-            <a href="/integrations" className="underline">Connect in Integrations</a>.
+            {t("cfgext.trigNoTelegramBot")}{" "}
+            <a href="/integrations" className="underline">{t("cfgext.socialConnectIn", { surface: t("nav.integrations") })}</a>.
           </p>
         ) : (
           <Select
@@ -312,12 +326,12 @@ export function TelegramTriggerConfig({ data, onUpdate }: ConfigProps<TelegramTr
             onValueChange={(v) => onUpdate({ connectionId: v })}
           >
             <SelectTrigger className="mt-1.5">
-              <SelectValue placeholder="Select bot..." />
+              <SelectValue placeholder={t("cfgext.trigSelectBot")} />
             </SelectTrigger>
             <SelectContent>
               {connections.map((conn) => (
                 <SelectItem key={conn.id} value={conn.id}>
-                  {conn.display_name || conn.platform_username || "Telegram Bot"}
+                  {conn.display_name || conn.platform_username || t("cfgext.trigTelegramBot")}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -327,23 +341,23 @@ export function TelegramTriggerConfig({ data, onUpdate }: ConfigProps<TelegramTr
 
       {/* Chat ID filter */}
       <div>
-        <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Chat ID Filter</Label>
+        <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">{t("cfgext.trigChatIdFilter")}</Label>
         <Input
           value={d.chatIdFilter || ""}
           onChange={(e) => onUpdate({ chatIdFilter: e.target.value })}
-          placeholder="Optional — leave blank to receive from all chats"
+          placeholder={t("cfgext.trigChatIdFilterPh")}
           className="mt-1.5"
         />
         <p className="text-[10px] text-muted-foreground mt-1">
-          Restrict to a specific chat ID (e.g. @channel or -100xxx).
+          {t("cfgext.trigChatIdFilterHint")}
         </p>
       </div>
 
       {/* Message type filters */}
       <div>
-        <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Message Types</Label>
+        <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">{t("cfgext.trigMessageTypes")}</Label>
         <div className="flex flex-col gap-2 mt-2">
-          {TELEGRAM_MESSAGE_TYPES.map((type) => (
+          {TELEGRAM_MESSAGE_TYPES().map((type) => (
             <div key={type.value} className="flex items-center gap-2">
               <Checkbox
                 id={`msg-type-${type.value}`}
@@ -364,33 +378,35 @@ export function TelegramTriggerConfig({ data, onUpdate }: ConfigProps<TelegramTr
         className={isActive ? "w-full border-destructive/30 text-destructive hover:bg-destructive/10" : "w-full bg-[#ff0073] hover:bg-[#e0005f] text-white"}
         onClick={handleToggleActive}
       >
-        {isActive ? "Deactivate Trigger" : "Activate Trigger"}
+        {isActive ? t("cfgext.trigDeactivate") : t("cfgext.trigActivate")}
       </Button>
     </div>
   )
 }
 
 export function TelegramChannelFeedConfig({ data, onUpdate }: ConfigProps<TelegramChannelFeedData>) {
+  const t = useT()
+  const localizeNode = useLocalizeNodeLabel()
   const d = data as TelegramChannelFeedData
   return (
     <div className="space-y-4">
       <div>
         <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">
-          Channel <span className="text-red-500">*</span>
+          {t("utilcfg.channel")} <span className="text-red-500">*</span>
         </Label>
         <Input
           value={d.channel || ""}
           onChange={(e) => onUpdate({ channel: e.target.value })}
-          placeholder="@channelname or t.me/channelname"
+          placeholder={t("cfgext.trigChannelPh")}
           className="mt-1.5"
         />
         <p className="text-[10px] text-muted-foreground mt-1">
-          Any PUBLIC channel with web preview enabled. Reads the most recent posts from t.me/s/&lt;channel&gt;.
+          {t("cfgext.trigChannelHint")}
         </p>
       </div>
 
       <div>
-        <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Max posts per run</Label>
+        <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">{t("cfgext.trigMaxPostsPerRun")}</Label>
         <Input
           type="number"
           min={1}
@@ -403,7 +419,7 @@ export function TelegramChannelFeedConfig({ data, onUpdate }: ConfigProps<Telegr
           className="mt-1.5"
         />
         <p className="text-[10px] text-muted-foreground mt-1">
-          Pair with a Schedule Trigger to poll on an interval — only posts newer than the last run are emitted.
+          {t("cfgext.trigPairWithSchedule", { node: localizeNode("Schedule Trigger") })}
         </p>
       </div>
 

@@ -3,6 +3,8 @@
 import { useMemo, type ReactNode } from "react"
 import { Music, Activity, Piano, User, MessageCircle, type LucideIcon } from "lucide-react"
 import { getParameterPromptHint } from "@nodaro/prompts"
+import { useT } from "@/lib/i18n"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { cn } from "@/lib/utils"
 
@@ -65,12 +67,14 @@ function collect(
  * are wired up.
  */
 export function ConnectedAudioSources({ consumerNodeId, nodes, edges, className }: Props): ReactNode {
+  const t = useT()
+  const localizeNode = useLocalizeNodeLabel()
   const sources = useMemo(() => collect(consumerNodeId, nodes, edges), [consumerNodeId, nodes, edges])
   if (sources.length === 0) return null
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
       <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
-        Connected Sound
+        {t("cfgext.connAudConnectedSound")}
       </div>
       {sources.map((s) => {
         const Icon = ICON_BY_TYPE[s.type]
@@ -78,7 +82,7 @@ export function ConnectedAudioSources({ consumerNodeId, nodes, edges, className 
           <div key={s.key} className="flex items-start gap-2 text-xs">
             <Icon className="size-3.5 mt-0.5 text-muted-foreground" />
             <div className="flex flex-col">
-              <span className="font-medium">{LABEL_BY_TYPE[s.type]}</span>
+              <span className="font-medium">{localizeNode(LABEL_BY_TYPE[s.type])}</span>
               <span className="text-muted-foreground italic">{s.hint}</span>
             </div>
           </div>

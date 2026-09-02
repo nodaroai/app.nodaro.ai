@@ -3,6 +3,12 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { SceneConfig } from "../scene-configs"
 import type { SceneNodeFrontendData } from "@/types/nodes"
 import type { VideoCriticVerdict } from "@nodaro/shared"
+import { translate } from "@/lib/i18n"
+
+// Negative assertions keep their old substring breadth: an exact-string
+// matcher would let a renamed or extended string satisfy "must not be present".
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+const rx = (key: Parameters<typeof translate>[1]) => new RegExp(escapeRegExp(translate("en", key)), "i")
 
 // ── Minimal mocks for heavy dependencies ────────────────────────────────────
 
@@ -200,7 +206,7 @@ describe("SceneConfig video-critic findings surface (Phase 1D.2c-b-ii)", () => {
     renderPanel(makeDataWithShot())
 
     expect(screen.queryByTestId("video-critic-shot_01")).not.toBeInTheDocument()
-    expect(screen.queryByText(/Video Critic/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(rx("cfgext.sceneVideoCritic"))).not.toBeInTheDocument()
   })
 
   // ── Test 2: passing critic renders informational ──────────────────────────
@@ -217,18 +223,25 @@ describe("SceneConfig video-critic findings surface (Phase 1D.2c-b-ii)", () => {
 
     const block = screen.getByTestId("video-critic-shot_01")
     expect(block).toBeInTheDocument()
-    expect(screen.getByText("Video Critic")).toBeInTheDocument()
-    expect(screen.getByText(/Pass · 8\/10/)).toBeInTheDocument()
+    expect(screen.getByText(translate("en", "cfgext.sceneVideoCritic"))).toBeInTheDocument()
+    expect(screen.getByText(
+        translate("en", "cfgext.sceneCriticScore", {
+          verdict: translate("en", "cfgext.scenePassVerdict"),
+          score: 8,
+        }),
+      )).toBeInTheDocument()
     // The identified-action text lives inside the video-critic block
     expect(block.textContent ?? "").toMatch(/Hero walks toward camera/i)
     expect(screen.getByText("warning")).toBeInTheDocument()
     expect(screen.getByText("visual_artifacts")).toBeInTheDocument()
     expect(screen.getByText(/Mild banding/i)).toBeInTheDocument()
-    expect(screen.getByText(/Fix: Lower compression/i)).toBeInTheDocument()
+    expect(screen.getByText(
+      translate("en", "cfgext.sceneCriticFix", { fix: "Lower compression / re-render" }),
+    )).toBeInTheDocument()
 
     // No Skip / Regenerate buttons when not failed
-    expect(screen.queryByRole("button", { name: /skip/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole("button", { name: /regenerate/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: rx("pipe.skip") })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: rx("pipe.regenerate") })).not.toBeInTheDocument()
   })
 
   // ── Test 3: failed critic renders wired Skip + Regenerate buttons (J1) ────
@@ -246,16 +259,21 @@ describe("SceneConfig video-critic findings surface (Phase 1D.2c-b-ii)", () => {
     )
 
     expect(screen.getByTestId("video-critic-shot_01")).toBeInTheDocument()
-    expect(screen.getByText(/Failed · 3\/10/)).toBeInTheDocument()
-    expect(screen.getByText(/continuity 4\/10/)).toBeInTheDocument()
-    expect(screen.getByText(/Retries used: 1/i)).toBeInTheDocument()
+    expect(screen.getByText(
+      translate("en", "cfgext.sceneCriticScore", {
+        verdict: translate("en", "exec.statusFailed"),
+        score: 3,
+      }),
+    )).toBeInTheDocument()
+    expect(screen.getByText(translate("en", "cfgext.sceneContinuityScore", { score: 4 }))).toBeInTheDocument()
+    expect(screen.getByText(translate("en", "cfgext.sceneRetriesUsed", { count: 1 }))).toBeInTheDocument()
     expect(screen.getByText("blocking")).toBeInTheDocument()
     expect(screen.getByText("motion_glitch")).toBeInTheDocument()
 
     // Skip + Regenerate buttons rendered, enabled (pipelineId + sceneEntityId
     // are present in the test data), no placeholder tooltip.
-    const skipBtn = screen.getByRole("button", { name: /skip/i })
-    const regenBtn = screen.getByRole("button", { name: /regenerate/i })
+    const skipBtn = screen.getByRole("button", { name: translate("en", "pipe.skip") })
+    const regenBtn = screen.getByRole("button", { name: translate("en", "pipe.regenerate") })
     expect(skipBtn).toBeInTheDocument()
     expect(regenBtn).toBeInTheDocument()
     expect(skipBtn).not.toBeDisabled()
@@ -313,7 +331,7 @@ describe("SceneConfig video-critic findings surface (Phase 1D.2c-b-ii)", () => {
       }),
     )
 
-    fireEvent.click(screen.getByRole("button", { name: /skip/i }))
+    fireEvent.click(screen.getByRole("button", { name: translate("en", "pipe.skip") }))
 
     expect(mockSkipShotVideoCriticFailure).toHaveBeenCalledWith(
       "pipe_01",
@@ -350,7 +368,7 @@ describe("SceneConfig video-critic findings surface (Phase 1D.2c-b-ii)", () => {
       }),
     )
 
-    fireEvent.click(screen.getByRole("button", { name: /regenerate/i }))
+    fireEvent.click(screen.getByRole("button", { name: translate("en", "pipe.regenerate") }))
 
     expect(mockRetryShotVideoGeneration).toHaveBeenCalledWith(
       "pipe_01",
@@ -386,8 +404,8 @@ describe("SceneConfig video-critic findings surface (Phase 1D.2c-b-ii)", () => {
 
     renderPanel(data)
 
-    const skipBtn = screen.getByRole("button", { name: /skip/i })
-    const regenBtn = screen.getByRole("button", { name: /regenerate/i })
+    const skipBtn = screen.getByRole("button", { name: translate("en", "pipe.skip") })
+    const regenBtn = screen.getByRole("button", { name: translate("en", "pipe.regenerate") })
     expect(skipBtn).toBeDisabled()
     expect(regenBtn).toBeDisabled()
   })

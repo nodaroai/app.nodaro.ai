@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react"
 import { createPortal } from "react-dom"
 import { BookmarkPlus, Loader2, Check, X } from "lucide-react"
+import { useT, tx } from "@/lib/i18n"
 import { useAuth } from "@/hooks/use-auth"
 import { saveGeneratedToLibrary } from "@/lib/api"
 import { isCloud } from "@/lib/edition"
@@ -37,6 +38,7 @@ interface AdminDialogProps {
 }
 
 function AdminSaveDialog({ open, onClose, onSave, saving }: AdminDialogProps) {
+  const t = useT()
   if (!open) return null
 
   return createPortal(
@@ -53,11 +55,12 @@ function AdminSaveDialog({ open, onClose, onSave, saving }: AdminDialogProps) {
             <div className="w-8 h-8 rounded-lg bg-[#ff0073]/10 flex items-center justify-center">
               <BookmarkPlus className="w-4 h-4 text-[#ff0073]" />
             </div>
-            <h2 className="text-base font-semibold">Save to Library</h2>
+            <h2 className="text-base font-semibold">{t("cfgshared.saveLibTitle")}</h2>
           </div>
           <button
             type="button"
             onClick={onClose}
+            aria-label={t("common.close")}
             className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-muted transition-colors text-muted-foreground"
           >
             <X className="w-4 h-4" />
@@ -67,7 +70,7 @@ function AdminSaveDialog({ open, onClose, onSave, saving }: AdminDialogProps) {
         {/* Options */}
         <div className="p-5 space-y-3">
           <p className="text-sm text-muted-foreground">
-            Where would you like to save this asset?
+            {t("cfgshared.saveLibQuestion")}
           </p>
 
           <button
@@ -75,14 +78,14 @@ function AdminSaveDialog({ open, onClose, onSave, saving }: AdminDialogProps) {
             onClick={() => onSave(false)}
             disabled={saving}
             className={cn(
-              "w-full px-4 py-3 text-left rounded-lg border border-border",
+              "w-full px-4 py-3 text-start rounded-lg border border-border",
               "hover:border-[#ff0073]/30 hover:bg-muted/30 transition-colors",
               "disabled:opacity-50 disabled:cursor-not-allowed",
             )}
           >
-            <span className="text-sm font-medium">My Library</span>
+            <span className="text-sm font-medium">{t("cfgshared.saveLibMine")}</span>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Only visible to you
+              {t("cfgshared.saveLibMineHint")}
             </p>
           </button>
 
@@ -91,14 +94,14 @@ function AdminSaveDialog({ open, onClose, onSave, saving }: AdminDialogProps) {
             onClick={() => onSave(true)}
             disabled={saving}
             className={cn(
-              "w-full px-4 py-3 text-left rounded-lg border border-border",
+              "w-full px-4 py-3 text-start rounded-lg border border-border",
               "hover:border-[#ff0073]/30 hover:bg-muted/30 transition-colors",
               "disabled:opacity-50 disabled:cursor-not-allowed",
             )}
           >
-            <span className="text-sm font-medium">Shared Library</span>
+            <span className="text-sm font-medium">{t("cfgshared.saveLibShared")}</span>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Visible to all users
+              {t("cfgshared.saveLibSharedHint")}
             </p>
           </button>
         </div>
@@ -107,7 +110,7 @@ function AdminSaveDialog({ open, onClose, onSave, saving }: AdminDialogProps) {
         {saving && (
           <div className="px-5 pb-4 flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="w-3 h-3 animate-spin" />
-            Saving...
+            {t("cfgshared.saveLibSaving")}
           </div>
         )}
       </div>
@@ -128,6 +131,7 @@ export function SaveToLibraryButton({
   compact = true,
   className,
 }: SaveToLibraryButtonProps) {
+  const t = useT()
   const { user, isAdmin } = useAuth()
   const [saveState, setSaveState] = useState<SaveState>("idle")
   const [showAdminDialog, setShowAdminDialog] = useState(false)
@@ -151,7 +155,7 @@ export function SaveToLibraryButton({
         // Reset after 3 seconds
         setTimeout(() => setSaveState("idle"), 3000)
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Save failed"
+        const message = err instanceof Error ? err.message : tx("cfgshared.saveLibTitleFailed")
         // If already exists, treat as "saved"
         if (message.includes("already in your library")) {
           setSaveState("saved")
@@ -203,10 +207,10 @@ export function SaveToLibraryButton({
           onClick={handleClick}
           title={
             saveState === "saved"
-              ? "Saved to library"
+              ? t("cfgshared.saveLibTitleSaved")
               : saveState === "error"
-                ? "Save failed"
-                : "Save to library"
+                ? t("cfgshared.saveLibTitleFailed")
+                : t("cfgshared.saveLibTitleSave")
           }
           disabled={saveState === "saving"}
         >
@@ -254,10 +258,10 @@ export function SaveToLibraryButton({
           <BookmarkPlus className="w-3 h-3" />
         )}
         {saveState === "saved"
-          ? "Saved"
+          ? t("cfgshared.saveLibSaved")
           : saveState === "error"
-            ? "Failed"
-            : "Save to Library"}
+            ? t("cfgshared.saveLibFailed")
+            : t("cfgshared.saveLibTitle")}
       </button>
 
       <AdminSaveDialog

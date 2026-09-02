@@ -1,5 +1,6 @@
 "use client"
 
+import { useLocalizeNodeLabel, useLocalizeOptionLabel } from "@/lib/i18n/labels"
 import { useMemo, useState, useCallback, useEffect, Suspense, memo } from "react"
 import { useSurfaceAvailability } from "@/lib/surface-availability"
 import { hasCredits } from "@/lib/edition"
@@ -77,7 +78,7 @@ import { InjectedReferenceList } from "./injected-reference-list"
 import { SeedanceReferenceTip } from "./seedance-reference-tip"
 import { FramesAndReferencesTip } from "./frames-references-tip"
 import { removeMentionToken, makeRemoveWiredSource, appendSuppressedSlug } from "./injected-reference-helpers"
-import { useT } from "@/lib/i18n"
+import { useT, tx } from "@/lib/i18n"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { PromptFieldFinalView, PromptFieldModeToggle } from "./prompt-field-final-view"
 import { useFinalPromptSegments, negativeRoutingCaption } from "./use-final-prompt-segments"
@@ -184,6 +185,10 @@ export function buildVideoRefAutocomplete(
     // so the `@kira` / `@kira-smile` typeahead in the prompt editor sees them.
     if (effectiveType === "character") {
       const charData = nd as unknown as CharacterNodeData
+      // Latin identity seed, NOT display copy: `characterMentionSlug` keeps only
+      // [a-z0-9], so a localized fallback slugifies to "" and the expansion is
+      // silently skipped. execute-node.ts / connected-references.ts seed the same
+      // literal — they must not diverge by locale.
       const charName = charData.characterName || s.label || "Character"
       const slug = characterMentionSlug(charName)
       if (slug) {
@@ -242,6 +247,7 @@ export function buildVideoRefAutocomplete(
     // the autocomplete. Mirrors `expandLocationNodeIntoRefs` in
     // execute-node.ts (runtime path) for slice 3 of Location Studio Phase 2 #2.
     if (effectiveType === "location") {
+      // Latin identity seed — see the character note above.
       const locName = (nd.locationName as string) || s.label || "Location"
       const locSlug = locationMentionSlug(locName) || undefined
       const sourceUrl = nd.sourceImageUrl as string | undefined
@@ -364,6 +370,7 @@ export function toRefImageItems(entries: ReadonlyArray<VideoRefAutocompleteEntry
 }
 
 function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, onUpdateNode, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ImageToVideoData> & { nodeId?: string }) {
+  const localizeOption = useLocalizeOptionLabel()
   // Re-render when the deployment's availability sets arrive: they land
   // after the first paint, and without a subscription this dropdown would
   // keep showing every model for the rest of the session.
@@ -453,9 +460,9 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
     return sources.filter((s) => imageTypes.includes(s.type) && s.targetHandle !== "references").map((s) => {
       let displayLabel = s.label
       if (s.targetHandle === "startFrame") {
-        displayLabel = `Start: ${s.label}`
+        displayLabel = t("vidcfg.frameStartPrefix", { label: s.label })
       } else if (s.targetHandle === "endFrame") {
-        displayLabel = `End: ${s.label}`
+        displayLabel = t("vidcfg.frameEndPrefix", { label: s.label })
       }
 
       return {
@@ -466,7 +473,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
         targetHandle: s.targetHandle,
       }
     })
-  }, [sources])
+  }, [sources, t])
 
   const connectedRefImages = useMemo(() => {
     return sources.filter((s) => s.targetHandle === "references").map((s) => ({
@@ -516,7 +523,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           onUpdateOrder={(order) => onUpdate({ connectedImageOrder: order })}
           acceptedTypes={new Set(["generate-image", "upload-image", "character", "object", "location", "edit-image", "image-to-image", "scene"])}
           mediaType="image"
-          primaryLabel="Start Frame"
+          primaryLabel={t("vidcfg.startFrame")}
         />
       )}
 
@@ -526,7 +533,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           onChange={(v) => onUpdate({ provider: v as ImageToVideoData["provider"] })}
           options={withoutDeniedModels(VIDEO_I2V_MODELS)}
           getTooltip={getVideoModelCapabilitiesTooltip}
-          ariaLabel="Provider"
+          ariaLabel={t("field.provider")}
         />
       </MappableField>
       <ModelDescriptionHint modelId={data.provider} />
@@ -547,19 +554,21 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           limits: modeLimits,
         })
         const label = s2.mode === "reference"
-          ? "Reference — frames used as prompt-directed references"
-          : s2.mode === "first-last-frame" ? "First + Last Frame (exact)" : "First Frame (exact)"
+          ? t("vidcfg.modeReference")
+          : s2.mode === "first-last-frame" ? t("vidcfg.modeFirstLastFrame") : t("vidcfg.modeFirstFrame")
         return (
           <div className="flex flex-col gap-1 rounded-md border border-border bg-muted/30 p-2">
             <span className="text-[11px] font-medium text-foreground">{t("vidcfg.modeLabel", { label })}</span>
             {s2.promptSuffix && (
               <span className="text-[10px] leading-snug text-muted-foreground">
-                Appended to prompt: “{s2.promptSuffix}”
+                {t("vidcfg.appendedToPrompt", { suffix: s2.promptSuffix })}
               </span>
             )}
             {s2.droppedRefImages > 0 && (
               <span className="text-[10px] leading-snug text-amber-500">
-                {s2.droppedRefImages} reference image{s2.droppedRefImages > 1 ? "s" : ""} over the {modeLimits.images}-image limit will be dropped (frames kept).
+                {s2.droppedRefImages === 1
+                  ? t("vidcfg.droppedRefImage", { limit: modeLimits.images })
+                  : t("vidcfg.droppedRefImages", { count: s2.droppedRefImages, limit: modeLimits.images })}
               </span>
             )}
           </div>
@@ -579,8 +588,8 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           </Select>
           <p className="text-[10px] text-muted-foreground px-1">
             {isVeoRefMode
-              ? "Reference mode uses 1-3 reference images to guide generation (not as start/end frames)."
-              : "Frame-to-frame mode uses start and optional end frame images."}
+              ? t("vidcfg.veoReferenceModeNote")
+              : t("vidcfg.veoFrameToFrameNote")}
           </p>
         </div>
       )}
@@ -599,7 +608,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
             mediaType="image"
           />
           <p className="text-[10px] text-muted-foreground px-1">
-            Connect image nodes to the References handle. Up to {maxRefImages} additional reference images.
+            {t("vidcfg.connectRefImagesNote", { max: maxRefImages })}
           </p>
         </div>
       )}
@@ -656,7 +665,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
               placeholder={t("imgcfg.thingsToAvoid")}
             />
-            <PromptLengthCounter value={(data as Record<string, unknown>).negativePrompt as string || ""} max={getMaxNegativePromptChars(currentI2VProvider)} modelLabel={currentI2VProvider} noun="negative prompt" />
+            <PromptLengthCounter value={(data as Record<string, unknown>).negativePrompt as string || ""} max={getMaxNegativePromptChars(currentI2VProvider)} modelLabel={currentI2VProvider} noun={t("vidcfg.negativePrompt")} />
           </>
         )}
       </MappableField>
@@ -705,9 +714,9 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <AspectRatioSelector
               options={[
-                { value: "Auto", label: "Auto (from image)" },
-                { value: "16:9", label: "16:9 (Landscape)" },
-                { value: "9:16", label: "9:16 (Portrait)" },
+                { value: "Auto", label: t("vidcfg.autoFromImage") },
+                { value: "16:9", label: t("vidcfg.169Landscape") },
+                { value: "9:16", label: t("vidcfg.916Portrait") },
               ]}
               value={data.aspectRatio || "16:9"}
               onValueChange={(v) => onUpdate({ aspectRatio: v as ImageToVideoData["aspectRatio"] })}
@@ -725,12 +734,12 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
                   <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {opts.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 <p className="text-[10px] text-muted-foreground mt-1">
-                  4K generates the base at 1080p, then upscales to 4K automatically in the same run (billed at the 4K rate).
+                  {t("vidcfg.veo4kUpscaleNote")}
                 </p>
               </div>
             ) : null
@@ -790,7 +799,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
             <SelectTrigger aria-label={t("field.durationSeconds")}><SelectValue /></SelectTrigger>
             <SelectContent>
               {allowedDurations.map((d) => (
-                <SelectItem key={d} value={String(d)}>{d} seconds</SelectItem>
+                <SelectItem key={d} value={String(d)}>{t("vidcfg.nSeconds", { n: d })}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -806,14 +815,14 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
       </MappableField>
       {allowedDurations && allowedDurations.length === 1 && (
         <p className="text-xs text-muted-foreground px-1">
-          {`${data.provider || "This provider"} produces ~${allowedDurations[0]} second videos.`}
+          {t("vidcfg.providerProducesNSecondVideos", { provider: data.provider || t("vidcfg.thisProvider"), n: allowedDurations[0] })}
         </p>
       )}
       {supportsEndFrame && (
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">{t("vidcfg.endFrameOptional")}</Label>
           <p className="text-xs text-muted-foreground px-1">
-            Connect an image node to the &quot;End Frame&quot; handle for start-to-end frame video generation.
+            {t("vidcfg.connectEndFrameNote")}
           </p>
         </div>
       )}
@@ -837,7 +846,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           <>
             <div className="px-1">
               <label htmlFor="loopTrim-frames" className="text-[10px] text-muted-foreground">
-                Frames to test: {data.loopTrim.framesToTest ?? 16}
+                {t("vidcfg.framesToTest", { n: data.loopTrim.framesToTest ?? 16 })}
               </label>
               <input
                 id="loopTrim-frames"
@@ -918,7 +927,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
 
       {(data.provider === "kling-turbo" || data.provider === "kling-master") && (
         <div>
-          <Label className="text-xs">CFG Scale ({String((data as Record<string, unknown>).cfgScale ?? 0.5)})</Label>
+          <Label className="text-xs">{t("vidcfg.cfgScale", { value: String((data as Record<string, unknown>).cfgScale ?? 0.5) })}</Label>
           <Input
             type="number"
             min={0}
@@ -927,7 +936,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
             value={((data as Record<string, unknown>).cfgScale as number) ?? ""}
             onChange={(e) => onUpdate({ cfgScale: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
           />
-          <p className="text-[10px] text-muted-foreground mt-1">0 = creative, 1 = strict prompt adherence</p>
+          <p className="text-[10px] text-muted-foreground mt-1">{t("vidcfg.cfgScaleHint")}</p>
         </div>
       )}
 
@@ -1017,10 +1026,10 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <AspectRatioSelector
               options={[
-                { value: "16:9", label: "16:9 (Landscape)" },
-                { value: "9:16", label: "9:16 (Portrait)" },
-                { value: "1:1", label: "1:1 (Square)" },
-                { value: "21:9", label: "21:9 (Ultra-wide)" },
+                { value: "16:9", label: t("vidcfg.169Landscape") },
+                { value: "9:16", label: t("vidcfg.916Portrait") },
+                { value: "1:1", label: t("vidcfg.11Square") },
+                { value: "21:9", label: t("vidcfg.219UltraWide") },
               ]}
               value={data.aspectRatio || "16:9"}
               onValueChange={(v) => onUpdate({ aspectRatio: v as ImageToVideoData["aspectRatio"] })}
@@ -1061,7 +1070,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               <SelectContent>
                 {/* Catalog-driven: seedance-2/-fast expose 480p/720p/1080p; seedance-2-mini 480p/720p */}
                 {(getVideoResolutionOptions(currentI2VProvider) ?? []).map((o) => (
-                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -1123,7 +1132,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
                   <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {opts.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -1138,7 +1147,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
             />
           </MappableField>
           <p className="text-[10px] text-muted-foreground px-1">
-            2K (default) or 768P output — 768P bills at the cheaper per-second rate. “adaptive” matches the wired input; pure text-to-video renders 16:9 unless a concrete ratio is picked. Audio is always generated — lip-synced to reference audio when connected.
+            {t("vidcfg.minimaxH3ResNote")}
           </p>
         </>
       )}
@@ -1163,7 +1172,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
                   <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {opts.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -1240,7 +1249,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               ) : (
                 <>
                   <SelectItem value="768P">768P</SelectItem>
-                  <SelectItem value="1080P">1080P (6s max)</SelectItem>
+                  <SelectItem value="1080P">{t("vidcfg.res1080PMax6s")}</SelectItem>
                 </>
               )}
             </SelectContent>
@@ -1306,7 +1315,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
       {lightboxImage && (
         <ImageLightbox
           src={lightboxImage}
-          alt="Connected image"
+          alt={t("vidcfg.connectedImage")}
           onClose={() => setLightboxImage(null)}
         />
       )}
@@ -1324,6 +1333,7 @@ export const ImageToVideoConfig = memo(ImageToVideoConfigImpl)
 const V2V_IMAGE_TYPES = ["generate-image", "upload-image", "character", "object", "location", "edit-image", "image-to-image", "scene"]
 
 function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<VideoToVideoData> & { nodeId?: string }) {
+  const localizeOption = useLocalizeOptionLabel()
   const t = useT()
   const promptSnippets = useSnippetPool("video", "prompt")
   const negativeSnippets = useSnippetPool("video", "negative")
@@ -1402,7 +1412,7 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           onChange={(v) => onUpdate({ provider: v as VideoToVideoData["provider"] })}
           options={VIDEO_V2V_MODELS}
           getTooltip={getVideoModelCapabilitiesTooltip}
-          ariaLabel="Provider"
+          ariaLabel={t("field.provider")}
         />
       </MappableField>
       <ModelDescriptionHint modelId={data.provider} />
@@ -1464,7 +1474,7 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               refMap={refMap}
               snippets={negativeSnippets}
             />
-            <PromptLengthCounter value={data.negativePrompt || ""} max={getMaxNegativePromptChars(provider)} modelLabel={provider} noun="negative prompt" />
+            <PromptLengthCounter value={data.negativePrompt || ""} max={getMaxNegativePromptChars(provider)} modelLabel={provider} noun={t("vidcfg.negativePrompt")} />
           </>
         )}
       </MappableField>
@@ -1509,7 +1519,7 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               <SelectTrigger aria-label={t("field.duration")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 {V2V_DURATION_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -1519,7 +1529,7 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 {V2V_RESOLUTION_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -1562,7 +1572,7 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               <SelectContent>
                 <SelectItem value="">{t("vidcfg.phAuto")}</SelectItem>
                 {V2V_ALEPH_ASPECT_RATIOS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -1590,8 +1600,8 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               <SelectTrigger aria-label={t("field.duration")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="0">{t("vidcfg.phAuto")}</SelectItem>
-                <SelectItem value="5">5 seconds</SelectItem>
-                <SelectItem value="10">10 seconds</SelectItem>
+                <SelectItem value="5">{t("vidcfg.nSeconds", { n: 5 })}</SelectItem>
+                <SelectItem value="10">{t("vidcfg.nSeconds", { n: 10 })}</SelectItem>
               </SelectContent>
             </Select>
           </MappableField>
@@ -1603,7 +1613,7 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 {V2V_RESOLUTION_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -1649,11 +1659,13 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
 
 export const VideoToVideoConfig = memo(VideoToVideoConfigImpl)
 
-const SWITCHX_MODE_HELP: Record<string, string> = {
-  auto: "AI masks the foreground subject — relight it, restyle/replace the background.",
-  fill: "Keep the whole scene — restyle the entire frame from your reference/prompt.",
-  select: "Provide one keyframe mask image (e.g. wire a Generate Mask node into the Mask input); the AI propagates it across the video.",
-  custom: "Provide a full per-frame alpha matte video for frame-accurate control.",
+function SWITCHX_MODE_HELP(): Record<string, string> {
+  return {
+  auto: tx("vidcfg.switchxHelpAuto"),
+  fill: tx("vidcfg.switchxHelpFill"),
+  select: tx("vidcfg.switchxHelpSelect"),
+  custom: tx("vidcfg.switchxHelpCustom"),
+}
 }
 
 function SwitchXConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, nodeId }: ConfigProps<SwitchXData> & { nodeId?: string }) {
@@ -1699,7 +1711,7 @@ function SwitchXConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField,
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="text-[11px] text-muted-foreground/70 -mb-1">Powered by SwitchX · Beeble</div>
+      <div className="text-[11px] text-muted-foreground/70 -mb-1">{t("vidcfg.poweredBySwitchx")}</div>
 
       <MappableField field="alphaMode" label={t("field.mode")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select value={mode} onValueChange={(v) => onUpdate({ alphaMode: v as SwitchXData["alphaMode"] })}>
@@ -1712,7 +1724,7 @@ function SwitchXConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField,
           </SelectContent>
         </Select>
       </MappableField>
-      <p className="text-[11px] text-muted-foreground/70 -mt-1">{SWITCHX_MODE_HELP[mode]}</p>
+      <p className="text-[11px] text-muted-foreground/70 -mt-1">{SWITCHX_MODE_HELP()[mode]}</p>
 
       <MappableField field="prompt" label={t("node.prompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
         <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
@@ -1870,7 +1882,7 @@ function MotionTransferConfigImpl({ data, onUpdate, sources, fieldMappings, onMa
           value={provider}
           onChange={(v) => onUpdate({ provider: v as MotionTransferData["provider"] })}
           options={MOTION_TRANSFER_MODELS}
-          ariaLabel="Provider"
+          ariaLabel={t("field.provider")}
         />
       </MappableField>
       <MappableField field="prompt" label={t("field.promptOptionalCap")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
@@ -1928,7 +1940,7 @@ function MotionTransferConfigImpl({ data, onUpdate, sources, fieldMappings, onMa
               refMap={refMap}
               snippets={negativeSnippets}
             />
-            <PromptLengthCounter value={data.negativePrompt} max={getMaxNegativePromptChars(provider)} modelLabel={provider} noun="negative prompt" />
+            <PromptLengthCounter value={data.negativePrompt} max={getMaxNegativePromptChars(provider)} modelLabel={provider} noun={t("vidcfg.negativePrompt")} />
           </>
         )}
       </MappableField>
@@ -1984,14 +1996,14 @@ function MotionTransferConfigImpl({ data, onUpdate, sources, fieldMappings, onMa
       </MappableField>
       {data.videoDuration != null && (
         <p className="text-xs text-muted-foreground px-1">
-          ~{data.videoDuration}s video detected. Cost scales with duration.
+          {t("vidcfg.videoDurationDetected", { n: data.videoDuration })}
         </p>
       )}
       <p className="text-xs text-muted-foreground px-1">
-        {({ "kling-3.0": "Uses Kling 3.0 Motion Control. Connect image and video inputs.",
-           "wan-animate-move": "Moves character from image within the video scene (~1s output).",
-           "wan-animate-replace": "Replaces character in video with character from image (~1s output).",
-        } as Record<string, string>)[provider] ?? "Uses Kling 2.6 Motion Control. Connect image and video inputs."}
+        {({ "kling-3.0": t("vidcfg.motionTransferKling3"),
+           "wan-animate-move": t("vidcfg.motionTransferWanMove"),
+           "wan-animate-replace": t("vidcfg.motionTransferWanReplace"),
+        } as Record<string, string>)[provider] ?? t("vidcfg.motionTransferKling26")}
       </p>
 
       {/* Unified injected-references list — surfaces wired character canonicals
@@ -2044,7 +2056,7 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
             {/* The credit cache is never populated without billing, so the
                 hardcoded fallbacks below rendered as real prices on a
                 self-host (community grind, 2026-08-13). */}
-            <SelectItem value="topaz">{`Topaz factor-based${hasCredits() ? ` (${creditUnits(getCachedCredits("topaz-video") ?? 19)} ${creditUnitLabel(t("credits.unitShort"))})` : ""}`}</SelectItem>
+            <SelectItem value="topaz">{`${t("vidcfg.topazFactorBased")}${hasCredits() ? ` (${creditUnits(getCachedCredits("topaz-video") ?? 19)} ${creditUnitLabel(t("credits.unitShort"))})` : ""}`}</SelectItem>
             <SelectItem value="veo-1080p">{`VEO 1080p${hasCredits() ? ` (${creditUnits(getCachedCredits("veo-1080p") ?? 2)} ${creditUnitLabel(t("credits.unitShort"))})` : ""}`}</SelectItem>
             <SelectItem value="veo-4k">{`VEO 4K${hasCredits() ? ` (${creditUnits(getCachedCredits("veo-4k") ?? 38)} ${creditUnitLabel(t("credits.unitShort"))})` : ""}`}</SelectItem>
           </SelectContent>
@@ -2059,9 +2071,9 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
           >
             <SelectTrigger aria-label={t("field.upscaleFactor")}><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="1">1x (no upscale, AI enhance only)</SelectItem>
-              <SelectItem value="2">2x (recommended)</SelectItem>
-              <SelectItem value="4">4x (maximum)</SelectItem>
+              <SelectItem value="1">{t("vidcfg.upscale1x")}</SelectItem>
+              <SelectItem value="2">{t("vidcfg.upscale2x")}</SelectItem>
+              <SelectItem value="4">{t("vidcfg.upscale4x")}</SelectItem>
             </SelectContent>
           </Select>
         </MappableField>
@@ -2069,19 +2081,21 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
 
       <p className="text-xs text-muted-foreground px-1">
         {provider === "topaz"
-          ? "Uses Topaz Video Upscaler. Max 50MB input video."
-          : "Upscales a VEO video to higher resolution. Connect an upstream VEO video node."}
+          ? t("vidcfg.descTopazUpscale")
+          : t("vidcfg.descVeoUpscale")}
       </p>
     </div>
   )
 }
 
 function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<TextToVideoData> & { nodeId?: string }) {
+  const localizeOption = useLocalizeOptionLabel()
   // Re-render when the deployment's availability sets arrive: they land
   // after the first paint, and without a subscription this dropdown would
   // keep showing every model for the rest of the session.
   useSurfaceAvailability()
   const t = useT()
+  const localizeNode = useLocalizeNodeLabel()
   const promptSnippets = useSnippetPool("video", "prompt")
   const negativeSnippets = useSnippetPool("video", "negative")
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
@@ -2191,7 +2205,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           onChange={(v) => onUpdate({ provider: v })}
           options={withoutDeniedModels(VIDEO_T2V_MODELS)}
           getTooltip={getVideoModelCapabilitiesTooltip}
-          ariaLabel="Provider"
+          ariaLabel={t("field.provider")}
         />
       </MappableField>
       <ModelDescriptionHint modelId={currentProvider} />
@@ -2265,7 +2279,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
             <SelectTrigger aria-label={t("field.durationSeconds")}><SelectValue /></SelectTrigger>
             <SelectContent>
               {allowedDurations.map((d) => (
-                <SelectItem key={d} value={String(d)}>{d} seconds</SelectItem>
+                <SelectItem key={d} value={String(d)}>{t("vidcfg.nSeconds", { n: d })}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -2281,7 +2295,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
       </MappableField>
       {allowedDurations && allowedDurations.length === 1 && (
         <p className="text-xs text-muted-foreground px-1">
-          {`${data.provider || "This provider"} produces ~${allowedDurations[0]} second videos.`}
+          {t("vidcfg.providerProducesNSecondVideos", { provider: data.provider || t("vidcfg.thisProvider"), n: allowedDurations[0] })}
         </p>
       )}
       {(data.provider === "veo3" || data.provider === "veo3.1" || data.provider === "veo3_lite") && (
@@ -2298,12 +2312,12 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                   <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {opts.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 <p className="text-[10px] text-muted-foreground mt-1">
-                  4K generates the base at 1080p, then upscales to 4K automatically in the same run (billed at the 4K rate).
+                  {t("vidcfg.veo4kUpscaleNote")}
                 </p>
               </div>
             ) : null
@@ -2352,7 +2366,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
 
       {data.provider === "kling-turbo" && (
         <div>
-          <Label className="text-xs">CFG Scale ({String((data as Record<string, unknown>).cfgScale ?? 0.5)})</Label>
+          <Label className="text-xs">{t("vidcfg.cfgScale", { value: String((data as Record<string, unknown>).cfgScale ?? 0.5) })}</Label>
           <Input
             type="number"
             min={0}
@@ -2361,7 +2375,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
             value={((data as Record<string, unknown>).cfgScale as number) ?? ""}
             onChange={(e) => onUpdate({ cfgScale: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
           />
-          <p className="text-[10px] text-muted-foreground mt-1">0 = creative, 1 = strict prompt adherence</p>
+          <p className="text-[10px] text-muted-foreground mt-1">{t("vidcfg.cfgScaleHint")}</p>
         </div>
       )}
 
@@ -2386,7 +2400,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
               <div className="flex flex-col gap-1">
                 {connectedRefVideos.map((s) => (
                   <div key={s.id} className="text-[10px] px-2 py-1 rounded bg-muted/50 text-muted-foreground truncate">
-                    {s.label}
+                    {localizeNode(s.label)}
                   </div>
                 ))}
               </div>
@@ -2398,7 +2412,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
               <div className="flex flex-col gap-1">
                 {connectedRefAudio.map((s) => (
                   <div key={s.id} className="text-[10px] px-2 py-1 rounded bg-muted/50 text-muted-foreground truncate">
-                    {s.label}
+                    {localizeNode(s.label)}
                   </div>
                 ))}
               </div>
@@ -2425,7 +2439,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                   <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {opts.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -2469,7 +2483,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                   <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {opts.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -2477,7 +2491,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
             ) : null
           })()}
           <p className="text-[10px] text-muted-foreground px-1">
-            2K (default) or 768P output — 768P bills at the cheaper per-second rate. Audio is always generated — lip-synced to reference audio when connected.
+            {t("vidcfg.minimaxH3ResNoteT2v")}
           </p>
         </>
       )}
@@ -2494,7 +2508,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
               <SelectContent>
                 {/* Catalog-driven: seedance-2/-fast expose 480p/720p/1080p; seedance-2-mini 480p/720p */}
                 {(getVideoResolutionOptions(currentProvider) ?? []).map((o) => (
-                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -2569,7 +2583,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
               refMap={refMap}
               snippets={negativeSnippets}
             />
-            <PromptLengthCounter value={data.negativePrompt} max={getMaxNegativePromptChars(currentProvider)} modelLabel={currentProvider} noun="negative prompt" />
+            <PromptLengthCounter value={data.negativePrompt} max={getMaxNegativePromptChars(currentProvider)} modelLabel={currentProvider} noun={t("vidcfg.negativePrompt")} />
           </>
         )}
       </MappableField>
@@ -2601,11 +2615,13 @@ export const TextToVideoConfig = memo(TextToVideoConfigImpl)
 //   - Kling 3.0 dispatches to Kling3StudioConfig (same as i2v/t2v).
 // ---------------------------------------------------------------------------
 function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources, fieldMappings, onMapField, nodes, edges, onUpdateNode, variableDisplayMode, nodeId }: ConfigProps<GenerateVideoNodeData> & { nodeId?: string }) {
+  const localizeOption = useLocalizeOptionLabel()
   // Re-render when the deployment's availability sets arrive: they land
   // after the first paint, and without a subscription this dropdown would
   // keep showing every model for the rest of the session.
   useSurfaceAvailability()
   const t = useT()
+  const localizeNode = useLocalizeNodeLabel()
   // Single source for the prompt editor's @-refs / variables / snippets — shared
   // with the inline canvas editor + quick-edit modal so they never drift. Supplies
   // referenceImages (was the local refImagesForAutocomplete via buildVideoRefAutocomplete;
@@ -2792,9 +2808,9 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
     return sources.filter((s) => imageTypes.includes(s.type) && s.targetHandle !== "imageReferences").map((s) => {
       let displayLabel = s.label
       if (s.targetHandle === "startFrame") {
-        displayLabel = `Start: ${s.label}`
+        displayLabel = t("vidcfg.frameStartPrefix", { label: s.label })
       } else if (s.targetHandle === "endFrame") {
-        displayLabel = `End: ${s.label}`
+        displayLabel = t("vidcfg.frameEndPrefix", { label: s.label })
       }
 
       return {
@@ -2805,7 +2821,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
         targetHandle: s.targetHandle,
       }
     })
-  }, [sources])
+  }, [sources, t])
 
   const connectedRefImages = useMemo(() => {
     return sources.filter((s) => s.targetHandle === "imageReferences").map((s) => ({
@@ -2866,7 +2882,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           onUpdateOrder={(order) => onUpdate({ connectedImageOrder: order })}
           acceptedTypes={new Set(["generate-image", "upload-image", "character", "object", "location", "edit-image", "image-to-image", "scene"])}
           mediaType="image"
-          primaryLabel="Start Frame"
+          primaryLabel={t("vidcfg.startFrame")}
         />
       )}
 
@@ -2876,7 +2892,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           onChange={(v) => onUpdate({ provider: v as ImageToVideoData["provider"] })}
           options={withoutDeniedModels(VIDEO_GEN_MODELS)}
           getTooltip={getVideoModelCapabilitiesTooltip}
-          ariaLabel="Provider"
+          ariaLabel={t("field.provider")}
         />
       </MappableField>
       <ModelDescriptionHint modelId={currentProvider} />
@@ -2903,19 +2919,21 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           limits: modeLimits,
         })
         const label = s2.mode === "reference"
-          ? "Reference — frames used as prompt-directed references"
-          : s2.mode === "first-last-frame" ? "First + Last Frame (exact)" : "First Frame (exact)"
+          ? t("vidcfg.modeReference")
+          : s2.mode === "first-last-frame" ? t("vidcfg.modeFirstLastFrame") : t("vidcfg.modeFirstFrame")
         return (
           <div className="flex flex-col gap-1 rounded-md border border-border bg-muted/30 p-2">
             <span className="text-[11px] font-medium text-foreground">{t("vidcfg.modeLabel", { label })}</span>
             {s2.promptSuffix && (
               <span className="text-[10px] leading-snug text-muted-foreground">
-                Appended to prompt: “{s2.promptSuffix}”
+                {t("vidcfg.appendedToPrompt", { suffix: s2.promptSuffix })}
               </span>
             )}
             {s2.droppedRefImages > 0 && (
               <span className="text-[10px] leading-snug text-amber-500">
-                {s2.droppedRefImages} reference image{s2.droppedRefImages > 1 ? "s" : ""} over the {modeLimits.images}-image limit will be dropped (frames kept).
+                {s2.droppedRefImages === 1
+                  ? t("vidcfg.droppedRefImage", { limit: modeLimits.images })
+                  : t("vidcfg.droppedRefImages", { count: s2.droppedRefImages, limit: modeLimits.images })}
               </span>
             )}
           </div>
@@ -2935,8 +2953,8 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           </Select>
           <p className="text-[10px] text-muted-foreground px-1">
             {isVeoRefMode
-              ? "Reference mode uses 1-3 reference images to guide generation (not as start/end frames)."
-              : "Frame-to-frame mode uses start and optional end frame images."}
+              ? t("vidcfg.veoReferenceModeNote")
+              : t("vidcfg.veoFrameToFrameNote")}
           </p>
         </div>
       )}
@@ -2952,7 +2970,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
             mediaType="image"
           />
           <p className="text-[10px] text-muted-foreground px-1">
-            Connect image nodes to the References handle. Up to {maxRefImages} additional reference images.
+            {t("vidcfg.connectRefImagesNote", { max: maxRefImages })}
           </p>
         </div>
       )}
@@ -2967,7 +2985,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           <div className="flex flex-col gap-1">
             {connectedRefVideos.map((s) => (
               <div key={s.id} className="text-[10px] px-2 py-1 rounded bg-muted/50 text-muted-foreground truncate">
-                {s.label}
+                {localizeNode(s.label)}
               </div>
             ))}
           </div>
@@ -2984,7 +3002,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           <div className="flex flex-col gap-1">
             {connectedRefAudio.map((s) => (
               <div key={s.id} className="text-[10px] px-2 py-1 rounded bg-muted/50 text-muted-foreground truncate">
-                {s.label}
+                {localizeNode(s.label)}
               </div>
             ))}
           </div>
@@ -3012,7 +3030,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               rows={3}
               value={data.prompt || ""}
               onChange={(v) => onUpdate({ prompt: v })}
-              placeholder={connectedImages.length > 0 ? "Describe the motion or animation you want..." : "Describe the video to generate..."}
+              placeholder={connectedImages.length > 0 ? t("vidcfg.phDescribeMotion") : t("vidcfg.phDescribeVideoGen")}
               referenceImages={referenceImages}
               nodeRefs={nodeRefs}
               refMap={refMap}
@@ -3046,7 +3064,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
               placeholder={t("imgcfg.thingsToAvoid")}
             />
-            <PromptLengthCounter value={(data as Record<string, unknown>).negativePrompt as string || ""} max={getMaxNegativePromptChars(currentProvider)} modelLabel={currentProvider} noun="negative prompt" />
+            <PromptLengthCounter value={(data as Record<string, unknown>).negativePrompt as string || ""} max={getMaxNegativePromptChars(currentProvider)} modelLabel={currentProvider} noun={t("vidcfg.negativePrompt")} />
           </>
         )}
       </MappableField>
@@ -3095,9 +3113,9 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <AspectRatioSelector
               options={[
-                { value: "Auto", label: "Auto (from image)" },
-                { value: "16:9", label: "16:9 (Landscape)" },
-                { value: "9:16", label: "9:16 (Portrait)" },
+                { value: "Auto", label: t("vidcfg.autoFromImage") },
+                { value: "16:9", label: t("vidcfg.169Landscape") },
+                { value: "9:16", label: t("vidcfg.916Portrait") },
               ]}
               value={data.aspectRatio || "16:9"}
               onValueChange={(v) => onUpdate({ aspectRatio: v as ImageToVideoData["aspectRatio"] })}
@@ -3115,12 +3133,12 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
                   <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {opts.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 <p className="text-[10px] text-muted-foreground mt-1">
-                  4K generates the base at 1080p, then upscales to 4K automatically in the same run (billed at the 4K rate).
+                  {t("vidcfg.veo4kUpscaleNote")}
                 </p>
               </div>
             ) : null
@@ -3177,7 +3195,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
             <SelectTrigger aria-label={t("field.durationSeconds")}><SelectValue /></SelectTrigger>
             <SelectContent>
               {allowedDurations.map((d) => (
-                <SelectItem key={d} value={String(d)}>{d} seconds</SelectItem>
+                <SelectItem key={d} value={String(d)}>{t("vidcfg.nSeconds", { n: d })}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -3196,14 +3214,14 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
       )}
       {allowedDurations && allowedDurations.length === 1 && (
         <p className="text-xs text-muted-foreground px-1">
-          {`${currentProvider || "This provider"} produces ~${allowedDurations[0]} second videos.`}
+          {t("vidcfg.providerProducesNSecondVideos", { provider: currentProvider || t("vidcfg.thisProvider"), n: allowedDurations[0] })}
         </p>
       )}
       {supportsEndFrame && (
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">{t("vidcfg.endFrameOptional")}</Label>
           <p className="text-xs text-muted-foreground px-1">
-            Connect an image node to the &quot;End Frame&quot; handle for start-to-end frame video generation.
+            {t("vidcfg.connectEndFrameNote")}
           </p>
         </div>
       )}
@@ -3227,7 +3245,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           <>
             <div className="px-1">
               <label htmlFor="gv-loopTrim-frames" className="text-[10px] text-muted-foreground">
-                Frames to test: {data.loopTrim.framesToTest ?? 16}
+                {t("vidcfg.framesToTest", { n: data.loopTrim.framesToTest ?? 16 })}
               </label>
               <input
                 id="gv-loopTrim-frames"
@@ -3308,7 +3326,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
 
       {(currentProvider === "kling-turbo" || currentProvider === "kling-master") && (
         <div>
-          <Label className="text-xs">CFG Scale ({String((data as Record<string, unknown>).cfgScale ?? 0.5)})</Label>
+          <Label className="text-xs">{t("vidcfg.cfgScale", { value: String((data as Record<string, unknown>).cfgScale ?? 0.5) })}</Label>
           <Input
             type="number"
             min={0}
@@ -3317,7 +3335,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
             value={((data as Record<string, unknown>).cfgScale as number) ?? ""}
             onChange={(e) => onUpdate({ cfgScale: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
           />
-          <p className="text-[10px] text-muted-foreground mt-1">0 = creative, 1 = strict prompt adherence</p>
+          <p className="text-[10px] text-muted-foreground mt-1">{t("vidcfg.cfgScaleHint")}</p>
         </div>
       )}
 
@@ -3407,10 +3425,10 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <AspectRatioSelector
               options={[
-                { value: "16:9", label: "16:9 (Landscape)" },
-                { value: "9:16", label: "9:16 (Portrait)" },
-                { value: "1:1", label: "1:1 (Square)" },
-                { value: "21:9", label: "21:9 (Ultra-wide)" },
+                { value: "16:9", label: t("vidcfg.169Landscape") },
+                { value: "9:16", label: t("vidcfg.916Portrait") },
+                { value: "1:1", label: t("vidcfg.11Square") },
+                { value: "21:9", label: t("vidcfg.219UltraWide") },
               ]}
               value={data.aspectRatio || "16:9"}
               onValueChange={(v) => onUpdate({ aspectRatio: v as ImageToVideoData["aspectRatio"] })}
@@ -3451,7 +3469,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               <SelectContent>
                 {/* Catalog-driven: seedance-2/-fast expose 480p/720p/1080p; seedance-2-mini 480p/720p */}
                 {(getVideoResolutionOptions(currentProvider) ?? []).map((o) => (
-                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -3513,7 +3531,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
                   <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {opts.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -3528,7 +3546,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
             />
           </MappableField>
           <p className="text-[10px] text-muted-foreground px-1">
-            2K (default) or 768P output — 768P bills at the cheaper per-second rate. “adaptive” matches the wired input; pure text-to-video renders 16:9 unless a concrete ratio is picked. Audio is always generated — lip-synced to reference audio when connected.
+            {t("vidcfg.minimaxH3ResNote")}
           </p>
         </>
       )}
@@ -3561,7 +3579,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
                   <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {opts.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -3638,7 +3656,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               ) : (
                 <>
                   <SelectItem value="768P">768P</SelectItem>
-                  <SelectItem value="1080P">1080P (6s max)</SelectItem>
+                  <SelectItem value="1080P">{t("vidcfg.res1080PMax6s")}</SelectItem>
                 </>
               )}
             </SelectContent>
@@ -3705,7 +3723,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
         <>
           {geminiQuotaExceeded && (
             <div className="rounded border border-red-500/40 bg-red-500/10 p-2 text-[11px] leading-snug text-red-300">
-              Too many inputs for Gemini Omni: images + 2×videos must be ≤ 7 (currently {geminiQuotaUsed}). The start frame and each reference image count as 1; each source video counts as 2. Remove some inputs before generating.
+              {t("vidcfg.geminiOmniQuotaExceeded", { used: geminiQuotaUsed })}
             </div>
           )}
           <MappableField field="resolution" label={t("field.resolution")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -3713,7 +3731,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 {(getVideoResolutionOptions(currentProvider) ?? []).map((o) => (
-                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -3762,7 +3780,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
       {lightboxImage && (
         <ImageLightbox
           src={lightboxImage}
-          alt="Connected image"
+          alt={t("vidcfg.connectedImage")}
           onClose={() => setLightboxImage(null)}
         />
       )}
@@ -3784,13 +3802,13 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               }
             />
             <Label htmlFor="gv-save-to-character" className="text-xs cursor-pointer">
-              Save clip to “{connectedCharacter.label}” as reference video
+              {t("vidcfg.saveClipToCharacter", { name: connectedCharacter.label })}
             </Label>
           </div>
           {data.attachReferenceVideoVariant !== undefined && (
-            <div className="flex flex-col gap-1 pl-6">
+            <div className="flex flex-col gap-1 ps-6">
               <Label htmlFor="gv-save-variant" className="text-[11px] text-muted-foreground">
-                Variant label
+                {t("vidcfg.variantLabel")}
               </Label>
               <Input
                 id="gv-save-variant"
@@ -3800,7 +3818,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
                 className="h-7 text-xs"
               />
               <p className="text-[11px] text-muted-foreground">
-                Saved to {connectedCharacter.label}’s reference videos on completion — reusable as a video reference.
+                {t("vidcfg.savedToCharacterNote", { name: connectedCharacter.label })}
               </p>
             </div>
           )}
@@ -3835,21 +3853,26 @@ export { GENERATE_VIDEO_PRO_MAX_DURATION_FALLBACK } from "./model-options"
  *  the panel's only explanation of a lever whose failure mode (a shot bending
  *  its world to reach a pre-guessed closing frame) is invisible until it
  *  happens. Keyed by the node's stored choice, "auto" included. */
-const GVP_ANCHOR_MODE_LABELS: Record<GvpAnchorChoice, string> = {
-  auto: "Auto (engine decides)",
-  "start-end": "Start + end frames",
-  "start-only": "Start frame only",
-  reference: "References only",
+function GVP_ANCHOR_MODE_LABELS(): Record<GvpAnchorChoice, string> {
+  return {
+  auto: tx("vidcfg.anchorAuto"),
+  "start-end": tx("vidcfg.anchorStartEnd"),
+  "start-only": tx("vidcfg.anchorStartOnly"),
+  reference: tx("vidcfg.anchorReferenceOnly"),
+}
 }
 
-const GVP_ANCHOR_MODE_HINTS: Record<GvpAnchorChoice, string> = {
-  auto: "The engine chooses. Today that means a generated opening still per scene, plus a closing still on longer scenes where the provider supports one.",
-  "start-end": "Each scene renders between a generated opening and closing still. Best when a shot must land on a specific final image — a held pose, a product hero, a title frame. On a moving camera the closing still is a guess about where the world ends up, which is what makes shots warp.",
-  "start-only": "Each scene opens on a still generated from the previous shot's real last frame, then ends wherever its motion naturally lands. Removes the warping that comes from converging on a pre-generated closing frame.",
-  reference: "No generated frames at all — character and location references plus the prompt carry every shot. The most freedom for camera, light and atmosphere; the least control over exact composition.",
+function GVP_ANCHOR_MODE_HINTS(): Record<GvpAnchorChoice, string> {
+  return {
+  auto: tx("vidcfg.anchorAutoHint"),
+  "start-end": tx("vidcfg.anchorStartEndHint"),
+  "start-only": tx("vidcfg.anchorStartOnlyHint"),
+  reference: tx("vidcfg.anchorReferenceHint"),
+}
 }
 
 function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap }: ConfigProps<GenerateVideoProNodeData> & { nodeId?: string }) {
+  const localizeOption = useLocalizeOptionLabel()
   const t = useT()
   const promptSnippets = useSnippetPool("video", "prompt")
   const currentProvider = data.provider || "seedance-2"
@@ -3959,7 +3982,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
           <SelectTrigger aria-label={t("field.provider")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {GVP_PROVIDERS.map((m) => (
-              <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+              <SelectItem key={m.value} value={m.value}>{localizeOption(m.label)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -4042,7 +4065,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
             <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
             <SelectContent>
               {resolutionOptions.map((o) => (
-                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -4098,8 +4121,8 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
         </Select>
         <p className="text-[11px] text-muted-foreground">
           {canExtend
-            ? "Keyframes renders each scene from generated start/end frames — scenes re-render independently. Music is added after render, not by the video model."
-            : `${MODEL_CATALOG[currentProvider]?.label ?? currentProvider} has no reference-video transport, so it always renders with keyframes: each scene from its own generated start/end frames, every seam a hard cut.`}
+            ? t("vidcfg.renderKeyframesNote")
+            : t("vidcfg.renderKeyframesForced", { model: MODEL_CATALOG[currentProvider]?.label ?? currentProvider })}
         </p>
       </div>
 
@@ -4122,15 +4145,15 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
             <SelectContent>
               {anchorChoices.map((choice) => (
                 <SelectItem key={choice} value={choice}>
-                  {GVP_ANCHOR_MODE_LABELS[choice]}
+                  {GVP_ANCHOR_MODE_LABELS()[choice]}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
           <p className="text-[11px] text-muted-foreground">
-            {GVP_ANCHOR_MODE_HINTS[data.anchorMode ?? "auto"]}
+            {GVP_ANCHOR_MODE_HINTS()[data.anchorMode ?? "auto"]}
             {hasWiredEndFrame
-              ? " A reference-driven run has no closing-frame lane to pin one to, so that choice is unavailable while an end frame is connected."
+              ? ` ${t("vidcfg.anchorReferenceUnavailable")}`
               : ""}
           </p>
         </div>
@@ -4180,11 +4203,11 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
           </SelectContent>
         </Select>
         <p className="text-[11px] text-muted-foreground">
-          Faithful keeps timing (shifted per segment); Condensed rewrites to a compact cast sheet + flowing beats; Slot-anchored opens each segment with slot definitions and references the slot names in the action; Hybrid combines compact beats with consistent entity labels and leans on reference images for appearance; Hybrid Plus adds a structured Elements identity manifest above every continuation; Hybrid Max is Hybrid Plus with the compression and size cap removed — the planner preserves every detail from the analysis (longer prompts, maximum fidelity).
+          {t("vidcfg.plannerStyleHint")}
         </p>
         {(data.plannerMode === "hybrid-plus" || data.plannerMode === "hybrid-max") && !data.rollingRefs && (
           <p className="text-[11px] font-medium text-amber-500">
-            {data.plannerMode === "hybrid-max" ? "Hybrid Max" : "Hybrid Plus"} builds its Elements manifest from Rolling references — enable Rolling references below or continuations compose like plain Hybrid.
+            {t("vidcfg.hybridNeedsRollingRefs", { mode: data.plannerMode === "hybrid-max" ? t("vidcfg.hybridMaxName") : t("vidcfg.hybridPlusName") })}
           </p>
         )}
       </div>
@@ -4201,17 +4224,17 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
           <SelectContent>
             {Array.from({ length: 14 }, (_, i) => i + 2).map((s) => (
               <SelectItem key={s} value={String(s)}>
-                {s}s{s === 2 ? " (default)" : ""}
+                {s}s{s === 2 ? t("vidcfg.suffixDefault") : ""}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
         <p className="text-[11px] text-muted-foreground">
-          How much of the previous segment each continuation sees. Raise for slow camera moves or music-timed motion; adds a small per-join cost.
+          {t("vidcfg.contextTailHint")}
         </p>
         {(data.contextTailSec ?? 2) > 5 && (
           <p className="text-[11px] font-medium text-amber-500">
-            High values (6–15s) are a testing lever — the tail rides as a reference video and eats the provider's ~15s reference-video budget, so a long tail combined with Rolling references can exceed it and fail the join.
+            {t("vidcfg.contextTailHighWarning")}
           </p>
         )}
       </div>
@@ -4226,7 +4249,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
           className="rounded border-muted-foreground/40"
         />
         <label htmlFor="gvp-autoCast" className="text-xs">
-          Auto-cast from analysis — use the analysis&apos;s per-entity reference frames as identity refs (experimental, default off — v1 is text-only)
+          {t("vidcfg.autoCastFromAnalysis")}
         </label>
       </div>
 
@@ -4241,7 +4264,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
           className="rounded border-muted-foreground/40"
         />
         <label htmlFor="gvp-rollingRefs" className="text-xs">
-          Rolling references (experimental) — re-anchor entities returning after absence with their last-seen shot
+          {t("vidcfg.rollingReferences")}
         </label>
       </div>
 
@@ -4257,7 +4280,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
           className="rounded border-muted-foreground/40"
         />
         <label htmlFor="gvp-wordCut" className="text-xs">
-          Clean word cut (experimental) — trim each boundary at an inter-word audio gap so the soundtrack never cuts mid-word
+          {t("vidcfg.cleanWordCut")}
         </label>
       </div>
 
@@ -4274,7 +4297,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
           className="rounded border-muted-foreground/40"
         />
         <label htmlFor="gvp-shotTimestamps" className="text-xs">
-          Shot timestamps (A/B) — inject rebased per-segment time ranges into Hybrid/Condense beats (off = their timestamp-free default)
+          {t("vidcfg.shotTimestamps")}
         </label>
       </div>
 
@@ -4285,7 +4308,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
           the reserve is computed on the same split the planner uses. */}
       <div className="flex items-center gap-2 px-1">
         <label htmlFor="gvp-preferredSegmentSec" className="text-xs shrink-0">
-          Preferred segment length (s)
+          {t("vidcfg.preferredSegmentLength")}
         </label>
         <Input
           id="gvp-preferredSegmentSec"
@@ -4304,7 +4327,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
           className="h-7 w-20 text-xs"
         />
         <span className="text-[11px] text-muted-foreground">
-          4–15 — segments cut near this length; empty packs to the 15s cap
+          {t("vidcfg.preferredSegmentHint")}
         </span>
       </div>
 
@@ -4320,7 +4343,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
           className="rounded border-muted-foreground/40"
         />
         <label htmlFor="gvp-audioTail" className="text-xs">
-          Audio context tail (experimental) — carry the soundtrack-so-far into each continuation
+          {t("vidcfg.audioContextTail")}
         </label>
       </div>
 
@@ -4345,7 +4368,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
           </SelectContent>
         </Select>
         <p className="text-[11px] text-muted-foreground">
-          Both ride a longer overlapping reference; the anchor frame and its instruction differ. The stitch detects the model&apos;s actual behavior either way.
+          {t("vidcfg.overlapAnchorHint")}
         </p>
       </div>
 
@@ -4370,8 +4393,8 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
         </Select>
         <p className="text-[11px] text-muted-foreground">
           {keyframeAnchored
-            ? "Pre-roll modes need a last-frame boundary — switch Overlap anchor to Last frame (or Off) to enable them; keyframe re-enactments have no pixel replay to detect."
-            : "For last-frame overlap: detect where the continuation re-enacts the previous tail and cut cleanly. Best pair is the default stitch."}
+            ? t("vidcfg.smartCutKeyframeNote")
+            : t("vidcfg.smartCutLastFrameNote")}
         </p>
       </div>
 
@@ -4385,7 +4408,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
           <div className="flex items-center gap-2">
             <div className="flex flex-1 flex-col gap-1">
               <Label htmlFor="gvp-smartCutFramesPrev" className="text-[11px] font-normal text-muted-foreground">
-                From previous end
+                {t("vidcfg.fromPreviousEnd")}
               </Label>
               <Input
                 id="gvp-smartCutFramesPrev"
@@ -4403,7 +4426,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
             </div>
             <div className="flex flex-1 flex-col gap-1">
               <Label htmlFor="gvp-smartCutFramesNext" className="text-[11px] font-normal text-muted-foreground">
-                From next start
+                {t("vidcfg.fromNextStart")}
               </Label>
               <Input
                 id="gvp-smartCutFramesNext"
@@ -4421,10 +4444,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
             </div>
           </div>
           <p className="text-[11px] text-muted-foreground">
-            How many frames the matcher compares at each join — the last N of a segment against the first M of the next.
-            Leave blank for the default ({SMART_CUT_WINDOW_DEFAULT}×{SMART_CUT_WINDOW_DEFAULT}). Widen (up to {SMART_CUT_WINDOW_MAX}×{SMART_CUT_WINDOW_MAX})
-            when a continuation re-enacts more than a third of a second of the previous tail — a match outside the window is never
-            found and the join falls back to fixed trims.
+            {t("vidcfg.bestPairWindowHint", { default: SMART_CUT_WINDOW_DEFAULT, max: SMART_CUT_WINDOW_MAX })}
           </p>
         </div>
       )}
@@ -4440,7 +4460,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
             className="rounded border-muted-foreground/40"
           />
           <label htmlFor="gvp-smartCutAudio" className="text-xs">
-            Audio-assisted cut — use voice/SFX resemblance to place the cut (best with No background music)
+            {t("vidcfg.audioAssistedCut")}
           </label>
         </div>
       )}
@@ -4455,7 +4475,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
           className="rounded border-muted-foreground/40"
         />
         <label htmlFor="gvp-planOnly" className="text-xs">
-          Plan only — return the full segment plan without generating video (charged the plan fee only)
+          {t("vidcfg.planOnlyLabel")}
         </label>
       </div>
     </div>
@@ -4489,6 +4509,7 @@ export const EDIT_VIDEO_PRO_MAX_SPAN_FALLBACK = 120
  * audio toggle.
  */
 function EditVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap }: ConfigProps<EditVideoProNodeData> & { nodeId?: string }) {
+  const localizeOption = useLocalizeOptionLabel()
   const t = useT()
   const promptSnippets = useSnippetPool("video", "prompt")
   const currentProvider = data.provider || "seedance-2"
@@ -4516,7 +4537,7 @@ function EditVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           <SelectTrigger aria-label={t("field.provider")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {EVP_PROVIDERS.map((m) => (
-              <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+              <SelectItem key={m.value} value={m.value}>{localizeOption(m.label)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -4584,7 +4605,7 @@ function EditVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           </MappableField>
         </div>
         <p className="text-[10px] text-muted-foreground px-1">
-          Replace span must be at least 4 seconds. Spans longer than ~15s are automatically split into multiple stitched Seedance 2 segments. Maximum span: {EDIT_VIDEO_PRO_MAX_SPAN_FALLBACK}s.
+          {t("vidcfg.replaceSpanHint", { max: EDIT_VIDEO_PRO_MAX_SPAN_FALLBACK })}
         </p>
       </div>
 
@@ -4605,6 +4626,7 @@ function EditVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
 export const EditVideoProConfig = memo(EditVideoProConfigImpl)
 
 export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ExtendVideoData> & { nodeId?: string }) {
+  const localizeOption = useLocalizeOptionLabel()
   const t = useT()
   const promptSnippets = useSnippetPool("video", "prompt")
   // Prompt-only toggle: this panel renders no negative editor (the old preview
@@ -4662,13 +4684,13 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
           <SelectTrigger aria-label={t("field.provider")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {EXTEND_VIDEO_MODELS.map((m) => (
-              <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+              <SelectItem key={m.value} value={m.value}>{localizeOption(m.label)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
       </MappableField>
 
-      <MappableField field="prompt" label={isSeedanceExtend ? "What happens next" : "Prompt"} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+      <MappableField field="prompt" label={isSeedanceExtend ? t("vidcfg.whatHappensNext") : t("node.prompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
         <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
         <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="video" />
         <PromptHelperButton nodeType="extend-video" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
@@ -4685,7 +4707,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
             <TagTextarea
               value={data.prompt || ""}
               onChange={(v) => onUpdate({ prompt: v })}
-              placeholder={isSeedanceExtend ? "What happens next? e.g. the ball keeps rolling until it hits a cup" : "Describe how the video should continue..."}
+              placeholder={isSeedanceExtend ? t("vidcfg.phWhatHappensNext") : t("vidcfg.phDescribeContinue")}
               rows={3}
               nodeRefs={nodeRefs}
               displayMode={variableDisplayMode}
@@ -4757,13 +4779,13 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
               <div className="flex items-center gap-2">
                 <RadioGroupItem value="end" id="extend-mode-end" />
                 <Label htmlFor="extend-mode-end" className="text-xs cursor-pointer">
-                  End (continue forward)
+                  {t("vidcfg.extendEnd")}
                 </Label>
               </div>
               <div className="flex items-center gap-2">
                 <RadioGroupItem value="start" id="extend-mode-start" />
                 <Label htmlFor="extend-mode-start" className="text-xs cursor-pointer">
-                  Start (prepend backwards)
+                  {t("vidcfg.extendStart")}
                 </Label>
               </div>
             </RadioGroup>
@@ -4792,7 +4814,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
               <SelectTrigger aria-label={t("vidcfg.secondsToAdd")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 {seedanceDurations.map((s) => (
-                  <SelectItem key={s} value={String(s)}>{s} seconds</SelectItem>
+                  <SelectItem key={s} value={String(s)}>{t("vidcfg.nSeconds", { n: s })}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -4809,7 +4831,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
                 {seedanceResolutions.map((r) => {
                   const credits = getCachedCredits(buildVideoCreditModelIdentifier("seedance-2-extend", seedanceDuration, undefined, undefined, undefined, r))
                   return (
-                    <SelectItem key={r} value={r}>{credits != null ? `${r} (${creditUnits(credits)} credits)` : r}</SelectItem>
+                    <SelectItem key={r} value={r}>{credits != null ? t("vidcfg.resWithCredits", { res: r, credits: creditUnits(credits) }) : r}</SelectItem>
                   )
                 })}
               </SelectContent>
@@ -4832,8 +4854,8 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
 
       <p className="text-xs text-muted-foreground px-1">
         {isSeedanceExtend
-          ? "Extends ANY connected video: Seedance 2 generates what happens next (sound included) and the result is stitched into one seamless clip."
-          : "Extends a VEO, Runway, or LTX video with a new prompt. Connect an upstream Image to Video or Text to Video node that produces a kieTaskId."}
+          ? t("vidcfg.descSeedanceExtend")
+          : t("vidcfg.descOtherExtend")}
       </p>
 
       <ConnectedCinematographySources consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
@@ -4891,9 +4913,9 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="480p">{`480p (${creditUnits(getCachedCredits("speech-to-video") ?? 4)} credits)`}</SelectItem>
-            <SelectItem value="580p">{`580p (${creditUnits(getCachedCredits("speech-to-video:580p") ?? 6)} credits)`}</SelectItem>
-            <SelectItem value="720p">{`720p (${creditUnits(getCachedCredits("speech-to-video:720p") ?? 8)} credits)`}</SelectItem>
+            <SelectItem value="480p">{t("vidcfg.resWithCredits", { res: "480p", credits: creditUnits(getCachedCredits("speech-to-video") ?? 4) })}</SelectItem>
+            <SelectItem value="580p">{t("vidcfg.resWithCredits", { res: "580p", credits: creditUnits(getCachedCredits("speech-to-video:580p") ?? 6) })}</SelectItem>
+            <SelectItem value="720p">{t("vidcfg.resWithCredits", { res: "720p", credits: creditUnits(getCachedCredits("speech-to-video:720p") ?? 8) })}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -4982,7 +5004,7 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
               placeholder={t("vidcfg.phWhatToAvoid")}
               className="min-h-[60px] text-sm"
             />
-            <PromptLengthCounter value={data.negativePrompt || ""} max={getMaxNegativePromptChars(data.provider as string | undefined)} modelLabel={(data.provider as string | undefined) || "wan-s2v"} noun="negative prompt" />
+            <PromptLengthCounter value={data.negativePrompt || ""} max={getMaxNegativePromptChars(data.provider as string | undefined)} modelLabel={(data.provider as string | undefined) || "wan-s2v"} noun={t("vidcfg.negativePrompt")} />
           </>
         )}
       </MappableField>
@@ -4990,10 +5012,10 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
       {/* Advanced Settings */}
       <button
         type="button"
-        className="text-xs text-muted-foreground hover:text-foreground transition-colors text-left"
+        className="text-xs text-muted-foreground hover:text-foreground transition-colors text-start"
         onClick={() => setShowAdvanced(!showAdvanced)}
       >
-        {showAdvanced ? "Hide" : "Show"} Advanced Settings
+        {showAdvanced ? t("addnode.hide") : t("addnode.show")} {t("vidcfg.advancedSettings")}
       </button>
 
       {showAdvanced && (
@@ -5089,7 +5111,7 @@ export function FaceSwapConfig({ data, onUpdate, sources, edges, nodeId }: Confi
       <p className="text-xs text-muted-foreground px-1">
         {t("vidcfg.descFaceSwap1")}
         {t("vidcfg.descFaceSwap2")}
-        Powered by Roop (Replicate) — {creditUnits(getCachedCredits("roop-face-swap") ?? 16)} {creditUnitLabel(t("credits.unitShort"))} per run.
+        {t("vidcfg.poweredByRoop", { credits: creditUnits(getCachedCredits("roop-face-swap") ?? 16), unit: creditUnitLabel(t("credits.unitShort")) })}
       </p>
 
       {/* Unified injected-references list — face-swap doesn't have a prompt to
@@ -5251,7 +5273,7 @@ function VideoRetakeConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
         <Select value="1080p" disabled>
           <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="1080p">1080p (locked for retake)</SelectItem>
+            <SelectItem value="1080p">{t("vidcfg.res1080pLockedRetake")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -5281,7 +5303,7 @@ function VideoRetakeConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
       </div>
 
       <p className="text-xs text-muted-foreground px-1">
-        Re-renders a segment of an upstream video using LTX 2.3 Pro. Connect a video source to the pink handle, then choose the segment to replace. Minimum duration is 2 seconds.
+        {t("vidcfg.descVideoRetake")}
       </p>
 
       <ConnectedCinematographySources consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
@@ -5371,7 +5393,7 @@ export function VideoAnalysisConfig({ data, onUpdate }: ConfigProps<VideoAnalysi
         setProbeError(undefined)
       } catch (err) {
         if (cancelled) return
-        setProbeError(err instanceof Error ? err.message : "Could not read this video")
+        setProbeError(err instanceof Error ? err.message : t("vidcfg.probeReadError"))
       } finally {
         if (!cancelled) setProbing(false)
       }
@@ -5421,8 +5443,7 @@ export function VideoAnalysisConfig({ data, onUpdate }: ConfigProps<VideoAnalysi
           </SelectContent>
         </Select>
         <p className="text-[11px] text-muted-foreground">
-          The video is analyzed several times. "Choose" keeps the strongest pass as-is; "Combine" also folds in
-          details from the other passes after verifying them against the footage (slightly slower, most complete).
+          {t("vidcfg.resultSelectionHint")}
         </p>
       </div>
 
@@ -5438,13 +5459,11 @@ export function VideoAnalysisConfig({ data, onUpdate }: ConfigProps<VideoAnalysi
             onCheckedChange={(v) => onUpdate({ variations: v === true ? true : undefined })}
           />
           <Label htmlFor="video-analysis-variations" className="text-xs cursor-pointer font-normal">
-            Cast variations — detect alternate looks per entity
+            {t("vidcfg.castVariations")}
           </Label>
         </div>
         <p className="text-[11px] text-muted-foreground">
-          Also detect per-entity appearance variations (dream, flashback, disguise, costume…) and bind them to the
-          scenes where each look is active. Note: on single-pass tiers this can reduce how many entities get
-          extracted — leave off unless you need the looks.
+          {t("vidcfg.castVariationsHint")}
         </p>
       </div>
 
@@ -5462,7 +5481,7 @@ export function VideoAnalysisConfig({ data, onUpdate }: ConfigProps<VideoAnalysi
             onCheckedChange={(v) => onUpdate({ translateSpeechToEnglish: v === true ? true : undefined })}
           />
           <Label htmlFor="video-analysis-translate-speech" className="text-xs cursor-pointer font-normal">
-            Speech — what's said or sung
+            {t("vidcfg.translateSpeech")}
           </Label>
         </div>
         <div className="flex items-center gap-2">
@@ -5472,14 +5491,11 @@ export function VideoAnalysisConfig({ data, onUpdate }: ConfigProps<VideoAnalysi
             onCheckedChange={(v) => onUpdate({ translateOnScreenTextToEnglish: v === true ? true : undefined })}
           />
           <Label htmlFor="video-analysis-translate-onscreen" className="text-xs cursor-pointer font-normal">
-            On-screen text — signs, captions, titles
+            {t("vidcfg.translateOnScreenText")}
           </Label>
         </div>
         <p className="text-[11px] text-muted-foreground">
-          Off, the analysis keeps the video's original language word-for-word. Tick them independently — English
-          speech over a street whose signs stay in their own script, for example. Each choice carries into a
-          regenerated video: what it says, and what it shows. Brand, product, and place names keep their original
-          form either way.
+          {t("vidcfg.translateHint")}
         </p>
       </div>
 
@@ -5495,7 +5511,7 @@ export function VideoAnalysisConfig({ data, onUpdate }: ConfigProps<VideoAnalysi
         />
         {probed ? (
           <p className="text-[11px] text-muted-foreground">
-            Duration {formatProbedDuration(probed.durationSec)} — pricing bucket set from this length.
+            {t("vidcfg.probedDuration", { duration: formatProbedDuration(probed.durationSec) })}
           </p>
         ) : probing ? (
           <p className="text-[11px] text-muted-foreground">{t("vidcfg.checkingVideo")}</p>
@@ -5548,6 +5564,7 @@ function auditCreditRange(auto: boolean): { readonly min: number; readonly max: 
  * whole job is to state it honestly (and the node itself repeats it on canvas).
  */
 export function VideoAuditConfig({ sources }: ConfigProps<VideoAuditNodeData>) {
+  const t = useT()
   const analysisSource = sources.find((s) => s.targetHandle === "analysis")
   const videoSource = sources.find((s) => s.targetHandle === "video")
   const wiredRange = auditCreditRange(false)
@@ -5561,24 +5578,23 @@ export function VideoAuditConfig({ sources }: ConfigProps<VideoAuditNodeData>) {
         }`}
       >
         <p className="text-xs font-medium">
-          {analysisSource ? `Auditing the analysis from “${analysisSource.label}”` : "No analysis wired"}
+          {analysisSource ? t("vidcfg.auditingAnalysisFrom", { name: analysisSource.label }) : t("vidcfg.noAnalysisWired")}
         </p>
         <p className="text-[11px] text-muted-foreground leading-snug">
           {analysisSource
-            ? `The audit re-watches the clip against that analysis and applies only video-verified corrections, disclosing every change. ${creditUnits(wiredRange.min)}–${creditUnits(wiredRange.max)} credits by video length.`
-            : `Wire a Video Analysis (or another AI Audit) into the Analysis handle to audit it. Left unwired, this node runs its own fast analysis first — the same audit, but ${creditUnits(autoRange.min)}–${creditUnits(autoRange.max)} credits by video length instead of ${creditUnits(wiredRange.min)}–${creditUnits(wiredRange.max)}.`}
+            ? t("vidcfg.auditWiredDesc", { min: creditUnits(wiredRange.min), max: creditUnits(wiredRange.max) })
+            : t("vidcfg.auditUnwiredDesc", { autoMin: creditUnits(autoRange.min), autoMax: creditUnits(autoRange.max), min: creditUnits(wiredRange.min), max: creditUnits(wiredRange.max) })}
         </p>
       </div>
 
       {!videoSource && (
         <p className="text-[11px] text-amber-600 dark:text-amber-500 leading-snug">
-          Connect a video to the Video handle — the audit re-watches the footage itself, so it can&apos;t run without it.
+          {t("vidcfg.auditConnectVideo")}
         </p>
       )}
 
       <p className="text-xs text-muted-foreground">
-        Re-watches a clip (max 10 min) against its analysis and returns the corrected analysis plus a report of what was
-        fixed, what the guards refused, and what to watch. No settings — the audit follows the footage.
+        {t("vidcfg.descVideoAudit")}
       </p>
     </div>
   )

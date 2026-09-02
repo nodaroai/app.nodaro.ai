@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { useState } from "react"
 import { ChevronDown, ChevronRight } from "lucide-react"
 import { Label } from "@/components/ui/label"
@@ -48,6 +49,7 @@ function PromptAffixSectionInner({
   nodeData: Record<string, unknown>
   updateNodeData: (id: string, data: Record<string, unknown>) => void
 }) {
+  const t = useT()
   const prefix = readText(nodeData, PROMPT_PREFIX_KEY)
   const suffix = readText(nodeData, PROMPT_SUFFIX_KEY)
   const setCount = (prefix.trim() ? 1 : 0) + (suffix.trim() ? 1 : 0)
@@ -65,44 +67,43 @@ function PromptAffixSectionInner({
           data-testid="prompt-affix-toggle"
           aria-expanded={expanded}
           onClick={() => setExpanded((v) => !v)}
-          className="flex w-full items-center gap-1.5 text-left"
+          className="flex w-full items-center gap-1.5 text-start"
         >
           {expanded ? <ChevronDown className="w-3 h-3 text-muted-foreground" /> : <ChevronRight className="w-3 h-3 text-muted-foreground" />}
           <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B] cursor-pointer">
-            Pre &amp; post text
+            {t("cfgshared.promptAffixTitle")}
           </Label>
           {setCount > 0 && (
             <span
               data-testid="prompt-affix-badge"
-              className="ml-auto rounded-full bg-teal-500/15 px-1.5 py-0.5 text-[10px] font-medium text-teal-700 dark:text-teal-300"
+              className="ms-auto rounded-full bg-teal-500/15 px-1.5 py-0.5 text-[10px] font-medium text-teal-700 dark:text-teal-300"
             >
-              {setCount} set
+              {t("cfgshared.promptAffixSetCount", { count: setCount })}
             </span>
           )}
         </button>
         {expanded && (
           <div className="space-y-2">
             <div className="space-y-1">
-              <Label className="text-xs">Before the prompt</Label>
+              <Label className="text-xs">{t("cfgshared.promptAffixBefore")}</Label>
               <PromptEditor
                 value={prefix}
                 onChange={(v) => updateNodeData(nodeId, { [PROMPT_PREFIX_KEY]: v })}
-                placeholder="Text placed before the prompt at run time — @ references, { variables, / snippets"
+                placeholder={t("cfgshared.promptAffixBeforePh")}
                 {...editorProps}
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">After the prompt</Label>
+              <Label className="text-xs">{t("cfgshared.promptAffixAfter")}</Label>
               <PromptEditor
                 value={suffix}
                 onChange={(v) => updateNodeData(nodeId, { [PROMPT_SUFFIX_KEY]: v })}
-                placeholder="Text placed after the prompt at run time — @ references, { variables, / snippets"
+                placeholder={t("cfgshared.promptAffixAfterPh")}
                 {...editorProps}
               />
             </div>
             <p className="text-[10px] text-muted-foreground">
-              Wrapped around the prompt at run time — including a wired or fan-out prompt — and shown in the
-              Final view. Not visible on the node; captured by presets.
+              {t("cfgshared.promptAffixHint")}
             </p>
           </div>
         )}

@@ -14,6 +14,7 @@
 // There is NO speech / voice / audio / engine here — it's avatar-referenced
 // text-to-video (Seedance).
 
+import { useLocalizeOptionLabel } from "@/lib/i18n/labels"
 import {
   Select,
   SelectContent,
@@ -38,6 +39,7 @@ import { CINEMATIC_PROMPT_MAX } from "@nodaro/shared"
 import { PromptFieldFinalView, PromptFieldModeToggle } from "./prompt-field-final-view"
 import { useFinalPromptSegments } from "./use-final-prompt-segments"
 import { usePromptFieldMode } from "@/hooks/use-prompt-field-mode"
+import { useT } from "@/lib/i18n"
 import {
   CINEMATIC_ASPECT_RATIO_OPTIONS,
   CINEMATIC_RESOLUTION_OPTIONS,
@@ -58,6 +60,8 @@ export function CinematicAvatarConfig({
   edges,
   nodeId,
 }: ConfigProps<CinematicAvatarData> & { nodeId?: string }) {
+  const localizeOption = useLocalizeOptionLabel()
+  const t = useT()
   const looks = data.avatarLooks ?? []
   const lookNames = data.avatarLookNames ?? []
   const autoDuration = data.autoDuration ?? false
@@ -81,9 +85,9 @@ export function CinematicAvatarConfig({
   // so the panel reflects the canvas. Resolved into HeyGen's `references` at
   // execute time.
   const REFERENCE_HANDLES: ReadonlyArray<{ handle: string; label: string }> = [
-    { handle: "ref-video", label: "Video ref" },
-    { handle: "ref-audio", label: "Audio ref" },
-    { handle: "ref-image", label: "Image ref" },
+    { handle: "ref-video", label: t("cfgext.cinAvVideoRef") },
+    { handle: "ref-audio", label: t("cfgext.cinAvAudioRef") },
+    { handle: "ref-image", label: t("cfgext.cinAvImageRef") },
   ]
   const wiredReferences = REFERENCE_HANDLES.map((ref) => ({
     ...ref,
@@ -124,7 +128,7 @@ export function CinematicAvatarConfig({
       {/* ── Prompt (generative — wizard + FieldMappings OK) ─────────────────── */}
       <MappableField
         field="prompt"
-        label="Prompt"
+        label={t("node.prompt")}
         sources={sources}
         fieldMappings={fieldMappings}
         onMapField={onMapField}
@@ -145,7 +149,7 @@ export function CinematicAvatarConfig({
           <PromptFieldFinalView
             segments={finalPrompt.promptSegments}
             plainText={finalPrompt.promptText}
-            placeholder="Final prompt preview — node has no prompt yet"
+            placeholder={t("imgcfg.promptPreviewEmpty")}
             minHeightRem={4 * 1.5}
           />
         ) : (
@@ -153,7 +157,7 @@ export function CinematicAvatarConfig({
             <TagTextarea
               value={data.prompt ?? ""}
               onChange={(v) => onUpdate({ prompt: v.slice(0, CINEMATIC_PROMPT_MAX) })}
-              placeholder="Describe the cinematic scene the avatar should perform…"
+              placeholder={t("cfgext.cinAvPhPrompt")}
               rows={4}
               nodeRefs={nodeRefs}
               displayMode={variableDisplayMode}
@@ -161,7 +165,7 @@ export function CinematicAvatarConfig({
               snippets={promptSnippets}
             />
             {(data.prompt?.length ?? 0) > 0 && (
-              <span className="text-[10px] text-muted-foreground text-right block">
+              <span className="text-[10px] text-muted-foreground text-end block">
                 {data.prompt?.length ?? 0} / {CINEMATIC_PROMPT_MAX}
               </span>
             )}
@@ -172,9 +176,9 @@ export function CinematicAvatarConfig({
       {/* ── Avatar looks (multi-select 1–3) ─────────────────────────────────── */}
       <div className="flex flex-col gap-1.5">
         <Label className="text-xs text-muted-foreground">
-          Avatar Looks
-          <span className="ml-1.5 text-muted-foreground/60 font-normal">
-            (pick 1–{MAX_LOOKS})
+          {t("cfgext.cinAvAvatarLooks")}
+          <span className="ms-1.5 text-muted-foreground/60 font-normal">
+            {t("cfgext.cinAvPickRange", { max: MAX_LOOKS })}
           </span>
         </Label>
 
@@ -189,7 +193,7 @@ export function CinematicAvatarConfig({
                 {lookNames[i] ?? id}
                 <button
                   type="button"
-                  aria-label={`Remove ${lookNames[i] ?? id}`}
+                  aria-label={t("cfgshared.removeModel", { name: lookNames[i] ?? id })}
                   onClick={() => handleRemoveLook(id)}
                   className="hover:text-[#ff0073]/70"
                 >
@@ -218,16 +222,16 @@ export function CinematicAvatarConfig({
             onCheckedChange={(v) => onUpdate({ autoDuration: v === true })}
           />
           <label htmlFor="cinematic-auto-duration" className="text-xs cursor-pointer">
-            Auto duration (let HeyGen decide)
+            {t("cfgext.cinAvAutoDuration")}
           </label>
         </div>
 
         {!autoDuration && (
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
-              <Label className="text-xs text-muted-foreground">Duration</Label>
+              <Label className="text-xs text-muted-foreground">{t("field.duration")}</Label>
               <span className="text-xs text-muted-foreground tabular-nums">
-                {data.duration ?? 10}s
+                {t("proccfg.s2", { n: data.duration ?? 10 })}
               </span>
             </div>
             <Slider
@@ -239,8 +243,8 @@ export function CinematicAvatarConfig({
               className="w-full"
             />
             <div className="flex justify-between text-[9px] text-muted-foreground/60">
-              <span>4s</span>
-              <span>15s</span>
+              <span>{t("proccfg.s2", { n: 4 })}</span>
+              <span>{t("proccfg.s2", { n: 15 })}</span>
             </div>
           </div>
         )}
@@ -248,7 +252,7 @@ export function CinematicAvatarConfig({
 
       {/* ── Aspect Ratio ────────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-1.5">
-        <Label className="text-xs text-muted-foreground">Aspect Ratio</Label>
+        <Label className="text-xs text-muted-foreground">{t("field.aspectRatio")}</Label>
         <Select
           value={data.aspectRatio ?? "16:9"}
           onValueChange={(v) => onUpdate({ aspectRatio: v as CinematicAvatarData["aspectRatio"] })}
@@ -256,7 +260,7 @@ export function CinematicAvatarConfig({
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             {CINEMATIC_ASPECT_RATIO_OPTIONS.map((ar) => (
-              <SelectItem key={ar.value} value={ar.value}>{ar.label}</SelectItem>
+              <SelectItem key={ar.value} value={ar.value}>{localizeOption(ar.label)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -264,7 +268,7 @@ export function CinematicAvatarConfig({
 
       {/* ── Resolution ──────────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-1.5">
-        <Label className="text-xs text-muted-foreground">Resolution</Label>
+        <Label className="text-xs text-muted-foreground">{t("field.resolution")}</Label>
         <Select
           value={data.resolution ?? "720p"}
           onValueChange={(v) => onUpdate({ resolution: v as CinematicAvatarData["resolution"] })}
@@ -272,7 +276,7 @@ export function CinematicAvatarConfig({
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             {CINEMATIC_RESOLUTION_OPTIONS.map((r) => (
-              <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+              <SelectItem key={r.value} value={r.value}>{localizeOption(r.label)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -286,15 +290,15 @@ export function CinematicAvatarConfig({
           onCheckedChange={(v) => onUpdate({ enhancePrompt: v === true })}
         />
         <label htmlFor="cinematic-enhance-prompt" className="text-xs cursor-pointer">
-          Enhance prompt
+          {t("cfgext.cinAvEnhancePrompt")}
         </label>
       </div>
 
       {/* ── References (read-only — wired on the node) ──────────────────────── */}
       <div className="flex flex-col gap-1.5">
         <Label className="text-xs text-muted-foreground">
-          References
-          <span className="ml-1.5 text-muted-foreground/60 font-normal">(optional, wired on node)</span>
+          {t("cfgext.cinAvReferences")}
+          <span className="ms-1.5 text-muted-foreground/60 font-normal">{t("cfgext.cinAvRefsOptional")}</span>
         </Label>
         {hasWiredReferences ? (
           <div className="flex flex-col gap-1">
@@ -306,7 +310,7 @@ export function CinematicAvatarConfig({
                   className="flex items-center justify-between rounded-md border border-border/60 bg-muted/20 px-2 py-1 text-[11px]"
                 >
                   <span className="text-muted-foreground">{r.label}</span>
-                  <span className="truncate text-foreground/80 max-w-[140px] text-right">
+                  <span className="truncate text-foreground/80 max-w-[140px] text-end">
                     {r.source?.label}
                   </span>
                 </div>
@@ -314,8 +318,7 @@ export function CinematicAvatarConfig({
           </div>
         ) : (
           <p className="text-[10.5px] text-muted-foreground/60">
-            Wire a video / audio / image producer to the node&apos;s reference handles to guide
-            generation.
+            {t("cfgext.cinAvWireRefsHint")}
           </p>
         )}
       </div>

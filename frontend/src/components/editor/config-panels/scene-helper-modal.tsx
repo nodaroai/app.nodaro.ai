@@ -20,6 +20,7 @@ import {
 import { creditUnits } from "@/lib/credit-units"
 import type { SceneHelperState } from "@/hooks/use-scene-helper"
 import type { SceneNodeFrontendData } from "@/types/nodes"
+import { useT, tx } from "@/lib/i18n"
 
 /**
  * §6.11 Scene-Context helper result modal.
@@ -43,20 +44,23 @@ interface Props {
 // as `Record<SceneHelperName, …>` so adding a new helper to
 // `SCENE_HELPER_NAMES` in @nodaro/shared raises a TS error here until a
 // title is provided.
-const TITLE_MAP: Record<SceneHelperName, string> = {
-  audit_prompt: "Audit Prompt",
-  improve_prompt: "Improve Prompt",
-  generate_motion: "Generate Motion",
-  optimize_for_model: "Optimize for Model",
-  add_broll: "Add B-Roll",
-  bridge_to_next_scene: "Bridge to Next Scene",
-  anchor_scene_style: "Anchor Scene Style",
-  audit_images: "Audit Images",
-  fix_continuity: "Fix Continuity",
-  validate_match_cut: "Validate Match Cut",
+function TITLE_MAP(): Record<SceneHelperName, string> {
+  return {
+  audit_prompt: tx("cfgext.shbAuditPrompt"),
+  improve_prompt: tx("cfgext.shbImprovePrompt"),
+  generate_motion: tx("cfgext.shbGenerateMotion"),
+  optimize_for_model: tx("cfgext.shbOptimizeForModel"),
+  add_broll: tx("cfgext.shbAddBRoll"),
+  bridge_to_next_scene: tx("cfgext.shmBridgeToNextScene"),
+  anchor_scene_style: tx("cfgext.shmAnchorSceneStyle"),
+  audit_images: tx("cfgext.shbAuditImages"),
+  fix_continuity: tx("cfgext.shbFixContinuity"),
+  validate_match_cut: tx("cfgext.shbValidateMatchCut"),
+}
 }
 
 export function SceneHelperModal({ state, data, onAccept, onReject }: Props) {
+  const t = useT()
   if (state.status === "idle") return null
 
   const helperName = state.name
@@ -64,11 +68,11 @@ export function SceneHelperModal({ state, data, onAccept, onReject }: Props) {
     <Dialog open onOpenChange={(open) => !open && onReject()}>
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{TITLE_MAP[helperName] ?? helperName}</DialogTitle>
+          <DialogTitle>{TITLE_MAP()[helperName] ?? helperName}</DialogTitle>
           <DialogDescription>
-            {state.status === "loading" && "Running…"}
-            {state.status === "error" && `Failed: ${state.message}`}
-            {state.status === "ready" && "Review the result, then Accept or Reject."}
+            {state.status === "loading" && t("cfgext.shmRunning")}
+            {state.status === "error" && t("cfgext.shmFailedWithMessage", { message: state.message })}
+            {state.status === "ready" && t("cfgext.shmReviewResult")}
           </DialogDescription>
         </DialogHeader>
 
@@ -84,7 +88,7 @@ export function SceneHelperModal({ state, data, onAccept, onReject }: Props) {
         {state.status === "error" && (
           <DialogFooter className="mt-4">
             <Button variant="outline" onClick={onReject}>
-              Close
+              {t("common.close")}
             </Button>
           </DialogFooter>
         )}
@@ -152,10 +156,11 @@ function SceneHelperResultBody(props: {
 // ─── 6.11.2 Audit Prompt — read-only ────────────────────────────────────────
 function AuditPromptBody(props: { result: AuditPromptResult; onReject: () => void }) {
   const { result: audit, onReject } = props
+  const t = useT()
   return (
     <div className="space-y-3">
       <p className="text-sm font-medium">
-        {audit.ok ? "No issues found." : `${audit.issues_per_shot.length} issue(s)`}
+        {audit.ok ? t("cfgext.shmNoIssuesFound") : t("cfgext.shmIssueCount", { count: audit.issues_per_shot.length })}
       </p>
       {audit.issues_per_shot.map((issue, idx) => (
         <div key={idx} className="rounded border border-zinc-200 p-2 text-sm">
@@ -163,7 +168,7 @@ function AuditPromptBody(props: { result: AuditPromptResult; onReject: () => voi
             {issue.shot_id} · {issue.severity}
           </div>
           <div className="text-zinc-600 mt-1">{issue.message}</div>
-          <div className="text-zinc-500 mt-1 italic">Suggested: {issue.suggested_fix}</div>
+          <div className="text-zinc-500 mt-1 italic">{t("cfgext.shmSuggested", { fix: issue.suggested_fix })}</div>
         </div>
       ))}
       {audit.scene_level_notes && (
@@ -171,7 +176,7 @@ function AuditPromptBody(props: { result: AuditPromptResult; onReject: () => voi
       )}
       <DialogFooter className="mt-4">
         <Button variant="outline" onClick={onReject}>
-          Close
+          {t("common.close")}
         </Button>
       </DialogFooter>
     </div>
@@ -186,6 +191,7 @@ function PerShotPatchBody(props: {
   onReject: () => void
 }) {
   const { result, data, onAccept, onReject } = props
+  const t = useT()
   type ShotUpdate = {
     shot_id: string
     action?: string
@@ -215,21 +221,23 @@ function PerShotPatchBody(props: {
       {updates.map((s, idx) => (
         <div key={idx} className="rounded border border-zinc-200 p-2 text-sm">
           <div className="font-medium">{s.shot_id}</div>
-          {s.action !== undefined && <div className="text-zinc-700 mt-1">action: {s.action}</div>}
+          {s.action !== undefined && (
+            <div className="text-zinc-700 mt-1">{t("cfgext.shmFieldAction", { value: s.action })}</div>
+          )}
           {s.motion_prompt !== undefined && (
-            <div className="text-zinc-700 mt-1">motion: {s.motion_prompt}</div>
+            <div className="text-zinc-700 mt-1">{t("cfgext.shmFieldMotion", { value: s.motion_prompt })}</div>
           )}
           {s.dialogue_line !== undefined && (
-            <div className="text-zinc-700 mt-1">dialogue: {s.dialogue_line}</div>
+            <div className="text-zinc-700 mt-1">{t("cfgext.shmFieldDialogue", { value: s.dialogue_line })}</div>
           )}
           {s.reasoning && <div className="text-xs text-zinc-500 italic mt-1">{s.reasoning}</div>}
         </div>
       ))}
       <DialogFooter className="mt-4">
         <Button variant="outline" onClick={onReject}>
-          Reject
+          {t("cfgext.shmReject")}
         </Button>
-        <Button onClick={applyPatch}>Apply to all</Button>
+        <Button onClick={applyPatch}>{t("cfgext.shmApplyToAll")}</Button>
       </DialogFooter>
     </div>
   )
@@ -243,6 +251,7 @@ function AddBRollBody(props: {
   onReject: () => void
 }) {
   const { result, data, onAccept, onReject } = props
+  const t = useT()
   const applyAll = () => {
     // Build insertion map: insert_after_shot_id → candidates[]
     const insertions = new Map<string, AddBRollResult["candidates"]>()
@@ -269,13 +278,19 @@ function AddBRollBody(props: {
   return (
     <div className="space-y-3">
       <p className="text-sm">
-        Adds {result.candidates.length} insert(s) · +{result.scene_duration_delta.toFixed(1)}s
+        {t("cfgext.shmAddsInserts", {
+          count: result.candidates.length,
+          delta: result.scene_duration_delta.toFixed(1),
+        })}
       </p>
       {result.candidates.map((c, idx) => (
         <div key={idx} className="rounded border border-zinc-200 p-2 text-sm">
           <div className="font-medium">
-            After {c.proposed_insert_after_shot_id} · {c.insert_kind} ·{" "}
-            {c.shot.duration_seconds.toFixed(1)}s
+            {t("cfgext.shmAfterShot", {
+              shot: c.proposed_insert_after_shot_id,
+              kind: c.insert_kind,
+              duration: c.shot.duration_seconds.toFixed(1),
+            })}
           </div>
           <div className="text-zinc-700 mt-1">{c.shot.action}</div>
           <div className="text-xs text-zinc-500 italic mt-1">{c.rationale}</div>
@@ -283,9 +298,9 @@ function AddBRollBody(props: {
       ))}
       <DialogFooter className="mt-4">
         <Button variant="outline" onClick={onReject}>
-          Reject
+          {t("cfgext.shmReject")}
         </Button>
-        <Button onClick={applyAll}>Apply all</Button>
+        <Button onClick={applyAll}>{t("cfgext.shmApplyAll")}</Button>
       </DialogFooter>
     </div>
   )
@@ -299,6 +314,7 @@ function BridgeBody(props: {
   onReject: () => void
 }) {
   const { result, data, onAccept, onReject } = props
+  const t = useT()
   const applyPatch = () => {
     const next: ShotSpec[] = data.shots.map((s) =>
       s.shot_id === result.target_shot_id
@@ -310,15 +326,15 @@ function BridgeBody(props: {
   return (
     <div className="space-y-3">
       <div className="rounded border border-zinc-200 p-2 text-sm">
-        <div className="font-medium">{result.target_shot_id} bridge</div>
+        <div className="font-medium">{t("cfgext.shmBridgeLabel", { shot: result.target_shot_id })}</div>
         <div className="text-zinc-700 mt-1">{result.bridge_image_prompt}</div>
         <div className="text-xs text-zinc-500 italic mt-1">{result.reasoning}</div>
       </div>
       <DialogFooter className="mt-4">
         <Button variant="outline" onClick={onReject}>
-          Reject
+          {t("cfgext.shmReject")}
         </Button>
-        <Button onClick={applyPatch}>Apply</Button>
+        <Button onClick={applyPatch}>{t("preset.apply")}</Button>
       </DialogFooter>
     </div>
   )
@@ -331,6 +347,7 @@ function AnchorBody(props: {
   onReject: () => void
 }) {
   const { result, onAccept, onReject } = props
+  const t = useT()
   const applyPatch = () => {
     // SceneNodeDataSchema.scene_anchor_keyframe is AssetRefSchema.nullable() —
     // { asset_id: uuid, url: string }. Matches the helper's returned fields
@@ -344,17 +361,17 @@ function AnchorBody(props: {
       <div className="aspect-video bg-zinc-100 rounded overflow-hidden">
         <img
           src={result.asset_url}
-          alt="Scene anchor keyframe"
+          alt={t("cfgext.shmSceneAnchorAlt")}
           className="w-full h-full object-cover"
         />
       </div>
       <div className="text-xs text-zinc-500 italic">{result.anchor_prompt}</div>
-      <div className="text-xs text-zinc-500">{creditUnits(result.credits_spent)} credits spent</div>
+      <div className="text-xs text-zinc-500">{t("cfgext.shmCreditsSpent", { credits: creditUnits(result.credits_spent) })}</div>
       <DialogFooter className="mt-4">
         <Button variant="outline" onClick={onReject}>
-          Reject
+          {t("cfgext.shmReject")}
         </Button>
-        <Button onClick={applyPatch}>Use this anchor</Button>
+        <Button onClick={applyPatch}>{t("cfgext.shmUseThisAnchor")}</Button>
       </DialogFooter>
     </div>
   )
@@ -381,6 +398,7 @@ function severityBadgeVariant(
 
 /** Renders a single ImageCriticIssue as a compact chip + message line. */
 function ImageCriticIssueLine({ issue }: { issue: ImageCriticIssue }) {
+  const t = useT()
   return (
     <div className="flex items-start gap-2 text-xs">
       <Badge variant={severityBadgeVariant(issue.severity)} className="shrink-0">
@@ -390,7 +408,7 @@ function ImageCriticIssueLine({ issue }: { issue: ImageCriticIssue }) {
         <span className="font-medium">{issue.type.replace(/_/g, " ")}</span>
         <span className="text-zinc-600">{issue.message}</span>
         {issue.suggested_fix && (
-          <span className="text-zinc-500 italic">Fix: {issue.suggested_fix}</span>
+          <span className="text-zinc-500 italic">{t("cfgext.sceneCriticFix", { fix: issue.suggested_fix })}</span>
         )}
       </div>
     </div>
@@ -409,7 +427,7 @@ function ImageCriticIssueLine({ issue }: { issue: ImageCriticIssue }) {
 function KeyframeThumbnail({
   title,
   url,
-  emptyLabel = "no keyframe",
+  emptyLabel,
   children,
 }: {
   title: ReactNode
@@ -417,6 +435,8 @@ function KeyframeThumbnail({
   emptyLabel?: string
   children?: ReactNode
 }) {
+  const t = useT()
+  const emptyText = emptyLabel ?? t("cfgext.shmNoKeyframe")
   return (
     <Card className="overflow-hidden">
       <CardHeader className="pb-2">
@@ -427,7 +447,7 @@ function KeyframeThumbnail({
           <div className="aspect-video bg-zinc-100 rounded overflow-hidden">
             <CachedImage
               src={url}
-              alt={typeof title === "string" ? title : "keyframe"}
+              alt={typeof title === "string" ? title : t("cfgext.shmKeyframeAlt")}
               className="w-full h-full object-cover"
               thumbnail
               thumbnailWidth={192}
@@ -435,7 +455,7 @@ function KeyframeThumbnail({
           </div>
         ) : (
           <div className="aspect-video bg-zinc-100 rounded flex items-center justify-center text-xs text-zinc-400">
-            {emptyLabel}
+            {emptyText}
           </div>
         )}
         {children}
@@ -460,9 +480,10 @@ function CriticVerdictBlock({
   notes?: string
   emptyFallback: string
 }) {
+  const t = useT()
   return (
     <div className="rounded border border-zinc-200 p-2 space-y-1.5">
-      <p className="text-xs font-medium">Critic verdict</p>
+      <p className="text-xs font-medium">{t("cfgext.shmCriticVerdict")}</p>
       {issues.length === 0 ? (
         <p className="text-xs text-zinc-500 italic">{notes || emptyFallback}</p>
       ) : (
@@ -486,13 +507,14 @@ function AuditImagesBody(props: {
   onReject: () => void
 }) {
   const { result, data, onReject } = props
+  const t = useT()
   // Cross-reference each entry to its shot for the keyframe thumbnail. Map
   // lookup is O(n*m) here but the scene is bounded to ≤8 shots.
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <Badge variant={result.ok ? "outline" : "destructive"}>
-          {result.ok ? "All keyframes pass" : "Issues found"}
+          {result.ok ? t("cfgext.shmAllKeyframesPass") : t("cfgext.shmIssuesFound")}
         </Badge>
         <p className="text-xs text-zinc-500">{result.summary}</p>
       </div>
@@ -503,10 +525,10 @@ function AuditImagesBody(props: {
             <span className="flex items-center justify-between gap-2">
               <span>{entry.shot_id}</span>
               {entry.skipped ? (
-                <Badge variant="outline">no keyframe</Badge>
+                <Badge variant="outline">{t("cfgext.shmNoKeyframe")}</Badge>
               ) : (
                 <Badge variant={entry.ok ? "outline" : "destructive"}>
-                  {entry.ok ? "pass" : "fail"}
+                  {entry.ok ? t("cfgext.shmPass") : t("cfgext.shmFail")}
                 </Badge>
               )}
             </span>
@@ -515,13 +537,13 @@ function AuditImagesBody(props: {
             <KeyframeThumbnail key={entry.shot_id} title={title} url={shot?.keyframe_url}>
               {entry.skipped ? (
                 <p className="text-xs text-zinc-500 italic">
-                  Skipped — generate a keyframe for this shot first.
+                  {t("cfgext.shmSkippedNoKeyframe")}
                 </p>
               ) : entry.verdict ? (
                 <div className="space-y-1.5">
                   {entry.verdict.issues.length === 0 ? (
                     <p className="text-xs text-zinc-500 italic">
-                      {entry.verdict.notes || "No issues."}
+                      {entry.verdict.notes || t("cfgext.shmNoIssues")}
                     </p>
                   ) : (
                     entry.verdict.issues.map((issue, idx) => (
@@ -536,7 +558,7 @@ function AuditImagesBody(props: {
       </div>
       <DialogFooter className="mt-4">
         <Button variant="outline" onClick={onReject}>
-          Close
+          {t("common.close")}
         </Button>
       </DialogFooter>
     </div>
@@ -551,6 +573,7 @@ function FixContinuityBody(props: {
   onReject: () => void
 }) {
   const { result, data, onAccept, onReject } = props
+  const t = useT()
   const targetIdx = data.shots.findIndex((s) => s.shot_id === result.target_shot_id)
   const targetShot = targetIdx >= 0 ? data.shots[targetIdx] : null
   const priorShot = targetIdx > 0 ? data.shots[targetIdx - 1] : null
@@ -579,25 +602,25 @@ function FixContinuityBody(props: {
   return (
     <div className="space-y-3">
       <Badge variant={regenerated ? "default" : "outline"}>
-        {regenerated ? "Regenerated keyframe" : "No action needed"}
+        {regenerated ? t("cfgext.shmRegeneratedKeyframe") : t("cfgext.shmNoActionNeeded")}
       </Badge>
       <div className="grid grid-cols-2 gap-2">
         <KeyframeThumbnail
           title={
             <>
-              Prior last frame
-              {priorShot && <span className="ml-1 text-zinc-500">({priorShot.shot_id})</span>}
+              {t("cfgext.shmPriorLastFrame")}
+              {priorShot && <span className="ms-1 text-zinc-500">({priorShot.shot_id})</span>}
             </>
           }
           url={priorShot?.last_frame_url}
-          emptyLabel="no last_frame"
+          emptyLabel={t("cfgext.shmNoLastFrame")}
         />
         <KeyframeThumbnail
           title={
             <>
-              {regenerated ? "Regenerated keyframe" : "Target keyframe"}
+              {regenerated ? t("cfgext.shmRegeneratedKeyframe") : t("cfgext.shmTargetKeyframe")}
               {targetShot && (
-                <span className="ml-1 text-zinc-500">({targetShot.shot_id})</span>
+                <span className="ms-1 text-zinc-500">({targetShot.shot_id})</span>
               )}
             </>
           }
@@ -607,14 +630,14 @@ function FixContinuityBody(props: {
       <CriticVerdictBlock
         issues={result.critic_verdict.issues}
         notes={result.critic_verdict.notes}
-        emptyFallback="No issues — continuity is fine."
+        emptyFallback={t("cfgext.shmNoIssuesContinuity")}
       />
       <DialogFooter className="mt-4">
         <Button variant="outline" onClick={onReject}>
-          {regenerated ? "Reject" : "Close"}
+          {regenerated ? t("cfgext.shmReject") : t("common.close")}
         </Button>
         {regenerated && (
-          <Button onClick={applyPatch}>Apply regenerated keyframe</Button>
+          <Button onClick={applyPatch}>{t("cfgext.shmApplyRegenerated")}</Button>
         )}
       </DialogFooter>
     </div>
@@ -622,26 +645,29 @@ function FixContinuityBody(props: {
 }
 
 // ─── 6.11.14 Validate Match Cut — strength gauge + side-by-side ─────────────
-const MATCH_STRENGTH_BADGE: Record<
+/** Live getter — a module constant would freeze the labels to the boot locale. */
+function MATCH_STRENGTH_BADGE(): Record<
   ValidateMatchCutResult["match_strength"],
   { variant: "outline" | "default" | "destructive"; className: string; label: string }
-> = {
+> {
+  return {
   strong: {
     variant: "default",
     className: "bg-green-500 hover:bg-green-500 text-white",
-    label: "Strong match",
+    label: tx("cfgext.shmMatchStrong"),
   },
   moderate: {
     variant: "default",
     className: "bg-yellow-500 hover:bg-yellow-500 text-white",
-    label: "Moderate match",
+    label: tx("cfgext.shmMatchModerate"),
   },
   weak: {
     variant: "default",
     className: "bg-orange-500 hover:bg-orange-500 text-white",
-    label: "Weak match",
+    label: tx("cfgext.shmMatchWeak"),
   },
-  break: { variant: "destructive", className: "", label: "No match (break)" },
+  break: { variant: "destructive", className: "", label: tx("cfgext.shmMatchBreak") },
+}
 }
 
 function ValidateMatchCutBody(props: {
@@ -650,10 +676,11 @@ function ValidateMatchCutBody(props: {
   onReject: () => void
 }) {
   const { result, data, onReject } = props
+  const t = useT()
   const [shotAId, shotBId] = result.shot_pair
   const shotA = data.shots.find((s) => s.shot_id === shotAId)
   const shotB = data.shots.find((s) => s.shot_id === shotBId)
-  const badge = MATCH_STRENGTH_BADGE[result.match_strength]
+  const badge = MATCH_STRENGTH_BADGE()[result.match_strength]
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
@@ -665,23 +692,23 @@ function ValidateMatchCutBody(props: {
         </p>
       </div>
       <div className="grid grid-cols-2 gap-2">
-        <KeyframeThumbnail title="Shot A — out" url={shotA?.keyframe_url} />
-        <KeyframeThumbnail title="Shot B — in" url={shotB?.keyframe_url} />
+        <KeyframeThumbnail title={t("cfgext.shmShotAOut")} url={shotA?.keyframe_url} />
+        <KeyframeThumbnail title={t("cfgext.shmShotBIn")} url={shotB?.keyframe_url} />
       </div>
       <CriticVerdictBlock
         issues={result.critic_verdict.issues}
         notes={result.critic_verdict.notes}
-        emptyFallback="No issues."
+        emptyFallback={t("cfgext.shmNoIssues")}
       />
       {result.suggested_adjustments && (
         <div className="rounded border border-zinc-200 p-2">
-          <p className="text-xs font-medium">Suggested adjustments</p>
+          <p className="text-xs font-medium">{t("cfgext.shmSuggestedAdjustments")}</p>
           <p className="text-xs text-zinc-700 mt-1">{result.suggested_adjustments}</p>
         </div>
       )}
       <DialogFooter className="mt-4">
         <Button variant="outline" onClick={onReject}>
-          Close
+          {t("common.close")}
         </Button>
       </DialogFooter>
     </div>

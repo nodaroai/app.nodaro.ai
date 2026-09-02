@@ -1,5 +1,8 @@
 "use client"
 
+import { useLocalizeOptionLabel } from "@/lib/i18n/labels"
+import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
+import { nodeTypeDefaultLabel } from "@/components/editor/config-panel-label"
 import { useState, useRef, useEffect, Suspense, useMemo, memo } from "react"
 import { useSurfaceAvailability } from "@/lib/surface-availability"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
@@ -19,7 +22,7 @@ import {
 } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { CachedImage } from "@/components/ui/cached-image"
-import { useT } from "@/lib/i18n"
+import { useT, tx } from "@/lib/i18n"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { prefetchModelCredits } from "@/ee/hooks/use-model-credits"
 import { useMediaEditor, MediaEditorModal } from "@/components/editor/media-editor"
@@ -102,7 +105,7 @@ function expandLocationSourceForAutocomplete(
   nd: Record<string, unknown>,
   fallbackLabel: string,
 ): Array<ConnectedReference> | null {
-  const locName = (nd.locationName as string) || fallbackLabel || "Location"
+  const locName = (nd.locationName as string) || fallbackLabel || tx("field.location")
   const locSlug = locationMentionSlug(locName)
   const sourceUrl = nd.sourceImageUrl as string | undefined
   if (!sourceUrl || !locSlug) return null
@@ -148,6 +151,10 @@ function expandLocationSourceForAutocomplete(
 // REF_IMAGE_MAX_LIMITS / DEFAULT_REF_IMAGE_MAX live in @nodaro/shared (model-constants).
 
 function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, variableDisplayMode, nodeId }: ConfigProps<GenerateImageData> & { nodeId?: string }) {
+  const localizeOption = useLocalizeOptionLabel()
+  // Style presets are catalog entries: resolved by id through the locale
+  // sidecar (style.he.ts …), not by English string.
+  const styleCatalog = useLocalizedCatalog("style")
   // imageStylePresets() curates at read; subscribe so a late pack registration re-renders the dropdown.
   useCatalogPacksVersion()
   // Re-render when the deployment's availability sets arrive: they land
@@ -340,7 +347,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
       .map((s) => {
         const nd = s.nodeData ?? {}
         const url = (nd.generatedImageUrl as string) || (nd.url as string) || ""
-        return { id: s.id, url, label: s.label || s.type }
+        return { id: s.id, url, label: s.label || nodeTypeDefaultLabel(s.type) }
       })
       .filter((w) => w.url)
   }, [sources])
@@ -467,7 +474,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
           <SelectContent>
             <SelectItem value="__none__">{t("imgcfg.noStyle")}</SelectItem>
             {imageStylePresets().map((p) => (
-              <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+              <SelectItem key={p.value} value={p.value}>{styleCatalog.resolveLabel(p.value, p.label)}</SelectItem>
             ))}
             <SelectItem value="__custom__">{t("imgcfg.customOption")}</SelectItem>
           </SelectContent>
@@ -483,8 +490,8 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
         )}
         <p className="text-[10px] text-muted-foreground mt-0.5">
           {styleNodeConnected
-            ? "Bypassed — using connected Style node"
-            : "Appended to prompt as style guidance"}
+            ? t("imgcfg.styleBypassed")
+            : t("imgcfg.styleGuidance")}
         </p>
       </MappableField>
       <MappableField field="negativePrompt" label={t("field.negativePrompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
@@ -511,7 +518,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
               refMap={refMap}
               snippets={negativeSnippets}
             />
-            <PromptLengthCounter value={data.negativePrompt} max={getMaxNegativePromptChars(currentProvider)} modelLabel={currentProvider} noun="negative prompt" />
+            <PromptLengthCounter value={data.negativePrompt} max={getMaxNegativePromptChars(currentProvider)} modelLabel={currentProvider} noun={t("imgcfg.negativePrompt")} />
             <p className="text-[10px] text-muted-foreground mt-0.5">{t("imgcfg.exclusionGuidance")}</p>
           </>
         )}
@@ -579,7 +586,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
             onClick={() => setShowAssetLibrary(true)}
             className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md border hover:bg-muted transition-colors"
           >
-            <Plus className="w-3 h-3" /> Add from Library
+            <Plus className="w-3 h-3" /> {t("imgcfg.addFromLibrary")}
           </button>
           <div className="relative">
             <button
@@ -587,13 +594,13 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
               onClick={() => setShowDefineNewMenu(!showDefineNewMenu)}
               className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md border hover:bg-muted transition-colors"
             >
-              <UserPlus className="w-3 h-3" /> Create new
+              <UserPlus className="w-3 h-3" /> {t("imgcfg.createNew")}
             </button>
             {showDefineNewMenu && (
-              <div className="absolute top-full left-0 mt-1 w-36 rounded-md border bg-popover shadow-md z-30">
+              <div className="absolute top-full start-0 mt-1 w-36 rounded-md border bg-popover shadow-md z-30">
                 <button
                   type="button"
-                  className="w-full text-left px-3 py-2 text-xs hover:bg-pink-500/10 transition-colors flex items-center gap-2"
+                  className="w-full text-start px-3 py-2 text-xs hover:bg-pink-500/10 transition-colors flex items-center gap-2"
                   onClick={() => handleDefineNewAsset("character")}
                 >
                   <UserCircle className="w-4 h-4 text-pink-500" />
@@ -601,7 +608,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
                 </button>
                 <button
                   type="button"
-                  className="w-full text-left px-3 py-2 text-xs hover:bg-emerald-500/10 transition-colors flex items-center gap-2"
+                  className="w-full text-start px-3 py-2 text-xs hover:bg-emerald-500/10 transition-colors flex items-center gap-2"
                   onClick={() => handleDefineNewAsset("object")}
                 >
                   <Package className="w-4 h-4 text-emerald-500" />
@@ -609,7 +616,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
                 </button>
                 <button
                   type="button"
-                  className="w-full text-left px-3 py-2 text-xs hover:bg-cyan-500/10 transition-colors flex items-center gap-2"
+                  className="w-full text-start px-3 py-2 text-xs hover:bg-cyan-500/10 transition-colors flex items-center gap-2"
                   onClick={() => handleDefineNewAsset("location")}
                 >
                   <MapPin className="w-4 h-4 text-cyan-500" />
@@ -642,7 +649,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
                 <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {resolutionOptions.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -657,7 +664,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
                 <SelectTrigger aria-label={t("field.quality")}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {qualityOptions.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -769,7 +776,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
                   onChange={(e) => onUpdate({ strength: parseFloat(e.target.value) })}
                   className="flex-1"
                 />
-                <span className="text-xs text-muted-foreground w-8 text-right">
+                <span className="text-xs text-muted-foreground w-8 text-end">
                   {(data.strength ?? strengthConfig.default).toFixed(2)}
                 </span>
               </div>
@@ -789,7 +796,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
                   onChange={(e) => onUpdate({ guidanceScale: parseFloat(e.target.value) })}
                   className="flex-1"
                 />
-                <span className="text-xs text-muted-foreground w-8 text-right">
+                <span className="text-xs text-muted-foreground w-8 text-end">
                   {(data.guidanceScale ?? guidanceScaleConfig.default).toFixed(1)}
                 </span>
               </div>
@@ -828,21 +835,21 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
           <div className="flex flex-col gap-2 mt-2">
             {data.maskUrl ? (
               <div className="flex items-center gap-2">
-                <img src={optimizedImageUrl(data.maskUrl)} alt="Mask" className="w-16 h-16 object-cover rounded border border-border dark:border-[#2D2D2D]" />
+                <img src={optimizedImageUrl(data.maskUrl)} alt={t("imgcfg.maskAlt")} className="w-16 h-16 object-cover rounded border border-border dark:border-[#2D2D2D]" />
                 <div className="flex flex-col gap-1">
                   <button
                     type="button"
                     onClick={() => setShowMaskPainter(true)}
                     className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md border hover:bg-muted transition-colors"
                   >
-                    <Paintbrush className="w-3 h-3" /> Edit Mask
+                    <Paintbrush className="w-3 h-3" /> {t("imgcfg.editMask")}
                   </button>
                   <button
                     type="button"
                     onClick={() => onUpdate({ maskUrl: undefined })}
                     className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md border hover:bg-destructive/10 hover:text-destructive transition-colors"
                   >
-                    <X className="w-3 h-3" /> Clear Mask
+                    <X className="w-3 h-3" /> {t("imgcfg.clearMask")}
                   </button>
                 </div>
               </div>
@@ -853,7 +860,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
                 className="flex items-center gap-1.5 px-3 py-2 text-xs rounded-md border border-dashed hover:bg-muted transition-colors"
               >
                 <Paintbrush className="w-3.5 h-3.5" />
-                Paint Mask
+                {t("imgcfg.paintMask")}
               </button>
             )}
             <p className="text-[10px] text-muted-foreground">{t("imgcfg.maskHint")}</p>
@@ -903,6 +910,8 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
 export const GenerateImageConfig = memo(GenerateImageConfigImpl)
 
 function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ModifyImageData> & { nodeId?: string }) {
+  const localizeOption = useLocalizeOptionLabel()
+  const styleCatalog = useLocalizedCatalog("style")
   // imageStylePresets() curates at read; subscribe so a late pack registration re-renders the dropdown.
   useCatalogPacksVersion()
   const t = useT()
@@ -1041,7 +1050,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
       const id = "manual-ref"
       map.set(id, {
         id,
-        defaultName: "Reference Image",
+        defaultName: t("field.referenceImage"),
         source: "manual",
         url: data.referenceImageUrl,
       })
@@ -1057,7 +1066,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
       const nd = s.nodeData ?? {}
       if (effectiveType === "character") {
         const charData = nd as unknown as CharacterNodeData
-        const charName = charData.characterName || s.label || "Character"
+        const charName = charData.characterName || s.label || t("field.character")
         const slug = characterMentionSlug(charName)
         if (slug) {
           // Propagate the character node's default usage mode into every
@@ -1342,10 +1351,10 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
             label: m.label,
             desc: "desc" in m ? (m as { desc?: string }).desc : (m as { description?: string }).description ?? "",
           }))}
-          ariaLabel="Provider"
+          ariaLabel={t("cfgshared.provider")}
         />
       </MappableField>
-      <MappableField field="prompt" label={isNanoBananaEdit ? "Edit Instructions" : "Transformation Prompt"} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+      <MappableField field="prompt" label={isNanoBananaEdit ? t("imgcfg.editInstructions") : t("imgcfg.transformationPrompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
         <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
         <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="image" />
         <PromptHelperButton nodeType="image-to-image" currentPrompt={data.prompt || ""} provider={data.provider} aspectRatio={data.aspectRatio} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
@@ -1363,7 +1372,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
               rows={3}
               value={data.prompt}
               onChange={(v) => onUpdate({ prompt: v })}
-              placeholder={isNanoBananaEdit ? "Describe how to edit the image..." : "Describe how to transform the input image..."}
+              placeholder={isNanoBananaEdit ? t("imgcfg.describeEdit") : t("imgcfg.describeTransform")}
               referenceImages={refImagesForAutocomplete}
               nodeRefs={nodeRefs}
               refMap={refMap}
@@ -1394,7 +1403,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           <SelectContent>
             <SelectItem value="__none__">{t("imgcfg.noStyle")}</SelectItem>
             {imageStylePresets().map((p) => (
-              <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+              <SelectItem key={p.value} value={p.value}>{styleCatalog.resolveLabel(p.value, p.label)}</SelectItem>
             ))}
             <SelectItem value="__custom__">{t("imgcfg.customOption")}</SelectItem>
           </SelectContent>
@@ -1410,8 +1419,8 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
         )}
         <p className="text-[10px] text-muted-foreground mt-0.5">
           {styleNodeConnected
-            ? "Bypassed — using connected Style node"
-            : "Appended to prompt as style guidance"}
+            ? t("imgcfg.styleBypassed")
+            : t("imgcfg.styleGuidance")}
         </p>
       </MappableField>
       <MappableField field="negativePrompt" label={t("field.negativePrompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
@@ -1438,7 +1447,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
               refMap={refMap}
               snippets={negativeSnippets}
             />
-            <PromptLengthCounter value={data.negativePrompt ?? ""} max={getMaxNegativePromptChars(currentProvider)} modelLabel={currentProvider} noun="negative prompt" />
+            <PromptLengthCounter value={data.negativePrompt ?? ""} max={getMaxNegativePromptChars(currentProvider)} modelLabel={currentProvider} noun={t("imgcfg.negativePrompt")} />
             <p className="text-[10px] text-muted-foreground mt-0.5">{t("imgcfg.exclusionGuidance")}</p>
           </>
         )}
@@ -1476,7 +1485,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           onUpdate({ suppressedCanonicalCharacterIds: appendSuppressedSlug(data.suppressedCanonicalCharacterIds, slug) })
         }
         label={t("field.injectedReferences")}
-        primaryLabel={isNanoBananaEdit ? "Image to Edit" : "Main Image"}
+        primaryLabel={isNanoBananaEdit ? t("imgcfg.imageToEdit") : t("imgcfg.mainImage")}
       />
 
       {/* Connected upstream images with ordering — kept alongside the unified
@@ -1491,7 +1500,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           onUpdateOrder={(order) => onUpdate({ connectedMediaOrder: order })}
           acceptedTypes={IMAGE_SOURCE_TYPES}
           mediaType="image"
-          primaryLabel={isNanoBananaEdit ? "Image to Edit" : "Main Image"}
+          primaryLabel={isNanoBananaEdit ? t("imgcfg.imageToEdit") : t("imgcfg.mainImage")}
         />
       )}
 
@@ -1544,7 +1553,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
             onClick={() => setShowAssetLibrary(true)}
             className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md border hover:bg-muted transition-colors"
           >
-            <Plus className="w-3 h-3" /> Add from Library
+            <Plus className="w-3 h-3" /> {t("imgcfg.addFromLibrary")}
           </button>
           <div className="relative">
             <button
@@ -1552,13 +1561,13 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
               onClick={() => setShowDefineNewMenu(!showDefineNewMenu)}
               className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md border hover:bg-muted transition-colors"
             >
-              <UserPlus className="w-3 h-3" /> Create new
+              <UserPlus className="w-3 h-3" /> {t("imgcfg.createNew")}
             </button>
             {showDefineNewMenu && (
-              <div className="absolute top-full left-0 mt-1 w-36 rounded-md border bg-popover shadow-md z-30">
+              <div className="absolute top-full start-0 mt-1 w-36 rounded-md border bg-popover shadow-md z-30">
                 <button
                   type="button"
-                  className="w-full text-left px-3 py-2 text-xs hover:bg-pink-500/10 transition-colors flex items-center gap-2"
+                  className="w-full text-start px-3 py-2 text-xs hover:bg-pink-500/10 transition-colors flex items-center gap-2"
                   onClick={() => handleDefineNewAsset("character")}
                 >
                   <UserCircle className="w-4 h-4 text-pink-500" />
@@ -1566,7 +1575,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                 </button>
                 <button
                   type="button"
-                  className="w-full text-left px-3 py-2 text-xs hover:bg-emerald-500/10 transition-colors flex items-center gap-2"
+                  className="w-full text-start px-3 py-2 text-xs hover:bg-emerald-500/10 transition-colors flex items-center gap-2"
                   onClick={() => handleDefineNewAsset("object")}
                 >
                   <Package className="w-4 h-4 text-emerald-500" />
@@ -1574,7 +1583,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                 </button>
                 <button
                   type="button"
-                  className="w-full text-left px-3 py-2 text-xs hover:bg-cyan-500/10 transition-colors flex items-center gap-2"
+                  className="w-full text-start px-3 py-2 text-xs hover:bg-cyan-500/10 transition-colors flex items-center gap-2"
                   onClick={() => handleDefineNewAsset("location")}
                 >
                   <MapPin className="w-4 h-4 text-cyan-500" />
@@ -1594,7 +1603,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           <div className="flex flex-col gap-2 mt-2">
             {data.maskUrl ? (
               <div className="flex items-center gap-2">
-                <img src={optimizedImageUrl(data.maskUrl)} alt="Mask" className="w-16 h-16 object-cover rounded border border-border dark:border-[#2D2D2D]" />
+                <img src={optimizedImageUrl(data.maskUrl)} alt={t("imgcfg.maskAlt")} className="w-16 h-16 object-cover rounded border border-border dark:border-[#2D2D2D]" />
                 <div className="flex flex-col gap-1">
                   <button
                     type="button"
@@ -1602,14 +1611,14 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                     disabled={!sourceImageUrl}
                     className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md border hover:bg-muted transition-colors disabled:opacity-50"
                   >
-                    <Paintbrush className="w-3 h-3" /> Edit Mask
+                    <Paintbrush className="w-3 h-3" /> {t("imgcfg.editMask")}
                   </button>
                   <button
                     type="button"
                     onClick={() => onUpdate({ maskUrl: undefined })}
                     className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md border hover:bg-destructive/10 hover:text-destructive transition-colors"
                   >
-                    <X className="w-3 h-3" /> Clear Mask
+                    <X className="w-3 h-3" /> {t("imgcfg.clearMask")}
                   </button>
                 </div>
               </div>
@@ -1621,7 +1630,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                 className="flex items-center gap-1.5 px-3 py-2 text-xs rounded-md border border-dashed hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Paintbrush className="w-3.5 h-3.5" />
-                {sourceImageUrl ? "Paint Mask" : "Connect an image first"}
+                {sourceImageUrl ? t("imgcfg.paintMask") : t("imgcfg.connectImageFirst")}
               </button>
             )}
             <p className="text-[10px] text-muted-foreground">{t("imgcfg.maskHint")}</p>
@@ -1661,7 +1670,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                 <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {resolutionOptions.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -1676,7 +1685,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                 <SelectTrigger aria-label={t("field.quality")}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {qualityOptions.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -1695,7 +1704,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                   onChange={(e) => onUpdate({ strength: parseFloat(e.target.value) })}
                   className="flex-1"
                 />
-                <span className="text-xs text-muted-foreground w-8 text-right">
+                <span className="text-xs text-muted-foreground w-8 text-end">
                   {(data.strength ?? strengthConfig.default).toFixed(2)}
                 </span>
               </div>
@@ -1715,7 +1724,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                   onChange={(e) => onUpdate({ guidanceScale: parseFloat(e.target.value) })}
                   className="flex-1"
                 />
-                <span className="text-xs text-muted-foreground w-8 text-right">
+                <span className="text-xs text-muted-foreground w-8 text-end">
                   {(data.guidanceScale ?? guidanceScaleConfig.default).toFixed(1)}
                 </span>
               </div>
@@ -1761,17 +1770,17 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
               <Label className="text-xs">{t("field.referenceImage")}</Label>
               {data.referenceImageUrl ? (
                 <div className="flex items-center gap-2 mt-1">
-                  <CachedImage src={data.referenceImageUrl} alt="Reference" className="w-16 h-16 rounded object-cover" thumbnail thumbnailWidth={128} />
+                  <CachedImage src={data.referenceImageUrl} alt={t("imgcfg.referenceAlt")} className="w-16 h-16 rounded object-cover" thumbnail thumbnailWidth={128} />
                   <Button variant="ghost" size="sm" onClick={() => onUpdate({ referenceImageUrl: undefined })}>
-                    <X className="w-3 h-3 mr-1" /> Remove
+                    <X className="w-3 h-3 me-1" /> {t("imgcfg.remove")}
                   </Button>
                 </div>
               ) : (
                 <div className="mt-1">
                   <input ref={refImageInputRef} type="file" accept="image/*" className="hidden" onChange={handleRefImageUpload} />
                   <Button variant="outline" size="sm" onClick={() => refImageInputRef.current?.click()} disabled={uploadingRefImage}>
-                    {uploadingRefImage ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Upload className="w-3 h-3 mr-1" />}
-                    Upload Reference
+                    {uploadingRefImage ? <Loader2 className="w-3 h-3 me-1 animate-spin" /> : <Upload className="w-3 h-3 me-1" />}
+                    {t("imgcfg.uploadReference")}
                   </Button>
                   <p className="text-[10px] text-muted-foreground mt-0.5">{t("imgcfg.refImageHint")}</p>
                 </div>
@@ -1803,6 +1812,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
 export const ModifyImageConfig = memo(ModifyImageConfigImpl)
 
 export function UpscaleImageConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<UpscaleImageData>) {
+  const localizeOption = useLocalizeOptionLabel()
   const t = useT()
   useEffect(() => { prefetchModelCredits(UPSCALE_IMAGE_MODELS.map((m) => m.value)) }, [])
   // Legacy node data carried a `targetResolution` (2K/4K/8K) that had no
@@ -1841,7 +1851,7 @@ export function UpscaleImageConfig({ data, onUpdate, sources, fieldMappings, onM
             >
               <SelectTrigger aria-label={t("field.upscaleFactor")}><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="1">1x (Enhance only)</SelectItem>
+                <SelectItem value="1">{t("imgcfg.upscaleEnhanceOnly")}</SelectItem>
                 <SelectItem value="2">2x</SelectItem>
                 <SelectItem value="4">4x</SelectItem>
               </SelectContent>
@@ -1852,12 +1862,12 @@ export function UpscaleImageConfig({ data, onUpdate, sources, fieldMappings, onM
 
       {!isTopaz && (
         <p className="text-xs text-muted-foreground px-1">
-          Upscale and enhance the input image to higher resolution.
+          {t("imgcfg.upscaleDesc")}
         </p>
       )}
       {isTopaz && (
         <p className="text-xs text-muted-foreground px-1">
-          AI-powered upscaling via Topaz. Higher factors produce larger images.
+          {t("imgcfg.topazUpscaleDesc")}
         </p>
       )}
     </div>
@@ -1865,10 +1875,11 @@ export function UpscaleImageConfig({ data, onUpdate, sources, fieldMappings, onM
 }
 
 export function RemoveBackgroundConfig({ data }: ConfigProps<RemoveBackgroundData>) {
+  const t = useT()
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground px-1">
-        Automatically removes the background from the input image, leaving a transparent PNG.
+        {t("imgcfg.removeBackgroundDesc")}
       </p>
     </div>
   )
@@ -1891,7 +1902,7 @@ export function GenerateMaskConfig({ data, onUpdate, nodes, edges, nodeId }: Con
   return (
     <div className="flex flex-col gap-4">
       <p className="text-xs text-muted-foreground px-1">
-        Generates a binary segmentation mask from a text prompt (Grounded SAM). Connect an input image and describe the subject to mask.
+        {t("imgcfg.generateMaskDesc")}
       </p>
 
       <div className="flex flex-col gap-1.5">
@@ -1914,7 +1925,7 @@ export function GenerateMaskConfig({ data, onUpdate, nodes, edges, nodeId }: Con
             rows={2}
             value={data.prompt ?? ""}
             onChange={(v) => onUpdate({ prompt: v })}
-            placeholder={`e.g. "the blonde woman", "the red car", "the background"`}
+            placeholder={t("imgcfg.maskPromptExamples")}
             referenceImages={referenceImages}
             nodeRefs={nodeRefs}
             refMap={refMap}

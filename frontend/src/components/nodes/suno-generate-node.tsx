@@ -283,7 +283,7 @@ function SunoGenerateNodeComponent({ id, data, selected }: NodeProps) {
                     Prepended so it's the first item; the 4 secondary items stay. */}
                 <DropdownMenuItem onSelect={() => openPromptEditor(id)}>Prompt</DropdownMenuItem>
                 {(["title", "lyrics", "style", "negativeStyle"] as const).map((f) => (
-                  <DropdownMenuItem key={f} onSelect={() => setEditField(f)}>{SUNO_FIELD_EDIT_META[f].label.replace(" (optional)", "")}</DropdownMenuItem>
+                  <DropdownMenuItem key={f} onSelect={() => setEditField(f)}>{SUNO_FIELD_EDIT_META()[f].shortLabel}</DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>

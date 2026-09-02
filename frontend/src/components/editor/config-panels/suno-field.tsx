@@ -4,6 +4,7 @@ import { useId, memo } from "react"
 import { Link2 } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { MappableFieldCtx } from "@/components/ui/select"
+import { useT } from "@/lib/i18n"
 import type { WorkflowEdge } from "@/types/nodes"
 
 /**
@@ -63,6 +64,7 @@ export const SunoField = memo(function SunoField({
   readonly labelAction?: React.ReactNode
   readonly children: React.ReactNode
 }) {
+  const t = useT()
   const baseId = useId()
   const labelId = `${baseId}-label`
   const triggerId = `${baseId}-trigger`
@@ -84,7 +86,7 @@ export const SunoField = memo(function SunoField({
         <div className="flex items-start gap-1.5 rounded-lg bg-[#F8FAFC] dark:bg-[#121212] border border-gray-200 dark:border-[#2D2D2D] px-2.5 py-2">
           <Link2 className="size-3 mt-0.5 shrink-0 text-[#ff0073]" />
           <p className="text-xs text-gray-600 dark:text-[#94A3B8] break-words whitespace-pre-wrap flex-1 min-w-0">
-            <span className="italic text-gray-400">Value comes from the connected handle</span>
+            <span className="italic text-gray-400">{t("cfgext.sunoValueFromHandle")}</span>
           </p>
         </div>
       ) : (

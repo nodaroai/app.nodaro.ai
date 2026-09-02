@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import { useT } from "@/lib/i18n"
 import { Check, Copy } from "lucide-react"
 import { getParameterPromptHint } from "@nodaro/prompts"
 import { cn } from "@/lib/utils"
@@ -73,6 +74,7 @@ interface PromptInjectionPreviewProps {
  * lever (there is no node to write the mode to).
  */
 export function PromptInjectionPreview({ hints, className }: PromptInjectionPreviewProps) {
+  const t = useT()
   const ctx = useParameterPreviewContext()
   const setHintMode = useHintModeSetter()
   // Only a registered picker composes through the injection path: free-text
@@ -117,7 +119,7 @@ export function PromptInjectionPreview({ hints, className }: PromptInjectionPrev
       <div className="flex items-center justify-between gap-2 px-0.5">
         <div className="flex items-center gap-1.5 min-w-0">
           <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground truncate">
-            Will inject into prompt
+            {t("cfgext.pipWillInject")}
           </p>
           {picker && (
             <HintModeToggle
@@ -130,8 +132,8 @@ export function PromptInjectionPreview({ hints, className }: PromptInjectionPrev
           type="button"
           onClick={handleCopy}
           disabled={!joined}
-          aria-label="Copy injected prompt"
-          title={joined ? "Copy to clipboard" : "Nothing to copy"}
+          aria-label={t("cfgext.pipCopyAria")}
+          title={joined ? t("cfgshared.copyToClipboard") : t("cfgshared.nothingToCopy")}
           className={cn(
             "flex items-center gap-1 text-[10px] uppercase tracking-wider font-semibold rounded px-1.5 py-0.5 transition-colors",
             joined
@@ -140,7 +142,7 @@ export function PromptInjectionPreview({ hints, className }: PromptInjectionPrev
           )}
         >
           {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
-          <span>{copied ? "Copied" : "Copy"}</span>
+          <span>{copied ? t("apiTok.copied") : t("apiTok.copy")}</span>
         </button>
       </div>
       <div className="rounded-lg border border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] p-2">
@@ -150,7 +152,7 @@ export function PromptInjectionPreview({ hints, className }: PromptInjectionPrev
           </p>
         ) : (
           <p className="text-[11px] italic text-muted-foreground">
-            (nothing selected — no hint will be injected)
+            {t("cfgext.pipNothingSelected")}
           </p>
         )}
       </div>

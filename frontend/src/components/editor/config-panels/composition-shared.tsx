@@ -21,11 +21,16 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion"
+import { useT } from "@/lib/i18n"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import type { SourceNodeInfo } from "./types"
 import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { COMPOSITION_RATIOS } from "./model-options"
 
 export function SortableAssetItem({ id, index, label, typeLabel }: { id: string; index: number; label: string; typeLabel: string }) {
+  // Source rows carry the node's English default label (custom names pass
+  // through untouched) — same table the pips and the connect dialog use.
+  const localizeNode = useLocalizeNodeLabel()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -39,7 +44,7 @@ export function SortableAssetItem({ id, index, label, typeLabel }: { id: string;
         <GripVertical className="w-3.5 h-3.5 text-muted-foreground/40" />
       </span>
       <span className="text-muted-foreground w-4 text-center shrink-0">{index + 1}</span>
-      <span className="truncate flex-1" title={label}>{label}</span>
+      <span className="truncate flex-1" title={localizeNode(label)}>{localizeNode(label)}</span>
       <span className="text-muted-foreground/60 text-[10px] shrink-0">{typeLabel}</span>
     </div>
   )
@@ -100,10 +105,11 @@ export function MediaOrderList({
   orderedSources: ReadonlyArray<SourceNodeInfo>
   onDragEnd: (event: DragEndEvent) => void
 }) {
+  const t = useT()
   if (orderedSources.length === 0) return null
   return (
     <div>
-      <Label className="mb-1.5 block">Media Order</Label>
+      <Label className="mb-1.5 block">{t("cfgext.compShMediaOrder")}</Label>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={orderedIds} strategy={verticalListSortingStrategy}>
           <div className="flex flex-col gap-1">
@@ -113,7 +119,7 @@ export function MediaOrderList({
                 id={s.id}
                 index={i}
                 label={s.label}
-                typeLabel={s.type.includes("image") ? "img" : "vid"}
+                typeLabel={s.type.includes("image") ? t("cfgext.compShTypeImg") : t("cfgext.compShTypeVid")}
               />
             ))}
           </div>
@@ -138,15 +144,16 @@ export function VideoSettingsAccordion({
   onUpdate: (d: Record<string, unknown>) => void
   idPrefix: string
 }) {
+  const t = useT()
   return (
     <Accordion type="single" collapsible>
       <AccordionItem value="advanced" className="border-0">
         <AccordionTrigger className="text-xs text-muted-foreground py-1.5 hover:no-underline">
-          Advanced Settings
+          {t("vidcfg.advancedSettings")}
         </AccordionTrigger>
         <AccordionContent className="space-y-3 pt-1">
           <div>
-            <Label>Aspect Ratio</Label>
+            <Label>{t("field.aspectRatio")}</Label>
             <AspectRatioSelector
               options={COMPOSITION_RATIOS}
               value={aspectRatio}
@@ -154,18 +161,18 @@ export function VideoSettingsAccordion({
             />
           </div>
           <div>
-            <Label htmlFor={`${idPrefix}-fps`}>FPS</Label>
+            <Label htmlFor={`${idPrefix}-fps`}>{t("field.fps")}</Label>
             <Select value={String(fps)} onValueChange={(v) => onUpdate({ fps: parseInt(v, 10) })}>
-              <SelectTrigger aria-label="FPS"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("field.fps")}><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="24">24 fps (Film)</SelectItem>
-                <SelectItem value="30">30 fps (Standard)</SelectItem>
-                <SelectItem value="60">60 fps (Smooth)</SelectItem>
+                <SelectItem value="24">{t("cfgext.compShFps24Film")}</SelectItem>
+                <SelectItem value="30">{t("cfgext.compShFps30Standard")}</SelectItem>
+                <SelectItem value="60">{t("cfgext.compShFps60Smooth")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div>
-            <Label htmlFor={`${idPrefix}-duration`}>Duration (seconds)</Label>
+            <Label htmlFor={`${idPrefix}-duration`}>{t("field.durationSeconds")}</Label>
             <Input
               id={`${idPrefix}-duration`}
               type="number"
@@ -176,7 +183,7 @@ export function VideoSettingsAccordion({
             />
           </div>
           <div>
-            <Label htmlFor={`${idPrefix}-bg`}>Background Color</Label>
+            <Label htmlFor={`${idPrefix}-bg`}>{t("proccfg.backgroundColor")}</Label>
             <Input
               id={`${idPrefix}-bg`}
               type="color"
@@ -202,8 +209,9 @@ export function SceneGraphPreviewInline({
   fps: number
   onUpdate: (sg: Record<string, unknown>) => void
 }) {
+  const t = useT()
   return (
-    <Suspense fallback={<div className="text-xs text-muted-foreground py-2">Loading preview...</div>}>
+    <Suspense fallback={<div className="text-xs text-muted-foreground py-2">{t("proccfg.loadingPreview")}</div>}>
       <LazySceneGraphPreview
         sceneGraph={sceneGraph}
         fps={fps}

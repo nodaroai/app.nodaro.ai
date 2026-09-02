@@ -1,3 +1,4 @@
+import { tx } from "@/lib/i18n"
 import type { LlmReasoningEffort } from "@nodaro/shared"
 
 export interface GenerateTextTemplate {
@@ -14,11 +15,12 @@ export interface GenerateTextTemplate {
   readonly requiresImageRef?: boolean
 }
 
-export const GENERATE_TEXT_TEMPLATES: readonly GenerateTextTemplate[] = [
+export function GENERATE_TEXT_TEMPLATES(): readonly GenerateTextTemplate[] {
+  return [
   {
     id: "photo-shoot",
-    label: "Photo Shoot Planner",
-    description: "Plan a detailed photo shoot with scenes, poses, lighting, and wardrobe.",
+    label: tx("txtcfg.tplPhotoShootLabel"),
+    description: tx("txtcfg.tplPhotoShootDesc"),
     systemPrompt:
       "You are a Photo Shoot Director creating production-ready image generation prompts for an AI influencer content calendar.\n\n" +
       "You receive a creative brief with character details, locations, and a content plan. Generate the exact number of unique photo prompts as specified by the user — one per day.\n\n" +
@@ -100,8 +102,8 @@ export const GENERATE_TEXT_TEMPLATES: readonly GenerateTextTemplate[] = [
   },
   {
     id: "product-catalog",
-    label: "Product Catalog Writer",
-    description: "Generate product image prompts for e-commerce photography.",
+    label: tx("txtcfg.tplProductCatalogLabel"),
+    description: tx("txtcfg.tplProductCatalogDesc"),
     systemPrompt:
       "You are an expert product photography director and AI image prompt writer. " +
       "Given product details, generate exactly {outputCount} separate image generation prompts for product photography. " +
@@ -115,8 +117,8 @@ export const GENERATE_TEXT_TEMPLATES: readonly GenerateTextTemplate[] = [
   },
   {
     id: "storyboard",
-    label: "Storyboard Writer",
-    description: "Create scene-by-scene visual descriptions for video production.",
+    label: tx("txtcfg.tplStoryboardLabel"),
+    description: tx("txtcfg.tplStoryboardDesc"),
     systemPrompt:
       "You are a storyboard artist and AI image prompt writer. " +
       "Given a concept, generate exactly {outputCount} separate image generation prompts, one per scene/shot. " +
@@ -130,13 +132,14 @@ export const GENERATE_TEXT_TEMPLATES: readonly GenerateTextTemplate[] = [
   },
   {
     id: "custom",
-    label: "Custom",
-    description: "Write your own system prompt for any task.",
+    label: tx("cfgshared.custom"),
+    description: tx("txtcfg.tplCustomDesc"),
     systemPrompt: "",
     placeholderInput: "Enter your instructions or content...",
   },
 ]
+}
 
 export function getGenerateTextTemplate(id: string): GenerateTextTemplate | undefined {
-  return GENERATE_TEXT_TEMPLATES.find((t) => t.id === id)
+  return GENERATE_TEXT_TEMPLATES().find((t) => t.id === id)
 }

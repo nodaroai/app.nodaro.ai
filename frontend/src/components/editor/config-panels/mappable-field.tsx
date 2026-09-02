@@ -1,5 +1,7 @@
 "use client"
 
+import { useT, tx } from "@/lib/i18n"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import { useId, memo } from "react"
 import { Link2 } from "lucide-react"
 import { Label } from "@/components/ui/label"
@@ -42,6 +44,8 @@ export const MappableField = memo(function MappableField({
   readonly labelAction?: React.ReactNode
   readonly children: React.ReactNode
 }) {
+  const t = useT()
+  const localizeNode = useLocalizeNodeLabel()
   const baseId = useId()
   const labelId = `${baseId}-label`
   const triggerId = `${baseId}-trigger`
@@ -64,7 +68,7 @@ export const MappableField = memo(function MappableField({
               onValueChange={(v) => onMapField(field, v === "__manual__" ? null : v)}
             >
               <SelectTrigger
-                aria-label={`${label} source`}
+                aria-label={t("cfgshared.fieldSourceAria", { label })}
                 className={`h-5 text-[10px] leading-none w-auto max-w-[160px] px-1.5 py-0 gap-1 shrink-0 rounded-md border-0 font-medium transition-colors ${
                   isMapped
                     ? "bg-[#ff0073]/10 text-[#ff0073] hover:bg-[#ff0073]/15 dark:bg-[#ff0073]/15 dark:text-[#ff6aa5]"
@@ -75,10 +79,10 @@ export const MappableField = memo(function MappableField({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="bg-white dark:bg-[#1E1E1E] border-gray-200 dark:border-[#2D2D2D] min-w-[160px]">
-                <SelectItem value="__manual__" className="text-[11px]">Manual</SelectItem>
+                <SelectItem value="__manual__" className="text-[11px]">{tx("audiocfg.manual")}</SelectItem>
                 {compatible.map((s) => (
                   <SelectItem key={s.id} value={s.id} className="text-[11px]">
-                    {s.label}
+                    {localizeNode(s.label)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -90,7 +94,7 @@ export const MappableField = memo(function MappableField({
         <div className="flex items-start gap-1.5 rounded-lg bg-[#F8FAFC] dark:bg-[#121212] border border-gray-200 dark:border-[#2D2D2D] px-2.5 py-2">
           <Link2 className="size-3 mt-0.5 shrink-0 text-[#ff0073]" />
           <p className="text-xs text-gray-600 dark:text-[#94A3B8] break-words whitespace-pre-wrap flex-1 min-w-0">
-            {mappedSource.value || <span className="italic text-gray-400">(source produces no value yet)</span>}
+            {mappedSource.value || <span className="italic text-gray-400">{tx("cfgshared.sourceNoValueYet")}</span>}
           </p>
         </div>
       ) : (

@@ -5,6 +5,8 @@ import { GripVertical } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useT } from "@/lib/i18n"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import type { CombineAudioData } from "@/types/nodes"
 import type { WorkflowNode } from "@/types/nodes"
 import type { ConfigProps } from "./types"
@@ -14,6 +16,8 @@ function getNodeLabel(node: WorkflowNode): string {
 }
 
 export function CombineAudioConfig({ data, onUpdate, nodes }: ConfigProps<CombineAudioData>) {
+  const t = useT()
+  const localizeNode = useLocalizeNodeLabel()
   const edges = useWorkflowStore((s) => s.edges)
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
   const dragItemRef = useRef<string | null>(null)
@@ -74,7 +78,7 @@ export function CombineAudioConfig({ data, onUpdate, nodes }: ConfigProps<Combin
   return (
     <div className="flex flex-col gap-3">
       {connectedNodes.length === 0 && (
-        <p className="text-xs text-muted-foreground">Connect audio nodes to add segments. Segments play in order from top to bottom.</p>
+        <p className="text-xs text-muted-foreground">{t("cfgext.combAudConnectHint")}</p>
       )}
       {orderedNodes.map((node, idx) => {
         const settings = segmentSettings[node.id] ?? {}
@@ -89,11 +93,11 @@ export function CombineAudioConfig({ data, onUpdate, nodes }: ConfigProps<Combin
           >
             <div className="flex items-center gap-2 mb-2">
               <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
-              <span className="text-xs font-medium truncate flex-1">{idx + 1}. {getNodeLabel(node)}</span>
+              <span className="text-xs font-medium truncate flex-1">{idx + 1}. {localizeNode(getNodeLabel(node))}</span>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <Label className="text-[10px] text-muted-foreground">Start (s)</Label>
+                <Label className="text-[10px] text-muted-foreground">{t("cfgext.combAudStartSeconds")}</Label>
                 <Input
                   type="number"
                   min={0}
@@ -104,7 +108,7 @@ export function CombineAudioConfig({ data, onUpdate, nodes }: ConfigProps<Combin
                 />
               </div>
               <div>
-                <Label className="text-[10px] text-muted-foreground">End (s)</Label>
+                <Label className="text-[10px] text-muted-foreground">{t("cfgext.combAudEndSeconds")}</Label>
                 <Input
                   type="number"
                   min={0}

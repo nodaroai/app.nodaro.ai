@@ -10,6 +10,7 @@
  */
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { useT, tx } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import { useProbedAudioDuration, formatClipLength } from "@/hooks/use-probed-audio-duration"
 import type { ConfigProps } from "./types"
@@ -17,13 +18,17 @@ import type { SlideshowData } from "@/types/nodes"
 
 type Motion = SlideshowData["motion"]
 
-const MOTION_OPTIONS: ReadonlyArray<{ value: Motion; label: string; glyph: string }> = [
-  { value: "none", label: "None", glyph: "—" },
-  { value: "zoom-in", label: "Zoom in", glyph: "+" },
-  { value: "zoom-out", label: "Zoom out", glyph: "−" },
-  { value: "ken-burns", label: "Ken Burns", glyph: "⤡" },
-  { value: "alternate", label: "Alternate", glyph: "+−" },
-]
+// Function, not a const: a module-level table built with `tx()` at load time
+// would freeze on the boot locale (see EFFORT_LABELS in reasoning-effort-select).
+function MOTION_OPTIONS(): ReadonlyArray<{ value: Motion; label: string; glyph: string }> {
+  return [
+    { value: "none", label: tx("pubDialog.noneOption"), glyph: "—" },
+    { value: "zoom-in", label: tx("cfgext.slideZoomIn"), glyph: "+" },
+    { value: "zoom-out", label: tx("cfgext.slideZoomOut"), glyph: "−" },
+    { value: "ken-burns", label: tx("cfgext.slideKenBurns"), glyph: "⤡" },
+    { value: "alternate", label: tx("cfgext.slideAlternate"), glyph: "+−" },
+  ]
+}
 
 const RESOLUTION_OPTIONS = ["720p", "1080p", "4K"] as const
 const FPS_OPTIONS = [24, 30] as const
@@ -69,6 +74,7 @@ function SegmentedControl<T extends string | number>({ options, value, onChange,
 }
 
 export function SlideshowConfig({ data, onUpdate, sources }: ConfigProps<SlideshowData>) {
+  const t = useT()
   const motion = data.motion ?? "none"
   const intensity = data.intensity ?? 3
   const fit = data.fit ?? "cover"
@@ -88,8 +94,8 @@ export function SlideshowConfig({ data, onUpdate, sources }: ConfigProps<Slidesh
       {/* perImageDuration — the ruler ONLY when no audio is wired */}
       <div className={cn("flex flex-col gap-2", hasAudio && "opacity-40 pointer-events-none")}>
         <div className="flex items-center gap-2">
-          <Label htmlFor="slideshow-per-image">Per Image</Label>
-          <span className="px-1.5 py-0.5 rounded bg-muted text-[9px] font-mono text-muted-foreground">no audio</span>
+          <Label htmlFor="slideshow-per-image">{t("cfgext.slidePerImage")}</Label>
+          <span className="px-1.5 py-0.5 rounded bg-muted text-[9px] font-mono text-muted-foreground">{t("cfgext.slideNoAudioTag")}</span>
         </div>
         <div className="flex items-center gap-2">
           <Input
@@ -103,12 +109,12 @@ export function SlideshowConfig({ data, onUpdate, sources }: ConfigProps<Slidesh
             onChange={(e) => onUpdate({ perImageDuration: Math.min(60, Math.max(0.5, parseFloat(e.target.value) || 3)) })}
             disabled={hasAudio}
           />
-          <span className="text-[11px] text-muted-foreground">sec per slide{hasAudio ? " — the wired audio sets the length instead" : ""}</span>
+          <span className="text-[11px] text-muted-foreground">{t("cfgext.slideSecPerSlide")}{hasAudio ? t("cfgext.slideAudioSetsLength") : ""}</span>
         </div>
       </div>
 
       <div className="flex flex-col gap-2">
-        <Label htmlFor="slideshow-transition-duration">Transition</Label>
+        <Label htmlFor="slideshow-transition-duration">{t("proccfg.transition")}</Label>
         <div className="flex items-center gap-2">
           <Input
             id="slideshow-transition-duration"
@@ -120,21 +126,21 @@ export function SlideshowConfig({ data, onUpdate, sources }: ConfigProps<Slidesh
             value={data.transitionDuration ?? 0.5}
             onChange={(e) => onUpdate({ transitionDuration: Math.min(5, Math.max(0, parseFloat(e.target.value) || 0)) })}
           />
-          <span className="text-[11px] text-muted-foreground">sec</span>
+          <span className="text-[11px] text-muted-foreground">{t("cfgext.slideSec")}</span>
         </div>
         <p className="text-[10px] text-muted-foreground leading-snug">
-          Transition <span className="text-foreground font-mono">{transitionPick ?? "cut"}</span>{" "}
-          {transitionPick ? "comes from the wired parameter node." : "— wire a Transition parameter node to change it; unwired defaults to cut."}
+          {t("proccfg.transition")} <span className="text-foreground font-mono">{transitionPick ?? "cut"}</span>{" "}
+          {transitionPick ? t("cfgext.slideTransitionFromNode") : t("cfgext.slideTransitionWireHint")}
         </p>
       </div>
 
       <div className="flex flex-col gap-2">
         <div className="flex items-baseline justify-between">
-          <Label>Motion</Label>
-          <span className="text-[10px] text-muted-foreground">per slide</span>
+          <Label>{t("field.motion")}</Label>
+          <span className="text-[10px] text-muted-foreground">{t("cfgext.slidePerSlide")}</span>
         </div>
         <div className="grid grid-cols-3 gap-1.5">
-          {MOTION_OPTIONS.map((opt) => (
+          {MOTION_OPTIONS().map((opt) => (
             <button
               key={opt.value}
               type="button"
@@ -153,23 +159,23 @@ export function SlideshowConfig({ data, onUpdate, sources }: ConfigProps<Slidesh
           ))}
         </div>
         {motion === "alternate" && (
-          <p className="text-[10px] text-muted-foreground">Flips zoom in / out per slide — avoids the mechanical look of one uniform push.</p>
+          <p className="text-[10px] text-muted-foreground">{t("cfgext.slideAlternateHint")}</p>
         )}
       </div>
 
       <div className={cn("flex flex-col gap-2", !motionEnabled && "opacity-40 pointer-events-none")}>
         <div className="flex items-baseline justify-between">
-          <Label>Intensity</Label>
+          <Label>{t("paramcfg.intensity")}</Label>
           <span className="text-[11px] font-mono text-foreground">
             {intensity} <span className="text-muted-foreground">· {intensityRateLabel(intensity)}</span>
           </span>
         </div>
-        <div className="flex items-center gap-1" role="slider" aria-label="Intensity" aria-valuemin={1} aria-valuemax={10} aria-valuenow={intensity}>
+        <div className="flex items-center gap-1" role="slider" aria-label={t("paramcfg.intensity")} aria-valuemin={1} aria-valuemax={10} aria-valuenow={intensity}>
           {Array.from({ length: 10 }, (_, i) => i + 1).map((step) => (
             <button
               key={step}
               type="button"
-              aria-label={`Intensity ${step}`}
+              aria-label={t("cfgext.slideIntensityStep", { step })}
               onClick={() => onUpdate({ intensity: step })}
               className={cn(
                 "flex-1 h-5 rounded transition-colors",
@@ -178,17 +184,17 @@ export function SlideshowConfig({ data, onUpdate, sources }: ConfigProps<Slidesh
             />
           ))}
         </div>
-        <div className="flex justify-between text-[10px] text-muted-foreground"><span>subtle</span><span>strong</span></div>
+        <div className="flex justify-between text-[10px] text-muted-foreground"><span>{t("cfgext.slideSubtle")}</span><span>{t("cfgext.slideStrong")}</span></div>
       </div>
 
       <div className="flex flex-col gap-2">
-        <Label>Resolution</Label>
-        <SegmentedControl options={RESOLUTION_OPTIONS} value={data.resolution ?? "1080p"} onChange={(v) => onUpdate({ resolution: v })} ariaLabel="Resolution" />
+        <Label>{t("field.resolution")}</Label>
+        <SegmentedControl options={RESOLUTION_OPTIONS} value={data.resolution ?? "1080p"} onChange={(v) => onUpdate({ resolution: v })} ariaLabel={t("field.resolution")} />
       </div>
 
       <div className="flex gap-3">
         <div className="flex-[1.6] flex flex-col gap-2">
-          <Label>Aspect Ratio</Label>
+          <Label>{t("field.aspectRatio")}</Label>
           <div className="grid grid-cols-4 gap-1.5">
             {ASPECT_OPTIONS.map((opt) => (
               <button
@@ -216,11 +222,11 @@ export function SlideshowConfig({ data, onUpdate, sources }: ConfigProps<Slidesh
       </div>
 
       <div className="flex flex-col gap-2">
-        <Label>Fit</Label>
+        <Label>{t("cfgext.slideFit")}</Label>
         <div className="flex gap-2">
           {([
-            { value: "cover", label: "cover", hint: "crops to fill" },
-            { value: "contain", label: "contain", hint: "pads to fit" },
+            { value: "cover", label: "cover", hint: t("cfgext.slideFitCoverHint") },
+            { value: "contain", label: "contain", hint: t("cfgext.slideFitContainHint") },
           ] as const).map((opt) => (
             <button
               key={opt.value}
@@ -228,7 +234,7 @@ export function SlideshowConfig({ data, onUpdate, sources }: ConfigProps<Slidesh
               aria-pressed={fit === opt.value}
               onClick={() => onUpdate({ fit: opt.value })}
               className={cn(
-                "flex-1 flex items-center gap-2 px-2.5 py-2 rounded-lg border text-left transition-colors",
+                "flex-1 flex items-center gap-2 px-2.5 py-2 rounded-lg border text-start transition-colors",
                 fit === opt.value ? "border-primary bg-primary/10" : "border-border bg-muted/30 hover:bg-muted/60",
               )}
             >
@@ -246,7 +252,7 @@ export function SlideshowConfig({ data, onUpdate, sources }: ConfigProps<Slidesh
 
       <div className={cn("flex flex-col gap-2", fit !== "contain" && "opacity-40 pointer-events-none")}>
         <div className="flex items-center gap-2">
-          <Label htmlFor="slideshow-pad-color">Pad Color</Label>
+          <Label htmlFor="slideshow-pad-color">{t("proccfg.padColor")}</Label>
           <span className="px-1.5 py-0.5 rounded bg-muted text-[9px] font-mono text-muted-foreground">fit = contain</span>
         </div>
         <div className="flex items-center gap-2">
@@ -264,15 +270,15 @@ export function SlideshowConfig({ data, onUpdate, sources }: ConfigProps<Slidesh
 
       <div className="flex items-center justify-between pt-3 border-t border-border">
         <div className="flex flex-col gap-0.5">
-          <span className="text-[10px] tracking-wider text-muted-foreground">OUTPUT</span>
+          <span className="text-[10px] tracking-wider text-muted-foreground">{t("cfgext.slideOutput")}</span>
           <span className="text-xs font-mono text-foreground">
             {totalSeconds !== undefined
-              ? <>{formatClipLength(totalSeconds)} <span className="text-muted-foreground">· {Math.ceil(totalSeconds * fps)} frames{slideCount ? ` · ${slideCount} slides` : ""}</span></>
-              : hasAudio ? "…" : "set by images × per-image"}
+              ? <>{formatClipLength(totalSeconds)} <span className="text-muted-foreground">· {t("cfgext.slideFramesCount", { count: Math.ceil(totalSeconds * fps) })}{slideCount ? ` · ${t("cfgext.slideSlidesCount", { count: slideCount })}` : ""}</span></>
+              : hasAudio ? "…" : t("cfgext.slideLengthFromImages")}
           </span>
         </div>
-        <span className="text-[10px] text-muted-foreground text-right max-w-[140px] leading-snug">
-          {hasAudio ? "length follows the audio" : "no audio — output will be silent"}
+        <span className="text-[10px] text-muted-foreground text-end max-w-[140px] leading-snug">
+          {hasAudio ? t("cfgext.slideLengthFollowsAudio") : t("cfgext.slideNoAudioSilent")}
         </span>
       </div>
     </div>

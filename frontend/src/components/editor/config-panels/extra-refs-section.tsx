@@ -20,6 +20,8 @@
  * Text-to-Video, and Video-to-Video config panels.
  */
 
+import { useT, tx } from "@/lib/i18n"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import { useMemo, useRef, useState } from "react"
 import { Plus, X, Loader2, Upload, UserCircle, ChevronDown, ChevronRight } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -38,7 +40,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { uploadImage } from "@/lib/api"
-import { toast } from "sonner"
 import { USAGE_MODES, type UsageMode, characterMentionSlug, usageModeLabel } from "@nodaro/shared"
 import type {
   ExtraRef,
@@ -85,6 +86,9 @@ function buildCharacterOptions(
     const upstream = nodes.find((n) => n.id === e.source)
     if (!upstream || upstream.type !== "character") continue
     const charData = upstream.data as CharacterNodeData
+    // Latin identity seed, NOT display copy: `characterMentionSlug` keeps only
+    // [a-z0-9], so a localized fallback slugifies to "" and the character is
+    // skipped. The picker localizes the name at render (node-label table).
     const charName = charData.characterName || (charData.label as string) || "Character"
     const slug = characterMentionSlug(charName)
     if (!slug) continue
@@ -99,7 +103,7 @@ function buildCharacterOptions(
         characterSlug: slug,
         characterName: charName,
         variantSlug: undefined,
-        variantDisplayName: "canonical",
+        variantDisplayName: tx("cfgshared.variantCanonical"),
         description: charData.description ?? "",
         url: canonicalUrl,
       })
@@ -165,6 +169,8 @@ export function ExtraRefsSection({
   nodes,
   edges,
 }: ExtraRefsSectionProps) {
+  const t = useT()
+  const localizeNode = useLocalizeNodeLabel()
   const refs: readonly ExtraRef[] = extraRefs ?? []
   // Start collapsed when there are no extras; expanded once the user has
   // added one (so the rows are immediately visible after they pick).
@@ -244,9 +250,9 @@ export function ExtraRefsSection({
           onClick={() => setExpanded((v) => !v)}
         >
           {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-          Extra reference images
+          {t("cfgshared.extraRefsTitle")}
           {refs.length > 0 && (
-            <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-primary/20 text-primary normal-case tracking-normal">
+            <span className="ms-1 text-[10px] px-1.5 py-0.5 rounded bg-primary/20 text-primary normal-case tracking-normal">
               {refs.length}
             </span>
           )}
@@ -261,11 +267,11 @@ export function ExtraRefsSection({
               disabled={uploading}
             >
               {uploading ? (
-                <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                <Loader2 className="w-3 h-3 me-1 animate-spin" />
               ) : (
-                <Plus className="w-3 h-3 mr-1" />
+                <Plus className="w-3 h-3 me-1" />
               )}
-              Add
+              {t("handle.add")}
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-64 p-1" align="end">
@@ -279,12 +285,12 @@ export function ExtraRefsSection({
             />
             <button
               type="button"
-              className="w-full flex items-center gap-2 px-2 py-2 text-xs rounded hover:bg-muted text-left"
+              className="w-full flex items-center gap-2 px-2 py-2 text-xs rounded hover:bg-muted text-start"
               onClick={() => fileInputRef.current?.click()}
             >
               <Upload className="w-3.5 h-3.5 text-primary" />
               <div className="flex-1">
-                <div className="font-medium">Upload from device</div>
+                <div className="font-medium">{t("cfgshared.extraRefsUploadDevice")}</div>
                 <div className="text-[10px] text-muted-foreground">PNG, JPG, WebP</div>
               </div>
             </button>
@@ -293,12 +299,12 @@ export function ExtraRefsSection({
                 <PopoverTrigger asChild>
                   <button
                     type="button"
-                    className="w-full flex items-center gap-2 px-2 py-2 text-xs rounded hover:bg-muted text-left"
+                    className="w-full flex items-center gap-2 px-2 py-2 text-xs rounded hover:bg-muted text-start"
                   >
                     <UserCircle className="w-3.5 h-3.5 text-pink-500" />
                     <div className="flex-1">
-                      <div className="font-medium">Pick from connected character</div>
-                      <div className="text-[10px] text-muted-foreground">{groupedOptions.length} wired</div>
+                      <div className="font-medium">{t("cfgshared.extraRefsPickCharacter")}</div>
+                      <div className="text-[10px] text-muted-foreground">{t("cfgshared.extraRefsWiredMany", { count: groupedOptions.length })}</div>
                     </div>
                     <ChevronRight className="w-3 h-3 text-muted-foreground" />
                   </button>
@@ -308,13 +314,13 @@ export function ExtraRefsSection({
                     {groupedOptions.map((group) => (
                       <div key={group.characterSlug}>
                         <div className="text-[10px] font-semibold text-muted-foreground uppercase px-2 py-1">
-                          {group.characterName}
+                          {localizeNode(group.characterName)}
                         </div>
                         {group.variants.map((opt) => (
                           <button
                             key={opt.key}
                             type="button"
-                            className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-muted text-left"
+                            className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-muted text-start"
                             onClick={() => handlePickCharacter(opt)}
                           >
                             <div className="w-8 h-10 rounded overflow-hidden bg-muted flex-shrink-0">
@@ -347,8 +353,8 @@ export function ExtraRefsSection({
               <div className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground/60">
                 <UserCircle className="w-3.5 h-3.5" />
                 <div className="flex-1">
-                  <div>Pick from connected character</div>
-                  <div className="text-[10px]">No character wired</div>
+                  <div>{t("cfgshared.extraRefsPickCharacter")}</div>
+                  <div className="text-[10px]">{t("cfgshared.extraRefsNoCharacterWired")}</div>
                 </div>
               </div>
             )}
@@ -360,8 +366,7 @@ export function ExtraRefsSection({
         <div className="flex flex-col gap-1.5">
           {refs.length === 0 ? (
             <p className="text-[10px] text-muted-foreground/60 px-1">
-              Add extra images with per-image descriptions (e.g. &quot;full body, standing, facing right&quot;).
-              Descriptions are injected as identity directives at generate time.
+              {t("cfgshared.extraRefsEmptyHint")}
             </p>
           ) : (
             refs.map((ref, i) => (
@@ -388,9 +393,10 @@ interface ExtraRefRowProps {
 }
 
 function ExtraRefRow({ ref, onRemove, onUpdate }: ExtraRefRowProps) {
+  const t = useT()
   const label = ref.characterSlug
     ? `${ref.characterSlug}${ref.variantDisplayName ? ` / ${ref.variantDisplayName}` : ""}`
-    : "Uploaded reference"
+    : t("cfgshared.extraRefsUploadedLabel")
   return (
     <div className="flex gap-2 p-1.5 rounded border border-border/40 bg-background">
       <div className="w-12 h-16 rounded overflow-hidden bg-muted flex-shrink-0">
@@ -408,13 +414,13 @@ function ExtraRefRow({ ref, onRemove, onUpdate }: ExtraRefRowProps) {
         <div className="flex items-center gap-1">
           <span className="text-[10px] font-medium truncate" title={label}>{label}</span>
           {ref.characterSlug && (
-            <span className="text-[8px] px-1 py-0 rounded bg-pink-500/10 text-pink-500">character</span>
+            <span className="text-[8px] px-1 py-0 rounded bg-pink-500/10 text-pink-500">{t("cfgshared.extraRefsCharacterBadge")}</span>
           )}
           <button
             type="button"
             onClick={onRemove}
-            className="ml-auto p-0.5 rounded hover:bg-destructive/10 hover:text-destructive flex-shrink-0"
-            aria-label="Remove reference"
+            className="ms-auto p-0.5 rounded hover:bg-destructive/10 hover:text-destructive flex-shrink-0"
+            aria-label={t("cfgshared.extraRefsRemove")}
           >
             <X className="w-3 h-3" />
           </button>
@@ -424,7 +430,7 @@ function ExtraRefRow({ ref, onRemove, onUpdate }: ExtraRefRowProps) {
           className="text-xs min-h-[40px] resize-y"
           value={ref.description}
           onChange={(e) => onUpdate({ description: e.target.value })}
-          placeholder="full body, standing, facing right…"
+          placeholder={t("cfgshared.extraRefsDescPlaceholder")}
         />
         <Select
           value={ref.usageMode ?? "__inherit__"}
@@ -432,11 +438,11 @@ function ExtraRefRow({ ref, onRemove, onUpdate }: ExtraRefRowProps) {
             onUpdate({ usageMode: v === "__inherit__" ? undefined : (v as UsageMode) })
           }
         >
-          <SelectTrigger className="h-6 text-[10px]" aria-label="Usage mode">
-            <SelectValue placeholder="Inherit" />
+          <SelectTrigger className="h-6 text-[10px]" aria-label={t("cfgshared.extraRefsUsageMode")}>
+            <SelectValue placeholder={t("cfgshared.extraRefsInherit")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__inherit__">Inherit</SelectItem>
+            <SelectItem value="__inherit__">{t("cfgshared.extraRefsInherit")}</SelectItem>
             {USAGE_MODES.map((m) => (
               <SelectItem key={m} value={m}>{usageModeLabel(m)}</SelectItem>
             ))}

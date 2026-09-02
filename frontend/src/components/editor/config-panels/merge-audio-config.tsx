@@ -1,5 +1,7 @@
 "use client"
 
+import { useLocalizeOptionLabel } from "@/lib/i18n/labels"
+import { useT, tx } from "@/lib/i18n"
 import { useMemo } from "react"
 import { Mic, Music, AudioWaveform, Film, Volume2, VolumeX, Play } from "lucide-react"
 import { Input } from "@/components/ui/input"
@@ -17,15 +19,17 @@ import type { MergeVideoAudioData } from "@/types/nodes"
 import type { ConfigProps } from "./types"
 import { classifyMergeSource } from "./merge-audio-classify"
 
-const TRACK_ROLE_OPTIONS = [
-  { value: "dialogue", label: "Dialogue", icon: Mic, color: "text-pink-400 bg-pink-500/15" },
-  { value: "narration", label: "Narration", icon: Mic, color: "text-purple-400 bg-purple-500/15" },
-  { value: "background", label: "Background", icon: Music, color: "text-blue-400 bg-blue-500/15" },
-  { value: "effect", label: "Effect", icon: AudioWaveform, color: "text-amber-400 bg-amber-500/15" },
+function TRACK_ROLE_OPTIONS() {
+  return [
+  { value: "dialogue", label: tx("audiocfg.mergeRoleDialogue"), icon: Mic, color: "text-pink-400 bg-pink-500/15" },
+  { value: "narration", label: tx("audiocfg.mergeRoleNarration"), icon: Mic, color: "text-purple-400 bg-purple-500/15" },
+  { value: "background", label: tx("audiocfg.mergeRoleBackground"), icon: Music, color: "text-blue-400 bg-blue-500/15" },
+  { value: "effect", label: tx("field.effect"), icon: AudioWaveform, color: "text-amber-400 bg-amber-500/15" },
 ] as const
+}
 
 function getRoleBadgeColor(role: string): string {
-  return TRACK_ROLE_OPTIONS.find((o) => o.value === role)?.color ?? "text-muted-foreground bg-muted"
+  return TRACK_ROLE_OPTIONS().find((o) => o.value === role)?.color ?? "text-muted-foreground bg-muted"
 }
 
 function getTrackIcon(sourceType: string) {
@@ -44,6 +48,8 @@ function getTrackDefaultRole(sourceType: string): string {
 }
 
 export function MergeVideoAudioConfig({ data, onUpdate, nodes }: ConfigProps<MergeVideoAudioData>) {
+  const localizeOption = useLocalizeOptionLabel()
+  const t = useT()
   const edges = useWorkflowStore((s) => s.edges)
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
 
@@ -127,7 +133,7 @@ export function MergeVideoAudioConfig({ data, onUpdate, nodes }: ConfigProps<Mer
       <div>
         <Label className="text-xs text-[#ff0073] uppercase tracking-wider font-semibold flex items-center gap-1.5 mb-2">
           <Film className="w-3.5 h-3.5" />
-          Video Source
+          {t("audiocfg.mergeVideoSource")}
         </Label>
         {videoSource ? (
           <div className="rounded-lg border bg-card p-3">
@@ -141,21 +147,21 @@ export function MergeVideoAudioConfig({ data, onUpdate, nodes }: ConfigProps<Mer
             {/* Original audio controls */}
             <div className="border-t pt-2 mt-1">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-muted-foreground">Original Audio</span>
+                <span className="text-xs text-muted-foreground">{t("audiocfg.mergeOriginalAudio")}</span>
                 <button
                   type="button"
                   className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full transition-colors ${keepOriginal ? "bg-emerald-500/15 text-emerald-400" : "bg-muted text-muted-foreground"}`}
                   onClick={() => onUpdate({ keepOriginalAudio: !keepOriginal })}
                 >
                   {keepOriginal ? <Volume2 className="w-3 h-3" /> : <VolumeX className="w-3 h-3" />}
-                  {keepOriginal ? "Keep" : "Muted"}
+                  {keepOriginal ? t("audiocfg.mergeKeepBadge") : t("audiocfg.mergeMutedBadge")}
                 </button>
               </div>
 
               {keepOriginal && (
                 <div className="flex flex-col gap-1.5">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground w-12 shrink-0">Vol</span>
+                    <span className="text-xs text-muted-foreground w-12 shrink-0">{t("audiocfg.mergeVol")}</span>
                     <input
                       type="range"
                       min={0}
@@ -175,7 +181,7 @@ export function MergeVideoAudioConfig({ data, onUpdate, nodes }: ConfigProps<Mer
                     <span className="text-[10px] text-muted-foreground">%</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground w-12 shrink-0">Role</span>
+                    <span className="text-xs text-muted-foreground w-12 shrink-0">{t("audiocfg.mergeRole")}</span>
                     <Select
                       value={data.originalAudioRole ?? "background"}
                       onValueChange={(v) => onUpdate({ originalAudioRole: v })}
@@ -184,9 +190,9 @@ export function MergeVideoAudioConfig({ data, onUpdate, nodes }: ConfigProps<Mer
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="background">Background</SelectItem>
-                        <SelectItem value="narration">Narration</SelectItem>
-                        <SelectItem value="effect">Effect</SelectItem>
+                        <SelectItem value="background">{t("audiocfg.mergeRoleBackground")}</SelectItem>
+                        <SelectItem value="narration">{t("audiocfg.mergeRoleNarration")}</SelectItem>
+                        <SelectItem value="effect">{t("field.effect")}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -196,7 +202,7 @@ export function MergeVideoAudioConfig({ data, onUpdate, nodes }: ConfigProps<Mer
           </div>
         ) : (
           <div className="rounded-lg border-2 border-dashed border-muted-foreground/20 p-3 text-center">
-            <p className="text-xs text-muted-foreground">No video connected</p>
+            <p className="text-xs text-muted-foreground">{t("audiocfg.mergeNoVideo")}</p>
           </div>
         )}
       </div>
@@ -205,7 +211,7 @@ export function MergeVideoAudioConfig({ data, onUpdate, nodes }: ConfigProps<Mer
       <div>
         <Label className="text-xs text-[#ff0073] uppercase tracking-wider font-semibold flex items-center gap-1.5 mb-2">
           <Volume2 className="w-3.5 h-3.5" />
-          Audio Tracks
+          {t("audiocfg.mergeAudioTracks")}
           {audioSources.length > 0 && (
             <span className="bg-[#ff0073]/15 text-[#ff0073] text-[10px] rounded-full px-1.5 py-0.5 font-mono">
               {audioSources.length}
@@ -215,8 +221,8 @@ export function MergeVideoAudioConfig({ data, onUpdate, nodes }: ConfigProps<Mer
 
         {audioSources.length === 0 ? (
           <div className="rounded-lg border-2 border-dashed border-muted-foreground/20 p-3 text-center">
-            <p className="text-xs text-muted-foreground">No audio sources connected</p>
-            <p className="text-[10px] text-muted-foreground/60 mt-0.5">Connect TTS, Music, or Audio nodes</p>
+            <p className="text-xs text-muted-foreground">{t("audiocfg.mergeNoAudioSources")}</p>
+            <p className="text-[10px] text-muted-foreground/60 mt-0.5">{t("audiocfg.mergeConnectHint")}</p>
           </div>
         ) : (
           <div className="flex flex-col gap-2">
@@ -252,20 +258,20 @@ export function MergeVideoAudioConfig({ data, onUpdate, nodes }: ConfigProps<Mer
                     <TrackIcon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                     <span className="text-xs font-medium truncate flex-1" title={srcLabel}>
                       {isVideoSource && (
-                        <span className="text-amber-400 mr-1" title="Audio extracted from video">
-                          {"[vid] "}
+                        <span className="text-amber-400 me-1" title={t("audiocfg.mergeExtractedFromVideo")}>
+                          {t("audiocfg.mergeVidBadge")}
                         </span>
                       )}
                       {srcLabel}
                     </span>
                     <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${roleBadge}`}>
-                      {TRACK_ROLE_OPTIONS.find((o) => o.value === role)?.label ?? role}
+                      {TRACK_ROLE_OPTIONS().find((o) => o.value === role)?.label ?? role}
                     </span>
                     {previewUrl && (
                       <button
                         type="button"
                         className="w-5 h-5 flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                        title="Preview audio"
+                        title={t("audiocfg.mergePreviewAudio")}
                         onClick={() => {
                           const audio = new Audio(previewUrl)
                           audio.volume = Math.min(vol / 100, 1)
@@ -281,7 +287,7 @@ export function MergeVideoAudioConfig({ data, onUpdate, nodes }: ConfigProps<Mer
                   <div className="px-3 py-2 flex flex-col gap-1.5">
                     {/* Role */}
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground w-10 shrink-0">Role</span>
+                      <span className="text-xs text-muted-foreground w-10 shrink-0">{t("audiocfg.mergeRole")}</span>
                       <Select
                         value={role}
                         onValueChange={(v) => updateTrackSetting(src.id, "role", v)}
@@ -290,8 +296,8 @@ export function MergeVideoAudioConfig({ data, onUpdate, nodes }: ConfigProps<Mer
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {TRACK_ROLE_OPTIONS.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                          {TRACK_ROLE_OPTIONS().map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>{localizeOption(opt.label)}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -299,7 +305,7 @@ export function MergeVideoAudioConfig({ data, onUpdate, nodes }: ConfigProps<Mer
 
                     {/* Volume */}
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground w-10 shrink-0">Vol</span>
+                      <span className="text-xs text-muted-foreground w-10 shrink-0">{t("audiocfg.mergeVol")}</span>
                       <input
                         type="range"
                         min={0}
@@ -321,7 +327,7 @@ export function MergeVideoAudioConfig({ data, onUpdate, nodes }: ConfigProps<Mer
 
                     {/* Start time */}
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground w-10 shrink-0">Start</span>
+                      <span className="text-xs text-muted-foreground w-10 shrink-0">{t("audiocfg.mergeStart")}</span>
                       <Input
                         type="number"
                         min={0}
@@ -330,7 +336,7 @@ export function MergeVideoAudioConfig({ data, onUpdate, nodes }: ConfigProps<Mer
                         onChange={(e) => updateTrackSetting(src.id, "startTime", e.target.value === "" ? undefined : parseFloat(e.target.value))}
                         className="flex-1 h-6 text-xs"
                       />
-                      <span className="text-xs text-muted-foreground">s</span>
+                      <span className="text-xs text-muted-foreground">{t("audiocfg.unitSeconds")}</span>
                     </div>
                   </div>
                 </div>

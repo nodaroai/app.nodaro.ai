@@ -3,6 +3,7 @@
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import type { AssembleNarratedVideoData } from "@/types/nodes"
+import { useT } from "@/lib/i18n"
 import type { ConfigProps } from "./types"
 
 /**
@@ -12,10 +13,11 @@ import type { ConfigProps } from "./types"
  * N/A here since there's nothing to snap/clear).
  */
 export function AssembleNarratedVideoConfig({ data, onUpdate }: ConfigProps<AssembleNarratedVideoData>) {
+  const t = useT()
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label htmlFor="voice-volume">Voice Volume (%) — {data.voiceVolume ?? 100}</Label>
+        <Label htmlFor="voice-volume">{t("cfgext.anvVoiceVolume", { n: data.voiceVolume ?? 100 })}</Label>
         <Input
           id="voice-volume"
           type="number"
@@ -29,7 +31,7 @@ export function AssembleNarratedVideoConfig({ data, onUpdate }: ConfigProps<Asse
       </div>
 
       <div>
-        <Label htmlFor="clip-audio-volume">Clip Audio Volume (%) — {data.clipAudioVolume ?? 40}</Label>
+        <Label htmlFor="clip-audio-volume">{t("cfgext.anvClipAudioVolume", { n: data.clipAudioVolume ?? 40 })}</Label>
         <Input
           id="clip-audio-volume"
           type="number"
@@ -43,7 +45,7 @@ export function AssembleNarratedVideoConfig({ data, onUpdate }: ConfigProps<Asse
       </div>
 
       <div>
-        <Label htmlFor="max-slowdown">Max Slowdown — {data.maxSlowdown ?? 1.5}×</Label>
+        <Label htmlFor="max-slowdown">{t("cfgext.anvMaxSlowdown", { n: data.maxSlowdown ?? 1.5 })}</Label>
         <Input
           id="max-slowdown"
           type="number"
@@ -59,7 +61,7 @@ export function AssembleNarratedVideoConfig({ data, onUpdate }: ConfigProps<Asse
 
       <div>
         <Label htmlFor="trim-start-frames">
-          Trim each clip start (frames, except first) — {data.trimStartFrames ?? 0}
+          {t("proccfg.trimEachClipStartFramesExcept", { n: data.trimStartFrames ?? 0 })}
         </Label>
         <Input
           id="trim-start-frames"
@@ -76,7 +78,7 @@ export function AssembleNarratedVideoConfig({ data, onUpdate }: ConfigProps<Asse
 
       <div>
         <Label htmlFor="trim-end-frames">
-          Trim each clip end (frames, except last) — {data.trimEndFrames ?? 0}
+          {t("proccfg.trimEachClipEndFramesExcept", { n: data.trimEndFrames ?? 0 })}
         </Label>
         <Input
           id="trim-end-frames"

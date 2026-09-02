@@ -1,4 +1,5 @@
 import { AlertTriangle } from "lucide-react"
+import { useT } from "@/lib/i18n"
 
 /**
  * Character counter + over-limit WARNING for prompt / negative / text fields.
@@ -14,17 +15,20 @@ export function PromptLengthCounter({
   value,
   max,
   modelLabel,
-  noun = "prompt",
+  noun,
 }: {
   readonly value: string | undefined
   readonly max: number
   /** The selected model's name, shown in the warning so the user knows what to switch away from. */
   readonly modelLabel?: string
-  /** Field noun for the warning copy ("prompt" | "negative prompt" | "lyrics" | "text"). */
+  /** Field noun for the warning copy ("prompt" | "negative prompt" | "lyrics" | "text"). Already
+   *  localized by the caller; defaults to the localized "prompt". */
   readonly noun?: string
 }) {
+  const t = useT()
   const len = value?.length ?? 0
   const over = len > max
+  const nounText = noun ?? t("audiocfg.prompt")
   return (
     <div className="flex flex-col gap-0.5">
       <span className={`text-xs ${over ? "text-amber-500 font-medium" : "text-muted-foreground"}`}>
@@ -34,8 +38,9 @@ export function PromptLengthCounter({
         <span className="text-xs text-amber-500 inline-flex items-start gap-1">
           <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" aria-hidden />
           <span>
-            {len - max} over {modelLabel ? `${modelLabel}'s` : "this model's"} {max}-character {noun}{" "}
-            limit — it will be truncated. Switch to a model with a higher limit, or shorten it.
+            {modelLabel
+              ? t("cfgext.plcOverLimitModel", { over: len - max, model: modelLabel, max, noun: nounText })
+              : t("cfgext.plcOverLimit", { over: len - max, max, noun: nounText })}
           </span>
         </span>
       )}

@@ -1,13 +1,13 @@
 import { describe, it, expect } from "vitest"
 import { GENERATE_TEXT_TEMPLATES, getGenerateTextTemplate } from "../generate-text-templates"
 
-describe("GENERATE_TEXT_TEMPLATES", () => {
+describe("GENERATE_TEXT_TEMPLATES()", () => {
   it("has exactly 4 templates", () => {
-    expect(GENERATE_TEXT_TEMPLATES).toHaveLength(4)
+    expect(GENERATE_TEXT_TEMPLATES()).toHaveLength(4)
   })
 
   it("template IDs are photo-shoot, product-catalog, storyboard, custom", () => {
-    expect(GENERATE_TEXT_TEMPLATES.map((t) => t.id)).toEqual([
+    expect(GENERATE_TEXT_TEMPLATES().map((t) => t.id)).toEqual([
       "photo-shoot",
       "product-catalog",
       "storyboard",
@@ -16,7 +16,7 @@ describe("GENERATE_TEXT_TEMPLATES", () => {
   })
 
   it("every template has required fields", () => {
-    for (const tmpl of GENERATE_TEXT_TEMPLATES) {
+    for (const tmpl of GENERATE_TEXT_TEMPLATES()) {
       expect(tmpl.id).toBeTruthy()
       expect(tmpl.label).toBeTruthy()
       expect(tmpl.description).toBeTruthy()
@@ -26,18 +26,18 @@ describe("GENERATE_TEXT_TEMPLATES", () => {
   })
 
   it("custom template has an empty system prompt", () => {
-    const custom = GENERATE_TEXT_TEMPLATES.find((t) => t.id === "custom")!
+    const custom = GENERATE_TEXT_TEMPLATES().find((t) => t.id === "custom")!
     expect(custom.systemPrompt).toBe("")
   })
 
   it("non-custom templates have non-empty system prompts", () => {
-    for (const tmpl of GENERATE_TEXT_TEMPLATES.filter((t) => t.id !== "custom")) {
+    for (const tmpl of GENERATE_TEXT_TEMPLATES().filter((t) => t.id !== "custom")) {
       expect(tmpl.systemPrompt.length).toBeGreaterThan(0)
     }
   })
 
   it("photo-shoot template has defaultInput and defaultMaxTokens", () => {
-    const photoShoot = GENERATE_TEXT_TEMPLATES.find((t) => t.id === "photo-shoot")!
+    const photoShoot = GENERATE_TEXT_TEMPLATES().find((t) => t.id === "photo-shoot")!
     expect(photoShoot.defaultInput).toBeTruthy()
     expect(photoShoot.defaultMaxTokens).toBe(16384)
   })

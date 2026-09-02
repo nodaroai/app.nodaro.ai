@@ -12,31 +12,43 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { SHEET_TYPES, SHEET_SKINS, SHEET_ASPECTS, type SheetType, type SheetSkin, type SheetAspect, type SheetFlavour, type EntityKind } from "@nodaro/shared"
+import { useT, tx } from "@/lib/i18n"
 import type { ReferenceSheetData } from "@/types/nodes"
 import type { ConfigProps } from "./types"
 
-const TYPE_LABELS: Record<SheetType, string> = {
-  turnaround: "Turnaround",
-  "variation-board": "Variation Board",
-  detail: "Detail",
-  "full-reference": "Full Reference",
+// Live getters, not module constants: a table built at import time would freeze
+// the boot locale and never follow a language switch (reasoning-effort-select's
+// EFFORT_LABELS() is the reference implementation).
+function TYPE_LABELS(): Record<SheetType, string> {
+  return {
+    turnaround: tx("cfgext.refSheetTypeTurnaround"),
+    "variation-board": tx("cfgext.refSheetTypeVariationBoard"),
+    detail: tx("cfgext.refSheetTypeDetail"),
+    "full-reference": tx("cfgext.refSheetTypeFullReference"),
+  }
 }
-const SKIN_LABELS: Record<SheetSkin, string> = {
-  studio: "Studio",
-  cinematic: "Cinematic",
-  blueprint: "Blueprint",
-  illustrated: "Illustrated",
+function SKIN_LABELS(): Record<SheetSkin, string> {
+  return {
+    studio: tx("cfgext.refSheetSkinStudio"),
+    cinematic: tx("cfgext.refSheetSkinCinematic"),
+    blueprint: tx("cfgext.refSheetSkinBlueprint"),
+    illustrated: tx("cfgext.refSheetSkinIllustrated"),
+  }
 }
-const ASPECT_LABELS: Record<SheetAspect, string> = {
-  landscape: "Landscape",
-  square: "Square",
-  story: "Story (9:16)",
+function ASPECT_LABELS(): Record<SheetAspect, string> {
+  return {
+    landscape: tx("cfgext.refSheetAspectLandscape"),
+    square: tx("cfgext.refSheetAspectSquare"),
+    story: tx("cfgext.refSheetAspectStory"),
+  }
 }
 
-const ENTITY_META: Record<EntityKind, { label: string; Icon: typeof User }> = {
-  character: { label: "Character", Icon: User },
-  object: { label: "Object", Icon: Box },
-  location: { label: "Location", Icon: MapPin },
+function ENTITY_META(): Record<EntityKind, { label: string; Icon: typeof User }> {
+  return {
+    character: { label: tx("assetlib.typeCharacter"), Icon: User },
+    object: { label: tx("assetlib.typeObject"), Icon: Box },
+    location: { label: tx("assetlib.typeLocation"), Icon: MapPin },
+  }
 }
 
 const ENTITY_TYPES = new Set<string>(["character", "object", "location"])
@@ -66,6 +78,7 @@ export function ReferenceSheetConfig({
   edges,
   nodeId,
 }: ConfigProps<ReferenceSheetData> & { nodeId?: string }) {
+  const t = useT()
   const flavour: SheetFlavour =
     data.flavour ?? { outputFormat: "still", withText: true, showLabels: true, aspect: "landscape", background: "grey" }
 
@@ -95,7 +108,7 @@ export function ReferenceSheetConfig({
 
   const updateFlavour = (partial: Partial<SheetFlavour>) => onUpdate({ flavour: { ...flavour, ...partial } })
 
-  const entityMeta = connectedKind ? ENTITY_META[connectedKind] : undefined
+  const entityMeta = connectedKind ? ENTITY_META()[connectedKind] : undefined
 
   return (
     <div className="flex flex-col gap-3">
@@ -104,27 +117,27 @@ export function ReferenceSheetConfig({
         {entityMeta ? (
           <div className="flex items-center gap-2 text-sm">
             <entityMeta.Icon className="w-4 h-4 text-[#ff0073]" />
-            <span className="font-medium text-foreground">{entityMeta.label} connected</span>
+            <span className="font-medium text-foreground">{t("cfgext.refSheetEntityConnected", { entity: entityMeta.label })}</span>
           </div>
         ) : (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Unplug className="w-4 h-4" />
-            <span>Connect a character, object, or location</span>
+            <span>{t("cfgext.refSheetConnectPrompt")}</span>
           </div>
         )}
         <p className="text-[11px] text-muted-foreground mt-1 leading-snug">
-          Generates any missing panels from the main image, then composes the sheet. The entity needs a main image.
+          {t("cfgext.refSheetIntro")}
         </p>
       </div>
 
       {/* 2. Sheet type */}
       <div>
-        <Label>Sheet type</Label>
+        <Label>{t("cfgext.refSheetSheetType")}</Label>
         <Select value={data.type ?? "full-reference"} onValueChange={(v) => onUpdate({ type: v as SheetType })}>
-          <SelectTrigger aria-label="Sheet type"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("cfgext.refSheetSheetType")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            {SHEET_TYPES.map((t) => (
-              <SelectItem key={t} value={t}>{TYPE_LABELS[t]}</SelectItem>
+            {SHEET_TYPES.map((ty) => (
+              <SelectItem key={ty} value={ty}>{TYPE_LABELS()[ty]}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -132,12 +145,12 @@ export function ReferenceSheetConfig({
 
       {/* 3. Skin */}
       <div>
-        <Label>Skin</Label>
+        <Label>{t("cfgext.refSheetSkinLabel")}</Label>
         <Select value={data.skin ?? "studio"} onValueChange={(v) => onUpdate({ skin: v as SheetSkin })}>
-          <SelectTrigger aria-label="Skin"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("cfgext.refSheetSkinLabel")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {SHEET_SKINS.map((s) => (
-              <SelectItem key={s} value={s}>{SKIN_LABELS[s]}</SelectItem>
+              <SelectItem key={s} value={s}>{SKIN_LABELS()[s]}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -145,19 +158,19 @@ export function ReferenceSheetConfig({
 
       {/* 4. Layout */}
       <div>
-        <Label>Aspect</Label>
+        <Label>{t("cfgext.refSheetAspectLabel")}</Label>
         <Select value={flavour.aspect} onValueChange={(v) => updateFlavour({ aspect: v as SheetAspect })}>
-          <SelectTrigger aria-label="Aspect"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("cfgext.refSheetAspectLabel")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {SHEET_ASPECTS.map((a) => (
-              <SelectItem key={a} value={a}>{ASPECT_LABELS[a]}</SelectItem>
+              <SelectItem key={a} value={a}>{ASPECT_LABELS()[a]}</SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
 
       <div className="flex items-center justify-between">
-        <Label htmlFor="rs-with-text" className="cursor-pointer">Title & metadata text</Label>
+        <Label htmlFor="rs-with-text" className="cursor-pointer">{t("cfgext.refSheetWithText")}</Label>
         <Switch
           id="rs-with-text"
           checked={flavour.withText}
@@ -166,7 +179,7 @@ export function ReferenceSheetConfig({
       </div>
 
       <div className="flex items-center justify-between">
-        <Label htmlFor="rs-show-labels" className="cursor-pointer">Panel labels</Label>
+        <Label htmlFor="rs-show-labels" className="cursor-pointer">{t("cfgext.refSheetPanelLabels")}</Label>
         <Switch
           id="rs-show-labels"
           checked={flavour.showLabels}

@@ -1,6 +1,7 @@
 "use client"
 import { Slider } from "@/components/ui/slider"
 import { useCallback } from "react"
+import { useT } from "@/lib/i18n"
 
 interface RetakeRangeSliderProps {
   /** Total video duration in seconds. */
@@ -25,6 +26,7 @@ export function RetakeRangeSlider({
   onChange,
   className,
 }: RetakeRangeSliderProps) {
+  const t = useT()
   const end = startTime + duration
   const handleChange = useCallback(
     (next: number[]) => {
@@ -51,12 +53,12 @@ export function RetakeRangeSlider({
         step={STEP}
         minStepsBetweenThumbs={Math.ceil(MIN_DURATION / STEP)}
         onValueChange={handleChange}
-        aria-label="Retake time window"
+        aria-label={t("cfgext.retakeAriaWindow")}
       />
       <div className="mt-2 flex justify-between text-xs text-muted-foreground">
-        <span>Start: {startTime.toFixed(1)}s</span>
-        <span>Duration: {duration.toFixed(1)}s</span>
-        <span>End: {end.toFixed(1)}s</span>
+        <span>{t("cfgext.retakeStart", { n: startTime.toFixed(1) })}</span>
+        <span>{t("proccfg.durationS", { n: duration.toFixed(1) })}</span>
+        <span>{t("cfgext.retakeEnd", { n: end.toFixed(1) })}</span>
       </div>
     </div>
   )

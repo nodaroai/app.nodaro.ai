@@ -1,7 +1,12 @@
 import { describe, it, expect, vi } from "vitest"
 import { render, screen, fireEvent } from "@testing-library/react"
 import { WebScrapeConfig } from "../scraper-configs"
+import { translate } from "@/lib/i18n"
 import type { WebScrapeNodeData } from "@/types/nodes"
+
+// The panel's field labels are localized; assert against the English
+// resolution of the very key the panel renders, not a hand-copied literal.
+const en = (key: Parameters<typeof translate>[1]) => translate("en", key)
 
 vi.mock("@/components/ui/label", () => ({
   Label: ({ children, htmlFor, ...props }: any) => (
@@ -85,24 +90,24 @@ function renderPanel(data: Partial<WebScrapeNodeData> = {}) {
 describe("WebScrapeConfig", () => {
   it("renders Google Search fields by default", () => {
     renderPanel()
-    expect(screen.getByLabelText(/query/i)).toBeInTheDocument()
-    expect(screen.queryByLabelText(/start url/i)).not.toBeInTheDocument()
+    expect(screen.getByLabelText(en("cfgext.scrapeQuery"))).toBeInTheDocument()
+    expect(screen.queryByLabelText(en("cfgext.scrapeStartUrl"))).not.toBeInTheDocument()
   })
 
   it("content-crawler actor reveals URL field and crawl mode", () => {
     renderPanel({ actor: "content-crawler", url: "https://example.com" })
-    expect(screen.getByLabelText(/start url/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/crawl mode/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(en("cfgext.scrapeStartUrl"))).toBeInTheDocument()
+    expect(screen.getByLabelText(en("cfgext.scrapeCrawlMode"))).toBeInTheDocument()
   })
 
   it("instagram actor shows target URL field", () => {
     renderPanel({ actor: "instagram", target: "https://instagram.com/nasa" })
-    expect(screen.getByLabelText(/profile or post url/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(en("cfgext.scrapeTarget"))).toBeInTheDocument()
   })
 
   it("changes propagate via onUpdate", () => {
     const { onUpdate } = renderPanel()
-    fireEvent.change(screen.getByLabelText(/query/i), { target: { value: "ai news" } })
+    fireEvent.change(screen.getByLabelText(en("cfgext.scrapeQuery")), { target: { value: "ai news" } })
     expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ query: "ai news" }))
   })
 })

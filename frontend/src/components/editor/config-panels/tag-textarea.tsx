@@ -5,6 +5,7 @@ import { AUDIO_TAGS, SSML_BREAK_OPTIONS, isV2Model } from "@/lib/audio-tags"
 import type { NodeRefItem } from "@/lib/node-refs"
 import type { VariableDisplayMode } from "./types"
 import { renderNodeRefs } from "@/lib/render-node-refs"
+import { useT, tx } from "@/lib/i18n"
 import { optimizedImageUrl } from "@/lib/image"
 import { computeFlipPosition } from "@/lib/flip-position"
 import { PROMPT_EDITOR_PORTAL_PROPS } from "@/lib/prompt-editor-portal"
@@ -202,13 +203,18 @@ export interface RefImageItem {
 
 type TriggerChar = "[" | "<" | "/" | "{" | "@"
 
-const REF_IMAGE_SOURCE_LABEL: Record<RefImageItem["source"], string> = {
-  uploaded: "Uploaded",
-  wired: "Wired",
-  character: "Character",
-  location: "Location",
-  video: "Video",
-  audio: "Audio",
+/** Category headers for the `@` autocomplete rows. A function, not a const:
+ *  a module-level table built with `tx()` at load time would freeze on the boot
+ *  locale (see EFFORT_LABELS in reasoning-effort-select). */
+function REF_IMAGE_SOURCE_LABEL(): Record<RefImageItem["source"], string> {
+  return {
+    uploaded: tx("cfgshared.refImgUploaded"),
+    wired: tx("cfgshared.refImgWired"),
+    character: tx("assetlib.typeCharacter"),
+    location: tx("assetlib.typeLocation"),
+    video: tx("common.video"),
+    audio: tx("usage.catAudio"),
+  }
 }
 
 /**
@@ -245,12 +251,10 @@ function getAllSuggestions(): SuggestionItem[] {
     category: t.category,
   }))
   for (const b of SSML_BREAK_OPTIONS) {
-    items.push({ tag: b.tag, label: b.label, category: "SSML Breaks" })
+    items.push({ tag: b.tag, label: b.label, category: tx("cfgext.tagTaSsmlBreaks") })
   }
   return items
 }
-
-const ALL_SUGGESTIONS = getAllSuggestions()
 
 /**
  * Scan the current prompt for existing `@<char>:<N>(:<variant>)?` tokens and
@@ -276,22 +280,25 @@ function computeNextMentionIndex(promptValue: string): number {
   return maxIndex + 1
 }
 
-const SSML_SUGGESTIONS: SuggestionItem[] = SSML_BREAK_OPTIONS.map((b) => ({
-  tag: b.tag,
-  label: b.label,
-  category: "SSML Breaks",
-}))
+function ssmlSuggestions(): SuggestionItem[] {
+  return SSML_BREAK_OPTIONS.map((b) => ({
+    tag: b.tag,
+    label: b.label,
+    category: tx("cfgext.tagTaSsmlBreaks"),
+  }))
+}
 
 /** Map node type to a human-readable category for the dropdown */
 function nodeTypeCategory(type: string): string {
-  if (["text-prompt", "ai-writer", "llm-chat", "list"].includes(type)) return "Text"
-  if (["generate-image", "upload-image", "edit-image", "image-to-image", "character", "face", "object", "location", "scene"].includes(type)) return "Image"
-  if (["image-to-video", "text-to-video", "video-to-video", "upload-video", "youtube-video", "combine-videos", "extend-video"].includes(type)) return "Video"
-  if (["text-to-speech", "generate-music", "text-to-audio", "upload-audio", "suno-generate"].includes(type)) return "Audio"
-  return "Node"
+  if (["text-prompt", "ai-writer", "llm-chat", "list"].includes(type)) return tx("out.text")
+  if (["generate-image", "upload-image", "edit-image", "image-to-image", "character", "face", "object", "location", "scene"].includes(type)) return tx("common.image")
+  if (["image-to-video", "text-to-video", "video-to-video", "upload-video", "youtube-video", "combine-videos", "extend-video"].includes(type)) return tx("common.video")
+  if (["text-to-speech", "generate-music", "text-to-audio", "upload-audio", "suno-generate"].includes(type)) return tx("usage.catAudio")
+  return tx("cfgext.tagTaNodeCategory")
 }
 
 export function TagTextarea(props: TagTextareaProps) {
+  const t = useT()
   const { value, onChange, placeholder, rows, className, maxLength, nodeRefs, referenceImages, displayMode = "raw", refMap, snippets } = props
   const tagMode: "audio" | "suno" | "none" = props.tagMode ?? "none"
   const provider = props.tagMode === "audio" ? props.provider : undefined
@@ -327,7 +334,9 @@ export function TagTextarea(props: TagTextareaProps) {
       label: ref.label,
       category: nodeTypeCategory(ref.type),
     }))
-  }, [nodeRefs])
+    // `t` is in the deps only to re-run the localized category labels on a
+    // language switch (nodeTypeCategory reads the live locale via tx()).
+  }, [nodeRefs, t])
 
   // Hybrid autocomplete for the `@` trigger:
   //
@@ -371,9 +380,9 @@ export function TagTextarea(props: TagTextareaProps) {
     // specific variant, surface USAGE_MODES so they can pick the per-mention
     // mode override. Typing filters by label/key.
     if (drillVariant) {
-      const variantName = drillVariant.variantDisplayName ?? "canonical"
-      const backLabel = `back (${variantName})`
-      const modeCategory = "Usage mode"
+      const variantName = drillVariant.variantDisplayName ?? t("cfgshared.variantCanonical")
+      const backLabel = t("cfgext.tagTaBackTo", { name: variantName })
+      const modeCategory = t("cfgshared.extraRefsUsageMode")
       const matchingModes = q.length > 0
         ? USAGE_MODES.filter((m) =>
             usageModeLabel(m).toLowerCase().includes(q) || m.toLowerCase().includes(q),
@@ -401,7 +410,7 @@ export function TagTextarea(props: TagTextareaProps) {
     // `@smile` finds Kira's smile expression directly. Filter matches
     // character name, variant name, character slug, or variant slug.
     if (q.length > 0) {
-      const flatCategory = "Search"
+      const flatCategory = t("cfgext.tagTaSearch")
       const matches: SuggestionItem[] = []
       for (const [slug, group] of characterGroups) {
         const canonical = group.find((i) => !i.variantSlug) ?? group[0]
@@ -456,7 +465,7 @@ export function TagTextarea(props: TagTextareaProps) {
             kind: "leaf",
             tag: refInsertTag(r),
             label: `#${r.index} ${r.label}`,
-            category: REF_IMAGE_SOURCE_LABEL[r.source],
+            category: REF_IMAGE_SOURCE_LABEL()[r.source],
             thumbnailUrl: r.url,
           })
         }
@@ -469,10 +478,10 @@ export function TagTextarea(props: TagTextareaProps) {
       const variants = characterGroups.get(drillCharacterSlug) ?? []
       const canonical = variants.find((v) => !v.variantSlug)
       const characterName = canonical?.label ?? drillCharacterSlug
-      const backLabel = `back (${characterName})`
+      const backLabel = t("cfgext.tagTaBackTo", { name: characterName })
       // Single category bucket keeps the back row visually attached to the
       // variant list and avoids two separate category headers.
-      const drillCategory = `${characterName} variants`
+      const drillCategory = t("cfgext.tagTaVariantsOf", { name: characterName })
       return [
         {
           kind: "back",
@@ -504,22 +513,22 @@ export function TagTextarea(props: TagTextareaProps) {
         kind: "character-root",
         tag: `@${slug}`,
         label: canonical.label,
-        category: REF_IMAGE_SOURCE_LABEL[canonical.source],
+        category: REF_IMAGE_SOURCE_LABEL()[canonical.source],
         thumbnailUrl: canonical.url,
         characterSlug: slug,
         // Hint at how many variants are available behind the drill-in.
-        variantDisplayName: variantCount > 1 ? `${variantCount} variants` : undefined,
+        variantDisplayName: variantCount > 1 ? t("cfgext.tagTaVariantCount", { count: variantCount }) : undefined,
       })
     }
     const nonCharacterLeaves: SuggestionItem[] = nonCharacterItems.map((r) => ({
       kind: "leaf",
       tag: refInsertTag(r),
       label: `#${r.index} ${r.label}`,
-      category: REF_IMAGE_SOURCE_LABEL[r.source],
+      category: REF_IMAGE_SOURCE_LABEL()[r.source],
       thumbnailUrl: r.url,
     }))
     return [...nonCharacterLeaves, ...characterRoots]
-  }, [referenceImages, drillCharacterSlug, drillVariant, filterText])
+  }, [referenceImages, drillCharacterSlug, drillVariant, filterText, t])
 
   // Filter character-aware suggestions internally (the memo above already
   // applies the query in flat-search mode and ignores it in root/drill mode).
@@ -553,7 +562,7 @@ export function TagTextarea(props: TagTextareaProps) {
       if (triggerInfo.char === "<") return []
       items = customTags
     } else if (tagMode === "audio") {
-      items = triggerInfo.char === "<" ? SSML_SUGGESTIONS : ALL_SUGGESTIONS
+      items = triggerInfo.char === "<" ? ssmlSuggestions() : getAllSuggestions()
     } else {
       return []
     }
@@ -561,7 +570,9 @@ export function TagTextarea(props: TagTextareaProps) {
     if (!q) return items
     // Back rows always stay visible — they're navigation, not data.
     return items.filter((s) => s.kind === "back" || s.label.toLowerCase().includes(q) || s.category.toLowerCase().includes(q))
-  }, [showDropdown, triggerInfo, filterText, customTags, nodeRefSuggestions, refImageSuggestions, tagMode, snippets])
+    // `t` re-runs the memo on a language switch: the audio-tag / SSML category
+    // headers above are built from the live locale.
+  }, [showDropdown, triggerInfo, filterText, customTags, nodeRefSuggestions, refImageSuggestions, tagMode, snippets, t])
 
   const groupedFiltered = useMemo(() => {
     const map = new Map<string, SuggestionItem[]>()
@@ -632,9 +643,9 @@ export function TagTextarea(props: TagTextareaProps) {
       const isAudioTag = tag.startsWith("[")
       const isSsmlTag = tag.startsWith("<")
       if (isSsmlTag && provider !== undefined && !isV2Model(provider)) {
-        setWarning("SSML breaks work best with Turbo v2.5 or Multilingual v2")
+        setWarning(tx("cfgext.tagTaSsmlWarning"))
       } else if (isAudioTag && provider !== undefined && isV2Model(provider)) {
-        setWarning("Audio tags like " + tag + " work best with ElevenLabs v3")
+        setWarning(tx("cfgext.tagTaAudioTagWarning", { tag }))
       }
     }
 
@@ -1079,7 +1090,7 @@ export function TagTextarea(props: TagTextareaProps) {
             </span>
             <button
               type="button"
-              aria-label="Remove image reference"
+              aria-label={t("cfgext.tagTaRemoveImageRef")}
               className="image-ref-pill__remove"
               onMouseDown={(e) => {
                 // Use mousedown so the textarea doesn't reclaim focus before
@@ -1108,7 +1119,7 @@ export function TagTextarea(props: TagTextareaProps) {
       parts.push("\n")
     }
     return parts
-  }, [value, highlightPattern, referenceImages, removeTokenAt])
+  }, [value, highlightPattern, referenceImages, removeTokenAt, t])
 
   // Sync scroll from textarea to backdrop
   const backdropRef = useRef<HTMLDivElement | null>(null)
@@ -1172,7 +1183,7 @@ export function TagTextarea(props: TagTextareaProps) {
                   key={`back-${idx}`}
                   type="button"
                   data-index={idx}
-                  className={`w-full text-left px-2.5 py-1.5 text-[11px] cursor-pointer transition-colors flex items-center gap-2 border-b border-border/50 ${
+                  className={`w-full text-start px-2.5 py-1.5 text-[11px] cursor-pointer transition-colors flex items-center gap-2 border-b border-border/50 ${
                     isSelected
                       ? "bg-sky-500/15 text-sky-700 dark:text-sky-300"
                       : "hover:bg-muted text-muted-foreground"
@@ -1194,7 +1205,7 @@ export function TagTextarea(props: TagTextareaProps) {
                   key={`mode-${item.mode}`}
                   type="button"
                   data-index={idx}
-                  className={`w-full text-left px-2.5 py-1.5 text-[11px] cursor-pointer transition-colors flex items-center gap-2 ${
+                  className={`w-full text-start px-2.5 py-1.5 text-[11px] cursor-pointer transition-colors flex items-center gap-2 ${
                     isSelected
                       ? "bg-sky-500/15 text-sky-700 dark:text-sky-300"
                       : "hover:bg-muted text-foreground"
@@ -1223,7 +1234,7 @@ export function TagTextarea(props: TagTextareaProps) {
                 key={isSnippet ? `snippet-${item.snippetId}` : item.tag}
                 type="button"
                 data-index={idx}
-                className={`w-full text-left px-2.5 py-1.5 text-[11px] cursor-pointer transition-colors flex items-center gap-2 ${
+                className={`w-full text-start px-2.5 py-1.5 text-[11px] cursor-pointer transition-colors flex items-center gap-2 ${
                   isSelected
                     ? "bg-sky-500/15 text-sky-700 dark:text-sky-300"
                     : "hover:bg-muted text-foreground"
@@ -1244,7 +1255,7 @@ export function TagTextarea(props: TagTextareaProps) {
                     <span className="truncate flex-1 min-w-0">
                       {item.label}
                       {item.variantDisplayName && item.variantDisplayName !== "canonical" && (
-                        <span className="text-slate-500 ml-1">/ {item.variantDisplayName}</span>
+                        <span className="text-slate-500 ms-1">/ {item.variantDisplayName}</span>
                       )}
                     </span>
                     {isCharacterRoot ? (
@@ -1269,8 +1280,8 @@ export function TagTextarea(props: TagTextareaProps) {
                         {showModeChip && (
                           <span
                             role="button"
-                            aria-label="Pick usage mode"
-                            title="Pick usage mode (or press Right arrow)"
+                            aria-label={t("cfgext.tagTaPickUsageMode")}
+                            title={t("cfgext.tagTaPickUsageModeTitle")}
                             className={`inline-flex items-center rounded-md border px-1.5 py-0 text-[10px] font-medium leading-4 shrink-0 cursor-pointer transition-colors ${
                               isSelected
                                 ? "border-sky-400/60 bg-sky-500/10 text-sky-700 dark:text-sky-200 hover:bg-sky-500/25"
@@ -1285,7 +1296,7 @@ export function TagTextarea(props: TagTextareaProps) {
                               drillIntoMode(item)
                             }}
                           >
-                            mode &rsaquo;
+                            {t("cfgext.tagTaModeChip")} &rsaquo;
                           </span>
                         )}
                       </>

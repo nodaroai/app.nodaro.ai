@@ -67,7 +67,7 @@ vi.mock("@/ee/hooks/use-model-credits", () => ({ useModelCredits: () => 3 }))
 vi.mock("@/components/ui/delete-confirmation-dialog", () => ({ DeleteConfirmationDialog: () => null }))
 vi.mock("@/lib/generate-text-templates", () => ({
   getGenerateTextTemplate: () => ({ id: "custom", label: "Custom" }),
-  GENERATE_TEXT_TEMPLATES: [{ id: "custom", label: "Custom" }],
+  GENERATE_TEXT_TEMPLATES: () => [{ id: "custom", label: "Custom" }],
 }))
 vi.mock("react-dom", async () => {
   const actual = await vi.importActual("react-dom")

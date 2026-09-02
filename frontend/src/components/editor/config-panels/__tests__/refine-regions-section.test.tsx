@@ -22,6 +22,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { render, screen, fireEvent, act, waitFor } from "@testing-library/react"
 import { RefineRegionsSection } from "../refine-regions-section"
+import { translate } from "@/lib/i18n"
 import type { GenerateImageData } from "@/types/nodes"
 
 const { grokSegmentMapMock, grokRegionEditMock, getJobStatusLeanMock, pollImageRefineToNodeMock } =
@@ -95,8 +96,8 @@ describe("RefineRegionsSection", () => {
       ],
     })
     render(<RefineRegionsSection nodeId="n1" data={data} onUpdate={vi.fn()} />)
-    expect(screen.getByText(/Run this node again to enable region editing/)).toBeTruthy()
-    expect(screen.queryByText(/Detect regions/)).toBeNull()
+    expect(screen.getByText(translate("en", "cfgext.refineNoTaskId"))).toBeTruthy()
+    expect(screen.queryByText(translate("en", "cfgext.refineDetectRegions"))).toBeNull()
   })
 
   it("detects regions (passing the source image for placement) and stores the zipped segment map with bboxes", async () => {
@@ -106,7 +107,7 @@ describe("RefineRegionsSection", () => {
     const onUpdate = vi.fn()
     render(<RefineRegionsSection nodeId="n1" data={baseData()} onUpdate={onUpdate} />)
 
-    fireEvent.click(screen.getByText(/Detect regions/))
+    fireEvent.click(screen.getByText(translate("en", "cfgext.refineDetectRegions")))
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2000)
     })
@@ -139,7 +140,7 @@ describe("RefineRegionsSection", () => {
       },
     })
     render(<RefineRegionsSection nodeId="n1" data={data} onUpdate={vi.fn()} />)
-    expect(screen.getByText(/Detect regions/)).toBeTruthy()
+    expect(screen.getByText(translate("en", "cfgext.refineDetectRegions"))).toBeTruthy()
     expect(screen.queryByText("sky")).toBeNull()
   })
 
@@ -228,7 +229,7 @@ describe("RefineRegionsSection", () => {
 
     // The regression: with located segments present, NO re-detect affordance
     // existed at all — old (wrong) placements were stranded forever.
-    const redetect = screen.getByRole("button", { name: /Re-detect regions/ })
+    const redetect = screen.getByRole("button", { name: translate("en", "cfgext.refineRedetectRegions") })
     fireEvent.click(redetect)
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2000)
@@ -251,7 +252,7 @@ describe("RefineRegionsSection", () => {
     })
     render(<RefineRegionsSection nodeId="n1" data={data} onUpdate={vi.fn()} />)
 
-    fireEvent.click(screen.getByText(/Edit 2 regions/))
+    fireEvent.click(screen.getByText(translate("en", "cfgext.refineEditRegionMany", { n: 2 })))
     await waitFor(() => expect(pollImageRefineToNodeMock).toHaveBeenCalledTimes(1))
     const [nodeId, apiCall, label] = pollImageRefineToNodeMock.mock.calls[0]
     expect(nodeId).toBe("n1")
@@ -270,7 +271,7 @@ describe("RefineRegionsSection", () => {
     const { rerender } = render(
       <RefineRegionsSection nodeId="n1" data={baseData({ grokSegments: segments })} onUpdate={vi.fn()} />,
     )
-    const applyNoPrompt = screen.getByRole("button", { name: /Edit whole image/ })
+    const applyNoPrompt = screen.getByRole("button", { name: translate("en", "cfgext.refineEditWholeImage") })
     expect((applyNoPrompt as HTMLButtonElement).disabled).toBe(true)
 
     rerender(
@@ -280,7 +281,7 @@ describe("RefineRegionsSection", () => {
         onUpdate={vi.fn()}
       />,
     )
-    fireEvent.click(screen.getByRole("button", { name: /Edit whole image/ }))
+    fireEvent.click(screen.getByRole("button", { name: translate("en", "cfgext.refineEditWholeImage") }))
     await waitFor(() => expect(pollImageRefineToNodeMock).toHaveBeenCalledTimes(1))
     grokRegionEditMock.mockResolvedValue({ jobId: "edit-job-2" })
     await pollImageRefineToNodeMock.mock.calls[0][1]()

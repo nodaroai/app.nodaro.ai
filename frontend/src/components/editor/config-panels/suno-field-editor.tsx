@@ -1,3 +1,4 @@
+import { tx } from "@/lib/i18n"
 import { Input } from "@/components/ui/input"
 import { TagTextarea, type SuggestionItem } from "./tag-textarea"
 import { PromptLengthCounter } from "./prompt-length-counter"
@@ -18,6 +19,8 @@ export type SunoEditField = "style" | "lyrics" | "title" | "negativeStyle"
 export interface SunoFieldEditMeta {
   readonly field: SunoEditField
   readonly label: string
+  /** The label without its "(optional)" tail — for the on-node quick menu. */
+  readonly shortLabel: string
   readonly kind: "input" | "tags"
   readonly rows?: number
   readonly maxLength: number
@@ -26,11 +29,15 @@ export interface SunoFieldEditMeta {
   readonly counter?: "style" | "prompt"
 }
 
-export const SUNO_FIELD_EDIT_META: Record<SunoEditField, SunoFieldEditMeta> = {
-  title: { field: "title", label: "Title (optional)", kind: "input", maxLength: 200, placeholder: "Song title" },
-  lyrics: { field: "lyrics", label: "Lyrics (optional)", kind: "tags", rows: 4, maxLength: SUNO_TEXT_MAX, customTags: SUNO_LYRICS_SUGGESTION_ITEMS, placeholder: "Write custom lyrics... (type [ or / for metatags)", counter: "prompt" },
-  style: { field: "style", label: "Style (optional)", kind: "tags", rows: 2, maxLength: 1000, customTags: SUNO_STYLE_SUGGESTION_ITEMS, placeholder: "e.g. pop, rock, jazz, lo-fi... (type [ or / for suggestions)", counter: "style" },
-  negativeStyle: { field: "negativeStyle", label: "Negative Style (optional)", kind: "tags", rows: 2, maxLength: 500, customTags: SUNO_STYLE_SUGGESTION_ITEMS, placeholder: "Styles to avoid... (type [ or / for suggestions)" },
+// A getter, not a module constant: the labels/placeholders are chrome copy and
+// must follow a live language switch instead of freezing on the boot locale.
+export function SUNO_FIELD_EDIT_META(): Record<SunoEditField, SunoFieldEditMeta> {
+  return {
+    title: { field: "title", label: tx("audiocfg.titleOptional"), shortLabel: tx("audiocfg.fieldTitle"), kind: "input", maxLength: 200, placeholder: tx("audiocfg.phSongTitle") },
+    lyrics: { field: "lyrics", label: tx("audiocfg.lyricsOptional"), shortLabel: tx("audiocfg.fieldLyrics"), kind: "tags", rows: 4, maxLength: SUNO_TEXT_MAX, customTags: SUNO_LYRICS_SUGGESTION_ITEMS, placeholder: tx("audiocfg.phWriteCustomLyricsTags"), counter: "prompt" },
+    style: { field: "style", label: tx("audiocfg.styleOptional"), shortLabel: tx("audiocfg.fieldStyle"), kind: "tags", rows: 2, maxLength: 1000, customTags: SUNO_STYLE_SUGGESTION_ITEMS, placeholder: tx("audiocfg.phGenreTags1"), counter: "style" },
+    negativeStyle: { field: "negativeStyle", label: tx("audiocfg.negativeStyleOptional"), shortLabel: tx("audiocfg.fieldNegativeStyle"), kind: "tags", rows: 2, maxLength: 500, customTags: SUNO_STYLE_SUGGESTION_ITEMS, placeholder: tx("audiocfg.phStylesToAvoidTags") },
+  }
 }
 
 export function SunoFieldEditor({

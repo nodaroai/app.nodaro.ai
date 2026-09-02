@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
 import { render, screen } from "@testing-library/react"
 import { SunoField, isSunoFieldWired } from "../suno-field"
+import { translate } from "@/lib/i18n"
 import { SunoFieldAiButton } from "@/components/nodes/suno-field-ai-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { WorkflowEdge } from "@/types/nodes"
@@ -88,7 +89,7 @@ describe("read-only ⇔ AI-button-hidden (via the unified predicate)", () => {
       </SunoField>,
     )
     // Read-only preview shown; the editable child is NOT mounted.
-    expect(screen.getByText(/value comes from the connected handle/i)).toBeInTheDocument()
+    expect(screen.getByText(translate("en", "cfgext.sunoValueFromHandle"))).toBeInTheDocument()
     expect(screen.queryByTestId("editor")).toBeNull()
   })
 

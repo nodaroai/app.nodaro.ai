@@ -1,5 +1,6 @@
 "use client"
 
+import { useT, tx } from "@/lib/i18n"
 import { useMemo, useState } from "react"
 import { Check, Copy, Eye, Pencil } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -35,15 +36,17 @@ export const ORIGIN_CLASS: Record<DisplayOrigin, string> = {
 
 /** Legend dot color + label per origin. `mention` reads as "References" to the
  *  user (it's the identity/reference directive block). Display order is fixed. */
-export const LEGEND_META: ReadonlyArray<{ origin: Exclude<DisplayOrigin, "user">; label: string; dot: string }> = [
-  { origin: "variable", label: "Variable", dot: "bg-sky-500" },
-  { origin: "picker", label: "Picker", dot: "bg-indigo-500" },
-  { origin: "snippet", label: "Snippet", dot: "bg-amber-500" },
-  { origin: "affix", label: "Pre/post text", dot: "bg-teal-500" },
-  { origin: "mention", label: "References", dot: "bg-violet-500" },
-  { origin: "style", label: "Style", dot: "bg-muted-foreground" },
-  { origin: "negative", label: "Negative", dot: "bg-rose-500" },
+export function LEGEND_META(): ReadonlyArray<{ origin: Exclude<DisplayOrigin, "user">; label: string; dot: string }> {
+  return [
+  { origin: "variable", label: tx("audiocfg.variable"), dot: "bg-sky-500" },
+  { origin: "picker", label: tx("cfgshared.legendPicker"), dot: "bg-indigo-500" },
+  { origin: "snippet", label: tx("cfgshared.legendSnippet"), dot: "bg-amber-500" },
+  { origin: "affix", label: tx("cfgshared.legendAffix"), dot: "bg-teal-500" },
+  { origin: "mention", label: tx("cfgshared.legendReferences"), dot: "bg-violet-500" },
+  { origin: "style", label: tx("field.style"), dot: "bg-muted-foreground" },
+  { origin: "negative", label: tx("cfgshared.legendNegative"), dot: "bg-rose-500" },
 ]
+}
 
 interface PromptFieldFinalViewProps {
   /** Origin-tagged segments to render as colored spans. INVARIANT (upstream):
@@ -95,6 +98,7 @@ export function PromptFieldFinalView({
   hideLegend = false,
   className,
 }: PromptFieldFinalViewProps) {
+  const t = useT()
   const hasContent = plainText.length > 0
 
   // Legend shows only when ≥1 non-user origin is present.
@@ -103,7 +107,7 @@ export function PromptFieldFinalView({
     for (const s of segments) set.add(s.origin)
     return set
   }, [segments])
-  const legendItems = LEGEND_META.filter((l) => presentOrigins.has(l.origin))
+  const legendItems = LEGEND_META().filter((l) => presentOrigins.has(l.origin))
 
   const [copied, setCopied] = useState(false)
   const handleCopy = () => {
@@ -133,20 +137,20 @@ export function PromptFieldFinalView({
           type="button"
           onClick={handleCopy}
           disabled={!hasContent}
-          aria-label="Copy final prompt"
-          title={hasContent ? "Copy to clipboard" : "Nothing to copy"}
+          aria-label={t("cfgshared.copyFinalPrompt")}
+          title={hasContent ? t("cfgshared.copyToClipboard") : t("cfgshared.nothingToCopy")}
           className={cn(
-            "absolute right-1.5 top-1.5 flex items-center gap-1 text-[10px] uppercase tracking-wider font-semibold rounded px-1.5 py-0.5 transition-colors",
+            "absolute end-1.5 top-1.5 flex items-center gap-1 text-[10px] uppercase tracking-wider font-semibold rounded px-1.5 py-0.5 transition-colors",
             hasContent
               ? "text-muted-foreground hover:text-foreground hover:bg-gray-100 dark:hover:bg-[#2D2D2D] cursor-pointer"
               : "text-muted-foreground/40 cursor-not-allowed",
           )}
         >
           {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
-          <span>{copied ? "Copied" : "Copy"}</span>
+          <span>{copied ? t("apiTok.copied") : t("apiTok.copy")}</span>
         </button>
         {hasContent ? (
-          <p className="text-[13px] leading-relaxed whitespace-pre-wrap break-words pr-12 text-foreground">
+          <p className="text-[13px] leading-relaxed whitespace-pre-wrap break-words pe-12 text-foreground">
             {/* Flat-path fallback: provider-less surfaces feed `plainText` with
                 empty `segments` (no provenance spans), so render the plain text
                 directly rather than an empty paragraph. Mirrors the old
@@ -159,13 +163,13 @@ export function PromptFieldFinalView({
               : plainText}
           </p>
         ) : (
-          <p className="text-[13px] leading-relaxed text-muted-foreground pr-12">
+          <p className="text-[13px] leading-relaxed text-muted-foreground pe-12">
             {placeholder ?? ""}
           </p>
         )}
       </div>
       {!hideLegend && legendItems.length > 0 && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-0.5 pt-0.5" aria-label="Prompt provenance legend">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-0.5 pt-0.5" aria-label={t("cfgshared.provenanceLegend")}>
           {legendItems.map((l) => (
             <span key={l.origin} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
               <span className={cn("inline-block size-2.5 rounded-full", l.dot)} aria-hidden="true" />
@@ -196,7 +200,8 @@ interface PromptFieldModeToggleProps {
  * offers an Eye ("Show final prompt"); in final mode a Pencil ("Edit prompt").
  */
 export function PromptFieldModeToggle({ mode, onToggle, className }: PromptFieldModeToggleProps) {
-  const label = mode === "edit" ? "Show final prompt" : "Edit prompt"
+  const t = useT()
+  const label = mode === "edit" ? t("cfgshared.showFinalPrompt") : t("node.editPrompt")
   return (
     <button
       type="button"

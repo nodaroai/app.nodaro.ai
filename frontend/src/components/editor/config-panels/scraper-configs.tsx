@@ -15,6 +15,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "sonner"
 import { SCRAPER_ACTOR_LABELS, type ScraperActorId } from "@nodaro/shared"
+import { useT, tx } from "@/lib/i18n"
 import type { WebScrapeNodeData } from "@/types/nodes"
 import {
   WEB_SCRAPE_PEEK,
@@ -46,6 +47,7 @@ const ACTOR_FIELD_KEYS = ["query", "maxResults", "countryCode", "url", "mode", "
  * before that — no new plumbing: the default derives from run state.
  */
 export function WebScrapeConfig(props: ConfigProps<WebScrapeNodeData>) {
+  const t = useT()
   const hasRun = props.data.lastRunOutcome !== undefined || props.data.generatedJson !== undefined
   return (
     // key: the panel stays mounted across open/close, so defaultValue alone
@@ -54,8 +56,8 @@ export function WebScrapeConfig(props: ConfigProps<WebScrapeNodeData>) {
     // once a run has finished".
     <Tabs key={hasRun ? "has-run" : "no-run"} defaultValue={hasRun ? "results" : "config"} className="flex flex-col gap-3">
       <TabsList className="grid w-full grid-cols-2 h-8">
-        <TabsTrigger value="config" className="text-xs">Config</TabsTrigger>
-        <TabsTrigger value="results" className="text-xs">Results</TabsTrigger>
+        <TabsTrigger value="config" className="text-xs">{t("cfgext.reduceTabConfig")}</TabsTrigger>
+        <TabsTrigger value="results" className="text-xs">{t("cfgext.scrapeResultsTab")}</TabsTrigger>
       </TabsList>
       <TabsContent value="config">
         <WebScrapeConfigTab {...props} />
@@ -69,6 +71,7 @@ export function WebScrapeConfig(props: ConfigProps<WebScrapeNodeData>) {
 
 // Exported for tests — rendered only inside WebScrapeConfig's Results tab.
 export function WebScrapeResultsTab({ data }: { readonly data: WebScrapeNodeData }) {
+  const t = useT()
   const [view, setView] = useState<"list" | "json">("list")
   const actor: ScraperActorId = data.actor ?? "google-search"
   const peek = WEB_SCRAPE_PEEK[actor]
@@ -79,15 +82,15 @@ export function WebScrapeResultsTab({ data }: { readonly data: WebScrapeNodeData
   if (data.generatedJson === undefined) {
     return (
       <p className="text-xs text-muted-foreground py-4 text-center">
-        No results yet — run the node to fetch.
+        {t("cfgext.scrapeNoResults")}
       </p>
     )
   }
 
   const copyJson = () => {
     void navigator.clipboard.writeText(json).then(
-      () => toast.success("JSON copied"),
-      () => toast.error("Copy failed"),
+      () => toast.success(tx("cfgext.scrapeJsonCopied")),
+      () => toast.error(tx("cfgext.scrapeCopyFailed")),
     )
   }
   const downloadJson = () => {
@@ -104,27 +107,29 @@ export function WebScrapeResultsTab({ data }: { readonly data: WebScrapeNodeData
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <div className="flex gap-1">
-          <Button variant={view === "list" ? "secondary" : "ghost"} size="sm" className="h-6 px-2 text-xs" onClick={() => setView("list")}>List</Button>
-          <Button variant={view === "json" ? "secondary" : "ghost"} size="sm" className="h-6 px-2 text-xs" onClick={() => setView("json")}>Raw JSON</Button>
+          <Button variant={view === "list" ? "secondary" : "ghost"} size="sm" className="h-6 px-2 text-xs" onClick={() => setView("list")}>{t("cfgext.scrapeViewList")}</Button>
+          <Button variant={view === "json" ? "secondary" : "ghost"} size="sm" className="h-6 px-2 text-xs" onClick={() => setView("json")}>{t("cfgext.scrapeViewJson")}</Button>
         </div>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" className="h-6 px-1.5" onClick={copyJson} title="Copy JSON">
+          <Button variant="ghost" size="sm" className="h-6 px-1.5" onClick={copyJson} title={t("cfgext.scrapeCopyJson")}>
             <Copy className="h-3 w-3" />
           </Button>
-          <Button variant="ghost" size="sm" className="h-6 px-1.5" onClick={downloadJson} title="Download JSON">
+          <Button variant="ghost" size="sm" className="h-6 px-1.5" onClick={downloadJson} title={t("cfgext.scrapeDownloadJson")}>
             <Download className="h-3 w-3" />
           </Button>
         </div>
       </div>
       <div className="text-[10px] text-muted-foreground flex items-center justify-between">
         <span>
-          {items.length} {peek.countNoun}
+          {peek.countNoun === "pages"
+            ? t("cfgext.scrapeCountPages", { count: items.length })
+            : t("cfgext.scrapeCountResults", { count: items.length })}
           {data.lastGoodAt ? ` · ${relativeTime(data.lastGoodAt)}` : ""}
         </span>
         <span>{sizeKb} KB</span>
       </div>
       {view === "list" ? (
-        <div className="flex flex-col gap-1.5 max-h-[50vh] overflow-y-auto pr-1">
+        <div className="flex flex-col gap-1.5 max-h-[50vh] overflow-y-auto pe-1">
           {items.map((item, i) => {
             const sub =
               actor === "google-search" ? item.url
@@ -137,7 +142,7 @@ export function WebScrapeResultsTab({ data }: { readonly data: WebScrapeNodeData
             return (
               <div key={i} className="flex flex-col border-b border-border/40 pb-1.5 min-w-0">
                 <div className="flex items-baseline gap-1.5 min-w-0">
-                  <span className="w-[16px] shrink-0 text-[10px] text-muted-foreground/70 text-right">{peek.glyph(item, i)}</span>
+                  <span className="w-[16px] shrink-0 text-[10px] text-muted-foreground/70 text-end">{peek.glyph(item, i)}</span>
                   {href ? (
                     <a href={href} target="_blank" rel="noopener noreferrer" className="truncate text-xs hover:underline" title={href}>{title}</a>
                   ) : (
@@ -148,9 +153,9 @@ export function WebScrapeResultsTab({ data }: { readonly data: WebScrapeNodeData
                   href && sub.trim() === href ? (
                     // Same destination as the title link — out of the tab order so
                     // keyboard users are not handed the same link twice per row.
-                    <a href={href} target="_blank" rel="noopener noreferrer" tabIndex={-1} className="pl-[22px] truncate text-[10px] text-muted-foreground/70 hover:underline hover:text-muted-foreground">{sub}</a>
+                    <a href={href} target="_blank" rel="noopener noreferrer" tabIndex={-1} className="ps-[22px] truncate text-[10px] text-muted-foreground/70 hover:underline hover:text-muted-foreground">{sub}</a>
                   ) : (
-                    <span className="pl-[22px] truncate text-[10px] text-muted-foreground/70">{sub}</span>
+                    <span className="ps-[22px] truncate text-[10px] text-muted-foreground/70">{sub}</span>
                   )
                 )}
               </div>
@@ -165,7 +170,16 @@ export function WebScrapeResultsTab({ data }: { readonly data: WebScrapeNodeData
 }
 
 function WebScrapeConfigTab({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<WebScrapeNodeData>) {
+  const t = useT()
   const actor: ScraperActorId = data.actor ?? "google-search"
+
+  // SCRAPER_ACTOR_LABELS lives in @nodaro/shared (wire contract, shared with
+  // the node card), so the two non-brand entries are localized here at the
+  // render site rather than by editing the shared table.
+  const actorLabel = (id: ScraperActorId): string =>
+    id === "content-crawler" ? t("cfgext.scrapeActorContentCrawler")
+    : id === "rss" ? t("cfgext.scrapeActorRss")
+    : SCRAPER_ACTOR_LABELS[id]
 
   const handleActorChange = (v: string) => {
     const next = v as ScraperActorId
@@ -179,7 +193,7 @@ function WebScrapeConfigTab({ data, onUpdate, sources, fieldMappings, onMapField
     <div className="flex flex-col gap-3">
       {/* Actor */}
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="scraper-actor">Source</Label>
+        <Label htmlFor="scraper-actor">{t("inputcfg.source")}</Label>
         <Select
           value={actor}
           onValueChange={handleActorChange}
@@ -190,7 +204,7 @@ function WebScrapeConfigTab({ data, onUpdate, sources, fieldMappings, onMapField
           <SelectContent>
             {ACTOR_OPTIONS.map((id) => (
               <SelectItem key={id} value={id}>
-                {SCRAPER_ACTOR_LABELS[id]}
+                {actorLabel(id)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -200,17 +214,17 @@ function WebScrapeConfigTab({ data, onUpdate, sources, fieldMappings, onMapField
       {/* Google Search */}
       {actor === "google-search" && (
         <>
-          <MappableField field="query" label="Query" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField field="query" label={t("cfgext.scrapeQuery")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <Input
               id="scraper-query"
               value={data.query ?? ""}
               onChange={(e) => onUpdate({ query: e.target.value })}
-              placeholder="e.g. ai news today (use {} to inject input)"
+              placeholder={t("cfgext.scrapeQueryPh")}
               className="text-sm"
             />
           </MappableField>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="scraper-max-results">Max results</Label>
+            <Label htmlFor="scraper-max-results">{t("cfgext.scrapeMaxResults")}</Label>
             <Input
               id="scraper-max-results"
               type="number"
@@ -224,7 +238,7 @@ function WebScrapeConfigTab({ data, onUpdate, sources, fieldMappings, onMapField
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="scraper-country">Country code</Label>
+            <Label htmlFor="scraper-country">{t("cfgext.scrapeCountryCode")}</Label>
             <Input
               id="scraper-country"
               value={data.countryCode ?? ""}
@@ -242,17 +256,17 @@ function WebScrapeConfigTab({ data, onUpdate, sources, fieldMappings, onMapField
       {/* Content Crawler */}
       {actor === "content-crawler" && (
         <>
-          <MappableField field="url" label="Start URL" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField field="url" label={t("cfgext.scrapeStartUrl")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <Input
               id="scraper-url"
               value={data.url ?? ""}
               onChange={(e) => onUpdate({ url: e.target.value })}
-              placeholder="https://example.com (use {} to inject input)"
+              placeholder={t("cfgext.scrapeUrlPh")}
               className="text-sm"
             />
           </MappableField>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="scraper-mode">Crawl mode</Label>
+            <Label htmlFor="scraper-mode">{t("cfgext.scrapeCrawlMode")}</Label>
             <Select
               value={data.mode ?? "page"}
               onValueChange={(v) => onUpdate({ mode: v as "page" | "site" })}
@@ -261,8 +275,8 @@ function WebScrapeConfigTab({ data, onUpdate, sources, fieldMappings, onMapField
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="page">{`Single page (${formatCreditUnits(3)})`}</SelectItem>
-                <SelectItem value="site">{`Site crawl, up to 20 pages (${formatCreditUnits(10)})`}</SelectItem>
+                <SelectItem value="page">{t("cfgext.scrapeSinglePage", { units: formatCreditUnits(3) })}</SelectItem>
+                <SelectItem value="site">{t("cfgext.scrapeSiteCrawl", { units: formatCreditUnits(10) })}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -272,7 +286,7 @@ function WebScrapeConfigTab({ data, onUpdate, sources, fieldMappings, onMapField
       {/* RSS — direct fetch + XML parse, no Apify */}
       {actor === "rss" && (
         <>
-          <MappableField field="url" label="Feed URL" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField field="url" label={t("inputcfg.feedUrl")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <Input
               id="scraper-rss-url"
               value={data.url ?? ""}
@@ -282,7 +296,7 @@ function WebScrapeConfigTab({ data, onUpdate, sources, fieldMappings, onMapField
             />
           </MappableField>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="scraper-rss-limit">Results limit</Label>
+            <Label htmlFor="scraper-rss-limit">{t("cfgext.scrapeResultsLimit")}</Label>
             <Input
               id="scraper-rss-limit"
               type="number"
@@ -295,7 +309,7 @@ function WebScrapeConfigTab({ data, onUpdate, sources, fieldMappings, onMapField
               className="text-sm"
             />
             <p className="text-[10px] text-muted-foreground">
-              Fetched directly (no Apify). Emits an array of {"{ title, url, description, pubDate, guid }"}.
+              {t("cfgext.scrapeRssHint", { fields: "{ title, url, description, pubDate, guid }" })}
             </p>
           </div>
         </>
@@ -304,21 +318,21 @@ function WebScrapeConfigTab({ data, onUpdate, sources, fieldMappings, onMapField
       {/* Instagram / TikTok */}
       {(actor === "instagram" || actor === "tiktok") && (
         <>
-          <MappableField field="target" label="Profile or post URL" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField field="target" label={t("cfgext.scrapeTarget")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <Input
               id="scraper-target"
               value={data.target ?? ""}
               onChange={(e) => onUpdate({ target: e.target.value })}
               placeholder={
                 actor === "instagram"
-                  ? "https://instagram.com/nasa (use {} to inject input)"
-                  : "https://tiktok.com/@username (use {} to inject input)"
+                  ? t("cfgext.scrapeInstagramPh")
+                  : t("cfgext.scrapeTiktokPh")
               }
               className="text-sm"
             />
           </MappableField>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="scraper-results-limit">Results limit</Label>
+            <Label htmlFor="scraper-results-limit">{t("cfgext.scrapeResultsLimit")}</Label>
             <Input
               id="scraper-results-limit"
               type="number"

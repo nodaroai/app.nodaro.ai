@@ -139,7 +139,7 @@ describe("suno-generate on-node Edit menu", () => {
     await user.click(await screen.findByRole("menuitem", { name: "Lyrics" }))
 
     expect(
-      await screen.findByPlaceholderText(SUNO_FIELD_EDIT_META.lyrics.placeholder),
+      await screen.findByPlaceholderText(SUNO_FIELD_EDIT_META().lyrics.placeholder),
     ).toBeInTheDocument()
   })
 
@@ -163,7 +163,7 @@ describe("suno-generate on-node Edit menu", () => {
       // Selecting Prompt opens the prompt-edit surface for THIS node...
       expect(openPromptEditor).toHaveBeenCalledWith("n1")
       // ...and does NOT open the field-edit modal (no secondary-field editor mounts).
-      expect(screen.queryByPlaceholderText(SUNO_FIELD_EDIT_META.lyrics.placeholder)).toBeNull()
+      expect(screen.queryByPlaceholderText(SUNO_FIELD_EDIT_META().lyrics.placeholder)).toBeNull()
     } finally {
       useWorkflowStore.setState({ openPromptEditor: orig })
     }

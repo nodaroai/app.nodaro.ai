@@ -1,3 +1,4 @@
+import { useLocalizeOptionLabel } from "@/lib/i18n/labels"
 import { useState, useRef, useCallback, useMemo, useEffect } from "react"
 import { hasCredits } from "@/lib/edition"
 import { formatCreditUnits } from "@/lib/credit-units"
@@ -27,6 +28,7 @@ import { useVoiceLibraryInfinite } from "@/hooks/use-voices"
 import { useVoiceClones, useCreateVoiceClone, useDeleteVoiceClone } from "@/hooks/use-voice-clones"
 import { getCachedCredits, prefetchModelCredits } from "@/ee/hooks/use-model-credits"
 import { toast } from "sonner"
+import { useT, tx } from "@/lib/i18n"
 import type { TtsProvider } from "@nodaro/shared"
 
 /** Library-voice model verification, threaded so the TTS config can snap to
@@ -62,52 +64,105 @@ interface VoiceBrowserProps {
 export const BROWSE_DIALOG_Z = "z-[110]"
 export const FILTER_SELECT_Z = "z-[120]"
 
+// Every filter table below is a FUNCTION, not a module constant: a constant
+// that calls tx() at load time freezes the boot locale, so a language switch
+// would leave the picker's own chips and menus in the old language while the
+// rest of the dialog followed (the EFFORT_LABELS() pattern in
+// reasoning-effort-select.tsx). The `value` side is the ElevenLabs query enum
+// and stays English; only `label` is translated.
 const GENDER_FILTERS = ["All", "Female", "Male", "Other"] as const
 type GenderFilter = (typeof GENDER_FILTERS)[number]
 
-const LIBRARY_CATEGORIES = [
-  { key: "featured", label: "Featured", isFeatured: true },
-  { key: "professional", label: "Professional", isFeatured: false },
-  { key: "famous", label: "Famous", isFeatured: false },
-] as const
+/** Display text for the gender chips. Keyed BY the English filter value —
+ *  `matchesGender` and the API's `gender` param both read that value, so it
+ *  must not be translated in place. */
+function GENDER_FILTER_LABELS(): Record<GenderFilter, string> {
+  return {
+    All: tx("apps.filterAll"),
+    Female: tx("audiocfg.female"),
+    Male: tx("audiocfg.male"),
+    Other: tx("usage.catOther"),
+  }
+}
 
-const SORT_OPTIONS = [
-  { value: "trending", label: "Trending" },
-  { value: "latest", label: "Latest" },
-  { value: "most_users", label: "Most Popular" },
-  { value: "usage", label: "Most Used" },
-] as const
+interface FilterOption {
+  readonly value: string
+  readonly label: string
+}
 
-const ACCENT_OPTIONS = [
-  "american", "british", "australian", "indian", "african", "irish",
-  "italian", "german", "french", "spanish", "latin", "scandinavian",
-  "korean", "japanese", "chinese", "arabic", "portuguese", "dutch",
-  "polish", "turkish", "swedish", "russian",
-] as const
+function LIBRARY_CATEGORIES(): ReadonlyArray<{ readonly key: string; readonly label: string; readonly isFeatured: boolean }> {
+  return [
+    { key: "featured", label: tx("cfgext.voiceCatFeatured"), isFeatured: true },
+    { key: "professional", label: tx("cfgext.voiceCatProfessional"), isFeatured: false },
+    { key: "famous", label: tx("cfgext.voiceCatFamous"), isFeatured: false },
+  ]
+}
 
-const AGE_OPTIONS = [
-  { value: "young", label: "Young" },
-  { value: "middle_aged", label: "Middle Aged" },
-  { value: "old", label: "Old" },
-] as const
+function SORT_OPTIONS(): ReadonlyArray<FilterOption> {
+  return [
+    { value: "trending", label: tx("cfgext.voiceSortTrending") },
+    { value: "latest", label: tx("cfgext.voiceSortLatest") },
+    { value: "most_users", label: tx("marketplace.sortPopular") },
+    { value: "usage", label: tx("cfgext.voiceSortMostUsed") },
+  ]
+}
 
-const USE_CASE_OPTIONS = [
-  { value: "advertisement", label: "Advertisement" },
-  { value: "characters_animation", label: "Characters & Animation" },
-  { value: "conversational", label: "Conversational" },
-  { value: "entertainment_tv", label: "Entertainment & TV" },
-  { value: "informative_educational", label: "Informative & Educational" },
-  { value: "narrative_story", label: "Narrative & Story" },
-  { value: "social_media", label: "Social Media" },
-] as const
+function ACCENT_OPTIONS(): ReadonlyArray<FilterOption> {
+  return [
+    { value: "american", label: tx("cfgext.voiceAccentAmerican") }, { value: "british", label: tx("cfgext.voiceAccentBritish") },
+    { value: "australian", label: tx("cfgext.voiceAccentAustralian") }, { value: "indian", label: tx("cfgext.voiceAccentIndian") },
+    { value: "african", label: tx("cfgext.voiceAccentAfrican") }, { value: "irish", label: tx("cfgext.voiceAccentIrish") },
+    { value: "italian", label: tx("cfgext.voiceAccentItalian") }, { value: "german", label: tx("cfgext.voiceAccentGerman") },
+    { value: "french", label: tx("cfgext.voiceAccentFrench") }, { value: "spanish", label: tx("cfgext.voiceAccentSpanish") },
+    { value: "latin", label: tx("cfgext.voiceAccentLatin") }, { value: "scandinavian", label: tx("cfgext.voiceAccentScandinavian") },
+    { value: "korean", label: tx("cfgext.voiceAccentKorean") }, { value: "japanese", label: tx("cfgext.voiceAccentJapanese") },
+    { value: "chinese", label: tx("cfgext.voiceAccentChinese") }, { value: "arabic", label: tx("cfgext.voiceAccentArabic") },
+    { value: "portuguese", label: tx("cfgext.voiceAccentPortuguese") }, { value: "dutch", label: tx("cfgext.voiceAccentDutch") },
+    { value: "polish", label: tx("cfgext.voiceAccentPolish") }, { value: "turkish", label: tx("cfgext.voiceAccentTurkish") },
+    { value: "swedish", label: tx("cfgext.voiceAccentSwedish") }, { value: "russian", label: tx("cfgext.voiceAccentRussian") },
+  ]
+}
 
-const TONE_OPTIONS = [
-  "anxious", "calm", "casual", "chill", "classy", "confident", "crisp",
-  "cute", "deep", "excited", "formal", "gentle", "grumpy", "husky",
-  "hyped", "intense", "mature", "meditative", "modulated", "neutral",
-  "pleasant", "professional", "raspy", "relaxed", "rough", "sad",
-  "sassy", "serious", "soft", "upbeat", "whispery", "wise",
-] as const
+function AGE_OPTIONS(): ReadonlyArray<FilterOption> {
+  return [
+    { value: "young", label: tx("cfgext.voiceAgeYoung") },
+    { value: "middle_aged", label: tx("cfgext.voiceAgeMiddleAged") },
+    { value: "old", label: tx("cfgext.voiceAgeOld") },
+  ]
+}
+
+function USE_CASE_OPTIONS(): ReadonlyArray<FilterOption> {
+  return [
+    { value: "advertisement", label: tx("cfgext.voiceUseAdvertisement") },
+    { value: "characters_animation", label: tx("cfgext.voiceUseCharactersAnimation") },
+    { value: "conversational", label: tx("cfgext.voiceUseConversational") },
+    { value: "entertainment_tv", label: tx("cfgext.voiceUseEntertainmentTv") },
+    { value: "informative_educational", label: tx("cfgext.voiceUseInformativeEducational") },
+    { value: "narrative_story", label: tx("cfgext.voiceUseNarrativeStory") },
+    { value: "social_media", label: tx("cat.socialMedia") },
+  ]
+}
+
+function TONE_OPTIONS(): ReadonlyArray<FilterOption> {
+  return [
+    { value: "anxious", label: tx("cfgext.voiceToneAnxious") }, { value: "calm", label: tx("cfgext.voiceToneCalm") },
+    { value: "casual", label: tx("cfgext.voiceToneCasual") }, { value: "chill", label: tx("cfgext.voiceToneChill") },
+    { value: "classy", label: tx("cfgext.voiceToneClassy") }, { value: "confident", label: tx("cfgext.voiceToneConfident") },
+    { value: "crisp", label: tx("cfgext.voiceToneCrisp") }, { value: "cute", label: tx("cfgext.voiceToneCute") },
+    { value: "deep", label: tx("cfgext.voiceToneDeep") }, { value: "excited", label: tx("cfgext.voiceToneExcited") },
+    { value: "formal", label: tx("cfgext.voiceToneFormal") }, { value: "gentle", label: tx("cfgext.voiceToneGentle") },
+    { value: "grumpy", label: tx("cfgext.voiceToneGrumpy") }, { value: "husky", label: tx("cfgext.voiceToneHusky") },
+    { value: "hyped", label: tx("cfgext.voiceToneHyped") }, { value: "intense", label: tx("cfgext.voiceToneIntense") },
+    { value: "mature", label: tx("cfgext.voiceToneMature") }, { value: "meditative", label: tx("cfgext.voiceToneMeditative") },
+    { value: "modulated", label: tx("cfgext.voiceToneModulated") }, { value: "neutral", label: tx("cfgext.voiceToneNeutral") },
+    { value: "pleasant", label: tx("cfgext.voiceTonePleasant") }, { value: "professional", label: tx("cfgext.voiceCatProfessional") },
+    { value: "raspy", label: tx("cfgext.voiceToneRaspy") }, { value: "relaxed", label: tx("cfgext.voiceToneRelaxed") },
+    { value: "rough", label: tx("cfgext.voiceToneRough") }, { value: "sad", label: tx("cfgext.voiceToneSad") },
+    { value: "sassy", label: tx("cfgext.voiceToneSassy") }, { value: "serious", label: tx("cfgext.voiceToneSerious") },
+    { value: "soft", label: tx("cfgext.voiceToneSoft") }, { value: "upbeat", label: tx("cfgext.voiceToneUpbeat") },
+    { value: "whispery", label: tx("cfgext.voiceToneWhispery") }, { value: "wise", label: tx("cfgext.voiceToneWise") },
+  ]
+}
 
 type TabId = "my-voices" | "premade" | "library"
 
@@ -125,6 +180,9 @@ function capitalize(s: string): string {
 }
 
 export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomVoices, triggerAriaLabel }: VoiceBrowserProps) {
+  const localizeOption = useLocalizeOptionLabel()
+  const t = useT()
+  const genderLabels = GENDER_FILTER_LABELS()
   const [open, setOpen] = useState(false)
   // The Voice Library opens first: thousands of voices with the full filter set
   // (language, tone, …) against a couple dozen premades — it is where the right
@@ -299,13 +357,13 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
     }
   }, [])
 
-  const displayLabel = valueLabel || value || "Select voice"
+  const displayLabel = valueLabel || value || t("cfgext.voiceSelectVoice")
 
   const tabs: TabId[] = showCustomVoices ? ["library", "my-voices", "premade"] : ["library", "premade"]
   const tabLabels: Record<TabId, string> = {
-    "my-voices": "My Voices",
-    premade: "Premade",
-    library: "Voice Library",
+    "my-voices": t("cfgext.voiceTabMyVoices"),
+    premade: t("cfgext.voiceTabPremade"),
+    library: t("cfgext.voiceTabLibrary"),
   }
 
   return (
@@ -326,7 +384,7 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
           higher FILTER_SELECT_Z so their menus clear THIS dialog in turn. */}
       <DialogContent className={`sm:max-w-md max-h-[80vh] flex flex-col gap-3 p-4 ${BROWSE_DIALOG_Z}`} overlayClassName={BROWSE_DIALOG_Z}>
         <DialogHeader>
-          <DialogTitle>Browse Voices</DialogTitle>
+          <DialogTitle>{t("cfgext.voiceBrowseVoices")}</DialogTitle>
         </DialogHeader>
 
         {/* Tabs */}
@@ -362,12 +420,12 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
           <>
             {/* Search */}
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
-                placeholder="Search voices..."
+                placeholder={t("cfgext.voiceSearchVoices")}
                 value={premadeSearch}
                 onChange={(e) => setPremadeSearch(e.target.value)}
-                className="pl-8 h-8 text-sm"
+                className="ps-8 h-8 text-sm"
               />
             </div>
 
@@ -381,17 +439,17 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
                     onClick={() => setPremadeGender(g)}
                     className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${premadeGender === g ? "border-primary bg-primary/10 text-primary font-medium" : "hover:bg-muted text-muted-foreground"}`}
                   >
-                    {g}
+                    {genderLabels[g]}
                   </button>
                 ))}
               </div>
               {premadeAccents.length > 0 && (
                 <Select value={premadeAccent} onValueChange={setPremadeAccent}>
                   <SelectTrigger className="h-7 w-[120px] text-xs">
-                    <SelectValue placeholder="Accent" />
+                    <SelectValue placeholder={t("cfgext.voiceAccentPlaceholder")} />
                   </SelectTrigger>
                   <SelectContent className={FILTER_SELECT_Z}>
-                    <SelectItem value="All">All accents</SelectItem>
+                    <SelectItem value="All">{t("cfgext.voiceAllAccents")}</SelectItem>
                     {premadeAccents.map((a) => (
                       <SelectItem key={a} value={a}>{a}</SelectItem>
                     ))}
@@ -423,18 +481,18 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
           <>
             {/* Search */}
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
-                placeholder="Search the voice library..."
+                placeholder={t("cfgext.voiceSearchLibrary")}
                 value={librarySearch}
                 onChange={(e) => setLibrarySearch(e.target.value)}
-                className="pl-8 h-8 text-sm"
+                className="ps-8 h-8 text-sm"
               />
             </div>
 
             {/* Category chips + HQ toggle */}
             <div className="flex items-center gap-1 flex-wrap">
-              {LIBRARY_CATEGORIES.map((cat) => {
+              {LIBRARY_CATEGORIES().map((cat) => {
                 const isActive = cat.isFeatured
                   ? libraryFeatured
                   : libraryCategory === cat.key
@@ -466,7 +524,7 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
                 <span className={`inline-flex h-3 w-3 items-center justify-center rounded-sm border text-[8px] leading-none ${libraryHighQuality ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40"}`}>
                   {libraryHighQuality && "✓"}
                 </span>
-                High Quality
+                {t("cfgext.voiceHighQuality")}
               </button>
             </div>
 
@@ -480,7 +538,7 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
                     onClick={() => { setLibraryGender(g) }}
                     className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${libraryGender === g ? "border-primary bg-primary/10 text-primary font-medium" : "hover:bg-muted text-muted-foreground"}`}
                   >
-                    {g}
+                    {genderLabels[g]}
                   </button>
                 ))}
               </div>
@@ -489,8 +547,8 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className={FILTER_SELECT_Z}>
-                  {SORT_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  {SORT_OPTIONS().map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>{localizeOption(opt.label)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -504,9 +562,9 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
                 className={`flex items-center gap-1 text-xs transition-colors ${hasActiveAdvancedFilters ? "text-primary font-medium" : "text-muted-foreground hover:text-foreground"}`}
               >
                 <SlidersHorizontal className="h-3 w-3" />
-                {showAdvancedFilters ? "Hide filters" : "More filters"}
+                {showAdvancedFilters ? t("cfgext.voiceHideFilters") : t("cfgext.voiceMoreFilters")}
                 {!showAdvancedFilters && hasActiveAdvancedFilters && (
-                  <span className="ml-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                  <span className="ms-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
                 )}
               </button>
               {(hasActiveAdvancedFilters || libraryGender !== "All" || libraryCategory || libraryFeatured || libraryHighQuality || debouncedSearch) && (
@@ -515,7 +573,7 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
                   onClick={resetAllFilters}
                   className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  Reset
+                  {t("settings.reset")}
                 </button>
               )}
             </div>
@@ -525,23 +583,23 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
                 <div className="flex gap-2">
                   <Select value={libraryAccent} onValueChange={(v) => { setLibraryAccent(v) }}>
                     <SelectTrigger className="h-7 text-xs flex-1">
-                      <SelectValue placeholder="Accent" />
+                      <SelectValue placeholder={t("cfgext.voiceAccentPlaceholder")} />
                     </SelectTrigger>
                     <SelectContent className={FILTER_SELECT_Z}>
-                      <SelectItem value="All">All accents</SelectItem>
-                      {ACCENT_OPTIONS.map((a) => (
-                        <SelectItem key={a} value={a}>{capitalize(a)}</SelectItem>
+                      <SelectItem value="All">{t("cfgext.voiceAllAccents")}</SelectItem>
+                      {ACCENT_OPTIONS().map((a) => (
+                        <SelectItem key={a.value} value={a.value}>{localizeOption(a.label)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                   <Select value={libraryAge} onValueChange={(v) => { setLibraryAge(v) }}>
                     <SelectTrigger className="h-7 text-xs flex-1">
-                      <SelectValue placeholder="Age" />
+                      <SelectValue placeholder={t("cfgext.voiceAgePlaceholder")} />
                     </SelectTrigger>
                     <SelectContent className={FILTER_SELECT_Z}>
-                      <SelectItem value="All">All ages</SelectItem>
-                      {AGE_OPTIONS.map((a) => (
-                        <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>
+                      <SelectItem value="All">{t("cfgext.voiceAllAges")}</SelectItem>
+                      {AGE_OPTIONS().map((a) => (
+                        <SelectItem key={a.value} value={a.value}>{localizeOption(a.label)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -552,7 +610,7 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
                     value={libraryLanguage}
                     onChange={setLibraryLanguage}
                     options={ALL_LANGUAGES}
-                    allLabel="All languages"
+                    allLabel={t("cfgext.voiceAllLanguages")}
                     className="flex-1"
                     zClassName={FILTER_SELECT_Z}
                   />
@@ -560,23 +618,23 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
                 <div className="flex gap-2">
                   <Select value={libraryUseCase} onValueChange={(v) => { setLibraryUseCase(v) }}>
                     <SelectTrigger className="h-7 text-xs flex-1">
-                      <SelectValue placeholder="Use case" />
+                      <SelectValue placeholder={t("cfgext.voiceUseCasePlaceholder")} />
                     </SelectTrigger>
                     <SelectContent className={FILTER_SELECT_Z}>
-                      <SelectItem value="All">All use cases</SelectItem>
-                      {USE_CASE_OPTIONS.map((uc) => (
-                        <SelectItem key={uc.value} value={uc.value}>{uc.label}</SelectItem>
+                      <SelectItem value="All">{t("cfgext.voiceAllUseCases")}</SelectItem>
+                      {USE_CASE_OPTIONS().map((uc) => (
+                        <SelectItem key={uc.value} value={uc.value}>{localizeOption(uc.label)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                   <Select value={libraryDescriptive} onValueChange={(v) => { setLibraryDescriptive(v) }}>
                     <SelectTrigger className="h-7 text-xs flex-1">
-                      <SelectValue placeholder="Tone" />
+                      <SelectValue placeholder={t("paramcfg.tone")} />
                     </SelectTrigger>
                     <SelectContent className={FILTER_SELECT_Z}>
-                      <SelectItem value="All">All tones</SelectItem>
-                      {TONE_OPTIONS.map((d) => (
-                        <SelectItem key={d} value={d}>{capitalize(d)}</SelectItem>
+                      <SelectItem value="All">{t("cfgext.voiceAllTones")}</SelectItem>
+                      {TONE_OPTIONS().map((d) => (
+                        <SelectItem key={d.value} value={d.value}>{localizeOption(d.label)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -592,7 +650,7 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
               </div>
             ) : libraryVoices.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">
-                No voices found — try adjusting your filters
+                {t("cfgext.voiceNoVoicesFound")}
               </p>
             ) : (
               <VoiceList
@@ -635,6 +693,7 @@ function MyVoicesTab({
   readonly onPlay: (previewUrl: string, id: string) => void
   readonly onSelect: (voiceId: string, voiceName: string) => void
 }) {
+  const t = useT()
   useEffect(() => { prefetchModelCredits(["voice-clone"]) }, [])
   const { data: voiceClones = [], isLoading } = useVoiceClones()
   const createMutation = useCreateVoiceClone()
@@ -685,7 +744,7 @@ function MyVoicesTab({
         setRecordingTime((t) => t + 1)
       }, 1000)
     } catch {
-      toast.error("Could not access microphone")
+      toast.error(tx("cfgext.voiceMicDenied"))
     }
   }, [])
 
@@ -721,22 +780,22 @@ function MyVoicesTab({
 
     try {
       await createMutation.mutateAsync({ name: voiceName.trim(), file: blob })
-      toast.success("Voice cloned successfully")
+      toast.success(tx("cfgext.voiceCloneSuccess"))
       setRecordedBlob(null)
       setUploadedFile(null)
       setVoiceName("")
       setShowForm(null)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to clone voice")
+      toast.error(err instanceof Error ? err.message : tx("cfgext.voiceCloneFailed"))
     }
   }, [recordedBlob, uploadedFile, voiceName, createMutation])
 
   const handleDeleteClone = useCallback(async (id: string) => {
     try {
       await deleteMutation.mutateAsync(id)
-      toast.success("Voice deleted")
+      toast.success(tx("cfgext.voiceDeleted"))
     } catch {
-      toast.error("Failed to delete voice")
+      toast.error(tx("cfgext.voiceDeleteFailed"))
     }
   }, [deleteMutation])
 
@@ -771,8 +830,8 @@ function MyVoicesTab({
             className="flex-1"
             onClick={() => { setShowForm("record"); setRecordedBlob(null); setUploadedFile(null); setVoiceName("") }}
           >
-            <Mic className="h-3.5 w-3.5 mr-1.5" />
-            Record Voice
+            <Mic className="h-3.5 w-3.5 me-1.5" />
+            {t("cfgext.voiceRecordVoice")}
           </Button>
           <Button
             variant="outline"
@@ -780,8 +839,8 @@ function MyVoicesTab({
             className="flex-1"
             onClick={() => fileInputRef.current?.click()}
           >
-            <Upload className="h-3.5 w-3.5 mr-1.5" />
-            Upload Audio
+            <Upload className="h-3.5 w-3.5 me-1.5" />
+            {t("cfgext.voiceUploadAudio")}
           </Button>
           <input
             ref={fileInputRef}
@@ -798,22 +857,22 @@ function MyVoicesTab({
         <div className="rounded-md border border-border p-3 flex flex-col gap-2">
           <div className="flex items-center justify-between">
             <span className="text-xs text-muted-foreground">
-              {isRecording ? `Recording... ${formatTime(recordingTime)}` : "Ready to record"}
+              {isRecording ? t("cfgext.voiceRecordingElapsed", { time: formatTime(recordingTime) }) : t("cfgext.voiceReadyToRecord")}
             </span>
             <div className="flex gap-1.5">
               {!isRecording ? (
                 <Button size="sm" variant="default" onClick={startRecording} className="h-7 text-xs">
-                  <Mic className="h-3 w-3 mr-1" />
-                  Start
+                  <Mic className="h-3 w-3 me-1" />
+                  {t("audiocfg.mergeStart")}
                 </Button>
               ) : (
                 <Button size="sm" variant="destructive" onClick={stopRecording} className="h-7 text-xs">
-                  <Square className="h-3 w-3 mr-1" />
-                  Stop
+                  <Square className="h-3 w-3 me-1" />
+                  {t("node.stop")}
                 </Button>
               )}
               <Button size="sm" variant="ghost" onClick={cancelRecording} className="h-7 text-xs">
-                Cancel
+                {t("common.cancel")}
               </Button>
             </div>
           </div>
@@ -839,14 +898,14 @@ function MyVoicesTab({
         <div className="rounded-md border border-border p-3 flex flex-col gap-2">
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground flex-1">
-              {recordedBlob ? `Recorded (${formatTime(recordingTime)})` : uploadedFile?.name}
+              {recordedBlob ? t("cfgext.voiceRecordedElapsed", { time: formatTime(recordingTime) }) : uploadedFile?.name}
             </span>
             {recordedPreviewUrl && (
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6"
-                aria-label="Play recorded audio"
+                aria-label={t("cfgext.voicePlayRecorded")}
                 onClick={() => {
                   const a = new Audio(recordedPreviewUrl)
                   a.play().catch(() => {})
@@ -857,7 +916,7 @@ function MyVoicesTab({
             )}
           </div>
           <Input
-            placeholder="Voice name..."
+            placeholder={t("cfgext.voiceNamePlaceholder")}
             value={voiceName}
             onChange={(e) => setVoiceName(e.target.value)}
             className="h-8 text-sm"
@@ -870,12 +929,14 @@ function MyVoicesTab({
               onClick={handleSubmitClone}
             >
               {createMutation.isPending ? (
-                <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                <Loader2 className="h-3 w-3 animate-spin me-1" />
               ) : null}
-              {`Clone Voice${hasCredits() ? ` (${formatCreditUnits(getCachedCredits("voice-clone") ?? 5)})` : ""}`}
+              {hasCredits()
+                ? t("cfgext.voiceCloneVoiceCredits", { credits: formatCreditUnits(getCachedCredits("voice-clone") ?? 5) })
+                : t("cfgext.voiceCloneVoice")}
             </Button>
             <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={cancelRecording}>
-              Cancel
+              {t("common.cancel")}
             </Button>
           </div>
         </div>
@@ -888,7 +949,7 @@ function MyVoicesTab({
         </div>
       ) : voiceClones.length === 0 ? (
         <p className="text-sm text-muted-foreground text-center py-8">
-          No custom voices yet. Record or upload audio to clone a voice.
+          {t("cfgext.voiceNoCustomVoices")}
         </p>
       ) : (
         <div className="flex-1 overflow-y-auto min-h-0 max-h-[50vh] -mx-1 px-1">
@@ -901,14 +962,14 @@ function MyVoicesTab({
                   key={clone.id}
                   type="button"
                   onClick={() => onSelect(clone.elevenlabsVoiceId, clone.name)}
-                  className={`flex items-start gap-2 rounded-md px-2.5 py-2 text-left transition-colors ${isSelected ? "bg-primary/10 border border-primary/30" : "hover:bg-muted border border-transparent"}`}
+                  className={`flex items-start gap-2 rounded-md px-2.5 py-2 text-start transition-colors ${isSelected ? "bg-primary/10 border border-primary/30" : "hover:bg-muted border border-transparent"}`}
                 >
                   {clone.sampleAudioUrl ? (
                     <Button
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7 shrink-0 mt-0.5"
-                      aria-label={isPlaying ? "Pause voice preview" : "Play voice preview"}
+                      aria-label={isPlaying ? t("cfgext.voicePausePreview") : t("cfgext.voicePlayPreview")}
                       onClick={(e) => {
                         e.stopPropagation()
                         onPlay(clone.sampleAudioUrl!, clone.id)
@@ -923,21 +984,21 @@ function MyVoicesTab({
                     <div className="flex items-center gap-1.5">
                       <FitText text={clone.name} className="text-sm font-medium" />
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary shrink-0">
-                        Custom
+                        {t("cfgshared.custom")}
                       </span>
                       {isSelected && (
                         <span className="text-xs text-primary">&#10003;</span>
                       )}
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      Created {new Date(clone.createdAt).toLocaleDateString()}
+                      {t("apiTok.created", { date: new Date(clone.createdAt).toLocaleDateString() })}
                     </div>
                   </div>
                   <Button
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7 shrink-0 mt-0.5 text-destructive hover:text-destructive"
-                    aria-label="Delete voice clone"
+                    aria-label={t("cfgext.voiceDeleteClone")}
                     disabled={deleteMutation.isPending}
                     onClick={(e) => {
                       e.stopPropagation()
@@ -994,6 +1055,7 @@ function VoiceList({
   /** Whether a next page is currently loading — pauses the sentinel + shows a spinner. */
   readonly loadingMore?: boolean
 }) {
+  const t = useT()
   // Infinite-scroll sentinel, observed against the list's OWN scroll container
   // (root = scrollRef) so it fires on intra-list scroll — the list is clipped to
   // max-h-[50vh] inside the dialog, so a viewport-rooted observer would never see
@@ -1018,7 +1080,7 @@ function VoiceList({
   }, [onEndReached, hasMore, loadingMore, voices.length])
 
   if (voices.length === 0) {
-    return <p className="text-sm text-muted-foreground text-center py-8">No voices match your filters</p>
+    return <p className="text-sm text-muted-foreground text-center py-8">{t("cfgext.voiceNoMatch")}</p>
   }
 
   return (
@@ -1032,14 +1094,14 @@ function VoiceList({
               key={voice.id}
               type="button"
               onClick={() => onSelect(voice)}
-              className={`group relative flex items-start gap-2 rounded-md px-2.5 py-2 text-left transition-colors ${isSelected ? "bg-primary/10 border border-primary/30" : "hover:bg-muted border border-transparent"}`}
+              className={`group relative flex items-start gap-2 rounded-md px-2.5 py-2 text-start transition-colors ${isSelected ? "bg-primary/10 border border-primary/30" : "hover:bg-muted border border-transparent"}`}
             >
               {voice.preview_url ? (
                 <Button
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7 shrink-0 mt-0.5"
-                  aria-label={isPlaying ? "Pause voice preview" : "Play voice preview"}
+                  aria-label={isPlaying ? t("cfgext.voicePausePreview") : t("cfgext.voicePlayPreview")}
                   onClick={(e) => {
                     e.stopPropagation()
                     onPlay(voice.preview_url, voice.id)
@@ -1077,8 +1139,8 @@ function VoiceList({
                   <TooltipTrigger asChild>
                     <span
                       role="button"
-                      aria-label="Voice description"
-                      className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-accent"
+                      aria-label={t("cfgext.voiceDescriptionLabel")}
+                      className="absolute top-1.5 end-1.5 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-accent"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <Info className="h-3.5 w-3.5 text-muted-foreground" />

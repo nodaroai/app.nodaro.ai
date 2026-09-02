@@ -2,6 +2,8 @@ import type { SceneNodeFrontendData } from "@/types/nodes"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { ACTIVE_SCENE_HELPERS, SCENE_HELPER_NAMES, type SceneHelperName } from "@nodaro/shared"
+import { useMemo } from "react"
+import { tx, useT } from "@/lib/i18n"
 
 /**
  * §6.11 Scene-Context helper buttons — one row of 10 actions on the SceneNode
@@ -32,62 +34,63 @@ interface Props {
   onInvoke: (helperName: SceneHelperName) => void
 }
 
-const HELPER_LABELS: Record<
+/** Live getter — a module constant would freeze the labels to the boot locale. */
+export function HELPER_LABELS(): Record<
   SceneHelperName,
   { icon: string; label: string; tooltip: string }
-> = {
+> {
+  return {
   audit_prompt: {
     icon: "🔍",
-    label: "Audit Prompt",
-    tooltip: "Check shots for contradictions with the scene.",
+    label: tx("cfgext.shbAuditPrompt"),
+    tooltip: tx("cfgext.shbAuditPromptTip"),
   },
   improve_prompt: {
     icon: "✨",
-    label: "Improve Prompt",
-    tooltip: "Rewrite a shot's action / motion / dialogue.",
+    label: tx("cfgext.shbImprovePrompt"),
+    tooltip: tx("cfgext.shbImprovePromptTip"),
   },
   generate_motion: {
     icon: "🎬",
-    label: "Generate Motion",
-    tooltip: "Fill motion_prompt for shots missing one.",
+    label: tx("cfgext.shbGenerateMotion"),
+    tooltip: tx("cfgext.shbGenerateMotionTip"),
   },
   optimize_for_model: {
     icon: "🎯",
-    label: "Optimize for Model",
-    tooltip: "Rewrite all shots for the current video_model's style.",
+    label: tx("cfgext.shbOptimizeForModel"),
+    tooltip: tx("cfgext.shbOptimizeForModelTip"),
   },
   add_broll: {
     icon: "🎞️",
-    label: "Add B-Roll",
-    tooltip: "Propose insert shots (reaction / cutaway / etc.).",
+    label: tx("cfgext.shbAddBRoll"),
+    tooltip: tx("cfgext.shbAddBRollTip"),
   },
   bridge_to_next_scene: {
     icon: "🌉",
-    label: "Bridge to Next",
-    tooltip: "Generate i2i edit prompt to transition the prior shot's last frame.",
+    label: tx("cfgext.shbBridgeToNext"),
+    tooltip: tx("cfgext.shbBridgeToNextTip"),
   },
   anchor_scene_style: {
     icon: "🎨",
-    label: "Anchor Style",
-    tooltip: "Generate a master keyframe to lock style across this scene.",
+    label: tx("cfgext.shbAnchorStyle"),
+    tooltip: tx("cfgext.shbAnchorStyleTip"),
   },
   audit_images: {
     icon: "🔍",
-    label: "Audit Images",
-    tooltip: "Run the Image Critic on every keyframe in this scene.",
+    label: tx("cfgext.shbAuditImages"),
+    tooltip: tx("cfgext.shbAuditImagesTip"),
   },
   fix_continuity: {
     icon: "🔗",
-    label: "Fix Continuity",
-    tooltip:
-      "Check a shot's keyframe against the prior shot's last frame; regenerate if continuity breaks.",
+    label: tx("cfgext.shbFixContinuity"),
+    tooltip: tx("cfgext.shbFixContinuityTip"),
   },
   validate_match_cut: {
     icon: "🎯",
-    label: "Validate Match Cut",
-    tooltip:
-      "Evaluate the match-cut quality between a shot and the next (requires shot_intent.is_match_cut).",
+    label: tx("cfgext.shbValidateMatchCut"),
+    tooltip: tx("cfgext.shbValidateMatchCutTip"),
   },
+}
 }
 
 export function SceneHelperButtons({
@@ -98,11 +101,16 @@ export function SceneHelperButtons({
   onInvoke,
 }: Props) {
   const ready = !!pipelineId && !!sceneEntityId && data.shots.length > 0
+  // Subscribes this row to the locale store: HELPER_LABELS() reads tx() at
+  // call time, so without a live `t` dependency the labels would render
+  // correctly on mount and then freeze through a language switch.
+  const t = useT()
+  const labels = useMemo(() => HELPER_LABELS(), [t])
   return (
     <TooltipProvider>
       <div className="flex flex-wrap gap-1">
         {SCENE_HELPER_NAMES.map((name) => {
-          const meta = HELPER_LABELS[name]
+          const meta = labels[name]
           const active = ACTIVE_SCENE_HELPERS.has(name)
           const enabled = ready && active && !isLoading
           return (
@@ -115,7 +123,7 @@ export function SceneHelperButtons({
                   onClick={() => enabled && onInvoke(name)}
                   className="text-xs"
                 >
-                  <span className="mr-1">{meta.icon}</span>
+                  <span className="me-1">{meta.icon}</span>
                   {meta.label}
                 </Button>
               </TooltipTrigger>

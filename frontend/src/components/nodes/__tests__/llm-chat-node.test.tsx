@@ -103,7 +103,8 @@ vi.mock("@/lib/generate-text-templates", () => ({
     id === "custom" || !id
       ? { id: "custom", label: "Custom" }
       : { id: "storyboard", label: "Storyboard Writer" },
-  GENERATE_TEXT_TEMPLATES: [
+  // A live getter (it reads the locale), not a constant.
+  GENERATE_TEXT_TEMPLATES: () => [
     { id: "custom", label: "Custom" },
     { id: "storyboard", label: "Storyboard Writer" },
   ],

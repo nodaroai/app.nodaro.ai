@@ -30,6 +30,8 @@ import type { WizardQuestion, RecommendedModel, ModelChange } from "@nodaro/prom
 import { LlmModelSelect } from "./llm-model-select"
 import { formatCreditUnits } from "@/lib/credit-units"
 import { ReasoningEffortSelect } from "./reasoning-effort-select"
+import { useT, tx } from "@/lib/i18n"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 
 interface PromptHelperDialogProps {
   readonly open: boolean
@@ -95,42 +97,47 @@ const CATEGORY_TO_JSON_KEY: Record<string, string> = {
 }
 
 // Keep in sync with NODE_TYPE_TO_CATEGORIES in packages/shared/src/prompt-wizard-categories.ts
-const WIZARD_TARGET_OPTIONS: ReadonlyArray<{
+function WIZARD_TARGET_OPTIONS(): ReadonlyArray<{
   group: string
   items: ReadonlyArray<{ value: string; label: string }>
-}> = [
-  {
-    group: "Image",
-    items: [
-      { value: "generate-image", label: "Generate Image" },
-      { value: "image-to-image", label: "Image to Image" },
-    ],
-  },
-  {
-    group: "Video",
-    items: [
-      { value: "text-to-video", label: "Text to Video" },
-      { value: "image-to-video", label: "Image to Video" },
-      { value: "video-to-video", label: "Video to Video" },
-      { value: "motion-transfer", label: "Motion Transfer" },
-      { value: "extend-video", label: "Extend Video" },
-      { value: "speech-to-video", label: "Speech to Video" },
-    ],
-  },
-  {
-    group: "Music",
-    items: [
-      { value: "generate-music", label: "Generate Music" },
-      { value: "suno-generate", label: "Suno Generate" },
-    ],
-  },
-  {
-    group: "Audio",
-    items: [
-      { value: "text-to-audio", label: "Text to Audio" },
-    ],
-  },
-]
+}> {
+  // A function, not a module constant, so the group headers follow a language
+  // switch. `label` stays the node's ENGLISH default label — it is localized at
+  // the render site through the node-label table, same as every node header.
+  return [
+    {
+      group: tx("common.image"),
+      items: [
+        { value: "generate-image", label: "Generate Image" },
+        { value: "image-to-image", label: "Image to Image" },
+      ],
+    },
+    {
+      group: tx("common.video"),
+      items: [
+        { value: "text-to-video", label: "Text to Video" },
+        { value: "image-to-video", label: "Image to Video" },
+        { value: "video-to-video", label: "Video to Video" },
+        { value: "motion-transfer", label: "Motion Transfer" },
+        { value: "extend-video", label: "Extend Video" },
+        { value: "speech-to-video", label: "Speech to Video" },
+      ],
+    },
+    {
+      group: tx("cfgext.phdGroupMusic"),
+      items: [
+        { value: "generate-music", label: "Generate Music" },
+        { value: "suno-generate", label: "Suno Generate" },
+      ],
+    },
+    {
+      group: tx("addnode.tabAudio"),
+      items: [
+        { value: "text-to-audio", label: "Text to Audio" },
+      ],
+    },
+  ]
+}
 
 export function PromptHelperDialog({
   open,
@@ -145,6 +152,8 @@ export function PromptHelperDialog({
   downstreamTargets,
   onAccept,
 }: PromptHelperDialogProps) {
+  const t = useT()
+  const localizeNode = useLocalizeNodeLabel()
   // Shared state
   const [llmModel, setLlmModel] = useState<string | undefined>(() => {
     return localStorage.getItem("prompt-wizard-model") || "gemini-3.1-pro"
@@ -167,7 +176,7 @@ export function PromptHelperDialog({
 
   // Types already shown in Connected group — excluded from static groups to avoid duplicate Radix Select values
   const connectedTypes = useMemo(
-    () => new Set(downstreamTargets?.map((t) => t.type) ?? []),
+    () => new Set(downstreamTargets?.map((target) => target.type) ?? []),
     [downstreamTargets],
   )
 
@@ -260,7 +269,7 @@ export function PromptHelperDialog({
       setCustomTexts({})
       setPhase("review")
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Analysis failed")
+      setError(err instanceof Error ? err.message : tx("cfgext.phdAnalysisFailed"))
     } finally {
       setLoading(false)
     }
@@ -307,7 +316,7 @@ export function PromptHelperDialog({
       setRecommendedModel(result.recommendedModel ?? null)
       setPhase("result")
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Generation failed")
+      setError(err instanceof Error ? err.message : tx("cfgext.phdGenerationFailed"))
     } finally {
       setLoading(false)
     }
@@ -429,18 +438,18 @@ export function PromptHelperDialog({
         <DialogHeader className="shrink-0 px-6 pt-6 pb-3 border-b">
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-[#ff0073]" />
-            AI Prompt Wizard
+            {t("cfgext.phdTitle")}
             {phase !== "input" && (
-              <span className="text-xs font-normal text-muted-foreground ml-2">
-                {phase === "review" ? "Step 2 of 3" : "Step 3 of 3"}
+              <span className="text-xs font-normal text-muted-foreground ms-2">
+                {t("cfgext.phdStepOf", { n: phase === "review" ? 2 : 3, total: 3 })}
               </span>
             )}
           </DialogTitle>
           <button
             type="button"
             onClick={() => setShowPreference((p) => !p)}
-            className={`absolute top-4 right-10 p-1 rounded-md transition-colors ${showPreference || userPreference ? "text-[#ff0073] bg-[#ff0073]/10" : "text-muted-foreground hover:text-foreground"}`}
-            title="Wizard preferences"
+            className={`absolute top-4 end-10 p-1 rounded-md transition-colors ${showPreference || userPreference ? "text-[#ff0073] bg-[#ff0073]/10" : "text-muted-foreground hover:text-foreground"}`}
+            title={t("cfgext.phdPrefsTitle")}
           >
             <Settings className="w-3.5 h-3.5" />
           </button>
@@ -455,18 +464,18 @@ export function PromptHelperDialog({
           {showPreference && (
             <div className="flex flex-col gap-1.5 p-3 rounded-lg border border-[#ff0073]/20 bg-[#ff0073]/5">
               <label className="text-xs font-medium text-muted-foreground">
-                General Preference <span className="text-[10px] font-normal">(applies to all wizard sessions)</span>
+                {t("cfgext.phdGeneralPreference")} <span className="text-[10px] font-normal">{t("cfgext.phdGeneralPreferenceNote")}</span>
               </label>
               <Textarea
                 rows={2}
                 value={userPreference}
                 onChange={(e) => handlePreferenceChange(e.target.value)}
-                placeholder="e.g. show options in Hebrew, always suggest photorealistic style, use simple language..."
+                placeholder={t("cfgext.phdPreferencePh")}
                 className="text-xs resize-none"
                 maxLength={500}
               />
               {userPreference && (
-                <p className="text-[10px] text-muted-foreground">Saved automatically. Clear the text to remove.</p>
+                <p className="text-[10px] text-muted-foreground">{t("cfgext.phdPrefSaved")}</p>
               )}
             </div>
           )}
@@ -477,7 +486,7 @@ export function PromptHelperDialog({
               {hasTargetSelector && (
                 <div>
                   <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                    Prompt target
+                    {t("cfgext.phdPromptTarget")}
                   </label>
                   <Select value={selectedTargetType} onValueChange={setSelectedTargetType}>
                     <SelectTrigger className="h-auto min-h-[2rem] sm:min-h-[2.5rem] text-xs py-1.5">
@@ -487,44 +496,44 @@ export function PromptHelperDialog({
                       {downstreamTargets && downstreamTargets.length > 0 && (
                         <>
                           <SelectGroup>
-                            <SelectLabel className="text-[10px] text-muted-foreground">Connected</SelectLabel>
-                            {downstreamTargets.map((t) => (
-                              <SelectItem key={t.id} value={t.type}>
-                                <span>{t.label}</span>
-                                <span className="ml-1.5 text-[10px] text-muted-foreground">{t.type}</span>
+                            <SelectLabel className="text-[10px] text-muted-foreground">{t("integ.connected")}</SelectLabel>
+                            {downstreamTargets.map((target) => (
+                              <SelectItem key={target.id} value={target.type}>
+                                <span>{localizeNode(target.label)}</span>
+                                <span className="ms-1.5 text-[10px] text-muted-foreground">{target.type}</span>
                               </SelectItem>
                             ))}
                           </SelectGroup>
                           <SelectSeparator />
                         </>
                       )}
-                      {WIZARD_TARGET_OPTIONS.map((group) => {
+                      {WIZARD_TARGET_OPTIONS().map((group) => {
                         const filtered = group.items.filter((item) => !connectedTypes.has(item.value))
                         if (!filtered.length) return null
                         return (
                           <SelectGroup key={group.group}>
                             <SelectLabel className="text-[10px] text-muted-foreground">{group.group}</SelectLabel>
                             {filtered.map((item) => (
-                              <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>
+                              <SelectItem key={item.value} value={item.value}>{localizeNode(item.label)}</SelectItem>
                             ))}
                           </SelectGroup>
                         )
                       })}
                       <SelectSeparator />
-                      <SelectItem value={GENERAL_TEXT_VALUE}>General text</SelectItem>
+                      <SelectItem value={GENERAL_TEXT_VALUE}>{t("cfgext.phdGeneralText")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               )}
               <div>
                 <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                  Describe what you want (or leave empty to build from scratch)
+                  {t("cfgext.phdDescribeLabel")}
                 </label>
                 <Textarea
                   rows={3}
                   value={roughIdea}
                   onChange={(e) => setRoughIdea(e.target.value)}
-                  placeholder="e.g. a cat sitting on a windowsill at sunset..."
+                  placeholder={t("cfgext.phdIdeaPh")}
                   className="text-xs resize-none"
                   maxLength={5000}
                 />
@@ -546,7 +555,7 @@ export function PromptHelperDialog({
               {/* Collapsed rough idea */}
               {roughIdea && (
                 <div className="text-xs bg-muted/50 rounded-md px-2.5 py-2 border">
-                  <span className="text-muted-foreground font-medium">Your idea: </span>
+                  <span className="text-muted-foreground font-medium">{t("cfgext.phdYourIdea")}</span>
                   <span className="break-words">{roughIdea.length > 120 ? roughIdea.slice(0, 120) + "..." : roughIdea}</span>
                 </div>
               )}
@@ -565,7 +574,7 @@ export function PromptHelperDialog({
                       {refImageUrl && (
                         <img
                           src={refImageUrl}
-                          alt={`Reference ${refIdx + 1}`}
+                          alt={t("cfgext.phdReferenceN", { n: refIdx + 1 })}
                           className="w-12 h-12 rounded-md object-cover border flex-shrink-0"
                         />
                       )}
@@ -599,7 +608,7 @@ export function PromptHelperDialog({
                           onValueChange={(v) => handleSingleSelect(q.category, v)}
                         >
                           <SelectTrigger className="h-auto min-h-[2rem] sm:min-h-[2.5rem] text-xs py-1.5">
-                            <SelectValue placeholder="Select..." />
+                            <SelectValue placeholder={t("cfgext.phdSelectPh")} />
                           </SelectTrigger>
                           <SelectContent className="max-w-[min(90vw,600px)]">
                             {q.options.map((opt) => (
@@ -613,7 +622,7 @@ export function PromptHelperDialog({
                               </SelectItem>
                             ))}
                             {q.allowCustom && (
-                              <SelectItem value={CUSTOM_VALUE}>Custom...</SelectItem>
+                              <SelectItem value={CUSTOM_VALUE}>{t("imgcfg.customOption")}</SelectItem>
                             )}
                           </SelectContent>
                         </Select>
@@ -623,7 +632,7 @@ export function PromptHelperDialog({
                           <Input
                             value={customTexts[q.category] ?? ""}
                             onChange={(e) => handleCustomText(q.category, e.target.value)}
-                            placeholder="Type your custom value..."
+                            placeholder={t("cfgext.phdCustomPh")}
                             className="h-8 text-xs mt-1"
                           />
                         )}
@@ -642,7 +651,7 @@ export function PromptHelperDialog({
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center justify-between gap-2">
                   <label className="text-xs font-medium text-muted-foreground">
-                    {outputFormat === "json" ? "Generated Prompt (JSON)" : "Generated Prompt"}
+                    {outputFormat === "json" ? t("cfgext.phdGeneratedPromptJson") : t("cfgext.phdGeneratedPrompt")}
                   </label>
                   <div className="inline-flex rounded-md border bg-background p-0.5 text-[10px]">
                     <button
@@ -650,14 +659,14 @@ export function PromptHelperDialog({
                       onClick={() => setOutputFormat("natural")}
                       className={`px-2 py-0.5 rounded-sm transition-colors ${outputFormat === "natural" ? "bg-[#ff0073] text-white" : "text-muted-foreground hover:text-foreground"}`}
                     >
-                      Natural
+                      {t("cfgext.phdNatural")}
                     </button>
                     <button
                       type="button"
                       onClick={() => setOutputFormat("json")}
                       className={`px-2 py-0.5 rounded-sm transition-colors ${outputFormat === "json" ? "bg-[#ff0073] text-white" : "text-muted-foreground hover:text-foreground"}`}
                     >
-                      JSON
+                      {t("out.json")}
                     </button>
                   </div>
                 </div>
@@ -683,7 +692,7 @@ export function PromptHelperDialog({
                 <div className="flex items-start gap-3 p-3 rounded-lg border bg-muted/30">
                   <Lightbulb className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium">Recommended: {recommendedModel.label}</p>
+                    <p className="text-xs font-medium">{t("cfgext.phdRecommended", { label: recommendedModel.label })}</p>
                     <p className="text-[10px] text-muted-foreground mt-0.5">{recommendedModel.reason}</p>
                   </div>
                   <Button
@@ -692,8 +701,8 @@ export function PromptHelperDialog({
                     onClick={() => handleAccept(true)}
                     className="flex-shrink-0 text-xs h-7"
                   >
-                    <Check className="w-3 h-3 mr-1" />
-                    Apply & Use
+                    <Check className="w-3 h-3 me-1" />
+                    {t("cfgext.phdApplyAndUse")}
                   </Button>
                 </div>
               )}
@@ -714,12 +723,12 @@ export function PromptHelperDialog({
               className="w-full bg-[#ff0073] hover:bg-[#ff0073]/90 text-white"
             >
               {loading ? (
-                <><Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />Analyzing...</>
+                <><Loader2 className="w-3.5 h-3.5 animate-spin me-1.5" />{t("cfgext.phdAnalyzing")}</>
               ) : (
                 <>
-                  <Sparkles className="w-3.5 h-3.5 mr-1.5" />
-                  Build Prompt
-                  <span className="ml-1.5 text-[10px] opacity-80 bg-white/20 px-1.5 py-0.5 rounded">{formatCreditUnits(creditCost)}</span>
+                  <Sparkles className="w-3.5 h-3.5 me-1.5" />
+                  {t("cfgext.phdBuildPrompt")}
+                  <span className="ms-1.5 text-[10px] opacity-80 bg-white/20 px-1.5 py-0.5 rounded">{formatCreditUnits(creditCost)}</span>
                 </>
               )}
             </Button>
@@ -732,9 +741,9 @@ export function PromptHelperDialog({
                 onClick={() => setPhase("input")}
                 className="flex-shrink-0"
               >
-                <ArrowLeft className="w-3.5 h-3.5 mr-1" />
-                Re-analyze
-                <span className="ml-1 text-[10px] opacity-60">{formatCreditUnits(creditCost)}</span>
+                <ArrowLeft className="w-3.5 h-3.5 me-1" />
+                {t("cfgext.phdReanalyze")}
+                <span className="ms-1 text-[10px] opacity-60">{formatCreditUnits(creditCost)}</span>
               </Button>
               <Button
                 onClick={handleGenerate}
@@ -742,11 +751,11 @@ export function PromptHelperDialog({
                 className="flex-1 bg-[#ff0073] hover:bg-[#ff0073]/90 text-white"
               >
                 {loading ? (
-                  <><Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />Generating...</>
+                  <><Loader2 className="w-3.5 h-3.5 animate-spin me-1.5" />{t("cfgext.entGenerating")}</>
                 ) : (
                   <>
-                    Generate Prompt
-                    <span className="ml-1.5 text-[10px] opacity-80 bg-white/20 px-1.5 py-0.5 rounded">{formatCreditUnits(creditCost)}</span>
+                    {t("cfgext.phdGeneratePrompt")}
+                    <span className="ms-1.5 text-[10px] opacity-80 bg-white/20 px-1.5 py-0.5 rounded">{formatCreditUnits(creditCost)}</span>
                   </>
                 )}
               </Button>
@@ -760,14 +769,14 @@ export function PromptHelperDialog({
                 onClick={() => setPhase("review")}
                 className="flex-shrink-0"
               >
-                <ArrowLeft className="w-3.5 h-3.5 mr-1" />
-                Back
+                <ArrowLeft className="w-3.5 h-3.5 me-1" />
+                {t("common.back")}
               </Button>
               <Button
                 onClick={() => handleAccept(false)}
                 className="flex-1 bg-[#ff0073] hover:bg-[#ff0073]/90 text-white"
               >
-                Use This Prompt
+                {t("cfgext.phdUseThisPrompt")}
               </Button>
             </div>
           )}

@@ -12,19 +12,25 @@ import { Label } from "@/components/ui/label"
 import { useProbedAudioDuration, formatClipLength } from "@/hooks/use-probed-audio-duration"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
+import { useT, tx } from "@/lib/i18n"
 import type { ConfigProps } from "./types"
 import type { StillToVideoData } from "@/types/nodes"
 
 type Motion = StillToVideoData["motion"]
 
-const MOTION_OPTIONS: ReadonlyArray<{ value: Motion; label: string; glyph: string }> = [
-  { value: "none", label: "None", glyph: "—" },
-  { value: "zoom-in", label: "Zoom in", glyph: "+" },
-  { value: "zoom-out", label: "Zoom out", glyph: "−" },
-  { value: "pan-left", label: "Pan left", glyph: "←" },
-  { value: "pan-right", label: "Pan right", glyph: "→" },
-  { value: "ken-burns", label: "Ken Burns", glyph: "⤡" },
-]
+/** Live getter, not a module constant: a constant built at import time would
+ *  freeze the boot locale (same reason EFFORT_LABELS() is a function). */
+function MOTION_OPTIONS(): ReadonlyArray<{ value: Motion; label: string; glyph: string }> {
+  return [
+    { value: "none", label: tx("audiocfg.none"), glyph: "—" },
+    { value: "zoom-in", label: tx("cfgext.slideZoomIn"), glyph: "+" },
+    { value: "zoom-out", label: tx("cfgext.slideZoomOut"), glyph: "−" },
+    { value: "pan-left", label: tx("cfgext.s2vPanLeft"), glyph: "←" },
+    { value: "pan-right", label: tx("cfgext.s2vPanRight"), glyph: "→" },
+    // Named after the filmmaker — a proper noun in every locale.
+    { value: "ken-burns", label: "Ken Burns", glyph: "⤡" },
+  ]
+}
 
 const RESOLUTION_OPTIONS = ["720p", "1080p", "4K"] as const
 const FPS_OPTIONS = [24, 30] as const
@@ -70,6 +76,7 @@ function SegmentedControl<T extends string | number>({ options, value, onChange,
 }
 
 export function StillToVideoConfig({ data, onUpdate, sources }: ConfigProps<StillToVideoData>) {
+  const t = useT()
   const motion = data.motion ?? "none"
   const intensity = data.intensity ?? 3
   const fit = data.fit ?? "cover"
@@ -84,11 +91,11 @@ export function StillToVideoConfig({ data, onUpdate, sources }: ConfigProps<Stil
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
         <div className="flex items-baseline justify-between">
-          <Label>Motion</Label>
-          <span className="text-[10px] text-muted-foreground">applied to the still</span>
+          <Label>{t("field.motion")}</Label>
+          <span className="text-[10px] text-muted-foreground">{t("cfgext.s2vAppliedToStill")}</span>
         </div>
         <div className="grid grid-cols-3 gap-1.5">
-          {MOTION_OPTIONS.map((opt) => (
+          {MOTION_OPTIONS().map((opt) => (
             <button
               key={opt.value}
               type="button"
@@ -110,17 +117,17 @@ export function StillToVideoConfig({ data, onUpdate, sources }: ConfigProps<Stil
 
       <div className={cn("flex flex-col gap-2", !motionEnabled && "opacity-40 pointer-events-none")}>
         <div className="flex items-baseline justify-between">
-          <Label>Intensity</Label>
+          <Label>{t("paramcfg.intensity")}</Label>
           <span className="text-[11px] font-mono text-foreground">
             {intensity} <span className="text-muted-foreground">· {intensityRateLabel(intensity)}</span>
           </span>
         </div>
-        <div className="flex items-center gap-1" role="slider" aria-label="Intensity" aria-valuemin={1} aria-valuemax={10} aria-valuenow={intensity}>
+        <div className="flex items-center gap-1" role="slider" aria-label={t("paramcfg.intensity")} aria-valuemin={1} aria-valuemax={10} aria-valuenow={intensity}>
           {Array.from({ length: 10 }, (_, i) => i + 1).map((step) => (
             <button
               key={step}
               type="button"
-              aria-label={`Intensity ${step}`}
+              aria-label={t("cfgext.s2vIntensityStep", { n: step })}
               onClick={() => onUpdate({ intensity: step })}
               className={cn(
                 "flex-1 h-5 rounded transition-colors",
@@ -129,22 +136,22 @@ export function StillToVideoConfig({ data, onUpdate, sources }: ConfigProps<Stil
             />
           ))}
         </div>
-        <div className="flex justify-between text-[10px] text-muted-foreground"><span>subtle</span><span>strong</span></div>
+        <div className="flex justify-between text-[10px] text-muted-foreground"><span>{t("cfgext.slideSubtle")}</span><span>{t("cfgext.slideStrong")}</span></div>
       </div>
 
       <div className="flex flex-col gap-2">
-        <Label>Resolution</Label>
+        <Label>{t("field.resolution")}</Label>
         <SegmentedControl
           options={RESOLUTION_OPTIONS}
           value={data.resolution ?? "1080p"}
           onChange={(v) => onUpdate({ resolution: v })}
-          ariaLabel="Resolution"
+          ariaLabel={t("field.resolution")}
         />
       </div>
 
       <div className="flex gap-3">
         <div className="flex-[1.6] flex flex-col gap-2">
-          <Label>Aspect Ratio</Label>
+          <Label>{t("field.aspectRatio")}</Label>
           <div className="grid grid-cols-4 gap-1.5">
             {ASPECT_OPTIONS.map((opt) => (
               <button
@@ -166,22 +173,22 @@ export function StillToVideoConfig({ data, onUpdate, sources }: ConfigProps<Stil
           </div>
         </div>
         <div className="flex-1 flex flex-col gap-2">
-          <Label>FPS</Label>
+          <Label>{t("field.fps")}</Label>
           <SegmentedControl
             options={FPS_OPTIONS}
             value={data.fps ?? 30}
             onChange={(v) => onUpdate({ fps: v })}
-            ariaLabel="FPS"
+            ariaLabel={t("field.fps")}
           />
         </div>
       </div>
 
       <div className="flex flex-col gap-2">
-        <Label>Fit</Label>
+        <Label>{t("cfgext.slideFit")}</Label>
         <div className="flex gap-2">
           {([
-            { value: "cover", label: "cover", hint: "crops to fill" },
-            { value: "contain", label: "contain", hint: "pads to fit" },
+            { value: "cover", label: t("cfgext.s2vFitCover"), hint: t("cfgext.slideFitCoverHint") },
+            { value: "contain", label: t("cfgext.s2vFitContain"), hint: t("cfgext.slideFitContainHint") },
           ] as const).map((opt) => (
             <button
               key={opt.value}
@@ -189,7 +196,7 @@ export function StillToVideoConfig({ data, onUpdate, sources }: ConfigProps<Stil
               aria-pressed={fit === opt.value}
               onClick={() => onUpdate({ fit: opt.value })}
               className={cn(
-                "flex-1 flex items-center gap-2 px-2.5 py-2 rounded-lg border text-left transition-colors",
+                "flex-1 flex items-center gap-2 px-2.5 py-2 rounded-lg border text-start transition-colors",
                 fit === opt.value
                   ? "border-primary bg-primary/10"
                   : "border-border bg-muted/30 hover:bg-muted/60",
@@ -210,7 +217,7 @@ export function StillToVideoConfig({ data, onUpdate, sources }: ConfigProps<Stil
       {/* padColor is disabled, not hidden, until fit=contain — hiding it makes the panel jump height. */}
       <div className={cn("flex flex-col gap-2", fit !== "contain" && "opacity-40 pointer-events-none")}>
         <div className="flex items-center gap-2">
-          <Label htmlFor="still-pad-color">Pad Color</Label>
+          <Label htmlFor="still-pad-color">{t("proccfg.padColor")}</Label>
           <span className="px-1.5 py-0.5 rounded bg-muted text-[9px] font-mono text-muted-foreground">fit = contain</span>
         </div>
         <div className="flex items-center gap-2">
@@ -228,14 +235,14 @@ export function StillToVideoConfig({ data, onUpdate, sources }: ConfigProps<Stil
 
       <div className="flex items-center justify-between pt-3 border-t border-border">
         <div className="flex flex-col gap-0.5">
-          <span className="text-[10px] tracking-wider text-muted-foreground">OUTPUT LENGTH</span>
+          <span className="text-[10px] tracking-wider text-muted-foreground">{t("cfgext.s2vOutputLength")}</span>
           <span className="text-xs font-mono text-foreground">
             {audioDuration
-              ? <>{formatClipLength(audioDuration)} <span className="text-muted-foreground">· {Math.ceil(audioDuration * fps)} frames</span></>
-              : "set by the wired audio"}
+              ? <>{formatClipLength(audioDuration)} <span className="text-muted-foreground">· {t("cfgext.s2vFramesCount", { n: Math.ceil(audioDuration * fps) })}</span></>
+              : t("cfgext.s2vSetByAudio")}
           </span>
         </div>
-        <span className="text-[10px] text-muted-foreground text-right max-w-[140px] leading-snug">from the audio — no duration field</span>
+        <span className="text-[10px] text-muted-foreground text-end max-w-[140px] leading-snug">{t("cfgext.s2vFromAudioNoDuration")}</span>
       </div>
     </div>
   )

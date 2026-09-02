@@ -1,6 +1,7 @@
 "use client"
 import { Slider } from "@/components/ui/slider"
 import { useCallback } from "react"
+import { useT } from "@/lib/i18n"
 
 interface SpanRangeSliderProps {
   /** Source video duration in seconds (from loadedmetadata — display only). */
@@ -15,6 +16,7 @@ const MIN_SPAN = 4 // Seedance-2 minimum segment length
 const STEP = 0.1
 
 export function SpanRangeSlider({ videoDuration, spanStart, spanEnd, onChange, className }: SpanRangeSliderProps) {
+  const t = useT()
   const handleChange = useCallback(
     (next: number[]) => {
       const [nextStart, nextEnd] = next
@@ -41,12 +43,12 @@ export function SpanRangeSlider({ videoDuration, spanStart, spanEnd, onChange, c
         step={STEP}
         minStepsBetweenThumbs={Math.ceil(MIN_SPAN / STEP)}
         onValueChange={handleChange}
-        aria-label="Replace span"
+        aria-label={t("cfgext.spanAriaReplaceSpan")}
       />
       <div className="mt-2 flex justify-between text-xs text-muted-foreground">
-        <span>From: {spanStart.toFixed(1)}s</span>
-        <span>Span: {(spanEnd - spanStart).toFixed(1)}s</span>
-        <span>To: {spanEnd.toFixed(1)}s</span>
+        <span>{t("cfgext.spanFrom", { n: spanStart.toFixed(1) })}</span>
+        <span>{t("cfgext.spanSpan", { n: (spanEnd - spanStart).toFixed(1) })}</span>
+        <span>{t("cfgext.spanTo", { n: spanEnd.toFixed(1) })}</span>
       </div>
     </div>
   )

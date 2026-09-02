@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { render, screen } from "@testing-library/react"
 import { SunoField } from "../suno-field"
+import { translate } from "@/lib/i18n"
 
 /**
  * SunoField is MappableField MINUS the manual "Manual / source" dropdown: a Suno
@@ -38,7 +39,7 @@ describe("SunoField", () => {
     // Editor not mounted — the value comes from the wired handle.
     expect(screen.queryByPlaceholderText("STYLE-EDITOR")).toBeNull()
     // A read-only preview is shown instead.
-    expect(screen.getByText(/connected handle/i)).toBeInTheDocument()
+    expect(screen.getByText(translate("en", "cfgext.sunoValueFromHandle"))).toBeInTheDocument()
     // And still no source dropdown in the wired state either.
     expect(screen.queryByRole("combobox", { name: /source/i })).toBeNull()
   })

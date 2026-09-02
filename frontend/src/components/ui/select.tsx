@@ -150,14 +150,14 @@ function SelectItem({
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
-        "focus:bg-accent focus:text-accent-foreground [&_svg:not([class*='text-'])]:text-muted-foreground relative flex w-full cursor-pointer items-center gap-2 rounded-sm py-1.5 pr-8 pl-2 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2",
+        "focus:bg-accent focus:text-accent-foreground [&_svg:not([class*='text-'])]:text-muted-foreground relative flex w-full cursor-pointer items-center gap-2 rounded-sm py-1.5 pe-8 ps-2 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2",
         className
       )}
       {...props}
     >
       <span
         data-slot="select-item-indicator"
-        className="absolute right-2 flex size-3.5 items-center justify-center"
+        className="absolute end-2 flex size-3.5 items-center justify-center"
       >
         <SelectPrimitive.ItemIndicator>
           <CheckIcon className="size-4" />
@@ -191,14 +191,14 @@ function SelectItemWithMeta({
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
-        "focus:bg-accent focus:text-accent-foreground relative flex w-full cursor-pointer flex-col gap-0.5 rounded-sm py-2 pr-8 pl-2 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+        "focus:bg-accent focus:text-accent-foreground relative flex w-full cursor-pointer flex-col gap-0.5 rounded-sm py-2 pe-8 ps-2 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         className
       )}
       {...props}
     >
       <span
         data-slot="select-item-indicator"
-        className="absolute right-2 top-2.5 flex size-3.5 items-center justify-center"
+        className="absolute end-2 top-2.5 flex size-3.5 items-center justify-center"
       >
         <SelectPrimitive.ItemIndicator>
           <CheckIcon className="size-4" />
@@ -207,7 +207,7 @@ function SelectItemWithMeta({
       <span className="flex w-full items-center gap-2">
         <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
         {badge && (
-          <span className="ml-auto text-[11px] tabular-nums text-muted-foreground">
+          <span className="ms-auto text-[11px] tabular-nums text-muted-foreground">
             {badge}
           </span>
         )}

@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { TagTextarea } from "./tag-textarea"
 import { getLanguagesForModel, ALL_LANGUAGES, isV3Model } from "@/lib/audio-tags"
 import { SUNO_SUGGESTION_ITEMS, SUNO_LYRICS_SUGGESTION_ITEMS, SUNO_STYLE_SUGGESTION_ITEMS } from "@/lib/suno-tags"
-import { SUNO_SLIDER_META } from "@/lib/suno-sliders"
+import { SUNO_SLIDER_META, type SunoSliderMeta } from "@/lib/suno-sliders"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Slider } from "@/components/ui/slider"
@@ -55,7 +55,7 @@ import type {
   ForcedAlignmentData,
   GeneratedScript,
 } from "@/types/nodes"
-import { VOICE_CHANGER_MODELS, DEFAULT_VOICE_CHANGER_MODEL, AUDIO_FX_PRESETS, AUDIO_FX_PRESET_LABELS, AUDIO_FX_REVERB_PRESETS, REPLICATE_LIP_SYNC_PROVIDERS, FAL_LIP_SYNC_PROVIDERS, VIDEO_INPUT_LIP_SYNC_PROVIDERS, isPerSecondLipSyncProvider, SUNO_ADD_TRACK_MODELS, SUNO_HARD_CEILING, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars, sunoCreditType } from "@nodaro/shared"
+import { VOICE_CHANGER_MODELS, DEFAULT_VOICE_CHANGER_MODEL, AUDIO_FX_PRESETS, AUDIO_FX_REVERB_PRESETS, REPLICATE_LIP_SYNC_PROVIDERS, FAL_LIP_SYNC_PROVIDERS, VIDEO_INPUT_LIP_SYNC_PROVIDERS, isPerSecondLipSyncProvider, SUNO_ADD_TRACK_MODELS, SUNO_HARD_CEILING, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars, sunoCreditType } from "@nodaro/shared"
 import type { AudioFxPreset } from "@nodaro/shared"
 import { getEffectiveSunoCustomMode } from "@nodaro/prompts"
 import { MappableField } from "./mappable-field"
@@ -73,14 +73,15 @@ import { ConnectedAudioSources } from "./connected-audio-sources"
 import { FinalAudioPromptPreview } from "./final-audio-prompt-preview"
 import { LIP_SYNC_MODELS, TTS_MODELS, SUNO_MODELS } from "./model-options"
 import { PromptLengthCounter } from "./prompt-length-counter"
-import { SUNO_FIELD_EDIT_META, SunoFieldEditor } from "./suno-field-editor"
+import { SUNO_FIELD_EDIT_META, SunoFieldEditor, type SunoEditField } from "./suno-field-editor"
 import { SunoFieldAiButton, isSunoAiField } from "@/components/nodes/suno-field-ai-button"
 import { InjectedReferenceList } from "./injected-reference-list"
 import { SeedanceReferenceTip } from "./seedance-reference-tip"
 import { WaveformAudioPlayer } from "@/components/audio-player"
 import { removeMentionToken, makeRemoveWiredSource, appendSuppressedSlug } from "./injected-reference-helpers"
 import { buildConnectedRefsFromSources } from "./connected-refs-builder"
-import { useT } from "@/lib/i18n"
+import { useT, tx, type MessageKey } from "@/lib/i18n"
+import { useLocalizeModelDescription, useLocalizeOptionLabel } from "@/lib/i18n/labels"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { WorkflowEdge } from "@/types/nodes"
 import type { ConfigProps } from "./types"
@@ -90,7 +91,49 @@ import type { ConfigProps } from "./types"
 const EMPTY_EDGES: ReadonlyArray<WorkflowEdge> = []
 const SUNO_ADD_TRACK_MODEL_OPTIONS = SUNO_MODELS.filter(m => (SUNO_ADD_TRACK_MODELS as readonly string[]).includes(m.value))
 
+// i18n key maps that PARALLEL the English constant tables (AUDIO_FX_PRESET_LABELS
+// in @nodaro/shared, SUNO_SLIDER_META, SUNO_FIELD_EDIT_META). The tables stay the
+// English source of truth — other modules and tests read them — so nothing there
+// is mutated; every render site in this file translates through these maps.
+// Typed Record<…> so a missing/typo'd id is a compile error, not a silent
+// English leak.
+const AUDIO_FX_PRESET_LABEL_KEYS: Record<AudioFxPreset, MessageKey> = {
+  room: "audiocfg.fxRoom",
+  bathroom: "audiocfg.fxBathroom",
+  car: "audiocfg.fxCar",
+  hall: "audiocfg.fxHall",
+  "concert-hall": "audiocfg.fxConcertHall",
+  church: "audiocfg.fxChurch",
+  cave: "audiocfg.fxCave",
+  arena: "audiocfg.fxArena",
+  outdoor: "audiocfg.fxOutdoor",
+  telephone: "audiocfg.fxTelephone",
+  megaphone: "audiocfg.fxMegaphone",
+  echo: "audiocfg.fxEcho",
+  custom: "cfgshared.custom",
+}
+
+const SUNO_SLIDER_LABEL_KEYS: Record<SunoSliderMeta["key"], MessageKey> = {
+  styleWeight: "audiocfg.sliderStyleWeight",
+  weirdnessConstraint: "audiocfg.sliderWeirdness",
+  audioWeight: "audiocfg.sliderAudioWeight",
+}
+
+const SUNO_SLIDER_DESC_KEYS: Record<SunoSliderMeta["key"], MessageKey> = {
+  styleWeight: "audiocfg.sliderStyleWeightDesc",
+  weirdnessConstraint: "audiocfg.sliderWeirdnessDesc",
+  audioWeight: "audiocfg.sliderAudioWeightDesc",
+}
+
+const SUNO_FIELD_LABEL_KEYS: Record<SunoEditField, MessageKey> = {
+  title: "audiocfg.titleOptional",
+  lyrics: "audiocfg.lyricsOptional",
+  style: "audiocfg.styleOptional",
+  negativeStyle: "audiocfg.negativeStyleOptional",
+}
+
 export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<TextToSpeechData> & { nodeId?: string }) {
+  const localizeOption = useLocalizeOptionLabel()
   const t = useT()
   const textSource = data.textSource || "connected"
   const promptSnippets = useSnippetPool("audio", "prompt")
@@ -120,7 +163,7 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
             onClick={() => onUpdate({ textSource: "direct" })}
             className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-md border transition-colors ${textSource === "direct" ? "border-primary bg-primary/10 text-primary" : "hover:bg-muted"}`}
           >
-            Write directly
+            {t("audiocfg.writeDirectly")}
           </button>
         </div>
       </div>
@@ -163,7 +206,7 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
                 displayMode={variableDisplayMode}
                 refMap={refMap}
               />
-              <PromptLengthCounter value={data.directText || ""} max={getMaxTtsChars(data.provider === "elevenlabs" ? "elevenlabs-v3" : (data.provider || "elevenlabs-v3"))} modelLabel={data.provider === "elevenlabs" ? "elevenlabs-v3" : (data.provider || "elevenlabs-v3")} noun="text" />
+              <PromptLengthCounter value={data.directText || ""} max={getMaxTtsChars(data.provider === "elevenlabs" ? "elevenlabs-v3" : (data.provider || "elevenlabs-v3"))} modelLabel={data.provider === "elevenlabs" ? "elevenlabs-v3" : (data.provider || "elevenlabs-v3")} noun={t("audiocfg.text")} />
               <p className="text-[10px] text-muted-foreground mt-1">{t("audiocfg.hintTypeTags")}</p>
             </>
           )}
@@ -208,7 +251,7 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
           <SelectContent>
             <SelectItem value="auto">{t("audiocfg.phAutoDetect")}</SelectItem>
             {getLanguagesForModel(data.provider).map((l) => (
-              <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+              <SelectItem key={l.value} value={l.value}>{localizeOption(l.label)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -288,7 +331,7 @@ export function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMa
               onChange={(v) => {
                 if (v.length <= maxPromptLen) onUpdate({ prompt: v })
               }}
-              placeholder={isSfx ? "Describe the sound effect (max 450 chars)..." : "Describe the sound effect (e.g. dog barking, rain on window)..."}
+              placeholder={isSfx ? t("audiocfg.phDescribeSfxCapped") : t("audiocfg.phDescribeSfx")}
               tagMode="none"
               nodeRefs={nodeRefs}
               displayMode={variableDisplayMode}
@@ -378,7 +421,7 @@ export function SunoVoiceConfig({ data }: ConfigProps<SunoVoiceData>) {
         )}
         {data.voiceId && (
           <div className="text-[10px] font-mono text-muted-foreground/80 mt-2 break-all">
-            ID: {data.voiceId}
+            {t("audiocfg.idPrefix")} {data.voiceId}
           </div>
         )}
         {!ready && (
@@ -393,7 +436,7 @@ export function SunoVoiceConfig({ data }: ConfigProps<SunoVoiceData>) {
         </div>
       )}
       <div className="text-[11px] text-muted-foreground">
-        {t("audiocfg.svWirePre")}<span className="font-medium">in</span>{t("audiocfg.svWirePost")}
+        {t("audiocfg.svWirePre")}<span className="font-medium">{t("audiocfg.svWireHandleIn")}</span>{t("audiocfg.svWirePost")}
       </div>
     </div>
   )
@@ -458,7 +501,7 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
               refMap={refMap}
               snippets={promptSnippets}
             />
-            <PromptLengthCounter value={data.prompt} max={getMaxSunoPromptChars(data.model, getEffectiveSunoCustomMode(data))} modelLabel={data.model ?? "V5_5"} noun="prompt / lyrics" />
+            <PromptLengthCounter value={data.prompt} max={getMaxSunoPromptChars(data.model, getEffectiveSunoCustomMode(data))} modelLabel={data.model ?? "V5_5"} noun={t("audiocfg.promptLyrics")} />
           </>
         )}
       </SunoField>
@@ -483,15 +526,15 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
             placeholder={t("audiocfg.phAuto")}
           />
           <p className="text-[10px] text-muted-foreground">
-            10–360s, V5.5 only. Applies in custom mode (with style / title / lyrics set)
-            {getEffectiveSunoCustomMode(data) ? "." : " — currently inactive, Suno picks the length."}
+            {t("audiocfg.hintV55Duration")}
+            {getEffectiveSunoCustomMode(data) ? "." : t("audiocfg.hintV55DurationInactive")}
           </p>
         </div>
       )}
       {(["title", "lyrics", "style", "negativeStyle"] as const).map((f) => {
-        const meta = SUNO_FIELD_EDIT_META[f]
+        const meta = SUNO_FIELD_EDIT_META()[f]
         return (
-          <SunoField key={f} field={meta.field} label={meta.label} wired={isSunoFieldWired(meta.field, data, sunoEdges, nodeId)} labelAction={isSunoAiField(meta.field) && nodeId ? <SunoFieldAiButton nodeId={nodeId} field={meta.field} /> : undefined}>
+          <SunoField key={f} field={meta.field} label={t(SUNO_FIELD_LABEL_KEYS[f])} wired={isSunoFieldWired(meta.field, data, sunoEdges, nodeId)} labelAction={isSunoAiField(meta.field) && nodeId ? <SunoFieldAiButton nodeId={nodeId} field={meta.field} /> : undefined}>
             <SunoFieldEditor meta={meta} data={data} onUpdate={onUpdate} nodeRefs={nodeRefs} refMap={refMap} variableDisplayMode={variableDisplayMode} />
           </SunoField>
         )
@@ -509,7 +552,7 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
       {SUNO_SLIDER_META.map((s) => (
         <div key={s.key} className="flex flex-col gap-1">
           <div className="flex items-center justify-between">
-            <label className="text-xs font-medium text-muted-foreground">{s.label}</label>
+            <label className="text-xs font-medium text-muted-foreground">{t(SUNO_SLIDER_LABEL_KEYS[s.key])}</label>
             <span className="text-xs text-muted-foreground">{(data[s.key] as number | undefined) ?? s.default}</span>
           </div>
           <input
@@ -518,7 +561,7 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
             onChange={(e) => onUpdate({ [s.key]: parseFloat(e.target.value) } as Partial<SunoGenerateData>)}
             className="w-full accent-[#ff0073]"
           />
-          <p className="text-[10px] leading-tight text-muted-foreground/70">{s.description}</p>
+          <p className="text-[10px] leading-tight text-muted-foreground/70">{t(SUNO_SLIDER_DESC_KEYS[s.key])}</p>
         </div>
       ))}
       <div className="flex items-center gap-2">
@@ -585,7 +628,7 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
               refMap={refMap}
               snippets={promptSnippets}
             />
-            <PromptLengthCounter value={data.prompt} max={getMaxSunoPromptChars(data.model, getEffectiveSunoCustomMode(data))} modelLabel={data.model ?? "V5_5"} noun="prompt / lyrics" />
+            <PromptLengthCounter value={data.prompt} max={getMaxSunoPromptChars(data.model, getEffectiveSunoCustomMode(data))} modelLabel={data.model ?? "V5_5"} noun={t("audiocfg.promptLyrics")} />
           </>
         )}
       </MappableField>
@@ -620,7 +663,7 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
             displayMode={variableDisplayMode}
             refMap={refMap}
           />
-          <PromptLengthCounter value={data.lyrics ?? ""} max={getMaxSunoPromptChars(data.model, getEffectiveSunoCustomMode(data))} modelLabel={data.model ?? "V5_5"} noun="lyrics" />
+          <PromptLengthCounter value={data.lyrics ?? ""} max={getMaxSunoPromptChars(data.model, getEffectiveSunoCustomMode(data))} modelLabel={data.model ?? "V5_5"} noun={t("audiocfg.lyrics")} />
         </>
       </MappableField>
       <MappableField field="style" label={t("audiocfg.styleOptional")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -637,7 +680,7 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
             displayMode={variableDisplayMode}
             refMap={refMap}
           />
-          <PromptLengthCounter value={data.style ?? ""} max={getMaxSunoStyleChars(data.model)} modelLabel={data.model ?? "V5_5"} noun="style" />
+          <PromptLengthCounter value={data.style ?? ""} max={getMaxSunoStyleChars(data.model)} modelLabel={data.model ?? "V5_5"} noun={t("audiocfg.style")} />
         </>
       </MappableField>
       <MappableField field="negativeStyle" label={t("audiocfg.negativeStyleOptional")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -722,7 +765,7 @@ export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMap
               refMap={refMap}
               snippets={promptSnippets}
             />
-            <PromptLengthCounter value={data.prompt ?? ""} max={getMaxSunoPromptChars(data.model, getEffectiveSunoCustomMode(data))} modelLabel={data.model ?? "V5_5"} noun="prompt / lyrics" />
+            <PromptLengthCounter value={data.prompt ?? ""} max={getMaxSunoPromptChars(data.model, getEffectiveSunoCustomMode(data))} modelLabel={data.model ?? "V5_5"} noun={t("audiocfg.promptLyrics")} />
           </>
         )}
       </MappableField>
@@ -754,7 +797,7 @@ export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMap
             displayMode={variableDisplayMode}
             refMap={refMap}
           />
-          <PromptLengthCounter value={data.style ?? ""} max={getMaxSunoStyleChars(data.model)} modelLabel={data.model ?? "V5_5"} noun="style" />
+          <PromptLengthCounter value={data.style ?? ""} max={getMaxSunoStyleChars(data.model)} modelLabel={data.model ?? "V5_5"} noun={t("audiocfg.style")} />
         </>
       </MappableField>
       <div className="flex items-center gap-2">
@@ -939,7 +982,7 @@ export function AudioFxConfig({ data, onUpdate }: { readonly data: AudioFxData; 
         <Select value={data.preset} onValueChange={(v) => onUpdate({ preset: v as AudioFxData["preset"] })}>
           <SelectTrigger aria-label={t("field.effect")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            {AUDIO_FX_PRESETS.map((p) => (<SelectItem key={p} value={p}>{AUDIO_FX_PRESET_LABELS[p]}</SelectItem>))}
+            {AUDIO_FX_PRESETS.map((p) => (<SelectItem key={p} value={p}>{t(AUDIO_FX_PRESET_LABEL_KEYS[p])}</SelectItem>))}
           </SelectContent>
         </Select>
       </div>
@@ -965,11 +1008,11 @@ export function AudioFxConfig({ data, onUpdate }: { readonly data: AudioFxData; 
       {isCustom && (
         <>
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-muted-foreground">EQ Low (dB): {data.eqLow ?? 0}</label>
+            <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.eqLow")}: {data.eqLow ?? 0}</label>
             <Slider min={-20} max={20} step={1} value={[data.eqLow ?? 0]} onValueChange={(vals) => onUpdate({ eqLow: vals[0] })} />
           </div>
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-muted-foreground">EQ High (dB): {data.eqHigh ?? 0}</label>
+            <label className="text-xs font-medium text-muted-foreground">{t("audiocfg.eqHigh")}: {data.eqHigh ?? 0}</label>
             <Slider min={-20} max={20} step={1} value={[data.eqHigh ?? 0]} onValueChange={(vals) => onUpdate({ eqHigh: vals[0] })} />
           </div>
         </>
@@ -1121,7 +1164,7 @@ export function SunoReplaceSectionConfig({ data, onUpdate, sources, fieldMapping
                 backend always clamps with clampSunoFields(parsed.data, { customMode: true }),
                 so the cap here mirrors that call exactly (undefined model, custom mode true). */}
             <TagTextarea rows={3} value={data.prompt ?? ""} onChange={(v) => { if (v.length <= SUNO_HARD_CEILING) onUpdate({ prompt: v }) }} placeholder={t("audiocfg.phDescribeReplacement")} maxLength={SUNO_HARD_CEILING} tagMode="suno" customTags={SUNO_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} snippets={promptSnippets} />
-            <PromptLengthCounter value={data.prompt ?? ""} max={getMaxSunoPromptChars(undefined, true)} noun="prompt" />
+            <PromptLengthCounter value={data.prompt ?? ""} max={getMaxSunoPromptChars(undefined, true)} noun={t("audiocfg.prompt")} />
           </>
         )}
       </MappableField>
@@ -1134,7 +1177,7 @@ export function SunoReplaceSectionConfig({ data, onUpdate, sources, fieldMapping
       <MappableField field="fullLyrics" label={t("audiocfg.fullLyricsPostEdit")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <>
           <TagTextarea rows={4} value={data.fullLyrics ?? ""} onChange={(v) => { if (v.length <= SUNO_HARD_CEILING) onUpdate({ fullLyrics: v }) }} placeholder={t("audiocfg.phFullLyrics")} maxLength={SUNO_HARD_CEILING} tagMode="suno" customTags={SUNO_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} />
-          <PromptLengthCounter value={data.fullLyrics ?? ""} max={getMaxSunoPromptChars(undefined, true)} noun="lyrics" />
+          <PromptLengthCounter value={data.fullLyrics ?? ""} max={getMaxSunoPromptChars(undefined, true)} noun={t("audiocfg.lyrics")} />
         </>
       </MappableField>
       <MappableField field="negativeTags" label={t("audiocfg.negativeTagsOptional")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -1185,7 +1228,7 @@ export function SunoStyleBoostConfig({ data, onUpdate, sources, fieldMappings, o
               refMap={refMap}
               snippets={styleBoostSnippets}
             />
-            <PromptLengthCounter value={data.content ?? ""} max={getMaxSunoPromptChars(undefined, true)} noun="content" />
+            <PromptLengthCounter value={data.content ?? ""} max={getMaxSunoPromptChars(undefined, true)} noun={t("audiocfg.content")} />
           </>
         )}
       </MappableField>
@@ -1309,7 +1352,7 @@ export function SunoUploadExtendConfig({ data, onUpdate, sources, fieldMappings,
                 literally rather than getEffectiveSunoCustomMode(data) (whose
                 style/title heuristic would disagree with the route here). */}
             <TagTextarea rows={3} value={data.prompt ?? ""} onChange={(v) => { if (v.length <= SUNO_HARD_CEILING) onUpdate({ prompt: v }) }} placeholder={t("audiocfg.phDescribeExtension")} maxLength={SUNO_HARD_CEILING} tagMode="suno" customTags={SUNO_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} snippets={promptSnippets} />
-            <PromptLengthCounter value={data.prompt ?? ""} max={getMaxSunoPromptChars(data.model, false)} modelLabel={data.model ?? "V5_5"} noun="prompt" />
+            <PromptLengthCounter value={data.prompt ?? ""} max={getMaxSunoPromptChars(data.model, false)} modelLabel={data.model ?? "V5_5"} noun={t("audiocfg.prompt")} />
           </>
         )}
       </MappableField>
@@ -1507,7 +1550,7 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
             <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
             <SelectContent>
               {resOpts.values.map((r) => (
-                <SelectItem key={r} value={r}>{r === resOpts.def ? `${r} (default)` : r}</SelectItem>
+                <SelectItem key={r} value={r}>{r === resOpts.def ? t("audiocfg.optDefaultSuffix", { value: r }) : r}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -1867,6 +1910,7 @@ export function AudioIsolationConfig({ data, onUpdate, nodeRefs }: ConfigProps<A
 }
 
 export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap, variableDisplayMode }: ConfigProps<TextToDialogueData>) {
+  const localizeOption = useLocalizeOptionLabel()
   const t = useT()
   const dialogue = data.dialogue ?? [{ id: "1", text: "", voice: DEFAULT_DIALOGUE_VOICE }]
   const totalChars = dialogue.reduce((sum, l) => sum + l.text.length, 0)
@@ -1906,7 +1950,7 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
       voiceLabel: d.speaker,
     }))
     onUpdate({ dialogue: newDialogue })
-    toast.success(`Filled ${newDialogue.length} dialogue lines from script`)
+    toast.success(tx("audiocfg.toastFilledDialogueLines", { count: newDialogue.length }))
   }, [scriptDialogue, onUpdate])
 
   function updateLine(index: number, updates: Partial<DialogueLine>) {
@@ -1949,7 +1993,7 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
           onClick={fillFromScript}
         >
           <Wand2 className="w-3.5 h-3.5" />
-          Fill {scriptDialogue.length} Lines from Script
+          {t("audiocfg.fillLinesFromScript", { count: scriptDialogue.length })}
         </Button>
       )}
 
@@ -1974,7 +2018,7 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
               rows={2}
               value={line.text}
               onChange={(v) => updateLine(i, { text: v })}
-              placeholder={`Line ${i + 1}... (type [ or / for audio tags)`}
+              placeholder={t("audiocfg.phDialogueLine", { n: i + 1 })}
               className="text-sm"
               tagMode="audio"
               nodeRefs={nodeRefs}
@@ -1986,7 +2030,7 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
       </div>
 
       <Button variant="outline" size="sm" onClick={addLine} className="w-full">
-        <Plus className="h-3 w-3 mr-1" /> Add Line
+        <Plus className="h-3 w-3 me-1" /> {t("audiocfg.addLine")}
       </Button>
 
       <div>
@@ -2014,7 +2058,7 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
           <SelectContent>
             <SelectItem value="auto">{t("audiocfg.phAutoDetect")}</SelectItem>
             {ALL_LANGUAGES.map((l) => (
-              <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+              <SelectItem key={l.value} value={l.value}>{localizeOption(l.label)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -2067,7 +2111,9 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
 }
 
 export function VoiceChangerConfig({ data, onUpdate, nodeRefs }: ConfigProps<VoiceChangerData>) {
+  const localizeOption = useLocalizeOptionLabel()
   const t = useT()
+  const localizeDesc = useLocalizeModelDescription()
   return (
     <div className="flex flex-col gap-3">
       <div>
@@ -2094,12 +2140,12 @@ export function VoiceChangerConfig({ data, onUpdate, nodeRefs }: ConfigProps<Voi
           <SelectTrigger id="vc-model" aria-label={t("field.model")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {VOICE_CHANGER_MODELS.map((m) => (
-              <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+              <SelectItem key={m.value} value={m.value}>{localizeOption(m.label)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
         <p className="text-[10px] text-muted-foreground mt-1">
-          {VOICE_CHANGER_MODELS.find((m) => m.value === (data.model || DEFAULT_VOICE_CHANGER_MODEL))?.desc}
+          {localizeDesc(VOICE_CHANGER_MODELS.find((m) => m.value === (data.model || DEFAULT_VOICE_CHANGER_MODEL))?.desc ?? "")}
         </p>
       </div>
       <div>
@@ -2158,7 +2204,7 @@ export function VoiceChangerConfig({ data, onUpdate, nodeRefs }: ConfigProps<Voi
           />
           <Label htmlFor="vc-remove-bg">{t("audiocfg.removeBackgroundNoise")}</Label>
         </div>
-        <p className="text-[10px] text-muted-foreground mt-1 ml-6">
+        <p className="text-[10px] text-muted-foreground mt-1 ms-6">
           {t("audiocfg.hintRevoiceOffOn")}
         </p>
       </div>
@@ -2311,7 +2357,7 @@ export function VoiceDesignConfig({ data, onUpdate, sources, fieldMappings, onMa
           refMap={refMap}
         />
         {data.text && data.text.length < 100 && (
-          <p className="text-[10px] text-amber-500 mt-0.5">{data.text.length}/100 characters (minimum 100 required)</p>
+          <p className="text-[10px] text-amber-500 mt-0.5">{t("audiocfg.minChars100", { n: data.text.length })}</p>
         )}
       </MappableField>
       <div>
@@ -2320,7 +2366,7 @@ export function VoiceDesignConfig({ data, onUpdate, sources, fieldMappings, onMa
           <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="eleven_multilingual_ttv_v2">ElevenLabs Multilingual v2</SelectItem>
-            <SelectItem value="eleven_ttv_v3">ElevenLabs v3 (recommended)</SelectItem>
+            <SelectItem value="eleven_ttv_v3">{t("audiocfg.optElevenV3Recommended")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -2390,7 +2436,7 @@ export function VoiceDesignConfig({ data, onUpdate, sources, fieldMappings, onMa
         </div>
       )}
       <p className="text-xs text-muted-foreground">
-        Designs a new voice using full controls (model, loudness, guidance, quality). Outputs audio preview and a reusable voice ID.
+        {t("audiocfg.descVoiceDesignFull")}
       </p>
     </div>
   )
@@ -2447,6 +2493,7 @@ export function ForcedAlignmentConfig({ data, onUpdate, sources, fieldMappings, 
 const VOICE_FX_NONE = "__none__"
 
 export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChangerProData>) {
+  const localizeOption = useLocalizeOptionLabel()
   const t = useT()
   const voices = data.orderedVoices ?? []
   const addVoice = (voiceId: string, voiceLabel: string, voiceType: "premade" | "custom" | "library") =>
@@ -2501,7 +2548,7 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
           aria-label={t("audiocfg.addKeepOriginalSlot")}
           onClick={addKeepSlot}
         >
-          <Plus className="h-3 w-3 mr-1" /> Keep original — don&apos;t recast this speaker
+          <Plus className="h-3 w-3 me-1" /> {t("audiocfg.keepOriginalSlotBtn")}
         </Button>
       </div>
       <div className="flex flex-col gap-1">
@@ -2520,22 +2567,22 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
                   <span className="text-sm text-muted-foreground truncate">{t("audiocfg.keepOriginal")}</span>
                   <VoiceBrowser
                     value=""
-                    valueLabel="Choose voice…"
+                    valueLabel={t("audiocfg.chooseVoice")}
                     compact
                     showCustomVoices
-                    triggerAriaLabel={`Choose voice for speaker ${i + 1}`}
+                    triggerAriaLabel={t("audiocfg.chooseVoiceForSpeaker", { n: i + 1 })}
                     onSelect={(id, name, voiceType) => setVoiceAt(i, id, name, voiceType ?? "premade")}
                   />
                 </div>
               )}
               {v && (
                 <button
-                  aria-label={`Keep original for speaker ${i + 1}`}
+                  aria-label={t("audiocfg.keepOriginalForSpeaker", { n: i + 1 })}
                   title={t("audiocfg.keepOriginalVoiceTitle")}
                   onClick={() => keepAt(i)}
                   className="text-[10px] px-1 text-muted-foreground hover:text-foreground"
                 >
-                  Keep
+                  {t("audiocfg.mergeKeepBadge")}
                 </button>
               )}
               <button aria-label={t("audiocfg.moveUp")} onClick={() => move(i, -1)} className="text-xs px-1">↑</button>
@@ -2614,7 +2661,7 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
                     <Switch id={`speaker-boost-${i}`} checked={v.useSpeakerBoost ?? true} onCheckedChange={(c) => updateVoice(i, { useSpeakerBoost: c })} />
                   </div>
                   <p className="text-[10px] text-muted-foreground mt-0.5">
-                    Boosts the recast&apos;s fidelity to the target voice (slightly higher latency).
+                    {t("audiocfg.hintSpeakerBoostRecast")}
                   </p>
                 </div>
                 </>)}
@@ -2624,7 +2671,7 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
                     value={v.volumeMode ?? "match"}
                     onValueChange={(mode) => updateVoice(i, { volumeMode: mode as NonNullable<VoiceChangerProData["orderedVoices"][number]>["volumeMode"] })}
                   >
-                    <SelectTrigger id={`volume-mode-${i}`} aria-label={`Volume mode for speaker ${i + 1}`} className="h-8"><SelectValue /></SelectTrigger>
+                    <SelectTrigger id={`volume-mode-${i}`} aria-label={t("audiocfg.volumeModeForSpeaker", { n: i + 1 })} className="h-8"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="match">{t("audiocfg.matchSource")}</SelectItem>
                       <SelectItem value="normalize">{t("audiocfg.normalize")}</SelectItem>
@@ -2680,7 +2727,7 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
           <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {VOICE_CHANGER_MODELS.map((m) => (
-              <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+              <SelectItem key={m.value} value={m.value}>{localizeOption(m.label)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -2744,7 +2791,7 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
           <SelectContent>
             <SelectItem value={VOICE_FX_NONE}>{t("audiocfg.none")}</SelectItem>
             {AUDIO_FX_PRESETS.map((p) => (
-              <SelectItem key={p} value={p}>{AUDIO_FX_PRESET_LABELS[p]}</SelectItem>
+              <SelectItem key={p} value={p}>{t(AUDIO_FX_PRESET_LABEL_KEYS[p])}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -2767,7 +2814,7 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
           </>
         )}
         <p className="text-[11px] text-muted-foreground">
-          Adds reverb/echo to the recast voices before the background music is mixed back.
+          {t("audiocfg.hintVoiceFxReverb")}
         </p>
       </div>
       <div>
@@ -2776,7 +2823,7 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
           <Switch checked={data.removeBackgroundNoise ?? false} onCheckedChange={(v) => onUpdate({ removeBackgroundNoise: v })} />
         </div>
         <p className="text-[11px] text-muted-foreground mt-1">
-          Under evaluation — vocals are isolated automatically; this may be unnecessary.
+          {t("audiocfg.hintRemoveBgNoiseUnderEval")}
         </p>
       </div>
     </div>
