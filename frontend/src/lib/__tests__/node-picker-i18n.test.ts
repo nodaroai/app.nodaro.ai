@@ -31,6 +31,24 @@ const PICKER_CHROME_KEYS = [
   "addnode.createsNode",
   "node.runsOnNodaro",
   "toolbar.myLibrary",
+  // Connect dialog (the picker's auto-connect handoff)
+  "connect.dialogAria", "connect.title", "connect.name", "connect.nameAria", "connect.handles",
+  "connect.after", "connect.before", "connect.wiresInto", "connect.roleNew", "connect.roleCurrent",
+  "connect.optionAriaAfter", "connect.optionAriaBefore", "connect.missingVariables",
+  "connect.variableHint", "connect.dontConnect", "connect.autoConnect", "connect.navigate",
+  "connect.confirm", "connect.cancel",
+  // Canvas toolbar rail
+  "ctb.searchWorkflows", "ctb.findInWorkflow", "ctb.previousFocus", "ctb.addStickyNote",
+  "ctb.tidyUp", "ctb.undo", "ctb.redo", "ctb.toggleSidebar", "ctb.keyboardShortcuts",
+  "ctb.dragAria", "ctb.dragTitle",
+  // My Library modal
+  "assetlib.searchPlaceholder", "assetlib.projectLabel", "assetlib.allProjects",
+  "assetlib.filterByProject", "assetlib.clear", "assetlib.tabAll", "assetlib.tabCharacters",
+  "assetlib.tabObjects", "assetlib.tabCreatures", "assetlib.tabLocations", "assetlib.tabFaces",
+  "assetlib.tabImages", "assetlib.tabVideos", "assetlib.tabAudio", "assetlib.loading",
+  "assetlib.loadFailed", "assetlib.noMatching", "assetlib.noSaved", "assetlib.tryFilters",
+  "assetlib.generateHint", "assetlib.onCanvas", "assetlib.viewAsset", "assetlib.addToCanvas",
+  "assetlib.typeCharacter", "assetlib.typeObject", "assetlib.typeCreature", "assetlib.typeLocation", "assetlib.typeFace",
 ] as const
 
 describe("picker chrome keys", () => {

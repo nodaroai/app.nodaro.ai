@@ -178,7 +178,7 @@ function ComponentListItem({
       onClick={onSelect}
       onMouseEnter={onMouseEnter}
       className={cn(
-        "w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors",
+        "w-full flex items-center gap-2.5 px-3 py-2 text-start transition-colors",
         isHighlighted
           ? "bg-[#F1F5F9] dark:bg-[#2D2D2D]"
           : "hover:bg-[#F8FAFC] dark:hover:bg-[#252525]",
@@ -213,6 +213,18 @@ function ComponentListItem({
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
+
+/** The popup variant's width (`w-80`). Callers that anchor the popup beside
+ *  something — the canvas toolbar rail — read this so the two cannot drift. */
+export const MARKETPLACE_POPUP_WIDTH = 320
+
+/** Keep a caller-supplied physical x on-screen: every caller hands over a raw
+ *  coordinate (a rail button's edge, a right-click, a handle drop) with no idea
+ *  of the popup's width, and near the viewport's inline end that runs the popup
+ *  off-screen. */
+export function clampPopupLeft(x: number, viewportWidth: number): number {
+  return Math.max(8, Math.min(x, viewportWidth - MARKETPLACE_POPUP_WIDTH - 8))
+}
 
 export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, variant = "popup", position }: ComponentMarketplaceModalProps) {
   const t = useT()
@@ -460,13 +472,13 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
 
           <div className="flex items-center gap-3 flex-wrap">
             <div className="relative flex-1 min-w-[200px] max-w-[360px]">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 ref={searchInputRef}
                 placeholder={t("marketplace.searchPlaceholder")}
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                className="pl-8 h-8 text-sm"
+                className="ps-8 h-8 text-sm"
               />
             </div>
 
@@ -549,7 +561,7 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
                       <h3 className="text-sm font-semibold text-foreground truncate">{comp.name}</h3>
                       <p className="text-[11px] text-muted-foreground font-mono mt-0.5">/app/{comp.slug}</p>
                     </div>
-                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                    <div className="flex items-center gap-1.5 shrink-0 ms-2">
                       <span
                         className={cn(
                           "text-[10px] px-2 py-0.5 rounded-full cursor-pointer transition-colors",
@@ -579,16 +591,16 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <a href={`/app/${comp.slug}`} target="_blank" rel="noopener noreferrer">
                       <Button variant="outline" size="sm" className="h-7 px-2 text-xs">
-                        <ExternalLink className="h-3 w-3 mr-1" /> {t("marketplace.open")}
+                        <ExternalLink className="h-3 w-3 me-1" /> {t("marketplace.open")}
                       </Button>
                     </a>
                     <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => setEditComp(comp)}>
-                      <Pencil className="h-3 w-3 mr-1" /> {t("common.edit")}
+                      <Pencil className="h-3 w-3 me-1" /> {t("common.edit")}
                     </Button>
                     <Button
                       variant={comp.isActive === false ? "default" : "outline"}
                       size="sm"
-                      className="h-7 px-2 text-xs ml-auto"
+                      className="h-7 px-2 text-xs ms-auto"
                       onClick={() => toggleActiveMutation.mutate({ appId: comp.id, isActive: comp.isActive === false })}
                     >
                       {comp.isActive === false ? t("marketplace.restore") : t("marketplace.archive")}
@@ -678,7 +690,7 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
           "overflow-hidden",
         )}
         style={position
-          ? { left: position.x, top: position.y }
+          ? { left: clampPopupLeft(position.x, window.innerWidth), top: position.y }
           : { left: 70, top: "50%", transform: "translateY(-50%)" }
         }
       >
@@ -719,7 +731,7 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
         {/* Search */}
         <div className="px-3 py-1.5">
           <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#94A3B8]" />
+            <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#94A3B8]" />
             <input
               ref={searchInputRef}
               type="text"
@@ -727,7 +739,7 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               className={cn(
-                "w-full pl-8 pr-3 py-1.5 text-sm",
+                "w-full ps-8 pe-3 py-1.5 text-sm",
                 "bg-[#F8FAFC] dark:bg-[#121212]",
                 "border border-[#E2E8F0] dark:border-[#2D2D2D]",
                 "rounded-lg",
@@ -978,7 +990,7 @@ function ComponentEditDialog({
                 <Switch checked={monetizationEnabled} onCheckedChange={handleToggleMonetization} />
               </div>
               {monetizationEnabled && (
-                <div className="space-y-3 pl-1">
+                <div className="space-y-3 ps-1">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label className="text-xs">{t("marketplace.flatFeeLabel", { u: creditUnitLabel(t("credits.unitShort")) })}</Label>
@@ -1003,7 +1015,7 @@ function ComponentEditDialog({
             className="w-full text-white hover:opacity-90"
             style={{ backgroundColor: "#ff0073" }}
           >
-            {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            {isSaving && <Loader2 className="h-4 w-4 me-2 animate-spin" />}
             {t("marketplace.saveChanges")}
           </Button>
         </div>

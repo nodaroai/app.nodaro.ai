@@ -8,6 +8,7 @@
  */
 import { create } from "zustand"
 import { hasCredits } from "@/lib/edition"
+import { surfaceFeatureHidden } from "@/lib/surface-selectors"
 
 /** Open rail width in px. The panel's own class and every layout offset read this. */
 export const COPILOT_RAIL_WIDTH = 380
@@ -38,16 +39,29 @@ export const useCopilotUiStore = create<CopilotUiState>((set) => ({
 }))
 
 /**
- * How many px the rail currently takes on the left.
+ * Is the Copilot surfaced at all here? Two independent questions, answered
+ * once: the EDITION must have credits (the copilot spends them), and the
+ * DEPLOYMENT must not have switched the feature off. Every render path and
+ * every layout offset asks this — a site that asked only `hasCredits()` would
+ * keep rendering a button whose backend answers 503, or keep reserving room
+ * for a rail that is not there.
+ */
+export function copilotSurfaced(): boolean {
+  return hasCredits() && !surfaceFeatureHidden("copilot")
+}
+
+/**
+ * How many px the rail currently takes at the inline start.
  *
  * The editor's floating toolbar is `position: fixed` and offsets itself from
  * the app sidebar, so without this it renders ON TOP of the rail — the reported
- * bug. Anything else anchored to the left edge should offset by this too.
- * Returns 0 when there is no rail at all (community, or never opened).
+ * bug. Anything else anchored to the inline-start edge should offset by this
+ * too. Returns 0 when there is no rail at all: community, a deployment that
+ * hides the Copilot feature, or a rail that never rendered.
  */
 export function useCopilotRailWidth(): number {
   return useCopilotUiStore((s) => {
-    if (!hasCredits()) return 0
+    if (!copilotSurfaced()) return 0
     return s.open ? COPILOT_RAIL_WIDTH : COPILOT_TAB_WIDTH
   })
 }
