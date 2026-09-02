@@ -118,7 +118,7 @@ describe("decideSignupGrant — device and network signals (the residual)", () =
   })
 })
 
-import { fallbackClaimDue, FALLBACK_CLAIM_GRACE_MS } from "../signup-grant.js"
+import { fallbackClaimDue, isForeignOrigin, FALLBACK_CLAIM_GRACE_MS } from "../signup-grant.js"
 
 describe("fallbackClaimDue — the balance-read fallback yields to the browser first", () => {
   const now = Date.parse("2026-09-01T20:00:00Z")
@@ -133,5 +133,90 @@ describe("fallbackClaimDue — the balance-read fallback yields to the browser f
   it("claims when the age is unknown — never strands an account at zero", () => {
     expect(fallbackClaimDue(null, now)).toBe(true)
     expect(fallbackClaimDue(new Date("garbage"), now)).toBe(true)
+  })
+})
+
+describe("isForeignOrigin — any page but our own SPA skips the grace", () => {
+  const PUBLIC_URL = "https://app.nodaro.ai"
+
+  const call = (over: Partial<Parameters<typeof isForeignOrigin>[0]>) =>
+    isForeignOrigin({ origin: undefined, publicUrl: PUBLIC_URL, host: "app.nodaro.ai", ...over })
+
+  it("is false when there is no Origin header — a same-origin GET sends none", () => {
+    expect(call({ origin: undefined })).toBe(false)
+    expect(call({ origin: "" })).toBe(false)
+    expect(call({ origin: "   " })).toBe(false)
+  })
+
+  it("is TRUE for a thin client — the production bug (a recast signup stranded at zero)", () => {
+    // recast/studio/person/voice call this API cross-origin and never send
+    // the keyed boot-time claim. No allowlist is consulted: every surface the
+    // operator forgot to list would otherwise silently keep stranding users.
+    expect(call({ origin: "https://recast.nodaro.ai" })).toBe(true)
+    expect(call({ origin: "https://studio.nodaro.ai" })).toBe(true)
+    expect(call({ origin: "chrome-extension://ourrealextensionid" })).toBe(true)
+  })
+
+  it("is TRUE for an origin we never published — a forged header buys only the 2 minutes", () => {
+    expect(call({ origin: "https://x.invalid" })).toBe(true)
+    expect(call({ origin: "https://recast.nodaro.ai.evil.test" })).toBe(true)
+  })
+
+  it("is false for our own origin — PUBLIC_URL", () => {
+    expect(call({ origin: PUBLIC_URL })).toBe(false)
+    expect(call({ origin: "https://APP.nodaro.ai" })).toBe(false)
+  })
+
+  it("is false when the Origin host equals the Host header, even with PUBLIC_URL unset", () => {
+    expect(call({ origin: "https://self.host.example", publicUrl: "", host: "self.host.example" })).toBe(false)
+    expect(call({ origin: "https://self.host.example", publicUrl: "", host: "Self.Host.Example" })).toBe(false)
+    // And a different page on a self-host with no PUBLIC_URL is still foreign.
+    expect(call({ origin: "https://other.example", publicUrl: "", host: "self.host.example" })).toBe(true)
+  })
+
+  it("is false when the Origin host equals the FIRST X-Forwarded-Host hop", () => {
+    expect(
+      call({
+        origin: "https://front.example",
+        publicUrl: "",
+        host: "internal.railway.app",
+        forwardedHost: "front.example, proxy.internal",
+      }),
+    ).toBe(false)
+    // A later hop is not the host the client asked for.
+    expect(
+      call({
+        origin: "https://proxy.internal",
+        publicUrl: "",
+        host: "internal.railway.app",
+        forwardedHost: "front.example, proxy.internal",
+      }),
+    ).toBe(true)
+  })
+
+  it("is false for the localhost dev origins — the SPA on Vite still sends the keyed claim", () => {
+    expect(call({ origin: "http://localhost:3000", publicUrl: "" })).toBe(false)
+    expect(call({ origin: "http://localhost:5173", publicUrl: "" })).toBe(false)
+    expect(call({ origin: "http://127.0.0.1:5173", publicUrl: "" })).toBe(false)
+    expect(call({ origin: "http://[::1]:5173", publicUrl: "" })).toBe(false)
+  })
+
+  it("keeps the grace on an opaque, unparseable or hostless Origin — decides nothing on garbage", () => {
+    for (const origin of ["null", "NULL", "not a url", "://///", "file:///etc/passwd"]) {
+      expect(call({ origin })).toBe(false)
+    }
+  })
+
+  it("ignores an unparseable PUBLIC_URL instead of throwing", () => {
+    expect(call({ origin: PUBLIC_URL, publicUrl: "not a url" })).toBe(false)
+    expect(call({ origin: "https://recast.nodaro.ai", publicUrl: "not a url" })).toBe(true)
+  })
+
+  it("handles ports on both sides", () => {
+    // The Host header may carry the default port the origin omits.
+    expect(call({ origin: PUBLIC_URL, publicUrl: "", host: "app.nodaro.ai:443" })).toBe(false)
+    // An explicit, different port is a different origin.
+    expect(call({ origin: "http://app.nodaro.ai:8080", publicUrl: "", host: "app.nodaro.ai" })).toBe(true)
+    expect(call({ origin: "http://app.nodaro.ai:8080", publicUrl: "", host: "app.nodaro.ai:8080" })).toBe(false)
   })
 })

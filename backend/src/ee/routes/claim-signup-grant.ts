@@ -1,8 +1,8 @@
-import type { FastifyInstance } from "fastify"
+import type { FastifyBaseLogger, FastifyInstance } from "fastify"
 import { z } from "zod"
 import { sendInternalError } from "../../lib/http-errors.js"
 import { callerKeyHash } from "../../routes/oauth-register.js"
-import { runSignupGrantClaim } from "../billing/signup-grant.js"
+import { fallbackClaimDue, runSignupGrantClaim } from "../billing/signup-grant.js"
 import { supabase } from "../../lib/supabase.js"
 
 /**
@@ -46,6 +46,52 @@ const claimBody = z.object({
 
 const CLAIM_FAILED = "Failed to claim the signup grant"
 
+/**
+ * Record the fingerprints of a keyed claim that arrived AFTER the account was
+ * already decided — but only inside the grace window, and only onto a row that
+ * carries no keys at all.
+ *
+ * WHY this exists: the balance read's keyless fallback (`settleFreeGrant` in
+ * routes/credits.ts) skips the grace for any cross-origin caller,
+ * on the premise that those surfaces ship no keyed claim. That premise is an
+ * assumption about OTHER repos' bundles — the day one of them adds this POST,
+ * its GET /v1/user/credits would land first and this handler would no-op, so
+ * the keys would be thrown away. The account's own decision is one-shot and
+ * stays keyless either way, but the CORPUS must not lose the observation:
+ * `browser_match` / `device_cluster` score every FUTURE signup against these
+ * rows, so a discarded fingerprint silently weakens the gate for everyone.
+ *
+ * Bounded on purpose. Only within FALLBACK_CLAIM_GRACE_MS of signup (past
+ * that, an already-decided account is just a returning user booting the app,
+ * which must not cost a write); and `.is(..., null)` on BOTH key columns, so
+ * an existing observation is never overwritten — a claim can fill a blank, it
+ * can never rewrite what was already seen. Best-effort: never fails the boot.
+ */
+async function backfillClaimKeys(
+  log: FastifyBaseLogger,
+  userId: string,
+  createdAt: unknown,
+  keys: { browserKey?: string; deviceKey?: string },
+): Promise<void> {
+  const browserKey = keys.browserKey ?? null
+  const deviceKey = keys.deviceKey ?? null
+  if (!browserKey && !deviceKey) return
+  const created = typeof createdAt === "string" ? new Date(createdAt) : null
+  if (!created || fallbackClaimDue(created)) return
+  try {
+    const { error } = await supabase
+      .from("signup_signals")
+      .update({ browser_key: browserKey, device_key: deviceKey })
+      .eq("user_id", userId)
+      .eq("source", "claim")
+      .is("browser_key", null)
+      .is("device_key", null)
+    if (error) log.warn({ err: error, userId }, "signup grant: late keyed-claim backfill failed")
+  } catch (err) {
+    log.warn({ err, userId }, "signup grant: late keyed-claim backfill threw")
+  }
+}
+
 export async function claimSignupGrantRoutes(app: FastifyInstance) {
   app.post(
     "/v1/credits/claim-signup-grant",
@@ -67,7 +113,7 @@ export async function claimSignupGrantRoutes(app: FastifyInstance) {
       try {
         const { data: profile, error: profileError } = await supabase
           .from("profiles")
-          .select("free_grant_state")
+          .select("free_grant_state, created_at")
           .eq("id", userId)
           .single()
 
@@ -75,14 +121,17 @@ export async function claimSignupGrantRoutes(app: FastifyInstance) {
           return sendInternalError(reply, req, profileError, CLAIM_FAILED)
         }
 
-        const current = typeof profile.free_grant_state === "string" ? profile.free_grant_state : "unclaimed"
-        // Already decided: idempotent no-op. No second signal row, no RPC.
-        if (current !== "unclaimed") {
-          return { state: current, granted: false }
-        }
-
         const parsed = claimBody.safeParse(req.body ?? {})
         const keys = parsed.success ? parsed.data : {}
+
+        const current = typeof profile.free_grant_state === "string" ? profile.free_grant_state : "unclaimed"
+        // Already decided: idempotent no-op. No second signal row, no RPC —
+        // only, inside the grace window, a blank-filling write of the keys the
+        // keyless fallback could not have (see `backfillClaimKeys`).
+        if (current !== "unclaimed") {
+          await backfillClaimKeys(req.log, userId, profile.created_at, keys)
+          return { state: current, granted: false }
+        }
 
         const outcome = await runSignupGrantClaim(
           {

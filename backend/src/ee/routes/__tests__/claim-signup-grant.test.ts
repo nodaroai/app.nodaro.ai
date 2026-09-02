@@ -57,6 +57,8 @@ interface Doubles {
   signals: { upsert: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn>; select: ReturnType<typeof vi.fn> }
   /** Every (column, value) pair passed to `.neq()` across all head counts. */
   neqCalls: Array<[string, unknown]>
+  /** Every filter applied to a `signup_signals` UPDATE, as [kind, column, value]. */
+  updateFilters: Array<[string, string, unknown]>
 }
 
 /** Per-rule head counts the policy reads back; every rule defaults to "nobody else". */
@@ -106,7 +108,15 @@ function wireSupabase(opts: {
     }
     return chain
   }
-  const updateChain = { eq: vi.fn(() => updateChain), then: (r: (x: Result) => void) => r({ data: null, error: null }) }
+  // `.update()` is used by two writers: the decision write (eq/eq) and the
+  // late keyed-claim backfill (eq/eq + is/is). Every filter is recorded so a
+  // test can pin WHICH rows a write was allowed to touch.
+  const updateFilters: Array<[string, string, unknown]> = []
+  const updateChain = {
+    eq: vi.fn((col: string, v: unknown) => { updateFilters.push(["eq", col, v]); return updateChain }),
+    is: vi.fn((col: string, v: unknown) => { updateFilters.push(["is", col, v]); return updateChain }),
+    then: (r: (x: Result) => void) => r({ data: null, error: null }),
+  }
   const signals = {
     upsert: vi.fn().mockResolvedValue(opts.signal ?? { data: null, error: null }),
     select: vi.fn(() => headChain()),
@@ -124,7 +134,7 @@ function wireSupabase(opts: {
     opts.rpc ?? { data: [{ did_claim: true, old_credits: 0, new_credits: TIER_CREDITS.free, state: "granted" }], error: null },
   )
 
-  return { profiles, signals, neqCalls }
+  return { profiles, signals, neqCalls, updateFilters }
 }
 
 // ---------------------------------------------------------------------------
@@ -200,6 +210,58 @@ describe("POST /v1/credits/claim-signup-grant — already decided", () => {
     expect(res.json()).toEqual({ state: "withheld", granted: false })
     expect(doubles.signals.upsert).not.toHaveBeenCalled()
     expect(mockRpc).not.toHaveBeenCalled()
+  })
+})
+
+describe("POST /v1/credits/claim-signup-grant — a keyed claim that lost the race", () => {
+  /** An account decided `ageMs` ago, i.e. one the fallback may have claimed. */
+  const decidedAge = (ageMs: number) =>
+    wireSupabase({
+      profile: {
+        data: { free_grant_state: "granted", created_at: new Date(Date.now() - ageMs).toISOString() },
+        error: null,
+      },
+    })
+
+  it("still records its fingerprints when the keyless fallback decided first", async () => {
+    // The premise behind the thin-client fast path (`isKnownThinClientOrigin`)
+    // is that studio/person/recast/voice ship no keyed claim. The day one of
+    // them does, its balance read lands first and this POST no-ops — and the
+    // fingerprints would be lost for good. This account's own decision stays
+    // keyless, but browser_match / device_cluster score every FUTURE signup
+    // against these rows, so the observation must survive.
+    const doubles = decidedAge(10_000)
+    const res = await claim({ browserKey: HEX64, deviceKey: OTHER_HEX64 })
+
+    expect(res.json()).toEqual({ state: "granted", granted: false })
+    expect(mockRpc).not.toHaveBeenCalled()
+    expect(doubles.signals.upsert).not.toHaveBeenCalled()
+    expect(doubles.signals.update).toHaveBeenCalledWith({ browser_key: HEX64, device_key: OTHER_HEX64 })
+    // Scoped to this account's claim row, and ONLY while it carries no keys —
+    // a claim may fill a blank, never rewrite an observation already made.
+    expect(doubles.updateFilters).toEqual([
+      ["eq", "user_id", TEST_USER_ID],
+      ["eq", "source", "claim"],
+      ["is", "browser_key", null],
+      ["is", "device_key", null],
+    ])
+  })
+
+  it("writes nothing for a returning user — an old account is not a lost race", async () => {
+    const doubles = decidedAge(3 * 60 * 1000)
+    const res = await claim({ browserKey: HEX64 })
+    expect(res.json()).toEqual({ state: "granted", granted: false })
+    expect(doubles.signals.update).not.toHaveBeenCalled()
+  })
+
+  it("writes nothing when the claim carries no keys, or the age is unknown", async () => {
+    const keyless = decidedAge(10_000)
+    expect((await claim({})).statusCode).toBe(200)
+    expect(keyless.signals.update).not.toHaveBeenCalled()
+
+    const ageless = wireSupabase({ profile: { data: { free_grant_state: "granted" }, error: null } })
+    expect((await claim({ browserKey: HEX64 })).statusCode).toBe(200)
+    expect(ageless.signals.update).not.toHaveBeenCalled()
   })
 })
 
