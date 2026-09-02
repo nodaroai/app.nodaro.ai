@@ -2,13 +2,12 @@ import type { FastifyInstance, FastifyRequest, LightMyRequestResponse } from "fa
 import { z } from "zod"
 import { resolveLlmCreditId, WORKSPACE_HEADER_LOWER } from "@nodaro/shared"
 import { shouldProxyLlmToCloud } from "../lib/cloud-llm-proxy.js"
-import { supabase } from "../lib/supabase.js"
 import { insertJob } from "../lib/insert-job.js"
+import { stampAnalysisChild, discardUnstartedJob } from "../lib/llm-structured-job-row.js"
 import { config } from "../lib/config.js"
 import { videoQueue } from "../lib/queue.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
-import { refundReservedCreditsForJob } from "../lib/credits-job-lifecycle.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
@@ -145,13 +144,16 @@ export async function llmStructuredJobsRoutes(app: FastifyInstance) {
       const prepared = prepareStructuredRequest(parsed.data)
       if (!prepared.ok) return reply.status(prepared.status).send({ error: prepared.error })
 
+      // Derived ONCE: the row's projection and the analysis stamp below are
+      // the same object, so the two cannot drift.
+      const inputData = structuredJobInputData(parsed.data, LLM_STRUCTURED_JOB_TYPE)
       const { data: job, error: jobError } = await insertJob(req, {
         workflow_id: extractWorkflowId(req.body),
         node_id: extractNodeId(req.body),
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: structuredJobInputData(parsed.data, LLM_STRUCTURED_JOB_TYPE),
+        input_data: inputData,
       })
       if (jobError) {
         return sendInternalError(reply, req, jobError, "Failed to create job")
@@ -164,22 +166,13 @@ export async function llmStructuredJobsRoutes(app: FastifyInstance) {
       if (parsed.data.videoUrl) {
         const child = await createAnalysisChild(app, req, parsed.data)
         if (!child.ok) {
-          // The analysis route refused: nothing has run. Undo the parent the
-          // way the reserve path undoes its own orphan — refund, then delete —
-          // so a run that never started never shows in a run list.
-          await refundReservedCreditsForJob(job.id)
-          await supabase.from("jobs").delete().eq("id", job.id).eq("user_id", userId)
+          // The analysis route refused: nothing has run, so the parent goes
+          // away with its reservation.
+          await discardUnstartedJob(job.id, userId)
           return reply.status(child.status).send(child.body)
         }
         analysisJobId = child.jobId
-        await supabase
-          .from("jobs")
-          .update({
-            input_data: { ...structuredJobInputData(parsed.data, LLM_STRUCTURED_JOB_TYPE), analysisJobId },
-            output_data: { stage: "analyzing", analysisJobId },
-          })
-          .eq("id", job.id)
-          .eq("user_id", userId)
+        await stampAnalysisChild(job.id, userId, inputData, analysisJobId)
       }
 
       // attempts: 1 — the LLM call is the paid step; a BullMQ re-run after a
