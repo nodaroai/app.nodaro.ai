@@ -112,6 +112,9 @@ const WILDCARD_REEXPORT_LINE_PATTERN = /^\s*export\s*\*\s*from\s*["'][^"']+["']/
 const ALLOWLIST = new Set([
   "packages/shared/src/monetization.ts",
   "packages/shared/src/__tests__/utilities.test.ts", // calculateMonetizationMarkup/calculateMonetizedCost describe blocks
+  // A guard test that FORBIDS pricing vocabulary in the usage wire types — its
+  // regex necessarily spells cost/margin/price; it leaks nothing (P15).
+  "packages/shared/src/__tests__/organizations-types.test.ts",
   // Migration comments whose $ figures are SANCTIONED public prices: KIE's own
   // published list rate (273) and our public credit price across the
   // re-denomination (289, 295). Reviewed 2026-08-20.
@@ -124,7 +127,20 @@ const ALLOWLIST = new Set([
 // cost margin: the CREATOR-set markup on a monetized app (a creator's fee over
 // the inner run, paid to the creator). Every other rule still runs on them.
 // Reviewed 2026-08-23 when docs/ joined the scan.
-const BARE_MARKUP_IS_PRODUCT_TERM = new Set(["docs/design/component-marketplace.md"])
+const BARE_MARKUP_IS_PRODUCT_TERM = new Set([
+  "docs/design/component-marketplace.md",
+  // P15 usage reporting: "app markup" is the creator-set markup on a monetized
+  // app (migration 352 process_app_monetization) — a product term, not a
+  // platform rate. The absorbed-markup total is a public wire field, so the
+  // name appears in the shared type, the SDK/CLI, the docs and their tests.
+  // (skipBareMarkup only skips the bare identifier; $/rate patterns still fail.)
+  "packages/shared/src/organizations/views.ts",
+  "packages/cli/src/commands/org.ts",
+  "packages/cli/src/commands/workspace.ts",
+  "packages/cli/src/commands/__tests__/usage.test.ts",
+  "docs/organizations.md",
+  "docs/sdk-reference.md",
+])
 
 function walk(dir) {
   let entries
@@ -167,11 +183,15 @@ const offenders = []
 for (const root of ROOTS) {
   for (const file of walk(root)) {
     if (ALLOWLIST.has(file)) continue
+    // Honour the product-term set here too (as the prose pass does): a file
+    // where bare "markup" is the creator-set app markup skips ONLY that word —
+    // provider-$ rate and margin patterns still fail.
+    const skipBareMarkup = BARE_MARKUP_IS_PRODUCT_TERM.has(file)
     const content = readFileSync(file, "utf8")
     const lines = content.split("\n")
     lines.forEach((line, i) => {
       if (REEXPORT_LINE_PATTERN.test(line) || WILDCARD_REEXPORT_LINE_PATTERN.test(line)) return
-      const reason = isPricingRelevantLine(line)
+      const reason = isPricingRelevantLine(line, { skipBareMarkup })
       if (reason) offenders.push(`${file}:${i + 1}: ${reason}\n    ${line.trim()}`)
     })
   }
