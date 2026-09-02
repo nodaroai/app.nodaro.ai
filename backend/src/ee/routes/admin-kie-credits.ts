@@ -56,6 +56,31 @@ export async function recordKieCreditSnapshot(): Promise<{ credits: number } | n
   return { credits }
 }
 
+/**
+ * Fetch snapshots recorded within the last `hoursBack` hours, oldest first.
+ * Used by the low-balance runway check (kie-low-balance-alert.ts), which
+ * needs a window wide enough to reliably contain a reading ~24h old even if
+ * an hourly cron run or two was missed — hence the caller passing 36h rather
+ * than exactly 24h.
+ */
+export async function fetchKieCreditSnapshotsSince(
+  hoursBack: number,
+): Promise<{ credits: number; recorded_at: string }[]> {
+  const since = new Date(Date.now() - hoursBack * 3_600_000).toISOString()
+  const { data, error } = await supabase
+    .from("kie_credit_snapshots")
+    .select("credits, recorded_at")
+    .gte("recorded_at", since)
+    .order("recorded_at", { ascending: true })
+
+  if (error) {
+    console.error("[KIE Credits] Failed to fetch recent snapshots:", error.message)
+    return []
+  }
+
+  return data ?? []
+}
+
 export async function adminKieCreditsRoutes(app: FastifyInstance) {
   /**
    * GET /v1/admin/kie-credits

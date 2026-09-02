@@ -9,7 +9,8 @@ import {
   sweepVideoAnalysisTmp,
   expireTopupCredits,
 } from "./cleanup-service.js"
-import { recordKieCreditSnapshot } from "../routes/admin-kie-credits.js"
+import { recordKieCreditSnapshot, fetchKieCreditSnapshotsSince } from "../routes/admin-kie-credits.js"
+import { kieRunwayAlert } from "./kie-low-balance-alert.js"
 import { sweepStaleDcrRegistrations } from "../../lib/oauth-dcr-sweep.js"
 import { sweepAbandonedCopilotWorkflows } from "../copilot/abandoned-sweep.js"
 
@@ -19,7 +20,7 @@ import { sweepAbandonedCopilotWorkflows } from "../copilot/abandoned-sweep.js"
  * Schedule:
  * - expireSubscriptions:        every hour at :00
  * - renewSubscriptionCredits:   every hour at :30
- * - recordKieCreditSnapshot:    every hour at :15
+ * - recordKieCreditSnapshot:    every hour at :15 (also runs kieRunwayAlert)
  * - cleanupFreeUserMedia:       daily at 03:00 UTC
  * - cleanupCanceledUserMedia:   daily at 03:30 UTC
  * - sweepSoftDeletedLocationAssets: daily at 04:00 UTC (Phase 2 #8)
@@ -202,6 +203,23 @@ export function startCleanupCron(): void {
       }
     } catch (err) {
       console.error("[cron] KIE credit snapshot failed:", err)
+    }
+
+    // Low-balance runway alert, ahead of the account actually hitting zero
+    // (2026-08-31 20:31Z: the first signal was four user jobs failing with
+    // "[ALERT] KIE.ai account balance exhausted" mid-generation). Runs
+    // hourly right alongside the snapshot it reads, so "once per hour" dedup
+    // is free -- no extra state. Own try/catch: a failure here must never be
+    // reported as the snapshot itself failing, and must never take the cron
+    // down.
+    try {
+      const snapshots = await fetchKieCreditSnapshotsSince(36)
+      const alert = kieRunwayAlert(snapshots, new Date())
+      if (alert) {
+        console.error(alert)
+      }
+    } catch (err) {
+      console.error("[cron] KIE low-balance check failed:", err)
     }
   })
 
