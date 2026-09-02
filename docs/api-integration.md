@@ -1503,8 +1503,46 @@ asking for it on a model with no direct lane is a 400
 allowed up to 240 seconds — so give your HTTP client a matching timeout.
 Errors: 400 `validation_error`, 401, 402 (credits), 500 `internal_error` (the
 job row could not be created), 502 `llm_error` once the retries are spent, 503
-`provider_unavailable`. No typed SDK resource yet — call it with
-`client.request("POST", "/v1/llm/structured", { body })`.
+`provider_unavailable`. SDK: `client.llm.structured(body)` — mind the client's
+`timeoutMs` (the default 60 s is shorter than this call can run; create the
+client with `timeoutMs: 300_000`, or use the asynchronous twin below).
+
+### Asynchronous structured drafts (`POST /v1/llm/structured/jobs`)
+
+The same call as a job. `POST /v1/llm/structured/jobs` takes the body above
+plus three optional fields and answers `{ jobId }` at once. Poll
+`GET /v1/jobs/:id/status`: on `completed`, `output_data` is
+`{ output, inputTokens, outputTokens }` with `output` in your schema's shape;
+on `failed`, `error_message` says why. The row is yours to find again —
+`GET /v1/jobs?type=llm-structured&origin=<your slug>` lists every draft you
+started — so a client can leave and come back. (The synchronous route stores
+its result on a job row too, but only tells you the id with the answer.)
+
+- `label` (≤ 120 chars) — a display label stored on the job, for run lists.
+- `videoUrl` — draft **from a video**. The platform analyzes it first through
+  `POST /v1/video-analysis` (the same probe, duration policy, tiers and price
+  as calling it yourself; the analysis is a separate job you also own,
+  `output_data.analysisJobId`) and appends the analysis — compact JSON with
+  its server-derived fields removed — to your `input` before the LLM call.
+  While the analysis runs `output_data.stage` is `"analyzing"` and `progress`
+  mirrors it; then `"drafting"`. The finished row carries `analysisJobId`
+  and `analysisCredits` beside the output.
+- `videoAnalysis` — `{ llmModel?, selectionMode? }`, handed to the analysis
+  route unchanged (its tier names and vocabulary; only with `videoUrl`).
+
+Credits: the LLM step is reserved at creation under `llm-structured:<tier>`,
+exactly as the synchronous route; a movie run's analysis is reserved by the
+analysis route under its own id. Errors at creation: the synchronous route's
+400 / 401 / 402 / 503, plus — when `videoUrl` is set — the analysis route's
+own answers, verbatim: `422 video_too_long` / `live_stream_not_supported` /
+`invalid_video_duration`, or `402` for the analysis price; in every refused
+case nothing stays reserved — a refused analysis refunds the parent's
+reservation. Cancelling the draft
+(`POST /v1/jobs/:id/cancel`) cancels a still-running analysis with it; a
+finished analysis stays. A retry is a new job. On an instance that proxies
+its LLM calls to nodaro.ai the route answers `503 provider_unavailable` —
+use the synchronous route there. SDK: `client.llm.structuredJob(body)` and
+`client.jobs.list({ type: "llm-structured", origin })`.
 
 ### Direct uploads
 
@@ -1514,6 +1552,15 @@ Accepted audio formats include MP3, WAV, M4A/AAC, OGG, WebM and FLAC
 (`audio/flac` / `audio/x-flac`); size caps are enforced per media type
 (50 MB for audio). The SDK wraps this as `client.uploads`; MCP clients use
 `prepare_audio_upload` / `request_audio_upload` and friends.
+
+### Media processing (free, synchronous)
+
+`POST /v1/media/process` cuts or crops a stored file: body
+`{ sourceUrl, type: "video" | "audio", trim?: { startTime, endTime }, crop?: { x, y, width, height }, format?, deleteSource? }`,
+answer `{ data: { url, thumbnailUrl, assetId, sizeBytes, mimeType, metadata } }`.
+`deleteSource: true` removes the source object afterwards when it is yours
+and nothing else references it — the cut replaces the original. The free
+sibling of the priced `trim-video` node. SDK: `client.media.process(input)`.
 
 ## 12. Credits (Cloud edition)
 
@@ -1605,15 +1652,16 @@ caller the key is absent (not `null`).
 
 ## 13. Job batch polling
 
-Two endpoints let you poll multiple job statuses in a single round trip
+The listing, plus two endpoints that poll multiple job statuses in a single round trip
 (useful for workflow UIs that track many concurrent jobs):
 
 | Method | Path | Purpose |
 |---|---|---|
+| `GET` | `/v1/jobs?limit=&cursor=&type=&origin=&attachToCharacterId=` | Your jobs, newest first, cursor-paginated: `{ data: Job[], next }` (`limit` ≤ 100; pass `next` back as `cursor`). `type` matches `input_data.type` — the route that created the job (`llm-structured`, `video-analysis`, …); `origin` matches `input_data.origin` — the client app that sent it (`studio`, …). Both are exact-match and combine. `attachToCharacterId` is the per-character archive described under characters. |
 | `GET` | `/v1/jobs/status?ids=a,b,c` | Comma-separated IDs, max 100. Returns `{ jobs: { id, status, output_data }[] }`. Cross-user / non-existent IDs are silently omitted — reconcile locally. |
 | `POST` | `/v1/jobs/batch-status` | Body `{ jobIds: string[] }`, max 100. Returns `{ data: { id, status, output_data, error_message }[] }`. |
 
-Both require `jobs:read` scope when using an OAuth token; admin tokens may
+All three require `jobs:read` scope when using an OAuth token; admin tokens may
 see cross-user jobs. These endpoints are public API — they are used by the
 editor but are equally suited to external polling clients. `input_data` and
 `output_data` are public projections: server-only fields such as Recast's

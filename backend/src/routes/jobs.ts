@@ -293,7 +293,7 @@ export async function jobRoutes(app: FastifyInstance) {
 
     let query = supabase
       .from("jobs")
-      .select("id, status, progress, input_data, output_data, error_message, error_detail, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, reconcile_attempts, source, source_detail")
+      .select("id, status, progress, input_data, output_data, error_message, error_detail, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, job_type, reconcile_attempts, source, source_detail")
       .eq("id", id)
 
     if (!isAdmin) {
@@ -361,9 +361,16 @@ export async function jobRoutes(app: FastifyInstance) {
   })
 
   app.get<{
-    Querystring: { userId?: string; limit?: string; cursor?: string; attachToCharacterId?: string }
+    Querystring: {
+      userId?: string
+      limit?: string
+      cursor?: string
+      attachToCharacterId?: string
+      type?: string
+      origin?: string
+    }
   }>("/v1/jobs", async (req, reply) => {
-    const { userId: queryUserId, limit = "50", cursor, attachToCharacterId } = req.query
+    const { userId: queryUserId, limit = "50", cursor, attachToCharacterId, type, origin } = req.query
     const limitNum = Math.min(parseInt(limit, 10) || 50, 100)
     const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
     const currentUserId = req.userId
@@ -404,6 +411,19 @@ export async function jobRoutes(app: FastifyInstance) {
     // closed by the characters-route predicate.
     if (attachToCharacterId) {
       query = query.filter("input_data->>attachToCharacterId", "eq", attachToCharacterId)
+    }
+
+    // Client-app run lists (Nodaro Studio's Director): every row carries
+    // `input_data.type` (buildJobInputData stamps it on insert) and, when a
+    // client app created it, `input_data.origin`. Deliberately NOT the
+    // `job_type` column — that is written by queue workers at pickup and is
+    // NULL on every row a synchronous route inserted, so a column filter
+    // would hide exactly the history a run list exists to show.
+    if (type) {
+      query = query.filter("input_data->>type", "eq", type)
+    }
+    if (origin) {
+      query = query.filter("input_data->>origin", "eq", origin)
     }
 
     // Cursor-based pagination (use created_at as cursor)
