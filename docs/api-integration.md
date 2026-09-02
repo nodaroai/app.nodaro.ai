@@ -1536,7 +1536,8 @@ analysis route under its own id. Errors at creation: the synchronous route's
 400 / 401 / 402 / 503, plus — when `videoUrl` is set — the analysis route's
 own answers, verbatim: `422 video_too_long` / `live_stream_not_supported` /
 `invalid_video_duration`, or `402` for the analysis price; in every refused
-case nothing was reserved. Cancelling the draft
+case nothing stays reserved — a refused analysis refunds the parent's
+reservation. Cancelling the draft
 (`POST /v1/jobs/:id/cancel`) cancels a still-running analysis with it; a
 finished analysis stays. A retry is a new job. On an instance that proxies
 its LLM calls to nodaro.ai the route answers `503 provider_unavailable` —
@@ -1651,7 +1652,7 @@ caller the key is absent (not `null`).
 
 ## 13. Job batch polling
 
-The listing plus two endpoints that poll multiple job statuses in a single round trip
+The listing, plus two endpoints that poll multiple job statuses in a single round trip
 (useful for workflow UIs that track many concurrent jobs):
 
 | Method | Path | Purpose |
@@ -1660,7 +1661,7 @@ The listing plus two endpoints that poll multiple job statuses in a single round
 | `GET` | `/v1/jobs/status?ids=a,b,c` | Comma-separated IDs, max 100. Returns `{ jobs: { id, status, output_data }[] }`. Cross-user / non-existent IDs are silently omitted — reconcile locally. |
 | `POST` | `/v1/jobs/batch-status` | Body `{ jobIds: string[] }`, max 100. Returns `{ data: { id, status, output_data, error_message }[] }`. |
 
-Both require `jobs:read` scope when using an OAuth token; admin tokens may
+All three require `jobs:read` scope when using an OAuth token; admin tokens may
 see cross-user jobs. These endpoints are public API — they are used by the
 editor but are equally suited to external polling clients. `input_data` and
 `output_data` are public projections: server-only fields such as Recast's

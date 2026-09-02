@@ -74,7 +74,10 @@ export class LlmResource {
    * at once. Poll `jobs.getStatus(jobId)` — `output_data` is an
    * {@link LlmStructuredJobOutput}; `error_message` says why a run failed.
    * `jobs.list({ type: "llm-structured", origin })` finds every run later.
-   * Throws `NotFoundError` on a platform that predates the route.
+   * Throws `NotFoundError` on a platform that predates the route. An instance
+   * that proxies its LLM calls to nodaro.ai answers `503 provider_unavailable`
+   * permanently — the SDK surfaces that as a generic `NodaroError` with the
+   * same code; treat it as unavailable here, not as transient.
    */
   structuredJob(input: LlmStructuredJobInput): Promise<{ jobId: string }> {
     return this.client.request<{ jobId: string }>("POST", "/v1/llm/structured/jobs", { body: input })

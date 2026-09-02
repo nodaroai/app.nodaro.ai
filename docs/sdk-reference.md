@@ -12,6 +12,7 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.workflows`](#clientworkflows)
   - [`client.projects`](#clientprojects)
   - [`client.jobs`](#clientjobs)
+  - [`client.llm`](#clientllm)
   - [`client.videoPro`](#clientvideopro)
   - [`client.recast`](#clientrecast)
   - [`client.executions`](#clientexecutions)
@@ -773,7 +774,9 @@ The same call as a job (`POST /v1/llm/structured/jobs`). Poll
 `label` names the run; `videoUrl` (+ `videoAnalysis`) analyzes a video first
 and drafts from the analysis (the analysis is a separate job you own,
 `output_data.analysisJobId`). Throws `NotFoundError` on a platform that
-predates the route.
+predates the route. An instance that proxies its LLM calls to nodaro.ai
+answers `503 provider_unavailable` permanently — surfaced as a generic
+`NodaroError` with that code; treat it as unavailable here, not as transient.
 
 ```ts
 const { jobId } = await client.llm.structuredJob({
