@@ -1591,11 +1591,12 @@ caller the key is absent (not `null`).
 
 ## 13. Job batch polling
 
-Two endpoints let you poll multiple job statuses in a single round trip
+The listing plus two endpoints that poll multiple job statuses in a single round trip
 (useful for workflow UIs that track many concurrent jobs):
 
 | Method | Path | Purpose |
 |---|---|---|
+| `GET` | `/v1/jobs?limit=&cursor=&type=&origin=&attachToCharacterId=` | Your jobs, newest first, cursor-paginated: `{ data: Job[], next }` (`limit` ≤ 100; pass `next` back as `cursor`). `type` matches `input_data.type` — the route that created the job (`llm-structured`, `video-analysis`, …); `origin` matches `input_data.origin` — the client app that sent it (`studio`, …). Both are exact-match and combine. `attachToCharacterId` is the per-character archive described under characters. |
 | `GET` | `/v1/jobs/status?ids=a,b,c` | Comma-separated IDs, max 100. Returns `{ jobs: { id, status, output_data }[] }`. Cross-user / non-existent IDs are silently omitted — reconcile locally. |
 | `POST` | `/v1/jobs/batch-status` | Body `{ jobIds: string[] }`, max 100. Returns `{ data: { id, status, output_data, error_message }[] }`. |
 
