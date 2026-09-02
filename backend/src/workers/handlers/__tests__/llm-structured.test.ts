@@ -8,6 +8,7 @@
  *     COMPACT stripped analysis, and carries analysisJobId + analysisCredits
  *     on the finished row;
  *   - a failed / cancelled / unreadable child fails the parent with a reason;
+ *   - a failed READ of the child is retried, never reported as absence;
  *   - a cancelled parent stops waiting;
  *   - a lost completion CAS never commits.
  */
@@ -93,11 +94,18 @@ describe("composeAnalysisInput", () => {
 
 describe("waitForAnalysis", () => {
   const row = (extra: Record<string, unknown>) => ({ status: "processing", progress: 0, output_data: null, error_message: null, user_id: "user-1", credits: null, ...extra })
-  const deps = (rows: Array<ReturnType<typeof row> | null>) => {
+  // An `Error` entry is a REJECTED read (a transient PostgREST failure), a
+  // `null` entry a genuinely missing row — the two must not behave alike.
+  const deps = (rows: Array<ReturnType<typeof row> | Error | null>) => {
     const queue = [...rows]
     let t = 0
+    const readJob = async () => {
+      const next = queue.shift() ?? null
+      if (next instanceof Error) throw next
+      return next
+    }
     return {
-      deps: { readJob: async () => queue.shift() ?? null, onProgress: vi.fn(async () => {}), sleep: async (ms: number) => { t += ms }, now: () => t },
+      deps: { readJob, onProgress: vi.fn(async () => {}), sleep: async (ms: number) => { t += ms }, now: () => t },
       clock: () => t,
     }
   }
@@ -117,6 +125,22 @@ describe("waitForAnalysis", () => {
     const forever = deps(Array.from({ length: 400 }, () => row({})))
     await expect(waitForAnalysis("c", "user-1", forever.deps)).rejects.toThrow("did not finish")
     expect(forever.clock()).toBeGreaterThanOrEqual(ANALYSIS_WAIT_BUDGET_MS)
+  })
+  it("retries a failed READ and still returns the analysis when a later tick answers", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const d = deps([new Error("fetch failed"), new Error("fetch failed"), row({ status: "completed", progress: 100, output_data: { json: analysis }, credits: 60 })])
+    const out = await waitForAnalysis("child-1", "user-1", d.deps)
+    expect(out.credits).toBe(60)
+    expect(out.analysis.scenes).toHaveLength(1)
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("[worker] analysis read failed for child-1"), expect.any(Error))
+    warn.mockRestore()
+  })
+  it("a read that never succeeds ends on the BUDGET — never on 'not found' (which would refund a live child)", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const forever = deps(Array.from({ length: 400 }, () => new Error("fetch failed")))
+    await expect(waitForAnalysis("c", "user-1", forever.deps)).rejects.toThrow("did not finish")
+    expect(forever.clock()).toBeGreaterThanOrEqual(ANALYSIS_WAIT_BUDGET_MS)
+    warn.mockRestore()
   })
   it("stops when the PARENT is cancelled", async () => {
     mocks.throwIfJobCancelled.mockRejectedValueOnce(new Error("Job parent-1 was cancelled"))

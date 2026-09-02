@@ -52,6 +52,8 @@ export interface AnalysisRow {
 }
 
 export interface AnalysisWaitDeps {
+  /** `null` = the row is genuinely gone. A REJECTION is a transient read
+   *  failure — the waiter retries those instead of declaring the child lost. */
   readJob: (id: string) => Promise<AnalysisRow | null>
   onProgress: (pct: number) => Promise<void>
   sleep: (ms: number) => Promise<void>
@@ -63,6 +65,7 @@ export interface AnalysisWaitDeps {
  * Checks the PARENT's cancellation every tick so a cancelled draft stops
  * waiting; mirrors the child's progress into the analysis band; validates
  * the finished result against the canonical schema before handing it on.
+ * A failed READ is retried, not reported as absence — see the loop.
  */
 export async function waitForAnalysis(
   analysisJobId: string,
@@ -72,7 +75,18 @@ export async function waitForAnalysis(
   const deadline = deps.now() + ANALYSIS_WAIT_BUDGET_MS
   for (;;) {
     await throwIfJobCancelled()
-    const row = await deps.readJob(analysisJobId)
+    if (deps.now() >= deadline) throw new Error("Video analysis did not finish in time")
+    let row: AnalysisRow | null
+    try {
+      row = await deps.readJob(analysisJobId)
+    } catch (err) {
+      // A transient read failure is NOT absence. Reporting "not found" here
+      // would fail and refund the PARENT while the child keeps running and
+      // billing; retry instead — the budget checked above still bounds us.
+      console.warn(`[worker] analysis read failed for ${analysisJobId}:`, err)
+      await deps.sleep(ANALYSIS_POLL_MS)
+      continue
+    }
     if (!row || (userId && row.user_id !== userId)) throw new Error("Video analysis job not found")
     if (ANALYSIS_TERMINAL_FAILURE.has(row.status)) {
       throw new Error(`Video analysis ${row.status}${row.error_message ? `: ${row.error_message}` : ""}`)
@@ -84,7 +98,6 @@ export async function waitForAnalysis(
       return { analysis: parsed.data, credits: row.credits }
     }
     await deps.onProgress(Math.min(ANALYSIS_PROGRESS_CAP, Math.round(((row.progress ?? 0) * ANALYSIS_PROGRESS_CAP) / 100)))
-    if (deps.now() >= deadline) throw new Error("Video analysis did not finish in time")
     await deps.sleep(ANALYSIS_POLL_MS)
   }
 }
@@ -97,12 +110,19 @@ export function composeAnalysisInput(input: string, analysis: VideoAnalysisResul
   return `${input}\n\n${JSON.stringify(stripDerivedAnalysisFields(analysis))}`
 }
 
+/** The child row, or `null` when it genuinely does not exist (PostgREST's
+ *  `single()` "no rows"). Every OTHER read failure THROWS: absence fails the
+ *  parent for good, so a transient one must not be spelled the same way. */
 async function readAnalysisRow(id: string): Promise<AnalysisRow | null> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("jobs")
     .select("status, progress, output_data, error_message, user_id, credits")
     .eq("id", id)
     .single()
+  if (error) {
+    if (error.code === "PGRST116") return null
+    throw new Error(`Failed to read analysis job ${id}: ${error.message}`, { cause: error })
+  }
   return (data as AnalysisRow | null) ?? null
 }
 
