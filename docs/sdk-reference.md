@@ -4037,6 +4037,9 @@ the first time a setting changed.
 | `previewInvitation(token)` | `GET /v1/invitations/by-token/:token` | **Public** — works while the invitee is still signed out. The address comes back masked. |
 | `acceptInvitation(token)` | `POST /v1/invitations/:token/accept` | Requires a signed-in caller whose email matches. |
 | `audit(orgId, { cursor?, limit? })` | `GET /v1/orgs/:id/audit` | Newest first. Readable while the organization is suspended. |
+| `usage(orgId, opts)` | `GET /v1/orgs/:id/usage` | Credits by `workspace`, `member`, `model` or `day`. Owner and org admins. `{ from?, to?, tz?, groupBy?, workspaceId?, userId? }`, inclusive dates, IANA `tz`, ≤ 366 days. |
+| `usageRows(orgId, opts)` | `GET /v1/orgs/:id/usage?groupBy=none` | The individual runs behind a report, newest first, cursor-paged. |
+| `usageCsv(orgId, opts)` | `GET /v1/orgs/:id/usage?format=csv` | The same report (or the rows) as CSV text. |
 
 `invite` returns **one row per address**, and a row whose `status` is not
 `sent` carries a `link` instead — an install with no mail provider, or a
@@ -4046,6 +4049,14 @@ without the link nobody can reach it.
 `audit` entries carry an `action` from an **open vocabulary**. Render the
 ones you recognise and fall back to the raw string; a client that switched
 exhaustively over it would break on the first new action.
+
+`usage` reports three credit figures per row. `credits` is what a run has cost
+so far — settled where the run finished, the held reservation otherwise — and
+`settledCredits` and `inFlightCredits` split it. A metered run that overran the
+workspace's headroom has the excess absorbed by the platform; the report totals
+it as `platformAbsorbedCredits`, counted against nobody's budget, and reports
+`chargedToBudget = settledCredits − platformAbsorbedCredits` — the amount that
+actually left the budgets.
 
 ---
 
@@ -4070,6 +4081,9 @@ first, [`withWorkspace`](#clientwithworkspaceworkspaceid) is the second.
 | `getJoinCode(id)` | `GET /v1/workspaces/:id/join-code` | `null` when none has been minted. Admins only. |
 | `actOnJoinCode(id, action)` | `POST /v1/workspaces/:id/join-code` | `"rotate" | "enable" | "disable"`. Rotating invalidates the old code immediately. |
 | `join(code)` | `POST /v1/workspaces/join` | Another way IN, so a stale workspace selection never blocks it. |
+| `usage(id, opts)` | `GET /v1/workspaces/:id/usage` | By `member`, `model` or `day`. A member sees their own runs; an admin sees everyone and may filter `userId`. |
+| `usageRows(id, opts)` | `GET /v1/workspaces/:id/usage?groupBy=none` | The runs behind a report, newest first, cursor-paged. |
+| `usageCsv(id, opts)` | `GET /v1/workspaces/:id/usage?format=csv` | The same report (or the rows) as CSV text. |
 
 ---
 

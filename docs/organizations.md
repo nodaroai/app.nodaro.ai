@@ -305,10 +305,9 @@ than the last:
 
 Work done inside a workspace is paid by the workspace, whatever the member's
 own balance says: the member's personal credits are untouched, and the two
-balances are shown side by side. (Workspace-paid runs and the side-by-side
-balance view arrive with the payer-selection and budget-UI stages of the
-organizations feature — until then allocations are held and reported, not
-yet spent against.) Headroom at every level is
+balances are shown side by side. (Workspace-paid runs are live; the budget
+console and payer-aware run gate arrive with the next update. Rollout-gated:
+instances enable organizations explicitly.) Headroom at every level is
 `allocated − reserved − spent`; a run that would exceed it is refused with a
 stable error code (`budget_exceeded`, `member_cap_exceeded`) rather than
 started.
@@ -320,6 +319,8 @@ started.
 | `POST /v1/orgs/:id/workspaces/:wsId/allocate` `{ delta }` | owner | move credits pool ⇄ workspace; returns the new headroom |
 | `GET /v1/workspaces/:id/budget` | member | own spend, cap and headroom; admins also get per-member rows |
 | `PATCH /v1/workspaces/:id/members/:userId` `{ creditCap, resetSpend }` | workspace admin | cap a member / zero their counted spend |
+| `GET /v1/orgs/:id/usage` | owner / org admin | credits by workspace, member, model or day for an inclusive date range; `groupBy=none` pages the runs; `format=csv` exports |
+| `GET /v1/workspaces/:id/usage` | member (own runs) / workspace admin (everyone) | the same, scoped to one workspace |
 
 Refunds and disputes claw credits back from the organization's pool,
 proportionally to the refunded amount and floored at zero — a pool that
@@ -338,6 +339,52 @@ workspace archived) stops the automation, and the workflow's run history
 shows one failed entry with the code `run_requires_authenticated_member`
 saying why. (Rollout-gated: workspace-paid runs may lag this document.)
 
+### Usage reports
+
+Two read-only endpoints answer "who spent how much on what, when" over the
+workspace-paid runs, for an inclusive date range:
+
+- `from` and `to` are inclusive calendar dates (`YYYY-MM-DD`); `tz` is an IANA
+  zone name (default `UTC`) and day buckets follow it. The range is at most 366
+  days and defaults to the last 30.
+- Group by `workspace` (the organization report only), `member`, `model` or
+  `day`. `groupBy=none` returns the individual runs, newest first, cursor-paged;
+  the cursor comes back as `nextCursor` and is passed in again as `cursor`.
+- `format=csv` streams the same report as a CSV attachment.
+
+Each row carries three credit numbers. `credits` is what a run has cost so far —
+the settled amount where the run has finished, the held reservation while it is
+still running. `settledCredits` and `inFlightCredits` split that sum, so an
+admin sees what is final and what is still pending. A run still holding its
+reservation is listed as **in flight**; it settles or is refunded when the job
+finishes, usually within the reconcile window, and a row that stays in flight
+for longer is a support case.
+
+A metered run that cost more than the workspace had left is charged up to the
+headroom; the rest is **absorbed by the platform** and listed on its own line,
+never against a member. The report totals it as `platformAbsorbedCredits`, and
+`chargedToBudget = settledCredits − platformAbsorbedCredits` is what actually
+left the workspace budgets.
+
+A plain workspace member sees their OWN usage: the workspace report is narrowed
+to them, and asking to group by member is refused. A workspace admin (explicit,
+or an organization admin acting in the workspace) sees everyone and may filter
+to one member. Organization-level usage is owner and organization admins only.
+
+**CSV.** UTF-8, RFC 4180, CRLF line endings, no byte-order mark. A cell that
+begins with `=`, `+`, `-` or `@` is quoted with a leading apostrophe so a
+spreadsheet cannot execute it. Exports are limited to ten per minute per user,
+and each export is recorded in the audit log before a single byte is streamed —
+if that record cannot be written the export is refused rather than left
+untracked. A report with more than 5000 groups comes back with `truncated:
+true`; narrow the window.
+
+**A known limit.** A member who deletes their account takes their run history
+with them; reports show a gap for their past activity. Their workflows and
+projects stay with the class, and the platform-absorbed line is unaffected.
+Resetting a member's counted spend does not change the report — it zeroes the
+cap counter, not the history.
+
 ## Errors
 
 Errors use the standard envelope `{ "error": { "code", "message" } }`; dispatch
@@ -345,7 +392,7 @@ on `code`.
 
 | Status | Code | When |
 |--------|------|------|
-| 400 | `validation_error` | A field fails validation, a cursor is malformed, or the change is not allowed for that row (for example, editing the owner's membership). |
+| 400 | `validation_error` | A field fails validation, a cursor is malformed, the change is not allowed for that row (for example, editing the owner's membership), or a usage report is asked for with a bad date, an unknown time zone, a range over 366 days, or a grouping the scope does not allow. |
 | 400 | `terms_required` | Creating a school without `acceptTerms: true`. |
 | 400 | `not_org_member` | Adding someone to a workspace who is not an active member of its organization. |
 | 400 | `token_workspace_mismatch` | A workspace-bound API token used with a header naming another workspace. |
@@ -356,11 +403,13 @@ on `code`.
 | 403 | `workspace_archived` | A write into an archived workspace. |
 | 403 | `not_a_member` | The `X-Nodaro-Workspace` header names a workspace you cannot select. |
 | 404 | `not_found` | No such organization, workspace or member — **or one you are not a member of**. An id route never reveals whether something you cannot see exists. |
+| 503 | `billing_unavailable` | Usage reporting is not yet available on this instance (its reporting functions have not been applied). |
+| 503 | `audit_unavailable` | A CSV usage export could not be recorded in the audit log, so it was refused; try again. |
 | 409 | `name_taken` | The slug you supplied is in use. |
 | 409 | `already_a_member` | The person is already in the workspace. |
 | 409 | `owner_cannot_leave` | Transfer ownership before leaving. |
 | 409 | `has_active_workspaces` | Archive every workspace before deleting the organization. |
-| 429 | `rate_limit_exceeded` | Too many organizations created recently, or too many join attempts. |
+| 429 | `rate_limit_exceeded` | Too many organizations created recently, too many join attempts, or too many CSV usage exports (ten per minute per user). |
 | 400 | `join_code_invalid` | No such code, the code is disabled, or its workspace is archived — one answer for all three, so a code cannot be used to learn what exists. |
 | 400 | `invitation_expired` | The invitation is past its 14 days. |
 | 400 | `invitation_revoked` | The invitation was revoked. |
@@ -427,17 +476,24 @@ the fields **absent** means the instance has no organizations, present and
 means the lookup failed — in which case keep whatever selection you had rather
 than concluding the person was removed from everything.
 
+`client.organizations.usage / usageRows / usageCsv` and the matching
+`client.workspaces` methods return a usage report, its individual runs, or the
+same report as CSV text, for a date range.
+
 **[CLI](./cli.md)** — `nodaro org` and `nodaro workspace`. Three ways to say
 which workspace a command acts in, each beating the one below:
 `--workspace <id>` for one command, `NODARO_WORKSPACE` for a shell or a CI
 job, and `nodaro workspace use <id>` saved on the profile.
 `nodaro workspace current` reports which of the three decided.
+`nodaro org usage` and `nodaro workspace usage` print the report as a table,
+`--json` as JSON, and `--csv` writes the CSV to stdout.
 
 **[MCP](./mcp/tools.md)** — `list_workspaces` and `select_workspace`. An MCP
 client has no switcher and no header it controls, so the same two questions
 become tools. The selection is remembered across sessions and **re-validated
 at every one**: a preference is written once and read for months, and
-membership can end in between.
+membership can end in between. There is no usage tool yet — usage is read
+through the SDK, the CLI, or the API.
 
 ## Notes for integrators
 

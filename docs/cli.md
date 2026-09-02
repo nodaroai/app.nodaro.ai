@@ -304,6 +304,7 @@ nodaro org invite <orgId> --email a@x.com --email b@x.com [--role admin|member] 
 nodaro org invitations <orgId> [--status open|accepted|revoked|expired] [--limit <n>] [--cursor <token>] [--json]
 nodaro org revoke <invitationId> [--json]
 nodaro org audit <orgId> [--limit <n>] [--cursor <token>] [--json]
+nodaro org usage <orgId> [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--tz <iana>] [--group-by workspace|member|model|day|none] [--workspace <id>] [--user <id>] [--limit <n>] [--cursor <token>] [--csv] [--json]
 
 # Workspaces — where work lands
 nodaro workspace list [--json]
@@ -313,6 +314,7 @@ nodaro workspace clear
 nodaro workspace get <id> [--json]
 nodaro workspace members <id> [--limit <n>] [--cursor <token>] [--json]
 nodaro workspace join <code> [--json]
+nodaro workspace usage [id] [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--tz <iana>] [--group-by member|model|day|none] [--user <id>] [--limit <n>] [--cursor <token>] [--csv] [--json]
 ```
 
 ### Working in a workspace
@@ -367,6 +369,17 @@ instead:
 ```
 
 Send those links yourself, or the invitation exists and nobody can reach it.
+
+### Usage reports
+
+`nodaro org usage` and `nodaro workspace usage` answer who spent how much on
+what, over a date range. The default prints a table with a totals line; `--json`
+emits the full report, and `--csv` writes the CSV to stdout so it pipes to a
+file. Dates are inclusive `YYYY-MM-DD`; `--tz` defaults to your terminal's zone.
+
+```bash
+nodaro org usage org_abc --from 2026-09-01 --to 2026-09-30 --group-by member --csv > september.csv
+```
 
 ### The interactive recast flow (analyze → recast stems → export)
 
