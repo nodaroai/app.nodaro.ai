@@ -7,6 +7,9 @@
  */
 import { ChevronDown, SlidersHorizontal } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useT } from "@/lib/i18n"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
+import { usePickerSectionLabel } from "@/lib/node-picker-i18n"
 import { NodaroMark, showNodaroMark } from "@/components/nodes/nodaro-exclusive-mark"
 import type { NodeOption } from "@/lib/node-compatibility"
 import type { PickerSection } from "@/lib/node-picker-sections"
@@ -49,7 +52,7 @@ function SectionHeader({ label, indent }: { label: string; indent?: boolean }) {
       className={cn(
         "sticky top-0 z-10 bg-[var(--npk-surface)] px-2.5 pb-1.5 pt-2",
         "text-[10.5px] font-semibold uppercase tracking-[1.3px] text-[var(--npk-dim)]",
-        indent && "pl-[22px] text-[10px] tracking-[1.2px]",
+        indent && "ps-[22px] text-[10px] tracking-[1.2px]",
       )}
     >
       {label}
@@ -76,6 +79,9 @@ export function PickerNodeRow({
   onHover,
   onSelect,
 }: RowProps) {
+  // Same node-label table the canvas headers use, so the row reads exactly
+  // like the node it creates; custom/unknown labels pass through in English.
+  const localizeNode = useLocalizeNodeLabel()
   return (
     <button
       type="button"
@@ -83,7 +89,7 @@ export function PickerNodeRow({
       onMouseEnter={() => onHover(index)}
       data-active={highlighted ? "true" : undefined}
       className={cn(
-        "flex w-full items-center gap-[11px] rounded-lg px-2.5 py-[5px] text-left transition-colors",
+        "flex w-full items-center gap-[11px] rounded-lg px-2.5 py-[5px] text-start transition-colors",
         control ? "min-h-9" : "min-h-[42px]",
         highlighted
           ? "bg-[var(--npk-sel-bg)] shadow-[inset_0_0_0_1px_var(--npk-sel-ring)]"
@@ -104,7 +110,7 @@ export function PickerNodeRow({
           control ? "text-[13px]" : "text-[13.5px]",
         )}
       >
-        {node.label}
+        {localizeNode(node.label)}
       </span>
       {showNodaroMark(node.type) && <NodaroMark />}
       {badge && (
@@ -137,13 +143,15 @@ export function PickerSectionList({
   onSelect,
   badgeFor,
 }: SectionListProps) {
+  const t = useT()
+  const sectionLabel = usePickerSectionLabel()
   let nav = 0
   const controlCount = controls.reduce((sum, s) => sum + s.options.length, 0)
 
   const renderSection = (section: PickerSection) => (
     <div key={section.id} className="mb-2.5">
-      <SectionHeader label={section.label} indent={section.control} />
-      <div className={cn(section.control && "grid grid-cols-2 gap-x-1 pl-[22px] pr-1")}>
+      <SectionHeader label={sectionLabel(section)} indent={section.control} />
+      <div className={cn(section.control && "grid grid-cols-2 gap-x-1 ps-[22px] pe-1")}>
         {section.options.map((node) => {
           const index = nav++
           return (
@@ -180,17 +188,17 @@ export function PickerSectionList({
         data-active={toggleIndex === highlightedIndex ? "true" : undefined}
         aria-expanded={controlsOpen}
         className={cn(
-          "mb-2 flex min-h-11 w-full items-center gap-[11px] rounded-lg px-2.5 text-left transition-colors",
+          "mb-2 flex min-h-11 w-full items-center gap-[11px] rounded-lg px-2.5 text-start transition-colors",
           "bg-[var(--npk-cc-bg)] shadow-[inset_0_0_0_1px_var(--npk-border)]",
           toggleIndex === highlightedIndex &&
             "bg-[var(--npk-sel-bg)] shadow-[inset_0_0_0_1px_var(--npk-sel-ring)]",
         )}
       >
         <SlidersHorizontal className="h-4 w-4 shrink-0 text-[var(--npk-icon)]" />
-        <span className="text-[13.5px] text-[var(--npk-t1)]">Creative Controls</span>
+        <span className="text-[13.5px] text-[var(--npk-t1)]">{t("addnode.creativeControls")}</span>
         <span className="text-[13.5px] text-[var(--npk-muted)]">({controlCount})</span>
-        <span className="ml-auto flex items-center gap-1.5 text-[11.5px] text-[var(--npk-muted)]">
-          {controlsOpen ? "Hide" : "Show"}
+        <span className="ms-auto flex items-center gap-1.5 text-[11.5px] text-[var(--npk-muted)]">
+          {controlsOpen ? t("addnode.hide") : t("addnode.show")}
           <ChevronDown
             className={cn("h-4 w-4 transition-transform", controlsOpen && "rotate-180")}
           />

@@ -15,11 +15,9 @@
 import { Suspense, lazy, useEffect, type ComponentType } from "react"
 import { useSearchParams } from "react-router-dom"
 import { Bot, Loader2 } from "lucide-react"
-import { hasCredits } from "@/lib/edition"
 import { SHORTCUTS, formatBinding, isMacPlatform, matchShortcut } from "@/lib/shortcuts"
-import { COPILOT_RAIL_WIDTH, COPILOT_TAB_WIDTH, useCopilotUiStore } from "@/hooks/use-copilot-ui-store"
+import { COPILOT_RAIL_WIDTH, COPILOT_TAB_WIDTH, copilotSurfaced, useCopilotUiStore } from "@/hooks/use-copilot-ui-store"
 import { useIsMobile } from "@/hooks/use-is-mobile"
-import { surfaceFeatureHidden } from "@/lib/surface-selectors"
 
 /**
  * Resolved on first render rather than at module load: the `import()` factory
@@ -27,17 +25,8 @@ import { surfaceFeatureHidden } from "@/lib/surface-selectors"
  * never requests the chunk — and the gate stays observable to a test instead of
  * being frozen into module scope.
  */
-/**
- * Is the Copilot surfaced at all here? Two independent questions, answered
- * once: the EDITION must have credits (the copilot spends them), and the
- * DEPLOYMENT must not have switched the feature off. Every entry point below
- * asks this — a site that asked only `hasCredits()` would keep rendering a
- * button whose backend answers 503.
- */
-function copilotSurfaced(): boolean {
-  return hasCredits() && !surfaceFeatureHidden("copilot")
-}
-
+// `copilotSurfaced()` lives beside the rail-width hook so the render paths
+// here and the layout offsets elsewhere answer the same question.
 let lazyPanel: ComponentType<CopilotPanelSlotProps & { onClose: () => void; fullScreen?: boolean }> | null = null
 function resolvePanel() {
   if (!copilotSurfaced()) return null
@@ -125,7 +114,7 @@ export function CopilotCollapsedTab() {
       onClick={openPanel}
       title={`Copilot (${formatBinding(SHORTCUTS.copilot.bindings[0], isMacPlatform())})`}
       style={{ width: COPILOT_TAB_WIDTH }}
-      className="flex-none bg-[var(--copilot-panel)] border-r border-border flex flex-col items-center pt-4 gap-2.5 text-primary hover:bg-[var(--copilot-card)] transition-colors"
+      className="flex-none bg-[var(--copilot-panel)] border-e border-border flex flex-col items-center pt-4 gap-2.5 text-primary hover:bg-[var(--copilot-card)] transition-colors"
     >
       <Bot className="w-3.5 h-3.5" strokeWidth={1.8} />
       <span className="[writing-mode:vertical-rl] text-[10px] tracking-[0.18em] font-semibold">COPILOT</span>
@@ -137,7 +126,7 @@ function CopilotPanelFallback() {
   return (
     <div
       style={{ width: COPILOT_RAIL_WIDTH }}
-      className="flex-none bg-[var(--copilot-panel)] border-r border-border flex items-center justify-center"
+      className="flex-none bg-[var(--copilot-panel)] border-e border-border flex items-center justify-center"
     >
       <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
     </div>
@@ -171,7 +160,7 @@ export function CopilotToolbarButton() {
       onClick={togglePanel}
       aria-pressed={open}
       title={`Copilot (${formatBinding(SHORTCUTS.copilot.bindings[0], isMacPlatform())})`}
-      className={`ml-auto mr-2 self-center flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+      className={`ms-auto me-2 self-center flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
         open
           ? "bg-primary/10 border border-primary/50 text-primary"
           : "bg-[var(--copilot-card)] border border-border text-muted-foreground hover:text-foreground hover:border-[var(--copilot-strong)]"

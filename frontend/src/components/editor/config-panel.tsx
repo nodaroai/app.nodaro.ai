@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { X, Play, Maximize2, Minimize2, Loader2, FastForward } from "lucide-react"
 import { useIsMobile } from "@/hooks/use-is-mobile"
+import { useAppDir } from "@/lib/locale-store"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -566,7 +567,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
         <TextToVideoConfig {...configProps} nodeId={selectedNodeId} />
         {(nodeData as TextToVideoData).provider === "kling-3.0" && (
           <Button variant="outline" className="w-full mt-2" onClick={onExpandDirector}>
-            <Maximize2 className="w-4 h-4 mr-2" />
+            <Maximize2 className="w-4 h-4 me-2" />
             {t("configPanel.expandDirector")}
           </Button>
         )}
@@ -581,7 +582,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
         <GenerateVideoConfig {...configProps} onUpdateNode={updateNodeData} nodeId={selectedNodeId} />
         {(nodeData as GenerateVideoNodeData).provider === "kling-3.0" && (
           <Button variant="outline" className="w-full mt-2" onClick={onExpandDirector}>
-            <Maximize2 className="w-4 h-4 mr-2" />
+            <Maximize2 className="w-4 h-4 me-2" />
             {t("configPanel.expandDirector")}
           </Button>
         )}
@@ -800,6 +801,11 @@ export function ConfigPanel() {
   // the new SceneNode uses the pipeline panel for editing, not a legacy modal.
   const [expandDirectorOpen, setExpandDirectorOpen] = useState(false)
   const isMobile = useIsMobile()
+  // The desktop drawer pins to the inline END — the edge the canvas toolbar
+  // rail does NOT occupy (the rail sits at the inline start; both flip
+  // together under RTL). Its off-screen slide has no logical form, so pick the
+  // side by the live direction — never a `rtl:` variant.
+  const isRtl = useAppDir() === "rtl"
   // `isExpanded` is sourced from the store so external code — e.g. picker-node
   // creation in workflow-canvas / node-toolbar — can open the panel in fullscreen
   // by calling `setConfigPanelFullscreen(true)`.
@@ -981,7 +987,7 @@ export function ConfigPanel() {
     // On mobile, render nothing when no node selected (bottom sheet simply gone)
     if (isMobile) return null
     return (
-      <div className="absolute inset-0 z-10 bg-white dark:bg-[#1E1E1E] shadow-2xl flex flex-col sm:inset-auto sm:top-0 sm:right-0 sm:h-full sm:w-96 sm:border-l border-gray-200 dark:border-[#2D2D2D] transition-transform duration-200 ease-in-out translate-x-full pointer-events-none" />
+      <div className={`absolute inset-0 z-10 bg-white dark:bg-[#1E1E1E] shadow-2xl flex flex-col sm:inset-auto sm:top-0 sm:end-0 sm:h-full sm:w-96 sm:border-s border-gray-200 dark:border-[#2D2D2D] transition-transform duration-200 ease-in-out ${isRtl ? "-translate-x-full" : "translate-x-full"} pointer-events-none`} />
     )
   }
 
@@ -1054,8 +1060,8 @@ export function ConfigPanel() {
     <div className={isExpanded
       ? "fixed inset-0 z-50 flex items-center justify-center"
       : isMobile
-        ? `fixed bottom-0 left-0 right-0 z-50 transition-transform duration-200 ease-in-out ${isVisible ? "translate-y-0" : "translate-y-full pointer-events-none"}`
-        : `absolute inset-0 z-10 bg-white dark:bg-[#1E1E1E] shadow-2xl flex flex-col sm:inset-auto sm:top-0 sm:right-0 sm:h-full sm:w-96 sm:border-l border-gray-200 dark:border-[#2D2D2D] ${isVisible && !isExpanded ? "transition-transform duration-200 ease-in-out translate-x-0" : "hidden"}`
+        ? `fixed bottom-0 inset-x-0 z-50 transition-transform duration-200 ease-in-out ${isVisible ? "translate-y-0" : "translate-y-full pointer-events-none"}`
+        : `absolute inset-0 z-10 bg-white dark:bg-[#1E1E1E] shadow-2xl flex flex-col sm:inset-auto sm:top-0 sm:end-0 sm:h-full sm:w-96 sm:border-s border-gray-200 dark:border-[#2D2D2D] ${isVisible && !isExpanded ? "transition-transform duration-200 ease-in-out translate-x-0" : "hidden"}`
     }>
       {isExpanded && (
         <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={(e) => { e.stopPropagation(); closeFullscreenSettings() }} />

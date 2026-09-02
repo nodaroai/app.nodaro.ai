@@ -149,7 +149,7 @@ export async function registerCreditsBalanceRoutes(app: FastifyInstance): Promis
 
     let query = supabase
       .from("usage_logs")
-      .select("id, created_at, credits_used, action, provider, metadata")
+      .select("id, created_at, credits_used, action, provider, metadata, workspace_id")
       .eq("user_id", req.userId)
       .order("created_at", { ascending: false })
       .limit(limit)
@@ -166,10 +166,21 @@ export async function registerCreditsBalanceRoutes(app: FastifyInstance): Promis
     // Project metadata BEFORE the cursor is derived -- the cursor reads
     // `created_at` off the last item, so the projection must preserve every
     // top-level column and only narrow `metadata`.
-    const items = (data ?? []).map((row) => ({
-      ...(row as Record<string, unknown>),
-      metadata: projectTransactionMetadata((row as { metadata?: unknown }).metadata),
-    }))
+    // `payer` / `workspaceId` are top-level fields derived from the
+    // `workspace_id` COLUMN, never from `metadata.payer` — the metadata
+    // allowlist (economics guard) stays untouched. `workspace_id` is dropped
+    // from the top level so the only public spelling is the camelCase one.
+    const items = (data ?? []).map((row) => {
+      const { workspace_id, ...rest } = row as Record<string, unknown> & {
+        workspace_id?: string | null
+      }
+      return {
+        ...rest,
+        metadata: projectTransactionMetadata((row as { metadata?: unknown }).metadata),
+        payer: workspace_id ? ("workspace" as const) : ("user" as const),
+        workspaceId: workspace_id ?? null,
+      }
+    })
     const last = items[items.length - 1] as { created_at?: string } | undefined
     const nextCursor =
       items.length === limit && last?.created_at ? last.created_at : null

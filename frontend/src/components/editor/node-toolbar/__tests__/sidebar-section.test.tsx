@@ -28,14 +28,16 @@ import type { SidebarSection as Section } from "@/lib/node-picker-sections"
 const header = (id: string) =>
   document.querySelector<HTMLButtonElement>(`[aria-controls="sidebar-section-${id}"]`)!
 
-const section = (id: string, label: string): Section => ({
+const section = (id: Section["tab"], label: string): Section => ({
   id,
   label,
+  tab: id,
   count: 2,
   families: [
     {
       id: `${id}-create`,
       label: "Create",
+      family: "Create",
       options: [
         { type: "generate-image", label: "Generate Image", icon: null, category: "AI" },
         { type: "upload-image", label: "Upload Image", icon: null, category: "Input" },

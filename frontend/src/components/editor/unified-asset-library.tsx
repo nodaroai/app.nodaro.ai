@@ -1,3 +1,4 @@
+import { useT } from "@/lib/i18n"
 import { useState, useCallback, useMemo, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { createPortal } from "react-dom"
@@ -49,6 +50,16 @@ interface UnifiedAsset {
   projectId?: string
   originalData: DbCharacter | DbObject | DbCreature | DbLocation | DbFace
 }
+
+/** The card badge names ONE asset, so these are the singular forms — the tab
+ *  keys (`assetlib.tabCharacters` …) are plural and read wrong on a card. */
+const TYPE_KEY = {
+  character: "assetlib.typeCharacter",
+  object: "assetlib.typeObject",
+  creature: "assetlib.typeCreature",
+  location: "assetlib.typeLocation",
+  face: "assetlib.typeFace",
+} as const
 
 interface UnifiedAssetLibraryModalProps {
   readonly open: boolean
@@ -160,6 +171,7 @@ function useAssetData() {
 
 // Standalone modal that can be controlled externally
 export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryModalProps) {
+  const t = useT()
   const { assets, projects, loading, error, invalidateAssets } = useAssetData()
 
   // Filters
@@ -483,7 +495,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
           >
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D] bg-[#ff0073] rounded-t-xl">
-            <h3 className="text-sm font-semibold uppercase tracking-widest text-white">My Library</h3>
+            <h3 className="text-sm font-semibold uppercase tracking-widest text-white">{t("canvas.myLibrary")}</h3>
             <button
               type="button"
               className="p-1 text-white/80 hover:text-white transition-colors"
@@ -496,32 +508,32 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
           {/* Search and Filters */}
           <div className="px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D] space-y-2 bg-white dark:bg-[#1E1E1E]">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-[#64748B]" />
+              <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-[#64748B]" />
               <Input
-                placeholder="Search assets..."
+                placeholder={t("assetlib.searchPlaceholder")}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 h-9 bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D] text-gray-900 dark:text-[#E2E8F0] placeholder:text-gray-400 dark:placeholder:text-[#64748B] focus:border-[#ff0073] focus:ring-[#ff0073]/20"
+                className="ps-9 h-9 bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D] text-gray-900 dark:text-[#E2E8F0] placeholder:text-gray-400 dark:placeholder:text-[#64748B] focus:border-[#ff0073] focus:ring-[#ff0073]/20"
               />
             </div>
             {/* Project Filter */}
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-[#64748B] min-w-[60px]">
                 <FolderOpen className="h-3.5 w-3.5" />
-                <span>Project:</span>
+                <span>{t("assetlib.projectLabel")}</span>
               </div>
               <Select
                 value={filterByProject}
                 onValueChange={setFilterByProject}
               >
-                <SelectTrigger className="h-8 text-xs flex-1 bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D] text-gray-700 dark:text-[#E2E8F0]" aria-label="Filter by project">
-                  <SelectValue placeholder="All Projects" />
+                <SelectTrigger className="h-8 text-xs flex-1 bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D] text-gray-700 dark:text-[#E2E8F0]" aria-label={t("assetlib.filterByProject")}>
+                  <SelectValue placeholder={t("assetlib.allProjects")} />
                 </SelectTrigger>
                 <SelectContent
                   className="bg-white dark:bg-[#1E1E1E] border-gray-200 dark:border-[#2D2D2D] z-[10000]"
                   position="popper"
                 >
-                  <SelectItem value="all">All Projects</SelectItem>
+                  <SelectItem value="all">{t("assetlib.allProjects")}</SelectItem>
                   {projects.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
                       {p.name}
@@ -536,7 +548,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
                   className="h-8 px-2 text-xs text-gray-500 dark:text-[#94A3B8] hover:text-gray-700 dark:hover:text-white"
                   onClick={() => setFilterByProject("all")}
                 >
-                  Clear
+                  {t("assetlib.clear")}
                 </Button>
               )}
             </div>
@@ -553,7 +565,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
               }`}
               onClick={() => setTypeFilter("all")}
             >
-              All
+              {t("assetlib.tabAll")}
             </button>
             <button
               type="button"
@@ -565,7 +577,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
               onClick={() => setTypeFilter("character")}
             >
               <UserCircle className="h-3 w-3" />
-              Characters
+              {t("assetlib.tabCharacters")}
               <span className="text-[10px] opacity-70">({counts.character})</span>
             </button>
             <button
@@ -578,7 +590,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
               onClick={() => setTypeFilter("object")}
             >
               <Package className="h-3 w-3" />
-              Objects/Props
+              {t("assetlib.tabObjects")}
               <span className="text-[10px] opacity-70">({counts.object})</span>
             </button>
             <button
@@ -591,7 +603,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
               onClick={() => setTypeFilter("creature")}
             >
               <PawPrint className="h-3 w-3" />
-              Creatures
+              {t("assetlib.tabCreatures")}
               <span className="text-[10px] opacity-70">({counts.creature})</span>
             </button>
             <button
@@ -604,7 +616,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
               onClick={() => setTypeFilter("location")}
             >
               <MapPin className="h-3 w-3" />
-              Locations
+              {t("assetlib.tabLocations")}
               <span className="text-[10px] opacity-70">({counts.location})</span>
             </button>
             <button
@@ -617,7 +629,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
               onClick={() => setTypeFilter("face")}
             >
               <SmilePlus className="h-3 w-3" />
-              Faces
+              {t("assetlib.tabFaces")}
               <span className="text-[10px] opacity-70">({counts.face})</span>
             </button>
             <div className="w-px self-stretch my-1 bg-gray-200 dark:bg-[#2D2D2D]" />
@@ -631,7 +643,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
               onClick={() => setTypeFilter("image")}
             >
               <Images className="h-3 w-3" />
-              Images
+              {t("assetlib.tabImages")}
             </button>
             <button
               type="button"
@@ -643,7 +655,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
               onClick={() => setTypeFilter("video")}
             >
               <Film className="h-3 w-3" />
-              Videos
+              {t("assetlib.tabVideos")}
             </button>
             <button
               type="button"
@@ -655,7 +667,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
               onClick={() => setTypeFilter("audio")}
             >
               <Music className="h-3 w-3" />
-              Audio
+              {t("assetlib.tabAudio")}
             </button>
           </div>
 
@@ -674,21 +686,21 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
             {loading ? (
               <div className="flex flex-col items-center justify-center py-12 text-gray-400 dark:text-[#64748B]">
                 <Loader2 className="w-8 h-8 animate-spin mb-2 text-[#ff0073]" />
-                <p className="text-sm">Loading assets...</p>
+                <p className="text-sm">{t("assetlib.loading")}</p>
               </div>
             ) : error ? (
               <div className="flex flex-col items-center justify-center py-12 text-red-500">
                 <AlertCircle className="w-8 h-8 mb-2" />
-                <p className="text-sm">{error.message || "Failed to load assets"}</p>
+                <p className="text-sm">{error.message || t("assetlib.loadFailed")}</p>
                 <Button variant="outline" size="sm" className="mt-2" onClick={invalidateAssets}>
-                  Retry
+                  {t("editor.retry")}
                 </Button>
               </div>
             ) : filteredAssets.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-gray-400 dark:text-[#64748B]">
                 <Grid3X3 className="w-10 h-10 mb-2 opacity-40" />
-                <p className="text-sm">No matching assets</p>
-                <p className="text-xs mt-1">Try adjusting your filters</p>
+                <p className="text-sm">{t("assetlib.noMatching")}</p>
+                <p className="text-xs mt-1">{t("assetlib.tryFilters")}</p>
               </div>
             ) : (
               <div className="grid grid-cols-3 gap-3">
@@ -702,9 +714,9 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
                     <div key={asset.id} className="relative group">
                       <button
                         type="button"
-                        className="flex flex-col items-center gap-1.5 p-3 rounded-lg border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] hover:border-[#ff0073] hover:shadow-md transition-all cursor-pointer text-left w-full"
+                        className="flex flex-col items-center gap-1.5 p-3 rounded-lg border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] hover:border-[#ff0073] hover:shadow-md transition-all cursor-pointer text-start w-full"
                         onClick={() => handleAssetClick(asset)}
-                        title={`View ${asset.name}`}
+                        title={t("assetlib.viewAsset", { name: asset.name })}
                       >
                         {asset.thumbnailUrl ? (
                           <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-100 dark:bg-[#121212]">
@@ -723,7 +735,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
                         )}
                         <span className="text-xs font-medium truncate w-full text-center text-gray-900 dark:text-[#E2E8F0]">{asset.name}</span>
                         <span className="text-[9px] px-1.5 py-0.5 rounded-full uppercase font-medium text-[#ff0073] bg-[#ff0073]/10">
-                          {asset.type}
+                          {t(TYPE_KEY[asset.type])}
                         </span>
                         {projectName && (
                           <span className="text-[9px] text-gray-400 dark:text-[#64748B] truncate w-full text-center">
@@ -731,15 +743,15 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
                           </span>
                         )}
                         {isOnCanvas && (
-                          <span className="text-[9px] text-gray-400 dark:text-[#64748B]">On canvas</span>
+                          <span className="text-[9px] text-gray-400 dark:text-[#64748B]">{t("assetlib.onCanvas")}</span>
                         )}
                       </button>
                       {/* Add to canvas button */}
                       <button
                         type="button"
-                        className="absolute bottom-8 right-1 w-6 h-6 flex items-center justify-center bg-[#ff0073] text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-[#e00066]"
+                        className="absolute bottom-8 end-1 w-6 h-6 flex items-center justify-center bg-[#ff0073] text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-[#e00066]"
                         onClick={(e) => handleAddToCanvas(e, asset)}
-                        title={`Add ${asset.name} to canvas`}
+                        title={t("assetlib.addToCanvas", { name: asset.name })}
                       >
                         <Plus className="w-4 h-4" />
                       </button>
@@ -805,6 +817,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
 }
 
 export function UnifiedAssetLibraryButton() {
+  const t = useT()
   const [open, setOpen] = useState(false)
   const { assets, projects, loading, error, invalidateAssets } = useAssetData()
 
@@ -1103,9 +1116,9 @@ export function UnifiedAssetLibraryButton() {
         onClick={() => setOpen(true)}
       >
         <Grid3X3 className="h-4 w-4" />
-        My Library
+        {t("toolbar.myLibrary")}
         {totalCount > 0 && (
-          <span className="ml-auto text-[10px] bg-violet-500/10 text-violet-600 px-1.5 py-0.5 rounded-full">
+          <span className="ms-auto text-[10px] bg-violet-500/10 text-violet-600 px-1.5 py-0.5 rounded-full">
             {totalCount}
           </span>
         )}
@@ -1122,7 +1135,7 @@ export function UnifiedAssetLibraryButton() {
           >
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D] bg-[#ff0073] rounded-t-xl">
-              <h3 className="text-sm font-semibold uppercase tracking-widest text-white">My Library</h3>
+              <h3 className="text-sm font-semibold uppercase tracking-widest text-white">{t("canvas.myLibrary")}</h3>
               <button
                 type="button"
                 className="p-1 text-white/80 hover:text-white transition-colors"
@@ -1135,32 +1148,32 @@ export function UnifiedAssetLibraryButton() {
             {/* Search and Filters */}
             <div className="px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D] space-y-2 bg-white dark:bg-[#1E1E1E]">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-[#64748B]" />
+                <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-[#64748B]" />
                 <Input
-                  placeholder="Search assets..."
+                  placeholder={t("assetlib.searchPlaceholder")}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9 h-9 bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D] text-gray-900 dark:text-[#E2E8F0] placeholder:text-gray-400 dark:placeholder:text-[#64748B] focus:border-[#ff0073] focus:ring-[#ff0073]/20"
+                  className="ps-9 h-9 bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D] text-gray-900 dark:text-[#E2E8F0] placeholder:text-gray-400 dark:placeholder:text-[#64748B] focus:border-[#ff0073] focus:ring-[#ff0073]/20"
                 />
               </div>
               {/* Project Filter */}
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-[#64748B] min-w-[60px]">
                   <FolderOpen className="h-3.5 w-3.5" />
-                  <span>Project:</span>
+                  <span>{t("assetlib.projectLabel")}</span>
                 </div>
                 <Select
                   value={filterByProject}
                   onValueChange={setFilterByProject}
                 >
-                  <SelectTrigger className="h-8 text-xs flex-1 bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D] text-gray-700 dark:text-[#E2E8F0]" aria-label="Filter by project">
-                    <SelectValue placeholder="All Projects" />
+                  <SelectTrigger className="h-8 text-xs flex-1 bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D] text-gray-700 dark:text-[#E2E8F0]" aria-label={t("assetlib.filterByProject")}>
+                    <SelectValue placeholder={t("assetlib.allProjects")} />
                   </SelectTrigger>
                   <SelectContent
                     className="bg-white dark:bg-[#1E1E1E] border-gray-200 dark:border-[#2D2D2D] z-[10000]"
                     position="popper"
                   >
-                    <SelectItem value="all">All Projects</SelectItem>
+                    <SelectItem value="all">{t("assetlib.allProjects")}</SelectItem>
                     {projects.map((p) => (
                       <SelectItem key={p.id} value={p.id}>
                         {p.name}
@@ -1175,7 +1188,7 @@ export function UnifiedAssetLibraryButton() {
                     className="h-8 px-2 text-xs text-gray-500 dark:text-[#94A3B8] hover:text-gray-700 dark:hover:text-white"
                     onClick={() => setFilterByProject("all")}
                   >
-                    Clear
+                    {t("assetlib.clear")}
                   </Button>
                 )}
               </div>
@@ -1192,8 +1205,8 @@ export function UnifiedAssetLibraryButton() {
                 }`}
                 onClick={() => setTypeFilter("all")}
               >
-                All
-                <span className="ml-1.5 text-[10px] opacity-70">({counts.all})</span>
+                {t("assetlib.tabAll")}
+                <span className="ms-1.5 text-[10px] opacity-70">({counts.all})</span>
               </button>
               <button
                 type="button"
@@ -1205,7 +1218,7 @@ export function UnifiedAssetLibraryButton() {
                 onClick={() => setTypeFilter("character")}
               >
                 <UserCircle className="h-3 w-3" />
-                Characters
+                {t("assetlib.tabCharacters")}
                 <span className="text-[10px] opacity-70">({counts.character})</span>
               </button>
               <button
@@ -1218,7 +1231,7 @@ export function UnifiedAssetLibraryButton() {
                 onClick={() => setTypeFilter("object")}
               >
                 <Package className="h-3 w-3" />
-                Objects/Props
+                {t("assetlib.tabObjects")}
                 <span className="text-[10px] opacity-70">({counts.object})</span>
               </button>
               <button
@@ -1231,7 +1244,7 @@ export function UnifiedAssetLibraryButton() {
                 onClick={() => setTypeFilter("creature")}
               >
                 <PawPrint className="h-3 w-3" />
-                Creatures
+                {t("assetlib.tabCreatures")}
                 <span className="text-[10px] opacity-70">({counts.creature})</span>
               </button>
               <button
@@ -1244,7 +1257,7 @@ export function UnifiedAssetLibraryButton() {
                 onClick={() => setTypeFilter("location")}
               >
                 <MapPin className="h-3 w-3" />
-                Locations
+                {t("assetlib.tabLocations")}
                 <span className="text-[10px] opacity-70">({counts.location})</span>
               </button>
               <button
@@ -1257,7 +1270,7 @@ export function UnifiedAssetLibraryButton() {
                 onClick={() => setTypeFilter("face")}
               >
                 <SmilePlus className="h-3 w-3" />
-                Faces
+                {t("assetlib.tabFaces")}
                 <span className="text-[10px] opacity-70">({counts.face})</span>
               </button>
             </div>
@@ -1267,14 +1280,14 @@ export function UnifiedAssetLibraryButton() {
               {loading ? (
                 <div className="flex flex-col items-center justify-center py-12 text-gray-400 dark:text-[#64748B]">
                   <Loader2 className="w-8 h-8 animate-spin mb-2 text-[#ff0073]" />
-                  <p className="text-sm">Loading assets...</p>
+                  <p className="text-sm">{t("assetlib.loading")}</p>
                 </div>
               ) : error ? (
                 <div className="flex flex-col items-center justify-center py-12 text-red-500">
                   <AlertCircle className="w-8 h-8 mb-2" />
-                  <p className="text-sm">{error.message || "Failed to load assets"}</p>
+                  <p className="text-sm">{error.message || t("assetlib.loadFailed")}</p>
                   <Button variant="outline" size="sm" className="mt-2" onClick={invalidateAssets}>
-                    Retry
+                    {t("editor.retry")}
                   </Button>
                 </div>
               ) : filteredAssets.length === 0 ? (
@@ -1282,13 +1295,13 @@ export function UnifiedAssetLibraryButton() {
                   <Grid3X3 className="w-10 h-10 mb-2 opacity-40" />
                   <p className="text-sm">
                     {searchQuery || typeFilter !== "all" || filterByProject !== "all"
-                      ? "No matching assets"
-                      : "No saved assets"}
+                      ? t("assetlib.noMatching")
+                      : t("assetlib.noSaved")}
                   </p>
                   <p className="text-xs mt-1">
                     {searchQuery || typeFilter !== "all" || filterByProject !== "all"
-                      ? "Try adjusting your filters"
-                      : "Generate a character, object, or location to save it here"}
+                      ? t("assetlib.tryFilters")
+                      : t("assetlib.generateHint")}
                   </p>
                 </div>
               ) : (
@@ -1303,9 +1316,9 @@ export function UnifiedAssetLibraryButton() {
                       <div key={asset.id} className="relative group">
                         <button
                           type="button"
-                          className="flex flex-col items-center gap-1.5 p-3 rounded-lg border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] hover:border-[#ff0073] hover:shadow-md transition-all cursor-pointer text-left w-full"
+                          className="flex flex-col items-center gap-1.5 p-3 rounded-lg border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] hover:border-[#ff0073] hover:shadow-md transition-all cursor-pointer text-start w-full"
                           onClick={() => handleAssetClick(asset)}
-                          title={`View ${asset.name}`}
+                          title={t("assetlib.viewAsset", { name: asset.name })}
                         >
                           {asset.thumbnailUrl ? (
                             <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-100 dark:bg-[#121212]">
@@ -1324,7 +1337,7 @@ export function UnifiedAssetLibraryButton() {
                           )}
                           <span className="text-xs font-medium truncate w-full text-center text-gray-900 dark:text-[#E2E8F0]">{asset.name}</span>
                           <span className="text-[9px] px-1.5 py-0.5 rounded-full uppercase font-medium text-[#ff0073] bg-[#ff0073]/10">
-                            {asset.type}
+                            {t(TYPE_KEY[asset.type])}
                           </span>
                           {projectName && (
                             <span className="text-[9px] text-gray-400 dark:text-[#64748B] truncate w-full text-center">
@@ -1332,15 +1345,15 @@ export function UnifiedAssetLibraryButton() {
                             </span>
                           )}
                           {isOnCanvas && (
-                            <span className="text-[9px] text-gray-400 dark:text-[#64748B]">On canvas</span>
+                            <span className="text-[9px] text-gray-400 dark:text-[#64748B]">{t("assetlib.onCanvas")}</span>
                           )}
                         </button>
                         {/* Add to canvas button */}
                         <button
                           type="button"
-                          className="absolute bottom-8 right-1 w-6 h-6 flex items-center justify-center bg-[#ff0073] text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-[#e00066]"
+                          className="absolute bottom-8 end-1 w-6 h-6 flex items-center justify-center bg-[#ff0073] text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-[#e00066]"
                           onClick={(e) => handleAddToCanvas(e, asset)}
-                          title={`Add ${asset.name} to canvas`}
+                          title={t("assetlib.addToCanvas", { name: asset.name })}
                         >
                           <Plus className="w-4 h-4" />
                         </button>

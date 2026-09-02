@@ -417,6 +417,11 @@ export function useLocalizePresetGroup(): (name: string) => string {
  * `@/lib/node-families`. Same pass-through contract as the maps above.
  */
 const NODE_GROUPS_HE: Record<string, string> = {
+  // Synthetic section headers minted by node-picker-sections.ts /
+  // picker-search-results.tsx rather than by a NODE_FAMILIES entry.
+  "Popular": "פופולריים",
+  "Other": "אחר",
+  "Recent": "אחרונים",
   "Add Your Own": "העלאה משלכם",
   "Analyze": "ניתוח",
   "Animate & Perform": "הנפשה וביצוע",

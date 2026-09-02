@@ -1515,7 +1515,9 @@ not registered and return 404.
 | `GET` | `/v1/credits/transactions` | `limit` (1–50, default 20), `cursor` (ISO timestamp for page-forward) | Return `{ data: Transaction[], nextCursor }`. Cursor is the `created_at` of the last row; pass it as `?cursor=` on the next request. `nextCursor` is `null` when there are no more rows. |
 
 `Transaction` fields: `id`, `created_at`, `credits_used`, `action`,
-`provider`, `metadata`.
+`provider`, `metadata`, `payer` (`"user"` or `"workspace"`) and `workspaceId`
+(`string | null`). Rows with `payer: "workspace"` were paid by a class or team
+budget, not your balance.
 
 `metadata` is an object carrying the run's billing mechanics, projected to a
 fixed set of keys. Present when the ledger recorded them: `model`, `from_sub`

@@ -383,21 +383,10 @@ export const FAMILY_RANK: ReadonlyMap<string, number> = new Map(
   NODE_FAMILIES.map((f, i) => [f.id, i]),
 )
 
-const TAB_BADGE: Record<string, string> = {
-  image: "IMAGE",
-  video: "VIDEO",
-  audio: "AUDIO",
-  models: "MODELS",
-  assets: "ASSETS",
-  automate: "AUTOMATE",
-  publish: "PUBLISH",
-  controls: "CONTROLS",
-}
-
-/** Short tab label for a cross-tab search hit, so a row under "From other
- *  tabs" says where it lives instead of leaving the user to guess. */
-export function tabBadgeForType(type: SceneNodeType): string | undefined {
+/** The tab a node type's owning family lives on. A cross-tab search hit is
+ *  badged with it (localized at render) so a row under "From other tabs" says
+ *  where it lives instead of leaving the user to guess. */
+export function tabForType(type: SceneNodeType): NodeFamily["tab"] | undefined {
   const id = OWNER_FAMILY_BY_TYPE.get(type)
-  const family = id ? FAMILY_BY_ID.get(id) : undefined
-  return family ? TAB_BADGE[family.tab] : undefined
+  return id ? FAMILY_BY_ID.get(id)?.tab : undefined
 }

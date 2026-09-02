@@ -17,14 +17,21 @@ import {
   POPULAR_TYPES,
   TAB_SUPERSET,
   familyById,
+  type NodeFamily,
   type PickerTab,
 } from "@/lib/node-families"
 
 export interface PickerSection {
   /** Stable key — family id, or a `common-*` / `popular` sentinel. */
   readonly id: string
-  /** Header text as written; the header style uppercases it. */
+  /** English header text as written; the header style uppercases it. Render
+   *  sites localize through `pickerSectionLabel()` (node-picker-i18n.ts),
+   *  which rebuilds this from `family` + `tab` in the user's locale. */
   readonly label: string
+  /** The English family / section name the header is built from. */
+  readonly family: string
+  /** Owning tab, set only where the header carries a `TAB · ` prefix. */
+  readonly tab?: NodeFamily["tab"]
   readonly options: readonly NodeOption[]
   /** Creative-control sections render as a 2-column grid of shorter rows. */
   readonly control?: boolean
@@ -59,7 +66,7 @@ export function popularSection(
   const types = POPULAR_TYPES[tab]
   if (!types) return null
   const options = pick(indexPool(pool), types)
-  return options.length ? { id: "popular", label: "Popular", options } : null
+  return options.length ? { id: "popular", label: "Popular", family: "Popular", options } : null
 }
 
 /** The families a tab renders: the ones it owns (with any superset members
@@ -80,7 +87,7 @@ export function tabSections(
     const options = isOwned
       ? [...pick(byType, family.types), ...(extra ? pick(byType, extra) : [])]
       : pick(byType, extra ?? [])
-    if (options.length) sections.push({ id: family.id, label: family.label, options })
+    if (options.length) sections.push({ id: family.id, label: family.label, family: family.label, options })
   }
   return sections
 }
@@ -98,7 +105,7 @@ export function creativeControlSections(
     const family = familyById(id)
     if (!family) continue
     const options = pick(byType, family.types)
-    if (options.length) sections.push({ id, label: family.label, options, control: true })
+    if (options.length) sections.push({ id, label: family.label, family: family.label, options, control: true })
   }
   return sections
 }
@@ -109,7 +116,7 @@ export function commonSections(pool: readonly NodeOption[]): PickerSection[] {
   const sections: PickerSection[] = []
   for (const section of COMMON_SECTIONS) {
     const options = pick(byType, section.types)
-    if (options.length) sections.push({ id: section.id, label: section.label, options })
+    if (options.length) sections.push({ id: section.id, label: section.label, family: section.label, options })
   }
   return sections
 }
@@ -137,6 +144,8 @@ export function allTabSections(pool: readonly NodeOption[]): PickerSection[] {
     sections.push({
       id: family.id,
       label: `${TAB_PREFIX[family.tab] ?? family.tab} · ${family.label}`,
+      family: family.label,
+      tab: family.tab,
       options,
       control: family.tab === "controls",
     })
@@ -177,8 +186,10 @@ export function sectionsForTab(
 export interface SidebarSection {
   /** Tab key — the persistence key for open/closed state. */
   readonly id: string
-  /** Header text, e.g. "Image". */
+  /** English header text, e.g. "Image"; render sites localize via `tab`. */
   readonly label: string
+  /** The tab this section is, for the localized header. */
+  readonly tab: NodeFamily["tab"]
   readonly families: readonly PickerSection[]
   /** Nodes across all families, shown beside the header. */
   readonly count: number
@@ -204,12 +215,13 @@ export function sidebarSections(pool: readonly NodeOption[]): SidebarSection[] {
       if (family.tab !== tab) continue
       const options = pick(byType, family.types)
       if (options.length)
-        families.push({ id: family.id, label: family.label, options, control: tab === "controls" })
+        families.push({ id: family.id, label: family.label, family: family.label, options, control: tab === "controls" })
     }
     if (!families.length) continue
     out.push({
       id: tab,
       label: TAB_PREFIX[tab] ?? tab,
+      tab,
       families,
       count: families.reduce((n, f) => n + f.options.length, 0),
     })
