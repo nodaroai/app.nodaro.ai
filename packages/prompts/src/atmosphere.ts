@@ -12,6 +12,7 @@
  */
 
 import { resolveTerm, type PickerHintMode } from "./term.js"
+import { overlayEntry } from "./catalog-overlay.js"
 
 export interface Atmosphere {
   readonly id: string
@@ -73,7 +74,7 @@ const atmosphereById = new Map<string, Atmosphere>(ATMOSPHERES.map((a) => [a.id,
 
 export function getAtmosphere(id: string | undefined | null): Atmosphere | undefined {
   if (!id) return undefined
-  return atmosphereById.get(id)
+  return overlayEntry("atmosphere", id, atmosphereById.get(id))
 }
 
 export function getAtmosphereLabel(id: string | undefined | null, fallback?: string): string {

@@ -2,12 +2,13 @@
 
 import { memo, useId, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { EXPOSURE_SETTINGS, EXPOSURE_CATEGORY_ORDER, EXPOSURE_CATEGORY_LABELS, EXPOSURE_FIELD_BY_CATEGORY, type ExposureSettings, type ExposureCategory, type ExposureValue } from "@nodaro/prompts"
+import { EXPOSURE_SETTINGS as BASE_EXPOSURE_SETTINGS, EXPOSURE_CATEGORY_ORDER, EXPOSURE_CATEGORY_LABELS, EXPOSURE_FIELD_BY_CATEGORY, type ExposureSettings, type ExposureCategory, type ExposureValue } from "@nodaro/prompts"
 import { Input } from "../ui/input"
 import { Switch } from "../ui/switch"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog } from "../i18n"
+import { useCuratedEntries } from "../curated.js"
 
 interface ExposureSettingsPickerProps {
   readonly value: ExposureValue
@@ -27,6 +28,10 @@ export const ExposureSettingsPicker = memo(function ExposureSettingsPicker({
   onChange,
   className,
 }: ExposureSettingsPickerProps) {
+  // Curated view of the bundled catalog: filtered to ids this deployment
+  // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
+  // registration re-renders. Identity-equal to the base on mainline.
+  const EXPOSURE_SETTINGS = useCuratedEntries("exposure-settings", BASE_EXPOSURE_SETTINGS)
   const [query, setQuery] = useState("")
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("exposure-settings")
 

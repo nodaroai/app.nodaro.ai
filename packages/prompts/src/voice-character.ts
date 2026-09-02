@@ -9,6 +9,7 @@
 
 import { pickIds } from "@nodaro/shared"
 import { resolveTerm, type PickerHintMode } from "./term.js"
+import { overlayEntry } from "./catalog-overlay.js"
 
 export interface VoiceCharacterEntry {
   readonly id: string
@@ -159,11 +160,11 @@ const LANGUAGE_BY_ID = new Map(VOICE_LANGUAGES.map((x) => [x.id, x]))
 const ACCENT_BY_ID = new Map(VOICE_ACCENTS.map((x) => [x.id, x]))
 const TIMBRE_BY_ID = new Map(VOICE_TIMBRES.map((x) => [x.id, x]))
 
-export function getVoiceAge(id: string | undefined) { return id ? AGE_BY_ID.get(id) : undefined }
-export function getVoiceGender(id: string | undefined) { return id ? GENDER_BY_ID.get(id) : undefined }
-export function getVoiceLanguage(id: string | undefined) { return id ? LANGUAGE_BY_ID.get(id) : undefined }
-export function getVoiceAccent(id: string | undefined) { return id ? ACCENT_BY_ID.get(id) : undefined }
-export function getVoiceTimbre(id: string | undefined) { return id ? TIMBRE_BY_ID.get(id) : undefined }
+export function getVoiceAge(id: string | undefined) { return id ? overlayEntry("voice-character", id, AGE_BY_ID.get(id)) : undefined }
+export function getVoiceGender(id: string | undefined) { return id ? overlayEntry("voice-character", id, GENDER_BY_ID.get(id)) : undefined }
+export function getVoiceLanguage(id: string | undefined) { return id ? overlayEntry("voice-character", id, LANGUAGE_BY_ID.get(id)) : undefined }
+export function getVoiceAccent(id: string | undefined) { return id ? overlayEntry("voice-character", id, ACCENT_BY_ID.get(id)) : undefined }
+export function getVoiceTimbre(id: string | undefined) { return id ? overlayEntry("voice-character", id, TIMBRE_BY_ID.get(id)) : undefined }
 
 /**
  * The COMPACT counterparts of the five sub-field lookups: the short

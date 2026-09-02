@@ -16,6 +16,7 @@
  */
 
 import { resolveTerm } from "./term.js"
+import { overlayEntry } from "./catalog-overlay.js"
 
 export interface CompositionEffect {
   readonly id: string
@@ -64,7 +65,7 @@ const compositionEffectById = new Map<string, CompositionEffect>(
 
 export function getCompositionEffect(id: string | undefined | null): CompositionEffect | undefined {
   if (!id) return undefined
-  return compositionEffectById.get(id)
+  return overlayEntry("composition-effects", id, compositionEffectById.get(id))
 }
 
 export function getCompositionEffectLabel(id: string | undefined | null, fallback?: string): string {

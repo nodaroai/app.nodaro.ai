@@ -20,6 +20,7 @@
  */
 
 import { resolveTerm, type PickerHintMode } from "./term.js"
+import { overlayEntry } from "./catalog-overlay.js"
 
 export type AestheticCategory = "mainstream" | "niche" | "era" | "mood"
 
@@ -400,7 +401,7 @@ const aestheticById = new Map<string, Aesthetic>(
 
 export function getAesthetic(id: string | undefined | null): Aesthetic | undefined {
   if (!id) return undefined
-  return aestheticById.get(id)
+  return overlayEntry("aesthetic", id, aestheticById.get(id))
 }
 
 export function getAestheticLabel(id: string | undefined | null, fallback?: string): string {

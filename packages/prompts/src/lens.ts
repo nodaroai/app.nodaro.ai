@@ -11,6 +11,7 @@
  */
 
 import { resolveTerm } from "./term.js"
+import { overlayEntry } from "./catalog-overlay.js"
 
 export interface Lens {
   readonly id: string
@@ -53,7 +54,7 @@ const lensById = new Map<string, Lens>(LENSES.map((l) => [l.id, l]))
 
 export function getLens(id: string | undefined | null): Lens | undefined {
   if (!id) return undefined
-  return lensById.get(id)
+  return overlayEntry("lens", id, lensById.get(id))
 }
 
 export function getLensLabel(id: string | undefined | null, fallback?: string): string {

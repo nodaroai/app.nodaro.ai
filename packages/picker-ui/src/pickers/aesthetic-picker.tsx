@@ -2,12 +2,13 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { AESTHETICS, AESTHETIC_CATEGORY_LABELS, AESTHETIC_CATEGORY_ORDER, type Aesthetic, type AestheticCategory } from "@nodaro/prompts"
+import { AESTHETICS as BASE_AESTHETICS, AESTHETIC_CATEGORY_LABELS, AESTHETIC_CATEGORY_ORDER, type Aesthetic, type AestheticCategory } from "@nodaro/prompts"
 import { Input } from "../ui/input"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog } from "../i18n"
 import { MultiPickBadge, useMultiPick } from "./multi-pick-ui"
+import { useCuratedEntries } from "../curated.js"
 
 interface AestheticPickerProps {
   readonly value: string | ReadonlyArray<string> | undefined
@@ -30,6 +31,10 @@ export const AestheticPicker = memo(function AestheticPicker({
   className,
   maxSelected = 1,
 }: AestheticPickerProps) {
+  // Curated view of the bundled catalog: filtered to ids this deployment
+  // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
+  // registration re-renders. Identity-equal to the base on mainline.
+  const AESTHETICS = useCuratedEntries("aesthetic", BASE_AESTHETICS)
   const [query, setQuery] = useState("")
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("aesthetic")
   const { selectedIds, isMulti, handlePick, activateMulti, demoteToSingle } =

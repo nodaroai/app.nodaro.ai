@@ -38,10 +38,7 @@ import { composeCameraMotionHintFromConnections } from "./camera-motions.js"
 import { composeTransitionHintFromConnections, type TransitionDuration, type TransitionIntensity, type TransitionPosition, type TransitionTiming } from "./transitions.js"
 import { composeCharacterFxHintFromConnections, type CharacterFxDuration, type CharacterFxIntensity, type CharacterFxPosition, type CharacterFxTiming } from "./character-fx.js"
 import { buildMaterialHints } from "./materials.js"
-import { getAnimalPromptHint, getAnimalTerm } from "@nodaro/shared"
-import { getVehicle } from "@nodaro/shared"
-import { getWeapon } from "@nodaro/shared"
-import { getFurniture } from "@nodaro/shared"
+import { curatedAnimalPromptHint, curatedAnimalTerm, curatedVehicleText, curatedWeaponText, curatedFurnitureText } from "./shared-catalog-overlay.js"
 import { getPhotoGenrePromptHint, getPhotoGenreTerm } from "./photo-genre.js"
 import { getBackdropPromptHint, getBackdropTerm } from "./backdrop.js"
 import { buildHeldPropHints } from "./held-prop.js"
@@ -58,7 +55,7 @@ import { buildInstrumentationHints } from "./instrumentation.js"
 import { buildVoiceCharacterHints } from "./voice-character.js"
 import { buildVoiceDeliveryHints } from "./voice-delivery.js"
 import { getPickerCatalog } from "./picker-catalogs.js"
-import { deriveTerm, resolveTerm, type PickerHintMode } from "./term.js"
+import { resolveTerm, type PickerHintMode } from "./term.js"
 
 
 function asStr(v: unknown): string {
@@ -107,28 +104,6 @@ function readHintMode(data: Record<string, unknown>): PickerHintMode | undefined
 /** Pick the full-hint or the compact-term getter for the active mode. */
 function byMode<T>(mode: PickerHintMode, full: T, compact: T): T {
   return mode === "compact" ? compact : full
-}
-
-/**
- * The compact fragment for an OBJECT-entity entry (animal / vehicle / weapon /
- * furniture). Those catalogs carry no `promptHint` of their own — the full
- * fragment is synthesized as "featuring a {label}, {description}" — so the
- * compact form is the authored `term` when there is one and the derived label
- * otherwise (a concrete object's label IS its trade term). The framing verb
- * ("featuring a", "with a") belongs to the HINT; a term drops bare into
- * whatever sentence the consumer is building, and "the object is in the scene"
- * is precisely what these four nodes mean.
- *
- * The fallback MUST be `deriveTerm` and not a bare `toLowerCase()`: it is the
- * same fallback `objectOptions` uses to build the `/v1/catalogs` projection,
- * so a parenthetical label ("Rifle (bolt-action)") must strip identically here
- * or the injected fragment and the projected term would disagree.
- *
- * `term` is read structurally because it is being added to the shared entity
- * interfaces separately; this stays correct before and after that lands.
- */
-function objectEntityTerm(entry: { readonly label: string }): string {
-  return (entry as { term?: string }).term ?? deriveTerm(entry.label)
 }
 
 /**
@@ -322,42 +297,23 @@ function resolveBaseHint(
       return withCustomText(data, byMode(mode, getLoopSubjectPromptHint, getLoopSubjectTerm)(asStr(data.loopSubject)))
     case "material":
       return withCustomText(data, buildMaterialHints(data.material, mode))
-    // Animal is the one Object-entity catalog whose phrasing has a single
-    // owner: `@nodaro/shared`'s `getAnimalPromptHint` / `getAnimalTerm`, which
-    // the picker-catalog funnel calls too. Both getters already return "" on a
-    // miss, so the entry lookup and the `animal ? … : ""` guard are the
-    // getters' job now, not this switch's.
+    // The four object-entity catalogs are owned by @nodaro/shared and overlaid
+    // in shared-catalog-overlay.ts — the ONE module every prompt-text read of
+    // them goes through (the subject fold uses it too). Each returns "" on a
+    // miss, so the entry lookup is the module's job, not this switch's.
     case "animal":
-      return withCustomText(
-        data,
-        byMode(mode, getAnimalPromptHint, getAnimalTerm)(asStr(data.animal)),
-      )
+      return withCustomText(data, byMode(mode, curatedAnimalPromptHint, curatedAnimalTerm)(asStr(data.animal)))
     case "vehicle": {
-      const vehicle = getVehicle(asStr(data.vehicle))
-      return withCustomText(
-        data,
-        vehicle
-          ? byMode(mode, `featuring a ${vehicle.label.toLowerCase()}, ${vehicle.description}`, objectEntityTerm(vehicle))
-          : "",
-      )
+      const t = curatedVehicleText(asStr(data.vehicle))
+      return withCustomText(data, byMode(mode, t.hint, t.term))
     }
     case "weapon": {
-      const weapon = getWeapon(asStr(data.weapon))
-      return withCustomText(
-        data,
-        weapon
-          ? byMode(mode, `with a ${weapon.label.toLowerCase()}, ${weapon.description}`, objectEntityTerm(weapon))
-          : "",
-      )
+      const t = curatedWeaponText(asStr(data.weapon))
+      return withCustomText(data, byMode(mode, t.hint, t.term))
     }
     case "furniture": {
-      const furniture = getFurniture(asStr(data.furniture))
-      return withCustomText(
-        data,
-        furniture
-          ? byMode(mode, `including a ${furniture.label.toLowerCase()}, ${furniture.description}`, objectEntityTerm(furniture))
-          : "",
-      )
+      const t = curatedFurnitureText(asStr(data.furniture))
+      return withCustomText(data, byMode(mode, t.hint, t.term))
     }
     case "photo-genre":
       return withCustomText(data, byMode(mode, getPhotoGenrePromptHint, getPhotoGenreTerm)(asStr(data.photoGenre)))

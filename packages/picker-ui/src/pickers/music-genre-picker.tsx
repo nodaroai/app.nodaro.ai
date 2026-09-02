@@ -2,13 +2,14 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { MUSIC_GENRES, MUSIC_ERAS, MUSIC_GENRE_CATEGORY_ORDER, MUSIC_GENRE_CATEGORY_LABELS, getMusicGenre, type MusicGenre, type MusicSubgenre, type MusicEra } from "@nodaro/prompts"
+import { MUSIC_GENRES as BASE_MUSIC_GENRES, MUSIC_ERAS as BASE_MUSIC_ERAS, MUSIC_GENRE_CATEGORY_ORDER, MUSIC_GENRE_CATEGORY_LABELS, getMusicGenre, type MusicGenre, type MusicSubgenre, type MusicEra } from "@nodaro/prompts"
 import { pickIds, togglePick } from "@nodaro/shared"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog } from "../i18n"
 import { SoundDimensionSection } from "./sound-dimension-section"
 import { SoundTabbedSection, type TabbedEntry } from "./sound-tabbed-section"
+import { useCuratedEntries, curateEntries } from "../curated.js"
 
 /** Cap multi-genre picks at 3 to keep prompt-hint composability sane. */
 const MAX_GENRES = 3
@@ -54,6 +55,11 @@ export const MusicGenrePicker = memo(function MusicGenrePicker({
   onChange,
   className,
 }: MusicGenrePickerProps) {
+  // Curated view of the bundled catalog: filtered to ids this deployment
+  // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
+  // registration re-renders. Identity-equal to the base on mainline.
+  const MUSIC_GENRES = useCuratedEntries("music-genre", BASE_MUSIC_GENRES)
+  const MUSIC_ERAS = useCuratedEntries("music-genre", BASE_MUSIC_ERAS)
   const [query, setQuery] = useState("")
   /** Explicit-enable for the genre section (mirrors StylingPicker pattern). */
   const [genreEnabled, setGenreEnabled] = useState(false)
@@ -81,7 +87,10 @@ export const MusicGenrePicker = memo(function MusicGenrePicker({
 
   const singleGenreId = genreIds.length === 1 ? genreIds[0] : undefined
   const currentGenre = getMusicGenre(singleGenreId)
-  const allSubgenres = subgenreEntries(currentGenre)
+  // Subgenres nest under their genre and are not reached by the flat
+  // `useCuratedEntries` pass above; the composed catalog flattens them into
+  // its own `subgenre` dimension, so curate the nested list against that.
+  const allSubgenres = curateEntries("music-genre", subgenreEntries(currentGenre))
   const filteredSubgenres = useMemo(
     () =>
       allSubgenres.filter((s) =>

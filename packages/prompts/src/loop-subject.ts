@@ -19,6 +19,7 @@
  */
 
 import { resolveTerm } from "./term.js"
+import { overlayEntry } from "./catalog-overlay.js"
 
 export type LoopSubjectCategory = "realistic" | "abstract"
 
@@ -280,7 +281,8 @@ export const LOOP_SUBJECTS: ReadonlyArray<LoopSubject> = [
 ]
 
 export function getLoopSubject(id: string | undefined | null): LoopSubject | undefined {
-  return LOOP_SUBJECTS.find((s) => s.id === id)
+  if (!id) return undefined
+  return overlayEntry("loop-subject", id, LOOP_SUBJECTS.find((s) => s.id === id))
 }
 
 export function getLoopSubjectLabel(id: string): string {

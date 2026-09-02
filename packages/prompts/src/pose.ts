@@ -21,6 +21,7 @@
  */
 
 import { resolveTerm, type PickerHintMode } from "./term.js"
+import { overlayEntry } from "./catalog-overlay.js"
 
 export type PoseCategory =
   | "standing"
@@ -165,7 +166,7 @@ const poseById = new Map<string, Pose>(POSES.map((p) => [p.id, p]))
 
 export function getPose(id: string | undefined | null): Pose | undefined {
   if (!id) return undefined
-  return poseById.get(id)
+  return overlayEntry("pose", id, poseById.get(id))
 }
 
 export function getPoseLabel(id: string | undefined | null, fallback?: string): string {

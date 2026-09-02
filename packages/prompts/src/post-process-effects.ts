@@ -22,6 +22,7 @@
  */
 
 import { resolveTerm, type PickerHintMode } from "./term.js"
+import { overlayEntry } from "./catalog-overlay.js"
 
 export interface PostProcessEffect {
   readonly id: string
@@ -65,7 +66,7 @@ const postProcessById = new Map<string, PostProcessEffect>(
 
 export function getPostProcessEffect(id: string | undefined | null): PostProcessEffect | undefined {
   if (!id) return undefined
-  return postProcessById.get(id)
+  return overlayEntry("post-process-effects", id, postProcessById.get(id))
 }
 
 export function getPostProcessEffectLabel(id: string | undefined | null, fallback?: string): string {

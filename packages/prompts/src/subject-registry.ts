@@ -80,7 +80,7 @@ import {
 } from "./styling.js"
 import { buildHeldPropHints } from "./held-prop.js"
 import { buildMaterialHints } from "./materials.js"
-import { getAnimalPromptHint, getAnimalTerm } from "@nodaro/shared"
+import { curatedAnimalPromptHint, curatedAnimalTerm } from "./shared-catalog-overlay.js"
 
 /** Which generation stages fold a dimension (mirrors `DirectionSurface`). */
 export type SubjectSurface = "image" | "video" | "both"
@@ -200,7 +200,7 @@ export const SUBJECT_FIELDS = [
   { key: "styling", kind: "group", surface: "both", render: viaFragmentBuilder(buildStylingHints) },
   { key: "heldProp", kind: "ids", surface: "both", maxPicks: 2, render: viaListBuilder(buildHeldPropHints) },
   { key: "material", kind: "ids", surface: "both", maxPicks: 2, render: viaStringBuilder(buildMaterialHints) },
-  { key: "animal", kind: "ids", surface: "both", maxPicks: 1, render: perId(getAnimalPromptHint, getAnimalTerm) },
+  { key: "animal", kind: "ids", surface: "both", maxPicks: 1, render: perId(curatedAnimalPromptHint, curatedAnimalTerm) },
 ] as const satisfies ReadonlyArray<SubjectFieldSpec>
 
 export type SubjectFieldRow = (typeof SUBJECT_FIELDS)[number]

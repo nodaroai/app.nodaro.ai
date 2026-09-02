@@ -2,12 +2,13 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { MUSIC_ENERGIES, MUSIC_EMOTIONS, MUSIC_VIBES, type MusicMoodEntry } from "@nodaro/prompts"
+import { MUSIC_ENERGIES as BASE_MUSIC_ENERGIES, MUSIC_EMOTIONS as BASE_MUSIC_EMOTIONS, MUSIC_VIBES as BASE_MUSIC_VIBES, type MusicMoodEntry } from "@nodaro/prompts"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog } from "../i18n"
 import { SoundDimensionSection } from "./sound-dimension-section"
 import { useMultiPick, type MultiPickValue } from "./multi-pick-ui"
+import { useCuratedEntries } from "../curated.js"
 
 export interface MusicMoodValue {
   readonly energy?: string
@@ -28,11 +29,15 @@ interface Section {
   readonly maxSelected: number
 }
 
-const SECTIONS: ReadonlyArray<Section> = [
-  { key: "energy",  label: "Energy",  entries: MUSIC_ENERGIES, maxSelected: 1 },
-  { key: "emotion", label: "Emotion", entries: MUSIC_EMOTIONS, maxSelected: 3 },
-  { key: "vibe",    label: "Vibe",    entries: MUSIC_VIBES,    maxSelected: 3 },
-]
+// Built per render from the CURATED lists, not at module scope from the
+// bundled constants — a deployment's packs may remove or reword entries.
+function buildSections(MUSIC_EMOTIONS: typeof BASE_MUSIC_EMOTIONS, MUSIC_ENERGIES: typeof BASE_MUSIC_ENERGIES, MUSIC_VIBES: typeof BASE_MUSIC_VIBES): ReadonlyArray<Section> {
+  return [
+    { key: "energy",  label: "Energy",  entries: MUSIC_ENERGIES, maxSelected: 1 },
+    { key: "emotion", label: "Emotion", entries: MUSIC_EMOTIONS, maxSelected: 3 },
+    { key: "vibe",    label: "Vibe",    entries: MUSIC_VIBES,    maxSelected: 3 },
+  ]
+}
 
 /**
  * Three dimensions: energy (single-select), emotion (up to 3), vibe (up to 3).
@@ -43,6 +48,13 @@ export const MusicMoodPicker = memo(function MusicMoodPicker({
   onChange,
   className,
 }: MusicMoodPickerProps) {
+  // Curated view of the bundled catalog: filtered to ids this deployment
+  // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
+  // registration re-renders. Identity-equal to the base on mainline.
+  const MUSIC_ENERGIES = useCuratedEntries("music-mood", BASE_MUSIC_ENERGIES)
+  const MUSIC_EMOTIONS = useCuratedEntries("music-mood", BASE_MUSIC_EMOTIONS)
+  const MUSIC_VIBES = useCuratedEntries("music-mood", BASE_MUSIC_VIBES)
+  const SECTIONS = useMemo(() => buildSections(MUSIC_EMOTIONS, MUSIC_ENERGIES, MUSIC_VIBES), [MUSIC_EMOTIONS, MUSIC_ENERGIES, MUSIC_VIBES])
   const [query, setQuery] = useState("")
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("music-mood")
 

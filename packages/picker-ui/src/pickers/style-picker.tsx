@@ -2,12 +2,13 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { STYLES } from "@nodaro/prompts"
+import { STYLES as BASE_STYLES } from "@nodaro/prompts"
 import { Input } from "../ui/input"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"
 import { StylePreview } from "../previews/style-preview"
 import { useLocalizedCatalog } from "../i18n"
+import { useCuratedEntries } from "../curated.js"
 
 interface StylePickerProps {
   readonly value: string
@@ -20,6 +21,10 @@ export const StylePicker = memo(function StylePicker({
   onValueChange,
   className,
 }: StylePickerProps) {
+  // Curated view of the bundled catalog: filtered to ids this deployment
+  // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
+  // registration re-renders. Identity-equal to the base on mainline.
+  const STYLES = useCuratedEntries("style", BASE_STYLES)
   const [query, setQuery] = useState("")
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("style")
 

@@ -2,13 +2,14 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { INSTRUMENTS, PRODUCTION_STYLES, VOCAL_PRESENCE, VOCAL_PRESENCE_INSTRUMENTAL_ID, SINGING_STYLES, INSTRUMENT_CATEGORY_ORDER, INSTRUMENT_CATEGORY_LABELS, type InstrumentationEntry } from "@nodaro/prompts"
+import { INSTRUMENTS as BASE_INSTRUMENTS, PRODUCTION_STYLES as BASE_PRODUCTION_STYLES, VOCAL_PRESENCE as BASE_VOCAL_PRESENCE, VOCAL_PRESENCE_INSTRUMENTAL_ID, SINGING_STYLES as BASE_SINGING_STYLES, INSTRUMENT_CATEGORY_ORDER, INSTRUMENT_CATEGORY_LABELS, type InstrumentationEntry } from "@nodaro/prompts"
 import { pickIds, togglePick } from "@nodaro/shared"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog } from "../i18n"
 import { SoundDimensionSection } from "./sound-dimension-section"
 import { SoundTabbedSection, type TabbedEntry } from "./sound-tabbed-section"
+import { useCuratedEntries } from "../curated.js"
 
 /** Cap instruments at 5, vocal presence at 3, singing style at 3. */
 const MAX_INSTRUMENTS = 5
@@ -43,6 +44,13 @@ export const InstrumentationPicker = memo(function InstrumentationPicker({
   onChange,
   className,
 }: InstrumentationPickerProps) {
+  // Curated view of the bundled catalog: filtered to ids this deployment
+  // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
+  // registration re-renders. Identity-equal to the base on mainline.
+  const INSTRUMENTS = useCuratedEntries("instrumentation", BASE_INSTRUMENTS)
+  const PRODUCTION_STYLES = useCuratedEntries("instrumentation", BASE_PRODUCTION_STYLES)
+  const VOCAL_PRESENCE = useCuratedEntries("instrumentation", BASE_VOCAL_PRESENCE)
+  const SINGING_STYLES = useCuratedEntries("instrumentation", BASE_SINGING_STYLES)
   const [query, setQuery] = useState("")
   /** Explicit-enable for multi sections — lets the user "check" the
    *  section without forcing a default pick (mirrors StylingPicker). */

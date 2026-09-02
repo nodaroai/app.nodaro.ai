@@ -20,6 +20,7 @@
  */
 
 import { resolveTerm } from "./term.js"
+import { overlayEntry } from "./catalog-overlay.js"
 
 export type SettingCategory = "indoor" | "urban" | "nature" | "fantastical"
 
@@ -118,7 +119,7 @@ const settingById = new Map<string, Setting>(SETTINGS.map((s) => [s.id, s]))
 
 export function getSetting(id: string | undefined | null): Setting | undefined {
   if (!id) return undefined
-  return settingById.get(id)
+  return overlayEntry("setting", id, settingById.get(id))
 }
 
 export function getSettingLabel(id: string | undefined | null, fallback?: string): string {

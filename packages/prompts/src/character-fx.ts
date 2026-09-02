@@ -19,6 +19,7 @@
  */
 
 import { resolveTerm, type PickerHintMode } from "./term.js"
+import { overlayEntry } from "./catalog-overlay.js"
 
 export type CharacterFxCategory =
   | "transformation"
@@ -249,7 +250,7 @@ const characterFxById = new Map<string, CharacterFx>(
 
 export function getCharacterFx(id: string | undefined | null): CharacterFx | undefined {
   if (!id) return undefined
-  return characterFxById.get(id)
+  return overlayEntry("character-fx", id, characterFxById.get(id))
 }
 
 export function getCharacterFxLabel(id: string | undefined | null, fallback?: string): string {

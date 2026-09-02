@@ -2,11 +2,12 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { VEHICLES, VEHICLE_SUBCATEGORY_LABELS, VEHICLE_SUBCATEGORY_ORDER, type Vehicle, type VehicleSubcategory } from "@nodaro/shared"
+import { VEHICLES as BASE_VEHICLES, VEHICLE_SUBCATEGORY_LABELS, VEHICLE_SUBCATEGORY_ORDER, type Vehicle, type VehicleSubcategory } from "@nodaro/shared"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog } from "../i18n"
 import { VEHICLE_ICON_FOR } from "../icons/parameter-picker-icons-vehicles"
+import { useCuratedEntries } from "../curated.js"
 
 interface VehiclePickerProps {
   readonly value: string
@@ -28,6 +29,10 @@ export const VehiclePicker = memo(function VehiclePicker({
   onValueChange,
   className,
 }: VehiclePickerProps) {
+  // Curated view of the bundled catalog: filtered to ids this deployment
+  // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
+  // registration re-renders. Identity-equal to the base on mainline.
+  const VEHICLES = useCuratedEntries("vehicles", BASE_VEHICLES)
   const [query, setQuery] = useState("")
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("vehicles")
 

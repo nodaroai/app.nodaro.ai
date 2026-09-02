@@ -2,11 +2,12 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { HELD_PROPS, HELD_PROP_CATEGORY_LABELS, HELD_PROP_CATEGORY_ORDER, type HeldProp, type HeldPropCategory } from "@nodaro/prompts"
+import { HELD_PROPS as BASE_HELD_PROPS, HELD_PROP_CATEGORY_LABELS, HELD_PROP_CATEGORY_ORDER, type HeldProp, type HeldPropCategory } from "@nodaro/prompts"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog } from "../i18n"
 import { MultiPickBadge, useMultiPick } from "./multi-pick-ui"
+import { useCuratedEntries } from "../curated.js"
 
 interface HeldPropPickerProps {
   readonly value: string | ReadonlyArray<string> | undefined
@@ -76,6 +77,10 @@ export const HeldPropPicker = memo(function HeldPropPicker({
   className,
   maxSelected = 1,
 }: HeldPropPickerProps) {
+  // Curated view of the bundled catalog: filtered to ids this deployment
+  // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
+  // registration re-renders. Identity-equal to the base on mainline.
+  const HELD_PROPS = useCuratedEntries("held-prop", BASE_HELD_PROPS)
   const [query, setQuery] = useState("")
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("held-prop")
   const { selectedIds, isMulti, handlePick, activateMulti, demoteToSingle } =

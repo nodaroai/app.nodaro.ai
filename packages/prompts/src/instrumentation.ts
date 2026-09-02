@@ -273,16 +273,16 @@ const VOCAL_BY_ID = new Map(VOCAL_PRESENCE.map((x) => [x.id, x]))
 const SINGING_STYLE_BY_ID = new Map(SINGING_STYLES.map((x) => [x.id, x]))
 
 export function getInstrument(id: string | undefined): CategorizedInstrument | undefined {
-  return id ? INSTRUMENT_BY_ID.get(id) : undefined
+  return id ? overlayEntry("instrumentation", id, INSTRUMENT_BY_ID.get(id)) : undefined
 }
 export function getProductionStyle(id: string | undefined): InstrumentationEntry | undefined {
-  return id ? PRODUCTION_BY_ID.get(id) : undefined
+  return id ? overlayEntry("instrumentation", id, PRODUCTION_BY_ID.get(id)) : undefined
 }
 export function getVocalPresence(id: string | undefined): InstrumentationEntry | undefined {
-  return id ? VOCAL_BY_ID.get(id) : undefined
+  return id ? overlayEntry("instrumentation", id, VOCAL_BY_ID.get(id)) : undefined
 }
 export function getSingingStyle(id: string | undefined): InstrumentationEntry | undefined {
-  return id ? SINGING_STYLE_BY_ID.get(id) : undefined
+  return id ? overlayEntry("instrumentation", id, SINGING_STYLE_BY_ID.get(id)) : undefined
 }
 
 /**
@@ -306,6 +306,7 @@ export function getSingingStyleTerm(id: string | undefined | null): string {
 }
 
 import { pickIds } from "@nodaro/shared"
+import { overlayEntry } from "./catalog-overlay.js"
 
 export function buildInstrumentationHints(
   data: {

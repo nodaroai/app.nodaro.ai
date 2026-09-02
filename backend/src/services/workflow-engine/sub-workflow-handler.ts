@@ -8,7 +8,7 @@
  */
 
 import { PARAMETER_NODE_TYPES } from "@nodaro/shared"
-import { getParameterPromptHint } from "@nodaro/prompts"
+import { getParameterPromptHint, findForeignCatalogIds, foreignCatalogIdMessage } from "@nodaro/prompts"
 import { config } from "../../lib/config.js"
 import { settledWithLimit } from "../../lib/settled-with-limit.js"
 import { supabase } from "../../lib/supabase.js"
@@ -162,6 +162,19 @@ export async function executeSubWorkflow(
     subEdges = subEdges.filter(
       (e) => reachable.has(e.source) && reachable.has(e.target),
     )
+  }
+
+  // The nested graph never passes the orchestrator's chokepoint — it is
+  // loaded and executed in-process here — so the catalog wall is asked again,
+  // after the route filter and before parameter nodes are pre-completed
+  // below. Inert on a deployment with no catalog packs.
+  {
+    const foreign = findForeignCatalogIds(subNodes)
+    if (foreign.length > 0) {
+      const err = new Error(foreignCatalogIdMessage(foreign)) as Error & { code?: string }
+      err.code = "catalog_value_not_available"
+      throw err
+    }
   }
 
   // Initialize node states for the sub-workflow

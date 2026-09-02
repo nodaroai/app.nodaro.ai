@@ -2,11 +2,12 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { ACTION_FX, ACTION_FX_CATEGORY_LABELS, ACTION_FX_CATEGORY_ORDER, type ActionFx, type ActionFxCategory } from "@nodaro/prompts"
+import { ACTION_FX as BASE_ACTION_FX, ACTION_FX_CATEGORY_LABELS, ACTION_FX_CATEGORY_ORDER, type ActionFx, type ActionFxCategory } from "@nodaro/prompts"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog } from "../i18n"
 import { MultiPickBadge, useMultiPick } from "./multi-pick-ui"
+import { useCuratedEntries } from "../curated.js"
 
 interface ActionFxPickerProps {
   readonly value: string | ReadonlyArray<string> | undefined
@@ -34,6 +35,10 @@ export const ActionFxPicker = memo(function ActionFxPicker({
   className,
   maxSelected = 2,
 }: ActionFxPickerProps) {
+  // Curated view of the bundled catalog: filtered to ids this deployment
+  // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
+  // registration re-renders. Identity-equal to the base on mainline.
+  const ACTION_FX = useCuratedEntries("action-fx", BASE_ACTION_FX)
   const [query, setQuery] = useState("")
   const [activeTab, setActiveTab] = useState<ActionFxCategory>("disaster")
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("action-fx")

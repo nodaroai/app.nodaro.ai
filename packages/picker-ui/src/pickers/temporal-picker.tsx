@@ -2,13 +2,14 @@
 
 import { memo, useId, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { TEMPORALS, TEMPORAL_CATEGORY_ORDER, TEMPORAL_CATEGORY_LABELS, TEMPORAL_FIELD_BY_CATEGORY, type Temporal, type TemporalCategory, type TemporalValue } from "@nodaro/prompts"
+import { TEMPORALS as BASE_TEMPORALS, TEMPORAL_CATEGORY_ORDER, TEMPORAL_CATEGORY_LABELS, TEMPORAL_FIELD_BY_CATEGORY, type Temporal, type TemporalCategory, type TemporalValue } from "@nodaro/prompts"
 import { Input } from "../ui/input"
 import { Switch } from "../ui/switch"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"
 import { TemporalPreview } from "../previews/temporal-preview"
 import { useLocalizedCatalog } from "../i18n"
+import { useCuratedEntries } from "../curated.js"
 
 interface TemporalPickerProps {
   readonly value: TemporalValue
@@ -28,6 +29,10 @@ export const TemporalPicker = memo(function TemporalPicker({
   onChange,
   className,
 }: TemporalPickerProps) {
+  // Curated view of the bundled catalog: filtered to ids this deployment
+  // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
+  // registration re-renders. Identity-equal to the base on mainline.
+  const TEMPORALS = useCuratedEntries("temporal", BASE_TEMPORALS)
   const [query, setQuery] = useState("")
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("temporal")
 

@@ -28,6 +28,7 @@
  */
 
 import { resolveTerm } from "./term.js"
+import { overlayEntry } from "./catalog-overlay.js"
 
 export type PhotoGenreCategory =
   | "editorial"
@@ -134,7 +135,7 @@ const photoGenreById = new Map<string, PhotoGenre>(
 
 export function getPhotoGenre(id: string | undefined | null): PhotoGenre | undefined {
   if (!id) return undefined
-  return photoGenreById.get(id)
+  return overlayEntry("photo-genre", id, photoGenreById.get(id))
 }
 
 export function getPhotoGenreLabel(id: string | undefined | null, fallback?: string): string {

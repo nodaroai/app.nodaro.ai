@@ -18,6 +18,7 @@
  */
 
 import { resolveTerm } from "./term.js"
+import { overlayEntry } from "./catalog-overlay.js"
 
 export type EraCategory = "decade-20c" | "pre-modern" | "speculative"
 
@@ -282,7 +283,7 @@ const eraById = new Map<string, Era>(ERAS.map((e) => [e.id, e]))
 
 export function getEra(id: string | undefined | null): Era | undefined {
   if (!id) return undefined
-  return eraById.get(id)
+  return overlayEntry("era", id, eraById.get(id))
 }
 
 export function getEraLabel(id: string | undefined | null, fallback?: string): string {

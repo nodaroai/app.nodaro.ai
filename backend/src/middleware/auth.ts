@@ -190,6 +190,12 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean }[] = [
   { method: "GET", path: "/v1/nodes" },
   { method: "GET", path: "/v1/picker-catalogs" },
   { method: "GET", path: "/v1/picker-catalogs/", prefix: true },
+  // The composed catalog set in one call. Its docstring always said public,
+  // and it must be: the browser fetches it at boot to REPLACE its bundled
+  // catalogs with the deployment's curated ones, and the anonymous
+  // presentation routes (/present, /app, /embed) render pickers too. Same
+  // data as the per-type route above, one round trip.
+  { method: "GET", path: "/v1/catalogs" },
   // Organization invitation preview (Cloud, organizations): the invitee is
   // signed OUT when they follow the link, and the page that tells them what
   // they were invited to must render before they sign in. The unguessable

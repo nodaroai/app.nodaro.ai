@@ -2,11 +2,12 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search, Cloud, Flame, Sparkles, Waves, Star, CloudRain, Spline, Hexagon, Zap, Atom, Infinity as InfinityIcon, Tornado, CloudSnow, CloudLightning, Orbit, Sun, FlowerIcon, Droplets, Flame as FireIcon, Grid3x3, Box, BarChart3, Dna, Disc3, Aperture, RotateCw, AlertTriangle, CircleDot, Layers } from "lucide-react"
-import { LOOP_SUBJECTS, type LoopSubject, type LoopSubjectCategory } from "@nodaro/prompts"
+import { LOOP_SUBJECTS as BASE_LOOP_SUBJECTS, type LoopSubject, type LoopSubjectCategory } from "@nodaro/prompts"
 import { Input } from "../ui/input"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog } from "../i18n"
+import { useCuratedEntries } from "../curated.js"
 
 interface LoopSubjectPickerProps {
   readonly value: string
@@ -71,6 +72,10 @@ export const LoopSubjectPicker = memo(function LoopSubjectPicker({
   onValueChange,
   className,
 }: LoopSubjectPickerProps) {
+  // Curated view of the bundled catalog: filtered to ids this deployment
+  // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
+  // registration re-renders. Identity-equal to the base on mainline.
+  const LOOP_SUBJECTS = useCuratedEntries("loop-subject", BASE_LOOP_SUBJECTS)
   const [query, setQuery] = useState("")
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("loop-subject")
 

@@ -11,6 +11,7 @@
  */
 
 import { resolveTerm, type PickerHintMode } from "./term.js"
+import { overlayEntry } from "./catalog-overlay.js"
 
 export type LightingCategory =
   | "time-of-day"
@@ -143,7 +144,7 @@ const lightingById = new Map<string, Lighting>(LIGHTINGS.map((l) => [l.id, l]))
 
 export function getLighting(id: string | undefined | null): Lighting | undefined {
   if (!id) return undefined
-  return lightingById.get(id)
+  return overlayEntry("lighting", id, lightingById.get(id))
 }
 
 export function getLightingLabel(id: string | undefined | null, fallback?: string): string {

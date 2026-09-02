@@ -5,7 +5,7 @@ import {
   VIDEO_GEN_MODELS,
   GVP_PROVIDERS,
   EVP_PROVIDERS,
-  IMAGE_STYLE_PRESETS,
+  imageStylePresets,
   getAspectRatiosForModel,
   getAspectRatiosForVideoModel,
   getVideoResolutionOptions,
@@ -401,7 +401,7 @@ function renderGenerateImage(
     case "style": {
       const styleOptions: readonly OptionEntry[] = [
         { value: "__none__", label: "None" },
-        ...IMAGE_STYLE_PRESETS.map((s) => ({ value: s.value, label: s.label })),
+        ...imageStylePresets().map((s) => ({ value: s.value, label: s.label })),
       ]
       return (
         <OptionSelect

@@ -10,6 +10,7 @@
  */
 
 import { resolveTerm, type PickerHintMode } from "./term.js"
+import { overlayEntry } from "./catalog-overlay.js"
 
 export type FramingCategory =
   | "shot-size"
@@ -568,7 +569,7 @@ const framingById = new Map<string, Framing>(FRAMINGS.map((f) => [f.id, f]))
 
 export function getFraming(id: string | undefined | null): Framing | undefined {
   if (!id) return undefined
-  return framingById.get(id)
+  return overlayEntry("framing", id, framingById.get(id))
 }
 
 export function getFramingLabel(id: string | undefined | null, fallback?: string): string {

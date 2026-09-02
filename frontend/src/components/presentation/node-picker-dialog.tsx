@@ -31,6 +31,7 @@ import { DEFAULT_SYSTEM_MAX_FANOUT } from "./input-card"
 import { PickerRestrictDialog } from "./picker-restrict-dialog"
 import {
   getParameterPickerMeta,
+  useCatalogPacksVersion,
   type ParameterPickerMeta,
 } from "@/lib/picker-ui"
 
@@ -133,6 +134,7 @@ function PickerInputConfigSlot({
   presentationSettings: PresentationSettings
   updatePresentationSettings: (settings: Partial<PresentationSettings>) => void
 }) {
+  useCatalogPacksVersion()
   const meta = getParameterPickerMeta(nodeType)
   if (!meta) return null
   return (

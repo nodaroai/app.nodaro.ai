@@ -7,6 +7,7 @@ import {
   deniedModelRejectionMessage,
   deniedNodeRejectionMessage,
 } from "../lib/surface-deny.js"
+import { findForeignCatalogIdsInBody, foreignCatalogIdMessage } from "@nodaro/prompts"
 import {
   computeFingerprint,
   findRecentMatchingJob,
@@ -129,6 +130,26 @@ export function creditGuard(
           error: {
             code: "node_not_available",
             message: deniedNodeRejectionMessage([nodeType]),
+          },
+        })
+      }
+      // Catalog curation, single-node lane. Three routes (generate-image,
+      // generate-video, text-to-video) accept folded `direction` / `subject`
+      // records whose values are picker ids, with schemas that tolerate
+      // unknown ids by design ("skipped, never rejected"). On a curated
+      // deployment an unknown id is exactly what must be rejected — the
+      // orchestrator wall covers the graph lane; this is the same door for
+      // the wire lane. Inert without catalog packs.
+      const foreign = findForeignCatalogIdsInBody(nodeType, req.body as { direction?: unknown; subject?: unknown } | undefined)
+      if (foreign.length > 0) {
+        console.warn(
+          `[catalog-guard] ${req.routeOptions?.url ?? nodeType} REFUSED for user ${req.userId ?? "anonymous"} — ` +
+            foreign.map((f) => `${f.field}="${f.id}"`).join(", "),
+        )
+        return reply.code(403).send({
+          error: {
+            code: "catalog_value_not_available",
+            message: foreignCatalogIdMessage(foreign),
           },
         })
       }

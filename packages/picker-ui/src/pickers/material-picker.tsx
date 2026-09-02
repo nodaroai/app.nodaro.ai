@@ -2,13 +2,14 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { MATERIALS, MATERIAL_CATEGORY_LABELS, MATERIAL_CATEGORY_ORDER, type Material, type MaterialCategory } from "@nodaro/prompts"
+import { MATERIALS as BASE_MATERIALS, MATERIAL_CATEGORY_LABELS, MATERIAL_CATEGORY_ORDER, type Material, type MaterialCategory } from "@nodaro/prompts"
 import { Input } from "../ui/input"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"
 import { MaterialPreview } from "../previews/material-preview"
 import { useLocalizedCatalog } from "../i18n"
 import { MultiPickBadge, useMultiPick } from "./multi-pick-ui"
+import { useCuratedEntries } from "../curated.js"
 
 interface MaterialPickerProps {
   readonly value: string | ReadonlyArray<string> | undefined
@@ -28,6 +29,10 @@ export const MaterialPicker = memo(function MaterialPicker({
   className,
   maxSelected = 1,
 }: MaterialPickerProps) {
+  // Curated view of the bundled catalog: filtered to ids this deployment
+  // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
+  // registration re-renders. Identity-equal to the base on mainline.
+  const MATERIALS = useCuratedEntries("materials", BASE_MATERIALS)
   const [query, setQuery] = useState("")
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("materials")
   const { selectedIds, isMulti, handlePick, activateMulti, demoteToSingle } =

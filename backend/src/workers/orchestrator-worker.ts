@@ -40,7 +40,7 @@ import type {
 } from "../services/workflow-engine/types.js"
 import { WORKFLOW_TIMEOUT_MS } from "../services/workflow-engine/types.js"
 import { filterCloneNodes, PARAMETER_NODE_TYPES, migrateEdgeOutputMode, REPEAT_PLACEHOLDER, getEffectiveRepeatCount, REPEATABLE_NODE_TYPES, expandItemsWithRepeat, decodeProviderItem, calculateMonetizationMarkup, resolveEffectiveTier } from "@nodaro/shared"
-import { getParameterPromptHint } from "@nodaro/prompts"
+import { getParameterPromptHint, findForeignCatalogIds, foreignCatalogIdMessage } from "@nodaro/prompts"
 import { applyInputOverridesToNodes } from "./apply-input-overrides.js"
 import { buildStatsKey, upsertExecutionStats } from "../services/execution-stats.js"
 import { settledWithLimit } from "../lib/settled-with-limit.js"
@@ -463,6 +463,26 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     // override work; see apply-input-overrides). Also clears stale generated*
     // results so the user's fresh input wins over a cached snapshot result.
     applyInputOverridesToNodes(nodes, inputOverrides)
+
+    // THE WALL for catalog curation (packages/prompts catalog-id-guard). This
+    // is the one place every run passes with its graph in hand — eight
+    // producers enqueue here, three of them (webhook, telegram, schedule) never
+    // load nodes at all — and it sits AFTER the override merge above, because
+    // any lane's inputOverrides can write a picker id onto a parameter node
+    // past every route-level check. A curated deployment refuses an id it does
+    // not offer here, before parameter nodes are pre-completed into prompt
+    // text below. Inert on a deployment with no catalog packs.
+    {
+      const foreign = findForeignCatalogIds(nodes)
+      if (foreign.length > 0) {
+        console.warn(
+          `[catalog-guard] execution ${executionId} REFUSED — ${foreign.length} picker value(s) this deployment does not offer: ` +
+            foreign.map((f) => `${f.nodeType}.${f.field}="${f.id}"`).join(", "),
+        )
+        await failExecution(executionId, foreignCatalogIdMessage(foreign))
+        return
+      }
+    }
 
     if (nodes.length === 0) {
       await failExecution(executionId, "Workflow has no nodes")

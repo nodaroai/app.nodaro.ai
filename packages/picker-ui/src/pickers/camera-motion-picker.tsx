@@ -2,12 +2,13 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { CAMERA_MOTIONS, CAMERA_MOTION_CATEGORY_ORDER, CAMERA_MOTION_CATEGORY_LABELS, type CameraMotion, type CameraMotionCategory } from "@nodaro/prompts"
+import { CAMERA_MOTIONS as BASE_CAMERA_MOTIONS, CAMERA_MOTION_CATEGORY_ORDER, CAMERA_MOTION_CATEGORY_LABELS, type CameraMotion, type CameraMotionCategory } from "@nodaro/prompts"
 import { Input } from "../ui/input"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"
 import { CameraMotionPreview } from "../previews/camera-motion-preview"
 import { useLocalizedCatalog } from "../i18n"
+import { useCuratedEntries } from "../curated.js"
 
 interface CameraMotionPickerProps {
   readonly value: string
@@ -21,6 +22,10 @@ export const CameraMotionPicker = memo(function CameraMotionPicker({
   onValueChange,
   className,
 }: CameraMotionPickerProps) {
+  // Curated view of the bundled catalog: filtered to ids this deployment
+  // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
+  // registration re-renders. Identity-equal to the base on mainline.
+  const CAMERA_MOTIONS = useCuratedEntries("camera-motions", BASE_CAMERA_MOTIONS)
   const [query, setQuery] = useState("")
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("camera-motions")
 

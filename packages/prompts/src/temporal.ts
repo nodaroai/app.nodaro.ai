@@ -16,6 +16,7 @@
  */
 
 import { resolveTerm, type PickerHintMode } from "./term.js"
+import { overlayEntry } from "./catalog-overlay.js"
 
 export type TemporalCategory = "speed" | "freeze" | "direction" | "shutter"
 
@@ -83,7 +84,7 @@ const temporalById = new Map<string, Temporal>(TEMPORALS.map((t) => [t.id, t]))
 
 export function getTemporal(id: string | undefined | null): Temporal | undefined {
   if (!id) return undefined
-  return temporalById.get(id)
+  return overlayEntry("temporal", id, temporalById.get(id))
 }
 
 export function getTemporalLabel(id: string | undefined | null, fallback?: string): string {

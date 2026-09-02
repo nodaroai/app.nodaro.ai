@@ -2,11 +2,12 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search, Camera } from "lucide-react"
-import { PHOTO_GENRES, PHOTO_GENRE_CATEGORY_LABELS, PHOTO_GENRE_CATEGORY_ORDER, type PhotoGenre, type PhotoGenreCategory } from "@nodaro/prompts"
+import { PHOTO_GENRES as BASE_PHOTO_GENRES, PHOTO_GENRE_CATEGORY_LABELS, PHOTO_GENRE_CATEGORY_ORDER, type PhotoGenre, type PhotoGenreCategory } from "@nodaro/prompts"
 import { Input } from "../ui/input"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog } from "../i18n"
+import { useCuratedEntries } from "../curated.js"
 
 interface PhotoGenrePickerProps {
   readonly value: string
@@ -24,6 +25,10 @@ export const PhotoGenrePicker = memo(function PhotoGenrePicker({
   onValueChange,
   className,
 }: PhotoGenrePickerProps) {
+  // Curated view of the bundled catalog: filtered to ids this deployment
+  // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
+  // registration re-renders. Identity-equal to the base on mainline.
+  const PHOTO_GENRES = useCuratedEntries("photo-genre", BASE_PHOTO_GENRES)
   const [query, setQuery] = useState("")
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("photo-genre")
 

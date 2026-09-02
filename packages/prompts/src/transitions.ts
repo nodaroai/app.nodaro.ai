@@ -13,6 +13,7 @@
  */
 
 import { resolveTerm, type PickerHintMode } from "./term.js"
+import { overlayEntry } from "./catalog-overlay.js"
 
 export type TransitionCategory =
   | "standard"
@@ -284,7 +285,7 @@ const transitionById = new Map<string, Transition>(
 
 export function getTransition(id: string | undefined | null): Transition | undefined {
   if (!id) return undefined
-  return transitionById.get(id)
+  return overlayEntry("transitions", id, transitionById.get(id))
 }
 
 export function getTransitionLabel(id: string | undefined | null, fallback?: string): string {

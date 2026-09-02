@@ -20,6 +20,7 @@
  */
 
 import { resolveTerm, type PickerHintMode } from "./term.js"
+import { overlayEntry } from "./catalog-overlay.js"
 
 export type PhotographerCategory =
   | "editorial"
@@ -642,7 +643,7 @@ const photographerById = new Map<string, Photographer>(
 
 export function getPhotographer(id: string | undefined | null): Photographer | undefined {
   if (!id) return undefined
-  return photographerById.get(id)
+  return overlayEntry("photographer", id, photographerById.get(id))
 }
 
 export function getPhotographerLabel(id: string | undefined | null, fallback?: string): string {

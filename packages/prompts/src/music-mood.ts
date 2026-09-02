@@ -6,6 +6,7 @@
 import { pickIds } from "@nodaro/shared"
 
 import { resolveTerm, type PickerHintMode } from "./term.js"
+import { overlayEntry } from "./catalog-overlay.js"
 
 export interface MusicMoodEntry {
   readonly id: string
@@ -102,13 +103,13 @@ const EMOTION_BY_ID = new Map(MUSIC_EMOTIONS.map((x) => [x.id, x]))
 const VIBE_BY_ID = new Map(MUSIC_VIBES.map((x) => [x.id, x]))
 
 export function getMusicEnergy(id: string | undefined): MusicMoodEntry | undefined {
-  return id ? ENERGY_BY_ID.get(id) : undefined
+  return id ? overlayEntry("music-mood", id, ENERGY_BY_ID.get(id)) : undefined
 }
 export function getMusicEmotion(id: string | undefined): MusicMoodEntry | undefined {
-  return id ? EMOTION_BY_ID.get(id) : undefined
+  return id ? overlayEntry("music-mood", id, EMOTION_BY_ID.get(id)) : undefined
 }
 export function getMusicVibe(id: string | undefined): MusicMoodEntry | undefined {
-  return id ? VIBE_BY_ID.get(id) : undefined
+  return id ? overlayEntry("music-mood", id, VIBE_BY_ID.get(id)) : undefined
 }
 
 /**

@@ -2,11 +2,12 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { ANIMALS, ANIMAL_SUBCATEGORY_LABELS, ANIMAL_SUBCATEGORY_ORDER, type Animal, type AnimalSubcategory } from "@nodaro/shared"
+import { ANIMALS as BASE_ANIMALS, ANIMAL_SUBCATEGORY_LABELS, ANIMAL_SUBCATEGORY_ORDER, type Animal, type AnimalSubcategory } from "@nodaro/shared"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog } from "../i18n"
 import { ANIMAL_ICON_FOR } from "../icons/parameter-picker-icons-animals"
+import { useCuratedEntries } from "../curated.js"
 
 interface AnimalPickerProps {
   readonly value: string
@@ -27,6 +28,10 @@ export const AnimalPicker = memo(function AnimalPicker({
   onValueChange,
   className,
 }: AnimalPickerProps) {
+  // Curated view of the bundled catalog: filtered to ids this deployment
+  // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
+  // registration re-renders. Identity-equal to the base on mainline.
+  const ANIMALS = useCuratedEntries("animals", BASE_ANIMALS)
   const [query, setQuery] = useState("")
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("animals")
 

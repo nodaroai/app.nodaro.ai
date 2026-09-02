@@ -2,12 +2,13 @@
 
 import { Fragment, memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { VOICE_AGES, VOICE_GENDERS, VOICE_LANGUAGES, VOICE_ACCENTS, VOICE_TIMBRES, type VoiceCharacterEntry } from "@nodaro/prompts"
+import { VOICE_AGES as BASE_VOICE_AGES, VOICE_GENDERS as BASE_VOICE_GENDERS, VOICE_LANGUAGES as BASE_VOICE_LANGUAGES, VOICE_ACCENTS as BASE_VOICE_ACCENTS, VOICE_TIMBRES as BASE_VOICE_TIMBRES, type VoiceCharacterEntry } from "@nodaro/prompts"
 import { pickIds, togglePick } from "@nodaro/shared"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog } from "../i18n"
 import { SoundDimensionSection } from "./sound-dimension-section"
+import { useCuratedEntries } from "../curated.js"
 
 /** Cap multi-language picks at 3 — codeswitching / multilingual voices. */
 const MAX_LANGUAGES = 3
@@ -33,12 +34,16 @@ interface SingleSection {
   readonly entries: ReadonlyArray<VoiceCharacterEntry>
 }
 
-const SINGLE_SECTIONS: ReadonlyArray<SingleSection> = [
-  { key: "age",     label: "Age",     entries: VOICE_AGES     },
-  { key: "gender",  label: "Gender",  entries: VOICE_GENDERS  },
-  { key: "accent",  label: "Accent",  entries: VOICE_ACCENTS  },
-  { key: "timbre",  label: "Timbre",  entries: VOICE_TIMBRES  },
-]
+// Built per render from the CURATED lists, not at module scope from the
+// bundled constants — a deployment's packs may remove or reword entries.
+function buildSingleSections(VOICE_ACCENTS: typeof BASE_VOICE_ACCENTS, VOICE_AGES: typeof BASE_VOICE_AGES, VOICE_GENDERS: typeof BASE_VOICE_GENDERS, VOICE_TIMBRES: typeof BASE_VOICE_TIMBRES): ReadonlyArray<SingleSection> {
+  return [
+    { key: "age",     label: "Age",     entries: VOICE_AGES     },
+    { key: "gender",  label: "Gender",  entries: VOICE_GENDERS  },
+    { key: "accent",  label: "Accent",  entries: VOICE_ACCENTS  },
+    { key: "timbre",  label: "Timbre",  entries: VOICE_TIMBRES  },
+  ]
+}
 
 /** Index where Language is interleaved (between Gender and Accent). */
 const LANGUAGE_INSERT_AT = 2
@@ -54,6 +59,15 @@ export const VoiceCharacterPicker = memo(function VoiceCharacterPicker({
   onChange,
   className,
 }: VoiceCharacterPickerProps) {
+  // Curated view of the bundled catalog: filtered to ids this deployment
+  // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
+  // registration re-renders. Identity-equal to the base on mainline.
+  const VOICE_AGES = useCuratedEntries("voice-character", BASE_VOICE_AGES)
+  const VOICE_GENDERS = useCuratedEntries("voice-character", BASE_VOICE_GENDERS)
+  const VOICE_LANGUAGES = useCuratedEntries("voice-character", BASE_VOICE_LANGUAGES)
+  const VOICE_ACCENTS = useCuratedEntries("voice-character", BASE_VOICE_ACCENTS)
+  const VOICE_TIMBRES = useCuratedEntries("voice-character", BASE_VOICE_TIMBRES)
+  const SINGLE_SECTIONS = useMemo(() => buildSingleSections(VOICE_ACCENTS, VOICE_AGES, VOICE_GENDERS, VOICE_TIMBRES), [VOICE_ACCENTS, VOICE_AGES, VOICE_GENDERS, VOICE_TIMBRES])
   const [query, setQuery] = useState("")
   const [languageEnabled, setLanguageEnabled] = useState(false)
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("voice-character")

@@ -87,6 +87,7 @@ import { INSTRUMENTS, PRODUCTION_STYLES, VOCAL_PRESENCE, SINGING_STYLES } from "
 import { VOICE_AGES, VOICE_GENDERS, VOICE_LANGUAGES, VOICE_ACCENTS, VOICE_TIMBRES } from "./voice-character.js"
 import { VOICE_PACES, VOICE_EMOTIONS, VOICE_ARCHETYPES } from "./voice-delivery.js"
 import { composePickerCatalogs, getRegisteredCatalogPacks, catalogPacksVersion } from "./catalog-packs.js"
+import { setComposedCatalogResolver } from "./catalog-overlay.js"
 import { deriveTerm, resolveTerm } from "./term.js"
 
 export interface PickerOption {
@@ -840,6 +841,11 @@ export function getPickerCatalog(nodeTypeOrCatalogId: string): PickerCatalog | u
     all.find((c) => c.catalogId === nodeTypeOrCatalogId)
   )
 }
+
+// Install the composed view into the per-catalog getters (catalog-overlay.ts).
+// Done here, at the one module that already imports every catalog, so the
+// catalog modules themselves never import upward.
+setComposedCatalogResolver(getPickerCatalog)
 
 export function listPickerCatalogs(): readonly PickerCatalog[] {
   return getRegisteredPickerCatalogs()

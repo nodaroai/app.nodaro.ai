@@ -24,6 +24,7 @@
  */
 
 import { resolveTerm, type PickerHintMode } from "./term.js"
+import { overlayEntry } from "./catalog-overlay.js"
 
 export type MoodCategory = "positive" | "negative" | "neutral" | "intense"
 
@@ -122,7 +123,7 @@ const moodById = new Map<string, Mood>(MOODS.map((m) => [m.id, m]))
 
 export function getMood(id: string | undefined | null): Mood | undefined {
   if (!id) return undefined
-  return moodById.get(id)
+  return overlayEntry("mood", id, moodById.get(id))
 }
 
 export function getMoodLabel(id: string | undefined | null, fallback?: string): string {

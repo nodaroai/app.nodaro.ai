@@ -3,6 +3,12 @@ import "./globals.css"
 // any picker that calls useLocalizedCatalog; mounted at the top of the
 // entry file so the registry is populated before React mounts.
 import "@/lib/i18n-bootstrap"
+// The deployment's curated picker catalogs. Kicked off here, NOT awaited: first
+// paint must not wait on the network (a deployment that curates nothing pays a
+// ~60-byte cached GET and never blocks; one that does re-renders its pickers
+// through subscribeCatalogPacks the moment the registration lands). Safety
+// never depended on this — the server refuses foreign ids on every run lane.
+import { bootstrapCatalogs } from "@/lib/catalog-bootstrap"
 
 // Auto-reload on stale chunks after deployment.
 // Vite fires this when any preloaded JS/CSS dep returns 404.
@@ -53,6 +59,8 @@ const ReactQueryDevtools = lazy(() =>
     default: m.ReactQueryDevtools,
   }))
 )
+
+void bootstrapCatalogs()
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

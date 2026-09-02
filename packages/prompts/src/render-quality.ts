@@ -24,6 +24,7 @@
  */
 
 import { resolveTerm } from "./term.js"
+import { overlayEntry } from "./catalog-overlay.js"
 
 export interface RenderQuality {
   readonly id: string
@@ -85,7 +86,7 @@ const renderQualityById = new Map<string, RenderQuality>(
 
 export function getRenderQuality(id: string | undefined | null): RenderQuality | undefined {
   if (!id) return undefined
-  return renderQualityById.get(id)
+  return overlayEntry("render-quality", id, renderQualityById.get(id))
 }
 
 export function getRenderQualityLabel(id: string | undefined | null, fallback?: string): string {
