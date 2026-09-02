@@ -105,6 +105,13 @@ const CLASSIFICATION: Record<string, { authenticated: string[]; serviceRole: str
     authenticated: [],
     serviceRole: [],
   },
+  // P15: reporting over usage_logs (346: browser-unreadable) and the variance
+  // ledger rows. Read-only, service-role only — the plugin route authorizes
+  // (org admin+ / workspace role) and relays; nothing here is an RLS helper.
+  "369_orgs_usage_reporting.sql": {
+    authenticated: [],
+    serviceRole: ["org_usage_report", "org_usage_rows", "org_usage_variance", "org_usage_window"],
+  },
 }
 
 const orgMigrations = readdirSync(MIGRATIONS_DIR)

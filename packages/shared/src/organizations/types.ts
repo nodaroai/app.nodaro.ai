@@ -57,6 +57,16 @@ export const SUBMISSION_STATUSES = ["submitted", "in_review", "returned", "appro
 export type SubmissionStatus = (typeof SUBMISSION_STATUSES)[number]
 
 /**
+ * How a usage report is bucketed (P15). `workspace` is org-scope only; `none`
+ * = flat rows. A runtime list, like `ORG_ROLES`, so the plugin route's Zod is
+ * `z.enum(USAGE_GROUP_BYS)` and the migration guard asserts the SQL
+ * `NOT IN (...)` list equals this minus `none` — one vocabulary, never three
+ * hand-copies that drift.
+ */
+export const USAGE_GROUP_BYS = ["workspace", "member", "model", "day", "none"] as const
+export type UsageGroupBy = (typeof USAGE_GROUP_BYS)[number]
+
+/**
  * Error codes the organization endpoints add to the standard envelope
  * (`{ error: { code, message } }`). Clients dispatch on the code, never on
  * the message text.
@@ -80,6 +90,8 @@ export const ORG_ERROR_CODES = [
   "domain_not_allowed",
   "already_started",
   "collab_unavailable",
+  // P15: a CSV usage export whose write-ahead audit row could not be written (503).
+  "audit_unavailable",
   // Organization, workspace and membership endpoints.
   "terms_required",
   "not_org_member",

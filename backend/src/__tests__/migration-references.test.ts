@@ -119,7 +119,8 @@ function references(sql: string): { tableCols: Set<string>; tables: Set<string> 
     // Keywords, catalog relations, set-returning functions — and the three
     // role names that follow REVOKE ... FROM / GRANT ... TO, which are not
     // tables either.
-    if (/^(of|on|set|only|select|insert|delete|conflict|update|table|function|trigger|policy|index|constraint|schema|type|view|extension|cascade|nothing|do|each|row|statement|true|false|null|anon|authenticated|service_role|public|pg_policies|pg_class|pg_constraint|pg_trigger|pg_proc|pg_namespace|jsonb_array_elements|unnest|generate_series)$/.test(t)) continue
+    // `org_usage_window` (369): a set-returning reporting helper named after FROM.
+    if (/^(of|on|set|only|select|insert|delete|conflict|update|table|function|trigger|policy|index|constraint|schema|type|view|extension|cascade|nothing|do|each|row|statement|true|false|null|anon|authenticated|service_role|public|pg_policies|pg_class|pg_constraint|pg_trigger|pg_proc|pg_namespace|jsonb_array_elements|unnest|generate_series|org_usage_window)$/.test(t)) continue
     if (/^v_/.test(t)) continue
     tables.add(t)
   }

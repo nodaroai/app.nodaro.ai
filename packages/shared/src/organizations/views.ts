@@ -4,6 +4,7 @@ import type {
   OrgRole,
   OrgSettings,
   OrgStatus,
+  UsageGroupBy,
   WorkspaceRole,
   WorkspaceSettings,
 } from "./types.js"
@@ -217,4 +218,91 @@ export interface OrgAuditEntry {
 export interface OrgPage<T> {
   data: T[]
   nextCursor: string | null
+}
+
+/**
+ * Usage reporting (P15). What `GET /v1/orgs/:id/usage` and
+ * `GET /v1/workspaces/:id/usage` return. No cost/USD field appears anywhere —
+ * a report shows CREDITS a class or team spent, never the platform's own rates
+ * (pricing-leak class, guarded by a source test).
+ */
+
+/** One bucket of a usage report. Exactly one of workspace/member/model/day is set. */
+export interface UsageReportRow {
+  key: string
+  workspace: { id: string; name: string | null; slug: string | null; archived: boolean } | null
+  member: { userId: string; displayName: string | null; email: string | null } | null
+  model: string | null
+  /** `YYYY-MM-DD` in the report's `tz`. */
+  day: string | null
+  runCount: number
+  appRunCount: number
+  /** Settled where known, the held reservation otherwise. = settledCredits + inFlightCredits. */
+  credits: number
+  settledCredits: number
+  inFlightCredits: number
+  inFlightRuns: number
+}
+
+/** The platform-absorbed overrun for one workspace (never attributed to a member). */
+export interface UsageVarianceRow {
+  workspace: { id: string; name: string | null; slug: string | null } | null
+  credits: number
+  rowCount: number
+}
+
+export interface UsageReportTotals {
+  runCount: number
+  credits: number
+  settledCredits: number
+  inFlightCredits: number
+  /** Sum of org_usage_variance rows in the window — paid by the platform, not the budget. */
+  platformAbsorbedCredits: number
+  /** settledCredits − platformAbsorbedCredits: what actually left the workspace budget(s). */
+  chargedToBudget: number
+}
+
+export interface UsageReport {
+  scope: "org" | "workspace"
+  scopeId: string
+  from: string
+  to: string
+  tz: string
+  groupBy: Exclude<UsageGroupBy, "none">
+  /** Present when a member's self-view or an admin's `?userId=` narrowed the report. */
+  userId: string | null
+  /** Present when an org report was narrowed to one workspace. */
+  workspaceId: string | null
+  rows: UsageReportRow[]
+  variance: UsageVarianceRow[]
+  totals: UsageReportTotals
+  /** True when more than 5000 buckets existed and the tail was dropped — narrow the window. */
+  truncated: boolean
+}
+
+/** One usage_logs row as an organization sees it. No cost fields, ever. */
+export interface UsageLogEntry {
+  id: string
+  createdAt: string
+  workspace: { id: string; name: string | null; slug: string | null } | null
+  member: { userId: string; displayName: string | null; email: string | null } | null
+  jobId: string | null
+  model: string
+  status: "reserved" | "committed"
+  creditsReserved: number
+  creditsSettled: number | null
+  credits: number
+  isAppRun: boolean
+}
+
+/** Query parameters shared by both usage routes (dates inclusive, IANA tz). */
+export interface UsageQuery {
+  from?: string
+  to?: string
+  tz?: string
+  groupBy?: UsageGroupBy
+  workspaceId?: string
+  userId?: string
+  cursor?: string
+  limit?: number
 }
