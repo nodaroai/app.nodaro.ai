@@ -53,13 +53,15 @@ type AccessCapableOrgs = {
  *
  * `hasOrganizations()` and not merely "is a capable plugin loaded", because
  * the two are not the same thing and the difference is visible in production.
- * The plugin gates its ROUTES on the feature flag and builds its SERVICE
- * object unconditionally, so a host running with the flag off still has every
- * member above available to call. Delegating there would change what this
- * product does today: the organization rule answers `own` to a platform admin
- * for every workflow in the database, where these routes answer 404 — and it
- * would pay three reads (the admin check, the memberships, the grant) on the
- * hottest path in the product to reach tables with no rows in them.
+ * The plugin gates BOTH its routes and its service object on the feature flag
+ * (since P14 sub-stage 10 its `services()` returns `{}` when the host keeps
+ * organizations off), so this gate and that one agree — two independent gates
+ * on the same seam, on purpose, so neither side's refactor can silently open
+ * it. Delegating with the flag off would change what this product does today:
+ * the organization rule answers `own` to a platform admin for every workflow
+ * in the database, where these routes answer 404 — and it would pay three
+ * reads (the admin check, the memberships, the grant) on the hottest path in
+ * the product to reach tables with no rows in them.
  *
  * Gated HERE rather than in each route, because a per-route gate is a thing to
  * remember. Same shape as `orgs-context.ts` and `routes/me.ts`, which is where

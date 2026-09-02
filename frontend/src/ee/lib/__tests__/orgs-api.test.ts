@@ -12,10 +12,13 @@ import {
   actOnJoinCode,
   createInvitations,
   createOrganization,
+  fetchUsageCsv,
   getJoinCode,
+  getOrgUsage,
   joinByCode,
   listInvitations,
   listOrgMembers,
+  listOrgUsageRows,
   listOrgWorkspaces,
   listOrganizations,
   previewInvitation,
@@ -226,5 +229,59 @@ describe("paths and verbs", () => {
     const out = await createInvitations("o-1", { emails: ["a@t.test", "b@t.test"], workspaceId: "w-1" })
     expect(out[1]).toEqual({ email: "b@t.test", status: "link_only", link: "https://app.test/join/tok" })
     expect(calls[0].body).toEqual({ emails: ["a@t.test", "b@t.test"], workspaceId: "w-1" })
+  })
+})
+
+describe("usage (P15)", () => {
+  function respondsCsv(text: string, filename: string) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        calls.push({ url, method: init?.method ?? "GET", headers: (init?.headers as Record<string, string>) ?? {} })
+        return {
+          ok: true,
+          status: 200,
+          blob: async () => new Blob([text], { type: "text/csv" }),
+          headers: { get: (k: string) => (k.toLowerCase() === "content-disposition" ? `attachment; filename="${filename}"` : null) },
+          json: async () => ({}),
+        } as unknown as Response
+      }),
+    )
+  }
+
+  it("getOrgUsage builds the query and drops empty params", async () => {
+    responds({ data: { rows: [] } })
+    await getOrgUsage("o-1", { from: "2026-09-01", to: "2026-09-30", tz: "Asia/Jerusalem", groupBy: "day" })
+    const url = calls[0].url
+    expect(url.startsWith("/v1/orgs/o-1/usage?")).toBe(true)
+    expect(url).toContain("from=2026-09-01")
+    expect(url).toContain("to=2026-09-30")
+    expect(url).toContain("tz=Asia%2FJerusalem")
+    expect(url).toContain("groupBy=day")
+    expect(url).not.toContain("workspaceId=")
+    expect(url).not.toContain("userId=")
+  })
+
+  it("listOrgUsageRows forces groupBy=none", async () => {
+    responds({ data: [], nextCursor: null })
+    await listOrgUsageRows("o-1", { limit: 25 })
+    expect(calls[0].url).toContain("groupBy=none")
+    expect(calls[0].url).toContain("limit=25")
+  })
+
+  it("fetchUsageCsv sends auth headers, returns the blob, and parses the filename", async () => {
+    respondsCsv("group,runs,credits\r\n", "usage-org-acme-2026-09-01_2026-09-30.csv")
+    const { blob, filename } = await fetchUsageCsv("org", "o-1", { groupBy: "day" })
+    expect(calls[0].headers.Authorization).toBe("Bearer jwt")
+    expect(calls[0].url).toContain("format=csv")
+    expect(filename).toBe("usage-org-acme-2026-09-01_2026-09-30.csv")
+    expect(blob).toBeInstanceOf(Blob)
+    expect(blob.size).toBeGreaterThan(0)
+  })
+
+  it("fetchUsageCsv throws OrgApiError with the code on a 403 envelope", async () => {
+    responds({ error: { code: "insufficient_role", message: "Members see their own usage only" } }, false, 403)
+    await expect(fetchUsageCsv("workspace", "w-1")).rejects.toMatchObject({ code: "insufficient_role", status: 403 })
+    await expect(fetchUsageCsv("workspace", "w-1")).rejects.toBeInstanceOf(OrgApiError)
   })
 })

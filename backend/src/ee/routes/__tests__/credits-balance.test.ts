@@ -194,8 +194,110 @@ describe("GET /v1/credits/transactions", () => {
     const res = await authedGet("/v1/credits/transactions?limit=20")
     expect(res.statusCode).toBe(200)
     const body = res.json()
-    expect(body.data).toEqual(rows)
+    // D3: every row gains top-level `payer` / `workspaceId`. These mocked rows
+    // carry no workspace_id column, so they are personal.
+    expect(body.data).toEqual(rows.map((r) => ({ ...r, payer: "user", workspaceId: null })))
     expect(body.nextCursor).toBeNull()
+  })
+
+  it("D3: a workspace-paid row reports payer=workspace and echoes workspaceId", async () => {
+    const rows = [
+      {
+        id: "log-ws",
+        created_at: "2026-04-29T10:00:00Z",
+        credits_used: 12,
+        action: "generate-image",
+        provider: "kie",
+        metadata: {},
+        workspace_id: "b0000000-0000-4000-8000-000000000931",
+      },
+    ]
+    // Spy on `.select(...)` so the mutant "drop workspace_id from the select"
+    // (which stays green when the mock bakes the column into `rows`) is caught.
+    const selectSpy = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        order: vi.fn().mockReturnValue({
+          limit: vi.fn().mockResolvedValue({ data: rows, error: null }),
+        }),
+      }),
+    })
+    const mockFrom = vi.mocked(supabase.from)
+    mockFrom.mockReturnValue({ select: selectSpy } as never)
+
+    const res = await authedGet("/v1/credits/transactions?limit=20")
+    expect(res.statusCode).toBe(200)
+    // The route MUST select workspace_id — derivation is from the COLUMN.
+    expect(selectSpy).toHaveBeenCalledWith(expect.stringContaining("workspace_id"))
+    const item = res.json().data[0]
+    expect(item.payer).toBe("workspace")
+    expect(item.workspaceId).toBe("b0000000-0000-4000-8000-000000000931")
+    // The snake_case column is dropped; only the camelCase field is public.
+    expect(item).not.toHaveProperty("workspace_id")
+  })
+
+  it("D3: payer comes from the COLUMN, not metadata.payer (allowlist strips the latter)", async () => {
+    const rows = [
+      {
+        id: "log-meta",
+        created_at: "2026-04-29T10:00:00Z",
+        credits_used: 4,
+        action: "generate-image",
+        provider: "kie",
+        // A workspace payer stamped ONLY in metadata, with a NULL column.
+        metadata: { payer: { kind: "workspace", workspaceId: "b0000000-0000-4000-8000-000000000931" } },
+        workspace_id: null,
+      },
+    ]
+    const mockFrom = vi.mocked(supabase.from)
+    mockFrom.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          order: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue({ data: rows, error: null }),
+          }),
+        }),
+      }),
+    } as never)
+
+    const res = await authedGet("/v1/credits/transactions?limit=20")
+    expect(res.statusCode).toBe(200)
+    const item = res.json().data[0]
+    // Column is NULL, so payer is "user" regardless of metadata; and the
+    // economics allowlist strips metadata.payer.
+    expect(item.payer).toBe("user")
+    expect(item.workspaceId).toBeNull()
+    expect(item.metadata).not.toHaveProperty("payer")
+  })
+
+  it("D3: a personal row reports payer=user and workspaceId=null", async () => {
+    const rows = [
+      {
+        id: "log-personal",
+        created_at: "2026-04-29T10:00:00Z",
+        credits_used: 3,
+        action: "generate-image",
+        provider: "kie",
+        metadata: {},
+        workspace_id: null,
+      },
+    ]
+    const mockFrom = vi.mocked(supabase.from)
+    mockFrom.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          order: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue({ data: rows, error: null }),
+          }),
+        }),
+      }),
+    } as never)
+
+    const res = await authedGet("/v1/credits/transactions?limit=20")
+    expect(res.statusCode).toBe(200)
+    const item = res.json().data[0]
+    expect(item.payer).toBe("user")
+    expect(item.workspaceId).toBeNull()
+    expect(item).not.toHaveProperty("workspace_id")
   })
 
   it("returns nextCursor when results fill the limit", async () => {
