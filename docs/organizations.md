@@ -362,28 +362,40 @@ for longer is a support case.
 
 A metered run that cost more than the workspace had left is charged up to the
 headroom; the rest is **absorbed by the platform** and listed on its own line,
-never against a member. The report totals it as `platformAbsorbedCredits`, and
-`chargedToBudget = settledCredits − platformAbsorbedCredits` is what actually
-left the workspace budgets.
+never against a member. The report totals metered overruns as
+`platformAbsorbedCredits`, so `chargedToBudget = settledCredits −
+platformAbsorbedCredits` is the metered settlement that reached the budget. An
+approved-app markup the budget could not cover is absorbed too, but it has no
+run in this report; it is totalled separately as `appMarkupAbsorbedCredits` and
+is not folded into `chargedToBudget` — so `chargedToBudget` is not, on its own,
+`workspace_budgets.spent`. Totals and the platform-absorbed lines cover the
+WHOLE window; only the grouped rows can be truncated.
 
 A plain workspace member sees their OWN usage: the workspace report is narrowed
 to them, and asking to group by member is refused. A workspace admin (explicit,
 or an organization admin acting in the workspace) sees everyone and may filter
 to one member. Organization-level usage is owner and organization admins only.
 
+A report with more than 5000 groups comes back with `truncated: true` — narrow
+the window. Only the grouped rows are cut; the totals and the platform-absorbed
+lines still cover the whole window.
+
 **CSV.** UTF-8, RFC 4180, CRLF line endings, no byte-order mark. A cell that
 begins with `=`, `+`, `-` or `@` is quoted with a leading apostrophe so a
 spreadsheet cannot execute it. Exports are limited to ten per minute per user,
 and each export is recorded in the audit log before a single byte is streamed —
 if that record cannot be written the export is refused rather than left
-untracked. A report with more than 5000 groups comes back with `truncated:
-true`; narrow the window.
+untracked.
 
 **A known limit.** A member who deletes their account takes their run history
 with them; reports show a gap for their past activity. Their workflows and
 projects stay with the class, and the platform-absorbed line is unaffected.
 Resetting a member's counted spend does not change the report — it zeroes the
 cap counter, not the history.
+
+(Rollout-gated: usage reports may lag this document — an instance that has not
+yet received them answers `404` for both routes, and `503 billing_unavailable`
+once the routes exist but the reporting functions are not yet applied.)
 
 ## Errors
 
@@ -403,13 +415,13 @@ on `code`.
 | 403 | `workspace_archived` | A write into an archived workspace. |
 | 403 | `not_a_member` | The `X-Nodaro-Workspace` header names a workspace you cannot select. |
 | 404 | `not_found` | No such organization, workspace or member — **or one you are not a member of**. An id route never reveals whether something you cannot see exists. |
-| 503 | `billing_unavailable` | Usage reporting is not yet available on this instance (its reporting functions have not been applied). |
-| 503 | `audit_unavailable` | A CSV usage export could not be recorded in the audit log, so it was refused; try again. |
 | 409 | `name_taken` | The slug you supplied is in use. |
 | 409 | `already_a_member` | The person is already in the workspace. |
 | 409 | `owner_cannot_leave` | Transfer ownership before leaving. |
 | 409 | `has_active_workspaces` | Archive every workspace before deleting the organization. |
 | 429 | `rate_limit_exceeded` | Too many organizations created recently, too many join attempts, or too many CSV usage exports (ten per minute per user). |
+| 503 | `billing_unavailable` | Usage reporting is not yet available on this instance (its reporting functions have not been applied). |
+| 503 | `audit_unavailable` | A CSV usage export could not be recorded in the audit log, so it was refused; try again. |
 | 400 | `join_code_invalid` | No such code, the code is disabled, or its workspace is archived — one answer for all three, so a code cannot be used to learn what exists. |
 | 400 | `invitation_expired` | The invitation is past its 14 days. |
 | 400 | `invitation_revoked` | The invitation was revoked. |

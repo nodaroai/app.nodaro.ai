@@ -4053,10 +4053,13 @@ exhaustively over it would break on the first new action.
 `usage` reports three credit figures per row. `credits` is what a run has cost
 so far — settled where the run finished, the held reservation otherwise — and
 `settledCredits` and `inFlightCredits` split it. A metered run that overran the
-workspace's headroom has the excess absorbed by the platform; the report totals
-it as `platformAbsorbedCredits`, counted against nobody's budget, and reports
-`chargedToBudget = settledCredits − platformAbsorbedCredits` — the amount that
-actually left the budgets.
+workspace's headroom has the excess absorbed by the platform; the totals report
+it as `platformAbsorbedCredits`, and `chargedToBudget = settledCredits −
+platformAbsorbedCredits` is the metered settlement that reached the budget. An
+approved-app markup the budget could not cover is absorbed separately as
+`appMarkupAbsorbedCredits`; it has no run in the report, so it is not in
+`chargedToBudget` (which is therefore not, by itself, the workspace's spent
+figure). Totals cover the whole window even when a grouping is `truncated`.
 
 ---
 
@@ -4107,7 +4110,8 @@ not two.
 - `InvitationView` / `InvitationDelivery` / `InvitationPreview` / `InvitationState` — invitations; `InvitationDelivery.link` is the one to surface
 - `JoinCodeView`, `OrgAuditEntry`, `OrgPage<T>`
 - `OrgKind` / `OrgRole` / `WorkspaceRole` / `MemberStatus` / `OrgStatus` / `OrgSettings` / `WorkspaceSettings`
-- `OrgErrorCode` — the codes to dispatch on; `WORKSPACE_HEADER` — the header name
+- `UsageReport` / `UsageReportRow` / `UsageVarianceRow` / `UsageReportTotals` — the grouped report; `UsageLogEntry` — a row of `usageRows`; `UsageQuery` / `UsageGroupBy` / `USAGE_GROUP_BYS` — the query and its `groupBy` values
+- `OrgErrorCode` — the codes to dispatch on; `WORKSPACE_HEADER` — the header name; `USAGE_GROUP_BYS` — the report groupings
 
 ### Templates & tutorials
 
