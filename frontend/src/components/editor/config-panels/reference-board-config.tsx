@@ -1,5 +1,7 @@
 "use client"
 
+import { useLocalizeModelDescription } from "@/lib/i18n/labels"
+import { useT } from "@/lib/i18n"
 import { useState, useRef, useEffect, memo } from "react"
 import { X, Upload } from "lucide-react"
 import { Label } from "@/components/ui/label"
@@ -41,6 +43,7 @@ function SourceSegmented({
   value: "entity" | "image"
   onChange: (v: "entity" | "image") => void
 }) {
+  const t = useT()
   return (
     <div className="flex rounded-md border border-border overflow-hidden w-full">
       {(["entity", "image"] as const).map((v) => (
@@ -56,7 +59,7 @@ function SourceSegmented({
           ].join(" ")}
           aria-pressed={value === v}
         >
-          {v === "entity" ? "Entity" : "Image"}
+          {v === "entity" ? t("cfgext.refBoardSourceEntity") : t("common.image")}
         </button>
       ))}
     </div>
@@ -83,6 +86,7 @@ function BoardTemplateSelect({
   value: string
   onChange: (id: string) => void
 }) {
+  const t = useT()
   // Group by entityKind
   const groups: Record<string, TemplateMeta[]> = {}
   for (const t of ALL_TEMPLATES) {
@@ -91,15 +95,15 @@ function BoardTemplateSelect({
     groups[k]!.push(t)
   }
   const kindLabels: Record<string, string> = {
-    character: "Character",
-    location: "Location",
-    object: "Object",
+    character: t("assetlib.typeCharacter"),
+    location: t("assetlib.typeLocation"),
+    object: t("assetlib.typeObject"),
   }
 
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger aria-label="Board Template">
-        <SelectValue placeholder="Select a board template" />
+      <SelectTrigger aria-label={t("cfgext.refBoardTemplate")}>
+        <SelectValue placeholder={t("cfgext.refBoardSelectTemplate")} />
       </SelectTrigger>
       <SelectContent>
         {Object.entries(groups).map(([kind, templates]) => (
@@ -136,6 +140,7 @@ function ReferenceBoardConfigImpl({
   variableDisplayMode,
   nodeId,
 }: ConfigProps<ReferenceBoardData> & { nodeId?: string }) {
+  const t = useT()
   // Prefetch credits for the two supported providers
   useEffect(() => {
     prefetchModelCredits([...REFERENCE_BOARD_PROVIDERS])
@@ -205,6 +210,7 @@ function ReferenceBoardConfigImpl({
   }
 
   // ── Reference image upload via MediaEditor ──────────────────────────────
+  const localizeDesc = useLocalizeModelDescription()
   const [uploadingRefImage, setUploadingRefImage] = useState(false)
   const refImageInputRef = useRef<HTMLInputElement>(null)
   const mediaEditor = useMediaEditor({
@@ -233,22 +239,22 @@ function ReferenceBoardConfigImpl({
     <div className="flex flex-col gap-3">
       {/* ── Source mode (entity vs. image) ──────────────────────────── */}
       <div>
-        <Label className="text-xs mb-1.5 block">Source</Label>
+        <Label className="text-xs mb-1.5 block">{t("inputcfg.source")}</Label>
         <SourceSegmented
           value={data.sourceMode ?? "image"}
           onChange={(v) => onUpdate({ sourceMode: v })}
         />
         <p className="text-[10px] text-muted-foreground mt-0.5">
           {data.sourceMode === "entity"
-            ? "Connect an entity node (Character / Location / Object) for consistent context"
-            : "Connect or upload reference images directly"}
+            ? t("cfgext.refBoardSourceEntityHint")
+            : t("cfgext.refBoardSourceImageHint")}
         </p>
       </div>
 
       {/* ── Board template ──────────────────────────────────────────── */}
       <MappableField
         field="boardTemplate"
-        label="Board Template"
+        label={t("cfgext.refBoardTemplate")}
         sources={sources}
         fieldMappings={fieldMappings}
         onMapField={onMapField}
@@ -258,7 +264,7 @@ function ReferenceBoardConfigImpl({
           onChange={handleTemplateChange}
         />
         <p className="text-[10px] text-muted-foreground mt-0.5">
-          Selecting a template seeds the prompt below — you can edit it freely after
+          {t("cfgext.refBoardTemplateHint")}
         </p>
       </MappableField>
 
@@ -267,7 +273,7 @@ function ReferenceBoardConfigImpl({
       {/* ── Provider ────────────────────────────────────────────────── */}
       <MappableField
         field="provider"
-        label="Provider"
+        label={t("cfgshared.provider")}
         sources={sources}
         fieldMappings={fieldMappings}
         onMapField={onMapField}
@@ -279,13 +285,13 @@ function ReferenceBoardConfigImpl({
             onUpdate({ provider: v as ReferenceBoardData["provider"] })
           }
         >
-          <SelectTrigger aria-label="Provider">
+          <SelectTrigger aria-label={t("cfgshared.provider")}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             {REFERENCE_BOARD_PROVIDER_OPTIONS.map((opt) => (
               <SelectItem key={opt.value} value={opt.value}>
-                {opt.label} — {opt.desc}
+                {opt.label} — {localizeDesc(opt.desc)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -295,7 +301,7 @@ function ReferenceBoardConfigImpl({
       {/* ── Prompt ──────────────────────────────────────────────────── */}
       <MappableField
         field="prompt"
-        label="Prompt"
+        label={t("node.prompt")}
         sources={sources}
         fieldMappings={fieldMappings}
         onMapField={onMapField}
@@ -318,7 +324,7 @@ function ReferenceBoardConfigImpl({
           rows={3}
           value={data.prompt}
           onChange={(v) => onUpdate({ prompt: v })}
-          placeholder="Describe the reference board… or select a template above to seed this field"
+          placeholder={t("cfgext.refBoardPromptPlaceholder")}
           nodeRefs={nodeRefs}
         />
       </MappableField>
@@ -326,7 +332,7 @@ function ReferenceBoardConfigImpl({
       {/* ── Negative Prompt ─────────────────────────────────────────── */}
       <MappableField
         field="negativePrompt"
-        label="Negative Prompt"
+        label={t("field.negativePrompt")}
         sources={sources}
         fieldMappings={fieldMappings}
         onMapField={onMapField}
@@ -335,11 +341,11 @@ function ReferenceBoardConfigImpl({
           rows={2}
           value={data.negativePrompt ?? ""}
           onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
-          placeholder="Things to avoid…"
+          placeholder={t("cfgext.refBoardNegativePlaceholder")}
           className="resize-none text-sm"
         />
         <p className="text-[10px] text-muted-foreground mt-0.5">
-          Appended to prompt as exclusion guidance
+          {t("imgcfg.exclusionGuidance")}
         </p>
       </MappableField>
 
@@ -372,13 +378,13 @@ function ReferenceBoardConfigImpl({
       <div className="pt-1">
         <Separator className="mb-3" />
         <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-          Model Settings
+          {t("imgcfg.modelSettings")}
         </label>
         <div className="flex flex-col gap-3 mt-2">
           {/* Aspect Ratio */}
           <MappableField
             field="aspectRatio"
-            label="Aspect Ratio"
+            label={t("field.aspectRatio")}
             sources={sources}
             fieldMappings={fieldMappings}
             onMapField={onMapField}
@@ -394,7 +400,7 @@ function ReferenceBoardConfigImpl({
           {resolutionOptions && (
             <MappableField
               field="resolution"
-              label="Resolution"
+              label={t("field.resolution")}
               sources={sources}
               fieldMappings={fieldMappings}
               onMapField={onMapField}
@@ -403,7 +409,7 @@ function ReferenceBoardConfigImpl({
                 value={data.resolution || resolutionOptions[0]?.value || "1K"}
                 onValueChange={(v) => onUpdate({ resolution: v })}
               >
-                <SelectTrigger aria-label="Resolution">
+                <SelectTrigger aria-label={t("field.resolution")}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -421,7 +427,7 @@ function ReferenceBoardConfigImpl({
           {qualityOptions && (
             <MappableField
               field="quality"
-              label="Quality"
+              label={t("field.quality")}
               sources={sources}
               fieldMappings={fieldMappings}
               onMapField={onMapField}
@@ -430,7 +436,7 @@ function ReferenceBoardConfigImpl({
                 value={data.quality || qualityOptions[0]?.value}
                 onValueChange={(v) => onUpdate({ quality: v })}
               >
-                <SelectTrigger aria-label="Quality">
+                <SelectTrigger aria-label={t("field.quality")}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -446,7 +452,7 @@ function ReferenceBoardConfigImpl({
 
           {/* Seed */}
           <div>
-            <Label className="text-xs">Seed</Label>
+            <Label className="text-xs">{t("field.seed")}</Label>
             <Input
               type="number"
               min={0}
@@ -456,10 +462,10 @@ function ReferenceBoardConfigImpl({
                 const val = e.target.value
                 onUpdate({ seed: val === "" ? undefined : parseInt(val, 10) })
               }}
-              placeholder="Random (leave empty)"
+              placeholder={t("imgcfg.seedRandom")}
             />
             <p className="text-[10px] text-muted-foreground mt-0.5">
-              Fixed seed for reproducible board layouts
+              {t("cfgext.refBoardSeedHint")}
             </p>
           </div>
         </div>

@@ -69,6 +69,13 @@ vi.mock("./entity-shared", () => ({
 }))
 
 import { ObjectConfig } from "../entity-configs"
+import { translate } from "@/lib/i18n"
+
+// Copy lives in the i18n dict now — resolve the SAME key the panel renders so a
+// key rename fails here instead of silently drifting the assertion.
+const STUDIO_BUTTON = translate("en", "cfgext.entOpenObjectStudio")
+const UNNAMED_OBJECT = translate("en", "cfgext.entUnnamedObject")
+const STYLE_LOCK = translate("en", "cfgext.entStyleLock")
 
 function renderObjectConfig(overrides: Record<string, unknown> = {}) {
   const defaultProps = {
@@ -114,20 +121,20 @@ describe("ObjectConfig (Phase E3/2 — Studio stub)", () => {
 
   it("renders the Open Object/Props Studio button", () => {
     renderObjectConfig()
-    const btn = screen.getByRole("button", { name: "Open Object/Props Studio" })
+    const btn = screen.getByRole("button", { name: STUDIO_BUTTON })
     expect(btn).toBeInTheDocument()
   })
 
   it("clicking the Studio button calls setObjectStudioNodeId with the nodeId", () => {
     renderObjectConfig()
-    const btn = screen.getByRole("button", { name: "Open Object/Props Studio" })
+    const btn = screen.getByRole("button", { name: STUDIO_BUTTON })
     fireEvent.click(btn)
     expect(setObjectStudioNodeIdMock).toHaveBeenCalledWith("obj-node-1")
   })
 
   it("disables the Studio button when nodeId is undefined (no-op)", () => {
     renderObjectConfig({ nodeId: undefined })
-    const btn = screen.getByRole("button", { name: "Open Object/Props Studio" })
+    const btn = screen.getByRole("button", { name: STUDIO_BUTTON })
     expect(btn).toBeDisabled()
     fireEvent.click(btn)
     expect(setObjectStudioNodeIdMock).not.toHaveBeenCalled()
@@ -140,18 +147,18 @@ describe("ObjectConfig (Phase E3/2 — Studio stub)", () => {
 
   it("shows '(unnamed object)' when no objectName", () => {
     renderObjectConfig({ data: { objectName: "", style: "realistic", category: "weapon", description: "", provider: "nano-banana", sourceImageUrl: "", executionStatus: "idle", activeResultIndex: 0, generatedResults: [], fieldMappings: {}, angles: [], materials: [], variations: [], anglesStatus: "idle", materialsStatus: "idle", variationsStatus: "idle", customVariations: [], motionClips: [], motionStatus: "idle", referencePhotos: [], canonicalDescription: "", styleLock: true } })
-    expect(screen.getByText("(unnamed object)")).toBeInTheDocument()
+    expect(screen.getByText(UNNAMED_OBJECT)).toBeInTheDocument()
   })
 
   it("renders the style lock checkbox + label", () => {
     renderObjectConfig()
-    expect(screen.getByLabelText("Style Lock")).toBeInTheDocument()
+    expect(screen.getByLabelText(STYLE_LOCK)).toBeInTheDocument()
   })
 
   it("calls onUpdate when toggling style lock", () => {
     const onUpdate = vi.fn()
     renderObjectConfig({ onUpdate })
-    const checkbox = screen.getByLabelText("Style Lock") as HTMLInputElement
+    const checkbox = screen.getByLabelText(STYLE_LOCK) as HTMLInputElement
     fireEvent.click(checkbox)
     expect(onUpdate).toHaveBeenCalledWith({ styleLock: false })
   })

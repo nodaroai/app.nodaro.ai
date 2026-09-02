@@ -115,7 +115,7 @@ export function NodePresetManageDialog({ nodeType, open, onOpenChange, activeId 
                     }
                   }}
                 />
-                <div className="space-y-1 px-2 pb-2 pl-6">
+                <div className="space-y-1 px-2 pb-2 ps-6">
                   {node.presets.length === 0 && (
                     <div className="px-2 py-1.5 text-xs text-muted-foreground">{t("preset.emptyMovePresets")}</div>
                   )}
@@ -211,7 +211,9 @@ function GroupRow({
         onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur() }}
         className="h-7 flex-1 font-medium"
       />
-      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{group.kind}</span>
+      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+        {group.kind === "folder" ? t("cfgext.npMgrKindFolder") : t("cfgext.npMgrKindSection")}
+      </span>
       <button type="button" aria-label={t("preset.deleteAria", { name: group.name })} onClick={onDelete} className="shrink-0 text-muted-foreground hover:text-destructive">
         <Trash2 className="h-4 w-4" />
       </button>

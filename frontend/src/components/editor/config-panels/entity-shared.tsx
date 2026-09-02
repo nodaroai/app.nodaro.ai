@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { Play, Loader2, Sparkles, Check, Maximize2 } from "lucide-react"
+import { useT } from "@/lib/i18n"
 import { Button } from "@/components/ui/button"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -19,6 +20,7 @@ export function CharacterAssetButton({
   readonly onClick: () => void
   readonly disabled?: boolean
 }) {
+  const t = useT()
   const isRunning = status === "running"
   return (
     <Button
@@ -33,13 +35,14 @@ export function CharacterAssetButton({
         {label}
       </span>
       {itemCount > 0 && (
-        <span className="text-muted-foreground">{itemCount} images</span>
+        <span className="text-muted-foreground">{t("cfgext.entShImageCount", { count: itemCount })}</span>
       )}
     </Button>
   )
 }
 
 export function CharacterAssetGrid({ items }: { readonly items: readonly { name: string; url: string }[] }) {
+  const t = useT()
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
 
   if (items.length === 0) return null
@@ -52,7 +55,7 @@ export function CharacterAssetGrid({ items }: { readonly items: readonly { name:
             type="button"
             className="flex flex-col items-center gap-0.5 cursor-pointer"
             onClick={() => setLightboxSrc(item.url)}
-            title={`${item.name} - click to enlarge`}
+            title={t("cfgext.entShClickToEnlarge", { name: item.name })}
           >
             <div className="w-full aspect-square rounded overflow-hidden bg-muted/30 hover:ring-2 hover:ring-primary/50 transition-shadow">
               <CachedImage src={item.url} alt={item.name} className="w-full h-full object-cover" thumbnail thumbnailWidth={160} />
@@ -81,6 +84,7 @@ export function ObjectAssetButton({
   readonly onClick: () => void
   readonly disabled: boolean
 }) {
+  const t = useT()
   const isRunning = status === "running"
   return (
     <Button
@@ -92,17 +96,17 @@ export function ObjectAssetButton({
     >
       {isRunning ? (
         <>
-          <Loader2 className="w-3 h-3 mr-1.5 animate-spin" />
-          Generating...
+          <Loader2 className="w-3 h-3 me-1.5 animate-spin" />
+          {t("cfgext.entGenerating")}
         </>
       ) : itemCount > 0 ? (
         <>
-          <Check className="w-3 h-3 mr-1.5 text-emerald-500" />
+          <Check className="w-3 h-3 me-1.5 text-emerald-500" />
           {label} ({itemCount})
         </>
       ) : (
         <>
-          <Play className="w-3 h-3 mr-1.5" />
+          <Play className="w-3 h-3 me-1.5" />
           {label}
         </>
       )}
@@ -129,7 +133,7 @@ export function ObjectAssetGrid({ items }: { readonly items: Array<{ name: strin
             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
               <Maximize2 className="w-4 h-4 text-white" />
             </div>
-            <span className="absolute bottom-0 left-0 right-0 text-[8px] bg-black/60 text-white text-center truncate px-0.5">
+            <span className="absolute bottom-0 inset-x-0 text-[8px] bg-black/60 text-white text-center truncate px-0.5">
               {item.name}
             </span>
           </button>
@@ -155,6 +159,7 @@ export function LocationAssetButton({
   readonly onClick: () => void
   readonly disabled: boolean
 }) {
+  const t = useT()
   const isRunning = status === "running"
   return (
     <Button
@@ -166,17 +171,17 @@ export function LocationAssetButton({
     >
       {isRunning ? (
         <>
-          <Loader2 className="w-3 h-3 mr-1.5 animate-spin" />
-          Generating...
+          <Loader2 className="w-3 h-3 me-1.5 animate-spin" />
+          {t("cfgext.entGenerating")}
         </>
       ) : itemCount > 0 ? (
         <>
-          <Check className="w-3 h-3 mr-1.5 text-cyan-500" />
+          <Check className="w-3 h-3 me-1.5 text-cyan-500" />
           {label} ({itemCount})
         </>
       ) : (
         <>
-          <Play className="w-3 h-3 mr-1.5" />
+          <Play className="w-3 h-3 me-1.5" />
           {label}
         </>
       )}
@@ -203,7 +208,7 @@ export function LocationAssetGrid({ items }: { readonly items: Array<{ name: str
             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
               <Maximize2 className="w-4 h-4 text-white" />
             </div>
-            <span className="absolute bottom-0 left-0 right-0 text-[8px] bg-black/60 text-white text-center truncate px-0.5">
+            <span className="absolute bottom-0 inset-x-0 text-[8px] bg-black/60 text-white text-center truncate px-0.5">
               {item.name}
             </span>
           </button>

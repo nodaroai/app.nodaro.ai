@@ -511,7 +511,7 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
                           {isFolder ? (
                             <button
                               type="button"
-                              className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left hover:bg-accent"
+                              className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-start hover:bg-accent"
                               onClick={() => toggleCollapsed(g.id)}
                             >
                               {isCollapsed ? <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-70" /> : <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" />}
@@ -557,7 +557,7 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
                           {isRoot ? null : isFolder ? (
                             <button
                               type="button"
-                              className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left hover:bg-accent"
+                              className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-start hover:bg-accent"
                               onClick={() => toggleCollapsed(folderKey)}
                             >
                               {isCollapsed ? <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-70" /> : <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" />}
@@ -788,7 +788,7 @@ function PresetRow({
         active && "bg-accent/60",
       )}
     >
-      <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={onSelect}>
+      <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-start" onClick={onSelect}>
         <Check className={cn("h-3.5 w-3.5 shrink-0", active ? "opacity-100 text-[#ff0073]" : "opacity-0")} />
         <span className="min-w-0">
           <span className="block truncate text-sm">{copy.name}</span>

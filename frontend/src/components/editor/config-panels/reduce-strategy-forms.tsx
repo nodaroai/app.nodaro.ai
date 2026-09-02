@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { LlmModelSelect } from "./llm-model-select"
+import { useT, tx } from "@/lib/i18n"
 
 /**
  * Per-strategy config form for the Choose Best node (type id `reduce`).
@@ -27,16 +28,27 @@ import { LlmModelSelect } from "./llm-model-select"
  * drift. Values are the registry's `inputKind` enum. The description matters:
  * with image candidates left on Texts the judge compares the URL strings,
  * not the pictures — a meaningless pick that looks like a real one.
+ *
+ * A FUNCTION, not a module constant: the copy is localized, and a constant
+ * would freeze whatever locale happened to be active at module load.
  */
-export const REDUCE_INPUT_KIND_OPTIONS = [
-  { value: "text", label: "Texts", description: "The AI reads each candidate as text" },
-  { value: "image-url", label: "Images", description: "The AI looks at each candidate picture" },
-] as const
+export function REDUCE_INPUT_KIND_OPTIONS(): readonly {
+  readonly value: ReduceInputKind
+  readonly label: string
+  readonly description: string
+}[] {
+  return [
+    { value: "text", label: tx("cfgext.reduceFormTexts"), description: tx("cfgext.reduceFormTextsDesc") },
+    { value: "image-url", label: tx("assetlib.tabImages"), description: tx("cfgext.reduceFormImagesDesc") },
+  ]
+}
 
-export type ReduceInputKind = (typeof REDUCE_INPUT_KIND_OPTIONS)[number]["value"]
+export type ReduceInputKind = "text" | "image-url"
 
-export const reduceInputKindLabel = (kind: string): string =>
-  REDUCE_INPUT_KIND_OPTIONS.find((o) => o.value === kind)?.label ?? REDUCE_INPUT_KIND_OPTIONS[0].label
+export const reduceInputKindLabel = (kind: string): string => {
+  const options = REDUCE_INPUT_KIND_OPTIONS()
+  return options.find((o) => o.value === kind)?.label ?? options[0].label
+}
 
 type Props = {
   readonly strategyId: string
@@ -45,6 +57,7 @@ type Props = {
 }
 
 export function ReduceStrategyForms({ strategyId, config, onChange }: Props) {
+  const t = useT()
   switch (strategyId) {
     case "pick-best-llm":
       return (
@@ -59,19 +72,19 @@ export function ReduceStrategyForms({ strategyId, config, onChange }: Props) {
             onChange={(llmModel) => onChange({ ...config, llmModel })}
           />
           <div className="flex flex-col gap-1.5">
-            <Label>Judge by</Label>
+            <Label>{t("cfgext.reduceFormJudgeBy")}</Label>
             <Textarea
               value={String(config.criteria ?? "")}
               onChange={(e) => onChange({ ...config, criteria: e.target.value })}
-              placeholder="e.g. 'The most eye-catching cover for a dark editorial Instagram feed — one clear focal point, readable as a thumbnail.'"
+              placeholder={t("cfgext.reduceFormCriteriaPlaceholder")}
               rows={3}
             />
             <p className="text-[10px] text-muted-foreground">
-              Describe what a winner looks like. The AI compares every candidate against this and picks one — its reasoning shows on the node and in the Candidates tab.
+              {t("cfgext.reduceFormCriteriaHint")}
             </p>
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label>The candidates are</Label>
+            <Label>{t("cfgext.reduceFormCandidatesAre")}</Label>
             <Select
               value={String(config.inputKind ?? "text")}
               onValueChange={(v) => onChange({ ...config, inputKind: v })}
@@ -80,7 +93,7 @@ export function ReduceStrategyForms({ strategyId, config, onChange }: Props) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {REDUCE_INPUT_KIND_OPTIONS.map((o) => (
+                {REDUCE_INPUT_KIND_OPTIONS().map((o) => (
                   <SelectItem key={o.value} value={o.value}>
                     <span className="flex flex-col gap-0.5">
                       <span>{o.label}</span>
@@ -91,7 +104,7 @@ export function ReduceStrategyForms({ strategyId, config, onChange }: Props) {
               </SelectContent>
             </Select>
             <p className="text-[10px] text-muted-foreground">
-              Also on the node, next to the model. Pick Images when the candidates are pictures — on Texts the AI would only compare their links.
+              {t("cfgext.reduceFormKindHint")}
             </p>
           </div>
         </div>
@@ -100,14 +113,14 @@ export function ReduceStrategyForms({ strategyId, config, onChange }: Props) {
     case "concat":
       return (
         <div className="flex flex-col gap-1.5">
-          <Label>Separator</Label>
+          <Label>{t("utilcfg.separator")}</Label>
           <Input
             value={String(config.separator ?? "\n\n")}
             onChange={(e) => onChange({ ...config, separator: e.target.value })}
-            placeholder="e.g. '\n\n' or ' • '"
+            placeholder={t("cfgext.reduceFormSeparatorPlaceholder")}
           />
           <p className="text-[10px] text-muted-foreground">
-            Placed between each candidate when they are joined into one text.
+            {t("cfgext.reduceFormSeparatorHint")}
           </p>
         </div>
       )
@@ -119,14 +132,14 @@ export function ReduceStrategyForms({ strategyId, config, onChange }: Props) {
             checked={Boolean(config.caseSensitive)}
             onCheckedChange={(v) => onChange({ ...config, caseSensitive: v })}
           />
-          <Label className="cursor-pointer">Treat different letter case as different answers</Label>
+          <Label className="cursor-pointer">{t("cfgext.reduceFormCaseSensitive")}</Label>
         </div>
       )
 
     case "merge-json":
       return (
         <div className="flex flex-col gap-1.5">
-          <Label>How to merge</Label>
+          <Label>{t("cfgext.reduceFormHowToMerge")}</Label>
           <Select
             value={String(config.strategy ?? "deep")}
             onValueChange={(v) => onChange({ ...config, strategy: v })}
@@ -135,13 +148,12 @@ export function ReduceStrategyForms({ strategyId, config, onChange }: Props) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="deep">Deep (nested objects too)</SelectItem>
-              <SelectItem value="shallow">Shallow (top level only)</SelectItem>
+              <SelectItem value="deep">{t("cfgext.reduceFormDeep")}</SelectItem>
+              <SelectItem value="shallow">{t("cfgext.reduceFormShallow")}</SelectItem>
             </SelectContent>
           </Select>
           <p className="text-[10px] text-muted-foreground">
-            Deep merges nested objects field by field. Shallow replaces whole
-            top-level fields, later candidates winning.
+            {t("cfgext.reduceFormMergeHint")}
           </p>
         </div>
       )
@@ -149,7 +161,7 @@ export function ReduceStrategyForms({ strategyId, config, onChange }: Props) {
     case "first-non-empty":
     case "count":
       return (
-        <p className="text-xs text-muted-foreground">Nothing to configure.</p>
+        <p className="text-xs text-muted-foreground">{t("cfgext.reduceFormNothingToConfigure")}</p>
       )
 
     default:

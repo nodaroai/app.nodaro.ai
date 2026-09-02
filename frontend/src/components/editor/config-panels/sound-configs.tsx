@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { buildMusicGenreHints, buildMusicMoodHints, buildInstrumentationHints, buildVoiceCharacterHints, buildVoiceDeliveryHints } from "@nodaro/prompts"
 import type {
   MusicGenreData, MusicMoodData, InstrumentationData,
@@ -24,6 +25,7 @@ function unfreeze(v: string | ReadonlyArray<string> | undefined): string | strin
 }
 
 export function MusicGenreConfig({ data, onUpdate }: ConfigProps<MusicGenreData>) {
+  const t = useT()
   const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
@@ -33,8 +35,8 @@ export function MusicGenreConfig({ data, onUpdate }: ConfigProps<MusicGenreData>
         idPrefix="music-genre"
         preText={data.preText}
         postText={data.postText}
-        prePlaceholder="e.g. cover song, remix"
-        postPlaceholder="e.g. with a brass-band breakdown"
+        prePlaceholder={t("paramcfg.eGCoverSongRemix")}
+        postPlaceholder={t("paramcfg.eGWithABrassBand")}
         onChange={onUpdate}
       />
       <MusicGenrePicker
@@ -46,6 +48,7 @@ export function MusicGenreConfig({ data, onUpdate }: ConfigProps<MusicGenreData>
 }
 
 export function MusicMoodConfig({ data, onUpdate }: ConfigProps<MusicMoodData>) {
+  const t = useT()
   const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
@@ -55,8 +58,8 @@ export function MusicMoodConfig({ data, onUpdate }: ConfigProps<MusicMoodData>) 
         idPrefix="music-mood"
         preText={data.preText}
         postText={data.postText}
-        prePlaceholder="e.g. start mellow"
-        postPlaceholder="e.g. building to a triumphant climax"
+        prePlaceholder={t("paramcfg.eGStartMellow")}
+        postPlaceholder={t("paramcfg.eGBuildingToATriumphant")}
         onChange={onUpdate}
       />
       <MusicMoodPicker
@@ -72,6 +75,7 @@ export function MusicMoodConfig({ data, onUpdate }: ConfigProps<MusicMoodData>) 
 }
 
 export function InstrumentationConfig({ data, onUpdate }: ConfigProps<InstrumentationData>) {
+  const t = useT()
   const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
@@ -81,8 +85,8 @@ export function InstrumentationConfig({ data, onUpdate }: ConfigProps<Instrument
         idPrefix="instrumentation"
         preText={data.preText}
         postText={data.postText}
-        prePlaceholder="e.g. acoustic intro"
-        postPlaceholder="e.g. with subtle string pads underneath"
+        prePlaceholder={t("paramcfg.eGAcousticIntro")}
+        postPlaceholder={t("paramcfg.eGWithSubtleStringPads")}
         onChange={onUpdate}
       />
       <InstrumentationPicker
@@ -108,6 +112,7 @@ export function InstrumentationConfig({ data, onUpdate }: ConfigProps<Instrument
 }
 
 export function VoiceCharacterConfig({ data, onUpdate }: ConfigProps<VoiceCharacterData>) {
+  const t = useT()
   const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
@@ -117,8 +122,8 @@ export function VoiceCharacterConfig({ data, onUpdate }: ConfigProps<VoiceCharac
         idPrefix="voice-character"
         preText={data.preText}
         postText={data.postText}
-        prePlaceholder="e.g. slightly hoarse from a cold"
-        postPlaceholder="e.g. with a hint of weariness"
+        prePlaceholder={t("paramcfg.eGSlightlyHoarseFromA")}
+        postPlaceholder={t("paramcfg.eGWithAHintOf")}
         onChange={onUpdate}
       />
       <VoiceCharacterPicker
@@ -144,6 +149,7 @@ export function VoiceCharacterConfig({ data, onUpdate }: ConfigProps<VoiceCharac
 }
 
 export function VoiceDeliveryConfig({ data, onUpdate }: ConfigProps<VoiceDeliveryData>) {
+  const t = useT()
   const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
@@ -153,8 +159,8 @@ export function VoiceDeliveryConfig({ data, onUpdate }: ConfigProps<VoiceDeliver
         idPrefix="voice-delivery"
         preText={data.preText}
         postText={data.postText}
-        prePlaceholder="e.g. pause, gather composure"
-        postPlaceholder="e.g. trail off"
+        prePlaceholder={t("paramcfg.eGPauseGatherComposure")}
+        postPlaceholder={t("paramcfg.eGTrailOff")}
         onChange={onUpdate}
       />
       <VoiceDeliveryPicker

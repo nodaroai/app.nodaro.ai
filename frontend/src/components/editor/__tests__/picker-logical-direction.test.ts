@@ -40,7 +40,23 @@ const PICKER_FILES = [
   "ee/components/copilot/copilot-panel.tsx",
   "components/editor/workflow-canvas.tsx",
   "components/editor/marketplace-popup-geometry.ts",
+  // The config panel's model pickers and the Select/Command primitives every
+  // dropdown in the app is built on (their check indicator sat on the text
+  // side under RTL).
+  "components/editor/config-panels/model-search-select.tsx",
+  "components/editor/config-panels/model-select-option.tsx",
+  "components/editor/config-panels/multi-provider-picker.tsx",
+  "components/editor/config-panels/llm-model-select.tsx",
+  "components/ui/select.tsx",
+  "components/ui/command.tsx",
 ]
+
+/** Every node config panel: the whole directory, so a new panel is covered
+ *  the day it is added. Discovered at test time rather than listed. */
+const CONFIG_PANEL_FILES = fs
+  .readdirSync(path.join(SRC, "components/editor/config-panels"))
+  .filter((f) => f.endsWith(".tsx"))
+  .map((f) => `components/editor/config-panels/${f}`)
 
 // A class token sits after a quote, backtick or whitespace, optionally behind
 // a variant chain (`md:`, `dark:hover:`, `data-[state=open]:`) and a leading
@@ -59,6 +75,22 @@ const PHYSICAL = /(?<=["'`\s])(?:[^\s"'`]*:)?-?(?:text-left|text-right|(?:ml|mr|
 // live direction at the render site: the config drawer's off-screen slide and
 // the Add Node panel's slide-in origin. A bare one is direction-blind.
 const DIRECTION_FLIP = /(?:-?translate-x-full|slide-in-from-(?:left|right))\b/
+
+/** Strip the exempt tokens, then test what is left of the line. */
+function isDirectionBlind(line: string): boolean {
+  if (/isRtl/.test(line)) return false
+  const stripped = line.replace(/data-\[side=(?:left|right)\]:slide-in-from-\S+/g, "")
+  return DIRECTION_FLIP.test(stripped)
+}
+
+describe("the direction-blind slide scan", () => {
+  it("exempts a popper side pair but still reports a bare flip on the same line", () => {
+    expect(isDirectionBlind(`"data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2"`)).toBe(false)
+    expect(isDirectionBlind(`"data-[side=left]:slide-in-from-right-2 slide-in-from-left-2"`)).toBe(true)
+    expect(isDirectionBlind(`isRtl ? "-translate-x-full" : "translate-x-full"`)).toBe(false)
+    expect(isDirectionBlind(`"translate-x-full"`)).toBe(true)
+  })
+})
 
 describe("the physical-class scan", () => {
   const hit = (cls: string) => [...`className="${cls} "`.matchAll(PHYSICAL)].map((m) => m[0])
@@ -79,7 +111,7 @@ describe("the physical-class scan", () => {
 })
 
 describe("picker components use logical (direction-aware) classes", () => {
-  for (const rel of PICKER_FILES) {
+  for (const rel of [...PICKER_FILES, ...CONFIG_PANEL_FILES]) {
     it(`${rel} has no physical left/right classes`, () => {
       const src = fs.readFileSync(path.join(SRC, rel), "utf8")
       const hits = src
@@ -93,7 +125,12 @@ describe("picker components use logical (direction-aware) classes", () => {
       const blind = src
         .split("\n")
         .map((line, i) => ({ line, n: i + 1 }))
-        .filter(({ line }) => DIRECTION_FLIP.test(line) && !/isRtl/.test(line))
+        // A `data-[side=…]:slide-in-from-…` pair is keyed to the PHYSICAL side
+        // the popper actually placed the content on — correct in either
+        // direction by construction, so it is not a direction-blind slide.
+        // Exempt TOKENS are stripped, not the line: a bare flip next to an
+        // exempt pair on the same line is still reported.
+        .filter(({ line }) => isDirectionBlind(line))
         .map(({ n, line }) => `${n}: ${line.trim()}`)
       expect(blind, `direction-blind slide in ${rel}:\n${blind.join("\n")}`).toEqual([])
     })

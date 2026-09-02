@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { Loader2, AlertCircle } from "lucide-react"
 import { getJobStatus } from "@/lib/api"
+import { useT, tx } from "@/lib/i18n"
 
 interface JobConfigDisplayProps {
   readonly jobId: string
@@ -21,16 +22,19 @@ function formatKey(key: string): string {
 function formatValue(value: unknown): string {
   if (value === null || value === undefined) return "—"
   if (typeof value === "string") return value
-  if (typeof value === "boolean") return value ? "yes" : "no"
+  if (typeof value === "boolean") return value ? tx("cfgext.jobCfgYes") : tx("cfgext.jobCfgNo")
   if (typeof value === "number") return String(value)
   if (Array.isArray(value)) {
-    if (value.length === 0) return "(none)"
+    if (value.length === 0) return tx("cfgext.jobCfgNone")
     return value.map((v) => (typeof v === "string" ? v : JSON.stringify(v))).join(", ")
   }
   return JSON.stringify(value)
 }
 
 export function JobConfigDisplay({ jobId }: JobConfigDisplayProps) {
+  // Subscribes this component to the locale so a language switch re-renders it —
+  // `formatValue` reads the live locale through tx() but does not subscribe.
+  const t = useT()
   const [data, setData] = useState<Record<string, unknown> | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -49,7 +53,7 @@ export function JobConfigDisplay({ jobId }: JobConfigDisplayProps) {
       })
       .catch((err: unknown) => {
         if (cancelled) return
-        setError(err instanceof Error ? err.message : "Failed to load config")
+        setError(err instanceof Error ? err.message : tx("cfgext.jobCfgLoadFailed"))
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -64,7 +68,7 @@ export function JobConfigDisplay({ jobId }: JobConfigDisplayProps) {
     return (
       <div className="flex items-center gap-2 px-3 py-2 text-xs text-gray-500 dark:text-[#94A3B8]">
         <Loader2 className="w-3 h-3 animate-spin" />
-        Loading config…
+        {t("cfgext.jobCfgLoading")}
       </div>
     )
   }
@@ -87,7 +91,7 @@ export function JobConfigDisplay({ jobId }: JobConfigDisplayProps) {
   if (entries.length === 0) {
     return (
       <div className="px-3 py-2 text-xs text-gray-500 dark:text-[#94A3B8] italic">
-        No config recorded.
+        {t("cfgext.jobCfgNoConfig")}
       </div>
     )
   }

@@ -10,26 +10,26 @@ const baseProps = { data: { model: "V5", label: "S" } as any, nodeRefs: [], refM
 
 describe("SUNO_FIELD_EDIT_META", () => {
   it("covers the 4 secondary fields with correct caps/kinds", () => {
-    expect(Object.keys(SUNO_FIELD_EDIT_META).sort()).toEqual(["lyrics", "negativeStyle", "style", "title"])
-    expect(SUNO_FIELD_EDIT_META.title.kind).toBe("input")
-    expect(SUNO_FIELD_EDIT_META.title.maxLength).toBe(200)
-    expect(SUNO_FIELD_EDIT_META.style.kind).toBe("tags")
-    expect(SUNO_FIELD_EDIT_META.style.maxLength).toBe(1000)
-    expect(SUNO_FIELD_EDIT_META.negativeStyle.maxLength).toBe(500)
-    expect(SUNO_FIELD_EDIT_META.lyrics.rows).toBe(4)
+    expect(Object.keys(SUNO_FIELD_EDIT_META()).sort()).toEqual(["lyrics", "negativeStyle", "style", "title"])
+    expect(SUNO_FIELD_EDIT_META().title.kind).toBe("input")
+    expect(SUNO_FIELD_EDIT_META().title.maxLength).toBe(200)
+    expect(SUNO_FIELD_EDIT_META().style.kind).toBe("tags")
+    expect(SUNO_FIELD_EDIT_META().style.maxLength).toBe(1000)
+    expect(SUNO_FIELD_EDIT_META().negativeStyle.maxLength).toBe(500)
+    expect(SUNO_FIELD_EDIT_META().lyrics.rows).toBe(4)
   })
 })
 
 describe("SunoFieldEditor", () => {
   it("renders an <input> for title and writes the field", () => {
     const onUpdate = vi.fn()
-    render(<SunoFieldEditor meta={SUNO_FIELD_EDIT_META.title} onUpdate={onUpdate} {...baseProps} />)
-    const input = screen.getByPlaceholderText(SUNO_FIELD_EDIT_META.title.placeholder)
+    render(<SunoFieldEditor meta={SUNO_FIELD_EDIT_META().title} onUpdate={onUpdate} {...baseProps} />)
+    const input = screen.getByPlaceholderText(SUNO_FIELD_EDIT_META().title.placeholder)
     fireEvent.change(input, { target: { value: "My Song" } })
     expect(onUpdate).toHaveBeenCalledWith({ title: "My Song" })
   })
   it("renders a textarea editor for style (not a plain input)", () => {
-    render(<SunoFieldEditor meta={SUNO_FIELD_EDIT_META.style} onUpdate={vi.fn()} {...baseProps} />)
-    expect(screen.getByPlaceholderText(SUNO_FIELD_EDIT_META.style.placeholder)).toBeInTheDocument()
+    render(<SunoFieldEditor meta={SUNO_FIELD_EDIT_META().style} onUpdate={vi.fn()} {...baseProps} />)
+    expect(screen.getByPlaceholderText(SUNO_FIELD_EDIT_META().style.placeholder)).toBeInTheDocument()
   })
 })

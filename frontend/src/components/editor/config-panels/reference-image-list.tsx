@@ -1,5 +1,7 @@
 "use client"
 
+import { useT, tx } from "@/lib/i18n"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import { GripVertical, X, Upload, Loader2 } from "lucide-react"
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core"
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable"
@@ -34,7 +36,7 @@ function buildEntryMap(
 ): Map<string, ReferenceImageEntry> {
   const map = new Map<string, ReferenceImageEntry>()
   for (const img of manualImages) {
-    map.set(img.id, { id: img.id, url: img.url, label: "Uploaded", source: "uploaded" })
+    map.set(img.id, { id: img.id, url: img.url, label: tx("cfgshared.refImgUploaded"), source: "uploaded" })
   }
   for (const img of wiredImages) {
     map.set(img.id, { id: img.id, url: img.url, label: img.label, source: "wired" })
@@ -77,10 +79,12 @@ export function buildOrderedRefImages(
   return applyOrder(buildEntryMap(manualImages, wiredImages, charRefImages), imageOrder)
 }
 
-const SOURCE_BADGE: Record<string, { label: string; className: string }> = {
-  uploaded: { label: "Uploaded", className: "bg-blue-500/10 text-blue-500" },
-  wired: { label: "Wired", className: "bg-cyan-500/10 text-cyan-500" },
-  character: { label: "Character", className: "bg-pink-500/10 text-pink-500" },
+function SOURCE_BADGE(): Record<string, { label: string; className: string }> {
+  return {
+  uploaded: { label: tx("cfgshared.refImgUploaded"), className: "bg-blue-500/10 text-blue-500" },
+  wired: { label: tx("cfgshared.refImgWired"), className: "bg-cyan-500/10 text-cyan-500" },
+  character: { label: tx("field.character"), className: "bg-pink-500/10 text-pink-500" },
+}
 }
 
 function SortableRefImageItem({
@@ -101,7 +105,10 @@ function SortableRefImageItem({
     opacity: isDragging ? 0.5 : 1,
     zIndex: isDragging ? 10 : undefined,
   }
-  const badge = SOURCE_BADGE[entry.source]
+  const badge = SOURCE_BADGE()[entry.source]
+  // A wired row carries the upstream node's persisted (English) label.
+  const localizeNode = useLocalizeNodeLabel()
+  const rowLabel = localizeNode(entry.label)
 
   return (
     <div
@@ -118,12 +125,12 @@ function SortableRefImageItem({
       <span className="text-muted-foreground w-4 text-center shrink-0 font-mono text-[10px]">#{index + 1}</span>
       <CachedImage
         src={entry.url}
-        alt={entry.label}
+        alt={rowLabel}
         className="w-10 h-10 rounded object-cover shrink-0"
         thumbnail
         thumbnailWidth={80}
       />
-      <span className="truncate flex-1 min-w-0" title={entry.label}>{entry.label}</span>
+      <span className="truncate flex-1 min-w-0" title={rowLabel}>{rowLabel}</span>
       <span className={`text-[9px] px-1 py-0.5 rounded shrink-0 ${badge.className}`}>{badge.label}</span>
       {onRemove && (
         <button
@@ -149,6 +156,7 @@ export function ReferenceImageList({
   onUpload,
   uploadingRef,
 }: ReferenceImageListProps) {
+  const t = useT()
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -184,7 +192,9 @@ export function ReferenceImageList({
     <div>
       <div className="flex items-center justify-between mb-1.5">
         <label className="text-xs font-medium">
-          Reference Images{totalCount > 0 && ` (${totalCount}/${maxImages})`}
+          {totalCount > 0
+            ? t("cfgshared.refImagesCount", { n: totalCount, max: maxImages })
+            : t("vidcfg.referenceImages")}
         </label>
         <Button
           variant="outline"
@@ -193,8 +203,8 @@ export function ReferenceImageList({
           onClick={onUpload}
           disabled={uploadingRef || !canUpload}
         >
-          {uploadingRef ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Upload className="w-3 h-3 mr-1" />}
-          Upload
+          {uploadingRef ? <Loader2 className="w-3 h-3 me-1 animate-spin" /> : <Upload className="w-3 h-3 me-1" />}
+          {t("pipe.upload")}
         </Button>
       </div>
 
@@ -216,13 +226,13 @@ export function ReferenceImageList({
         </DndContext>
       ) : (
         <p className="text-[10px] text-muted-foreground/60">
-          No reference images. Upload or wire upstream image nodes.
+          {t("cfgshared.noRefImages")}
         </p>
       )}
 
       {totalCount > 0 && (
         <p className="text-[10px] text-muted-foreground mt-1.5">
-          Tip: Use {"{image:1}"}, {"{image:2}"} in prompt to reference by position
+          {t("cfgshared.refImgPositionTip")}
         </p>
       )}
     </div>

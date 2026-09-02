@@ -111,11 +111,12 @@ describe("frontend parity net (source) — llm-chat in component-private sets", 
 
   it("tag-textarea: nodeTypeCategory classifies 'llm-chat' as the Text bucket", () => {
     const src = readSrc("components/editor/config-panels/tag-textarea.tsx")
-    // The Text-category line lists llm-chat then returns "Text".
-    const match = src.match(/\[([^\]]*?"llm-chat"[^\]]*?)\]\.includes\(type\)\)\s*return\s*"Text"/)
+    // The Text-category line lists llm-chat then returns the localized Text
+    // bucket (the raw "Text" literal moved behind the `out.text` i18n key).
+    const match = src.match(/\[([^\]]*?"llm-chat"[^\]]*?)\]\.includes\(type\)\)\s*return\s*tx\("out\.text"\)/)
     expect(
       match,
-      'tag-textarea nodeTypeCategory no longer lists "llm-chat" in the line that `return "Text"`. The Generate Text node would fall to the generic "Node" category in the @-mention dropdown.',
+      'tag-textarea nodeTypeCategory no longer lists "llm-chat" in the line that `return tx("out.text")`. The Generate Text node would fall to the generic "Node" category in the @-mention dropdown.',
     ).not.toBeNull()
   })
 

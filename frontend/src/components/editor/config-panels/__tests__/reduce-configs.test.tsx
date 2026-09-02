@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest"
 import { render, screen, fireEvent } from "@testing-library/react"
 import { ReduceConfig } from "../reduce-configs"
+import { translate } from "@/lib/i18n"
 import type { ReduceNodeData } from "@/types/nodes"
 
 // ── Shadcn mocks ─────────────────────────────────────────────────────────────
@@ -147,13 +148,13 @@ describe("ReduceConfig", () => {
 
   it("renders Tabs with Config + Inputs", () => {
     render(<ReduceConfig {...baseProps} data={makeData()} onUpdate={vi.fn()} />)
-    expect(screen.getByRole("tab", { name: /config/i })).toBeInTheDocument()
-    expect(screen.getByRole("tab", { name: /candidates/i })).toBeInTheDocument()
+    expect(screen.getByRole("tab", { name: translate("en", "cfgext.reduceTabConfig") })).toBeInTheDocument()
+    expect(screen.getByRole("tab", { name: translate("en", "cfgext.reduceTabCandidates") })).toBeInTheDocument()
   })
 
   it("Inputs tab disabled when node hasn't run", () => {
     render(<ReduceConfig {...baseProps} data={makeData({ executionStatus: "idle" })} onUpdate={vi.fn()} />)
-    const tab = screen.getByRole("tab", { name: /candidates/i })
+    const tab = screen.getByRole("tab", { name: translate("en", "cfgext.reduceTabCandidates") })
     expect(tab).toHaveAttribute("data-disabled")
   })
 
@@ -167,7 +168,7 @@ describe("ReduceConfig", () => {
         onUpdate={vi.fn()}
       />,
     )
-    const tab = screen.getByRole("tab", { name: /candidates/i })
+    const tab = screen.getByRole("tab", { name: translate("en", "cfgext.reduceTabCandidates") })
     expect(tab).toHaveAttribute("data-disabled")
   })
 
@@ -184,7 +185,7 @@ describe("ReduceConfig", () => {
         onUpdate={vi.fn()}
       />,
     )
-    const tab = screen.getByRole("tab", { name: /candidates/i })
+    const tab = screen.getByRole("tab", { name: translate("en", "cfgext.reduceTabCandidates") })
     expect(tab).not.toHaveAttribute("data-disabled")
   })
 
@@ -262,7 +263,7 @@ describe("ReduceConfig", () => {
         onUpdate={vi.fn()}
       />,
     )
-    expect(screen.getByText(/letter case/i)).toBeInTheDocument()
+    expect(screen.getByText(translate("en", "cfgext.reduceFormCaseSensitive"))).toBeInTheDocument()
   })
 
   it("renders deep/shallow select for merge-json strategy", () => {
@@ -275,8 +276,8 @@ describe("ReduceConfig", () => {
     )
     // "Deep" appears both in the <option> and in the helper text; use
     // getAllByText so we don't fight the helper.
-    expect(screen.getAllByText("Deep (nested objects too)").length).toBeGreaterThan(0)
-    expect(screen.getByText("Shallow (top level only)")).toBeInTheDocument()
+    expect(screen.getAllByText(translate("en", "cfgext.reduceFormDeep")).length).toBeGreaterThan(0)
+    expect(screen.getByText(translate("en", "cfgext.reduceFormShallow"))).toBeInTheDocument()
   })
 
   it("renders 'No configuration' for first-non-empty strategy", () => {
@@ -287,7 +288,7 @@ describe("ReduceConfig", () => {
         onUpdate={vi.fn()}
       />,
     )
-    expect(screen.getByText(/Nothing to configure/i)).toBeInTheDocument()
+    expect(screen.getByText(translate("en", "cfgext.reduceFormNothingToConfigure"))).toBeInTheDocument()
   })
 
   it("renders 'No configuration' for count strategy", () => {
@@ -298,7 +299,7 @@ describe("ReduceConfig", () => {
         onUpdate={vi.fn()}
       />,
     )
-    expect(screen.getByText(/Nothing to configure/i)).toBeInTheDocument()
+    expect(screen.getByText(translate("en", "cfgext.reduceFormNothingToConfigure"))).toBeInTheDocument()
   })
 })
 
@@ -323,7 +324,7 @@ describe("ReduceConfig — Inputs tab content", () => {
         onUpdate={vi.fn()}
       />,
     )
-    const tab = screen.getAllByRole("tab", { name: /candidates/i })
+    const tab = screen.getAllByRole("tab", { name: translate("en", "cfgext.reduceTabCandidates") })
     // Both renders share the disabled state since lastInputs missing
     tab.forEach((t) => expect(t).toHaveAttribute("data-disabled"))
   })
@@ -348,7 +349,7 @@ describe("ReduceConfig — Inputs tab content", () => {
       />,
     )
     // Activate the Inputs tab (it should be enabled now).
-    const tab = screen.getByRole("tab", { name: /candidates/i })
+    const tab = screen.getByRole("tab", { name: translate("en", "cfgext.reduceTabCandidates") })
     expect(tab).not.toHaveAttribute("data-disabled")
     fireEvent.click(tab)
 
@@ -362,7 +363,7 @@ describe("ReduceConfig — Inputs tab content", () => {
     expect(screen.getByText("charlie")).toBeInTheDocument()
 
     // selectedIndex=1 → "bravo" item has a "selected" badge
-    expect(screen.getByText(/chosen/i)).toBeInTheDocument()
+    expect(screen.getByText(translate("en", "cfgext.reduceChosen"))).toBeInTheDocument()
   })
 
   it("does NOT render reasoning blockquote when pick-best-llm omits it (other strategies)", () => {
@@ -380,7 +381,7 @@ describe("ReduceConfig — Inputs tab content", () => {
         onUpdate={vi.fn()}
       />,
     )
-    const tab = screen.getByRole("tab", { name: /candidates/i })
+    const tab = screen.getByRole("tab", { name: translate("en", "cfgext.reduceTabCandidates") })
     fireEvent.click(tab)
     expect(screen.getByText("joined 2")).toBeInTheDocument()
     expect(screen.getByText("a")).toBeInTheDocument()
@@ -405,7 +406,7 @@ describe("ReduceConfig — Inputs tab content", () => {
         onUpdate={vi.fn()}
       />,
     )
-    const tab = screen.getByRole("tab", { name: /candidates/i })
+    const tab = screen.getByRole("tab", { name: translate("en", "cfgext.reduceTabCandidates") })
     fireEvent.click(tab)
     const expected = "x".repeat(80) + "…"
     expect(screen.getByText(expected)).toBeInTheDocument()

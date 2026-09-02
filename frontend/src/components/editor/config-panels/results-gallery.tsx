@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Copy, Check, Download, ImageIcon, Play, Music } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -27,6 +28,7 @@ export function ResultsGallery({
   mediaType,
   onUpdate,
 }: ResultsGalleryProps) {
+  const t = useT()
   const setWorkflowThumbnail = useWorkflowStore((s) => s.setWorkflowThumbnail)
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -64,7 +66,7 @@ export function ResultsGallery({
   return (
     <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm">
       <div className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B] mb-2">
-        Latest Results
+        {t("cfgshared.latestResults")}
       </div>
 
       {/* Thumbnail grid */}
@@ -95,7 +97,7 @@ export function ResultsGallery({
                 ) : (
                   <CachedImage
                     src={r.url}
-                    alt={`Result ${idx + 1}`}
+                    alt={t("cfgshared.resultN", { n: idx + 1 })}
                     className="w-full h-full object-cover"
                     thumbnail
                     thumbnailWidth={96}
@@ -118,11 +120,11 @@ export function ResultsGallery({
             onClick={() => handleCopyUrl(activeUrl, activeIndex)}
           >
             {copiedIdx === activeIndex ? (
-              <Check className="w-3 h-3 mr-1.5 text-green-500" />
+              <Check className="w-3 h-3 me-1.5 text-green-500" />
             ) : (
-              <Copy className="w-3 h-3 mr-1.5" />
+              <Copy className="w-3 h-3 me-1.5" />
             )}
-            {copiedIdx === activeIndex ? "Copied" : "Copy URL"}
+            {copiedIdx === activeIndex ? t("apiTok.copied") : t("cfgshared.copyUrl")}
           </Button>
           <Button
             variant="outline"
@@ -130,8 +132,8 @@ export function ResultsGallery({
             className="flex-1 text-xs"
             onClick={() => downloadFile(activeUrl, `${nodeType}-result.${EXTENSION_MAP[mediaType]}`)}
           >
-            <Download className="w-3 h-3 mr-1.5" />
-            Download
+            <Download className="w-3 h-3 me-1.5" />
+            {t("cfgshared.download")}
           </Button>
         </div>
 
@@ -146,8 +148,8 @@ export function ResultsGallery({
             className="w-full"
             onClick={() => setWorkflowThumbnail(activeUrl)}
           >
-            <ImageIcon className="w-3.5 h-3.5 mr-2" />
-            Set as Thumbnail
+            <ImageIcon className="w-3.5 h-3.5 me-2" />
+            {t("cfgshared.setAsThumbnail")}
           </Button>
         )}
 
@@ -155,7 +157,7 @@ export function ResultsGallery({
         {activeJobId && (
           <details className="mt-1 rounded-md border border-gray-200 dark:border-[#2D2D2D] overflow-hidden group">
             <summary className="text-xs px-3 py-1.5 cursor-pointer select-none text-gray-600 dark:text-[#94A3B8] bg-gray-50 dark:bg-[#181818] hover:bg-gray-100 dark:hover:bg-[#2D2D2D]">
-              Config used
+              {t("cfgshared.configUsed")}
             </summary>
             <JobConfigDisplay jobId={activeJobId} />
           </details>

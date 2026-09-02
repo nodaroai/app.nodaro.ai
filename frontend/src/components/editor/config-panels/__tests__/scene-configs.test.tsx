@@ -3,6 +3,12 @@ import { render, screen, fireEvent } from "@testing-library/react"
 import { SceneConfig } from "../scene-configs"
 import type { SceneNodeFrontendData } from "@/types/nodes"
 import type { SceneInputMode, ShotSpec } from "@nodaro/shared"
+import { translate } from "@/lib/i18n"
+
+// Negative assertions keep their old substring breadth: an exact-string
+// matcher would let a renamed or extended string satisfy "must not be present".
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+const rx = (key: Parameters<typeof translate>[1]) => new RegExp(escapeRegExp(translate("en", key)), "i")
 
 // ── Minimal mocks for heavy dependencies ────────────────────────────────────
 
@@ -159,33 +165,33 @@ function renderPanel(data: SceneNodeFrontendData) {
 describe("SceneConfig per-shot editor", () => {
   it("does NOT render any per-shot section for first_frame mode", () => {
     renderPanel(makeData("first_frame"))
-    expect(screen.queryByText(/Extends shot/i)).not.toBeInTheDocument()
-    expect(screen.queryByText(/Interpolation keyframes/i)).not.toBeInTheDocument()
-    expect(screen.queryByText(/Camera path/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(rx("cfgext.sceneExtendsShot"))).not.toBeInTheDocument()
+    expect(screen.queryByText(rx("cfgext.sceneInterpolationKeyframes"))).not.toBeInTheDocument()
+    expect(screen.queryByText(rx("cfgext.sceneCameraPath"))).not.toBeInTheDocument()
   })
 
   // ── Section 1: video_continuation ──────────────────────────────────────────
 
   it("renders 'Extends shot' select for video_continuation mode", () => {
     renderPanel(makeData("video_continuation"))
-    expect(screen.getByText(/Extends shot/i)).toBeInTheDocument()
+    expect(screen.getByText(translate("en", "cfgext.sceneExtendsShot"))).toBeInTheDocument()
   })
 
   it("shows helper text for video_continuation", () => {
     renderPanel(makeData("video_continuation"))
-    expect(screen.getByText(/Continuation requires VEO or Seedance 2/i)).toBeInTheDocument()
+    expect(screen.getByText(translate("en", "cfgext.sceneContinuationHint"))).toBeInTheDocument()
   })
 
   it("shows warning when extends_shot_id references a missing shot", () => {
     renderPanel(
       makeData("video_continuation", { extends_shot_id: "shot_99" }),
     )
-    expect(screen.getByText(/referenced shot not found/i)).toBeInTheDocument()
+    expect(screen.getByText(translate("en", "cfgext.sceneExtendsMissing"))).toBeInTheDocument()
   })
 
   it("does NOT show warning when extends_shot_id is absent", () => {
     renderPanel(makeData("video_continuation"))
-    expect(screen.queryByText(/referenced shot not found/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(rx("cfgext.sceneExtendsMissing"))).not.toBeInTheDocument()
   })
 
   it("calls onUpdate with patched shots when extends_shot_id changes", () => {
@@ -214,17 +220,17 @@ describe("SceneConfig per-shot editor", () => {
 
   it("renders 'Interpolation keyframes' section for frame_interpolation mode", () => {
     renderPanel(makeData("frame_interpolation"))
-    expect(screen.getByText(/Interpolation keyframes/i)).toBeInTheDocument()
+    expect(screen.getByText(translate("en", "cfgext.sceneInterpolationKeyframes"))).toBeInTheDocument()
   })
 
   it("shows the 'Add keyframe' button", () => {
     renderPanel(makeData("frame_interpolation"))
-    expect(screen.getByRole("button", { name: /add keyframe/i })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: translate("en", "cfgext.sceneAddKeyframe") })).toBeInTheDocument()
   })
 
   it("adds a keyframe row when 'Add keyframe' is clicked", () => {
     const { onUpdate } = renderPanel(makeData("frame_interpolation"))
-    fireEvent.click(screen.getByRole("button", { name: /add keyframe/i }))
+    fireEvent.click(screen.getByRole("button", { name: translate("en", "cfgext.sceneAddKeyframe") }))
 
     expect(onUpdate).toHaveBeenCalledTimes(1)
     const [updateArg] = onUpdate.mock.calls[0]
@@ -244,10 +250,14 @@ describe("SceneConfig per-shot editor", () => {
     })
     renderPanel(data)
     expect(
-      screen.getByRole("spinbutton", { name: /Keyframe 1 timestamp/i }),
+      screen.getByRole("spinbutton", {
+        name: translate("en", "cfgext.sceneKeyframeTimestampAria", { n: 1 }),
+      }),
     ).toBeInTheDocument()
     expect(
-      screen.getByRole("spinbutton", { name: /Keyframe 2 timestamp/i }),
+      screen.getByRole("spinbutton", {
+        name: translate("en", "cfgext.sceneKeyframeTimestampAria", { n: 2 }),
+      }),
     ).toBeInTheDocument()
   })
 
@@ -260,8 +270,10 @@ describe("SceneConfig per-shot editor", () => {
     })
     const { onUpdate } = renderPanel(data)
 
-    const removeButtons = screen.getAllByRole("button", { name: /Remove keyframe/i })
-    fireEvent.click(removeButtons[0]) // remove first keyframe
+    const removeFirst = screen.getByRole("button", {
+      name: translate("en", "cfgext.sceneRemoveKeyframeAria", { n: 1 }),
+    })
+    fireEvent.click(removeFirst) // remove first keyframe
 
     expect(onUpdate).toHaveBeenCalledTimes(1)
     const [updateArg] = onUpdate.mock.calls[0]
@@ -271,33 +283,33 @@ describe("SceneConfig per-shot editor", () => {
 
   it("shows helper text for frame_interpolation", () => {
     renderPanel(makeData("frame_interpolation"))
-    expect(screen.getByText(/Requires ≥2 keyframes/i)).toBeInTheDocument()
+    expect(screen.getByText(translate("en", "cfgext.sceneInterpolationHint"))).toBeInTheDocument()
   })
 
   // ── Section 3: camera_path ──────────────────────────────────────────────────
 
   it("renders 'Camera path' select for camera_path mode", () => {
     renderPanel(makeData("camera_path"))
-    expect(screen.getByText(/Camera path/i)).toBeInTheDocument()
+    expect(screen.getByText(translate("en", "cfgext.sceneCameraPath"))).toBeInTheDocument()
   })
 
   it("renders all 5 path_kind options", () => {
     renderPanel(makeData("camera_path"))
-    expect(screen.getByRole("option", { name: "Orbit" })).toBeInTheDocument()
-    expect(screen.getByRole("option", { name: "Dolly" })).toBeInTheDocument()
-    expect(screen.getByRole("option", { name: "Crane" })).toBeInTheDocument()
-    expect(screen.getByRole("option", { name: "Arc" })).toBeInTheDocument()
-    expect(screen.getByRole("option", { name: "Reveal" })).toBeInTheDocument()
+    expect(screen.getByRole("option", { name: translate("en", "cfgext.scenePathOrbit") })).toBeInTheDocument()
+    expect(screen.getByRole("option", { name: translate("en", "cfgext.scenePathDolly") })).toBeInTheDocument()
+    expect(screen.getByRole("option", { name: translate("en", "cfgext.scenePathCrane") })).toBeInTheDocument()
+    expect(screen.getByRole("option", { name: translate("en", "cfgext.scenePathArc") })).toBeInTheDocument()
+    expect(screen.getByRole("option", { name: translate("en", "cfgext.scenePathReveal") })).toBeInTheDocument()
   })
 
   it("renders Parameters (JSON) textarea for camera_path mode", () => {
     renderPanel(makeData("camera_path"))
-    expect(screen.getByLabelText(/Parameters \(JSON\)/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(translate("en", "cfgext.sceneParametersJson"))).toBeInTheDocument()
   })
 
   it("shows helper text for camera_path", () => {
     renderPanel(makeData("camera_path"))
-    expect(screen.getByText(/Camera-path directive/i)).toBeInTheDocument()
+    expect(screen.getByText(translate("en", "cfgext.sceneCameraPathHint"))).toBeInTheDocument()
   })
 
   it("calls onUpdate with new path_kind when select changes", () => {
@@ -331,8 +343,8 @@ describe("SceneConfig pipeline-managed vs manual gating", () => {
     renderPanel(data)
     expect(screen.getByTestId("pipeline-managed-message")).toBeInTheDocument()
     // Editable label/description inputs MUST NOT be rendered.
-    expect(screen.queryByLabelText(/^Label$/i)).not.toBeInTheDocument()
-    expect(screen.queryByLabelText(/^Description$/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(rx("configPanel.label"))).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(rx("settings.descriptionTab"))).not.toBeInTheDocument()
   })
 
   it("does NOT show the read-only message for a manually-placed scene (no pipeline_owned)", () => {
@@ -343,18 +355,18 @@ describe("SceneConfig pipeline-managed vs manual gating", () => {
   it("renders editable Label / Description / Beat / Duration inputs for a manual scene", () => {
     renderPanel(makeData("first_frame"))
     // Labels are wired to the inputs via htmlFor — getByLabelText resolves them.
-    expect(screen.getByLabelText(/^Label$/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/Scene index/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/^Description$/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/Emotional beat/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/Duration \(s\)/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/Image model/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/Video model/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(translate("en", "configPanel.label"))).toBeInTheDocument()
+    expect(screen.getByLabelText(translate("en", "cfgext.sceneIndex"))).toBeInTheDocument()
+    expect(screen.getByLabelText(translate("en", "settings.descriptionTab"))).toBeInTheDocument()
+    expect(screen.getByLabelText(translate("en", "cfgext.sceneEmotionalBeat"))).toBeInTheDocument()
+    expect(screen.getByLabelText(translate("en", "scriptcfg.durationS"))).toBeInTheDocument()
+    expect(screen.getByLabelText(translate("en", "pipe.imageModel"))).toBeInTheDocument()
+    expect(screen.getByLabelText(translate("en", "pipe.videoModel"))).toBeInTheDocument()
   })
 
   it("calls onUpdate when the Description textarea is edited (manual scene)", () => {
     const { onUpdate } = renderPanel(makeData("first_frame"))
-    const desc = screen.getByLabelText(/^Description$/i)
+    const desc = screen.getByLabelText(translate("en", "settings.descriptionTab"))
     fireEvent.change(desc, { target: { value: "An updated description" } })
     expect(onUpdate).toHaveBeenCalledWith({ description: "An updated description" })
   })
@@ -368,7 +380,7 @@ describe("SceneConfig pipeline-managed vs manual gating", () => {
     } as unknown as SceneNodeFrontendData
     renderPanel(data)
     expect(screen.queryByTestId("pipeline-managed-message")).not.toBeInTheDocument()
-    expect(screen.getByLabelText(/^Label$/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(translate("en", "configPanel.label"))).toBeInTheDocument()
   })
 
   it("hides the Helpers block on manually-placed scenes (backend routes require a parent pipeline)", () => {

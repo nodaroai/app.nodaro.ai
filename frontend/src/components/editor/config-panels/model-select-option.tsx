@@ -1,6 +1,7 @@
 "use client"
 
 import { SelectItemWithMeta } from "@/components/ui/select"
+import { useLocalizeModelDescription } from "@/lib/i18n/labels"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { formatCreditBadge, formatPerSecondCreditBadge } from "./model-options"
 
@@ -33,6 +34,7 @@ export function ModelSelectOption({
 }) {
   // Both hooks run unconditionally (Rules of Hooks). When not per-second the
   // second call resolves the same id as the first (cached, no extra fetch).
+  const localizeDesc = useLocalizeModelDescription()
   const priceId = creditId ?? value
   const baseCredits = useModelCredits(priceId)
   const perSecondCredits = useModelCredits(perSecond ? `${priceId}:15s` : priceId)
@@ -44,8 +46,8 @@ export function ModelSelectOption({
     <SelectItemWithMeta
       value={value}
       badge={badge}
-      description={desc}
-      tooltip={tooltip}
+      description={localizeDesc(desc)}
+      tooltip={tooltip ? localizeDesc(tooltip) : tooltip}
     >
       {label}
     </SelectItemWithMeta>

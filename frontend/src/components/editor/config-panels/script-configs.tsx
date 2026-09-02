@@ -1,5 +1,6 @@
 "use client"
 
+import { useT, tx } from "@/lib/i18n"
 import { useState, useRef, useEffect } from "react"
 import { AdvancedModeToggle } from "./advanced-mode-toggle"
 import { Copy, Check } from "lucide-react"
@@ -47,6 +48,7 @@ import { usePromptFieldMode } from "@/hooks/use-prompt-field-mode"
 import type { ConfigProps } from "./types"
 
 export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode, nodes, edges, nodeId }: ConfigProps<GenerateScriptData> & { nodeId?: string }) {
+  const t = useT()
   const promptSnippets = useSnippetPool("text", "prompt")
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "styleGuide")
   const finalPrompt = useFinalPromptSegments({
@@ -104,7 +106,7 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
         maxTokens={data.maxTokens}
         onChange={onUpdate}
       />
-      <MappableField field="sceneCount" label="Number of Scenes" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="sceneCount" label={t("scriptcfg.numberOfScenes")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input
           type="number"
           min={1}
@@ -114,20 +116,20 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
         />
       </MappableField>
       <div>
-        <Label>Structure</Label>
+        <Label>{t("scriptcfg.structure")}</Label>
         <Select
           value={data.structure}
           onValueChange={(v) => onUpdate({ structure: v as GenerateScriptData["structure"] })}
         >
-          <SelectTrigger aria-label="Structure"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("scriptcfg.structure")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="freeform">Freeform</SelectItem>
-            <SelectItem value="8-step">8-Step Story</SelectItem>
-            <SelectItem value="custom">Custom</SelectItem>
+            <SelectItem value="freeform">{t("scriptcfg.structureFreeform")}</SelectItem>
+            <SelectItem value="8-step">{t("scriptcfg.structure8Step")}</SelectItem>
+            <SelectItem value="custom">{t("cfgshared.custom")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
-      <MappableField field="styleGuide" label="Style Guide" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
+      <MappableField field="styleGuide" label={t("scriptcfg.styleGuide")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
         <span className="inline-flex items-center gap-0.5">
           <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
           <SnippetMenuButton pool={promptSnippets} value={data.styleGuide || ""} onInsert={(v) => onUpdate({ styleGuide: v })} target="prompt" media="text" />
@@ -137,7 +139,7 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
           <PromptFieldFinalView
             segments={finalPrompt.promptSegments}
             plainText={finalPrompt.promptText}
-            placeholder="Final prompt preview — empty"
+            placeholder={t("audiocfg.phPromptPreviewEmpty")}
             minHeightRem={3 * 1.5}
           />
         ) : (
@@ -145,7 +147,7 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
             rows={3}
             value={data.styleGuide}
             onChange={(v) => onUpdate({ styleGuide: v })}
-            placeholder="e.g. children's book illustration, watercolor..."
+            placeholder={t("scriptcfg.phStyleGuide")}
             nodeRefs={nodeRefs}
             displayMode={variableDisplayMode}
             refMap={refMap}
@@ -153,14 +155,14 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
           />
         )}
       </MappableField>
-      <MappableField field="tone" label="Tone" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="tone" label={t("scriptcfg.tone")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input
           value={data.tone}
           onChange={(e) => onUpdate({ tone: e.target.value })}
-          placeholder="e.g. whimsical, dramatic, educational"
+          placeholder={t("scriptcfg.phTone")}
         />
       </MappableField>
-      <MappableField field="targetLength" label="Target Length (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="targetLength" label={t("scriptcfg.targetLengthSeconds")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input
           type="number"
           min={10}
@@ -175,7 +177,7 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
           <Separator />
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
-              <Label className="text-sm font-semibold">Generated Script</Label>
+              <Label className="text-sm font-semibold">{t("scriptcfg.generatedScript")}</Label>
               <Button
                 variant="outline"
                 size="sm"
@@ -183,12 +185,12 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
                 onClick={handleCopyImagePrompts}
               >
                 {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                {copied ? "Copied" : "Copy Prompts"}
+                {copied ? t("apiTok.copied") : t("scriptcfg.copyPrompts")}
               </Button>
             </div>
 
             <div>
-              <Label className="text-xs">Title</Label>
+              <Label className="text-xs">{t("scriptcfg.scriptTitle")}</Label>
               <Input
                 value={script.title}
                 onChange={(e) => {
@@ -202,21 +204,21 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
             </div>
 
             <div className="text-xs text-muted-foreground">
-              {script.scenes.length} scenes / {script.totalDuration}s total
+              {t("scriptcfg.sceneCountSummary", { count: script.scenes.length, seconds: script.totalDuration })}
             </div>
 
             <Accordion type="single" collapsible className="w-full">
               {script.scenes.map((scene, i) => (
                 <AccordionItem key={scene.sceneNumber} value={`scene-${i}`}>
                   <AccordionTrigger className="text-xs py-2 hover:no-underline">
-                    <span className="text-left truncate pr-2">
-                      Scene {scene.sceneNumber}: {scene.action.slice(0, 40)}{scene.action.length > 40 ? "..." : ""}
+                    <span className="text-start truncate pe-2">
+                      {t("scriptcfg.sceneHeading", { n: scene.sceneNumber, action: scene.action.slice(0, 40) })}{scene.action.length > 40 ? "..." : ""}
                     </span>
                   </AccordionTrigger>
                   <AccordionContent>
                     <div className="flex flex-col gap-2 pt-1">
                       <div>
-                        <Label className="text-[10px] text-muted-foreground">Visual Description</Label>
+                        <Label className="text-[10px] text-muted-foreground">{t("scriptcfg.visualDescription")}</Label>
                         <Textarea
                           rows={3}
                           className="text-xs"
@@ -225,7 +227,7 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
                         />
                       </div>
                       <div>
-                        <Label className="text-[10px] text-muted-foreground">Action</Label>
+                        <Label className="text-[10px] text-muted-foreground">{t("scriptcfg.sceneAction")}</Label>
                         <Textarea
                           rows={2}
                           className="text-xs"
@@ -235,7 +237,7 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <Label className="text-[10px] text-muted-foreground">Mood</Label>
+                          <Label className="text-[10px] text-muted-foreground">{t("scriptcfg.sceneMood")}</Label>
                           <Input
                             className="text-xs h-7"
                             value={Array.isArray(scene.mood) ? scene.mood.join(", ") : scene.mood}
@@ -243,7 +245,7 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
                           />
                         </div>
                         <div>
-                          <Label className="text-[10px] text-muted-foreground">Duration (s)</Label>
+                          <Label className="text-[10px] text-muted-foreground">{t("scriptcfg.durationS")}</Label>
                           <Input
                             type="number"
                             className="text-xs h-7"
@@ -255,7 +257,7 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
                         </div>
                       </div>
                       <div>
-                        <Label className="text-[10px] text-muted-foreground">Image Prompt (for Generate Image)</Label>
+                        <Label className="text-[10px] text-muted-foreground">{t("scriptcfg.imagePromptForGenerate")}</Label>
                         <Textarea
                           rows={3}
                           className="text-xs"
@@ -276,6 +278,7 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
 }
 
 export function QACheckConfig({ data, onUpdate }: ConfigProps<QACheckData>) {
+  const t = useT()
   return (
     <div className="flex flex-col gap-3">
       <LlmModelSelect
@@ -299,22 +302,22 @@ export function QACheckConfig({ data, onUpdate }: ConfigProps<QACheckData>) {
         onChange={onUpdate}
       />
       <div>
-        <Label>Check Type</Label>
+        <Label>{t("scriptcfg.checkType")}</Label>
         <Select
           value={data.checkType}
           onValueChange={(v) => onUpdate({ checkType: v as QACheckData["checkType"] })}
         >
-          <SelectTrigger aria-label="Check Type"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("scriptcfg.checkType")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="content">Content</SelectItem>
-            <SelectItem value="quality">Quality</SelectItem>
-            <SelectItem value="consistency">Consistency</SelectItem>
-            <SelectItem value="safety">Safety</SelectItem>
+            <SelectItem value="content">{t("field.content")}</SelectItem>
+            <SelectItem value="quality">{t("field.quality")}</SelectItem>
+            <SelectItem value="consistency">{t("scriptcfg.qaConsistency")}</SelectItem>
+            <SelectItem value="safety">{t("scriptcfg.qaSafety")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
       <div>
-        <Label htmlFor="threshold">Threshold</Label>
+        <Label htmlFor="threshold">{t("scriptcfg.threshold")}</Label>
         <Input
           id="threshold"
           type="number"
@@ -330,6 +333,7 @@ export function QACheckConfig({ data, onUpdate }: ConfigProps<QACheckData>) {
 }
 
 export function ImageCriticConfig({ data, onUpdate, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ImageCriticData> & { nodeId?: string }) {
+  const t = useT()
   const promptSnippets = useSnippetPool("image", "prompt")
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
   const finalPrompt = useFinalPromptSegments({
@@ -359,9 +363,9 @@ export function ImageCriticConfig({ data, onUpdate, nodes, edges, nodeRefs, refM
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label>Mode</Label>
+        <Label>{tx("field.mode")}</Label>
         <Select value={mode} onValueChange={(v) => handleModeChange(v as ImageCriticMode)}>
-          <SelectTrigger aria-label="Mode"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={tx("field.mode")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {IMAGE_CRITIC_MODES.map((m) => (
               <SelectItem key={m} value={m}>{m}</SelectItem>
@@ -371,7 +375,7 @@ export function ImageCriticConfig({ data, onUpdate, nodes, edges, nodeRefs, refM
       </div>
 
       <div>
-        <Label htmlFor="image-critic-threshold">Threshold ({data.threshold ?? 0.7})</Label>
+        <Label htmlFor="image-critic-threshold">{t("scriptcfg.thresholdWithValue", { value: data.threshold ?? 0.7 })}</Label>
         <Input
           id="image-critic-threshold"
           type="number"
@@ -393,7 +397,7 @@ export function ImageCriticConfig({ data, onUpdate, nodes, edges, nodeRefs, refM
       {usesPrompt && (
         <div>
           <div className="flex items-center justify-between gap-2">
-            <Label>Prompt (or wire via input edge)</Label>
+            <Label>{tx("scriptcfg.promptOrWire")}</Label>
             <span className="inline-flex items-center gap-0.5">
               <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
               <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="image" />
@@ -403,7 +407,7 @@ export function ImageCriticConfig({ data, onUpdate, nodes, edges, nodeRefs, refM
             <PromptFieldFinalView
               segments={finalPrompt.promptSegments}
               plainText={finalPrompt.promptText}
-              placeholder="Final prompt preview — empty"
+              placeholder={tx("audiocfg.phPromptPreviewEmpty")}
               minHeightRem={3 * 1.5}
             />
           ) : (
@@ -447,6 +451,7 @@ export function ImageCriticConfig({ data, onUpdate, nodes, edges, nodeRefs, refM
 }
 
 export function ImageToTextConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode, nodes, edges, nodeId }: ConfigProps<ImageToTextData> & { nodeId?: string }) {
+  const t = useT()
   const promptSnippets = useSnippetPool("text", "prompt")
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "customPrompt")
   const finalPrompt = useFinalPromptSegments({
@@ -467,16 +472,16 @@ export function ImageToTextConfig({ data, onUpdate, sources, fieldMappings, onMa
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label>Detail Level</Label>
+        <Label>{t("scriptcfg.detailLevel")}</Label>
         <Select
           value={imageToTextData.detailLevel ?? "detailed"}
           onValueChange={(v) => onUpdate({ detailLevel: v as ImageToTextData["detailLevel"] })}
         >
-          <SelectTrigger aria-label="Detail Level"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("scriptcfg.detailLevel")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="brief">Brief (1-2 sentences)</SelectItem>
-            <SelectItem value="detailed">Detailed (3-6 sentences)</SelectItem>
-            <SelectItem value="structured">Structured (labeled sections)</SelectItem>
+            <SelectItem value="brief">{t("scriptcfg.detailBrief")}</SelectItem>
+            <SelectItem value="detailed">{t("scriptcfg.detailDetailed")}</SelectItem>
+            <SelectItem value="structured">{t("scriptcfg.detailStructured")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -503,7 +508,7 @@ export function ImageToTextConfig({ data, onUpdate, sources, fieldMappings, onMa
       />
 
       <div>
-        <MappableField field="customPrompt" label="Custom Prompt (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
+        <MappableField field="customPrompt" label={t("scriptcfg.customPromptOptional")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
           <span className="inline-flex items-center gap-0.5">
             <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
             <SnippetMenuButton pool={promptSnippets} value={imageToTextData.customPrompt || ""} onInsert={(v) => onUpdate({ customPrompt: v })} target="prompt" media="text" />
@@ -513,14 +518,14 @@ export function ImageToTextConfig({ data, onUpdate, sources, fieldMappings, onMa
             <PromptFieldFinalView
               segments={finalPrompt.promptSegments}
               plainText={finalPrompt.promptText}
-              placeholder="Final prompt preview — empty"
+              placeholder={t("audiocfg.phPromptPreviewEmpty")}
               minHeightRem={3 * 1.5}
             />
           ) : (
             <TagTextarea
               value={imageToTextData.customPrompt ?? ""}
               onChange={(v) => onUpdate({ customPrompt: v })}
-              placeholder="Override the detail level with a custom instruction..."
+              placeholder={t("scriptcfg.phCustomPrompt")}
               rows={3}
               maxLength={2000}
               nodeRefs={nodeRefs}
@@ -531,13 +536,13 @@ export function ImageToTextConfig({ data, onUpdate, sources, fieldMappings, onMa
           )}
         </MappableField>
         <p className="text-xs text-muted-foreground mt-1">
-          If provided, overrides the detail level preset.
+          {t("scriptcfg.customPromptHint")}
         </p>
       </div>
 
       {results.length > 1 && (
         <div>
-          <Label>Result History</Label>
+          <Label>{t("scriptcfg.resultHistory")}</Label>
           <div className="flex gap-1 flex-wrap mt-1">
             {results.map((_, i) => (
               <button
@@ -565,7 +570,7 @@ export function ImageToTextConfig({ data, onUpdate, sources, fieldMappings, onMa
       {imageToTextData.generatedText && (
         <div>
           <div className="flex items-center justify-between">
-            <Label>Output</Label>
+            <Label>{t("nodecat.Output")}</Label>
             <Button
               variant="outline"
               size="sm"
@@ -578,7 +583,7 @@ export function ImageToTextConfig({ data, onUpdate, sources, fieldMappings, onMa
               }}
             >
               {copied ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
-              {copied ? "Copied" : "Copy"}
+              {copied ? t("apiTok.copied") : t("apiTok.copy")}
             </Button>
           </div>
           <div className="mt-1 rounded-md bg-muted/30 p-3 text-sm whitespace-pre-wrap max-h-60 overflow-y-auto">
@@ -591,17 +596,18 @@ export function ImageToTextConfig({ data, onUpdate, sources, fieldMappings, onMa
 }
 
 export function DescribeToPickerConfig({ nodeId, data, onUpdate }: ConfigProps<DescribeToPickerData> & { nodeId?: string }) {
+  const t = useT()
   const wiredPickers = useWorkflowStore(useShallow((s) => pickerFanoutTargets(nodeId ?? "", s.edges, s.nodes)))
   return (
     <div className="flex flex-col gap-3">
       <div className="text-xs text-muted-foreground">
         {wiredPickers.length > 0 ? (
           <>
-            Analyzing:{" "}
+            {t("scriptcfg.analyzingLabel")}{" "}
             <span className="text-foreground">{wiredPickers.map(pickerTypeLabel).join(" · ")}</span>
           </>
         ) : (
-          `Connect a picker node (${ANALYZABLE_PICKER_HINT}) to this node's output.`
+          t("scriptcfg.connectPickerHint", { types: ANALYZABLE_PICKER_HINT })
         )}
       </div>
       {/* Anthropic-only: the analyzer uses forced tool-use (Anthropic-direct only). */}
@@ -627,11 +633,11 @@ export function DescribeToPickerConfig({ nodeId, data, onUpdate }: ConfigProps<D
         onChange={onUpdate}
       />
       <div>
-        <Label>Extra guidance (optional)</Label>
+        <Label>{t("scriptcfg.extraGuidanceOptional")}</Label>
         <Textarea
           value={data.instructions ?? ""}
           onChange={(e) => onUpdate({ instructions: e.target.value })}
-          placeholder="e.g. focus on the foreground subject"
+          placeholder={t("scriptcfg.phExtraGuidance")}
           rows={2}
           maxLength={2000}
           className="text-xs resize-none"

@@ -2,6 +2,7 @@ import { useState, useMemo } from "react"
 import { X, Loader2, AlertCircle, Search, UserCircle, Package, PawPrint, MapPin, SmilePlus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { useT } from "@/lib/i18n"
 import { useAuth } from "@/hooks/use-auth"
 import { useCharacters, useObjects, useCreatures, useLocations, useFaces } from "@/hooks/queries/use-assets-queries"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -25,6 +26,14 @@ interface AssetSelectionModalProps {
   excludeIds?: readonly string[]
 }
 
+const ASSET_TYPE_KEYS = {
+  character: "cfgext.assetTypeCharacter",
+  object: "cfgext.assetTypeObject",
+  creature: "cfgext.assetTypeCreature",
+  location: "cfgext.assetTypeLocation",
+  face: "cfgext.assetTypeFace",
+} as const
+
 interface UnifiedAsset {
   id: string
   name: string
@@ -37,9 +46,10 @@ export function AssetSelectionModal({
   isOpen,
   onClose,
   onSelect,
-  title = "Select Asset",
+  title,
   excludeIds = [],
 }: AssetSelectionModalProps) {
+  const t = useT()
   const { user } = useAuth()
   const [searchQuery, setSearchQuery] = useState("")
   const [typeFilter, setTypeFilter] = useState<AssetType>("all")
@@ -153,8 +163,8 @@ export function AssetSelectionModal({
       >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-lg font-semibold">{title}</h2>
-          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
+          <h2 className="text-lg font-semibold">{title ?? t("cfgext.assetModalTitle")}</h2>
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label={t("common.close")}>
             <X className="w-5 h-5" />
           </Button>
         </div>
@@ -162,13 +172,13 @@ export function AssetSelectionModal({
         {/* Search and Filters */}
         <div className="p-4 border-b space-y-3">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
-              placeholder="Search assets..."
-              aria-label="Search assets"
+              placeholder={t("cfgext.assetModalSearchPh")}
+              aria-label={t("cfgext.assetModalSearchAria")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
+              className="ps-9"
             />
           </div>
           <div className="flex gap-2">
@@ -178,7 +188,7 @@ export function AssetSelectionModal({
               onClick={() => setTypeFilter("all")}
               className="text-xs"
             >
-              All ({counts.all})
+              {t("cfgext.assetModalAll", { count: counts.all })}
             </Button>
             <Button
               variant={typeFilter === "character" ? "default" : "outline"}
@@ -186,8 +196,8 @@ export function AssetSelectionModal({
               onClick={() => setTypeFilter("character")}
               className={cn("text-xs", typeFilter === "character" && "bg-pink-500 hover:bg-pink-600")}
             >
-              <UserCircle className="w-3.5 h-3.5 mr-1" />
-              Characters ({counts.character})
+              <UserCircle className="w-3.5 h-3.5 me-1" />
+              {t("cfgext.assetModalCharacters", { count: counts.character })}
             </Button>
             <Button
               variant={typeFilter === "object" ? "default" : "outline"}
@@ -195,8 +205,8 @@ export function AssetSelectionModal({
               onClick={() => setTypeFilter("object")}
               className={cn("text-xs", typeFilter === "object" && "bg-emerald-500 hover:bg-emerald-600")}
             >
-              <Package className="w-3.5 h-3.5 mr-1" />
-              Objects/Props ({counts.object})
+              <Package className="w-3.5 h-3.5 me-1" />
+              {t("cfgext.assetModalObjects", { count: counts.object })}
             </Button>
             <Button
               variant={typeFilter === "creature" ? "default" : "outline"}
@@ -204,8 +214,8 @@ export function AssetSelectionModal({
               onClick={() => setTypeFilter("creature")}
               className={cn("text-xs", typeFilter === "creature" && "bg-[#A78BFA] hover:bg-[#9170f0]")}
             >
-              <PawPrint className="w-3.5 h-3.5 mr-1" />
-              Animal/Creature ({counts.creature})
+              <PawPrint className="w-3.5 h-3.5 me-1" />
+              {t("cfgext.assetModalCreatures", { count: counts.creature })}
             </Button>
             <Button
               variant={typeFilter === "location" ? "default" : "outline"}
@@ -213,8 +223,8 @@ export function AssetSelectionModal({
               onClick={() => setTypeFilter("location")}
               className={cn("text-xs", typeFilter === "location" && "bg-cyan-500 hover:bg-cyan-600")}
             >
-              <MapPin className="w-3.5 h-3.5 mr-1" />
-              Locations ({counts.location})
+              <MapPin className="w-3.5 h-3.5 me-1" />
+              {t("cfgext.assetModalLocations", { count: counts.location })}
             </Button>
             <Button
               variant={typeFilter === "face" ? "default" : "outline"}
@@ -222,8 +232,8 @@ export function AssetSelectionModal({
               onClick={() => setTypeFilter("face")}
               className={cn("text-xs", typeFilter === "face" && "bg-violet-500 hover:bg-violet-600")}
             >
-              <SmilePlus className="w-3.5 h-3.5 mr-1" />
-              Faces ({counts.face})
+              <SmilePlus className="w-3.5 h-3.5 me-1" />
+              {t("cfgext.assetModalFaces", { count: counts.face })}
             </Button>
           </div>
         </div>
@@ -233,19 +243,19 @@ export function AssetSelectionModal({
           {loading ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
               <Loader2 className="w-8 h-8 animate-spin mb-2" />
-              <p className="text-sm">Loading assets...</p>
+              <p className="text-sm">{t("cfgext.assetModalLoading")}</p>
             </div>
           ) : error ? (
             <div className="flex flex-col items-center justify-center py-12 text-destructive">
               <AlertCircle className="w-8 h-8 mb-2" />
-              <p className="text-sm">{error.message || "Failed to load assets"}</p>
+              <p className="text-sm">{error.message || t("cfgext.assetModalLoadFailed")}</p>
             </div>
           ) : filteredAssets.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
               <p className="text-sm">
                 {assets.length === 0
-                  ? "No assets found. Create some characters, objects, or locations first."
-                  : "No assets match your filters."}
+                  ? t("cfgext.assetModalEmpty")
+                  : t("cfgext.assetModalNoMatch")}
               </p>
             </div>
           ) : (
@@ -297,7 +307,7 @@ export function AssetSelectionModal({
                     asset.type === "location" && "bg-cyan-500/10 text-cyan-500",
                     asset.type === "face" && "bg-violet-500/10 text-violet-500",
                   )}>
-                    {asset.type}
+                    {t(ASSET_TYPE_KEYS[asset.type])}
                   </span>
                 </button>
               ))}

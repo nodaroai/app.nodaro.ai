@@ -11,11 +11,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { useEdges } from "@xyflow/react"
 import { getPublishedApp, estimateComponentCredits } from "@/lib/api"
+import { useT } from "@/lib/i18n"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import type { ConfigProps } from "./types"
 import type { ComponentNodeData } from "@/types/nodes"
 import type { ComponentMetadata, ExposedSetting } from "@nodaro/shared"
 
 export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<ComponentNodeData> & { nodeId?: string }) {
+  const t = useT()
+  const localizeNode = useLocalizeNodeLabel()
   const nodeData = data as ComponentNodeData
   const edges = useEdges()
 
@@ -140,7 +144,7 @@ export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<Componen
       <div className="rounded-lg bg-gray-100 dark:bg-[#1a1a2e] border border-gray-200 dark:border-[#2D2D2D] p-3">
         <div className="flex items-center gap-2 mb-1">
           <Puzzle className="w-4 h-4 text-[#ff0073]" />
-          <span className="text-sm font-medium truncate">{nodeData.label || "Component"}</span>
+          <span className="text-sm font-medium truncate">{localizeNode(nodeData.label || "Component")}</span>
         </div>
         {nodeData.pinnedVersion > 0 && (
           <Badge variant="secondary" className="text-[10px] px-1.5 py-0 mt-1">
@@ -152,7 +156,7 @@ export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<Componen
       {/* Input handles — editable when not wired */}
       {meta.inputs.length > 0 && (
         <div className="flex flex-col gap-3">
-          <Label className="text-xs font-medium">Inputs</Label>
+          <Label className="text-xs font-medium">{t("preview.inputs")}</Label>
           {meta.inputs.map((h) => {
             const isConnected = connectedInputIds.has(h.id)
             return (
@@ -160,24 +164,24 @@ export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<Componen
                 <div className="flex items-center justify-between mb-1">
                   <Label className="text-[10px] text-muted-foreground">
                     {h.name}
-                    {h.required && <span className="text-red-400 ml-0.5">*</span>}
+                    {h.required && <span className="text-red-400 ms-0.5">*</span>}
                   </Label>
                   <Badge variant="outline" className="text-[9px] px-1 py-0">{h.type}</Badge>
                 </div>
                 {isConnected ? (
                   <div className="text-[10px] text-muted-foreground/60 italic px-2 py-1.5 bg-muted/30 rounded-md">
-                    Connected from upstream
+                    {t("cfgext.cmpCfgConnectedUpstream")}
                   </div>
                 ) : h.type === "text" ? (
                   <Textarea
                     className="text-xs min-h-[60px]"
-                    placeholder={`Enter ${h.name.toLowerCase()}...`}
+                    placeholder={t("cfgext.cmpCfgEnterField", { field: h.name.toLowerCase() })}
                     value={getInputValue(h.id, h.fieldKey)}
                     onChange={(e) => handleInputChange(h.id, h.fieldKey, e.target.value)}
                   />
                 ) : (
                   <div className="text-[10px] text-muted-foreground/60 italic px-2 py-1.5 bg-muted/30 rounded-md">
-                    Connect {h.type} from upstream node
+                    {t("cfgext.cmpCfgConnectFromUpstream", { type: h.type })}
                   </div>
                 )}
               </div>
@@ -189,7 +193,7 @@ export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<Componen
       {/* Exposed settings */}
       {(meta.exposedSettings ?? []).length > 0 && (
         <div className="flex flex-col gap-3">
-          <Label className="text-xs font-medium">Settings</Label>
+          <Label className="text-xs font-medium">{t("nav.settings")}</Label>
           {(meta.exposedSettings ?? []).map((setting) => {
             const key = `${setting.nodeId}:${setting.field}`
             const value = getSettingValue(setting)
@@ -298,7 +302,7 @@ export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<Componen
       {/* Outputs (read-only) */}
       {meta.outputs.length > 0 && (
         <div>
-          <Label className="text-xs font-medium">Outputs</Label>
+          <Label className="text-xs font-medium">{t("preview.outputs")}</Label>
           <div className="flex flex-col gap-1 mt-1">
             {meta.outputs.map((h) => (
               <div key={h.id} className="flex items-center justify-between text-[10px]">

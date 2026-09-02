@@ -1,19 +1,24 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen } from "@testing-library/react"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { render, screen, cleanup, act } from "@testing-library/react"
 
 const xyflow = vi.hoisted(() => ({ zoom: 1 }))
 vi.mock("@xyflow/react", () => ({
   useStore: vi.fn((selector: (s: { transform: number[] }) => unknown) => selector({ transform: [0, 0, xyflow.zoom] })),
 }))
 
+// One stable state object, as zustand hands out: re-creating it per call would
+// give every slice a fresh identity on every render, which silently defeats any
+// `useMemo` keyed on a store slice (and hid the stale-locale template label).
+const store = vi.hoisted(() => ({
+  state: {
+    updateNodeData: () => {},
+    runSingleNode: () => {},
+    userTextTemplates: [] as unknown[],
+    nodes: [{ id: "n1", width: 260 }],
+  },
+}))
 vi.mock("@/hooks/use-workflow-store", () => ({
-  useWorkflowStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({
-      updateNodeData: () => {},
-      runSingleNode: () => {},
-      userTextTemplates: [],
-      nodes: [{ id: "n1", width: 260 }],
-    }),
+  useWorkflowStore: (selector: (s: Record<string, unknown>) => unknown) => selector(store.state),
 }))
 
 vi.mock("../run-node-button", () => ({
@@ -23,6 +28,8 @@ vi.mock("../run-node-button", () => ({
 }))
 
 import { LlmChatQuickToolbar, buildModelChangePatch } from "../llm-chat-quick-toolbar"
+import { useLocaleStore } from "@/lib/locale-store"
+import { translate } from "@/lib/i18n"
 
 describe("LlmChatQuickToolbar", () => {
   beforeEach(() => {
@@ -65,7 +72,7 @@ describe("LlmChatQuickToolbar", () => {
         isRunning={false}
       />,
     )
-    expect(screen.getByTitle("Reasoning effort")).toBeInTheDocument()
+    expect(screen.getByTitle(translate("en", "cfgshared.reasoningEffort"))).toBeInTheDocument()
     expect(screen.getByText("Auto")).toBeInTheDocument()
   })
 
@@ -90,7 +97,7 @@ describe("LlmChatQuickToolbar", () => {
         isRunning={false}
       />,
     )
-    expect(screen.queryByTitle("Reasoning effort")).not.toBeInTheDocument()
+    expect(screen.queryByTitle(translate("en", "cfgshared.reasoningEffort"))).not.toBeInTheDocument()
   })
 
   it("collapses to the compact settings pill when zoomed out", () => {
@@ -104,8 +111,36 @@ describe("LlmChatQuickToolbar", () => {
       />,
     )
     expect(screen.getByTitle("Settings")).toBeInTheDocument()
-    expect(screen.queryByTitle("AI model")).not.toBeInTheDocument()
+    expect(screen.queryByTitle(translate("en", "cfgshared.aiModel"))).not.toBeInTheDocument()
     expect(screen.getByTestId("run-node-button")).toBeInTheDocument()
+  })
+})
+
+// The template chip reads GENERATE_TEXT_TEMPLATES(), whose labels resolve
+// through the live locale — so the memo that caches the label has to be keyed
+// on the locale too, or the chip keeps the previous language after a switch.
+describe("LlmChatQuickToolbar template label locale", () => {
+  beforeEach(() => {
+    xyflow.zoom = 1
+  })
+  afterEach(() => {
+    cleanup()
+    act(() => useLocaleStore.getState().setLocale("en"))
+  })
+
+  it("follows a language switch", () => {
+    render(
+      <LlmChatQuickToolbar
+        nodeId="n1"
+        data={{ llmModel: "gemini-3-flash", templateId: "photo-shoot" } as never}
+        credits={3}
+        isRunning={false}
+      />,
+    )
+    expect(screen.getByText(translate("en", "txtcfg.tplPhotoShootLabel"))).toBeInTheDocument()
+    act(() => useLocaleStore.getState().setLocale("he"))
+    expect(screen.getByText(translate("he", "txtcfg.tplPhotoShootLabel"))).toBeInTheDocument()
+    expect(screen.queryByText(translate("en", "txtcfg.tplPhotoShootLabel"))).not.toBeInTheDocument()
   })
 })
 

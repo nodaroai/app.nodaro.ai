@@ -4,20 +4,23 @@ import { useMemo } from "react"
 import { AlertTriangle } from "lucide-react"
 import { MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX } from "./model-options"
 import { T2I_TO_I2I_VARIANT } from "@nodaro/shared"
+import { useT } from "@/lib/i18n"
+import type { MessageKey } from "@/lib/i18n/en"
 
 const IMAGE_TOKEN_RE = /\{image:(\d+)(?::([a-zA-Z0-9_-]+))?\}/gi
 
 /**
  * Hard-no alternatives: providers that don't accept refs and don't have an
  * i2i sibling — point users at the only T2I family that actually supports
- * multi-reference natively.
+ * multi-reference natively. Values are message KEYS (resolved at render), so
+ * the suggestion follows the UI language instead of freezing at module load.
  */
-const NO_REF_ALTERNATIVE: Record<string, string> = {
-  "ideogram-v3": "nano-banana-pro for native multi-reference T2I",
-  "imagen4": "nano-banana-pro for native multi-reference T2I",
-  "imagen4-fast": "nano-banana-pro for native multi-reference T2I",
-  "imagen4-ultra": "nano-banana-pro for native multi-reference T2I",
-  "z-image": "nano-banana-pro for native multi-reference T2I",
+const NO_REF_ALTERNATIVE: Record<string, MessageKey> = {
+  "ideogram-v3": "cfgext.refWarnAltNanoBananaPro",
+  "imagen4": "cfgext.refWarnAltNanoBananaPro",
+  "imagen4-fast": "cfgext.refWarnAltNanoBananaPro",
+  "imagen4-ultra": "cfgext.refWarnAltNanoBananaPro",
+  "z-image": "cfgext.refWarnAltNanoBananaPro",
 }
 
 interface ReferenceSupportWarningProps {
@@ -57,6 +60,7 @@ function scanPrompt(prompt: string | undefined): UsageScan {
  * No banner shown for the auto-routing case — the swap is transparent.
  */
 export function ReferenceSupportWarning({ provider, prompt, attachedRefCount }: ReferenceSupportWarningProps) {
+  const t = useT()
   const { hasMentions, maxIndex } = useMemo(() => scanPrompt(prompt), [prompt])
 
   const messages: string[] = []
@@ -67,22 +71,27 @@ export function ReferenceSupportWarning({ provider, prompt, attachedRefCount }: 
 
     if (!supports && (hasMentions || attachedRefCount > 0)) {
       const alt = NO_REF_ALTERNATIVE[provider]
-      const tail = alt ? ` Use ${alt} instead.` : ""
-      messages.push(
-        `${provider} doesn't accept reference images — attached references and any \`@image:N:…\` tokens in the prompt will be ignored.${tail}`,
-      )
+      const tail = alt ? t("cfgext.refWarnUseInstead", { alt: t(alt) }) : ""
+      messages.push(t("cfgext.refWarnNoRefSupport", { provider }) + tail)
     } else if (supports) {
       // Limit + out-of-range checks use the i2i variant's limit when the
       // backend will auto-route to it.
       const limit = REF_IMAGE_MAX_LIMITS[i2iVariant ?? provider] ?? DEFAULT_REF_IMAGE_MAX
       if (attachedRefCount > limit) {
         messages.push(
-          `${i2iVariant ?? provider} accepts at most ${limit} reference image${limit === 1 ? "" : "s"} — only the first ${limit} will be sent.`,
+          t(limit === 1 ? "cfgext.refWarnLimitOne" : "cfgext.refWarnLimitMany", {
+            provider: i2iVariant ?? provider,
+            limit,
+            first: limit,
+          }),
         )
       }
       if (maxIndex > attachedRefCount) {
         messages.push(
-          `\`@image:${maxIndex}\` mentioned in prompt but only ${attachedRefCount} reference${attachedRefCount === 1 ? " is" : "s are"} attached.`,
+          t(attachedRefCount === 1 ? "cfgext.refWarnOutOfRangeOne" : "cfgext.refWarnOutOfRangeMany", {
+            index: maxIndex,
+            count: attachedRefCount,
+          }),
         )
       }
     }

@@ -1,5 +1,7 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
+import { useLocalizeOptionLabel } from "@/lib/i18n/labels"
 import { Wand2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { SelectItem } from "@/components/ui/select"
@@ -52,11 +54,14 @@ function displayText(value: string, label: string): string {
 }
 
 export function AspectRatioSelector({ options, value, onValueChange, className }: AspectRatioSelectorProps) {
+  const t = useT()
+  const localizeOption = useLocalizeOptionLabel()
   const cols = options.length <= 2 ? "grid-cols-2" : "grid-cols-3"
   return (
-    <div role="radiogroup" aria-label="Aspect Ratio" className={cn("grid gap-1.5", cols, className)}>
+    <div role="radiogroup" aria-label={t("field.aspectRatio")} className={cn("grid gap-1.5", cols, className)}>
       {options.map((opt) => {
         const selected = opt.value === value
+        const label = localizeOption(opt.label)
         return (
           <button
             key={opt.value}
@@ -64,7 +69,7 @@ export function AspectRatioSelector({ options, value, onValueChange, className }
             role="radio"
             aria-checked={selected}
             onClick={() => onValueChange(opt.value)}
-            title={opt.label !== opt.value ? opt.label : undefined}
+            title={label !== opt.value ? label : undefined}
             className={cn(
               "flex items-center justify-center gap-1 px-1.5 py-2 rounded-lg text-[11px] font-medium border transition-colors cursor-pointer",
               selected
@@ -73,7 +78,7 @@ export function AspectRatioSelector({ options, value, onValueChange, className }
             )}
           >
             <RatioIcon value={opt.value} label={opt.label} />
-            <span>{displayText(opt.value, opt.label)}</span>
+            <span>{displayText(opt.value, label)}</span>
           </button>
         )
       })}
@@ -87,13 +92,14 @@ export function AspectRatioSelector({ options, value, onValueChange, className }
  *  `RatioIcon` SVG as the full config panel's tile grid. Shared so the
  *  quick-toolbars and the run-strip controls render identical option rows. */
 export function AspectRatioItem({ value, label }: { value: string; label: string }) {
+  const localizeOption = useLocalizeOptionLabel()
   return (
-    <SelectItem value={value} className="text-xs pr-8">
+    <SelectItem value={value} className="text-xs pe-8">
       <span className="flex w-full items-center gap-2">
         <span className="text-muted-foreground shrink-0">
           <RatioIcon value={value} label={label} />
         </span>
-        <span className="flex-1">{label}</span>
+        <span className="flex-1">{localizeOption(label)}</span>
       </span>
     </SelectItem>
   )

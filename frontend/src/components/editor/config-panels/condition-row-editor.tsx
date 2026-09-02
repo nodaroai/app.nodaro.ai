@@ -13,35 +13,42 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Trash2 } from "lucide-react"
 import type { FilterListCondition, FilterListOperator } from "@/types/nodes"
+import { useT, tx } from "@/lib/i18n"
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const FILTER_OPERATOR_LABELS: Record<FilterListOperator, string> = {
-  ">": "greater than",
-  "<": "less than",
-  ">=": "greater or equal",
-  "<=": "less or equal",
-  "=": "equals",
-  "!=": "not equals",
-  contains: "contains",
-  not_contains: "does not contain",
-  starts_with: "starts with",
-  ends_with: "ends with",
-  regex: "matches regex",
-  exists: "exists",
-  not_exists: "does not exist",
+/** Live getter — a module constant would freeze the labels to the boot locale. */
+function FILTER_OPERATOR_LABELS(): Record<FilterListOperator, string> {
+  return {
+  ">": tx("utilcfg.opGreaterThan"),
+  "<": tx("utilcfg.opLessThan"),
+  ">=": tx("cfgext.selOpGreaterOrEqual"),
+  "<=": tx("cfgext.selOpLessOrEqual"),
+  "=": tx("utilcfg.opEquals"),
+  "!=": tx("utilcfg.opNotEquals"),
+  contains: tx("utilcfg.opContains"),
+  not_contains: tx("utilcfg.opNotContains"),
+  starts_with: tx("utilcfg.opStartsWith"),
+  ends_with: tx("utilcfg.opEndsWith"),
+  regex: tx("utilcfg.opMatchesRegex"),
+  exists: tx("cfgext.selOpExists"),
+  not_exists: tx("cfgext.selOpNotExists"),
+}
 }
 
 const FILTER_NO_VALUE_OPERATORS: ReadonlySet<FilterListOperator> = new Set(["exists", "not_exists"])
 
 const FILTER_COMPARISON_OPERATORS: ReadonlySet<FilterListOperator> = new Set([">", "<", ">=", "<="])
 
-const FILTER_VARIABLE_TOKENS: ReadonlyArray<{ token: string; label: string }> = [
-  { token: "{{now}}", label: "Current ISO time ({{now}})" },
-  { token: "{{trigger.last_triggered_at}}", label: "Last trigger fire ({{trigger.last_triggered_at}})" },
+/** Live getter — a module constant would freeze the labels to the boot locale. */
+function FILTER_VARIABLE_TOKENS(): ReadonlyArray<{ token: string; label: string }> {
+  return [
+  { token: "{{now}}", label: tx("cfgext.condTokenNow") },
+  { token: "{{trigger.last_triggered_at}}", label: tx("cfgext.condTokenLastTrigger") },
 ]
+}
 
 const DATE_FIELD_EXACT = new Set(["timestamp", "created_at", "updated_at", "published_at", "date"])
 const DATE_FIELD_SUFFIX_RE = /(_at|_date|At|Date)$/
@@ -89,12 +96,15 @@ export function buildDateValueToken(mode: DateValueMode, n: number): string {
   }
 }
 
-const DATE_MODE_LABEL: Record<DateValueMode, string> = {
-  "since-last-run": "Since last run",
-  "last-hours": "Last N hours",
-  "last-days": "Last N days",
-  "last-weeks": "Last N weeks",
-  custom: "Custom…",
+/** Live getter — a module constant would freeze the labels to the boot locale. */
+function DATE_MODE_LABEL(): Record<DateValueMode, string> {
+  return {
+  "since-last-run": tx("cfgext.condDateSinceLastRun"),
+  "last-hours": tx("cfgext.condDateLastNHours"),
+  "last-days": tx("cfgext.condDateLastNDays"),
+  "last-weeks": tx("cfgext.condDateLastNWeeks"),
+  custom: tx("cfgext.condDateCustom"),
+}
 }
 
 function DateTimeValuePicker({
@@ -104,7 +114,9 @@ function DateTimeValuePicker({
   value: string
   onChange: (nextValue: string, nextValueType: "static" | "variable") => void
 }) {
+  const t = useT()
   const parsed = parseDateValueMode(value)
+  const dateModeLabel = DATE_MODE_LABEL()
   const showNInput = parsed.mode === "last-hours" || parsed.mode === "last-days" || parsed.mode === "last-weeks"
   const isSinceLastRun = parsed.mode === "since-last-run"
 
@@ -127,13 +139,13 @@ function DateTimeValuePicker({
             onChange(buildDateValueToken(nextMode, n), "variable")
           }}
         >
-          <SelectTrigger className="h-7 text-xs flex-1 min-w-0" aria-label="Date value mode">
+          <SelectTrigger className="h-7 text-xs flex-1 min-w-0" aria-label={t("cfgext.condDateValueMode")}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {(Object.keys(DATE_MODE_LABEL) as DateValueMode[]).map((mode) => (
+            {(Object.keys(dateModeLabel) as DateValueMode[]).map((mode) => (
               <SelectItem key={mode} value={mode} className="text-xs">
-                {DATE_MODE_LABEL[mode]}
+                {dateModeLabel[mode]}
               </SelectItem>
             ))}
           </SelectContent>
@@ -148,13 +160,13 @@ function DateTimeValuePicker({
               onChange(buildDateValueToken(parsed.mode, n), "variable")
             }}
             className="text-xs h-7 w-16 shrink-0"
-            aria-label="Number of units"
+            aria-label={t("cfgext.condNumberOfUnits")}
           />
         )}
       </div>
       {isSinceLastRun && (
         <p className="text-[10px] text-amber-500/90" role="note">
-          Resolves only on triggered/scheduled runs. A manual Run treats this as empty.
+          {t("cfgext.condSinceLastRunNote")}
         </p>
       )}
     </div>
@@ -205,6 +217,7 @@ export interface ConditionRowEditorProps {
 }
 
 export function ConditionRowEditor({ condition, fieldOptions, onUpdate, onRemove }: ConditionRowEditorProps) {
+  const t = useT()
   const isNoValue = FILTER_NO_VALUE_OPERATORS.has(condition.operator)
   const isVariable = condition.valueType === "variable"
   const condMode = condition.mode ?? "dropdown"
@@ -229,22 +242,22 @@ export function ConditionRowEditor({ condition, fieldOptions, onUpdate, onRemove
               }
             }}
           >
-            <SelectTrigger aria-label="Field" className="h-7 text-xs min-w-0 flex-1">
-              <SelectValue placeholder="Select a field..." />
+            <SelectTrigger aria-label={t("utilcfg.field")} className="h-7 text-xs min-w-0 flex-1">
+              <SelectValue placeholder={t("utilcfg.phSelectField")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={FIELD_WHOLE} className="text-muted-foreground">(whole item)</SelectItem>
+              <SelectItem value={FIELD_WHOLE} className="text-muted-foreground">{t("utilcfg.wholeItem")}</SelectItem>
               {fieldOptions.map((opt) => (
                 <SelectItem key={opt} value={opt}>{opt}</SelectItem>
               ))}
-              <SelectItem value={FIELD_CUSTOM} className="text-muted-foreground">Custom path…</SelectItem>
+              <SelectItem value={FIELD_CUSTOM} className="text-muted-foreground">{t("utilcfg.customPath")}</SelectItem>
             </SelectContent>
           </Select>
         ) : (
           <Input
             value={fieldValue}
             onChange={(e) => onUpdate({ field: e.target.value })}
-            placeholder="field (blank = whole item)"
+            placeholder={t("cfgext.condPhFieldBlank")}
             className="text-xs h-7 min-w-0 flex-1"
           />
         )}
@@ -261,7 +274,7 @@ export function ConditionRowEditor({ condition, fieldOptions, onUpdate, onRemove
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {(Object.entries(FILTER_OPERATOR_LABELS) as [FilterListOperator, string][]).map(([op, label]) => (
+            {(Object.entries(FILTER_OPERATOR_LABELS()) as [FilterListOperator, string][]).map(([op, label]) => (
               <SelectItem key={op} value={op} className="text-xs">
                 {label}
               </SelectItem>
@@ -272,7 +285,7 @@ export function ConditionRowEditor({ condition, fieldOptions, onUpdate, onRemove
           type="button"
           onClick={onRemove}
           className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
-          title="Remove condition"
+          title={t("cfgext.condRemoveCondition")}
         >
           <Trash2 className="w-3.5 h-3.5" />
         </button>
@@ -280,10 +293,10 @@ export function ConditionRowEditor({ condition, fieldOptions, onUpdate, onRemove
       {condMode === "custom" && (
         <button
           type="button"
-          className="text-[11px] text-muted-foreground hover:text-foreground hover:underline text-left self-start"
+          className="text-[11px] text-muted-foreground hover:text-foreground hover:underline text-start self-start"
           onClick={() => onUpdate({ mode: "dropdown" })}
         >
-          ← Back to field list
+          {t("utilcfg.backToFieldList")}
         </button>
       )}
       {!isNoValue && (() => {
@@ -307,10 +320,10 @@ export function ConditionRowEditor({ condition, fieldOptions, onUpdate, onRemove
                 onValueChange={(v) => onUpdate({ value: v })}
               >
                 <SelectTrigger className="h-7 text-xs flex-1 min-w-0">
-                  <SelectValue placeholder="Select variable..." />
+                  <SelectValue placeholder={t("cfgext.condPhSelectVariable")} />
                 </SelectTrigger>
                 <SelectContent>
-                  {FILTER_VARIABLE_TOKENS.map((v) => (
+                  {FILTER_VARIABLE_TOKENS().map((v) => (
                     <SelectItem key={v.token} value={v.token} className="text-xs">
                       {v.label}
                     </SelectItem>
@@ -321,7 +334,7 @@ export function ConditionRowEditor({ condition, fieldOptions, onUpdate, onRemove
               <Input
                 value={condition.value ?? ""}
                 onChange={(e) => onUpdate({ value: e.target.value })}
-                placeholder="value"
+                placeholder={t("utilcfg.phValue")}
                 className="text-xs h-7 min-w-0 flex-1"
               />
             )}
@@ -339,9 +352,9 @@ export function ConditionRowEditor({ condition, fieldOptions, onUpdate, onRemove
                   ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-400"
                   : "border-border text-muted-foreground hover:text-foreground")
               }
-              title="Toggle static/variable value"
+              title={t("cfgext.condToggleStaticVariable")}
             >
-              {isVariable ? "var" : "str"}
+              {isVariable ? t("cfgext.condVar") : t("cfgext.condStr")}
             </button>
           </div>
         )

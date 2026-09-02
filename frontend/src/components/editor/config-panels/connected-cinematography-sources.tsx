@@ -14,6 +14,8 @@ import { StylePreview } from "@/lib/picker-ui"
 import { TemporalPreview } from "@/lib/picker-ui"
 import { CameraMotionPreview } from "@/lib/picker-ui"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
+import { useT, type TFunction } from "@/lib/i18n"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import { cn } from "@/lib/utils"
 
 interface Props {
@@ -35,6 +37,8 @@ function collectSources(
   consumerNodeId: string | undefined,
   nodes: ReadonlyArray<WorkflowNode>,
   edges: ReadonlyArray<WorkflowEdge>,
+  t: TFunction,
+  localizeNode: (label: string) => string,
 ): SourceEntry[] {
   if (!consumerNodeId) return []
   const entries: SourceEntry[] = []
@@ -44,7 +48,7 @@ function collectSources(
     const src = nodes.find((n) => n.id === edge.source)
     if (!src) continue
     const data = src.data as Record<string, unknown>
-    const srcNodeLabel = (data.label as string | undefined) || src.type || "Source"
+    const srcNodeLabel = localizeNode((data.label as string | undefined) || src.type || t("inputcfg.source"))
 
     switch (src.type) {
       case "camera-motion": {
@@ -190,7 +194,7 @@ function collectSources(
           key: src.id,
           icon: Palette,
           title: `${srcNodeLabel}: ${toneText}`,
-          description: "Tone",
+          description: t("paramcfg.tone"),
           preview: null,
         })
         break
@@ -202,7 +206,7 @@ function collectSources(
           key: src.id,
           icon: SlidersHorizontal,
           title: `${srcNodeLabel}: ${motion}`,
-          description: "Motion",
+          description: t("field.motion"),
           preview: null,
         })
         break
@@ -251,9 +255,11 @@ function collectSources(
  * noise when the user isn't using cinematography yet.
  */
 export function ConnectedCinematographySources({ consumerNodeId, nodes, edges, className }: Props) {
+  const t = useT()
+  const localizeNode = useLocalizeNodeLabel()
   const entries = useMemo(
-    () => collectSources(consumerNodeId, nodes, edges),
-    [consumerNodeId, nodes, edges],
+    () => collectSources(consumerNodeId, nodes, edges, t, localizeNode),
+    [consumerNodeId, nodes, edges, t, localizeNode],
   )
 
   if (entries.length === 0) return null
@@ -261,7 +267,7 @@ export function ConnectedCinematographySources({ consumerNodeId, nodes, edges, c
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground px-0.5">
-        Connected cinematography ({entries.length})
+        {t("cfgext.connCineHeader", { n: entries.length })}
       </p>
       <div className="flex flex-col gap-2">
         {entries.map((e) => {

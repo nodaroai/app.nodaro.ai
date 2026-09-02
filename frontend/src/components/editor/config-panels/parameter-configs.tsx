@@ -1,5 +1,6 @@
 "use client"
 
+import { useT, tx } from "@/lib/i18n"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
@@ -108,15 +109,16 @@ import { CustomTextRows } from "./custom-text-rows"
 import type { ConfigProps } from "./types"
 
 export function ToneConfig({ data, onUpdate }: ConfigProps<ToneData>) {
+  const t = useT()
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label htmlFor="tone-value">Tone</Label>
+        <Label htmlFor="tone-value">{t("paramcfg.tone")}</Label>
         <Input
           id="tone-value"
           value={data.tone}
           onChange={(e) => onUpdate({ tone: e.target.value })}
-          placeholder="e.g. dramatic, playful, dark"
+          placeholder={t("paramcfg.eGDramaticPlayfulDark")}
         />
       </div>
     </div>
@@ -124,16 +126,17 @@ export function ToneConfig({ data, onUpdate }: ConfigProps<ToneData>) {
 }
 
 export function StyleGuideConfig({ data, onUpdate }: ConfigProps<StyleGuideData>) {
+  const t = useT()
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label htmlFor="style-text">Style Description</Label>
+        <Label htmlFor="style-text">{t("paramcfg.styleDescription")}</Label>
         <Textarea
           id="style-text"
           rows={3}
           value={data.text}
           onChange={(e) => onUpdate({ text: e.target.value })}
-          placeholder="e.g. Studio Ghibli watercolor..."
+          placeholder={t("paramcfg.eGStudioGhibliWatercolor")}
         />
       </div>
     </div>
@@ -141,6 +144,7 @@ export function StyleGuideConfig({ data, onUpdate }: ConfigProps<StyleGuideData>
 }
 
 export function ProviderConfig({ data, onUpdate }: ConfigProps<ProviderData>) {
+  const t = useT()
   const category = data.category as ProviderCategory
   const providers = getProviders(category)
   const models = getModels(category, data.provider)
@@ -148,7 +152,7 @@ export function ProviderConfig({ data, onUpdate }: ConfigProps<ProviderData>) {
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label>Category</Label>
+        <Label>{t("apps.categoryLabel")}</Label>
         <Select
           value={data.category}
           onValueChange={(v) => {
@@ -158,17 +162,17 @@ export function ProviderConfig({ data, onUpdate }: ConfigProps<ProviderData>) {
             onUpdate({ category: cat, provider: firstProvider, model: firstModel })
           }}
         >
-          <SelectTrigger aria-label="Category"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("apps.categoryLabel")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="image">Image</SelectItem>
-            <SelectItem value="video">Video</SelectItem>
-            <SelectItem value="voice">Voice</SelectItem>
-            <SelectItem value="script">Script</SelectItem>
+            <SelectItem value="image">{t("common.image")}</SelectItem>
+            <SelectItem value="video">{t("common.video")}</SelectItem>
+            <SelectItem value="voice">{t("field.voice")}</SelectItem>
+            <SelectItem value="script">{t("node.script")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
       <div>
-        <Label>Provider</Label>
+        <Label>{t("field.provider")}</Label>
         <Select
           value={data.provider}
           onValueChange={(v) => {
@@ -176,7 +180,7 @@ export function ProviderConfig({ data, onUpdate }: ConfigProps<ProviderData>) {
             onUpdate({ provider: v, model: firstModel })
           }}
         >
-          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("field.provider")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {providers.map((p) => (
               <SelectItem key={p} value={p}>{getProviderLabel(category, p)}</SelectItem>
@@ -185,12 +189,12 @@ export function ProviderConfig({ data, onUpdate }: ConfigProps<ProviderData>) {
         </Select>
       </div>
       <div>
-        <Label>Model</Label>
+        <Label>{t("field.model")}</Label>
         <Select
           value={data.model}
           onValueChange={(v) => onUpdate({ model: v })}
         >
-          <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {models.map((m) => (
               <SelectItem key={m} value={m}>{m}</SelectItem>
@@ -203,10 +207,11 @@ export function ProviderConfig({ data, onUpdate }: ConfigProps<ProviderData>) {
 }
 
 export function SceneCountConfig({ data, onUpdate }: ConfigProps<SceneCountData>) {
+  const t = useT()
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label htmlFor="scene-count-val">Number of Scenes</Label>
+        <Label htmlFor="scene-count-val">{t("paramcfg.numberOfScenes")}</Label>
         <Input
           id="scene-count-val"
           type="number"
@@ -221,10 +226,11 @@ export function SceneCountConfig({ data, onUpdate }: ConfigProps<SceneCountData>
 }
 
 export function DurationConfig({ data, onUpdate }: ConfigProps<DurationData>) {
+  const t = useT()
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label htmlFor="duration-seconds">Duration (seconds)</Label>
+        <Label htmlFor="duration-seconds">{t("field.durationSeconds")}</Label>
         <Input
           id="duration-seconds"
           type="number"
@@ -239,19 +245,20 @@ export function DurationConfig({ data, onUpdate }: ConfigProps<DurationData>) {
 }
 
 export function AspectRatioConfig({ data, onUpdate }: ConfigProps<AspectRatioData>) {
+  const t = useT()
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label>Aspect Ratio</Label>
+        <Label>{t("field.aspectRatio")}</Label>
         <Select
           value={data.ratio}
           onValueChange={(v) => onUpdate({ ratio: v as AspectRatioData["ratio"] })}
         >
-          <SelectTrigger aria-label="Aspect ratio"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("paramcfg.aspectRatio")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="1:1">1:1 (Square)</SelectItem>
-            <SelectItem value="16:9">16:9 (Landscape)</SelectItem>
-            <SelectItem value="9:16">9:16 (Portrait)</SelectItem>
+            <SelectItem value="1:1">{t("paramcfg.11Square")}</SelectItem>
+            <SelectItem value="16:9">{t("paramcfg.169Landscape")}</SelectItem>
+            <SelectItem value="9:16">{t("paramcfg.916Portrait")}</SelectItem>
             <SelectItem value="4:3">4:3</SelectItem>
             <SelectItem value="4:5">4:5</SelectItem>
           </SelectContent>
@@ -262,19 +269,20 @@ export function AspectRatioConfig({ data, onUpdate }: ConfigProps<AspectRatioDat
 }
 
 export function MotionConfig({ data, onUpdate }: ConfigProps<MotionData>) {
+  const t = useT()
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label>Motion</Label>
+        <Label>{t("field.motion")}</Label>
         <Select
           value={data.motion}
           onValueChange={(v) => onUpdate({ motion: v as MotionData["motion"] })}
         >
-          <SelectTrigger aria-label="Motion"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("field.motion")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="subtle">Subtle</SelectItem>
-            <SelectItem value="moderate">Moderate</SelectItem>
-            <SelectItem value="dynamic">Dynamic</SelectItem>
+            <SelectItem value="subtle">{t("vidcfg.subtle")}</SelectItem>
+            <SelectItem value="moderate">{t("vidcfg.moderate")}</SelectItem>
+            <SelectItem value="dynamic">{t("vidcfg.dynamic")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -283,6 +291,7 @@ export function MotionConfig({ data, onUpdate }: ConfigProps<MotionData>) {
 }
 
 export function CameraMotionConfig({ data, onUpdate, nodes, edges, nodeId }: ConfigProps<CameraMotionData> & { nodeId?: string }) {
+  const t = useT()
   const dir = usePickerDir()
   const composed = composeCameraMotionHintForNode(
     data.cameraMotion,
@@ -295,17 +304,17 @@ export function CameraMotionConfig({ data, onUpdate, nodes, edges, nodeId }: Con
       <LocaleHeader />
       <PromptInjectionPreview hints={[data.preText, composed, data.postText]} />
       <p className="text-[10px] text-muted-foreground italic px-0.5">
-        Connect parameter nodes to startState / endState input handles to add "beginning with…" / "ending with…" clauses to this preview.
+        {t("paramcfg.connectParameterNodesToStartstateEndstat")}
       </p>
       <CustomTextRows
         idPrefix="camera-motion"
         preText={data.preText}
         postText={data.postText}
-        prePlaceholder="e.g. starts handheld"
-        postPlaceholder="e.g. settles to lock-off"
+        prePlaceholder={t("paramcfg.eGStartsHandheld")}
+        postPlaceholder={t("paramcfg.eGSettlesToLockOff")}
         onChange={onUpdate}
       />
-      <Label>Camera Motion</Label>
+      <Label>{t("paramcfg.cameraMotion")}</Label>
       <CameraMotionPicker
         value={data.cameraMotion || "static"}
         onValueChange={(v) => onUpdate({ cameraMotion: v })}
@@ -315,6 +324,7 @@ export function CameraMotionConfig({ data, onUpdate, nodes, edges, nodeId }: Con
 }
 
 export function FramingConfig({ data, onUpdate }: ConfigProps<FramingData>) {
+  const t = useT()
   const dir = usePickerDir()
   const maxItemsPerRow = data.maxItemsPerRow ?? 2
   return (
@@ -325,11 +335,11 @@ export function FramingConfig({ data, onUpdate }: ConfigProps<FramingData>) {
         idPrefix="framing"
         preText={data.preText}
         postText={data.postText}
-        prePlaceholder="e.g. handheld feel"
-        postPlaceholder="e.g. with subtle dolly-in"
+        prePlaceholder={t("paramcfg.eGHandheldFeel")}
+        postPlaceholder={t("paramcfg.eGWithSubtleDollyIn")}
         onChange={onUpdate}
       />
-      <Label>Framing</Label>
+      <Label>{t("paramcfg.framing")}</Label>
       <FramingPicker
         value={{
           shotSize: data.shotSize,
@@ -342,7 +352,7 @@ export function FramingConfig({ data, onUpdate }: ConfigProps<FramingData>) {
       />
       <div className="flex items-center justify-between gap-2 pt-1">
         <Label htmlFor="framing-max-items-per-row" className="text-xs text-muted-foreground">
-          Items per row (node card)
+          {t("paramcfg.itemsPerRowNodeCard")}
         </Label>
         <input
           id="framing-max-items-per-row"
@@ -356,7 +366,7 @@ export function FramingConfig({ data, onUpdate }: ConfigProps<FramingData>) {
             const clamped = Math.max(1, Math.min(5, next))
             onUpdate({ maxItemsPerRow: clamped })
           }}
-          className="w-16 h-8 rounded-md border border-input bg-transparent px-2 text-xs text-right"
+          className="w-16 h-8 rounded-md border border-input bg-transparent px-2 text-xs text-end"
         />
       </div>
     </div>
@@ -364,6 +374,7 @@ export function FramingConfig({ data, onUpdate }: ConfigProps<FramingData>) {
 }
 
 export function LensConfig({ data, onUpdate }: ConfigProps<LensData>) {
+  const t = useT()
   const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
@@ -373,11 +384,11 @@ export function LensConfig({ data, onUpdate }: ConfigProps<LensData>) {
         idPrefix="lens"
         preText={data.preText}
         postText={data.postText}
-        prePlaceholder="e.g. vintage"
-        postPlaceholder="e.g. with chromatic aberration"
+        prePlaceholder={t("paramcfg.eGVintage")}
+        postPlaceholder={t("paramcfg.eGWithChromaticAberration")}
         onChange={onUpdate}
       />
-      <Label>Lens</Label>
+      <Label>{t("paramcfg.lens")}</Label>
       <LensPicker
         value={data.lens || "normal-50mm"}
         onValueChange={(v) => onUpdate({ lens: v })}
@@ -387,6 +398,7 @@ export function LensConfig({ data, onUpdate }: ConfigProps<LensData>) {
 }
 
 export function CameraFormatConfig({ data, onUpdate }: ConfigProps<CameraFormatData>) {
+  const t = useT()
   const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
@@ -396,11 +408,11 @@ export function CameraFormatConfig({ data, onUpdate }: ConfigProps<CameraFormatD
         idPrefix="camera-format"
         preText={data.preText}
         postText={data.postText}
-        prePlaceholder="e.g. push-processed"
-        postPlaceholder="e.g. with grain bloom"
+        prePlaceholder={t("paramcfg.eGPushProcessed")}
+        postPlaceholder={t("paramcfg.eGWithGrainBloom")}
         onChange={onUpdate}
       />
-      <Label>Camera / Film</Label>
+      <Label>{t("paramcfg.cameraFilm")}</Label>
       <CameraFormatPicker
         value={data.cameraFormat || "35mm-film"}
         onValueChange={(v) => onUpdate({ cameraFormat: v })}
@@ -410,6 +422,7 @@ export function CameraFormatConfig({ data, onUpdate }: ConfigProps<CameraFormatD
 }
 
 export function LightingConfig({ data, onUpdate }: ConfigProps<LightingData>) {
+  const t = useT()
   const dir = usePickerDir()
   const maxItemsPerRow = data.maxItemsPerRow ?? 2
   return (
@@ -420,11 +433,11 @@ export function LightingConfig({ data, onUpdate }: ConfigProps<LightingData>) {
         idPrefix="lighting"
         preText={data.preText}
         postText={data.postText}
-        prePlaceholder="e.g. natural fill from window"
-        postPlaceholder="e.g. with practical lights in frame"
+        prePlaceholder={t("paramcfg.eGNaturalFillFromWindow")}
+        postPlaceholder={t("paramcfg.eGWithPracticalLightsIn")}
         onChange={onUpdate}
       />
-      <Label>Lighting</Label>
+      <Label>{t("paramcfg.lighting")}</Label>
       <LightingPicker
         value={{
           timeOfDay: data.timeOfDay,
@@ -437,7 +450,7 @@ export function LightingConfig({ data, onUpdate }: ConfigProps<LightingData>) {
       />
       <div className="flex items-center justify-between gap-2 pt-1">
         <Label htmlFor="lighting-max-items-per-row" className="text-xs text-muted-foreground">
-          Items per row (node card)
+          {t("paramcfg.itemsPerRowNodeCard")}
         </Label>
         <input
           id="lighting-max-items-per-row"
@@ -451,7 +464,7 @@ export function LightingConfig({ data, onUpdate }: ConfigProps<LightingData>) {
             const clamped = Math.max(1, Math.min(3, next))
             onUpdate({ maxItemsPerRow: clamped })
           }}
-          className="w-16 h-8 rounded-md border border-input bg-transparent px-2 text-xs text-right"
+          className="w-16 h-8 rounded-md border border-input bg-transparent px-2 text-xs text-end"
         />
       </div>
     </div>
@@ -459,6 +472,7 @@ export function LightingConfig({ data, onUpdate }: ConfigProps<LightingData>) {
 }
 
 export function ColorLookConfig({ data, onUpdate }: ConfigProps<ColorLookData>) {
+  const t = useT()
   const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
@@ -468,11 +482,11 @@ export function ColorLookConfig({ data, onUpdate }: ConfigProps<ColorLookData>) 
         idPrefix="color-look"
         preText={data.preText}
         postText={data.postText}
-        prePlaceholder="e.g. heavy grain"
-        postPlaceholder="e.g. with film burn at edges"
+        prePlaceholder={t("paramcfg.eGHeavyGrain")}
+        postPlaceholder={t("paramcfg.eGWithFilmBurnAt")}
         onChange={onUpdate}
       />
-      <Label>Color / Look</Label>
+      <Label>{t("paramcfg.colorLook")}</Label>
       <ColorLookPicker
         value={data.colorLook || "warm"}
         onValueChange={(v) => onUpdate({ colorLook: v })}
@@ -482,6 +496,7 @@ export function ColorLookConfig({ data, onUpdate }: ConfigProps<ColorLookData>) 
 }
 
 export function AtmosphereConfig({ data, onUpdate }: ConfigProps<AtmosphereData>) {
+  const t = useT()
   const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
@@ -491,11 +506,11 @@ export function AtmosphereConfig({ data, onUpdate }: ConfigProps<AtmosphereData>
         idPrefix="atmosphere"
         preText={data.preText}
         postText={data.postText}
-        prePlaceholder="e.g. just before dawn"
-        postPlaceholder="e.g. with dust suspended in beams"
+        prePlaceholder={t("paramcfg.eGJustBeforeDawn")}
+        postPlaceholder={t("paramcfg.eGWithDustSuspendedIn")}
         onChange={onUpdate}
       />
-      <Label>Atmosphere (pick up to 2)</Label>
+      <Label>{t("paramcfg.atmospherePickUpTo2")}</Label>
       <AtmospherePicker
         value={data.atmosphere}
         onValueChange={(v) => onUpdate({ atmosphere: v })}
@@ -506,6 +521,7 @@ export function AtmosphereConfig({ data, onUpdate }: ConfigProps<AtmosphereData>
 }
 
 export function ActionFxConfig({ data, onUpdate }: ConfigProps<ActionFxData>) {
+  const t = useT()
   const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
@@ -515,11 +531,11 @@ export function ActionFxConfig({ data, onUpdate }: ConfigProps<ActionFxData>) {
         idPrefix="action-fx"
         preText={data.preText}
         postText={data.postText}
-        prePlaceholder="e.g. mid-recoil"
-        postPlaceholder="e.g. fading into smoke"
+        prePlaceholder={t("paramcfg.eGMidRecoil")}
+        postPlaceholder={t("paramcfg.eGFadingIntoSmoke")}
         onChange={onUpdate}
       />
-      <Label>Action FX (pick up to 2)</Label>
+      <Label>{t("paramcfg.actionFxPickUpTo2")}</Label>
       <ActionFxPicker
         value={data.actionFx}
         onValueChange={(v) => onUpdate({ actionFx: v })}
@@ -530,6 +546,7 @@ export function ActionFxConfig({ data, onUpdate }: ConfigProps<ActionFxData>) {
 }
 
 export function StyleConfig({ data, onUpdate }: ConfigProps<StyleData>) {
+  const t = useT()
   const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
@@ -539,11 +556,11 @@ export function StyleConfig({ data, onUpdate }: ConfigProps<StyleData>) {
         idPrefix="style"
         preText={data.preText}
         postText={data.postText}
-        prePlaceholder="e.g. wet plate aesthetic"
-        postPlaceholder="e.g. with hand-printed edges"
+        prePlaceholder={t("paramcfg.eGWetPlateAesthetic")}
+        postPlaceholder={t("paramcfg.eGWithHandPrintedEdges")}
         onChange={onUpdate}
       />
-      <Label>Style</Label>
+      <Label>{t("field.style")}</Label>
       <StylePicker
         value={data.style || "cinematic"}
         onValueChange={(v) => onUpdate({ style: v })}
@@ -553,6 +570,7 @@ export function StyleConfig({ data, onUpdate }: ConfigProps<StyleData>) {
 }
 
 export function SettingConfig({ data, onUpdate }: ConfigProps<SettingData>) {
+  const t = useT()
   const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
@@ -562,11 +580,11 @@ export function SettingConfig({ data, onUpdate }: ConfigProps<SettingData>) {
         idPrefix="setting"
         preText={data.preText}
         postText={data.postText}
-        prePlaceholder="e.g. abandoned"
-        postPlaceholder="e.g. with mist creeping in"
+        prePlaceholder={t("paramcfg.eGAbandoned")}
+        postPlaceholder={t("paramcfg.eGWithMistCreepingIn")}
         onChange={onUpdate}
       />
-      <Label>Setting</Label>
+      <Label>{t("paramcfg.setting")}</Label>
       <SettingPicker
         value={data.setting || "forest"}
         onValueChange={(v) => onUpdate({ setting: v })}
@@ -576,6 +594,7 @@ export function SettingConfig({ data, onUpdate }: ConfigProps<SettingData>) {
 }
 
 export function LoopSubjectConfig({ data, onUpdate }: ConfigProps<LoopSubjectData>) {
+  const t = useT()
   const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
@@ -585,27 +604,24 @@ export function LoopSubjectConfig({ data, onUpdate }: ConfigProps<LoopSubjectDat
         idPrefix="loop-subject"
         preText={data.preText}
         postText={data.postText}
-        prePlaceholder="e.g. with lightning flashes"
-        postPlaceholder="e.g. seen from below"
+        prePlaceholder={t("paramcfg.eGWithLightningFlashes")}
+        postPlaceholder={t("paramcfg.eGSeenFromBelow")}
         onChange={onUpdate}
       />
-      <Label>Loop Subject</Label>
+      <Label>{t("paramcfg.loopSubject")}</Label>
       <LoopSubjectPicker
         value={data.loopSubject || "tunnel"}
         onValueChange={(v) => onUpdate({ loopSubject: v })}
       />
       <p className="text-[10px] text-muted-foreground leading-snug">
-        Wire this node&apos;s output into a Generate Image prompt input. Pair with
-        Image-to-Video (VEO 3.1, same image at start AND end frame, loopTrim
-        on) and the seal phrase &quot;Seamless loop: motion begins and ends in the
-        exact same composition and lighting so the first and last frames match
-        perfectly.&quot;
+        {t("paramcfg.wireThisNodeSOutputInto")}
       </p>
     </div>
   )
 }
 
 export function PersonConfig({ data, onUpdate }: ConfigProps<PersonData>) {
+  const t = useT()
   const dir = usePickerDir()
   const maxItemsPerRow = data.maxItemsPerRow ?? 2
   return (
@@ -615,25 +631,25 @@ export function PersonConfig({ data, onUpdate }: ConfigProps<PersonData>) {
       <div className="flex flex-col gap-2 rounded-md border border-border/60 p-2">
         <div className="flex items-center justify-between gap-2">
           <Label htmlFor="person-apply-mode" className="text-xs text-muted-foreground">
-            When image JSON is injected
+            {t("paramcfg.whenImageJsonIsInjected")}
           </Label>
         </div>
         <Select
           value={data.applyMode ?? "override"}
           onValueChange={(v) => onUpdate({ applyMode: v as PersonData["applyMode"] })}
         >
-          <SelectTrigger id="person-apply-mode" aria-label="Apply mode">
+          <SelectTrigger id="person-apply-mode" aria-label={t("paramcfg.applyMode")}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="override">Full override (clear undetected)</SelectItem>
-            <SelectItem value="overwrite-detected">Overwrite detected (keep rest)</SelectItem>
-            <SelectItem value="fill-empty">Fill empty only</SelectItem>
+            <SelectItem value="override">{t("paramcfg.fullOverrideClearUndetected")}</SelectItem>
+            <SelectItem value="overwrite-detected">{t("paramcfg.overwriteDetectedKeepRest")}</SelectItem>
+            <SelectItem value="fill-empty">{t("paramcfg.fillEmptyOnly")}</SelectItem>
           </SelectContent>
         </Select>
         <div className="flex items-center justify-between gap-2">
           <Label htmlFor="person-auto-apply" className="text-xs text-muted-foreground">
-            Auto-apply on change
+            {t("paramcfg.autoApplyOnChange")}
           </Label>
           <Switch
             id="person-auto-apply"
@@ -644,31 +660,31 @@ export function PersonConfig({ data, onUpdate }: ConfigProps<PersonData>) {
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="person-pre-text" className="text-xs text-muted-foreground">
-          Custom text (before)
+          {t("paramcfg.customTextBefore")}
         </Label>
         <Textarea
           id="person-pre-text"
           value={data.preText ?? ""}
           onChange={(e) => onUpdate({ preText: e.target.value })}
-          placeholder="e.g. wet-haired, covered in paint"
+          placeholder={t("paramcfg.eGWetHairedCoveredIn")}
           rows={2}
           className="text-xs resize-none"
         />
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="person-post-text" className="text-xs text-muted-foreground">
-          Custom text (after)
+          {t("paramcfg.customTextAfter")}
         </Label>
         <Textarea
           id="person-post-text"
           value={data.postText ?? ""}
           onChange={(e) => onUpdate({ postText: e.target.value })}
-          placeholder="e.g. wearing a leather jacket, with a silver necklace"
+          placeholder={t("paramcfg.eGWearingALeatherJacket")}
           rows={2}
           className="text-xs resize-none"
         />
       </div>
-      <Label>Person</Label>
+      <Label>{t("paramcfg.person")}</Label>
       {/* PersonData is a superset of PersonValue (every dimension field, plus
           node-only extras like preText/maxItemsPerRow that the picker ignores),
           so forward it whole. A hand-listed subset silently drops any newly-added
@@ -677,7 +693,7 @@ export function PersonConfig({ data, onUpdate }: ConfigProps<PersonData>) {
       <PersonPicker value={data} onChange={(patch) => onUpdate(patch)} />
       <div className="flex items-center justify-between gap-2 pt-1">
         <Label htmlFor="person-max-items-per-row" className="text-xs text-muted-foreground">
-          Items per row (node card)
+          {t("paramcfg.itemsPerRowNodeCard")}
         </Label>
         <input
           id="person-max-items-per-row"
@@ -691,7 +707,7 @@ export function PersonConfig({ data, onUpdate }: ConfigProps<PersonData>) {
             const clamped = Math.max(1, Math.min(4, Math.round(n)))
             onUpdate({ maxItemsPerRow: clamped })
           }}
-          className="w-16 h-7 rounded-md border border-input bg-background px-2 text-xs text-right"
+          className="w-16 h-7 rounded-md border border-input bg-background px-2 text-xs text-end"
         />
       </div>
     </div>
@@ -699,6 +715,7 @@ export function PersonConfig({ data, onUpdate }: ConfigProps<PersonData>) {
 }
 
 export function MoodConfig({ data, onUpdate }: ConfigProps<MoodData>) {
+  const t = useT()
   const MOODS = useCuratedEntries("mood", BASE_MOODS)
   const dir = usePickerDir()
   return (
@@ -707,31 +724,31 @@ export function MoodConfig({ data, onUpdate }: ConfigProps<MoodData>) {
       <PromptInjectionPreview hints={buildMoodHints(data)} />
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="mood-pre-text" className="text-xs text-muted-foreground">
-          Custom text (before)
+          {t("paramcfg.customTextBefore")}
         </Label>
         <Textarea
           id="mood-pre-text"
           value={data.preText ?? ""}
           onChange={(e) => onUpdate({ preText: e.target.value })}
-          placeholder="e.g. trying to hide it"
+          placeholder={t("paramcfg.eGTryingToHideIt")}
           rows={2}
           className="text-xs resize-none"
         />
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="mood-post-text" className="text-xs text-muted-foreground">
-          Custom text (after)
+          {t("paramcfg.customTextAfter")}
         </Label>
         <Textarea
           id="mood-post-text"
           value={data.postText ?? ""}
           onChange={(e) => onUpdate({ postText: e.target.value })}
-          placeholder="e.g. tears welling in eyes"
+          placeholder={t("paramcfg.eGTearsWellingInEyes")}
           rows={2}
           className="text-xs resize-none"
         />
       </div>
-      <Label>Mood (pick up to 2)</Label>
+      <Label>{t("paramcfg.moodPickUpTo2")}</Label>
       {/* Multi-pick (max 2): single → single mood hint; two → blended
           "with a X and Y expression". Numbered tile badges show pick order. */}
       <DimensionTileGrid
@@ -739,7 +756,7 @@ export function MoodConfig({ data, onUpdate }: ConfigProps<MoodData>) {
         value={data.mood}
         onChange={(v) => onUpdate({ mood: v })}
         renderIcon={(entry) => <MoodEmoji moodId={entry.id} className="size-full" />}
-        searchPlaceholder="Search moods"
+        searchPlaceholder={t("paramcfg.searchMoods")}
         gridClassName="grid grid-cols-3 gap-2"
         catalog="mood"
         maxSelected={2}
@@ -749,6 +766,7 @@ export function MoodConfig({ data, onUpdate }: ConfigProps<MoodData>) {
 }
 
 export function PhotographerConfig({ data, onUpdate }: ConfigProps<PhotographerData>) {
+  const t = useT()
   const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
@@ -758,11 +776,11 @@ export function PhotographerConfig({ data, onUpdate }: ConfigProps<PhotographerD
         idPrefix="photographer"
         preText={data.preText}
         postText={data.postText}
-        prePlaceholder="e.g. early-career style"
-        postPlaceholder="e.g. with the studio's signature lighting"
+        prePlaceholder={t("paramcfg.eGEarlyCareerStyle")}
+        postPlaceholder={t("paramcfg.eGWithTheStudioS")}
         onChange={onUpdate}
       />
-      <Label>Photographer / Artist Style (pick up to 2)</Label>
+      <Label>{t("paramcfg.photographerArtistStylePickUpTo")}</Label>
       <PhotographerPicker
         value={data.photographer}
         onValueChange={(v) => onUpdate({ photographer: v })}
@@ -773,6 +791,7 @@ export function PhotographerConfig({ data, onUpdate }: ConfigProps<PhotographerD
 }
 
 export function AestheticConfig({ data, onUpdate }: ConfigProps<AestheticData>) {
+  const t = useT()
   const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
@@ -782,11 +801,11 @@ export function AestheticConfig({ data, onUpdate }: ConfigProps<AestheticData>) 
         idPrefix="aesthetic"
         preText={data.preText}
         postText={data.postText}
-        prePlaceholder="e.g. heavily stylized"
-        postPlaceholder="e.g. with neon accents"
+        prePlaceholder={t("paramcfg.eGHeavilyStylized")}
+        postPlaceholder={t("paramcfg.eGWithNeonAccents")}
         onChange={onUpdate}
       />
-      <Label>Aesthetic / Microtrend (pick up to 2)</Label>
+      <Label>{t("paramcfg.aestheticMicrotrendPickUpTo2")}</Label>
       <AestheticPicker
         value={data.aesthetic}
         onValueChange={(v) => onUpdate({ aesthetic: v })}
@@ -797,6 +816,7 @@ export function AestheticConfig({ data, onUpdate }: ConfigProps<AestheticData>) 
 }
 
 export function EraConfig({ data, onUpdate }: ConfigProps<EraData>) {
+  const t = useT()
   const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
@@ -806,11 +826,11 @@ export function EraConfig({ data, onUpdate }: ConfigProps<EraData>) {
         idPrefix="era"
         preText={data.preText}
         postText={data.postText}
-        prePlaceholder="e.g. late summer"
-        postPlaceholder="e.g. with VHS grain"
+        prePlaceholder={t("paramcfg.eGLateSummer")}
+        postPlaceholder={t("paramcfg.eGWithVhsGrain")}
         onChange={onUpdate}
       />
-      <Label>Era / Period</Label>
+      <Label>{t("paramcfg.eraPeriod")}</Label>
       <EraPicker
         value={data.era || "1990s-mall"}
         onValueChange={(v) => onUpdate({ era: v })}
@@ -820,6 +840,7 @@ export function EraConfig({ data, onUpdate }: ConfigProps<EraData>) {
 }
 
 export function PoseConfig({ data, onUpdate }: ConfigProps<PoseData>) {
+  const t = useT()
   const POSES = useCuratedEntries("pose", BASE_POSES)
   const dir = usePickerDir()
   return (
@@ -828,31 +849,31 @@ export function PoseConfig({ data, onUpdate }: ConfigProps<PoseData>) {
       <PromptInjectionPreview hints={buildPoseHints(data)} />
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="pose-pre-text" className="text-xs text-muted-foreground">
-          Custom text (before)
+          {t("paramcfg.customTextBefore")}
         </Label>
         <Textarea
           id="pose-pre-text"
           value={data.preText ?? ""}
           onChange={(e) => onUpdate({ preText: e.target.value })}
-          placeholder="e.g. about to spring"
+          placeholder={t("paramcfg.eGAboutToSpring")}
           rows={2}
           className="text-xs resize-none"
         />
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="pose-post-text" className="text-xs text-muted-foreground">
-          Custom text (after)
+          {t("paramcfg.customTextAfter")}
         </Label>
         <Textarea
           id="pose-post-text"
           value={data.postText ?? ""}
           onChange={(e) => onUpdate({ postText: e.target.value })}
-          placeholder="e.g. holding a sword overhead"
+          placeholder={t("paramcfg.eGHoldingASwordOverhead")}
           rows={2}
           className="text-xs resize-none"
         />
       </div>
-      <Label>Pose</Label>
+      <Label>{t("paramcfg.pose")}</Label>
       {/* Pose is a single-dimension node so the picker IS the whole node —
           render the tile grid inline instead of behind a modal trigger. */}
       <DimensionTileGrid
@@ -860,7 +881,7 @@ export function PoseConfig({ data, onUpdate }: ConfigProps<PoseData>) {
         value={data.pose || "standing-upright"}
         onChange={(v) => onUpdate({ pose: v ?? "standing-upright" })}
         renderIcon={(entry) => <PoseIcon poseId={entry.id} className="size-full" />}
-        searchPlaceholder="Search poses"
+        searchPlaceholder={t("paramcfg.searchPoses")}
         gridClassName="grid grid-cols-3 gap-2"
         catalog="pose"
       />
@@ -869,6 +890,7 @@ export function PoseConfig({ data, onUpdate }: ConfigProps<PoseData>) {
 }
 
 export function StylingConfig({ data, onUpdate }: ConfigProps<StylingData>) {
+  const t = useT()
   const dir = usePickerDir()
   const maxItemsPerRow = data.maxItemsPerRow ?? 2
   return (
@@ -877,31 +899,31 @@ export function StylingConfig({ data, onUpdate }: ConfigProps<StylingData>) {
       <PromptInjectionPreview hints={buildStylingHints(data)} />
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="styling-pre-text" className="text-xs text-muted-foreground">
-          Custom text (before)
+          {t("paramcfg.customTextBefore")}
         </Label>
         <Textarea
           id="styling-pre-text"
           value={data.preText ?? ""}
           onChange={(e) => onUpdate({ preText: e.target.value })}
-          placeholder="e.g. freshly retouched, magazine-cover quality"
+          placeholder={t("paramcfg.eGFreshlyRetouchedMagazineCover")}
           rows={2}
           className="text-xs resize-none"
         />
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="styling-post-text" className="text-xs text-muted-foreground">
-          Custom text (after)
+          {t("paramcfg.customTextAfter")}
         </Label>
         <Textarea
           id="styling-post-text"
           value={data.postText ?? ""}
           onChange={(e) => onUpdate({ postText: e.target.value })}
-          placeholder="e.g. with a ruby tennis bracelet, with rose-gold rings"
+          placeholder={t("paramcfg.eGWithARubyTennis")}
           rows={2}
           className="text-xs resize-none"
         />
       </div>
-      <Label>Styling</Label>
+      <Label>{t("paramcfg.styling")}</Label>
       <StylingPicker
         value={{
           makeup: data.makeup,
@@ -926,7 +948,7 @@ export function StylingConfig({ data, onUpdate }: ConfigProps<StylingData>) {
       />
       <div className="flex items-center justify-between gap-2 pt-1">
         <Label htmlFor="styling-max-items-per-row" className="text-xs text-muted-foreground">
-          Items per row (node card)
+          {t("paramcfg.itemsPerRowNodeCard")}
         </Label>
         <input
           id="styling-max-items-per-row"
@@ -940,7 +962,7 @@ export function StylingConfig({ data, onUpdate }: ConfigProps<StylingData>) {
             const clamped = Math.max(1, Math.min(4, Math.round(n)))
             onUpdate({ maxItemsPerRow: clamped })
           }}
-          className="w-16 h-7 rounded-md border border-input bg-background px-2 text-xs text-right"
+          className="w-16 h-7 rounded-md border border-input bg-background px-2 text-xs text-end"
         />
       </div>
     </div>
@@ -948,6 +970,7 @@ export function StylingConfig({ data, onUpdate }: ConfigProps<StylingData>) {
 }
 
 export function TemporalConfig({ data, onUpdate }: ConfigProps<TemporalData>) {
+  const t = useT()
   const dir = usePickerDir()
   const maxItemsPerRow = data.maxItemsPerRow ?? 2
   return (
@@ -958,11 +981,11 @@ export function TemporalConfig({ data, onUpdate }: ConfigProps<TemporalData>) {
         idPrefix="temporal"
         preText={data.preText}
         postText={data.postText}
-        prePlaceholder="e.g. ramping"
-        postPlaceholder="e.g. with strobing flicker"
+        prePlaceholder={t("paramcfg.eGRamping")}
+        postPlaceholder={t("paramcfg.eGWithStrobingFlicker")}
         onChange={onUpdate}
       />
-      <Label>Temporal</Label>
+      <Label>{t("paramcfg.temporal")}</Label>
       <TemporalPicker
         value={{
           temporalSpeed: data.temporalSpeed,
@@ -974,7 +997,7 @@ export function TemporalConfig({ data, onUpdate }: ConfigProps<TemporalData>) {
       />
       <div className="flex items-center justify-between gap-2 pt-1">
         <Label htmlFor="temporal-max-items-per-row" className="text-xs text-muted-foreground">
-          Items per row (node card)
+          {t("paramcfg.itemsPerRowNodeCard")}
         </Label>
         <input
           id="temporal-max-items-per-row"
@@ -988,7 +1011,7 @@ export function TemporalConfig({ data, onUpdate }: ConfigProps<TemporalData>) {
             const clamped = Math.max(1, Math.min(4, next))
             onUpdate({ maxItemsPerRow: clamped })
           }}
-          className="w-16 h-8 rounded-md border border-input bg-transparent px-2 text-xs text-right"
+          className="w-16 h-8 rounded-md border border-input bg-transparent px-2 text-xs text-end"
         />
       </div>
     </div>
@@ -996,6 +1019,7 @@ export function TemporalConfig({ data, onUpdate }: ConfigProps<TemporalData>) {
 }
 
 export function MaterialConfig({ data, onUpdate }: ConfigProps<MaterialData>) {
+  const t = useT()
   const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
@@ -1005,11 +1029,11 @@ export function MaterialConfig({ data, onUpdate }: ConfigProps<MaterialData>) {
         idPrefix="material"
         preText={data.preText}
         postText={data.postText}
-        prePlaceholder="e.g. weather-beaten"
-        postPlaceholder="e.g. with hairline cracks"
+        prePlaceholder={t("paramcfg.eGWeatherBeaten")}
+        postPlaceholder={t("paramcfg.eGWithHairlineCracks")}
         onChange={onUpdate}
       />
-      <Label>Material (pick up to 2)</Label>
+      <Label>{t("paramcfg.materialPickUpTo2")}</Label>
       <MaterialPicker
         value={data.material}
         onValueChange={(v) => onUpdate({ material: v })}
@@ -1020,6 +1044,7 @@ export function MaterialConfig({ data, onUpdate }: ConfigProps<MaterialData>) {
 }
 
 export function AnimalConfig({ data, onUpdate }: ConfigProps<AnimalData>) {
+  const t = useT()
   const dir = usePickerDir()
   const animal = getAnimal(data.animal)
   const hint = animal ? `featuring a ${animal.label.toLowerCase()}, ${animal.description}` : ""
@@ -1031,11 +1056,11 @@ export function AnimalConfig({ data, onUpdate }: ConfigProps<AnimalData>) {
         idPrefix="animal"
         preText={data.preText}
         postText={data.postText}
-        prePlaceholder="e.g. mid-leap"
-        postPlaceholder="e.g. with fur catching the light"
+        prePlaceholder={t("paramcfg.eGMidLeap")}
+        postPlaceholder={t("paramcfg.eGWithFurCatchingThe")}
         onChange={onUpdate}
       />
-      <Label>Animal</Label>
+      <Label>{t("paramcfg.animal")}</Label>
       <AnimalPicker
         value={data.animal || "dog-golden-retriever"}
         onValueChange={(v) => onUpdate({ animal: v })}
@@ -1045,6 +1070,7 @@ export function AnimalConfig({ data, onUpdate }: ConfigProps<AnimalData>) {
 }
 
 export function VehicleConfig({ data, onUpdate }: ConfigProps<VehicleData>) {
+  const t = useT()
   const dir = usePickerDir()
   const vehicle = getVehicle(data.vehicle)
   const hint = vehicle ? `featuring a ${vehicle.label.toLowerCase()}, ${vehicle.description}` : ""
@@ -1056,11 +1082,11 @@ export function VehicleConfig({ data, onUpdate }: ConfigProps<VehicleData>) {
         idPrefix="vehicle"
         preText={data.preText}
         postText={data.postText}
-        prePlaceholder="e.g. matte-black"
-        postPlaceholder="e.g. with tire smoke"
+        prePlaceholder={t("paramcfg.eGMatteBlack")}
+        postPlaceholder={t("paramcfg.eGWithTireSmoke")}
         onChange={onUpdate}
       />
-      <Label>Vehicle</Label>
+      <Label>{t("paramcfg.vehicle")}</Label>
       <VehiclePicker
         value={data.vehicle || "sedan"}
         onValueChange={(v) => onUpdate({ vehicle: v })}
@@ -1070,6 +1096,7 @@ export function VehicleConfig({ data, onUpdate }: ConfigProps<VehicleData>) {
 }
 
 export function WeaponConfig({ data, onUpdate }: ConfigProps<WeaponData>) {
+  const t = useT()
   const dir = usePickerDir()
   const weapon = getWeapon(data.weapon)
   const hint = weapon ? `with a ${weapon.label.toLowerCase()}, ${weapon.description}` : ""
@@ -1081,11 +1108,11 @@ export function WeaponConfig({ data, onUpdate }: ConfigProps<WeaponData>) {
         idPrefix="weapon"
         preText={data.preText}
         postText={data.postText}
-        prePlaceholder="e.g. battle-worn"
-        postPlaceholder="e.g. blood-stained"
+        prePlaceholder={t("paramcfg.eGBattleWorn")}
+        postPlaceholder={t("paramcfg.eGBloodStained")}
         onChange={onUpdate}
       />
-      <Label>Weapon</Label>
+      <Label>{t("paramcfg.weapon")}</Label>
       <WeaponPicker
         value={data.weapon || "katana"}
         onValueChange={(v) => onUpdate({ weapon: v })}
@@ -1095,6 +1122,7 @@ export function WeaponConfig({ data, onUpdate }: ConfigProps<WeaponData>) {
 }
 
 export function FurnitureConfig({ data, onUpdate }: ConfigProps<FurnitureData>) {
+  const t = useT()
   const dir = usePickerDir()
   const furniture = getFurniture(data.furniture)
   const hint = furniture ? `featuring ${furniture.label.toLowerCase()}, ${furniture.description}` : ""
@@ -1106,11 +1134,11 @@ export function FurnitureConfig({ data, onUpdate }: ConfigProps<FurnitureData>) 
         idPrefix="furniture"
         preText={data.preText}
         postText={data.postText}
-        prePlaceholder="e.g. mid-century"
-        postPlaceholder="e.g. in walnut"
+        prePlaceholder={t("paramcfg.eGMidCentury")}
+        postPlaceholder={t("paramcfg.eGInWalnut")}
         onChange={onUpdate}
       />
-      <Label>Furniture</Label>
+      <Label>{t("paramcfg.furniture")}</Label>
       <FurniturePicker
         value={data.furniture || "sofa"}
         onValueChange={(v) => onUpdate({ furniture: v })}
@@ -1120,6 +1148,7 @@ export function FurnitureConfig({ data, onUpdate }: ConfigProps<FurnitureData>) 
 }
 
 export function PhotoGenreConfig({ data, onUpdate }: ConfigProps<PhotoGenreData>) {
+  const t = useT()
   const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
@@ -1129,11 +1158,11 @@ export function PhotoGenreConfig({ data, onUpdate }: ConfigProps<PhotoGenreData>
         idPrefix="photo-genre"
         preText={data.preText}
         postText={data.postText}
-        prePlaceholder="e.g. mid-action"
-        postPlaceholder="e.g. behind-the-scenes feel"
+        prePlaceholder={t("paramcfg.eGMidAction")}
+        postPlaceholder={t("paramcfg.eGBehindTheScenesFeel")}
         onChange={onUpdate}
       />
-      <Label>Photo Genre</Label>
+      <Label>{t("paramcfg.photoGenre")}</Label>
       <PhotoGenrePicker
         value={data.photoGenre || "fashion-editorial"}
         onValueChange={(v) => onUpdate({ photoGenre: v })}
@@ -1143,6 +1172,7 @@ export function PhotoGenreConfig({ data, onUpdate }: ConfigProps<PhotoGenreData>
 }
 
 export function BackdropConfig({ data, onUpdate }: ConfigProps<BackdropData>) {
+  const t = useT()
   const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
@@ -1152,11 +1182,11 @@ export function BackdropConfig({ data, onUpdate }: ConfigProps<BackdropData>) {
         idPrefix="backdrop"
         preText={data.preText}
         postText={data.postText}
-        prePlaceholder="e.g. softly lit"
-        postPlaceholder="e.g. with subtle vignette"
+        prePlaceholder={t("paramcfg.eGSoftlyLit")}
+        postPlaceholder={t("paramcfg.eGWithSubtleVignette")}
         onChange={onUpdate}
       />
-      <Label>Backdrop</Label>
+      <Label>{t("paramcfg.backdrop")}</Label>
       <BackdropPicker
         value={data.backdrop || "white-seamless"}
         onValueChange={(v) => onUpdate({ backdrop: v })}
@@ -1166,6 +1196,7 @@ export function BackdropConfig({ data, onUpdate }: ConfigProps<BackdropData>) {
 }
 
 export function HeldPropConfig({ data, onUpdate }: ConfigProps<HeldPropData>) {
+  const t = useT()
   const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
@@ -1175,11 +1206,11 @@ export function HeldPropConfig({ data, onUpdate }: ConfigProps<HeldPropData>) {
         idPrefix="held-prop"
         preText={data.preText}
         postText={data.postText}
-        prePlaceholder="e.g. clutched tightly"
-        postPlaceholder="e.g. with knuckles white"
+        prePlaceholder={t("paramcfg.eGClutchedTightly")}
+        postPlaceholder={t("paramcfg.eGWithKnucklesWhite")}
         onChange={onUpdate}
       />
-      <Label>Held Prop (pick up to 2)</Label>
+      <Label>{t("paramcfg.heldPropPickUpTo2")}</Label>
       <HeldPropPicker
         value={data.heldProp}
         onValueChange={(v) => onUpdate({ heldProp: v })}
@@ -1190,6 +1221,7 @@ export function HeldPropConfig({ data, onUpdate }: ConfigProps<HeldPropData>) {
 }
 
 export function ExposureSettingsConfig({ data, onUpdate }: ConfigProps<ExposureSettingsData>) {
+  const t = useT()
   const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
@@ -1199,11 +1231,11 @@ export function ExposureSettingsConfig({ data, onUpdate }: ConfigProps<ExposureS
         idPrefix="exposure-settings"
         preText={data.preText}
         postText={data.postText}
-        prePlaceholder="e.g. push +1 stop"
-        postPlaceholder="e.g. with halation"
+        prePlaceholder={t("paramcfg.eGPush1Stop")}
+        postPlaceholder={t("paramcfg.eGWithHalation")}
         onChange={onUpdate}
       />
-      <Label>Exposure Settings</Label>
+      <Label>{t("paramcfg.exposureSettings")}</Label>
       <ExposureSettingsPicker
         value={{ aperture: data.aperture, shutterSpeed: data.shutterSpeed, isoValue: data.isoValue }}
         onChange={(patch) => onUpdate(patch)}
@@ -1213,6 +1245,7 @@ export function ExposureSettingsConfig({ data, onUpdate }: ConfigProps<ExposureS
 }
 
 export function RenderQualityConfig({ data, onUpdate }: ConfigProps<RenderQualityData>) {
+  const t = useT()
   const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
@@ -1222,11 +1255,11 @@ export function RenderQualityConfig({ data, onUpdate }: ConfigProps<RenderQualit
         idPrefix="render-quality"
         preText={data.preText}
         postText={data.postText}
-        prePlaceholder="e.g. early ray-traced"
-        postPlaceholder="e.g. with lens caustics"
+        prePlaceholder={t("paramcfg.eGEarlyRayTraced")}
+        postPlaceholder={t("paramcfg.eGWithLensCaustics")}
         onChange={onUpdate}
       />
-      <Label>Render Quality</Label>
+      <Label>{t("paramcfg.renderQuality")}</Label>
       <RenderQualityPicker
         value={data.renderQuality || "raytracing"}
         onValueChange={(v) => onUpdate({ renderQuality: v })}
@@ -1236,6 +1269,7 @@ export function RenderQualityConfig({ data, onUpdate }: ConfigProps<RenderQualit
 }
 
 export function CompositionEffectsConfig({ data, onUpdate }: ConfigProps<CompositionEffectsData>) {
+  const t = useT()
   const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
@@ -1245,11 +1279,11 @@ export function CompositionEffectsConfig({ data, onUpdate }: ConfigProps<Composi
         idPrefix="composition-effects"
         preText={data.preText}
         postText={data.postText}
-        prePlaceholder="e.g. subtle"
-        postPlaceholder="e.g. layered"
+        prePlaceholder={t("paramcfg.eGSubtle")}
+        postPlaceholder={t("paramcfg.eGLayered")}
         onChange={onUpdate}
       />
-      <Label>Composition Effect</Label>
+      <Label>{t("paramcfg.compositionEffect")}</Label>
       <CompositionEffectsPicker
         value={data.compositionEffect || "none"}
         onValueChange={(v) => onUpdate({ compositionEffect: v })}
@@ -1259,6 +1293,7 @@ export function CompositionEffectsConfig({ data, onUpdate }: ConfigProps<Composi
 }
 
 export function PostProcessEffectsConfig({ data, onUpdate }: ConfigProps<PostProcessEffectsData>) {
+  const t = useT()
   const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
@@ -1268,11 +1303,11 @@ export function PostProcessEffectsConfig({ data, onUpdate }: ConfigProps<PostPro
         idPrefix="post-process-effects"
         preText={data.preText}
         postText={data.postText}
-        prePlaceholder="e.g. light dose"
-        postPlaceholder="e.g. plus subtle film grain"
+        prePlaceholder={t("paramcfg.eGLightDose")}
+        postPlaceholder={t("paramcfg.eGPlusSubtleFilmGrain")}
         onChange={onUpdate}
       />
-      <Label>Post-Process Effect (pick up to 2)</Label>
+      <Label>{t("paramcfg.postProcessEffectPickUpTo")}</Label>
       <PostProcessEffectsPicker
         value={data.postProcess}
         onValueChange={(v) => onUpdate({ postProcess: v })}
@@ -1290,19 +1325,51 @@ export function PostProcessEffectsConfig({ data, onUpdate }: ConfigProps<PostPro
 // carry the same ids but deliberately different wording (a transition occurs
 // and spans the clip; an effect manifests and persists), and each panel must
 // render — and tooltip — its own node's rows.
-const TRANSITION_TIMING_SELECTS = [
-  { key: "position",  label: "Position",  options: TRANSITION_POSITIONS },
-  { key: "duration",  label: "Duration",  options: TRANSITION_DURATIONS },
-  { key: "intensity", label: "Intensity", options: TRANSITION_INTENSITIES },
-] as const
+type TimingKey = Parameters<typeof tx>[0]
+/** Option LABELS are shared by both families (same ids); descriptions differ. */
+const TIMING_LABEL_KEYS: Record<string, TimingKey> = {
+  auto: "paramcfg.timingAuto", start: "paramcfg.timingStart", middle: "paramcfg.timingMiddle", end: "paramcfg.timingEnd", full: "paramcfg.timingFull",
+  instant: "paramcfg.timingInstant", short: "paramcfg.timingShort", medium: "paramcfg.timingMedium", long: "paramcfg.timingLong",
+  subtle: "paramcfg.timingSubtle", natural: "paramcfg.timingNatural", dynamic: "paramcfg.timingDynamic", crazy: "paramcfg.timingCrazy",
+}
+const INTENSITY_DESC_KEYS: Record<string, TimingKey> = {
+  subtle: "paramcfg.intSubtleDesc", natural: "paramcfg.intNaturalDesc", dynamic: "paramcfg.intDynamicDesc", crazy: "paramcfg.intCrazyDesc",
+}
+const TRANSITION_DESC_KEYS: Record<string, Record<string, TimingKey>> = {
+  position: { auto: "paramcfg.trPosAutoDesc", start: "paramcfg.trPosStartDesc", middle: "paramcfg.trPosMiddleDesc", end: "paramcfg.trPosEndDesc", full: "paramcfg.trPosFullDesc" },
+  duration: { auto: "paramcfg.trDurAutoDesc", instant: "paramcfg.trDurInstantDesc", short: "paramcfg.trDurShortDesc", medium: "paramcfg.trDurMediumDesc", long: "paramcfg.trDurLongDesc" },
+  intensity: { auto: "paramcfg.trIntAutoDesc", ...INTENSITY_DESC_KEYS },
+}
+const CHARACTER_FX_DESC_KEYS: Record<string, Record<string, TimingKey>> = {
+  position: { auto: "paramcfg.fxPosAutoDesc", start: "paramcfg.fxPosStartDesc", middle: "paramcfg.fxPosMiddleDesc", end: "paramcfg.fxPosEndDesc", full: "paramcfg.fxPosFullDesc" },
+  duration: { auto: "paramcfg.fxDurAutoDesc", instant: "paramcfg.fxDurInstantDesc", short: "paramcfg.fxDurShortDesc", medium: "paramcfg.fxDurMediumDesc", long: "paramcfg.fxDurLongDesc" },
+  intensity: { auto: "paramcfg.fxIntAutoDesc", ...INTENSITY_DESC_KEYS },
+}
+/** The option row's copy for the locale; an id the maps do not know falls back to the table's English. */
+function timingOptionCopy(descKeys: Record<string, TimingKey>, opt: { id: string; label: string; description: string }) {
+  const labelKey = TIMING_LABEL_KEYS[opt.id]
+  const descKey = descKeys[opt.id]
+  return { label: labelKey ? tx(labelKey) : opt.label, description: descKey ? tx(descKey) : opt.description }
+}
 
-const CHARACTER_FX_TIMING_SELECTS = [
-  { key: "position",  label: "Position",  options: CHARACTER_FX_POSITIONS },
-  { key: "duration",  label: "Duration",  options: CHARACTER_FX_DURATIONS },
-  { key: "intensity", label: "Intensity", options: CHARACTER_FX_INTENSITIES },
+function TRANSITION_TIMING_SELECTS() {
+  return [
+  { key: "position",  label: tx("paramcfg.position"),  options: TRANSITION_POSITIONS, descKeys: TRANSITION_DESC_KEYS.position },
+  { key: "duration",  label: tx("field.duration"),  options: TRANSITION_DURATIONS, descKeys: TRANSITION_DESC_KEYS.duration },
+  { key: "intensity", label: tx("paramcfg.intensity"), options: TRANSITION_INTENSITIES, descKeys: TRANSITION_DESC_KEYS.intensity },
 ] as const
+}
+
+function CHARACTER_FX_TIMING_SELECTS() {
+  return [
+  { key: "position",  label: tx("paramcfg.position"),  options: CHARACTER_FX_POSITIONS, descKeys: CHARACTER_FX_DESC_KEYS.position },
+  { key: "duration",  label: tx("field.duration"),  options: CHARACTER_FX_DURATIONS, descKeys: CHARACTER_FX_DESC_KEYS.duration },
+  { key: "intensity", label: tx("paramcfg.intensity"), options: CHARACTER_FX_INTENSITIES, descKeys: CHARACTER_FX_DESC_KEYS.intensity },
+] as const
+}
 
 export function TransitionConfig({ data, onUpdate }: ConfigProps<TransitionData>) {
+  const t = useT()
   const dir = usePickerDir()
   const composed = composeTransitionHintForNode(data)
 
@@ -1314,11 +1381,11 @@ export function TransitionConfig({ data, onUpdate }: ConfigProps<TransitionData>
         idPrefix="transition"
         preText={data.preText}
         postText={data.postText}
-        prePlaceholder="e.g. hard cut from action"
-        postPlaceholder="e.g. into establishing shot"
+        prePlaceholder={t("paramcfg.eGHardCutFromAction")}
+        postPlaceholder={t("paramcfg.eGIntoEstablishingShot")}
         onChange={onUpdate}
       />
-      <Label>Transition</Label>
+      <Label>{t("paramcfg.transition")}</Label>
       <TransitionPicker
         value={data.transition}
         onValueChange={(v) => onUpdate({ transition: v as string | string[] | undefined })}
@@ -1326,7 +1393,7 @@ export function TransitionConfig({ data, onUpdate }: ConfigProps<TransitionData>
       />
 
       <div className="grid grid-cols-3 gap-2">
-        {TRANSITION_TIMING_SELECTS.map(({ key, label: labelText, options }) => (
+        {TRANSITION_TIMING_SELECTS().map(({ key, label: labelText, options, descKeys }) => (
           <div key={key} className="flex flex-col gap-1">
             <Label className="text-[10px] uppercase">{labelText}</Label>
             <Select
@@ -1335,11 +1402,14 @@ export function TransitionConfig({ data, onUpdate }: ConfigProps<TransitionData>
             >
               <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {options.map((opt) => (
-                  <SelectItem key={opt.id} value={opt.id} title={opt.description}>
-                    {opt.label}
+                {options.map((opt) => {
+                  const copy = timingOptionCopy(descKeys, opt)
+                  return (
+                  <SelectItem key={opt.id} value={opt.id} title={copy.description}>
+                    {copy.label}
                   </SelectItem>
-                ))}
+                  )
+                })}
               </SelectContent>
             </Select>
           </div>
@@ -1350,6 +1420,7 @@ export function TransitionConfig({ data, onUpdate }: ConfigProps<TransitionData>
 }
 
 export function CharacterFxConfig({ data, onUpdate }: ConfigProps<CharacterFxData>) {
+  const t = useT()
   const dir = usePickerDir()
   const composed = composeCharacterFxHintForNode(data)
 
@@ -1361,11 +1432,11 @@ export function CharacterFxConfig({ data, onUpdate }: ConfigProps<CharacterFxDat
         idPrefix="character-fx"
         preText={data.preText}
         postText={data.postText}
-        prePlaceholder="e.g. mid-transformation"
-        postPlaceholder="e.g. with smoke trailing behind"
+        prePlaceholder={t("paramcfg.eGMidTransformation")}
+        postPlaceholder={t("paramcfg.eGWithSmokeTrailingBehind")}
         onChange={onUpdate}
       />
-      <Label>Character FX (pick up to 2)</Label>
+      <Label>{t("paramcfg.characterFxPickUpTo2")}</Label>
       <CharacterFxPicker
         value={data.characterFx}
         onValueChange={(v) => onUpdate({ characterFx: v as string | string[] | undefined })}
@@ -1373,7 +1444,7 @@ export function CharacterFxConfig({ data, onUpdate }: ConfigProps<CharacterFxDat
       />
 
       <div className="grid grid-cols-3 gap-2">
-        {CHARACTER_FX_TIMING_SELECTS.map(({ key, label: labelText, options }) => (
+        {CHARACTER_FX_TIMING_SELECTS().map(({ key, label: labelText, options, descKeys }) => (
           <div key={key} className="flex flex-col gap-1">
             <Label className="text-[10px] uppercase">{labelText}</Label>
             <Select
@@ -1382,11 +1453,14 @@ export function CharacterFxConfig({ data, onUpdate }: ConfigProps<CharacterFxDat
             >
               <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {options.map((opt) => (
-                  <SelectItem key={opt.id} value={opt.id} title={opt.description}>
-                    {opt.label}
+                {options.map((opt) => {
+                  const copy = timingOptionCopy(descKeys, opt)
+                  return (
+                  <SelectItem key={opt.id} value={opt.id} title={copy.description}>
+                    {copy.label}
                   </SelectItem>
-                ))}
+                  )
+                })}
               </SelectContent>
             </Select>
           </div>

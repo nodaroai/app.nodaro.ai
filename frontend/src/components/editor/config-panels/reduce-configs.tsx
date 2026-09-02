@@ -10,6 +10,7 @@ import {
 import { Label } from "@/components/ui/label"
 import { REDUCE_STRATEGIES, buildLlmCreditIdentifier } from "@nodaro/shared"
 import type { ReduceNodeData } from "@/types/nodes"
+import { useT } from "@/lib/i18n"
 import type { ConfigProps } from "./types"
 import { ReduceStrategyForms } from "./reduce-strategy-forms"
 import { ModelSelectOption } from "./model-select-option"
@@ -35,6 +36,7 @@ import { ModelSelectOption } from "./model-select-option"
  * `defaultConfig`.
  */
 export function ReduceConfig({ data, onUpdate }: ConfigProps<ReduceNodeData>) {
+  const t = useT()
   const status = data.executionStatus ?? "idle"
   const hasLastInputs = Array.isArray(data.lastInputs) && data.lastInputs.length > 0
   const inputsTabEnabled = status === "completed" && hasLastInputs
@@ -47,15 +49,15 @@ export function ReduceConfig({ data, onUpdate }: ConfigProps<ReduceNodeData>) {
   return (
     <Tabs defaultValue="config" className="w-full">
       <TabsList className="grid w-full grid-cols-2">
-        <TabsTrigger value="config">Config</TabsTrigger>
+        <TabsTrigger value="config">{t("cfgext.reduceTabConfig")}</TabsTrigger>
         <TabsTrigger value="inputs" disabled={!inputsTabEnabled}>
-          Candidates
+          {t("cfgext.reduceTabCandidates")}
         </TabsTrigger>
       </TabsList>
 
       <TabsContent value="config" className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
-          <Label>What to do with the candidates</Label>
+          <Label>{t("cfgext.reduceWhatToDo")}</Label>
           <Select
             value={data.strategyId}
             onValueChange={(strategyId) => {
@@ -104,7 +106,7 @@ export function ReduceConfig({ data, onUpdate }: ConfigProps<ReduceNodeData>) {
           <ReduceInputsTab inputs={data.lastInputs ?? []} meta={data.lastMeta} />
         ) : (
           <p className="text-sm text-muted-foreground">
-            Run the workflow to see the candidates and which one was chosen.
+            {t("cfgext.reduceRunToSee")}
           </p>
         )}
       </TabsContent>
@@ -120,6 +122,7 @@ function ReduceInputsTab({
   inputs: readonly string[]
   meta: ReduceNodeData["lastMeta"]
 }) {
+  const t = useT()
   const summary = meta?.summary ?? ""
   const reasoning = meta?.reasoning
   const selectedIndex = typeof meta?.selectedIndex === "number" ? meta.selectedIndex : undefined
@@ -128,15 +131,15 @@ function ReduceInputsTab({
     <>
       {summary && (
         <div className="flex flex-col gap-1">
-          <Label className="text-xs font-medium text-muted-foreground">Summary</Label>
+          <Label className="text-xs font-medium text-muted-foreground">{t("cfgext.reduceSummary")}</Label>
           <p className="text-sm">{summary}</p>
         </div>
       )}
 
       {reasoning && (
         <div className="flex flex-col gap-1">
-          <Label className="text-xs font-medium text-muted-foreground">Why it chose this</Label>
-          <blockquote className="text-xs italic border-l-2 border-muted-foreground/40 pl-2 text-muted-foreground">
+          <Label className="text-xs font-medium text-muted-foreground">{t("cfgext.reduceWhyChosen")}</Label>
+          <blockquote className="text-xs italic border-s-2 border-muted-foreground/40 ps-2 text-muted-foreground">
             {reasoning}
           </blockquote>
         </div>
@@ -144,7 +147,7 @@ function ReduceInputsTab({
 
       <div className="flex flex-col gap-1">
         <Label className="text-xs font-medium text-muted-foreground">
-          Candidates ({inputs.length})
+          {t("cfgext.reduceCandidatesCount", { n: inputs.length })}
         </Label>
         <ul className="flex flex-col gap-1.5">
           {inputs.map((item, i) => {
@@ -166,7 +169,7 @@ function ReduceInputsTab({
                   <span className="flex-1 min-w-0">{truncated}</span>
                   {isSelected && (
                     <span className="shrink-0 text-[10px] uppercase font-medium tracking-wide text-[#ff0073]">
-                      chosen
+                      {t("cfgext.reduceChosen")}
                     </span>
                   )}
                 </div>

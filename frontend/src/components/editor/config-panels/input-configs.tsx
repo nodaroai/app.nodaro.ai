@@ -1,5 +1,7 @@
 "use client"
 
+import { useT, tx } from "@/lib/i18n"
+import type { MessageKey } from "@/lib/i18n/en"
 import { useState, useCallback, useRef, useMemo } from "react"
 import { optimizedImageUrl } from "@/lib/image"
 import { isMultiColumnList } from "@/lib/list-loop-migration"
@@ -85,13 +87,16 @@ function getSourceLabel(
   return (nodes.find((n) => n.id === sourceId)?.data?.label as string) || ""
 }
 
-const OUTPUT_TARGETS: readonly { value: "text" | "voice" | "lyrics"; label: string; hint: string }[] = [
-  { value: "text", label: "Text", hint: "Plain prompt" },
-  { value: "voice", label: "Voice", hint: "Audio tags" },
-  { value: "lyrics", label: "Lyrics", hint: "Suno metatags" },
+function OUTPUT_TARGETS(): readonly { value: "text" | "voice" | "lyrics"; label: string; hint: string }[] {
+  return [
+  { value: "text", label: tx("field.text"), hint: tx("inputcfg.plainPrompt") },
+  { value: "voice", label: tx("field.voice"), hint: tx("inputcfg.audioTags") },
+  { value: "lyrics", label: tx("inputcfg.lyrics"), hint: tx("inputcfg.sunoMetatags") },
 ]
+}
 
 export function TextPromptConfig({ data, onUpdate, nodeRefs, refMap, variableDisplayMode, nodes, edges, nodeId }: ConfigProps<TextPromptData> & { nodeId?: string }) {
+  const t = useT()
   const outputTarget: "text" | "voice" | "lyrics" =
     data.outputTarget === "voice" || data.outputTarget === "lyrics" ? data.outputTarget : "text"
   const promptSnippets = useSnippetPool("text", "prompt")
@@ -108,9 +113,9 @@ export function TextPromptConfig({ data, onUpdate, nodeRefs, refMap, variableDis
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label>Writing for</Label>
-        <div role="radiogroup" aria-label="Output target" className="grid grid-cols-3 gap-1.5 mt-1">
-          {OUTPUT_TARGETS.map((t) => {
+        <Label>{t("inputcfg.writingFor")}</Label>
+        <div role="radiogroup" aria-label={t("inputcfg.outputTarget")} className="grid grid-cols-3 gap-1.5 mt-1">
+          {OUTPUT_TARGETS().map((t) => {
             const checked = outputTarget === t.value
             return (
               <button
@@ -119,7 +124,7 @@ export function TextPromptConfig({ data, onUpdate, nodeRefs, refMap, variableDis
                 role="radio"
                 aria-checked={checked}
                 onClick={() => onUpdate({ outputTarget: t.value })}
-                className={`rounded-md border px-2 py-1.5 text-left transition-colors ${checked ? "border-[#ff0073] bg-[#ff0073]/10" : "border-border hover:border-[#ff0073]/50"}`}
+                className={`rounded-md border px-2 py-1.5 text-start transition-colors ${checked ? "border-[#ff0073] bg-[#ff0073]/10" : "border-border hover:border-[#ff0073]/50"}`}
               >
                 <div className="text-xs font-medium">{t.label}</div>
                 <div className="text-[10px] text-muted-foreground">{t.hint}</div>
@@ -130,7 +135,7 @@ export function TextPromptConfig({ data, onUpdate, nodeRefs, refMap, variableDis
       </div>
       <div>
         <div className="flex items-center justify-between mb-1">
-          <Label>Prompt Text</Label>
+          <Label>{t("inputcfg.promptText")}</Label>
           <span className="inline-flex items-center gap-0.5">
             <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
             <SnippetMenuButton pool={promptSnippets} value={data.text || ""} onInsert={(v) => onUpdate({ text: v })} target="prompt" media="text" />
@@ -145,7 +150,7 @@ export function TextPromptConfig({ data, onUpdate, nodeRefs, refMap, variableDis
           <PromptFieldFinalView
             segments={finalPrompt.promptSegments}
             plainText={finalPrompt.promptText}
-            placeholder="Final prompt preview — this node has no text yet"
+            placeholder={t("inputcfg.finalPromptPreviewThisNodeHas")}
             minHeightRem={5 * 1.5}
           />
         ) : (
@@ -155,7 +160,7 @@ export function TextPromptConfig({ data, onUpdate, nodeRefs, refMap, variableDis
                 rows={5}
                 value={data.text}
                 onChange={(value) => onUpdate({ text: value })}
-                placeholder="Write your lyrics... (type [ for metatags)"
+                placeholder={t("inputcfg.writeYourLyricsTypeForMetatags")}
                 tagMode="suno"
                 customTags={SUNO_LYRICS_SUGGESTION_ITEMS}
                 nodeRefs={nodeRefs}
@@ -167,7 +172,7 @@ export function TextPromptConfig({ data, onUpdate, nodeRefs, refMap, variableDis
                 rows={5}
                 value={data.text}
                 onChange={(value) => onUpdate({ text: value })}
-                placeholder="Write the spoken text... (type [ for audio tags)"
+                placeholder={t("inputcfg.writeTheSpokenTextTypeFor")}
                 tagMode="audio"
                 nodeRefs={nodeRefs}
                 displayMode={variableDisplayMode}
@@ -178,7 +183,7 @@ export function TextPromptConfig({ data, onUpdate, nodeRefs, refMap, variableDis
                 rows={5}
                 value={data.text}
                 onChange={(value) => onUpdate({ text: value })}
-                placeholder="Enter your story prompt..."
+                placeholder={t("inputcfg.enterYourStoryPrompt")}
                 tagMode="none"
                 nodeRefs={nodeRefs}
                 displayMode={variableDisplayMode}
@@ -197,7 +202,7 @@ export function TextPromptConfig({ data, onUpdate, nodeRefs, refMap, variableDis
             onChange={(e) => onUpdate({ presentationReadOnly: e.target.checked })}
             className="rounded border-border"
           />
-          Read-only in app
+          {t("inputcfg.readOnlyInApp")}
         </label>
       )}
     </div>
@@ -205,6 +210,7 @@ export function TextPromptConfig({ data, onUpdate, nodeRefs, refMap, variableDis
 }
 
 export function ListConfig({ data, onUpdate }: { data: ListNodeData; onUpdate: (patch: Partial<ListNodeData>) => void }) {
+  const t = useT()
   const [newItem, setNewItem] = useState("")
   const itemList = (data.items || "").split("\n").filter((l) => l.trim() !== "")
 
@@ -229,11 +235,11 @@ export function ListConfig({ data, onUpdate }: { data: ListNodeData; onUpdate: (
 
   return (
     <div className="flex flex-col gap-3">
-      <Label>Items</Label>
+      <Label>{t("inputcfg.items")}</Label>
       <div className="flex flex-col gap-1.5">
         {itemList.map((item, i) => (
           <div key={`item-${i}`} className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground w-5 text-right shrink-0">{i + 1}</span>
+            <span className="text-xs text-muted-foreground w-5 text-end shrink-0">{i + 1}</span>
             <input
               className="flex-1 text-sm bg-muted/30 rounded px-2 py-1 border border-border focus:border-[#ff0073] focus:outline-none"
               value={item}
@@ -249,10 +255,10 @@ export function ListConfig({ data, onUpdate }: { data: ListNodeData; onUpdate: (
           </div>
         ))}
         <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground w-5 text-right shrink-0" />
+          <span className="text-xs text-muted-foreground w-5 text-end shrink-0" />
           <input
             className="flex-1 text-sm bg-muted/30 rounded px-2 py-1 border border-dashed border-border focus:border-[#ff0073] focus:outline-none"
-            placeholder="Add item..."
+            placeholder={t("inputcfg.addItem")}
             value={newItem}
             onChange={(e) => setNewItem(e.target.value)}
             onKeyDown={(e) => {
@@ -269,10 +275,12 @@ export function ListConfig({ data, onUpdate }: { data: ListNodeData; onUpdate: (
         </div>
       </div>
       <p className="text-xs text-muted-foreground">
-        {itemList.length} item{itemList.length !== 1 ? "s" : ""}
+        {itemList.length === 1
+          ? t("inputcfg.itemOne", { n: itemList.length })
+          : t("inputcfg.items2", { n: itemList.length })}
       </p>
       <div className="flex items-center gap-2 mt-3">
-        <label className="text-xs text-muted-foreground">Max items in app mode</label>
+        <label className="text-xs text-muted-foreground">{t("inputcfg.maxItemsInAppMode")}</label>
         <input
           type="number"
           min={1}
@@ -295,6 +303,7 @@ function MediaCellInput({
   colType: LoopColumn["type"]
   onChange: (value: string) => void
 }) {
+  const t = useT()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { upload, isUploading, uploadError, clearError, storageExceeded, clearStorageExceeded } = useFileUpload()
 
@@ -324,7 +333,7 @@ function MediaCellInput({
       {isUploading ? (
         <div className="flex items-center justify-center gap-2 py-3 rounded-md border border-border bg-muted/20">
           <Loader2 className="w-4 h-4 animate-spin text-[#38BDF8]" />
-          <span className="text-xs text-muted-foreground">Uploading...</span>
+          <span className="text-xs text-muted-foreground">{t("inputcfg.uploading")}</span>
         </div>
       ) : value ? (
         <div className="relative group">
@@ -335,14 +344,14 @@ function MediaCellInput({
           ) : (
             <div className="flex items-center gap-2 px-2 py-2 rounded-md border border-border bg-muted/20">
               {colType === "video-url" ? <Film className="w-4 h-4 text-[#818CF8]" /> : <Music className="w-4 h-4 text-[#22c55e]" />}
-              <span className="text-xs text-muted-foreground truncate flex-1">{value.split("/").pop() || "media file"}</span>
+              <span className="text-xs text-muted-foreground truncate flex-1">{value.split("/").pop() || t("inputcfg.mediaFile")}</span>
             </div>
           )}
           <button
             type="button"
-            className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-red-600/80 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
+            className="absolute top-1 end-1 w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-red-600/80 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
             onClick={() => onChange("")}
-            title="Remove"
+            title={t("inputcfg.remove")}
           >
             <X className="w-3 h-3" />
           </button>
@@ -355,7 +364,13 @@ function MediaCellInput({
             onClick={() => fileInputRef.current?.click()}
           >
             <Upload className="w-3.5 h-3.5" />
-            <span className="text-xs">Choose {colType === "image-url" ? "Image" : colType === "video-url" ? "Video" : "Audio"}</span>
+            <span className="text-xs">
+              {colType === "image-url"
+                ? t("inputcfg.chooseImage")
+                : colType === "video-url"
+                  ? t("inputcfg.chooseVideo")
+                  : t("inputcfg.chooseAudio")}
+            </span>
           </button>
           <div className="flex items-center gap-1.5">
             <Link className="w-3 h-3 text-muted-foreground/40 shrink-0" />
@@ -363,7 +378,7 @@ function MediaCellInput({
               type="text"
               value={value}
               onChange={(e) => onChange(e.target.value)}
-              placeholder="or paste URL..."
+              placeholder={t("inputcfg.orPasteUrl")}
               className="w-full bg-transparent border-b border-muted-foreground/20 text-xs py-1 outline-none focus:border-[#38BDF8] transition-colors placeholder:text-muted-foreground/30"
             />
           </div>
@@ -417,25 +432,33 @@ const COLUMN_TYPES = Object.entries(LOOP_COLUMN_TYPE_META).map(([value, meta]) =
   color: meta.color,
 }))
 
-const DELIMITER_PRESETS = [
-  { label: "Comma", value: "," },
-  { label: "Pipe", value: "|" },
-  { label: "Semicolon", value: ";" },
-  { label: "Newline", value: "\n" },
-  { label: "Three Stars", value: "***" },
-] as const
+/** Localized label per loop-column type. `LOOP_COLUMN_TYPE_META` keeps the
+ *  English (it is read by non-UI callers too), so the UI renders through this
+ *  parallel key map rather than the raw `label`. */
+const COLUMN_TYPE_LABEL_KEYS: Record<string, MessageKey> = {
+  text: "out.text",
+  "image-url": "out.image",
+  "video-url": "out.video",
+  "audio-url": "out.audio",
+  json: "out.json",
+}
+
+/** The preset delimiter VALUES (their labels are DELIMITER_OPTIONS(), localized). */
+const DELIMITER_PRESET_VALUES: ReadonlySet<string> = new Set([",", "|", ";", "\n", "***"])
 
 const CUSTOM_DELIMITER = "__custom__" as const
 
-const DELIMITER_OPTIONS = [
-  { label: "None", value: NO_SPLIT_DELIMITER },
-  { label: "Comma", value: "," },
-  { label: "Pipe", value: "|" },
-  { label: "Semicolon", value: ";" },
-  { label: "Newline", value: "\n" },
-  { label: "Three Stars (***)", value: "***" },
-  { label: "Custom", value: CUSTOM_DELIMITER },
+function DELIMITER_OPTIONS() {
+  return [
+  { label: tx("audiocfg.none"), value: NO_SPLIT_DELIMITER },
+  { label: tx("inputcfg.comma"), value: "," },
+  { label: tx("inputcfg.pipe"), value: "|" },
+  { label: tx("inputcfg.semicolon"), value: ";" },
+  { label: tx("inputcfg.newline"), value: "\n" },
+  { label: tx("inputcfg.threeStars"), value: "***" },
+  { label: tx("cfgshared.custom"), value: CUSTOM_DELIMITER },
 ] as const
+}
 
 function DelimiterSelect({
   column,
@@ -448,8 +471,9 @@ function DelimiterSelect({
   onDelimiterChange: (colIndex: number, delimiter: string | undefined) => void
   onSplit: (colIndex: number) => void
 }) {
+  const t = useT()
   const current = column.splitDelimiter
-  const isPreset = DELIMITER_PRESETS.some((p) => p.value === current)
+  const isPreset = DELIMITER_PRESET_VALUES.has(current ?? "")
   const isCustom = !!current && !isPreset && current !== NO_SPLIT_DELIMITER
   const [customValue, setCustomValue] = useState(isCustom ? current : "")
   // Track "user is editing custom" separately from "delimiter has a custom value",
@@ -488,7 +512,7 @@ function DelimiterSelect({
           <SelectValue />
         </SelectTrigger>
         <SelectContent position="popper">
-          {DELIMITER_OPTIONS.map((opt) => (
+          {DELIMITER_OPTIONS().map((opt) => (
             <SelectItem key={opt.value} value={opt.value}>
               {opt.label}
             </SelectItem>
@@ -503,7 +527,7 @@ function DelimiterSelect({
             setCustomValue(e.target.value)
             if (e.target.value) onDelimiterChange(colIndex, e.target.value)
           }}
-          placeholder="Delimiter..."
+          placeholder={t("inputcfg.delimiter")}
         />
       )}
       {!!current && current !== NO_SPLIT_DELIMITER && (
@@ -513,7 +537,7 @@ function DelimiterSelect({
           onClick={() => onSplit(colIndex)}
         >
           <Scissors className="w-3 h-3" />
-          Split
+          {t("inputcfg.split")}
         </button>
       )}
     </div>
@@ -527,6 +551,7 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
   nodes?: ReadonlyArray<{ id: string; type?: string; data: Record<string, unknown> }>
   nodeId?: string
 }) {
+  const t = useT()
   const [activeTab, setActiveTab] = useState<"configure" | "data">("configure")
   const columns = data.columns ?? []
   // Single-column "List" UI by default; becomes the multi-column "Table" UI once
@@ -663,7 +688,7 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
     }
 
     if (newRows.length > maxItems) {
-      toast.warning(`Split produced ${newRows.length} rows but max is ${maxItems}. Truncated to ${maxItems}.`)
+      toast.warning(tx("inputcfg.splitProducedRowsButMaxIs", { n: newRows.length, max: maxItems }))
       onUpdate({ rows: newRows.slice(0, maxItems) })
     } else {
       onUpdate({ rows: newRows })
@@ -698,7 +723,7 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
               : "text-muted-foreground hover:bg-muted/50"
           }`}
         >
-          Configure
+          {t("inputcfg.configure")}
         </button>
         <button
           type="button"
@@ -709,14 +734,14 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
               : "text-muted-foreground hover:bg-muted/50"
           }`}
         >
-          Data
+          {t("nodecat.Data")}
         </button>
       </div>
 
       {activeTab === "configure" && (
         <>
           <div className="flex items-center justify-between">
-            <Label>{singleColumn ? "List" : "Table"}</Label>
+            <Label>{singleColumn ? t("inputcfg.viewList") : t("configPanel.viewTable")}</Label>
             {/* Show Add Column when growing past a single column (Table mode) AND
                 at exactly 0 columns — a degenerate/bootstrap state (e.g. an empty
                 Table migrated to a 0-column list) where the panel would otherwise
@@ -729,15 +754,15 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
                 onClick={addColumn}
               >
                 <Plus className="w-3 h-3" />
-                Add Column
+                {t("inputcfg.addColumn")}
               </button>
             )}
           </div>
 
           {columns.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-6 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/50">
-              <p className="text-sm">No columns yet</p>
-              <p className="text-xs mt-1">Add a column to get started</p>
+              <p className="text-sm">{t("inputcfg.noColumnsYet")}</p>
+              <p className="text-xs mt-1">{t("inputcfg.addAColumnToGetStarted")}</p>
             </div>
           ) : (
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -756,7 +781,7 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
                             readOnly={!!col.connectedSourceId}
                           />
                           {col.connectedSourceId && (
-                            <span className="shrink-0 flex items-center gap-0.5 text-[9px] text-muted-foreground/60" title="Connected to upstream node">
+                            <span className="shrink-0 flex items-center gap-0.5 text-[9px] text-muted-foreground/60" title={t("inputcfg.connectedToUpstreamNode")}>
                               <Link className="w-3 h-3" />
                               {getSourceLabel(nodes, col.connectedSourceId)}
                             </span>
@@ -788,7 +813,7 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
                               className="inline-block rounded-full px-1.5 py-0 text-[10px] font-medium leading-4 text-white"
                               style={{ backgroundColor: COLUMN_TYPES.find((t) => t.value === (col.type ?? "text"))?.color ?? "#38BDF8" }}
                             >
-                              {COLUMN_TYPES.find((t) => t.value === (col.type ?? "text"))?.label ?? "Text"}
+                              {t(COLUMN_TYPE_LABEL_KEYS[col.type ?? "text"] ?? "field.text")}
                             </span>
                           </SelectTrigger>
                           <SelectContent position="popper">
@@ -799,7 +824,7 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
                                     className="inline-block w-2 h-2 rounded-full"
                                     style={{ backgroundColor: ct.color }}
                                   />
-                                  {ct.label}
+                                  {t(COLUMN_TYPE_LABEL_KEYS[ct.value] ?? "field.text")}
                                 </span>
                               </SelectItem>
                             ))}
@@ -815,7 +840,7 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
                         <SortableRow key={rowIds[ri]} id={rowIds[ri]}>
                           {({ attributes, listeners }) => (
                             <>
-                              <td className="pr-1 text-right align-middle">
+                              <td className="pe-1 text-end align-middle">
                                 <div className="flex items-center gap-0.5">
                                   <button
                                     type="button"
@@ -844,7 +869,7 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
                                     />
                                   ) : col.connectedSourceId ? (
                                     <div className="w-full min-w-[60px] text-xs bg-muted/20 rounded px-1.5 py-1 border border-border opacity-70 truncate">
-                                      {row[ci] || <span className="text-muted-foreground/50 italic">Waiting...</span>}
+                                      {row[ci] || <span className="text-muted-foreground/50 italic">{t("inputcfg.waiting")}</span>}
                                     </div>
                                   ) : (
                                     <input
@@ -858,7 +883,7 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
                                         if (!pasted.includes(delimiter)) return
                                         e.preventDefault()
                                         const { newRows, truncated, totalProduced } = spliceDelimitedRows(rows, ri, ci, pasted, delimiter, columns.length, data.maxItems ?? Infinity)
-                                        if (truncated) toast.warning(`Paste produced ${totalProduced} rows but max is ${data.maxItems}. Truncated to ${data.maxItems}.`)
+                                        if (truncated) toast.warning(tx("inputcfg.pasteProducedRowsButMaxIs", { n: totalProduced, max: data.maxItems ?? 0 }))
                                         onUpdate({ rows: newRows })
                                       }}
                                       placeholder={col.name}
@@ -880,33 +905,33 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
                 onClick={addRow}
               >
                 <Plus className="w-3 h-3" />
-                Add Row
+                {t("inputcfg.addRow")}
               </button>
             </div>
             </DndContext>
           )}
 
           <p className="text-xs text-muted-foreground">
-            {rows.length} row{rows.length !== 1 ? "s" : ""} &times; {columns.length} column{columns.length !== 1 ? "s" : ""}
+            {t("inputcfg.rowsColumns", { rows: rows.length, cols: columns.length })}
           </p>
 
           {/* Node view settings — how the node renders in the editor and in presentation mode. */}
           <div className="mt-5 pt-3 border-t border-border/50">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Node view</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">{t("inputcfg.nodeView")}</p>
             <div className="flex items-center gap-2">
-              <label className="text-xs text-muted-foreground">View mode</label>
+              <label className="text-xs text-muted-foreground">{t("inputcfg.viewMode")}</label>
               <select
                 value={resolveViewMode(data)}
                 onChange={(e) => onUpdate({ viewMode: e.target.value as "list" | "gallery" | "packed" })}
                 className="bg-background border border-border rounded px-2 py-1 text-xs"
               >
-                <option value="list">List (rows)</option>
-                <option value="gallery">Gallery (grid)</option>
-                <option value="packed">Packed (fit all)</option>
+                <option value="list">{t("inputcfg.listRows")}</option>
+                <option value="gallery">{t("inputcfg.galleryGrid")}</option>
+                <option value="packed">{t("inputcfg.packedFitAll")}</option>
               </select>
               {resolveViewMode(data) === "gallery" && (
                 <>
-                  <label className="text-xs text-muted-foreground ml-2">Items per row</label>
+                  <label className="text-xs text-muted-foreground ms-2">{t("inputcfg.itemsPerRow")}</label>
                   <input
                     type="number"
                     min={1}
@@ -919,7 +944,7 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
               )}
             </div>
             <div className="flex items-center gap-2 mt-2">
-              <label className="text-xs text-muted-foreground" title="How many lines of text each text item shows before clamping. Hover controllers (expand/copy/drag) hide when below 3 to avoid overlap.">Text max lines</label>
+              <label className="text-xs text-muted-foreground" title={t("inputcfg.howManyLinesOfTextEach")}>{t("inputcfg.textMaxLines")}</label>
               <input
                 type="number"
                 min={1}
@@ -928,24 +953,24 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
                 onChange={(e) => onUpdate({ textMaxLines: Math.max(1, Math.min(20, parseInt(e.target.value, 10) || TEXT_CELL_DEFAULT_MAX_LINES)) })}
                 className="w-16 bg-background border border-border rounded px-2 py-1 text-xs"
               />
-              <label className="text-xs text-muted-foreground ml-2">Font size</label>
+              <label className="text-xs text-muted-foreground ms-2">{t("inputcfg.fontSize")}</label>
               <select
                 value={data.textFontSize ?? TEXT_FONT_SIZE_DEFAULT}
                 onChange={(e) => onUpdate({ textFontSize: e.target.value as TextFontSize })}
                 className="bg-background border border-border rounded px-2 py-1 text-xs"
               >
-                <option value="small">Small</option>
-                <option value="medium">Medium</option>
-                <option value="large">Large</option>
+                <option value="small">{t("inputcfg.small")}</option>
+                <option value="medium">{t("inputcfg.medium")}</option>
+                <option value="large">{t("inputcfg.large")}</option>
               </select>
             </div>
           </div>
 
           {/* Presentation / app-mode settings — only apply when this node is used as an input in a published app or presentation mode. */}
           <div className="mt-5 pt-3 border-t border-border/50">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Presentation / App mode</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">{t("inputcfg.presentationAppMode")}</p>
             <div className="flex items-center gap-2">
-              <label className="text-xs text-muted-foreground" title="Hard cap on rows the end user can add in the app UI. Also bounds default and min.">Max items</label>
+              <label className="text-xs text-muted-foreground" title={t("inputcfg.hardCapOnRowsTheEnd")}>{t("inputcfg.maxItems")}</label>
               <input
                 type="number"
                 min={1}
@@ -956,7 +981,7 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
               />
             </div>
             <div className="flex items-center gap-2 mt-2">
-              <label className="text-xs text-muted-foreground" title="Run is disabled until the user provides at least this many rows. 0 = no minimum.">Min rows to run</label>
+              <label className="text-xs text-muted-foreground" title={t("inputcfg.runIsDisabledUntilTheUser")}>{t("inputcfg.minRowsToRun")}</label>
               <input
                 type="number"
                 min={0}
@@ -972,7 +997,7 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
               />
             </div>
             <div className="flex items-center gap-2 mt-2">
-              <label className="text-xs text-muted-foreground" title="Number of empty rows pre-populated when the app first loads.">Default rows</label>
+              <label className="text-xs text-muted-foreground" title={t("inputcfg.numberOfEmptyRowsPrePopulated")}>{t("inputcfg.defaultRows")}</label>
               <input
                 type="number"
                 min={data.minRows ?? 0}
@@ -995,22 +1020,22 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
         <div className="space-y-2">
           {columns.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">
-              No columns configured. Switch to Configure tab to add columns.
+              {t("inputcfg.noColumnsConfiguredSwitchToConfigure")}
             </p>
           ) : displayRows.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">
-              No data yet. Add rows manually or connect an upstream node.
+              {t("inputcfg.noDataYetAddRowsManually")}
             </p>
           ) : (
             <div className="max-h-[400px] overflow-auto rounded-lg border border-gray-200 dark:border-[#2D2D2D]">
               <table className="w-full text-sm border-collapse">
                 <thead>
                   <tr className="bg-gray-50 dark:bg-[#1a1a1a] sticky top-0">
-                    <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground w-8">#</th>
+                    <th className="px-3 py-2 text-start text-[10px] font-semibold uppercase tracking-wider text-muted-foreground w-8">#</th>
                     {columns.map((col) => {
                       const meta = LOOP_COLUMN_TYPE_META[col.type ?? "text"] ?? LOOP_COLUMN_TYPE_META.text
                       return (
-                        <th key={col.id} className="px-3 py-2 text-left">
+                        <th key={col.id} className="px-3 py-2 text-start">
                           <div className="flex items-center gap-1.5">
                             <span className="text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded"
                               style={{ background: `${meta.color}20`, color: meta.color }}>
@@ -1048,7 +1073,7 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
                                 <WaveformAudioPlayer url={val} variant="compact" className="w-full max-w-[160px]" />
                               )
                             ) : isConnected ? (
-                              <span className="text-muted-foreground/70">{val || <span className="italic text-muted-foreground/50">Waiting...</span>}</span>
+                              <span className="text-muted-foreground/70">{val || <span className="italic text-muted-foreground/50">{t("inputcfg.waiting")}</span>}</span>
                             ) : (
                               <span className={val ? "" : "text-muted-foreground/40"}>{val || "—"}</span>
                             )}
@@ -1062,8 +1087,8 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
             </div>
           )}
           <p className="text-[10px] text-muted-foreground/50 text-center">
-            {displayRows.length} row{displayRows.length !== 1 ? "s" : ""} × {columns.length} column{columns.length !== 1 ? "s" : ""}
-            {isConnectedData && " (from connected node)"}
+            {t("inputcfg.rowsColumns", { rows: displayRows.length, cols: columns.length })}
+            {isConnectedData && t("inputcfg.fromConnectedNode")}
           </p>
         </div>
       )}
@@ -1072,10 +1097,11 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
 }
 
 export function UploadImageConfig({ data, onUpdate }: ConfigProps<UploadImageData>) {
+  const t = useT()
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label htmlFor="image-url">Image URL</Label>
+        <Label htmlFor="image-url">{t("inputcfg.imageUrl")}</Label>
         <Input
           id="image-url"
           value={data.url}
@@ -1088,10 +1114,11 @@ export function UploadImageConfig({ data, onUpdate }: ConfigProps<UploadImageDat
 }
 
 export function UploadVideoConfig({ data, onUpdate }: ConfigProps<UploadVideoData>) {
+  const t = useT()
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label htmlFor="video-url">Video URL</Label>
+        <Label htmlFor="video-url">{t("inputcfg.videoUrl")}</Label>
         <Input
           id="video-url"
           value={data.url}
@@ -1104,10 +1131,11 @@ export function UploadVideoConfig({ data, onUpdate }: ConfigProps<UploadVideoDat
 }
 
 export function UploadAudioConfig({ data, onUpdate }: ConfigProps<UploadAudioData>) {
+  const t = useT()
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label htmlFor="audio-url">Audio URL</Label>
+        <Label htmlFor="audio-url">{t("inputcfg.audioUrl")}</Label>
         <Input
           id="audio-url"
           value={data.url}
@@ -1120,10 +1148,11 @@ export function UploadAudioConfig({ data, onUpdate }: ConfigProps<UploadAudioDat
 }
 
 export function RSSFeedConfig({ data, onUpdate }: ConfigProps<RSSFeedData>) {
+  const t = useT()
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label htmlFor="feed-url">Feed URL</Label>
+        <Label htmlFor="feed-url">{t("inputcfg.feedUrl")}</Label>
         <Input
           id="feed-url"
           value={data.feedUrl}
@@ -1132,7 +1161,7 @@ export function RSSFeedConfig({ data, onUpdate }: ConfigProps<RSSFeedData>) {
         />
       </div>
       <div>
-        <Label htmlFor="item-index">Item Index</Label>
+        <Label htmlFor="item-index">{t("inputcfg.itemIndex")}</Label>
         <Input
           id="item-index"
           type="number"
@@ -1177,16 +1206,19 @@ function extractVideoUrlId(url: string): string | null {
   return null
 }
 
-const VIDEO_PLATFORM_LABELS: Record<string, string> = {
+function VIDEO_PLATFORM_LABELS(): Record<string, string> {
+  return {
   youtube: "YouTube",
   facebook: "Facebook",
   tiktok: "TikTok",
   instagram: "Instagram",
   twitter: "Twitter/X",
-  unknown: "Video",
+  unknown: tx("common.video"),
+}
 }
 
 export function YouTubeVideoConfig({ data, onUpdate }: ConfigProps<YouTubeVideoData>) {
+  const t = useT()
   const [loading, setLoading] = useState(false)
 
   const platform = detectVideoPlatform(data.youtubeUrl || "")
@@ -1219,13 +1251,13 @@ export function YouTubeVideoConfig({ data, onUpdate }: ConfigProps<YouTubeVideoD
         const meta = await fetchYouTubeOEmbed(url)
         onUpdate({ title: meta.title, thumbnailUrl: meta.thumbnail_url })
       } else {
-        onUpdate({ title: `${VIDEO_PLATFORM_LABELS[detectedPlatform]} Video`, thumbnailUrl: "" })
+        onUpdate({ title: tx("inputcfg.video", { platform: VIDEO_PLATFORM_LABELS()[detectedPlatform] }), thumbnailUrl: "" })
       }
     } catch {
       if (detectedPlatform === "youtube") {
         onUpdate({ title: "", thumbnailUrl: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` })
       } else {
-        onUpdate({ title: `${VIDEO_PLATFORM_LABELS[detectedPlatform]} Video`, thumbnailUrl: "" })
+        onUpdate({ title: tx("inputcfg.video", { platform: VIDEO_PLATFORM_LABELS()[detectedPlatform] }), thumbnailUrl: "" })
       }
     } finally {
       setLoading(false)
@@ -1256,7 +1288,7 @@ export function YouTubeVideoConfig({ data, onUpdate }: ConfigProps<YouTubeVideoD
         } else if (event.phase === "failed") {
           onUpdate({
             downloadStatus: "failed",
-            downloadError: event.error ?? "Download failed",
+            downloadError: event.error ?? tx("inputcfg.downloadFailed"),
             downloadPercent: 0,
           })
         } else {
@@ -1264,7 +1296,7 @@ export function YouTubeVideoConfig({ data, onUpdate }: ConfigProps<YouTubeVideoD
         }
       })
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Download failed"
+      const message = err instanceof Error ? err.message : tx("inputcfg.downloadFailed")
       onUpdate({
         downloadStatus: "failed",
         downloadError: message,
@@ -1276,25 +1308,25 @@ export function YouTubeVideoConfig({ data, onUpdate }: ConfigProps<YouTubeVideoD
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label htmlFor="video-url">Video URL</Label>
+        <Label htmlFor="video-url">{t("inputcfg.videoUrl")}</Label>
         <Input
           id="video-url"
           value={data.youtubeUrl}
           onChange={(e) => handleUrlChange(e.target.value)}
-          placeholder="YouTube, Facebook, TikTok, Instagram, or X URL"
+          placeholder={t("inputcfg.youtubeFacebookTiktokInstagramOrX")}
         />
       </div>
       {loading && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Loader2 className="w-3 h-3 animate-spin" />
-          <span>Fetching metadata...</span>
+          <span>{t("inputcfg.fetchingMetadata")}</span>
         </div>
       )}
       {!loading && displayThumbnail && (
         <div className="rounded-md overflow-hidden">
           <CachedImage
             src={displayThumbnail}
-            alt={data.title || "Video"}
+            alt={data.title || t("common.video")}
             className="w-full rounded-md"
             thumbnail
             thumbnailWidth={480}
@@ -1303,7 +1335,7 @@ export function YouTubeVideoConfig({ data, onUpdate }: ConfigProps<YouTubeVideoD
       )}
       {data.title && (
         <div className="text-xs text-muted-foreground bg-muted/30 rounded-lg px-3 py-2">
-          <span className="font-medium">Title:</span> {data.title}
+          <span className="font-medium">{t("inputcfg.title")}</span> {data.title}
         </div>
       )}
 
@@ -1322,8 +1354,8 @@ export function YouTubeVideoConfig({ data, onUpdate }: ConfigProps<YouTubeVideoD
                 onClick={handleDownload}
                 className="w-full bg-[#ff0073] hover:bg-[#ff0073]/90 text-white"
               >
-                <Download className="w-3.5 h-3.5 mr-1.5" />
-                {downloadStatus === "failed" ? "Retry Download" : "Download Video"}
+                <Download className="w-3.5 h-3.5 me-1.5" />
+                {downloadStatus === "failed" ? t("inputcfg.retryDownload") : t("inputcfg.downloadVideo")}
               </Button>
             </>
           )}
@@ -1332,8 +1364,8 @@ export function YouTubeVideoConfig({ data, onUpdate }: ConfigProps<YouTubeVideoD
             <div className="flex flex-col gap-1.5 p-2 bg-muted/30 rounded-md">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Loader2 className="w-3.5 h-3.5 animate-spin text-[#ff0073]" />
-                <span>{data.downloadPhase === "uploading" ? "Uploading..." : data.downloadPhase === "processing" ? "Processing..." : "Downloading video..."}</span>
-                <span className="ml-auto font-mono text-[#ff0073]">{data.downloadPercent ?? 0}%</span>
+                <span>{data.downloadPhase === "uploading" ? t("inputcfg.uploading") : data.downloadPhase === "processing" ? t("pricing.processing") : t("inputcfg.downloadingVideo")}</span>
+                <span className="ms-auto font-mono text-[#ff0073]">{data.downloadPercent ?? 0}%</span>
               </div>
               <div className="w-full h-1.5 rounded-full bg-muted-foreground/20 overflow-hidden">
                 <div
@@ -1347,7 +1379,7 @@ export function YouTubeVideoConfig({ data, onUpdate }: ConfigProps<YouTubeVideoD
           {downloadStatus === "completed" && (
             <div className="flex items-center gap-2 text-xs text-green-500 p-2 bg-green-500/10 rounded-md">
               <Check className="w-3.5 h-3.5" />
-              <span>Downloaded and ready</span>
+              <span>{t("inputcfg.downloadedAndReady")}</span>
             </div>
           )}
         </div>
@@ -1356,7 +1388,7 @@ export function YouTubeVideoConfig({ data, onUpdate }: ConfigProps<YouTubeVideoD
       {!loading && data.videoId && isYouTube && (
         <div className="flex items-center gap-2 text-xs text-green-500 p-2 bg-green-500/10 rounded-md">
           <Check className="w-3.5 h-3.5" />
-          <span>Direct streaming</span>
+          <span>{t("inputcfg.directStreaming")}</span>
         </div>
       )}
     </div>
@@ -1364,6 +1396,7 @@ export function YouTubeVideoConfig({ data, onUpdate }: ConfigProps<YouTubeVideoD
 }
 
 export function ReferenceAudioConfig({ data, onUpdate }: ConfigProps<ReferenceAudioData>) {
+  const t = useT()
   const [extracting, setExtracting] = useState(false)
   const [fetchingMeta, setFetchingMeta] = useState(false)
 
@@ -1425,16 +1458,16 @@ export function ReferenceAudioConfig({ data, onUpdate }: ConfigProps<ReferenceAu
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label>Source</Label>
+        <Label>{t("inputcfg.source")}</Label>
         <Select
           value={data.sourceType || "youtube"}
           onValueChange={(v) => onUpdate({ sourceType: v as ReferenceAudioData["sourceType"], extractedAudioUrl: "", extractionStatus: "idle", videoTitle: "", videoThumbnail: "" })}
         >
-          <SelectTrigger aria-label="Source type"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("inputcfg.sourceType")}><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="youtube">YouTube</SelectItem>
-            <SelectItem value="upload">Upload File</SelectItem>
-            <SelectItem value="url">Direct URL</SelectItem>
+            <SelectItem value="upload">{t("inputcfg.uploadFile")}</SelectItem>
+            <SelectItem value="url">{t("inputcfg.directUrl")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -1442,7 +1475,7 @@ export function ReferenceAudioConfig({ data, onUpdate }: ConfigProps<ReferenceAu
       {(data.sourceType === "youtube" || !data.sourceType) && (
         <div className="flex flex-col gap-2">
           <div>
-            <Label htmlFor="yt-url">YouTube URL</Label>
+            <Label htmlFor="yt-url">{t("vidcfg.youtubeUrl")}</Label>
             <Input
               id="yt-url"
               value={data.youtubeUrl || ""}
@@ -1450,7 +1483,7 @@ export function ReferenceAudioConfig({ data, onUpdate }: ConfigProps<ReferenceAu
               placeholder="https://youtube.com/watch?v=..."
             />
           </div>
-          {fetchingMeta && <p className="text-xs text-muted-foreground">Fetching video info...</p>}
+          {fetchingMeta && <p className="text-xs text-muted-foreground">{t("inputcfg.fetchingVideoInfo")}</p>}
           {data.videoThumbnail && (
             <div className="rounded-md overflow-hidden bg-muted border border-border">
               <CachedImage src={data.videoThumbnail} alt="" className="w-full aspect-video object-cover" thumbnail thumbnailWidth={480} />
@@ -1462,14 +1495,14 @@ export function ReferenceAudioConfig({ data, onUpdate }: ConfigProps<ReferenceAu
             onClick={handleExtract}
             disabled={extracting || !data.youtubeUrl?.trim()}
           >
-            {extracting ? "Extracting..." : "Extract Audio"}
+            {extracting ? t("inputcfg.extracting") : t("inputcfg.extractAudio")}
           </Button>
         </div>
       )}
 
       {data.sourceType === "upload" && (
         <div className="flex flex-col gap-2">
-          <Label>Audio File</Label>
+          <Label>{t("inputcfg.audioFile")}</Label>
           <Input
             type="file"
             accept="audio/mpeg,audio/wav,audio/mp4,audio/aac,audio/flac,audio/x-flac,.mp3,.wav,.m4a,.aac,.flac"
@@ -1478,14 +1511,14 @@ export function ReferenceAudioConfig({ data, onUpdate }: ConfigProps<ReferenceAu
               if (file) handleFileUpload(file)
             }}
           />
-          {extracting && <p className="text-xs text-muted-foreground">Uploading...</p>}
+          {extracting && <p className="text-xs text-muted-foreground">{t("inputcfg.uploading")}</p>}
         </div>
       )}
 
       {data.sourceType === "url" && (
         <div className="flex flex-col gap-2">
           <div>
-            <Label htmlFor="direct-url">Audio URL</Label>
+            <Label htmlFor="direct-url">{t("inputcfg.audioUrl")}</Label>
             <Input
               id="direct-url"
               value={data.directUrl || ""}
@@ -1494,19 +1527,19 @@ export function ReferenceAudioConfig({ data, onUpdate }: ConfigProps<ReferenceAu
             />
           </div>
           <Button size="sm" onClick={handleDirectUrlSet} disabled={!data.directUrl?.trim()}>
-            Set URL
+            {t("inputcfg.setUrl")}
           </Button>
         </div>
       )}
 
       {data.extractionStatus === "ready" && data.extractedAudioUrl && (
         <div className="flex flex-col gap-1">
-          <p className="text-xs text-green-600">Audio ready</p>
+          <p className="text-xs text-green-600">{t("inputcfg.audioReady")}</p>
           <WaveformAudioPlayer url={data.extractedAudioUrl} variant="compact" className="w-full" />
         </div>
       )}
       {data.extractionStatus === "failed" && (
-        <p className="text-xs text-red-500">Extraction failed. Try again.</p>
+        <p className="text-xs text-red-500">{t("inputcfg.extractionFailedTryAgain")}</p>
       )}
     </div>
   )

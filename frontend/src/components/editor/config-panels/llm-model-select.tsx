@@ -1,5 +1,7 @@
 "use client"
 
+import { useT, tx } from "@/lib/i18n"
+import { useLocalizeModelDescription } from "@/lib/i18n/labels"
 import { useMemo, useState } from "react"
 import { Check, ChevronsUpDown } from "lucide-react"
 
@@ -12,10 +14,12 @@ import type { LlmTier, LlmFeature, LlmModelDef } from "@nodaro/shared"
 import { modelMatchesQuery } from "@/lib/model-search"
 import { ModelDescriptionHint } from "./model-description-hint"
 
-export const TIER_LABELS: Record<LlmTier, string> = {
-  economy: "Economy",
-  standard: "Standard",
-  premium: "Premium",
+export function TIER_LABELS(): Record<LlmTier, string> {
+  return {
+  economy: tx("cfgshared.tierEconomy"),
+  standard: tx("cfgshared.tierStandard"),
+  premium: tx("cfgshared.tierPremium"),
+}
 }
 
 /** Tier badge colors — the frontend-wide convention (economy green, standard
@@ -51,6 +55,8 @@ interface LlmModelSelectProps {
  * consumer panels didn't have to move.
  */
 export function LlmModelSelect({ feature, value, onChange, filter }: LlmModelSelectProps) {
+  const t = useT()
+  const localizeDesc = useLocalizeModelDescription()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
 
@@ -72,7 +78,7 @@ export function LlmModelSelect({ feature, value, onChange, filter }: LlmModelSel
 
   return (
     <div className="space-y-1">
-      <label className="text-xs font-medium text-muted-foreground">AI Model</label>
+      <label className="text-xs font-medium text-muted-foreground">{t("cfgshared.aiModel")}</label>
       <Popover open={open} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
           <Button
@@ -80,18 +86,18 @@ export function LlmModelSelect({ feature, value, onChange, filter }: LlmModelSel
             variant="outline"
             role="combobox"
             aria-expanded={open}
-            aria-label="AI Model"
+            aria-label={t("cfgshared.aiModel")}
             className="h-8 w-full justify-between px-2 text-xs font-normal"
           >
             <span className="flex min-w-0 items-center gap-2">
               <span className="truncate">{current?.displayName ?? currentValue}</span>
               {current && (
                 <span className={cn("shrink-0 text-[10px]", TIER_BADGE_CLASSES[current.tier])}>
-                  {TIER_LABELS[current.tier]}
+                  {TIER_LABELS()[current.tier]}
                 </span>
               )}
             </span>
-            <ChevronsUpDown className="ml-1 size-3.5 shrink-0 opacity-50" />
+            <ChevronsUpDown className="ms-1 size-3.5 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
         {/* z-[9999]: this picker also mounts inside dialogs (prompt helper,
@@ -101,12 +107,12 @@ export function LlmModelSelect({ feature, value, onChange, filter }: LlmModelSel
             <CommandInput
               value={query}
               onValueChange={setQuery}
-              placeholder="Search — name, company, tier…"
+              placeholder={t("cfgshared.searchModelsTierPlaceholder")}
               className="placeholder:text-muted-foreground/50"
             />
             <CommandList>
               {groups.length === 0 ? (
-                <div className="py-6 text-center text-sm text-muted-foreground">No models match.</div>
+                <div className="py-6 text-center text-sm text-muted-foreground">{t("cfgshared.noModelsMatch")}</div>
               ) : (
                 groups.map((group) => (
                   <CommandGroup key={group.vendor} heading={group.label}>
@@ -123,12 +129,12 @@ export function LlmModelSelect({ feature, value, onChange, filter }: LlmModelSel
                         <span className="flex w-full items-center gap-2">
                           <Check className={cn("size-3.5 shrink-0", model.id === currentValue ? "opacity-100" : "opacity-0")} />
                           <span className="truncate">{model.displayName}</span>
-                          <span className={cn("ml-auto shrink-0 text-[10px]", TIER_BADGE_CLASSES[model.tier])}>
-                            {TIER_LABELS[model.tier]}
+                          <span className={cn("ms-auto shrink-0 text-[10px]", TIER_BADGE_CLASSES[model.tier])}>
+                            {TIER_LABELS()[model.tier]}
                           </span>
                         </span>
-                        <span className="pl-[1.375rem] text-[11px] leading-tight text-muted-foreground/60">
-                          {model.desc}
+                        <span className="ps-[1.375rem] text-[11px] leading-tight text-muted-foreground/60">
+                          {localizeDesc(model.desc)}
                         </span>
                       </CommandItem>
                     ))}

@@ -42,6 +42,8 @@ import { LlmModelSelect } from "./llm-model-select"
 import { ReasoningEffortSelect } from "./reasoning-effort-select"
 import { MappableField } from "./mappable-field"
 import type { ConfigProps } from "./types"
+import { useT } from "@/lib/i18n"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import { motionGraphicsFeature } from "@nodaro/shared"
 import {
   useMediaOrder,
@@ -54,6 +56,7 @@ import { COMPOSITION_RATIOS } from "./model-options"
 import { LottieSlotControls } from "./lottie-slot-controls"
 
 export function VideoComposerConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<VideoComposerData>) {
+  const t = useT()
   const { sensors, orderedIds, orderedSources, handleDragEnd } = useMediaOrder(sources, data.assetOrder, onUpdate)
 
   return (
@@ -81,9 +84,9 @@ export function VideoComposerConfig({ data, onUpdate, sources, fieldMappings, on
         onChange={onUpdate}
       />
 
-      <MappableField field="compositionPrompt" label="Composition Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="compositionPrompt" label={t("cfgext.compCompositionPrompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <TagTextarea
-          placeholder="Describe the style of video you want: cinematic product showcase with slow fades, energetic social reel with zoom cuts..."
+          placeholder={t("cfgext.compPhCompositionPrompt")}
           value={data.compositionPrompt ?? ""}
           onChange={(v) => onUpdate({ compositionPrompt: v })}
           rows={3}
@@ -121,6 +124,7 @@ const LazyAfterEffectsPreview = lazy(() => import("@/components/editor/after-eff
 const LazyAfterEffectsPlayerPreview = lazy(() => import("@/components/editor/after-effects-player-preview").then(m => ({ default: m.AfterEffectsPlayerPreview })))
 
 export function AfterEffectsConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<AfterEffectsData>) {
+  const t = useT()
   return (
     <div className="flex flex-col gap-3">
       <LlmModelSelect
@@ -144,9 +148,9 @@ export function AfterEffectsConfig({ data, onUpdate, sources, fieldMappings, onM
         onChange={onUpdate}
       />
 
-      <MappableField field="effectPrompt" label="Effect Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="effectPrompt" label={t("cfgext.compEffectPrompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <TagTextarea
-          placeholder="Describe the look: cinematic film grain with warm color grading, vignette, letterbox..."
+          placeholder={t("cfgext.compPhEffectPrompt")}
           value={data.effectPrompt ?? ""}
           onChange={(v) => onUpdate({ effectPrompt: v })}
           rows={3}
@@ -161,14 +165,14 @@ export function AfterEffectsConfig({ data, onUpdate, sources, fieldMappings, onM
         <>
           <Separator />
           {(data.effectPlan as Record<string, unknown>).sourceVideo && (
-            <Suspense fallback={<div className="text-xs text-muted-foreground py-2">Loading player...</div>}>
+            <Suspense fallback={<div className="text-xs text-muted-foreground py-2">{t("cfgext.compLoadingPlayer")}</div>}>
               <LazyAfterEffectsPlayerPreview
                 effectPlan={data.effectPlan}
                 fps={data.fps}
               />
             </Suspense>
           )}
-          <Suspense fallback={<div className="text-xs text-muted-foreground py-2">Loading preview...</div>}>
+          <Suspense fallback={<div className="text-xs text-muted-foreground py-2">{t("proccfg.loadingPreview")}</div>}>
             <LazyAfterEffectsPreview
               effectPlan={data.effectPlan}
               fps={data.fps}
@@ -180,12 +184,12 @@ export function AfterEffectsConfig({ data, onUpdate, sources, fieldMappings, onM
 
       <Accordion type="single" collapsible>
         <AccordionItem value="settings">
-          <AccordionTrigger className="text-xs py-2">Settings</AccordionTrigger>
+          <AccordionTrigger className="text-xs py-2">{t("settings.title")}</AccordionTrigger>
           <AccordionContent>
             <div className="flex flex-col gap-3 pt-1">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label htmlFor="ae-fps" className="mb-1.5 block text-xs">FPS</Label>
+                  <Label htmlFor="ae-fps" className="mb-1.5 block text-xs">{t("field.fps")}</Label>
                   <Select value={String(data.fps)} onValueChange={(v) => onUpdate({ fps: parseInt(v, 10) })}>
                     <SelectTrigger id="ae-fps" className="h-8 text-xs"><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -196,7 +200,7 @@ export function AfterEffectsConfig({ data, onUpdate, sources, fieldMappings, onM
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor="ae-duration" className="mb-1.5 block text-xs">Duration (s)</Label>
+                  <Label htmlFor="ae-duration" className="mb-1.5 block text-xs">{t("scriptcfg.durationS")}</Label>
                   <Input
                     id="ae-duration"
                     type="number"
@@ -219,6 +223,7 @@ export function AfterEffectsConfig({ data, onUpdate, sources, fieldMappings, onM
 const LazyLottieOverlayPreview = lazy(() => import("@/components/editor/lottie-overlay-preview").then(m => ({ default: m.LottieOverlayPreview })))
 
 export function LottieOverlayConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<LottieOverlayData>) {
+  const t = useT()
   return (
     <div className="flex flex-col gap-3">
       <LlmModelSelect
@@ -242,9 +247,9 @@ export function LottieOverlayConfig({ data, onUpdate, sources, fieldMappings, on
         onChange={onUpdate}
       />
 
-      <MappableField field="overlayPrompt" label="Overlay Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="overlayPrompt" label={t("cfgext.compOverlayPrompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <TagTextarea
-          placeholder="Describe overlays: add confetti at 3 seconds, floating particles throughout..."
+          placeholder={t("cfgext.compPhOverlayPrompt")}
           value={data.overlayPrompt ?? ""}
           onChange={(v) => onUpdate({ overlayPrompt: v })}
           rows={3}
@@ -258,7 +263,7 @@ export function LottieOverlayConfig({ data, onUpdate, sources, fieldMappings, on
       {data.overlayPlan && (
         <>
           <Separator />
-          <Suspense fallback={<div className="text-xs text-muted-foreground py-2">Loading preview...</div>}>
+          <Suspense fallback={<div className="text-xs text-muted-foreground py-2">{t("proccfg.loadingPreview")}</div>}>
             <LazyLottieOverlayPreview
               overlayPlan={data.overlayPlan}
               fps={data.fps}
@@ -270,12 +275,12 @@ export function LottieOverlayConfig({ data, onUpdate, sources, fieldMappings, on
 
       <Accordion type="single" collapsible>
         <AccordionItem value="settings">
-          <AccordionTrigger className="text-xs py-2">Settings</AccordionTrigger>
+          <AccordionTrigger className="text-xs py-2">{t("settings.title")}</AccordionTrigger>
           <AccordionContent>
             <div className="flex flex-col gap-3 pt-1">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label htmlFor="lo-fps" className="mb-1.5 block text-xs">FPS</Label>
+                  <Label htmlFor="lo-fps" className="mb-1.5 block text-xs">{t("field.fps")}</Label>
                   <Select value={String(data.fps)} onValueChange={(v) => onUpdate({ fps: parseInt(v, 10) })}>
                     <SelectTrigger id="lo-fps" className="h-8 text-xs"><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -286,7 +291,7 @@ export function LottieOverlayConfig({ data, onUpdate, sources, fieldMappings, on
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor="lo-duration" className="mb-1.5 block text-xs">Duration (s)</Label>
+                  <Label htmlFor="lo-duration" className="mb-1.5 block text-xs">{t("scriptcfg.durationS")}</Label>
                   <Input
                     id="lo-duration"
                     type="number"
@@ -309,6 +314,7 @@ export function LottieOverlayConfig({ data, onUpdate, sources, fieldMappings, on
 const LazyThreeDTitlePreview = lazy(() => import("@/components/editor/three-d-title-preview").then(m => ({ default: m.ThreeDTitlePreview })))
 
 export function ThreeDTitleConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode, nodes, edges, nodeId }: ConfigProps<ThreeDTitleData> & { nodeId?: string }) {
+  const t = useT()
   const promptSnippets = useSnippetPool("text", "prompt")
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "titlePrompt")
   const finalPrompt = useFinalPromptSegments({
@@ -342,7 +348,7 @@ export function ThreeDTitleConfig({ data, onUpdate, sources, fieldMappings, onMa
         onChange={onUpdate}
       />
 
-      <MappableField field="titlePrompt" label="Title Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
+      <MappableField field="titlePrompt" label={t("cfgext.compTitlePrompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
         <span className="inline-flex items-center gap-0.5">
           <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
           <SnippetMenuButton pool={promptSnippets} value={data.titlePrompt || ""} onInsert={(v) => onUpdate({ titlePrompt: v })} target="prompt" media="text" />
@@ -352,12 +358,12 @@ export function ThreeDTitleConfig({ data, onUpdate, sources, fieldMappings, onMa
           <PromptFieldFinalView
             segments={finalPrompt.promptSegments}
             plainText={finalPrompt.promptText}
-            placeholder="Final prompt preview — node has no prompt yet"
+            placeholder={t("imgcfg.promptPreviewEmpty")}
             minHeightRem={3 * 1.5}
           />
         ) : (
           <TagTextarea
-            placeholder="Describe the 3D title: epic gold ADVENTURE text with particles, cinematic camera..."
+            placeholder={t("cfgext.compPh3dTitlePrompt")}
             value={data.titlePrompt ?? ""}
             onChange={(v) => onUpdate({ titlePrompt: v })}
             rows={3}
@@ -373,7 +379,7 @@ export function ThreeDTitleConfig({ data, onUpdate, sources, fieldMappings, onMa
       {data.titlePlan && (
         <>
           <Separator />
-          <Suspense fallback={<div className="text-xs text-muted-foreground py-2">Loading preview...</div>}>
+          <Suspense fallback={<div className="text-xs text-muted-foreground py-2">{t("proccfg.loadingPreview")}</div>}>
             <LazyThreeDTitlePreview
               titlePlan={data.titlePlan}
               fps={data.fps}
@@ -385,12 +391,12 @@ export function ThreeDTitleConfig({ data, onUpdate, sources, fieldMappings, onMa
 
       <Accordion type="single" collapsible>
         <AccordionItem value="settings">
-          <AccordionTrigger className="text-xs py-2">Settings</AccordionTrigger>
+          <AccordionTrigger className="text-xs py-2">{t("settings.title")}</AccordionTrigger>
           <AccordionContent>
             <div className="flex flex-col gap-3 pt-1">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label htmlFor="3d-fps" className="mb-1.5 block text-xs">FPS</Label>
+                  <Label htmlFor="3d-fps" className="mb-1.5 block text-xs">{t("field.fps")}</Label>
                   <Select value={String(data.fps)} onValueChange={(v) => onUpdate({ fps: parseInt(v, 10) })}>
                     <SelectTrigger id="3d-fps" className="h-8 text-xs"><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -401,7 +407,7 @@ export function ThreeDTitleConfig({ data, onUpdate, sources, fieldMappings, onMa
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor="3d-duration" className="mb-1.5 block text-xs">Duration (s)</Label>
+                  <Label htmlFor="3d-duration" className="mb-1.5 block text-xs">{t("scriptcfg.durationS")}</Label>
                   <Input
                     id="3d-duration"
                     type="number"
@@ -414,7 +420,7 @@ export function ThreeDTitleConfig({ data, onUpdate, sources, fieldMappings, onMa
                 </div>
               </div>
               <div>
-                <Label className="mb-1.5 block text-xs">Aspect Ratio</Label>
+                <Label className="mb-1.5 block text-xs">{t("field.aspectRatio")}</Label>
                 <AspectRatioSelector
                   options={COMPOSITION_RATIOS}
                   value={data.aspectRatio}
@@ -422,7 +428,7 @@ export function ThreeDTitleConfig({ data, onUpdate, sources, fieldMappings, onMa
                 />
               </div>
               <div>
-                <Label htmlFor="3d-bgcolor" className="mb-1.5 block text-xs">Background Color</Label>
+                <Label htmlFor="3d-bgcolor" className="mb-1.5 block text-xs">{t("proccfg.backgroundColor")}</Label>
                 <div className="flex items-center gap-2">
                   <input
                     type="color"
@@ -451,6 +457,10 @@ const LazyMotionGraphicsPlayerPreview = lazy(() => import("@/components/editor/m
 const LazyLottieGraphicPlayerPreview = lazy(() => import("@/components/editor/lottie-graphic-player-preview").then(m => ({ default: m.LottieGraphicPlayerPreview })))
 
 export function MotionGraphicsConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode, nodes, edges, nodeId }: ConfigProps<MotionGraphicsData> & { nodeId?: string }) {
+  const t = useT()
+  // The guide names a node the user has to wire up — same localized name the
+  // canvas and the connect dialog show, not the raw English default.
+  const localizeNode = useLocalizeNodeLabel()
   const [showInfo, setShowInfo] = useState(false)
   const promptSnippets = useSnippetPool("video", "prompt")
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "motionPrompt")
@@ -466,12 +476,12 @@ export function MotionGraphicsConfig({ data, onUpdate, sources, fieldMappings, o
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label htmlFor="mg-engine" className="mb-1.5 block text-xs">Engine</Label>
+        <Label htmlFor="mg-engine" className="mb-1.5 block text-xs">{t("cfgext.compEngine")}</Label>
         <Select value={data.engine ?? "elements"} onValueChange={(v) => onUpdate({ engine: v as MotionGraphicsData["engine"] })}>
-          <SelectTrigger id="mg-engine" className="h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectTrigger id="mg-engine" aria-label={t("cfgext.compEngine")} className="h-8 text-xs"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="elements">Classic (elements)</SelectItem>
-            <SelectItem value="lottie">Lottie (AI-authored)</SelectItem>
+            <SelectItem value="elements">{t("cfgext.compEngineClassic")}</SelectItem>
+            <SelectItem value="lottie">{t("cfgext.compEngineLottie")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -497,7 +507,7 @@ export function MotionGraphicsConfig({ data, onUpdate, sources, fieldMappings, o
         onChange={onUpdate}
       />
 
-      <MappableField field="motionPrompt" label="Motion Graphics Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
+      <MappableField field="motionPrompt" label={t("cfgext.compMotionGraphicsPrompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
         <span className="inline-flex items-center gap-0.5">
           <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
           <SnippetMenuButton pool={promptSnippets} value={data.motionPrompt || ""} onInsert={(v) => onUpdate({ motionPrompt: v })} target="prompt" media="video" />
@@ -508,7 +518,7 @@ export function MotionGraphicsConfig({ data, onUpdate, sources, fieldMappings, o
             type="button"
             onClick={() => setShowInfo(!showInfo)}
             className={`p-1 rounded-md transition-colors ${showInfo ? "bg-[#ff0073]/10 text-[#ff0073]" : "text-muted-foreground hover:text-[var(--text-primary)] hover:bg-muted/50"}`}
-            title="Prompt guide"
+            title={t("cfgext.compPromptGuide")}
           >
             <Info className="w-3.5 h-3.5" />
           </button>
@@ -516,28 +526,31 @@ export function MotionGraphicsConfig({ data, onUpdate, sources, fieldMappings, o
 
         {showInfo && (
           <div className="mb-2 p-3 rounded-md bg-muted/30 border border-[var(--border-primary)] text-xs text-muted-foreground space-y-2">
-            <p className="font-medium text-[var(--text-primary)]">What can you create?</p>
+            <p className="font-medium text-[var(--text-primary)]">{t("cfgext.compGuideWhatCanYouCreate")}</p>
             <ul className="space-y-1 list-disc list-inside">
-              <li><span className="text-[var(--text-primary)]">Lower thirds</span> — name + title bars for interviews, news</li>
-              <li><span className="text-[var(--text-primary)]">Title cards</span> — centered text with decorative shapes</li>
-              <li><span className="text-[var(--text-primary)]">Intros / Outros</span> — animated text sequences with staggered timing</li>
-              <li><span className="text-[var(--text-primary)]">Kinetic typography</span> — multiple texts animating in sequence</li>
-              <li><span className="text-[var(--text-primary)]">Animated shapes</span> — geometric patterns, lines, SVG paths</li>
+              <li><span className="text-[var(--text-primary)]">{t("cfgext.compGuideLowerThirds")}</span>{" — "}{t("cfgext.compGuideLowerThirdsDesc")}</li>
+              <li><span className="text-[var(--text-primary)]">{t("cfgext.compGuideTitleCards")}</span>{" — "}{t("cfgext.compGuideTitleCardsDesc")}</li>
+              <li><span className="text-[var(--text-primary)]">{t("cfgext.compGuideIntrosOutros")}</span>{" — "}{t("cfgext.compGuideIntrosOutrosDesc")}</li>
+              <li><span className="text-[var(--text-primary)]">{t("cfgext.compGuideKineticTypography")}</span>{" — "}{t("cfgext.compGuideKineticTypographyDesc")}</li>
+              <li><span className="text-[var(--text-primary)]">{t("cfgext.compGuideAnimatedShapes")}</span>{" — "}{t("cfgext.compGuideAnimatedShapesDesc")}</li>
             </ul>
             <Separator className="my-1.5" />
-            <p className="font-medium text-[var(--text-primary)]">Prompt tips</p>
+            <p className="font-medium text-[var(--text-primary)]">{t("cfgext.compGuidePromptTips")}</p>
             <ul className="space-y-1 list-disc list-inside">
-              <li>Include names/text in quotes: <span className="font-mono text-[10px]">"John Smith - CEO"</span></li>
-              <li>Mention style: modern, minimal, neon, corporate, elegant</li>
-              <li>Specify colors if you want: <span className="font-mono text-[10px]">pink accent, white text</span></li>
-              <li>Mention animation feel: snappy, smooth, cinematic</li>
+              <li>{t("cfgext.compTipQuotes")}{" "}<span className="font-mono text-[10px]">{t("cfgext.compTipQuotesExample")}</span></li>
+              <li>{t("cfgext.compTipStyle")}</li>
+              <li>{t("cfgext.compTipColors")}{" "}<span className="font-mono text-[10px]">{t("cfgext.compTipColorsExample")}</span></li>
+              <li>{t("cfgext.compTipAnimationFeel")}</li>
             </ul>
             <Separator className="my-1.5" />
-            <p className="font-medium text-[var(--text-primary)]">Settings</p>
+            <p className="font-medium text-[var(--text-primary)]">{t("settings.title")}</p>
             <ul className="space-y-1 list-disc list-inside">
-              <li><span className="text-[var(--text-primary)]">Background</span> — transparent (#00000000) for overlays, solid for standalone</li>
-              <li><span className="text-[var(--text-primary)]">Duration</span> — 3-5s for lower thirds, 5-10s for title cards</li>
-              <li>Wire to <span className="text-[var(--text-primary)]">Render Video</span> to produce the final video file</li>
+              <li><span className="text-[var(--text-primary)]">{t("audiocfg.mergeRoleBackground")}</span>{" — "}{t("cfgext.compGuideBackgroundDesc")}</li>
+              <li><span className="text-[var(--text-primary)]">{t("field.duration")}</span>{" — "}{t("cfgext.compGuideDurationDesc")}</li>
+              {/* The node NAME goes through the label table, so the sentence
+                  reads in one language; the inline highlight is dropped
+                  because the name's position moves between languages. */}
+              <li>{t("cfgext.compGuideWireToRender", { node: localizeNode("Render Video") })}</li>
             </ul>
           </div>
         )}
@@ -545,12 +558,12 @@ export function MotionGraphicsConfig({ data, onUpdate, sources, fieldMappings, o
           <PromptFieldFinalView
             segments={finalPrompt.promptSegments}
             plainText={finalPrompt.promptText}
-            placeholder="Final prompt preview — node has no prompt yet"
+            placeholder={t("imgcfg.promptPreviewEmpty")}
             minHeightRem={3 * 1.5}
           />
         ) : (
           <TagTextarea
-            placeholder="Describe the motion graphic: modern lower third with name, title card, animated shapes..."
+            placeholder={t("cfgext.compPhMotionGraphicsPrompt")}
             value={data.motionPrompt ?? ""}
             onChange={(v) => onUpdate({ motionPrompt: v })}
             rows={3}
@@ -568,7 +581,7 @@ export function MotionGraphicsConfig({ data, onUpdate, sources, fieldMappings, o
           <Separator />
           {data.motionPlan.planType === "lottie-graphic" ? (
             <>
-              <Suspense fallback={<div className="text-xs text-muted-foreground py-2">Loading player...</div>}>
+              <Suspense fallback={<div className="text-xs text-muted-foreground py-2">{t("cfgext.compLoadingPlayer")}</div>}>
                 <LazyLottieGraphicPlayerPreview
                   motionPlan={data.motionPlan}
                   fps={data.fps}
@@ -580,13 +593,13 @@ export function MotionGraphicsConfig({ data, onUpdate, sources, fieldMappings, o
             </>
           ) : (
             <>
-              <Suspense fallback={<div className="text-xs text-muted-foreground py-2">Loading player...</div>}>
+              <Suspense fallback={<div className="text-xs text-muted-foreground py-2">{t("cfgext.compLoadingPlayer")}</div>}>
                 <LazyMotionGraphicsPlayerPreview
                   motionPlan={data.motionPlan}
                   fps={data.fps}
                 />
               </Suspense>
-              <Suspense fallback={<div className="text-xs text-muted-foreground py-2">Loading preview...</div>}>
+              <Suspense fallback={<div className="text-xs text-muted-foreground py-2">{t("proccfg.loadingPreview")}</div>}>
                 <LazyMotionGraphicsPreview
                   motionPlan={data.motionPlan}
                   fps={data.fps}
@@ -600,12 +613,12 @@ export function MotionGraphicsConfig({ data, onUpdate, sources, fieldMappings, o
 
       <Accordion type="single" collapsible>
         <AccordionItem value="settings">
-          <AccordionTrigger className="text-xs py-2">Settings</AccordionTrigger>
+          <AccordionTrigger className="text-xs py-2">{t("settings.title")}</AccordionTrigger>
           <AccordionContent>
             <div className="flex flex-col gap-3 pt-1">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label htmlFor="mg-fps" className="mb-1.5 block text-xs">FPS</Label>
+                  <Label htmlFor="mg-fps" className="mb-1.5 block text-xs">{t("field.fps")}</Label>
                   <Select value={String(data.fps)} onValueChange={(v) => onUpdate({ fps: parseInt(v, 10) })}>
                     <SelectTrigger id="mg-fps" className="h-8 text-xs"><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -616,7 +629,7 @@ export function MotionGraphicsConfig({ data, onUpdate, sources, fieldMappings, o
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor="mg-duration" className="mb-1.5 block text-xs">Duration (s)</Label>
+                  <Label htmlFor="mg-duration" className="mb-1.5 block text-xs">{t("scriptcfg.durationS")}</Label>
                   <Input
                     id="mg-duration"
                     type="number"
@@ -629,7 +642,7 @@ export function MotionGraphicsConfig({ data, onUpdate, sources, fieldMappings, o
                 </div>
               </div>
               <div>
-                <Label className="mb-1.5 block text-xs">Aspect Ratio</Label>
+                <Label className="mb-1.5 block text-xs">{t("field.aspectRatio")}</Label>
                 <AspectRatioSelector
                   options={COMPOSITION_RATIOS}
                   value={data.aspectRatio}
@@ -637,7 +650,7 @@ export function MotionGraphicsConfig({ data, onUpdate, sources, fieldMappings, o
                 />
               </div>
               <div>
-                <Label htmlFor="mg-bgcolor" className="mb-1.5 block text-xs">Background Color</Label>
+                <Label htmlFor="mg-bgcolor" className="mb-1.5 block text-xs">{t("proccfg.backgroundColor")}</Label>
                 <div className="flex items-center gap-2">
                   <input
                     type="color"
@@ -662,6 +675,7 @@ export function MotionGraphicsConfig({ data, onUpdate, sources, fieldMappings, o
 }
 
 export function CompositeConfig({ data, onUpdate }: { data: CompositeData; onUpdate: (d: Partial<CompositeData>) => void }) {
+  const t = useT()
   const HANDLES = ["video1", "video2", "video3", "video4"] as const
 
   function updateLayer(layerId: string, patch: Partial<CompositeLayerConfig>) {
@@ -697,7 +711,7 @@ export function CompositeConfig({ data, onUpdate }: { data: CompositeData; onUpd
     <div className="flex flex-col gap-3">
       <div className="p-2.5 rounded-md bg-muted/30 border border-[var(--border-primary)]">
         <p className="text-xs text-muted-foreground">
-          Connect rendered videos to input handles, then configure layers below. 0 credits — plan is built client-side.
+          {t("cfgext.compCompositeIntro")}
         </p>
       </div>
 
@@ -705,21 +719,21 @@ export function CompositeConfig({ data, onUpdate }: { data: CompositeData; onUpd
 
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
-          <Label className="text-xs font-medium">Layers ({data.layers.length})</Label>
+          <Label className="text-xs font-medium">{t("cfgext.compLayersCount", { count: data.layers.length })}</Label>
           {availableHandles.length > 0 && (
             <button
               type="button"
               onClick={() => addLayer(availableHandles[0])}
               className="text-[10px] text-[#ff0073] hover:underline"
             >
-              + Add Layer
+              {t("cfgext.compAddLayer")}
             </button>
           )}
         </div>
 
         {data.layers.length === 0 && (
           <div className="text-xs text-muted-foreground/60 py-2 text-center">
-            No layers. Add a layer for each connected video input.
+            {t("cfgext.compNoLayers")}
           </div>
         )}
 
@@ -734,31 +748,31 @@ export function CompositeConfig({ data, onUpdate }: { data: CompositeData; onUpd
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <Label className="mb-1 block text-[10px]">Position</Label>
+                <Label className="mb-1 block text-[10px]">{t("proccfg.position")}</Label>
                 <Select value={layer.position} onValueChange={(v) => updateLayer(layer.id, { position: v as "fullscreen" | "positioned" })}>
-                  <SelectTrigger aria-label="Position" className="h-7 text-[11px]"><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("proccfg.position")} className="h-7 text-[11px]"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="fullscreen">Fullscreen</SelectItem>
-                    <SelectItem value="positioned">Positioned</SelectItem>
+                    <SelectItem value="fullscreen">{t("cfgext.compPositionFullscreen")}</SelectItem>
+                    <SelectItem value="positioned">{t("cfgext.compPositionPositioned")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label className="mb-1 block text-[10px]">Blend Mode</Label>
+                <Label className="mb-1 block text-[10px]">{t("cfgext.compBlendMode")}</Label>
                 <Select value={layer.blendMode} onValueChange={(v) => updateLayer(layer.id, { blendMode: v as CompositeLayerConfig["blendMode"] })}>
-                  <SelectTrigger aria-label="Blend Mode" className="h-7 text-[11px]"><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("cfgext.compBlendMode")} className="h-7 text-[11px]"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="normal">Normal</SelectItem>
-                    <SelectItem value="multiply">Multiply</SelectItem>
-                    <SelectItem value="screen">Screen</SelectItem>
-                    <SelectItem value="overlay">Overlay</SelectItem>
+                    <SelectItem value="normal">{t("vidcfg.normal")}</SelectItem>
+                    <SelectItem value="multiply">{t("cfgext.compBlendMultiply")}</SelectItem>
+                    <SelectItem value="screen">{t("cfgext.compBlendScreen")}</SelectItem>
+                    <SelectItem value="overlay">{t("cfgext.compBlendOverlay")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
             <div>
-              <Label className="mb-1 block text-[10px]">Opacity: {Math.round(layer.opacity * 100)}%</Label>
+              <Label className="mb-1 block text-[10px]">{t("cfgext.compOpacityPercent", { value: Math.round(layer.opacity * 100) })}</Label>
               <input
                 type="range"
                 min={0}
@@ -772,7 +786,7 @@ export function CompositeConfig({ data, onUpdate }: { data: CompositeData; onUpd
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <Label className="mb-1 block text-[10px]">Z-Index</Label>
+                <Label className="mb-1 block text-[10px]">{t("cfgext.compZIndex")}</Label>
                 <Input
                   type="number"
                   min={0}
@@ -783,7 +797,7 @@ export function CompositeConfig({ data, onUpdate }: { data: CompositeData; onUpd
                 />
               </div>
               <div>
-                <Label className="mb-1 block text-[10px]">Start Frame</Label>
+                <Label className="mb-1 block text-[10px]">{t("vidcfg.startFrame")}</Label>
                 <Input
                   type="number"
                   min={0}
@@ -797,19 +811,19 @@ export function CompositeConfig({ data, onUpdate }: { data: CompositeData; onUpd
             {layer.position === "positioned" && (
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <Label className="mb-1 block text-[10px]">X (%)</Label>
+                  <Label className="mb-1 block text-[10px]">{t("cfgext.compXPercent")}</Label>
                   <Input type="number" min={0} max={100} value={layer.x ?? ""} onChange={(e) => updateLayer(layer.id, { x: e.target.value === "" ? undefined : parseFloat(e.target.value) })} className="h-7 text-[11px]" />
                 </div>
                 <div>
-                  <Label className="mb-1 block text-[10px]">Y (%)</Label>
+                  <Label className="mb-1 block text-[10px]">{t("cfgext.compYPercent")}</Label>
                   <Input type="number" min={0} max={100} value={layer.y ?? ""} onChange={(e) => updateLayer(layer.id, { y: e.target.value === "" ? undefined : parseFloat(e.target.value) })} className="h-7 text-[11px]" />
                 </div>
                 <div>
-                  <Label className="mb-1 block text-[10px]">Width (%)</Label>
+                  <Label className="mb-1 block text-[10px]">{t("cfgext.compWidthPercent")}</Label>
                   <Input type="number" min={1} max={100} value={layer.width ?? ""} onChange={(e) => updateLayer(layer.id, { width: e.target.value === "" ? undefined : parseFloat(e.target.value) })} className="h-7 text-[11px]" />
                 </div>
                 <div>
-                  <Label className="mb-1 block text-[10px]">Height (%)</Label>
+                  <Label className="mb-1 block text-[10px]">{t("cfgext.compHeightPercent")}</Label>
                   <Input type="number" min={1} max={100} value={layer.height ?? ""} onChange={(e) => updateLayer(layer.id, { height: e.target.value === "" ? undefined : parseFloat(e.target.value) })} className="h-7 text-[11px]" />
                 </div>
               </div>
@@ -820,12 +834,12 @@ export function CompositeConfig({ data, onUpdate }: { data: CompositeData; onUpd
 
       <Accordion type="single" collapsible>
         <AccordionItem value="settings">
-          <AccordionTrigger className="text-xs py-2">Settings</AccordionTrigger>
+          <AccordionTrigger className="text-xs py-2">{t("settings.title")}</AccordionTrigger>
           <AccordionContent>
             <div className="flex flex-col gap-3 pt-1">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label htmlFor="comp-fps" className="mb-1.5 block text-xs">FPS</Label>
+                  <Label htmlFor="comp-fps" className="mb-1.5 block text-xs">{t("field.fps")}</Label>
                   <Select value={String(data.fps)} onValueChange={(v) => onUpdate({ fps: parseInt(v, 10) })}>
                     <SelectTrigger id="comp-fps" className="h-8 text-xs"><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -836,7 +850,7 @@ export function CompositeConfig({ data, onUpdate }: { data: CompositeData; onUpd
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor="comp-duration" className="mb-1.5 block text-xs">Duration (s)</Label>
+                  <Label htmlFor="comp-duration" className="mb-1.5 block text-xs">{t("scriptcfg.durationS")}</Label>
                   <Input
                     id="comp-duration"
                     type="number"
@@ -849,7 +863,7 @@ export function CompositeConfig({ data, onUpdate }: { data: CompositeData; onUpd
                 </div>
               </div>
               <div>
-                <Label className="mb-1.5 block text-xs">Aspect Ratio</Label>
+                <Label className="mb-1.5 block text-xs">{t("field.aspectRatio")}</Label>
                 <AspectRatioSelector
                   options={COMPOSITION_RATIOS}
                   value={data.aspectRatio}
@@ -857,7 +871,7 @@ export function CompositeConfig({ data, onUpdate }: { data: CompositeData; onUpd
                 />
               </div>
               <div>
-                <Label htmlFor="comp-bg" className="mb-1.5 block text-xs">Background Color</Label>
+                <Label htmlFor="comp-bg" className="mb-1.5 block text-xs">{t("proccfg.backgroundColor")}</Label>
                 <div className="flex items-center gap-2">
                   <input
                     type="color"
@@ -882,6 +896,9 @@ export function CompositeConfig({ data, onUpdate }: { data: CompositeData; onUpd
 }
 
 export function RenderVideoConfig({ data, onUpdate, sources }: ConfigProps<RenderVideoData>) {
+  const t = useT()
+  // Upstream nodes report their English default label unless renamed.
+  const localizeNode = useLocalizeNodeLabel()
   const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useWorkflowStore((s) => s.edges)
   const { sensors, orderedIds, orderedSources, handleDragEnd } = useMediaOrder(sources, data.assetOrder, onUpdate)
@@ -926,10 +943,10 @@ export function RenderVideoConfig({ data, onUpdate, sources }: ConfigProps<Rende
         <div className="flex items-center gap-2 p-2 rounded-md bg-[#ff0073]/5 border border-[#ff0073]/20">
           <Sparkles className="w-4 h-4 text-[#ff0073] shrink-0" />
           <div className="text-xs">
-            <span className="text-[var(--text-primary)]">Composition from </span>
-            <span className="font-medium text-[#ff0073]">{upstreamComposer.label}</span>
+            <span className="text-[var(--text-primary)]">{t("cfgext.compCompositionFrom")}{" "}</span>
+            <span className="font-medium text-[#ff0073]">{localizeNode(upstreamComposer.label)}</span>
             {upstreamComposer.trackCount > 0 && (
-              <span className="ml-1 text-muted-foreground">({upstreamComposer.trackCount} tracks)</span>
+              <span className="ms-1 text-muted-foreground">{t("cfgext.compTracksCount", { count: upstreamComposer.trackCount })}</span>
             )}
           </div>
         </div>

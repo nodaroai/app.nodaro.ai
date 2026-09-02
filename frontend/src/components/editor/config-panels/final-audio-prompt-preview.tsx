@@ -9,6 +9,7 @@ import {
   type SunoPreviewField,
 } from "@/lib/audio-prompt-assembly"
 import { buildNodeRefMap } from "@/lib/node-refs"
+import { useT } from "@/lib/i18n"
 import type { SoundConsumerType } from "@nodaro/prompts"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { cn } from "@/lib/utils"
@@ -65,6 +66,7 @@ export function FinalAudioPromptPreview({
   edges,
   className,
 }: Props): ReactNode {
+  const t = useT()
   const preview = useMemo(():
     | { kind: "suno"; fields: SunoPreviewField[] }
     | { kind: "single"; label: string; final: string; warnings: ReadonlyArray<string> }
@@ -93,8 +95,8 @@ export function FinalAudioPromptPreview({
 
     const label =
       consumerType === "voice-design" || consumerType === "voice-remix"
-        ? "Final voice description"
-        : "Final prompt"
+        ? t("cfgext.finalAudVoiceDescription")
+        : t("cfgext.finalAudPrompt")
     // Built only once we know we're rendering: this memo reruns on every render
     // of every audio config panel, and `buildNodeRefMap` is a full-graph walk
     // with no empty-graph short-circuit (unlike `collectAudioStyleHints`). Same
@@ -106,7 +108,7 @@ export function FinalAudioPromptPreview({
     // The typed values are read off the consumer node's `data` (via the shared
     // assembler), not off these props — but they stay in the deps so a keystroke
     // recomputes the preview even if the `nodes` array is referentially stable.
-  }, [consumerNodeId, consumerType, userPrompt, userStyle, userVoiceDescription, customMode, nodes, edges])
+  }, [consumerNodeId, consumerType, userPrompt, userStyle, userVoiceDescription, customMode, nodes, edges, t])
 
   if (!preview) return null
   return (

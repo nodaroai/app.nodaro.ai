@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils"
 import { optimizedImageUrl } from "@/lib/image"
 import { getJobStatusLean, grokRegionEdit, grokSegmentMap } from "@/lib/api"
 import { pollImageRefineToNode } from "../workflow-editor/poll-job"
+import { useT, tx } from "@/lib/i18n"
 import type { GenerateImageData, GeneratedResult, GrokSegmentInfo } from "@/types/nodes"
 
 /**
@@ -86,7 +87,7 @@ function segmentsFromOutput(od: Record<string, unknown>): GrokSegmentInfo[] {
     const tile = readBox(meta[i].tile)
     out.push({
       index: typeof meta[i].index === "number" ? (meta[i].index as number) : i,
-      name: typeof meta[i].name === "string" ? (meta[i].name as string) : `Region ${i + 1}`,
+      name: typeof meta[i].name === "string" ? (meta[i].name as string) : tx("cfgext.refineRegionN", { n: i + 1 }),
       maskUrl: urls[i],
       ...(bbox ? { bbox } : {}),
       ...(tile ? { tile } : {}),
@@ -160,6 +161,7 @@ function fillStyle(seg: GrokSegmentInfo, color: string, opacity: number): React.
 }
 
 export function RefineRegionsSection({ nodeId, data, onUpdate }: RefineRegionsSectionProps) {
+  const t = useT()
   const [detecting, setDetecting] = useState(false)
   const [detectError, setDetectError] = useState<string | undefined>()
   const [applying, setApplying] = useState(false)
@@ -202,7 +204,7 @@ export function RefineRegionsSection({ nodeId, data, onUpdate }: RefineRegionsSe
         const job = await getJobStatusLean(jobId)
         if (job.status === "completed") {
           const found = segmentsFromOutput((job.output_data ?? {}) as Record<string, unknown>)
-          if (!found.length) throw new Error("No regions detected in this image")
+          if (!found.length) throw new Error(tx("cfgext.refineNoRegionsDetected"))
           onUpdate({
             grokSegments: { taskId, segments: found },
             grokSelectedSegments: [],
@@ -210,13 +212,13 @@ export function RefineRegionsSection({ nodeId, data, onUpdate }: RefineRegionsSe
           return
         }
         if (job.status === "failed") {
-          throw new Error(job.error_message ?? "Region detection failed")
+          throw new Error(job.error_message ?? tx("cfgext.refineDetectionFailed"))
         }
       }
-      throw new Error("Region detection timed out")
+      throw new Error(tx("cfgext.refineDetectionTimedOut"))
     } catch (err) {
       if (aliveRef.current) {
-        setDetectError(err instanceof Error ? err.message : "Region detection failed")
+        setDetectError(err instanceof Error ? err.message : tx("cfgext.refineDetectionFailed"))
       }
     } finally {
       if (aliveRef.current) setDetecting(false)
@@ -262,20 +264,19 @@ export function RefineRegionsSection({ nodeId, data, onUpdate }: RefineRegionsSe
     <div className="pt-1" data-testid="refine-regions-section">
       <Separator className="mb-3" />
       <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-        Refine Regions
+        {t("cfgext.refineTitle")}
       </label>
 
       {!taskId ? (
         <p className="text-[10px] text-muted-foreground mt-2">
-          Run this node again to enable region editing — older results don&apos;t carry the
-          Grok task reference the editor needs.
+          {t("cfgext.refineNoTaskId")}
         </p>
       ) : (
         <div className="flex flex-col gap-2 mt-2">
           {/* Result preview — selected/hovered regions are outlined in place */}
           {segments && (
             <div className="relative rounded overflow-hidden border border-border dark:border-[#2D2D2D]">
-              <img src={optimizedImageUrl(imageUrl)} alt="Active result" className="w-full h-auto block" />
+              <img src={optimizedImageUrl(imageUrl)} alt={t("cfgext.refineActiveResultAlt")} className="w-full h-auto block" />
               {outlined.map((seg) => {
                 const position = segments.indexOf(seg)
                 const color = segmentColor(position)
@@ -312,9 +313,9 @@ export function RefineRegionsSection({ nodeId, data, onUpdate }: RefineRegionsSe
                     onClick={() => toggleSegment(seg.index)}
                     onMouseEnter={() => setHoveredIndex(seg.index)}
                     onMouseLeave={() => setHoveredIndex((h) => (h === seg.index ? undefined : h))}
-                    title={seg.bbox ? undefined : "Couldn't locate this region on the image — selectable, but no outline"}
+                    title={seg.bbox ? undefined : t("cfgext.refineNoOutlineTitle")}
                     className={cn(
-                      "flex items-center gap-1.5 pl-1 pr-2 py-1 text-[10px] rounded-full border transition-colors",
+                      "flex items-center gap-1.5 ps-1 pe-2 py-1 text-[10px] rounded-full border transition-colors",
                       isSelected
                         ? "border-[#ff0073] bg-[#ff0073]/10 text-foreground"
                         : "hover:bg-muted text-muted-foreground",
@@ -327,7 +328,7 @@ export function RefineRegionsSection({ nodeId, data, onUpdate }: RefineRegionsSe
                     >
                       <img src={seg.maskUrl} alt="" loading="lazy" className="w-full h-full object-contain" />
                     </span>
-                    {seg.name || `Region ${seg.index}`}
+                    {seg.name || t("cfgext.refineRegionN", { n: seg.index })}
                   </button>
                 )
               })}
@@ -341,12 +342,12 @@ export function RefineRegionsSection({ nodeId, data, onUpdate }: RefineRegionsSe
             >
               {detecting ? (
                 <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Detecting regions…
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("cfgext.refineDetecting")}
                 </>
               ) : (
                 <>
-                  <ScanSearch className="w-3.5 h-3.5" /> Detect regions
-                  <span className="text-muted-foreground">(free)</span>
+                  <ScanSearch className="w-3.5 h-3.5" /> {t("cfgext.refineDetectRegions")}
+                  <span className="text-muted-foreground">{t("cfgext.refineFree")}</span>
                 </>
               )}
             </button>
@@ -363,10 +364,10 @@ export function RefineRegionsSection({ nodeId, data, onUpdate }: RefineRegionsSe
               className="self-start text-[10px] text-muted-foreground underline underline-offset-2 hover:text-foreground disabled:opacity-60"
             >
               {detecting
-                ? "Re-detecting…"
+                ? t("cfgext.refineRedetecting")
                 : noneLocated
-                  ? "Outlines unavailable for this map — re-detect (free)"
-                  : "Re-detect regions (free)"}
+                  ? t("cfgext.refineOutlinesUnavailable")
+                  : t("cfgext.refineRedetectRegions")}
             </button>
           )}
           {detectError && <p className="text-[10px] text-destructive">{detectError}</p>}
@@ -378,11 +379,11 @@ export function RefineRegionsSection({ nodeId, data, onUpdate }: RefineRegionsSe
             onChange={(e) => onUpdate({ grokRegionPrompt: e.target.value })}
             placeholder={
               selected.length
-                ? "Describe the change for the selected regions…"
-                : "Describe the change (whole image unless regions are selected)…"
+                ? t("cfgext.refinePlaceholderSelected")
+                : t("cfgext.refinePlaceholderWhole")
             }
             className="text-xs"
-            aria-label="Region edit prompt"
+            aria-label={t("cfgext.refineAriaEditPrompt")}
           />
           <button
             type="button"
@@ -392,18 +393,19 @@ export function RefineRegionsSection({ nodeId, data, onUpdate }: RefineRegionsSe
           >
             {applying ? (
               <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Applying edit…
+                <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("cfgext.refineApplying")}
               </>
             ) : (
               <>
                 <Wand2 className="w-3.5 h-3.5" />
-                {selected.length ? `Edit ${selected.length} region${selected.length > 1 ? "s" : ""}` : "Edit whole image"}
+                {selected.length
+                  ? t(selected.length > 1 ? "cfgext.refineEditRegionMany" : "cfgext.refineEditRegionOne", { n: selected.length })
+                  : t("cfgext.refineEditWholeImage")}
               </>
             )}
           </button>
           <p className="text-[10px] text-muted-foreground">
-            The edit becomes a new version in this node&apos;s results — and can itself be
-            segmented and refined again.
+            {t("cfgext.refineFooter")}
           </p>
         </div>
       )}

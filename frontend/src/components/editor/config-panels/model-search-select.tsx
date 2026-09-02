@@ -1,5 +1,7 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
+import { useLocalizeModelDescription } from "@/lib/i18n/labels"
 import { useMemo, useState, type ReactNode } from "react"
 import { Check, ChevronsUpDown } from "lucide-react"
 
@@ -41,8 +43,6 @@ interface ModelSearchSelectProps {
   disabled?: boolean
 }
 
-const DEFAULT_PLACEHOLDER = "Search — name, company, 16:9, 2K, 720, 8s…"
-
 export function ModelSearchSelect({
   value,
   onChange,
@@ -56,9 +56,10 @@ export function ModelSearchSelect({
   triggerIcon,
   align = "start",
   ariaLabel,
-  placeholder = DEFAULT_PLACEHOLDER,
+  placeholder,
   disabled,
 }: ModelSearchSelectProps) {
+  const t = useT()
   const [internalOpen, setInternalOpen] = useState(false)
   const isOpen = open ?? internalOpen
   const [query, setQuery] = useState("")
@@ -71,6 +72,10 @@ export function ModelSearchSelect({
 
   const selected = options.find((o) => o.value === value)
   const display = triggerLabel ?? selected?.label ?? value
+  // Resolved per render (NOT a module-scope const / param default): the search
+  // hint is chrome copy, so it has to follow a live language switch instead of
+  // freezing on whatever locale the store held when this module was imported.
+  const inputPlaceholder = placeholder ?? t("cfgshared.modelSearchPlaceholder")
 
   const filtered = useMemo(() => {
     const q = query.trim()
@@ -96,7 +101,7 @@ export function ModelSearchSelect({
             {triggerIcon}
             <span className="truncate">{display}</span>
           </span>
-          <ChevronsUpDown className="ml-1 size-3.5 shrink-0 opacity-50" />
+          <ChevronsUpDown className="ms-1 size-3.5 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent align={align} className={cn("w-[350px] p-0", contentClassName)}>
@@ -108,10 +113,10 @@ export function ModelSearchSelect({
           {/* Keep the search hint quiet: it's a placeholder, so dim it to
               `muted-foreground/50` so it reads clearly below the model names
               and their descriptions rather than competing with them. */}
-          <CommandInput value={query} onValueChange={setQuery} placeholder={placeholder} className="placeholder:text-muted-foreground/50" />
+          <CommandInput value={query} onValueChange={setQuery} placeholder={inputPlaceholder} className="placeholder:text-muted-foreground/50" />
           <CommandList>
             {filtered.length === 0 ? (
-              <div className="py-6 text-center text-sm text-muted-foreground">No models match.</div>
+              <div className="py-6 text-center text-sm text-muted-foreground">{t("cfgshared.noModelsMatch")}</div>
             ) : (
               filtered.map((o) => (
                 <ModelCommandItem
@@ -150,6 +155,7 @@ function ModelCommandItem({
   onSelect: () => void
 }) {
   const badge = formatCreditBadge(option.value, useModelCredits(option.value))
+  const localizeDesc = useLocalizeModelDescription()
 
   const item = (
     <CommandItem
@@ -161,18 +167,18 @@ function ModelCommandItem({
         <Check className={cn("size-3.5 shrink-0", selected ? "opacity-100" : "opacity-0")} />
         <span className="truncate">{option.label}</span>
         {badge && (
-          <span className="ml-auto text-[11px] tabular-nums text-muted-foreground">{badge}</span>
+          <span className="ms-auto text-[11px] tabular-nums text-muted-foreground">{badge}</span>
         )}
       </span>
       {option.desc && (
-        <span className="pl-[1.375rem] text-[11px] leading-tight text-muted-foreground/60">
-          {option.desc}
+        <span className="ps-[1.375rem] text-[11px] leading-tight text-muted-foreground/60">
+          {localizeDesc(option.desc)}
         </span>
       )}
     </CommandItem>
   )
 
-  const tip = tooltip ?? option.desc
+  const tip = tooltip ? localizeDesc(tooltip) : option.desc ? localizeDesc(option.desc) : undefined
   if (!tip) return item
 
   return (

@@ -13,6 +13,7 @@ import { usePromptSnippets, usePromptSnippetMutations } from "@/hooks/queries/us
 import { PromptSnippetNameTakenError, type PromptSnippet } from "@/lib/api"
 import { SNIPPET_MEDIA_VALUES, type SnippetMedia, type SnippetTarget } from "@nodaro/prompts"
 import { toast } from "sonner"
+import { useT, tx } from "@/lib/i18n"
 
 interface SnippetManageDialogProps {
   readonly open: boolean
@@ -44,6 +45,7 @@ function SnippetForm({
   saving: boolean
   error: string | null
 }) {
+  const t = useT()
   const [f, setF] = useState<FormState>(initial)
   const textInvalid = FORBIDDEN_TEXT.test(f.text)
   const valid = f.name.trim().length > 0 && f.text.trim().length > 0 && !textInvalid
@@ -54,25 +56,25 @@ function SnippetForm({
   return (
     <div className="space-y-2 rounded-md border border-border p-2.5">
       <div className="grid grid-cols-2 gap-2">
-        <Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="Name" maxLength={80} className="h-8 text-xs" />
-        <Input value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })} placeholder="Category (optional)" maxLength={60} className="h-8 text-xs" />
+        <Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder={t("dash.name")} maxLength={80} className="h-8 text-xs" />
+        <Input value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })} placeholder={t("cfgext.snipMgrPhCategory")} maxLength={60} className="h-8 text-xs" />
       </div>
-      <Input value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} placeholder="Description (optional — searched by the menu)" maxLength={300} className="h-8 text-xs" />
-      <Textarea value={f.text} onChange={(e) => setF({ ...f, text: e.target.value.replace(/\n/g, " ") })} placeholder="The fragment inserted into the prompt…" rows={3} maxLength={2000} className="text-xs" />
-      {textInvalid && <p className="text-[10px] text-destructive">Snippet text may not contain {"{ } @"} or line breaks.</p>}
+      <Input value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} placeholder={t("cfgext.snipMgrPhDescription")} maxLength={300} className="h-8 text-xs" />
+      <Textarea value={f.text} onChange={(e) => setF({ ...f, text: e.target.value.replace(/\n/g, " ") })} placeholder={t("cfgext.snipMgrPhText")} rows={3} maxLength={2000} className="text-xs" />
+      {textInvalid && <p className="text-[10px] text-destructive">{t("cfgext.snipMgrTextInvalid")}</p>}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-1">
-          {(["prompt", "negative"] as const).map((t) => (
-            <button key={t} type="button" onClick={() => setF({ ...f, target: t })}
-              className={`rounded px-2 py-0.5 text-[10px] border transition-colors ${f.target === t ? "border-amber-400 bg-amber-500/15 text-amber-700 dark:text-amber-300" : "border-border text-muted-foreground hover:bg-muted"}`}>
-              {t === "prompt" ? "Prompt" : "Negative"}
+          {(["prompt", "negative"] as const).map((tgt) => (
+            <button key={tgt} type="button" onClick={() => setF({ ...f, target: tgt })}
+              className={`rounded px-2 py-0.5 text-[10px] border transition-colors ${f.target === tgt ? "border-amber-400 bg-amber-500/15 text-amber-700 dark:text-amber-300" : "border-border text-muted-foreground hover:bg-muted"}`}>
+              {tgt === "prompt" ? t("node.prompt") : t("cfgshared.legendNegative")}
             </button>
           ))}
         </div>
         <div className="flex items-center gap-1">
           {SNIPPET_MEDIA_VALUES.map((m) => (
             <button key={m} type="button" onClick={() => toggleMedia(m)}
-              title="Empty selection = all node types"
+              title={t("cfgext.snipMgrMediaTitle")}
               className={`rounded px-2 py-0.5 text-[10px] border transition-colors ${f.media.includes(m) ? "border-sky-400 bg-sky-500/15 text-sky-700 dark:text-sky-300" : "border-border text-muted-foreground hover:bg-muted"}`}>
               {m}
             </button>
@@ -81,9 +83,9 @@ function SnippetForm({
       </div>
       {error && <p className="text-[10px] text-destructive">{error}</p>}
       <div className="flex justify-end gap-1.5">
-        <Button variant="ghost" size="sm" className="h-7 text-[11px]" onClick={onCancel}><X className="w-3 h-3 mr-1" />Cancel</Button>
+        <Button variant="ghost" size="sm" className="h-7 text-[11px]" onClick={onCancel}><X className="w-3 h-3 me-1" />{t("common.cancel")}</Button>
         <Button size="sm" className="h-7 text-[11px]" disabled={!valid || saving} onClick={() => onSave(f)}>
-          <Check className="w-3 h-3 mr-1" />{saving ? "Saving…" : "Save"}
+          <Check className="w-3 h-3 me-1" />{saving ? t("cfgext.snipMgrSaving") : t("preset.save")}
         </Button>
       </div>
     </div>
@@ -93,6 +95,7 @@ function SnippetForm({
 export function SnippetManageDialog({
   open, onOpenChange, createPrefillText, defaultTarget, defaultMedia,
 }: SnippetManageDialogProps) {
+  const t = useT()
   const { user } = useAuth()
   const { data: snippets = [] } = usePromptSnippets(user?.id)
   const { create, update, remove } = usePromptSnippetMutations()
@@ -106,7 +109,7 @@ export function SnippetManageDialog({
   }
 
   const handleError = (e: unknown) =>
-    setError(e instanceof PromptSnippetNameTakenError ? "A snippet with that name already exists." : "Save failed — try again.")
+    setError(e instanceof PromptSnippetNameTakenError ? tx("cfgext.snipMgrNameTaken") : tx("cfgext.snipMgrSaveFailed"))
 
   const saveNew = (f: FormState) => {
     setError(null)
@@ -127,22 +130,22 @@ export function SnippetManageDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[560px]">
         <DialogHeader>
-          <DialogTitle>My snippets</DialogTitle>
+          <DialogTitle>{t("cfgext.snipMgrTitle")}</DialogTitle>
           <DialogDescription>
-            Reusable prompt fragments — insert with “/” in any prompt field. Factory snippets are built in and not editable.
+            {t("cfgext.snipMgrDescription")}
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+        <div className="space-y-2 max-h-[60vh] overflow-y-auto pe-1">
           {creating ? (
             <SnippetForm initial={emptyForm} saving={create.isPending} error={error}
               onSave={saveNew} onCancel={() => { setCreating(false); setError(null) }} />
           ) : (
             <Button variant="outline" size="sm" className="h-7 text-[11px]" onClick={() => { setCreating(true); setError(null) }}>
-              + New snippet
+              + {t("cfgext.snipMenuNew")}
             </Button>
           )}
           {snippets.length === 0 && !creating && (
-            <p className="text-xs text-muted-foreground py-2">No custom snippets yet.</p>
+            <p className="text-xs text-muted-foreground py-2">{t("cfgext.snipMgrEmpty")}</p>
           )}
           {snippets.map((s) =>
             editingId === s.id ? (
@@ -159,16 +162,16 @@ export function SnippetManageDialog({
                 <div className="flex-1 min-w-0">
                   <p className="text-[11px] font-medium truncate">
                     {s.name}
-                    <span className="ml-2 text-[9px] uppercase tracking-wider text-muted-foreground">
-                      {s.target}{s.media.length > 0 ? ` · ${s.media.join("/")}` : " · all"}
+                    <span className="ms-2 text-[9px] uppercase tracking-wider text-muted-foreground">
+                      {s.target}{s.media.length > 0 ? ` · ${s.media.join("/")}` : ` · ${t("lib.filterAll")}`}
                     </span>
                   </p>
                   <p className="text-[10px] text-muted-foreground truncate">{s.text}</p>
                 </div>
-                <button type="button" aria-label="Edit snippet" className="p-1 text-muted-foreground hover:text-foreground" onClick={() => { setEditingId(s.id); setError(null) }}>
+                <button type="button" aria-label={t("cfgext.snipMgrEditAria")} className="p-1 text-muted-foreground hover:text-foreground" onClick={() => { setEditingId(s.id); setError(null) }}>
                   <Pencil className="w-3 h-3" />
                 </button>
-                <button type="button" aria-label="Delete snippet" className="p-1 text-muted-foreground hover:text-destructive" onClick={() => remove.mutate(s.id, { onSuccess: () => toast.success("Snippet deleted"), onError: () => toast.error("Delete failed — try again.") })}>
+                <button type="button" aria-label={t("cfgext.snipMgrDeleteAria")} className="p-1 text-muted-foreground hover:text-destructive" onClick={() => remove.mutate(s.id, { onSuccess: () => toast.success(tx("cfgext.snipMgrDeleted")), onError: () => toast.error(tx("cfgext.snipMgrDeleteFailed")) })}>
                   <Trash2 className="w-3 h-3" />
                 </button>
               </div>

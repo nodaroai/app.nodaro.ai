@@ -10,6 +10,23 @@ import { LANGUAGES, type LocaleId } from "@nodaro/shared"
 // internals. Same values, same order.
 const LOCALE_IDS: readonly LocaleId[] = LANGUAGES.map((l) => l.id)
 
+/** Config-panel keys whose Hebrew value is legitimately Latin (reviewed one by one). */
+const LEGIT_LATIN_HE: readonly string[] = [
+  "cfgshared.badgeI2I",
+  "cfgext.compBlendMultiply",
+  "cfgext.compBlendScreen",
+  "cfgext.compBlendOverlay",
+  "cfgext.compXPercent",
+  "cfgext.compYPercent",
+  "cfgext.slideKenBurns",
+  "cfgext.injRefImageN",
+  "cfgext.sceneCriticScore",
+  "vidcfg.pro1080p",
+  "audiocfg.providerElevenLabsStt",
+  "audiocfg.providerWhisper",
+  "audiocfg.providerIncrediblyFastWhisper",
+]
+
 describe("i18n translate()", () => {
   it("returns the Hebrew string for a translated key", () => {
     expect(translate("he", "nav.integrations")).toBe("אינטגרציות")
@@ -49,6 +66,27 @@ describe("i18n translate()", () => {
   it("every he key is a valid en key (no orphans)", () => {
     const enKeys = new Set(Object.keys(en))
     for (const k of Object.keys(he)) expect(enKeys.has(k)).toBe(true)
+  })
+
+  it("every en key has a Hebrew translation (translate() falls back silently, so this is the only signal)", () => {
+    // Pre-existing gaps, tracked: the SSO copy is not offered in Hebrew yet.
+    const KNOWN_UNTRANSLATED = new Set(["auth.continueWithSso", "auth.ssoExchanging"])
+    const missing = Object.keys(en).filter((k) => !(k in he) && !KNOWN_UNTRANSLATED.has(k))
+    expect(missing, `en keys with no he value:\n${missing.join("\n")}`).toEqual([])
+    for (const k of KNOWN_UNTRANSLATED) expect(k in he, `${k} is translated now — drop it from KNOWN_UNTRANSLATED`).toBe(false)
+  })
+
+  it("every config-panel Hebrew value is actually Hebrew (no copy-pasted English)", () => {
+    // Values that are legitimately Latin: brand/model names, industry terms
+    // kept in English (blend modes), format tokens.
+    const LATIN_OK = new Set<string>(LEGIT_LATIN_HE)
+    const NS = /^(proccfg|utilcfg|paramcfg|inputcfg|txtcfg|scriptcfg|cfgshared|cfgext|imgcfg|vidcfg|audiocfg)\./
+    const HEBREW = /[\u0590-\u05FF]/
+    const bad = Object.entries(he)
+      .filter(([k, v]) => NS.test(k) && !LATIN_OK.has(k) && !HEBREW.test(v as string))
+      .map(([k, v]) => `${k} = ${v}`)
+    expect(bad, `he values with no Hebrew letter:\n${bad.join("\n")}`).toEqual([])
+    for (const k of LATIN_OK) expect(k in he && !HEBREW.test(he[k as keyof typeof he] as string), `${k} is Hebrew now — drop it from the Latin allowlist`).toBe(true)
   })
 
   it("every shipped locale has a registered chrome dict (empty is fine)", () => {

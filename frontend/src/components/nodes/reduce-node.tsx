@@ -1,5 +1,6 @@
 "use client"
 
+import { useLocalizeModelDescription } from "@/lib/i18n/labels"
 import { memo, useMemo, type CSSProperties } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Trophy, FileText, Braces } from "lucide-react"
@@ -110,6 +111,7 @@ const settingFieldClass =
 
 function ReduceNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as ReduceNodeData & { __upstreamCount?: number }
+  const localizeDesc = useLocalizeModelDescription()
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const status = nodeData.executionStatus ?? "idle"
@@ -218,7 +220,7 @@ function ReduceNodeComponent({ id, data, selected }: NodeProps) {
                     <SelectItem key={m.id} value={m.id} className="text-xs">
                       <span className="flex flex-col gap-0.5">
                         <span>{m.displayName}</span>
-                        <span className="text-[10px] leading-tight text-muted-foreground/70">{m.desc}</span>
+                        <span className="text-[10px] leading-tight text-muted-foreground/70">{localizeDesc(m.desc)}</span>
                       </span>
                     </SelectItem>
                   ))}
@@ -235,7 +237,7 @@ function ReduceNodeComponent({ id, data, selected }: NodeProps) {
                   <SelectValue>{reduceInputKindLabel(inputKind)}</SelectValue>
                 </SelectTrigger>
                 <SelectContent className="node-menu-surface">
-                  {REDUCE_INPUT_KIND_OPTIONS.map((o) => (
+                  {REDUCE_INPUT_KIND_OPTIONS().map((o) => (
                     <SelectItem key={o.value} value={o.value} className="text-xs">
                       <span className="flex flex-col gap-0.5">
                         <span>{o.label}</span>

@@ -1,5 +1,8 @@
 "use client"
 
+import { TIER_LABELS } from "@/components/editor/config-panels/llm-model-select"
+import { useT } from "@/lib/i18n"
+import { useLocalizeModelDescription } from "@/lib/i18n/labels"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useStore } from "@xyflow/react"
 import { Sparkles, LayoutTemplate, Repeat2, Settings2, Gauge } from "lucide-react"
@@ -26,11 +29,7 @@ import type { LLMChatData } from "@/types/nodes"
 
 const AUTO_EFFORT = "__auto__"
 
-const TIER_LABELS: Record<string, string> = {
-  economy: "Economy",
-  standard: "Standard",
-  premium: "Premium",
-}
+// Tier labels come from the LLM select's live table so they follow the locale.
 
 /**
  * Pure patch-builder behind the Model select's `onValueChange`. Exported so
@@ -86,6 +85,8 @@ export function LlmChatQuickToolbar({
   isRunning,
   onAnyOpenChange,
 }: LlmChatQuickToolbarProps) {
+  const t = useT()
+  const localizeDesc = useLocalizeModelDescription()
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const userTextTemplates = useWorkflowStore((s) => s.userTextTemplates)
@@ -139,18 +140,21 @@ export function LlmChatQuickToolbar({
   const modelLabel = modelEntry?.displayName ?? currentModel
 
   // Reasoning effort — only rendered when the current model declares levels.
-  // Options/labels are single-sourced from EFFORT_LABELS (shared with
+  // Options/labels are single-sourced from EFFORT_LABELS() (shared with
   // ReasoningEffortSelect, the config-panel counterpart) so wording can't drift.
   const effortLevels = availableReasoningEfforts(currentModel, data.advancedMode)
   const effortValue = data.reasoningEffort ?? AUTO_EFFORT
-  const effortLabel = data.reasoningEffort ? EFFORT_LABELS[data.reasoningEffort] : "Auto"
+  const effortLabel = data.reasoningEffort ? EFFORT_LABELS()[data.reasoningEffort] : "Auto"
 
   const currentTemplateId = data.templateId ?? "custom"
   // Memoized to match the `modelEntry` precedent above — this toolbar is mounted
   // (and re-rendered) for every llm-chat node on the canvas, not only the hovered one.
+  // `t` is in the deps on purpose: the built-in template labels resolve through
+  // the live locale, so the cached label has to be invalidated on a language
+  // switch (mirrors tag-textarea.tsx).
   const templateLabel = useMemo(
-    () => [...GENERATE_TEXT_TEMPLATES, ...userTextTemplates].find((t) => t.id === currentTemplateId)?.label ?? "Custom",
-    [userTextTemplates, currentTemplateId],
+    () => [...GENERATE_TEXT_TEMPLATES(), ...userTextTemplates].find((tpl) => tpl.id === currentTemplateId)?.label ?? t("cfgshared.custom"),
+    [userTextTemplates, currentTemplateId, t],
   )
 
   // # of runs — clamp 1–4 in this UI (execution honors any value via
@@ -191,7 +195,7 @@ export function LlmChatQuickToolbar({
         <SelectGroup key={group.vendor}>
           <SelectLabel>{group.label}</SelectLabel>
           {group.models.map((m) => (
-            <SelectItemWithMeta key={m.id} value={m.id} badge={TIER_LABELS[m.tier]} description={m.desc} className="text-xs">
+            <SelectItemWithMeta key={m.id} value={m.id} badge={TIER_LABELS()[m.tier]} description={localizeDesc(m.desc)} className="text-xs">
               {m.displayName}
             </SelectItemWithMeta>
           ))}
@@ -202,10 +206,10 @@ export function LlmChatQuickToolbar({
 
   const effortItems = (
     <SelectContent className="node-menu-surface">
-      <SelectItem value={AUTO_EFFORT} className="text-xs">Auto (model default)</SelectItem>
+      <SelectItem value={AUTO_EFFORT} className="text-xs">{t("cfgshared.effortAutoModelDefault")}</SelectItem>
       {effortLevels.map((level) => (
         <SelectItem key={level} value={level} className="text-xs">
-          {EFFORT_LABELS[level]}
+          {EFFORT_LABELS()[level]}
         </SelectItem>
       ))}
     </SelectContent>
@@ -214,8 +218,8 @@ export function LlmChatQuickToolbar({
   const templateItems = (
     <SelectContent className="node-menu-surface">
       <SelectGroup>
-        <SelectLabel>Built-in</SelectLabel>
-        {GENERATE_TEXT_TEMPLATES.map((t) => (
+        <SelectLabel>{t("txtcfg.builtIn")}</SelectLabel>
+        {GENERATE_TEXT_TEMPLATES().map((t) => (
           <SelectItem key={t.id} value={t.id} className="text-xs">
             {t.label}
           </SelectItem>
@@ -223,7 +227,7 @@ export function LlmChatQuickToolbar({
       </SelectGroup>
       {userTextTemplates.length > 0 && (
         <SelectGroup>
-          <SelectLabel>My Presets</SelectLabel>
+          <SelectLabel>{t("preset.myPresets")}</SelectLabel>
           {userTextTemplates.map((t) => (
             <SelectItem key={t.id} value={t.id} className="text-xs">
               {t.label || "Untitled"}
@@ -311,7 +315,7 @@ export function LlmChatQuickToolbar({
       <PromptEditButton nodeId={nodeId} />
       {/* AI Model */}
       <Select disabled={isRunning} value={currentModel} onValueChange={handleModelChange} onOpenChange={handleOpenChange}>
-        <SelectTrigger className={`${ghostTriggerClass} max-w-[150px]`} title="AI model">
+        <SelectTrigger className={`${ghostTriggerClass} max-w-[150px]`} title={t("cfgshared.aiModel")}>
           <Sparkles className="opacity-70" />
           <SelectValue>{modelLabel}</SelectValue>
         </SelectTrigger>
@@ -321,7 +325,7 @@ export function LlmChatQuickToolbar({
       {/* Reasoning effort — only for models that declare levels */}
       {effortLevels.length > 0 && (
         <Select disabled={isRunning} value={effortValue} onValueChange={handleEffortChange} onOpenChange={handleOpenChange}>
-          <SelectTrigger className={`${ghostTriggerClass} max-w-[130px]`} title="Reasoning effort">
+          <SelectTrigger className={`${ghostTriggerClass} max-w-[130px]`} title={t("cfgshared.reasoningEffort")}>
             <Gauge className="opacity-70" />
             <SelectValue>{effortLabel}</SelectValue>
           </SelectTrigger>
@@ -331,7 +335,7 @@ export function LlmChatQuickToolbar({
 
       {/* Preset */}
       <Select disabled={isRunning} value={currentTemplateId} onValueChange={handleTemplateChange} onOpenChange={handleOpenChange}>
-        <SelectTrigger className={`${ghostTriggerClass} max-w-[140px]`} title="Preset">
+        <SelectTrigger className={`${ghostTriggerClass} max-w-[140px]`} title={t("txtcfg.preset")}>
           <LayoutTemplate className="opacity-70" />
           <SelectValue>{templateLabel}</SelectValue>
         </SelectTrigger>
@@ -340,7 +344,7 @@ export function LlmChatQuickToolbar({
 
       {/* # of runs */}
       <Select disabled={isRunning} value={String(repeatCount)} onValueChange={handleRepeatChange} onOpenChange={handleOpenChange}>
-        <SelectTrigger className={ghostTriggerClass} title="Number of runs">
+        <SelectTrigger className={ghostTriggerClass} title={t("txtcfg.numberOfRuns")}>
           <Repeat2 className="opacity-70" />
           <SelectValue>× {repeatCount}</SelectValue>
         </SelectTrigger>

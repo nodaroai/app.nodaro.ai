@@ -1,5 +1,7 @@
 "use client"
 
+import { useLocalizeOptionLabel } from "@/lib/i18n/labels"
+import { useT, tx } from "@/lib/i18n"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Plus, Trash2, FileText, ImageIcon, Film, Music, GripVertical, Eye, EyeOff, ChevronUp, ChevronDown, Copy, Check, Download, X } from "lucide-react"
 import { nanoid } from "nanoid"
@@ -57,27 +59,31 @@ import type { ConfigProps, SourceNodeInfo } from "./types"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { WaveformAudioPlayer } from "@/components/audio-player"
 
-const SEPARATOR_OPTIONS = [
-  { value: "newline", label: "New Line (\\n)" },
-  { value: "double-newline", label: "Double New Line (\\n\\n)" },
-  { value: "comma", label: "Comma (,)" },
-  { value: "space", label: "Space" },
-  { value: "stars", label: "Three Stars (***)" },
-  { value: "custom", label: "Custom" },
+function SEPARATOR_OPTIONS() {
+  return [
+  { value: "newline", label: tx("utilcfg.sepNewline") },
+  { value: "double-newline", label: tx("utilcfg.sepDoubleNewline") },
+  { value: "comma", label: tx("utilcfg.sepComma") },
+  { value: "space", label: tx("utilcfg.sepSpace") },
+  { value: "stars", label: tx("utilcfg.sepThreeStars") },
+  { value: "custom", label: tx("cfgshared.custom") },
 ] as const
+}
 
-const SEPARATOR_PRESET_VALUES: readonly string[] = SEPARATOR_OPTIONS.map((o) => o.value)
+const SEPARATOR_PRESET_VALUES: readonly string[] = SEPARATOR_OPTIONS().map((o) => o.value)
 
 export function CombineTextConfig({ data, onUpdate }: { data: CombineTextNodeData; onUpdate: (patch: Partial<CombineTextNodeData>) => void }) {
+  const localizeOption = useLocalizeOptionLabel()
+  const t = useT()
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label>Separator</Label>
+        <Label>{t("utilcfg.separator")}</Label>
         <Select value={data.separator} onValueChange={(v) => onUpdate({ separator: v as CombineTextNodeData["separator"] })}>
-          <SelectTrigger aria-label="Separator"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("utilcfg.separator")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            {SEPARATOR_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+            {SEPARATOR_OPTIONS().map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>{localizeOption(opt.label)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -85,14 +91,14 @@ export function CombineTextConfig({ data, onUpdate }: { data: CombineTextNodeDat
 
       {data.separator === "custom" && (
         <div>
-          <Label>Custom Separator</Label>
-          <Input value={data.customSeparator} onChange={(e) => onUpdate({ customSeparator: e.target.value })} placeholder="Enter separator..." />
+          <Label>{t("utilcfg.customSeparator")}</Label>
+          <Input value={data.customSeparator} onChange={(e) => onUpdate({ customSeparator: e.target.value })} placeholder={t("utilcfg.phEnterSeparator")} />
         </div>
       )}
 
       {data.combinedText && (
         <div>
-          <Label>Output Preview</Label>
+          <Label>{t("utilcfg.outputPreview")}</Label>
           <Textarea rows={4} value={data.combinedText} readOnly className="text-xs opacity-70" />
         </div>
       )}
@@ -101,16 +107,17 @@ export function CombineTextConfig({ data, onUpdate }: { data: CombineTextNodeDat
 }
 
 export function SaveToStorageConfig({ data, onUpdate }: ConfigProps<SaveToStorageData>) {
+  const t = useT()
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label htmlFor="filename">Filename</Label>
+        <Label htmlFor="filename">{t("utilcfg.filename")}</Label>
         <Input id="filename" value={data.filename} onChange={(e) => onUpdate({ filename: e.target.value })} placeholder="output_video" />
       </div>
       <div>
-        <Label>Format</Label>
+        <Label>{t("utilcfg.format")}</Label>
         <Select value={data.format} onValueChange={(v) => onUpdate({ format: v as SaveToStorageData["format"] })}>
-          <SelectTrigger aria-label="Format"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("utilcfg.format")}><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="mp4">MP4</SelectItem>
             <SelectItem value="webm">WebM</SelectItem>
@@ -119,13 +126,13 @@ export function SaveToStorageConfig({ data, onUpdate }: ConfigProps<SaveToStorag
         </Select>
       </div>
       <div>
-        <Label>Quality</Label>
+        <Label>{t("field.quality")}</Label>
         <Select value={data.quality} onValueChange={(v) => onUpdate({ quality: v as SaveToStorageData["quality"] })}>
-          <SelectTrigger aria-label="Quality"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("field.quality")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="draft">Draft</SelectItem>
-            <SelectItem value="standard">Standard</SelectItem>
-            <SelectItem value="high">High</SelectItem>
+            <SelectItem value="draft">{t("utilcfg.qualityDraft")}</SelectItem>
+            <SelectItem value="standard">{t("utilcfg.qualityStandard")}</SelectItem>
+            <SelectItem value="high">{t("utilcfg.qualityHigh")}</SelectItem>
             <SelectItem value="4k">4K</SelectItem>
           </SelectContent>
         </Select>
@@ -135,6 +142,7 @@ export function SaveToStorageConfig({ data, onUpdate }: ConfigProps<SaveToStorag
 }
 
 export function WebhookOutputConfig({ data, onUpdate }: ConfigProps<WebhookOutputData>) {
+  const t = useT()
   const params = data.params ?? []
 
   const addParam = () => {
@@ -155,7 +163,7 @@ export function WebhookOutputConfig({ data, onUpdate }: ConfigProps<WebhookOutpu
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label htmlFor="webhook-url">Webhook URL</Label>
+        <Label htmlFor="webhook-url">{t("utilcfg.webhookUrl")}</Label>
         <Input
           id="webhook-url"
           value={data.url}
@@ -164,22 +172,22 @@ export function WebhookOutputConfig({ data, onUpdate }: ConfigProps<WebhookOutpu
           className="text-xs font-mono"
         />
         <p className="text-[10px] text-muted-foreground mt-1">
-          The URL to POST the collected data to.
+          {t("utilcfg.webhookUrlHint")}
         </p>
       </div>
 
       <div className="border-t border-border pt-3">
         <div className="flex items-center justify-between mb-2">
-          <Label>Input Parameters</Label>
+          <Label>{t("utilcfg.inputParameters")}</Label>
           <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={addParam}>
             <Plus className="h-3 w-3" />
-            Add
+            {t("cfgshared.add")}
           </Button>
         </div>
 
         {params.length === 0 && (
           <p className="text-[10px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border">
-            No parameters defined. All upstream data will be sent as a single payload.
+            {t("utilcfg.noParamsDefined")}
           </p>
         )}
 
@@ -189,7 +197,7 @@ export function WebhookOutputConfig({ data, onUpdate }: ConfigProps<WebhookOutpu
               <Input
                 value={param.name}
                 onChange={(e) => updateParam(i, { name: e.target.value })}
-                placeholder="name"
+                placeholder={t("utilcfg.phParamName")}
                 className="text-xs h-8 flex-1"
               />
               <Select
@@ -200,10 +208,10 @@ export function WebhookOutputConfig({ data, onUpdate }: ConfigProps<WebhookOutpu
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="text">Text</SelectItem>
-                  <SelectItem value="imageUrl">Image URL</SelectItem>
-                  <SelectItem value="videoUrl">Video URL</SelectItem>
-                  <SelectItem value="audioUrl">Audio URL</SelectItem>
+                  <SelectItem value="text">{t("field.text")}</SelectItem>
+                  <SelectItem value="imageUrl">{t("utilcfg.imageUrl")}</SelectItem>
+                  <SelectItem value="videoUrl">{t("utilcfg.videoUrl")}</SelectItem>
+                  <SelectItem value="audioUrl">{t("utilcfg.audioUrl")}</SelectItem>
                 </SelectContent>
               </Select>
               <Button
@@ -223,6 +231,8 @@ export function WebhookOutputConfig({ data, onUpdate }: ConfigProps<WebhookOutpu
 }
 
 export function SplitTextConfig({ data, onUpdate }: { data: SplitTextData; onUpdate: (patch: Partial<SplitTextData>) => void }) {
+  const localizeOption = useLocalizeOptionLabel()
+  const t = useT()
   // Legacy workflows may store a literal separator string (e.g. "===NEXT===") in `separator`.
   // Surface those as "custom" in the dropdown and pre-fill the custom field.
   const isPreset = SEPARATOR_PRESET_VALUES.includes(data.separator)
@@ -232,7 +242,7 @@ export function SplitTextConfig({ data, onUpdate }: { data: SplitTextData; onUpd
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label>Separator</Label>
+        <Label>{t("utilcfg.separator")}</Label>
         <Select
           value={selectValue}
           onValueChange={(v) => {
@@ -243,56 +253,56 @@ export function SplitTextConfig({ data, onUpdate }: { data: SplitTextData; onUpd
             }
           }}
         >
-          <SelectTrigger aria-label="Separator"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("utilcfg.separator")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            {SEPARATOR_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+            {SEPARATOR_OPTIONS().map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>{localizeOption(opt.label)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
         <p className="text-[10px] text-muted-foreground mt-1">
-          The delimiter used to split the input text into items
+          {t("utilcfg.splitSeparatorHint")}
         </p>
       </div>
 
       {selectValue === "custom" && (
         <div>
-          <Label>Custom Separator</Label>
+          <Label>{t("utilcfg.customSeparator")}</Label>
           <Input
             value={customValue}
             onChange={(e) => onUpdate({ separator: "custom", customSeparator: e.target.value })}
-            placeholder="Enter separator (e.g. ===NEXT===)"
+            placeholder={t("utilcfg.phEnterSeparatorEg")}
           />
         </div>
       )}
 
       <div className="flex items-center justify-between">
-        <Label>Trim whitespace</Label>
+        <Label>{t("utilcfg.trimWhitespace")}</Label>
         <Button
           variant={data.trimWhitespace !== false ? "default" : "outline"}
           size="sm"
           className="h-7 text-xs"
           onClick={() => onUpdate({ trimWhitespace: data.trimWhitespace === false })}
         >
-          {data.trimWhitespace !== false ? "On" : "Off"}
+          {data.trimWhitespace !== false ? t("audiocfg.normalizationOn") : t("audiocfg.normalizationOff")}
         </Button>
       </div>
 
       <div className="flex items-center justify-between">
-        <Label>Remove empty</Label>
+        <Label>{t("utilcfg.removeEmpty")}</Label>
         <Button
           variant={data.removeEmpty !== false ? "default" : "outline"}
           size="sm"
           className="h-7 text-xs"
           onClick={() => onUpdate({ removeEmpty: data.removeEmpty === false })}
         >
-          {data.removeEmpty !== false ? "On" : "Off"}
+          {data.removeEmpty !== false ? t("audiocfg.normalizationOn") : t("audiocfg.normalizationOff")}
         </Button>
       </div>
 
       {data.splitResults && data.splitResults.length > 0 && (
         <div>
-          <Label>Preview ({data.splitResults.length} items)</Label>
+          <Label>{t("utilcfg.previewItems", { count: data.splitResults.length })}</Label>
           <Textarea
             rows={Math.min(data.splitResults.length, 6)}
             value={data.splitResults.map((item, i) => `${i + 1}. ${item}`).join("\n")}
@@ -554,6 +564,7 @@ const EXTRACT_FIELD_CUSTOM = "__custom__"
 const EXTRACT_FIELD_WHOLE = "__whole__"
 
 export function ExtractFieldConfig({ data, onUpdate, sources, nodes, edges }: ConfigProps<ExtractFieldNodeData>) {
+  const t = useT()
   // Dropdown is the default UI — users opt into manual entry via "Custom path…".
   const mode = data.mode ?? "dropdown"
   const field = data.field ?? ""
@@ -576,7 +587,7 @@ export function ExtractFieldConfig({ data, onUpdate, sources, nodes, edges }: Co
     <div className="flex flex-col gap-3">
       {mode === "dropdown" ? (
         <div>
-          <Label>Field</Label>
+          <Label>{t("utilcfg.field")}</Label>
           <Select
             value={selectValue}
             onValueChange={(v) => {
@@ -589,63 +600,63 @@ export function ExtractFieldConfig({ data, onUpdate, sources, nodes, edges }: Co
               }
             }}
           >
-            <SelectTrigger aria-label="Field"><SelectValue placeholder="Select a field..." /></SelectTrigger>
+            <SelectTrigger aria-label={t("utilcfg.field")}><SelectValue placeholder={t("utilcfg.phSelectField")} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value={EXTRACT_FIELD_WHOLE} className="text-muted-foreground">(whole item)</SelectItem>
+              <SelectItem value={EXTRACT_FIELD_WHOLE} className="text-muted-foreground">{t("utilcfg.wholeItem")}</SelectItem>
               {actorOptions.map((opt) => (
                 <SelectItem key={opt} value={opt}>{opt}</SelectItem>
               ))}
-              <SelectItem value={EXTRACT_FIELD_CUSTOM} className="text-muted-foreground">Custom path…</SelectItem>
+              <SelectItem value={EXTRACT_FIELD_CUSTOM} className="text-muted-foreground">{t("utilcfg.customPath")}</SelectItem>
             </SelectContent>
           </Select>
           <p className="text-[10px] text-muted-foreground mt-1">
             {actorOptions.length > 0
-              ? <>Pick (whole item) when the JSON is a plain list of values (e.g., <code>["a","b"]</code>), or choose Custom path… for a manual dot-path.</>
-              : <>Connect an upstream node that emits JSON or list data to detect its fields, or choose Custom path… to enter a dot-path manually.</>}
+              ? <>{t("utilcfg.extractFieldHintDetected")}</>
+              : <>{t("utilcfg.fieldHintNoSchema")}</>}
           </p>
         </div>
       ) : (
         <div className="flex flex-col gap-1.5">
-          <Label>Path</Label>
+          <Label>{t("utilcfg.path")}</Label>
           <Input
             value={field}
             onChange={(e) => setField(e.target.value)}
-            placeholder="e.g., caption or authorMeta.name (blank = whole item)"
+            placeholder={t("utilcfg.phExtractPath")}
           />
           <p className="text-[10px] text-muted-foreground">
-            Use dot notation. The path runs against each item if the root is an array. Leave blank to use each item as-is (whole item).
+            {t("utilcfg.extractPathHint")}
           </p>
           <button
             type="button"
-            className="text-[11px] text-muted-foreground hover:text-foreground hover:underline text-left self-start mt-0.5"
+            className="text-[11px] text-muted-foreground hover:text-foreground hover:underline text-start self-start mt-0.5"
             onClick={() => setMode("dropdown")}
           >
-            ← Back to field list
+            {t("utilcfg.backToFieldList")}
           </button>
         </div>
       )}
 
       <div>
-        <Label>Output Type</Label>
+        <Label>{t("utilcfg.outputType")}</Label>
         <Select
           value={data.outputType ?? "text"}
           onValueChange={(v) => onUpdate({ outputType: v as "text" | "list" | "json" })}
         >
-          <SelectTrigger aria-label="Output type"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("utilcfg.outputTypeAria")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="text">Text</SelectItem>
-            <SelectItem value="list">List</SelectItem>
+            <SelectItem value="text">{t("field.text")}</SelectItem>
+            <SelectItem value="list">{t("utilcfg.outputList")}</SelectItem>
             <SelectItem value="json">JSON</SelectItem>
           </SelectContent>
         </Select>
         <p className="text-[10px] text-muted-foreground mt-1">
-          <strong>Text</strong>: single string (values joined by newline). <strong>List</strong>: each match is a separate item — supports <code>item:N</code>, each, and fan-out. <strong>JSON</strong>: raw structured value for chaining another Extract Field.
+          {t("utilcfg.outputTypeHint")}
         </p>
       </div>
 
       {data.extractedText && (
         <div>
-          <Label>Output Preview</Label>
+          <Label>{t("utilcfg.outputPreview")}</Label>
           <Textarea rows={4} value={data.extractedText} readOnly className="text-xs opacity-70" />
         </div>
       )}
@@ -662,6 +673,7 @@ const PREVIEW_TYPE_ICON: Record<PreviewItem["type"], React.ReactNode> = {
 }
 
 export function PreviewConfig({ data, onUpdate }: { data: PreviewNodeData; onUpdate: (patch: Partial<PreviewNodeData>) => void }) {
+  const t = useT()
   const items = data.previewItems ?? []
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
@@ -725,7 +737,7 @@ export function PreviewConfig({ data, onUpdate }: { data: PreviewNodeData; onUpd
   if (items.length === 0) {
     return (
       <p className="text-xs text-muted-foreground bg-muted/30 rounded-md px-3 py-3 border border-dashed border-border text-center">
-        Connect upstream nodes and run to see their values here.
+        {t("utilcfg.previewEmpty")}
       </p>
     )
   }
@@ -735,8 +747,8 @@ export function PreviewConfig({ data, onUpdate }: { data: PreviewNodeData; onUpd
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <Label>Connected Values ({items.length})</Label>
-        <span className="text-[10px] text-muted-foreground">{visibleCount} visible</span>
+        <Label>{t("utilcfg.connectedValues", { count: items.length })}</Label>
+        <span className="text-[10px] text-muted-foreground">{t("utilcfg.visibleCount", { count: visibleCount })}</span>
       </div>
       <div className="flex flex-col gap-1.5">
         {items.map((item, i) => {
@@ -786,7 +798,7 @@ export function PreviewConfig({ data, onUpdate }: { data: PreviewNodeData; onUpd
                   type="button"
                   className={"p-0.5 rounded hover:bg-muted/50 transition-colors shrink-0 " + (isVisible ? "text-foreground/70" : "text-muted-foreground/40")}
                   onClick={() => toggleVisibility(i)}
-                  title={isVisible ? "Hide on canvas" : "Show on canvas"}
+                  title={isVisible ? t("utilcfg.hideOnCanvas") : t("utilcfg.showOnCanvas")}
                 >
                   {isVisible ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
                 </button>
@@ -814,11 +826,11 @@ export function PreviewConfig({ data, onUpdate }: { data: PreviewNodeData; onUpd
                   onClick={() => handleCopy(item.value, i)}
                 >
                   {copiedIdx === i ? (
-                    <Check className="w-3 h-3 mr-1 text-green-500" />
+                    <Check className="w-3 h-3 me-1 text-green-500" />
                   ) : (
-                    <Copy className="w-3 h-3 mr-1" />
+                    <Copy className="w-3 h-3 me-1" />
                   )}
-                  {copiedIdx === i ? "Copied" : item.type === "text" ? "Copy Text" : item.type === "data" ? "Copy Data" : "Copy URL"}
+                  {copiedIdx === i ? t("apiTok.copied") : item.type === "text" ? t("utilcfg.copyText") : item.type === "data" ? t("utilcfg.copyData") : t("utilcfg.copyUrl")}
                 </Button>
                 {(item.type === "image" || item.type === "video" || item.type === "audio") && isMediaUrl(item.value) && (
                   <Button
@@ -830,8 +842,8 @@ export function PreviewConfig({ data, onUpdate }: { data: PreviewNodeData; onUpd
                       downloadFile(item.value, `${item.sourceNodeLabel}.${ext}`)
                     }}
                   >
-                    <Download className="w-3 h-3 mr-1" />
-                    Download
+                    <Download className="w-3 h-3 me-1" />
+                    {t("utilcfg.download")}
                   </Button>
                 )}
               </div>
@@ -844,6 +856,7 @@ export function PreviewConfig({ data, onUpdate }: { data: PreviewNodeData; onUpd
 }
 
 export function TeleporterConfig({ data, onUpdate, nodeType }: { data: TeleportSendData | TeleportReceiveData; onUpdate: (patch: Partial<TeleportSendData | TeleportReceiveData>) => void; nodeType: string }) {
+  const t = useT()
   const { nodes, updateNodeData, syncTeleporterEdges } = useWorkflowStore()
   const isSend = nodeType === "teleport-send"
 
@@ -864,7 +877,7 @@ export function TeleporterConfig({ data, onUpdate, nodeType }: { data: TeleportS
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <label className="text-xs font-medium text-muted-foreground">Channel</label>
+        <label className="text-xs font-medium text-muted-foreground">{t("utilcfg.channel")}</label>
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 rounded-full" style={{ backgroundColor: data.channelColor }} />
           <span className="text-sm font-semibold" style={{ color: data.channelColor }}>{data.channel}</span>
@@ -873,7 +886,7 @@ export function TeleporterConfig({ data, onUpdate, nodeType }: { data: TeleportS
 
       {!isSend && availableChannels.length > 0 && (
         <div className="space-y-2">
-          <label className="text-xs font-medium text-muted-foreground">Switch Channel</label>
+          <label className="text-xs font-medium text-muted-foreground">{t("utilcfg.switchChannel")}</label>
           <select
             className="w-full px-3 py-1.5 text-sm rounded-md border border-border bg-background"
             value={data.channel}
@@ -892,7 +905,7 @@ export function TeleporterConfig({ data, onUpdate, nodeType }: { data: TeleportS
           >
             {availableChannels.map((ch) => (
               <option key={ch.channel} value={ch.channel}>
-                Channel {ch.channel} — {ch.label}
+                {t("utilcfg.channelOption", { channel: ch.channel, label: ch.label })}
               </option>
             ))}
           </select>
@@ -900,12 +913,12 @@ export function TeleporterConfig({ data, onUpdate, nodeType }: { data: TeleportS
       )}
 
       <div className="space-y-2">
-        <label className="text-xs font-medium text-muted-foreground">Channel Name</label>
+        <label className="text-xs font-medium text-muted-foreground">{t("utilcfg.channelName")}</label>
         <input
           type="text"
           className="w-full px-3 py-1.5 text-sm rounded-md border border-border bg-background"
           value={isTeleportDefaultLabel(data.label, data.channel) ? "" : data.label}
-          placeholder="Name this channel..."
+          placeholder={t("utilcfg.phNameChannel")}
           onChange={(e) => {
             const newLabel = e.target.value || data.channel
             onUpdate({ label: newLabel })
@@ -918,17 +931,17 @@ export function TeleporterConfig({ data, onUpdate, nodeType }: { data: TeleportS
 
       <div className="space-y-2">
         <label className="text-xs font-medium text-muted-foreground">
-          {isSend ? "Receives on this channel" : "Send node"}
+          {isSend ? t("utilcfg.receivesOnChannel") : t("utilcfg.sendNode")}
         </label>
         {partners.length === 0 ? (
-          <p className="text-xs text-muted-foreground italic">No partner nodes found</p>
+          <p className="text-xs text-muted-foreground italic">{t("utilcfg.noPartnerNodes")}</p>
         ) : (
           <div className="space-y-1">
             {partners.map((p) => (
               <button
                 key={p.id}
                 type="button"
-                className="w-full text-left text-xs px-2 py-1 rounded hover:bg-accent/10 text-muted-foreground hover:text-foreground transition-colors"
+                className="w-full text-start text-xs px-2 py-1 rounded hover:bg-accent/10 text-muted-foreground hover:text-foreground transition-colors"
                 onClick={() => {
                   const event = new CustomEvent(TELEPORTER_PAN_EVENT, { detail: { nodeId: p.id } })
                   window.dispatchEvent(event)
@@ -945,6 +958,7 @@ export function TeleporterConfig({ data, onUpdate, nodeType }: { data: TeleportS
 }
 
 export function RouterConfig({ data, onUpdate, sources, nodes, edges }: ConfigProps<RouterNodeData>) {
+  const t = useT()
   const mode = data.mode ?? "radio"
   const routes = data.routes ?? []
   const isConditional = mode === "conditional"
@@ -983,7 +997,7 @@ export function RouterConfig({ data, onUpdate, sources, nodes, edges }: ConfigPr
     if (routes.length >= 10) return
     const letter = String.fromCharCode(65 + routes.length)
     onUpdate({
-      routes: [...routes, { id: crypto.randomUUID(), name: `Route ${letter}`, active: false }],
+      routes: [...routes, { id: crypto.randomUUID(), name: t("utilcfg.routeNameDefault", { letter }), active: false }],
     })
   }
 
@@ -1058,19 +1072,19 @@ export function RouterConfig({ data, onUpdate, sources, nodes, edges }: ConfigPr
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <Label className="text-xs font-medium text-muted-foreground mb-1.5 block">Mode</Label>
+        <Label className="text-xs font-medium text-muted-foreground mb-1.5 block">{t("field.mode")}</Label>
         <Select value={mode} onValueChange={switchMode}>
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="radio">Radio (one active)</SelectItem>
-            <SelectItem value="checkbox">Checkbox (any combination)</SelectItem>
-            <SelectItem value="conditional">Conditional (rule-based)</SelectItem>
+            <SelectItem value="radio">{t("utilcfg.routerModeRadio")}</SelectItem>
+            <SelectItem value="checkbox">{t("utilcfg.routerModeCheckbox")}</SelectItem>
+            <SelectItem value="conditional">{t("utilcfg.routerModeConditional")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
       <div>
-        <Label className="text-xs font-medium text-muted-foreground mb-1.5 block">Routes</Label>
+        <Label className="text-xs font-medium text-muted-foreground mb-1.5 block">{t("utilcfg.routes")}</Label>
         <div className="flex flex-col gap-2">
           {routes.map((route, i) => (
             <div key={route.id} className="flex items-center gap-2">
@@ -1078,7 +1092,7 @@ export function RouterConfig({ data, onUpdate, sources, nodes, edges }: ConfigPr
                 // Derived from rule evaluation — show a read-only indicator.
                 <div
                   className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${(data.activeRoutes ?? []).includes(route.id) ? "border-green-500" : "border-muted-foreground/40"}`}
-                  title="Active state is derived from condition groups at run time"
+                  title={t("utilcfg.derivedActiveTitle")}
                 >
                   {(data.activeRoutes ?? []).includes(route.id) && <div className="w-2 h-2 rounded-full bg-green-500" />}
                 </div>
@@ -1094,7 +1108,7 @@ export function RouterConfig({ data, onUpdate, sources, nodes, edges }: ConfigPr
                     </div>
                   ) : (
                     <div className={`w-7 h-4 rounded-full relative transition-colors ${route.active ? "bg-green-500" : "bg-muted-foreground/30"}`}>
-                      <div className={`w-3 h-3 rounded-full bg-white absolute top-0.5 transition-all ${route.active ? "right-0.5" : "left-0.5"}`} />
+                      <div className={`w-3 h-3 rounded-full bg-white absolute top-0.5 transition-all ${route.active ? "end-0.5" : "start-0.5"}`} />
                     </div>
                   )}
                 </button>
@@ -1118,7 +1132,7 @@ export function RouterConfig({ data, onUpdate, sources, nodes, edges }: ConfigPr
             onClick={addRoute}
             className="mt-2 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
           >
-            <Plus className="w-3 h-3" /> Add Route
+            <Plus className="w-3 h-3" /> {t("utilcfg.addRoute")}
           </button>
         )}
       </div>
@@ -1127,25 +1141,25 @@ export function RouterConfig({ data, onUpdate, sources, nodes, edges }: ConfigPr
         <div className="flex flex-col gap-3">
           {sampleItem !== undefined && (
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs font-medium text-muted-foreground">Upstream sample (first item)</Label>
+              <Label className="text-xs font-medium text-muted-foreground">{t("utilcfg.upstreamSample")}</Label>
               <FilterJsonPreview value={sampleItem} highlightedPaths={highlightedPaths} />
             </div>
           )}
 
           <div className="flex items-center justify-between">
-            <Label>Condition groups ({conditionGroups.length})</Label>
+            <Label>{t("utilcfg.conditionGroups", { count: conditionGroups.length })}</Label>
             <button
               type="button"
               onClick={addGroup}
               className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
             >
-              <Plus className="w-3 h-3" /> Add group
+              <Plus className="w-3 h-3" /> {t("utilcfg.addGroup")}
             </button>
           </div>
 
           {conditionGroups.length === 0 && (
             <p className="text-[10px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border">
-              No groups — zero routes activate; downstream nodes are skipped.
+              {t("utilcfg.noConditionGroups")}
             </p>
           )}
 
@@ -1163,7 +1177,7 @@ export function RouterConfig({ data, onUpdate, sources, nodes, edges }: ConfigPr
                     type="button"
                     onClick={() => removeGroup(group.id)}
                     className="text-muted-foreground hover:text-destructive transition-colors"
-                    title="Remove group"
+                    title={t("utilcfg.removeGroup")}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -1198,11 +1212,11 @@ export function RouterConfig({ data, onUpdate, sources, nodes, edges }: ConfigPr
                   }
                   className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 self-start"
                 >
-                  <Plus className="w-3 h-3" /> Add condition
+                  <Plus className="w-3 h-3" /> {t("utilcfg.addCondition")}
                 </button>
 
                 <div className="flex flex-col gap-1">
-                  <Label className="text-[10px]">Activates</Label>
+                  <Label className="text-[10px]">{t("utilcfg.activates")}</Label>
                   <div className="flex flex-wrap gap-1">
                     {routes.map((r) => {
                       const on = groupRouteIds.includes(r.id)
@@ -1229,7 +1243,7 @@ export function RouterConfig({ data, onUpdate, sources, nodes, edges }: ConfigPr
           })}
 
           <p className="text-[10px] text-muted-foreground">
-            Route activations across groups are unioned (deduped). If no group matches, all routes stay inactive and downstream nodes are skipped.
+            {t("utilcfg.routerGroupsHint")}
           </p>
         </div>
       )}
@@ -1241,24 +1255,27 @@ export function RouterConfig({ data, onUpdate, sources, nodes, edges }: ConfigPr
 // JsonProcessConfig
 // ---------------------------------------------------------------------------
 
-const OPERATOR_LABELS: Record<FilterOperator, string> = {
-  equals: "equals",
-  not_equals: "not equals",
-  contains: "contains",
-  not_contains: "does not contain",
-  starts_with: "starts with",
-  ends_with: "ends with",
-  greater_than: "greater than",
-  less_than: "less than",
-  is_empty: "is empty",
-  is_not_empty: "is not empty",
-  matches_regex: "matches regex",
-  in_list: "is in list",
+function OPERATOR_LABELS(): Record<FilterOperator, string> {
+  return {
+  equals: tx("utilcfg.opEquals"),
+  not_equals: tx("utilcfg.opNotEquals"),
+  contains: tx("utilcfg.opContains"),
+  not_contains: tx("utilcfg.opNotContains"),
+  starts_with: tx("utilcfg.opStartsWith"),
+  ends_with: tx("utilcfg.opEndsWith"),
+  greater_than: tx("utilcfg.opGreaterThan"),
+  less_than: tx("utilcfg.opLessThan"),
+  is_empty: tx("utilcfg.opIsEmpty"),
+  is_not_empty: tx("utilcfg.opIsNotEmpty"),
+  matches_regex: tx("utilcfg.opMatchesRegex"),
+  in_list: tx("utilcfg.opInList"),
+}
 }
 
 const NO_VALUE_OPERATORS: FilterOperator[] = ["is_empty", "is_not_empty"]
 
 export function JsonProcessConfig({ data, onUpdate }: ConfigProps<JsonProcessNodeData>) {
+  const t = useT()
   const mode = data.mode ?? "visual"
   const inputPath = data.inputPath ?? ""
   const filters = data.filters ?? []
@@ -1334,7 +1351,7 @@ export function JsonProcessConfig({ data, onUpdate }: ConfigProps<JsonProcessNod
     if (data.errorMessage) {
       return (
         <p className="text-xs text-destructive break-all">
-          Error: {data.errorMessage}
+          {t("utilcfg.errorPrefix", { message: data.errorMessage })}
         </p>
       )
     }
@@ -1344,7 +1361,7 @@ export function JsonProcessConfig({ data, onUpdate }: ConfigProps<JsonProcessNod
         const preview = result.slice(0, 5)
         return (
           <div className="space-y-0.5">
-            <p className="text-[10px] text-muted-foreground">First {Math.min(5, result.length)} of {result.length} items:</p>
+            <p className="text-[10px] text-muted-foreground">{t("utilcfg.firstOfItems", { shown: Math.min(5, result.length), total: result.length })}</p>
             <pre className="text-[10px] font-mono bg-muted/20 rounded p-1.5 overflow-x-auto whitespace-pre-wrap break-all">
               {JSON.stringify(preview, null, 2)}
             </pre>
@@ -1355,7 +1372,7 @@ export function JsonProcessConfig({ data, onUpdate }: ConfigProps<JsonProcessNod
         const entries = Object.entries(result as Record<string, unknown>).slice(0, 10)
         return (
           <div className="space-y-0.5">
-            <p className="text-[10px] text-muted-foreground">Fields ({Object.keys(result as object).length}):</p>
+            <p className="text-[10px] text-muted-foreground">{t("utilcfg.fieldsCount", { count: Object.keys(result as object).length })}</p>
             <div className="text-[10px] font-mono bg-muted/20 rounded p-1.5 space-y-0.5 overflow-x-auto">
               {entries.map(([k, v]) => (
                 <div key={k} className="flex gap-1.5">
@@ -1374,7 +1391,7 @@ export function JsonProcessConfig({ data, onUpdate }: ConfigProps<JsonProcessNod
       )
     }
     return (
-      <p className="text-[10px] text-muted-foreground italic">Run the node to see preview</p>
+      <p className="text-[10px] text-muted-foreground italic">{t("utilcfg.runToSeePreview")}</p>
     )
   }
 
@@ -1394,7 +1411,7 @@ export function JsonProcessConfig({ data, onUpdate }: ConfigProps<JsonProcessNod
                 : "bg-background text-muted-foreground hover:text-foreground")
             }
           >
-            {m === "visual" ? "Visual" : "Advanced"}
+            {m === "visual" ? t("utilcfg.modeVisual") : t("utilcfg.modeAdvanced")}
           </button>
         ))}
       </div>
@@ -1406,17 +1423,17 @@ export function JsonProcessConfig({ data, onUpdate }: ConfigProps<JsonProcessNod
             {/* Input Path */}
             <AccordionItem value="path">
               <AccordionTrigger className="px-3 py-2 text-xs font-medium hover:no-underline">
-                Input Path
+                {t("utilcfg.inputPath")}
               </AccordionTrigger>
               <AccordionContent className="px-3 pb-3 pt-0">
                 <Input
                   value={inputPath}
                   onChange={(e) => onUpdate({ inputPath: e.target.value })}
-                  placeholder="e.g. data.items"
+                  placeholder={t("utilcfg.phEgDataItems")}
                   className="text-xs h-8"
                 />
                 <p className="text-[10px] text-muted-foreground mt-1">
-                  Dot-notation path to the array or object to process. Leave blank for the root.
+                  {t("utilcfg.inputPathHint")}
                 </p>
               </AccordionContent>
             </AccordionItem>
@@ -1424,7 +1441,7 @@ export function JsonProcessConfig({ data, onUpdate }: ConfigProps<JsonProcessNod
             {/* Filters */}
             <AccordionItem value="filters">
               <AccordionTrigger className="px-3 py-2 text-xs font-medium hover:no-underline">
-                Filters ({filters.length})
+                {t("utilcfg.filtersCount", { count: filters.length })}
               </AccordionTrigger>
               <AccordionContent className="px-3 pb-3 pt-0">
                 <div className="flex flex-col gap-2">
@@ -1437,7 +1454,7 @@ export function JsonProcessConfig({ data, onUpdate }: ConfigProps<JsonProcessNod
                         <Input
                           value={f.field}
                           onChange={(e) => updateFilter(f.id, { field: e.target.value })}
-                          placeholder="field"
+                          placeholder={t("utilcfg.phField")}
                           className="text-xs h-7 min-w-0 flex-1"
                         />
                         {/* Operator */}
@@ -1460,7 +1477,7 @@ export function JsonProcessConfig({ data, onUpdate }: ConfigProps<JsonProcessNod
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            {(Object.entries(OPERATOR_LABELS) as [FilterOperator, string][]).map(([op, label]) => (
+                            {(Object.entries(OPERATOR_LABELS()) as [FilterOperator, string][]).map(([op, label]) => (
                               <SelectItem key={op} value={op} className="text-xs">
                                 {label}
                               </SelectItem>
@@ -1478,13 +1495,13 @@ export function JsonProcessConfig({ data, onUpdate }: ConfigProps<JsonProcessNod
                               }}
                               placeholder="a, b, c"
                               className="text-xs h-7 min-w-0 flex-1"
-                              title="Comma-separated values"
+                              title={t("utilcfg.commaSeparatedValues")}
                             />
                           ) : (
                             <Input
                               value={typeof f.value === "string" ? f.value : ""}
                               onChange={(e) => updateFilter(f.id, { value: e.target.value })}
-                              placeholder="value"
+                              placeholder={t("utilcfg.phValue")}
                               className="text-xs h-7 min-w-0 flex-1"
                             />
                           )
@@ -1494,7 +1511,7 @@ export function JsonProcessConfig({ data, onUpdate }: ConfigProps<JsonProcessNod
                           type="button"
                           onClick={() => removeFilter(f.id)}
                           className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
-                          title="Remove filter"
+                          title={t("utilcfg.removeFilter")}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -1506,7 +1523,7 @@ export function JsonProcessConfig({ data, onUpdate }: ConfigProps<JsonProcessNod
                     onClick={addFilter}
                     className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 self-start mt-0.5"
                   >
-                    <Plus className="w-3 h-3" /> Add filter
+                    <Plus className="w-3 h-3" /> {t("utilcfg.addFilter")}
                   </button>
                 </div>
               </AccordionContent>
@@ -1515,7 +1532,7 @@ export function JsonProcessConfig({ data, onUpdate }: ConfigProps<JsonProcessNod
             {/* Projections */}
             <AccordionItem value="projections">
               <AccordionTrigger className="px-3 py-2 text-xs font-medium hover:no-underline">
-                Projection ({projections.length} fields)
+                {t("utilcfg.projectionCount", { count: projections.length })}
               </AccordionTrigger>
               <AccordionContent className="px-3 pb-3 pt-0">
                 <div className="flex flex-wrap gap-1 mb-2 min-h-[28px] rounded border border-border px-1.5 py-1 bg-background">
@@ -1528,8 +1545,8 @@ export function JsonProcessConfig({ data, onUpdate }: ConfigProps<JsonProcessNod
                       <button
                         type="button"
                         onClick={() => removeProjection(p)}
-                        className="text-muted-foreground hover:text-foreground ml-0.5"
-                        title={`Remove ${p}`}
+                        className="text-muted-foreground hover:text-foreground ms-0.5"
+                        title={t("utilcfg.removeField", { field: p })}
                       >
                         <X className="w-2.5 h-2.5" />
                       </button>
@@ -1540,12 +1557,12 @@ export function JsonProcessConfig({ data, onUpdate }: ConfigProps<JsonProcessNod
                     value={projDraft}
                     onChange={(e) => setProjDraft(e.target.value)}
                     onKeyDown={handleProjKeyDown}
-                    placeholder={projections.length === 0 ? "field name, press Enter" : "add field…"}
+                    placeholder={projections.length === 0 ? t("utilcfg.phFieldNameEnter") : t("utilcfg.phAddField")}
                     className="bg-transparent border-none outline-none text-xs text-foreground placeholder:text-muted-foreground min-w-[100px] flex-1"
                   />
                 </div>
                 <p className="text-[10px] text-muted-foreground">
-                  Press Enter or Tab to add. Backspace on empty removes last. Leave empty to keep all fields.
+                  {t("utilcfg.projectionHint")}
                 </p>
               </AccordionContent>
             </AccordionItem>
@@ -1553,7 +1570,7 @@ export function JsonProcessConfig({ data, onUpdate }: ConfigProps<JsonProcessNod
 
           {/* Generated expression preview */}
           <div className="text-[10px] text-muted-foreground bg-muted/20 rounded px-2 py-1.5 border border-border font-mono break-all">
-            <span className="not-italic text-muted-foreground">Generated: </span>
+            <span className="not-italic text-muted-foreground">{t("utilcfg.generatedPrefix")}</span>
             <code className="text-foreground/80">{visualExpression}</code>
           </div>
         </>
@@ -1563,7 +1580,7 @@ export function JsonProcessConfig({ data, onUpdate }: ConfigProps<JsonProcessNod
       {mode === "advanced" && (
         <>
           <div className="flex flex-col gap-1.5">
-            <Label className="text-xs">Expression</Label>
+            <Label className="text-xs">{t("utilcfg.expression")}</Label>
             <Textarea
               value={expression}
               onChange={(e) => onUpdate({ expression: e.target.value })}
@@ -1575,24 +1592,10 @@ export function JsonProcessConfig({ data, onUpdate }: ConfigProps<JsonProcessNod
           <Accordion type="multiple" className="border rounded-md overflow-hidden">
             <AccordionItem value="syntax">
               <AccordionTrigger className="px-3 py-2 text-xs font-medium hover:no-underline">
-                Syntax reference
+                {t("utilcfg.syntaxReference")}
               </AccordionTrigger>
               <AccordionContent className="px-3 pb-3 pt-0">
-                <pre className="text-[10px] font-mono text-muted-foreground leading-relaxed whitespace-pre-wrap">{`.                       identity (whole input)
-.field                  field access
-.["api-key"]            bracket access (non-identifier fields)
-.[]                     iterate array (one value per element)
-.[0]  /  .[-1]          index access (supports negative)
-|                       pipe — feed left result into right
-select(expr)            keep items where expr is truthy
-{a, b: .field}          object construction / projection
-a | contains("x")       substring check
-a | startswith("x")     prefix check
-a | endswith("x")       suffix check
-a | test("regex")       regex match
-a and b  /  a or b      boolean logic
-x | not                 boolean negation
-==  !=  >  <  >=  <=    comparison operators`}</pre>
+                <pre className="text-[10px] font-mono text-muted-foreground leading-relaxed whitespace-pre-wrap">{t("utilcfg.syntaxReferenceBody")}</pre>
               </AccordionContent>
             </AccordionItem>
           </Accordion>
@@ -1601,7 +1604,7 @@ x | not                 boolean negation
 
       {/* Preview block — always visible */}
       <div className="rounded-md border border-border bg-muted/10 px-2.5 py-2">
-        <p className="text-[10px] font-medium text-muted-foreground mb-1.5">Preview</p>
+        <p className="text-[10px] font-medium text-muted-foreground mb-1.5">{t("pubTemplate.previewToggle")}</p>
         {renderPreview()}
       </div>
     </div>
@@ -1625,6 +1628,7 @@ export function FilterJsonPreview({
   value: unknown
   highlightedPaths: ReadonlySet<string>
 }) {
+  const t = useT()
   const render = (v: unknown, path: string, indent: number): React.ReactNode => {
     const pad = "  ".repeat(indent)
     if (v === null) return <span className="text-amber-400">null</span>
@@ -1633,7 +1637,7 @@ export function FilterJsonPreview({
     if (typeof v === "number" || typeof v === "boolean") return <span className="text-sky-400">{String(v)}</span>
     if (Array.isArray(v)) {
       if (v.length === 0) return <span>[]</span>
-      const hint = v.length > 1 ? ` /* +${v.length - 1} more */` : ""
+      const hint = v.length > 1 ? t("utilcfg.jsonMoreHint", { count: v.length - 1 }) : ""
       return (
         <>
           <span>[</span>
@@ -1685,6 +1689,7 @@ export function FilterJsonPreview({
 }
 
 export function FilterListConfig({ data, onUpdate, sources, nodes, edges }: ConfigProps<FilterListNodeData>) {
+  const t = useT()
   const conditions = data.conditions ?? []
   const logic = data.conditionLogic ?? "AND"
   const [previewOpen, setPreviewOpen] = useState(true)
@@ -1743,7 +1748,7 @@ export function FilterListConfig({ data, onUpdate, sources, nodes, edges }: Conf
             onClick={() => setPreviewOpen((v) => !v)}
             className="flex items-center justify-between text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors"
           >
-            <span>Upstream sample (first item)</span>
+            <span>{t("utilcfg.upstreamSample")}</span>
             <ChevronDown className={`w-3.5 h-3.5 transition-transform ${previewOpen ? "rotate-180" : ""}`} />
           </button>
           {previewOpen && (
@@ -1751,7 +1756,7 @@ export function FilterListConfig({ data, onUpdate, sources, nodes, edges }: Conf
               <FilterJsonPreview value={sampleItem} highlightedPaths={highlightedPaths} />
               {highlightedPaths.size > 0 && (
                 <p className="text-[10px] text-muted-foreground">
-                  Fields in gray are referenced by active conditions.
+                  {t("utilcfg.grayFieldsHint")}
                 </p>
               )}
             </>
@@ -1760,7 +1765,7 @@ export function FilterListConfig({ data, onUpdate, sources, nodes, edges }: Conf
       )}
 
       <div className="flex items-center justify-between">
-        <Label>Conditions ({conditions.length})</Label>
+        <Label>{t("utilcfg.conditionsCount", { count: conditions.length })}</Label>
         <AndOrToggle value={logic} onChange={(next) => onUpdate({ conditionLogic: next })} />
       </div>
 
@@ -1771,13 +1776,13 @@ export function FilterListConfig({ data, onUpdate, sources, nodes, edges }: Conf
           onCheckedChange={(v) => onUpdate({ caseSensitive: v === true })}
         />
         <Label htmlFor={`filter-case-sensitive-${data.label}`} className="text-xs cursor-pointer">
-          Case-sensitive text matching
+          {t("utilcfg.caseSensitive")}
         </Label>
       </div>
 
       {conditions.length === 0 && (
         <p className="text-[10px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border">
-          No conditions — every item passes through. Add one below to filter.
+          {t("utilcfg.noConditions")}
         </p>
       )}
 
@@ -1796,20 +1801,12 @@ export function FilterListConfig({ data, onUpdate, sources, nodes, edges }: Conf
           onClick={addCondition}
           className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 self-start"
         >
-          <Plus className="w-3 h-3" /> Add condition
+          <Plus className="w-3 h-3" /> {t("utilcfg.addCondition")}
         </button>
       </div>
 
       <p className="text-[10px] text-muted-foreground">
-        Items flowing in are parsed as JSON when a field path is provided. Date/time fields
-        (<code>created_at</code>, <code>published_at</code>, <code>*_at</code>, <code>*Date</code>, …)
-        show a relative-window picker for comparison operators; everything else accepts raw
-        values or the variables
-        <code className="ml-1">{"{{now}}"}</code>,
-        <code className="ml-1">{"{{trigger.last_triggered_at}}"}</code>,
-        <code className="ml-1">{"{{last_N_hours:3}}"}</code>,
-        <code className="ml-1">{"{{last_N_days:1}}"}</code>,
-        <code className="ml-1">{"{{last_N_weeks:2}}"}</code>.
+        {t("utilcfg.filterListHint")}
       </p>
     </div>
   )
@@ -1820,6 +1817,7 @@ export function FilterListConfig({ data, onUpdate, sources, nodes, edges }: Conf
 // ---------------------------------------------------------------------------
 
 export function DeduplicateConfig({ data, onUpdate, sources, nodes, edges }: ConfigProps<DeduplicateNodeData>) {
+  const t = useT()
   // Mirrors ExtractFieldConfig + FilterListConfig: dropdown fed by upstream
   // schema detection, with an explicit "Custom path…" escape hatch.
   const mode = data.mode ?? "dropdown"
@@ -1841,7 +1839,7 @@ export function DeduplicateConfig({ data, onUpdate, sources, nodes, edges }: Con
     <div className="flex flex-col gap-3">
       {mode === "dropdown" ? (
         <div className="flex flex-col gap-1.5">
-          <Label>Deduplicate by field</Label>
+          <Label>{t("utilcfg.dedupeByField")}</Label>
           <Select
             value={selectValue}
             onValueChange={(v) => {
@@ -1854,45 +1852,45 @@ export function DeduplicateConfig({ data, onUpdate, sources, nodes, edges }: Con
               }
             }}
           >
-            <SelectTrigger aria-label="Deduplicate by field"><SelectValue placeholder="Select a field..." /></SelectTrigger>
+            <SelectTrigger aria-label={t("utilcfg.dedupeByField")}><SelectValue placeholder={t("utilcfg.phSelectField")} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value={EXTRACT_FIELD_WHOLE} className="text-muted-foreground">(whole item)</SelectItem>
+              <SelectItem value={EXTRACT_FIELD_WHOLE} className="text-muted-foreground">{t("utilcfg.wholeItem")}</SelectItem>
               {actorOptions.map((opt) => (
                 <SelectItem key={opt} value={opt}>{opt}</SelectItem>
               ))}
-              <SelectItem value={EXTRACT_FIELD_CUSTOM} className="text-muted-foreground">Custom path…</SelectItem>
+              <SelectItem value={EXTRACT_FIELD_CUSTOM} className="text-muted-foreground">{t("utilcfg.customPath")}</SelectItem>
             </SelectContent>
           </Select>
           <p className="text-[10px] text-muted-foreground">
             {actorOptions.length > 0
-              ? <>Pick (whole item) to compare whole strings, or choose Custom path… for a manual dot-path.</>
-              : <>Connect an upstream node that emits JSON or list data to detect its fields, or choose Custom path… to enter a dot-path manually.</>}
+              ? <>{t("utilcfg.dedupeHintDetected")}</>
+              : <>{t("utilcfg.fieldHintNoSchema")}</>}
           </p>
         </div>
       ) : (
         <div className="flex flex-col gap-1.5">
-          <Label>Deduplicate by field</Label>
+          <Label>{t("utilcfg.dedupeByField")}</Label>
           <Input
             value={field}
             onChange={(e) => setField(e.target.value)}
-            placeholder="e.g., id or url (blank = whole item)"
+            placeholder={t("utilcfg.phDedupePath")}
           />
           <p className="text-[10px] text-muted-foreground">
-            Dot-notation path. Items are parsed as JSON when the path resolves against them. Leave blank to compare whole items as strings.
+            {t("utilcfg.dedupePathHint")}
           </p>
           <button
             type="button"
-            className="text-[11px] text-muted-foreground hover:text-foreground hover:underline text-left self-start mt-0.5"
+            className="text-[11px] text-muted-foreground hover:text-foreground hover:underline text-start self-start mt-0.5"
             onClick={() => setMode("dropdown")}
           >
-            ← Back to field list
+            {t("utilcfg.backToFieldList")}
           </button>
         </div>
       )}
 
       {data.listResults && data.listResults.length > 0 && (
         <div>
-          <Label>Preview ({data.listResults.length} unique items)</Label>
+          <Label>{t("utilcfg.previewUniqueItems", { count: data.listResults.length })}</Label>
           <Textarea
             rows={Math.min(data.listResults.length, 6)}
             value={data.listResults.map((item, i) => `${i + 1}. ${item}`).join("\n")}
@@ -1910,12 +1908,13 @@ export function DeduplicateConfig({ data, onUpdate, sources, nodes, edges }: Con
 // ---------------------------------------------------------------------------
 
 export function MergeListsConfig({ data, onUpdate }: ConfigProps<MergeListsNodeData>) {
+  const t = useT()
   const dedupeOn = data.deduplicate === true
   const mode = data.mode === "zip" ? "zip" : "concat"
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1.5">
-        <Label>Mode</Label>
+        <Label>{t("field.mode")}</Label>
         <div className="grid grid-cols-2 gap-2">
           <Button
             variant={mode === "concat" ? "default" : "outline"}
@@ -1923,7 +1922,7 @@ export function MergeListsConfig({ data, onUpdate }: ConfigProps<MergeListsNodeD
             className="h-8 text-xs"
             onClick={() => onUpdate({ mode: "concat" })}
           >
-            Concatenate
+            {t("utilcfg.concatenate")}
           </Button>
           <Button
             variant={mode === "zip" ? "default" : "outline"}
@@ -1931,31 +1930,31 @@ export function MergeListsConfig({ data, onUpdate }: ConfigProps<MergeListsNodeD
             className="h-8 text-xs"
             onClick={() => onUpdate({ mode: "zip" })}
           >
-            Zip (merge items)
+            {t("utilcfg.zipMergeItems")}
           </Button>
         </div>
         <p className="text-[10px] text-muted-foreground">
           {mode === "concat"
-            ? "Append upstream lists in edge order. Single-value outputs are treated as one-item lists."
-            : "Merge items element-wise. A single-object upstream is injected into every item of a longer list (shorter lists cycle)."}
+            ? t("utilcfg.concatHint")
+            : t("utilcfg.zipHint")}
         </p>
       </div>
 
       <div className="flex items-center justify-between">
-        <Label>Remove duplicates after merge</Label>
+        <Label>{t("utilcfg.removeDuplicatesAfterMerge")}</Label>
         <Button
           variant={dedupeOn ? "default" : "outline"}
           size="sm"
           className="h-7 text-xs"
           onClick={() => onUpdate({ deduplicate: !dedupeOn })}
         >
-          {dedupeOn ? "On" : "Off"}
+          {dedupeOn ? t("audiocfg.normalizationOn") : t("audiocfg.normalizationOff")}
         </Button>
       </div>
 
       {data.listResults && data.listResults.length > 0 && (
         <div>
-          <Label>Preview ({data.listResults.length} items)</Label>
+          <Label>{t("utilcfg.previewItems", { count: data.listResults.length })}</Label>
           <Textarea
             rows={Math.min(data.listResults.length, 6)}
             value={data.listResults.map((item, i) => `${i + 1}. ${item}`).join("\n")}
@@ -1973,6 +1972,7 @@ export function MergeListsConfig({ data, onUpdate }: ConfigProps<MergeListsNodeD
 // ---------------------------------------------------------------------------
 
 export function SortListConfig({ data, onUpdate, sources, nodes, edges }: ConfigProps<SortListNodeData>) {
+  const t = useT()
   const mode = data.mode ?? "dropdown"
   const field = data.field ?? ""
   const sortType = data.sortType ?? "auto"
@@ -1993,7 +1993,7 @@ export function SortListConfig({ data, onUpdate, sources, nodes, edges }: Config
     <div className="flex flex-col gap-3">
       {mode === "dropdown" ? (
         <div className="flex flex-col gap-1.5">
-          <Label>Sort by field</Label>
+          <Label>{t("utilcfg.sortByField")}</Label>
           <Select
             value={selectValue}
             onValueChange={(v) => {
@@ -2006,60 +2006,60 @@ export function SortListConfig({ data, onUpdate, sources, nodes, edges }: Config
               }
             }}
           >
-            <SelectTrigger aria-label="Sort by field"><SelectValue placeholder="Select a field..." /></SelectTrigger>
+            <SelectTrigger aria-label={t("utilcfg.sortByField")}><SelectValue placeholder={t("utilcfg.phSelectField")} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value={EXTRACT_FIELD_WHOLE} className="text-muted-foreground">(whole item)</SelectItem>
+              <SelectItem value={EXTRACT_FIELD_WHOLE} className="text-muted-foreground">{t("utilcfg.wholeItem")}</SelectItem>
               {actorOptions.map((opt) => (
                 <SelectItem key={opt} value={opt}>{opt}</SelectItem>
               ))}
-              <SelectItem value={EXTRACT_FIELD_CUSTOM} className="text-muted-foreground">Custom path…</SelectItem>
+              <SelectItem value={EXTRACT_FIELD_CUSTOM} className="text-muted-foreground">{t("utilcfg.customPath")}</SelectItem>
             </SelectContent>
           </Select>
           <p className="text-[10px] text-muted-foreground">
             {actorOptions.length > 0
-              ? <>Pick (whole item) to sort whole strings, or choose Custom path… for a manual dot-path.</>
-              : <>Connect an upstream node that emits JSON or list data to detect its fields, or choose Custom path… to enter a dot-path manually.</>}
+              ? <>{t("utilcfg.sortHintDetected")}</>
+              : <>{t("utilcfg.fieldHintNoSchema")}</>}
           </p>
         </div>
       ) : (
         <div className="flex flex-col gap-1.5">
-          <Label>Sort by field</Label>
+          <Label>{t("utilcfg.sortByField")}</Label>
           <Input
             value={field}
             onChange={(e) => setField(e.target.value)}
-            placeholder="e.g., score or created_at (blank = whole item)"
+            placeholder={t("utilcfg.phSortPath")}
           />
           <p className="text-[10px] text-muted-foreground">
-            Dot-notation path. Items are parsed as JSON when the path resolves against them. Leave blank to sort whole items.
+            {t("utilcfg.sortPathHint")}
           </p>
           <button
             type="button"
-            className="text-[11px] text-muted-foreground hover:text-foreground hover:underline text-left self-start mt-0.5"
+            className="text-[11px] text-muted-foreground hover:text-foreground hover:underline text-start self-start mt-0.5"
             onClick={() => setMode("dropdown")}
           >
-            ← Back to field list
+            {t("utilcfg.backToFieldList")}
           </button>
         </div>
       )}
 
       <div className="flex flex-col gap-1.5">
-        <Label>Sort type</Label>
+        <Label>{t("utilcfg.sortType")}</Label>
         <Select value={sortType} onValueChange={(v) => onUpdate({ sortType: v as SortListNodeData["sortType"] })}>
-          <SelectTrigger aria-label="Sort type"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("utilcfg.sortType")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="auto">Auto (detect)</SelectItem>
-            <SelectItem value="text">Text</SelectItem>
-            <SelectItem value="number">Number</SelectItem>
-            <SelectItem value="date">Date</SelectItem>
+            <SelectItem value="auto">{t("utilcfg.sortAuto")}</SelectItem>
+            <SelectItem value="text">{t("field.text")}</SelectItem>
+            <SelectItem value="number">{t("utilcfg.sortNumber")}</SelectItem>
+            <SelectItem value="date">{t("utilcfg.sortDate")}</SelectItem>
           </SelectContent>
         </Select>
         <p className="text-[10px] text-muted-foreground">
-          Auto tries Number → Date → Text. Pick an explicit type for deterministic ordering.
+          {t("utilcfg.sortTypeHint")}
         </p>
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <Label>Direction</Label>
+        <Label>{t("utilcfg.direction")}</Label>
         <div className="flex gap-1">
           <Button
             type="button"
@@ -2068,7 +2068,7 @@ export function SortListConfig({ data, onUpdate, sources, nodes, edges }: Config
             onClick={() => onUpdate({ direction: "asc" })}
             className="flex-1"
           >
-            ↑ Ascending
+            {t("utilcfg.ascending")}
           </Button>
           <Button
             type="button"
@@ -2077,17 +2077,17 @@ export function SortListConfig({ data, onUpdate, sources, nodes, edges }: Config
             onClick={() => onUpdate({ direction: "desc" })}
             className="flex-1"
           >
-            ↓ Descending
+            {t("utilcfg.descending")}
           </Button>
         </div>
         <p className="text-[10px] text-muted-foreground">
-          Missing or invalid values always appear last, regardless of direction.
+          {t("utilcfg.sortDirectionHint")}
         </p>
       </div>
 
       {data.listResults && data.listResults.length > 0 && (
         <div>
-          <Label>Preview ({data.listResults.length} sorted items)</Label>
+          <Label>{t("utilcfg.previewSortedItems", { count: data.listResults.length })}</Label>
           <Textarea
             rows={Math.min(data.listResults.length, 6)}
             value={data.listResults.map((item, i) => `${i + 1}. ${item}`).join("\n")}

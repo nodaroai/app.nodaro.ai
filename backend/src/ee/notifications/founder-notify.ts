@@ -1,4 +1,5 @@
 import { supabase } from "../../lib/supabase.js"
+import { config } from "../../lib/config.js"
 import { getNotifyConfig, readNotifyState, writeNotifyState } from "./notify-config.js"
 import { sendSlack, type SlackMessage } from "./slack-client.js"
 import { signupProduct, signupProductsFor } from "./signup-product.js"
@@ -20,6 +21,31 @@ import { signupProduct, signupProductsFor } from "./signup-product.js"
 const IL_TZ = "Asia/Jerusalem"
 const INTERNAL_EMAIL_LIKE = "%@nodaro.ai"
 const PAID_TIERS = ["basic", "standard", "pro", "business", "enterprise"]
+
+// ---------------------------------------------------------------------------
+// Single-sender guard. Staging and production run the SAME image against the
+// SAME Supabase project, so both would otherwise run this cron — double-sending
+// every alert AND racing the shared cursors (whichever advances a cursor first
+// makes the other miss those rows). Exactly one environment may send. We put the
+// known staging mirror on standby by its public host; production and any
+// self-host (a different host, or none) send normally. Override the host list
+// via NOTIFY_STANDBY_HOSTS (comma-separated) if the staging host ever changes.
+// ---------------------------------------------------------------------------
+export function isStandbySender(): boolean {
+  const raw = config.PUBLIC_URL?.trim()
+  if (!raw) return false // self-host / local single instance — always the sender
+  let host: string
+  try {
+    host = new URL(raw).host.toLowerCase()
+  } catch {
+    return false // unparseable PUBLIC_URL — fail open (send) rather than mute silently
+  }
+  const standby = (process.env.NOTIFY_STANDBY_HOSTS ?? "next.nodaro.ai")
+    .split(",")
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean)
+  return standby.includes(host)
+}
 
 // ---------------------------------------------------------------------------
 // Timezone (Asia/Jerusalem), DST-safe: derive everything from the wall clock.
@@ -69,6 +95,7 @@ async function userEmail(userId: string): Promise<string | null> {
 // ---------------------------------------------------------------------------
 export async function notifyPaidConversion(userId: string, priorTier: string | null, newTier: string): Promise<void> {
   try {
+    if (isStandbySender()) return
     const cfg = await getNotifyConfig()
     if (!cfg.milestonesEnabled || !cfg.slackWebhookUrl) return
     if ((priorTier ?? "free").toLowerCase() !== "free") return // already paid — not a conversion
@@ -87,6 +114,7 @@ export async function notifyCancellation(
 ): Promise<void> {
   try {
     if (!userId) return
+    if (isStandbySender()) return
     const cfg = await getNotifyConfig()
     if (!cfg.milestonesEnabled || !cfg.slackWebhookUrl) return
     if ((priorTier ?? "free").toLowerCase() === "free") return // free-tier ghost cancel — skip
@@ -106,6 +134,7 @@ export async function notifyCancellation(
 // slip between "not in the result yet" and "cursor already past it".
 // ---------------------------------------------------------------------------
 export async function runFounderNotifyTick(): Promise<void> {
+  if (isStandbySender()) return // staging shares prod's DB — prod is the sole sender/cursor-owner
   const cfg = await getNotifyConfig()
   if (!cfg.slackWebhookUrl) return // nothing configured — fully dormant
   const now = new Date()

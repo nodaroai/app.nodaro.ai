@@ -23,6 +23,8 @@ import { optimizedImageUrl } from "@/lib/image"
 import type { HeygenAvatar, HeygenVoice } from "@/lib/api"
 import type { AiAvatarData } from "@/types/nodes"
 import type { ConfigProps } from "./types"
+import { useT } from "@/lib/i18n"
+import { useLocalizeHandleLabel, useLocalizeOptionLabel } from "@/lib/i18n/labels"
 import {
   AI_AVATAR_ENGINE_OPTIONS,
   AI_AVATAR_RESOLUTION_OPTIONS,
@@ -38,6 +40,9 @@ export function AiAvatarConfig({
   data,
   onUpdate,
 }: ConfigProps<AiAvatarData>) {
+  const localizeOption = useLocalizeOptionLabel()
+  const t = useT()
+  const localizeHandle = useLocalizeHandleLabel()
   const engine = data.engine ?? "avatar-iv"
   const avatarSource = data.avatarSource ?? "avatar"
   const [showAdvanced, setShowAdvanced] = useState(false)
@@ -181,7 +186,7 @@ export function AiAvatarConfig({
     <div className="flex flex-col gap-4">
       {/* ── Source ───────────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-1.5">
-        <Label className="text-xs text-muted-foreground">Source</Label>
+        <Label className="text-xs text-muted-foreground">{t("inputcfg.source")}</Label>
         <RadioGroup
           value={avatarSource}
           onValueChange={(v) => onUpdate({ avatarSource: v as "avatar" | "image" })}
@@ -189,23 +194,23 @@ export function AiAvatarConfig({
         >
           <div className="flex items-center gap-1.5">
             <RadioGroupItem value="avatar" id="src-avatar" />
-            <label htmlFor="src-avatar" className="text-xs cursor-pointer">Avatar</label>
+            <label htmlFor="src-avatar" className="text-xs cursor-pointer">{t("cfgext.aiAvAvatar")}</label>
           </div>
           <div className="flex items-center gap-1.5">
             <RadioGroupItem value="image" id="src-image" />
-            <label htmlFor="src-image" className="text-xs cursor-pointer">Image</label>
+            <label htmlFor="src-image" className="text-xs cursor-pointer">{t("common.image")}</label>
           </div>
         </RadioGroup>
         {avatarSource === "image" && (
           <p className="text-[10px] text-muted-foreground/70 leading-snug">
-            Animate a raw image — no avatar creation needed.
+            {t("cfgext.aiAvAnimateRawImage")}
           </p>
         )}
       </div>
 
       {/* ── Speech Mode ──────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-1.5">
-        <Label className="text-xs text-muted-foreground">Speech Mode</Label>
+        <Label className="text-xs text-muted-foreground">{t("cfgext.aiAvSpeechMode")}</Label>
         <RadioGroup
           value={speechMode}
           onValueChange={(v) => onUpdate({ speechMode: v as "text" | "audio" })}
@@ -213,16 +218,16 @@ export function AiAvatarConfig({
         >
           <div className="flex items-center gap-1.5">
             <RadioGroupItem value="text"  id="sm-text"  />
-            <label htmlFor="sm-text"  className="text-xs cursor-pointer">Text (TTS)</label>
+            <label htmlFor="sm-text"  className="text-xs cursor-pointer">{t("cfgext.aiAvTextTts")}</label>
           </div>
           <div className="flex items-center gap-1.5">
             <RadioGroupItem value="audio" id="sm-audio" />
-            <label htmlFor="sm-audio" className="text-xs cursor-pointer">Wired Audio</label>
+            <label htmlFor="sm-audio" className="text-xs cursor-pointer">{t("cfgext.aiAvWiredAudio")}</label>
           </div>
         </RadioGroup>
         {speechMode === "audio" && (
           <p className="text-[10px] text-muted-foreground/70 leading-snug">
-            Audio is capped at 10 minutes — longer clips are automatically trimmed to 600s.
+            {t("cfgext.aiAvAudioCapHint")}
           </p>
         )}
       </div>
@@ -231,9 +236,9 @@ export function AiAvatarConfig({
       {avatarSource === "avatar" && (
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs text-muted-foreground">
-            Avatar
+            {t("cfgext.aiAvAvatar")}
             {data.avatarName && (
-              <span className="ml-1.5 text-[#ff0073] font-normal">— {data.avatarName}</span>
+              <span className="ms-1.5 text-[#ff0073] font-normal">— {data.avatarName}</span>
             )}
           </Label>
           <AvatarPicker
@@ -246,21 +251,21 @@ export function AiAvatarConfig({
       {/* ── Source Image (image source only) ─────────────────────────────── */}
       {avatarSource === "image" && (
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs text-muted-foreground">Source Image</Label>
+          <Label className="text-xs text-muted-foreground">{t("cfgext.aiAvSourceImage")}</Label>
           <p className="text-[10px] text-muted-foreground/70 leading-snug">
-            Wire an image into the node&apos;s Image input, paste a URL, or upload one.
+            {t("cfgext.aiAvWireImageHint", { handle: localizeHandle("Image") })}
           </p>
           {data.imageUrl ? (
             <div className="relative w-full overflow-hidden rounded-lg border border-muted-foreground/15">
               <img
                 src={optimizedImageUrl(data.imageUrl)}
-                alt="Source"
+                alt={t("inputcfg.source")}
                 className="w-full max-h-40 object-contain bg-black/20"
               />
               <button
                 type="button"
-                aria-label="Remove image"
-                className="absolute top-1.5 right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70"
+                aria-label={t("cfgext.aiAvRemoveImage")}
+                className="absolute top-1.5 end-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70"
                 onClick={() => onUpdate({ imageUrl: undefined })}
               >
                 <X className="h-3.5 w-3.5" />
@@ -270,11 +275,11 @@ export function AiAvatarConfig({
             <label className="flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-dashed border-muted-foreground/30 py-3 text-xs text-muted-foreground hover:border-muted-foreground/60 hover:text-foreground transition-colors">
               {isUploading ? (
                 <>
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Uploading…
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> {t("pipe.uploading")}
                 </>
               ) : (
                 <>
-                  <Upload className="h-3.5 w-3.5" /> Upload image
+                  <Upload className="h-3.5 w-3.5" /> {t("cfgext.aiAvUploadImage")}
                 </>
               )}
               <input
@@ -299,9 +304,9 @@ export function AiAvatarConfig({
         <>
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs text-muted-foreground">
-              Voice
+              {t("field.voice")}
               {data.voiceName && (
-                <span className="ml-1.5 text-[#ff0073] font-normal">— {data.voiceName}</span>
+                <span className="ms-1.5 text-[#ff0073] font-normal">— {data.voiceName}</span>
               )}
             </Label>
             <VoicePicker
@@ -311,16 +316,16 @@ export function AiAvatarConfig({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label className="text-xs text-muted-foreground">Script</Label>
+            <Label className="text-xs text-muted-foreground">{t("node.script")}</Label>
             <Textarea
               value={data.script ?? ""}
               onChange={(e) => onUpdate({ script: e.target.value || undefined })}
-              placeholder="What the avatar will say…"
+              placeholder={t("cfgext.aiAvPhScript")}
               className="min-h-[100px] text-sm resize-y"
               maxLength={5000}
             />
             {(data.script?.length ?? 0) > 0 && (
-              <p className="text-[10px] text-muted-foreground text-right">
+              <p className="text-[10px] text-muted-foreground text-end">
                 {data.script?.length ?? 0} / 5000
               </p>
             )}
@@ -328,7 +333,7 @@ export function AiAvatarConfig({
 
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
-              <Label className="text-xs text-muted-foreground">Voice Speed</Label>
+              <Label className="text-xs text-muted-foreground">{t("cfgext.aiAvVoiceSpeed")}</Label>
               <span className="text-xs text-muted-foreground tabular-nums">
                 {(data.voiceSpeed ?? 1).toFixed(2)}×
               </span>
@@ -352,7 +357,7 @@ export function AiAvatarConfig({
       {/* ── Engine (avatar source only — image mode has its own engine) ──── */}
       {avatarSource === "avatar" && (
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs text-muted-foreground">Engine</Label>
+          <Label className="text-xs text-muted-foreground">{t("cfgext.compEngine")}</Label>
           <Select
             value={engine}
             onValueChange={(v) => onUpdate({ engine: v as AiAvatarData["engine"] })}
@@ -371,7 +376,7 @@ export function AiAvatarConfig({
           {showAvatarVWarning && (
             <div className="flex items-start gap-1.5 text-[10.5px] text-amber-600 dark:text-amber-400 leading-snug" role="status">
               <AlertTriangle className="size-3 shrink-0 mt-0.5" aria-hidden />
-              This avatar doesn&apos;t support Avatar V — it&apos;ll fall back to Avatar IV.
+              {t("cfgext.aiAvVWarning")}
             </div>
           )}
         </div>
@@ -379,7 +384,7 @@ export function AiAvatarConfig({
 
       {/* ── Resolution ───────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-1.5">
-        <Label className="text-xs text-muted-foreground">Resolution</Label>
+        <Label className="text-xs text-muted-foreground">{t("field.resolution")}</Label>
         <Select
           value={data.resolution ?? "720p"}
           onValueChange={(v) => onUpdate({ resolution: v as AiAvatarData["resolution"] })}
@@ -387,7 +392,7 @@ export function AiAvatarConfig({
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             {(AI_AVATAR_RESOLUTION_OPTIONS[engine] ?? []).map((o) => (
-              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+              <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -395,7 +400,7 @@ export function AiAvatarConfig({
 
       {/* ── Aspect Ratio ─────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-1.5">
-        <Label className="text-xs text-muted-foreground">Aspect Ratio</Label>
+        <Label className="text-xs text-muted-foreground">{t("field.aspectRatio")}</Label>
         <Select
           value={data.aspectRatio ?? "16:9"}
           onValueChange={(v) => onUpdate({ aspectRatio: v as AiAvatarData["aspectRatio"] })}
@@ -417,17 +422,17 @@ export function AiAvatarConfig({
           onCheckedChange={(v) => onUpdate({ caption: v === true })}
         />
         <label htmlFor="ai-avatar-captions" className="text-xs cursor-pointer">
-          Generate captions (SRT)
+          {t("cfgext.aiAvGenerateCaptions")}
         </label>
       </div>
 
       {/* ── Advanced ─────────────────────────────────────────────────────── */}
       <button
         type="button"
-        className="text-xs text-muted-foreground hover:text-foreground transition-colors text-left"
+        className="text-xs text-muted-foreground hover:text-foreground transition-colors text-start"
         onClick={() => setShowAdvanced((s) => !s)}
       >
-        {showAdvanced ? "Hide" : "Show"} Advanced
+        {showAdvanced ? t("cfgext.aiAvHideAdvanced") : t("cfgext.aiAvShowAdvanced")}
       </button>
 
       {showAdvanced && (
@@ -435,11 +440,11 @@ export function AiAvatarConfig({
           {/* ── Voice tuning (text mode only) ──────────────────────────────── */}
           {speechMode === "text" && (
             <>
-              <p className="text-[11px] font-medium text-muted-foreground/80">Voice tuning</p>
+              <p className="text-[11px] font-medium text-muted-foreground/80">{t("cfgext.aiAvVoiceTuning")}</p>
 
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center justify-between">
-                  <Label className="text-xs text-muted-foreground">Pitch</Label>
+                  <Label className="text-xs text-muted-foreground">{t("cfgext.aiAvPitch")}</Label>
                   <span className="text-xs text-muted-foreground tabular-nums">
                     {data.pitch ?? 0}
                   </span>
@@ -460,7 +465,7 @@ export function AiAvatarConfig({
 
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center justify-between">
-                  <Label className="text-xs text-muted-foreground">Volume</Label>
+                  <Label className="text-xs text-muted-foreground">{t("field.volume")}</Label>
                   <span className="text-xs text-muted-foreground tabular-nums">
                     {(data.volume ?? 1).toFixed(2)}
                   </span>
@@ -476,20 +481,20 @@ export function AiAvatarConfig({
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <Label className="text-xs text-muted-foreground">Locale (optional)</Label>
+                <Label className="text-xs text-muted-foreground">{t("cfgext.aiAvLocaleOptional")}</Label>
                 <Input
                   value={data.locale ?? ""}
                   onChange={(e) => onUpdate({ locale: e.target.value || undefined })}
-                  placeholder="e.g. en-US"
+                  placeholder={t("cfgext.aiAvPhLocale")}
                 />
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <Label className="text-xs text-muted-foreground">TTS Engine</Label>
+                <Label className="text-xs text-muted-foreground">{t("cfgext.aiAvTtsEngine")}</Label>
                 <Select value={ttsEngineType} onValueChange={handleTtsEngineChange}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="default">HeyGen default</SelectItem>
+                    <SelectItem value="default">{t("cfgext.aiAvHeygenDefault")}</SelectItem>
                     <SelectItem value="elevenlabs">ElevenLabs</SelectItem>
                     <SelectItem value="fish">Fish</SelectItem>
                   </SelectContent>
@@ -497,9 +502,9 @@ export function AiAvatarConfig({
               </div>
 
               {ttsEngineType === "elevenlabs" && (
-                <div className="flex flex-col gap-3 pl-2 border-l-2 border-muted-foreground/10">
+                <div className="flex flex-col gap-3 ps-2 border-s-2 border-muted-foreground/10">
                   <div className="flex flex-col gap-1.5">
-                    <Label className="text-xs text-muted-foreground">Model</Label>
+                    <Label className="text-xs text-muted-foreground">{t("field.model")}</Label>
                     <Select
                       // v3 is ElevenLabs' newest TTS model (all languages) — default
                       // within this ElevenLabs engine branch. This does NOT change
@@ -512,7 +517,7 @@ export function AiAvatarConfig({
                     >
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="eleven_v3">v3 (recommended)</SelectItem>
+                        <SelectItem value="eleven_v3">{t("cfgext.aiAvV3Recommended")}</SelectItem>
                         <SelectItem value="eleven_multilingual_v2">Multilingual v2</SelectItem>
                         <SelectItem value="eleven_turbo_v2_5">Turbo v2.5</SelectItem>
                         <SelectItem value="eleven_flash_v2_5">Flash v2.5</SelectItem>
@@ -521,7 +526,7 @@ export function AiAvatarConfig({
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <Label className="text-xs text-muted-foreground">
-                      Stability ({(elevenlabs?.stability ?? 0.5).toFixed(2)})
+                      {t("cfgext.aiAvStabilityValue", { value: (elevenlabs?.stability ?? 0.5).toFixed(2) })}
                     </Label>
                     <Slider
                       value={[elevenlabs?.stability ?? 0.5]}
@@ -534,7 +539,7 @@ export function AiAvatarConfig({
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <Label className="text-xs text-muted-foreground">
-                      Similarity ({(elevenlabs?.similarityBoost ?? 0.75).toFixed(2)})
+                      {t("cfgext.aiAvSimilarityValue", { value: (elevenlabs?.similarityBoost ?? 0.75).toFixed(2) })}
                     </Label>
                     <Slider
                       value={[elevenlabs?.similarityBoost ?? 0.75]}
@@ -547,7 +552,7 @@ export function AiAvatarConfig({
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <Label className="text-xs text-muted-foreground">
-                      Style ({(elevenlabs?.style ?? 0).toFixed(2)})
+                      {t("cfgext.aiAvStyleValue", { value: (elevenlabs?.style ?? 0).toFixed(2) })}
                     </Label>
                     <Slider
                       value={[elevenlabs?.style ?? 0]}
@@ -565,16 +570,16 @@ export function AiAvatarConfig({
                       onCheckedChange={(v) => updateElevenlabs({ useSpeakerBoost: v === true })}
                     />
                     <label htmlFor="ai-avatar-speaker-boost" className="text-xs cursor-pointer">
-                      Speaker boost
+                      {t("cfgext.aiAvSpeakerBoost")}
                     </label>
                   </div>
                 </div>
               )}
 
               {ttsEngineType === "fish" && (
-                <div className="flex flex-col gap-3 pl-2 border-l-2 border-muted-foreground/10">
+                <div className="flex flex-col gap-3 ps-2 border-s-2 border-muted-foreground/10">
                   <div className="flex flex-col gap-1.5">
-                    <Label className="text-xs text-muted-foreground">Model</Label>
+                    <Label className="text-xs text-muted-foreground">{t("field.model")}</Label>
                     <Select
                       value={fish?.model ?? "s1"}
                       onValueChange={(v) =>
@@ -590,7 +595,7 @@ export function AiAvatarConfig({
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <Label className="text-xs text-muted-foreground">
-                      Stability ({(fish?.stability ?? 0.5).toFixed(2)})
+                      {t("cfgext.aiAvStabilityValue", { value: (fish?.stability ?? 0.5).toFixed(2) })}
                     </Label>
                     <Slider
                       value={[fish?.stability ?? 0.5]}
@@ -603,7 +608,7 @@ export function AiAvatarConfig({
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <Label className="text-xs text-muted-foreground">
-                      Similarity ({(fish?.similarity ?? 0.75).toFixed(2)})
+                      {t("cfgext.aiAvSimilarityValue", { value: (fish?.similarity ?? 0.75).toFixed(2) })}
                     </Label>
                     <Slider
                       value={[fish?.similarity ?? 0.75]}
@@ -620,16 +625,16 @@ export function AiAvatarConfig({
           )}
 
           {/* ── Video ──────────────────────────────────────────────────────── */}
-          <p className="text-[11px] font-medium text-muted-foreground/80">Video</p>
+          <p className="text-[11px] font-medium text-muted-foreground/80">{t("common.video")}</p>
 
           <div className="flex flex-col gap-1.5">
-            <Label className="text-xs text-muted-foreground">Background</Label>
+            <Label className="text-xs text-muted-foreground">{t("audiocfg.mergeRoleBackground")}</Label>
             <Select value={backgroundType} onValueChange={handleBackgroundTypeChange}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">None</SelectItem>
-                <SelectItem value="color">Color</SelectItem>
-                <SelectItem value="image">Image</SelectItem>
+                <SelectItem value="none">{t("audiocfg.none")}</SelectItem>
+                <SelectItem value="color">{t("proccfg.color")}</SelectItem>
+                <SelectItem value="image">{t("common.image")}</SelectItem>
               </SelectContent>
             </Select>
             {backgroundType === "color" && (
@@ -659,7 +664,7 @@ export function AiAvatarConfig({
               onCheckedChange={(v) => onUpdate({ removeBackground: v === true })}
             />
             <label htmlFor="ai-avatar-remove-bg" className="text-xs cursor-pointer">
-              Remove background
+              {t("cfgext.aiAvRemoveBackground")}
             </label>
           </div>
 
@@ -676,12 +681,12 @@ export function AiAvatarConfig({
               }
             />
             <label htmlFor="ai-avatar-caption-burn" className="text-xs cursor-pointer">
-              Burn captions into video
+              {t("cfgext.aiAvBurnCaptions")}
             </label>
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label className="text-xs text-muted-foreground">Output Format</Label>
+            <Label className="text-xs text-muted-foreground">{t("cfgext.aiAvOutputFormat")}</Label>
             <Select
               value={data.outputFormat ?? "mp4"}
               onValueChange={(v) => onUpdate({ outputFormat: v as AiAvatarData["outputFormat"] })}
@@ -695,15 +700,15 @@ export function AiAvatarConfig({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label className="text-xs text-muted-foreground">Fit</Label>
+            <Label className="text-xs text-muted-foreground">{t("cfgext.slideFit")}</Label>
             <Select
               value={data.fit ?? "cover"}
               onValueChange={(v) => onUpdate({ fit: v as AiAvatarData["fit"] })}
             >
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="cover">Cover</SelectItem>
-                <SelectItem value="contain">Contain</SelectItem>
+                <SelectItem value="cover">{t("cfgext.aiAvCover")}</SelectItem>
+                <SelectItem value="contain">{t("cfgext.aiAvContain")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -712,18 +717,18 @@ export function AiAvatarConfig({
           {supportsMotion && (
             <>
               <div className="flex flex-col gap-1.5">
-                <Label className="text-xs text-muted-foreground">Motion Prompt (optional)</Label>
+                <Label className="text-xs text-muted-foreground">{t("audiocfg.motionPromptOptional")}</Label>
                 <Textarea
                   value={data.motionPrompt ?? ""}
                   onChange={(e) => onUpdate({ motionPrompt: e.target.value || undefined })}
-                  placeholder="Describe the avatar's motion…"
+                  placeholder={t("cfgext.aiAvPhMotion")}
                   className="min-h-[64px] text-sm resize-y"
                   maxLength={1000}
                 />
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <Label className="text-xs text-muted-foreground">Expressiveness</Label>
+                <Label className="text-xs text-muted-foreground">{t("cfgext.aiAvExpressiveness")}</Label>
                 <Select
                   value={data.expressiveness ?? "low"}
                   onValueChange={(v) =>
@@ -732,9 +737,9 @@ export function AiAvatarConfig({
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="low">{t("cfgext.aiAvExprLow")}</SelectItem>
+                    <SelectItem value="medium">{t("cfgext.aiAvExprMedium")}</SelectItem>
+                    <SelectItem value="high">{t("cfgext.aiAvExprHigh")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

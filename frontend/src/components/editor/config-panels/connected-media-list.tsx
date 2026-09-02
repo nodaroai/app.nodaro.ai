@@ -1,5 +1,7 @@
 "use client"
 
+import { useLocalizeNodeLabel, useLocalizeHandleLabel } from "@/lib/i18n/labels"
+import { useT, tx } from "@/lib/i18n"
 import type { ReactNode } from "react"
 import { GripVertical, ImageIcon, Film, Music } from "lucide-react"
 import {
@@ -187,23 +189,25 @@ function getDefaultAcceptedTypes(
 
 // --- Type badge ---
 
-const TYPE_BADGE: Record<string, { label: string; className: string }> = {
-  "upload-image": { label: "Upload", className: "bg-blue-500/10 text-blue-500" },
-  "upload-video": { label: "Upload", className: "bg-blue-500/10 text-blue-500" },
-  "upload-audio": { label: "Upload", className: "bg-blue-500/10 text-blue-500" },
-  "generate-image": { label: "AI", className: "bg-pink-500/10 text-pink-500" },
-  "edit-image": { label: "Edit", className: "bg-amber-500/10 text-amber-500" },
-  "image-to-image": { label: "I2I", className: "bg-purple-500/10 text-purple-500" },
-  character: { label: "Char", className: "bg-pink-500/10 text-pink-500" },
-  face: { label: "Face", className: "bg-orange-500/10 text-orange-500" },
-  object: { label: "Obj", className: "bg-emerald-500/10 text-emerald-500" },
-  creature: { label: "Animal", className: "bg-violet-500/10 text-violet-500" },
-  location: { label: "Loc", className: "bg-cyan-500/10 text-cyan-500" },
-  scene: { label: "Scene", className: "bg-pink-500/10 text-pink-500" },
+function TYPE_BADGE(): Record<string, { label: string; className: string }> {
+  return {
+  "upload-image": { label: tx("pipe.upload"), className: "bg-blue-500/10 text-blue-500" },
+  "upload-video": { label: tx("pipe.upload"), className: "bg-blue-500/10 text-blue-500" },
+  "upload-audio": { label: tx("pipe.upload"), className: "bg-blue-500/10 text-blue-500" },
+  "generate-image": { label: tx("nodecat.AI"), className: "bg-pink-500/10 text-pink-500" },
+  "edit-image": { label: tx("common.edit"), className: "bg-amber-500/10 text-amber-500" },
+  "image-to-image": { label: tx("cfgshared.badgeI2I"), className: "bg-purple-500/10 text-purple-500" },
+  character: { label: tx("cfgshared.badgeChar"), className: "bg-pink-500/10 text-pink-500" },
+  face: { label: tx("assetlib.typeFace"), className: "bg-orange-500/10 text-orange-500" },
+  object: { label: tx("cfgshared.badgeObject"), className: "bg-emerald-500/10 text-emerald-500" },
+  creature: { label: tx("cfgshared.badgeCreature"), className: "bg-violet-500/10 text-violet-500" },
+  location: { label: tx("cfgshared.badgeLocation"), className: "bg-cyan-500/10 text-cyan-500" },
+  scene: { label: tx("cfgshared.badgeScene"), className: "bg-pink-500/10 text-pink-500" },
+}
 }
 
 function getTypeBadge(type: string) {
-  return TYPE_BADGE[type] ?? { label: "Node", className: "bg-muted text-muted-foreground" }
+  return TYPE_BADGE()[type] ?? { label: tx("cfgext.tagTaNodeCategory"), className: "bg-muted text-muted-foreground" }
 }
 
 // --- Media icon ---
@@ -236,6 +240,8 @@ function SortableMediaItem({
   mediaType?: "image" | "video" | "audio" | "any"
   rowExtra?: ReactNode
 }) {
+  const localizeNode = useLocalizeNodeLabel()
+  const localizeHandle = useLocalizeHandleLabel()
   const {
     attributes,
     listeners,
@@ -276,7 +282,7 @@ function SortableMediaItem({
         {mediaType === "image" && entry.thumbnailUrl ? (
           <CachedImage
             src={entry.thumbnailUrl}
-            alt={entry.label}
+            alt={localizeNode(entry.label)}
             className="w-10 h-10 rounded object-cover shrink-0"
             thumbnail
             thumbnailWidth={80}
@@ -291,8 +297,8 @@ function SortableMediaItem({
           </div>
         )}
         <div className="flex flex-col flex-1 min-w-0">
-          <span className="truncate" title={entry.label}>
-            {entry.label}
+          <span className="truncate" title={localizeNode(entry.label)}>
+            {localizeNode(entry.label)}
           </span>
           {isPrimary && primaryLabel && (
             <span className="text-[9px] text-pink-500 font-medium">
@@ -302,7 +308,7 @@ function SortableMediaItem({
         </div>
         {entry.targetHandle && (
           <span className="text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
-            {entry.targetHandle}
+            {localizeHandle(entry.targetHandle)}
           </span>
         )}
         <span
@@ -311,7 +317,7 @@ function SortableMediaItem({
           {badge.label}
         </span>
       </div>
-      {rowExtra != null && <div className="mt-1 pl-9">{rowExtra}</div>}
+      {rowExtra != null && <div className="mt-1 ps-9">{rowExtra}</div>}
     </div>
   )
 }
@@ -329,6 +335,8 @@ export function ConnectedMediaList({
   thumbnailFor,
   renderRowExtra,
 }: ConnectedMediaListProps) {
+  const localizeNode = useLocalizeNodeLabel()
+  const t = useT()
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, {
@@ -377,15 +385,13 @@ export function ConnectedMediaList({
     <div>
       <div className="flex items-center justify-between mb-1.5">
         <label className="text-xs font-medium">
-          Connected{" "}
           {mediaType === "image"
-            ? "Images"
+            ? t("cfgshared.connectedImages", { count: orderedEntries.length })
             : mediaType === "video"
-              ? "Videos"
+              ? t("cfgshared.connectedVideos", { count: orderedEntries.length })
               : mediaType === "audio"
-                ? "Tracks"
-                : "Media"}{" "}
-          ({orderedEntries.length})
+                ? t("cfgshared.connectedTracks", { count: orderedEntries.length })
+                : t("cfgshared.connectedMedia", { count: orderedEntries.length })}
         </label>
       </div>
 
@@ -432,7 +438,7 @@ export function ConnectedMediaList({
                 {mediaType === "image" && entry.thumbnailUrl ? (
                   <CachedImage
                     src={entry.thumbnailUrl}
-                    alt={entry.label}
+                    alt={localizeNode(entry.label)}
                     className="w-10 h-10 rounded object-cover shrink-0"
                     thumbnail
                     thumbnailWidth={80}
@@ -447,8 +453,8 @@ export function ConnectedMediaList({
                   </div>
                 )}
                 <div className="flex flex-col flex-1 min-w-0">
-                  <span className="truncate" title={entry.label}>
-                    {entry.label}
+                  <span className="truncate" title={localizeNode(entry.label)}>
+                    {localizeNode(entry.label)}
                   </span>
                   {primaryLabel && (
                     <span className="text-[9px] text-pink-500 font-medium">
@@ -463,7 +469,7 @@ export function ConnectedMediaList({
                 </span>
               </div>
               {renderRowExtra?.(entry) != null && (
-                <div className="mt-1 pl-6">{renderRowExtra?.(entry)}</div>
+                <div className="mt-1 ps-6">{renderRowExtra?.(entry)}</div>
               )}
             </div>
           ))}
@@ -472,7 +478,7 @@ export function ConnectedMediaList({
 
       {orderedEntries.length > 1 && (
         <p className="text-[10px] text-muted-foreground mt-1.5">
-          Drag to reorder. #1 is the primary input.
+          {t("cfgshared.dragToReorderPrimaryHint")}
         </p>
       )}
     </div>

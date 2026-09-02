@@ -28,6 +28,7 @@ import { useSceneHelper } from "@/hooks/use-scene-helper"
 import { SceneHelperButtons } from "./scene-helper-buttons"
 import { SceneHelperModal } from "./scene-helper-modal"
 import { pipelinesApi } from "@/lib/pipelines-api"
+import { useT } from "@/lib/i18n"
 
 /**
  * Phase 1D.2c-b-ii — Video Critic per-shot fields, persisted by Stage 7
@@ -76,6 +77,7 @@ interface SceneConfigProps extends ConfigProps<SceneNodeFrontendData> {
 }
 
 export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
+  const t = useT()
   // pipeline_id is written by canvas-materializer when the scene is created;
   // pipeline_entity_id is the bound row in pipeline_entities. The §6.11 helper
   // buttons stay disabled until both are present.
@@ -118,7 +120,7 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
   function shotLabel(shot: ShotSpec, idx: number): string {
     const action = shot.action?.trim() ?? ""
     const truncated = action.length > 40 ? `${action.slice(0, 40)}…` : action
-    return `Shot ${idx + 1}${truncated ? `: ${truncated}` : ""}`
+    return `${t("cfgext.kling3ShotN", { n: idx + 1 })}${truncated ? `: ${truncated}` : ""}`
   }
 
   return (
@@ -129,35 +131,35 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
               the Scene Director LLM (Stage 6) and the user approves/rejects
               through the pipeline panel, not here. */}
           <div>
-            <Label>Scene</Label>
-            <div className="text-sm">{data.description || data.label || `Scene ${data.scene_index}`}</div>
+            <Label>{t("cfgshared.badgeScene")}</Label>
+            <div className="text-sm">{data.description || data.label || t("cfgext.sceneNumbered", { index: data.scene_index })}</div>
           </div>
           <div>
-            <Label>Beat</Label>
+            <Label>{t("cfgext.sceneBeat")}</Label>
             <div className="text-sm">{data.emotional_beat}</div>
           </div>
           <div>
-            <Label>Duration</Label>
-            <div className="text-sm">{data.duration_seconds}s</div>
+            <Label>{t("exec.colDuration")}</Label>
+            <div className="text-sm">{t("cfgext.sceneDurationSeconds", { seconds: data.duration_seconds })}</div>
           </div>
           <div>
-            <Label>Shots</Label>
-            <div className="text-sm">{data.shots.length} planned</div>
+            <Label>{t("pipe.stageShots")}</Label>
+            <div className="text-sm">{t("cfgext.sceneShotsPlanned", { count: data.shots.length })}</div>
           </div>
           <div>
-            <Label>Image model</Label>
+            <Label>{t("pipe.imageModel")}</Label>
             <div className="text-sm">{data.image_model}</div>
           </div>
           <div>
-            <Label>Video model</Label>
+            <Label>{t("pipe.videoModel")}</Label>
             <div className="text-sm">{data.video_model}</div>
           </div>
           <div>
-            <Label>Input mode</Label>
+            <Label>{t("cfgext.sceneInputMode")}</Label>
             <div className="text-sm">{data.shot_input_mode}</div>
           </div>
           <div>
-            <Label>View mode</Label>
+            <Label>{t("inputcfg.viewMode")}</Label>
             <Select
               value={data.view_mode ?? "storyboard"}
               onValueChange={(v) =>
@@ -168,15 +170,15 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="default">Default</SelectItem>
-                <SelectItem value="storyboard">Storyboard</SelectItem>
-                <SelectItem value="scripting">Scripting</SelectItem>
-                <SelectItem value="video">Video</SelectItem>
+                <SelectItem value="default">{t("integ.defaultAccount")}</SelectItem>
+                <SelectItem value="storyboard">{t("cfgext.sceneViewStoryboard")}</SelectItem>
+                <SelectItem value="scripting">{t("cfgext.sceneViewScripting")}</SelectItem>
+                <SelectItem value="video">{t("common.video")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="text-xs text-zinc-500 italic" data-testid="pipeline-managed-message">
-            Edit through the pipeline panel; this node is pipeline-managed in Phase 1B.2.
+            {t("cfgext.scenePipelineManagedNote")}
           </div>
         </>
       ) : (
@@ -187,16 +189,16 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
               parent pipeline binding; they render disabled here until the
               scene is bound. */}
           <div>
-            <Label htmlFor="scene-label">Label</Label>
+            <Label htmlFor="scene-label">{t("configPanel.label")}</Label>
             <Input
               id="scene-label"
               value={data.label ?? ""}
               onChange={(e) => onUpdate({ label: e.target.value })}
-              placeholder={`Scene ${data.scene_index}`}
+              placeholder={t("cfgext.sceneNumbered", { index: data.scene_index })}
             />
           </div>
           <div>
-            <Label htmlFor="scene-index">Scene index</Label>
+            <Label htmlFor="scene-index">{t("cfgext.sceneIndex")}</Label>
             <Input
               id="scene-index"
               type="number"
@@ -208,26 +210,26 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
             />
           </div>
           <div>
-            <Label htmlFor="scene-description">Description</Label>
+            <Label htmlFor="scene-description">{t("settings.descriptionTab")}</Label>
             <Textarea
               id="scene-description"
               value={data.description ?? ""}
               onChange={(e) => onUpdate({ description: e.target.value })}
-              placeholder="What happens in this scene…"
+              placeholder={t("cfgext.scenePhDescription")}
               rows={3}
             />
           </div>
           <div>
-            <Label htmlFor="scene-beat">Emotional beat</Label>
+            <Label htmlFor="scene-beat">{t("cfgext.sceneEmotionalBeat")}</Label>
             <Input
               id="scene-beat"
               value={data.emotional_beat ?? ""}
               onChange={(e) => onUpdate({ emotional_beat: e.target.value })}
-              placeholder="e.g. tension, reveal, resolution"
+              placeholder={t("cfgext.scenePhBeat")}
             />
           </div>
           <div>
-            <Label htmlFor="scene-duration">Duration (s)</Label>
+            <Label htmlFor="scene-duration">{t("scriptcfg.durationS")}</Label>
             <Input
               id="scene-duration"
               type="number"
@@ -239,7 +241,7 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
             />
           </div>
           <div>
-            <Label htmlFor="scene-shot-input-mode">Shot input mode</Label>
+            <Label htmlFor="scene-shot-input-mode">{t("cfgext.sceneShotInputMode")}</Label>
             <Select
               value={data.shot_input_mode ?? "first_frame"}
               onValueChange={(v) =>
@@ -261,7 +263,7 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
             </Select>
           </div>
           <div>
-            <Label htmlFor="scene-image-model">Image model</Label>
+            <Label htmlFor="scene-image-model">{t("pipe.imageModel")}</Label>
             <Input
               id="scene-image-model"
               value={data.image_model ?? ""}
@@ -269,7 +271,7 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
             />
           </div>
           <div>
-            <Label htmlFor="scene-video-model">Video model</Label>
+            <Label htmlFor="scene-video-model">{t("pipe.videoModel")}</Label>
             <Input
               id="scene-video-model"
               value={data.video_model ?? ""}
@@ -285,18 +287,18 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
               ? videoModelCanSpeakDialogue(data.video_model)
                 ? (
                   <p className="text-[10px] text-emerald-500/80 mt-1">
-                    Speaks dialogue in-model — the character&apos;s voice is lip-synced automatically.
+                    {t("cfgext.sceneSpeaksDialogue")}
                   </p>
                 )
                 : (
                   <p className="text-[10px] text-muted-foreground mt-1">
-                    This model can&apos;t sync spoken dialogue — dialogue lines fall back to TTS + lip-sync.
+                    {t("cfgext.sceneNoDialogueSync")}
                   </p>
                 )
               : null}
           </div>
           <div>
-            <Label htmlFor="scene-continuity">Continuity from previous</Label>
+            <Label htmlFor="scene-continuity">{t("cfgext.sceneContinuityFromPrev")}</Label>
             <Select
               value={data.continuity_from_prev ?? "hard_cut"}
               onValueChange={(v) =>
@@ -319,7 +321,7 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
             </Select>
           </div>
           <div>
-            <Label>View mode</Label>
+            <Label>{t("inputcfg.viewMode")}</Label>
             <Select
               value={data.view_mode ?? "storyboard"}
               onValueChange={(v) =>
@@ -330,10 +332,10 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="default">Default</SelectItem>
-                <SelectItem value="storyboard">Storyboard</SelectItem>
-                <SelectItem value="scripting">Scripting</SelectItem>
-                <SelectItem value="video">Video</SelectItem>
+                <SelectItem value="default">{t("integ.defaultAccount")}</SelectItem>
+                <SelectItem value="storyboard">{t("cfgext.sceneViewStoryboard")}</SelectItem>
+                <SelectItem value="scripting">{t("cfgext.sceneViewScripting")}</SelectItem>
+                <SelectItem value="video">{t("common.video")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -371,7 +373,7 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
             {mode === "video_continuation" && (
               <div className="space-y-1">
                 <Label htmlFor={`extends-${shot.shot_id}`} className="text-xs">
-                  Extends shot
+                  {t("cfgext.sceneExtendsShot")}
                 </Label>
                 <Select
                   value={shot.extends_shot_id ?? ""}
@@ -380,10 +382,10 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
                   }
                 >
                   <SelectTrigger id={`extends-${shot.shot_id}`} className="h-8 text-xs">
-                    <SelectValue placeholder="None (start fresh)" />
+                    <SelectValue placeholder={t("cfgext.sceneNoneStartFresh")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None (start fresh)</SelectItem>
+                    <SelectItem value="">{t("cfgext.sceneNoneStartFresh")}</SelectItem>
                     {data.shots
                       .filter((s) => s.shot_id !== shot.shot_id)
                       .map((s, si) => (
@@ -398,12 +400,11 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
                     (s) => s.shot_id === shot.extends_shot_id && s.shot_id !== shot.shot_id,
                   ) && (
                     <p className="text-xs text-amber-600">
-                      Warning: referenced shot not found in this scene.
+                      {t("cfgext.sceneExtendsMissing")}
                     </p>
                   )}
                 <p className="text-xs text-zinc-500">
-                  Continuation requires VEO or Seedance 2 video model. Prior shot must come
-                  before this one.
+                  {t("cfgext.sceneContinuationHint")}
                 </p>
               </div>
             )}
@@ -411,7 +412,7 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
             {/* ── Section 2: frame_interpolation — interpolation_keyframes ─ */}
             {mode === "frame_interpolation" && (
               <div className="space-y-2">
-                <Label className="text-xs">Interpolation keyframes</Label>
+                <Label className="text-xs">{t("cfgext.sceneInterpolationKeyframes")}</Label>
                 {(shot.interpolation_keyframes ?? []).map((kf, kfIdx) => (
                   <div key={kfIdx} className="flex gap-1 items-start">
                     <Input
@@ -425,7 +426,7 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
                         patchShot(shot.shot_id, { interpolation_keyframes: frames })
                       }}
                       className="h-7 w-20 text-xs shrink-0"
-                      aria-label={`Keyframe ${kfIdx + 1} timestamp (seconds)`}
+                      aria-label={t("cfgext.sceneKeyframeTimestampAria", { n: kfIdx + 1 })}
                     />
                     <Textarea
                       value={kf.prompt}
@@ -436,8 +437,8 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
                       }}
                       rows={2}
                       className="text-xs flex-1 min-h-0 resize-none"
-                      placeholder="Keyframe visual prompt…"
-                      aria-label={`Keyframe ${kfIdx + 1} prompt`}
+                      placeholder={t("cfgext.scenePhKeyframePrompt")}
+                      aria-label={t("cfgext.sceneKeyframePromptAria", { n: kfIdx + 1 })}
                     />
                     <Button
                       variant="ghost"
@@ -449,7 +450,7 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
                         )
                         patchShot(shot.shot_id, { interpolation_keyframes: frames })
                       }}
-                      aria-label={`Remove keyframe ${kfIdx + 1}`}
+                      aria-label={t("cfgext.sceneRemoveKeyframeAria", { n: kfIdx + 1 })}
                     >
                       <X className="h-3 w-3" />
                     </Button>
@@ -467,12 +468,11 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
                     patchShot(shot.shot_id, { interpolation_keyframes: frames })
                   }}
                 >
-                  <Plus className="h-3 w-3 mr-1" />
-                  Add keyframe
+                  <Plus className="h-3 w-3 me-1" />
+                  {t("cfgext.sceneAddKeyframe")}
                 </Button>
                 <p className="text-xs text-zinc-500">
-                  Requires ≥2 keyframes. First must be timestamp 0. Costly — auto-mode falls back
-                  to first_frame.
+                  {t("cfgext.sceneInterpolationHint")}
                 </p>
               </div>
             )}
@@ -482,7 +482,7 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
               <div className="space-y-2">
                 <div className="space-y-1">
                   <Label htmlFor={`path-kind-${shot.shot_id}`} className="text-xs">
-                    Camera path
+                    {t("cfgext.sceneCameraPath")}
                   </Label>
                   <Select
                     value={shot.camera_path_directive?.path_kind ?? ""}
@@ -500,24 +500,24 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
                       id={`path-kind-${shot.shot_id}`}
                       className="h-8 text-xs"
                     >
-                      <SelectValue placeholder="Select path kind…" />
+                      <SelectValue placeholder={t("cfgext.scenePhPathKind")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="orbit">Orbit</SelectItem>
-                      <SelectItem value="dolly">Dolly</SelectItem>
-                      <SelectItem value="crane">Crane</SelectItem>
-                      <SelectItem value="arc">Arc</SelectItem>
-                      <SelectItem value="reveal">Reveal</SelectItem>
+                      <SelectItem value="orbit">{t("cfgext.scenePathOrbit")}</SelectItem>
+                      <SelectItem value="dolly">{t("cfgext.scenePathDolly")}</SelectItem>
+                      <SelectItem value="crane">{t("cfgext.scenePathCrane")}</SelectItem>
+                      <SelectItem value="arc">{t("cfgext.scenePathArc")}</SelectItem>
+                      <SelectItem value="reveal">{t("cfgext.scenePathReveal")}</SelectItem>
                     </SelectContent>
                   </Select>
                   {shot.camera_path_directive?.path_kind === "orbit" && (
                     <p className="text-xs text-zinc-400">
-                      Hint: try <code className="font-mono">{"{ \"degrees\": 360 }"}</code>
+                      {t("cfgext.sceneHintTry")} <code className="font-mono">{"{ \"degrees\": 360 }"}</code>
                     </p>
                   )}
                   {shot.camera_path_directive?.path_kind === "dolly" && (
                     <p className="text-xs text-zinc-400">
-                      Hint: try <code className="font-mono">{"{ \"distance\": 2 }"}</code>
+                      {t("cfgext.sceneHintTry")} <code className="font-mono">{"{ \"distance\": 2 }"}</code>
                     </p>
                   )}
                 </div>
@@ -526,7 +526,7 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
                     htmlFor={`cam-params-${shot.shot_id}`}
                     className="text-xs"
                   >
-                    Parameters (JSON)
+                    {t("cfgext.sceneParametersJson")}
                   </Label>
                   <Textarea
                     id={`cam-params-${shot.shot_id}`}
@@ -567,8 +567,7 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
                   />
                 </div>
                 <p className="text-xs text-zinc-500">
-                  Camera-path directive. Works for all video models via text-prompt fallback;
-                  SV3D when available.
+                  {t("cfgext.sceneCameraPathHint")}
                 </p>
               </div>
             )}
@@ -591,15 +590,15 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
                         : "bg-zinc-500/20 text-zinc-400"
 
               return (
-                <div className="border-l-2 border-amber-400 pl-3 my-2 space-y-2">
-                  <Label className="text-xs font-semibold">Match Cut</Label>
+                <div className="border-s-2 border-amber-400 ps-3 my-2 space-y-2">
+                  <Label className="text-xs font-semibold">{t("cfgext.sceneMatchCut")}</Label>
 
                   {/* Side-by-side thumbnails */}
                   <div className="flex gap-2">
                     {shot.keyframe_url && (
                       <CachedImage
                         src={shot.keyframe_url}
-                        alt={`Shot ${shot.shot_id} keyframe`}
+                        alt={t("cfgext.sceneShotKeyframeAlt", { shot: shot.shot_id })}
                         className="w-24 h-14 object-cover rounded"
                         thumbnail
                         thumbnailWidth={192}
@@ -608,7 +607,7 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
                     {nextShot.keyframe_url && (
                       <CachedImage
                         src={nextShot.keyframe_url}
-                        alt={`Shot ${nextShot.shot_id} keyframe`}
+                        alt={t("cfgext.sceneShotKeyframeAlt", { shot: nextShot.shot_id })}
                         className="w-24 h-14 object-cover rounded"
                         thumbnail
                         thumbnailWidth={192}
@@ -618,7 +617,7 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
 
                   {/* Verdict chip + actions */}
                   {!verdict ? (
-                    <p className="text-xs text-zinc-500 italic">Pending critic verdict…</p>
+                    <p className="text-xs text-zinc-500 italic">{t("cfgext.scenePendingVerdict")}</p>
                   ) : (
                     <div className="space-y-1">
                       <span
@@ -655,14 +654,14 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
                                   })
                               }}
                             >
-                              {isLoading ? "Accepting…" : "Accept break"}
+                              {isLoading ? t("cfgext.sceneAccepting") : t("cfgext.sceneAcceptBreak")}
                             </Button>
                           </div>
                         )}
 
                       {shot.accepted_match_cut_break && (
                         <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-zinc-500/20 text-zinc-400">
-                          Break accepted
+                          {t("cfgext.sceneBreakAccepted")}
                         </span>
                       )}
                     </div>
@@ -696,28 +695,28 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
 
               return (
                 <div
-                  className={`border-l-2 ${accentBorder} pl-3 my-2 space-y-2`}
+                  className={`border-s-2 ${accentBorder} ps-3 my-2 space-y-2`}
                   data-testid={`video-critic-${shot.shot_id}`}
                 >
                   <div className="flex items-center gap-2">
-                    <Label className="text-xs font-semibold">Video Critic</Label>
+                    <Label className="text-xs font-semibold">{t("cfgext.sceneVideoCritic")}</Label>
                     {score !== undefined && (
                       <span
                         className={`inline-block text-xs px-2 py-0.5 rounded-full font-medium ${scoreChipClass}`}
                       >
-                        {failed ? "Failed" : "Pass"} · {score}/10
+                        {t("cfgext.sceneCriticScore", { verdict: failed ? t("exec.statusFailed") : t("cfgext.scenePassVerdict"), score })}
                       </span>
                     )}
                     {continuityScore != null && (
                       <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-zinc-500/20 text-zinc-400">
-                        continuity {continuityScore}/10
+                        {t("cfgext.sceneContinuityScore", { score: continuityScore })}
                       </span>
                     )}
                   </div>
 
                   {identifiedAction && (
                     <p className="text-xs text-zinc-500 italic">
-                      Critic sees: {identifiedAction}
+                      {t("cfgext.sceneCriticSees", { action: identifiedAction })}
                     </p>
                   )}
 
@@ -742,8 +741,8 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
                             </div>
                             <div className="text-zinc-300">{finding.description}</div>
                             {finding.suggested_fix && (
-                              <div className="text-zinc-500 italic pl-3">
-                                Fix: {finding.suggested_fix}
+                              <div className="text-zinc-500 italic ps-3">
+                                {t("cfgext.sceneCriticFix", { fix: finding.suggested_fix })}
                               </div>
                             )}
                           </li>
@@ -754,7 +753,7 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
 
                   {retryCount !== undefined && retryCount > 0 && (
                     <p className="text-[10px] text-zinc-500">
-                      Retries used: {retryCount}
+                      {t("cfgext.sceneRetriesUsed", { count: retryCount })}
                     </p>
                   )}
 
@@ -796,7 +795,7 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
                           }
                         }}
                       >
-                        {videoCriticLoading[shot.shot_id] ? "Skipping…" : "Skip"}
+                        {videoCriticLoading[shot.shot_id] ? t("cfgext.sceneSkipping") : t("pipe.skip")}
                       </Button>
                       <Button
                         size="sm"
@@ -845,8 +844,8 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
                         }}
                       >
                         {videoCriticLoading[shot.shot_id]
-                          ? "Regenerating…"
-                          : "Regenerate"}
+                          ? t("cfgext.sceneRegenerating")
+                          : t("pipe.regenerate")}
                       </Button>
                     </div>
                   )}
@@ -858,7 +857,7 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
       })}
       {isPipelineManaged && (
       <div className="space-y-2 pt-3 border-t border-zinc-200 dark:border-zinc-800">
-        <Label>Helpers</Label>
+        <Label>{t("cfgext.sceneHelpers")}</Label>
         <SceneHelperButtons
           pipelineId={pipelineId}
           sceneEntityId={sceneEntityId}

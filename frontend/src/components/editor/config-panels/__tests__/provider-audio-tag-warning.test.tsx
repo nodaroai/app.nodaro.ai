@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { render, screen } from "@testing-library/react"
 import { ProviderAudioTagWarning } from "../provider-audio-tag-warning"
+import { translate } from "@/lib/i18n"
 
 describe("ProviderAudioTagWarning", () => {
   it("renders nothing when provider is undefined", () => {
@@ -45,13 +46,13 @@ describe("ProviderAudioTagWarning", () => {
         fieldValues={["hello", "[whispers] hi"]}
       />,
     )
-    expect(screen.getByText(/ElevenLabs v3/i)).toBeInTheDocument()
+    expect(screen.getByText(translate("en", "cfgext.provWarnAudioTags"))).toBeInTheDocument()
   })
 
   it("renders warning when provider is elevenlabs-turbo and any field has brackets", () => {
     render(
       <ProviderAudioTagWarning provider="elevenlabs-turbo" fieldValues={["[sighs] yes"]} />,
     )
-    expect(screen.getByText(/ElevenLabs v3/i)).toBeInTheDocument()
+    expect(screen.getByText(translate("en", "cfgext.provWarnAudioTags"))).toBeInTheDocument()
   })
 })

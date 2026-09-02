@@ -1,4 +1,5 @@
 import { Columns2, Columns3, Columns4, Rows3, AlignLeft, AlignCenter, AlignRight } from "lucide-react"
+import { useT, tx } from "@/lib/i18n"
 import type { PresentationDisplay } from "@/types/nodes"
 
 const COLUMN_OPTIONS: { value: 1 | 2 | 3 | 4; icon: React.ReactNode; label: string }[] = [
@@ -14,11 +15,15 @@ const SIZE_OPTIONS: { value: "sm" | "md" | "lg"; label: string }[] = [
   { value: "lg", label: "L" },
 ]
 
-const ALIGN_OPTIONS: { value: "left" | "center" | "right"; icon: React.ReactNode; label: string }[] = [
-  { value: "left", icon: <AlignLeft className="w-3.5 h-3.5" />, label: "Left" },
-  { value: "center", icon: <AlignCenter className="w-3.5 h-3.5" />, label: "Center" },
-  { value: "right", icon: <AlignRight className="w-3.5 h-3.5" />, label: "Right" },
-]
+// Function, not a const: a module-level table that read `tx()` at load time
+// would freeze on the boot locale (see EFFORT_LABELS in reasoning-effort-select).
+function ALIGN_OPTIONS(): { value: "left" | "center" | "right"; icon: React.ReactNode; label: string }[] {
+  return [
+    { value: "left", icon: <AlignLeft className="w-3.5 h-3.5" />, label: tx("pubDialog.leftLabel") },
+    { value: "center", icon: <AlignCenter className="w-3.5 h-3.5" />, label: tx("proccfg.center") },
+    { value: "right", icon: <AlignRight className="w-3.5 h-3.5" />, label: tx("pubDialog.rightLabel") },
+  ]
+}
 
 const WIDTH_OPTIONS: { value: number; label: string }[] = [
   { value: 25, label: "25%" },
@@ -46,14 +51,15 @@ export function PresentationDisplayConfig({
   showElementSize = true,
   viewModes,
 }: PresentationDisplayConfigProps) {
+  const t = useT()
   return (
     <div className="space-y-3">
       <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">
-        Presentation
+        {t("cfgext.presPresentation")}
       </p>
 
       {showColumns && <div className="space-y-1">
-        <p className="text-[11px] text-muted-foreground">Columns per row</p>
+        <p className="text-[11px] text-muted-foreground">{t("cfgext.presColumnsPerRow")}</p>
         <div className="flex gap-1">
           {COLUMN_OPTIONS.map((opt) => (
             <button
@@ -75,7 +81,7 @@ export function PresentationDisplayConfig({
 
       {showElementSize && (
         <div className="space-y-1">
-          <p className="text-[11px] text-muted-foreground">Element size</p>
+          <p className="text-[11px] text-muted-foreground">{t("cfgext.presElementSize")}</p>
           <div className="flex gap-1">
             {SIZE_OPTIONS.map((opt) => (
               <button
@@ -97,7 +103,7 @@ export function PresentationDisplayConfig({
 
       {viewModes && viewModes.length > 1 && (
         <div className="space-y-1">
-          <p className="text-[11px] text-muted-foreground">View mode</p>
+          <p className="text-[11px] text-muted-foreground">{t("inputcfg.viewMode")}</p>
           <div className="flex gap-1">
             {viewModes.map((opt) => (
               <button
@@ -118,7 +124,7 @@ export function PresentationDisplayConfig({
       )}
 
       <div className="space-y-1">
-        <p className="text-[11px] text-muted-foreground">Max width</p>
+        <p className="text-[11px] text-muted-foreground">{t("cfgext.presMaxWidth")}</p>
         <div className="flex gap-1">
           {WIDTH_OPTIONS.map((opt) => (
             <button
@@ -138,9 +144,9 @@ export function PresentationDisplayConfig({
       </div>
 
       <div className="space-y-1">
-        <p className="text-[11px] text-muted-foreground">Alignment</p>
+        <p className="text-[11px] text-muted-foreground">{t("cfgext.presAlignment")}</p>
         <div className="flex gap-1">
-          {ALIGN_OPTIONS.map((opt) => (
+          {ALIGN_OPTIONS().map((opt) => (
             <button
               key={opt.value}
               type="button"

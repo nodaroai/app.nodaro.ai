@@ -245,7 +245,7 @@ const reasoningEffortControl: QuickConfigControl = {
     if (levels.length === 0) return []
     return [
       { value: "auto", label: "Auto" },
-      ...levels.map((level) => ({ value: level, label: EFFORT_LABELS[level] })),
+      ...levels.map((level) => ({ value: level, label: EFFORT_LABELS()[level] })),
     ]
   },
 }

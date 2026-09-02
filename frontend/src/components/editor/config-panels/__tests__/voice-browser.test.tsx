@@ -100,6 +100,7 @@ vi.mock("@/ee/hooks/use-model-credits", () => ({
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 import { VoiceBrowser } from "../voice-browser"
+import { translate } from "@/lib/i18n"
 
 // ---------------------------------------------------------------------------
 // Harness
@@ -119,7 +120,7 @@ async function openLibraryTab() {
   // The library IS the default tab now — opening the dialog lands on it; the
   // explicit click stays as a harmless no-op that also asserts the tab exists.
   fireEvent.click(screen.getByRole("button", { name: "Open voice picker" }))
-  fireEvent.click(await screen.findByText("Voice Library"))
+  fireEvent.click(await screen.findByText(translate("en", "cfgext.voiceTabLibrary")))
 }
 
 beforeEach(() => {
@@ -166,7 +167,7 @@ describe("VoiceBrowser — Voice Library infinite scroll", () => {
     await screen.findByText("Lib Voice 0")
     mockSearchVoiceLibrary.mockClear()
 
-    fireEvent.change(screen.getByPlaceholderText("Search the voice library..."), {
+    fireEvent.change(screen.getByPlaceholderText(translate("en", "cfgext.voiceSearchLibrary")), {
       target: { value: "warm narrator" },
     })
 
@@ -203,7 +204,7 @@ describe("VoiceBrowser — Premade tab", () => {
     renderBrowser(onSelect)
     // The library is the default tab now — reach Premade by its tab.
     fireEvent.click(screen.getByRole("button", { name: "Open voice picker" }))
-    fireEvent.click(await screen.findByText("Premade"))
+    fireEvent.click(await screen.findByText(translate("en", "cfgext.voiceTabPremade")))
 
     fireEvent.click(await screen.findByText("Premade 2"))
 
@@ -220,6 +221,6 @@ describe("VoiceBrowser — default tab", () => {
     expect(await screen.findByText("Lib Voice 0")).toBeInTheDocument()
     // The advanced filters are OPEN by default (their collapse used to read as
     // "no language filter") — the toggle shows its expanded label.
-    expect(screen.getByText("Hide filters")).toBeInTheDocument()
+    expect(screen.getByText(translate("en", "cfgext.voiceHideFilters"))).toBeInTheDocument()
   })
 })

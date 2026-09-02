@@ -1,5 +1,7 @@
 "use client"
 
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
+import { useT, tx, type MessageKey } from "@/lib/i18n"
 import { useState, useEffect, Suspense } from "react"
 import { lazyWithRetry } from "@/lib/lazy-with-retry"
 import { ChevronDown, ChevronRight } from "lucide-react"
@@ -60,7 +62,43 @@ const CaptionsStylePreview = lazyWithRetry(() =>
 const KINETIC_STYLE_FONT_DEFAULT = 64
 const STATIC_STYLE_FONT_DEFAULT = 32
 
+// Parallel i18n key maps for the two SHARED constant tables rendered below
+// (`CONTENT_TYPES_BY_PLATFORM` and `AUDIO_CROSSFADE_CURVES` both live in
+// @nodaro/shared and are read by the backend + package tests). The tables keep
+// their English as the source of truth; the pickers translate at render and
+// fall back to the table's own label/description for any id added upstream
+// before a key exists.
+const CONTENT_TYPE_LABEL_KEYS: Record<string, MessageKey | undefined> = {
+  "instagram:feed-square": "proccfg.feedSquare10801080",
+  "instagram:feed-portrait": "proccfg.feedPortrait10801350",
+  "instagram:feed-landscape": "proccfg.feedLandscape1080566",
+  "instagram:story-reel": "proccfg.storyReel10801920",
+  "tiktok:video": "proccfg.video10801920",
+  "x:image-landscape": "proccfg.imageLandscape1200675",
+  "x:image-square": "proccfg.imageSquare10801080",
+  "x:x-video": "proccfg.video19201080",
+  "youtube:short": "proccfg.short10801920",
+  "facebook:fb-feed-portrait": "proccfg.feedPortrait10801350",
+  "facebook:reel": "proccfg.reel10801920",
+  "linkedin:li-image-landscape": "proccfg.imageLandscape1200627",
+  "linkedin:li-image-square": "proccfg.imageSquare10801080",
+  "linkedin:li-video": "proccfg.video19201080",
+  "telegram:message": "proccfg.messageText",
+}
+
+const CROSSFADE_CURVE_KEYS: Record<
+  string,
+  { label: MessageKey; description: MessageKey } | undefined
+> = {
+  linear: { label: "proccfg.linear", description: "proccfg.straightLineFadeDefaultPredictableBut" },
+  "equal-power": { label: "proccfg.equalPower", description: "proccfg.quarterSineKeepsPerceivedLoudnessRoughly" },
+  smooth: { label: "proccfg.smoothSine", description: "proccfg.halfSineGentlerThanEqualPower" },
+  logarithmic: { label: "proccfg.logarithmic", description: "proccfg.compensatesForTheEarSLogarithmic" },
+  exponential: { label: "proccfg.exponential", description: "proccfg.sharpOutSlowInOrVice" },
+}
+
 export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<CombineVideosData>) {
+  const t = useT()
   // Fail-safe (CLAUDE.md pitfall-5 pattern): the manual trim fields are
   // HIDDEN under the smart methods (2026-07-24 — manual and smart are
   // ALTERNATIVE boundary-cut methods, not layers), so custom manual values
@@ -83,7 +121,7 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
       />
 
       <div className="flex flex-col gap-1.5">
-        <Label>Transition</Label>
+        <Label>{t("proccfg.transition")}</Label>
         <CombineTransitionPicker
           value={data.transition}
           onChange={(id) => onUpdate({ transition: id })}
@@ -93,7 +131,7 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
       {data.transition !== "cut" && (
         <div>
           <Label htmlFor="transition-duration">
-            Transition duration — {data.transitionDuration ?? 0.5}s
+            {t("proccfg.transitionDurationS", { n: data.transitionDuration ?? 0.5 })}
           </Label>
           <Input
             id="transition-duration"
@@ -110,23 +148,23 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
       )}
 
       <div className="flex flex-col gap-1.5">
-        <Label>Audio</Label>
+        <Label>{t("field.audio")}</Label>
         <Select
           value={data.audioMode ?? "crossfade"}
           onValueChange={(v) => onUpdate({ audioMode: v as CombineVideosData["audioMode"] })}
         >
-          <SelectTrigger aria-label="Audio"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("field.audio")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="keep">Keep original</SelectItem>
-            <SelectItem value="crossfade">Crossfade</SelectItem>
-            <SelectItem value="remove">Remove audio</SelectItem>
+            <SelectItem value="keep">{t("audiocfg.keepOriginal")}</SelectItem>
+            <SelectItem value="crossfade">{t("proccfg.crossfade")}</SelectItem>
+            <SelectItem value="remove">{t("proccfg.removeAudio")}</SelectItem>
           </SelectContent>
         </Select>
         {(data.audioMode ?? "crossfade") === "crossfade" && (
-          <div className="flex flex-col gap-2 pl-3 border-l-2 border-muted-foreground/20">
+          <div className="flex flex-col gap-2 ps-3 border-s-2 border-muted-foreground/20">
             <div className="flex flex-col gap-1">
               <Label htmlFor="audio-crossfade-duration" className="text-[11px] text-muted-foreground">
-                Crossfade duration — {data.audioCrossfadeDuration ?? data.transitionDuration ?? 0.5}s (audio only)
+                {t("proccfg.crossfadeDurationSAudioOnly", { n: data.audioCrossfadeDuration ?? data.transitionDuration ?? 0.5 })}
               </Label>
               <Input
                 id="audio-crossfade-duration"
@@ -143,21 +181,24 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
             </div>
             <div className="flex flex-col gap-1">
               <Label htmlFor="audio-crossfade-curve" className="text-[11px] text-muted-foreground">
-                Crossfade curve
+                {t("proccfg.crossfadeCurve")}
               </Label>
               <Select
                 value={data.audioCrossfadeCurve ?? DEFAULT_AUDIO_CROSSFADE_CURVE_ID}
                 onValueChange={(v) => onUpdate({ audioCrossfadeCurve: v })}
               >
-                <SelectTrigger id="audio-crossfade-curve" aria-label="Crossfade curve" className="h-8 text-xs">
+                <SelectTrigger id="audio-crossfade-curve" aria-label={t("proccfg.crossfadeCurve")} className="h-8 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {AUDIO_CROSSFADE_CURVES.map((c) => (
-                    <SelectItem key={c.id} value={c.id} title={c.description}>
-                      {c.label}
-                    </SelectItem>
-                  ))}
+                  {AUDIO_CROSSFADE_CURVES.map((c) => {
+                    const ck = CROSSFADE_CURVE_KEYS[c.id]
+                    return (
+                      <SelectItem key={c.id} value={c.id} title={ck ? t(ck.description) : c.description}>
+                        {ck ? t(ck.label) : c.label}
+                      </SelectItem>
+                    )
+                  })}
                 </SelectContent>
               </Select>
             </div>
@@ -175,7 +216,7 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
           fail-safe effect above clears any that linger). */}
       {isCloud() && (
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="boundary-cut-method">Boundary cut</Label>
+          <Label htmlFor="boundary-cut-method">{t("proccfg.boundaryCut")}</Label>
           <Select
             value={data.smartCutEnabled ? (data.smartCutMode ?? "best-pair") : "manual"}
             onValueChange={(v) =>
@@ -189,35 +230,34 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
                   })
             }
           >
-            <SelectTrigger id="boundary-cut-method" aria-label="Boundary cut method" className="h-9 text-sm">
+            <SelectTrigger id="boundary-cut-method" aria-label={t("proccfg.boundaryCutMethod")} className="h-9 text-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="manual">Manual — trim an exact number of frames at each boundary</SelectItem>
-              <SelectItem value="best-pair">Smart: best pair — cut at the single most similar frame pair</SelectItem>
-              <SelectItem value="preroll-keep-next">Smart: pre-roll keep-next — detect the replayed overlap, keep the next clip&apos;s copy</SelectItem>
-              <SelectItem value="preroll-keep-prev">Smart: pre-roll keep-prev — detect the replayed overlap, keep the previous clip&apos;s frames</SelectItem>
+              <SelectItem value="manual">{t("proccfg.manualTrimAnExactNumberOf")}</SelectItem>
+              <SelectItem value="best-pair">{t("proccfg.smartBestPairCutAtThe")}</SelectItem>
+              <SelectItem value="preroll-keep-next">{t("proccfg.smartPreRollKeepNextDetect")}</SelectItem>
+              <SelectItem value="preroll-keep-prev">{t("proccfg.smartPreRollKeepPrevDetect")}</SelectItem>
             </SelectContent>
           </Select>
           <p className="text-[11px] text-muted-foreground">
             {data.smartCutEnabled
-              ? "Searches the windows below at every boundary and cuts where the method decides — the duplicated moment plays once. Boundaries with no genuine match fall back to the default trims (1 start / 2 end)."
-              : "Drops a fixed number of frames on each side of every boundary; the first clip's start and the last clip's end are never touched."}
+              ? t("proccfg.searchesTheWindowsBelowAtEvery")
+              : t("proccfg.dropsAFixedNumberOfFrames")}
           </p>
           {(data.smartCutMode === "preroll-keep-prev" || data.smartCutMode === "preroll-keep-next") && data.smartCutEnabled && (
             <p className="text-[11px] text-muted-foreground">
-              The pre-roll methods suit continuation chains where the next clip re-enacts
-              the previous clip&apos;s last frames before diverging.
+              {t("proccfg.thePreRollMethodsSuitContinuation")}
             </p>
           )}
         </div>
       )}
 
       {isCloud() && data.smartCutEnabled && (
-        <div className="flex flex-col gap-2 pl-3 border-l-2 border-muted-foreground/20">
+        <div className="flex flex-col gap-2 ps-3 border-s-2 border-muted-foreground/20">
           <div>
             <Label htmlFor="smart-cut-prev" className="text-[11px] text-muted-foreground">
-              Search window: end of previous clip — {data.smartCutFramesPrev ?? 8} frames
+              {t("proccfg.searchWindowEndOfPreviousClip", { n: data.smartCutFramesPrev ?? 8 })}
             </Label>
             <Input
               id="smart-cut-prev"
@@ -234,7 +274,7 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
           </div>
           <div>
             <Label htmlFor="smart-cut-next" className="text-[11px] text-muted-foreground">
-              Search window: start of next clip — {data.smartCutFramesNext ?? 8} frames
+              {t("proccfg.searchWindowStartOfNextClip", { n: data.smartCutFramesNext ?? 8 })}
             </Label>
             <Input
               id="smart-cut-next"
@@ -259,7 +299,7 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
         <>
           <div>
             <Label htmlFor="trim-end-frames">
-              Trim each clip end (frames, except last) — {data.trimEndFrames ?? 2}
+              {t("proccfg.trimEachClipEndFramesExcept", { n: data.trimEndFrames ?? 2 })}
             </Label>
             <Input
               id="trim-end-frames"
@@ -276,7 +316,7 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
 
           <div>
             <Label htmlFor="trim-start-frames">
-              Trim each clip start (frames, except first) — {data.trimStartFrames ?? 1}
+              {t("proccfg.trimEachClipStartFramesExcept", { n: data.trimStartFrames ?? 1 })}
             </Label>
             <Input
               id="trim-start-frames"
@@ -297,6 +337,7 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
 }
 
 export function AddCaptionsConfig({ data, onUpdate }: ConfigProps<AddCaptionsData>) {
+  const t = useT()
   function handleStyleChange(next: AddCaptionsData["style"]) {
     const isKineticNext = next !== "subtitle"
     const update: Partial<AddCaptionsData> = { style: next }
@@ -311,24 +352,24 @@ export function AddCaptionsConfig({ data, onUpdate }: ConfigProps<AddCaptionsDat
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label>Style</Label>
+        <Label>{t("field.style")}</Label>
         <Select
           value={data.style}
           onValueChange={(v) => handleStyleChange(v as AddCaptionsData["style"])}
         >
-          <SelectTrigger aria-label="Style"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("field.style")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="subtitle">Subtitle (static)</SelectItem>
-            <SelectItem value="word-highlight">Word Highlight (kinetic)</SelectItem>
-            <SelectItem value="karaoke">Karaoke (kinetic)</SelectItem>
-            <SelectItem value="tiktok-words">TikTok Words (kinetic)</SelectItem>
-            <SelectItem value="word-pop">Word Pop (kinetic)</SelectItem>
-            <SelectItem value="bouncy">Bouncy (kinetic)</SelectItem>
+            <SelectItem value="subtitle">{t("proccfg.subtitleStatic")}</SelectItem>
+            <SelectItem value="word-highlight">{t("proccfg.wordHighlightKinetic")}</SelectItem>
+            <SelectItem value="karaoke">{t("proccfg.karaokeKinetic")}</SelectItem>
+            <SelectItem value="tiktok-words">{t("proccfg.tiktokWordsKinetic")}</SelectItem>
+            <SelectItem value="word-pop">{t("proccfg.wordPopKinetic")}</SelectItem>
+            <SelectItem value="bouncy">{t("proccfg.bouncyKinetic")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
-      <Suspense fallback={<div className="text-xs text-muted-foreground py-2">Loading preview...</div>}>
+      <Suspense fallback={<div className="text-xs text-muted-foreground py-2">{t("proccfg.loadingPreview")}</div>}>
         <CaptionsStylePreview
           style={data.style}
           position={data.position}
@@ -339,30 +380,30 @@ export function AddCaptionsConfig({ data, onUpdate }: ConfigProps<AddCaptionsDat
       </Suspense>
 
       <div>
-        <Label>Position</Label>
+        <Label>{t("proccfg.position")}</Label>
         <Select value={data.position} onValueChange={(v) => onUpdate({ position: v as AddCaptionsData["position"] })}>
-          <SelectTrigger aria-label="Position"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("proccfg.position")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="bottom">Bottom</SelectItem>
-            <SelectItem value="top">Top</SelectItem>
-            <SelectItem value="center">Center</SelectItem>
+            <SelectItem value="bottom">{t("proccfg.bottom")}</SelectItem>
+            <SelectItem value="top">{t("proccfg.top")}</SelectItem>
+            <SelectItem value="center">{t("proccfg.center")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
       <div>
-        <Label htmlFor="font-size">Font Size</Label>
+        <Label htmlFor="font-size">{t("proccfg.fontSize")}</Label>
         <Input id="font-size" type="number" min={8} max={200}
           value={data.fontSize ?? ""}
           onChange={(e) => onUpdate({ fontSize: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
         />
       </div>
       <div>
-        <Label htmlFor="caption-color">Color</Label>
+        <Label htmlFor="caption-color">{t("proccfg.color")}</Label>
         <Input id="caption-color" type="color" value={data.color} onChange={(e) => onUpdate({ color: e.target.value })} />
       </div>
       {data.style !== "subtitle" && (
         <div className="text-xs text-muted-foreground">
-          Kinetic styles render via Remotion (5 credits). Captions are auto-transcribed from the input video unless you wire a Transcribe node to this node's <code>captions</code> input.
+          {t("proccfg.kineticStylesRenderViaRemotion5", { handle: "captions" })}
         </div>
       )}
     </div>
@@ -370,10 +411,11 @@ export function AddCaptionsConfig({ data, onUpdate }: ConfigProps<AddCaptionsDat
 }
 
 export function ResizeVideoConfig({ data, onUpdate }: ConfigProps<ResizeVideoData>) {
+  const t = useT()
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label>Target Aspect Ratio</Label>
+        <Label>{t("proccfg.targetAspectRatio")}</Label>
         <AspectRatioSelector
           options={COMPOSITION_RATIOS}
           value={data.targetAspect}
@@ -381,21 +423,21 @@ export function ResizeVideoConfig({ data, onUpdate }: ConfigProps<ResizeVideoDat
         />
       </div>
       <div>
-        <Label>Method</Label>
+        <Label>{t("proccfg.method")}</Label>
         <Select
           value={data.method}
           onValueChange={(v) => onUpdate({ method: v as ResizeVideoData["method"] })}
         >
-          <SelectTrigger aria-label="Method"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("proccfg.method")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="crop">Crop</SelectItem>
-            <SelectItem value="pad">Pad</SelectItem>
-            <SelectItem value="stretch">Stretch</SelectItem>
+            <SelectItem value="crop">{t("audiocfg.crop")}</SelectItem>
+            <SelectItem value="pad">{t("proccfg.pad")}</SelectItem>
+            <SelectItem value="stretch">{t("proccfg.stretch")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
       <div>
-        <Label htmlFor="pad-color">Pad Color</Label>
+        <Label htmlFor="pad-color">{t("proccfg.padColor")}</Label>
         <Input
           id="pad-color"
           type="color"
@@ -408,15 +450,16 @@ export function ResizeVideoConfig({ data, onUpdate }: ConfigProps<ResizeVideoDat
 }
 
 export function TrimAudioConfig({ data, onUpdate }: ConfigProps<TrimAudioData>) {
+  const t = useT()
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label>Audio Format</Label>
+        <Label>{t("proccfg.audioFormat")}</Label>
         <Select
           value={data.audioFormat}
           onValueChange={(v) => onUpdate({ audioFormat: v as TrimAudioData["audioFormat"] })}
         >
-          <SelectTrigger aria-label="Audio format"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("proccfg.audioFormat2")}><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="mp3">MP3</SelectItem>
             <SelectItem value="wav">WAV</SelectItem>
@@ -425,7 +468,7 @@ export function TrimAudioConfig({ data, onUpdate }: ConfigProps<TrimAudioData>) 
         </Select>
       </div>
       <div>
-        <Label htmlFor="start-time">Start Time (s) — optional</Label>
+        <Label htmlFor="start-time">{t("proccfg.startTimeSOptional")}</Label>
         <Input
           id="start-time"
           type="number"
@@ -437,13 +480,13 @@ export function TrimAudioConfig({ data, onUpdate }: ConfigProps<TrimAudioData>) 
         />
       </div>
       <div>
-        <Label htmlFor="end-time">End Time (s) — optional</Label>
+        <Label htmlFor="end-time">{t("proccfg.endTimeSOptional")}</Label>
         <Input
           id="end-time"
           type="number"
           min={0}
           step={0.1}
-          placeholder="end of file"
+          placeholder={t("proccfg.endOfFile")}
           value={(data.endTime as number | undefined) ?? ""}
           onChange={(e) => onUpdate({ endTime: e.target.value ? parseFloat(e.target.value) : undefined })}
         />
@@ -453,10 +496,11 @@ export function TrimAudioConfig({ data, onUpdate }: ConfigProps<TrimAudioData>) 
 }
 
 export function SplitMediaConfig({ data, onUpdate }: ConfigProps<SplitMediaData>) {
+  const t = useT()
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label htmlFor="chunk-duration">Chunk Duration (seconds)</Label>
+        <Label htmlFor="chunk-duration">{t("proccfg.chunkDurationSeconds")}</Label>
         <Input
           id="chunk-duration"
           type="number"
@@ -467,12 +511,12 @@ export function SplitMediaConfig({ data, onUpdate }: ConfigProps<SplitMediaData>
         />
       </div>
       <div>
-        <Label>Audio Format</Label>
+        <Label>{t("proccfg.audioFormat")}</Label>
         <Select
           value={data.audioFormat ?? "mp3"}
           onValueChange={(v) => onUpdate({ audioFormat: v as "mp3" | "wav" | "aac" })}
         >
-          <SelectTrigger aria-label="Audio format"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("proccfg.audioFormat2")}><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="mp3">MP3</SelectItem>
             <SelectItem value="wav">WAV</SelectItem>
@@ -482,7 +526,7 @@ export function SplitMediaConfig({ data, onUpdate }: ConfigProps<SplitMediaData>
       </div>
       {(data.generatedAudioUrls?.length ?? 0) > 0 && (
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Output Chunk</label>
+          <label className="text-xs font-medium text-muted-foreground">{t("proccfg.outputChunk")}</label>
           <select
             value={data.outputChunkIndex ?? 0}
             onChange={(e) => {
@@ -492,17 +536,17 @@ export function SplitMediaConfig({ data, onUpdate }: ConfigProps<SplitMediaData>
             className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
           >
             {data.generatedAudioUrls!.map((_, i) => (
-              <option key={i} value={i}>Chunk {i + 1}</option>
+              <option key={i} value={i}>{t("proccfg.chunk", { n: i + 1 })}</option>
             ))}
           </select>
-          <p className="text-[10px] text-muted-foreground">Select which chunk to output when connected to another node</p>
+          <p className="text-[10px] text-muted-foreground">{t("proccfg.selectWhichChunkToOutputWhen")}</p>
         </div>
       )}
       {(data.generatedAudioUrls?.length ?? 0) > 0 && (
         <div className="flex flex-col gap-2 pt-2 border-t border-border">
           <div className="flex items-center justify-between">
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
-              Audio Chunks ({data.generatedAudioUrls!.length})
+              {t("proccfg.audioChunks", { count: data.generatedAudioUrls!.length })}
             </label>
             <button
               type="button"
@@ -512,7 +556,7 @@ export function SplitMediaConfig({ data, onUpdate }: ConfigProps<SplitMediaData>
                 onUpdate({ selectedAudioChunks: allSelected ? [] : data.generatedAudioUrls!.map((_, idx) => idx) })
               }}
             >
-              {!data.selectedAudioChunks || data.selectedAudioChunks.length === data.generatedAudioUrls!.length ? "Deselect All" : "Select All"}
+              {!data.selectedAudioChunks || data.selectedAudioChunks.length === data.generatedAudioUrls!.length ? t("lib.deselectAll") : t("lib.selectAll")}
             </button>
           </div>
           <div className="flex flex-col gap-3 max-h-64 overflow-y-auto">
@@ -529,8 +573,8 @@ export function SplitMediaConfig({ data, onUpdate }: ConfigProps<SplitMediaData>
                     }}
                     className="w-3.5 h-3.5"
                   />
-                  <span className="text-[11px] text-muted-foreground">Chunk {i + 1}</span>
-                  <a href={url} download className="text-[10px] text-primary hover:underline ml-auto" onClick={(e) => e.stopPropagation()}>Download</a>
+                  <span className="text-[11px] text-muted-foreground">{t("proccfg.chunk", { n: i + 1 })}</span>
+                  <a href={url} download className="text-[10px] text-primary hover:underline ms-auto" onClick={(e) => e.stopPropagation()}>{t("proccfg.download")}</a>
                 </div>
                 <WaveformAudioPlayer url={url} variant="compact" className="w-full" />
               </div>
@@ -542,7 +586,7 @@ export function SplitMediaConfig({ data, onUpdate }: ConfigProps<SplitMediaData>
         <div className="flex flex-col gap-2 pt-2 border-t border-border">
           <div className="flex items-center justify-between">
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
-              Video Chunks ({data.generatedVideoUrls!.length})
+              {t("proccfg.videoChunks", { count: data.generatedVideoUrls!.length })}
             </label>
             <button
               type="button"
@@ -552,7 +596,7 @@ export function SplitMediaConfig({ data, onUpdate }: ConfigProps<SplitMediaData>
                 onUpdate({ selectedVideoChunks: allSelected ? [] : data.generatedVideoUrls!.map((_, idx) => idx) })
               }}
             >
-              {!data.selectedVideoChunks || data.selectedVideoChunks.length === data.generatedVideoUrls!.length ? "Deselect All" : "Select All"}
+              {!data.selectedVideoChunks || data.selectedVideoChunks.length === data.generatedVideoUrls!.length ? t("lib.deselectAll") : t("lib.selectAll")}
             </button>
           </div>
           <div className="flex flex-col gap-3 max-h-64 overflow-y-auto">
@@ -569,8 +613,8 @@ export function SplitMediaConfig({ data, onUpdate }: ConfigProps<SplitMediaData>
                     }}
                     className="w-3.5 h-3.5"
                   />
-                  <span className="text-[11px] text-muted-foreground">Chunk {i + 1}</span>
-                  <a href={url} download className="text-[10px] text-primary hover:underline ml-auto" onClick={(e) => e.stopPropagation()}>Download</a>
+                  <span className="text-[11px] text-muted-foreground">{t("proccfg.chunk", { n: i + 1 })}</span>
+                  <a href={url} download className="text-[10px] text-primary hover:underline ms-auto" onClick={(e) => e.stopPropagation()}>{t("proccfg.download")}</a>
                 </div>
                 <video controls src={url} className="w-full rounded" style={{ maxHeight: '80px' }} />
               </div>
@@ -584,25 +628,30 @@ export function SplitMediaConfig({ data, onUpdate }: ConfigProps<SplitMediaData>
 
 // Extract Audio has no settings — connect a video and run.
 export function ExtractAudioConfig(_props: ConfigProps<ExtractAudioData>) {
+  const localizeNode = useLocalizeNodeLabel()
+  const t = useT()
   return (
     <div className="flex flex-col gap-2 text-sm text-muted-foreground">
-      <p>Extracts the audio track from the connected video as a standalone MP3.</p>
-      <p className="text-xs">No settings — connect a video to the input and run. Use <span className="font-medium text-foreground">Remove Audio</span> if you want the silent video instead.</p>
+      <p>{t("proccfg.extractsTheAudioTrackFromThe")}</p>
+      <p className="text-xs">{t("proccfg.noSettingsConnectAVideoTo", { node: localizeNode("Remove Audio") })}</p>
     </div>
   )
 }
 
 // Remove Audio has no settings — connect a video and run.
 export function RemoveAudioConfig(_props: ConfigProps<RemoveAudioData>) {
+  const localizeNode = useLocalizeNodeLabel()
+  const t = useT()
   return (
     <div className="flex flex-col gap-2 text-sm text-muted-foreground">
-      <p>Strips the audio track from the connected video, leaving a silent clip (lossless — the video is stream-copied, not re-encoded).</p>
-      <p className="text-xs">No settings — connect a video to the input and run. Use <span className="font-medium text-foreground">Extract Audio</span> if you want the audio track instead.</p>
+      <p>{t("proccfg.stripsTheAudioTrackFromThe")}</p>
+      <p className="text-xs">{t("proccfg.noSettingsConnectAVideoTo2", { node: localizeNode("Extract Audio") })}</p>
     </div>
   )
 }
 
 export function MixAudioConfig({ data, onUpdate, nodes, sources }: ConfigProps<MixAudioData>) {
+  const t = useT()
   const edges = useWorkflowStore((s) => s.edges)
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
 
@@ -625,7 +674,7 @@ export function MixAudioConfig({ data, onUpdate, nodes, sources }: ConfigProps<M
   return (
     <div className="flex flex-col gap-3">
       {connectedNodes.length === 0 && (
-        <p className="text-xs text-muted-foreground">Connect audio nodes to set per-track volumes.</p>
+        <p className="text-xs text-muted-foreground">{t("proccfg.connectAudioNodesToSetPer")}</p>
       )}
       {connectedNodes.length > 1 && (
         <ConnectedMediaList
@@ -643,7 +692,7 @@ export function MixAudioConfig({ data, onUpdate, nodes, sources }: ConfigProps<M
             <div key={node.id}>
               <div className="flex items-center justify-between mb-1">
                 <Label className="text-xs truncate flex-1">{label}</Label>
-                <span className="text-xs text-muted-foreground ml-2 tabular-nums">{volume}%</span>
+                <span className="text-xs text-muted-foreground ms-2 tabular-nums">{volume}%</span>
               </div>
               <Input
                 type="range"
@@ -665,10 +714,11 @@ export function MixAudioConfig({ data, onUpdate, nodes, sources }: ConfigProps<M
 }
 
 export function AdjustVolumeConfig({ data, onUpdate }: ConfigProps<AdjustVolumeData>) {
+  const t = useT()
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label htmlFor="volume">Volume (%)</Label>
+        <Label htmlFor="volume">{t("proccfg.volume")}</Label>
         <Input
           id="volume"
           type="number"
@@ -685,10 +735,10 @@ export function AdjustVolumeConfig({ data, onUpdate }: ConfigProps<AdjustVolumeD
           checked={data.normalize}
           onChange={(e) => onUpdate({ normalize: e.target.checked })}
         />
-        <Label htmlFor="normalize">Normalize</Label>
+        <Label htmlFor="normalize">{t("audiocfg.normalize")}</Label>
       </div>
       <div>
-        <Label htmlFor="fade-in">Fade In (s)</Label>
+        <Label htmlFor="fade-in">{t("proccfg.fadeInS")}</Label>
         <Input
           id="fade-in"
           type="number"
@@ -700,7 +750,7 @@ export function AdjustVolumeConfig({ data, onUpdate }: ConfigProps<AdjustVolumeD
         />
       </div>
       <div>
-        <Label htmlFor="fade-out">Fade Out (s)</Label>
+        <Label htmlFor="fade-out">{t("proccfg.fadeOutS")}</Label>
         <Input
           id="fade-out"
           type="number"
@@ -716,20 +766,21 @@ export function AdjustVolumeConfig({ data, onUpdate }: ConfigProps<AdjustVolumeD
 }
 
 export function TrimVideoConfig({ data, onUpdate }: ConfigProps<TrimVideoData>) {
+  const t = useT()
   const mode = data.trimMode ?? "time"
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label>Trim Mode</Label>
+        <Label>{t("proccfg.trimMode")}</Label>
         <Select value={mode} onValueChange={(v) => onUpdate({ trimMode: v as TrimVideoData["trimMode"] })}>
-          <SelectTrigger aria-label="Trim mode"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("proccfg.trimMode2")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="time">Range — start/end (seconds)</SelectItem>
-            <SelectItem value="seconds">Trim edges (seconds)</SelectItem>
-            <SelectItem value="keep-first-seconds">Keep first N seconds</SelectItem>
-            <SelectItem value="keep-last-seconds">Keep last N seconds</SelectItem>
-            <SelectItem value="frames">Trim edges (frames)</SelectItem>
-            <SelectItem value="smart-loop-cut">Smart loop cut</SelectItem>
+            <SelectItem value="time">{t("proccfg.rangeStartEndSeconds")}</SelectItem>
+            <SelectItem value="seconds">{t("proccfg.trimEdgesSeconds")}</SelectItem>
+            <SelectItem value="keep-first-seconds">{t("proccfg.keepFirstNSeconds")}</SelectItem>
+            <SelectItem value="keep-last-seconds">{t("proccfg.keepLastNSeconds")}</SelectItem>
+            <SelectItem value="frames">{t("proccfg.trimEdgesFrames")}</SelectItem>
+            <SelectItem value="smart-loop-cut">{t("proccfg.smartLoopCut")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -744,7 +795,7 @@ export function TrimVideoConfig({ data, onUpdate }: ConfigProps<TrimVideoData>) 
             className="rounded border-muted-foreground/40"
           />
           <label htmlFor="trim-lossless-kf" className="text-xs">
-            Lossless (snap to keyframe) — no re-encode; the start moves back to the nearest keyframe
+            {t("proccfg.losslessSnapToKeyframeNoRe")}
           </label>
         </div>
       )}
@@ -752,7 +803,7 @@ export function TrimVideoConfig({ data, onUpdate }: ConfigProps<TrimVideoData>) 
       {mode === "time" && (
         <>
           <div>
-            <Label htmlFor="start-time">Start Time (s)</Label>
+            <Label htmlFor="start-time">{t("proccfg.startTimeS")}</Label>
             <Input
               id="start-time"
               type="number"
@@ -763,7 +814,7 @@ export function TrimVideoConfig({ data, onUpdate }: ConfigProps<TrimVideoData>) 
             />
           </div>
           <div>
-            <Label htmlFor="end-time">End Time (s)</Label>
+            <Label htmlFor="end-time">{t("proccfg.endTimeS")}</Label>
             <Input
               id="end-time"
               type="number"
@@ -779,7 +830,7 @@ export function TrimVideoConfig({ data, onUpdate }: ConfigProps<TrimVideoData>) 
       {mode === "seconds" && (
         <>
           <div>
-            <Label htmlFor="trim-start-seconds">Trim from start (s)</Label>
+            <Label htmlFor="trim-start-seconds">{t("proccfg.trimFromStartS")}</Label>
             <Input
               id="trim-start-seconds"
               type="number"
@@ -791,7 +842,7 @@ export function TrimVideoConfig({ data, onUpdate }: ConfigProps<TrimVideoData>) 
             />
           </div>
           <div>
-            <Label htmlFor="trim-end-seconds">Trim from end (s)</Label>
+            <Label htmlFor="trim-end-seconds">{t("proccfg.trimFromEndS")}</Label>
             <Input
               id="trim-end-seconds"
               type="number"
@@ -803,7 +854,7 @@ export function TrimVideoConfig({ data, onUpdate }: ConfigProps<TrimVideoData>) 
             />
           </div>
           <p className="text-[10px] text-muted-foreground leading-snug">
-            Seconds-mirror of the frames mode. Worker probes the source duration so the end-trim works on any length input.
+            {t("proccfg.secondsMirrorOfTheFramesMode")}
           </p>
         </>
       )}
@@ -811,7 +862,7 @@ export function TrimVideoConfig({ data, onUpdate }: ConfigProps<TrimVideoData>) 
       {mode === "keep-first-seconds" && (
         <>
           <div>
-            <Label htmlFor="keep-first-seconds">Keep first (s)</Label>
+            <Label htmlFor="keep-first-seconds">{t("proccfg.keepFirstS")}</Label>
             <Input
               id="keep-first-seconds"
               type="number"
@@ -823,7 +874,7 @@ export function TrimVideoConfig({ data, onUpdate }: ConfigProps<TrimVideoData>) 
             />
           </div>
           <p className="text-[10px] text-muted-foreground leading-snug">
-            Output is the first N seconds of the source (clamped to the source length).
+            {t("proccfg.outputIsTheFirstNSeconds")}
           </p>
         </>
       )}
@@ -831,7 +882,7 @@ export function TrimVideoConfig({ data, onUpdate }: ConfigProps<TrimVideoData>) 
       {mode === "keep-last-seconds" && (
         <>
           <div>
-            <Label htmlFor="keep-last-seconds">Keep last (s)</Label>
+            <Label htmlFor="keep-last-seconds">{t("proccfg.keepLastS")}</Label>
             <Input
               id="keep-last-seconds"
               type="number"
@@ -843,7 +894,7 @@ export function TrimVideoConfig({ data, onUpdate }: ConfigProps<TrimVideoData>) 
             />
           </div>
           <p className="text-[10px] text-muted-foreground leading-snug">
-            Output is the last N seconds of the source (worker probes duration and computes the start).
+            {t("proccfg.outputIsTheLastNSeconds")}
           </p>
         </>
       )}
@@ -851,7 +902,7 @@ export function TrimVideoConfig({ data, onUpdate }: ConfigProps<TrimVideoData>) 
       {mode === "frames" && (
         <>
           <div>
-            <Label htmlFor="trim-start-frames">Trim from start (frames)</Label>
+            <Label htmlFor="trim-start-frames">{t("proccfg.trimFromStartFrames")}</Label>
             <Input
               id="trim-start-frames"
               type="number"
@@ -863,7 +914,7 @@ export function TrimVideoConfig({ data, onUpdate }: ConfigProps<TrimVideoData>) 
             />
           </div>
           <div>
-            <Label htmlFor="trim-end-frames">Trim from end (frames)</Label>
+            <Label htmlFor="trim-end-frames">{t("proccfg.trimFromEndFrames")}</Label>
             <Input
               id="trim-end-frames"
               type="number"
@@ -875,7 +926,7 @@ export function TrimVideoConfig({ data, onUpdate }: ConfigProps<TrimVideoData>) 
             />
           </div>
           <p className="text-[10px] text-muted-foreground leading-snug">
-            The worker probes the source&apos;s frame rate and converts. Useful for VEO 3.1 outputs (24fps fixed) and any case where exact frame alignment matters more than time.
+            {t("proccfg.theWorkerProbesTheSourceS")}
           </p>
         </>
       )}
@@ -883,7 +934,7 @@ export function TrimVideoConfig({ data, onUpdate }: ConfigProps<TrimVideoData>) 
       {mode === "smart-loop-cut" && (
         <>
           <div>
-            <Label htmlFor="smart-lookback">Lookback window (frames)</Label>
+            <Label htmlFor="smart-lookback">{t("proccfg.lookbackWindowFrames")}</Label>
             <Input
               id="smart-lookback"
               type="number"
@@ -896,7 +947,7 @@ export function TrimVideoConfig({ data, onUpdate }: ConfigProps<TrimVideoData>) 
             />
           </div>
           <p className="text-[10px] text-muted-foreground leading-snug">
-            Picks the trailing frame closest to frame 0 (by PSNR pixel similarity) and trims there. Beats a fixed offset on stochastic outputs — VEO 3.1 first+last-frame mode in particular benefits because the actual cleanest cut isn&apos;t always exactly 8 frames in.
+            {t("proccfg.picksTheTrailingFrameClosestTo")}
           </p>
         </>
       )}
@@ -909,34 +960,35 @@ export function TrimVideoConfig({ data, onUpdate }: ConfigProps<TrimVideoData>) 
           onChange={(e) => onUpdate({ outputSilentVideo: e.target.checked })}
           className="w-4 h-4"
         />
-        <label htmlFor="outputSilentVideo" className="text-xs text-muted-foreground">Output Silent Video</label>
+        <label htmlFor="outputSilentVideo" className="text-xs text-muted-foreground">{t("proccfg.outputSilentVideo")}</label>
       </div>
     </div>
   )
 }
 
 export function ExtractFrameConfig({ data, onUpdate }: ConfigProps<ExtractFrameData>) {
+  const t = useT()
   const mode = data.mode || "first"
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label htmlFor="extract-mode">Frame Selection</Label>
+        <Label htmlFor="extract-mode">{t("proccfg.frameSelection")}</Label>
         <Select value={mode} onValueChange={(v) => onUpdate({ mode: v as ExtractFrameData["mode"] })}>
           <SelectTrigger id="extract-mode"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="first">First Frame</SelectItem>
-            <SelectItem value="last">Last Frame</SelectItem>
-            <SelectItem value="timestamp">At Timestamp (s)</SelectItem>
-            <SelectItem value="frame-index">Frame # from start</SelectItem>
-            <SelectItem value="frame-from-end">Frame # from end</SelectItem>
-            <SelectItem value="keyframe">Nearest keyframe</SelectItem>
+            <SelectItem value="first">{t("proccfg.firstFrame")}</SelectItem>
+            <SelectItem value="last">{t("proccfg.lastFrame")}</SelectItem>
+            <SelectItem value="timestamp">{t("proccfg.atTimestampS")}</SelectItem>
+            <SelectItem value="frame-index">{t("proccfg.frameFromStart")}</SelectItem>
+            <SelectItem value="frame-from-end">{t("proccfg.frameFromEnd")}</SelectItem>
+            <SelectItem value="keyframe">{t("proccfg.nearestKeyframe")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
       {(mode === "timestamp" || mode === "keyframe") && (
         <div>
           <Label htmlFor="extract-timestamp">
-            {mode === "keyframe" ? "Seek to (seconds)" : "Timestamp (seconds)"}
+            {mode === "keyframe" ? t("proccfg.seekToSeconds") : t("proccfg.timestampSeconds")}
           </Label>
           <Input
             id="extract-timestamp"
@@ -948,14 +1000,14 @@ export function ExtractFrameConfig({ data, onUpdate }: ConfigProps<ExtractFrameD
           />
           {mode === "keyframe" && (
             <p className="text-[10px] text-muted-foreground leading-snug mt-1">
-              Snaps to the nearest keyframe at or after this point. Cheaper than decoding inter-frames; 0 = first keyframe.
+              {t("proccfg.snapsToTheNearestKeyframeAt")}
             </p>
           )}
         </div>
       )}
       {mode === "frame-index" && (
         <div>
-          <Label htmlFor="extract-frame-index">Frame index (from start)</Label>
+          <Label htmlFor="extract-frame-index">{t("proccfg.frameIndexFromStart")}</Label>
           <Input
             id="extract-frame-index"
             type="number"
@@ -966,13 +1018,13 @@ export function ExtractFrameConfig({ data, onUpdate }: ConfigProps<ExtractFrameD
             onChange={(e) => onUpdate({ frameIndex: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
           />
           <p className="text-[10px] text-muted-foreground leading-snug mt-1">
-            0 = first frame. Worker probes source fps to seek precisely.
+            {t("proccfg.0FirstFrameWorkerProbesSource")}
           </p>
         </div>
       )}
       {mode === "frame-from-end" && (
         <div>
-          <Label htmlFor="extract-frames-from-end">Frames back from end</Label>
+          <Label htmlFor="extract-frames-from-end">{t("proccfg.framesBackFromEnd")}</Label>
           <Input
             id="extract-frames-from-end"
             type="number"
@@ -983,7 +1035,7 @@ export function ExtractFrameConfig({ data, onUpdate }: ConfigProps<ExtractFrameD
             onChange={(e) => onUpdate({ framesFromEnd: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
           />
           <p className="text-[10px] text-muted-foreground leading-snug mt-1">
-            0 = last frame, 1 = second-to-last, etc. Worker probes duration + fps.
+            {t("proccfg.0LastFrame1SecondTo")}
           </p>
         </div>
       )}
@@ -992,7 +1044,8 @@ export function ExtractFrameConfig({ data, onUpdate }: ConfigProps<ExtractFrameD
 }
 
 export function SpeedRampConfig({ data, onUpdate }: ConfigProps<SpeedRampData>) {
-  const speedLabel = data.speed === 1 ? "1x (Normal)" : data.speed < 1 ? `${data.speed}x (Slow Mo)` : `${data.speed}x (Fast)`
+  const t = useT()
+  const speedLabel = data.speed === 1 ? t("proccfg.1xNormal") : data.speed < 1 ? t("proccfg.xSlowMo", { speed: data.speed }) : t("proccfg.xFast", { speed: data.speed })
   // Resolve effective audio mode for the UI, honoring the legacy adjustAudio shim.
   const audioMode: "pitch-preserve" | "pitch-shift" | "drop" =
     data.audioMode ?? (data.adjustAudio === false ? "drop" : "pitch-preserve")
@@ -1018,7 +1071,7 @@ export function SpeedRampConfig({ data, onUpdate }: ConfigProps<SpeedRampData>) 
     <div className="flex flex-col gap-3">
       {!usingRamps && (
         <div>
-          <Label htmlFor="speed">Speed: {speedLabel}</Label>
+          <Label htmlFor="speed">{t("proccfg.speed", { label: speedLabel })}</Label>
           <input
             id="speed"
             type="range"
@@ -1030,9 +1083,9 @@ export function SpeedRampConfig({ data, onUpdate }: ConfigProps<SpeedRampData>) 
             className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#ff0073] bg-[#F8FAFC] dark:bg-[#121212]"
           />
           <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
-            <span>0.1x</span>
-            <span>1x</span>
-            <span>10x</span>
+            <span>{t("proccfg.x", { n: 0.1 })}</span>
+            <span>{t("proccfg.x", { n: 1 })}</span>
+            <span>{t("proccfg.x", { n: 10 })}</span>
           </div>
         </div>
       )}
@@ -1044,11 +1097,11 @@ export function SpeedRampConfig({ data, onUpdate }: ConfigProps<SpeedRampData>) 
           checked={reverse}
           onChange={(e) => onUpdate({ reverse: e.target.checked })}
         />
-        <Label htmlFor="speed-reverse">Reverse playback</Label>
+        <Label htmlFor="speed-reverse">{t("proccfg.reversePlayback")}</Label>
       </div>
 
       <div>
-        <Label>Audio</Label>
+        <Label>{t("field.audio")}</Label>
         <Select
           value={audioMode}
           onValueChange={(v) => onUpdate({
@@ -1056,43 +1109,43 @@ export function SpeedRampConfig({ data, onUpdate }: ConfigProps<SpeedRampData>) 
             adjustAudio: undefined,
           })}
         >
-          <SelectTrigger aria-label="Audio mode"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("proccfg.audioMode")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="pitch-preserve">Pitch preserved (natural voice)</SelectItem>
-            <SelectItem value="pitch-shift">Pitch shifted (chipmunk / giant)</SelectItem>
-            <SelectItem value="drop">Drop audio</SelectItem>
+            <SelectItem value="pitch-preserve">{t("proccfg.pitchPreservedNaturalVoice")}</SelectItem>
+            <SelectItem value="pitch-shift">{t("proccfg.pitchShiftedChipmunkGiant")}</SelectItem>
+            <SelectItem value="drop">{t("proccfg.dropAudio")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
       <div>
-        <Label>Frame quality</Label>
+        <Label>{t("proccfg.frameQuality")}</Label>
         <Select value={quality} onValueChange={(v) => onUpdate({ quality: v as "fast" | "smooth" })}>
-          <SelectTrigger aria-label="Frame quality"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("proccfg.frameQuality")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="fast">Fast (frame-duplicate, 2 cr)</SelectItem>
-            <SelectItem value="smooth">Smooth (motion interpolation, 5 cr)</SelectItem>
+            <SelectItem value="fast">{t("proccfg.fastFrameDuplicate2Cr")}</SelectItem>
+            <SelectItem value="smooth">{t("proccfg.smoothMotionInterpolation5Cr")}</SelectItem>
           </SelectContent>
         </Select>
         <p className="text-[10px] text-muted-foreground mt-1">
-          Smooth synthesizes in-between frames for cleaner slow-motion. ~5-20x slower to render.
+          {t("proccfg.smoothSynthesizesInBetweenFramesFor")}
         </p>
       </div>
 
       <div className="border-t border-border/40 pt-3">
         <div className="flex items-center justify-between mb-2">
-          <Label>Speed ramps (variable speed)</Label>
+          <Label>{t("proccfg.speedRampsVariableSpeed")}</Label>
           <button
             type="button"
             onClick={addRamp}
             className="text-[11px] px-2 py-0.5 rounded bg-[#ff0073]/10 text-[#ff0073] hover:bg-[#ff0073]/20"
           >
-            + Add segment
+            {t("proccfg.addSegment")}
           </button>
         </div>
         {ramps.length === 0 ? (
           <p className="text-[10px] text-muted-foreground">
-            Add segments for variable speed (e.g. normal → slow-mo → normal). When set, audio is dropped and the constant Speed above is ignored. Segments are in input seconds.
+            {t("proccfg.addSegmentsForVariableSpeedE")}
           </p>
         ) : (
           <div className="flex flex-col gap-2">
@@ -1103,32 +1156,32 @@ export function SpeedRampConfig({ data, onUpdate }: ConfigProps<SpeedRampData>) 
                   type="number" min={0} step={0.1} value={r.start}
                   onChange={(e) => updateRamp(i, { start: parseFloat(e.target.value) || 0 })}
                   className="w-14 px-1 py-0.5 rounded border bg-background"
-                  aria-label={`Segment ${i + 1} start`}
+                  aria-label={t("proccfg.segmentStart", { n: i + 1 })}
                 />
                 <span className="text-muted-foreground">→</span>
                 <input
                   type="number" min={0} step={0.1} value={r.end}
                   onChange={(e) => updateRamp(i, { end: parseFloat(e.target.value) || 0 })}
                   className="w-14 px-1 py-0.5 rounded border bg-background"
-                  aria-label={`Segment ${i + 1} end`}
+                  aria-label={t("proccfg.segmentEnd", { n: i + 1 })}
                 />
-                <span className="text-muted-foreground">s @</span>
+                <span className="text-muted-foreground">{t("proccfg.s")}</span>
                 <input
                   type="number" min={0.05} max={100} step={0.05} value={r.speed}
                   onChange={(e) => updateRamp(i, { speed: parseFloat(e.target.value) || 1 })}
                   className="w-14 px-1 py-0.5 rounded border bg-background"
-                  aria-label={`Segment ${i + 1} speed`}
+                  aria-label={t("proccfg.segmentSpeed", { n: i + 1 })}
                 />
                 <span className="text-muted-foreground">x</span>
                 <button
-                  type="button" aria-label={`Remove segment ${i + 1}`}
+                  type="button" aria-label={t("proccfg.removeSegment", { n: i + 1 })}
                   onClick={() => removeRamp(i)}
-                  className="ml-auto text-muted-foreground hover:text-red-500"
+                  className="ms-auto text-muted-foreground hover:text-red-500"
                 >×</button>
               </div>
             ))}
             <p className="text-[10px] text-muted-foreground">
-              Audio is dropped while ramps are active. Per-segment audio time-stretch is on the roadmap.
+              {t("proccfg.audioIsDroppedWhileRampsAre")}
             </p>
           </div>
         )}
@@ -1138,23 +1191,24 @@ export function SpeedRampConfig({ data, onUpdate }: ConfigProps<SpeedRampData>) 
 }
 
 export function LoopVideoConfig({ data, onUpdate }: ConfigProps<LoopVideoData>) {
+  const t = useT()
   const mode = data.mode ?? "repeat"
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label>Mode</Label>
+        <Label>{t("field.mode")}</Label>
         <Select value={mode} onValueChange={(v) => onUpdate({ mode: v as LoopVideoData["mode"] })}>
-          <SelectTrigger aria-label="Loop mode"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("proccfg.loopMode")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="repeat">Repeat N times</SelectItem>
-            <SelectItem value="duration">Loop to duration</SelectItem>
+            <SelectItem value="repeat">{t("proccfg.repeatNTimes")}</SelectItem>
+            <SelectItem value="duration">{t("proccfg.loopToDuration")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
       {mode === "repeat" && (
         <div>
-          <Label htmlFor="repeat-count">Repeat: {data.repeatCount ?? 2}x</Label>
+          <Label htmlFor="repeat-count">{t("proccfg.repeatX", { n: data.repeatCount ?? 2 })}</Label>
           <input
             id="repeat-count"
             type="range"
@@ -1166,16 +1220,16 @@ export function LoopVideoConfig({ data, onUpdate }: ConfigProps<LoopVideoData>) 
             className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#ff0073] bg-[#F8FAFC] dark:bg-[#121212]"
           />
           <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
-            <span>2x</span>
-            <span>10x</span>
-            <span>20x</span>
+            <span>{t("proccfg.x", { n: 2 })}</span>
+            <span>{t("proccfg.x", { n: 10 })}</span>
+            <span>{t("proccfg.x", { n: 20 })}</span>
           </div>
         </div>
       )}
 
       {mode === "duration" && (
         <div>
-          <Label htmlFor="target-duration">Target Duration: {data.targetDuration ?? 10}s</Label>
+          <Label htmlFor="target-duration">{t("proccfg.targetDurationS", { n: data.targetDuration ?? 10 })}</Label>
           <input
             id="target-duration"
             type="range"
@@ -1187,17 +1241,17 @@ export function LoopVideoConfig({ data, onUpdate }: ConfigProps<LoopVideoData>) 
             className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#ff0073] bg-[#F8FAFC] dark:bg-[#121212]"
           />
           <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
-            <span>1s</span>
-            <span>150s</span>
-            <span>300s</span>
+            <span>{t("proccfg.s2", { n: 1 })}</span>
+            <span>{t("proccfg.s2", { n: 150 })}</span>
+            <span>{t("proccfg.s2", { n: 300 })}</span>
           </div>
         </div>
       )}
 
       <p className="text-[10px] text-muted-foreground">
         {mode === "repeat"
-          ? "The input video will be repeated the specified number of times."
-          : "The input video will loop until the target duration is reached, then trim to exact length."}
+          ? t("proccfg.theInputVideoWillBeRepeated")
+          : t("proccfg.theInputVideoWillLoopUntil")}
       </p>
 
       <div className="flex flex-col gap-1.5 pt-2 border-t border-border">
@@ -1209,14 +1263,14 @@ export function LoopVideoConfig({ data, onUpdate }: ConfigProps<LoopVideoData>) 
             onChange={(e) => onUpdate({ smartLoopCutBeforeRepeat: e.target.checked })}
             className="rounded border-muted-foreground/40"
           />
-          <label htmlFor="loop-video-smart-cut-pre" className="text-xs">Smart cut before looping</label>
+          <label htmlFor="loop-video-smart-cut-pre" className="text-xs">{t("proccfg.smartCutBeforeLooping")}</label>
         </div>
         <p className="text-[10px] text-muted-foreground px-1 leading-snug">
-          Trims the input clip to its cleanest loop boundary BEFORE concatenating. Eliminates seam discontinuity at every internal repeat boundary, not just the final wrap. Useful for VEO 3.1 outputs and any clip with a stochastic tail.
+          {t("proccfg.trimsTheInputClipToIts")}
         </p>
         {data.smartLoopCutBeforeRepeat && (
           <div>
-            <Label htmlFor="loop-video-smart-lookback" className="text-xs">Lookback window (frames)</Label>
+            <Label htmlFor="loop-video-smart-lookback" className="text-xs">{t("proccfg.lookbackWindowFrames")}</Label>
             <Input
               id="loop-video-smart-lookback"
               type="number"
@@ -1235,6 +1289,7 @@ export function LoopVideoConfig({ data, onUpdate }: ConfigProps<LoopVideoData>) 
 }
 
 export function GifToVideoConfig({ data, onUpdate }: ConfigProps<GifToVideoData>) {
+  const t = useT()
   const loopToMinimum = data.loopToMinimum ?? true
   return (
     <div className="flex flex-col gap-3">
@@ -1246,15 +1301,15 @@ export function GifToVideoConfig({ data, onUpdate }: ConfigProps<GifToVideoData>
           onChange={(e) => onUpdate({ loopToMinimum: e.target.checked })}
           className="rounded border-muted-foreground/40"
         />
-        <label htmlFor="gif-loop-to-minimum" className="text-xs">Extend short GIFs to a target length</label>
+        <label htmlFor="gif-loop-to-minimum" className="text-xs">{t("proccfg.extendShortGifsToATarget")}</label>
       </div>
       <p className="text-[10px] text-muted-foreground px-1 leading-snug">
-        Most GIFs are shorter than the ~2s a motion reference needs. When on, the clip is looped up to the target duration (seam-aware — a non-seamless GIF ping-pongs so a hard repeat's jump-cut isn&apos;t reproduced as motion). A GIF already too short is looped regardless.
+        {t("proccfg.mostGifsAreShorterThanThe")}
       </p>
 
       {loopToMinimum && (
         <div>
-          <Label htmlFor="gif-target-duration">Target Duration: {data.targetDuration ?? 3}s</Label>
+          <Label htmlFor="gif-target-duration">{t("proccfg.targetDurationS", { n: data.targetDuration ?? 3 })}</Label>
           <input
             id="gif-target-duration"
             type="range"
@@ -1266,38 +1321,38 @@ export function GifToVideoConfig({ data, onUpdate }: ConfigProps<GifToVideoData>
             className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#ff0073] bg-[#F8FAFC] dark:bg-[#121212]"
           />
           <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
-            <span>2s</span>
-            <span>5s</span>
-            <span>8s</span>
+            <span>{t("proccfg.s2", { n: 2 })}</span>
+            <span>{t("proccfg.s2", { n: 5 })}</span>
+            <span>{t("proccfg.s2", { n: 8 })}</span>
           </div>
         </div>
       )}
 
       <div>
-        <Label>Motion smoothing</Label>
+        <Label>{t("proccfg.motionSmoothing")}</Label>
         <Select value={(data.interpolate ?? true) ? "smooth" : "stepped"} onValueChange={(v) => onUpdate({ interpolate: v === "smooth" })}>
-          <SelectTrigger aria-label="Motion smoothing"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("proccfg.motionSmoothing")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="smooth">Smooth (interpolate to 24fps)</SelectItem>
-            <SelectItem value="stepped">Preserve original timing</SelectItem>
+            <SelectItem value="smooth">{t("proccfg.smoothInterpolateTo24fps")}</SelectItem>
+            <SelectItem value="stepped">{t("proccfg.preserveOriginalTiming")}</SelectItem>
           </SelectContent>
         </Select>
         <p className="text-[10px] text-muted-foreground mt-1 leading-snug">
-          Smooth synthesises in-between frames for realistic footage; preserve keeps the GIF&apos;s stepped, choppy character (better for graphic animation).
+          {t("proccfg.smoothSynthesisesInBetweenFramesFor")}
         </p>
       </div>
 
       <div>
-        <Label>Transparent background</Label>
+        <Label>{t("proccfg.transparentBackground")}</Label>
         <Select value={data.alphaBackground ?? "white"} onValueChange={(v) => onUpdate({ alphaBackground: v as GifToVideoData["alphaBackground"] })}>
-          <SelectTrigger aria-label="Transparent background"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("proccfg.transparentBackground")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="white">White</SelectItem>
-            <SelectItem value="black">Black</SelectItem>
+            <SelectItem value="white">{t("proccfg.white")}</SelectItem>
+            <SelectItem value="black">{t("proccfg.black")}</SelectItem>
           </SelectContent>
         </Select>
         <p className="text-[10px] text-muted-foreground mt-1 leading-snug">
-          MP4 can&apos;t carry transparency — a GIF with an alpha channel is flattened onto this colour.
+          {t("proccfg.mp4CanTCarryTransparencyA")}
         </p>
       </div>
     </div>
@@ -1305,15 +1360,16 @@ export function GifToVideoConfig({ data, onUpdate }: ConfigProps<GifToVideoData>
 }
 
 export function FadeVideoConfig({ data, onUpdate }: { data: FadeVideoData; onUpdate: (patch: Partial<FadeVideoData>) => void }) {
+  const t = useT()
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label>Fade Color</Label>
+        <Label>{t("proccfg.fadeColor")}</Label>
         <Select value={data.color ?? "black"} onValueChange={(v) => onUpdate({ color: v as "black" | "white" })}>
-          <SelectTrigger aria-label="Fade color"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("proccfg.fadeColor2")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="black">Black</SelectItem>
-            <SelectItem value="white">White</SelectItem>
+            <SelectItem value="black">{t("proccfg.black")}</SelectItem>
+            <SelectItem value="white">{t("proccfg.white")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -1326,11 +1382,11 @@ export function FadeVideoConfig({ data, onUpdate }: { data: FadeVideoData; onUpd
           onChange={(e) => onUpdate({ fadeIn: e.target.checked })}
           className="accent-[#ff0073]"
         />
-        <Label htmlFor="fade-in-toggle" className="mb-0">Fade In</Label>
+        <Label htmlFor="fade-in-toggle" className="mb-0">{t("proccfg.fadeIn")}</Label>
       </div>
       {data.fadeIn !== false && (
         <div>
-          <Label htmlFor="fade-in-dur">Duration: {data.fadeInDuration ?? 0.5}s</Label>
+          <Label htmlFor="fade-in-dur">{t("proccfg.durationS", { n: data.fadeInDuration ?? 0.5 })}</Label>
           <input
             id="fade-in-dur"
             type="range"
@@ -1342,9 +1398,9 @@ export function FadeVideoConfig({ data, onUpdate }: { data: FadeVideoData; onUpd
             className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#ff0073] bg-[#F8FAFC] dark:bg-[#121212]"
           />
           <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
-            <span>0.1s</span>
-            <span>1.5s</span>
-            <span>3s</span>
+            <span>{t("proccfg.s2", { n: 0.1 })}</span>
+            <span>{t("proccfg.s2", { n: 1.5 })}</span>
+            <span>{t("proccfg.s2", { n: 3 })}</span>
           </div>
         </div>
       )}
@@ -1357,11 +1413,11 @@ export function FadeVideoConfig({ data, onUpdate }: { data: FadeVideoData; onUpd
           onChange={(e) => onUpdate({ fadeOut: e.target.checked })}
           className="accent-[#ff0073]"
         />
-        <Label htmlFor="fade-out-toggle" className="mb-0">Fade Out</Label>
+        <Label htmlFor="fade-out-toggle" className="mb-0">{t("proccfg.fadeOut")}</Label>
       </div>
       {data.fadeOut !== false && (
         <div>
-          <Label htmlFor="fade-out-dur">Duration: {data.fadeOutDuration ?? 0.5}s</Label>
+          <Label htmlFor="fade-out-dur">{t("proccfg.durationS", { n: data.fadeOutDuration ?? 0.5 })}</Label>
           <input
             id="fade-out-dur"
             type="range"
@@ -1373,28 +1429,29 @@ export function FadeVideoConfig({ data, onUpdate }: { data: FadeVideoData; onUpd
             className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#ff0073] bg-[#F8FAFC] dark:bg-[#121212]"
           />
           <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
-            <span>0.1s</span>
-            <span>1.5s</span>
-            <span>3s</span>
+            <span>{t("proccfg.s2", { n: 0.1 })}</span>
+            <span>{t("proccfg.s2", { n: 1.5 })}</span>
+            <span>{t("proccfg.s2", { n: 3 })}</span>
           </div>
         </div>
       )}
 
       <p className="text-[10px] text-muted-foreground">
-        Apply fade in/out transitions to video. Audio fades are applied automatically when the video has an audio track.
+        {t("proccfg.applyFadeInOutTransitionsTo")}
       </p>
     </div>
   )
 }
 
 export function TranscodeVideoConfig({ data, onUpdate }: ConfigProps<TranscodeVideoData>) {
+  const t = useT()
   const [showAdvanced, setShowAdvanced] = useState(false)
   const isDefault = data.codec === "h264" && (data.crf ?? 23) === 23 && data.resolution === "original" && data.audioBitrate === "128k"
 
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">
-        Auto-transcodes video to browser/phone-safe H.264 + AAC MP4.
+        {t("proccfg.autoTranscodesVideoToBrowserPhone")}
       </p>
 
       <button
@@ -1403,27 +1460,27 @@ export function TranscodeVideoConfig({ data, onUpdate }: ConfigProps<TranscodeVi
         className="flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
       >
         {showAdvanced ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-        Advanced Settings {isDefault && "(using defaults)"}
+        {t("proccfg.advancedSettings")} {isDefault && t("proccfg.usingDefaults")}
       </button>
 
       {showAdvanced && (
-        <div className="flex flex-col gap-3 pl-1 border-l-2 border-muted-foreground/10 ml-1">
+        <div className="flex flex-col gap-3 ps-1 border-s-2 border-muted-foreground/10 ms-1">
           <div>
-            <Label>Codec</Label>
+            <Label>{t("proccfg.codec")}</Label>
             <Select
               value={data.codec ?? "h264"}
               onValueChange={(v) => onUpdate({ codec: v as TranscodeVideoData["codec"] })}
             >
-              <SelectTrigger aria-label="Codec"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("proccfg.codec")}><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="h264">H.264 (recommended)</SelectItem>
+                <SelectItem value="h264">{t("proccfg.h264Recommended")}</SelectItem>
                 <SelectItem value="h265">H.265 (HEVC)</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div>
-            <Label htmlFor="transcode-crf">Quality (CRF): {data.crf ?? 23}</Label>
+            <Label htmlFor="transcode-crf">{t("proccfg.qualityCrf", { n: data.crf ?? 23 })}</Label>
             <input
               id="transcode-crf"
               type="range"
@@ -1435,21 +1492,21 @@ export function TranscodeVideoConfig({ data, onUpdate }: ConfigProps<TranscodeVi
               className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#ff0073] bg-[#F8FAFC] dark:bg-[#121212]"
             />
             <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
-              <span>0 (best)</span>
-              <span>23 (default)</span>
-              <span>51 (worst)</span>
+              <span>{t("proccfg.0Best")}</span>
+              <span>{t("proccfg.23Default")}</span>
+              <span>{t("proccfg.51Worst")}</span>
             </div>
           </div>
 
           <div>
-            <Label>Resolution</Label>
+            <Label>{t("field.resolution")}</Label>
             <Select
               value={data.resolution ?? "original"}
               onValueChange={(v) => onUpdate({ resolution: v as TranscodeVideoData["resolution"] })}
             >
-              <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="original">Original</SelectItem>
+                <SelectItem value="original">{t("proccfg.original")}</SelectItem>
                 <SelectItem value="1080p">1080p</SelectItem>
                 <SelectItem value="720p">720p</SelectItem>
                 <SelectItem value="480p">480p</SelectItem>
@@ -1458,14 +1515,14 @@ export function TranscodeVideoConfig({ data, onUpdate }: ConfigProps<TranscodeVi
           </div>
 
           <div>
-            <Label>Audio Bitrate</Label>
+            <Label>{t("proccfg.audioBitrate")}</Label>
             <Select
               value={data.audioBitrate ?? "128k"}
               onValueChange={(v) => onUpdate({ audioBitrate: v as TranscodeVideoData["audioBitrate"] })}
             >
-              <SelectTrigger aria-label="Audio bitrate"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("proccfg.audioBitrate2")}><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="128k">128 kbps (default)</SelectItem>
+                <SelectItem value="128k">{t("proccfg.128KbpsDefault")}</SelectItem>
                 <SelectItem value="192k">192 kbps</SelectItem>
                 <SelectItem value="256k">256 kbps</SelectItem>
                 <SelectItem value="320k">320 kbps</SelectItem>
@@ -1479,37 +1536,39 @@ export function TranscodeVideoConfig({ data, onUpdate }: ConfigProps<TranscodeVi
 }
 
 /** Per-image size hint options — wire values 0–3 (see ImageCollageData.imageSizeBySource). */
-const COLLAGE_SIZE_OPTIONS = [
-  { value: 0, label: "Auto" },
-  { value: 1, label: "Big" },
-  { value: 2, label: "Med" },
-  { value: 3, label: "Small" },
+function COLLAGE_SIZE_OPTIONS() {
+  return [
+  { value: 0, label: tx("imgcfg.styleAuto") },
+  { value: 1, label: tx("proccfg.big") },
+  { value: 2, label: tx("proccfg.med") },
+  { value: 3, label: tx("proccfg.small") },
 ] as const
+}
 
 export function ImageCollageConfig({ data, onUpdate, sources }: ConfigProps<ImageCollageData>) {
+  const t = useT()
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground px-1">
-        Arranges every connected image into one large image. Connect 2+ image
-        producers — or a List of image URLs — to the input handle.
+        {t("proccfg.arrangesEveryConnectedImageIntoOne")}
       </p>
       <div>
-        <Label>Layout</Label>
+        <Label>{t("proccfg.layout")}</Label>
         <Select
           value={data.layout ?? "smart"}
           onValueChange={(v) => onUpdate({ layout: v as ImageCollageData["layout"] })}
         >
-          <SelectTrigger aria-label="Layout"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("proccfg.layout")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="smart">Smart (justified — aspect-aware)</SelectItem>
-            <SelectItem value="grid">Grid (uniform cells)</SelectItem>
+            <SelectItem value="smart">{t("proccfg.smartJustifiedAspectAware")}</SelectItem>
+            <SelectItem value="grid">{t("proccfg.gridUniformCells")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
       <div className="space-y-1">
         <div className="flex items-center justify-between">
           <Label htmlFor="collage-numbered" className="text-xs font-medium">
-            Number images (storyboard)
+            {t("proccfg.numberImagesStoryboard")}
           </Label>
           <Switch
             id="collage-numbered"
@@ -1520,25 +1579,25 @@ export function ImageCollageConfig({ data, onUpdate, sources }: ConfigProps<Imag
           />
         </div>
         <p className="text-[10px] text-muted-foreground">
-          1, 2, 3… at each image's corner, in the order below.
+          {t("proccfg.123AtEachImage")}
         </p>
       </div>
       <div>
-        <Label>Badge corner</Label>
+        <Label>{t("proccfg.badgeCorner")}</Label>
         <Select
           value={data.badgePosition === "top-right" ? "top-right" : "top-left"}
           // Top-left is the default: store `undefined` for it so a node that never
           // touched this stays byte-identical to a pre-feature workflow.
           onValueChange={(v) => onUpdate({ badgePosition: v === "top-right" ? "top-right" : undefined })}
         >
-          <SelectTrigger aria-label="Badge corner"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("proccfg.badgeCorner")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="top-left">Top-left (storyboard convention)</SelectItem>
-            <SelectItem value="top-right">Top-right</SelectItem>
+            <SelectItem value="top-left">{t("proccfg.topLeftStoryboardConvention")}</SelectItem>
+            <SelectItem value="top-right">{t("proccfg.topRight")}</SelectItem>
           </SelectContent>
         </Select>
         <p className="text-[10px] text-muted-foreground mt-1">
-          Where the number and label sit on each image.
+          {t("proccfg.whereTheNumberAndLabelSit")}
         </p>
       </div>
       {sources.length > 0 && (
@@ -1557,7 +1616,7 @@ export function ImageCollageConfig({ data, onUpdate, sources }: ConfigProps<Imag
             onUpdateOrder={(order) => onUpdate({ imageOrder: order })}
             acceptedTypes={new Set(sources.map((s) => s.type))}
             mediaType="image"
-            emptyMessage="Connect 2+ image producers to arrange them."
+            emptyMessage={t("proccfg.connect2ImageProducersToArrange")}
             thumbnailFor={(s) => {
               const nd = s.nodeData ?? {}
               const results = nd.generatedResults as Array<{ url?: string }> | undefined
@@ -1575,9 +1634,9 @@ export function ImageCollageConfig({ data, onUpdate, sources }: ConfigProps<Imag
                   <div
                     className="flex rounded-md border border-border overflow-hidden w-fit"
                     role="radiogroup"
-                    aria-label={`Size for ${entry.label}`}
+                    aria-label={t("proccfg.sizeFor", { label: entry.label })}
                   >
-                    {COLLAGE_SIZE_OPTIONS.map((opt) => (
+                    {COLLAGE_SIZE_OPTIONS().map((opt) => (
                       <button
                         key={opt.value}
                         type="button"
@@ -1603,9 +1662,9 @@ export function ImageCollageConfig({ data, onUpdate, sources }: ConfigProps<Imag
                   </div>
                   <Input
                     className="h-6 w-32 text-[11px]"
-                    placeholder="Label (optional)"
+                    placeholder={t("proccfg.labelOptional")}
                     maxLength={80}
-                    aria-label={`Label for ${entry.label}`}
+                    aria-label={t("proccfg.labelFor", { label: entry.label })}
                     value={data.imageLabelBySource?.[entry.id] ?? ""}
                     onChange={(e) => {
                       const next = { ...(data.imageLabelBySource ?? {}) }
@@ -1621,17 +1680,16 @@ export function ImageCollageConfig({ data, onUpdate, sources }: ConfigProps<Imag
           />
           <p className="text-[10px] text-muted-foreground mt-1">
             {(data.layout ?? "smart") === "grid"
-              ? "Drag to reorder (reading order). Size hints apply to the Smart layout — Grid keeps uniform cells."
-              : "Drag to reorder (reading order). Sizes are relative hints: Big ≈ 2× Medium, Small ≈ ½. A List input moves as one block and applies its hint to every image it contributes."}
+              ? t("proccfg.dragToReorderReadingOrderSize")
+              : t("proccfg.dragToReorderReadingOrderSizes")}
           </p>
           <p className="text-[10px] text-muted-foreground mt-1">
-            Labels show after the number (e.g. “3 · Close-up”). A List input’s
-            label repeats on each image it contributes.
+            {t("proccfg.labelsShowAfterTheNumberE")}
           </p>
         </div>
       )}
       <div>
-        <Label>Aspect Ratio</Label>
+        <Label>{t("field.aspectRatio")}</Label>
         <AspectRatioSelector
           options={COLLAGE_ASPECT_RATIOS}
           value={data.aspectRatio ?? "4:3"}
@@ -1639,20 +1697,20 @@ export function ImageCollageConfig({ data, onUpdate, sources }: ConfigProps<Imag
         />
       </div>
       <div>
-        <Label>Resolution</Label>
+        <Label>{t("field.resolution")}</Label>
         <Select
           value={data.resolution ?? "2K"}
           onValueChange={(v) => onUpdate({ resolution: v as ImageCollageData["resolution"] })}
         >
-          <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="2K">2K (2560 px long edge)</SelectItem>
-            <SelectItem value="4K">4K (3840 px long edge)</SelectItem>
+            <SelectItem value="2K">{t("proccfg.2k2560PxLongEdge")}</SelectItem>
+            <SelectItem value="4K">{t("proccfg.4k3840PxLongEdge")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
       <div>
-        <Label htmlFor="collage-gap">Gap: {data.gap ?? 24}px</Label>
+        <Label htmlFor="collage-gap">{t("proccfg.gapPx", { n: data.gap ?? 24 })}</Label>
         <input
           id="collage-gap"
           type="range"
@@ -1665,7 +1723,7 @@ export function ImageCollageConfig({ data, onUpdate, sources }: ConfigProps<Imag
         />
       </div>
       <div>
-        <Label htmlFor="collage-bg">Background Color</Label>
+        <Label htmlFor="collage-bg">{t("proccfg.backgroundColor")}</Label>
         <Input
           id="collage-bg"
           type="color"
@@ -1678,6 +1736,7 @@ export function ImageCollageConfig({ data, onUpdate, sources }: ConfigProps<Imag
 }
 
 export function SocialMediaFormatConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<SocialMediaFormatData>) {
+  const t = useT()
   const platform = (data.platform ?? "instagram") as SocialMediaPlatform
   const contentTypes = CONTENT_TYPES_BY_PLATFORM[platform] ?? []
   const spec = PLATFORM_SPECS[data.specKey]
@@ -1707,9 +1766,9 @@ export function SocialMediaFormatConfig({ data, onUpdate, sources, fieldMappings
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label>Platform</Label>
+        <Label>{t("proccfg.platform")}</Label>
         <Select value={platform} onValueChange={handlePlatformChange}>
-          <SelectTrigger aria-label="Platform"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("proccfg.platform")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {(Object.keys(PLATFORM_LABELS) as SocialMediaPlatform[]).map((p) => (
               <SelectItem key={p} value={p}>{PLATFORM_LABELS[p]}</SelectItem>
@@ -1719,25 +1778,28 @@ export function SocialMediaFormatConfig({ data, onUpdate, sources, fieldMappings
       </div>
 
       <div>
-        <Label>Content Type</Label>
+        <Label>{t("proccfg.contentType")}</Label>
         <Select value={data.specKey} onValueChange={handleContentTypeChange}>
-          <SelectTrigger aria-label="Content type"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("proccfg.contentType2")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            {contentTypes.map((ct) => (
-              <SelectItem key={ct.key} value={ct.key}>{ct.label}</SelectItem>
-            ))}
+            {contentTypes.map((ct) => {
+              const labelKey = CONTENT_TYPE_LABEL_KEYS[ct.key]
+              return (
+                <SelectItem key={ct.key} value={ct.key}>{labelKey ? t(labelKey) : ct.label}</SelectItem>
+              )
+            })}
           </SelectContent>
         </Select>
       </div>
 
       {spec && (
         <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground space-y-1">
-          <div className="flex justify-between"><span>Dimensions</span><span className="font-medium text-foreground">{spec.width}×{spec.height}</span></div>
-          <div className="flex justify-between"><span>Aspect Ratio</span><span className="font-medium text-foreground">{(spec.width / spec.height).toFixed(2)}:1</span></div>
+          <div className="flex justify-between"><span>{t("proccfg.dimensions")}</span><span className="font-medium text-foreground">{spec.width}×{spec.height}</span></div>
+          <div className="flex justify-between"><span>{t("field.aspectRatio")}</span><span className="font-medium text-foreground">{(spec.width / spec.height).toFixed(2)}:1</span></div>
           {spec.maxDurationSeconds && (
-            <div className="flex justify-between"><span>Max Duration</span><span className="font-medium text-foreground">{spec.maxDurationSeconds}s</span></div>
+            <div className="flex justify-between"><span>{t("proccfg.maxDuration")}</span><span className="font-medium text-foreground">{t("proccfg.s2", { n: spec.maxDurationSeconds })}</span></div>
           )}
-          <div className="flex justify-between"><span>Text Limit</span><span className="font-medium text-foreground">{spec.textLimit.toLocaleString()} chars</span></div>
+          <div className="flex justify-between"><span>{t("proccfg.textLimit")}</span><span className="font-medium text-foreground">{t("proccfg.chars", { count: spec.textLimit.toLocaleString() })}</span></div>
         </div>
       )}
 
@@ -1751,20 +1813,20 @@ export function SocialMediaFormatConfig({ data, onUpdate, sources, fieldMappings
       />
 
       <div>
-        <Label>Resize Method</Label>
+        <Label>{t("proccfg.resizeMethod")}</Label>
         <Select value={data.method} onValueChange={(v) => onUpdate({ method: v as SocialMediaFormatData["method"] })}>
-          <SelectTrigger aria-label="Resize method"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("proccfg.resizeMethod2")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="crop">Crop (fill, cut edges)</SelectItem>
-            <SelectItem value="pad">Pad (fit, add bars)</SelectItem>
-            <SelectItem value="stretch">Stretch (distort)</SelectItem>
+            <SelectItem value="crop">{t("proccfg.cropFillCutEdges")}</SelectItem>
+            <SelectItem value="pad">{t("proccfg.padFitAddBars")}</SelectItem>
+            <SelectItem value="stretch">{t("proccfg.stretchDistort")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
       {data.method === "pad" && (
         <div>
-          <Label htmlFor="smf-pad-color">Pad Color</Label>
+          <Label htmlFor="smf-pad-color">{t("proccfg.padColor")}</Label>
           <Input
             id="smf-pad-color"
             type="color"
@@ -1776,7 +1838,7 @@ export function SocialMediaFormatConfig({ data, onUpdate, sources, fieldMappings
 
       <MappableField
         field="formattedText"
-        label="Caption / Post Text"
+        label={t("proccfg.captionPostText")}
         sources={sources}
         fieldMappings={fieldMappings}
         onMapField={onMapField}
@@ -1789,24 +1851,25 @@ export function SocialMediaFormatConfig({ data, onUpdate, sources, fieldMappings
         <Textarea
           value={data.formattedText ?? ""}
           onChange={(e) => onUpdate({ formattedText: e.target.value })}
-          placeholder="Enter post text (optional)..."
+          placeholder={t("proccfg.enterPostTextOptional")}
           className="min-h-[60px] text-xs"
         />
         {isOverLimit && (
           <p className="text-[10px] text-red-500 mt-1">
-            Text exceeds {PLATFORM_LABELS[platform]}'s {textLimit} character limit by {textLen - textLimit} characters.
+            {t("proccfg.textExceedsSCharacterLimitBy", { platform: PLATFORM_LABELS[platform], limit: textLimit, over: textLen - textLimit })}
           </p>
         )}
       </MappableField>
 
       <p className="text-[10px] text-muted-foreground">
-        FFmpeg processing. Reformats media to {PLATFORM_LABELS[platform]} specs.
+        {t("proccfg.ffmpegProcessingReformatsMediaToSpecs", { platform: PLATFORM_LABELS[platform] })}
       </p>
     </div>
   )
 }
 
 export function ManualEditConfig({ data, onUpdate }: ConfigProps<ManualEditData>) {
+  const t = useT()
   const status = data.executionStatus ?? "idle"
   const mode = data.mode ?? "bypass"
   const editorLoad = data.editorLoad ?? "first"
@@ -1814,42 +1877,42 @@ export function ManualEditConfig({ data, onUpdate }: ConfigProps<ManualEditData>
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label>Run Mode</Label>
+        <Label>{t("proccfg.runMode")}</Label>
         <Select value={mode} onValueChange={(v) => onUpdate({ mode: v as "bypass" | "wait" })}>
-          <SelectTrigger aria-label="Run Mode"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("proccfg.runMode")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="bypass">Bypass (pass through)</SelectItem>
-            <SelectItem value="wait">Wait for Edit</SelectItem>
+            <SelectItem value="bypass">{t("proccfg.bypassPassThrough")}</SelectItem>
+            <SelectItem value="wait">{t("proccfg.waitForEdit")}</SelectItem>
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground mt-1">
-          {mode === "bypass" ? "Passes input through during workflow run. Open editor manually anytime." : "Pauses workflow until you finish editing in the NodarCut Editor."}
+          {mode === "bypass" ? t("proccfg.passesInputThroughDuringWorkflowRun") : t("proccfg.pausesWorkflowUntilYouFinishEditing")}
         </p>
       </div>
 
       <div>
-        <Label>Editor Load</Label>
+        <Label>{t("proccfg.editorLoad")}</Label>
         <Select value={editorLoad} onValueChange={(v) => onUpdate({ editorLoad: v as "first" | "all" })}>
-          <SelectTrigger aria-label="Editor Load"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("proccfg.editorLoad")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="first">First asset to timeline</SelectItem>
-            <SelectItem value="all">All assets to timeline</SelectItem>
+            <SelectItem value="first">{t("proccfg.firstAssetToTimeline")}</SelectItem>
+            <SelectItem value="all">{t("proccfg.allAssetsToTimeline")}</SelectItem>
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground mt-1">
-          {editorLoad === "first" ? "First video on timeline, others in asset library." : "All assets loaded to timeline on open."}
+          {editorLoad === "first" ? t("proccfg.firstVideoOnTimelineOthersIn") : t("proccfg.allAssetsLoadedToTimelineOn")}
         </p>
       </div>
 
       {status === "awaiting-user" && (
         <div className="flex items-center gap-2 rounded-md bg-amber-500/10 border border-amber-500/30 px-3 py-2">
           <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-          <span className="text-xs font-medium text-amber-500">Waiting for your edit</span>
+          <span className="text-xs font-medium text-amber-500">{t("proccfg.waitingForYourEdit")}</span>
         </div>
       )}
 
       <p className="text-[10px] text-muted-foreground">
-        0 credits — connect videos, images, and audio. Open the NodarCut Editor to edit anytime.
+        {t("proccfg.0CreditsConnectVideosImagesAnd")}
       </p>
     </div>
   )

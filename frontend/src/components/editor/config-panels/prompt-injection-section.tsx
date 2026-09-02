@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
@@ -36,6 +37,7 @@ export function PromptInjectionSection({
   selectedNodeId: string | undefined
   updateNodeData: (id: string, data: Record<string, unknown>) => void
 }) {
+  const t = useT()
   const inputs = NODE_DEFINITIONS.find((d) => d.type === nodeType)?.inputs ?? []
   const hasLook = inputs.includes("look") || inputs.includes("cinematography")
   const hasElements = inputs.includes("elements")
@@ -57,12 +59,12 @@ export function PromptInjectionSection({
       <Separator />
       <div className="space-y-2">
         <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">
-          Prompt Injection
+          {t("cfgshared.promptInjection")}
         </Label>
         {hasPromptInject && (
           <>
             <div className="flex items-center justify-between">
-              <Label htmlFor="inject-prompt" className="text-xs cursor-pointer">Inject Prompt</Label>
+              <Label htmlFor="inject-prompt" className="text-xs cursor-pointer">{t("cfgshared.injectPrompt")}</Label>
               <Switch
                 id="inject-prompt"
                 checked={injectPrompt}
@@ -70,14 +72,14 @@ export function PromptInjectionSection({
               />
             </div>
             <p className="text-[10px] text-muted-foreground -mt-1">
-              Append a connected prompt to this node&apos;s prompt
+              {t("cfgshared.injectPromptHint")}
             </p>
           </>
         )}
         {hasNegativeInject && (
           <>
             <div className="flex items-center justify-between">
-              <Label htmlFor="inject-negative" className="text-xs cursor-pointer">Inject Negative</Label>
+              <Label htmlFor="inject-negative" className="text-xs cursor-pointer">{t("cfgshared.injectNegative")}</Label>
               <Switch
                 id="inject-negative"
                 checked={injectNegative}
@@ -85,14 +87,14 @@ export function PromptInjectionSection({
               />
             </div>
             <p className="text-[10px] text-muted-foreground -mt-1">
-              Append a connected negative prompt to this node&apos;s negative
+              {t("cfgshared.injectNegativeHint")}
             </p>
           </>
         )}
         {hasLook && (
           <>
             <div className="flex items-center justify-between">
-              <Label htmlFor="inject-look" className="text-xs cursor-pointer">Inject Look</Label>
+              <Label htmlFor="inject-look" className="text-xs cursor-pointer">{t("cfgshared.injectLook")}</Label>
               <Switch
                 id="inject-look"
                 checked={injectLook}
@@ -100,14 +102,14 @@ export function PromptInjectionSection({
               />
             </div>
             <p className="text-[10px] text-muted-foreground -mt-1">
-              Fold connected cinematography / Look nodes into this node&apos;s prompt
+              {t("cfgshared.injectLookHint")}
             </p>
           </>
         )}
         {hasElements && (
           <>
             <div className="flex items-center justify-between">
-              <Label htmlFor="inject-elements" className="text-xs cursor-pointer">Inject Elements</Label>
+              <Label htmlFor="inject-elements" className="text-xs cursor-pointer">{t("cfgshared.injectElements")}</Label>
               <Switch
                 id="inject-elements"
                 checked={injectElements}
@@ -115,7 +117,7 @@ export function PromptInjectionSection({
               />
             </div>
             <p className="text-[10px] text-muted-foreground -mt-1">
-              Weave connected character Elements into this node&apos;s prompt
+              {t("cfgshared.injectElementsHint")}
             </p>
           </>
         )}

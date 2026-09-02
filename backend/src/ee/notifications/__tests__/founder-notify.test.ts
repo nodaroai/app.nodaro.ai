@@ -23,15 +23,23 @@ vi.mock("@/ee/notifications/signup-product.js", () => ({
   signupProduct: vi.fn(async () => "app"),
   signupProductsFor: vi.fn(async () => new Map()),
 }))
+// PUBLIC_URL drives the single-sender guard; default "" = this instance sends.
+vi.mock("@/lib/config.js", () => ({ config: { PUBLIC_URL: "" } }))
 
 import {
   israelParts,
   startOfIsraelDayUtc,
   notifyPaidConversion,
   notifyCancellation,
+  isStandbySender,
 } from "../founder-notify.js"
 import { getNotifyConfig } from "../notify-config.js"
 import { sendSlack } from "../slack-client.js"
+import { config } from "../../../lib/config.js"
+
+function setPublicUrl(url: string) {
+  ;(config as { PUBLIC_URL: string }).PUBLIC_URL = url
+}
 
 const CONFIG_ON = {
   digestEnabled: true,
@@ -45,6 +53,36 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(getNotifyConfig).mockResolvedValue({ ...CONFIG_ON })
   vi.mocked(sendSlack).mockResolvedValue({ ok: true })
+  setPublicUrl("") // default: this instance is the sender
+})
+
+describe("isStandbySender — single-sender guard (shared DB)", () => {
+  it("sends when PUBLIC_URL is empty (self-host / local)", () => {
+    setPublicUrl("")
+    expect(isStandbySender()).toBe(false)
+  })
+
+  it("stands by on the staging host (next.nodaro.ai)", () => {
+    setPublicUrl("https://next.nodaro.ai")
+    expect(isStandbySender()).toBe(true)
+  })
+
+  it("sends on the production host (app.nodaro.ai)", () => {
+    setPublicUrl("https://app.nodaro.ai")
+    expect(isStandbySender()).toBe(false)
+  })
+
+  it("sends on an arbitrary self-host domain", () => {
+    setPublicUrl("https://nodaro.acme.internal")
+    expect(isStandbySender()).toBe(false)
+  })
+
+  it("a standby instance does not send milestone alerts", async () => {
+    setPublicUrl("https://next.nodaro.ai")
+    await notifyPaidConversion("u1", "free", "pro")
+    await notifyCancellation("u1", "pro")
+    expect(sendSlack).not.toHaveBeenCalled()
+  })
 })
 
 describe("israelParts — DST-safe wall clock", () => {

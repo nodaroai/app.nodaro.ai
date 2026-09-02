@@ -20,6 +20,8 @@ import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
 import { PromptFieldFinalView, PromptFieldModeToggle } from "./prompt-field-final-view"
 import { useFinalPromptSegments, negativeRoutingCaption } from "./use-final-prompt-segments"
 import { usePromptFieldMode } from "@/hooks/use-prompt-field-mode"
+import { useT } from "@/lib/i18n"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import type { VideoSfxNodeData } from "@/types/nodes"
 import type { ConfigProps } from "./types"
 
@@ -67,6 +69,8 @@ export function VideoSfxConfig({
   variableDisplayMode,
   nodeId,
 }: ConfigProps<VideoSfxNodeData> & { nodeId?: string }) {
+  const t = useT()
+  const localizeNode = useLocalizeNodeLabel()
   const [showAdvanced, setShowAdvanced] = useState(false)
   const promptSnippets = useSnippetPool("audio", "prompt")
   const negativeSnippets = useSnippetPool("audio", "negative")
@@ -98,9 +102,9 @@ export function VideoSfxConfig({
           workaround is to mux the SFX back into the original via Merge
           Video + Audio downstream. */}
       <p className="text-xs text-muted-foreground leading-snug">
-        Replaces the video's audio track with generated SFX. Pipe through
-        <span className="font-medium text-foreground"> Merge Video + Audio </span>
-        to preserve the original audio.
+        {t("cfgext.sfxReplacesAudioBefore")}
+        <span className="font-medium text-foreground"> {localizeNode("Merge Video & Audio")} </span>
+        {t("cfgext.sfxReplacesAudioAfter")}
       </p>
 
       {/* 2. Prompt — mappable from upstream text nodes. The AI helper
@@ -109,7 +113,7 @@ export function VideoSfxConfig({
           PromptHelperButton owns the decision for every render site. */}
       <MappableField
         field="prompt"
-        label="Prompt"
+        label={t("node.prompt")}
         sources={sources}
         fieldMappings={fieldMappings}
         onMapField={onMapField}
@@ -130,7 +134,7 @@ export function VideoSfxConfig({
           <PromptFieldFinalView
             segments={finalPrompt.promptSegments}
             plainText={finalPrompt.promptText}
-            placeholder="Final prompt preview — node has no prompt yet"
+            placeholder={t("imgcfg.promptPreviewEmpty")}
             minHeightRem={3 * 1.5}
           />
         ) : (
@@ -139,7 +143,7 @@ export function VideoSfxConfig({
               rows={3}
               value={data.prompt ?? ""}
               onChange={(v) => onUpdate({ prompt: v })}
-              placeholder='e.g. "footsteps on dry leaves", "rain on a metal roof", "engine revving"'
+              placeholder={t("cfgext.sfxPromptPlaceholder")}
               maxLength={2000}
               tagMode="none"
               nodeRefs={nodeRefs}
@@ -148,7 +152,7 @@ export function VideoSfxConfig({
               snippets={promptSnippets}
             />
             <p className="text-xs text-muted-foreground mt-1">
-              Leave blank for pure foley driven by the video alone.
+              {t("cfgext.sfxPromptBlankHint")}
             </p>
           </>
         )}
@@ -159,7 +163,7 @@ export function VideoSfxConfig({
           style prompts and not understand why. Max 500 chars (route Zod cap). */}
       <MappableField
         field="negativePrompt"
-        label='Negative prompt (default: "music")'
+        label={t("cfgext.sfxNegativePromptLabel")}
         sources={sources}
         fieldMappings={fieldMappings}
         onMapField={onMapField}
@@ -172,7 +176,7 @@ export function VideoSfxConfig({
           <PromptFieldFinalView
             segments={finalPrompt.negativeSegments}
             plainText={finalPrompt.negativeText}
-            placeholder="Final negative prompt preview — nothing to avoid yet"
+            placeholder={t("imgcfg.negPreviewEmpty")}
             routingCaption={negativeRoutingCaption(finalPrompt.negativeRouting)}
             minHeightRem={2.5}
           />
@@ -186,8 +190,7 @@ export function VideoSfxConfig({
               maxLength={500}
             />
             <p className="text-xs text-muted-foreground mt-1">
-              MMAudio actively suppresses music by default. Clear this field if
-              you want the model to generate music as the "SFX".
+              {t("cfgext.sfxNegativeDefaultHint")}
             </p>
           </>
         )}
@@ -197,7 +200,7 @@ export function VideoSfxConfig({
           Same lever exposed in the hover quick toolbar. */}
       <MappableField
         field="versions"
-        label="Versions"
+        label={t("cfgext.sfxVersionsLabel")}
         sources={sources}
         fieldMappings={fieldMappings}
         onMapField={onMapField}
@@ -209,17 +212,17 @@ export function VideoSfxConfig({
             onUpdate({ versions: Number.isFinite(n) ? Math.min(Math.max(1, n), 4) : 1 })
           }}
         >
-          <SelectTrigger aria-label="Versions"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label={t("cfgext.sfxVersionsLabel")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {[1, 2, 3, 4].map((n) => (
               <SelectItem key={n} value={String(n)}>
-                {n} {n === 1 ? "take" : "takes"}
+                {n} {n === 1 ? t("cfgext.sfxTake") : t("cfgext.sfxTakes")}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground mt-1">
-          Generates N distinct SFX takes per run. Linear credit cost.
+          {t("cfgext.sfxVersionsHint")}
         </p>
       </MappableField>
 
@@ -233,15 +236,15 @@ export function VideoSfxConfig({
         className="flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
       >
         {showAdvanced ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-        Advanced
+        {t("utilcfg.modeAdvanced")}
       </button>
 
       {showAdvanced && (
-        <div className="flex flex-col gap-3 pl-1 border-l-2 border-muted-foreground/10 ml-1">
+        <div className="flex flex-col gap-3 ps-1 border-s-2 border-muted-foreground/10 ms-1">
           {/* CFG strength — higher = closer to prompt, lower = more
               grounded in the video. Default 4.5 is MMAudio's reference. */}
           <div>
-            <Label>CFG strength: {cfgStrength.toFixed(1)}</Label>
+            <Label>{t("cfgext.sfxCfgStrength", { value: cfgStrength.toFixed(1) })}</Label>
             <Slider
               min={1}
               max={10}
@@ -250,16 +253,16 @@ export function VideoSfxConfig({
               onValueChange={(vals) => onUpdate({ cfgStrength: vals[0] })}
             />
             <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
-              <span>1 (loose)</span>
-              <span>4.5 (default)</span>
-              <span>10 (strict)</span>
+              <span>{t("cfgext.sfxCfgLoose")}</span>
+              <span>{t("cfgext.sfxCfgDefault")}</span>
+              <span>{t("cfgext.sfxCfgStrict")}</span>
             </div>
           </div>
 
           {/* Inference steps — more steps = cleaner SFX but slower (and
               hits the duration-bucketed credit cost the same either way). */}
           <div>
-            <Label>Inference steps: {numSteps}</Label>
+            <Label>{t("cfgext.sfxInferenceSteps", { value: numSteps })}</Label>
             <Slider
               min={10}
               max={50}
@@ -268,9 +271,9 @@ export function VideoSfxConfig({
               onValueChange={(vals) => onUpdate({ numSteps: vals[0] })}
             />
             <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
-              <span>10 (fast)</span>
-              <span>25 (default)</span>
-              <span>50 (clean)</span>
+              <span>{t("cfgext.sfxStepsFast")}</span>
+              <span>{t("cfgext.sfxStepsDefault")}</span>
+              <span>{t("cfgext.sfxStepsClean")}</span>
             </div>
           </div>
 
@@ -280,11 +283,11 @@ export function VideoSfxConfig({
               and -1 to match "random" intent without poking the backend
               with a sentinel it'd have to translate. */}
           <div>
-            <Label>Seed</Label>
+            <Label>{t("field.seed")}</Label>
             <Input
               type="number"
               value={data.seed ?? ""}
-              placeholder="blank or -1 = random"
+              placeholder={t("cfgext.sfxSeedPlaceholder")}
               onChange={(e) => {
                 const raw = e.target.value
                 if (raw === "" || raw === "-1") {
@@ -296,7 +299,7 @@ export function VideoSfxConfig({
               }}
             />
             <p className="text-xs text-muted-foreground mt-1">
-              Same seed + same inputs = deterministic output.
+              {t("cfgext.sfxSeedHint")}
             </p>
           </div>
         </div>

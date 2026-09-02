@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { useState, useMemo } from "react"
 import { Sparkles } from "lucide-react"
 import { useLlmAvailability } from "@/hooks/use-llm-availability"
@@ -35,6 +36,7 @@ export function PromptHelperButton({
   onAccept,
   size = "sm",
 }: PromptHelperButtonProps) {
+  const t = useT()
   const [open, setOpen] = useState(false)
   // Capability, not edition: render wherever the install can actually reach
   // an LLM (Cloud always; self-host with a KIE/Anthropic/Gemini key or the
@@ -107,7 +109,7 @@ export function PromptHelperButton({
         }
       >
         <Sparkles className={size === "md" ? "w-3.5 h-3.5" : "w-3 h-3"} />
-        Generate with AI
+        {t("cfgshared.generateWithAi")}
       </button>
       {open && (
         <PromptHelperDialog

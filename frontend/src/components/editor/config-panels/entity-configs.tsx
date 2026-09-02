@@ -2,6 +2,8 @@
 
 import { useState, useRef, useMemo, useEffect } from "react"
 import { useSurfaceAvailability } from "@/lib/surface-availability"
+import { useT } from "@/lib/i18n"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import { Play, Loader2, Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -44,6 +46,8 @@ import type { ConfigProps } from "./types"
 type CharacterConfigProps = ConfigProps<CharacterNodeData> & { nodeId?: string }
 
 export function CharacterConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeId }: CharacterConfigProps) {
+  const t = useT()
+  const localizeNode = useLocalizeNodeLabel()
   const setCharacterStudioNodeId = useWorkflowStore((s) => s.setCharacterStudioNodeId)
 
   const exprCount = (data.expressions ?? []).length
@@ -53,10 +57,16 @@ export function CharacterConfig({ data, onUpdate, sources, fieldMappings, onMapF
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <div className="text-[9px] uppercase tracking-wide text-muted-foreground mb-1">Character Asset</div>
-        <div className="text-[13px] font-semibold text-foreground">{data.characterName || "Unnamed"}</div>
+        <div className="text-[9px] uppercase tracking-wide text-muted-foreground mb-1">{localizeNode("Character Asset")}</div>
+        <div className="text-[13px] font-semibold text-foreground">{data.characterName || t("cfgext.entUnnamed")}</div>
         <div className="text-[10px] text-muted-foreground">
-          {data.style} · {data.gender} · {exprCount} expr · {poseCount} poses · {motionCount} motions
+          {t("cfgext.entCharacterSummary", {
+            style: data.style ?? "",
+            gender: data.gender ?? "",
+            expr: exprCount,
+            poses: poseCount,
+            motions: motionCount,
+          })}
         </div>
       </div>
 
@@ -68,35 +78,35 @@ export function CharacterConfig({ data, onUpdate, sources, fieldMappings, onMapF
       <button
         type="button"
         onClick={() => nodeId && setCharacterStudioNodeId(nodeId)}
-        className="w-full text-left bg-[#1e3a5f] border border-[#3b82f644] rounded-md px-3.5 py-2.5 flex items-center gap-2 hover:bg-[#234670] transition-colors disabled:opacity-50"
+        className="w-full text-start bg-[#1e3a5f] border border-[#3b82f644] rounded-md px-3.5 py-2.5 flex items-center gap-2 hover:bg-[#234670] transition-colors disabled:opacity-50"
         disabled={!nodeId}
-        aria-label="Open Character Studio"
+        aria-label={t("cfgext.entOpenCharacterStudio")}
       >
         <span className="text-base leading-none">⬡</span>
         <span>
-          <span className="block text-[11px] font-semibold text-[#93c5fd]">Open Character Studio</span>
-          <span className="block text-[9px] text-muted-foreground">Edit appearance, assets, voice &amp; personality</span>
+          <span className="block text-[11px] font-semibold text-[#93c5fd]">{t("cfgext.entOpenCharacterStudio")}</span>
+          <span className="block text-[9px] text-muted-foreground">{t("cfgext.entCharacterStudioSub")}</span>
         </span>
-        <span className="ml-auto text-[#3b82f6]">→</span>
+        <span className="ms-auto text-[#3b82f6]">→</span>
       </button>
 
       <div className="border-t border-border pt-3 flex flex-col gap-3">
         {/* Identity Lock — kept verbatim from the pre-studio CharacterConfig */}
         <div>
-          <Label htmlFor="char-identity-lock">Identity Lock</Label>
+          <Label htmlFor="char-identity-lock">{t("cfgext.entIdentityLock")}</Label>
           <Select
             value={data.identityLock ?? DEFAULT_IDENTITY_LOCK}
             onValueChange={(v) => onUpdate({ identityLock: v as NonNullable<CharacterNodeData["identityLock"]> })}
           >
             <SelectTrigger id="char-identity-lock"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="off">Off — model may reinterpret the face</SelectItem>
-              <SelectItem value="soft">Soft — preserve overall likeness (default)</SelectItem>
-              <SelectItem value="strict">Strict — clamp facial identity to the reference</SelectItem>
+              <SelectItem value="off">{t("cfgext.entIdentityLockOff")}</SelectItem>
+              <SelectItem value="soft">{t("cfgext.entIdentityLockSoft")}</SelectItem>
+              <SelectItem value="strict">{t("cfgext.entIdentityLockStrict")}</SelectItem>
             </SelectContent>
           </Select>
           <p className="text-[10px] text-muted-foreground mt-0.5">
-            Applied when this Character feeds downstream image / video generation.
+            {t("cfgext.entIdentityLockHint")}
           </p>
         </div>
 
@@ -114,27 +124,27 @@ export function CharacterConfig({ data, onUpdate, sources, fieldMappings, onMapF
               onChange={(e) => onUpdate({ injectIdentityInPrompts: e.target.checked })}
             />
             <Label htmlFor="char-inject-identity" className="text-xs">
-              Inject identity description in downstream prompts
+              {t("cfgext.entInjectIdentity")}
             </Label>
           </div>
           <p className="text-[10px] text-muted-foreground">
-            When enabled, downstream image/video nodes wired to this character will use the canonical identity description for better consistency.
+            {t("cfgext.entInjectIdentityHint")}
           </p>
           {data.injectIdentityInPrompts && !(data.canonicalDescription && data.canonicalDescription.trim().length > 0) && (
             <p className="text-[10px] text-amber-500">
-              No canonical description yet — generate a portrait in the studio first.
+              {t("cfgext.entNoCanonicalDescription")}
             </p>
           )}
         </div>
 
         {/* Field Mappings — keep the {} input-injection mapping for the Character Name,
             the one referenceable field that survives the move to the studio. */}
-        <MappableField field="characterName" label="Character Name" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <MappableField field="characterName" label={t("cfgext.entCharacterName")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
           <Input
             id="char-name"
             value={data.characterName}
             onChange={(e) => onUpdate({ characterName: e.target.value })}
-            placeholder="e.g. Sir Aldric (use {} to inject input)"
+            placeholder={t("cfgext.entCharacterNamePlaceholder")}
           />
         </MappableField>
       </div>
@@ -147,6 +157,8 @@ export function FaceConfig({ data, onUpdate, sources, fieldMappings, onMapField 
   // after the first paint, and without a subscription this dropdown would
   // keep showing every model for the rest of the session.
   useSurfaceAvailability()
+  const t = useT()
+  const localizeNode = useLocalizeNodeLabel()
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
   const nodes = useWorkflowStore((s) => s.nodes)
@@ -216,9 +228,9 @@ export function FaceConfig({ data, onUpdate, sources, fieldMappings, onMapField 
     if (!data.faceName) return null
     if (data.faceDbId) return null
     const exactMatch = existingNames.includes(data.faceName)
-    if (exactMatch) return `A face named "${data.faceName}" already exists. It will be auto-versioned on blur.`
+    if (exactMatch) return t("cfgext.entFaceDuplicateWarning", { name: data.faceName })
     return null
-  }, [data.faceName, data.faceDbId, existingNames])
+  }, [data.faceName, data.faceDbId, existingNames, t])
 
   function handleUploadImage(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -230,47 +242,47 @@ export function FaceConfig({ data, onUpdate, sources, fieldMappings, onMapField 
 
   return (
     <div className="flex flex-col gap-3">
-      <MappableField field="faceName" label="Face Name" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Input id="face-name" value={data.faceName} onChange={(e) => onUpdate({ faceName: e.target.value })} onBlur={(e) => handleNameChange(e.target.value)} placeholder="e.g. John Smith (use {} to inject input)" />
+      <MappableField field="faceName" label={t("cfgext.entFaceName")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Input id="face-name" value={data.faceName} onChange={(e) => onUpdate({ faceName: e.target.value })} onBlur={(e) => handleNameChange(e.target.value)} placeholder={t("cfgext.entFaceNamePlaceholder")} />
         {duplicateWarning && (<p className="text-[10px] text-amber-500 mt-0.5">{duplicateWarning}</p>)}
       </MappableField>
-      <MappableField field="description" label="Description" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Textarea id="face-desc" value={data.description} onChange={(e) => onUpdate({ description: e.target.value })} placeholder="A person in their 30s with brown eyes... (use {} to inject input)" rows={3} />
+      <MappableField field="description" label={t("settings.descriptionTab")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Textarea id="face-desc" value={data.description} onChange={(e) => onUpdate({ description: e.target.value })} placeholder={t("cfgext.entFaceDescriptionPlaceholder")} rows={3} />
       </MappableField>
       <div>
-        <Label htmlFor="face-style">Style</Label>
+        <Label htmlFor="face-style">{t("pipe.style")}</Label>
         <Select value={data.style} onValueChange={(v) => onUpdate({ style: v as FaceNodeData["style"] })}>
           <SelectTrigger id="face-style"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="realistic">Realistic</SelectItem>
-            <SelectItem value="anime">Anime</SelectItem>
-            <SelectItem value="3d-pixar">3D Pixar</SelectItem>
-            <SelectItem value="illustration">Illustration</SelectItem>
+            <SelectItem value="realistic">{t("imgcfg.styleRealistic")}</SelectItem>
+            <SelectItem value="anime">{t("cfgext.entStyleAnime")}</SelectItem>
+            <SelectItem value="3d-pixar">{t("cfgext.entStyle3dPixar")}</SelectItem>
+            <SelectItem value="illustration">{t("cfgext.entStyleIllustration")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
       <div>
-        <Label htmlFor="face-image">Reference Photo</Label>
-        <p className="text-[10px] text-muted-foreground mb-1">Upload a clear face photo. This will be used to maintain facial identity in generated images.</p>
+        <Label htmlFor="face-image">{t("cfgext.entReferencePhoto")}</Label>
+        <p className="text-[10px] text-muted-foreground mb-1">{t("cfgext.entReferencePhotoHint")}</p>
         <div className="flex gap-1.5">
-          <Input id="face-image" value={data.sourceImageUrl} onChange={(e) => onUpdate({ sourceImageUrl: e.target.value })} placeholder="https://... or upload" className="flex-1" />
+          <Input id="face-image" value={data.sourceImageUrl} onChange={(e) => onUpdate({ sourceImageUrl: e.target.value })} placeholder={t("cfgext.entUrlOrUploadPlaceholder")} className="flex-1" />
           <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/avif,image/heic,image/heif" className="hidden" onChange={handleUploadImage} />
-          <Button variant="outline" size="icon" className="shrink-0 h-9 w-9" disabled={uploading} onClick={() => fileInputRef.current?.click()} title="Upload image from computer" aria-label="Upload image from computer">
+          <Button variant="outline" size="icon" className="shrink-0 h-9 w-9" disabled={uploading} onClick={() => fileInputRef.current?.click()} title={t("cfgext.entUploadFromComputer")} aria-label={t("cfgext.entUploadFromComputer")}>
             {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
           </Button>
         </div>
       </div>
 
       <div>
-        <Label className="text-xs">Image Model</Label>
+        <Label className="text-xs">{t("cfgext.entImageModel")}</Label>
         <ModelSearchSelect
           value={data.provider || "nano-banana"}
           onChange={(v) => onUpdate({ provider: v })}
           options={withoutDeniedModels(IMAGE_GEN_MODELS)}
           triggerClassName="h-8 text-xs mt-1"
           contentClassName="z-[9999]"
-          ariaLabel="Image model"
+          ariaLabel={t("pipe.imageModel")}
         />
       </div>
       <ModelDescriptionHint modelId={data.provider} />
@@ -284,10 +296,10 @@ export function FaceConfig({ data, onUpdate, sources, fieldMappings, onMapField 
         disabled={isRunning || !data.faceName || (!data.sourceImageUrl && !hasConnectedImage)}
         onClick={() => { if (selectedNodeId && runSingleNode) runSingleNode(selectedNodeId) }}
       >
-        {isRunning ? (<><Loader2 className="w-3 h-3 mr-1.5 animate-spin" />Generating...</>) : (<><Play className="w-3 h-3 mr-1.5" />Generate Headshot{creditCost > 0 ? ` (${formatCreditUnits(creditCost)})` : ""}</>)}
+        {isRunning ? (<><Loader2 className="w-3 h-3 me-1.5 animate-spin" />{t("cfgext.entGenerating")}</>) : (<><Play className="w-3 h-3 me-1.5" />{t("cfgext.entGenerateHeadshot")}{creditCost > 0 ? ` (${formatCreditUnits(creditCost)})` : ""}</>)}
       </Button>
       {!data.sourceImageUrl && !hasConnectedImage && data.faceName && (
-        <p className="text-[10px] text-muted-foreground">Upload a reference photo or connect an Upload Image node to enable headshot generation.</p>
+        <p className="text-[10px] text-muted-foreground">{t("cfgext.entFaceNoReferenceHint", { node: localizeNode("Upload Image") })}</p>
       )}
 
       <MediaEditorModal editor={faceMediaEditor} />
@@ -298,6 +310,8 @@ export function FaceConfig({ data, onUpdate, sources, fieldMappings, onMapField 
 type ObjectConfigProps = ConfigProps<ObjectNodeData> & { nodeId?: string }
 
 export function ObjectConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeId }: ObjectConfigProps) {
+  const t = useT()
+  const localizeNode = useLocalizeNodeLabel()
   const setObjectStudioNodeId = useWorkflowStore((s) => s.setObjectStudioNodeId)
 
   const anglesCount = (data.angles ?? []).length
@@ -309,10 +323,18 @@ export function ObjectConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <div className="text-[9px] uppercase tracking-wide text-muted-foreground mb-1">Object/Props Asset</div>
-        <div className="text-[13px] font-semibold text-foreground">{data.objectName || "(unnamed object)"}</div>
+        <div className="text-[9px] uppercase tracking-wide text-muted-foreground mb-1">{localizeNode("Object/Props Asset")}</div>
+        <div className="text-[13px] font-semibold text-foreground">{data.objectName || t("cfgext.entUnnamedObject")}</div>
         <div className="text-[10px] text-muted-foreground">
-          {data.style} · {data.category} · {anglesCount} angles · {materialsCount} materials · {variationsCount} variations · {motionCount} motion · {refsCount} refs
+          {t("cfgext.entObjectSummary", {
+            style: data.style ?? "",
+            category: data.category ?? "",
+            angles: anglesCount,
+            materials: materialsCount,
+            variations: variationsCount,
+            motion: motionCount,
+            refs: refsCount,
+          })}
         </div>
       </div>
 
@@ -321,16 +343,16 @@ export function ObjectConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
       <button
         type="button"
         onClick={() => nodeId && setObjectStudioNodeId(nodeId)}
-        className="w-full text-left bg-[#0e3a2e] border border-[#34D39944] rounded-md px-3.5 py-2.5 flex items-center gap-2 hover:bg-[#114b3b] transition-colors disabled:opacity-50"
+        className="w-full text-start bg-[#0e3a2e] border border-[#34D39944] rounded-md px-3.5 py-2.5 flex items-center gap-2 hover:bg-[#114b3b] transition-colors disabled:opacity-50"
         disabled={!nodeId}
-        aria-label="Open Object/Props Studio"
+        aria-label={t("cfgext.entOpenObjectStudio")}
       >
         <span className="text-base leading-none">⬡</span>
         <span>
-          <span className="block text-[11px] font-semibold text-[#6ee7b7]">Open Object/Props Studio</span>
-          <span className="block text-[9px] text-muted-foreground">Edit appearance, assets, motion &amp; reference photos</span>
+          <span className="block text-[11px] font-semibold text-[#6ee7b7]">{t("cfgext.entOpenObjectStudio")}</span>
+          <span className="block text-[9px] text-muted-foreground">{t("cfgext.entStudioSubMotionRefs")}</span>
         </span>
-        <span className="ml-auto text-[#34D399]">→</span>
+        <span className="ms-auto text-[#34D399]">→</span>
       </button>
 
       <div className="border-t border-border pt-3 flex flex-col gap-3">
@@ -346,23 +368,23 @@ export function ObjectConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
               onChange={(e) => onUpdate({ styleLock: e.target.checked })}
             />
             <Label htmlFor="obj-style-lock" className="text-xs">
-              Style Lock
+              {t("cfgext.entStyleLock")}
             </Label>
           </div>
           <p className="text-[10px] text-muted-foreground">
-            When enabled, downstream image/video nodes wired to this object will use the canonical caption for better consistency.
+            {t("cfgext.entStyleLockHintObject")}
           </p>
         </div>
 
         {/* Field Mappings — keep the {} input-injection mapping for the
             Object Name, the one referenceable field that survives the move
             to the studio. */}
-        <MappableField field="objectName" label="Object/Props Name" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <MappableField field="objectName" label={t("cfgext.entObjectName")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
           <Input
             id="obj-name"
             value={data.objectName}
             onChange={(e) => onUpdate({ objectName: e.target.value })}
-            placeholder="e.g. Magic Sword (use {} to inject input)"
+            placeholder={t("cfgext.entObjectNamePlaceholder")}
           />
         </MappableField>
       </div>
@@ -379,6 +401,8 @@ type CreatureConfigProps = ConfigProps<CreatureNodeData> & { nodeId?: string }
 const ANIMAL_SPECIES_SUGGESTIONS = ANIMALS
 
 export function CreatureConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeId }: CreatureConfigProps) {
+  const t = useT()
+  const localizeNode = useLocalizeNodeLabel()
   const setCreatureStudioNodeId = useWorkflowStore((s) => s.setCreatureStudioNodeId)
 
   const anglesCount = (data.angles ?? []).length
@@ -390,10 +414,18 @@ export function CreatureConfig({ data, onUpdate, sources, fieldMappings, onMapFi
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <div className="text-[9px] uppercase tracking-wide text-muted-foreground mb-1">Animal/Creature Asset</div>
-        <div className="text-[13px] font-semibold text-foreground">{data.creatureName || "(unnamed creature)"}</div>
+        <div className="text-[9px] uppercase tracking-wide text-muted-foreground mb-1">{localizeNode("Animal/Creature Asset")}</div>
+        <div className="text-[13px] font-semibold text-foreground">{data.creatureName || t("cfgext.entUnnamedCreature")}</div>
         <div className="text-[10px] text-muted-foreground">
-          {data.style} · {data.species || data.category} · {anglesCount} angles · {posesCount} poses · {variationsCount} variations · {motionCount} motion · {refsCount} refs
+          {t("cfgext.entCreatureSummary", {
+            style: data.style ?? "",
+            species: data.species || data.category || "",
+            angles: anglesCount,
+            poses: posesCount,
+            variations: variationsCount,
+            motion: motionCount,
+            refs: refsCount,
+          })}
         </div>
       </div>
 
@@ -402,16 +434,16 @@ export function CreatureConfig({ data, onUpdate, sources, fieldMappings, onMapFi
       <button
         type="button"
         onClick={() => nodeId && setCreatureStudioNodeId(nodeId)}
-        className="w-full text-left bg-[#2e1e4a] border border-[#A78BFA44] rounded-md px-3.5 py-2.5 flex items-center gap-2 hover:bg-[#3a2960] transition-colors disabled:opacity-50"
+        className="w-full text-start bg-[#2e1e4a] border border-[#A78BFA44] rounded-md px-3.5 py-2.5 flex items-center gap-2 hover:bg-[#3a2960] transition-colors disabled:opacity-50"
         disabled={!nodeId}
-        aria-label="Open Creature Studio"
+        aria-label={t("cfgext.entOpenCreatureStudio")}
       >
         <span className="text-base leading-none">⬡</span>
         <span>
-          <span className="block text-[11px] font-semibold text-[#c4b5fd]">Open Creature Studio</span>
-          <span className="block text-[9px] text-muted-foreground">Edit appearance, assets, motion &amp; reference photos</span>
+          <span className="block text-[11px] font-semibold text-[#c4b5fd]">{t("cfgext.entOpenCreatureStudio")}</span>
+          <span className="block text-[9px] text-muted-foreground">{t("cfgext.entStudioSubMotionRefs")}</span>
         </span>
-        <span className="ml-auto text-[#A78BFA]">→</span>
+        <span className="ms-auto text-[#A78BFA]">→</span>
       </button>
 
       <div className="border-t border-border pt-3 flex flex-col gap-3">
@@ -421,14 +453,14 @@ export function CreatureConfig({ data, onUpdate, sources, fieldMappings, onMapFi
             from object's hard category enum. */}
         <div className="flex flex-col gap-1">
           <Label htmlFor="creature-species" className="text-xs">
-            Species / Type
+            {t("cfgext.entSpeciesType")}
           </Label>
           <Input
             id="creature-species"
             list="creature-species-suggestions"
             value={data.species ?? ""}
             onChange={(e) => onUpdate({ species: e.target.value })}
-            placeholder="e.g. red fox, griffin, dragon"
+            placeholder={t("cfgext.entSpeciesPlaceholder")}
           />
           <datalist id="creature-species-suggestions">
             {ANIMAL_SPECIES_SUGGESTIONS.map((a) => (
@@ -436,7 +468,7 @@ export function CreatureConfig({ data, onUpdate, sources, fieldMappings, onMapFi
             ))}
           </datalist>
           <p className="text-[10px] text-muted-foreground">
-            Free text — pick a suggestion or type any animal / mythical creature.
+            {t("cfgext.entSpeciesHint")}
           </p>
         </div>
 
@@ -452,23 +484,23 @@ export function CreatureConfig({ data, onUpdate, sources, fieldMappings, onMapFi
               onChange={(e) => onUpdate({ styleLock: e.target.checked })}
             />
             <Label htmlFor="creature-style-lock" className="text-xs">
-              Style Lock
+              {t("cfgext.entStyleLock")}
             </Label>
           </div>
           <p className="text-[10px] text-muted-foreground">
-            When enabled, downstream image/video nodes wired to this creature will use the canonical caption for better consistency.
+            {t("cfgext.entStyleLockHintCreature")}
           </p>
         </div>
 
         {/* Field Mappings — keep the {} input-injection mapping for the
             Creature Name, the one referenceable field that survives the move
             to the studio. */}
-        <MappableField field="creatureName" label="Creature Name" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <MappableField field="creatureName" label={t("cfgext.entCreatureName")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
           <Input
             id="creature-name"
             value={data.creatureName}
             onChange={(e) => onUpdate({ creatureName: e.target.value })}
-            placeholder="e.g. Spark the Fox (use {} to inject input)"
+            placeholder={t("cfgext.entCreatureNamePlaceholder")}
           />
         </MappableField>
       </div>
@@ -479,6 +511,8 @@ export function CreatureConfig({ data, onUpdate, sources, fieldMappings, onMapFi
 type LocationConfigProps = ConfigProps<LocationNodeData> & { nodeId?: string }
 
 export function LocationConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeId }: LocationConfigProps) {
+  const t = useT()
+  const localizeNode = useLocalizeNodeLabel()
   const setLocationStudioNodeId = useWorkflowStore((s) => s.setLocationStudioNodeId)
 
   const todCount = (data.timeOfDay ?? []).length
@@ -490,10 +524,18 @@ export function LocationConfig({ data, onUpdate, sources, fieldMappings, onMapFi
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <div className="text-[9px] uppercase tracking-wide text-muted-foreground mb-1">Location Asset</div>
-        <div className="text-[13px] font-semibold text-foreground">{data.locationName || "(unnamed location)"}</div>
+        <div className="text-[9px] uppercase tracking-wide text-muted-foreground mb-1">{localizeNode("Location Asset")}</div>
+        <div className="text-[13px] font-semibold text-foreground">{data.locationName || t("cfgext.entUnnamedLocation")}</div>
         <div className="text-[10px] text-muted-foreground">
-          {data.style} · {data.category} · {todCount} tod · {weatherCount} weather · {seasonsCount} seasons · {anglesCount} angles · {lightingCount} lighting
+          {t("cfgext.entLocationSummary", {
+            style: data.style ?? "",
+            category: data.category ?? "",
+            tod: todCount,
+            weather: weatherCount,
+            seasons: seasonsCount,
+            angles: anglesCount,
+            lighting: lightingCount,
+          })}
         </div>
       </div>
 
@@ -502,16 +544,16 @@ export function LocationConfig({ data, onUpdate, sources, fieldMappings, onMapFi
       <button
         type="button"
         onClick={() => nodeId && setLocationStudioNodeId(nodeId)}
-        className="w-full text-left bg-[#0e3a4a] border border-[#22D3EE44] rounded-md px-3.5 py-2.5 flex items-center gap-2 hover:bg-[#114b5f] transition-colors disabled:opacity-50"
+        className="w-full text-start bg-[#0e3a4a] border border-[#22D3EE44] rounded-md px-3.5 py-2.5 flex items-center gap-2 hover:bg-[#114b5f] transition-colors disabled:opacity-50"
         disabled={!nodeId}
-        aria-label="Open Location Studio"
+        aria-label={t("cfgext.entOpenLocationStudio")}
       >
         <span className="text-base leading-none">⬡</span>
         <span>
-          <span className="block text-[11px] font-semibold text-[#67e8f9]">Open Location Studio</span>
-          <span className="block text-[9px] text-muted-foreground">Edit appearance, assets &amp; atmosphere</span>
+          <span className="block text-[11px] font-semibold text-[#67e8f9]">{t("cfgext.entOpenLocationStudio")}</span>
+          <span className="block text-[9px] text-muted-foreground">{t("cfgext.entLocationStudioSub")}</span>
         </span>
-        <span className="ml-auto text-[#22D3EE]">→</span>
+        <span className="ms-auto text-[#22D3EE]">→</span>
       </button>
 
       <div className="border-t border-border pt-3 flex flex-col gap-3">
@@ -527,22 +569,22 @@ export function LocationConfig({ data, onUpdate, sources, fieldMappings, onMapFi
               onChange={(e) => onUpdate({ styleLock: e.target.checked })}
             />
             <Label htmlFor="loc-style-lock" className="text-xs">
-              Style Lock
+              {t("cfgext.entStyleLock")}
             </Label>
           </div>
           <p className="text-[10px] text-muted-foreground">
-            When enabled, downstream image/video nodes wired to this location will use the canonical caption for better consistency.
+            {t("cfgext.entStyleLockHintLocation")}
           </p>
         </div>
 
         {/* Field Mappings — keep the {} input-injection mapping for the Location Name,
             the one referenceable field that survives the move to the studio. */}
-        <MappableField field="locationName" label="Location Name" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <MappableField field="locationName" label={t("cfgext.entLocationName")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
           <Input
             id="loc-name"
             value={data.locationName}
             onChange={(e) => onUpdate({ locationName: e.target.value })}
-            placeholder="e.g. Ancient Forest (use {} to inject input)"
+            placeholder={t("cfgext.entLocationNamePlaceholder")}
           />
         </MappableField>
       </div>

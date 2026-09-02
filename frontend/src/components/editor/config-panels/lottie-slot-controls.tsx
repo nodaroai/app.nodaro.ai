@@ -4,6 +4,7 @@ import { RotateCcw } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
+import { useT } from "@/lib/i18n"
 import { describeSlotControl, rgbaArrayToHex, hexToRgbaArray, humanizeSlotSid, type SlotControlDescriptor } from "@nodaro/shared"
 import type { MotionGraphicsData } from "@/types/nodes"
 
@@ -15,6 +16,7 @@ interface LottieSlotControlsProps {
 }
 
 export function LottieSlotControls({ plan, onUpdate }: LottieSlotControlsProps) {
+  const t = useT()
   const slots = (plan.slots as Record<string, unknown>) ?? {}
   const slotValues = (plan.slotValues as Record<string, unknown>) ?? {}
 
@@ -40,8 +42,8 @@ export function LottieSlotControls({ plan, onUpdate }: LottieSlotControlsProps) 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-baseline justify-between">
-        <Label className="text-xs font-medium text-[var(--text-primary)]">Slots</Label>
-        <span className="text-[10px] text-muted-foreground">free edits — no credits</span>
+        <Label className="text-xs font-medium text-[var(--text-primary)]">{t("cfgext.lottieSlots")}</Label>
+        <span className="text-[10px] text-muted-foreground">{t("cfgext.lottieFreeEdits")}</span>
       </div>
 
       {entries.map(({ sid, control }) => {
@@ -60,8 +62,8 @@ export function LottieSlotControls({ plan, onUpdate }: LottieSlotControlsProps) 
                   type="button"
                   onClick={() => resetValue(sid)}
                   className="rounded-md p-0.5 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-[var(--text-primary)]"
-                  title={`Reset ${label}`}
-                  aria-label={`Reset ${label}`}
+                  title={t("cfgext.lottieResetSlot", { name: label })}
+                  aria-label={t("cfgext.lottieResetSlot", { name: label })}
                 >
                   <RotateCcw className="h-3 w-3" />
                 </button>

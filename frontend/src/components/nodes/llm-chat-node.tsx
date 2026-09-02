@@ -5,6 +5,7 @@ import { createPortal } from "react-dom"
 import { Position, type NodeProps } from "@xyflow/react"
 import { MessageSquare, Type, Loader2, AlertCircle, X, FileText, Copy, Download, BookOpen, ImageIcon, List, LayoutGrid, LayoutTemplate, Sparkles, Braces, Eye } from "lucide-react"
 import { cn, computeDeleteResultUpdates, copyToClipboard, downloadTextFile } from "@/lib/utils"
+import { useT } from "@/lib/i18n"
 import { lazyWithRetry } from "@/lib/lazy-with-retry"
 import { BaseNode } from "./base-node"
 import { LlmChatQuickToolbar } from "./llm-chat-quick-toolbar"
@@ -69,6 +70,13 @@ const SHOW_OUTPUTS_BTN_ACTIVE =
   "shrink-0 h-6 px-1.5 inline-flex items-center gap-1 rounded-md bg-[#ff0073] text-white hover:bg-[#ff0073]/90 transition-colors"
 
 function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
+  // Locale subscription, called for the re-render only (no binding: the
+  // template lookups below already use `t` as their `.find()` parameter).
+  // The template labels come from GENERATE_TEXT_TEMPLATES(), which resolves
+  // them through the live locale — and this component is memo()-wrapped with no
+  // other locale-dependent slice, so without this a language switch would leave
+  // the badge stuck in the previous language until node data changed.
+  useT()
   const nodeData = data as LLMChatData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const status = nodeData.executionStatus ?? "idle"
@@ -124,7 +132,7 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
   const activeTemplateId = activeResult?.templateId
   const activeTemplateLabel =
     activeTemplateId && activeTemplateId !== "custom"
-      ? [...GENERATE_TEXT_TEMPLATES, ...userTextTemplates].find((t) => t.id === activeTemplateId)?.label ?? activeTemplateId
+      ? [...GENERATE_TEXT_TEMPLATES(), ...userTextTemplates].find((t) => t.id === activeTemplateId)?.label ?? activeTemplateId
       : undefined
 
   function handleDeleteResult(indexToDelete: number) {
@@ -432,7 +440,7 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
                   const runTemplateId = groupResults[0]?.templateId
                   const runTemplateLabel =
                     runTemplateId && runTemplateId !== "custom"
-                      ? [...GENERATE_TEXT_TEMPLATES, ...userTextTemplates].find((t) => t.id === runTemplateId)?.label ?? runTemplateId
+                      ? [...GENERATE_TEXT_TEMPLATES(), ...userTextTemplates].find((t) => t.id === runTemplateId)?.label ?? runTemplateId
                       : undefined
                   return (
                   <div key={rid} className="rounded-xl border border-white/8 overflow-hidden">

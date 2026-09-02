@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Plus, Trash2, RefreshCw, AlertCircle, ExternalLink, Eye } from "lucide-react"
 import { WorkflowViewerModal } from "@/components/editor/workflow-viewer-modal"
+import { useT, tx } from "@/lib/i18n"
+import { useLocalizeNodeLabel, useLocalizeOptionLabel } from "@/lib/i18n/labels"
 import type { ConfigProps } from "./types"
 import type {
   SubWorkflowInputData,
@@ -32,10 +34,13 @@ function PortsEditor({
   readonly ports: SubWorkflowPort[]
   readonly onChange: (ports: SubWorkflowPort[]) => void
 }) {
+  const t = useT()
   const addPort = useCallback(() => {
     const newPort: SubWorkflowPort = {
       id: crypto.randomUUID(),
-      name: `Port ${ports.length + 1}`,
+      // tx(), not t(): this seeds persisted node data from a callback, so it
+      // must read the live locale rather than close over a render-time value.
+      name: tx("cfgext.subwfPortN", { n: ports.length + 1 }),
       mediaType: "any",
     }
     onChange([...ports, newPort])
@@ -53,9 +58,9 @@ function PortsEditor({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <Label className="text-xs font-medium">Ports</Label>
+        <Label className="text-xs font-medium">{t("cfgext.subwfPorts")}</Label>
         <Button variant="ghost" size="sm" onClick={addPort} className="h-6 px-2 text-xs">
-          <Plus className="w-3 h-3 mr-1" /> Add
+          <Plus className="w-3 h-3 me-1" /> {t("cfgshared.add")}
         </Button>
       </div>
       {ports.map((port) => (
@@ -64,7 +69,7 @@ function PortsEditor({
             className="flex-1 h-8 text-xs"
             value={port.name}
             onChange={(e) => updatePort(port.id, "name", e.target.value)}
-            placeholder="Port name"
+            placeholder={t("cfgext.subwfPortName")}
           />
           <Select
             value={port.mediaType}
@@ -74,11 +79,11 @@ function PortsEditor({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="text">Text</SelectItem>
-              <SelectItem value="image">Image</SelectItem>
-              <SelectItem value="video">Video</SelectItem>
-              <SelectItem value="audio">Audio</SelectItem>
-              <SelectItem value="any">Any</SelectItem>
+              <SelectItem value="text">{t("out.text")}</SelectItem>
+              <SelectItem value="image">{t("common.image")}</SelectItem>
+              <SelectItem value="video">{t("common.video")}</SelectItem>
+              <SelectItem value="audio">{t("usage.catAudio")}</SelectItem>
+              <SelectItem value="any">{t("cfgext.subwfAny")}</SelectItem>
             </SelectContent>
           </Select>
           <Button
@@ -99,6 +104,8 @@ function PortsEditor({
 // ---------- Sub-Workflow Input Config ----------
 
 export function SubWorkflowInputConfig({ data, onUpdate }: ConfigProps<SubWorkflowInputData>) {
+  const t = useT()
+  const localizeNode = useLocalizeNodeLabel()
   const nodeData = data as SubWorkflowInputData
 
   // Auto-generate routeId if empty
@@ -124,35 +131,35 @@ export function SubWorkflowInputConfig({ data, onUpdate }: ConfigProps<SubWorkfl
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <Label className="text-xs font-medium">Label</Label>
+        <Label className="text-xs font-medium">{t("configPanel.label")}</Label>
         <Input
           className="mt-1 h-8 text-xs"
           value={nodeData.label}
           onChange={(e) => handleLabelChange(e.target.value)}
-          placeholder="Route label"
+          placeholder={t("cfgext.subwfRouteLabel")}
         />
         <p className="text-[10px] text-muted-foreground mt-1">
-          This becomes the display name on sub-workflow caller nodes.
+          {t("cfgext.subwfLabelHint")}
         </p>
       </div>
 
       <div>
-        <Label className="text-xs font-medium">Route ID</Label>
+        <Label className="text-xs font-medium">{t("cfgext.subwfRouteId")}</Label>
         <div className="flex items-center gap-2 mt-1">
           <Input
             className="flex-1 h-8 text-xs font-mono"
             value={routeId}
             readOnly
-            placeholder="Click Generate"
+            placeholder={t("cfgext.subwfClickGenerate")}
           />
           {!routeId && (
             <Button variant="outline" size="sm" onClick={handleGenerateRouteId} className="h-8 text-xs">
-              Generate
+              {t("vd.generate")}
             </Button>
           )}
         </div>
         <p className="text-[10px] text-muted-foreground mt-1">
-          Pair this with a Sub-Workflow Output using the same Route ID.
+          {t("cfgext.subwfPairHint", { node: localizeNode("Sub-Workflow Output") })}
         </p>
       </div>
 
@@ -164,6 +171,7 @@ export function SubWorkflowInputConfig({ data, onUpdate }: ConfigProps<SubWorkfl
 // ---------- Sub-Workflow Output Config ----------
 
 export function SubWorkflowOutputConfig({ data, onUpdate, nodes }: ConfigProps<SubWorkflowOutputData>) {
+  const t = useT()
   const nodeData = data as SubWorkflowOutputData
 
   // Find all sub-workflow-input nodes in the current workflow that have a routeId
@@ -203,7 +211,7 @@ export function SubWorkflowOutputConfig({ data, onUpdate, nodes }: ConfigProps<S
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <Label className="text-xs font-medium">Label</Label>
+        <Label className="text-xs font-medium">{t("configPanel.label")}</Label>
         <Input
           className="mt-1 h-8 text-xs"
           value={nodeData.label}
@@ -212,10 +220,10 @@ export function SubWorkflowOutputConfig({ data, onUpdate, nodes }: ConfigProps<S
       </div>
 
       <div>
-        <Label className="text-xs font-medium">Paired Input Route</Label>
+        <Label className="text-xs font-medium">{t("cfgext.subwfPairedInputRoute")}</Label>
         <Select value={nodeData.routeId || ""} onValueChange={handleRouteChange}>
           <SelectTrigger className="mt-1 h-8 text-xs">
-            <SelectValue placeholder="Select an input node..." />
+            <SelectValue placeholder={t("cfgext.subwfSelectInputNode")} />
           </SelectTrigger>
           <SelectContent>
             {inputNodes.map((input) => (
@@ -231,9 +239,9 @@ export function SubWorkflowOutputConfig({ data, onUpdate, nodes }: ConfigProps<S
 
       {(nodeData.ports ?? []).length > 0 && (
         <div>
-          <Label className="text-xs font-medium">Visible Output</Label>
+          <Label className="text-xs font-medium">{t("cfgext.subwfVisibleOutput")}</Label>
           <p className="text-[10px] text-muted-foreground mb-1">
-            Which port's result to preview on the caller node.
+            {t("cfgext.subwfVisibleOutputHint")}
           </p>
           <div className="flex flex-col gap-1">
             {(nodeData.ports ?? []).map((port) => (
@@ -258,6 +266,8 @@ export function SubWorkflowOutputConfig({ data, onUpdate, nodes }: ConfigProps<S
 // ---------- Sub-Workflow Config (Caller Node) ----------
 
 export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowData>) {
+  const localizeOption = useLocalizeOptionLabel()
+  const t = useT()
   const nodeData = data as SubWorkflowData
   const navigate = useNavigateWithGuard()
   const projectId = useWorkflowStore((s) => s.projectId)
@@ -283,12 +293,12 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
 
     const localEntry = {
       id: workflowId,
-      name: workflowName || "Current Workflow",
+      name: workflowName || t("cfgext.subwfCurrentWorkflow"),
       projectId: projectId ?? "",
       projectName: "",
       routes: localRoutes.map((r) => ({
         routeId: r.routeId,
-        inputLabel: r.inputData.label || "Unnamed",
+        inputLabel: r.inputData.label || t("cfgext.entUnnamed"),
         inputPorts: r.inputData.ports ?? [],
         outputPorts: r.outputData.ports ?? [],
         visibleOutputPortId: r.outputData.visibleOutputPortId ?? "",
@@ -298,7 +308,7 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
     // Replace the remote entry for the current workflow with the local one
     const filtered = remote.filter((w) => w.id !== workflowId)
     return [localEntry, ...filtered]
-  }, [callableWorkflows, workflowId, workflowName, projectId, localNodes])
+  }, [callableWorkflows, workflowId, workflowName, projectId, localNodes, t])
 
   const { data: workflowInterface, isLoading: isLoadingInterface, refetch: refetchInterface } = useWorkflowInterface(
     nodeData.referencedWorkflowId || undefined,
@@ -340,7 +350,7 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <Label className="text-xs font-medium">Label</Label>
+        <Label className="text-xs font-medium">{t("configPanel.label")}</Label>
         <Input
           className="mt-1 h-8 text-xs"
           value={nodeData.label}
@@ -349,7 +359,7 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
       </div>
 
       <div>
-        <Label className="text-xs font-medium">Create new sub-workflow</Label>
+        <Label className="text-xs font-medium">{t("cfgext.subwfCreateNew")}</Label>
         <Button
           variant="default"
           size="sm"
@@ -359,7 +369,7 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
             if (!workflowId || creating) return
             setCreating(true)
             try {
-              const child = await createChildSubWorkflow(workflowId, { name: "New sub-workflow" })
+              const child = await createChildSubWorkflow(workflowId, { name: tx("cfgext.subwfNewName") })
               onUpdate({
                 referencedWorkflowId: child.id,
                 referencedWorkflowName: child.name,
@@ -374,23 +384,23 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
               })
             } catch (err) {
               console.error("Failed to create sub-workflow:", err)
-              toast.error(err instanceof Error ? err.message : "Failed to create sub-workflow")
+              toast.error(err instanceof Error ? err.message : tx("cfgext.subwfCreateFailed"))
             } finally {
               setCreating(false)
             }
           }}
         >
-          <Plus className="w-3.5 h-3.5 mr-1.5" />
-          {creating ? "Creating..." : "Create empty sub-workflow"}
+          <Plus className="w-3.5 h-3.5 me-1.5" />
+          {creating ? t("cfgext.subwfCreating") : t("cfgext.subwfCreateEmpty")}
         </Button>
         <p className="mt-1 text-[10px] text-muted-foreground">
-          Seeds a new workflow with one input + one output node under this parent. Opens for editing immediately.
+          {t("cfgext.subwfSeedsHint")}
         </p>
       </div>
 
       <div>
         <div className="flex items-center justify-between">
-          <Label className="text-xs font-medium">Workflow</Label>
+          <Label className="text-xs font-medium">{t("apps.workflow")}</Label>
           <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground cursor-pointer">
             <input
               type="checkbox"
@@ -398,7 +408,7 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
               onChange={(e) => setShowAllProjects(e.target.checked)}
               className="accent-[#ff0073]"
             />
-            All projects
+            {t("cfgext.subwfAllProjects")}
           </label>
         </div>
         <Select
@@ -406,17 +416,20 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
           onValueChange={handleWorkflowSelect}
         >
           <SelectTrigger className="mt-1 h-8 text-xs">
-            <SelectValue placeholder={isLoadingWorkflows ? "Loading..." : "Select a workflow..."} />
+            <SelectValue placeholder={isLoadingWorkflows ? t("cfgext.subwfLoading") : t("cfgext.subwfSelectWorkflow")} />
           </SelectTrigger>
           <SelectContent>
             {mergedWorkflows.map((w) => (
               <SelectItem key={w.id} value={w.id}>
-                {w.name}{w.id === workflowId ? " (current)" : ""} ({w.routes.length} route{w.routes.length !== 1 ? "s" : ""})
+                {w.name}{w.id === workflowId ? ` ${t("cfgext.subwfCurrent")}` : ""}{" "}
+                {w.routes.length === 1
+                  ? t("cfgext.subwfRouteCountOne", { count: w.routes.length })
+                  : t("cfgext.subwfRouteCount", { count: w.routes.length })}
               </SelectItem>
             ))}
             {!isLoadingWorkflows && mergedWorkflows.length === 0 && (
               <div className="px-3 py-2 text-xs text-muted-foreground">
-                No callable workflows found. Add Sub-Workflow Input/Output nodes to a workflow first.
+                {t("cfgext.subwfNoCallable")}
               </div>
             )}
           </SelectContent>
@@ -425,15 +438,15 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
 
       {nodeData.referencedWorkflowId && workflowInterface && workflowInterface.routes.length > 1 && (
         <div>
-          <Label className="text-xs font-medium">Route</Label>
+          <Label className="text-xs font-medium">{t("cfgext.subwfRoute")}</Label>
           <Select value={nodeData.selectedRouteId || ""} onValueChange={handleRouteSelect}>
             <SelectTrigger className="mt-1 h-8 text-xs">
-              <SelectValue placeholder="Select route..." />
+              <SelectValue placeholder={t("cfgext.subwfSelectRoute")} />
             </SelectTrigger>
             <SelectContent>
               {workflowInterface.routes.map((route) => (
                 <SelectItem key={route.routeId} value={route.routeId}>
-                  {route.inputLabel} ({route.inputPorts.length} in, {route.outputPorts.length} out)
+                  {route.inputLabel} {t("cfgext.subwfPortCounts", { inPorts: route.inputPorts.length, outPorts: route.outputPorts.length })}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -444,7 +457,7 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
       {snapshot && (
         <div className="rounded-lg bg-gray-100 dark:bg-[#1a1a2e] border border-gray-200 dark:border-[#2D2D2D] p-3">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-medium">Interface</span>
+            <span className="text-xs font-medium">{t("cfgext.subwfInterface")}</span>
             <Button
               variant="ghost"
               size="sm"
@@ -452,16 +465,16 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
               disabled={isLoadingInterface}
               className="h-6 px-2 text-[10px]"
             >
-              <RefreshCw className="w-3 h-3 mr-1" /> Refresh
+              <RefreshCw className="w-3 h-3 me-1" /> {t("exec.refresh")}
             </Button>
           </div>
           <div className="flex flex-col gap-1">
             <div className="text-[10px] text-muted-foreground">
-              <span className="font-medium">Inputs:</span>{" "}
+              <span className="font-medium">{t("cfgext.subwfInputs")}</span>{" "}
               {snapshot.inputPorts.map((p) => `${p.name} (${p.mediaType})`).join(", ")}
             </div>
             <div className="text-[10px] text-muted-foreground">
-              <span className="font-medium">Outputs:</span>{" "}
+              <span className="font-medium">{t("cfgext.subwfOutputs")}</span>{" "}
               {snapshot.outputPorts.map((p) => `${p.name} (${p.mediaType})`).join(", ")}
             </div>
           </div>
@@ -476,8 +489,8 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
             className="flex-1 h-8 text-xs"
             onClick={() => setViewerOpen(true)}
           >
-            <Eye className="w-3 h-3 mr-1.5" />
-            View Workflow
+            <Eye className="w-3 h-3 me-1.5" />
+            {t("cfgext.subwfViewWorkflow")}
           </Button>
           <Button
             variant="outline"
@@ -489,7 +502,7 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
               if (pid && nodeData.referencedWorkflowId) {
                 openSubWorkflow({
                   childWorkflowId: nodeData.referencedWorkflowId,
-                  childWorkflowName: nodeData.referencedWorkflowName ?? wf?.name ?? "Untitled Workflow",
+                  childWorkflowName: nodeData.referencedWorkflowName ?? wf?.name ?? tx("cfgext.subwfUntitledWorkflow"),
                   childProjectId: pid,
                   navigate,
                   extraQuery: "?focusType=sub-workflow-input",
@@ -497,8 +510,8 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
               }
             }}
           >
-            <ExternalLink className="w-3 h-3 mr-1.5" />
-            Open Workflow
+            <ExternalLink className="w-3 h-3 me-1.5" />
+            {t("cfgext.subwfOpenWorkflow")}
           </Button>
         </div>
       )}
@@ -506,12 +519,12 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
       {nodeData.referencedWorkflowId && !workflowInterface && !isLoadingInterface && (
         <div className="flex items-center gap-2 text-xs text-red-400">
           <AlertCircle className="w-3.5 h-3.5" />
-          Referenced workflow not found or has no valid routes.
+          {t("cfgext.subwfNotFound")}
         </div>
       )}
 
       <div>
-        <Label className="text-xs font-medium">View mode</Label>
+        <Label className="text-xs font-medium">{t("inputcfg.viewMode")}</Label>
         <Select
           value={nodeData.viewMode ?? DEFAULT_VIEW_MODE_ID}
           onValueChange={(v) => onUpdate({ viewMode: v })}
@@ -521,12 +534,12 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
           </SelectTrigger>
           <SelectContent>
             {listSubWorkflowViewModes().map((mode) => (
-              <SelectItem key={mode.id} value={mode.id}>{mode.label}</SelectItem>
+              <SelectItem key={mode.id} value={mode.id}>{localizeOption(mode.label)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
         <p className="mt-1 text-[10px] text-muted-foreground">
-          Controls how this container renders on the canvas. Storyboard / Video / Script views will plug in here as they ship in v2.
+          {t("cfgext.subwfViewModeHint")}
         </p>
       </div>
 

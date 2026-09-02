@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { useT } from "@/lib/i18n"
 import type { LanguageOption } from "@/lib/audio-tags"
 
 /**
@@ -20,12 +21,14 @@ import type { LanguageOption } from "@/lib/audio-tags"
  * `allLabel` renders an optional leading "any" row bound to the sentinel
  * `allValue` — the voice browser's filter semantics ("All" = don't filter).
  * Omit `allLabel` for pickers where a language is mandatory (dubbing target).
+ * `allLabel` / `ariaLabel` arrive already localized from the caller; `ariaLabel`
+ * falls back to the localized "Language".
  */
 export function LanguageSearchSelect({
   value,
   onChange,
   options,
-  ariaLabel = "Language",
+  ariaLabel,
   allLabel,
   allValue = "All",
   className,
@@ -42,11 +45,13 @@ export function LanguageSearchSelect({
   readonly className?: string
   readonly zClassName?: string
 }) {
+  const t = useT()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
 
+  const ariaText = ariaLabel ?? t("lang.label")
   const current = options.find((o) => o.value === value)
-  const triggerLabel = current?.label ?? allLabel ?? ariaLabel
+  const triggerLabel = current?.label ?? allLabel ?? ariaText
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -72,11 +77,11 @@ export function LanguageSearchSelect({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          aria-label={ariaLabel}
+          aria-label={ariaText}
           className={cn("h-7 justify-between px-2 text-xs font-normal", className)}
         >
           <span className="truncate">{triggerLabel}</span>
-          <ChevronsUpDown className="ml-1 size-3 shrink-0 opacity-50" />
+          <ChevronsUpDown className="ms-1 size-3 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className={cn("w-[220px] p-0", zClassName)}>
@@ -84,22 +89,22 @@ export function LanguageSearchSelect({
           <CommandInput
             value={query}
             onValueChange={setQuery}
-            placeholder="Search languages…"
+            placeholder={t("cfgext.langSelSearch")}
             className="placeholder:text-muted-foreground/50"
           />
           <CommandList>
             {allLabel && !query.trim() && (
               <CommandItem value={allValue} onSelect={() => pick(allValue)}>
-                <Check className={cn("mr-1 size-3.5", value === allValue ? "opacity-100" : "opacity-0")} />
+                <Check className={cn("me-1 size-3.5", value === allValue ? "opacity-100" : "opacity-0")} />
                 {allLabel}
               </CommandItem>
             )}
             {visible.length === 0 ? (
-              <div className="py-6 text-center text-sm text-muted-foreground">No languages match.</div>
+              <div className="py-6 text-center text-sm text-muted-foreground">{t("cfgext.langSelNoMatch")}</div>
             ) : (
               visible.map((o) => (
                 <CommandItem key={o.value} value={o.value} onSelect={() => pick(o.value)}>
-                  <Check className={cn("mr-1 size-3.5", value === o.value ? "opacity-100" : "opacity-0")} />
+                  <Check className={cn("me-1 size-3.5", value === o.value ? "opacity-100" : "opacity-0")} />
                   {o.label}
                 </CommandItem>
               ))
