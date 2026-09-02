@@ -14,7 +14,9 @@ vi.mock("@/lib/config.js", () => ({
 
 import {
   classifyContentPolicy,
+  classifyContentPolicyClass,
   CONTENT_POLICY_MESSAGE,
+  CONTENT_POLICY_MESSAGES,
   KieError,
   createUpstreamFailureError,
   isUpstreamKieFailure,
@@ -141,6 +143,7 @@ describe('pollKieTask — state:"fail" content-policy classification', () => {
 
     expect(err).toBeInstanceOf(KieError)
     expect((err as KieError).contentPolicy).toBe(true)
+    expect((err as KieError).contentPolicyClass).toBe("copyright")
     expect((err as KieError).isUpstreamFailure).toBe(true)
     expect((err as KieError).message).toBe(CONTENT_POLICY_MESSAGE)
   })
@@ -170,5 +173,61 @@ describe('pollKieTask — state:"fail" content-policy classification', () => {
     expect((err as KieError).contentPolicy).toBe(false)
     expect((err as KieError).isUpstreamFailure).toBe(true)
     expect((err as KieError).message).not.toBe(CONTENT_POLICY_MESSAGE)
+  })
+})
+
+describe("classifyContentPolicyClass — copyright / likeness / safety", () => {
+  it("copyright", () => {
+    expect(classifyContentPolicyClass("output video may be related to copyright restrictions")).toBe("copyright")
+    expect(classifyContentPolicyClass("intellectual property concern")).toBe("copyright")
+  })
+  it("likeness", () => {
+    expect(classifyContentPolicyClass("public figure detected")).toBe("likeness")
+    expect(classifyContentPolicyClass("Celebrity likeness is not allowed")).toBe("likeness")
+  })
+  it("safety", () => {
+    expect(classifyContentPolicyClass("flagged by content policy")).toBe("safety")
+    expect(classifyContentPolicyClass("prohibited content")).toBe("safety")
+    expect(classifyContentPolicyClass("sensitive content detected")).toBe("safety")
+    expect(classifyContentPolicyClass("blocked by the safety filter")).toBe("safety")
+  })
+  it("null for transient text; classifyContentPolicy mirrors it", () => {
+    expect(classifyContentPolicyClass("internal error")).toBeNull()
+    expect(classifyContentPolicy("internal error")).toBe(false)
+    expect(classifyContentPolicy("public figure detected")).toBe(true)
+  })
+  it("copyright wins when both copyright and a safety word appear", () => {
+    expect(classifyContentPolicyClass("copyright violation")).toBe("copyright")
+  })
+})
+
+describe("createUpstreamFailureError classifies when the caller did not", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+  })
+  it("a likeness failMsg from a non-pollKieTask site gets the likeness class + message", () => {
+    const err = createUpstreamFailureError("Suno task failed: public figure detected", "Music generation")
+    expect(err.contentPolicy).toBe(true)
+    expect(err.contentPolicyClass).toBe("likeness")
+    expect(err.message).toBe(CONTENT_POLICY_MESSAGES.likeness)
+  })
+  it("a plain upstream failure stays unclassified", () => {
+    const err = createUpstreamFailureError("task failed: [400] audio too long", "Generation")
+    expect(err.contentPolicy).toBe(false)
+    expect(err.contentPolicyClass).toBeNull()
+  })
+  it("an explicit contentPolicy:false is honoured even when the text would match", () => {
+    const err = createUpstreamFailureError("copyright restrictions", "Generation", { contentPolicy: false })
+    expect(err.contentPolicy).toBe(false)
+    expect(err.contentPolicyClass).toBeNull()
+  })
+})
+
+describe("the three messages", () => {
+  it("copyright keeps the legacy CONTENT_POLICY_MESSAGE text; likeness and safety differ from it", () => {
+    expect(CONTENT_POLICY_MESSAGES.copyright).toBe(CONTENT_POLICY_MESSAGE)
+    expect(CONTENT_POLICY_MESSAGES.likeness).toContain("real person")
+    expect(CONTENT_POLICY_MESSAGES.safety).toContain("safety filter")
+    expect(new Set(Object.values(CONTENT_POLICY_MESSAGES)).size).toBe(3)
   })
 })

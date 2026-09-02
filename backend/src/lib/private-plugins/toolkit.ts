@@ -52,6 +52,7 @@ import {
   requestJobStop,
 } from "../../workers/shared.js"
 import { supabase } from "../supabase.js"
+import { redactProviderDetail } from "../provider-error-detail.js"
 import { config } from "../config.js"
 import { redis } from "../queue.js"
 import { checkIsAdmin } from "../admin-check.js"
@@ -780,12 +781,13 @@ async function readJob(jobId: string): Promise<{
  * (the caller refunds only on true, mirroring the worker's only-if-we-flipped
  * refund discipline).
  */
-async function pluginMarkJobFailed(jobId: string, errorMessage: string): Promise<boolean> {
+async function pluginMarkJobFailed(jobId: string, errorMessage: string, detail?: string | null): Promise<boolean> {
   const { data } = await supabase
     .from("jobs")
     .update({
       status: "failed",
       error_message: errorMessage,
+      error_detail: redactProviderDetail(detail),
       completed_at: new Date().toISOString(),
     })
     .eq("id", jobId)

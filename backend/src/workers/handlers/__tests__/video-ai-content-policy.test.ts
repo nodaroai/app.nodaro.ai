@@ -182,6 +182,22 @@ function makeNonPolicyError(): KieError {
   return new KieError("Generation failed, please try again.", "task failed: [500] internal error", "Generation", true, false)
 }
 
+/** Same terminal content block as makePolicyError, but tagged `likeness` (the
+ *  class is passed explicitly — this fixture is not re-classified from its
+ *  `internalDetails`). The rewrite prompt is copyright-aware only, so asking it
+ *  to fix a real-person-likeness block is a no-op that burns an LLM call and a
+ *  paid retry; video-ai.ts's guard throws these straight through. */
+function makeLikenessError(): KieError {
+  return new KieError(
+    CONTENT_POLICY_MESSAGE,
+    "task failed: [500] may be related to copyright restrictions",
+    "Generation",
+    true,
+    true,
+    "likeness",
+  )
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   // mockClear() (inside clearAllMocks) does NOT drain a pending
@@ -277,6 +293,24 @@ describe("text-to-video handler — content-policy rewrite-once", () => {
     await expect(handler(job as never, makeCtx())).rejects.toBe(nonPolicyError)
 
     expect(mocks.mockTextToVideo).toHaveBeenCalledTimes(1)
+    expect(mocks.mockLlmCompleteStructured).not.toHaveBeenCalled()
+    expect(mocks.mockFinalizeJobWithMedia).not.toHaveBeenCalled()
+  })
+
+  it("likeness-classified policy KieError: rethrows immediately, no rewrite attempted", async () => {
+    const likenessError = makeLikenessError()
+    // The fixture proves itself: `contentPolicy` IS true, so the boolean half of
+    // the guard would let this through to the rewrite — only the class stops it.
+    expect(likenessError.contentPolicy).toBe(true)
+    expect(likenessError.contentPolicyClass).toBe("likeness")
+    mocks.mockTextToVideo.mockRejectedValueOnce(likenessError)
+
+    const job = makeJob({ prompt: ORIGINAL_PROMPT })
+    await expect(handler(job as never, makeCtx())).rejects.toBe(likenessError)
+
+    expect(mocks.mockTextToVideo).toHaveBeenCalledTimes(1)
+    // rewriteForContentPolicy is REAL in this file (only its llmCompleteStructured
+    // boundary is mocked), so "the LLM was never called" IS "never rewritten".
     expect(mocks.mockLlmCompleteStructured).not.toHaveBeenCalled()
     expect(mocks.mockFinalizeJobWithMedia).not.toHaveBeenCalled()
   })

@@ -1,5 +1,6 @@
 import { supabase } from "../supabase.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
+import { providerDetailOf } from "../provider-error-detail.js"
 import { MAX_ATTEMPTS } from "./types.js"
 
 /**
@@ -38,6 +39,7 @@ export async function bumpAttemptsOrExhaust(
   err: unknown,
 ): Promise<void> {
   const msg = (err instanceof Error ? err.message : String(err)).slice(0, 500)
+  const detail = providerDetailOf(err)
 
   const { data } = await supabase
     .from("jobs")
@@ -48,7 +50,7 @@ export async function bumpAttemptsOrExhaust(
   const next = current + 1
 
   if (DETERMINISTIC_RECONCILE_ERRORS.some((re) => re.test(msg))) {
-    await forceFailExhausted(jobId, msg, next)
+    await forceFailExhausted(jobId, msg, next, detail)
     return
   }
 
@@ -63,19 +65,21 @@ export async function bumpAttemptsOrExhaust(
     return
   }
 
-  await forceFailExhausted(jobId, msg, next)
+  await forceFailExhausted(jobId, msg, next, detail)
 }
 
 async function forceFailExhausted(
   jobId: string,
   lastError: string,
   finalAttempts: number,
+  detail: string | null,
 ): Promise<void> {
   const { data: marked } = await supabase
     .from("jobs")
     .update({
       status: "failed",
       error_message: `reconcile_exhausted: ${lastError}`.slice(0, 500),
+      error_detail: detail,
       completed_at: new Date().toISOString(),
       reconcile_attempts: finalAttempts,
       reconcile_last_error: "exhausted",

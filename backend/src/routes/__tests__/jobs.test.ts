@@ -61,6 +61,7 @@ const sampleJob: JobRecord = {
   credits: 1,
   credits_actual: null,
   job_type: "generate-image",
+  error_detail: "task failed: [400] aspect_ratio 3:2 not allowed",
 }
 
 // ---------------------------------------------------------------------------
@@ -71,7 +72,7 @@ describe("sanitizeJobForPublic", () => {
   it("returns the full job unchanged for admin users", () => {
     const result = sanitizeJobForPublic(sampleJob, true)
 
-    expect(result).toEqual(sampleJob)
+    expect(result).toEqual({ ...sampleJob })
     expect("provider" in result).toBe(true)
     expect("provider_cost" in result).toBe(true)
     expect("credits_actual" in result).toBe(true)
@@ -131,6 +132,38 @@ describe("sanitizeJobForPublic", () => {
       pro: { finalUrl: "https://public.example/final.mp4" },
     })
     expect(regular.input_data).toEqual({ requested: [{ gain: 35 }] })
+  })
+
+  it("is an allowlist: unknown columns never reach any caller, error_detail reaches admins only", () => {
+    const withExtra = { ...sampleJob, future_secret_column: "x" } as unknown as JobRecord
+    const admin = sanitizeJobForPublic(withExtra, true) as unknown as Record<string, unknown>
+    const regular = sanitizeJobForPublic(withExtra, false) as unknown as Record<string, unknown>
+
+    expect("future_secret_column" in admin).toBe(false)
+    expect("future_secret_column" in regular).toBe(false)
+    expect(admin.error_detail).toBe("task failed: [400] aspect_ratio 3:2 not allowed")
+    expect("error_detail" in regular).toBe(false)
+  })
+
+  it("admins keep input_data internals; regular users get them stripped (parity with the pre-allowlist code)", () => {
+    const withInternals = {
+      ...sampleJob,
+      input_data: { prompt: "test", userId: "u-1", jobId: "j-1", usageLogId: "ul-1", force_private: true, provider: "nano-banana" },
+    } as JobRecord
+    const admin = sanitizeJobForPublic(withInternals, true) as unknown as { input_data: Record<string, unknown> }
+    const regular = sanitizeJobForPublic(withInternals, false) as unknown as { input_data: Record<string, unknown> }
+    expect(admin.input_data).toEqual(withInternals.input_data)
+    expect(regular.input_data).toEqual({ prompt: "test" })
+  })
+
+  it("returns exactly the public key set for regular users", () => {
+    const regular = sanitizeJobForPublic(sampleJob, false) as unknown as Record<string, unknown>
+    expect(Object.keys(regular).sort()).toEqual(
+      [
+        "id", "status", "progress", "input_data", "output_data", "error_message",
+        "created_at", "started_at", "completed_at", "user_id", "credits", "job_type",
+      ].sort(),
+    )
   })
 })
 

@@ -401,9 +401,13 @@ describe("video worker processor", () => {
     )
   })
 
-  it("stores only sanitized message for KieError (no internal details)", async () => {
+  it("stores the sanitized message in error_message and the REDACTED internal details in error_detail", async () => {
     mocks.mockHandler.mockRejectedValueOnce(
-      new KieError("Image generation failed", "KIE API returned 500: internal server error", "generate-image"),
+      new KieError(
+        "Image generation failed",
+        "KIE API returned 500: internal server error at https://api.kie.ai/v1/x?token=abc",
+        "generate-image",
+      ),
     )
 
     const job = makeBullJob("generate-image")
@@ -413,7 +417,17 @@ describe("video worker processor", () => {
       expect.objectContaining({
         status: "failed",
         error_message: "Image generation failed",
+        error_detail: "KIE API returned 500: internal server error at api.kie.ai/…",
       }),
+    )
+  })
+
+  it("writes error_detail: null for a plain Error (no provider text)", async () => {
+    mocks.mockHandler.mockRejectedValueOnce(new Error("handler crashed"))
+    const job = makeBullJob("generate-image")
+    await expect(processor(job)).rejects.toThrow("handler crashed")
+    expect(mocks.mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "failed", error_message: "handler crashed", error_detail: null }),
     )
   })
 
