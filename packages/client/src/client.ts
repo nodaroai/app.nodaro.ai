@@ -107,8 +107,6 @@ interface RequestOptions {
   query?: Record<string, string | number | boolean | undefined>
   headers?: Record<string, string>
   signal?: AbortSignal
-  /** Sent as the `Accept` header (e.g. "text/csv" for exports). Default: none. */
-  accept?: string
 }
 
 /**
@@ -260,12 +258,18 @@ export class NodaroClient {
   }
 
   /**
-   * The transport: build the request, send it, and throw the typed error on a
-   * non-2xx via {@link throwFromResponse}. Returns the raw `Response` so both
-   * the JSON path ({@link request}) and the text path ({@link requestText})
-   * share one place for headers, timeout and error handling.
+   * The transport: build the request, send it, throw the typed error on a
+   * non-2xx via {@link throwFromResponse}, then read the body via `read` — all
+   * inside the abort timer, so `timeoutMs` bounds the body download too (a
+   * stalled CSV stream aborts, it does not hang forever). Both the JSON path
+   * ({@link request}) and the text path ({@link requestText}) go through here.
    */
-  private async send(method: string, path: string, options: RequestOptions = {}): Promise<Response> {
+  private async send<T>(
+    method: string,
+    path: string,
+    options: RequestOptions,
+    read: (res: Response) => Promise<T>,
+  ): Promise<T> {
     const url = this.buildUrl(path, options.query)
 
     const token = await this.auth.getToken()
@@ -277,7 +281,6 @@ export class NodaroClient {
       typeof FormData !== "undefined" && options.body instanceof FormData
     const headers: Record<string, string> = {
       ...(isFormData ? {} : { "Content-Type": "application/json" }),
-      ...(options.accept ? { Accept: options.accept } : {}),
       ...(this.sendClientHeader ? { [CLIENT_HEADER]: this.clientLabel } : {}),
       // Before per-request headers: a resource that needs to reach outside
       // this client's workspace says so explicitly and wins.
@@ -315,26 +318,26 @@ export class NodaroClient {
         throwFromResponse(res.status, errBody)
       }
 
-      return res
+      return await read(res)
     } finally {
       clearTimeout(timeoutId)
     }
   }
 
   async request<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {
-    const res = await this.send(method, path, options)
-    // 204 No Content
-    if (res.status === 204) return undefined as T
-    return await res.json() as T
+    return this.send(method, path, options, async (res) =>
+      // 204 No Content
+      res.status === 204 ? (undefined as T) : ((await res.json()) as T),
+    )
   }
 
   /**
    * Like {@link request}, for endpoints that answer text (CSV exports). Errors
-   * are still the JSON envelope and throw the same typed errors.
+   * are still the JSON envelope and throw the same typed errors, and the read is
+   * bounded by the same timeout as the request.
    */
   async requestText(method: string, path: string, options: RequestOptions = {}): Promise<string> {
-    const res = await this.send(method, path, options)
-    return await res.text()
+    return this.send(method, path, options, (res) => res.text())
   }
 
   /**

@@ -35,7 +35,7 @@ const EMPTY_REPORT = {
   data: {
     rows: [],
     variance: [],
-    totals: { runCount: 0, credits: 0, settledCredits: 0, inFlightCredits: 0, platformAbsorbedCredits: 0, chargedToBudget: 0 },
+    totals: { runCount: 0, credits: 0, settledCredits: 0, inFlightCredits: 0, platformAbsorbedCredits: 0, appMarkupAbsorbedCredits: 0, chargedToBudget: 0 },
     truncated: false,
   },
 }

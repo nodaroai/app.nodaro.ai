@@ -352,7 +352,7 @@ export function orgCommand(): Command {
           )
           dim(
             `total: ${report.totals.credits} credits (${report.totals.settledCredits} settled, ` +
-              `${report.totals.inFlightCredits} in flight, ${report.totals.platformAbsorbedCredits} absorbed by the platform)`,
+              `${report.totals.inFlightCredits} in flight, ${report.totals.platformAbsorbedCredits} platform-absorbed overrun, ${report.totals.appMarkupAbsorbedCredits} app-markup absorbed)`,
           )
           if (report.truncated) warn("report truncated at 5000 groups — narrow the window")
         } catch (err) {
