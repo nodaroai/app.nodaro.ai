@@ -237,6 +237,22 @@ export const queryKeys = {
         userId ?? "",
         [...(excludeUserIds ?? [])].sort().join(","),
       ] as const,
+    // Infinite (Gallery view) counterpart of `jobs` — page is managed inside
+    // useInfiniteQuery, so it is not part of the key.
+    jobsInfinite: (
+      pageSize: number,
+      status?: string,
+      userId?: string,
+      excludeUserIds?: ReadonlyArray<string>,
+    ) =>
+      [
+        "admin",
+        "jobs-infinite",
+        pageSize,
+        status ?? "",
+        userId ?? "",
+        [...(excludeUserIds ?? [])].sort().join(","),
+      ] as const,
     usersLite: () => ["admin", "users-lite"] as const,
     usageLogs: (
       page: number,

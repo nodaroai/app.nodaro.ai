@@ -1,5 +1,6 @@
 import {
   useQuery,
+  useInfiniteQuery,
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query"
@@ -252,6 +253,99 @@ interface JobRow {
   provider_call_started_at: string | null
 }
 
+// Fetch + client-side enrich ONE page of admin jobs. Extracted verbatim from
+// useAdminJobs so the table (useAdminJobs) and the Gallery
+// (useAdminJobsInfinite) share exactly one fetch/enrichment implementation.
+async function fetchAdminJobsPage(
+  page: number,
+  pageSize: number,
+  statusFilter?: string,
+  userIdFilter?: string,
+  excludeUserIds?: ReadonlyArray<string>,
+): Promise<AdminJob[]> {
+  const supabase = createClient()
+  // `jobs` is no longer column-readable from the browser: migration 347
+  // revoked table-level SELECT from `authenticated` down to the four columns
+  // Realtime needs, so provider_cost / display_cost (and 17 other fields
+  // this table renders) are service-role-only. The listing comes over REST
+  // from GET /v1/admin/jobs (requireAdmin). The enrichment reads below are
+  // unaffected — those tables keep their admin RLS policies.
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
+  if (statusFilter) params.set("status", statusFilter)
+  if (userIdFilter) params.set("userId", userIdFilter)
+  if (excludeUserIds && excludeUserIds.length > 0) {
+    params.set("excludeUserIds", excludeUserIds.join(","))
+  }
+  const res = await fetch(`/v1/admin/jobs?${params.toString()}`, {
+    headers: await getAuthHeaders(),
+  })
+  if (!res.ok) throw await adminError(res, "Failed to fetch jobs")
+  const { data: jobs } = (await res.json()) as { data: JobRow[] }
+  if (!jobs || jobs.length === 0) return []
+  const userIds = [...new Set(jobs.map((j) => j.user_id))]
+  // Orchestrator-created rows carry only workflow_execution_id (their
+  // workflow_id is null), so the owning workflow is resolved through the
+  // execution row — otherwise the Workflow column has nothing to link.
+  const executionIds = [
+    ...new Set(jobs.filter((j) => !j.workflow_id && j.workflow_execution_id).map((j) => j.workflow_execution_id as string)),
+  ]
+  // source='app' rows store the developer-app ID in source_detail (it is a
+  // query key for credit-guard/connected-instances, so the stored value
+  // stays an id). Resolve the display name here; a miss stays null — the
+  // app may have been deleted (DCR sweep) — and the badge shows the id.
+  const appIds = [
+    ...new Set(jobs.filter((j) => j.source === "app" && j.source_detail).map((j) => j.source_detail as string)),
+  ]
+  // The two `as never` / `as unknown as` casts mirror the jobs query above:
+  // the generated Database type predates these tables.
+  const [usersRes, executionsRes, appsRes] = await Promise.all([
+    supabase.from("profiles").select("id, email").in("id", userIds),
+    supabase.from("workflow_executions" as never).select("id, workflow_id").in("id", executionIds) as unknown as PromiseLike<{
+      data: Array<{ id: string; workflow_id: string | null }> | null
+    }>,
+    supabase.from("developer_apps" as never).select("id, name").in("id", appIds) as unknown as PromiseLike<{
+      data: Array<{ id: string; name: string }> | null
+    }>,
+  ])
+  const execWfMap = new Map((executionsRes.data ?? []).map((e) => [e.id, e.workflow_id]))
+  const appNameMap = new Map((appsRes.data ?? []).map((a) => [a.id, a.name]))
+  const resolveWorkflowId = (j: JobRow): string | null =>
+    j.workflow_id ?? (j.workflow_execution_id ? (execWfMap.get(j.workflow_execution_id) ?? null) : null)
+  const workflowIds = [...new Set(jobs.map(resolveWorkflowId).filter(Boolean) as string[])]
+  const workflowsRes = await supabase.from("workflows").select("id, name, project_id").in("id", workflowIds)
+  const userMap = new Map((usersRes.data ?? []).map((u) => [u.id, u.email]))
+  const wfMap = new Map((workflowsRes.data ?? []).map((w) => [w.id, { name: w.name, project_id: w.project_id }]))
+  return jobs.map((j) => ({
+    id: j.id,
+    status: j.status,
+    job_type: j.job_type ?? null,
+    credits: j.credits,
+    provider: j.provider ?? null,
+    provider_cost: j.provider_cost ?? null,
+    display_cost: j.display_cost ?? null,
+    error_message: j.error_message ?? null,
+    input_data: (j.input_data ?? null) as Record<string, unknown> | null,
+    output_data: (j.output_data ?? null) as Record<string, unknown> | null,
+    created_at: j.created_at,
+    started_at: j.started_at ?? null,
+    completed_at: j.completed_at ?? null,
+    user_id: j.user_id,
+    user_email: userMap.get(j.user_id) ?? "Unknown",
+    workflow_id: resolveWorkflowId(j),
+    workflow_name: wfMap.get(resolveWorkflowId(j) ?? "")?.name ?? "Unknown",
+    workflow_execution_id: j.workflow_execution_id ?? null,
+    workflow_project_id: wfMap.get(resolveWorkflowId(j) ?? "")?.project_id ?? null,
+    source: j.source ?? null,
+    source_detail: j.source_detail ?? null,
+    source_app_name: j.source === "app" && j.source_detail ? (appNameMap.get(j.source_detail) ?? null) : null,
+    provider_kind: j.provider_kind ?? null,
+    provider_task_id: j.provider_task_id ?? null,
+    reconcile_attempts: j.reconcile_attempts ?? 0,
+    reconcile_last_error: j.reconcile_last_error ?? null,
+    provider_call_started_at: j.provider_call_started_at ?? null,
+  }))
+}
+
 export function useAdminJobs(
   page: number,
   pageSize = 50,
@@ -261,91 +355,35 @@ export function useAdminJobs(
 ) {
   return useQuery({
     queryKey: queryKeys.admin.jobs(page, pageSize, statusFilter, userIdFilter, excludeUserIds),
-    queryFn: async (): Promise<AdminJob[]> => {
-      const supabase = createClient()
-      // `jobs` is no longer column-readable from the browser: migration 347
-      // revoked table-level SELECT from `authenticated` down to the four columns
-      // Realtime needs, so provider_cost / display_cost (and 17 other fields
-      // this table renders) are service-role-only. The listing comes over REST
-      // from GET /v1/admin/jobs (requireAdmin). The enrichment reads below are
-      // unaffected — those tables keep their admin RLS policies.
-      const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
-      if (statusFilter) params.set("status", statusFilter)
-      if (userIdFilter) params.set("userId", userIdFilter)
-      if (excludeUserIds && excludeUserIds.length > 0) {
-        params.set("excludeUserIds", excludeUserIds.join(","))
-      }
-      const res = await fetch(`/v1/admin/jobs?${params.toString()}`, {
-        headers: await getAuthHeaders(),
-      })
-      if (!res.ok) throw await adminError(res, "Failed to fetch jobs")
-      const { data: jobs } = (await res.json()) as { data: JobRow[] }
-      if (!jobs || jobs.length === 0) return []
-      const userIds = [...new Set(jobs.map((j) => j.user_id))]
-      // Orchestrator-created rows carry only workflow_execution_id (their
-      // workflow_id is null), so the owning workflow is resolved through the
-      // execution row — otherwise the Workflow column has nothing to link.
-      const executionIds = [
-        ...new Set(jobs.filter((j) => !j.workflow_id && j.workflow_execution_id).map((j) => j.workflow_execution_id as string)),
-      ]
-      // source='app' rows store the developer-app ID in source_detail (it is a
-      // query key for credit-guard/connected-instances, so the stored value
-      // stays an id). Resolve the display name here; a miss stays null — the
-      // app may have been deleted (DCR sweep) — and the badge shows the id.
-      const appIds = [
-        ...new Set(jobs.filter((j) => j.source === "app" && j.source_detail).map((j) => j.source_detail as string)),
-      ]
-      // The two `as never` / `as unknown as` casts mirror the jobs query above:
-      // the generated Database type predates these tables.
-      const [usersRes, executionsRes, appsRes] = await Promise.all([
-        supabase.from("profiles").select("id, email").in("id", userIds),
-        supabase.from("workflow_executions" as never).select("id, workflow_id").in("id", executionIds) as unknown as PromiseLike<{
-          data: Array<{ id: string; workflow_id: string | null }> | null
-        }>,
-        supabase.from("developer_apps" as never).select("id, name").in("id", appIds) as unknown as PromiseLike<{
-          data: Array<{ id: string; name: string }> | null
-        }>,
-      ])
-      const execWfMap = new Map((executionsRes.data ?? []).map((e) => [e.id, e.workflow_id]))
-      const appNameMap = new Map((appsRes.data ?? []).map((a) => [a.id, a.name]))
-      const resolveWorkflowId = (j: JobRow): string | null =>
-        j.workflow_id ?? (j.workflow_execution_id ? (execWfMap.get(j.workflow_execution_id) ?? null) : null)
-      const workflowIds = [...new Set(jobs.map(resolveWorkflowId).filter(Boolean) as string[])]
-      const workflowsRes = await supabase.from("workflows").select("id, name, project_id").in("id", workflowIds)
-      const userMap = new Map((usersRes.data ?? []).map((u) => [u.id, u.email]))
-      const wfMap = new Map((workflowsRes.data ?? []).map((w) => [w.id, { name: w.name, project_id: w.project_id }]))
-      return jobs.map((j) => ({
-        id: j.id,
-        status: j.status,
-        job_type: j.job_type ?? null,
-        credits: j.credits,
-        provider: j.provider ?? null,
-        provider_cost: j.provider_cost ?? null,
-        display_cost: j.display_cost ?? null,
-        error_message: j.error_message ?? null,
-        input_data: (j.input_data ?? null) as Record<string, unknown> | null,
-        output_data: (j.output_data ?? null) as Record<string, unknown> | null,
-        created_at: j.created_at,
-        started_at: j.started_at ?? null,
-        completed_at: j.completed_at ?? null,
-        user_id: j.user_id,
-        user_email: userMap.get(j.user_id) ?? "Unknown",
-        workflow_id: resolveWorkflowId(j),
-        workflow_name: wfMap.get(resolveWorkflowId(j) ?? "")?.name ?? "Unknown",
-        workflow_execution_id: j.workflow_execution_id ?? null,
-        workflow_project_id: wfMap.get(resolveWorkflowId(j) ?? "")?.project_id ?? null,
-        source: j.source ?? null,
-        source_detail: j.source_detail ?? null,
-        source_app_name: j.source === "app" && j.source_detail ? (appNameMap.get(j.source_detail) ?? null) : null,
-        provider_kind: j.provider_kind ?? null,
-        provider_task_id: j.provider_task_id ?? null,
-        reconcile_attempts: j.reconcile_attempts ?? 0,
-        reconcile_last_error: j.reconcile_last_error ?? null,
-        provider_call_started_at: j.provider_call_started_at ?? null,
-      }))
-    },
+    queryFn: () => fetchAdminJobsPage(page, pageSize, statusFilter, userIdFilter, excludeUserIds),
     enabled: hasAdmin(),
     staleTime: 15_000,
+  })
+}
+
+/**
+ * Infinite (Gallery view) counterpart of useAdminJobs — same fetch + per-page
+ * client-side enrichment, paged by offset. refetchOnWindowFocus is OFF: each
+ * page fans out several Supabase enrichment reads, so a focus refetch of every
+ * loaded page would be a burst of dozens of queries. Flatten `pages` deduped by
+ * id at the call site — offset paging over a live created_at-desc table repeats
+ * a row across page boundaries when new jobs land mid-scroll.
+ */
+export function useAdminJobsInfinite(
+  pageSize = 50,
+  statusFilter?: string,
+  userIdFilter?: string,
+  excludeUserIds?: ReadonlyArray<string>,
+) {
+  return useInfiniteQuery({
+    queryKey: queryKeys.admin.jobsInfinite(pageSize, statusFilter, userIdFilter, excludeUserIds),
+    queryFn: ({ pageParam }) =>
+      fetchAdminJobsPage(pageParam, pageSize, statusFilter, userIdFilter, excludeUserIds),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => (lastPage.length === pageSize ? allPages.length : undefined),
+    enabled: hasAdmin(),
+    staleTime: 15_000,
+    refetchOnWindowFocus: false,
   })
 }
 
