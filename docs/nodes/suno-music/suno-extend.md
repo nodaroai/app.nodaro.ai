@@ -11,10 +11,10 @@ Suno Extend takes a previously generated Suno track (identified by its Audio ID)
 |-------|------|---------|-------------|
 | Audio ID | string | `""` | Suno audio ID (required). Inherited from the connected Suno node's **selected** track — the panel shows "Inherited from *Suno Generate*: `<id>`" under the field, so nothing needs pasting; switch tracks on the source node and Extend follows. A manual value applies only without a connection. |
 | Continue From | number (seconds) | `0` | Timestamp in seconds where the extension begins. Must be greater than 0; leave it at 0 (or empty) and the node extends the track using Suno's own parameters instead of the custom ones. |
-| Extension Prompt | string (max 5000) | `""` | Prompt describing the desired continuation. |
+| Extension Prompt | string | `""` | Prompt describing the desired continuation. Max length is per-version (5000 for V4.5+/V5, 3000 for V4); longer input is truncated rather than rejected. |
 | Model | enum | `"V5"` | Suno model version: `V5`, `V4_5ALL`, `V4_5PLUS`, `V4_5`, `V4`. |
 | Title | string (max 80) | `""` | Title for the extended track. |
-| Style | string (max 1000) | `""` | Genre and style tags for the extension. |
+| Style | string (max 1000) | `""` | Genre and style tags for the extension. Max **1000** for V4.5+/V5, **200** for V4. |
 | Negative Style | string (max 500) | `""` | Styles to avoid in the extension. |
 | Vocal Gender | enum | auto | `"male"`, `"female"`, or unset for automatic selection. |
 | Style Weight | number | `0.5` | Influence of style tags (0.0 to 1.0). |
@@ -47,5 +47,5 @@ Suno Extend takes a previously generated Suno track (identified by its Audio ID)
 
 - This node requires a Suno Audio ID, not a generic audio URL. It must be connected to an upstream Suno node (Generate, Cover, etc.).
 - To extend audio from non-Suno sources, use the Suno Upload Extend node instead.
-- The Extension Prompt supports up to 5000 characters, allowing for very detailed continuation instructions.
+- The Extension Prompt's max length is per-version (5000 for V4.5+/V5, 3000 for V4); longer input is truncated rather than rejected.
 - Style Weight, Weirdness, and Audio Weight are only active controls when Use Default Parameters is set to true; turn it off to let Suno apply its own defaults instead.

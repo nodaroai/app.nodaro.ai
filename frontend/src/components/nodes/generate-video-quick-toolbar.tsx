@@ -18,6 +18,8 @@ import { NodeRunStripControls } from "./node-run-strip-controls"
 import { useGenerateVideoStripModel } from "./use-generate-video-strip-model"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { NODE_VISUAL_SCALE_FLOOR } from "@/lib/zoom-floor"
+import { videoImageGateBlocked } from "@/lib/video-image-gate"
+import { useT } from "@/lib/i18n"
 import type { GenerateVideoNodeData } from "@/types/nodes"
 
 interface GenerateVideoQuickToolbarProps {
@@ -70,6 +72,16 @@ export function GenerateVideoQuickToolbar({
   const zoom = useStore((s) => s.transform[2])
   const visibleNodeWidth = nodeWidth * zoom
   const isCompact = TOOLBAR_NATURAL_WIDTH > visibleNodeWidth * 1.5
+
+  const t = useT()
+  // Primitive selector: one boolean, so an unrelated edge change can't
+  // re-render the toolbar.
+  const imageGateBlocked = useWorkflowStore((s) =>
+    videoImageGateBlocked({ id: nodeId, type: "generate-video", data: data as Record<string, unknown> }, s.edges),
+  )
+  const runDisabledReason = imageGateBlocked
+    ? t("node.imageRequiredHint", { model: (data.provider as string | undefined) ?? "" })
+    : undefined
 
   // NodeToolbar renders at fixed DOM scale (its portal sits outside the
   // React Flow zoom transform), so its visual size doesn't track zoom by
@@ -294,6 +306,8 @@ export function GenerateVideoQuickToolbar({
           credits={credits}
           isRunning={isRunning}
           onRun={(nid) => runSingleNode?.(nid)}
+          disabled={imageGateBlocked}
+          disabledReason={runDisabledReason}
         />
       </div>
     )
@@ -317,6 +331,8 @@ export function GenerateVideoQuickToolbar({
         isRunning={isRunning}
         credits={credits}
         onRun={(nid) => runSingleNode?.(nid)}
+        runDisabled={imageGateBlocked}
+        runDisabledReason={runDisabledReason}
         onOpenChange={handleOpenChange}
         isMulti={false}
         modelLabel={modelLabel}

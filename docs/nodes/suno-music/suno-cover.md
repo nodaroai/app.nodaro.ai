@@ -9,12 +9,12 @@ Suno Cover takes a source audio track and generates a new cover version of it. Y
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| Prompt | string (max 3000) | `""` | Description of how the cover should differ from the original. |
+| Prompt | string | `""` | Description of how the cover should differ from the original. Max length is per-version: **5000** for V4.5 / V4.5PLUS / V4.5ALL / V5 / V5.5, **3000** for V4; **3000** in non-custom mode. Over-long input is truncated to the model's limit — the editor warns first. |
 | Source Audio URL | URL | `""` | URL of the source audio to cover. Can be connected from an upstream node. |
 | Model | enum | `"V5"` | Suno model version: `V5`, `V4_5ALL`, `V4_5PLUS`, `V4_5`, `V4`. |
-| Title | string (max 200) | `""` | Title for the cover version. |
-| Lyrics | string (max 3000) | `""` | Custom lyrics for the cover. Supports Suno metatags. |
-| Style | string (max 500) | `""` | Genre and style tags for the cover. |
+| Title | string (max 80) | `""` | Title for the cover version. |
+| Lyrics | string | `""` | Custom lyrics for the cover. Supports Suno metatags. Same per-version max as Prompt. |
+| Style | string (max 1000) | `""` | Genre and style tags for the cover. Max **1000** for V4.5+/V5, **200** for V4. |
 | Negative Style | string (max 500) | `""` | Styles to avoid in the cover. |
 | Vocal Gender | enum | auto | `"male"`, `"female"`, or unset for automatic selection. |
 | Custom Mode | boolean | `false` | Enables advanced parameter control. |

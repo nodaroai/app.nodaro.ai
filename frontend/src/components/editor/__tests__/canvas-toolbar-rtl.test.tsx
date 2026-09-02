@@ -35,7 +35,7 @@ vi.mock("@/components/ui/tooltip", () => ({
 }))
 
 const { CanvasToolbar } = await import("../canvas-toolbar")
-const { MARKETPLACE_POPUP_WIDTH } = await import("../component-marketplace-modal")
+const { MARKETPLACE_POPUP_WIDTH } = await import("../marketplace-popup-geometry")
 const { COPILOT_TAB_WIDTH, useCopilotUiStore } = await import("@/hooks/use-copilot-ui-store")
 const { useLocaleStore } = await import("@/lib/locale-store")
 const { translate } = await import("@/lib/i18n")
@@ -115,6 +115,16 @@ describe("canvas toolbar under RTL", () => {
     enButton.getBoundingClientRect = () => ({ left: 76, right: 132, top: 300, bottom: 340, width: 56, height: 40, x: 76, y: 300, toJSON: () => ({}) })
     fireEvent.click(enButton)
     expect(onAddNode).toHaveBeenCalledWith({ x: 132 + 8, y: 300 }, true)
+  })
+
+  it("anchors the mobile bar's Add Node popup the same way", () => {
+    const onAddNode = vi.fn()
+    const { container } = render(<CanvasToolbar {...props} onAddNode={onAddNode} />, { wrapper: Router })
+    const mobileBar = container.querySelector<HTMLElement>(".md\\:hidden")!
+    const button = mobileBar.querySelector<HTMLElement>(`[aria-label="${translate("he", "toolbar.addNode")}"]`)!
+    button.getBoundingClientRect = () => ({ left: 300, right: 336, top: 8, bottom: 44, width: 36, height: 36, x: 300, y: 8, toJSON: () => ({}) })
+    fireEvent.click(button)
+    expect(onAddNode).toHaveBeenCalledWith({ x: 300 - 8 - MARKETPLACE_POPUP_WIDTH, y: 44 + 8 }, true)
   })
 
   it("opens tooltips away from the anchored edge", () => {

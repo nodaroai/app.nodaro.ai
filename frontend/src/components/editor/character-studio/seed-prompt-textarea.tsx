@@ -23,10 +23,10 @@ export function SeedPromptTextarea({ value, onChange, suggestContext }: SeedProm
         onChange={(e) => onChange(e.target.value)}
         placeholder="A short identity description for the portrait — physical traits, demeanor, distinctive features"
         rows={4}
-        maxLength={2000}
+        maxLength={4000}
         className="block w-full text-[11px] bg-[#13161f] border border-[#334155] rounded px-2 py-1.5 text-slate-200"
       />
-      <div className="text-right text-[9px] text-slate-500 tabular-nums">{value.length}/2000</div>
+      <div className="text-right text-[9px] text-slate-500 tabular-nums">{value.length}/4000</div>
     </div>
   )
 }

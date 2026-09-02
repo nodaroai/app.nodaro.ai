@@ -529,7 +529,7 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
           }}
         />
       )}
-    <aside className="fixed right-0 top-0 h-full w-[420px] border-l border-zinc-200 dark:border-[#2D2D2D] bg-zinc-50 dark:bg-[#121212] p-4 overflow-y-auto z-40">
+    <aside className="fixed end-0 top-0 h-full w-[420px] border-s border-zinc-200 dark:border-[#2D2D2D] bg-zinc-50 dark:bg-[#121212] p-4 overflow-y-auto z-40">
       <div className="flex items-center justify-between mb-4 gap-2">
         <div className="min-w-0">
           <div className="text-xs uppercase text-zinc-500 dark:text-zinc-400">Pipeline</div>

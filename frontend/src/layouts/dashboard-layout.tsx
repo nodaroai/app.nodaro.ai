@@ -4,6 +4,7 @@ import { useLocation, useNavigate, Outlet } from "react-router-dom"
 import { Loader2 } from "lucide-react"
 import { AppSidebar, MobileHeader } from "@/components/layout/app-sidebar"
 import { FreeGrantBannerSlot } from "@/components/layout/free-grant-banner-slot"
+import { ConsentGateSlot } from "@/components/layout/consent-gate-slot"
 import { SidebarProvider } from "@/components/layout/sidebar-context"
 import { useLoadUserSettings } from "@/hooks/use-load-user-settings"
 import { useAuth } from "@/hooks/use-auth"
@@ -100,6 +101,8 @@ export default function DashboardLayout() {
           </main>
         </div>
       </div>
+      {/* Marketing-email consent nag (Cloud-only, self-hiding, never in an embed). */}
+      <ConsentGateSlot />
     </SidebarProvider>
   )
 }

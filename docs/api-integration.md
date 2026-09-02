@@ -997,6 +997,18 @@ orchestrator already use):
   requirement: a provider with no reference support still needs `imageUrl`,
   and e.g. audio-only references on an images-only model are rejected with a
   400 rather than silently dropped.
+- **`image_required` vs `validation_error` on a missing start frame.** When
+  `POST /v1/generate-video` gets no `imageUrl`, no `REFERENCE_2_VIDEO`
+  `generationType` and no reference kind the provider can carry, the response
+  depends on the model. Any model whose catalog `modes` omit `text-to-video`
+  (e.g. Kling 3 Omni, HappyHorse Ref2V, Hailuo 2.3 — the set is derived, so
+  `GET /v1/models` is the authority, not this list) returns
+  `400 image_required` naming the model; every other provider returns
+  `400 validation_error` telling you to use `POST /v1/text-to-video` for a
+  prompt-only run. The `image_required` message also says whether references
+  are an alternative for that model — derived from the same reference caps the
+  guard above uses, so a model with no image-reference capability is told it
+  needs a start frame.
 - **Backward compatible.** Omit `connectedReferences` and the route behaves
   exactly as before — a pre-assembled `prompt` + flat `referenceImageUrls` pass
   through unchanged. `connectedReferences` feeds the **image** channel only;

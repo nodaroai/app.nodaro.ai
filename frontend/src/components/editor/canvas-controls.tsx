@@ -286,7 +286,9 @@ export function CanvasControls({ zoom, showMiniMap, onToggleMiniMap, snapEnabled
   return (
     <div
       className={cn(
-        "absolute bottom-4 left-4 z-10",
+        // Inline START — the corner opposite the node config drawer (which
+        // pins to the inline end); both mirror together under RTL.
+        "absolute bottom-4 start-4 z-10",
         "flex items-center gap-1 p-1",
         "rounded-xl backdrop-blur-md",
         "transition-all duration-300 ease-in-out",

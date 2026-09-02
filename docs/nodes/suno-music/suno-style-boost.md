@@ -9,7 +9,7 @@ Suno Style Boost takes raw text content (typically lyrics) and enhances its styl
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| Content | string (max 3000) | `""` | The text content to enhance (typically lyrics). |
+| Content | string | `""` | The text content to enhance (typically lyrics). Max 5000; longer input is truncated rather than rejected. |
 | `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ## Inputs & Outputs
@@ -21,7 +21,7 @@ Suno Style Boost takes raw text content (typically lyrics) and enhances its styl
 - Use this after Suno Lyrics to polish AI-generated lyrics before feeding them into Suno Generate.
 - Provide rough drafts or outlines as input -- the style boost works best when there is a solid foundation to refine.
 - Chain multiple style boost passes for increasingly refined output, though diminishing returns apply after 2-3 passes.
-- Keep input under 3000 characters for reliable processing.
+- Max 5000; longer input is truncated rather than rejected.
 - This node processes text, not audio -- it is a text-to-text transformation.
 
 ## Common Use Cases

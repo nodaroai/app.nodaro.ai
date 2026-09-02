@@ -15,7 +15,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { useSidebar } from "@/components/layout/sidebar-context"
-import { MARKETPLACE_POPUP_WIDTH } from "./component-marketplace-modal"
+import { MARKETPLACE_POPUP_WIDTH } from "./marketplace-popup-geometry"
 
 interface CanvasToolbarProps {
   readonly onAddNode: (position?: { x: number; y: number }, placeAtCenter?: boolean) => void
@@ -348,9 +348,11 @@ export function CanvasToolbar({
           shortcut={formatBinding(SHORTCUTS.addNode.bindings[0], isMac)}
           onClick={(e) => {
             const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-            // The popup grows rightward from the x it is given, so beside a
-            // right-anchored rail its LEFT edge must sit a popup width (plus
-            // the gap) before the rail; beside a left-anchored one, just past it.
+            // Forwarded through the (viewport-centred) node picker to the
+            // component browser popup, which grows rightward from the x it is
+            // given: beside a right-anchored rail its LEFT edge must sit a popup
+            // width (plus the gap) before the rail; beside a left-anchored one,
+            // just past it.
             const x = isRtl ? rect.left - 8 - MARKETPLACE_POPUP_WIDTH : rect.right + 8
             onAddNode({ x, y: rect.top }, true)
           }}

@@ -159,6 +159,10 @@ export const envSchema = z.object({
   HEYGEN_CATALOG_REFRESH_HOURS: z.coerce.number().positive().max(24 * 30).default(24),
   BEEBLE_API_KEY: z.string().default(""),
   APIFY_API_TOKEN: z.string().default(""),
+  /** Loops (loops.so) API key for the Cloud-only marketing-consent -> contact
+   *  sync (ee/lib/loops-client.ts). Empty on community/self-host, where the
+   *  sync no-ops. Not a provider key; not in PROVIDER_KEY_IDS. */
+  LOOPS_API_KEY: z.string().default(""),
   PORT: z.coerce.number().default(8000),
   HOST: z.string().default("0.0.0.0"),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),

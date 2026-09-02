@@ -19,6 +19,9 @@ export interface NodeRunStripControlsProps {
   readonly isRunning: boolean
   readonly credits?: number
   readonly onRun: (nodeId: string) => void
+  /** Forwarded verbatim to the strip's RunNodeButton. */
+  readonly runDisabled?: boolean
+  readonly runDisabledReason?: string
   /** Optional dropdown open/close notifier — PILL presentation only (keeps the
    *  hover toolbar visible while a portaled menu is open). In-body omits it. */
   readonly onOpenChange?: (open: boolean) => void
@@ -134,7 +137,14 @@ export function NodeRunStripControls(props: NodeRunStripControlsProps) {
         </SelectContent>
       </Select>
 
-      <RunNodeButton nodeId={props.nodeId} credits={props.credits} isRunning={props.isRunning} onRun={props.onRun} />
+      <RunNodeButton
+        nodeId={props.nodeId}
+        credits={props.credits}
+        isRunning={props.isRunning}
+        onRun={props.onRun}
+        disabled={props.runDisabled}
+        disabledReason={props.runDisabledReason}
+      />
     </>
   )
 }

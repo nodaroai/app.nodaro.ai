@@ -1,3 +1,5 @@
+import { useAppDir } from "@/lib/locale-store"
+import { clampPopupLeft, popupDefaultStyle } from "./marketplace-popup-geometry"
 import { useState, useCallback, useEffect, useRef, useMemo } from "react"
 import { createPortal } from "react-dom"
 import { Puzzle, Search, X, Loader2, FileText, Star, Coins, ExternalLink, Pencil, ToggleLeft, ToggleRight } from "lucide-react"
@@ -57,7 +59,9 @@ interface ComponentMarketplaceModalProps {
   onSelect: (component: ComponentSelection) => void
   /** "popup" = compact inline list (add-node / context menu), "fullscreen" = rich browser (toolbar button) */
   variant?: "popup" | "fullscreen"
-  /** Position for the popup variant. Falls back to left:70, centered vertically. */
+  /** Position for the popup variant. With none, it opens beside the Add Node
+   *  panel at the inline start (left:70, or right:70 under RTL), centered
+   *  vertically — see popupDefaultStyle. */
   position?: { x: number; y: number }
 }
 
@@ -214,20 +218,11 @@ function ComponentListItem({
 // Main component
 // ---------------------------------------------------------------------------
 
-/** The popup variant's width (`w-80`). Callers that anchor the popup beside
- *  something — the canvas toolbar rail — read this so the two cannot drift. */
-export const MARKETPLACE_POPUP_WIDTH = 320
-
-/** Keep a caller-supplied physical x on-screen: every caller hands over a raw
- *  coordinate (a rail button's edge, a right-click, a handle drop) with no idea
- *  of the popup's width, and near the viewport's inline end that runs the popup
- *  off-screen. */
-export function clampPopupLeft(x: number, viewportWidth: number): number {
-  return Math.max(8, Math.min(x, viewportWidth - MARKETPLACE_POPUP_WIDTH - 8))
-}
-
 export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, variant = "popup", position }: ComponentMarketplaceModalProps) {
   const t = useT()
+  // The popup is `fixed` (viewport-physical); its no-position default opens
+  // beside the Add Node panel, whose side follows the reading direction.
+  const isRtl = useAppDir() === "rtl"
   const isFullscreen = variant === "fullscreen"
   const [activeTab, setActiveTab] = useState<TabId>("browse")
   const [searchInput, setSearchInput] = useState("")
@@ -691,7 +686,7 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
         )}
         style={position
           ? { left: clampPopupLeft(position.x, window.innerWidth), top: position.y }
-          : { left: 70, top: "50%", transform: "translateY(-50%)" }
+          : popupDefaultStyle(isRtl)
         }
       >
         {/* Header */}

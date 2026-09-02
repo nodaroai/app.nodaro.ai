@@ -56,8 +56,15 @@ export function copilotSurfaced(): boolean {
  * The editor's floating toolbar is `position: fixed` and offsets itself from
  * the app sidebar, so without this it renders ON TOP of the rail — the reported
  * bug. Anything else anchored to the inline-start edge should offset by this
- * too. Returns 0 when there is no rail at all: community, a deployment that
- * hides the Copilot feature, or a rail that never rendered.
+ * too. Returns 0 when the Copilot is not surfaced at all — a community
+ * edition, or a deployment that hides the feature. A never-opened rail still
+ * renders its collapsed tab, so that is COPILOT_TAB_WIDTH, not 0.
+ *
+ * Known gap: the slot's mobile gate is `(max-width: 899px) and (pointer:
+ * coarse)` (use-is-mobile.ts), wider than Tailwind's `md` (768px). On a touch
+ * device between 768 and 899px the slot renders no tab while the desktop rail
+ * is visible, so this over-reports by COPILOT_TAB_WIDTH — symmetric in both
+ * directions, and left as is until the two gates share one breakpoint.
  */
 export function useCopilotRailWidth(): number {
   return useCopilotUiStore((s) => {

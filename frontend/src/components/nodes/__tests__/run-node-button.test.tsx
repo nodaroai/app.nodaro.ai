@@ -186,6 +186,55 @@ describe("RunNodeButton — discard run", () => {
   })
 })
 
+describe("disabled / disabledReason", () => {
+  it("does not fire onRun when disabled, and exposes the reason", () => {
+    storeNode = { id: "n1", type: "generate-image", data: {} }
+    const onRunLocal = vi.fn()
+    render(
+      <RunNodeButton
+        nodeId="n1"
+        isRunning={false}
+        onRun={onRunLocal}
+        disabled
+        disabledReason="kling-3-omni needs an input image"
+      />,
+    )
+    const btn = screen.getByRole("button", { name: /run/i })
+    expect(btn).toBeDisabled()
+    expect(btn).toHaveAttribute("title", "kling-3-omni needs an input image")
+    fireEvent.click(btn)
+    expect(onRunLocal).not.toHaveBeenCalled()
+  })
+
+  it("still runs when not disabled", () => {
+    storeNode = { id: "n1", type: "generate-image", data: {} }
+    const onRunLocal = vi.fn()
+    render(<RunNodeButton nodeId="n1" isRunning={false} onRun={onRunLocal} />)
+    fireEvent.click(screen.getByRole("button", { name: /run/i }))
+    expect(onRunLocal).toHaveBeenCalledWith("n1")
+  })
+
+  it("does NOT gate the RUNNING branch — Stop/Discard stay reachable even when disabled is set", () => {
+    // The precondition being unmet doesn't matter once a run is in flight —
+    // `disabled` must never hide Stop/Discard.
+    storeNode = { id: "node-1", type: "generate-image", data: { executionStatus: "running", currentJobId: "job-old" } }
+    render(
+      <RunNodeButton
+        nodeId="node-1"
+        credits={0}
+        isRunning
+        onRun={onRun}
+        disabled
+        disabledReason="kling-3-omni needs an input image"
+      />,
+    )
+    const stopButton = screen.getByRole("button", { name: /stop/i })
+    expect(stopButton).not.toBeDisabled()
+    fireEvent.click(screen.getByText("Discard"))
+    expect(cancelJob).toHaveBeenCalledWith("job-old")
+  })
+})
+
 describe("RunNodeButton — graceful Stop & keep (segmented engines)", () => {
   it("offers 'Stop & keep' for generate-video-pro; clicking calls stopGenerateVideoPro WITHOUT discarding (no cancel, no abort, no revert)", () => {
     renderRunning("job-old", "generate-video-pro")

@@ -15,6 +15,7 @@ vi.mock("@/hooks/use-workflow-store", () => ({
       updateNodeData: () => {},
       runSingleNode: () => {},
       nodes: [{ id: "n1", width: 320 }],
+      edges: [],
     }),
 }))
 

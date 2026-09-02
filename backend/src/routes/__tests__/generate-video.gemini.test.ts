@@ -187,7 +187,9 @@ describe("POST /v1/generate-video — gemini-omni-video V2V", () => {
     expect(queuePayload.videoTrimEnd).toBe(8)
   })
 
-  // 4. No imageUrl AND no reference arrays → still 400 "imageUrl is required"
+  // 4. No imageUrl AND no reference arrays → still 400, validation_error
+  //    (gemini-omni-video has a t2v mode, so this is "wrong lane", not
+  //    image_required — see backend/src/lib/video-image-required.ts)
   it("still rejects gemini-omni-video with no imageUrl and no refs", async () => {
     const res = await app.inject({
       method: "POST",
@@ -200,7 +202,8 @@ describe("POST /v1/generate-video — gemini-omni-video V2V", () => {
     })
 
     expect(res.statusCode).toBe(400)
-    expect(res.json().error.message).toBe("imageUrl is required")
+    expect(res.json().error.code).toBe("validation_error")
+    expect(res.json().error.message).toContain("/v1/text-to-video")
   })
 
   // 5. One-sided over-window rejected: videoTrimEnd:30 alone (→ 0..30) must be 400
@@ -242,10 +245,10 @@ describe("POST /v1/generate-video — gemini-omni-video V2V", () => {
 })
 
 // ---------------------------------------------------------------------------
-// The references-only exemption from the `imageUrl is required` 400 is
-// CATALOG-driven (VIDEO_REF_LIMITS_BY_PROVIDER), not a hardcoded provider pair.
-// These cases pin that a model gets the exemption purely by declaring caps —
-// the sibling SKU and the Wan family inherit it with no route edit.
+// The references-only exemption from the missing-imageUrl 400 is CATALOG-driven
+// (VIDEO_REF_LIMITS_BY_PROVIDER), not a hardcoded provider pair. These cases
+// pin that a model gets the exemption purely by declaring caps — the sibling
+// SKU and the Wan family inherit it with no route edit.
 // ---------------------------------------------------------------------------
 
 describe("POST /v1/generate-video — catalog-driven references-only exemption", () => {
@@ -280,7 +283,10 @@ describe("POST /v1/generate-video — catalog-driven references-only exemption",
       })
 
       expect(res.statusCode).toBe(400)
-      expect(res.json().error.message).toBe("imageUrl is required")
+      // All three providers here have a t2v mode, so this is "wrong lane"
+      // (validation_error), not image_required.
+      expect(res.json().error.code).toBe("validation_error")
+      expect(res.json().error.message).toContain("/v1/text-to-video")
     })
   }
 

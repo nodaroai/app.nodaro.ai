@@ -40,6 +40,13 @@ interface RunNodeButtonProps {
   onRun: (nodeId: string) => void
   /** When true, shows "Run from here" label with FastForward icon. */
   runFromHere?: boolean
+  /** Block the IDLE Run action — an unmet precondition the user can fix on the
+   *  canvas (today: an image-required video model with no image wired). The
+   *  RUNNING branch is deliberately untouched: Stop / Discard must stay
+   *  reachable whatever the node's current configuration says. */
+  disabled?: boolean
+  /** Tooltip text explaining `disabled`. Shown as the button's `title`. */
+  disabledReason?: string
 }
 
 /** Node types whose engine checkpoints per segment, so a running job can be
@@ -48,7 +55,7 @@ interface RunNodeButtonProps {
  *  Stop menu shows an extra "Stop & keep" item for these. */
 const GRACEFUL_STOP_NODE_TYPES = new Set(["generate-video-pro"])
 
-export function RunNodeButton({ nodeId, credits, isRunning, onRun, runFromHere }: RunNodeButtonProps) {
+export function RunNodeButton({ nodeId, credits, isRunning, onRun, runFromHere, disabled, disabledReason }: RunNodeButtonProps) {
   const t = useT()
   // Narrow subscription: only PRIMITIVES this button renders/derives from — the
   // current job id, a primitive fingerprint of the edges feeding fan-out
@@ -261,8 +268,11 @@ export function RunNodeButton({ nodeId, credits, isRunning, onRun, runFromHere }
     <NodeSettingsButton nodeId={nodeId} />
     <button
       type="button"
-      className={`flex items-center gap-1 h-6 px-2.5 text-[11px] font-medium rounded-md whitespace-nowrap ${RUN_BUTTON_CLASS}`}
-      onClick={(e) => { e.stopPropagation(); onRun(nodeId) }}
+      disabled={disabled}
+      title={disabled ? disabledReason : undefined}
+      aria-disabled={disabled || undefined}
+      className={`flex items-center gap-1 h-6 px-2.5 text-[11px] font-medium rounded-md whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed ${RUN_BUTTON_CLASS}`}
+      onClick={(e) => { e.stopPropagation(); if (!disabled) onRun(nodeId) }}
     >
       <Icon className="w-3 h-3" />
       {label}

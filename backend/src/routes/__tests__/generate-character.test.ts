@@ -310,6 +310,30 @@ describe("POST /v1/generate-character", () => {
     expect(insert).toHaveBeenCalledTimes(2)
   })
 
+  it("accepts a 4000-char seedPrompt on the generation route", async () => {
+    const { insert } = mockJobsInsertChain()
+    vi.mocked(supabase.from).mockReturnValue({ insert, ...charSelectChain() } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-character",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { name: "Kira", seedPrompt: "y".repeat(4000), count: 1 },
+    })
+    expect(res.statusCode).toBe(200)
+  })
+
+  it("rejects a 4001-char seedPrompt (400) — mirrors the characters_seed_prompt_4000_check CHECK", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-character",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { name: "Kira", seedPrompt: "y".repeat(4001), count: 1 },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
   it("force_private: true on every inserted job (ignores body forcePrivate=false)", async () => {
     const { insert } = mockJobsInsertChain()
     vi.mocked(supabase.from).mockReturnValue({ insert, ...charSelectChain() } as never)

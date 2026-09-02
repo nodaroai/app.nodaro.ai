@@ -16,6 +16,7 @@ import { backendHybridRoles } from "../../lib/reference-format.js"
 import { selectLoraRoutingForMentions } from "../../lib/character-lora.js"
 import { config } from "../../lib/config.js"
 import { isNodeDenied, deniedNodeRejectionMessage, isModelDenied, deniedModelRejectionMessage } from "../../lib/surface-deny.js"
+import { imageRequiredMessage } from "../../lib/video-image-required.js"
 import { isVoiceGenderAllowed, premadeVoiceGender } from "../../lib/voice-policy.js"
 import { applyPromptPolicies } from "../../lib/prompt-policy.js"
 import { ltxCameraMotionFromUpstream } from "../../lib/ltx-camera-motion.js"
@@ -3143,7 +3144,7 @@ export function buildPayload(
       // /v1/text-to-video route returns, BEFORE a job row is created and
       // credits are reserved, instead of a provider-lookup error mid-run.
       if (effectiveMode === "text-to-video" && videoProviderRequiresImage(resolvedProvider)) {
-        throw new Error(`${resolvedProvider} requires an input image — connect an image to the node's image input.`)
+        throw new Error(imageRequiredMessage(resolvedProvider))
       }
 
       // Prompt composition (typed-primary, via the shared helper): list-override

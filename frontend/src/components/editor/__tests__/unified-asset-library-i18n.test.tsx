@@ -23,28 +23,36 @@ vi.mock("../character-page-modal", () => ({ CharacterPageModal: () => null }))
 vi.mock("../object-page-modal", () => ({ ObjectPageModal: () => null }))
 vi.mock("../creature-studio/creature-studio-modal", () => ({ default: () => null }))
 vi.mock("../location-studio/location-studio-modal", () => ({ default: () => null }))
-vi.mock("@/hooks/use-workflow-store", () => ({
-  useWorkflowStore: Object.assign(
-    (selector: (s: Record<string, unknown>) => unknown) =>
-      selector({ nodes: [], selectNode: vi.fn(), addNode: vi.fn(), updateNodeData: vi.fn() }),
-    { getState: () => ({ nodes: [], addNode: vi.fn(), selectNode: vi.fn() }) },
-  ),
-}))
+// A canvas node bound to the fox, so the "On canvas" badge has something to say.
+vi.mock("@/hooks/use-workflow-store", () => {
+  const nodes = [{ id: "n-fox", type: "creature", position: { x: 0, y: 0 }, data: { creatureDbId: "cre-1" } }]
+  return {
+    useWorkflowStore: Object.assign(
+      (selector: (s: Record<string, unknown>) => unknown) =>
+        selector({ nodes, selectNode: vi.fn(), addNode: vi.fn(), updateNodeData: vi.fn() }),
+      { getState: () => ({ nodes, addNode: vi.fn(), selectNode: vi.fn() }) },
+    ),
+  }
+})
 const FOX = {
   id: "cre-1", name: "Red Fox", species: "red fox", category: "wild", style: "realistic",
   sourceImageUrl: "https://example.com/fox.png", description: "a sly fox", projectId: "proj-1",
   angles: [], poses: [], variations: [],
 }
+const creatures = vi.fn(() => ({ data: [FOX] as (typeof FOX)[], isLoading: false, error: null as unknown }))
 vi.mock("@/hooks/queries/use-assets-queries", () => {
   const empty = () => ({ data: [], isLoading: false, error: null })
-  return { useCharacters: empty, useObjects: empty, useCreatures: () => ({ data: [FOX], isLoading: false, error: null }), useLocations: empty, useFaces: empty }
+  return { useCharacters: empty, useObjects: empty, useCreatures: () => creatures(), useLocations: empty, useFaces: empty }
 })
 
 import { UnifiedAssetLibraryModal, UnifiedAssetLibraryButton } from "../unified-asset-library"
 import { useLocaleStore } from "@/lib/locale-store"
 import { translate } from "@/lib/i18n"
 
-beforeEach(() => act(() => useLocaleStore.getState().setLocale("he")))
+beforeEach(() => {
+  creatures.mockReturnValue({ data: [FOX], isLoading: false, error: null })
+  act(() => useLocaleStore.getState().setLocale("he"))
+})
 afterEach(() => {
   cleanup()
   act(() => useLocaleStore.getState().setLocale("en"))
@@ -88,7 +96,7 @@ describe("My Library modal in Hebrew", () => {
 // node-toolbar actually mounts. It was localized in step with the modal and
 // needs its own render, or a drift between the two bodies passes silently.
 describe("My Library from the sidebar button in Hebrew", () => {
-  it("renders the opened library in Hebrew, including the empty-library hint", () => {
+  it("renders the opened library in Hebrew, with the card's on-canvas badge", () => {
     render(<UnifiedAssetLibraryButton />)
     fireEvent.click(screen.getByRole("button", { name: new RegExp(translate("he", "toolbar.myLibrary")) }))
     expect(screen.getByRole("heading", { level: 3 }).textContent).toBe(translate("he", "canvas.myLibrary"))
@@ -98,8 +106,19 @@ describe("My Library from the sidebar button in Hebrew", () => {
     expect(screen.getByText(translate("he", "assetlib.noMatching"))).toBeTruthy()
     fireEvent.click(screen.getByRole("button", { name: /יצורים/ }))
     expect(screen.getByText(translate("he", "assetlib.typeCreature"))).toBeTruthy()
-    for (const en of ["My Library", "Characters", "Creatures", "No saved assets", "On canvas", "creature"]) {
+    expect(screen.getByText(translate("he", "assetlib.onCanvas"))).toBeTruthy()
+    for (const en of ["My Library", "Characters", "Creatures", "On canvas", "creature"]) {
       expect(screen.queryByText(en), `raw English "${en}"`).toBeNull()
     }
+  })
+
+  it("explains a library with nothing saved yet, in Hebrew", () => {
+    creatures.mockReturnValue({ data: [], isLoading: false, error: null })
+    render(<UnifiedAssetLibraryButton />)
+    fireEvent.click(screen.getByRole("button", { name: new RegExp(translate("he", "toolbar.myLibrary")) }))
+    // Untouched default tab, no filters: the "nothing saved" branch.
+    expect(screen.getByText(translate("he", "assetlib.noSaved"))).toBeTruthy()
+    expect(screen.getByText(translate("he", "assetlib.generateHint"))).toBeTruthy()
+    expect(screen.queryByText("No saved assets")).toBeNull()
   })
 })

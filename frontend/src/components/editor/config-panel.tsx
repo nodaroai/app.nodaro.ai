@@ -16,6 +16,7 @@ import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 const Kling3DirectorModal = lazy(() => import("@/components/editor/kling3-director-modal").then(m => ({ default: m.Kling3DirectorModal })))
 import { GenerateButton } from "@/ee/components/credits/GenerateButton"
 import { RUN_BUTTON_CLASS } from "@/lib/run-button-style"
+import { videoImageGateBlocked } from "@/lib/video-image-gate"
 import { useProvidersCreditsSum } from "@/ee/hooks/use-providers-credits-sum"
 import { createClient } from "@/lib/supabase"
 import { pipelinesApi } from "@/lib/pipelines-api"
@@ -999,6 +1000,13 @@ export function ConfigPanel() {
   // fullscreen toggle stay interactive — see the fieldset around NodeTypeConfig.
   const isNodeRunning =
     nodeData.executionStatus === "running" || nodeData.executionStatus === "pending"
+  // Engine-parity Run gate for an image-required video model with no image
+  // wired — see frontend/src/lib/video-image-gate.ts. No-op for every other
+  // node type (the predicate itself checks `type === "generate-video"`).
+  const imageGateBlocked = videoImageGateBlocked(
+    selectedNode as { id: string; type?: string; data?: Record<string, unknown> } | undefined,
+    edges,
+  )
 
   // Cross-cutting preset dropdown — one component, reads its node from the store by id. Self-hides
   // for nodes with no portable config (and asset/structural nodes). Placed below the heading in the
@@ -1290,6 +1298,12 @@ export function ConfigPanel() {
                     userId={userId ?? ""}
                     label={t("configPanel.runThisNode")}
                     isRunning={nodeData.executionStatus === "running"}
+                    disabled={imageGateBlocked}
+                    disabledReason={
+                      imageGateBlocked
+                        ? t("node.imageRequiredHint", { model: (nodeData.provider as string | undefined) ?? "" })
+                        : undefined
+                    }
                     creditOverride={
                       nodeType === "component"
                         ? (nodeData.estimatedCredits as number) || undefined

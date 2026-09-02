@@ -9,7 +9,7 @@ Suno Generate creates complete songs from text prompts. It supports multiple Sun
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| Prompt | string | `""` | Main text prompt describing the song (in custom mode, the lyrics). Supports Suno metatag autocomplete. Max length is per-version: **5000** for V4.5 / V4.5PLUS / V4.5ALL / V5 / V5.5, **3000** for V4; **500** in non-custom (inspiration) mode. Over-long input is truncated to the model's limit — the editor warns first so you can switch model or shorten. |
+| Prompt | string | `""` | Main text prompt describing the song (in custom mode, the lyrics). Supports Suno metatag autocomplete. Max length is per-version: **5000** for V4.5 / V4.5PLUS / V4.5ALL / V5 / V5.5, **3000** for V4; **3000** in non-custom (inspiration) mode. Over-long input is truncated to the model's limit — the editor warns first so you can switch model or shorten. |
 | Model | enum | `"V5_5"` | Suno model version: `V5_5`, `V5`, `V4_5PLUS`, `V4_5ALL`, `V4_5`, `V4`. |
 | Title | string (max 80) | `""` | Title for the generated song (Suno caps titles at 80 characters). |
 | Lyrics | string | `""` | Song lyrics with metatag support (`[Verse]`, `[Chorus]`, `[Bridge]`, etc.). Same per-version max as Prompt (5000 for V4.5+/V5, 3000 for V4). |

@@ -4,6 +4,7 @@ import { providerFetch, type EgressMeta } from "../egress.js"
 import { ELEVENLABS_BASE_URL } from "./client.js"
 import { defaultAllowedVoiceId } from "../../lib/voice-policy.js"
 import { FALLBACK_VOICES } from "../../lib/premade-voices.js"
+import { languageCodeForModel } from "./language-code.js"
 
 function resolveModel(provider?: string): string {
   if (provider === "elevenlabs-v3") return "eleven_v3"
@@ -186,8 +187,11 @@ export async function directElevenLabsTTS(
     text,
     model_id: resolveModel(provider),
   }
-  if (options?.languageCode) {
-    body.language_code = options.languageCode
+  // Single funnel: 639-3 -> 639-1 (Scribe answers in 639-3, this API wants
+  // 639-1) and omission on models that reject the field. See language-code.ts.
+  const languageCode = languageCodeForModel(provider, options?.languageCode)
+  if (languageCode) {
+    body.language_code = languageCode
   }
 
   const hasExplicitSettings =
