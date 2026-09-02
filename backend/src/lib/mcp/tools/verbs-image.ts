@@ -712,7 +712,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         image_asset_id: z.string().optional().describe("Nodaro image job id."),
         model: z.enum(["recraft-upscale", "topaz-image-upscale", "recraft-remove-bg", "nano-banana-edit", "grok-upscale", "grok-2-edit", "grok-2-segment"]).optional().describe("Edit operation. Default recraft-upscale."),
         upscale_factor: z.enum(["1", "2", "4"]).optional().describe("Upscale factor (for topaz-image-upscale). Default 2."),
-        target_resolution: z.enum(["2K", "4K", "8K"]).optional().describe("Target output resolution."),
+        target_resolution: z.enum(["2K", "4K", "8K"]).optional().describe("Deprecated for topaz-image-upscale — maps to an upscale factor (2K→2, 4K→4, 8K→4). Prefer upscale_factor."),
         prompt: z.string().max(2000).optional().describe("Edit prompt (required for nano-banana-edit and grok-2-edit)."),
         kie_task_id: z.string().optional().describe("KIE task id from a prior Grok generation (required for grok-upscale / grok-2-edit / grok-2-segment instead of image_url; read it from the generation job's output kieTaskId)."),
         mask_indexes: z.array(z.number().int().min(0)).min(1).max(64).optional().describe("grok-2-edit only: segment indexes from a prior grok-2-segment run's output `segments` (pass the returned `index` values verbatim — 0-based) — restricts the edit to those regions."),

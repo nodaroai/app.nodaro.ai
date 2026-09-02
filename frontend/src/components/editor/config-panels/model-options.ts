@@ -90,7 +90,7 @@ export const MODIFY_IMAGE_MODELS = [
 
 export const UPSCALE_IMAGE_MODELS = [
   { value: "recraft-upscale", label: "Recraft Upscale", description: "Fast, high-quality upscaling" },
-  { value: "topaz-image-upscale", label: "Topaz Upscale", description: "Premium AI upscaling with resolution control" },
+  { value: "topaz-image-upscale", label: "Topaz Upscale", description: "Premium AI upscaling with a 1x / 2x / 4x factor" },
 ]
 
 export const VIDEO_I2V_MODELS = [
@@ -356,16 +356,6 @@ export const COLLAGE_ASPECT_RATIOS = [
 export const IMAGE_RESOLUTION_OPTIONS: Record<string, readonly LabeledOption[]> =
   resolutionOptionsByKind("image")
 
-// Topaz image upscale isn't generation — it's a post-processing utility — so
-// its resolution dropdown lives separately. Derived from the catalog so it
-// stays in sync with the pricing tiers.
-export const TOPAZ_IMAGE_RESOLUTIONS: readonly LabeledOption[] =
-  IMAGE_RESOLUTION_OPTIONS["topaz-image-upscale"] ?? [
-    { value: "2K", label: "2K (Standard)" },
-    { value: "4K", label: "4K (High)" },
-    { value: "8K", label: "8K (Ultra)" },
-  ]
-
 // =============================================================================
 // VIDEO MODEL RESOLUTIONS — derived from MODEL_CATALOG.
 // Providers with no entry have no resolution lever — `data.resolution` should
@@ -374,21 +364,7 @@ export const TOPAZ_IMAGE_RESOLUTIONS: readonly LabeledOption[] =
 // `valueLabels` field. Case-sensitive: hailuo uses uppercase ("768P",
 // "1080P"), everything else is lowercase ("720p", "1080p").
 // =============================================================================
-export const VIDEO_RESOLUTION_OPTIONS: Record<string, readonly LabeledOption[]> = {
-  ...resolutionOptionsByKind("video"),
-  // LTX 2.3 — Lightricks via Replicate. Not yet in MODEL_CATALOG, so the
-  // option lists are spliced in here. Both Pro and Fast support 1080p/2K/4K.
-  "ltx-2.3-pro": [
-    { value: "1080p", label: "1080p" },
-    { value: "2k", label: "2K" },
-    { value: "4k", label: "4K" },
-  ],
-  "ltx-2.3-fast": [
-    { value: "1080p", label: "1080p" },
-    { value: "2k", label: "2K" },
-    { value: "4k", label: "4K" },
-  ],
-}
+export const VIDEO_RESOLUTION_OPTIONS: Record<string, readonly LabeledOption[]> = { ...resolutionOptionsByKind("video") }
 
 export function getVideoResolutionOptions(
   provider: string,
@@ -425,12 +401,6 @@ export const VIDEO_DURATION_OPTIONS: Record<string, ReadonlyArray<{ value: numbe
         out[id] = sorted.map((n) => ({ value: n, label: `${n}s` }))
       }
     }
-    // LTX 2.3 — Lightricks via Replicate. Not yet in MODEL_CATALOG, so the
-    // duration menus are spliced in here. Pro caps at 10s; Fast goes to 20s.
-    // The "Fast >10s implies 1080p / 24-25fps only" constraint is enforced by
-    // the config panel's snap-stale useEffect, not by this list.
-    out["ltx-2.3-pro"] = [6, 8, 10].map((n) => ({ value: n, label: `${n}s` }))
-    out["ltx-2.3-fast"] = [6, 8, 10, 12, 14, 16, 18, 20].map((n) => ({ value: n, label: `${n}s` }))
     // Grok t2v alias — KIE_T2V_DURATIONS keys grok image-mode under "grok" but
     // MODEL_CATALOG only tracks the i2v durations under "grok-i2v". Mirror the
     // alias here so the legacy TextToVideoConfig snap-stale effect doesn't
@@ -455,19 +425,7 @@ export function getDurationsForVideoModel(
 // an `aspectRatios` entry fall through to the generic VIDEO_RATIOS default
 // (16:9 / 9:16 / 1:1) used by the legacy video-configs panels.
 // =============================================================================
-const _VIDEO_ASPECT_BY_PROVIDER: Record<string, readonly LabeledOption[]> = {
-  ...aspectRatioOptionsByKind("video"),
-  // LTX 2.3 — Lightricks via Replicate. Not yet in MODEL_CATALOG, so the
-  // aspect-ratio menus are spliced in here. Both variants are 16:9 / 9:16.
-  "ltx-2.3-pro": [
-    { value: "16:9", label: "16:9 (Landscape)" },
-    { value: "9:16", label: "9:16 (Portrait)" },
-  ],
-  "ltx-2.3-fast": [
-    { value: "16:9", label: "16:9 (Landscape)" },
-    { value: "9:16", label: "9:16 (Portrait)" },
-  ],
-}
+const _VIDEO_ASPECT_BY_PROVIDER: Record<string, readonly LabeledOption[]> = { ...aspectRatioOptionsByKind("video") }
 
 /**
  * Per-provider VIDEO_ASPECT_RATIOS export — re-exposes the per-provider map

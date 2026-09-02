@@ -218,7 +218,7 @@ describe("renderSubjectHints — the flat-bag behaviors", () => {
       { distinctiveFeature: ["feature-midriff-visible", "feature-navel-visible"] },
       IMAGE,
     )
-    expect(out).toEqual(["wearing a cropped style, midriff and navel visible"])
+    expect(out).toEqual(["with a cropped hemline and the navel showing"])
   })
 
   it("de-duplicates an exact repeated clause, first occurrence winning", () => {

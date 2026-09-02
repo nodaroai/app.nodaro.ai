@@ -23,6 +23,19 @@ declare module "fastify" {
      *  a user JWT / API token can't drive them directly. */
     isInternalCall?: boolean
     creditReservation?: import("./credit-guard.js").CreditReservation
+    /** Set by the video routes' credit-identifier preHandler (see
+     *  {@link import("../lib/video-request-norm.js").VideoRequestNorm}) so `computeCredits`
+     *  prices the same normalized aspect/resolution/duration the CHECK used. */
+    videoNorm?: import("../lib/video-request-norm.js").VideoRequestNorm
+    /** RAW per-reference-video ffprobe durations (seconds), in request order,
+     *  set by the video routes' `validateRefVideoDurationPreHandler` BEFORE
+     *  creditGuard runs. A FAILED probe is carried as `NaN`, never dropped:
+     *  `checkRefVideoDurations` ignores it (a probe blip must not 400 a valid
+     *  run) while the pricing helper still charges the 15s worst case for that
+     *  clip, so reusing this array instead of re-probing cannot lower the
+     *  reservation. Present only for providers in
+     *  VIDEO_REF_VIDEO_DURATION_LIMITS that sent reference videos. */
+    refVideoDurationsSec?: number[]
     storageSnapshot?: import("./credit-guard.js").StorageSnapshot
     /** SHA-256 fingerprint of (req.url + stable-stringified body), set by
      *  creditGuard for anti-double-click dedup. Route handlers should write

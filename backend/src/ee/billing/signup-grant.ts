@@ -192,3 +192,99 @@ export function fallbackClaimDue(createdAt: Date | null, now = Date.now()): bool
   if (!createdAt || Number.isNaN(createdAt.getTime())) return true
   return now - createdAt.getTime() >= FALLBACK_CLAIM_GRACE_MS
 }
+
+
+/**
+ * Is this balance read coming from a page OTHER than our own SPA?
+ *
+ * WHY it decides the grace: the keyed claim (POST /v1/credits/claim-signup-grant,
+ * the only caller that carries browser/device fingerprints) ships in the
+ * app.nodaro.ai SPA bundle alone. Every other browser surface — the thin
+ * clients (studio / person / recast / voice), the browser extension — has no
+ * claim call, and a cross-origin page could not send the fingerprints anyway.
+ * For those, waiting out FALLBACK_CLAIM_GRACE_MS buys nothing: no keyed claim
+ * is ever coming, and a user who signs up there and leaves inside two minutes
+ * sits at zero credits (incident 2026-09-02, a recast signup gone after 43 s).
+ *
+ * HOW the SPA is recognized: a same-origin GET carries no Origin header at
+ * all, and a same-origin POST carries our own — PUBLIC_URL, the Host header,
+ * or the first X-Forwarded-Host hop. The localhost dev origins are the SPA on
+ * Vite, which does send the keyed claim. Anything else IS another page.
+ *
+ * WHAT A FORGED HEADER BUYS, stated plainly: Origin is caller-supplied, so a
+ * curl can claim "foreign" and skip the grace. That skips exactly what a
+ * caller already skips today by not running the SPA at all — the grace was
+ * never a defence against a client that controls its own requests; it exists
+ * so the HONEST SPA population's fingerprints land before the keyless
+ * fallback decides. An allowlist of published origins would not change that
+ * (those names are just as forgeable) and would silently turn the fix off for
+ * any surface the operator forgot to list, so there is deliberately none.
+ *
+ * An opaque ("null"), unparseable or hostless Origin cannot come from a page
+ * we can reason about; it keeps today's behaviour (the grace) rather than
+ * deciding anything on garbage.
+ *
+ * Pure on purpose — headers and PUBLIC_URL come in as arguments, so this
+ * stays unit-testable next to `fallbackClaimDue`.
+ */
+export function isForeignOrigin(input: {
+  origin: string | undefined
+  publicUrl: string
+  host: string | undefined
+  forwardedHost?: string | undefined
+}): boolean {
+  const origin = input.origin?.trim()
+  // No Origin at all: a same-origin browser GET, or a non-browser client.
+  if (!origin) return false
+
+  let url: URL
+  try {
+    url = new URL(origin)
+  } catch {
+    return false
+  }
+  if (!url.host) return false
+
+  const originHost = url.host.toLowerCase()
+  const originHostname = url.hostname.toLowerCase()
+
+  // Dev: the SPA runs on Vite (5173) / the proxy (3000) while the API answers
+  // on another port, so it never matches the Host header. It is still the SPA,
+  // and it does send the keyed claim — keep the grace.
+  if (originHostname === "localhost" || originHostname === "127.0.0.1" || originHostname === "[::1]") return false
+
+  // Our own front door, by any of the three names a request can carry it under.
+  const ownHosts: string[] = []
+  if (input.publicUrl) {
+    try {
+      ownHosts.push(new URL(input.publicUrl).host.toLowerCase())
+    } catch {
+      // An unparseable PUBLIC_URL is a config problem, not an origin verdict.
+    }
+  }
+  if (input.host) ownHosts.push(input.host.trim().toLowerCase())
+  // Only the FIRST hop is the host the client actually asked for.
+  if (input.forwardedHost) {
+    const firstHop = input.forwardedHost.split(",")[0]?.trim().toLowerCase()
+    if (firstHop) ownHosts.push(firstHop)
+  }
+  for (const own of ownHosts) {
+    if (!own) continue
+    if (own === originHost) return false
+    // A Host header may carry a port the origin omits (`app.nodaro.ai:443`).
+    // Only when the origin states no explicit port is the bare host equal.
+    if (url.port === "" && stripPort(own) === originHostname) return false
+  }
+
+  return true
+}
+
+/** `example.com:8080` → `example.com`; `[::1]:8080` → `[::1]`. */
+function stripPort(hostValue: string): string {
+  if (hostValue.startsWith("[")) {
+    const end = hostValue.indexOf("]")
+    return end === -1 ? hostValue : hostValue.slice(0, end + 1)
+  }
+  const colon = hostValue.indexOf(":")
+  return colon === -1 ? hostValue : hostValue.slice(0, colon)
+}

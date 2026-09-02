@@ -87,7 +87,7 @@ Providers that accept a paired last frame: `veo3`, `veo3.1`, `veo3_lite` (`image
 
 ### Multimodal references
 
-Seedance 2 (`seedance-2` / `seedance-2-fast` / `seedance-2-mini`) accepts up to 9 image refs, 3 video refs, and 3 audio refs in a single call; **`seedance-2-5` raises those caps to 30 / 10 / 10** and accepts reference audio up to 30 s per clip. **`seedance-2-fast` requires each reference audio clip to be ≤ 15.2 seconds** (audio-driven r2v mode) — longer clips are rejected before the job is created with an `audio_too_long` error. MiniMax Hailuo 3 (`minimax-h3`) mirrors the same 9 / 3 / 3 caps through the same input resolver (frames fold into the reference pool when any reference is wired): reference videos are 2–15s each and ≤ 15s combined, reference audio is ≤ 15s per clip (enforced pre-submit with the same `audio_too_long` error) and **cannot be used alone** — it must ride with an image or video reference. HappyHorse Ref2V accepts 1–9 image refs, addressed in its own `[Image N]` vocabulary. VEO 3.x (`veo3` / `veo3.1`) flips to `REFERENCE_2_VIDEO` mode whenever image references are wired — **with or without a start frame** — under a 3-ingredient cap: a wired start frame takes seat 1 and is bound in the prompt as the opening frame, the first two references fill the remaining seats, and a wired **end frame is surrendered** in this mode (reference conditioning and a pinned last frame are mutually exclusive on VEO; the node reports the dropped input). Gemini Omni (`gemini-omni-video` / `gemini-omni-flash`) accepts up to 7 image inputs in both modes — with a start frame (i2v) or without one (reference-conditioned t2v). In i2v the start frame occupies input 1 (`@image_1`, bound in the prompt as the opening frame) and references fill the remaining slots as **identity references, not frames** (`@image_2..N`); wiring a source video reserves 2 of the 7 slots, and references beyond the quota are **dropped, not rejected** (the node reports how many). Wan 3.0 (`wan-3` / `wan-3-prime`) accepts up to **10 image + 5 video + 5 audio** references. Each reference video and audio clip is **1–15 s** with a **≤ 15 s combined** cap per media type, and with a reference video wired the provider additionally requires **input video duration + output duration ≤ 30 s**. On the Wan wire the reference arrays are **mutually exclusive** with the first/last frame parameters — so, exactly like Seedance 2 and Hailuo 3, the platform **folds** rather than rejects: with any reference wired, a start/end frame is appended to `reference_image_urls` **after** your own images (leaving their ordinals unchanged) and named in the prompt as the opening/closing frame. The pair is never sent together, and the run is never rejected for the combination.
+Seedance 2 (`seedance-2` / `seedance-2-fast` / `seedance-2-mini`) accepts up to 9 image refs, 3 video refs, and 3 audio refs in a single call; **`seedance-2-5` raises those caps to 30 / 10 / 10** and accepts reference audio up to 30 s per clip. **Reference videos for Seedance 2.5 must each be 2–30 seconds, and 30 seconds in total.** A clip outside that range is rejected before the run starts with a `video_too_long` error, so no credits are spent — trim it with a Trim Video node upstream and run again. The same check runs on single-node runs, workflow runs and published-app runs alike, always before any credits are reserved. **`seedance-2-fast` requires each reference audio clip to be ≤ 15.2 seconds** (audio-driven r2v mode) — longer clips are rejected before the job is created with an `audio_too_long` error. MiniMax Hailuo 3 (`minimax-h3`) mirrors the same 9 / 3 / 3 caps through the same input resolver (frames fold into the reference pool when any reference is wired): **reference videos must each be 2–15 seconds, and 15 seconds in total** — a clip outside that range is rejected before the run starts with the same `video_too_long` error, so no credits are spent — reference audio is ≤ 15s per clip (enforced pre-submit with the same `audio_too_long` error) and **cannot be used alone** — it must ride with an image or video reference. HappyHorse Ref2V accepts 1–9 image refs, addressed in its own `[Image N]` vocabulary. VEO 3.x (`veo3` / `veo3.1`) flips to `REFERENCE_2_VIDEO` mode whenever image references are wired — **with or without a start frame** — under a 3-ingredient cap: a wired start frame takes seat 1 and is bound in the prompt as the opening frame, the first two references fill the remaining seats, and a wired **end frame is surrendered** in this mode (reference conditioning and a pinned last frame are mutually exclusive on VEO; the node reports the dropped input). Gemini Omni (`gemini-omni-video` / `gemini-omni-flash`) accepts up to 7 image inputs in both modes — with a start frame (i2v) or without one (reference-conditioned t2v). In i2v the start frame occupies input 1 (`@image_1`, bound in the prompt as the opening frame) and references fill the remaining slots as **identity references, not frames** (`@image_2..N`); wiring a source video reserves 2 of the 7 slots, and references beyond the quota are **dropped, not rejected** (the node reports how many). Wan 3.0 (`wan-3` / `wan-3-prime`) accepts up to **10 image + 5 video + 5 audio** references. Each reference video and audio clip is **1–15 s** with a **≤ 15 s combined** cap per media type, and with a reference video wired the provider additionally requires **input video duration + output duration ≤ 30 s**. On the Wan wire the reference arrays are **mutually exclusive** with the first/last frame parameters — so, exactly like Seedance 2 and Hailuo 3, the platform **folds** rather than rejects: with any reference wired, a start/end frame is appended to `reference_image_urls` **after** your own images (leaving their ordinals unchanged) and named in the prompt as the opening/closing frame. The pair is never sent together, and the run is never rejected for the combination.
 
 **Seedance 2 unified inputs (frames + references together).** Seedance 2 no longer has a Frames-vs-References toggle (`data.seedance2InputMode` was removed) — first/last frames and references can all be connected at once, and the dispatch mode is derived from the wiring:
 
@@ -464,6 +464,50 @@ Common fields:
 | Loop Trim | Group | off | Enable + framesToTest + quality |
 | Inject Character Context | Checkbox | off | When an upstream Character has identity-injection on |
 | `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
+
+### Resolution, aspect ratio and duration corrections
+
+Every model exposes a different set of resolutions, aspect ratios and durations,
+and the node lets you type a value the wired provider may not support (a saved
+workflow can also carry a value from a provider you switched away from). Rather
+than fail the run — which would take every already-generated, already-billed
+sibling node down with it — the platform **corrects** the value to one the model
+accepts, and **you are billed for the corrected value, because it is also the
+value actually sent to the provider.**
+
+- **Off-list values snap to the NEAREST option, never the cheapest or the first
+  in the list.** A `4k` request on a model that tops out at 1080p renders 1080p
+  (not the 480p floor); a portrait `9:21` becomes `9:16` (never landscape
+  `16:9`).
+- **An omitted resolution is sent at the band it is priced at.** Where the
+  platform declares a model's default band, that band is now what the provider is
+  asked for as well as what you pay for — previously the field could be left
+  unset and the provider chose for itself. The value is recorded on the job, so
+  you can always see what was sent.
+- **`4K` and `4k` mean the same thing.** Spelling is canonicalised before
+  pricing, so an uppercase `4K` on LTX 2.3 prices and renders the 4K band
+  instead of falling back to 1080p.
+- **`Auto` / `adaptive` are passed through untouched** — they are instructions to
+  the provider ("match the input"), not concrete ratios, so they are resolved at
+  render time rather than snapped to a fixed ratio.
+- **Duration is passed through as you set it**, except on **LTX 2.3**, which is
+  priced on a fixed ladder of durations per resolution band (Pro: 6 / 8 / 10s at
+  every band; Fast: up to 20s at 1080p, 6 / 8 / 10s at 2k / 4k). A duration
+  between rungs moves to the nearest one — a 7s LTX request renders and bills 6s.
+- **A few models ignore an unsupported resolution** and render a fixed default
+  rather than the nearest band: `minimax-h3` renders 2K for anything that is not
+  `768P`, and the `wan-3` family renders 720p. For those the correction targets
+  the band the provider will actually produce, so the price still matches the
+  render.
+
+Through the API these corrections are returned in the response — see
+[Parameter corrections](../../api-integration.md#4d-parameter-corrections-adjustments).
+
+**Seedance 2.5 in a workflow:** an untouched Generate Video node has always *sent*
+`480p` (the first band in the model's list) while being *priced* at the model's
+720p default. Those two now agree at **480p** — the tier actually rendered — so a
+workflow that never touched the Resolution field bills less than it used to. Set
+Resolution explicitly to 720p or 1080p if you want the higher tier.
 
 ## Migration from legacy nodes
 

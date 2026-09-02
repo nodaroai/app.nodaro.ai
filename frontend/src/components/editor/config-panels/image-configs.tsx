@@ -37,7 +37,7 @@ import type {
   ManualReferenceImage,
   ImageProvider,
 } from "@/types/nodes"
-import { IMAGE_GEN_MODELS, MODIFY_IMAGE_MODELS, UPSCALE_IMAGE_MODELS, imageStylePresets, getAspectRatiosForModel, IMAGE_RESOLUTION_OPTIONS, IMAGE_QUALITY_OPTIONS, TOPAZ_IMAGE_RESOLUTIONS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT, defaultResolutionFor, withoutDeniedModels } from "./model-options"
+import { IMAGE_GEN_MODELS, MODIFY_IMAGE_MODELS, UPSCALE_IMAGE_MODELS, imageStylePresets, getAspectRatiosForModel, IMAGE_RESOLUTION_OPTIONS, IMAGE_QUALITY_OPTIONS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT, defaultResolutionFor, withoutDeniedModels } from "./model-options"
 import { ModelSelectOption } from "./model-select-option"
 import { ModelSearchSelect } from "./model-search-select"
 import { ModelDescriptionHint } from "./model-description-hint"
@@ -53,7 +53,7 @@ import type { RefImageItem } from "./tag-textarea"
 import { PromptEditor, useCatalogPacksVersion } from "@/lib/picker-ui"
 import { usePromptEditorRefs } from "@/components/nodes/inline-node-prompt/use-prompt-editor-refs"
 import { ReferenceSupportWarning } from "./reference-support-warning"
-import { DEFAULT_LABEL_BY_SOURCE, characterMentionSlug, locationMentionSlug, expandExtraRefsToConnectedReferences, getMaxImagePromptChars, getMaxNegativePromptChars, resolveEffectiveSourceType, sourceRefKey } from "@nodaro/shared"
+import { DEFAULT_LABEL_BY_SOURCE, characterMentionSlug, locationMentionSlug, expandExtraRefsToConnectedReferences, getMaxImagePromptChars, getMaxNegativePromptChars, resolveEffectiveSourceType, sourceRefKey, resolveTopazUpscale } from "@nodaro/shared"
 import type { ConnectedReference, ReferenceSource } from "@nodaro/shared"
 import { entityActiveImageUrl } from "@/lib/entity-output-url"
 import { PromptLengthCounter } from "./prompt-length-counter"
@@ -1805,6 +1805,15 @@ export const ModifyImageConfig = memo(ModifyImageConfigImpl)
 export function UpscaleImageConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<UpscaleImageData>) {
   const t = useT()
   useEffect(() => { prefetchModelCredits(UPSCALE_IMAGE_MODELS.map((m) => m.value)) }, [])
+  // Legacy node data carried a `targetResolution` (2K/4K/8K) that had no
+  // provider parameter behind it. Fold it into the one real lever the first
+  // time the panel mounts so the dropdown, the badge and the run all agree.
+  useEffect(() => {
+    if (data.provider !== "topaz-image-upscale") return
+    if (data.upscaleFactor) return
+    if (!data.targetResolution) return
+    onUpdate({ upscaleFactor: resolveTopazUpscale({ targetResolution: data.targetResolution }).upscaleFactor })
+  }, [data.provider, data.upscaleFactor, data.targetResolution, onUpdate])
   const isTopaz = data.provider === "topaz-image-upscale"
 
   return (
@@ -1837,20 +1846,6 @@ export function UpscaleImageConfig({ data, onUpdate, sources, fieldMappings, onM
                 <SelectItem value="4">4x</SelectItem>
               </SelectContent>
             </Select>
-          </MappableField>
-          <MappableField field="targetResolution" label={t("field.targetResolution")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-            <Select
-              value={data.targetResolution || "2K"}
-              onValueChange={(v) => onUpdate({ targetResolution: v as "2K" | "4K" | "8K" })}
-            >
-              <SelectTrigger aria-label={t("field.targetResolution")}><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {TOPAZ_IMAGE_RESOLUTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-[10px] text-muted-foreground mt-0.5">{t("imgcfg.higherResCost")}</p>
           </MappableField>
         </>
       )}

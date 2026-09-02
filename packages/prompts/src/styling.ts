@@ -424,10 +424,10 @@ export const STYLINGS: ReadonlyArray<Styling> = [
 
   // -------------------- Wardrobe State (modifier — composes with any garment) --------------------
   { id: "state-oversized",     label: "Oversized",       dimension: "wardrobe-state", description: "Loose, oversized fit",      promptHint: "the clothing loose and oversized, draping freely well past the body", term: "oversized fit" },
-  { id: "state-fitted",        label: "Fitted",          dimension: "wardrobe-state", description: "Form-fitting silhouette",   promptHint: "the clothing fitted and form-conscious, hugging the contours of the body", term: "form-fitting clothing" , adultOnly: true },
+  { id: "state-fitted",        label: "Fitted",          dimension: "wardrobe-state", description: "Form-fitting silhouette",   promptHint: "tailored, close-fitting clothing", term: "close-fitting clothing" , adultOnly: true },
   { id: "state-cropped",       label: "Cropped",         dimension: "wardrobe-state", description: "Top cropped at midriff",    promptHint: "the top cropped above the midriff with the stomach visible", term: "cropped top" , adultOnly: true },
   { id: "state-sheer",         label: "Sheer",           dimension: "wardrobe-state", description: "Translucent fabric",        promptHint: "the fabric translucent and sheer, hinting at the silhouette underneath", term: "sheer clothing" , adultOnly: true },
-  { id: "state-wet",           label: "Wet",             dimension: "wardrobe-state", description: "Soaked, water-clinging",    promptHint: "the clothing soaked and wet, the fabric clinging to the body and dripping water", term: "wet clothing" , adultOnly: true },
+  { id: "state-wet",           label: "Wet",             dimension: "wardrobe-state", description: "Soaked, water-clinging",    promptHint: "the clothing soaked through and dripping", term: "soaked clothing" , adultOnly: true },
   { id: "state-ripped",        label: "Ripped",          dimension: "wardrobe-state", description: "Torn and frayed",           promptHint: "the fabric torn and ripped at the seams, with frayed edges", term: "ripped clothing" },
   { id: "state-distressed",    label: "Distressed",      dimension: "wardrobe-state", description: "Worn, faded, weathered",    promptHint: "the clothing distressed and weathered, with faded color and worn-down edges", term: "distressed clothing" },
   { id: "state-vintage",       label: "Vintage",         dimension: "wardrobe-state", description: "Worn, retro character",     promptHint: "the clothing carrying vintage character — softened color, broken-in fit, retro silhouette", term: "vintage clothing" },
@@ -651,6 +651,40 @@ function collectStylingFragments(
   const floored = isMinorAge(data as { age?: string; customAge?: number; type?: string })
   const emit = floored ? (id: string) => (getStyling(id)?.adultOnly === true ? "" : fragmentFor(id)) : fragmentFor
 
+  // W1-b (spec 2026-09-01 §3.3): three ids say "cropped" — the Person
+  // catalog's `feature-midriff-visible` and this catalog's `top-crop-top` and
+  // `state-cropped`. Stacked they read as three separate statements about a
+  // bare stomach, which is one of the compounds the safety classifiers flag.
+  // Same mechanism and same caveat as the bold-lips dedupe above: the subject
+  // fold hands BOTH builders one flat bag, so the person pick is readable
+  // here; a separate styling node carries no `distinctiveFeature` and this
+  // no-ops. Person leads the fold order, so the person clause wins; with no
+  // person clause the garment wins over the modifier.
+  const featureRaw = (data as Record<string, unknown>).distinctiveFeature
+  const midriffPicked = Array.isArray(featureRaw)
+    ? featureRaw.includes("feature-midriff-visible")
+    : featureRaw === "feature-midriff-visible"
+  // Gate on pick-minus-floor (`midriffPicked && !floored`), which equals EMISSION
+  // unless an overlay pack drops the entry — the same rule the midriff+navel fold
+  // uses (`fragmentFor(id) !== ""` inside `emitIndependentFragments`).
+  // `feature-midriff-visible` is `adultOnly`, so for a minor the person
+  // collector drops it; suppressing the styling twins as well would leave a
+  // minor who picked midriff AND crop-top with NO cropped clause at all.
+  // `floored` is the local computed just above from the same shared bag, so
+  // the two collectors cannot disagree.
+  const midriffAlready = midriffPicked && !floored
+  const cropTopPicked = (data as Record<string, unknown>).top === "top-crop-top"
+  // `top` is single-pick (always a bare string), but `wardrobeState` is
+  // declared `string | ReadonlyArray<string>` AND the subject-fold door
+  // (`normalizeSubjectFields`) unwraps a lone array pick down to a bare
+  // string — so a single "state-cropped" selection, the common case, arrives
+  // here as a plain string, not an array. The suppression must therefore be
+  // checked at BOTH emission sites below (the `typeof raw === "string"`
+  // branch and the `Array.isArray(raw)` branch), not just the array one.
+  const croppedSuppressed = (id: string): boolean =>
+    (id === "top-crop-top" && midriffAlready) ||
+    (id === "state-cropped" && (midriffAlready || cropTopPicked))
+
   for (const dimension of STYLING_DIMENSION_ORDER) {
     const field = STYLING_FIELD_BY_DIMENSION[dimension]
     const raw = data[field]
@@ -658,11 +692,13 @@ function collectStylingFragments(
     // jewelry / wardrobe-state / hair-state are multi-pick (string | string[]);
     // emit each id's fragment independently and let the comma-join compose.
     if (typeof raw === "string" && raw.length > 0) {
+      if (croppedSuppressed(raw)) continue
       const fragment = emit(raw)
       if (fragment) out.push(fragment)
     } else if (Array.isArray(raw)) {
       for (const item of raw) {
         if (typeof item !== "string" || item.length === 0) continue
+        if (croppedSuppressed(item)) continue
         const fragment = emit(item)
         if (fragment) out.push(fragment)
       }

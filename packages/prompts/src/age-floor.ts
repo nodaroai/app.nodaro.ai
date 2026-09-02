@@ -65,10 +65,71 @@ export function getAdultOnlyIds(): ReadonlySet<string> {
   return new Set(getAdultOnlyEntries().map((e) => e.id))
 }
 
+/**
+ * The pre-W1-b `promptHint` of every `adultOnly` entry the spec
+ * (2026-09-01-app-reports-triage-design §3.3) listed for rewording — including
+ * the two the harness kept at their current wording (harmless double coverage) —
+ * plus the hard-coded midriff+navel fold clause. These strings are permanently part of the strip
+ * set: a consumer that has not bumped `@nodaro/prompts` still emits them, and
+ * the client-assembled `seedPrompt` path is exactly how the 2026-07-30
+ * minor-age prompts reached a provider. Retiring can only ever cause an EXTRA
+ * strip, and only for a subject `isMinorAge` has already judged a minor — so
+ * the list only grows, never shrinks.
+ *
+ * `promptHint` ONLY, for the same reason `getAdultOnlyHintStrings` gives:
+ * `term` is short display vocabulary and the composed-catalog projection
+ * back-fills a derived `term` for every option, so terms collide with benign
+ * everyday text. Assembled prompts and client seedPrompts are built from
+ * hints, never from terms. The three W1-b entries that are NOT flagged —
+ * `texture-dewy`, `texture-baby-soft`, `eye-state-staring-camera` (spec
+ * §3.3's "deliberately not flagged" list) — are absent: their old wording
+ * never belonged to the floor.
+ *
+ * 15 flagged hints + the fold literal = 16.
+ */
+export const RETIRED_ADULT_ONLY_HINT_STRINGS: ReadonlyArray<string> = [
+  // bust-very-full
+  "very full bust",
+  // silhouette-hourglass
+  "hourglass silhouette",
+  // waist-defined
+  "defined waist",
+  // lip-state-glossy
+  "with high-shine glossy wet-look lips",
+  // lip-state-parted
+  "with lips slightly parted, taking a soft breath",
+  // lip-state-bitten
+  "playfully biting the lower lip",
+  // eye-state-half-lidded
+  "with heavy half-lidded sleepy eyes",
+  // texture-glistening
+  "with glistening skin, sweat or oil catching the light",
+  // texture-shower-fresh-wet
+  "with just-out-of-the-shower wet skin, water beading on the surface and rolling in slow droplets down the curves of the body",
+  // feature-bare-shoulders
+  "with bare shoulders exposed, the line of the collarbone and shoulder muscles uncovered",
+  // feature-collarbone-visible
+  "with a prominent collarbone clearly defined and catching the light",
+  // feature-midriff-visible
+  "wearing a cropped style with the midriff visible",
+  // state-fitted — the 2026-07-30 incident clause
+  "the clothing fitted and form-conscious, hugging the contours of the body",
+  // state-wet
+  "the clothing soaked and wet, the fabric clinging to the body and dripping water",
+  // pose `biting-lip` (the lip-state-bitten twin)
+  "biting the lower lip with a subtle playful expression",
+  // the hard-coded midriff+navel fold in emitIndependentFragments — not any
+  // entry's hint, so retiring it ADDS a needle for a clause that really is
+  // emitted verbatim.
+  "wearing a cropped style, midriff and navel visible",
+]
+
 /** Every full prompt-hint string a flagged entry can inject, lower-cased,
  *  longest first — the backend policy strips text that contains any of them
  *  (Layer 2), which is how flagged wording arriving inside free text (a
- *  client-assembled seedPrompt) is caught.
+ *  client-assembled seedPrompt) is caught. Seeded with
+ *  `RETIRED_ADULT_ONLY_HINT_STRINGS` so a catalog rewording can never narrow
+ *  the strip set for a consumer still shipping the pre-rephrase wording.
  *
  *  `promptHint` ONLY, deliberately — `term` is analyzer/UI vocabulary
  *  (compact-mode display), and `picker-catalogs.ts`'s composed-catalog
@@ -81,7 +142,7 @@ export function getAdultOnlyIds(): ReadonlySet<string> {
  *  can actually arrive verbatim in free text — terms don't need to be (and
  *  must not be) swept here. */
 export function getAdultOnlyHintStrings(): ReadonlyArray<string> {
-  const out = new Set<string>()
+  const out = new Set<string>(RETIRED_ADULT_ONLY_HINT_STRINGS)
   for (const e of getAdultOnlyEntries()) {
     if (e.promptHint) out.add(e.promptHint.toLowerCase())
   }

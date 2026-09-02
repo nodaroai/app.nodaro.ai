@@ -26,6 +26,7 @@ const DELIBERATELY_GENERIC: ReadonlyMap<string, string> = new Map([
   ["minimax", "legacy 5s tier, no vendor guide"],
   ["seedance", "legacy Seedance 1.x, superseded"],
   ["ltx-2.3-fast", "no vendor prompt guide published"],
+  ["ltx-2.3-pro", "no vendor prompt guide published"],
   ["sora2", "roster utility — no first-party guide via KIE"],
   ["sora2-pro", "roster utility — no first-party guide via KIE"],
 ])

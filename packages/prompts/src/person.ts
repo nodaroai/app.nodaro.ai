@@ -437,10 +437,10 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "bust-small",     label: "Small",     dimension: "bust", description: "Small bust",     promptHint: "small bust", term: "small bust" , adultOnly: true },
   { id: "bust-average",   label: "Average",   dimension: "bust", description: "Average bust",   promptHint: "" },
   { id: "bust-full",      label: "Full",      dimension: "bust", description: "Full bust",      promptHint: "full bust", term: "full bust" , adultOnly: true },
-  { id: "bust-very-full", label: "Very Full", dimension: "bust", description: "Very full bust", promptHint: "very full bust", term: "very full bust" , adultOnly: true },
+  { id: "bust-very-full", label: "Very Full", dimension: "bust", description: "Very full bust", promptHint: "a fuller bust", term: "fuller bust" , adultOnly: true },
 
   // ----- Waist -----
-  { id: "waist-defined",  label: "Defined",  dimension: "waist", description: "Defined, cinched waist",    promptHint: "defined waist", term: "defined waist" , adultOnly: true },
+  { id: "waist-defined",  label: "Defined",  dimension: "waist", description: "Defined, cinched waist",    promptHint: "a defined waistline", term: "defined waistline" , adultOnly: true },
   { id: "waist-average",  label: "Average",  dimension: "waist", description: "Average waist",             promptHint: "" },
   { id: "waist-straight", label: "Straight", dimension: "waist", description: "Straight, undefined waist", promptHint: "straight waistline", term: "straight waistline" , adultOnly: true },
 
@@ -450,7 +450,7 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "hips-wide",     label: "Wide",     dimension: "hips", description: "Wide hips",     promptHint: "wide hips", term: "wide hips" , adultOnly: true },
 
   // ----- Silhouette (overall body shape; optional, no neutral) -----
-  { id: "silhouette-hourglass",   label: "Hourglass",         dimension: "silhouette", description: "Balanced bust + hips, defined waist", promptHint: "hourglass silhouette", term: "hourglass silhouette" , adultOnly: true },
+  { id: "silhouette-hourglass",   label: "Hourglass",         dimension: "silhouette", description: "Balanced bust + hips, defined waist", promptHint: "an hourglass figure", term: "hourglass figure" , adultOnly: true },
   { id: "silhouette-rectangular", label: "Rectangular",       dimension: "silhouette", description: "Straight up-and-down silhouette",      promptHint: "rectangular silhouette", term: "rectangular silhouette" },
   { id: "silhouette-pear",        label: "Pear",              dimension: "silhouette", description: "Hips wider than shoulders",            promptHint: "pear-shaped silhouette", term: "pear-shaped silhouette" , adultOnly: true },
   { id: "silhouette-inverted",    label: "Inverted Triangle", dimension: "silhouette", description: "Broad shoulders, narrow hips",         promptHint: "inverted-triangle silhouette", term: "inverted-triangle silhouette" },
@@ -553,11 +553,11 @@ export const PEOPLE: ReadonlyArray<Person> = [
 
   // -------------------- Lip State (what the lips are doing / wearing) --------------------
   { id: "lip-state-chapped",   label: "Chapped",   dimension: "lip-state", description: "Cracked, dry, weather-worn lips", promptHint: "with chapped, cracked, weather-worn dry lips", term: "chapped dry lips" },
-  { id: "lip-state-glossy",    label: "Glossy",    dimension: "lip-state", description: "High-shine, wet-look lips",       promptHint: "with high-shine glossy wet-look lips", term: "glossy wet-look lips" , adultOnly: true },
+  { id: "lip-state-glossy",    label: "Glossy",    dimension: "lip-state", description: "High-shine, wet-look lips",       promptHint: "with a glossy lip finish", term: "glossy lips" , adultOnly: true },
   { id: "lip-state-bare",      label: "Bare",      dimension: "lip-state", description: "Natural, untreated, no makeup",   promptHint: "with bare, natural, untreated lips", term: "bare natural lips" },
   { id: "lip-state-bold-red",  label: "Bold Red",  dimension: "lip-state", description: "Saturated red lipstick statement", promptHint: "with a bold, saturated red lipstick statement", term: "bold red lipstick" },
-  { id: "lip-state-bitten",    label: "Bitten",    dimension: "lip-state", description: "Slight playful lip-bite, lower lip caught", promptHint: "playfully biting the lower lip", term: "biting the lower lip" , adultOnly: true },
-  { id: "lip-state-parted",    label: "Parted",    dimension: "lip-state", description: "Lips slightly parted, breath of air", promptHint: "with lips slightly parted, taking a soft breath", term: "lips slightly parted" , adultOnly: true },
+  { id: "lip-state-bitten",    label: "Bitten",    dimension: "lip-state", description: "Slight playful lip-bite, lower lip caught", promptHint: "lightly biting the lower lip", term: "biting lower lip" , adultOnly: true },
+  { id: "lip-state-parted",    label: "Parted",    dimension: "lip-state", description: "Lips slightly parted, breath of air", promptHint: "with lips relaxed and slightly open, as if mid-sentence", term: "lips slightly open" , adultOnly: true },
   { id: "lip-state-pursed",    label: "Pursed",    dimension: "lip-state", description: "Lips pressed and pushed forward", promptHint: "with lips pursed, pressed and pushed forward", term: "pursed lips" },
   { id: "lip-state-bold-black", label: "Bold Black", dimension: "lip-state", description: "Saturated black lipstick statement (goth / avant-garde)", promptHint: "with a bold, saturated black lipstick statement, goth / avant-garde", term: "bold black lipstick" },
   { id: "lip-state-burgundy",   label: "Burgundy",   dimension: "lip-state", description: "Deep wine-red lipstick", promptHint: "with deep wine-red burgundy lipstick", term: "burgundy lipstick" },
@@ -678,7 +678,7 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "eye-state-closed",         label: "Closed",            dimension: "eye-state", description: "Eyes fully closed, peaceful",       promptHint: "with eyes fully closed in a peaceful expression", term: "eyes fully closed" },
   { id: "eye-state-half-lidded",    label: "Half-lidded",       dimension: "eye-state", description: "Heavy-lidded sleepy gaze",          promptHint: "with heavy half-lidded sleepy eyes", term: "half-lidded sleepy eyes" , adultOnly: true },
   { id: "eye-state-wide-eyed",      label: "Wide-eyed",         dimension: "eye-state", description: "Eyes wide open, alert / surprised", promptHint: "with eyes wide open, alert and surprised" },
-  { id: "eye-state-staring-camera", label: "Staring at Camera", dimension: "eye-state", description: "Direct unbroken eye contact with the lens", promptHint: "staring directly at the camera with unbroken eye contact" },
+  { id: "eye-state-staring-camera", label: "Staring at Camera", dimension: "eye-state", description: "Direct unbroken eye contact with the lens", promptHint: "looking directly into the camera", term: "direct gaze to camera" },
   { id: "eye-state-gazing-away",    label: "Gazing Away",       dimension: "eye-state", description: "Looking off-camera, contemplative", promptHint: "gazing off-camera with a contemplative expression", term: "gazing off-camera" },
   { id: "eye-state-gazing-up",      label: "Gazing Up",         dimension: "eye-state", description: "Eyes raised toward something above", promptHint: "with eyes gazing upward toward something above" },
   { id: "eye-state-gazing-down",    label: "Gazing Down",       dimension: "eye-state", description: "Eyes downcast",                     promptHint: "with eyes downcast, gazing softly downward" },
@@ -697,8 +697,8 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "texture-smooth",     label: "Smooth",      dimension: "skin-texture", description: "Flawless, silky smooth skin", promptHint: "with flawless, silky smooth skin", term: "flawless smooth skin" },
   { id: "texture-wrinkled",   label: "Wrinkled",    dimension: "skin-texture", description: "Aged, deeply lined skin",     promptHint: "with deep wrinkles and aged skin texture", term: "deeply wrinkled aged skin" },
   { id: "texture-goosebumps", label: "Goosebumps",  dimension: "skin-texture", description: "Raised goosebumps on skin",   promptHint: "with goosebumps raised on the skin" },
-  { id: "texture-dewy",       label: "Dewy",        dimension: "skin-texture", description: "Glowing, dewy fresh skin",    promptHint: "with dewy, glowing skin and a fresh sheen", term: "dewy glowing skin" },
-  { id: "texture-glistening", label: "Glistening",  dimension: "skin-texture", description: "Sweat or oil sheen",          promptHint: "with glistening skin, sweat or oil catching the light", term: "glistening skin" , adultOnly: true },
+  { id: "texture-dewy",       label: "Dewy",        dimension: "skin-texture", description: "Glowing, dewy fresh skin",    promptHint: "with dewy, luminous skin", term: "dewy skin" },
+  { id: "texture-glistening", label: "Glistening",  dimension: "skin-texture", description: "Sweat or oil sheen",          promptHint: "with a light glistening sheen on the skin", term: "glistening sheen" , adultOnly: true },
   { id: "texture-weathered",  label: "Weathered",   dimension: "skin-texture", description: "Sun-aged rough skin",         promptHint: "with weathered, sun-worn rough skin", term: "weathered sun-worn skin" },
   { id: "texture-porcelain",  label: "Porcelain",   dimension: "skin-texture", description: "Flawless near-translucent porcelain", promptHint: "with flawless, near-translucent porcelain skin", term: "porcelain skin" },
   { id: "texture-sun-kissed", label: "Sun-kissed",  dimension: "skin-texture", description: "Warm tan with healthy glow",  promptHint: "with sun-kissed skin, warmly tanned with a healthy glow", term: "sun-kissed skin" },
@@ -710,8 +710,8 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "texture-oily",       label: "Oily / Shiny", dimension: "skin-texture", description: "Slight oil sheen on T-zone", promptHint: "with a slight oily sheen across the T-zone", term: "oily shiny skin" , adultOnly: true },
   { id: "texture-matte",      label: "Matte",       dimension: "skin-texture", description: "Poreless matte finish",       promptHint: "with a poreless, matte skin finish", term: "matte skin finish" },
   { id: "texture-blemished",  label: "Blemished",   dimension: "skin-texture", description: "Visible blemishes, real-skin imperfections", promptHint: "with visible blemishes and natural real-skin imperfections", term: "blemished skin" },
-  { id: "texture-baby-soft",  label: "Baby-soft",   dimension: "skin-texture", description: "Smooth, fine-pored youthful skin", promptHint: "with baby-soft, fine-pored, youthful smooth skin", term: "baby-soft skin" },
-  { id: "texture-shower-fresh-wet", label: "Shower-Fresh Wet", dimension: "skin-texture", description: "Just-out-of-shower wet skin with water beads", promptHint: "with just-out-of-the-shower wet skin, water beading on the surface and rolling in slow droplets down the curves of the body", term: "shower-fresh wet skin" , adultOnly: true },
+  { id: "texture-baby-soft",  label: "Baby-soft",   dimension: "skin-texture", description: "Smooth, fine-pored youthful skin", promptHint: "with soft, fine-pored skin", term: "soft fine-pored skin" },
+  { id: "texture-shower-fresh-wet", label: "Shower-Fresh Wet", dimension: "skin-texture", description: "Just-out-of-shower wet skin with water beads", promptHint: "fresh, water-dappled skin as if just out of the shower", term: "water-dappled skin" , adultOnly: true },
   { id: "texture-acne-scarred", label: "Acne-scarred", dimension: "skin-texture", description: "Visible acne scarring (distinct from blemished — healed scar pattern)", promptHint: "with visible acne scarring, healed pitted-skin texture and uneven surface from past breakouts", term: "acne-scarred skin" },
 
   // -------------------- Distinctive Features --------------------
@@ -741,9 +741,9 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "feature-ear-piercings", label: "Ear Piercings", dimension: "distinctive-features", description: "Multiple stacked ear piercings (cartilage, helix, conch)", promptHint: "with multiple stacked ear piercings — cartilage, helix, and conch", term: "multiple stacked ear piercings" },
   { id: "feature-lip-piercing", label: "Lip Piercing", dimension: "distinctive-features", description: "Lip ring / labret stud", promptHint: "with a lip piercing, a small ring or labret stud at the lip" },
   { id: "feature-nostril-piercing", label: "Nostril Piercing", dimension: "distinctive-features", description: "Single nostril stud or ring", promptHint: "with a single nostril piercing, a small stud or ring at the nostril" },
-  { id: "feature-bare-shoulders", label: "Bare Shoulders", dimension: "distinctive-features", description: "Bare shoulders exposed", promptHint: "with bare shoulders exposed, the line of the collarbone and shoulder muscles uncovered" , adultOnly: true },
+  { id: "feature-bare-shoulders", label: "Bare Shoulders", dimension: "distinctive-features", description: "Bare shoulders exposed", promptHint: "with the shoulders uncovered", term: "shoulders uncovered" , adultOnly: true },
   { id: "feature-collarbone-visible", label: "Collarbone Visible", dimension: "distinctive-features", description: "Prominent collarbone catching light", promptHint: "with a prominent collarbone clearly defined and catching the light", term: "visible collarbone" , adultOnly: true },
-  { id: "feature-midriff-visible", label: "Midriff Visible", dimension: "distinctive-features", description: "Exposed midriff between top and bottom", promptHint: "wearing a cropped style with the midriff visible", term: "visible midriff" , adultOnly: true },
+  { id: "feature-midriff-visible", label: "Midriff Visible", dimension: "distinctive-features", description: "Exposed midriff between top and bottom", promptHint: "with a cropped hemline", term: "cropped hemline" , adultOnly: true },
   { id: "feature-navel-visible", label: "Navel Visible", dimension: "distinctive-features", description: "Visible navel on bare stomach", promptHint: "with the navel visible", term: "visible navel" , adultOnly: true },
   { id: "feature-elongated-neck", label: "Elongated Neck", dimension: "distinctive-features", description: "Long swan-like neck", promptHint: "with an elongated, swan-like neck, long and gracefully extended", term: "elongated swan-like neck" },
   { id: "feature-under-eye-circles", label: "Under-Eye Circles", dimension: "distinctive-features", description: "Subtle dark circles under the eyes (distinct from puffy eye-bags)", promptHint: "with subtle dark circles under the eyes", term: "dark under-eye circles" },
@@ -1333,7 +1333,8 @@ function emitIndependentFragments(value: unknown, fragmentFor: PersonFragmentFor
   // "midriff visible" + "navel visible" as separate clauses reads twice as
   // exposed as it is, and stacked with glamour hints it tips borderline draws
   // into content blocks (observed on kie-standard, 2026-07-18 app_reports).
-  // When both are picked, fold them into ONE neutral clause.
+  // When both are picked, fold them into ONE neutral clause
+  // ("with a cropped hemline and the navel showing").
   const midriff = ids.includes("feature-midriff-visible")
   const navel = ids.includes("feature-navel-visible")
   for (const id of ids) {
@@ -1342,7 +1343,7 @@ function emitIndependentFragments(value: unknown, fragmentFor: PersonFragmentFor
       // floored `fragmentFor` (see `emit` in collectPersonFragments) returns
       // "" for a flagged id, so gate the fold on that instead of hardcoding
       // the minor check here.
-      if (id === "feature-midriff-visible" && fragmentFor(id) !== "") out.push("wearing a cropped style, midriff and navel visible")
+      if (id === "feature-midriff-visible" && fragmentFor(id) !== "") out.push("with a cropped hemline and the navel showing")
       continue
     }
     const fragment = fragmentFor(id)

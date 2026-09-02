@@ -1900,6 +1900,89 @@ export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
   // verified provider path + the catalog `reference-image` feature.
 }
 
+/** Per-reference-video duration bounds, in seconds. */
+export interface RefVideoDurationLimit {
+  minSec: number
+  maxSec: number
+  /** Cap on the SUM of all reference-video durations, when the provider has one. */
+  maxTotalSec?: number
+}
+
+/**
+ * Reference-video duration limits, provider-declared.
+ *
+ * `VIDEO_REF_LIMITS_BY_PROVIDER` above caps the reference COUNT; these cap the
+ * duration of each clip. Both routes already ffprobe every reference video to
+ * price the run (ee/billing/seedance2-ref-video-credits.ts and
+ * minimax-h3-credits.ts), so the numbers are in hand before the job exists —
+ * and until 2026-09-02 they were discarded, which is why "Each reference video
+ * must be between 2 and 30 seconds" and "video duration 52838 ms, expected
+ * [2000, 15000] ms" were reaching users as post-payment provider rejects
+ * (app-reports §11.3).
+ *
+ * Data-driven, exactly like SEEDANCE_2_R2V_MAX_AUDIO_SEC_BY_PROVIDER above:
+ * only providers with a VERIFIED documented limit are listed, so an unknown
+ * provider is never false-rejected.
+ *
+ * Sources: docs.kie.ai/market/bytedance/seedance-2-5 ("Single video duration:
+ * [2, 30] seconds"; "Total duration of reference videos must not exceed 30
+ * seconds") and docs.kie.ai/market/minimax-h3/reference-to-video (reference
+ * videos are "2 to 15 seconds" each and "the total duration of all reference
+ * videos cannot exceed 15 seconds", up to 3 videos) — both fetched 2026-09-02.
+ */
+export const VIDEO_REF_VIDEO_DURATION_LIMITS: Record<string, RefVideoDurationLimit | undefined> = {
+  "seedance-2-5": { minSec: 2, maxSec: 30, maxTotalSec: 30 },
+  // MiniMax Hailuo 3 — the provider states the per-clip bound in its own reject
+  // text: "content[1].video_url: invalid param: video duration 52838 ms,
+  // expected [2000, 15000] ms" (app-reports P4, 2 rows, the same clip retried).
+  // The KIE reference-to-video doc adds the COMBINED cap — the same shape the
+  // audio side already declares in SEEDANCE_2_R2V_MAX_AUDIO_SEC_BY_PROVIDER
+  // above, whose h3 row cites the same page.
+  "minimax-h3": { minSec: 2, maxSec: 15, maxTotalSec: 15 },
+}
+
+/**
+ * Validate probed reference-video durations against the provider's limits.
+ *
+ * Non-finite / non-positive entries are IGNORED, never rejected: the probe
+ * helpers treat an unreadable clip as a worst-case duration for pricing, and
+ * turning a failed ffprobe into a user-facing 400 would block legitimate runs
+ * on a transient probe failure. Callers therefore pass the RAW per-URL probe
+ * outcomes (a rejected ffprobe arrives here as NaN) — an ignored entry also
+ * contributes nothing to the `maxTotalSec` sum, so a probe blip can never push
+ * an otherwise-legal set over the total cap either.
+ */
+export function checkRefVideoDurations(
+  provider: string,
+  durationsSec: readonly number[],
+): { ok: true } | { ok: false; message: string } {
+  const limit = VIDEO_REF_VIDEO_DURATION_LIMITS[provider]
+  if (!limit) return { ok: true }
+
+  const usable = durationsSec.filter((d) => Number.isFinite(d) && d > 0)
+  if (usable.length === 0) return { ok: true }
+
+  const offender = usable.find((d) => d < limit.minSec || d > limit.maxSec)
+  if (offender !== undefined) {
+    return {
+      ok: false,
+      message: `Each reference video must be between ${limit.minSec} and ${limit.maxSec} seconds — one is ${offender.toFixed(1)}s. Trim it (a Trim Video node upstream works) and run again.`,
+    }
+  }
+
+  if (limit.maxTotalSec !== undefined) {
+    const total = usable.reduce((a, b) => a + b, 0)
+    if (total > limit.maxTotalSec) {
+      return {
+        ok: false,
+        message: `Reference videos must not exceed ${limit.maxTotalSec} seconds in total — these add up to ${total.toFixed(1)}s. Remove one or trim them and run again.`,
+      }
+    }
+  }
+
+  return { ok: true }
+}
+
 /**
  * Video models where credit cost depends on resolution AND whether a video
  * reference is connected. Identifier suffix: `:{resolution}[-ref]`.

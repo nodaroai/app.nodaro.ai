@@ -7,7 +7,8 @@ import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState, Workfl
 import { normalizeCollageLabels } from "../../providers/image/collage-badges.js"
 
 // Shared logic from packages/shared — single source of truth
-import { resolveSlideshowTransition, collectAncestorRefs as sharedCollectAncestorRefs, applyDefaultVideoSelection, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionableAssetArrays, buildCreditModelIdentifier, resolveImageGenCreditIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, resolveVideoModeForInputs, videoProviderRequiresImage, isVeoProvider, buildLipSyncCreditId, isPerSecondLipSyncProvider, resolveAiAvatarCreditId, resolveSwitchXCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, buildVideoAuditCreditId, resolveVideoAnalysisModel, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName, validateAiAvatarPayload, validateCinematicAvatarPayload, resolveNodeRefs, resolveEffectiveSourceType, PARAMETER_NODE_TYPES, characterMentionSlug, expandExtraRefsToConnectedReferences, PLATFORM_SPECS, isSeedance2Provider, isMinimaxH3Provider, isWan3Provider, isGeminiOmniProvider, PRICING_DEFAULT_RESOLUTION, supportsExtendRender, MODEL_CATALOG, hasFeature, referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality, COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS, buildLlmCreditIdentifier, motionGraphicsFeature, FLUX_LORA_CHARACTER_MODEL_ID, extractCharacterLoraFields, clampSmartCutWindow, resolveGvpAnchorWire, normalizeModelInput, readPromptAffixes, findImageMentionTokens, knownImageSlugsFromRefs, findEntityMentionTokens, knownEntitySlugsFromRefs, uiAspectRatioFill, uiResolutionFill } from "@nodaro/shared"
+import { resolveVideoRequestNorm } from "../../lib/video-request-norm.js"
+import { resolveSlideshowTransition, collectAncestorRefs as sharedCollectAncestorRefs, applyDefaultVideoSelection, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionableAssetArrays, buildCreditModelIdentifier, resolveImageGenCreditIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, resolveVideoModeForInputs, videoProviderRequiresImage, isVeoProvider, buildLipSyncCreditId, isPerSecondLipSyncProvider, resolveAiAvatarCreditId, resolveSwitchXCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, buildVideoAuditCreditId, resolveVideoAnalysisModel, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName, validateAiAvatarPayload, validateCinematicAvatarPayload, resolveNodeRefs, resolveEffectiveSourceType, PARAMETER_NODE_TYPES, characterMentionSlug, expandExtraRefsToConnectedReferences, PLATFORM_SPECS, isSeedance2Provider, isMinimaxH3Provider, isWan3Provider, isGeminiOmniProvider, PRICING_DEFAULT_RESOLUTION, supportsExtendRender, MODEL_CATALOG, hasFeature, referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality, COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS, buildLlmCreditIdentifier, motionGraphicsFeature, FLUX_LORA_CHARACTER_MODEL_ID, extractCharacterLoraFields, clampSmartCutWindow, resolveGvpAnchorWire, normalizeModelInput, readPromptAffixes, findImageMentionTokens, knownImageSlugsFromRefs, findEntityMentionTokens, knownEntitySlugsFromRefs, uiAspectRatioFill, uiResolutionFill, resolveTopazUpscale } from "@nodaro/shared"
 import { composeNegative, resolveTemplate, applyTemplate, computeNodePrompt, assembleImageInput, readDirectionFields, readStructuredFields, readSubjectFields, buildImagePrompt, buildScenePrompt, collectIdentityLockClause as sharedCollectIdentityLockClause, getParameterPromptHint, characterLockToRefLock, buildCharacterPrompt, buildObjectPrompt, buildCreaturePrompt, buildLocationPrompt, buildFaceTemplateInputs, appendMusicMeta, composeSoundHintFromConnections, truncateForField, appendField, assembleSunoInput, type SoundConsumerType, type SoundComposition, resolveVideoReferenceCore, applyPromptAffixes, composeVideoPromptText, isMinorAge, containsMinorAgeHint, type DirectionFields, type StructuredPromptFields, type SubjectFields } from "@nodaro/prompts"
 import type { CharacterDef, ConnectedReference, SceneData, ExtraRefInput, ExtraRefCharacterContext } from "@nodaro/shared"
 import type { CharacterMeta } from "@nodaro/prompts"
@@ -2318,16 +2319,23 @@ export function buildPayload(
           ? withImagePromptPolicy({ prompt: editPrompt, nativeNegativePrompt: editNegative })
           : { prompt: editPrompt as string | undefined, nativeNegativePrompt: editNegative }
       const targetResolution = data.targetResolution as string | undefined
+      // Topaz's only real quality lever is the upscale FACTOR; the legacy
+      // `targetResolution` on stored node data has no provider parameter behind
+      // it and is mapped forward by the same resolver the route and the worker
+      // use, so the reserved tier is the tier that renders.
+      const topaz = provider === "topaz-image-upscale"
+        ? resolveTopazUpscale({ upscaleFactor: data.upscaleFactor as string | undefined, targetResolution })
+        : undefined
       return {
         jobName: "edit-image",
         queueName: "video-generation",
-        modelIdentifier: buildCreditModelIdentifier(provider, undefined, undefined, undefined, targetResolution),
+        modelIdentifier: buildCreditModelIdentifier(provider, undefined, undefined, undefined, topaz ? topaz.creditTier : targetResolution),
         payload: {
           jobId,
           imageUrl: mainImageUrl,
           prompt: editPolicied.prompt,
           provider,
-          upscaleFactor: data.upscaleFactor,
+          upscaleFactor: topaz ? topaz.upscaleFactor : (data.upscaleFactor as string | undefined),
           targetResolution,
           aspectRatio: editParams.aspectRatio,
           negativePrompt: editPolicied.nativeNegativePrompt,
@@ -2735,15 +2743,22 @@ export function buildPayload(
     case "upscale-image": {
       const provider = (data.provider as string) ?? "recraft-upscale"
       const targetResolution = data.targetResolution as string | undefined
+      // Topaz's only real quality lever is the upscale FACTOR; the legacy
+      // `targetResolution` on stored node data has no provider parameter behind
+      // it and is mapped forward by the same resolver the route and the worker
+      // use, so the reserved tier is the tier that renders.
+      const topaz = provider === "topaz-image-upscale"
+        ? resolveTopazUpscale({ upscaleFactor: data.upscaleFactor as string | undefined, targetResolution })
+        : undefined
       return {
         jobName: "edit-image",
         queueName: "video-generation",
-        modelIdentifier: buildCreditModelIdentifier(provider, undefined, undefined, undefined, targetResolution),
+        modelIdentifier: buildCreditModelIdentifier(provider, undefined, undefined, undefined, topaz ? topaz.creditTier : targetResolution),
         payload: {
           jobId,
           imageUrl: resolvedInputs.imageUrl,
           provider,
-          upscaleFactor: data.upscaleFactor,
+          upscaleFactor: topaz ? topaz.upscaleFactor : (data.upscaleFactor as string | undefined),
           targetResolution,
           usageLogId,
         },
@@ -2858,16 +2873,31 @@ export function buildPayload(
           i2vReferenceImageUrls = merged
         }
       }
+      // Normalize the SAME values the branch already emits — the ui-fill is the
+      // effective request for an untouched node (video-ui-defaults.ts), so
+      // normalizing raw `data.*` would erase it (R5).
+      const i2vNorm = resolveVideoRequestNorm({
+        provider,
+        aspectRatio: (data.aspectRatio as string | undefined) ?? uiAspectRatioFill(provider),
+        resolution: (data.resolution as string | undefined) ?? uiResolutionFill(provider),
+        duration: data.duration as number | string | undefined,
+      })
+      if (i2vNorm.adjustments.length > 0) {
+        console.warn(
+          `[payload-builder] ${node.id} (${provider}): ` +
+          i2vNorm.adjustments.map((a) => `${a.field} "${a.from}" → ${a.to ?? "removed"}`).join("; "),
+        )
+      }
       return {
         jobName: "image-to-video",
         queueName: "video-generation",
         modelIdentifier: buildVideoCreditModelIdentifier(
           provider,
-          data.duration as number | string | undefined,
+          i2vNorm.duration ?? (data.duration as number | string | undefined),
           (data.sound ?? data.kling3Sound) as boolean | undefined,
           "image-to-video",
           (data.videoSize as string | undefined) ?? (data.mode ?? data.kling3Mode) as string | undefined,
-          data.resolution as string | undefined,
+          i2vNorm.resolution,
           hasVideoRef,
         ),
         payload: {
@@ -2877,7 +2907,7 @@ export function buildPayload(
           audioUrl: resolvedInputs.audioUrl,
           prompt: i2vPrompt,
           provider,
-          duration: data.duration,
+          duration: i2vNorm.duration ?? data.duration,
           mode: data.mode ?? data.kling3Mode,
           sound: data.sound ?? data.kling3Sound,
           generateAudio: data.generateAudio,
@@ -2889,8 +2919,8 @@ export function buildPayload(
           // Fill the defaults here so the request matches the UI. (H3 has no
           // resolution lever — its catalog declares no resolutions, so the
           // resolution fallback stays undefined by construction.)
-          aspectRatio: (data.aspectRatio as string | undefined) ?? uiAspectRatioFill(provider),
-          resolution: (data.resolution as string | undefined) ?? uiResolutionFill(provider),
+          aspectRatio: i2vNorm.aspectRatio,
+          resolution: i2vNorm.resolution,
           seed: data.seed,
           cameraFixed: data.cameraFixed,
           multiShot: data.multiShot,
@@ -2974,27 +3004,41 @@ export function buildPayload(
         }
         t2vReferenceImageUrls = merged
       }
+      // See the i2v note above (R5): the ui-fill is the effective request for an
+      // untouched node, so it is what gets normalized — never raw `data.*`.
+      const t2vNorm = resolveVideoRequestNorm({
+        provider,
+        aspectRatio: (data.aspectRatio as string | undefined) ?? uiAspectRatioFill(provider),
+        resolution: (data.resolution as string | undefined) ?? uiResolutionFill(provider),
+        duration: data.duration as number | string | undefined,
+      })
+      if (t2vNorm.adjustments.length > 0) {
+        console.warn(
+          `[payload-builder] ${node.id} (${provider}): ` +
+          t2vNorm.adjustments.map((a) => `${a.field} "${a.from}" → ${a.to ?? "removed"}`).join("; "),
+        )
+      }
       return {
         jobName: "text-to-video",
         queueName: "video-generation",
         modelIdentifier: buildVideoCreditModelIdentifier(
           provider,
-          data.duration as number | string | undefined,
+          t2vNorm.duration ?? (data.duration as number | string | undefined),
           (data.sound ?? data.kling3Sound) as boolean | undefined,
           "text-to-video",
           (data.mode ?? data.kling3Mode ?? data.videoSize) as string | undefined,
-          data.resolution as string | undefined,
+          t2vNorm.resolution,
           hasVideoRef,
         ),
         payload: {
           jobId,
           prompt: t2vPrompt,
           provider,
-          duration: data.duration,
+          duration: t2vNorm.duration ?? data.duration,
           mode: data.mode ?? data.kling3Mode,
           sound: data.sound ?? data.kling3Sound,
           // See i2v note above — Seedance 2 / MiniMax H3 UI default fallbacks.
-          aspectRatio: (data.aspectRatio as string | undefined) ?? uiAspectRatioFill(provider),
+          aspectRatio: t2vNorm.aspectRatio,
           negativePrompt: data.negativePrompt,
           cfgScale: data.cfgScale,
           multiShot: data.multiShot,
@@ -3002,7 +3046,7 @@ export function buildPayload(
           elements: data.elements,
           removeWatermark: data.removeWatermark,
           seed: data.seed,
-          resolution: (data.resolution as string | undefined) ?? uiResolutionFill(provider),
+          resolution: t2vNorm.resolution,
           generateAudio: data.generateAudio,
           referenceImageUrls: t2vReferenceImageUrls,
           referenceVideoUrls: resolvedInputs.referenceVideoUrls,
@@ -3067,10 +3111,45 @@ export function buildPayload(
         }))
         const cameraMotion = ltxCameraMotionFromUpstream(hints) ?? "none"
 
+        // The LTX exit has no ui-fill, so this normalizes raw `data.*`. It
+        // REPLACES the raw resolution that used to reach the identifier, keeping
+        // the priced tier and `payload.resolution`/`duration` one value — and it
+        // fills the 1080p band the identifier assumes for an omitted resolution,
+        // which the wire previously left unset for Replicate to guess at.
+        const ltxNorm = resolveVideoRequestNorm({
+          provider,
+          aspectRatio: data.aspectRatio as string | undefined,
+          resolution: data.resolution as string | undefined,
+          duration: gvSel.duration as number | string | undefined,
+        })
+        if (ltxNorm.adjustments.length > 0) {
+          console.warn(
+            `[payload-builder] ${node.id} (${provider}): ` +
+            ltxNorm.adjustments.map((a) => `${a.field} "${a.from}" → ${a.to ?? "removed"}`).join("; "),
+          )
+        }
+
         return {
           jobName: task === "audio_to_video" ? "text-to-video" : (task === "image_to_video" ? "image-to-video" : "text-to-video"),
           queueName: "video-generation",
-          modelIdentifier: provider,
+          // Price the tier we are about to RENDER. The bare provider id is the
+          // cheapest band (1080p:6s) and `commit_credits` never collects an
+          // upward delta, so reserving it against a 4k:10s run under-charged by
+          // up to 6.7× (app-reports triage §4.2). Both direct routes already
+          // call this helper; the orchestrator was the only lane that didn't.
+          // `buildVideoCreditModelIdentifier` snaps an unknown band to 1080p and
+          // an off-tier duration to the nearest seeded one, so the id always prices.
+          // The band lookup is CASE-SENSITIVE with lowercase keys — never
+          // upper-case `resolution` on the way in (see Task 6, ruling R3).
+          modelIdentifier: buildVideoCreditModelIdentifier(
+            provider,
+            ltxNorm.duration ?? (gvSel.duration as number | string | undefined),
+            undefined,
+            task === "image_to_video" ? "image-to-video" : "text-to-video",
+            undefined,
+            ltxNorm.resolution,
+            false,
+          ),
           payload: {
             jobId,
             provider,
@@ -3094,9 +3173,9 @@ export function buildPayload(
               ...(hasEnd && { last_frame_image: resolvedInputs.endFrameUrl }),
             }),
             ...(task === "audio_to_video" && { audio: resolvedInputs.audioUrl }),
-            resolution: data.resolution as string | undefined,
-            duration: gvSel.duration as number | undefined,
-            aspect_ratio: data.aspectRatio as string | undefined,
+            resolution: ltxNorm.resolution,
+            duration: (ltxNorm.duration ?? gvSel.duration) as number | undefined,
+            aspect_ratio: ltxNorm.aspectRatio,
             fps: data.fps as number | undefined,
             generate_audio: (data.generateAudio as boolean | undefined) ?? true,
             camera_motion: cameraMotion,
@@ -3236,16 +3315,35 @@ export function buildPayload(
       else if (hasStart && !!endFrameUrl) generationType = "FIRST_AND_LAST_FRAMES_2_VIDEO"
       else if (hasImageRef || hasVideoRef) generationType = "REFERENCE_2_VIDEO"
 
+      // R5: the identifier already used `resolvedProvider` while the ui-fills
+      // used the stored `provider` — a pre-existing disagreement. Both now read
+      // `resolvedProvider`: it is the id whose catalog governs the request that
+      // will actually run. Behaviour change, small but real, for the split-id
+      // models (Grok Imagine 1, Wan 2.6/2.7) whose mode variants could declare
+      // different lists. And the fill is what gets normalized, never raw
+      // `data.*` — normalizing raw data would erase the fill (R5).
+      const gvNorm = resolveVideoRequestNorm({
+        provider: resolvedProvider,
+        aspectRatio: (data.aspectRatio as string | undefined) ?? uiAspectRatioFill(resolvedProvider),
+        resolution: (data.resolution as string | undefined) ?? uiResolutionFill(resolvedProvider),
+        duration: data.duration as number | string | undefined,
+      })
+      if (gvNorm.adjustments.length > 0) {
+        console.warn(
+          `[payload-builder] ${node.id} (${resolvedProvider}): ` +
+          gvNorm.adjustments.map((a) => `${a.field} "${a.from}" → ${a.to ?? "removed"}`).join("; "),
+        )
+      }
       return {
         jobName: effectiveMode,
         queueName: "video-generation",
         modelIdentifier: buildVideoCreditModelIdentifier(
           resolvedProvider,
-          data.duration as number | string | undefined,
+          gvNorm.duration ?? (data.duration as number | string | undefined),
           (data.sound ?? data.kling3Sound) as boolean | undefined,
           effectiveMode,
           (data.videoSize as string | undefined) ?? (data.mode ?? data.kling3Mode) as string | undefined,
-          data.resolution as string | undefined,
+          gvNorm.resolution,
           hasVideoRef,
         ),
         payload: {
@@ -3264,7 +3362,7 @@ export function buildPayload(
           videoTrimEnd: data.videoTrimEnd,
           referenceAudioUrls: resolvedInputs.referenceAudioUrls,
           audioUrl: resolvedInputs.audioUrl,
-          duration: data.duration,
+          duration: gvNorm.duration ?? data.duration,
           mode: data.mode ?? data.kling3Mode,
           sound: data.sound ?? data.kling3Sound,
           generateAudio: data.generateAudio,
@@ -3272,8 +3370,8 @@ export function buildPayload(
           // Seedance 2 config pickers render defaults in the UI without
           // persisting them to data until the user explicitly picks; fill
           // them in here so the worker request matches the visible UI state.
-          aspectRatio: (data.aspectRatio as string | undefined) ?? uiAspectRatioFill(provider),
-          resolution: (data.resolution as string | undefined) ?? uiResolutionFill(provider),
+          aspectRatio: gvNorm.aspectRatio,
+          resolution: gvNorm.resolution,
           seed: data.seed,
           cameraFixed: data.cameraFixed,
           multiShot: data.multiShot,

@@ -92,9 +92,16 @@ vi.mock("../../ee/billing/credits.js", async () => {
   }
 })
 
-// Spy on the hook's entry point so the control case proves the dynamic branch
+// Spy on BOTH hook entry points so the control case proves the dynamic branch
 // is NOT taken; keep the real implementation for the math.
+//
+// A ref-video request now prices through `…FromDurations`: the routes' duration
+// pre-check ffprobed the clips first and stashed them on the request, so the
+// pricing side reuses that array instead of probing again (R15). A request with
+// NO ref videos (the >5-images surcharge) has no stash and still runs
+// `…FromUrls` — which probes an empty list.
 const h3CreditsSpy = vi.fn()
+const h3DurationsSpy = vi.fn()
 vi.mock("../../ee/billing/minimax-h3-credits.js", async () => {
   const actual = await vi.importActual<typeof import("../../ee/billing/minimax-h3-credits.js")>("../../ee/billing/minimax-h3-credits.js")
   return {
@@ -102,6 +109,10 @@ vi.mock("../../ee/billing/minimax-h3-credits.js", async () => {
     minimaxH3BaseCreditsFromUrls: (args: Parameters<typeof actual.minimaxH3BaseCreditsFromUrls>[0]) => {
       h3CreditsSpy(args)
       return actual.minimaxH3BaseCreditsFromUrls(args)
+    },
+    minimaxH3BaseCreditsFromDurations: (args: Parameters<typeof actual.minimaxH3BaseCreditsFromDurations>[0]) => {
+      h3DurationsSpy(args)
+      return actual.minimaxH3BaseCreditsFromDurations(args)
     },
   }
 })
@@ -152,11 +163,13 @@ describe("/v1/generate-video minimax-h3 dynamic billing", () => {
       "u-1", "job-1", expect.any(String), 0, 0,
       expect.objectContaining({ creditOverride: 1187 }),
     )
+    // R15: ONE ffprobe for the clip — the pre-check's, reused by the pricer.
     expect(probeSpy).toHaveBeenCalledTimes(1)
-    expect(h3CreditsSpy).toHaveBeenCalledWith(
+    expect(h3CreditsSpy).not.toHaveBeenCalled()
+    expect(h3DurationsSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         outputDurationSec: 8,
-        referenceVideoUrls: ["https://r2.example.com/ref.mp4"],
+        durationsSec: [5],
         referenceImageCount: 0,
       }),
     )
@@ -260,8 +273,8 @@ describe("/v1/generate-video minimax-h3 dynamic billing", () => {
       "u-1", "job-1", expect.any(String), 0, 0,
       expect.objectContaining({ creditOverride: 732 }),
     )
-    expect(h3CreditsSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ outputDurationSec: 8, resolution: "768P" }),
+    expect(h3DurationsSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ outputDurationSec: 8, durationsSec: [5], resolution: "768P" }),
     )
     await app.close()
   })
@@ -305,10 +318,11 @@ describe("/v1/text-to-video minimax-h3 dynamic billing", () => {
       "u-1", "job-1", expect.any(String), 0, 0,
       expect.objectContaining({ creditOverride: 1187 }),
     )
-    expect(h3CreditsSpy).toHaveBeenCalledWith(
+    expect(probeSpy).toHaveBeenCalledTimes(1)
+    expect(h3DurationsSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         outputDurationSec: 8,
-        referenceVideoUrls: ["https://r2.example.com/ref.mp4"],
+        durationsSec: [5],
         referenceImageCount: 0, // t2v has no frames and no image refs wired here
       }),
     )

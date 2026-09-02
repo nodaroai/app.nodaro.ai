@@ -14,6 +14,7 @@ import {
   TIER_STORAGE_LIMITS,
 } from "./stripe-config.js"
 import { tierColumns } from "./tier-columns.js"
+import { notifyPaidConversion, notifyCancellation } from "../notifications/founder-notify.js"
 import { getStripe } from "./stripe-client.js"
 import { downgradeToEffectiveFloor, raiseStorageFloorOnActivation, reapplyStorageFloorAfterClawback } from "./downgrade-floor.js"
 import { creditsForLoadUsd } from "./load-rate.js"
@@ -113,10 +114,11 @@ export async function handleSubscriptionCreated(
   // cancellation) after the profile update succeeds.
   const { data: preProfile } = await supabase
     .from("profiles")
-    .select("subscription_credits, topup_credits")
+    .select("subscription_credits, topup_credits, subscription_tier")
     .eq("id", userId)
     .single()
   const carryover = Math.max(0, preProfile?.subscription_credits ?? 0)
+  const priorTier = preProfile?.subscription_tier ?? "free"
 
   // Insert subscription record
   const { error: subError } = await supabase
@@ -202,6 +204,10 @@ export async function handleSubscriptionCreated(
   })
 
   console.log(`[stripe] subscription.created: user=${userId} tier=${tier} credits=${credits}`)
+
+  // Internal founder milestone alert (fire-and-forget; a notification failure
+  // must never affect billing). Fires only on a real free→paid transition.
+  void notifyPaidConversion(userId, priorTier, tier)
 }
 
 /**
@@ -253,7 +259,7 @@ export async function handleSubscriptionUpdated(
   // Look up existing subscription
   const { data: existing } = await supabase
     .from("subscriptions")
-    .select("id, stripe_price_id, tier, current_period_start")
+    .select("id, stripe_price_id, tier, current_period_start, cancel_at_period_end")
     .eq("stripe_subscription_id", data.subscriptionId)
     .single()
 
@@ -384,6 +390,18 @@ export async function handleSubscriptionUpdated(
   }
 
   invalidateBalanceCache(userId)
+
+  // Internal founder milestone alerts (fire-and-forget). Conversion fires only
+  // on a genuine free→paid transition. The churn alert fires the moment the
+  // user SCHEDULES cancellation (cancel_at_period_end false→true) — the
+  // founder-relevant signal — not 30 days later at period end; keying on the
+  // flip means a later unrelated `updated` (e.g. a payment-method change while
+  // already scheduled) won't re-fire it. The immediate-cancel case is covered
+  // by handleSubscriptionCanceled below (which skips anything already flagged).
+  void notifyPaidConversion(userId, oldTier, newTier)
+  if (!existing.cancel_at_period_end && data.cancelAtPeriodEnd === true) {
+    void notifyCancellation(userId, oldTier, true)
+  }
 }
 
 // ── Subscription Canceled ────────────────────────────────────────
@@ -400,6 +418,18 @@ export async function handleSubscriptionCanceled(
 ): Promise<void> {
   const userId = await resolveUserId(data.stripeCustomerId, data.metadata)
   const now = new Date().toISOString()
+
+  // Whether this cancellation was ALREADY announced to founders at schedule
+  // time (the portal cancel_at_period_end flip, alerted from
+  // subscription.updated). Read BEFORE the status overwrite below. A directly
+  // deleted subscription (immediate cancel, no prior scheduled flip) has this
+  // false/absent and IS announced at the end of this handler.
+  const { data: preCancelSub } = await supabase
+    .from("subscriptions")
+    .select("cancel_at_period_end")
+    .eq("stripe_subscription_id", data.subscriptionId)
+    .single()
+  const cancelAlreadyAnnounced = preCancelSub?.cancel_at_period_end === true
 
   // Update subscription status
   const { error: subError } = await supabase
@@ -420,12 +450,14 @@ export async function handleSubscriptionCanceled(
     return
   }
 
-  // Get current subscription credits to cap at free tier limit
+  // Get current subscription credits to cap at free tier limit (and the tier
+  // before downgrade, for the internal founder cancellation alert).
   const { data: profile } = await supabase
     .from("profiles")
-    .select("subscription_credits")
+    .select("subscription_credits, subscription_tier")
     .eq("id", userId)
     .single()
+  const priorTier = profile?.subscription_tier ?? null
 
   const currentSubCredits = profile?.subscription_credits ?? 0
   const freeCredits = TIER_CREDITS.free ?? 0
@@ -460,6 +492,11 @@ export async function handleSubscriptionCanceled(
   console.log(
     `[stripe] subscription.canceled: sub=${data.subscriptionId} user=${userId} downgraded to free (credits: ${cappedCredits})`
   )
+
+  // Internal founder milestone alert (fire-and-forget). Fires only when the
+  // user was actually on a paid tier before this cancellation AND it wasn't
+  // already announced at schedule time (avoids a duplicate 30 days later).
+  if (!cancelAlreadyAnnounced) void notifyCancellation(userId, priorTier)
 }
 
 // ── Invoice Paid (credit renewal for subscriptions) ──────────────

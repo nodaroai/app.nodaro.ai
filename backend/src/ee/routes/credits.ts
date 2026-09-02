@@ -10,12 +10,29 @@ import { formatZodError } from "../../lib/zod-error.js"
 import { handlePriceNotConfigured } from "../lib/credit-guard-impl.js"
 import { PriceNotConfiguredError, type UserBalance } from "../billing/credits.js"
 import { callerKeyHash } from "../../routes/oauth-register.js"
-import { fallbackClaimDue, readFreeGrant, runSignupGrantClaim } from "../billing/signup-grant.js"
+import { config } from "../../lib/config.js"
+import { firstHeaderValue } from "../../lib/request-helpers.js"
+import { fallbackClaimDue, isForeignOrigin, readFreeGrant, runSignupGrantClaim } from "../billing/signup-grant.js"
 
 /**
  * Resolve the account's free-grant state for the balance read, claiming on
  * the spot when it is still 'unclaimed'. `undefined` when the column is not
  * there yet (dormant) or anything failed — the balance read must not care.
+ *
+ * An 'unclaimed' account is settled in one of two ways, decided by WHO asked:
+ *
+ * 1. Our own page (no Origin on a same-origin GET, or our own origin), or no
+ *    Origin at all: wait out FALLBACK_CLAIM_GRACE_MS so the app.nodaro.ai
+ *    SPA's keyed boot-time POST can decide with the fingerprints.
+ * 2. Any other origin — the thin clients (studio / person / recast / voice),
+ *    the browser extension, anything cross-origin: those surfaces have no
+ *    claim call, and a cross-origin caller could not send fingerprints anyway.
+ *    No keyed claim is ever coming, so claim NOW — the grace would only strand
+ *    the account at zero credits until it next polls, which a user who leaves
+ *    never does. A forged Origin buys a curl nothing it did not already have
+ *    (see `isForeignOrigin`). Should a thin client ever grow its own keyed
+ *    claim, `backfillClaimKeys` (claim-signup-grant.ts) keeps the late
+ *    fingerprints out of the bin.
  */
 async function settleFreeGrant(
   userId: string,
@@ -25,15 +42,39 @@ async function settleFreeGrant(
     const grant = await readFreeGrant(userId)
     if (!grant) return undefined
     if (grant.state !== "unclaimed") return { state: grant.state, moved: false }
-    // Fresh account: the browser's keyed claim is on its way. Leave it be.
-    if (!fallbackClaimDue(grant.createdAt)) return { state: "unclaimed", moved: false }
+    const origin = firstHeaderValue(req.headers.origin)
+    const foreign = isForeignOrigin({
+      origin,
+      publicUrl: config.PUBLIC_URL,
+      host: firstHeaderValue(req.headers.host),
+      forwardedHost: firstHeaderValue(req.headers["x-forwarded-host"]),
+    })
+    // Fresh account on our own page: the keyed claim may still be coming.
+    if (!foreign && !fallbackClaimDue(grant.createdAt)) return { state: "unclaimed", moved: false }
     const outcome = await runSignupGrantClaim(
       { userId, browserKey: null, deviceKey: null, ipHash: callerKeyHash(req) },
       req.log,
     )
+    if (foreign) {
+      // The host only — never the raw caller IP, which is what ipHash exists for.
+      req.log.info(
+        { userId, originHost: originHostOf(origin), state: outcome.state },
+        "free grant claimed keyless for a cross-origin client",
+      )
+    }
     return { state: outcome.state, moved: outcome.granted }
   } catch (err) {
     req.log.warn({ err, userId }, "free grant fallback claim failed")
+    return undefined
+  }
+}
+
+/** Loggable host of an Origin header, or `undefined` when it is not a URL. */
+function originHostOf(origin: string | undefined): string | undefined {
+  if (!origin) return undefined
+  try {
+    return new URL(origin).host
+  } catch {
     return undefined
   }
 }
@@ -155,11 +196,13 @@ export async function creditsRoutes(app: FastifyInstance) {
     try {
       let balance = await CreditsService.getBalance(userId)
 
-      // Free-grant fallback. The boot-time claim lives in the browser bundle,
-      // so a tab still running a build from before the gate never sends it —
-      // and once the signup default is zero, that user sits at zero credits
-      // until they reload. Every client reads its balance, so this is where
-      // an 'unclaimed' account gets its decision made regardless of bundle.
+      // Free-grant fallback. The boot-time claim lives in the app.nodaro.ai
+      // browser bundle, so two kinds of caller never send it: a tab running a
+      // build from before the gate, and every cross-origin thin client. Once
+      // the signup default is zero, such a user sits at zero credits. Every
+      // client reads its balance, so this is where an 'unclaimed' account gets
+      // its decision made regardless of bundle — after the grace by default,
+      // immediately for any other origin (settleFreeGrant).
       // Arrives with no fingerprints; the policy scores what it has.
       // Best-effort end to end: nothing here may break a balance read.
       const grant = await settleFreeGrant(userId, req)

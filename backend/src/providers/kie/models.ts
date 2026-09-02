@@ -24,10 +24,25 @@ export interface KieModelConfig {
   inputType?: string      // Some models have different input types
   inputKind?: "image" | "video"  // Lip-sync input shape: "image" (image+audio, default) vs "video" (video+audio dubbing, e.g. volcengine). Drives the KIE lipSync vs lipSyncVideo dispatch.
   imageParam?: string     // Parameter name for input image (default: "image", some use "input_urls")
+  /**
+   * Image formats this SKU's API accepts, as `sharp` spells them ("jpeg",
+   * "png", "webp", …). Read by the shared `ensureImageForProvider` chokepoint,
+   * which re-encodes anything outside the set to JPEG before the call. Declare
+   * it where the SKU's documented set differs from — or is worth pinning
+   * against drift in — the `jpeg/png/webp` default. Each declaration carries
+   * its doc URL and fetch date.
+   */
+  acceptedImageFormats?: readonly string[]
   aspectRatioParam?: string    // Non-standard aspect ratio param name (default: "aspect_ratio"; e.g., "ratio")
   maxRefImages?: number        // If set, merges primary + referenceImageUrls into imageParam array up to this cap
   extraParams?: Record<string, unknown>  // Default extra parameters
   allowedDurations?: number[]  // Video models: allowed duration values in seconds
+  // SCHEMA FACT, not a default: this video SKU's KIE request schema declares a
+  // `resolution` property, but we pin no value for it (the request omits the key
+  // unless the caller asked for a band). Read by `kieModelAcceptsResolution` so
+  // an explicit user choice still reaches the wire. A SKU that also wants a
+  // pinned default expresses that with `extraParams.resolution` instead.
+  acceptsResolution?: true
   supportsEndFrame?: boolean   // Video models: supports start + end frame (2 images -> video)
   endFrameParam?: string       // Parameter name for end frame (e.g., "tail_image_url", "end_image_url")
   // Lip-sync param mapping (per-model overrides for the generic lipSync dispatch):
@@ -425,6 +440,12 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     credits: 0.5,
     cost: 0.0025,
     inputType: "image-to-image",
+    // "Accepted types: image/jpeg, image/png, image/webp. Max size: 10.0MB"
+    // — docs.kie.ai/market/recraft/crisp-upscale.md (fetched 2026-09-02).
+    // Handed anything else — an AVIF or HEIC photo (both reported by sharp as
+    // "heif"), or any other non-accepted upload — this SKU answers "image file
+    // type not supported" (app-reports §11.3, P5).
+    acceptedImageFormats: ["jpeg", "png", "webp"],
   },
 
   // Topaz image upscale (image enhancement utility)
@@ -436,6 +457,12 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     // NOTE: 4K, 8K = — handled via composite identifiers
     inputType: "image-to-image",
     imageParam: "image_url",  // Single URL string
+    // "Accepted types: image/jpeg, image/png, image/webp. Max size: 10.0MB"
+    // — docs.kie.ai/market/topaz/image-upscale.md (fetched 2026-09-02).
+    // Handed anything else — an AVIF or HEIC photo (both reported by sharp as
+    // "heif"), or any other non-accepted upload — this SKU answers "image_url
+    // file type not supported" (app-reports §11.3, P5).
+    acceptedImageFormats: ["jpeg", "png", "webp"],
     extraParams: { upscale_factor: "2" },
   },
 
@@ -562,12 +589,17 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   },
 
   // Grok - VERIFIED: docs.kie.ai/market/grok-imagine/image-to-video
+  // That page lists `resolution` among the accepted input params (and
+  // MODEL_CATALOG["grok-i2v"].resolutions exposes it as a user lever), hence
+  // acceptsResolution. No value is pinned: with no user choice the request
+  // carries no `resolution` key, exactly as before the lever guard existed.
   "grok-i2v": {
     model: "grok-imagine/image-to-video",
     credits: 20,
     cost: 0.10,  // (6s, 720p default)
     imageParam: "image_urls",  // array format
     maxRefImages: 7,           // up to 7 images total (primary + refs)
+    acceptsResolution: true,
     extraParams: { mode: "normal", duration: "6" },
     allowedDurations: [6, 10],  // Grok supports 6 or 10 second videos
     supportsEndFrame: false,
@@ -741,12 +773,16 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Wan 2.7 I2V — 2–15s, 720p/1080p, supports start+end frame
   // See: docs.kie.ai/market/wan/2-7-image-to-video.md
   // KIE params: first_frame_url (string) + last_frame_url (string) for end frame
+  // docs.kie.ai/market/wan/2-7-image-to-video.md lists `resolution` among the
+  // accepted input params, hence acceptsResolution. No value is pinned — an
+  // intent-less request sends no `resolution` key, exactly as before.
   "wan-2.7-i2v": {
     model: "wan/2-7-image-to-video",
     credits: 75,
     cost: 0.375,  // (5s 720p)
     imageParam: "first_frame_url",  // single string; end frame goes to last_frame_url
     supportsEndFrame: true,
+    acceptsResolution: true,
     allowedDurations: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
   },
 
@@ -1209,11 +1245,15 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
 
   // Wan 2.7 T2V — 2–15s, 720p/1080p
   // See: docs.kie.ai/market/wan/2-7-text-to-video.md
+  // docs.kie.ai/market/wan/2-7-text-to-video.md lists `resolution` among the
+  // accepted input params — same schema fact as the wan-2.7-i2v sibling, and
+  // likewise no pinned value.
   "wan-2.7-t2v": {
     model: "wan/2-7-text-to-video",
     credits: 75,
     cost: 0.375,  // (5s 720p)
     aspectRatioParam: "ratio",  // KIE uses "ratio" not "aspect_ratio" for this model
+    acceptsResolution: true,
     allowedDurations: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
   },
 
@@ -1543,6 +1583,60 @@ export const KIE_SPECIAL_MODELS: Record<string, KieModelConfig> = {
     cost: 0.84,  // 12 cr/sec * ~14s (720p)
   },
 
+}
+
+// =============================================================================
+// RESOLUTION LEVER
+// =============================================================================
+
+/**
+ * Providers whose params adapter reads `input.resolution` rather than
+ * `options.resolution`, and therefore DEPEND on the generic forwarder writing
+ * it — even though their KIE config declares no `resolution` in `extraParams`.
+ *
+ * minimax-h3: `applyMinimaxH3Params` (kie/video.ts) normalises
+ * `input.resolution` and always sends the result, which is what pins the render
+ * to the tier billing collapsed to. Strip the assignment and every H3 run
+ * silently renders the 2K default while being billed off the request's 768P
+ * anchor (app-reports triage, ruling R2). The membership is checked against
+ * `MINIMAX_H3_PROVIDERS` in `__tests__/kie-resolution-lever.test.ts`, so a
+ * future H3 SKU cannot re-open that hole.
+ *
+ * The seedance family is the MIRROR case and is deliberately absent: it reads
+ * `options.resolution` itself, which is why the generic forwarder already
+ * excludes it via `isSeedance2Provider`.
+ */
+export const RESOLUTION_CONSUMING_PARAM_ADAPTERS: ReadonlySet<string> = new Set(["minimax-h3"])
+
+/**
+ * True when this KIE video SKU may receive a `resolution` in its request body.
+ *
+ * KIE resolves a market operation as `Market_<model>_<resolution>_<duration>`,
+ * so injecting a resolution into a SKU that has none produces
+ * "Operation not found: Market_kling_v2-5-turbo-text-to-video-pro_480p_10"
+ * (app-reports 11.3, 2 rows) — a client-side bug, not a KIE registry gap.
+ *
+ * This asks "does the SKU's SCHEMA declare the param", which is deliberately
+ * separate from "does it have a pinned default":
+ *   - `extraParams.resolution` — declares the param AND pins a value we send on
+ *     every request.
+ *   - `acceptsResolution` — declares the param and NOTHING else, so a request
+ *     with no user choice carries no `resolution` key at all.
+ * Both are levers; only the first changes an intent-less request.
+ *
+ * The model config is the authority here, NOT MODEL_CATALOG: `grok` takes a
+ * resolution while declaring no catalog `resolutions`, so a catalog-based gate
+ * would drop a real parameter. The adapter set covers the inverse case (see
+ * RESOLUTION_CONSUMING_PARAM_ADAPTERS).
+ *
+ * `resolutionMap` / `defaultResolution` are deliberately NOT consulted: they
+ * feed `buildLipSyncInput` only and never reach the video builders, so honouring
+ * them here would hand a future lip-sync-shaped SKU the incident payload.
+ */
+export function kieModelAcceptsResolution(provider: string, modelConfig: KieModelConfig | undefined): boolean {
+  if (RESOLUTION_CONSUMING_PARAM_ADAPTERS.has(provider)) return true
+  if (!modelConfig) return false
+  return modelConfig.acceptsResolution === true || modelConfig.extraParams?.resolution !== undefined
 }
 
 // =============================================================================

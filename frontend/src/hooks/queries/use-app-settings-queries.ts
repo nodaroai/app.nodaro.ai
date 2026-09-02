@@ -27,6 +27,12 @@ export interface AppSettings {
   readonly consent_login_definition?: "session" | "app_open"
   readonly consent_text?: string
   readonly consent_version?: number
+  /** Internal founder-notification knobs (Cloud-only). Absent on non-cloud. */
+  readonly notify_digest_enabled?: boolean
+  readonly notify_digest_hour?: number
+  readonly notify_milestones_enabled?: boolean
+  readonly notify_every_signup_enabled?: boolean
+  readonly notify_slack_webhook_url?: string
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -69,6 +75,11 @@ async function fetchAppSettings(): Promise<AppSettings> {
     consent_login_definition: (settings.consent_login_definition as "session" | "app_open" | undefined) ?? "session",
     consent_text: (settings.consent_text as string | undefined) ?? "",
     consent_version: (settings.consent_version as number | undefined) ?? 1,
+    notify_digest_enabled: (settings.notify_digest_enabled as boolean | undefined) ?? true,
+    notify_digest_hour: (settings.notify_digest_hour as number | undefined) ?? 8,
+    notify_milestones_enabled: (settings.notify_milestones_enabled as boolean | undefined) ?? true,
+    notify_every_signup_enabled: (settings.notify_every_signup_enabled as boolean | undefined) ?? false,
+    notify_slack_webhook_url: (settings.notify_slack_webhook_url as string | undefined) ?? "",
   }
 }
 

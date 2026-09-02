@@ -18,7 +18,7 @@ describe("buildPersonHints — body proportion axes", () => {
       silhouette: "silhouette-hourglass",
     })
     expect(hints.join(", ")).toBe(
-      "slim, lean build, full bust, defined waist, hourglass silhouette",
+      "slim, lean build, full bust, a defined waistline, an hourglass figure",
     )
   })
 
@@ -56,7 +56,7 @@ describe("buildPersonHints — body proportion axes", () => {
   })
 
   it("Bust:Very Full emits the distinct very-full token", () => {
-    expect(buildPersonHints({ bust: "bust-very-full" })).toEqual(["very full bust"])
+    expect(buildPersonHints({ bust: "bust-very-full" })).toEqual(["a fuller bust"])
   })
 
   it("ignores stored values for the retired Build / Body Proportions keys (no migration)", () => {

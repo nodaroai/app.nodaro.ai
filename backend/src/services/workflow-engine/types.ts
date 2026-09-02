@@ -139,8 +139,11 @@ export interface NodeExecutionState {
   /** Resolved inputs fed to this node (stored for debugging). */
   inputs?: Record<string, unknown>
   error?: string
-  /** Stable refusal code when the failure is a mapped billing refusal
-   *  (reserve-errors.ts) — P16's budget UI branches on this, never on text. */
+  /** Stable code for a refusal the UI may branch on, never on text. Two
+   *  producers today: a mapped billing refusal (reserve-errors.ts — P16's
+   *  budget UI) and the pre-dispatch reference-video duration gate
+   *  (`video_too_long`). PRESENCE alone does not mean "billing" — read the
+   *  specific code, the way `isInputWarningCode` does on the frontend. */
   errorCode?: string
   startedAt?: string
   completedAt?: string

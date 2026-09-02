@@ -4,7 +4,7 @@ import { supabase } from "../lib/supabase.js"
 import { resolveWebSurfaceFlag } from "../middleware/credit-guard.js"
 import { insertJob } from "../lib/insert-job.js"
 import { executeAppRun } from "../services/app-execution.js"
-import { buildCreditModelIdentifier } from "@nodaro/shared"
+import { buildCreditModelIdentifier, resolveTopazUpscale } from "@nodaro/shared"
 import type { ComponentMetadata } from "@nodaro/shared"
 import { collectComponentOutputs } from "./_collect-component-outputs.js"
 import { JOB_POLL_INTERVAL_MS, POLL_ABSOLUTE_TIMEOUT_MS } from "../services/workflow-engine/types.js"
@@ -296,13 +296,24 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
         continue
       }
 
-      const creditModelId = buildCreditModelIdentifier(
-        provider,
-        data.quality as string | undefined,
-        data.resolution as string | undefined,
-        data.renderingSpeed as string | undefined,
-        data.targetResolution as string | undefined,
-      )
+      // Topaz bills on the upscale FACTOR, not on the legacy `targetResolution`
+      // the node may still carry — resolveTopazUpscale is the same authority
+      // the route, the estimator and the worker use.
+      const creditModelId = provider === "topaz-image-upscale"
+        ? buildCreditModelIdentifier(
+            provider, undefined, undefined, undefined,
+            resolveTopazUpscale({
+              upscaleFactor: data.upscaleFactor as string | undefined,
+              targetResolution: data.targetResolution as string | undefined,
+            }).creditTier,
+          )
+        : buildCreditModelIdentifier(
+            provider,
+            data.quality as string | undefined,
+            data.resolution as string | undefined,
+            data.renderingSpeed as string | undefined,
+            data.targetResolution as string | undefined,
+          )
       total += STATIC_CREDIT_COSTS[creditModelId] ?? STATIC_CREDIT_COSTS[provider] ?? STATIC_CREDIT_COSTS[nodeType] ?? 0
     }
 

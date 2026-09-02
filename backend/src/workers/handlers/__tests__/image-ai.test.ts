@@ -73,6 +73,7 @@ vi.mock("../../shared.js", async (importOriginal) => {
 // ---------------------------------------------------------------------------
 
 import { imageAIHandlers } from "../image-ai.js"
+import { resolveTopazUpscale, buildCreditModelIdentifier } from "@nodaro/shared"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -512,5 +513,128 @@ describe("image-to-image handler", () => {
     await handler(job as never, makeCtx())
 
     expect(mocks.mockAttach).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// topaz-image-upscale — the sent factor matches the billed tier
+// ---------------------------------------------------------------------------
+
+describe("topaz-image-upscale — the sent factor matches the billed tier", () => {
+  const handler = imageAIHandlers["edit-image"]
+
+  it("sends upscale_factor 4 for a 4K-targeted job (legacy field, no explicit factor)", async () => {
+    const job = makeJob("edit-image", {
+      imageUrl: "https://img.png",
+      provider: "topaz-image-upscale",
+      targetResolution: "4K",
+    })
+    await handler(job as never, makeCtx())
+    expect(mocks.mockEditImage).toHaveBeenCalledWith(
+      "https://img.png",
+      "topaz-image-upscale",
+      undefined,
+      expect.objectContaining({ upscale_factor: "4" }),
+      expect.anything(),
+    )
+  })
+
+  it("sends upscale_factor 4 for an 8K-targeted job (the provider's ceiling)", async () => {
+    const job = makeJob("edit-image", {
+      imageUrl: "https://img.png",
+      provider: "topaz-image-upscale",
+      targetResolution: "8K",
+    })
+    await handler(job as never, makeCtx())
+    // No `prompt` in job.data ⇒ effectivePrompt really is `undefined` at
+    // position 3 — expect.anything() never matches undefined, so it must be
+    // asserted literally (this bites tests below too).
+    expect(mocks.mockEditImage).toHaveBeenCalledWith(
+      expect.anything(), expect.anything(), undefined,
+      expect.objectContaining({ upscale_factor: "4" }),
+      expect.anything(),
+    )
+  })
+
+  it("an explicit factor wins over the legacy field", async () => {
+    const job = makeJob("edit-image", {
+      imageUrl: "https://img.png",
+      provider: "topaz-image-upscale",
+      upscaleFactor: "2",
+      targetResolution: "8K",
+    })
+    await handler(job as never, makeCtx())
+    expect(mocks.mockEditImage).toHaveBeenCalledWith(
+      expect.anything(), expect.anything(), undefined,
+      expect.objectContaining({ upscale_factor: "2" }),
+      expect.anything(),
+    )
+  })
+
+  // The gvp identity-plate gate (lib/private-plugins/plate-gate.ts) asserts the
+  // result is EXACTLY 2x the source. It calls this lane with neither field set,
+  // so the default must stay "2" forever.
+  it("defaults to 2x when neither field is set (the plate gate depends on it)", async () => {
+    const job = makeJob("edit-image", { imageUrl: "https://img.png", provider: "topaz-image-upscale" })
+    await handler(job as never, makeCtx())
+    expect(mocks.mockEditImage).toHaveBeenCalledWith(
+      expect.anything(), expect.anything(), undefined,
+      expect.objectContaining({ upscale_factor: "2" }),
+      expect.anything(),
+    )
+  })
+
+  it("leaves non-topaz providers alone (no upscale_factor injected)", async () => {
+    const job = makeJob("edit-image", { imageUrl: "https://img.png", provider: "recraft-upscale" })
+    await handler(job as never, makeCtx())
+    const extra = mocks.mockEditImage.mock.calls.at(-1)?.[3] as Record<string, unknown> | undefined
+    expect(extra?.upscale_factor).toBeUndefined()
+  })
+
+  // -------------------------------------------------------------------------
+  // Money pin: the render lever and the billed tier must be derived from the
+  // SAME resolved factor, or a user can pay for a tier we did not render
+  // (app-reports triage 2026-09-01 §4.3). For each payload this asserts:
+  //   1. the worker sends EXACTLY what resolveTopazUpscale resolved
+  //      (the correctness this task fixes), and
+  //   2. buildCreditModelIdentifier, fed that SAME resolved `creditTier` in
+  //      the exact positional slot the reservation site uses today
+  //      (`backend/src/routes/edit-image.ts:95` —
+  //      `buildCreditModelIdentifier(baseProvider, undefined, undefined,
+  //      undefined, targetResolution)`), produces the identifier that
+  //      matches the rendered factor's tier.
+  // Today that reservation site still passes the RAW `targetResolution`
+  // rather than `resolved.creditTier` in that slot (Task 3 wires it through
+  // this same resolver) — this pin locks the invariant the two call sites
+  // must share once they do, using only `@nodaro/shared` exports so it can't
+  // silently drift from either side's implementation.
+  // -------------------------------------------------------------------------
+  describe("money pin: render factor and billed tier never drift apart", () => {
+    const payloads: Array<{ upscaleFactor?: string; targetResolution?: string }> = [
+      { targetResolution: "4K" },
+      { upscaleFactor: "4" },
+      { upscaleFactor: "2", targetResolution: "8K" },
+      {},
+    ]
+
+    for (const payload of payloads) {
+      it(`payload ${JSON.stringify(payload)}`, async () => {
+        const resolved = resolveTopazUpscale(payload)
+
+        const job = makeJob("edit-image", {
+          imageUrl: "https://img.png",
+          provider: "topaz-image-upscale",
+          ...payload,
+        })
+        await handler(job as never, makeCtx())
+        const extra = mocks.mockEditImage.mock.calls.at(-1)?.[3] as Record<string, unknown>
+        expect(extra.upscale_factor).toBe(resolved.upscaleFactor)
+
+        const identifier = buildCreditModelIdentifier(
+          "topaz-image-upscale", undefined, undefined, undefined, resolved.creditTier,
+        )
+        expect(identifier).toBe(resolved.upscaleFactor === "4" ? "topaz-image-upscale:4K" : "topaz-image-upscale")
+      })
+    }
   })
 })

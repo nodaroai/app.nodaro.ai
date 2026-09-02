@@ -1,7 +1,11 @@
 import { resolveSeedance2Inputs } from "@nodaro/prompts"
 import { normalizeMinimaxH3Resolution } from "@nodaro/shared"
 import { STATIC_CREDIT_COSTS, PriceNotConfiguredError } from "./credits.js"
-import { probeMediaDuration } from "../../providers/video/ffmpeg-utils.js"
+// The probe lives in CORE (lib/ref-video-probe.ts) for the same reason the
+// seedance twin re-exports it: the routes' and the DAG's duration pre-check is
+// plain input validation and must run in community/business, where no ee/
+// module may be loaded at runtime. ee -> core is the allowed direction.
+import { probeRefVideoDurations } from "../../lib/ref-video-probe.js"
 
 /**
  * KIE caps a MiniMax Hailuo 3 reference-video run's total input at ≤15s, so a
@@ -12,8 +16,16 @@ import { probeMediaDuration } from "../../providers/video/ffmpeg-utils.js"
  */
 const REF_VIDEO_WORST_CASE_SEC = 15
 
-/** KIE r2v reference-video cap for minimax-h3 (max 3 URLs — the route Zod cap). */
-const MAX_REF_VIDEOS = 3
+/**
+ * The provider id every helper here prices for. Passed to the shared probe so
+ * the clip cap is read from `VIDEO_REF_LIMITS_BY_PROVIDER["minimax-h3"]`
+ * (videos: 3) instead of a hand-kept local constant — R16: the routes' Zod
+ * ceiling is a FLAT `SEEDANCE_2_5_REF_LIMITS.videos` (10) for every provider,
+ * so "how many clips do we probe and price" must come from the same map the
+ * dispatch path truncates by (`resolveSeedance2Inputs`), never from a number
+ * typed twice.
+ */
+const PROVIDER_ID = "minimax-h3"
 
 /**
  * KIE bills minimax-h3 input images beyond the FIRST FIVE at 11 KIE cr each
@@ -104,17 +116,52 @@ export function minimaxH3BaseCredits(args: {
 }
 
 /**
+ * BASE credits for a MiniMax Hailuo 3 run from ALREADY-PROBED durations.
+ *
+ * The SINGLE place the h3 worst-case rule lives (the seedance twin has its
+ * own): an unusable probe (NaN/≤0) counts as the full 15s worst case for that
+ * URL so we can only ever OVER-reserve, never under-reserve (the refund-only
+ * `commit_credits` constraint). 15s is EXACTLY h3's documented per-clip
+ * ceiling (`VIDEO_REF_VIDEO_DURATION_LIMITS["minimax-h3"].maxSec`), so unlike
+ * the seedance-2-5 case the worst case here really is the worst case.
+ *
+ * Callers that already hold a probe result — the routes' duration pre-check
+ * stashes one on the request, the DAG hands one down from its own pre-check —
+ * price through here instead of running a second uncached ffprobe per clip
+ * (R15). The CHECK and the DEBIT then read the SAME probed set by
+ * construction: the NaN the checker ignored is the NaN charged at 15s here.
+ */
+export function minimaxH3BaseCreditsFromDurations(args: {
+  outputDurationSec: number
+  durationsSec: readonly number[]
+  referenceImageCount: number
+  resolution?: unknown
+}): number {
+  const inputVideoDurationSec = args.durationsSec.reduce(
+    (sum, d) => sum + (Number.isFinite(d) && d > 0 ? d : REF_VIDEO_WORST_CASE_SEC),
+    0,
+  )
+  return minimaxH3BaseCredits({
+    outputDurationSec: args.outputDurationSec,
+    inputVideoDurationSec,
+    referenceImageCount: args.referenceImageCount,
+    resolution: args.resolution,
+  })
+}
+
+/**
  * ffprobe the connected reference videos, sum their durations, and return the
  * BASE (0%-markup) credit total for the full `unit × (input + output)` +
  * extra-image MiniMax Hailuo 3 run. SINGLE shared entry point for the route
- * `computeCredits` hooks and the orchestrator reservation — mirrors
- * seedance2RefVideoBaseCreditsFromUrls:
+ * `computeCredits` hooks and the orchestrator reservation — composed from the
+ * shared core probe + the worst-case pricer above, exactly like
+ * `seedance2RefVideoBaseCreditsFromUrls`, so there is ONE probe implementation
+ * and ONE h3 worst-case implementation.
  *
- * - At most 3 URLs are probed (the route's Zod cap), never an unbounded list.
+ * - At most `VIDEO_REF_LIMITS_BY_PROVIDER["minimax-h3"].videos` (3) URLs are
+ *   probed, never an unbounded list — see PROVIDER_ID above.
  * - Probes run via `Promise.allSettled`; a rejected probe (or a NaN/≤0
- *   duration) counts as the 15s worst case for that URL so we can only ever
- *   OVER-reserve, never under-reserve (the refund-only `commit_credits`
- *   constraint).
+ *   duration) counts as the 15s worst case for that URL.
  * - Non-string / empty entries are ignored (they contribute 0s).
  */
 export async function minimaxH3BaseCreditsFromUrls(args: {
@@ -123,20 +170,13 @@ export async function minimaxH3BaseCreditsFromUrls(args: {
   referenceImageCount: number
   resolution?: unknown
 }): Promise<number> {
-  const candidates = args.referenceVideoUrls
-    .slice(0, MAX_REF_VIDEOS)
-    .filter((u): u is string => typeof u === "string" && u.length > 0)
-
-  const settled = await Promise.allSettled(candidates.map((u) => probeMediaDuration(u)))
-  const inputVideoDurationSec = settled.reduce((sum, r) => {
-    if (r.status === "fulfilled" && Number.isFinite(r.value) && r.value > 0) return sum + r.value
-    // Rejected probe OR an unusable duration → assume the full 15s worst case.
-    return sum + REF_VIDEO_WORST_CASE_SEC
-  }, 0)
-
-  return minimaxH3BaseCredits({
+  const durationsSec = await probeRefVideoDurations({
+    provider: PROVIDER_ID,
+    referenceVideoUrls: args.referenceVideoUrls,
+  })
+  return minimaxH3BaseCreditsFromDurations({
     outputDurationSec: args.outputDurationSec,
-    inputVideoDurationSec,
+    durationsSec,
     referenceImageCount: args.referenceImageCount,
     resolution: args.resolution,
   })

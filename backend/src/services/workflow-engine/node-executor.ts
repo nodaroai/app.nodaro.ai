@@ -29,6 +29,7 @@ import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired, res
 import { computeLlmChatFields, computeNodePrompt, pickerFanoutTargets, applyPromptAffixes } from "@nodaro/prompts"
 import type { ComponentMetadata } from "@nodaro/shared"
 import { getAppSettings } from "../../lib/app-settings.js"
+import { probeAndCheckRefVideoDurations } from "../../lib/ref-video-probe.js"
 import type {
   SimpleNode,
   SimpleEdge,
@@ -1035,6 +1036,7 @@ export function buildSyncHttpBody(
  */
 async function computeSeedance2RefVideoCreditOverride(
   payload: Record<string, unknown>,
+  probedDurationsSec?: number[],
 ): Promise<number | undefined> {
   const provider = payload.provider as string | undefined
   const referenceVideoUrls = payload.referenceVideoUrls
@@ -1042,13 +1044,23 @@ async function computeSeedance2RefVideoCreditOverride(
     return undefined
   }
 
-  const { seedance2RefVideoBaseCreditsFromUrls } = await import("../../ee/billing/seedance2-ref-video-credits.js")
-  const baseCredits = await seedance2RefVideoBaseCreditsFromUrls({
+  const { seedance2RefVideoBaseCreditsFromUrls, seedance2RefVideoBaseCreditsFromDurations } =
+    await import("../../ee/billing/seedance2-ref-video-credits.js")
+  const priceArgs = {
     provider: provider as string,
     resolution: (payload.resolution as string | undefined) ?? "720p",
     outputDurationSec: Number(payload.duration ?? 5),
-    referenceVideoUrls: referenceVideoUrls as unknown[],
-  })
+  }
+  // Probe once, use twice (R15) — the duration gate above already ffprobed
+  // this payload for any provider with a declared bound, so the DEBIT prices
+  // from the very array the CHECK read (NaN entries included, still charged at
+  // the worst case). No stash => no gate ran for this provider => probe here.
+  const baseCredits = probedDurationsSec
+    ? seedance2RefVideoBaseCreditsFromDurations({ ...priceArgs, durationsSec: probedDurationsSec })
+    : await seedance2RefVideoBaseCreditsFromUrls({
+        ...priceArgs,
+        referenceVideoUrls: referenceVideoUrls as unknown[],
+      })
 
   // Apply the admin markup ONCE — identical formula + guard to credit-guard-impl.ts.
   const settings = await getAppSettings()
@@ -1070,11 +1082,12 @@ async function computeSeedance2RefVideoCreditOverride(
  */
 async function computeMinimaxH3CreditOverride(
   payload: Record<string, unknown>,
+  probedDurationsSec?: number[],
 ): Promise<number | undefined> {
   const provider = payload.provider as string | undefined
   if (!isMinimaxH3Provider(provider)) return undefined
 
-  const { minimaxH3BaseCreditsFromUrls, minimaxH3BillableRefImageCount, MINIMAX_H3_FREE_INPUT_IMAGES } =
+  const { minimaxH3BaseCreditsFromUrls, minimaxH3BaseCreditsFromDurations, minimaxH3BillableRefImageCount, MINIMAX_H3_FREE_INPUT_IMAGES } =
     await import("../../ee/billing/minimax-h3-credits.js")
   const refVideos = Array.isArray(payload.referenceVideoUrls) ? (payload.referenceVideoUrls as unknown[]) : []
   const refImageCount = minimaxH3BillableRefImageCount({
@@ -1086,12 +1099,15 @@ async function computeMinimaxH3CreditOverride(
   })
   if (refVideos.length === 0 && refImageCount <= MINIMAX_H3_FREE_INPUT_IMAGES) return undefined
 
-  const baseCredits = await minimaxH3BaseCreditsFromUrls({
+  const h3PriceArgs = {
     outputDurationSec: Number(payload.duration ?? 6),
-    referenceVideoUrls: refVideos,
     referenceImageCount: refImageCount,
     resolution: payload.resolution,
-  })
+  }
+  // Probe once, use twice (R15) — same contract as the seedance twin above.
+  const baseCredits = probedDurationsSec
+    ? minimaxH3BaseCreditsFromDurations({ ...h3PriceArgs, durationsSec: probedDurationsSec })
+    : await minimaxH3BaseCreditsFromUrls({ ...h3PriceArgs, referenceVideoUrls: refVideos })
 
   // Apply the admin markup ONCE — identical formula + guard to credit-guard-impl.ts.
   const settings = await getAppSettings()
@@ -1330,7 +1346,36 @@ async function executeWorkerNode(
   }
   const { jobName, queueName, payload, modelIdentifier } = buildResult
 
-  // 2b. Update job with full input_data from the built payload
+  // 2b. Reference-video duration gate — the DAG twin of the routes'
+  // `validateRefVideoDurationPreHandler`, through the SAME core helper.
+  //
+  // Without it a workflow / published-app run with an out-of-bounds reference
+  // clip reserved credits, dispatched, and only then collected the provider's
+  // reject ("video duration 52838 ms, expected [2000, 15000] ms") — taking the
+  // rest of the run with it. Runs in EVERY edition and BEFORE the reservation
+  // block below (which is itself gated on hasCredits()): this is input
+  // validation, not a credit feature.
+  //
+  // The placeholder jobs row exists at this point, so it is deleted on
+  // rejection exactly like the buildPayload catch above does — the throw
+  // therefore leaves NO jobs row, no usage log and no reservation. The coded
+  // error rides `errorCode` into the node state the way a mapped billing
+  // refusal does, while `message` (a finished user-facing sentence) is what the
+  // orchestrator stores in `nodeStates[node.id].error`.
+  const refVideoCheck = await probeAndCheckRefVideoDurations({
+    provider: payload.provider as string | undefined,
+    referenceVideoUrls: payload.referenceVideoUrls,
+  })
+  if (!refVideoCheck.ok) {
+    await supabase.from("jobs").delete().eq("id", jobId)
+    const err = new Error(refVideoCheck.message) as Error & { errorCode?: string }
+    err.errorCode = "video_too_long"
+    throw err
+  }
+  // Reused by the reservation below so a legal set is ffprobed ONCE per run (R15).
+  const refVideoDurationsSec = refVideoCheck.durationsSec
+
+  // 2c. Update job with full input_data from the built payload
   // Store all payload fields so the execution detail modal can show complete inputs.
   // Internal fields (jobId, userId, usageLogId) are kept — useful for admin debugging;
   // regular users never see raw input_data anyway (sanitizeJobForPublic strips sensitive job fields).
@@ -1395,10 +1440,10 @@ async function executeWorkerNode(
       const creditOverride =
         (await computeGenerateVideoProCreditOverride(payload))?.override ??
         (await computeEditVideoProCreditOverride(payload))?.override ??
-        (await computeSeedance2RefVideoCreditOverride(payload)) ??
+        (await computeSeedance2RefVideoCreditOverride(payload, refVideoDurationsSec)) ??
         // MiniMax Hailuo 3 twin — unit×(input+output) ref-video billing plus
         // the >5-input-images surcharge (same heuristic-gated fallback slot).
-        (await computeMinimaxH3CreditOverride(payload))
+        (await computeMinimaxH3CreditOverride(payload, refVideoDurationsSec))
 
       // Free-tier / blocked-models gate. reserveCredits does NOT check
       // blockedModels, so without this a free-tier workflow/app run could

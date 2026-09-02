@@ -948,7 +948,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
   },
   // ---- Additional ai-image nodes (creditCost auto-filled from STATIC_CREDIT_COSTS; per-provider variable pricing) ----
   { type: "modify-image", label: "Modify Image", category: "ai-image", description: "Transform an existing image with a text prompt across 20+ image-to-image / editing providers (Flux, GPT Image, Ideogram, Nano Banana, Qwen, Seedream, + Nano Banana Edit). Migrated successor of edit-image.", outputType: "image", creditCost: "1-18" },
-  { type: "upscale-image", label: "Upscale Image", category: "ai-image", description: "Increase image resolution with Recraft Upscale or Topaz Upscale (2K/4K/8K). No prompt — pure enhancement utility.", outputType: "image", creditCost: "1-10" },
+  { type: "upscale-image", label: "Upscale Image", category: "ai-image", description: "Increase image resolution with Recraft Upscale or Topaz Upscale (1x / 2x / 4x factor). No prompt — pure enhancement utility.", outputType: "image", creditCost: "1-10" },
   { type: "remove-background", label: "Remove Background", category: "ai-image", description: "Remove the background from an image and output a transparent PNG (Recraft).", outputType: "image" },
 
   {

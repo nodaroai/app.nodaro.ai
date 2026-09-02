@@ -362,8 +362,17 @@ describe("buildCreditModelIdentifier", () => {
     expect(buildCreditModelIdentifier("topaz-image-upscale", { targetResolution: "4K" })).toBe("topaz-image-upscale:4K")
   })
 
-  it("returns 'topaz-image-upscale:8K' for 8K", () => {
-    expect(buildCreditModelIdentifier("topaz-image-upscale", { targetResolution: "8K" })).toBe("topaz-image-upscale:8K")
+  it("returns 'topaz-image-upscale:4K' for the legacy 8K target", () => {
+    // 8K maps to the 4x tier — resolveTopazUpscale (the provider has no 8x factor).
+    expect(buildCreditModelIdentifier("topaz-image-upscale", { targetResolution: "8K" })).toBe("topaz-image-upscale:4K")
+  })
+
+  it("prices the explicit 4x factor at the 4K tier even with no targetResolution", () => {
+    expect(buildCreditModelIdentifier("topaz-image-upscale", { upscaleFactor: "4" })).toBe("topaz-image-upscale:4K")
+  })
+
+  it("lets an explicit 2x factor override a stored 4K/8K target (bare tier)", () => {
+    expect(buildCreditModelIdentifier("topaz-image-upscale", { upscaleFactor: "2", targetResolution: "8K" })).toBe("topaz-image-upscale")
   })
 
   it("returns 'ideogram-v3:TURBO' for TURBO renderingSpeed", () => {

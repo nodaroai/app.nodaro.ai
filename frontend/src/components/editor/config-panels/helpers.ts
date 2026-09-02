@@ -1,6 +1,6 @@
 import type { WorkflowNode, WorkflowEdge, FieldMappings } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
-import { buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS, motionGraphicsFeature, buildScraperCreditId, isScraperActor, isKineticCaptionStyle, resolveAiAvatarCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, buildVideoAuditCreditId, sunoCreditType } from "@nodaro/shared"
+import { buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS, motionGraphicsFeature, buildScraperCreditId, isScraperActor, isKineticCaptionStyle, resolveAiAvatarCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, buildVideoAuditCreditId, sunoCreditType, resolveTopazUpscale } from "@nodaro/shared"
 import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/types"
 import type { LlmFeature } from "@nodaro/shared"
 /** Every node type whose output is prose/text. Used to build the compatible
@@ -458,12 +458,22 @@ export function buildCreditModelIdentifier(provider: string, data: Record<string
   // refs) so the displayed credit number matches what the route will charge.
   const refs = data.referenceImageUrls as string[] | undefined
   const refCount = refs?.length ?? 0
+  // Topaz bills on the upscale FACTOR. The legacy `targetResolution` still on
+  // stored node data is mapped forward by resolveTopazUpscale — the same
+  // authority the route, the estimator and the worker use — so the credit badge
+  // shows the tier that will actually be reserved and rendered.
+  const targetResolution = provider === "topaz-image-upscale"
+    ? resolveTopazUpscale({
+        upscaleFactor: data.upscaleFactor as string | undefined,
+        targetResolution: data.targetResolution as string | undefined,
+      }).creditTier
+    : (data.targetResolution as string | undefined)
   return sharedBuildCreditModelIdentifier(
     provider,
     data.quality as string | undefined,
     data.resolution as string | undefined,
     data.renderingSpeed as string | undefined,
-    data.targetResolution as string | undefined,
+    targetResolution,
     refCount,
   )
 }

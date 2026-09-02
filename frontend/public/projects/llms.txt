@@ -426,8 +426,7 @@ Transform or upscale an existing image.
 **Providers:** `recraft-upscale`, `topaz-image-upscale`, `recraft-remove-bg`, `nano-banana-edit`
 
 **Optional fields:**
-- `upscaleFactor`: `"2"`, `"4"` (recraft-upscale)
-- `targetResolution`: `"2K"`, `"4K"`, `"8K"` (topaz-image-upscale)
+- `upscaleFactor`: `"1"`, `"2"`, `"4"` (topaz-image-upscale — its only quality lever)
 
 | Input Handles | Output Handles |
 |---------------|----------------|
