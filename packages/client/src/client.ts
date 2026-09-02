@@ -17,6 +17,7 @@ import { PipelinesResource } from "./resources/pipelines.js"
 import { ReduceResource } from "./resources/reduce.js"
 import { PromptHelperResource } from "./resources/prompt-helper.js"
 import { VoicesResource } from "./resources/voices.js"
+import { LlmResource } from "./resources/llm.js"
 import { MediaResource } from "./resources/media.js"
 import { AudioResource } from "./resources/audio.js"
 import { CreditsResource } from "./resources/credits.js"
@@ -170,6 +171,7 @@ export class NodaroClient {
   readonly reduce: ReduceResource
   readonly promptHelper: PromptHelperResource
   readonly voices: VoicesResource
+  readonly llm: LlmResource
   readonly media: MediaResource
   readonly audio: AudioResource
   readonly credits: CreditsResource
@@ -217,6 +219,7 @@ export class NodaroClient {
     this.reduce = new ReduceResource(this)
     this.promptHelper = new PromptHelperResource(this)
     this.voices = new VoicesResource(this)
+    this.llm = new LlmResource(this)
     this.media = new MediaResource(this)
     this.audio = new AudioResource(this)
     this.credits = new CreditsResource(this)

@@ -50,6 +50,7 @@ export { PipelinesResource } from "./resources/pipelines.js"
 export { ReduceResource } from "./resources/reduce.js"
 export { PromptHelperResource } from "./resources/prompt-helper.js"
 export { VoicesResource } from "./resources/voices.js"
+export { LlmResource } from "./resources/llm.js"
 export { MediaResource } from "./resources/media.js"
 export { AudioResource } from "./resources/audio.js"
 export { CreditsResource } from "./resources/credits.js"
@@ -119,7 +120,13 @@ export type {
   UpdateProjectInput,
 } from "./resources/projects.js"
 
-export type { Job, JobStatus, JobStatusResult, CancelJobResult } from "./resources/jobs.js"
+export type { Job, JobStatus, JobStatusResult, CancelJobResult, ListJobsParams, ListJobsPage } from "./resources/jobs.js"
+export type {
+  LlmStructuredInput,
+  LlmStructuredResult,
+  LlmStructuredJobInput,
+  LlmStructuredJobOutput,
+} from "./resources/llm.js"
 export type { StopVideoProResult, ContinueVideoProResult } from "./resources/video-pro.js"
 
 export type {
@@ -339,7 +346,7 @@ export type {
   DubbingInput,
   AudioFxPreset,
 } from "./resources/voices.js"
-export type { VideoMetadata, DownloadVideoProgress } from "./resources/media.js"
+export type { VideoMetadata, DownloadVideoProgress, MediaProcessInput, MediaProcessResult } from "./resources/media.js"
 
 export type {
   UserBalance,

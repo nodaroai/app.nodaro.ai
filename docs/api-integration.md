@@ -1540,6 +1540,15 @@ Accepted audio formats include MP3, WAV, M4A/AAC, OGG, WebM and FLAC
 (50 MB for audio). The SDK wraps this as `client.uploads`; MCP clients use
 `prepare_audio_upload` / `request_audio_upload` and friends.
 
+### Media processing (free, synchronous)
+
+`POST /v1/media/process` cuts or crops a stored file: body
+`{ sourceUrl, type: "video" | "audio", trim?: { startTime, endTime }, crop?: { x, y, width, height }, format?, deleteSource? }`,
+answer `{ data: { url, thumbnailUrl, assetId, sizeBytes, mimeType, metadata } }`.
+`deleteSource: true` removes the source object afterwards when it is yours
+and nothing else references it — the cut replaces the original. The free
+sibling of the priced `trim-video` node. SDK: `client.media.process(input)`.
+
 ## 12. Credits (Cloud edition)
 
 Two endpoints surface the caller's credit balance and transaction

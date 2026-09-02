@@ -132,6 +132,18 @@ describe("media resource", () => {
     expect(out.durationSec).toBe(212)
     expect(out.height).toBe(720)
   })
+
+  it("process POSTs the trim/crop body to /v1/media/process and returns the data envelope", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: { url: "https://r2/cut.mp4", thumbnailUrl: "https://r2/cut.png", assetId: "a1", sizeBytes: 123, mimeType: "video/mp4", metadata: {} } }))
+    const c = make(fetchMock)
+    const input = { sourceUrl: "https://r2/src.mp4", type: "video" as const, trim: { startTime: 3, endTime: 48 }, deleteSource: true }
+    const { data } = await c.media.process(input)
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/media/process")
+    expect(fetchMock.mock.calls[0][1].method).toBe("POST")
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual(input)
+    expect(data.url).toBe("https://r2/cut.mp4")
+    expect(data.sizeBytes).toBe(123)
+  })
 })
 
 /** A Response whose body is an SSE stream emitting the given raw chunks. */

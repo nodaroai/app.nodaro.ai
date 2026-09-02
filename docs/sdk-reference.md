@@ -342,7 +342,7 @@ throwFromResponse(403, { error: { code: "insufficient_scope", message: "...", mi
 Every resource is constructed automatically by `createClient` and reachable via
 `client.<resource>`. The classes are also exported for advanced typechecking
 but rarely need to be imported directly:
-`WorkflowsResource`, `ProjectsResource`, `JobsResource`, `ExecutionsResource`,
+`WorkflowsResource`, `ProjectsResource`, `JobsResource`, `LlmResource`, `ExecutionsResource`,
 `NodesResource`, `CharactersResource`, `LocationsResource`, `ObjectsResource`,
 `PipelinesResource`, `ReduceResource`, `PromptHelperResource`, `AppsResource`,
 `DeveloperAppsResource`, `OAuthResource`, `VoicesResource`, `CreditsResource`,
@@ -698,6 +698,22 @@ Admin callers additionally receive `provider`, `provider_cost`, `display_cost`,
 values inside job JSON, including Recast's private pre-watermark remux base,
 are removed recursively for every caller, including administrators.
 
+#### `list(params?)`
+
+```ts
+list(params?: { type?: string; origin?: string; limit?: number; cursor?: string }): Promise<{ data: Job[]; next: string | null }>
+```
+
+Your jobs, newest first (`GET /v1/jobs`), cursor-paginated (`limit` ≤ 100;
+pass `next` back as `cursor`). `type` matches the job's `input_data.type`
+(the route that created it — `"llm-structured"`, `"video-analysis"`, …) and
+`origin` matches `input_data.origin` (the client app that sent it). Both are
+exact-match and combine.
+
+```ts
+const { data: runs, next } = await client.jobs.list({ type: "llm-structured", origin: "studio" })
+```
+
 #### `getStatus(id)`
 
 ```ts
@@ -726,6 +742,43 @@ Cancels a job and refunds any reserved credit holds. Returns
 
 ```ts
 const { cancelled } = await client.jobs.cancel(jobId)
+```
+
+---
+
+### `client.llm`
+
+Structured LLM output: your system prompt and JSON Schema in, a validated
+object out. Billed under `llm-structured` per model tier.
+
+#### `structured(input)`
+
+```ts
+structured<T>(input: LlmStructuredInput): Promise<{ jobId: string; output: T; usage: { inputTokens: number; outputTokens: number } }>
+```
+
+`POST /v1/llm/structured`, synchronous — a call may run several minutes,
+longer than the client's default 60 s `timeoutMs`. Construct the client with
+a larger `timeoutMs` for it, or use `structuredJob`.
+
+#### `structuredJob(input)`
+
+```ts
+structuredJob(input: LlmStructuredJobInput): Promise<{ jobId: string }>
+```
+
+The same call as a job (`POST /v1/llm/structured/jobs`). Poll
+`jobs.getStatus(jobId)`; `output_data` is an `LlmStructuredJobOutput` —
+`{ stage }` while running, then `{ output, inputTokens, outputTokens }`.
+`label` names the run; `videoUrl` (+ `videoAnalysis`) analyzes a video first
+and drafts from the analysis (the analysis is a separate job you own,
+`output_data.analysisJobId`). Throws `NotFoundError` on a platform that
+predates the route.
+
+```ts
+const { jobId } = await client.llm.structuredJob({
+  system, input: brief, jsonSchema, schemaName: "studio_production", origin: "studio", label: brief.slice(0, 80),
+})
 ```
 
 ---
@@ -3429,6 +3482,24 @@ Probe a social video's metadata (`POST /v1/video-metadata`) — duration,
 dimensions, title, live status — **without** downloading it. A direct read,
 not a job. Use it to decide whether to trim before importing.
 
+#### `process(input)`
+
+```ts
+process(input: {
+  sourceUrl: string
+  type: "video" | "audio"
+  trim?: { startTime: number; endTime: number }
+  crop?: { x: number; y: number; width: number; height: number }
+  format?: "mp4" | "webm" | "mp3" | "wav" | "m4a" | "aac"
+  deleteSource?: boolean
+}): Promise<{ data: { url: string; thumbnailUrl: string | null; assetId: string | null; sizeBytes: number; mimeType: string; metadata: Record<string, unknown> } }>
+```
+
+Cut or crop a stored file (`POST /v1/media/process`) — synchronous and free,
+the source-preparation sibling of the priced `trimVideo` node. `deleteSource:
+true` removes the source afterwards when it is yours and nothing else
+references it.
+
 ---
 
 ### `client.audio`
@@ -4122,6 +4193,11 @@ not two.
 - `JobStatus` — `"pending" | "queued" | "processing" | "completed" | "failed" | "cancelled"`
 - `JobStatusResult` — lean poll shape: `{ id, status, progress?, output_data?, error_message? }`
 - `CancelJobResult` — `{ success: true, cancelled: number }`
+- `ListJobsParams` / `ListJobsPage` — `jobs.list` filters and page
+
+### LLM
+
+- `LlmStructuredInput`, `LlmStructuredResult<T>`, `LlmStructuredJobInput`, `LlmStructuredJobOutput<T>`
 
 ### Video Pro run control
 
@@ -4251,6 +4327,7 @@ not two.
 
 - `VideoMetadata` — `media.videoMetadata()` result (best-effort probe fields)
 - `DownloadVideoProgress` — one `media.downloadVideoProgress()` event: `{ phase, percent, videoUrl?, thumbnailUrl?, error? }`
+- `MediaProcessInput`, `MediaProcessResult` — `media.process()` input / stored-file result
 
 ### Credits
 

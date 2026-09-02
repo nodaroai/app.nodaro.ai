@@ -47,6 +47,24 @@ export interface CancelJobResult {
   cancelled: number
 }
 
+export interface ListJobsParams {
+  /** Exact match on `input_data.type` — the route that created the job
+   *  (`"llm-structured"`, `"video-analysis"`, …). */
+  type?: string
+  /** Exact match on `input_data.origin` — the client app that sent it. */
+  origin?: string
+  /** Page size, 1–100 (server default 50). */
+  limit?: number
+  /** The previous page's `next`. */
+  cursor?: string
+}
+
+export interface ListJobsPage {
+  data: Job[]
+  /** Pass back as `cursor` for the next page; `null` on the last one. */
+  next: string | null
+}
+
 /**
  * Lean job status returned by `GET /v1/jobs/:id/status`. Skips the
  * `input_data` JSONB and cost/timestamp columns. Its `output_data` still goes
@@ -67,6 +85,15 @@ export class JobsResource {
   /** Get a single job by ID. */
   get(id: string): Promise<{ data: Job }> {
     return this.client.request("GET", `/v1/jobs/${encodeURIComponent(id)}`)
+  }
+
+  /**
+   * Your jobs, newest first (`GET /v1/jobs`), cursor-paginated. `type` and
+   * `origin` filter on the job's own `input_data`, which every job carries —
+   * a client app lists its runs with `{ type: "llm-structured", origin: "studio" }`.
+   */
+  list(params: ListJobsParams = {}): Promise<ListJobsPage> {
+    return this.client.request<ListJobsPage>("GET", "/v1/jobs", { query: { ...params } })
   }
 
   /**
