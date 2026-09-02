@@ -9,10 +9,11 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { applySnappedLevers, withAdjustments } from "../lib/image-gen-normalize.js"
 import { insertJobIdempotent } from "../lib/insert-job.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
-import { IMAGE_GEN_PROVIDERS, T2I_TO_I2I_VARIANT, FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING, resolveImageGenCreditIdentifier } from "@nodaro/shared"
+import { IMAGE_GEN_PROVIDERS, T2I_TO_I2I_VARIANT, FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_ASPECT_RATIO_VALUES, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING, resolveNormalizedImageGen } from "@nodaro/shared"
 import { assembleImageInput, REFERENCE_RULES, REFERENCE_RULES_MULTI_PERSON, type AssembleImageInput, type BuildImagePromptResult } from "@nodaro/prompts"
 import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
 import { directionSchema } from "../lib/direction-schema.js"
@@ -166,15 +167,13 @@ export const generateImageBody = z.object({
   _internalLora: z.object({
     characterId: z.string().uuid(),
   }).optional(),
-  // "auto" is gpt-image-2 specific (KIE constrains it to 1K) — keeping the
-  // enum permissive here and letting the per-provider config / fail-safe in
-  // model-options.ts gate it on the correct providers.
-  aspectRatio: z.enum([
-    "auto",
-    "1:1", "16:9", "9:16", "4:3", "3:4",
-    "3:2", "2:3", "5:4", "4:5", "21:9",
-    "8:1", "1:8", // Wan 2.7 / Wan 2.7 Pro ultra-wide (in the catalog + picker)
-  ]).optional(),
+  // ONE shared vocabulary across /v1/generate-image, /v1/image-to-image and
+  // /v1/edit-image (`IMAGE_ASPECT_RATIO_VALUES` — the union of every ratio any
+  // image model declares, guarded by a catalog-superset test). It is permissive
+  // ON PURPOSE: "auto" is gpt-image-2 specific and the banner ratios are Wan
+  // 2.7 / Nano Banana 2 Lite specific, and the per-model gate is the catalog
+  // snap below, which corrects an unsupported ratio instead of rejecting it.
+  aspectRatio: z.enum(IMAGE_ASPECT_RATIO_VALUES).optional(),
   resolution: z.enum(["1K", "2K", "4K", "0.5 MP", "1 MP", "2 MP", "4 MP"]).optional(),
   quality: z.enum(["medium", "high", "basic"]).optional(),
   negativePrompt: z.string().max(5000).optional(),
@@ -355,9 +354,12 @@ export function resolveImageCreditIdentifier(req: FastifyRequest): string {
   }
   const rawProvider = (body?.provider as string) ?? "nano-banana"
   const flatRefs = body?.referenceImageUrls as string[] | undefined
-  const quality = body?.quality as string | undefined
-  const resolution = body?.resolution as string | undefined
-  const renderingSpeed = body?.renderingSpeed as string | undefined
+  // Read the levers RAW — this preHandler runs before Zod, so any of them can
+  // be a non-string. `resolveNormalizedImageGen` coerces defensively.
+  const aspectRatio = body?.aspectRatio
+  const quality = body?.quality
+  const resolution = body?.resolution
+  const renderingSpeed = body?.renderingSpeed
 
   // WI-1b: in structured mode, `connectedReferences` expand to URLs and are
   // gated per-provider INSIDE `buildImagePrompt` — so the billed reference
@@ -385,7 +387,20 @@ export function resolveImageCreditIdentifier(req: FastifyRequest): string {
   // swap) and encodes the per-ref Flux 2 tier. The SAME helper drives the
   // workflow orchestrator (payload-builder.ts), so single-node and DAG runs
   // reserve identical credits.
-  return resolveImageGenCreditIdentifier({ provider: rawProvider, quality, resolution, renderingSpeed, refCount, swapToI2i: true })
+  // The catalog snap runs HERE, inside the CHECK, because `resolution` and
+  // `quality` are pricing dimensions — a snap applied only in the handler would
+  // break CHECK === DEBIT (see `resolveNormalizedImageGen`'s docstring).
+  // `aspectRatio` is threaded too: it does not price on its own, but the
+  // cross-field rules (gpt-image-2 `auto` → 1K) re-price through it.
+  return resolveNormalizedImageGen({
+    provider: rawProvider,
+    aspectRatio,
+    quality,
+    resolution,
+    renderingSpeed,
+    refCount,
+    swapToI2i: true,
+  }).identifier
 }
 
 
@@ -399,7 +414,23 @@ openApiRegistry.registerPath({
   security: [{ bearerAuth: [] }],
   request: { body: { content: { "application/json": { schema: generateImageBody } } } },
   responses: {
-    200: { description: "Job created", content: { "application/json": { schema: z.object({ jobId: z.string().uuid() }) } } },
+    200: {
+      description: "Job created",
+      content: {
+        "application/json": {
+          schema: z.object({
+            jobId: z.string().uuid(),
+            /** Present only when a catalog-invalid parameter was corrected. */
+            adjustments: z.array(z.object({
+              field: z.enum(["aspectRatio", "resolution", "quality", "duration"]),
+              from: z.union([z.string(), z.number()]),
+              to: z.union([z.string(), z.number()]).optional(),
+              reason: z.string(),
+            })).optional(),
+          }),
+        },
+      },
+    },
     401: { description: "Unauthorized" },
     402: { description: "Insufficient credits" },
   },
@@ -414,7 +445,11 @@ export async function generateImageRoutes(app: FastifyInstance) {
       })
     }
 
-    const { prompt: rawPrompt, referenceImageUrls, characterDescriptions, provider, aspectRatio, resolution, quality, negativePrompt, seed, renderingSpeed, styleType, expandPrompt, baseImageUrl, maskUrl, strength, guidanceScale } = parsed.data
+    // The three catalog-governed levers are destructured as `raw*` on purpose:
+    // `applySnappedLevers` below rewrites them on `parsed.data`, so these locals
+    // are the caller's PRE-snap values and are only ever valid as INPUT to the
+    // normalizer. Everything downstream reads `parsed.data.*`.
+    const { prompt: rawPrompt, referenceImageUrls, characterDescriptions, provider, aspectRatio: rawAspectRatio, resolution: rawResolution, quality: rawQuality, negativePrompt, seed, renderingSpeed, styleType, expandPrompt, baseImageUrl, maskUrl, strength, guidanceScale } = parsed.data
     const internalLora = parsed.data._internalLora
     const userId = req.userId
 
@@ -588,20 +623,31 @@ export async function generateImageRoutes(app: FastifyInstance) {
     // the worker below — so the DEBIT can never under/over-bill relative to what the
     // provider actually receives. In the flat path `assembledRefs === referenceImageUrls`,
     // so this is byte-identical to the previous `referenceImageUrls?.length`.
-    const modelIdentifier = resolvedLora
-      ? FLUX_LORA_CHARACTER_MODEL_ID
-      : resolveImageGenCreditIdentifier({
-          // Pass the RAW provider — the shared helper applies the same T2I→I2I
-          // swap as `resolveEffectiveProvider` above, keyed on the assembled
-          // ref count, so this DEBIT matches the preHandler CHECK and the
-          // workflow orchestrator exactly.
-          provider,
-          quality,
-          resolution,
-          renderingSpeed,
-          refCount: assembledRefs.length,
-          swapToI2i: true,
-        })
+    // Same call the preHandler CHECK made, on the ASSEMBLED ref count. It
+    // returns both the identifier AND the snapped levers, so the credits we
+    // reserve and the parameters we send the provider come from ONE derivation.
+    const normalized = resolveNormalizedImageGen({
+      // Pass the RAW provider — the shared helper applies the same T2I→I2I
+      // swap as `resolveEffectiveProvider` above, keyed on the assembled
+      // ref count, so this DEBIT matches the preHandler CHECK and the
+      // workflow orchestrator exactly.
+      provider,
+      aspectRatio: rawAspectRatio,
+      quality: rawQuality,
+      resolution: rawResolution,
+      renderingSpeed,
+      refCount: assembledRefs.length,
+      swapToI2i: true,
+    })
+    const modelIdentifier = resolvedLora ? FLUX_LORA_CHARACTER_MODEL_ID : normalized.identifier
+
+    // Write the snapped levers back onto the parsed body — `input_data` and the
+    // queue payload below both read from it, so what we persist and what we
+    // send the provider are the values we just priced. The LoRA path runs a
+    // trained Replicate model with no catalog entry, so its levers stay exactly
+    // as the caller sent them.
+    if (!resolvedLora) applySnappedLevers(parsed.data, normalized, generateImageBody)
+    const adjustments = resolvedLora ? [] : normalized.adjustments
 
     const mcpClient = extractMcpClient(req.body)
 
@@ -651,9 +697,11 @@ export async function generateImageRoutes(app: FastifyInstance) {
       provider: effectiveProvider,
       // Hand the synthetic flux-lora-character model id to the Replicate provider.
       model: resolvedLora ? FLUX_LORA_CHARACTER_MODEL_ID : undefined,
-      aspectRatio,
-      resolution,
-      quality,
+      // Read through `parsed.data`, NOT the `raw*` locals above: those still
+      // hold the caller's pre-snap values.
+      aspectRatio: parsed.data.aspectRatio,
+      resolution: parsed.data.resolution,
+      quality: parsed.data.quality,
       // Structured mode: only the NATIVE negative prompt rides this channel
       // (the non-native one is folded into `prompt`). Flat mode: the raw
       // negative prompt, unchanged.
@@ -674,6 +722,8 @@ export async function generateImageRoutes(app: FastifyInstance) {
       usageLogId,
     })
 
-    return { jobId: job.id }
+    // Disclose corrections rather than silently handing back something else.
+    // Absent when nothing changed, so the mainline body is unchanged.
+    return withAdjustments({ jobId: job.id }, adjustments)
   })
 }

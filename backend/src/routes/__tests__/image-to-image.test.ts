@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import Fastify, { type FastifyInstance } from "fastify"
+import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify"
 
 // ---------------------------------------------------------------------------
 // Mocks — hoisted before any route import
@@ -71,11 +71,12 @@ vi.mock("@/lib/url-validator.js", async () => {
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { imageToImageRoutes } from "../image-to-image.js"
+import { imageToImageRoutes, resolveImageToImageCreditIdentifier, imageToImageBody } from "../image-to-image.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { llmComplete } from "../../lib/llm-client.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
+import { IMAGE_ASPECT_RATIO_VALUES, MODIFY_IMAGE_PROVIDERS, resolveNormalizedImageGen } from "@nodaro/shared"
 
 // ---------------------------------------------------------------------------
 // Test app setup
@@ -989,5 +990,214 @@ describe("POST /v1/image-to-image", () => {
       })
       expect(res.statusCode).toBe(200)
     })
+  })
+
+  // ─── Catalog parameter normalization + CHECK === DEBIT (Task 4) ───────────
+  // Mirrors generate-image.test.ts's WI-1b block: `resolveImageToImageCreditIdentifier`
+  // is the exact preHandler closure the route registers with `creditGuard`
+  // (mocked to a no-op in every route test here), so calling it directly is
+  // the only way to exercise the real CHECK pricing. `debitIdentifierFor` runs
+  // the route end-to-end and returns BOTH halves of the money record — the
+  // DEBIT identifier (`reserveCreditsForJob` arg 4) and the `input_data` row
+  // that was persisted — so parity is three-way: CHECK === DEBIT === the
+  // levers the job row says produced the result.
+  describe("catalog parameter normalization + CHECK === DEBIT", () => {
+    const VALID_UUID = "00000000-0000-4000-8000-000000000001"
+
+    function checkIdentifierFor(body: Record<string, unknown>): string {
+      return resolveImageToImageCreditIdentifier({ body } as FastifyRequest)
+    }
+
+    async function debitIdentifierFor(payload: Record<string, unknown>): Promise<{
+      identifier: string | undefined
+      inputData: Record<string, unknown>
+    }> {
+      vi.clearAllMocks()
+      const { mockInsert } = mockJobInsert()
+      const res = await app.inject({ method: "POST", url: "/v1/image-to-image", payload })
+      expect(res.statusCode).toBe(200)
+      const row = mockInsert.mock.calls.at(-1)?.[0] as { input_data: Record<string, unknown> }
+      return {
+        identifier: vi.mocked(reserveCreditsForJob).mock.calls.at(-1)?.[3],
+        inputData: row.input_data,
+      }
+    }
+
+    it("CHECK === DEBIT for gpt-image-2-i2i + auto + 2K (the cross-field snap re-prices to 1K)", async () => {
+      const payload = {
+        imageUrl: "https://r2.nodaro.ai/in.png",
+        prompt: "make it night",
+        userId: VALID_UUID,
+        provider: "gpt-image-2-i2i",
+        aspectRatio: "auto",
+        resolution: "2K",
+      }
+      const { identifier: debit, inputData } = await debitIdentifierFor(payload)
+      const check = checkIdentifierFor(payload)
+      expect(check).toBe(debit)
+      // `auto` only renders 1K, so the reserve is the BASE tier, not `:2K`.
+      expect(check).toBe("gpt-image-2-i2i")
+      // …and the job row records the 1K render we actually paid for.
+      expect(inputData.aspectRatio).toBe("auto")
+      expect(inputData.resolution).toBe("1K")
+    })
+
+    it("snaps an off-list ratio before enqueue and discloses it", async () => {
+      vi.clearAllMocks()
+      const { mockInsert } = mockJobInsert()
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/image-to-image",
+        payload: {
+          imageUrl: "https://r2.nodaro.ai/in.png",
+          prompt: "make it night",
+          userId: VALID_UUID,
+          provider: "gpt-image-2-i2i",
+          aspectRatio: "3:2",
+        },
+      })
+      expect(res.statusCode).toBe(200)
+      const body = res.json() as { adjustments?: { field: string; from: string; to?: string }[] }
+      const adj = body.adjustments?.find((a) => a.field === "aspectRatio")
+      // 3:2 is off-list for GPT Image 2 (I2I) → snaps to the catalog's first
+      // ratio ("auto"), which HAS a replacement (unlike a dropped lever).
+      expect(adj?.from).toBe("3:2")
+      expect(adj?.to).toBe("auto")
+
+      const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as { aspectRatio?: string }
+      expect(queued.aspectRatio).not.toBe("3:2")
+      expect(queued.aspectRatio).toBe("auto")
+
+      // The snapped value — not the caller's raw one — is what got persisted.
+      const row = mockInsert.mock.calls.at(-1)?.[0] as { input_data: Record<string, unknown> }
+      expect(row.input_data.aspectRatio).toBe("auto")
+    })
+
+    it("drops a lever the model has no setting for and says so with no `to`", async () => {
+      vi.clearAllMocks()
+      const { mockInsert } = mockJobInsert()
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/image-to-image",
+        payload: {
+          imageUrl: "https://r2.nodaro.ai/in.png",
+          prompt: "make it night",
+          userId: VALID_UUID,
+          provider: "gpt-image-2-i2i",
+          aspectRatio: "16:9",
+          // GPT Image 2 (I2I) declares no `qualities` — the lever is dropped,
+          // not snapped.
+          quality: "high",
+        },
+      })
+      expect(res.statusCode).toBe(200)
+      const body = res.json() as { adjustments?: { field: string; from: string; to?: string }[] }
+      const adj = body.adjustments?.find((a) => a.field === "quality")
+      expect(adj?.from).toBe("high")
+      // A dropped lever has no replacement: `to` is absent from the wire body.
+      expect(adj).not.toHaveProperty("to")
+
+      const row = mockInsert.mock.calls.at(-1)?.[0] as { input_data: Record<string, unknown> }
+      expect(row.input_data.quality).toBeUndefined()
+      const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as { quality?: string }
+      expect(queued.quality).toBeUndefined()
+    })
+
+    it("returns no `adjustments` key when the request was already valid", async () => {
+      vi.clearAllMocks()
+      mockJobInsert("job-1")
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/image-to-image",
+        payload: {
+          imageUrl: "https://r2.nodaro.ai/in.png",
+          prompt: "make it night",
+          userId: VALID_UUID,
+        },
+      })
+      expect(res.statusCode).toBe(200)
+      expect(res.json()).toEqual({ jobId: expect.any(String) })
+    })
+
+    it("resolver does not throw on a non-object body", () => {
+      expect(() =>
+        resolveImageToImageCreditIdentifier({ body: null } as unknown as FastifyRequest),
+      ).not.toThrow()
+      expect(resolveImageToImageCreditIdentifier({ body: null } as unknown as FastifyRequest)).toBe("nano-banana")
+    })
+  })
+
+  // ---------------------------------------------------------------------------
+  // Structural guard for `applySnappedLevers` (backend/src/lib/image-gen-normalize.ts).
+  // It narrows each snapped lever through the route's OWN Zod enum and, when
+  // that parse fails, leaves the caller's value in place — which would put an
+  // un-snapped value on the wire while the credit identifier was priced off the
+  // snapped one. That fallback is only unreachable while every value the snap
+  // can EMIT is spelled in the route's enums, so sweep it exhaustively instead
+  // of trusting the reasoning: every MODIFY_IMAGE_PROVIDERS member (image-to-image
+  // is already an i2i provider, so swapToI2i is always false and there is no
+  // T2I→I2I variant expansion to add), both a single ref and multiple refs, and
+  // every route-enum value plus `undefined` for all three levers.
+  // ---------------------------------------------------------------------------
+  describe("snap output is always route-enum representable", () => {
+    const optionsOf = (field: "aspectRatio" | "resolution" | "quality"): readonly string[] =>
+      (imageToImageBody.shape[field].unwrap() as { options: readonly string[] }).options
+
+    it("never emits a lever value the route's Zod enum cannot carry", () => {
+      const LEVERS = ["aspectRatio", "resolution", "quality"] as const
+      const allowed = {
+        aspectRatio: new Set(optionsOf("aspectRatio")),
+        resolution: new Set(optionsOf("resolution")),
+        quality: new Set(optionsOf("quality")),
+      }
+      const ratios: (string | undefined)[] = [...optionsOf("aspectRatio"), undefined]
+      const resolutions: (string | undefined)[] = [...optionsOf("resolution"), undefined]
+      const qualities: (string | undefined)[] = [...optionsOf("quality"), undefined]
+      const models = [...new Set<string>(MODIFY_IMAGE_PROVIDERS)]
+
+      const violations: string[] = []
+      for (const provider of models) {
+        for (const refCount of [1, 2]) {
+          for (const aspectRatio of ratios) {
+            for (const resolution of resolutions) {
+              for (const quality of qualities) {
+                const out = resolveNormalizedImageGen({
+                  provider,
+                  aspectRatio,
+                  resolution,
+                  quality,
+                  refCount,
+                  swapToI2i: false,
+                })
+                for (const field of LEVERS) {
+                  const value = out[field]
+                  if (value !== undefined && !allowed[field].has(value)) {
+                    violations.push(
+                      `${provider} refs=${refCount} in(${aspectRatio}/${resolution}/${quality}) → ${field}="${value}"`,
+                    )
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      expect(violations).toEqual([])
+      // Guard the guard: a domain that silently collapsed would make this vacuous.
+      expect(models.length).toBeGreaterThan(20)
+      expect(ratios.length * resolutions.length * qualities.length).toBeGreaterThan(200)
+    })
+  })
+})
+
+// The tuple is the ONE ratio vocabulary all three image routes share, and a
+// catalog test asserts it is a superset of every image model's declared ratios.
+// A private copy here would silently drift out from under that guarantee — the
+// exact shape of the bug that shipped twice (Wan 2.7's 8:1/1:8, then Nano
+// Banana 2 Lite's 4:1/1:4).
+describe("imageToImageBody aspectRatio enum", () => {
+  it("declares the SHARED image ratio vocabulary, not a private copy", () => {
+    const options = (imageToImageBody.shape.aspectRatio.unwrap() as { options: readonly string[] }).options
+    expect([...options]).toEqual([...IMAGE_ASPECT_RATIO_VALUES])
   })
 })

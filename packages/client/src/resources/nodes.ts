@@ -1,7 +1,7 @@
 import type { NodaroClient } from "../client.js"
 import type { JobStatusResult } from "./jobs.js"
 import { JobAbortedError, JobFailedError, JobTimeoutError } from "../errors.js"
-import type { ConnectedReference } from "@nodaro/shared"
+import type { ConnectedReference, ModelInputAdjustment } from "@nodaro/shared"
 
 export type NodeCategory =
   | "input"
@@ -78,8 +78,21 @@ export interface NodeDescriptor {
  * result body. The shape is route-specific; consumers should branch on the
  * presence of `jobId`.
  */
+/**
+ * One parameter the server corrected because the chosen model does not accept
+ * the value you sent (e.g. `gpt-image-2` has no 3:2 aspect ratio). The run
+ * proceeds with the corrected value rather than failing — this is how you find
+ * out what it actually used.
+ *
+ * Re-exports `@nodaro/shared`'s `ModelInputAdjustment` — the same shape the
+ * server's `normalizeModelInput` / `resolveNormalizedImageGen` populate — under
+ * the SDK's naming convention, rather than declaring a second copy of the
+ * fields.
+ */
+export type RunNodeAdjustment = ModelInputAdjustment
+
 export type RunNodeResult =
-  | { jobId: string; usageLogId?: string; [k: string]: unknown }
+  | { jobId: string; usageLogId?: string; adjustments?: RunNodeAdjustment[]; [k: string]: unknown }
   | Record<string, unknown>
 
 /**

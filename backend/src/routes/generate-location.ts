@@ -6,7 +6,8 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
-import { resolveEntityImageCreditIdentifier } from "../lib/entity-credit-identifier.js"
+import { resolveEntityImageCreditIdentifier, resolveEntityImageParams } from "../lib/entity-credit-identifier.js"
+import { applySnappedLevers } from "../lib/image-gen-normalize.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { buildLocationPrompt, buildLocationRefinePrompt } from "@nodaro/prompts"
@@ -24,8 +25,11 @@ const generateLocationBody = z.object({
   sourceImageUrl: safeUrlSchema.optional(),
   provider: z.string().optional().default("nano-banana"),
   // Credit-affecting output levers (mirrors generate-image). The enums are
-  // PERMISSIVE on purpose — a value the chosen model doesn't support is
-  // ignored by the per-provider param routing / worker fail-safe, never 400d.
+  // PERMISSIVE on purpose — a value the chosen model doesn't support is never
+  // 400d. It is SNAPPED to the model's catalog entry inside
+  // `resolveEntityImageParams` (the resolver the CHECK and the DEBIT share) and
+  // the snapped value is what gets recorded and enqueued, so an unsupported
+  // lever no longer rides through to the provider.
   resolution: z.enum(["1K", "2K", "4K", "0.5 MP", "1 MP", "2 MP", "4 MP"]).optional(),
   quality: z.enum(["medium", "high", "basic"]).optional(),
   userId: z.string().uuid().optional(),
@@ -106,7 +110,15 @@ export async function generateLocationRoutes(app: FastifyInstance) {
 
       // Composite identifier (provider[:quality|:resolution|…]) — derived by
       // the SAME resolver the preHandler ran on the raw body, so CHECK===DEBIT.
-      const modelIdentifier = resolveEntityImageCreditIdentifier(parsed.data)
+      const entityParams = resolveEntityImageParams(parsed.data)
+      const modelIdentifier = entityParams.identifier
+      // Record and enqueue the levers this run was PRICED on. This body carries
+      // no `aspectRatio` field, so there is nothing for the write-back to pin.
+      applySnappedLevers(
+        parsed.data,
+        { resolution: entityParams.resolution, quality: entityParams.quality },
+        generateLocationBody,
+      )
 
       // Prompt building has two modes:
       //  - Refine/edit: when the caller supplies a non-empty `userPrompt` (the

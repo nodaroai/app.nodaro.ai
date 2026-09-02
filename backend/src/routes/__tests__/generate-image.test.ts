@@ -74,7 +74,7 @@ import {
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
-import { FLUX_LORA_CHARACTER_MODEL_ID, PROMPT_HARD_CEILING, getMaxImagePromptChars, type ConnectedReference } from "@nodaro/shared"
+import { FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_ASPECT_RATIO_VALUES, IMAGE_GEN_PROVIDERS, PROMPT_HARD_CEILING, T2I_TO_I2I_VARIANT, getMaxImagePromptChars, resolveNormalizedImageGen, type ConnectedReference } from "@nodaro/shared"
 import { assembleImageInput, buildMoodHints, getFramingPromptHint, getPersonPromptHint, getStylePromptHint, getStylingPromptHint, REFERENCE_RULES, REFERENCE_RULES_MULTI_PERSON } from "@nodaro/prompts"
 import { registerPromptPolicy, clearPromptPolicies } from "../../lib/prompt-policy.js"
 
@@ -99,6 +99,15 @@ describe("generateImageBody aspectRatio enum", () => {
     for (const r of ["auto", "1:1", "16:9", "9:16", "4:3", "3:4", "21:9"]) {
       expect(aspectRatioEnum.has(r), `missing ${r}`).toBe(true)
     }
+  })
+
+  // The tuple is the ONE ratio vocabulary all three image routes share, and a
+  // catalog test asserts it is a superset of every image model's declared
+  // ratios. A private copy here would silently drift out from under that
+  // guarantee — the exact shape of the bug that shipped twice.
+  it("declares the SHARED image ratio vocabulary, not a private copy", () => {
+    const options = (generateImageBody.shape.aspectRatio.unwrap() as { options: readonly string[] }).options
+    expect([...options]).toEqual([...IMAGE_ASPECT_RATIO_VALUES])
   })
 })
 
@@ -1400,13 +1409,27 @@ describe("POST /v1/generate-image", () => {
       mood: ["happy", "joyful"],
     }
 
-    /** Run the route, return the DEBIT identifier (reserveCreditsForJob arg 4). */
-    async function debitIdentifierFor(payload: Record<string, unknown>): Promise<string | undefined> {
+    /**
+     * Run the route and return BOTH halves of the money record: the DEBIT
+     * identifier (reserveCreditsForJob arg 4) and the `input_data` row that was
+     * persisted. The catalog snap re-prices `resolution`/`quality`, so parity is
+     * now three-way — CHECK identifier === DEBIT identifier === the levers the
+     * job row says produced the result. A run that debits the 2K tier while
+     * recording a 1K render is exactly the mis-bill this asserts against.
+     */
+    async function debitIdentifierFor(payload: Record<string, unknown>): Promise<{
+      identifier: string | undefined
+      inputData: Record<string, unknown>
+    }> {
       vi.clearAllMocks()
-      setupSupabaseMock({})
+      const { jobInsert } = setupSupabaseMock({})
       const res = await app.inject({ method: "POST", url: "/v1/generate-image", payload })
       expect(res.statusCode).toBe(200)
-      return vi.mocked(reserveCreditsForJob).mock.calls.at(-1)?.[3]
+      const row = jobInsert.mock.calls.at(-1)?.[0] as { input_data: Record<string, unknown> }
+      return {
+        identifier: vi.mocked(reserveCreditsForJob).mock.calls.at(-1)?.[3],
+        inputData: row.input_data,
+      }
     }
 
     /** Run the REAL preHandler CHECK resolver directly on the same body. */
@@ -1425,7 +1448,7 @@ describe("POST /v1/generate-image", () => {
           connectedReferences: mkManualRefs(n),
           direction: DIRECTION,
         }
-        const debit = await debitIdentifierFor(body)
+        const { identifier: debit } = await debitIdentifierFor(body)
         const check = checkIdentifierFor(body)
         expect(check).toBe(debit)
         // Pin the concrete value so a regression in BOTH sites can't pass silently.
@@ -1441,7 +1464,7 @@ describe("POST /v1/generate-image", () => {
         referenceImageUrls: ["https://r2.nodaro.ai/a.png", "https://r2.nodaro.ai/b.png", "https://r2.nodaro.ai/c.png"],
         direction: DIRECTION,
       }
-      const debit = await debitIdentifierFor(body)
+      const { identifier: debit } = await debitIdentifierFor(body)
       const check = checkIdentifierFor(body)
       expect(check).toBe(debit)
       expect(check).toBe("flux-2-max:1MP:3ref")
@@ -1461,7 +1484,7 @@ describe("POST /v1/generate-image", () => {
         }],
         direction: DIRECTION,
       }
-      const debit = await debitIdentifierFor(body)
+      const { identifier: debit } = await debitIdentifierFor(body)
       const check = checkIdentifierFor(body)
       expect(check).toBe(debit)
       expect(check).toBe("flux-2-max:1MP:1ref")
@@ -1475,11 +1498,74 @@ describe("POST /v1/generate-image", () => {
         connectedReferences: mkManualRefs(1),
         direction: DIRECTION,
       }
-      const debit = await debitIdentifierFor(body)
+      const { identifier: debit } = await debitIdentifierFor(body)
       const check = checkIdentifierFor(body)
       // Both sites must swap T2I → i2i off the SAME assembled ref count.
       expect(check).toBe(debit)
       expect(check).toContain("seedream-5-lite-i2i")
+    })
+
+    // ─── P1: the catalog snap is a PRICING event ────────────────────────────
+    // `resolution` and `quality` are pricing dimensions, so a snap applied at
+    // only one of the two sites silently mis-bills — `commit_credits` never
+    // collects an upward delta, the reserve IS the charge. These two cases pin
+    // the three-way record: CHECK identifier === DEBIT identifier === the
+    // levers persisted on the job row.
+    it("CHECK === DEBIT for gpt-image-2 + auto + 2K (the cross-field snap re-prices to 1K)", async () => {
+      const body = {
+        prompt: "a lighthouse",
+        userId: VALID_UUID,
+        provider: "gpt-image-2",
+        aspectRatio: "auto",
+        resolution: "2K",
+        direction: DIRECTION,
+      }
+      const { identifier: debit, inputData } = await debitIdentifierFor(body)
+      const check = checkIdentifierFor(body)
+      expect(check).toBe(debit)
+      // `auto` only renders 1K, so the reserve is the BASE tier, not :2K.
+      expect(check).toBe("gpt-image-2")
+      // …and the job row records the 1K render we actually paid for.
+      expect(inputData.aspectRatio).toBe("auto")
+      expect(inputData.resolution).toBe("1K")
+    })
+
+    it("CHECK === DEBIT for gpt-image-2 + an off-list ratio", async () => {
+      const body = {
+        prompt: "a lighthouse",
+        userId: VALID_UUID,
+        provider: "gpt-image-2",
+        aspectRatio: "3:2",
+        resolution: "4K",
+        direction: DIRECTION,
+      }
+      const { identifier: debit, inputData } = await debitIdentifierFor(body)
+      const check = checkIdentifierFor(body)
+      expect(check).toBe(debit)
+      // 3:2 is off-list → snaps to the catalog's first ratio (`auto`), which in
+      // turn cascades 4K → 1K. Priced off the SNAPPED pair, not the caller's.
+      expect(check).toBe("gpt-image-2")
+      expect(inputData.aspectRatio).toBe("auto")
+      expect(inputData.resolution).toBe("1K")
+    })
+
+    it("CHECK === DEBIT for flux-2-max + 1K (the snap moves a per-megapixel pricing tier)", async () => {
+      // Flux 2 bills per output megapixel and commits non-metered — the reserve
+      // IS the charge, with no upward true-up. "1K" is not a Flux 2 resolution,
+      // so the snap moves the request onto the model's DEFAULT tier ("2 MP");
+      // both sites must price that tier, and the job row must say so.
+      const body = {
+        prompt: "a lighthouse",
+        userId: VALID_UUID,
+        provider: "flux-2-max",
+        resolution: "1K",
+        direction: DIRECTION,
+      }
+      const { identifier: debit, inputData } = await debitIdentifierFor(body)
+      const check = checkIdentifierFor(body)
+      expect(check).toBe(debit)
+      expect(check).toBe("flux-2-max:2MP:0ref")
+      expect(inputData.resolution).toBe("2 MP")
     })
 
     // Robustness companion to the route-level null-body test: the REAL preHandler
@@ -1497,5 +1583,182 @@ describe("POST /v1/generate-image", () => {
       // Non-object body → flat path, 0 refs, default provider.
       expect(identifier).toBe("nano-banana")
     })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// P1 (app-report sweep): the route's `aspectRatio` Zod enum is a FLAT union of
+// every ratio any image model supports, so `gpt-image-2 + 3:2` passed
+// validation, reserved credits, and was rejected by the provider mid-run
+// ("Invalid aspect ratio setting") — 30 of the 41 P1 rows. The catalog is the
+// per-model truth, so the route now SNAPS instead of failing, and discloses
+// every correction it made in the 200 body.
+// ---------------------------------------------------------------------------
+describe("catalog parameter normalization (P1 aspect ratio)", () => {
+  const VALID_UUID = "00000000-0000-4000-8000-000000000001"
+  // Not exported from the catalog — mirror of `GPT_IMAGE_2_RATIOS`
+  // (packages/shared/src/model-catalog.ts).
+  const GPT_IMAGE_2_RATIOS = ["auto", "1:1", "16:9", "9:16", "4:3", "3:4"]
+
+  it("snaps an off-list aspect ratio before enqueue and discloses it", async () => {
+    vi.clearAllMocks()
+    setupSupabaseMock({})
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-image",
+      payload: {
+        prompt: "a snow leopard",
+        userId: VALID_UUID,
+        provider: "gpt-image-2",
+        aspectRatio: "3:2",
+        resolution: "4K",
+      },
+    })
+    expect(res.statusCode).toBe(200)
+
+    const body = res.json() as { jobId: string; adjustments?: { field: string; from: string; to?: string }[] }
+    expect(body.adjustments?.map((a) => a.field)).toContain("aspectRatio")
+    expect(body.adjustments?.find((a) => a.field === "aspectRatio")?.from).toBe("3:2")
+
+    const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as {
+      aspectRatio?: string
+      resolution?: string
+    }
+    expect(GPT_IMAGE_2_RATIOS).toContain(queued.aspectRatio)
+    // "auto" only renders 1K — the cross-field rule cascades.
+    expect(queued.resolution).toBe("1K")
+  })
+
+  it("persists the SNAPPED levers in input_data, not the caller's originals", async () => {
+    vi.clearAllMocks()
+    const { jobInsert } = setupSupabaseMock({})
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-image",
+      payload: {
+        prompt: "a snow leopard",
+        userId: VALID_UUID,
+        provider: "gpt-image-2",
+        aspectRatio: "3:2",
+      },
+    })
+    const row = jobInsert.mock.calls.at(-1)?.[0] as { input_data: Record<string, unknown> }
+    expect(row.input_data.aspectRatio).not.toBe("3:2")
+    expect(GPT_IMAGE_2_RATIOS).toContain(row.input_data.aspectRatio)
+  })
+
+  it("drops a lever the model has no setting for and says so with no `to`", async () => {
+    vi.clearAllMocks()
+    const { jobInsert } = setupSupabaseMock({})
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-image",
+      payload: {
+        prompt: "a snow leopard",
+        userId: VALID_UUID,
+        provider: "gpt-image-2",
+        aspectRatio: "16:9",
+        // GPT Image 2 declares no `qualities` — the lever is dropped, not snapped.
+        quality: "high",
+      },
+    })
+    expect(res.statusCode).toBe(200)
+
+    const body = res.json() as { adjustments?: { field: string; from: string; to?: string }[] }
+    const adj = body.adjustments?.find((a) => a.field === "quality")
+    expect(adj?.from).toBe("high")
+    // A dropped lever has no replacement: `to` is absent from the wire body.
+    expect(adj).not.toHaveProperty("to")
+
+    const row = jobInsert.mock.calls.at(-1)?.[0] as { input_data: Record<string, unknown> }
+    expect(row.input_data.quality).toBeUndefined()
+    const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as { quality?: string }
+    expect(queued.quality).toBeUndefined()
+  })
+
+  it("returns no `adjustments` key when the request was already valid", async () => {
+    vi.clearAllMocks()
+    setupSupabaseMock({})
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-image",
+      payload: {
+        prompt: "a snow leopard",
+        userId: VALID_UUID,
+        provider: "gpt-image-2",
+        aspectRatio: "16:9",
+        resolution: "4K",
+      },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ jobId: expect.any(String) })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Structural guard for `applySnappedLevers` (backend/src/lib/image-gen-normalize.ts).
+// It narrows each snapped lever through the route's OWN Zod enum and, when that
+// parse fails, leaves the caller's value in place — which would put an un-snapped
+// value on the wire while the credit identifier was priced off the snapped one.
+// That fallback is only unreachable while every value the snap can EMIT is
+// spelled in the route's enums, so sweep it exhaustively instead of trusting the
+// reasoning: every image model the route can reach, both ref-count regimes (the
+// T2I→I2I swap selects a DIFFERENT catalog entry, with its own lever lists), and
+// every route-enum value plus `undefined` for all three levers.
+//
+// Domains are read off the schema so this test cannot drift from the enum it
+// guards. It asserts OUTPUTS only. (The INPUT gap it was written around is
+// closed: `IMAGE_ASPECT_RATIO_VALUES` now carries nano-banana-2-lite's 4:1 /
+// 1:4, and a catalog test keeps the tuple a superset of every declared ratio,
+// so no picker-offered ratio 400s before it reaches the snap.)
+// ---------------------------------------------------------------------------
+describe("snap output is always route-enum representable", () => {
+  const optionsOf = (field: "aspectRatio" | "resolution" | "quality"): readonly string[] =>
+    (generateImageBody.shape[field].unwrap() as { options: readonly string[] }).options
+
+  it("never emits a lever value the route's Zod enum cannot carry", () => {
+    const LEVERS = ["aspectRatio", "resolution", "quality"] as const
+    const allowed = {
+      aspectRatio: new Set(optionsOf("aspectRatio")),
+      resolution: new Set(optionsOf("resolution")),
+      quality: new Set(optionsOf("quality")),
+    }
+    const ratios: (string | undefined)[] = [...optionsOf("aspectRatio"), undefined]
+    const resolutions: (string | undefined)[] = [...optionsOf("resolution"), undefined]
+    const qualities: (string | undefined)[] = [...optionsOf("quality"), undefined]
+    // The T2I entries plus every i2i sibling an attached reference can swap to.
+    const models = [...new Set<string>([...IMAGE_GEN_PROVIDERS, ...Object.values(T2I_TO_I2I_VARIANT)])]
+
+    const violations: string[] = []
+    for (const provider of models) {
+      for (const refCount of [0, 1]) {
+        for (const aspectRatio of ratios) {
+          for (const resolution of resolutions) {
+            for (const quality of qualities) {
+              const out = resolveNormalizedImageGen({
+                provider,
+                aspectRatio,
+                resolution,
+                quality,
+                refCount,
+                swapToI2i: true,
+              })
+              for (const field of LEVERS) {
+                const value = out[field]
+                if (value !== undefined && !allowed[field].has(value)) {
+                  violations.push(
+                    `${provider} refs=${refCount} in(${aspectRatio}/${resolution}/${quality}) → ${field}="${value}"`,
+                  )
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    expect(violations).toEqual([])
+    // Guard the guard: a domain that silently collapsed would make this vacuous.
+    expect(models.length).toBeGreaterThan(20)
+    expect(ratios.length * resolutions.length * qualities.length).toBeGreaterThan(400)
   })
 })

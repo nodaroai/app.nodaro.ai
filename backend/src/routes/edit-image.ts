@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify"
+import type { FastifyInstance, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
@@ -8,8 +8,9 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { applySnappedLevers, withAdjustments } from "../lib/image-gen-normalize.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
-import { IMAGE_EDIT_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS, PROMPT_HARD_CEILING, buildCreditModelIdentifier } from "@nodaro/shared"
+import { IMAGE_ASPECT_RATIO_VALUES, IMAGE_EDIT_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS, PROMPT_HARD_CEILING, buildCreditModelIdentifier, resolveNormalizedImageGen } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 
@@ -33,7 +34,13 @@ export const editImageBody = z.object({
   provider: z.enum(IMAGE_EDIT_PROVIDERS).optional(),
   upscaleFactor: z.enum(["1", "2", "4"]).optional(),
   targetResolution: z.enum(["2K", "4K", "8K"]).optional(),
-  aspectRatio: z.string().max(20).optional(),
+  // The SAME vocabulary /v1/generate-image and /v1/image-to-image declare —
+  // one shared tuple, not three drifting literal lists. This bounds the
+  // vocabulary only, so a free-form string can't reach KIE as `image_size`;
+  // the per-model gate is the catalog snap in the handler below, which
+  // CORRECTS an unsupported ratio (and discloses it in `adjustments`) rather
+  // than 400ing a caller.
+  aspectRatio: z.enum(IMAGE_ASPECT_RATIO_VALUES).optional(),
   negativePrompt: z.string().max(5000).optional(),
   style: z.string().max(500).optional(),
   seed: z.number().int().min(0).optional(),
@@ -58,13 +65,28 @@ export const editImageBody = z.object({
   { message: "imageUrl is required (or taskId for grok-upscale / grok-2-edit / grok-2-segment)" },
 )
 
+/**
+ * The credit-CHECK model-identifier resolver (preHandler side). Named + exported
+ * so the CHECK===DEBIT billing-parity test can run the EXACT pricing the live
+ * preHandler runs — every route test mocks `creditGuard` to a no-op, so this
+ * closure would otherwise never execute. Keep in lock-step with the handler's
+ * reservation identifier below.
+ *
+ * `aspectRatio` is deliberately NOT part of this: on this route pricing keys on
+ * `targetResolution` alone, so the aspect snap is billing-neutral and lives in
+ * the handler. `targetResolution` is NOT fed to the catalog normalizer either —
+ * `recraft-upscale` declares no `resolutions`, so a snap would DROP a 4K/8K the
+ * user paid for and drop the reserve to the base tier.
+ */
+export function resolveEditImageCreditIdentifier(req: FastifyRequest): string {
+  const body = req.body as Record<string, unknown> | null
+  const provider = (body?.provider as string) ?? "recraft-upscale"
+  const targetResolution = typeof body?.targetResolution === "string" ? body.targetResolution : undefined
+  return buildCreditModelIdentifier(provider, undefined, undefined, undefined, targetResolution)
+}
+
 export async function editImageRoutes(app: FastifyInstance) {
-  app.post("/v1/edit-image", { preHandler: creditGuard((req) => {
-    const body = req.body as Record<string, unknown>
-    const provider = (body?.provider as string) ?? "recraft-upscale"
-    const targetResolution = body?.targetResolution as string | undefined
-    return buildCreditModelIdentifier(provider, undefined, undefined, undefined, targetResolution)
-  }) }, async (req, reply) => {
+  app.post("/v1/edit-image", { preHandler: creditGuard(resolveEditImageCreditIdentifier) }, async (req, reply) => {
     const parsed = editImageBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -72,7 +94,11 @@ export async function editImageRoutes(app: FastifyInstance) {
       })
     }
 
-    const { imageUrl, taskId, prompt, provider, upscaleFactor, targetResolution, aspectRatio, negativePrompt, style, seed, referenceImageUrls, maskUrl, maskIndexes } = parsed.data
+    // `aspectRatio` is destructured as `raw*` on purpose: `applySnappedLevers`
+    // below rewrites it on `parsed.data`, so this local is the caller's PRE-snap
+    // value and is only ever valid as INPUT to the normalizer. Everything
+    // downstream reads `parsed.data.aspectRatio`.
+    const { imageUrl, taskId, prompt, provider, upscaleFactor, targetResolution, aspectRatio: rawAspectRatio, negativePrompt, style, seed, referenceImageUrls, maskUrl, maskIndexes } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -93,6 +119,23 @@ export async function editImageRoutes(app: FastifyInstance) {
 
     const baseProvider = provider ?? "recraft-upscale"
     const modelIdentifier = buildCreditModelIdentifier(baseProvider, undefined, undefined, undefined, targetResolution)
+
+    // Aspect-ONLY catalog snap. Billing-neutral on this route (pricing keys on
+    // `targetResolution`, which is NOT passed here — see
+    // `resolveEditImageCreditIdentifier`), so unlike generate-image /
+    // image-to-image it may live in the handler without splitting CHECK from
+    // DEBIT. Providers that declare no `aspectRatios` — the upscalers,
+    // remove-bg and the grok task-chained ops — DROP the value, so
+    // `image_size` stops being forwarded upstream for them; `nano-banana-edit`
+    // keeps its own ratio list. Must run BEFORE `buildJobInputData` so the job
+    // row records what actually ran.
+    const normalized = resolveNormalizedImageGen({
+      provider: baseProvider,
+      aspectRatio: rawAspectRatio,
+      refCount: 0,
+      swapToI2i: false,
+    })
+    applySnappedLevers(parsed.data, normalized, editImageBody)
 
     // B4b: deployment prompt policy on the prompt-driven edit lane — only when
     // a prompt exists (upscale/remove-bg edits carry none, and policing ""
@@ -131,7 +174,7 @@ export async function editImageRoutes(app: FastifyInstance) {
       provider,
       upscaleFactor,
       targetResolution,
-      aspectRatio,
+      aspectRatio: parsed.data.aspectRatio,
       negativePrompt: finalNegativePrompt,
       style,
       seed,
@@ -141,6 +184,6 @@ export async function editImageRoutes(app: FastifyInstance) {
       usageLogId,
     })
 
-    return { jobId: job.id }
+    return withAdjustments({ jobId: job.id }, normalized.adjustments)
   })
 }

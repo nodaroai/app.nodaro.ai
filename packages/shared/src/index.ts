@@ -18,6 +18,7 @@ export { usdToCredits, creditsToUsd, CREDIT_ROUNDING_RESOLUTION } from "./credit
 export {
   CREDIT_BASE_USD,
   IMAGE_PROMPT_MAX,
+  IMAGE_ASPECT_RATIO_VALUES,
   MAX_IMAGE_PROMPT_CHARS_BY_PROVIDER,
   getMaxImagePromptChars,
   PROMPT_HARD_CEILING,
@@ -173,6 +174,7 @@ export { FEATURED_ENTITIES, getFeaturedEntities } from "./featured-entities.js"
 export type { FeaturedEntity } from "./featured-entities.js"
 
 export type {
+  ImageAspectRatio,
   ImageGenProvider,
   ImageMaskMode,
   ImageI2IProvider,
@@ -234,12 +236,14 @@ export type {
 export {
   buildCreditModelIdentifier,
   resolveImageGenCreditIdentifier,
+  resolveNormalizedImageGen,
   buildVideoCreditModelIdentifier,
   buildMotionCreditModelIdentifier,
   sunoCreditType,
   SUNO_VERSION_PRICED_OPERATIONS,
   SUNO_SELECT_OPERATIONS,
 } from "./credit-identifiers.js"
+export type { NormalizedImageGen } from "./credit-identifiers.js"
 
 export * from "./credit-estimators/index.js"
 export { extractVideoDurationFromNode } from "./video-duration.js"

@@ -170,6 +170,7 @@ export type {
 } from "./resources/apps.js"
 export type {
   RunNodeResult,
+  RunNodeAdjustment,
   NodeJobOutput,
   RunAndWaitOptions,
   RunManyResult,

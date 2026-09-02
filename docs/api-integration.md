@@ -353,6 +353,44 @@ The organization, workspace and membership endpoints themselves — creating an
 organization, adding people, archiving a class — are documented in
 [Organizations](./organizations.md).
 
+## 4d. Parameter corrections (`adjustments`)
+
+`POST /v1/generate-image`, `/v1/image-to-image` and `/v1/edit-image` accept a
+single, model-agnostic vocabulary for `aspectRatio`, `resolution` and
+`quality` — but no model supports all of it. Rather than reject a request (a
+rejection mid-workflow takes every already-generated, already-billed sibling
+node down with it), the server **corrects** the value to one the chosen model
+accepts and tells you what it changed:
+
+```json
+{
+  "jobId": "0f1a…",
+  "adjustments": [
+    {
+      "field": "aspectRatio",
+      "from": "3:2",
+      "to": "auto",
+      "reason": "GPT Image 2 does not support aspectRatio \"3:2\" — using \"auto\" instead. Supported: auto, 1:1, 16:9, 9:16, 4:3, 3:4."
+    },
+    {
+      "field": "resolution",
+      "from": "4K",
+      "to": "1K",
+      "reason": "GPT Image 2 only renders 1K at the \"auto\" aspect ratio."
+    }
+  ]
+}
+```
+
+- `adjustments` is **absent** when nothing needed correcting — a valid request's
+  body is exactly `{ "jobId": "…" }`.
+- `to` is absent when the model has no such lever at all and the value was
+  dropped (e.g. an `aspectRatio` sent to `recraft-upscale`).
+- **Credits are reserved against the corrected values.** A `gpt-image-2` request
+  for `auto` + `2K` renders and bills at 1K, because `auto` only renders 1K.
+- The per-model option lists are in `GET /v1/models`; a workflow saved through
+  the API or MCP is corrected the same way at write time.
+
 ## 5. Sync vs async execution
 
 By default, `POST /v1/api/run` is **async**: it returns `202 Accepted`
@@ -585,8 +623,14 @@ The image-generating routes (`/v1/generate-character`,
 `"2K"` / `"4K"` / `"0.5 MP"` / `"1 MP"` / `"2 MP"` / `"4 MP"`). These are
 **credit-affecting** and price exactly like `/v1/generate-image` (composite
 ids such as `gpt-image:high` / `nano-banana-pro:4K`) — a 4K / high run
-reserves more credits than the same model at its base tier. A value the
-chosen model doesn't support is ignored, never a 400.
+reserves more credits than the same model at its base tier. A value the chosen
+model doesn't support is **corrected to one it does** (the same mechanism as
+"Parameter corrections" above), never a 400 — and the credits reserved match
+the corrected value, not the one you asked for. These four routes apply the
+correction but, unlike `/v1/generate-image`, `/v1/image-to-image` and
+`/v1/edit-image`, do **not** return an `adjustments` array — the corrected
+value is visible only in the job's persisted `input_data` (`GET /v1/jobs/:id`),
+not in the route's own response body.
 
 ### Portrait approval
 

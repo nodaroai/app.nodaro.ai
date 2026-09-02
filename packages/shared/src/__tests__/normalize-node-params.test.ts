@@ -59,6 +59,42 @@ describe("normalizeNodeModelParams", () => {
     expect(MODEL_PARAM_NODE_TYPES.has("image-to-video")).toBe(false)
   })
 
+  // The write boundary has to cover every image node an agent can author, not
+  // just the two that shipped first: `modify-image` carries the same
+  // provider/aspectRatio/resolution/quality trio, and `edit-image` carries
+  // provider + aspectRatio (its `targetResolution` is an upscale target, a
+  // DIFFERENT field the normalizer never reads, so there is no conflation).
+  it("covers every image node type whose data carries catalog-governed params", () => {
+    expect([...MODEL_PARAM_NODE_TYPES].sort()).toEqual([
+      "edit-image",
+      "generate-image",
+      "image-to-image",
+      "modify-image",
+    ])
+  })
+
+  it("heals a modify-image node written straight into workflow JSON", () => {
+    const { nodes, adjustments } = normalizeNodeModelParams([
+      node("m9", "modify-image", { provider: "gpt-image", aspectRatio: "16:9", quality: "basic" }),
+    ])
+    const d = nodes[0].data as Record<string, unknown>
+    expect(d.aspectRatio).not.toBe("16:9")
+    expect(d.quality).toBe("medium") // gpt-image declares ["medium", "high"]
+    expect(adjustments.map((a) => a.field).sort()).toEqual(["aspectRatio", "quality"])
+    expect(adjustments[0].nodeId).toBe("m9")
+  })
+
+  it("heals an edit-image node's ratio without touching its targetResolution", () => {
+    const { nodes, adjustments } = normalizeNodeModelParams([
+      node("e1", "edit-image", { provider: "recraft-upscale", aspectRatio: "16:9", targetResolution: "4K" }),
+    ])
+    const d = nodes[0].data as Record<string, unknown>
+    // The upscalers declare no aspectRatios at all -> the lever is dropped.
+    expect(d.aspectRatio).toBeUndefined()
+    expect(d.targetResolution).toBe("4K")
+    expect(adjustments.map((a) => a.field)).toEqual(["aspectRatio"])
+  })
+
   it("skips multi-provider nodes rather than guessing an intersection", () => {
     const input = [
       node("m1", "generate-image", {

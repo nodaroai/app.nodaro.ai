@@ -30,10 +30,18 @@ import { normalizeModelInput, type ModelInputAdjustment } from "./model-catalog.
  * through mode-dependent defaults (`"adaptive"` for Seedance/Hailuo, duration
  * composites tied to pricing) that this flat normalizer would flatten wrongly;
  * they get their own pass once those defaults are catalog-derived too.
+ *
+ * `modify-image` carries the same provider/aspectRatio/resolution/quality trio
+ * as `image-to-image` (it routes through the same worker), and `edit-image`
+ * carries provider + aspectRatio. `edit-image`'s `targetResolution` is an
+ * UPSCALE target, a different field this module never reads — so listing the
+ * type here heals its ratio without touching what it is priced on.
  */
 export const MODEL_PARAM_NODE_TYPES: ReadonlySet<string> = new Set([
   "generate-image",
   "image-to-image",
+  "modify-image",
+  "edit-image",
 ])
 
 export interface NodeParamAdjustment extends ModelInputAdjustment {

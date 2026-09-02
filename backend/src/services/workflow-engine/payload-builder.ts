@@ -2234,6 +2234,24 @@ export function buildPayload(
     case "edit-image": {
       const provider = (data.provider as string) ?? "recraft-upscale"
 
+      // Same last-mile catalog snap as generate-image / image-to-image — see the
+      // comment there. Aspect-only on this branch: `targetResolution` is an
+      // UPSCALE target (a different field the catalog does not govern) and it is
+      // what `buildCreditModelIdentifier` prices on, so the snap is billing-
+      // neutral here. It still matters: the upscalers, remove-bg and the grok
+      // task-chained ops declare NO `aspectRatios`, so a ratio a FieldMapping
+      // injected at run time was forwarded upstream as `image_size` on models
+      // that have no such lever. Mirrors `routes/edit-image.ts`.
+      const editParams = normalizeModelInput(provider, {
+        aspectRatio: data.aspectRatio as string | undefined,
+      })
+      if (editParams.adjustments.length > 0) {
+        console.warn(
+          `[payload-builder] ${node.id} (${provider}): ` +
+          editParams.adjustments.map((a) => `${a.field} "${a.from}" → ${a.to ?? "removed"}`).join("; "),
+        )
+      }
+
       // Apply connectedMediaOrder to determine main image vs references
       let mainImageUrl = resolvedInputs.imageUrl || data.imageUrl
       let editRefUrls: string[] | undefined
@@ -2310,7 +2328,7 @@ export function buildPayload(
           provider,
           upscaleFactor: data.upscaleFactor,
           targetResolution,
-          aspectRatio: data.aspectRatio,
+          aspectRatio: editParams.aspectRatio,
           negativePrompt: editPolicied.nativeNegativePrompt,
           style: hasConnectedStyleNode(node.id, buildCtx) ? undefined : data.style,
           seed: data.seed,
@@ -2479,6 +2497,24 @@ export function buildPayload(
 
     case "modify-image": {
       const provider = (data.provider as string) ?? "nano-banana"
+      // Same last-mile catalog snap as generate-image / image-to-image — see the
+      // comment there. Hoisted ABOVE the provider fork so both arms share it:
+      // the nano-banana-edit arm sends `aspectRatio`, and the i2i arm feeds
+      // `resolution` / `quality` into `resolveImageGenCreditIdentifier`, which
+      // prices off the SNAPPED values. Handing that resolver raw data while
+      // putting the same raw data in the payload reserved one tier and rendered
+      // another, with no upward true-up to correct it.
+      const modParams = normalizeModelInput(provider, {
+        aspectRatio: data.aspectRatio as string | undefined,
+        resolution: data.resolution as string | undefined,
+        quality: data.quality as string | undefined,
+      })
+      if (modParams.adjustments.length > 0) {
+        console.warn(
+          `[payload-builder] ${node.id} (${provider}): ` +
+          modParams.adjustments.map((a) => `${a.field} "${a.from}" → ${a.to ?? "removed"}`).join("; "),
+        )
+      }
       if (provider === "nano-banana-edit") {
         // Same logic as edit-image case for nano-banana-edit
 
@@ -2543,7 +2579,7 @@ export function buildPayload(
             imageUrl: mainImageUrl,
             prompt: editPrompt,
             provider,
-            aspectRatio: data.aspectRatio,
+            aspectRatio: modParams.aspectRatio,
             negativePrompt: data.negativePrompt,
             style: hasConnectedStyleNode(node.id, buildCtx) ? undefined : data.style,
             seed: data.seed,
@@ -2668,8 +2704,8 @@ export function buildPayload(
           // + assembled extras (modify-image routes through /v1/image-to-image).
           modelIdentifier: resolveImageGenCreditIdentifier({
             provider,
-            quality: data.quality as string | undefined,
-            resolution: data.resolution as string | undefined,
+            quality: modParams.quality,
+            resolution: modParams.resolution,
             renderingSpeed: data.renderingSpeed as string | undefined,
             refCount: 1 + (i2iResult.referenceImageUrls?.length ?? 0),
             swapToI2i: false,
@@ -2681,9 +2717,9 @@ export function buildPayload(
             referenceImageUrls: i2iResult.referenceImageUrls,
             provider,
             strength: data.strength,
-            aspectRatio: data.aspectRatio,
-            resolution: data.resolution,
-            quality: data.quality,
+            aspectRatio: modParams.aspectRatio,
+            resolution: modParams.resolution,
+            quality: modParams.quality,
             negativePrompt: i2iResult.nativeNegativePrompt,
             seed: data.seed,
             renderingSpeed: data.renderingSpeed,
