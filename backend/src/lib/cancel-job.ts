@@ -27,16 +27,28 @@ export type CancelOwnedJobResult =
 const CANCELLABLE_STATUSES = ["pending", "queued", "processing"] as const
 
 /**
- * Refund every reserved hold on the job. Best-effort — `refundCredits`
- * short-circuits on rows that are no longer `reserved`, so a concurrent
- * commit/refund is safe. `ee/` is reached through a dynamic import (core may
- * not import it statically; `credits-job-lifecycle.ts` does the same).
+ * Refund every reserved credit hold for the given job IDs — the ONE refund
+ * path both cancel flows use (`cancelOwnedJob` passes a single id, the
+ * `cancel-all` route passes the whole batch it flipped in one query).
+ *
+ * Without this, cancelling a job leaves its `usage_logs` row stuck at
+ * `status='reserved'` forever — the user's balance was decremented when the
+ * job was reserved but never restored. Net effect: silent credit theft on
+ * every cancellation.
+ *
+ * Best-effort — `CreditsService.refundCredits` already short-circuits on rows
+ * that aren't `status='reserved'` (see PR #1502), so it's safe if the worker
+ * happens to commit/refund the same row concurrently. `ee/` is reached through
+ * a dynamic import (core may not import it statically; the route that used to
+ * own this copy is allowlisted, `lib/` is not — `credits-job-lifecycle.ts`
+ * does the same).
  */
-async function refundReservedHolds(jobId: string): Promise<void> {
+export async function refundReservedHolds(jobIds: string[]): Promise<void> {
+  if (jobIds.length === 0) return
   const { data: usageLogs } = await supabase
     .from("usage_logs")
     .select("id")
-    .in("job_id", [jobId])
+    .in("job_id", jobIds)
     .eq("status", "reserved")
   if (!usageLogs || usageLogs.length === 0) return
   const { CreditsService } = await import("../ee/billing/credits.js")
@@ -75,7 +87,7 @@ export async function cancelOwnedJob(jobId: string, userId: string): Promise<Can
   if (updateError) throw updateError
   if (!flipped || flipped.length === 0) return { kind: "lost_race" }
 
-  await refundReservedHolds(jobId)
+  await refundReservedHolds([jobId])
 
   const input = (job.input_data ?? null) as Record<string, unknown> | null
   const analysisJobId = typeof input?.analysisJobId === "string" ? input.analysisJobId : null

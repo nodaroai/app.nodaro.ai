@@ -3,39 +3,8 @@ import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { tryRemoveFromQueue } from "../lib/queue.js"
-import { cancelOwnedJob } from "../lib/cancel-job.js"
-import { CreditsService } from "../ee/billing/credits.js"
+import { cancelOwnedJob, refundReservedHolds } from "../lib/cancel-job.js"
 import { invalidateBalanceCache } from "../ee/routes/credits.js"
-
-/**
- * Refund any reserved credit holds for the given job IDs. Best-effort —
- * `CreditsService.refundCredits` already short-circuits on rows that aren't
- * `status='reserved'` (see PR #1502), so it's safe if the worker happens to
- * commit/refund the same row concurrently.
- *
- * Without this, cancelling a job leaves its `usage_logs` row stuck at
- * `status='reserved'` forever — the user's balance was decremented when the
- * job was reserved but never restored. Net effect: silent credit theft on
- * every cancellation.
- */
-async function refundReservedCreditsForJobs(jobIds: string[]): Promise<void> {
-  if (jobIds.length === 0) return
-  const { data: usageLogs } = await supabase
-    .from("usage_logs")
-    .select("id")
-    .in("job_id", jobIds)
-    .eq("status", "reserved")
-
-  if (!usageLogs || usageLogs.length === 0) return
-
-  await Promise.all(
-    usageLogs.map((row) =>
-      CreditsService.refundCredits(row.id).catch((err) =>
-        console.error(`[cancel-job] Failed to refund usage_log ${row.id}:`, err),
-      ),
-    ),
-  )
-}
 
 export async function cancelJobsRoutes(app: FastifyInstance) {
   // Cancel a single job
@@ -84,7 +53,9 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
         // with videoUrl) takes a STILL-RUNNING child with it: the child's row
         // and reservation are the user's too, and nobody will draft from an
         // analysis whose draft was cancelled. A finished child is left alone
-        // (anything but "cancelled" here is fine — Draft again reuses it).
+        // (anything but "cancelled" here is fine — Draft again reuses it), and
+        // a child already out at the provider is left to finish, like any
+        // in-flight job.
         if (result.analysisJobId) {
           await cancelOwnedJob(result.analysisJobId, userId).catch((err) =>
             console.error(`[cancel-job] child ${result.analysisJobId} of ${jobId}:`, err),
@@ -155,7 +126,7 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
       const cancelledIds = (cancelledRows ?? []).map((r) => r.id as string)
       if (cancelledIds.length > 0) {
         // Refund reserved credits for every cancelled job in one pass.
-        await refundReservedCreditsForJobs(cancelledIds)
+        await refundReservedHolds(cancelledIds)
         invalidateBalanceCache(userId)
       }
 
