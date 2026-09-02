@@ -3,6 +3,7 @@ import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { tryRemoveFromQueue } from "../lib/queue.js"
+import { cancelOwnedJob } from "../lib/cancel-job.js"
 import { CreditsService } from "../ee/billing/credits.js"
 import { invalidateBalanceCache } from "../ee/routes/credits.js"
 
@@ -57,86 +58,40 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
       }
 
       try {
-        // Get the job to verify ownership and current status. `provider_task_id`
-        // is set once we've submitted to the external provider — past that point
-        // the job can't be killed (no provider cancel API), it runs to completion.
-        const { data: job, error: fetchError } = await supabase
-          .from("jobs") // tenant-scope-ignore: ownership verified post-fetch (job.user_id !== userId → 403 below)
-          .select("id, status, user_id, input_data, output_data, provider_task_id, reconcile_attempts")
-          .eq("id", jobId)
-          .single()
-
-        if (fetchError || !job) {
-          return reply.status(404).send({
-            error: { code: "not_found", message: "Job not found" },
-          })
+        const result = await cancelOwnedJob(jobId, userId)
+        switch (result.kind) {
+          case "not_found":
+            return reply.status(404).send({ error: { code: "not_found", message: "Job not found" } })
+          case "forbidden":
+            return reply.status(403).send({ error: { code: "forbidden", message: "You do not own this job" } })
+          case "invalid_status":
+            return reply.status(400).send({
+              error: { code: "invalid_status", message: `Job cannot be cancelled (status: ${result.status})` },
+            })
+          case "in_flight":
+            // The provider call already went out and a live worker is polling
+            // it — let it finish (the user keeps the result they paid for) and
+            // report `inFlight` so the UI shows "Stopping…" honestly.
+            return { success: true, cancelled: 0, inFlight: true }
+          case "lost_race":
+            // A terminal writer beat us; its lifecycle handled the credits.
+            return { success: true, cancelled: 0, inFlight: false }
+          case "cancelled":
+            break
         }
 
-        // Verify ownership
-        if (job.user_id !== userId) {
-          return reply.status(403).send({
-            error: { code: "forbidden", message: "You do not own this job" },
-          })
+        // A parent that spawned an analysis child (POST /v1/llm/structured/jobs
+        // with videoUrl) takes a STILL-RUNNING child with it: the child's row
+        // and reservation are the user's too, and nobody will draft from an
+        // analysis whose draft was cancelled. A finished child is left alone
+        // (anything but "cancelled" here is fine — Draft again reuses it).
+        if (result.analysisJobId) {
+          await cancelOwnedJob(result.analysisJobId, userId).catch((err) =>
+            console.error(`[cancel-job] child ${result.analysisJobId} of ${jobId}:`, err),
+          )
         }
 
-        // Already terminal — nothing to do.
-        const cancellableStatuses = ["pending", "queued", "processing"]
-        if (!cancellableStatuses.includes(job.status)) {
-          return reply.status(400).send({
-            error: {
-              code: "invalid_status",
-              message: `Job cannot be cancelled (status: ${job.status})`,
-            },
-          })
-        }
-
-        // In flight: the external provider call already went out and a live
-        // worker is polling it. We can't kill it — let it finish (the user
-        // keeps the result they paid for). Report `inFlight` so the UI shows
-        // a graceful "Stopping…" rather than pretending it was cancelled.
-        //
-        // EXCEPTION (audit D2): a row the reconcile system has already touched
-        // (`reconcile_attempts > 0`) was abandoned by its worker — the user is
-        // staring at a stuck progress bar with no kill path, possibly for the
-        // full exhaustion budget (~90+ min). Cancelling converts the wait into
-        // an immediate refund; the provider cost is sunk either way (the same
-        // trade reconcile exhaustion makes). The CAS below + reserved-only
-        // refund keep the race with a concurrent cron completion safe in both
-        // directions: cron wins → CAS flips 0 rows, no refund; cancel wins →
-        // the cron's claim RPC + finalize + markJobCompleted all refuse
-        // cancelled rows.
-        const inRecovery = ((job.reconcile_attempts as number | null) ?? 0) > 0
-        if (job.provider_task_id && !inRecovery) {
-          return { success: true, cancelled: 0, inFlight: true }
-        }
-
-        // Truly cancel. Remove from the queue (if still waiting), CAS-flip to
-        // cancelled (only live rows — a concurrent completion between our read
-        // and this write must NOT be trampled into `cancelled` after its
-        // credits committed), and refund ONLY when we actually flipped the row.
-        await tryRemoveFromQueue(jobId)
-
-        const { data: cancelledRows, error: updateError } = await supabase
-          .from("jobs")
-          .update({ status: "cancelled" })
-          .eq("id", jobId)
-          .eq("user_id", userId)
-          .in("status", ["pending", "queued", "processing"])
-          .select("id")
-
-        if (updateError) {
-          return sendInternalError(reply, req, updateError, "Failed to cancel job")
-        }
-
-        if (!cancelledRows || cancelledRows.length === 0) {
-          // Lost the race to a terminal writer (completed/failed/cancelled).
-          // The job's own lifecycle handled credits — nothing to refund here.
-          return { success: true, cancelled: 0, inFlight: false }
-        }
-
-        await refundReservedCreditsForJobs([jobId])
         invalidateBalanceCache(userId)
-
         return { success: true, cancelled: 1, inFlight: false }
       } catch (err) {
         console.error("[cancel-job] Error:", err)
