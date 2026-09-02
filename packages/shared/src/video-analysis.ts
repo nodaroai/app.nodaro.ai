@@ -633,3 +633,48 @@ export function inferMusicVideo(analysis: {
     }),
   )
 }
+
+// ---------------------------------------------------------------------------
+// The analysis as a BRIEF — the compact projection an LLM is handed
+// ---------------------------------------------------------------------------
+
+/** Top-level keys the analyzer derives AFTER the model's pass (merge
+ *  diagnostics, folded cast looks). A reader drafting FROM the analysis — a
+ *  production plan, a script — needs none of them. */
+const DERIVED_ANALYSIS_TOP_KEYS: ReadonlySet<string> = new Set(["warnings", "variationFolds"])
+
+/** Per-scene keys the validator computes from `visual` and the slot list. */
+const DERIVED_ANALYSIS_SCENE_KEYS: ReadonlySet<string> = new Set(["visualResolved", "slotRefs", "oversized"])
+
+const asRecord = (v: unknown): Record<string, unknown> | null =>
+  typeof v === "object" && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : null
+
+/**
+ * The analysis with its server-derived fields removed — the form an LLM is
+ * handed when the analysis IS the brief (Nodaro Studio's Director and its
+ * job-id loader). Drops `warnings` and `variationFolds` at the top and
+ * `visualResolved`, `slotRefs`, `oversized` on every scene; keeps
+ * `refImageUrl` (a downstream cast image) and everything else. Never mutates;
+ * a non-object input comes back as-is.
+ *
+ * ONE strip list, shared by the worker that composes the brief server-side
+ * (`llm-structured` jobs with a `videoUrl`) and the client that loads a
+ * finished analysis into a textarea, so the two can never drift.
+ */
+export function stripDerivedAnalysisFields(json: unknown): unknown {
+  const doc = asRecord(json)
+  if (!doc) return json
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(doc)) {
+    if (DERIVED_ANALYSIS_TOP_KEYS.has(key)) continue
+    out[key] =
+      key === "scenes" && Array.isArray(value)
+        ? value.map((scene) => {
+            const s = asRecord(scene)
+            if (!s) return scene
+            return Object.fromEntries(Object.entries(s).filter(([k]) => !DERIVED_ANALYSIS_SCENE_KEYS.has(k)))
+          })
+        : value
+  }
+  return out
+}
