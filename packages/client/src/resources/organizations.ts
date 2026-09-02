@@ -11,6 +11,9 @@ import type {
   OrgPage,
   OrgRole,
   OrgSettings,
+  UsageLogEntry,
+  UsageQuery,
+  UsageReport,
   WorkspaceRole,
 } from "@nodaro/shared"
 import type { NodaroClient } from "../client.js"
@@ -175,6 +178,30 @@ export class OrganizationsResource {
     opts: { cursor?: string; limit?: number } = {},
   ): Promise<OrgPage<OrgAuditEntry>> {
     return this.client.request("GET", `/v1/orgs/${encodeURIComponent(orgId)}/audit`, { query: { ...opts } })
+  }
+
+  // -- usage ----------------------------------------------------------------
+
+  /**
+   * Credits by workspace, member, model or day. Owner and org admins only.
+   * Inclusive dates (`from`/`to`), IANA `tz` (default UTC), ≤ 366 days
+   * (default last 30).
+   */
+  usage(
+    orgId: string,
+    opts: Omit<UsageQuery, "cursor" | "limit" | "groupBy"> & { groupBy?: "workspace" | "member" | "model" | "day" } = {},
+  ): Promise<{ data: UsageReport }> {
+    return this.client.request("GET", `/v1/orgs/${encodeURIComponent(orgId)}/usage`, { query: { ...opts } })
+  }
+
+  /** The individual runs behind a report, newest first, cursor-paged. */
+  usageRows(orgId: string, opts: Omit<UsageQuery, "groupBy"> = {}): Promise<OrgPage<UsageLogEntry>> {
+    return this.client.request("GET", `/v1/orgs/${encodeURIComponent(orgId)}/usage`, { query: { ...opts, groupBy: "none" } })
+  }
+
+  /** The same report (or the rows, with `groupBy: "none"`) as CSV text. */
+  usageCsv(orgId: string, opts: Omit<UsageQuery, "cursor" | "limit"> = {}): Promise<string> {
+    return this.client.requestText("GET", `/v1/orgs/${encodeURIComponent(orgId)}/usage`, { query: { ...opts, format: "csv" } })
   }
 }
 

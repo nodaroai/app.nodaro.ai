@@ -2,6 +2,9 @@ import type {
   JoinCodeView,
   MemberStatus,
   OrgPage,
+  UsageLogEntry,
+  UsageQuery,
+  UsageReport,
   WorkspaceMemberView,
   WorkspaceRole,
   WorkspaceSettings,
@@ -132,5 +135,30 @@ export class WorkspacesResource {
    */
   join(code: string): Promise<{ data: { orgId: string; workspaceId: string } }> {
     return this.client.request("POST", "/v1/workspaces/join", { body: { code } })
+  }
+
+  // -- usage ----------------------------------------------------------------
+
+  /**
+   * Credits by member, model or day for this workspace. A plain member sees
+   * their OWN runs (the report is self-narrowed and `groupBy: "member"` is
+   * refused); a workspace admin sees everyone and may filter `userId`.
+   * Inclusive dates, IANA `tz` (default UTC), ≤ 366 days (default last 30).
+   */
+  usage(
+    id: string,
+    opts: Omit<UsageQuery, "cursor" | "limit" | "workspaceId" | "groupBy"> & { groupBy?: "member" | "model" | "day" } = {},
+  ): Promise<{ data: UsageReport }> {
+    return this.client.request("GET", `/v1/workspaces/${encodeURIComponent(id)}/usage`, { query: { ...opts } })
+  }
+
+  /** The individual runs behind a report, newest first, cursor-paged. */
+  usageRows(id: string, opts: Omit<UsageQuery, "groupBy" | "workspaceId"> = {}): Promise<OrgPage<UsageLogEntry>> {
+    return this.client.request("GET", `/v1/workspaces/${encodeURIComponent(id)}/usage`, { query: { ...opts, groupBy: "none" } })
+  }
+
+  /** The same report (or the rows, with `groupBy: "none"`) as CSV text. */
+  usageCsv(id: string, opts: Omit<UsageQuery, "cursor" | "limit" | "workspaceId"> = {}): Promise<string> {
+    return this.client.requestText("GET", `/v1/workspaces/${encodeURIComponent(id)}/usage`, { query: { ...opts, format: "csv" } })
   }
 }

@@ -267,5 +267,99 @@ export function orgCommand(): Command {
       }
     })
 
+  cmd
+    .command("usage <orgId>")
+    .description("credits by workspace, member, model or day for a date range")
+    .option("--from <YYYY-MM-DD>", "inclusive start date")
+    .option("--to <YYYY-MM-DD>", "inclusive end date")
+    .option("--tz <iana>", "IANA time zone (default: your local zone)")
+    .option("--group-by <dim>", "workspace | member | model | day | none", "day")
+    .option("--workspace <id>", "narrow to one workspace")
+    .option("--user <id>", "narrow to one member")
+    .option("--limit <n>", "rows page size (with --group-by none)", (v) => Number(v))
+    .option("--cursor <cursor>", "continue a rows page")
+    .option("--csv", "write the report as CSV to stdout")
+    .option("--profile <name>")
+    .option("--json")
+    .action(
+      async (
+        orgId: string,
+        opts: {
+          from?: string
+          to?: string
+          tz?: string
+          groupBy: string
+          workspace?: string
+          user?: string
+          limit?: number
+          cursor?: string
+          csv?: boolean
+        } & GlobalOpts,
+      ) => {
+        try {
+          const client = buildClient(opts.profile)
+          const tz = opts.tz ?? Intl.DateTimeFormat().resolvedOptions().timeZone
+          const common = { from: opts.from, to: opts.to, tz, workspaceId: opts.workspace, userId: opts.user }
+          if (opts.csv) {
+            process.stdout.write(
+              await client.organizations.usageCsv(orgId, {
+                ...common,
+                groupBy: opts.groupBy as "workspace" | "member" | "model" | "day" | "none",
+              }),
+            )
+            return
+          }
+          if (opts.groupBy === "none") {
+            const page = await client.organizations.usageRows(orgId, { ...common, limit: opts.limit, cursor: opts.cursor })
+            if (opts.json) {
+              emit(page, opts)
+              return
+            }
+            table(
+              page.data.map((e) => ({
+                at: e.createdAt,
+                member: e.member?.displayName ?? e.member?.email ?? e.member?.userId ?? "",
+                model: e.model,
+                status: e.status,
+                credits: e.credits,
+              })),
+              ["at", "member", "model", "status", "credits"],
+            )
+            if (page.nextCursor) dim(`more: --cursor ${page.nextCursor}`)
+            return
+          }
+          const { data: report } = await client.organizations.usage(orgId, {
+            ...common,
+            groupBy: opts.groupBy as "workspace" | "member" | "model" | "day",
+          })
+          if (opts.json) {
+            emit(report, opts)
+            return
+          }
+          table(
+            report.rows.map((r) => ({
+              group: r.workspace
+                ? (r.workspace.name ?? r.workspace.slug ?? r.workspace.id)
+                : r.member
+                  ? (r.member.displayName ?? r.member.email ?? r.member.userId)
+                  : (r.model ?? r.day ?? r.key),
+              runs: r.runCount,
+              credits: r.credits,
+              settled: r.settledCredits,
+              in_flight: r.inFlightCredits,
+            })),
+            ["group", "runs", "credits", "settled", "in_flight"],
+          )
+          dim(
+            `total: ${report.totals.credits} credits (${report.totals.settledCredits} settled, ` +
+              `${report.totals.inFlightCredits} in flight, ${report.totals.platformAbsorbedCredits} absorbed by the platform)`,
+          )
+          if (report.truncated) warn("report truncated at 5000 groups — narrow the window")
+        } catch (err) {
+          handleError(err)
+        }
+      },
+    )
+
   return cmd
 }
