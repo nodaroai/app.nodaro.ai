@@ -737,4 +737,29 @@ describe("POST /v1/suno/upload-extend", () => {
       }),
     )
   })
+
+  it("defaults instrumental to false so KIE never sees a null", async () => {
+    const res = await authedPost("/v1/suno/upload-extend", {
+      uploadUrl: "https://example.com/audio.mp3",
+      continueAt: 30,
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mockVideoQueueAdd).toHaveBeenCalledWith(
+      "suno-upload-extend",
+      expect.objectContaining({ instrumental: false }),
+    )
+  })
+
+  it("forwards an explicit instrumental: true", async () => {
+    const res = await authedPost("/v1/suno/upload-extend", {
+      uploadUrl: "https://example.com/audio.mp3",
+      continueAt: 30,
+      instrumental: true,
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mockVideoQueueAdd).toHaveBeenCalledWith(
+      "suno-upload-extend",
+      expect.objectContaining({ instrumental: true }),
+    )
+  })
 })

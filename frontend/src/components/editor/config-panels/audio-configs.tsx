@@ -55,7 +55,7 @@ import type {
   ForcedAlignmentData,
   GeneratedScript,
 } from "@/types/nodes"
-import { VOICE_CHANGER_MODELS, DEFAULT_VOICE_CHANGER_MODEL, AUDIO_FX_PRESETS, AUDIO_FX_PRESET_LABELS, AUDIO_FX_REVERB_PRESETS, REPLICATE_LIP_SYNC_PROVIDERS, FAL_LIP_SYNC_PROVIDERS, VIDEO_INPUT_LIP_SYNC_PROVIDERS, isPerSecondLipSyncProvider, SUNO_ADD_TRACK_MODELS, SUNO_TEXT_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars } from "@nodaro/shared"
+import { VOICE_CHANGER_MODELS, DEFAULT_VOICE_CHANGER_MODEL, AUDIO_FX_PRESETS, AUDIO_FX_PRESET_LABELS, AUDIO_FX_REVERB_PRESETS, REPLICATE_LIP_SYNC_PROVIDERS, FAL_LIP_SYNC_PROVIDERS, VIDEO_INPUT_LIP_SYNC_PROVIDERS, isPerSecondLipSyncProvider, SUNO_ADD_TRACK_MODELS, SUNO_TEXT_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars, sunoCreditType } from "@nodaro/shared"
 import type { AudioFxPreset } from "@nodaro/shared"
 import { getEffectiveSunoCustomMode } from "@nodaro/prompts"
 import { MappableField } from "./mappable-field"
@@ -463,7 +463,7 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
           <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {SUNO_MODELS.map((m) => (
-              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} creditId={sunoCreditType(m.value, "suno-generate")} />
             ))}
           </SelectContent>
         </Select>
@@ -593,7 +593,7 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
           <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {SUNO_MODELS.map((m) => (
-              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} creditId={sunoCreditType(m.value, "suno-cover")} />
             ))}
           </SelectContent>
         </Select>
@@ -691,7 +691,7 @@ export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMap
       </MappableField>
       <SunoInheritedHint what="track" manual={data.audioId} inherited={inherited?.trackId} sourceLabel={inherited?.sourceLabel} />
       <MappableField field="continueAt" label={t("audiocfg.continueFrom")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Input type="number" min={0} value={data.continueAt ?? 0} onChange={(e) => onUpdate({ continueAt: Number(e.target.value) })} placeholder="0" />
+        <Input type="number" min={1} value={data.continueAt ?? 0} onChange={(e) => onUpdate({ continueAt: Number(e.target.value) })} placeholder={t("audiocfg.continueAtPlaceholder")} />
       </MappableField>
       <MappableField field="prompt" label={t("audiocfg.extensionPrompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
         <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
@@ -727,7 +727,7 @@ export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMap
           <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {SUNO_MODELS.map((m) => (
-              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} creditId={sunoCreditType(m.value, "suno-extend")} />
             ))}
           </SelectContent>
         </Select>
@@ -1042,7 +1042,7 @@ export function SunoMashupConfig({ data, onUpdate, sources, fieldMappings, onMap
           <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {SUNO_MODELS.map((m) => (
-              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} creditId={sunoCreditType(m.value, "suno-mashup")} />
             ))}
           </SelectContent>
         </Select>
@@ -1203,7 +1203,7 @@ export function SunoAddInstrumentalConfig({ data, onUpdate, sources, fieldMappin
           <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {SUNO_ADD_TRACK_MODEL_OPTIONS.map((m) => (
-              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} creditId={sunoCreditType(m.value, "suno-add-instrumental")} />
             ))}
           </SelectContent>
         </Select>
@@ -1228,7 +1228,7 @@ export function SunoAddVocalsConfig({ data, onUpdate, sources, fieldMappings, on
           <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {SUNO_ADD_TRACK_MODEL_OPTIONS.map((m) => (
-              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} creditId={sunoCreditType(m.value, "suno-add-vocals")} />
             ))}
           </SelectContent>
         </Select>
@@ -1272,7 +1272,7 @@ export function SunoUploadExtendConfig({ data, onUpdate, sources, fieldMappings,
           <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {SUNO_MODELS.map((m) => (
-              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} creditId={sunoCreditType(m.value, "suno-upload-extend")} />
             ))}
           </SelectContent>
         </Select>
@@ -1293,7 +1293,7 @@ export function SunoUploadExtendConfig({ data, onUpdate, sources, fieldMappings,
         )}
       </MappableField>
       <MappableField field="continueAt" label={t("audiocfg.continueAt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Input type="number" min={0} step={1} value={data.continueAt ?? ""} onChange={(e) => onUpdate({ continueAt: e.target.value === "" ? undefined : parseFloat(e.target.value) })} placeholder="0" />
+        <Input type="number" min={1} step={1} value={data.continueAt ?? ""} onChange={(e) => onUpdate({ continueAt: e.target.value === "" ? undefined : parseFloat(e.target.value) })} placeholder={t("audiocfg.continueAtPlaceholder")} />
       </MappableField>
       <div className="flex items-center gap-2">
         <Checkbox id="upload-extend-default" checked={data.defaultParamFlag} onCheckedChange={(v) => onUpdate({ defaultParamFlag: !!v })} />

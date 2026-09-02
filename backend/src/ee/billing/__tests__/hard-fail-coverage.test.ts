@@ -22,7 +22,7 @@
 
 import { describe, it, expect } from "vitest"
 import { STATIC_CREDIT_COSTS } from "../credits.js"
-import { IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, IMAGE_GEN_PROVIDERS, IMAGE_I2I_PROVIDERS, IMAGE_EDIT_PROVIDERS, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, buildCreditModelIdentifier, buildLlmCreditIdentifier, LLM_MODELS, FLUX2_RES_MP, type Flux2Model, PIPELINE_PINNABLE_SCRIPT_LLMS } from "@nodaro/shared"
+import { IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, IMAGE_GEN_PROVIDERS, IMAGE_I2I_PROVIDERS, IMAGE_EDIT_PROVIDERS, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, buildCreditModelIdentifier, buildLlmCreditIdentifier, LLM_MODELS, FLUX2_RES_MP, type Flux2Model, PIPELINE_PINNABLE_SCRIPT_LLMS, SUNO_MODELS, sunoCreditType, SUNO_VERSION_PRICED_OPERATIONS, SUNO_SELECT_OPERATIONS } from "@nodaro/shared"
 
 // ---------------------------------------------------------------------------
 // Plausible-input matrices for each builder
@@ -290,5 +290,49 @@ describe("free inline / control node identifiers price to 0 (must not hard-fail)
 
   it.each(FREE_INLINE_IDS)("%s is present in STATIC_CREDIT_COSTS as 0", (id) => {
     expect(STATIC_CREDIT_COSTS[id]).toBe(0)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Suno credit keys (W3, spec 2026-09-01-app-reports-triage-design.md §5)
+//
+// The seven Suno model dropdowns price their rows through sunoCreditType. Every
+// (version × operation) pair the UI can emit therefore has to land on a
+// STATIC_CREDIT_COSTS key — otherwise GET /v1/credits/model-cost returns 503
+// price_not_configured and the badge renders blank, which is exactly the
+// 96-row `price-not-configured` cluster this test exists to prevent.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("Suno dropdown credit identifiers resolve to a priced key", () => {
+  // SUNO_SELECT_OPERATIONS (from @nodaro/shared) is every operation that has a
+  // model select in the editor (config-panels/audio-configs.tsx) — the three
+  // version-priced operations plus the four flat ones. Both sets are owned by
+  // Task 1's suno-credit-type.test.ts; this test only proves the DOWNSTREAM
+  // consequence — that every id sunoCreditType can emit is actually priced.
+  it("every SUNO_MODELS version × every Suno select operation is in STATIC_CREDIT_COSTS", () => {
+    const missing: string[] = []
+    for (const operation of SUNO_SELECT_OPERATIONS) {
+      for (const model of SUNO_MODELS) {
+        const id = sunoCreditType(model, operation)
+        if (STATIC_CREDIT_COSTS[id] === undefined) missing.push(`${id} (${operation} + ${model})`)
+      }
+    }
+    expect(
+      missing,
+      `Suno credit identifier(s) with no STATIC_CREDIT_COSTS entry — the model dropdown will 503 and render no price:\n  ${missing.join("\n  ")}`,
+    ).toEqual([])
+  })
+
+  it("the four flat operations never resolve to a version key", () => {
+    // Derived from the two shared sets rather than re-listed here, so this
+    // stays correct if the flat/version-priced split ever changes shape.
+    const flatOperations = SUNO_SELECT_OPERATIONS.filter(
+      (operation) => !(SUNO_VERSION_PRICED_OPERATIONS as readonly string[]).includes(operation),
+    )
+    for (const operation of flatOperations) {
+      for (const model of SUNO_MODELS) {
+        expect(sunoCreditType(model, operation)).toBe(operation)
+      }
+    }
   })
 })

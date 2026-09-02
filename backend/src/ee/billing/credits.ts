@@ -7,7 +7,7 @@ import { hasCredits } from "../../lib/config.js"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { buildSeedanceExtendCreditIdentifier } from "../../lib/seedance-extend-model.js"
 import { FREE_TIER_RESTRICTIONS, TIER_STORAGE_LIMITS } from "./stripe-config.js"
-import { PIPELINE_PINNABLE_SCRIPT_LLMS, getLlmTier, buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, FLUX2_RES_MP, type Flux2Model, AI_AVATAR_DURATION_BUCKETS, resolveAiAvatarCreditId, type AiAvatarEngine, type AiAvatarResolution, CINEMATIC_MIN_DURATION_SEC, CINEMATIC_MAX_DURATION_SEC, cinematicCreditId, resolveCinematicCreditId, type CinematicResolution, resolveSwitchXCreditId, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_MODEL, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, resolveEffectiveTier, resolveStoredTier } from "@nodaro/shared"
+import { PIPELINE_PINNABLE_SCRIPT_LLMS, getLlmTier, buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, FLUX2_RES_MP, type Flux2Model, AI_AVATAR_DURATION_BUCKETS, resolveAiAvatarCreditId, type AiAvatarEngine, type AiAvatarResolution, CINEMATIC_MIN_DURATION_SEC, CINEMATIC_MAX_DURATION_SEC, cinematicCreditId, resolveCinematicCreditId, type CinematicResolution, resolveSwitchXCreditId, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_MODEL, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, resolveEffectiveTier, resolveStoredTier, sunoCreditType } from "@nodaro/shared"
 // Provider-$ cost formulas — CORE lib (not @nodaro/shared, an irrevocably
 // published Apache package). See the 2026-07-06 public-flip IP audit, S5.
 import { flux2BaseCredits } from "../../lib/pricing/flux2-cost.js"
@@ -2917,12 +2917,13 @@ function getNodeModelIdentifier(node: { type: string; data?: Record<string, unkn
     return buildLlmCreditIdentifier("llm-chat", llmModel, reasoningEffort, data.advancedMode === true)
   }
 
-  // Suno generate/cover/extend use "model" field (V4/V5/V5_5)
-  if (nodeType.startsWith("suno-") && nodeType !== "suno-lyrics" && nodeType !== "suno-separate" && nodeType !== "suno-music-video") {
-    const m = data.model as string
-    if (m === "V5_5") return "suno-v5_5"
-    if (m === "V5") return "suno-v5"
-    return nodeType
+  // Suno: the ROUTE contract decides which operations are version-priced.
+  // `sunoCreditType` gates on the operation, so passing the node type (which
+  // IS the operation key) is correct for every Suno node — version-priced ones
+  // get suno-v5/suno-v5_5, flat ones get their own key back. suno-separate is
+  // excluded because its own branch below is a different axis (stem vs vocal).
+  if (nodeType.startsWith("suno-") && nodeType !== "suno-separate") {
+    return sunoCreditType(data.model as string | undefined, nodeType)
   }
 
   // Suno separate: "split_stem" costs more

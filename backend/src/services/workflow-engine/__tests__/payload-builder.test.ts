@@ -743,6 +743,31 @@ describe("buildPayload", () => {
       expect(result.payload.uploadUrl).toBe("https://cover.mp3")
     })
 
+    it("suno-cover throws audio_required when nothing is wired", () => {
+      // defaultData seeds uploadUrl: "" — falsy, same as unset. Fail fast
+      // before reserving credits instead of sending KIE an undefined
+      // uploadUrl (spec §11.3).
+      const n = node("n1", "suno-cover", { uploadUrl: "" })
+      expect(() => buildPayload(n, jobId, {})).toThrow(/audio_required/)
+    })
+
+    it("suno-upload-extend", () => {
+      const n = node("n1", "suno-upload-extend", {})
+      const inputs: ResolvedInputs = { audioUrl: "https://extend.mp3" }
+      const result = buildPayload(n, jobId, inputs)
+      expect(result.jobName).toBe("suno-upload-extend")
+      expect(result.payload.uploadUrl).toBe("https://extend.mp3")
+    })
+
+    it("suno-upload-extend throws audio_required when nothing is wired", () => {
+      // This node's own defaultData has no uploadUrl key at all, so an
+      // unwired orchestrated run resolves straight to undefined and would
+      // otherwise hit the same KIE "uploadUrl cannot be null" as suno-cover
+      // (spec §11.3). Fail fast before reserving credits instead.
+      const n = node("n1", "suno-upload-extend", {})
+      expect(() => buildPayload(n, jobId, {})).toThrow(/audio_required/)
+    })
+
     it("suno-extend", () => {
       // `audioId` is the manual field; `sunoTrackId` on a consumer is its own
       // output's id and no longer an input (#819 review).

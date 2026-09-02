@@ -10,7 +10,7 @@ Suno Extend takes a previously generated Suno track (identified by its Audio ID)
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | Audio ID | string | `""` | Suno audio ID (required). Inherited from the connected Suno node's **selected** track — the panel shows "Inherited from *Suno Generate*: `<id>`" under the field, so nothing needs pasting; switch tracks on the source node and Extend follows. A manual value applies only without a connection. |
-| Continue From | number (seconds) | `0` | Timestamp in seconds where the extension begins. |
+| Continue From | number (seconds) | `0` | Timestamp in seconds where the extension begins. Must be greater than 0; leave it at 0 (or empty) and the node extends the track using Suno's own parameters instead of the custom ones. |
 | Extension Prompt | string (max 5000) | `""` | Prompt describing the desired continuation. |
 | Model | enum | `"V5"` | Suno model version: `V5`, `V4_5ALL`, `V4_5PLUS`, `V4_5`, `V4`. |
 | Title | string (max 80) | `""` | Title for the extended track. |
@@ -20,7 +20,7 @@ Suno Extend takes a previously generated Suno track (identified by its Audio ID)
 | Style Weight | number | `0.5` | Influence of style tags (0.0 to 1.0). |
 | Weirdness | number | `0.0` | Experimental output factor (0.0 to 1.0). |
 | Audio Weight | number | `0.5` | Balance between prompt and source audio (0.0 to 1.0). |
-| Use Default Parameters | boolean | `true` | When true, Suno uses its own defaults for advanced parameters. |
+| Use Default Parameters | boolean | `true` | When true, the extension uses your own Style, Title, Negative Style, and Continue From instead of Suno's defaults; when false, Suno applies its own default extension parameters (the same fallback that happens when Continue From is left at 0). |
 | `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ## Inputs & Outputs
@@ -29,9 +29,9 @@ Suno Extend takes a previously generated Suno track (identified by its Audio ID)
 - **Outputs:** `audio` -- extended audio URL
 ## Best Practices
 
-- Set Continue From to the exact timestamp where you want new content to begin; setting it to 0 appends to the end.
+- Set Continue From to the exact timestamp where you want new content to begin. It must be greater than 0 and less than the track's length; leaving it at 0 falls back to Suno's default extension parameters (Style, Title and Negative Style are then ignored).
 - Use the Extension Prompt to describe the new section (e.g., "build to an epic chorus" or "fade out with ambient pads").
-- Keep Use Default Parameters enabled unless you have specific requirements for style weight and weirdness.
+- Turn Use Default Parameters on when you need control over style weight and weirdness; leave it off to let Suno apply its own defaults for the extension.
 - Chain multiple Suno Extend nodes to build progressively longer compositions section by section.
 - The Title field has a shorter limit (80 chars) than other Suno nodes -- keep it concise.
 
@@ -48,4 +48,4 @@ Suno Extend takes a previously generated Suno track (identified by its Audio ID)
 - This node requires a Suno Audio ID, not a generic audio URL. It must be connected to an upstream Suno node (Generate, Cover, etc.).
 - To extend audio from non-Suno sources, use the Suno Upload Extend node instead.
 - The Extension Prompt supports up to 5000 characters, allowing for very detailed continuation instructions.
-- When Use Default Parameters is off, Style Weight, Weirdness, and Audio Weight become active controls.
+- Style Weight, Weirdness, and Audio Weight are only active controls when Use Default Parameters is set to true; turn it off to let Suno apply its own defaults instead.

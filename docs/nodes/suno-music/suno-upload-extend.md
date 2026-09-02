@@ -10,9 +10,9 @@ Suno Upload Extend takes any audio file via URL and extends it using Suno AI. Un
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | Model | enum | `"V5"` | Suno model version: `V5`, `V4_5ALL`, `V4_5PLUS`, `V4_5`, `V4`. |
-| Continue At | number (seconds) | `0` | Timestamp in seconds from which to continue the extension (minimum 0). |
+| Continue At | number (seconds) | `0` | Timestamp in seconds from which to continue the extension. Must be greater than 0; leave it empty and the node extends using Suno's own parameters instead of the custom ones. |
 | Prompt | string (max 3000) | `""` | Optional prompt describing the desired continuation. |
-| Use Default Parameters | boolean | `true` | When true, Suno uses its defaults for style-related parameters. |
+| Use Default Parameters | boolean | `true` | When true, the extension uses your own Style, Title, Negative Style, and Continue At instead of Suno's defaults; when false, Suno applies its own default extension parameters (the same fallback that happens when Continue At is left empty). |
 | Title | string (max 200) | `""` | Title for the extended track. |
 | Style | string (max 500) | `""` | Genre and style tags for the extension. |
 | Negative Style | string (max 500) | `""` | Styles to avoid in the extension. |
@@ -26,9 +26,9 @@ Suno Upload Extend takes any audio file via URL and extends it using Suno AI. Un
 ## Best Practices
 
 - Use this node instead of Suno Extend when your source audio is not from a Suno node.
-- Set Continue At to specify exactly where the extension should begin; 0 appends to the end.
+- Set Continue At to specify exactly where the extension should begin. It must be greater than 0 and less than the source audio's length; leaving it empty falls back to Suno's default extension parameters (Style, Title and Negative Style are then ignored).
 - Provide a prompt to guide the continuation style, especially when the source audio has ambiguous direction.
-- Toggle Use Default Parameters off to gain control over style, negative style, and vocal gender.
+- Turn Use Default Parameters on to gain control over style, negative style, and vocal gender; leave it off to let Suno choose its own.
 - The source audio must be accessible via a public URL.
 
 ## Common Use Cases
@@ -44,5 +44,5 @@ Suno Upload Extend takes any audio file via URL and extends it using Suno AI. Un
 - The key difference from Suno Extend is that this node accepts a raw audio URL (`uploadUrl`) rather than a Suno Audio ID. Use Suno Extend for Suno-generated tracks and Upload Extend for everything else.
 - This is lighter than standard Suno Extend because it does not use the full generation pipeline.
 - The Prompt field is optional but recommended -- without it, the AI relies entirely on the source audio to determine continuation.
-- Style, Negative Style, and Vocal Gender are only active when Use Default Parameters is set to false.
+- Style, Negative Style, and Vocal Gender are only active when Use Default Parameters is set to true.
 - Connect any audio-producing node upstream (Upload Audio, Text to Speech, Generate Music, Audio Isolation, etc.).

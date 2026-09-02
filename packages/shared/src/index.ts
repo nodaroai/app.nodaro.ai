@@ -236,6 +236,9 @@ export {
   resolveImageGenCreditIdentifier,
   buildVideoCreditModelIdentifier,
   buildMotionCreditModelIdentifier,
+  sunoCreditType,
+  SUNO_VERSION_PRICED_OPERATIONS,
+  SUNO_SELECT_OPERATIONS,
 } from "./credit-identifiers.js"
 
 export * from "./credit-estimators/index.js"

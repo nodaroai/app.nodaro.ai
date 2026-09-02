@@ -550,8 +550,8 @@ const handleSunoConvertWav: HandlerFn = async function handleSunoConvertWav(job,
 }
 
 const handleSunoUploadExtend: HandlerFn = async function handleSunoUploadExtend(job, ctx) {
-  const { uploadUrl, continueAt, defaultParamFlag, model, style, title, negativeStyle, vocalGender } = job.data as {
-    jobId: string; uploadUrl: string; continueAt: number; defaultParamFlag?: boolean; model?: SunoModel; style?: string; title?: string
+  const { uploadUrl, continueAt, defaultParamFlag, instrumental, model, style, title, negativeStyle, vocalGender } = job.data as {
+    jobId: string; uploadUrl: string; continueAt: number; defaultParamFlag?: boolean; instrumental?: boolean; model?: SunoModel; style?: string; title?: string
     negativeStyle?: string; vocalGender?: string
   }
   console.log(`[worker] suno-upload-extend ${ctx.jobId} (model: ${model ?? "V5"}, continueAt: ${continueAt}s)`)
@@ -572,7 +572,7 @@ const handleSunoUploadExtend: HandlerFn = async function handleSunoUploadExtend(
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => sunoUploadExtend({ uploadUrl: resolvedUploadUrl, continueAt, defaultParamFlag, model, style, title, negativeStyle, vocalGender }, { onTaskCreated, modelKey: "suno-upload-extend" }),
+    () => sunoUploadExtend({ uploadUrl: resolvedUploadUrl, continueAt, defaultParamFlag, instrumental, model, style, title, negativeStyle, vocalGender }, { onTaskCreated, modelKey: "suno-upload-extend" }),
   )
   await finalizeSunoJob(job, ctx, result, "Suno upload-extend returned no tracks", "kie")
 }

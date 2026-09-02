@@ -4487,10 +4487,22 @@ export function buildPayload(
     case "suno-cover": {
       const hasCoverCustomFields = !!(data.style || data.title || data.lyrics)
       const sunoCoverCreditId = (data.model as string) === "V5" ? "suno-v5" : "suno-cover"
+      // The source track is mandatory — Suno Cover has nothing to cover
+      // without it, and KIE's own validator rejects an absent/empty
+      // uploadUrl outright ("uploadUrl cannot be null", spec §11.3). Fail
+      // fast before reserving credits (mirrors AI Audit's video_required
+      // above) instead of letting an orchestrated run with nothing wired
+      // reach KIE with `undefined` (the node's own defaultData seeds
+      // uploadUrl: "", which is equally falsy here).
+      const coverUploadUrl =
+        resolvedInputs.uploadUrl || resolvedInputs.audioUrl || data.uploadUrl || data.audioUrl
+      if (!coverUploadUrl) {
+        throw new Error("audio_required: connect an audio track to the Suno Cover node")
+      }
       return simpleResult("suno-cover", sunoCoverCreditId, {
         jobId,
         prompt: applyPromptAffixes(resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap), readPromptAffixes(data), refMap),
-        uploadUrl: resolvedInputs.uploadUrl || resolvedInputs.audioUrl || data.uploadUrl || data.audioUrl,
+        uploadUrl: coverUploadUrl,
         model: data.model,
         lyrics: resolveRefs(data.lyrics as string | undefined, refMap),
         style: data.style,
@@ -4620,15 +4632,27 @@ export function buildPayload(
         usageLogId,
       })
 
-    case "suno-upload-extend":
+    case "suno-upload-extend": {
+      // Same requirement as suno-cover above — Suno Upload Extend has no
+      // Suno-side fallback (unlike suno-extend's audioId), so an absent
+      // uploadUrl is fatal. This node's own defaultData has no `uploadUrl`
+      // key at all, so an unwired orchestrated run resolves straight to
+      // `undefined` and hits the identical KIE "uploadUrl cannot be null"
+      // (spec §11.3). Fail fast before reserving credits rather than let
+      // the request reach KIE.
+      const uploadExtendUrl = resolvedInputs.audioUrl || data.uploadUrl || data.audioUrl
+      if (!uploadExtendUrl) {
+        throw new Error("audio_required: connect an audio track to the Suno Upload Extend node")
+      }
       return simpleResult("suno-upload-extend", "suno-upload-extend", {
         jobId,
-        uploadUrl: resolvedInputs.audioUrl || data.uploadUrl || data.audioUrl,
+        uploadUrl: uploadExtendUrl,
         prompt: applyPromptAffixes(resolveRefs(data.prompt as string | undefined, refMap), readPromptAffixes(data), refMap),
         // Route schema requires continueAt as a non-negative number; default to
         // 0 (extend from start) to match the frontend single-node behaviour.
         continueAt: (data.continueAt as number | undefined) ?? 0,
         defaultParamFlag: data.defaultParamFlag ?? true,
+        instrumental: (data.instrumental as boolean | undefined) ?? false,
         model: data.model,
         style: resolvedInputs.prompt || data.style,
         title: data.title,
@@ -4636,6 +4660,7 @@ export function buildPayload(
         vocalGender: data.vocalGender,
         usageLogId,
       })
+    }
 
     // --- Transcription / OCR ---
     case "transcribe": {

@@ -8,6 +8,7 @@ import {
   getModelIdentifier,
   buildCreditModelIdentifier,
 } from "../helpers"
+import { sunoCreditType, SUNO_SELECT_OPERATIONS, SUNO_MODELS } from "@nodaro/shared"
 import type { SourceNodeInfo } from "../types"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
@@ -301,6 +302,54 @@ describe("getModelIdentifier", () => {
     expect(id720).toBe("beeble-switchx:240f:720p")
     expect(id1080).toBe("beeble-switchx:240f:1080p")
     expect(id720).not.toBe("beeble-switchx")
+  })
+
+  // Suno: the live-cost path must quote the key routes/suno.ts actually
+  // reserves. generate/cover/extend are version-priced; every other Suno
+  // operation charges a flat per-operation key regardless of the version the
+  // node carries (all four flat-priced Suno nodes default to model V5_5).
+  it("suno-generate V5_5 returns the version key", () => {
+    const node = makeNode({ type: "suno-generate", data: { label: "Suno", model: "V5_5" } as any })
+    expect(getModelIdentifier(node)).toBe("suno-v5_5")
+  })
+
+  it("suno-cover V5 returns the version key", () => {
+    const node = makeNode({ type: "suno-cover", data: { label: "Cover", model: "V5" } as any })
+    expect(getModelIdentifier(node)).toBe("suno-v5")
+  })
+
+  it("suno-extend V4 falls back to the operation key", () => {
+    const node = makeNode({ type: "suno-extend", data: { label: "Extend", model: "V4" } as any })
+    expect(getModelIdentifier(node)).toBe("suno-extend")
+  })
+
+  it("suno-mashup V5_5 returns the FLAT operation key, not the version key", () => {
+    const node = makeNode({ type: "suno-mashup", data: { label: "Mashup", model: "V5_5" } as any })
+    expect(getModelIdentifier(node)).toBe("suno-mashup")
+  })
+
+  it("suno-add-vocals V5 returns the FLAT operation key, not suno-v5", () => {
+    const node = makeNode({ type: "suno-add-vocals", data: { label: "Vocals", model: "V5" } as any })
+    expect(getModelIdentifier(node)).toBe("suno-add-vocals")
+  })
+
+  it("suno-separate keeps its own stem/vocal axis", () => {
+    const node = makeNode({ type: "suno-separate", data: { label: "Sep", type: "split_stem", model: "V5" } as any })
+    expect(getModelIdentifier(node)).toBe("suno-separate-stem")
+  })
+
+  // Wiring check: getModelIdentifier's Suno branch must delegate to
+  // sunoCreditType for EVERY select operation, not just the ones spot-checked
+  // above. Derived from the shared SUNO_SELECT_OPERATIONS / SUNO_MODELS lists
+  // (owned by Task 1) rather than re-listed here, so this stays correct if
+  // the operation set ever grows.
+  it("matches sunoCreditType for every Suno select operation and model version", () => {
+    for (const operation of SUNO_SELECT_OPERATIONS) {
+      for (const model of SUNO_MODELS) {
+        const node = makeNode({ type: operation, data: { label: operation, model } as any })
+        expect(getModelIdentifier(node)).toBe(sunoCreditType(model, operation))
+      }
+    }
   })
 })
 
