@@ -776,10 +776,22 @@ describe("CreditsService", () => {
       ])).toBe(50)
     })
 
-    it("resolves topaz-image-upscale:8K", () => {
+    // resolveTopazUpscale: the provider has no 8x factor, so a stored 8K target
+    // renders — and therefore bills — at the 4x tier. The `:8K` price key stays
+    // in STATIC_CREDIT_COSTS for historical usage_logs; nothing reserves it.
+    it("resolves a legacy topaz-image-upscale 8K target at the 4x tier", () => {
       expect(CreditsService.estimateWorkflowCredits([
         { type: "edit-image", data: { provider: "topaz-image-upscale", targetResolution: "8K" } },
-      ])).toBe(100)
+      ])).toBe(50)
+    })
+
+    it("resolves topaz-image-upscale by the explicit factor, overriding a stored target", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "edit-image", data: { provider: "topaz-image-upscale", upscaleFactor: "4" } },
+      ])).toBe(50)
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "edit-image", data: { provider: "topaz-image-upscale", upscaleFactor: "2", targetResolution: "8K" } },
+      ])).toBe(25)
     })
 
     it("resolves topaz-image-upscale at default 2K (base)", () => {

@@ -15,6 +15,8 @@ import sharp from "sharp"
 import { KieError, createSanitizedError, runKieTask, type KieResultJson } from "./client.js"
 import { runFluxKontextTask } from "./kontext-client.js"
 import { KIE_IMAGE_MODELS } from "./models.js"
+import { ensureImageForProvider } from "./video.js"
+import { TASK_CHAINED_EDIT_PROVIDERS } from "@nodaro/shared"
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
 import { uploadBufferToR2 } from "../../lib/storage.js"
 import { safeFetch } from "../../lib/safe-fetch.js"
@@ -511,6 +513,38 @@ export class KieImageProvider
       input.output_format = "png"
     }
 
+    // Normalize the source image to a format this SKU accepts. The KIE VIDEO
+    // lanes have run every frame through ensureImageForProvider since 2026-08;
+    // the IMAGE lanes never did, so "image_url file type not supported"
+    // (topaz) and "image file type not supported" (recraft) reached users
+    // verbatim (app-reports §11.3, P5). One chokepoint, not a per-lane copy:
+    // a new SKU is covered by declaring `acceptedImageFormats` on its model
+    // config. Task-chained grok ops carry a task id, not a URL — never touch
+    // those. Runs inside the worker AFTER the reservation, which is the
+    // existing chokepoint's position and is safe: a re-encode cannot change
+    // the price. If it throws (unreadable/undownloadable image) the job fails
+    // pre-provider, so `refundJobCredits` refunds.
+    const effectiveImageUrl = TASK_CHAINED_EDIT_PROVIDERS.has(provider)
+      ? imageUrl
+      : await ensureImageForProvider(imageUrl, provider, {
+          // Undefined ⇒ the chokepoint's own default. Repeating the default
+          // list here would be a second copy of it, free to drift.
+          acceptedFormats: modelConfig.acceptedImageFormats
+            ? new Set(modelConfig.acceptedImageFormats)
+            : undefined,
+          context: "Image editing",
+          // Every lane here is an EDIT or an UPSCALE: the user is paying this
+          // SKU to preserve detail, so normalising the input must not spend
+          // that detail on a lossy, alpha-flattening JPEG. Lossless where the
+          // SKU accepts it; JPEG only as the over-the-cap fallback.
+          preferLossless: true,
+          // A supplied inpainting mask is aligned to the SOURCE dimensions and
+          // is forwarded verbatim (no ensureMaskDimensions on this path), so
+          // the over-cap fallback downscale must not move the pixel grid under
+          // it — that would edit the wrong region and look like a model bug.
+          preserveGeometry: typeof input.mask_url === "string" && input.mask_url.length > 0,
+        })
+
     // Set the image parameter based on model config
     const imageParamName = modelConfig.imageParam ?? "image"
     if (
@@ -518,10 +552,10 @@ export class KieImageProvider
       imageParamName === "input_urls"
     ) {
       // Array-based image parameter
-      input[imageParamName] = [imageUrl]
+      input[imageParamName] = [effectiveImageUrl]
     } else {
       // Single URL parameter
-      input[imageParamName] = imageUrl
+      input[imageParamName] = effectiveImageUrl
     }
 
     // Add prompt for edit models that support it

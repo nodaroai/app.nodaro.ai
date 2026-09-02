@@ -355,12 +355,13 @@ organization, adding people, archiving a class — are documented in
 
 ## 4d. Parameter corrections (`adjustments`)
 
-`POST /v1/generate-image`, `/v1/image-to-image` and `/v1/edit-image` accept a
-single, model-agnostic vocabulary for `aspectRatio`, `resolution` and
-`quality` — but no model supports all of it. Rather than reject a request (a
-rejection mid-workflow takes every already-generated, already-billed sibling
-node down with it), the server **corrects** the value to one the chosen model
-accepts and tells you what it changed:
+`POST /v1/generate-image`, `/v1/image-to-image`, `/v1/edit-image`,
+`/v1/text-to-video` and `/v1/generate-video` accept a single, model-agnostic
+vocabulary for `aspectRatio`, `resolution` and `quality` — but no model supports
+all of it. Rather than reject a request (a rejection mid-workflow takes every
+already-generated, already-billed sibling node down with it), the server
+**corrects** the value to one the chosen model accepts and tells you what it
+changed:
 
 ```json
 {
@@ -390,6 +391,41 @@ accepts and tells you what it changed:
   for `auto` + `2K` renders and bills at 1K, because `auto` only renders 1K.
 - The per-model option lists are in `GET /v1/models`; a workflow saved through
   the API or MCP is corrected the same way at write time.
+
+### On the video routes
+
+`/v1/text-to-video` and `/v1/generate-video` return `adjustments` in the same
+shape. `/v1/generate-video` reports each correction **twice** — once in
+`adjustments` (structured: `field`, `from`, `to`, `reason`) and once in its
+existing `warnings` array (the `reason` prose only, alongside any non-parameter
+warning such as `voice_unsupported_for_provider`). Read `adjustments` when you
+need to know *which* lever moved; the two never disagree.
+
+Three video-specific rules:
+
+- **An off-list value snaps to the NEAREST option, never the cheapest or the
+  first.** A `4k` request on a model that tops out at 1080p renders 1080p (not
+  the 480p floor), and a portrait `9:21` becomes `9:16` (not landscape `16:9`).
+- **An omitted `resolution` is sent at the band it is priced at.** Where the
+  platform declares a model's default band, that band is what you are billed for
+  *and* what the provider is asked for — the request no longer leaves the field
+  unset for the provider to fill with something else. The value is echoed in the
+  job's `input_data`, so you can always see what was actually sent.
+- **Spelling is canonicalised before pricing.** `4K` is read as `4k`, so it
+  prices and renders the 4K band rather than silently falling back.
+
+A few models **ignore** an unsupported resolution and render a fixed default
+instead of the nearest band — `minimax-h3` renders 2K for anything that is not
+`768P`, and the `wan-3` family renders 720p (both described under
+[Seedance 2 video capabilities](#seedance-2-video-capabilities)).
+For those the correction targets the band the provider will actually produce, so
+the price still matches the render. Each such model declares this in the catalog
+via `unlistedResolutionRendersAs`, which is what `GET /v1/models` reflects.
+
+`duration` is passed through as you send it, with one exception: the LTX 2.3
+models are priced on a fixed ladder of seeded durations per resolution band, so
+a duration between rungs is moved to the nearest one and reported in
+`adjustments`.
 
 ## 5. Sync vs async execution
 

@@ -37,7 +37,11 @@ vi.mock("../client.js", () => ({
   MAX_POLL_ATTEMPTS_VIDEO: 120,
 }))
 
-vi.mock("../../../lib/storage.js", () => ({
+// Spread the real module: ensureImageForProvider now keys converted inputs
+// with tmpObjectKey (the sweepable tmp/ prefix), which a replace-everything
+// mock would leave undefined.
+vi.mock("../../../lib/storage.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../lib/storage.js")>()),
   uploadBufferToR2: mocks.mockUploadBufferToR2,
 }))
 
@@ -51,8 +55,12 @@ vi.mock("sharp", () => {
   const makeChain = () => {
     const chain: Record<string, unknown> = {}
     chain.metadata = () => Promise.resolve({ ...mocks.sharpMeta })
+    // .rotate() honours EXIF orientation before the re-encode drops it.
+    chain.rotate = () => chain
     chain.resize = () => chain
     chain.jpeg = () => chain
+    chain.webp = () => chain
+    chain.png = () => chain
     chain.toBuffer = () => Promise.resolve(Buffer.from("converted-jpeg-data"))
     return chain
   }

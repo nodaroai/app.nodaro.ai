@@ -44,6 +44,7 @@ import {
   KIE_LIP_SYNC_MODELS,
   KIE_SPEECH_TO_VIDEO_MODELS,
   KIE_CREDIT_USD,
+  kieModelAcceptsResolution,
   type KieModelConfig,
 } from "./models.js"
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
@@ -166,6 +167,33 @@ export function applySeedance2Params(
   if (resolved.referenceAudioUrls.length > 0) input.reference_audio_urls = resolved.referenceAudioUrls
   else delete input.reference_audio_urls
 
+  // Aspect snap. Both route Zod enums are a FLAT union of every ratio any video
+  // model supports (4:5, 5:4, 9:21 on both; "Auto" on generate-video), and a
+  // FieldMapping can inject `aspectRatio` at run time after every UI guard is
+  // gone — so an off-enum ratio reaches KIE, which rejects the task
+  // synchronously ("Invalid aspect ratio setting", app-reports P1). Snapping
+  // here mirrors applyMinimaxH3Params: decided AFTER the resolver, because only
+  // it knows whether a frame survived into frame mode.
+  //
+  // "adaptive" is IN the seedance enum (NATIVE_ADAPTIVE_ASPECT) and is left
+  // alone; "Auto" is the unified node's provider-agnostic token and has no
+  // provider meaning, so it becomes adaptive when there is something to match
+  // and the fixed default otherwise.
+  const resolvedAspect = resolveCatalogAspect(
+    provider,
+    typeof input.aspect_ratio === "string" ? input.aspect_ratio : undefined,
+    {
+      hasVisualInput: Boolean(
+        resolved.firstFrameUrl ||
+        resolved.lastFrameUrl ||
+        resolved.referenceImageUrls.length > 0 ||
+        resolved.referenceVideoUrls.length > 0,
+      ),
+      fallback: SEEDANCE_2_DEFAULT_ASPECT,
+    },
+  )
+  if (resolvedAspect !== undefined) input.aspect_ratio = resolvedAspect
+
   // Start-frame modes on some models (Seedance 2.5) reject every explicit aspect
   // ratio with a 422 — see FRAME_MODE_ADAPTIVE_ONLY_ASPECT. Coerce AFTER the
   // resolver, because only it knows whether a frame survived into frame mode (a
@@ -197,6 +225,42 @@ export function applySeedance2Params(
     const base = typeof input.prompt === "string" ? input.prompt : ""
     input.prompt = base ? `${base}\n\n${resolved.promptSuffix}` : resolved.promptSuffix
   }
+}
+
+/** KIE's documented seedance default when no ratio is supplied
+ *  (docs.kie.ai/market/bytedance/seedance-2) — also the value a pure-t2v
+ *  "Auto" resolves to, since `adaptive` means "match the input" and t2v has none. */
+const SEEDANCE_2_DEFAULT_ASPECT = "16:9"
+
+/**
+ * Resolve a requested aspect ratio against a model's OWN catalog list.
+ *
+ * One implementation for the "the route enums are a flat union of every ratio
+ * any video model supports" problem: an off-enum ratio (4:5, 5:4, 9:21) reaches
+ * the provider and is rejected synchronously, and a FieldMapping can inject
+ * `aspectRatio` at run time after every UI guard is gone.
+ *
+ * `"adaptive"` is a real provider enum member for the seedance family and is
+ * returned untouched. `"Auto"` is the unified node's provider-agnostic token
+ * with no provider meaning: it becomes `"adaptive"` when the model offers it
+ * AND there is something to match, and the model's fixed default otherwise.
+ */
+function resolveCatalogAspect(
+  modelId: string | undefined,
+  requested: string | undefined,
+  opts: { hasVisualInput: boolean; fallback: string },
+): string | undefined {
+  const raw = requested?.trim()
+  if (!raw) return undefined
+  const allowed = (modelId ? getModel(modelId)?.aspectRatios : undefined) ?? []
+  if (allowed.length === 0) return raw
+  const fixed = allowed.filter((a) => a !== "adaptive")
+
+  if (raw === "Auto" || raw === "auto") {
+    return opts.hasVisualInput && allowed.includes("adaptive") ? "adaptive" : opts.fallback
+  }
+  if (allowed.includes(raw)) return raw
+  return snapAspectRatioToken(raw, fixed) ?? opts.fallback
 }
 
 /**
@@ -487,6 +551,25 @@ const JPEG_PNG_ONLY_PROVIDERS = new Set(["kling-3.0"])
 // Max image file size (10 MB per KIE docs, applies to all models)
 const IMAGE_MAX_BYTES = 10 * 1024 * 1024
 
+/**
+ * The ONE input-image failure whose cause the user can actually act on, so it
+ * gets a real message instead of the generic "please try again" fallback —
+ * wrong advice for a file that will fail identically on every retry. The HTTP
+ * download failure stays generic on purpose: that one IS often transient.
+ */
+function unreadableImageError(context: string) {
+  return createSanitizedError(
+    "Could not read image metadata — unsupported image file",
+    context,
+    false,
+    false,
+    {
+      userSafeMessage:
+        "The input image could not be read (unsupported or corrupt file). Upload a PNG, JPEG, WebP, HEIC or AVIF image.",
+    },
+  )
+}
+
 interface ImageConstraints {
   /** Human-readable context for error messages */
   context: string
@@ -506,6 +589,22 @@ interface ImageConstraints {
   forceJpeg?: boolean
   /** Downscale (preserving aspect ratio) so neither side exceeds this many pixels. */
   maxDimension?: number
+  /**
+   * Re-encode losslessly (WebP if the SKU accepts it, else PNG) rather than to
+   * JPEG, falling back to the JPEG ladder only if the lossless result exceeds
+   * the size cap. Set by lanes whose product promise is fidelity — image edit
+   * and upscale — where a lossy, alpha-flattening re-encode of the SOURCE
+   * would degrade exactly what the user is paying the SKU to preserve.
+   * Ignored when `forceJpeg` is set.
+   */
+  preferLossless?: boolean
+  /**
+   * Never change the pixel grid on our own initiative (skips the >10 MB
+   * fallback downscale). Set when the caller has something aligned to the
+   * source dimensions — an inpainting mask — that a silent resize would
+   * de-align.
+   */
+  preserveGeometry?: boolean
 }
 
 /**
@@ -519,8 +618,14 @@ interface ImageConstraints {
  * - All: max 10 MB (progressive JPEG compression + resize)
  *
  * Returns the original URL if no processing is needed, or a new R2 URL.
+ *
+ * Shared by BOTH KIE lanes. The video lanes (i2v frames, reference images,
+ * motion) have called it since 2026-08; the IMAGE lanes (`image.ts::editImage`)
+ * joined in 2026-09 after "file type not supported" reached users verbatim from
+ * topaz and recraft (app-reports §11.3, P5). Exported rather than copied so
+ * there stays exactly ONE place that decides what a provider will accept.
  */
-async function ensureImageForProvider(
+export async function ensureImageForProvider(
   imageUrl: string,
   provider: string,
   constraints?: ImageConstraints,
@@ -542,16 +647,22 @@ async function ensureImageForProvider(
     )
   }
   const buffer = Buffer.from(await res.arrayBuffer())
-  const meta = await sharp(buffer).metadata()
+  // sharp THROWS on a buffer it cannot parse ("Input buffer contains
+  // unsupported image format") rather than returning empty metadata, so
+  // without this catch the raw library string escaped to the user and the
+  // guard below was unreachable for the commonest corrupt-file case.
+  let meta: Awaited<ReturnType<ReturnType<typeof sharp>["metadata"]>>
+  try {
+    meta = await sharp(buffer).metadata()
+  } catch {
+    throw unreadableImageError(context)
+  }
   const format = meta.format // "jpeg" | "png" | "webp" | "gif" | "tiff" | ...
   const width = meta.width ?? 0
   const height = meta.height ?? 0
 
   if (!format || !width || !height) {
-    throw createSanitizedError(
-      "Could not read image metadata — unsupported image file",
-      context
-    )
+    throw unreadableImageError(context)
   }
 
   // Enforce minimum dimension
@@ -576,6 +687,17 @@ async function ensureImageForProvider(
   }
 
   const maxDim = constraints?.maxDimension
+  // PROBE PENDING (app-reports §11.3, P5 — the two seedance-2-5 i2v rows).
+  // Those two runs DID pass through here and still came back "File type not
+  // supported", so either the rejected input was not this image, or the format
+  // `sharp` reports is accepted by name while the FILE still is not — an
+  // animated webp (`meta.pages > 1`), a CMYK jpeg (`meta.space === "cmyk"`) or
+  // a 16-bit png (`meta.depth === "ushort"`). Deciding between those needs the
+  // production URLs behind those two job ids; the probe could not be run in
+  // this session (see the PR body). If it comes back showing an
+  // accepted-format-but-still-rejected file, the fix is to OR that property
+  // into the condition below and pin it with a fixture in
+  // __tests__/image-format-normalize.test.ts — not to widen the format set.
   const needsConversion =
     !acceptedFormats.has(format) || (constraints?.forceJpeg === true && format !== "jpeg")
   const needsCompress = buffer.length > IMAGE_MAX_BYTES
@@ -592,12 +714,57 @@ async function ensureImageForProvider(
     `${needsCompress ? ` → compressing (>${IMAGE_MAX_BYTES / 1024 / 1024}MB)` : ""}`
   )
 
-  // Base pipeline: optionally cap the longest side, preserving aspect ratio.
+  const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+
+  // Base pipeline. `.rotate()` FIRST: re-encoding drops EXIF, so an
+  // orientation-tagged photo (every HEIC/AVIF off a phone, and plenty of
+  // TIFFs) would otherwise be handed to the provider sideways — the pixels
+  // survive, the orientation tag does not. Same one-word fix the repo already
+  // made in lib/anthropic-image.ts:34. Then optionally cap the longest side,
+  // preserving aspect ratio.
   const pipeline = () => {
-    const s = sharp(buffer)
+    const s = sharp(buffer).rotate()
     return maxDim !== undefined
       ? s.resize(maxDim, maxDim, { fit: "inside", withoutEnlargement: true })
       : s
+  }
+
+  // Lossless first, where the lane asked for it and the SKU will take it.
+  // JPEG is lossy, drops alpha and re-compresses exactly the detail an
+  // image-EDIT or UPSCALE lane was hired to preserve — normalising the format
+  // must not quietly cost the user the fidelity they are paying for. WebP is
+  // preferred over PNG: alpha-capable and usually much smaller, so it clears
+  // the size cap more often. `forceJpeg` always wins — it exists precisely to
+  // drop alpha for the Hailuo/MiniMax backend. If the lossless result does not
+  // fit under the cap we fall through to the JPEG ladder unchanged, so this
+  // can only ever improve on the old behaviour, never fail where it succeeded.
+  const losslessFormat: "webp" | "png" | null =
+    constraints?.preferLossless === true && constraints?.forceJpeg !== true
+      ? acceptedFormats.has("webp")
+        ? "webp"
+        : acceptedFormats.has("png")
+          ? "png"
+          : null
+      : null
+
+  if (losslessFormat) {
+    const lossless = losslessFormat === "webp"
+      ? await pipeline().webp({ lossless: true }).toBuffer()
+      : await pipeline().png({ compressionLevel: 9 }).toBuffer()
+    if (lossless.length <= IMAGE_MAX_BYTES) {
+      const losslessUrl = await uploadBufferToR2(
+        lossless,
+        tmpObjectKey(`provider-converted-${stamp}`, losslessFormat),
+        `image/${losslessFormat}`,
+      )
+      console.log(
+        `[KIE.ai] Image converted losslessly to ${losslessFormat}: ${(lossless.length / 1024 / 1024).toFixed(1)}MB → ${losslessUrl.substring(0, 80)}...`
+      )
+      return losslessUrl
+    }
+    console.log(
+      `[KIE.ai] Lossless ${losslessFormat} is ${(lossless.length / 1024 / 1024).toFixed(1)}MB (> ${IMAGE_MAX_BYTES / 1024 / 1024}MB) — falling back to JPEG`
+    )
   }
 
   // Convert to JPEG — good balance of compatibility and compression
@@ -614,19 +781,32 @@ async function ensureImageForProvider(
       .toBuffer()
   }
 
-  // If still over limit after quality reduction, resize down further
-  if (converted.length > IMAGE_MAX_BYTES) {
+  // If still over limit after quality reduction, resize down further.
+  // GEOMETRY HAZARD: this is the only step that changes the pixel grid without
+  // the caller asking for it, so anything the caller has already aligned TO
+  // that grid (an inpainting mask — `editImage` forwards `mask_url` verbatim
+  // and does NOT re-run ensureMaskDimensions) would silently de-align and the
+  // provider would edit the wrong region. `preserveGeometry` opts out: we ship
+  // the ladder's best effort and let the provider reject an oversized file
+  // honestly, rather than return a confidently wrong edit.
+  if (converted.length > IMAGE_MAX_BYTES && constraints?.preserveGeometry !== true) {
     const effectiveWidth = maxDim !== undefined ? Math.min(width, maxDim) : width
     const scale = Math.sqrt(IMAGE_MAX_BYTES / converted.length)
     const newWidth = Math.round(effectiveWidth * scale)
     converted = await sharp(buffer)
+      .rotate()
       .resize(newWidth)
       .jpeg({ quality: 80, mozjpeg: true })
       .toBuffer()
   }
 
-  const key = `images/provider-converted-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`
-  const newUrl = await uploadBufferToR2(converted, key, "image/jpeg")
+  // tmp/ prefix: a converted INPUT is disposable once the provider has fetched
+  // it, so it belongs under the sweepable prefix, not beside user media.
+  const newUrl = await uploadBufferToR2(
+    converted,
+    tmpObjectKey(`provider-converted-${stamp}`, "jpg"),
+    "image/jpeg",
+  )
   console.log(
     `[KIE.ai] Image converted: ${(converted.length / 1024 / 1024).toFixed(1)}MB → ${newUrl.substring(0, 80)}...`
   )
@@ -1455,8 +1635,15 @@ export class KieVideoProvider
       input.cfg_scale = options.cfgScale
     }
 
-    // Resolution override for models that support it
-    if (options?.resolution) {
+    // Resolution override for models that ACTUALLY declare the lever (or whose
+    // params adapter reads input.resolution — RESOLUTION_CONSUMING_PARAM_ADAPTERS).
+    // A SKU with neither must not receive the key at all: KIE keys its market
+    // operation by (model, resolution, duration) and answers "Operation not
+    // found" for an unregistered triple (app-reports 11.3). This site also gains
+    // the `!isSeedance2Provider` exclusion the t2v site already had — inert in
+    // practice, since applySeedance2Params re-sets the value from
+    // options.resolution a few lines below.
+    if (options?.resolution && !isSeedance2Provider(provider) && kieModelAcceptsResolution(provider, modelConfig)) {
       input.resolution = options.resolution
       // Hailuo 2.3 Pro/Standard: 1080P only supports 6s duration
       if ((provider === "hailuo-2.3-pro" || provider === "hailuo-2.3") && options.resolution === "1080P" && input.duration && Number(input.duration) > 6) {
@@ -1774,7 +1961,13 @@ export class KieVideoProvider
       input.cfg_scale = options.cfgScale
     }
 
-    if (options?.resolution && !isSeedance2Provider(provider)) {
+    // Only override a resolution the SKU actually has (or whose params adapter
+    // is waiting for it — see RESOLUTION_CONSUMING_PARAM_ADAPTERS). Seedance
+    // handles its own via options.resolution; a model with neither must not
+    // receive the key at all, because KIE keys its market operation by
+    // (model, resolution, duration) and answers "Operation not found" for an
+    // unregistered triple (app-reports 11.3).
+    if (options?.resolution && !isSeedance2Provider(provider) && kieModelAcceptsResolution(provider, modelConfig)) {
       input.resolution = options.resolution
     }
 

@@ -18,6 +18,17 @@ Existing workflows continue to work — `text-to-video` nodes auto-migrate to `g
 
 All text-to-video pricing examples (VEO 3.x, Gemini Omni, Kling, Seedance 2, Hailuo Standard, Bytedance, MiniMax, Wan 2.6 / 2.7 / **3.0**, HappyHorse, Runway, …), per-provider parameter tables, and the dispatch rules that route a wireless node to `text-to-video` mode are documented on the [Generate Video](./generate-video.md) page.
 
+`/v1/text-to-video` remains a live API route and behaves identically to the
+unified node. A resolution, aspect ratio or duration the wired model does not
+support is **corrected** rather than rejected, and you are billed for the
+corrected value because it is also the value sent to the provider: off-list
+values snap to the nearest supported option (never the cheapest, and never
+landscape from a portrait request), an omitted resolution is sent at the band it
+is priced at, `4K` canonicalises to `4k`, and LTX 2.3 durations move to the
+nearest seeded rung. The route returns the corrections in an `adjustments` array.
+See [Resolution, aspect ratio and duration corrections](./generate-video.md#resolution-aspect-ratio-and-duration-corrections)
+and the API reference on [Parameter corrections](../../api-integration.md#4d-parameter-corrections-adjustments).
+
 ## See also
 
 - [Generate Video](./generate-video.md) — the unified replacement node.

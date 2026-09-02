@@ -27,8 +27,21 @@ vi.mock("@/lib/queue.js", () => ({
   redis: {},
 }))
 
+// Captures the identifier resolver the route hands to `creditGuard` so the
+// CHECK === DEBIT parity test below can run the REAL preHandler pricing: the
+// guard itself is mocked to a no-op here, so that closure would otherwise never
+// execute in a route test and the CHECK side would go entirely unpinned.
+const guardHarness = vi.hoisted(() => ({
+  resolver: undefined as ((req: { body: unknown }) => string) | undefined,
+}))
+
 vi.mock("@/middleware/credit-guard.js", () => ({
-  creditGuard: () => async () => {},
+  creditGuard: (resolver: unknown) => {
+    if (typeof resolver === "function") {
+      guardHarness.resolver = resolver as (req: { body: unknown }) => string
+    }
+    return async () => {}
+  },
   reserveCreditsForJob: vi.fn().mockResolvedValue({
     usageLogId: "usage-1",
     creditsReserved: 1,
@@ -752,5 +765,141 @@ describe("POST /v1/edit-image — CHECK === DEBIT", () => {
     expect(resolveEditImageCreditIdentifier({ body: null } as unknown as FastifyRequest)).toBe(
       "recraft-upscale",
     )
+  })
+})
+// ---------------------------------------------------------------------------
+// topaz-image-upscale — CHECK === DEBIT === SENT.
+//
+// KIE's `topaz/image-upscale` exposes exactly ONE quality lever
+// (`upscale_factor`: 1 / 2 / 4). The route nevertheless priced on
+// `targetResolution`, a control with no provider parameter behind it, and the
+// worker rendered whatever `upscaleFactor` said — so the tier the user was
+// charged for and the tier that was rendered could disagree in BOTH directions
+// (a 4K/8K target billed a 2x render; a bare `upscaleFactor: "4"` billed the
+// base tier). `resolveTopazUpscale` is now the single authority at the CHECK
+// (preHandler), the DEBIT (reservation) and the enqueued payload, so all three
+// have to agree for every combination of the two legacy inputs.
+// ---------------------------------------------------------------------------
+
+const TOPAZ_UUID = "00000000-0000-4000-8000-000000000001"
+
+/** POST the body with a valid user + a successful job insert. */
+async function postTopaz(payload: Record<string, unknown>) {
+  mockJobInsert({ data: { id: "job-topaz-1" }, error: null })
+  return app.inject({
+    method: "POST",
+    url: "/v1/edit-image",
+    payload: { userId: TOPAZ_UUID, ...payload },
+  })
+}
+
+/** The DEBIT identifier — `reserveCreditsForJob`'s 4th argument. */
+function topazDebitIdentifier(): string | undefined {
+  return vi.mocked(reserveCreditsForJob).mock.calls.at(-1)?.[3]
+}
+
+/** The CHECK identifier — the REAL preHandler resolver, run on the same body. */
+function topazCheckIdentifier(body: Record<string, unknown>): string {
+  if (!guardHarness.resolver) throw new Error("creditGuard resolver was never captured")
+  return guardHarness.resolver({ body })
+}
+
+/** The factor the worker actually receives, from the enqueued payload. */
+function topazSentFactor(): unknown {
+  const payload = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown> | undefined
+  return payload?.upscaleFactor
+}
+
+describe("topaz-image-upscale reserves the tier it renders", () => {
+  it("charges the bare tier for a 4K target with the default 2x factor", async () => {
+    const res = await postTopaz({
+      imageUrl: "https://img.png",
+      provider: "topaz-image-upscale",
+      upscaleFactor: "2",
+      targetResolution: "4K",
+    })
+    expect(res.statusCode).toBe(200)
+    expect(reserveCreditsForJob).toHaveBeenCalledWith(
+      expect.anything(), expect.anything(), expect.any(String), "topaz-image-upscale",
+    )
+  })
+
+  it("charges the 4x tier when the factor is 4", async () => {
+    const res = await postTopaz({
+      imageUrl: "https://img.png",
+      provider: "topaz-image-upscale",
+      upscaleFactor: "4",
+    })
+    expect(res.statusCode).toBe(200)
+    expect(reserveCreditsForJob).toHaveBeenCalledWith(
+      expect.anything(), expect.anything(), expect.any(String), "topaz-image-upscale:4K",
+    )
+  })
+
+  it("enqueues the resolved factor so the worker and the reservation agree", async () => {
+    await postTopaz({
+      imageUrl: "https://img.png",
+      provider: "topaz-image-upscale",
+      targetResolution: "8K",
+    })
+    expect(videoQueue.add).toHaveBeenCalledWith(
+      "edit-image",
+      expect.objectContaining({ provider: "topaz-image-upscale", upscaleFactor: "4" }),
+    )
+  })
+
+  it("keeps targetResolution on the payload as the evidence of what was asked for", async () => {
+    await postTopaz({
+      imageUrl: "https://img.png",
+      provider: "topaz-image-upscale",
+      targetResolution: "8K",
+    })
+    expect(videoQueue.add).toHaveBeenCalledWith(
+      "edit-image",
+      expect.objectContaining({ targetResolution: "8K" }),
+    )
+  })
+
+  it("leaves a non-topaz provider's identifier and factor untouched", async () => {
+    const res = await postTopaz({
+      imageUrl: "https://img.png",
+      provider: "recraft-upscale",
+      upscaleFactor: "4",
+    })
+    expect(res.statusCode).toBe(200)
+    expect(topazDebitIdentifier()).toBe("recraft-upscale")
+    expect(topazSentFactor()).toBe("4")
+  })
+})
+
+// The four bodies below are the ones the Task 2 review showed diverging in
+// production: the first two under-charge relative to the 4x render, the third
+// over-charges (an 8K tier reserved for a 2x render), the fourth is the
+// untouched default. CHECK, DEBIT and the worker-visible factor are asserted
+// against each other AND pinned to concrete values, so a regression that moves
+// all three together still fails.
+describe("topaz-image-upscale CHECK === DEBIT === SENT parity", () => {
+  const CASES: Array<{
+    label: string
+    body: Record<string, unknown>
+    identifier: string
+    factor: string
+  }> = [
+    { label: "legacy 4K target, no factor", body: { targetResolution: "4K" }, identifier: "topaz-image-upscale:4K", factor: "4" },
+    { label: "explicit 4x factor", body: { upscaleFactor: "4" }, identifier: "topaz-image-upscale:4K", factor: "4" },
+    { label: "2x factor overriding a stored 8K tier", body: { upscaleFactor: "2", targetResolution: "8K" }, identifier: "topaz-image-upscale", factor: "2" },
+    { label: "neither lever set (provider default)", body: {}, identifier: "topaz-image-upscale", factor: "2" },
+  ]
+
+  it.each(CASES)("$label", async ({ body, identifier, factor }) => {
+    const full = { imageUrl: "https://img.png", provider: "topaz-image-upscale", ...body }
+    const res = await postTopaz(full)
+    expect(res.statusCode).toBe(200)
+
+    const debit = topazDebitIdentifier()
+    const check = topazCheckIdentifier({ userId: TOPAZ_UUID, ...full })
+    expect(check).toBe(debit)
+    expect(check).toBe(identifier)
+    expect(topazSentFactor()).toBe(factor)
   })
 })

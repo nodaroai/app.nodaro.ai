@@ -7,7 +7,9 @@ import { videoQueue } from "../lib/queue.js"
 import { shotsSchema, elementsSchema } from "../lib/video-schemas.js"
 import { effectiveVideoPromptCeiling } from "../lib/video-prompt-ceiling.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { resolveVideoRequestNorm } from "../lib/video-request-norm.js"
 import { probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
+import { probeAndCheckRefVideoDurations } from "../lib/ref-video-probe.js"
 import { getModelCreditBaseCost } from "../ee/billing/credits.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
@@ -413,6 +415,16 @@ openApiRegistry.registerPath({
       content: { "application/json": { schema: z.object({
         jobId: z.string().uuid(),
         warnings: z.array(z.object({ code: z.string(), message: z.string() })).optional(),
+        // Catalog corrections applied to the request (an off-list resolution or
+        // aspect ratio snapped onto the model's own list, an LTX duration moved
+        // to its seeded tier). Same shape /v1/text-to-video returns; the same
+        // corrections also appear in `warnings` as prose.
+        adjustments: z.array(z.object({
+          field: z.string(),
+          from: z.union([z.string(), z.number()]),
+          to: z.union([z.string(), z.number()]).optional(),
+          reason: z.string(),
+        })).optional(),
       }) } },
     },
     401: { description: "Unauthorized" },
@@ -458,29 +470,106 @@ export async function validateSeedance2AudioPreHandler(
   }
 }
 
+/**
+ * Reference-VIDEO duration pre-check — the twin of the audio guard above.
+ *
+ * KIE rejects an out-of-bounds reference clip AFTER the task is created, so
+ * without this the user pays for a run that cannot start (app-reports §11.3:
+ * "Each reference video must be between 2 and 30 seconds" on seedance-2-5).
+ *
+ * Runs BEFORE creditGuard — same reason the audio twin does — so nothing is
+ * reserved for a request we are about to reject. It also probes FIRST, and
+ * stashes the raw per-URL durations on the request so `computeCredits` reuses
+ * them instead of running a second uncached ffprobe per clip: `probeMediaDuration`
+ * is an unmemoized subprocess + network fetch, so re-probing would double the
+ * latency and egress of the very lane this fixes.
+ *
+ * The stash carries a FAILED probe as NaN rather than dropping it, so the
+ * pricing side still charges the worst case for that clip (never a silently
+ * lower reservation) while `checkRefVideoDurations` ignores it.
+ *
+ * Data-driven: providers absent from VIDEO_REF_VIDEO_DURATION_LIMITS are not
+ * probed here at all, so this adds no work to any lane without a verified limit.
+ *
+ * Edition-neutral: it runs in EVERY edition (the provider rejects an over-long
+ * clip whether or not credits exist), which is why the probe it calls lives in
+ * core rather than ee/billing.
+ */
+export async function validateRefVideoDurationPreHandler(
+  req: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  const body = (req.body ?? {}) as Record<string, unknown>
+  // Resolve the SAME way creditGuard/computeCredits do: an omitted provider
+  // defaults to DEFAULT_VIDEO_PROVIDER, and this gate must probe/check
+  // whichever provider pricing actually resolves to — keying on the raw body
+  // field let an omitted-but-defaulted provider skip a duration bound its
+  // default maps to.
+  const provider = applyDefaultVideoSelection({ provider: body.provider as string | undefined, duration: body.duration as number | string | undefined }).provider
+
+  // Probe + check in ONE core call (lib/ref-video-probe.ts), imported
+  // statically: this is input validation, not a credit feature, so it must also
+  // run in community/business — where reaching into ee/ would load billing code
+  // that credit-guard-impl.ts promises is absent at runtime. The same helper
+  // backs the DAG gate in node-executor.ts, so "which providers have a bound"
+  // and "how many clips do we probe" are stated exactly once for all lanes.
+  const check = await probeAndCheckRefVideoDurations({ provider, referenceVideoUrls: body.referenceVideoUrls })
+  // Undefined when nothing was probed (no reference videos, or a provider with
+  // no declared bound) — `computeCredits` then falls back to its own probe.
+  req.refVideoDurationsSec = check.durationsSec
+
+  if (!check.ok) {
+    // Route-neutral prefix: unlike the audio twin, this preHandler is shared by
+    // /v1/generate-video AND /v1/text-to-video, so the log must not name one.
+    req.log.warn(
+      { provider, durationsSec: check.durationsSec, route: req.routeOptions?.url },
+      "video: reference video outside the provider's duration bounds",
+    )
+    return reply.status(400).send({
+      error: { code: "video_too_long", message: check.message },
+    })
+  }
+}
+
 export async function generateVideoRoutes(app: FastifyInstance) {
   app.post("/v1/generate-video", {
     preHandler: [
       validateSeedance2AudioPreHandler,
+      validateRefVideoDurationPreHandler,
       creditGuard(
       (req) => {
         const body = req.body as Record<string, unknown>
         const hasVideoRef = Array.isArray(body?.referenceVideoUrls) && (body.referenceVideoUrls as unknown[]).length > 0
         const sel = applyDefaultVideoSelection({ provider: body?.provider as string | undefined, duration: body?.duration as number | string | undefined })
+        // Placement rule: the CHECK identifier, `computeCredits` and the
+        // reservation must all be computed from the SAME normalized values.
+        // Stash them so the two later sites cannot re-derive them differently.
+        const norm = resolveVideoRequestNorm({
+          provider: sel.provider,
+          aspectRatio: body?.aspectRatio as string | undefined,
+          resolution: body?.resolution as string | undefined,
+          duration: sel.duration,
+        })
+        req.videoNorm = norm
         return buildVideoCreditModelIdentifier(
           sel.provider,
-          sel.duration,
+          norm.duration ?? sel.duration,
           body?.sound as boolean | undefined,
           "image-to-video",
           body?.videoSize as string | undefined,
-          body?.resolution as string | undefined,
+          norm.resolution,
           hasVideoRef,
         )
       },
       {
-        computeCredits: async (body) => {
+        computeCredits: async (body, req) => {
           const b = body as Record<string, unknown>
           const hasVideoRef = Array.isArray(b?.referenceVideoUrls) && (b.referenceVideoUrls as unknown[]).length > 0
+          // R14: read the resolution the CHECK identifier was built from, never
+          // the raw body — normalizing in the preHandler but not here would make
+          // the reserved AMOUNT disagree with the checked IDENTIFIER, which is
+          // the exact drift this normalizer exists to remove.
+          const normResolution = req.videoNorm?.resolution ?? (b.resolution as string | undefined)
           // Seedance 2 reference-video runs are billed unit×(input+output). The
           // seeded `-ref` composite only encodes the per-8s OUTPUT rate, so we
           // ffprobe the connected reference videos and reserve the FULL scaled
@@ -488,11 +577,25 @@ export async function generateVideoRoutes(app: FastifyInstance) {
           // may not statically import ee/, so the helper is loaded dynamically
           // (the allowed escape hatch — same pattern the credit-guard shim uses).
           if (isSeedance2Provider(b?.provider as string | undefined) && hasVideoRef) {
-            const { seedance2RefVideoBaseCreditsFromUrls } = await import("../ee/billing/seedance2-ref-video-credits.js")
-            return seedance2RefVideoBaseCreditsFromUrls({
+            const { seedance2RefVideoBaseCreditsFromUrls, seedance2RefVideoBaseCreditsFromDurations } =
+              await import("../ee/billing/seedance2-ref-video-credits.js")
+            const priceArgs = {
               provider: b.provider as string,
-              resolution: (b.resolution as string | undefined) ?? "720p",
+              resolution: normResolution ?? "720p",
               outputDurationSec: Number(b.duration ?? 5),
+            }
+            // Probe once, use twice: when validateRefVideoDurationPreHandler
+            // already ffprobed this request (it runs first, for every provider
+            // with a declared duration limit), price from ITS durations rather
+            // than paying for a second uncached probe per clip. Identical
+            // arithmetic — the same worst-case rule applies to a NaN entry —
+            // so the CHECK and the DEBIT read the same probed set.
+            const stashed = req.refVideoDurationsSec
+            if (stashed) {
+              return seedance2RefVideoBaseCreditsFromDurations({ ...priceArgs, durationsSec: stashed })
+            }
+            return seedance2RefVideoBaseCreditsFromUrls({
+              ...priceArgs,
               referenceVideoUrls: b.referenceVideoUrls as unknown[],
             })
           }
@@ -512,7 +615,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
           // blend clauses) — is ruled out for every registered catalog by
           // `packages/prompts/src/__tests__/direction-hint-token-safety.test.ts`.
           if (isMinimaxH3Provider(b?.provider as string | undefined)) {
-            const { minimaxH3BaseCreditsFromUrls, minimaxH3BillableRefImageCount, MINIMAX_H3_FREE_INPUT_IMAGES } =
+            const { minimaxH3BaseCreditsFromUrls, minimaxH3BaseCreditsFromDurations, minimaxH3BillableRefImageCount, MINIMAX_H3_FREE_INPUT_IMAGES } =
               await import("../ee/billing/minimax-h3-credits.js")
             const refVideos = Array.isArray(b.referenceVideoUrls) ? (b.referenceVideoUrls as unknown[]) : []
             const assembled = assembleVideoConnectedReferences({
@@ -532,23 +635,31 @@ export async function generateVideoRoutes(app: FastifyInstance) {
               referenceAudioUrls: Array.isArray(b.referenceAudioUrls) ? (b.referenceAudioUrls as unknown[]) : undefined,
             })
             if (hasVideoRef || refImageCount > MINIMAX_H3_FREE_INPUT_IMAGES) {
-              return minimaxH3BaseCreditsFromUrls({
+              const h3PriceArgs = {
                 outputDurationSec: Number(b.duration ?? 6),
-                referenceVideoUrls: refVideos,
                 referenceImageCount: refImageCount,
-                resolution: b.resolution,
-              })
+                resolution: normResolution,
+              }
+              // Probe once, use twice (R15) — same contract as the seedance
+              // branch above: validateRefVideoDurationPreHandler already
+              // ffprobed this request (minimax-h3 has a declared bound), so the
+              // DEBIT prices from the very array the CHECK read, NaN included.
+              const stashed = req.refVideoDurationsSec
+              if (stashed) {
+                return minimaxH3BaseCreditsFromDurations({ ...h3PriceArgs, durationsSec: stashed })
+              }
+              return minimaxH3BaseCreditsFromUrls({ ...h3PriceArgs, referenceVideoUrls: refVideos })
             }
             // No ref videos and ≤5 images → the seeded duration composite prices it.
           }
           const bSel = applyDefaultVideoSelection({ provider: b?.provider as string | undefined, duration: b?.duration as number | string | undefined })
           const modelId = buildVideoCreditModelIdentifier(
             bSel.provider,
-            bSel.duration,
+            req.videoNorm?.duration ?? bSel.duration,
             b?.sound as boolean | undefined,
             "image-to-video",
             b?.videoSize as string | undefined,
-            b?.resolution as string | undefined,
+            normResolution,
             hasVideoRef,
           )
           const { creditCost: baseCost } = await getModelCreditBaseCost(modelId)
@@ -578,6 +689,20 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     // Platform default when the request omits provider/duration — the SAME
     // helper the DAG payload builder uses, so the two paths cannot drift.
     const { provider, duration } = applyDefaultVideoSelection({ provider: rawProvider, duration: rawDuration })
+    // Recomputed rather than read off `req` so the handler is correct even when
+    // credits are disabled (community edition never runs the guard). Pure, so it
+    // agrees with the preHandler by construction.
+    const normalized = resolveVideoRequestNorm({ provider, aspectRatio, resolution, duration })
+    const normAspectRatio = normalized.aspectRatio
+    const normResolution = normalized.resolution
+    const normDuration = normalized.duration ?? duration
+    const adjustmentWarnings = normalized.adjustments.map((a) => ({
+      code: "params_adjusted" as const,
+      message: a.reason,
+    }))
+    if (normalized.adjustments.length > 0) {
+      req.log.warn({ provider, adjustments: normalized.adjustments }, "[generate-video] snapped catalog-governed params")
+    }
     let prompt = rawPrompt
 
     // Cinematic direction fold — catalog IDS → prompt text, server-side.
@@ -818,11 +943,11 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     // Determine model identifier for credit check (supports variable pricing by duration/audio/resolution/video-ref)
     const modelIdentifier = buildVideoCreditModelIdentifier(
       provider,
-      duration,
+      normDuration,
       sound,
       "image-to-video",
       videoSize,
-      resolution,
+      normResolution,
       (referenceVideoUrls?.length ?? 0) > 0,
     )
 
@@ -849,7 +974,13 @@ export async function generateVideoRoutes(app: FastifyInstance) {
           user_id: userId,
           job_type: "image-to-video",
           status: "pending",
-          input_data: buildJobInputData(parsed.data, "image-to-video"),
+          // R26: the normalized values are passed in rather than written back
+          // onto `parsed.data` — the handler destructured above, so a mutation
+          // would be invisible to every reader AND against the no-mutation rule.
+          input_data: buildJobInputData(
+            { ...parsed.data, aspectRatio: normAspectRatio, resolution: normResolution, duration: normDuration },
+            "image-to-video",
+          ),
           ...(mcpClient ? { mcp_client: mcpClient } : {}),
         },
         req.idempotencyKey,
@@ -893,17 +1024,17 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       prompt,
       provider,
       generateAudio,
-      duration,
+      duration: normDuration,
       mode,
       sound,
       negativePrompt,
       motionPrompt,
       cfgScale,
-      aspectRatio,
+      aspectRatio: normAspectRatio,
       multiShot,
       shots,
       elements,
-      resolution,
+      resolution: normResolution,
       grokMode,
       videoSize,
       seed,
@@ -922,6 +1053,12 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       usageLogId,
     })
 
+    // R27: BOTH exits disclose a snap. `warnings` keeps this route's existing
+    // human-readable vocabulary; `adjustments` carries the SAME corrections in
+    // the structured {field, from, to, reason} shape /v1/text-to-video returns
+    // and the API docs define — the message string alone drops `field`/`from`/
+    // `to`, so a client cannot tell WHICH lever moved without re-parsing prose.
+    const structuredAdjustments = normalized.adjustments
     if (wantsVoice && !canVoice) {
       return {
         jobId: job.id,
@@ -930,9 +1067,13 @@ export async function generateVideoRoutes(app: FastifyInstance) {
             code: "voice_unsupported_for_provider",
             message: `The selected model (${provider}) can't voice dialogue; the clip was generated without voice. Use a VEO 3.x or Seedance-2 model for character voice.`,
           },
+          ...adjustmentWarnings,
         ],
+        ...(structuredAdjustments.length > 0 ? { adjustments: structuredAdjustments } : {}),
       }
     }
-    return { jobId: job.id }
+    return structuredAdjustments.length > 0
+      ? { jobId: job.id, warnings: adjustmentWarnings, adjustments: structuredAdjustments }
+      : { jobId: job.id }
   })
 }

@@ -1,9 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest"
 
 const mocks = vi.hoisted(() => {
   const mockRunKieTask = vi.fn()
   const mockCreateSanitizedError = vi.fn((msg: string, ctx: string) => new Error(`[${ctx}] ${msg}`))
-  return { mockRunKieTask, mockCreateSanitizedError }
+  const mockSafeFetch = vi.fn()
+  const mockUploadBufferToR2 = vi.fn()
+  return { mockRunKieTask, mockCreateSanitizedError, mockSafeFetch, mockUploadBufferToR2 }
 })
 
 vi.mock("../client.js", async (importOriginal) => {
@@ -16,7 +18,11 @@ vi.mock("../client.js", async (importOriginal) => {
   }
 })
 
-vi.mock("../models.js", () => ({
+// Spread the real module: editImage now imports the shared image-format
+// chokepoint from ../video.js, which pulls the KIE_VIDEO_* maps out of
+// models.js. A fixture-only mock would leave those undefined.
+vi.mock("../models.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../models.js")>()),
   KIE_IMAGE_MODELS: {
     "nano-banana": { model: "nano-banana-pro", cost: 0.02, inputType: "text-to-image", extraParams: { output_format: "png" } },
     "flux": { model: "flux-2/pro-text-to-image", cost: 0.05, inputType: "text-to-image", extraParams: {} },
@@ -36,16 +42,42 @@ vi.mock("../models.js", () => ({
   },
 }))
 
+// editImage now runs its source image through ensureImageForProvider (the
+// shared format chokepoint), which downloads via safeFetch and — for a format
+// the SKU does not accept — re-uploads a JPEG to R2. Serve a real 8x8 PNG so
+// every test below takes the already-accepted pass-through path and neither
+// the network nor R2 is touched. See image-format-normalize.test.ts for the
+// conversion behaviour itself.
+vi.mock("../../../lib/safe-fetch.js", () => ({ safeFetch: mocks.mockSafeFetch }))
+vi.mock("../../../lib/storage.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../lib/storage.js")>()),
+  uploadBufferToR2: mocks.mockUploadBufferToR2,
+}))
+
+import sharp from "sharp"
 import { KieError } from "../client.js"
 import { KieImageProvider } from "../image.js"
 
 let provider: KieImageProvider
+let pngFixture: Buffer
+
+beforeAll(async () => {
+  pngFixture = await sharp({
+    create: { width: 8, height: 8, channels: 3, background: "#fff" },
+  }).png().toBuffer()
+})
 
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.mockRunKieTask.mockResolvedValue({
     resultJson: { resultUrls: ["https://kie.example.com/result.png"] },
   })
+  mocks.mockSafeFetch.mockResolvedValue({
+    ok: true,
+    status: 200,
+    arrayBuffer: async () => pngFixture,
+  })
+  mocks.mockUploadBufferToR2.mockResolvedValue("https://cdn.example.com/converted.jpg")
   provider = new KieImageProvider()
 })
 

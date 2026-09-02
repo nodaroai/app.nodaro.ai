@@ -152,3 +152,20 @@ describe("minimaxH3TaskModel — per-mode KIE endpoint swap", () => {
     expect(minimaxH3TaskModel(I2V_MODEL, { reference_image_urls: [], first_frame_url: "f" })).toBe(I2V_MODEL)
   })
 })
+
+describe("minimax-h3 renders the tier it is billed for", () => {
+  // R2. computeCredits anchors on the REQUEST's resolution
+  // (minimax-h3:8s:768p vs the 2K tier); applyMinimaxH3Params only sees it via
+  // input.resolution, which the generic forwarder writes. If a resolution guard
+  // ever strips that assignment, this test is what catches the under-billing.
+  it("sends 768P when 768P was requested", () => {
+    const input: Record<string, unknown> = { resolution: "768P" }
+    applyMinimaxH3Params(input, {})
+    expect(input.resolution).toBe("768P")
+  })
+  it("sends 2K when 2K was requested", () => {
+    const input: Record<string, unknown> = { resolution: "2K" }
+    applyMinimaxH3Params(input, {})
+    expect(input.resolution).toBe("2K")
+  })
+})

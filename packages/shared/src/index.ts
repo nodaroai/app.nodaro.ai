@@ -108,6 +108,8 @@ export {
   NATIVE_ADAPTIVE_ASPECT,
   FRAME_MODE_ADAPTIVE_ONLY_ASPECT,
   VIDEO_REF_LIMITS_BY_PROVIDER,
+  VIDEO_REF_VIDEO_DURATION_LIMITS,
+  checkRefVideoDurations,
   VIDEO_PROVIDERS_REQUIRING_IMAGE,
   videoProviderRequiresImage,
   VIDEO_MODE_ALIASES,
@@ -212,6 +214,7 @@ export type {
   VideoAudioCapability,
   GvpAnchorChoice,
   GvpAnchorWireMode,
+  RefVideoDurationLimit,
 } from "./model-constants.js"
 
 
@@ -239,15 +242,25 @@ export {
   resolveImageGenCreditIdentifier,
   resolveNormalizedImageGen,
   buildVideoCreditModelIdentifier,
+  pricedVideoSelection,
   buildMotionCreditModelIdentifier,
   sunoCreditType,
   SUNO_VERSION_PRICED_OPERATIONS,
   SUNO_SELECT_OPERATIONS,
 } from "./credit-identifiers.js"
-export type { NormalizedImageGen } from "./credit-identifiers.js"
+export type { NormalizedImageGen, PricedVideoSelection } from "./credit-identifiers.js"
 
 export * from "./credit-estimators/index.js"
 export { extractVideoDurationFromNode } from "./video-duration.js"
+
+export {
+  resolveTopazUpscale,
+  TOPAZ_UPSCALE_FACTORS,
+  TOPAZ_DEFAULT_UPSCALE_FACTOR,
+  type TopazUpscaleFactor,
+  type TopazUpscaleAdjustment,
+  type TopazUpscaleResolution,
+} from "./topaz-upscale.js"
 
 
 
@@ -727,9 +740,11 @@ export {
   modelIdsByKindMode,
   buildModelMenu,
   normalizeModelInput,
+  normalizeVideoRequestParams,
   defaultResolutionFor,
 } from "./model-catalog.js"
 export type {
+  NormalizedVideoRequest,
   ModelCatalogEntry,
   ModelKind,
   ModelMode,

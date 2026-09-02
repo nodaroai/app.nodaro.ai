@@ -35,6 +35,10 @@ export interface CreditReservation {
   creditOverride?: number
 }
 
+/** Re-exported so the video routes keep one import for the guard + the stash
+ *  type. Authoritative declaration lives in `lib/video-request-norm.ts`. */
+export type { VideoRequestNorm } from "../lib/video-request-norm.js"
+
 export interface StorageSnapshot {
   usedBytes: number
   limitBytes: number

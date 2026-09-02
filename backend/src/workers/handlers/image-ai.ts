@@ -11,7 +11,7 @@ import { locateGrokSegments } from "../../lib/grok-segment-placement.js"
 import { providerKindForImageModel } from "../../lib/reconcile/provider-kind.js"
 import { finalizeJobWithMedia } from "../../lib/job-finalize.js"
 import { supabase } from "../../lib/supabase.js"
-import { IMAGE_MASK_MODE, describeMaskRegion, T2I_TO_I2I_VARIANT, TASK_CHAINED_EDIT_PROVIDERS, type ImageGenProvider } from "@nodaro/shared"
+import { IMAGE_MASK_MODE, describeMaskRegion, T2I_TO_I2I_VARIANT, TASK_CHAINED_EDIT_PROVIDERS, resolveTopazUpscale, type ImageGenProvider } from "@nodaro/shared"
 import { compositeInpaint, maskBoundingBoxFromUrl, imageDimensions } from "../../services/inpaint/composite.js"
 
 const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, ctx) {
@@ -142,13 +142,14 @@ const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, c
 }
 
 const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
-  const { imageUrl, taskId, prompt, provider, upscaleFactor, aspectRatio, negativePrompt, style, seed, maskUrl, maskIndexes } = job.data as {
+  const { imageUrl, taskId, prompt, provider, upscaleFactor, targetResolution, aspectRatio, negativePrompt, style, seed, maskUrl, maskIndexes } = job.data as {
     jobId: string
     imageUrl?: string
     taskId?: string
     prompt?: string
     provider?: string
     upscaleFactor?: string
+    targetResolution?: string
     aspectRatio?: string
     negativePrompt?: string
     style?: string
@@ -175,8 +176,27 @@ const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
   const effectivePrompt = style && prompt ? `${prompt}. Style: ${style}` : prompt
   console.log(`[worker] edit-image ${ctx.jobId} (provider: ${resolvedProvider}): "${effectivePrompt ?? "(no prompt)"}"`)
 
+  // Topaz is the ONE provider whose quality lever is billed: the reserved tier
+  // and the value sent here are both derived from resolveTopazUpscale, so a
+  // user can never pay for a tier we did not render (app-reports §4.3). Always
+  // explicit — relying on the model default in kie/models.ts would silently
+  // re-introduce the drift the moment that default changes.
+  const topaz = resolvedProvider === "topaz-image-upscale"
+    ? resolveTopazUpscale({ upscaleFactor, targetResolution })
+    : undefined
+  if (topaz?.adjustments.length) {
+    console.warn(
+      `[worker] topaz upscale ${ctx.jobId}: ` +
+      topaz.adjustments.map((a) => `${a.field} "${a.from}" → ${a.to}`).join("; "),
+    )
+  }
+
   const extraParams: Record<string, unknown> = {
-    ...(upscaleFactor && { upscale_factor: upscaleFactor }),
+    ...(topaz
+      ? { upscale_factor: topaz.upscaleFactor }
+      : upscaleFactor
+        ? { upscale_factor: upscaleFactor }
+        : {}),
     ...(aspectRatio && { image_size: aspectRatio }),
     ...(negativePrompt && { negative_prompt: negativePrompt }),
     ...(seed != null && { seed }),

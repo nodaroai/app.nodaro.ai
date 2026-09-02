@@ -133,6 +133,24 @@ export interface ModelCatalogEntry {
   features?: readonly string[]
   aspectRatios?: readonly string[]
   resolutions?: readonly string[]
+  /**
+   * What this model actually RENDERS for a resolution outside `resolutions`.
+   *
+   * Most providers honour whatever band they are sent, so an off-list value is
+   * best snapped to the NEAREST supported one — a 4k request on a 1080p-max
+   * model renders 1080p. A few instead COLLAPSE anything unrecognised to a
+   * fixed default (MiniMax H3 → 2K, Wan 3.0 → 720p), and for those the nearest
+   * band is the wrong answer in the most expensive direction: snapping a stale
+   * "720p" to H3's cheap 768P would send a value the provider ignores, so we
+   * would bill the 768P tier against a 2K render, and `commit_credits` never
+   * collects the shortfall.
+   *
+   * Declare it in the catalog's own spelling. `normalizeVideoRequestParams`
+   * uses it in place of the nearest-band snap; `video-collapse-parity.test.ts`
+   * pins each declaration to what the provider normalizer actually returns, so
+   * the two cannot drift.
+   */
+  unlistedResolutionRendersAs?: string
   qualities?: readonly string[]
   durations?: readonly number[]
   pricing: readonly PriceVariant[]
@@ -177,7 +195,7 @@ export const MODEL_RECOMMENDATIONS: readonly ModelRecommendation[] = [
   { intent: "cheapest realistic image", modelIds: ["z-image", "qwen", "imagen4-fast"], note: "Z-Image is the cheapest. Qwen / Imagen4 Fast for slightly higher quality." },
   { intent: "highest fidelity image", modelIds: ["nano-banana-pro", "imagen4-ultra", "flux-flex"], note: "Pick by family preference; all three are premium tiers." },
   { intent: "image edit / restyle", modelIds: ["flux-kontext", "ideogram-remix", "seedream-5-pro-i2i"], note: "Flux Kontext preserves identity; Ideogram Remix is character-aware; Seedream 5 Pro for instruction-based edits (5 Lite is the budget option)." },
-  { intent: "highest-resolution image (4K / 8K)", modelIds: ["topaz-image-upscale", "nano-banana-pro", "gpt-image-2"], note: "Generate at native then Topaz upscale for 8K." },
+  { intent: "highest-resolution image", modelIds: ["topaz-image-upscale", "nano-banana-pro", "gpt-image-2"], note: "Generate at the model's top tier, then Topaz upscale 4x (Topaz's only lever is the 1x/2x/4x factor)." },
   { intent: "background removal / cutout", modelIds: ["recraft-remove-bg"], note: "Cheap, no prompt needed." },
   // video
   { intent: "best cinematic video", modelIds: ["veo3", "kling-3.0", "seedance-2"], note: "VEO 3.1 Quality for premium narrative; Kling 3.0 for music-synced motion; Seedance 2 for reference-driven consistency." },
@@ -975,14 +993,15 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     family: "Topaz",
     label: "Topaz Image Upscale",
     series: "Topaz",
-    description: "High-quality image upscale up to 8K. Best for production-ready output.",
+    description: "High-quality image upscale at 1x (enhance only), 2x or 4x. Best for production-ready output.",
     useCases: ["upscale", "high-res", "premium"],
     features: ["reference-image"],
-    resolutions: ["2K", "4K", "8K"],
+    // No `resolutions`: the provider's only quality lever is `upscale_factor`
+    // (1/2/4) — see resolveTopazUpscale. The 2K/4K/8K menu this used to
+    // advertise had no provider parameter behind it.
     pricing: [
-      { identifier: "topaz-image-upscale", credits: 25, note: "2K default" },
-      { identifier: "topaz-image-upscale:4K", credits: 50, note: "4K" },
-      { identifier: "topaz-image-upscale:8K", credits: 100, note: "8K" },
+      { identifier: "topaz-image-upscale", credits: 25, note: "1x / 2x" },
+      { identifier: "topaz-image-upscale:4K", credits: 50, note: "4x (legacy identifier)" },
     ],
   },
 }
@@ -1017,6 +1036,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   // docs.kie.ai/market/minimax-h3/{text,image,reference}-to-video.
   "minimax-h3": {
     id: "minimax-h3",
+    unlistedResolutionRendersAs: "2K",
     kind: "video",
     modes: ["i2v", "t2v"] as const,
     family: "MiniMax",
@@ -1505,6 +1525,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   // declared explicitly in PRICING_DEFAULT_RESOLUTION, never by array position.
   "wan-3": {
     id: "wan-3",
+    unlistedResolutionRendersAs: "720p",
     kind: "video",
     modes: ["i2v", "t2v"] as const,
     family: "Alibaba",
@@ -1529,6 +1550,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   },
   "wan-3-prime": {
     id: "wan-3-prime",
+    unlistedResolutionRendersAs: "720p",
     kind: "video",
     modes: ["i2v", "t2v"] as const,
     family: "Alibaba",
@@ -1695,6 +1717,76 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     resolutions: ["720p", "1080p"],
     pricing: [
       { identifier: "wan-2.7-t2v", credits: 188, note: "5s 720p default" },
+    ],
+  },
+  // Lightricks LTX 2.3 (Replicate, not KIE). Both variants run one endpoint per
+  // variant and switch behaviour with a `task` discriminator, so t2v and i2v are
+  // the SAME id — no VIDEO_MODE_ALIASES row. `extend` / `retake` are separate
+  // priced ops on the same model (ids below) but are NOT listed in `modes`:
+  // they are driven by the Extend Video / Video Retake nodes' own pickers, and
+  // adding the mode here would duplicate LTX in those menus.
+  // Bands are lowercase to match LTX_DURATION_TIERS' keys in credit-identifiers.ts
+  // and QUALITY_MAP in node-default-mappings.ts.
+  "ltx-2.3-pro": {
+    id: "ltx-2.3-pro",
+    kind: "video",
+    modes: ["i2v", "t2v"] as const,
+    family: "Lightricks",
+    label: "LTX 2.3 Pro",
+    series: "LTX",
+    description: "Lightricks LTX 2.3 Pro — text/image/audio→video up to 4K, 6/8/10s, end-frame interpolation.",
+    useCases: ["premium", "high-res", "narrative"],
+    features: ["end-frame"],
+    aspectRatios: ["16:9", "9:16"] as const,
+    resolutions: ["1080p", "2k", "4k"] as const,
+    durations: [6, 8, 10],
+    pricing: [
+      { identifier: "ltx-2.3-pro", credits: 240, note: "default 1080p 6s" },
+      { identifier: "ltx-2.3-pro:1080p:6s", credits: 240 },
+      { identifier: "ltx-2.3-pro:1080p:8s", credits: 320 },
+      { identifier: "ltx-2.3-pro:1080p:10s", credits: 400 },
+      { identifier: "ltx-2.3-pro:2k:6s", credits: 480 },
+      { identifier: "ltx-2.3-pro:2k:8s", credits: 640 },
+      { identifier: "ltx-2.3-pro:2k:10s", credits: 800 },
+      { identifier: "ltx-2.3-pro:4k:6s", credits: 960 },
+      { identifier: "ltx-2.3-pro:4k:8s", credits: 1280 },
+      { identifier: "ltx-2.3-pro:4k:10s", credits: 1600 },
+      { identifier: "ltx-2.3-pro-extend:per-second", credits: 40, note: "extend, per second of new footage" },
+      { identifier: "ltx-2.3-pro-retake:per-second", credits: 40, note: "retake, per second re-rendered" },
+    ],
+  },
+  "ltx-2.3-fast": {
+    id: "ltx-2.3-fast",
+    kind: "video",
+    modes: ["i2v", "t2v"] as const,
+    family: "Lightricks",
+    label: "LTX 2.3 Fast",
+    series: "LTX",
+    description: "Lightricks LTX 2.3 Fast — text/image→video up to 20s at 1080p (6/8/10s at 2K and 4K). No audio input, no extend.",
+    useCases: ["long-form", "fast", "narrative"],
+    features: ["end-frame"],
+    aspectRatios: ["16:9", "9:16"] as const,
+    resolutions: ["1080p", "2k", "4k"] as const,
+    // Flat union across bands — 12–20s exist only at 1080p (LTX_DURATION_TIERS
+    // in credit-identifiers.ts is the per-band authority and snaps a 2k/4k
+    // request back onto 6/8/10s, so the reservation is always a real tier).
+    durations: [6, 8, 10, 12, 14, 16, 18, 20],
+    pricing: [
+      { identifier: "ltx-2.3-fast", credits: 180, note: "default 1080p 6s" },
+      { identifier: "ltx-2.3-fast:1080p:6s", credits: 180 },
+      { identifier: "ltx-2.3-fast:1080p:8s", credits: 240 },
+      { identifier: "ltx-2.3-fast:1080p:10s", credits: 300 },
+      { identifier: "ltx-2.3-fast:1080p:12s", credits: 360 },
+      { identifier: "ltx-2.3-fast:1080p:14s", credits: 420 },
+      { identifier: "ltx-2.3-fast:1080p:16s", credits: 480 },
+      { identifier: "ltx-2.3-fast:1080p:18s", credits: 540 },
+      { identifier: "ltx-2.3-fast:1080p:20s", credits: 600 },
+      { identifier: "ltx-2.3-fast:2k:6s", credits: 360 },
+      { identifier: "ltx-2.3-fast:2k:8s", credits: 480 },
+      { identifier: "ltx-2.3-fast:2k:10s", credits: 600 },
+      { identifier: "ltx-2.3-fast:4k:6s", credits: 720 },
+      { identifier: "ltx-2.3-fast:4k:8s", credits: 960 },
+      { identifier: "ltx-2.3-fast:4k:10s", credits: 1200 },
     ],
   },
   // ── HappyHorse (1.1 — ids kept version-less; repointed in place when KIE
@@ -2714,6 +2806,187 @@ export function normalizeModelInput(
   return out
 }
 
+/** Aspect tokens that mean "match the input" or "let the provider decide". They
+ *  are NOT concrete ratios, so snapping them onto one is always wrong — the
+ *  provider adapter (applySeedance2Params, applyMinimaxH3Params) resolves them
+ *  once it knows the run's mode. */
+const PASSTHROUGH_ASPECT_TOKENS = new Set(["auto", "adaptive"])
+
+/** Approximate vertical pixel count per band token, for nearest-band matching.
+ *  Anything of the form `<N>p` is parsed directly; these are the named bands
+ *  the catalogs use that do not follow that form. */
+const RESOLUTION_BAND_PIXELS: Record<string, number> = {
+  "2k": 1440,
+  "4k": 2160,
+  "8k": 4320,
+}
+
+function bandPixels(token: string): number | undefined {
+  const t = token.trim().toLowerCase()
+  if (RESOLUTION_BAND_PIXELS[t] !== undefined) return RESOLUTION_BAND_PIXELS[t]
+  const m = /^(\d+)p$/.exec(t)
+  return m ? Number(m[1]) : undefined
+}
+
+/** Nearest member of `allowed` to `token` by vertical pixels. An UNPARSEABLE
+ *  request falls back to the highest declared band — never the cheapest, which
+ *  is what a catalog-order fallback would give (R7). Highest is computed from
+ *  the pixel counts, not from the array position: most video catalogs list
+ *  ascending but not all do (minimax-h3 is `["2K", "768P"]`), and an ordering
+ *  convention is not something a money path should depend on. */
+function nearestResolutionBand(token: string, allowed: readonly string[]): string {
+  let highest = allowed[allowed.length - 1]!
+  let highestPx = -Infinity
+  for (const a of allowed) {
+    const px = bandPixels(a)
+    if (px !== undefined && px > highestPx) { highestPx = px; highest = a }
+  }
+  const want = bandPixels(token)
+  if (want === undefined) return highest
+  let best = highest
+  let bestDist = Infinity
+  for (const a of allowed) {
+    const px = bandPixels(a)
+    if (px === undefined) continue
+    const d = Math.abs(px - want)
+    if (d < bestDist) { bestDist = d; best = a }
+  }
+  return best
+}
+
+/** Nearest aspect ratio in log space. Mirrors
+ *  `backend/src/providers/video/aspect-ratio.ts` exactly — that helper cannot
+ *  be imported here (wrong package), and the totality test in
+ *  `backend/src/lib/mcp/__tests__/video-normalizer-totality.test.ts` pins the
+ *  two implementations to the same answer for every catalogued model. */
+function nearestAspectRatio(token: string, allowed: readonly string[]): string | undefined {
+  const [w, h] = token.split(":").map(Number)
+  if (!w || !h) return undefined
+  const target = Math.log(w / h)
+  let best: string | undefined
+  let bestDist = Infinity
+  for (const c of allowed) {
+    const [cw, ch] = c.split(":").map(Number)
+    if (!cw || !ch) continue
+    const d = Math.abs(Math.log(cw / ch) - target)
+    if (d < bestDist) { bestDist = d; best = c }
+  }
+  return best
+}
+
+/**
+ * Read a catalog lever off an UNVALIDATED input as a trimmed string.
+ *
+ * `normalizeVideoRequestParams` runs in both routes' creditGuard preHandler —
+ * which fires BEFORE the route's Zod parse — and in all four `buildPayload`
+ * branches, whose `data` is persisted workflow JSON that an agent/import/
+ * FieldMapping can write any JSON type into. A bare `.trim()` therefore throws
+ * `TypeError` on `{"resolution": 1080}`: a 500 where the route used to return a
+ * clean Zod 400, and in the DAG a thrown lever takes the WHOLE run down after
+ * sibling nodes have already reserved and generated. So coerce rather than
+ * assume — same posture as `sameOptionValue`, which has always used `String(v)`.
+ *
+ * `null`/`undefined`/blank mean "absent" (there is nothing to snap) and read as
+ * `undefined`, so the priced fill downstream supplies the band the identifier
+ * assumes — price and wire still agree. Everything else is stringified: a
+ * numeric `1080` becomes `"1080"` and snaps like its string form.
+ */
+function readOptionToken(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined
+  const s = (typeof value === "string" ? value : String(value)).trim()
+  return s === "" ? undefined : s
+}
+
+export interface NormalizedVideoRequest {
+  aspectRatio?: string
+  resolution?: string
+  adjustments: ModelInputAdjustment[]
+}
+
+/**
+ * The video lane's LIMITED normalizer: `aspectRatio` + `resolution` only, and
+ * only when the catalog actually declares the option list.
+ *
+ * Three deliberate differences from `normalizeModelInput`:
+ *   1. It never DROPS a lever. `normalizeModelInput` removes a value whose list
+ *      the catalog doesn't declare; on the video lane `resolution` is a pricing
+ *      input, so dropping it would lower the reserved tier and `commit_credits`
+ *      never collects an upward delta — a params fix would become a money bug.
+ *   2. "Auto" / "adaptive" pass through (see PASSTHROUGH_ASPECT_TOKENS).
+ *   3. It snaps to the NEAREST option, not to `allowed[0]`. `normalizeModelInput`
+ *      would turn a portrait 9:21 into landscape 16:9 and a 4k request into the
+ *      cheapest 480p; nearest matches what the provider adapters and the MCP
+ *      normalizer already do, so all three give ONE answer. Its snap policy is
+ *      deliberately left alone — it is shared with the image lane and the
+ *      copilot, and PR 4 defers changing it.
+ *
+ * `duration` is deliberately NOT normalized here: the LTX bands make duration
+ * legality resolution-dependent, which a flat catalog list can't express, and
+ * `buildVideoCreditModelIdentifier` already snaps duration onto a seeded tier.
+ * Carrying THAT tier to the wire is `pricedVideoSelection`'s job
+ * (`credit-identifiers.ts`), which runs after this one, once resolution is known.
+ *
+ * An OMITTED lever stays omitted here — filling it is a pricing decision, not a
+ * catalog one, and likewise belongs to `pricedVideoSelection`.
+ *
+ * Case is canonicalised to the catalog's own spelling — the credit identifiers
+ * key their tables case-SENSITIVELY (LTX_DURATION_TIERS), so this is the single
+ * place a "4K" becomes "4k", and it runs before every identifier site.
+ *
+ * Pure — so the credit-identifier preHandler, `computeCredits`, the reservation
+ * site and the payload build can all call it and cannot disagree (spec §4).
+ */
+export function normalizeVideoRequestParams(
+  modelId: string,
+  input: { aspectRatio?: string; resolution?: string },
+): NormalizedVideoRequest {
+  const m = MODEL_CATALOG[modelId]
+  // Seeded from the COERCED tokens, never the raw input: this function's own
+  // return type promises `string | undefined`, and its callers feed it straight
+  // to the credit identifier and the provider wire. Handing back the caller's
+  // `1080` or `[]` verbatim would break that promise at exactly the sites that
+  // must agree on one value.
+  const aspect = readOptionToken(input.aspectRatio)
+  const res = readOptionToken(input.resolution)
+  const out: NormalizedVideoRequest = { aspectRatio: aspect, resolution: res, adjustments: [] }
+  if (!m) return out
+
+  if (m.aspectRatios?.length && aspect && !PASSTHROUGH_ASPECT_TOKENS.has(aspect.toLowerCase())) {
+    const allowed = m.aspectRatios
+    const exact = allowed.find((a) => a === aspect) ?? allowed.find((a) => a.toLowerCase() === aspect.toLowerCase())
+    if (exact !== undefined) {
+      out.aspectRatio = exact
+    } else {
+      const next = nearestAspectRatio(aspect, allowed.filter((a) => !PASSTHROUGH_ASPECT_TOKENS.has(a.toLowerCase()))) ?? allowed[0]!
+      out.adjustments.push({
+        field: "aspectRatio", from: aspect, to: next,
+        reason: `${m.label} does not support aspect ratio "${aspect}" — using "${next}" instead. Supported: ${allowed.join(", ")}.`,
+      })
+      out.aspectRatio = next
+    }
+  }
+
+  if (m.resolutions?.length && res) {
+    const allowed = m.resolutions
+    const exact = allowed.find((a) => a === res) ?? allowed.find((a) => a.toLowerCase() === res.toLowerCase())
+    if (exact !== undefined) {
+      out.resolution = exact
+    } else {
+      // A provider that COLLAPSES an unrecognised band renders its declared
+      // default no matter what we send, so that default — not the nearest band
+      // — is the value the wire and the price must both carry.
+      const next = m.unlistedResolutionRendersAs ?? nearestResolutionBand(res, allowed)
+      out.adjustments.push({
+        field: "resolution", from: res, to: next,
+        reason: `${m.label} does not support resolution "${res}" — using "${next}" instead. Supported: ${allowed.join(", ")}.`,
+      })
+      out.resolution = next
+    }
+  }
+
+  return out
+}
+
 // =============================================================================
 // Frontend picker helpers — return `{value, label}[]` shapes that the
 // existing config-panel components expect, derived from the catalog so we
@@ -2742,6 +3015,7 @@ const MODEL_VALUE_LABELS: Record<string, string> = {
   "2K": "2K (High)",
   "4K": "4K (Ultra)",
   "4k": "4K",
+  "2k": "2K",
   "8K": "8K (Ultra)",
   // qualities
   "medium": "Medium (Balanced)",

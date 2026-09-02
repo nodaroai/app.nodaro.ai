@@ -27,7 +27,7 @@ Don't know where to start? Find your goal here, then jump to the model in the ta
 | cheapest realistic image | Z-Image, Qwen, Imagen 4 Fast | Z-Image is the cheapest. Qwen / Imagen4 Fast for slightly higher quality. |
 | highest fidelity image | Nano Banana Pro, Imagen 4 Ultra, Flux 2 Flex | Pick by family preference; all three are premium tiers. |
 | image edit / restyle | Flux Kontext Pro, Ideogram Remix, Seedream 5 Pro (I2I) | Flux Kontext preserves identity; Ideogram Remix is character-aware; Seedream 5 Pro for instruction-based edits (5 Lite is the budget option). |
-| highest-resolution image (4K / 8K) | Topaz Image Upscale, Nano Banana Pro, GPT Image 2 | Generate at native then Topaz upscale for 8K. |
+| highest-resolution image | Topaz Image Upscale, Nano Banana Pro, GPT Image 2 | Generate at the model's top tier, then Topaz upscale 4x (Topaz's only lever is the 1x/2x/4x factor). |
 | background removal / cutout | Recraft Remove BG | Cheap, no prompt needed. |
 | best cinematic video | VEO 3.1 Quality, Kling 3.0, Seedance 2 | VEO 3.1 Quality for premium narrative; Kling 3.0 for music-synced motion; Seedance 2 for reference-driven consistency. |
 | cheap batch video clips | VEO 3.1 Fast, Wan 2.2 Turbo, Bytedance Lite I2V | VEO 3.1 Fast is the best price/quality balance with native audio. |
@@ -79,7 +79,7 @@ Text-to-image, image-to-image, editing, upscaling, and background removal. For e
 | Flux 2 Pro (Safety Tolerance) | Black Forest Labs | Premium | 23 | t2i, i2i | BFL Flux 2 Pro flagship via Replicate — exposes the `safety_tolerance` lever pinned to 5 (max for Pro). Accepts up to 4 reference images. |
 | Flux Kontext Max | Black Forest Labs | Premium | 25 | t2i, edit | Premium Kontext — highest fidelity context-aware edits. |
 | Grok Upscale | xAI | Premium | 25 | upscale | Upscale a previously-generated Grok image. Requires the prior task id. |
-| Topaz Image Upscale | Topaz | Premium | 25 | upscale | High-quality image upscale up to 8K. Best for production-ready output. |
+| Topaz Image Upscale | Topaz | Premium | 25 | upscale | High-quality image upscale at 1x (enhance only), 2x or 4x. Best for production-ready output. |
 | Imagen 4 Ultra | Google | Premium | 30 | t2i | Premium Imagen 4 — highest fidelity, slower / more credits. |
 | Kontext Multi (Open) | Black Forest Labs | Premium | 30 | i2i, edit | Multi-image Flux Kontext Pro via Replicate — up to 4 input images, no safety filter. |
 | Flux 2 Flex | Black Forest Labs | Premium | 35 | t2i | Flux 2 Flex — premium fidelity, more flexible composition. Pricier than Pro. |
@@ -115,6 +115,7 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Bytedance Pro I2V | Bytedance | Premium | 175 | i2v, t2v | Pro Bytedance video tier — better quality. |
 | Wan 2.6 | Alibaba | Premium | 175 | v2v, t2v | Wan 2.6 — text-to-video and video-to-video under a single id. |
 | Wan 2.6 I2V | Alibaba | Premium | 175 | i2v | Wan 2.6 image-to-video — 5/10/15s at 720p/1080p. |
+| LTX 2.3 Fast | Lightricks | Premium | 180 | i2v, t2v | Lightricks LTX 2.3 Fast — text/image→video up to 20s at 1080p (6/8/10s at 2K and 4K). No audio input, no extend. |
 | Wan 2.7 I2V | Alibaba | Premium | 188 | i2v | Wan 2.7 image-to-video — 2–15s at 720p/1080p, supports start+end frame. |
 | Wan 2.7 T2V | Alibaba | Premium | 188 | t2v | Wan 2.7 text-to-video — 2–15s at 720p/1080p. |
 | Seedance 2 Mini | Bytedance | Premium | 190 | i2v, t2v | Budget Seedance 2 tier — 480p/720p only, per-second pricing by resolution. |
@@ -122,6 +123,7 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | VEO Extend | Google | Premium | 190 | extend | Extend an existing VEO 3.1 clip by another segment. |
 | Hailuo 2.3 Pro | MiniMax | Premium | 200 | i2v | Hailuo 2.3 Pro — newer Hailuo with 768P / 1080P resolutions. |
 | Wan 3.0 | Alibaba | Premium | 200 | i2v, t2v | Wan 3.0 — multimodal: first/last frame or image/video/audio references, native audio, 2-30s at 480p/720p/1080p. |
+| LTX 2.3 Pro | Lightricks | Premium | 240 | i2v, t2v | Lightricks LTX 2.3 Pro — text/image/audio→video up to 4K, 6/8/10s, end-frame interpolation. |
 | Kling 3 Omni | Kuaishou | Premium | 250 | i2v | Kling 3 Omni via Replicate — 3-15s, 720p/1080p, end frame + reference images, native audio. |
 | Gemini Omni Flash | Google | Premium | 270 | i2v, t2v | Google Gemini Omni Flash — faster/cheaper Omni tier: multimodal video with native audio, text/image-to-video + video-edit. |
 | Kling 2.6 | Kuaishou | Premium | 280 | i2v, t2v | Kling 2.6 I2V — strong motion realism. 5s/10s, optional native audio. |

@@ -235,6 +235,32 @@ const LTX_DURATION_TIERS: Record<string, Record<string, number[]>> = {
   "ltx-2.3-fast": { "1080p": [6, 8, 10, 12, 14, 16, 18, 20], "2k": [6, 8, 10], "4k": [6, 8, 10] },
 }
 
+/**
+ * The (band, duration) tier the LTX pricing ladder charges for a request, or
+ * `undefined` for a non-LTX provider. Extracted so
+ * `buildVideoCreditModelIdentifier` and `pricedVideoSelection` read the ladder
+ * ONCE — the routes must send the tier they reserved, and a second copy of this
+ * math is exactly how the two drift apart.
+ *
+ * An unknown/absent band falls back to 1080p (LTX's own default, and the band
+ * `snapLtxInput` snaps to at the Replicate call), and an off-tier duration
+ * snaps to the NEAREST seeded one so the emitted composite always prices.
+ */
+function ltxPricedTier(
+  provider: string,
+  resolution?: string,
+  duration?: number | string,
+): { band: string; duration: number } | undefined {
+  const bands = LTX_DURATION_TIERS[provider]
+  if (!bands) return undefined
+  const band = bands[String(resolution)] ? String(resolution) : "1080p"
+  const allowed = bands[band]!
+  const raw = typeof duration === "string" ? parseInt(duration, 10) : (duration ?? allowed[0]!)
+  const want = Number.isNaN(raw) ? allowed[0]! : raw
+  const dur = allowed.reduce((b, a) => (Math.abs(a - want) < Math.abs(b - want) ? a : b))
+  return { band, duration: dur }
+}
+
 export function buildVideoCreditModelIdentifier(
   provider: string,
   duration?: number | string,
@@ -292,14 +318,9 @@ export function buildVideoCreditModelIdentifier(
   // (actual < reserved) and NEVER collects an upward delta, so an under-reserved
   // LTX run (the bare-id default = cheapest 1080p:6s tier) stays under-charged
   // even with meteredCost:true. Snap to a seeded tier so the id always prices.
-  if (effectiveProvider === "ltx-2.3-pro" || effectiveProvider === "ltx-2.3-fast") {
-    const bands = LTX_DURATION_TIERS[effectiveProvider]
-    const band = bands[String(resolution)] ? String(resolution) : "1080p"
-    const allowed = bands[band]
-    const raw = typeof duration === "string" ? parseInt(duration, 10) : (duration ?? allowed[0])
-    const want = Number.isNaN(raw) ? allowed[0] : raw
-    const dur = allowed.reduce((b, a) => (Math.abs(a - want) < Math.abs(b - want) ? a : b))
-    return `${effectiveProvider}:${band}:${dur}s`
+  const ltxTier = ltxPricedTier(effectiveProvider, resolution, duration)
+  if (ltxTier) {
+    return `${effectiveProvider}:${ltxTier.band}:${ltxTier.duration}s`
   }
 
   if (!DURATION_PRICED_PROVIDERS.has(effectiveProvider)) {
@@ -403,6 +424,92 @@ export function buildVideoCreditModelIdentifier(
   }
 
   return identifier
+}
+
+/** What the video credit identifier PRICES for a request, for the levers whose
+ *  priced value must also be the value we SEND. */
+export interface PricedVideoSelection {
+  /** The resolution band the reservation is priced at when the request omitted
+   *  one — and only where the platform DECLARES that band as the provider's own
+   *  default. `undefined` means "leave `resolution` exactly as the request had
+   *  it": either the caller supplied one, or the provider's real default is not
+   *  known to be the band the identifier assumes. */
+  resolution?: string
+  /** The seeded duration tier the reservation is priced at (LTX only — the one
+   *  family whose duration ladder is per-band and case-sensitively seeded).
+   *  `undefined` for every other provider: their duration passes through. */
+  duration?: number
+  /** Non-empty only for a lever the caller ASKED for and did not get (an LTX
+   *  7s snapped to the 6s tier). Filling an omitted lever is a disclosure of
+   *  the price already being charged, not a correction, so it reports nothing. */
+  adjustments: ModelInputAdjustment[]
+}
+
+/**
+ * The other half of the video money path: `normalizeVideoRequestParams` snaps a
+ * value the CATALOG governs; this returns the value the PRICE ladder governs.
+ *
+ * Two defects it closes, both of the same shape — the identifier prices one
+ * thing and the wire carries another, and `commit_credits` (migration 176) only
+ * ever refunds a surplus, so the reservation is the final charge:
+ *
+ *  1. **Absent resolution.** `buildVideoCreditModelIdentifier` prices an omitted
+ *     `resolution` as a concrete band (LTX → 1080p; a
+ *     {@link PRICING_DEFAULT_RESOLUTION} member → its declared default). Leaving
+ *     the key unset then lets the provider pick — documented for the KIE members
+ *     (their `extraParams` pin the same band) but UNDOCUMENTED for LTX on
+ *     Replicate. Sending the band we priced makes the two agree by construction.
+ *
+ *     The fill is deliberately limited to providers with a DECLARED default.
+ *     `buildVideoCreditModelIdentifier` also has un-declared fallbacks — the
+ *     cheapest tier for a resolution-priced provider with no
+ *     `PRICING_DEFAULT_RESOLUTION` row — and those are a HEDGE, not a verified
+ *     provider default: seedance-2 / -fast / -mini pin `resolution: "720p"`
+ *     KIE-side while the identifier prices 480p, so filling 480p would downgrade
+ *     the render to match a price we already know is wrong. That mismatch is a
+ *     pre-existing identifier bug and is fixed by seeding the row, not here.
+ *
+ *  2. **LTX duration.** The LTX ladder is seeded per (band × seconds), so the
+ *     identifier snaps 7s onto the 6s tier. Sending 7s bills six and renders
+ *     seven. Most other providers' durations pass through untouched: their
+ *     legality is a flat catalog list the caller already sees, and their tiers
+ *     are ranges (`durationSec <= maxSeconds`), not seeded points. Gemini Omni
+ *     is the one other seeded ladder — `GEMINI_OMNI_DURATIONS` ([4, 6, 8, 10])
+ *     is nearest-snapped by `buildVideoCreditModelIdentifier`, the same shape
+ *     as LTX — but this function does not carry it yet: a 7s request prices
+ *     `:6` while 7s is still what gets sent. Pre-existing, out of scope here,
+ *     and ticketed as a follow-up (`geminiOmniPricedTier`, mirroring
+ *     `ltxPricedTier`).
+ *
+ * Pure, and IDEMPOTENT against the identifier: feeding its output back in
+ * cannot move the reserved tier. `video-request-normalize.test.ts` proves that
+ * over every provider × resolution × duration.
+ */
+export function pricedVideoSelection(opts: {
+  provider: string
+  resolution?: string
+  duration?: number | string
+}): PricedVideoSelection {
+  const adjustments: ModelInputAdjustment[] = []
+  const ltx = ltxPricedTier(opts.provider, opts.resolution, opts.duration)
+
+  // The band the request will be priced AND rendered at. An explicit value
+  // always wins — this only ever fills an omission.
+  const resolution = opts.resolution
+    ?? (ltx ? ltx.band : PRICING_DEFAULT_RESOLUTION[opts.provider])
+
+  if (!ltx) return { resolution, adjustments }
+
+  const requested = typeof opts.duration === "string" ? parseInt(opts.duration, 10) : opts.duration
+  if (requested !== undefined && !Number.isNaN(requested) && requested !== ltx.duration) {
+    adjustments.push({
+      field: "duration",
+      from: requested,
+      to: ltx.duration,
+      reason: `LTX renders ${ltx.band} in ${ltx.duration}s steps — using ${ltx.duration}s instead of ${requested}s.`,
+    })
+  }
+  return { resolution, duration: ltx.duration, adjustments }
 }
 
 /**

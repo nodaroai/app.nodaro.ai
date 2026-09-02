@@ -1,6 +1,13 @@
-import { MODEL_CATALOG, SEEDANCE_2_REF_LIMITS } from "@nodaro/shared"
+import { MODEL_CATALOG } from "@nodaro/shared"
 import { STATIC_CREDIT_COSTS, PriceNotConfiguredError } from "./credits.js"
-import { probeMediaDuration } from "../../providers/video/ffmpeg-utils.js"
+// The probe lives in CORE (lib/ref-video-probe.ts) because the routes' duration
+// pre-check — plain input validation, not a credit feature — must run in
+// community/business too, where no ee/ module may be loaded at runtime.
+// ee -> core is the allowed direction; re-exported so existing importers of
+// this module are unaffected.
+import { probeRefVideoDurations } from "../../lib/ref-video-probe.js"
+
+export { probeRefVideoDurations, refVideoCapFor } from "../../lib/ref-video-probe.js"
 
 /**
  * KIE caps a Seedance 2 reference-video run's total input at ≤15s, so a probe we
@@ -58,18 +65,40 @@ export function seedance2RefVideoBaseCredits(args: {
 }
 
 /**
+ * BASE credits for a reference-video run from ALREADY-PROBED durations.
+ *
+ * The SINGLE place the worst-case rule lives: an unusable probe (NaN/<=0)
+ * counts as the full 15s worst case for that URL so we can only ever
+ * OVER-reserve, never under-reserve (the refund-only `commit_credits`
+ * constraint). Callers that hold a probe result (the routes' duration
+ * pre-check stashes one on the request) price through here instead of running
+ * a second uncached ffprobe per clip.
+ */
+export function seedance2RefVideoBaseCreditsFromDurations(args: {
+  provider: string
+  resolution: string
+  outputDurationSec: number
+  durationsSec: readonly number[]
+}): number {
+  const { provider, resolution, outputDurationSec, durationsSec } = args
+  const inputVideoDurationSec = durationsSec.reduce(
+    (sum, d) => sum + (Number.isFinite(d) && d > 0 ? d : REF_VIDEO_WORST_CASE_SEC),
+    0,
+  )
+  return seedance2RefVideoBaseCredits({ provider, resolution, outputDurationSec, inputVideoDurationSec })
+}
+
+/**
  * ffprobe the connected reference videos, sum their durations, and return the
  * BASE (0%-markup) credit total for the full `unit × (input + output)` Seedance 2
  * reference run. This is the SINGLE shared entry point for both the route
  * `computeCredits` hook (A2) and the orchestrator reservation (A3) — neither
  * duplicates the probe/sum/worst-case logic.
  *
- * - At most `SEEDANCE_2_REF_LIMITS.videos` URLs are probed (the route's Zod cap),
- *   so we never ffprobe an unbounded list.
- * - Probes run via `Promise.allSettled`; a rejected probe (or a NaN/≤0 duration)
- *   counts as the 15s worst case for that URL so we can only ever OVER-reserve,
- *   never under-reserve (the refund-only `commit_credits` constraint).
- * - Non-string / empty entries are ignored (they contribute 0s).
+ * Composed from the two halves above so there is exactly ONE probe
+ * implementation and ONE worst-case implementation; a caller that already
+ * probed (the routes' pre-check) skips straight to
+ * {@link seedance2RefVideoBaseCreditsFromDurations}.
  */
 export async function seedance2RefVideoBaseCreditsFromUrls(args: {
   provider: string
@@ -78,17 +107,6 @@ export async function seedance2RefVideoBaseCreditsFromUrls(args: {
   referenceVideoUrls: readonly unknown[]
 }): Promise<number> {
   const { provider, resolution, outputDurationSec, referenceVideoUrls } = args
-
-  const candidates = referenceVideoUrls
-    .slice(0, SEEDANCE_2_REF_LIMITS.videos)
-    .filter((u): u is string => typeof u === "string" && u.length > 0)
-
-  const settled = await Promise.allSettled(candidates.map((u) => probeMediaDuration(u)))
-  const inputVideoDurationSec = settled.reduce((sum, r) => {
-    if (r.status === "fulfilled" && Number.isFinite(r.value) && r.value > 0) return sum + r.value
-    // Rejected probe OR an unusable duration → assume the full 15s worst case.
-    return sum + REF_VIDEO_WORST_CASE_SEC
-  }, 0)
-
-  return seedance2RefVideoBaseCredits({ provider, resolution, outputDurationSec, inputVideoDurationSec })
+  const durationsSec = await probeRefVideoDurations({ provider, referenceVideoUrls })
+  return seedance2RefVideoBaseCreditsFromDurations({ provider, resolution, outputDurationSec, durationsSec })
 }

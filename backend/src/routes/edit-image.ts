@@ -10,7 +10,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { applySnappedLevers, withAdjustments } from "../lib/image-gen-normalize.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
-import { IMAGE_ASPECT_RATIO_VALUES, IMAGE_EDIT_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS, PROMPT_HARD_CEILING, buildCreditModelIdentifier, resolveNormalizedImageGen } from "@nodaro/shared"
+import { IMAGE_ASPECT_RATIO_VALUES, IMAGE_EDIT_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS, PROMPT_HARD_CEILING, buildCreditModelIdentifier, resolveNormalizedImageGen, resolveTopazUpscale } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 
@@ -73,16 +73,30 @@ export const editImageBody = z.object({
  * reservation identifier below.
  *
  * `aspectRatio` is deliberately NOT part of this: on this route pricing keys on
- * `targetResolution` alone, so the aspect snap is billing-neutral and lives in
- * the handler. `targetResolution` is NOT fed to the catalog normalizer either —
- * `recraft-upscale` declares no `resolutions`, so a snap would DROP a 4K/8K the
- * user paid for and drop the reserve to the base tier.
+ * the resolution tier alone, so the aspect snap is billing-neutral and lives in
+ * the handler.
+ *
+ * The tier itself is provider-dependent. For `topaz-image-upscale` it comes from
+ * `resolveTopazUpscale` — the SAME resolver the handler's DEBIT and the worker
+ * use — where a valid `upscaleFactor` takes precedence and the legacy
+ * `targetResolution` only maps in as a fallback (8K→4). Passing the raw
+ * `targetResolution` here instead would split CHECK from DEBIT: `commit_credits`
+ * only ever refunds a surplus and never collects an upward delta, so
+ * `{upscaleFactor:"4"}` would under-charge and `{upscaleFactor:"2",
+ * targetResolution:"8K"}` would over-charge. Every other provider passes
+ * `targetResolution` through verbatim.
  */
 export function resolveEditImageCreditIdentifier(req: FastifyRequest): string {
   const body = req.body as Record<string, unknown> | null
   const provider = (body?.provider as string) ?? "recraft-upscale"
   const targetResolution = typeof body?.targetResolution === "string" ? body.targetResolution : undefined
-  return buildCreditModelIdentifier(provider, undefined, undefined, undefined, targetResolution)
+  const creditTier = provider === "topaz-image-upscale"
+    ? resolveTopazUpscale({
+        upscaleFactor: typeof body?.upscaleFactor === "string" ? body.upscaleFactor : undefined,
+        targetResolution,
+      }).creditTier
+    : targetResolution
+  return buildCreditModelIdentifier(provider, undefined, undefined, undefined, creditTier)
 }
 
 export async function editImageRoutes(app: FastifyInstance) {
@@ -118,7 +132,21 @@ export async function editImageRoutes(app: FastifyInstance) {
     }
 
     const baseProvider = provider ?? "recraft-upscale"
-    const modelIdentifier = buildCreditModelIdentifier(baseProvider, undefined, undefined, undefined, targetResolution)
+    // `topaz.adjustments` is deliberately discarded rather than folded into the
+    // `withAdjustments` response below: `ModelInputAdjustment.field` is a closed
+    // union that does not admit `upscaleFactor`/`targetResolution`. Surfacing
+    // them is a follow-up that carries its own @nodaro/shared changeset.
+    const topaz = baseProvider === "topaz-image-upscale"
+      ? resolveTopazUpscale({ upscaleFactor, targetResolution })
+      : undefined
+    const modelIdentifier = buildCreditModelIdentifier(
+      baseProvider, undefined, undefined, undefined, topaz ? topaz.creditTier : targetResolution,
+    )
+    // The factor the worker renders. `targetResolution` stays on the payload
+    // below so the worker's own resolveTopazUpscale call is a no-op agreement
+    // rather than a second opinion, and so `input_data` keeps the evidence of
+    // what the caller asked for.
+    const effectiveUpscaleFactor = topaz ? topaz.upscaleFactor : upscaleFactor
 
     // Aspect-ONLY catalog snap. Billing-neutral on this route (pricing keys on
     // `targetResolution`, which is NOT passed here — see
@@ -172,7 +200,7 @@ export async function editImageRoutes(app: FastifyInstance) {
       taskId,
       prompt: finalPrompt,
       provider,
-      upscaleFactor,
+      upscaleFactor: effectiveUpscaleFactor,
       targetResolution,
       aspectRatio: parsed.data.aspectRatio,
       negativePrompt: finalNegativePrompt,
