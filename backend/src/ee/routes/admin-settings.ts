@@ -3,6 +3,8 @@ import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
 import { invalidateSettingsCache } from "../../lib/app-settings.js"
 import { invalidateConsentConfigCache } from "../lib/consent-config.js"
+import { invalidateNotifyConfigCache } from "../notifications/notify-config.js"
+import { isSlackWebhookValid } from "../notifications/slack-client.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { requirePlatformOperator } from "../middleware/require-platform-operator.js"
 
@@ -250,6 +252,40 @@ export async function adminSettingsRoutes(app: FastifyInstance) {
       }
     }
 
+    // Internal founder notifications (see ee/notifications/). Slack, one channel.
+    if (
+      key === "notify_digest_enabled" ||
+      key === "notify_milestones_enabled" ||
+      key === "notify_every_signup_enabled"
+    ) {
+      if (typeof value !== "boolean") {
+        return reply.status(400).send({
+          error: { code: "validation_error", message: `${key} must be a boolean` },
+        })
+      }
+    }
+
+    if (key === "notify_digest_hour") {
+      if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 23) {
+        return reply.status(400).send({
+          error: { code: "validation_error", message: "notify_digest_hour must be an integer between 0 and 23 (Asia/Jerusalem)" },
+        })
+      }
+    }
+
+    if (key === "notify_slack_webhook_url") {
+      // Empty string = notifications off (dormant). A non-empty value MUST be a
+      // real Slack incoming-webhook URL — a typo here would fail silently forever.
+      if (typeof value !== "string" || (value.trim() !== "" && !isSlackWebhookValid(value))) {
+        return reply.status(400).send({
+          error: {
+            code: "validation_error",
+            message: "notify_slack_webhook_url must be empty or a valid https://hooks.slack.com/services/... URL",
+          },
+        })
+      }
+    }
+
     if (key === "featured_app_ids") {
       if (!Array.isArray(value) || !value.every((v: unknown) => typeof v === "string")) {
         return reply.status(400).send({
@@ -305,6 +341,7 @@ export async function adminSettingsRoutes(app: FastifyInstance) {
     // Invalidate cached settings so changes take effect immediately
     invalidateSettingsCache()
     invalidateConsentConfigCache()
+    invalidateNotifyConfigCache()
 
     return {
       key: data.key,

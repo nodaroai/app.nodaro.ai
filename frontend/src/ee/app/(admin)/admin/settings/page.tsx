@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { Loader2, Settings, Server, Percent, Check, AlertCircle, Film, Plus, Trash2, Bot, Mail } from "lucide-react"
+import { Loader2, Settings, Server, Percent, Check, AlertCircle, Film, Plus, Trash2, Bot, Mail, Bell } from "lucide-react"
 import { useAdminSettings } from "@/ee/hooks/queries/use-admin-queries"
 import { useUpdateSettingMutation, type AppSettings } from "@/hooks/queries/use-app-settings-queries"
 import { isFeatureEnabled, isCloud } from "@/lib/edition"
@@ -76,6 +76,12 @@ export default function AdminSettingsPage() {
   const [consentLoginDef, setConsentLoginDef] = useState<"session" | "app_open">("session")
   const [consentText, setConsentText] = useState("")
   const [consentVersion, setConsentVersion] = useState(1)
+  // Internal founder notifications (Slack, one channel; Cloud-only).
+  const [notifyDigestEnabled, setNotifyDigestEnabled] = useState(true)
+  const [notifyDigestHour, setNotifyDigestHour] = useState(8)
+  const [notifyMilestonesEnabled, setNotifyMilestonesEnabled] = useState(true)
+  const [notifyEverySignupEnabled, setNotifyEverySignupEnabled] = useState(false)
+  const [notifySlackWebhookUrl, setNotifySlackWebhookUrl] = useState("")
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -101,6 +107,11 @@ export default function AdminSettingsPage() {
       setConsentLoginDef(settings.consent_login_definition ?? "session")
       setConsentText(settings.consent_text ?? "")
       setConsentVersion(settings.consent_version ?? 1)
+      setNotifyDigestEnabled(settings.notify_digest_enabled ?? true)
+      setNotifyDigestHour(settings.notify_digest_hour ?? 8)
+      setNotifyMilestonesEnabled(settings.notify_milestones_enabled ?? true)
+      setNotifyEverySignupEnabled(settings.notify_every_signup_enabled ?? false)
+      setNotifySlackWebhookUrl(settings.notify_slack_webhook_url ?? "")
     }
   }, [settings])
 
@@ -167,6 +178,14 @@ export default function AdminSettingsPage() {
     if (consentText.trim() && consentText.trim() !== (settings?.consent_text ?? "")) updates.push({ key: "consent_text", value: consentText.trim() })
     if (consentVersion !== (settings?.consent_version ?? 1)) updates.push({ key: "consent_version", value: consentVersion })
 
+    if (notifyDigestEnabled !== (settings?.notify_digest_enabled ?? true)) updates.push({ key: "notify_digest_enabled", value: notifyDigestEnabled })
+    if (notifyDigestHour !== (settings?.notify_digest_hour ?? 8)) updates.push({ key: "notify_digest_hour", value: notifyDigestHour })
+    if (notifyMilestonesEnabled !== (settings?.notify_milestones_enabled ?? true)) updates.push({ key: "notify_milestones_enabled", value: notifyMilestonesEnabled })
+    if (notifyEverySignupEnabled !== (settings?.notify_every_signup_enabled ?? false)) updates.push({ key: "notify_every_signup_enabled", value: notifyEverySignupEnabled })
+    // The webhook may legitimately be cleared to "" (turns notifications off), so
+    // unlike consent_text this pushes even an empty value when it changed.
+    if (notifySlackWebhookUrl.trim() !== (settings?.notify_slack_webhook_url ?? "")) updates.push({ key: "notify_slack_webhook_url", value: notifySlackWebhookUrl.trim() })
+
     let allSuccess = true
     for (const update of updates) {
       try {
@@ -205,7 +224,12 @@ export default function AdminSettingsPage() {
     consentWithdrawnHours !== (settings.consent_withdrawn_cadence_hours ?? 720) ||
     consentLoginDef !== (settings.consent_login_definition ?? "session") ||
     (consentText.trim() !== "" && consentText.trim() !== (settings.consent_text ?? "")) ||
-    consentVersion !== (settings.consent_version ?? 1)
+    consentVersion !== (settings.consent_version ?? 1) ||
+    notifyDigestEnabled !== (settings.notify_digest_enabled ?? true) ||
+    notifyDigestHour !== (settings.notify_digest_hour ?? 8) ||
+    notifyMilestonesEnabled !== (settings.notify_milestones_enabled ?? true) ||
+    notifyEverySignupEnabled !== (settings.notify_every_signup_enabled ?? false) ||
+    notifySlackWebhookUrl.trim() !== (settings.notify_slack_webhook_url ?? "")
   )
 
   if (loading && !settings) {
@@ -606,6 +630,71 @@ export default function AdminSettingsPage() {
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">Cadence is time-based today; this is informational until a login counter exists.</p>
+          </div>
+        </div>
+
+        {/* Internal founder notifications (Slack, one channel; Cloud-only) */}
+        <div className="border rounded-lg p-4 bg-card">
+          <div className="flex items-center gap-2 mb-4">
+            <Bell className="h-4 w-4 text-muted-foreground" />
+            <h2 className="font-medium">Founder notifications</h2>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="notify-webhook">Slack incoming-webhook URL</Label>
+            <Input
+              id="notify-webhook"
+              type="url"
+              value={notifySlackWebhookUrl}
+              onChange={(e) => setNotifySlackWebhookUrl(e.target.value)}
+              placeholder="https://hooks.slack.com/services/…"
+            />
+            <p className="text-xs text-muted-foreground">
+              All internal alerts post here — one channel. Leave empty to turn every notification below off. These never go through Loops.
+            </p>
+          </div>
+
+          <div className="mt-4 flex items-center justify-between">
+            <div className="pr-4">
+              <Label htmlFor="notify-milestones">Milestone alerts</Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Immediate: a user&apos;s first generation, first paid conversion, or a paid cancellation.
+              </p>
+            </div>
+            <Switch id="notify-milestones" checked={notifyMilestonesEnabled} onCheckedChange={setNotifyMilestonesEnabled} />
+          </div>
+
+          <div className="mt-4 flex items-center justify-between">
+            <div className="pr-4">
+              <Label htmlFor="notify-every-signup">Every signup</Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Immediate ping on every new signup. Off by default — noisy once volume picks up.
+              </p>
+            </div>
+            <Switch id="notify-every-signup" checked={notifyEverySignupEnabled} onCheckedChange={setNotifyEverySignupEnabled} />
+          </div>
+
+          <div className="mt-4 flex items-center justify-between">
+            <div className="pr-4">
+              <Label htmlFor="notify-digest">Daily digest</Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Once a day: yesterday&apos;s signups plus running totals. Silent on days with zero signups.
+              </p>
+            </div>
+            <Switch id="notify-digest" checked={notifyDigestEnabled} onCheckedChange={setNotifyDigestEnabled} />
+          </div>
+
+          <div className="mt-4 max-w-xs space-y-1.5">
+            <Label htmlFor="notify-digest-hour">Digest send hour</Label>
+            <Input
+              id="notify-digest-hour"
+              type="number"
+              min={0}
+              max={23}
+              value={notifyDigestHour}
+              onChange={(e) => setNotifyDigestHour(Math.max(0, Math.min(23, Number(e.target.value) || 0)))}
+            />
+            <p className="text-xs text-muted-foreground">Hour of day, 0–23, Israel time (Asia/Jerusalem).</p>
           </div>
         </div>
 

@@ -578,6 +578,22 @@ export function useAdminSettings() {
         featured_app_ids: (Array.isArray(settings.featured_app_ids) ? settings.featured_app_ids : []) as string[],
         featured_apps_limit: (settings.featured_apps_limit as number) ?? 20,
         apps_auto_scroll_seconds: (settings.apps_auto_scroll_seconds as number) ?? 4,
+        // Consent knobs — the admin settings page reads these off THIS hook, so
+        // they must be mapped here (not only in fetchAppSettings) or the card
+        // shows defaults forever and never reflects a saved value.
+        consent_enabled: (settings.consent_enabled as boolean | undefined) ?? false,
+        consent_cadence_hours: (settings.consent_cadence_hours as number | undefined) ?? 24,
+        consent_max_asks: (settings.consent_max_asks as number | undefined) ?? 5,
+        consent_withdrawn_cadence_hours: (settings.consent_withdrawn_cadence_hours as number | undefined) ?? 720,
+        consent_login_definition: (settings.consent_login_definition as "session" | "app_open" | undefined) ?? "session",
+        consent_text: (settings.consent_text as string | undefined) ?? "",
+        consent_version: (settings.consent_version as number | undefined) ?? 1,
+        // Internal founder-notification knobs (same reasoning as consent above).
+        notify_digest_enabled: (settings.notify_digest_enabled as boolean | undefined) ?? true,
+        notify_digest_hour: (settings.notify_digest_hour as number | undefined) ?? 8,
+        notify_milestones_enabled: (settings.notify_milestones_enabled as boolean | undefined) ?? true,
+        notify_every_signup_enabled: (settings.notify_every_signup_enabled as boolean | undefined) ?? false,
+        notify_slack_webhook_url: (settings.notify_slack_webhook_url as string | undefined) ?? "",
       }
     },
     enabled: hasAdmin(),

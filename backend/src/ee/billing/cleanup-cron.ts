@@ -14,6 +14,7 @@ import { kieRunwayAlert } from "./kie-low-balance-alert.js"
 import { sweepStaleDcrRegistrations } from "../../lib/oauth-dcr-sweep.js"
 import { sweepAbandonedCopilotWorkflows } from "../copilot/abandoned-sweep.js"
 import { sweepUnsyncedConsents } from "../lib/consent-loops-sync.js"
+import { runFounderNotifyTick } from "../notifications/founder-notify.js"
 
 /**
  * Start all billing cleanup cron jobs.
@@ -65,6 +66,18 @@ export function startCleanupCron(): void {
       if (synced > 0) console.log(`[cron] consent->Loops backfill: ${synced} contact(s) reconciled`)
     } catch (err) {
       console.error("[cron] consent->Loops backfill failed:", err)
+    }
+  })
+
+  // Internal founder notifications (Cloud, internal-only) -- every 5 minutes.
+  // Drives the every-signup + first-generation polls and the once-a-day digest
+  // (which self-gates on the configured Israel hour). Fully dormant until an
+  // admin sets notify_slack_webhook_url; runFounderNotifyTick never throws.
+  cron.schedule("*/5 * * * *", async () => {
+    try {
+      await runFounderNotifyTick()
+    } catch (err) {
+      console.error("[cron] founder notify tick failed:", err)
     }
   })
 
@@ -264,5 +277,5 @@ export function startCleanupCron(): void {
   // no reconcile at all (audit B2). It now starts unconditionally from
   // server.ts via lib/reconcile/start.ts.
 
-  console.log("[cron] Billing cleanup cron jobs started (9 schedules)")
+  console.log("[cron] Billing cleanup cron jobs started (10 schedules)")
 }
