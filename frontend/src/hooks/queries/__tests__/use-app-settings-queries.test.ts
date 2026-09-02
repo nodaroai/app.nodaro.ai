@@ -109,6 +109,13 @@ describe("useAppSettings", () => {
       featured_app_ids: [],
       featured_apps_limit: 20,
       apps_auto_scroll_seconds: 4,
+      consent_enabled: false,
+      consent_cadence_hours: 24,
+      consent_max_asks: 5,
+      consent_withdrawn_cadence_hours: 720,
+      consent_login_definition: "session",
+      consent_text: "",
+      consent_version: 1,
     })
   })
 

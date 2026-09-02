@@ -19,6 +19,14 @@ export interface AppSettings {
   readonly featured_app_ids: readonly string[]
   readonly featured_apps_limit: number
   readonly apps_auto_scroll_seconds: number
+  /** Marketing-email consent prompt knobs (Cloud-only). Absent on non-cloud. */
+  readonly consent_enabled?: boolean
+  readonly consent_cadence_hours?: number
+  readonly consent_max_asks?: number
+  readonly consent_withdrawn_cadence_hours?: number
+  readonly consent_login_definition?: "session" | "app_open"
+  readonly consent_text?: string
+  readonly consent_version?: number
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -54,6 +62,13 @@ async function fetchAppSettings(): Promise<AppSettings> {
     featured_app_ids: (Array.isArray(settings.featured_app_ids) ? settings.featured_app_ids : []) as string[],
     featured_apps_limit: (settings.featured_apps_limit as number) ?? 20,
     apps_auto_scroll_seconds: (settings.apps_auto_scroll_seconds as number) ?? 4,
+    consent_enabled: (settings.consent_enabled as boolean | undefined) ?? false,
+    consent_cadence_hours: (settings.consent_cadence_hours as number | undefined) ?? 24,
+    consent_max_asks: (settings.consent_max_asks as number | undefined) ?? 5,
+    consent_withdrawn_cadence_hours: (settings.consent_withdrawn_cadence_hours as number | undefined) ?? 720,
+    consent_login_definition: (settings.consent_login_definition as "session" | "app_open" | undefined) ?? "session",
+    consent_text: (settings.consent_text as string | undefined) ?? "",
+    consent_version: (settings.consent_version as number | undefined) ?? 1,
   }
 }
 

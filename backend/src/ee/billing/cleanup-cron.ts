@@ -13,6 +13,7 @@ import { recordKieCreditSnapshot, fetchKieCreditSnapshotsSince } from "../routes
 import { kieRunwayAlert } from "./kie-low-balance-alert.js"
 import { sweepStaleDcrRegistrations } from "../../lib/oauth-dcr-sweep.js"
 import { sweepAbandonedCopilotWorkflows } from "../copilot/abandoned-sweep.js"
+import { sweepUnsyncedConsents } from "../lib/consent-loops-sync.js"
 
 /**
  * Start all billing cleanup cron jobs.
@@ -52,6 +53,18 @@ export function startCleanupCron(): void {
       }
     } catch (err) {
       console.error("[cron] stale DCR sweep failed:", err)
+    }
+  })
+
+  // Loops contact backfill -- reconcile any consent rows whose Loops state is
+  // stale (a failed immediate push, or a change made while Loops was down).
+  // Every hour at :50. No-ops when LOOPS_API_KEY is unset.
+  cron.schedule("50 * * * *", async () => {
+    try {
+      const synced = await sweepUnsyncedConsents()
+      if (synced > 0) console.log(`[cron] consent->Loops backfill: ${synced} contact(s) reconciled`)
+    } catch (err) {
+      console.error("[cron] consent->Loops backfill failed:", err)
     }
   })
 

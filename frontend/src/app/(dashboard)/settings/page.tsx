@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
+import { ConsentSettingsSlot } from "@/components/layout/consent-settings-slot"
 import { hasAdmin, hasCredits, isCloud } from "@/lib/edition"
 import { toast } from "sonner"
 import { Link } from "react-router-dom"
@@ -359,6 +360,9 @@ export default function SettingsPage() {
           </TooltipProvider>
         </div>
       </div>
+
+      {/* Email preferences (Cloud-only; self-hiding) */}
+      <ConsentSettingsSlot />
 
       {/* API Tokens */}
       {hasAdmin() && (

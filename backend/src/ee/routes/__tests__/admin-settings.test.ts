@@ -321,3 +321,56 @@ describe("PUT /v1/admin/settings — copilot tier controls", () => {
     expect(res.statusCode).toBe(200)
   })
 })
+
+describe("PUT /v1/admin/settings — consent knobs", () => {
+  const upsertOk = (key: string, value: unknown) => {
+    const mockSingle = vi.fn().mockResolvedValue({ data: { key, value, updated_at: "x" }, error: null })
+    const mockUpsert = vi.fn().mockReturnValue({ select: () => ({ single: mockSingle }) })
+    vi.mocked(supabase.from).mockReturnValue({ upsert: mockUpsert } as never)
+  }
+
+  it("rejects consent_enabled that is not a boolean", async () => {
+    const res = await app.inject({ method: "PUT", url: "/v1/admin/settings/consent_enabled", payload: { value: "on", userId: "admin-1" } })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.message).toContain("consent_enabled")
+  })
+
+  it("rejects consent_cadence_hours out of range", async () => {
+    for (const value of [0, -1, 9000]) {
+      const res = await app.inject({ method: "PUT", url: "/v1/admin/settings/consent_cadence_hours", payload: { value, userId: "admin-1" } })
+      expect(res.statusCode).toBe(400)
+    }
+  })
+
+  it("rejects consent_max_asks that is not an integer in range", async () => {
+    for (const value of [0, 2.5, 51]) {
+      const res = await app.inject({ method: "PUT", url: "/v1/admin/settings/consent_max_asks", payload: { value, userId: "admin-1" } })
+      expect(res.statusCode).toBe(400)
+    }
+  })
+
+  it("rejects an unknown consent_login_definition", async () => {
+    const res = await app.inject({ method: "PUT", url: "/v1/admin/settings/consent_login_definition", payload: { value: "weekly", userId: "admin-1" } })
+    expect(res.statusCode).toBe(400)
+  })
+
+  it("rejects empty or oversized consent_text", async () => {
+    for (const value of ["", "   ", "x".repeat(501)]) {
+      const res = await app.inject({ method: "PUT", url: "/v1/admin/settings/consent_text", payload: { value, userId: "admin-1" } })
+      expect(res.statusCode).toBe(400)
+    }
+  })
+
+  it("rejects consent_version below 1", async () => {
+    const res = await app.inject({ method: "PUT", url: "/v1/admin/settings/consent_version", payload: { value: 0, userId: "admin-1" } })
+    expect(res.statusCode).toBe(400)
+  })
+
+  it("accepts a valid consent_max_asks and invalidates the cache", async () => {
+    upsertOk("consent_max_asks", 8)
+    const res = await app.inject({ method: "PUT", url: "/v1/admin/settings/consent_max_asks", payload: { value: 8, userId: "admin-1" } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().value).toBe(8)
+    expect(invalidateSettingsCache).toHaveBeenCalled()
+  })
+})
