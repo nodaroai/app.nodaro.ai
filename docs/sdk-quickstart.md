@@ -614,3 +614,18 @@ patterns, models, credits, OAuth) **and** the hosted MCP connection:
 /plugin marketplace add nodaroai/app.nodaro.ai
 /plugin install nodaro
 ```
+
+## Draft a document with the LLM, as a job
+
+```ts
+const { jobId } = await client.llm.structuredJob({
+  system: "You write production plans.",
+  input: "A rainy chase through Rome.",
+  jsonSchema: { type: "object", properties: { title: { type: "string" } }, required: ["title"] },
+  origin: "my-app",
+})
+// later — even from another session
+const { data } = await client.jobs.getStatus(jobId)
+if (data.status === "completed") console.log((data.output_data as { output: { title: string } }).output.title)
+const { data: runs } = await client.jobs.list({ type: "llm-structured", origin: "my-app" })
+```

@@ -227,6 +227,17 @@ export class MediaResource {
   videoMetadata(input: { url: string }): Promise<VideoMetadata> {
     return this.client.request<VideoMetadata>("POST", "/v1/video-metadata", { body: input })
   }
+
+  /**
+   * Cut or crop a stored file (`POST /v1/media/process`) — synchronous and
+   * free, the source-preparation sibling of the priced `trimVideo` node.
+   * `trim` is `[startTime, endTime]` in seconds; `deleteSource: true` removes
+   * the source object afterwards when it is yours and nothing else references
+   * it ("the cut replaces the original"). Answers the stored file.
+   */
+  process(input: MediaProcessInput): Promise<{ data: MediaProcessResult }> {
+    return this.client.request<{ data: MediaProcessResult }>("POST", "/v1/media/process", { body: input })
+  }
 }
 
 /**
@@ -254,4 +265,22 @@ export interface VideoMetadata {
   title?: string | null
   isLive?: boolean
   [key: string]: unknown
+}
+
+export interface MediaProcessInput {
+  sourceUrl: string
+  type: "video" | "audio"
+  trim?: { startTime: number; endTime: number }
+  crop?: { x: number; y: number; width: number; height: number }
+  format?: "mp4" | "webm" | "mp3" | "wav" | "m4a" | "aac"
+  deleteSource?: boolean
+}
+
+export interface MediaProcessResult {
+  url: string
+  thumbnailUrl: string | null
+  assetId: string | null
+  sizeBytes: number
+  mimeType: string
+  metadata: Record<string, unknown>
 }

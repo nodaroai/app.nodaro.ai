@@ -606,6 +606,56 @@ describe("GET /v1/jobs — attachToCharacterId (durable per-character listing)",
   })
 })
 
+describe("GET /v1/jobs — type / origin (client-app run lists)", () => {
+  it("filters on the input_data JSONB paths, never the job_type column", async () => {
+    const calls = seedJobsList([])
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/jobs?__userId=${TEST_USER_ID}&type=llm-structured&origin=studio`,
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(calls).toContainEqual({ method: "filter", args: ["input_data->>type", "eq", "llm-structured"] })
+    expect(calls).toContainEqual({ method: "filter", args: ["input_data->>origin", "eq", "studio"] })
+    // The column is null on every row a synchronous route inserted — a
+    // column filter would hide exactly the history a run list exists to show.
+    expect(calls.filter((c) => c.method === "eq" && c.args[0] === "job_type")).toEqual([])
+  })
+
+  it("applies each filter independently and none when absent", async () => {
+    const originOnly = seedJobsList([])
+    await app.inject({ method: "GET", url: `/v1/jobs?__userId=${TEST_USER_ID}&origin=studio` })
+    expect(originOnly.filter((c) => c.method === "filter")).toEqual([
+      { method: "filter", args: ["input_data->>origin", "eq", "studio"] },
+    ])
+
+    const none = seedJobsList([])
+    await app.inject({ method: "GET", url: `/v1/jobs?__userId=${TEST_USER_ID}` })
+    expect(none.filter((c) => c.method === "filter")).toEqual([])
+  })
+})
+
+describe("GET /v1/jobs/:id — job_type", () => {
+  it("selects job_type (allowlisted and typed in the SDK, previously never selected)", async () => {
+    let selected = ""
+    vi.mocked(supabase.from).mockImplementation(() => {
+      const chain = {
+        select: vi.fn((cols: string) => { selected = cols; return chain }),
+        eq: vi.fn(() => chain),
+        single: vi.fn().mockResolvedValue({ data: { ...sampleJob, user_id: TEST_USER_ID }, error: null }),
+      }
+      return chain as never
+    })
+
+    const res = await app.inject({ method: "GET", url: `/v1/jobs/job-1?__userId=${TEST_USER_ID}` })
+
+    expect(res.statusCode).toBe(200)
+    expect(selected.split(",").map((s) => s.trim())).toContain("job_type")
+    expect(res.json().data.job_type).toBe("generate-image")
+  })
+})
+
 describe("POST /v1/jobs/batch-status", () => {
   it("redacts private remux bases from the direct status projection", async () => {
     seedJobs([

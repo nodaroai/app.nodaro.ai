@@ -71,4 +71,23 @@ describe("jobs resource", () => {
       "https://api.example.com/v1/jobs/job%2F1/status",
     )
   })
+
+  it("list GETs /v1/jobs with type / origin / limit / cursor and returns the page", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: [{ id: "j1" }], next: "2026-09-02T00:00:00Z" }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const page = await c.jobs.list({ type: "llm-structured", origin: "studio", limit: 50, cursor: "2026-09-01T00:00:00Z" })
+    const url = new URL(fetchMock.mock.calls[0][0] as string)
+    expect(url.pathname).toBe("/v1/jobs")
+    expect(Object.fromEntries(url.searchParams)).toEqual({ type: "llm-structured", origin: "studio", limit: "50", cursor: "2026-09-01T00:00:00Z" })
+    expect(fetchMock.mock.calls[0][1].method).toBe("GET")
+    expect(page.data[0].id).toBe("j1")
+    expect(page.next).toBe("2026-09-02T00:00:00Z")
+  })
+
+  it("list without params sends no query string (buildUrl sets no param for an empty object, so no bare `?`)", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: [], next: null }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    await c.jobs.list()
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/jobs")
+  })
 })

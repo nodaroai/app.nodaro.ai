@@ -425,3 +425,65 @@ describe("POST /v1/jobs/cancel-all", () => {
     expect(mockInvalidateBalanceCache).toHaveBeenCalledWith(TEST_USER_ID)
   })
 })
+
+describe("POST /v1/jobs/:jobId/cancel — a parent takes its analysis child with it", () => {
+  const PARENT = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+  const CHILD = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+  const USER = "user-123"
+
+  /** jobs handler answering lookups in order (parent first, then the child)
+   *  and echoing every CAS update as flipped. */
+  function jobsSequence(lookups: Array<Record<string, unknown>>) {
+    const queue = [...lookups]
+    return () => {
+      const single = vi.fn().mockImplementation(async () => {
+        const row = queue.shift()
+        return row ? { data: row, error: null } : { data: null, error: { message: "not found" } }
+      })
+      const select = vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ single }) })
+      const updateSelect = vi.fn().mockImplementation(async () => ({ data: [{ id: "flipped" }], error: null }))
+      const inFn = vi.fn().mockReturnValue({ select: updateSelect })
+      const eq2 = vi.fn().mockReturnValue({ in: inFn })
+      const eq1 = vi.fn().mockReturnValue({ eq: eq2 })
+      const update = vi.fn().mockReturnValue({ eq: eq1 })
+      return { select, update }
+    }
+  }
+
+  it("cancels the still-running analysis child named by input_data.analysisJobId, refunding both", async () => {
+    setupTableMocks({
+      jobs: jobsSequence([
+        { id: PARENT, status: "processing", user_id: USER, input_data: { type: "llm-structured", analysisJobId: CHILD }, provider_task_id: null, reconcile_attempts: 0 },
+        { id: CHILD, status: "processing", user_id: USER, input_data: { type: "video-analysis" }, provider_task_id: null, reconcile_attempts: 0 },
+      ]),
+      usage_logs: usageLogsHandler([{ id: "usage-log-1" }]),
+    })
+
+    const res = await app.inject({ method: "POST", url: `/v1/jobs/${PARENT}/cancel`, payload: { userId: USER } })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ success: true, cancelled: 1, inFlight: false })
+    expect(tryRemoveFromQueue).toHaveBeenCalledWith(PARENT)
+    expect(tryRemoveFromQueue).toHaveBeenCalledWith(CHILD)
+    // one reserved log per lookup → two refunds
+    expect(mockRefundCredits).toHaveBeenCalledTimes(2)
+    expect(mockInvalidateBalanceCache).toHaveBeenCalledWith(USER)
+  })
+
+  it("leaves a finished child alone (Draft again still has its analysis)", async () => {
+    setupTableMocks({
+      jobs: jobsSequence([
+        { id: PARENT, status: "processing", user_id: USER, input_data: { type: "llm-structured", analysisJobId: CHILD }, provider_task_id: null, reconcile_attempts: 0 },
+        { id: CHILD, status: "completed", user_id: USER, input_data: { type: "video-analysis" }, provider_task_id: null, reconcile_attempts: 0 },
+      ]),
+      usage_logs: usageLogsHandler([{ id: "usage-log-1" }]),
+    })
+
+    const res = await app.inject({ method: "POST", url: `/v1/jobs/${PARENT}/cancel`, payload: { userId: USER } })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ success: true, cancelled: 1, inFlight: false })
+    expect(tryRemoveFromQueue).toHaveBeenCalledTimes(1)
+    expect(mockRefundCredits).toHaveBeenCalledTimes(1)
+  })
+})
