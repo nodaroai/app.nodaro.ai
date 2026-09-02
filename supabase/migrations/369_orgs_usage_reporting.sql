@@ -179,9 +179,15 @@ END $$;
 --    settled runs; folding the app-markup shortfall in would make
 --    chargedToBudget wrong (it can even go negative). The description prefix is
 --    the only discriminator today (pinned against 351/352 by the migration
---    guard). Reads credit_transactions (alias-qualified; no pragma needed).
+--    guard). p_user_id narrows to one runner (the member self-view), exactly as
+--    report/totals/rows do — both writers stamp the runner on the ledger row
+--    (351 v_user_id, 352 p_runner_id), so a member self-view subtracts only its
+--    OWN absorbed overrun: it never sees another member's overrun and its
+--    chargedToBudget cannot go negative. Reads credit_transactions
+--    (alias-qualified; no pragma needed).
 CREATE OR REPLACE FUNCTION public.org_usage_variance(
-  p_scope TEXT, p_scope_id UUID, p_from DATE, p_to DATE, p_tz TEXT, p_workspace_id UUID DEFAULT NULL)
+  p_scope TEXT, p_scope_id UUID, p_from DATE, p_to DATE, p_tz TEXT,
+  p_workspace_id UUID DEFAULT NULL, p_user_id UUID DEFAULT NULL)
 RETURNS TABLE (workspace_id UUID, kind TEXT, credits BIGINT, row_count BIGINT)
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE v_start TIMESTAMPTZ; v_end TIMESTAMPTZ;
@@ -201,6 +207,7 @@ BEGIN
     AND t.created_at >= v_start AND t.created_at < v_end
     AND ((p_scope = 'org' AND t.org_id = p_scope_id) OR (p_scope = 'workspace' AND t.workspace_id = p_scope_id))
     AND (p_workspace_id IS NULL OR t.workspace_id = p_workspace_id)
+    AND (p_user_id IS NULL OR t.user_id = p_user_id)
   GROUP BY 1, 2;
 END $$;
 
@@ -227,7 +234,7 @@ REVOKE EXECUTE ON FUNCTION public.org_usage_rows(TEXT, UUID, DATE, DATE, TEXT, U
 REVOKE EXECUTE ON FUNCTION public.org_usage_rows(TEXT, UUID, DATE, DATE, TEXT, UUID, UUID, TIMESTAMPTZ, UUID, INT) FROM authenticated;
 GRANT  EXECUTE ON FUNCTION public.org_usage_rows(TEXT, UUID, DATE, DATE, TEXT, UUID, UUID, TIMESTAMPTZ, UUID, INT) TO service_role;
 
-REVOKE EXECUTE ON FUNCTION public.org_usage_variance(TEXT, UUID, DATE, DATE, TEXT, UUID) FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.org_usage_variance(TEXT, UUID, DATE, DATE, TEXT, UUID) FROM anon;
-REVOKE EXECUTE ON FUNCTION public.org_usage_variance(TEXT, UUID, DATE, DATE, TEXT, UUID) FROM authenticated;
-GRANT  EXECUTE ON FUNCTION public.org_usage_variance(TEXT, UUID, DATE, DATE, TEXT, UUID) TO service_role;
+REVOKE EXECUTE ON FUNCTION public.org_usage_variance(TEXT, UUID, DATE, DATE, TEXT, UUID, UUID) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.org_usage_variance(TEXT, UUID, DATE, DATE, TEXT, UUID, UUID) FROM anon;
+REVOKE EXECUTE ON FUNCTION public.org_usage_variance(TEXT, UUID, DATE, DATE, TEXT, UUID, UUID) FROM authenticated;
+GRANT  EXECUTE ON FUNCTION public.org_usage_variance(TEXT, UUID, DATE, DATE, TEXT, UUID, UUID) TO service_role;

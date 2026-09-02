@@ -14,6 +14,9 @@
  *    `#variable_conflict use_column`;
  *  - `org_usage_variance` discriminates the two variance ledgers by the exact
  *    description prefixes migrations 351/352 write (so a reworded writer fails);
+ *  - all four data readers (report/totals/rows/variance) narrow by `p_user_id`
+ *    so a member self-view never subtracts another member's absorbed overrun
+ *    (P15R-01: totals is narrowable, so the variance line must be too);
  *  - each `org_usage_*` function is defined in EXACTLY ONE migration (a later
  *    CREATE OR REPLACE elsewhere would escape these pins).
  */
@@ -138,6 +141,24 @@ describe("369 usage-reporting migration guard", () => {
       const re = new RegExp(`CREATE OR REPLACE FUNCTION\\s+public\\.org_usage_${name}\\s*\\(`)
       const defs = allSql.filter(([, body]) => re.test(body)).map(([f]) => f)
       expect(defs, `org_usage_${name} defined in exactly one migration`).toHaveLength(1)
+    }
+  })
+
+  it("15. all four data readers narrow by p_user_id (member self-view — P15R-01)", () => {
+    // totals is narrowable by member; the variance line MUST be too, or a member
+    // self-view subtracts the WHOLE workspace's absorbed overrun from ONE member's
+    // settled total — chargedToBudget goes negative and leaks another member's
+    // overrun. Both variance writers stamp the runner on the ledger row (351
+    // v_user_id, 352 p_runner_id) so the narrowing is exact. window takes no scope.
+    const DATA_READERS = ["report", "totals", "rows", "variance"] as const
+    for (const name of DATA_READERS) {
+      const paramList =
+        sql.match(new RegExp(`CREATE OR REPLACE FUNCTION\\s+public\\.org_usage_${name}\\s*\\(([\\s\\S]*?)\\)\\s*RETURNS`, "i"))?.[1] ?? ""
+      expect(paramList, `org_usage_${name} declares p_user_id UUID DEFAULT NULL`).toMatch(/p_user_id\s+UUID\s+DEFAULT\s+NULL/i)
+      const body = chunks.get(name) ?? "!!missing!!"
+      expect(body, `org_usage_${name} filters WHERE p_user_id IS NULL OR <alias>.user_id = p_user_id`).toMatch(
+        /p_user_id IS NULL OR \w+\.user_id = p_user_id/,
+      )
     }
   })
 })

@@ -170,12 +170,15 @@ END $$;
 INSERT INTO usage_logs (user_id, on_behalf_of, action, provider, credits_used, credits_charged, status, workspace_id, org_id, created_at, metadata)
 VALUES ('00000000-0000-4000-8000-000000000932', '00000000-0000-4000-8000-000000000933', 'generate', 'kie', 10, 10, 'committed', NULL, NULL, now(), '{}'::jsonb);
 
--- App-markup variance row (behavior #kind): the 352-shaped ledger row that
--- SHARES source='org_usage_variance' with the metered overrun but has NO
--- usage_logs counterpart. Hand-inserted with 352's exact description prefix
--- (calling process_app_monetization would need approved-app fixtures).
+-- App-markup variance row (behavior #kind, #var-narrow): the 352-shaped ledger
+-- row that SHARES source='org_usage_variance' with the metered overrun but has
+-- NO usage_logs counterpart. Hand-inserted with 352's exact description prefix
+-- (calling process_app_monetization would need approved-app fixtures). Runner is
+-- B (933), a DIFFERENT member than the metered overrun's runner A (932), so the
+-- member self-view narrowing (P15R-01) is proven across two distinct members:
+-- A's self-view must not see B's app markup and B's must not see A's overrun.
 INSERT INTO credit_transactions (user_id, amount, credit_type, source, description, org_id, workspace_id, job_id, created_at)
-VALUES ('00000000-0000-4000-8000-000000000932', 9, 'org', 'org_usage_variance',
+VALUES ('00000000-0000-4000-8000-000000000933', 9, 'org', 'org_usage_variance',
         'App markup beyond workspace headroom, absorbed by the platform (run test-markup)',
         'a0000000-0000-4000-8000-000000000931', 'b0000000-0000-4000-8000-000000000931', NULL, now());
 
@@ -392,6 +395,36 @@ SELECT pg_temp.assert_eq('#kind app-markup variance for live ws = 9',
 SELECT pg_temp.assert_eq('#kind org-scope variance returns both kinds on the live ws',
   (SELECT string_agg(kind, ',' ORDER BY kind) FROM org_usage_variance('org', 'a0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC')), 'app_markup,metered_overrun');
 
+-- #var-narrow p_user_id narrows the variance line to one runner (member self-view,
+-- P15R-01). Live ws has TWO variance rows by TWO members: A (932) metered overrun
+-- 15, B (933) app markup 9. A member's self-view must return only its own — never
+-- another member's absorbed overrun (which would make chargedToBudget negative).
+SELECT pg_temp.assert_eq('#var-narrow A (932) self-view sees own metered overrun (15)',
+  (SELECT string_agg(kind || '=' || credits, ',' ORDER BY kind)
+     FROM org_usage_variance('workspace', 'b0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC', NULL, '00000000-0000-4000-8000-000000000932')),
+  'metered_overrun=15');
+SELECT pg_temp.assert_eq('#var-narrow B (933) self-view sees own app markup only — NOT A''s overrun',
+  (SELECT string_agg(kind || '=' || credits, ',' ORDER BY kind)
+     FROM org_usage_variance('workspace', 'b0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC', NULL, '00000000-0000-4000-8000-000000000933')),
+  'app_markup=9');
+SELECT pg_temp.assert_eq('#var-narrow un-narrowed workspace variance still returns both members'' rows',
+  (SELECT string_agg(kind, ',' ORDER BY kind) FROM org_usage_variance('workspace', 'b0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC')), 'app_markup,metered_overrun');
+
+-- #var-charged P15R-01 end to end: chargedToBudget = totals.settled − own metered
+-- overrun, computed for a member self-view, must never go negative. B (933) settled
+-- one run of 8 and caused NO metered overrun, so 8 − 0 = 8. Before the fix the
+-- variance line was NOT narrowed, so B's self-view subtracted A's 15 → 8 − 15 = −7.
+DO $$
+DECLARE v_settled BIGINT; v_overrun BIGINT;
+BEGIN
+  SELECT settled_credits INTO v_settled
+    FROM org_usage_totals('workspace', 'b0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC', NULL, '00000000-0000-4000-8000-000000000933');
+  SELECT COALESCE(sum(credits), 0) INTO v_overrun
+    FROM org_usage_variance('workspace', 'b0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC', NULL, '00000000-0000-4000-8000-000000000933')
+    WHERE kind = 'metered_overrun';
+  PERFORM pg_temp.assert_eq('#var-charged B self-view chargedToBudget = 8 - 0 = 8 (never negative)', (v_settled - v_overrun)::text, '8');
+END $$;
+
 -- #totals org_usage_totals aggregates the WHOLE window and equals the column-wise
 -- sum of the (grouped) member report — totals never come from the capped rows.
 SELECT pg_temp.assert_eq('#totals credits == sum of member report credits',
@@ -467,7 +500,7 @@ DECLARE v_runs_before BIGINT; v_runs_after BIGINT; v_var_before BIGINT; v_var_af
 BEGIN
   SELECT run_count INTO v_runs_before FROM org_usage_report('workspace', 'b0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC', 'member', NULL, '00000000-0000-4000-8000-000000000932');
   SELECT credits INTO v_var_before FROM org_usage_variance('workspace', 'b0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC') WHERE kind = 'metered_overrun';
-  DELETE FROM profiles WHERE id = '00000000-0000-4000-8000-000000000932';   -- cascades usage_logs, SET NULL on the variance rows
+  DELETE FROM profiles WHERE id = '00000000-0000-4000-8000-000000000932';   -- cascades usage_logs, SET NULL on A's metered variance row (B's app-markup row is untouched)
   SELECT COALESCE(sum(run_count), 0) INTO v_runs_after FROM org_usage_report('workspace', 'b0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC', 'member', NULL, '00000000-0000-4000-8000-000000000932');
   SELECT credits INTO v_var_after FROM org_usage_variance('workspace', 'b0000000-0000-4000-8000-000000000931', CURRENT_DATE - 1, CURRENT_DATE + 1, 'UTC') WHERE kind = 'metered_overrun';
   SELECT user_id INTO v_var_user FROM credit_transactions WHERE source = 'org_usage_variance' AND workspace_id = 'b0000000-0000-4000-8000-000000000931' AND description LIKE 'Metered overrun%';
