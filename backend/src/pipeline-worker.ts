@@ -15,6 +15,7 @@
 
 import { hasCredits } from "./lib/config.js"
 import { loadOverlay } from "./lib/overlay/load.js"
+import { registerMainlinePromptPolicies } from "./lib/prompt-policies/index.js"
 
 process.on("unhandledRejection", (err) => {
   console.error("[pipeline-worker] Unhandled rejection:", err)
@@ -29,6 +30,10 @@ async function main() {
   // ahead of the hasCredits() gate so a cloud pipeline process still loads it.
   // No-op + byte-identical when NODARO_OVERLAY_PACKAGE is unset.
   await loadOverlay()
+
+  // Mainline prompt policies run AFTER the overlay's (registration order):
+  // the minor-age floor is a platform safety invariant, not deployment content.
+  registerMainlinePromptPolicies()
 
   if (!hasCredits()) {
     console.log("[pipeline-worker] EDITION is not cloud — pipeline worker not started")

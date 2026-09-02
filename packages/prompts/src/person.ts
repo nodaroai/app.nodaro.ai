@@ -37,6 +37,12 @@ import {
   personPacksVersion,
 } from "./person-packs.js"
 import { resolveTerm, type PickerHintMode } from "./term.js"
+// W1-a minor-age floor: `age-signal.ts` is an import-free leaf (no runtime
+// deps at all), so this import is cycle-safe unconditionally — unlike
+// `age-floor.js`, which pulls in the catalog funnel (`person-packs.js` /
+// `picker-catalogs.js`) and would reopen the person → age-floor →
+// picker-catalogs load-time cycle if imported from here.
+import { isMinorAge } from "./age-signal.js"
 
 export type PersonDimension =
   | "type"
@@ -79,6 +85,16 @@ export interface Person {
   readonly dimension: PersonDimension
   readonly description: string
   readonly promptHint: string
+  /**
+   * W1-a minor-age floor (spec 2026-09-01 §3.3). `true` marks an entry whose
+   * hint describes body exposure, sheer/wet clothing, swimwear/lingerie, a
+   * seductive expression or gaze, or a body-placed tattoo. The fragment
+   * collectors DROP flagged entries for a minor subject (`isMinorAge`), the
+   * picker hides their tiles, the analyzer never emits them, and the backend
+   * policy strips their wording from free text. Hand-curated; the
+   * `adult-only-ratchet` test only ratchets. Never set on neutral defaults.
+   */
+  readonly adultOnly?: true
   /** Optional sub-grouping within a dimension. Used by the picker to render
    *  two-level selection (e.g. ethnicity grouped by region → specific). */
   readonly group?: string
@@ -138,7 +154,7 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "stylish-influencer", label: "Stylish Influencer", group: "Realistic — Style",   dimension: "type", description: "Polished social-media tastemaker", promptHint: "a stylish social-media influencer — polished personal-brand styling, trend-forward outfit, expressive natural posing for the camera, the curated put-together look of a content creator" },
   { id: "stunning-model",    label: "Stunning Model",     group: "Realistic — Style",    dimension: "type", description: "Fashion-model aesthetic",         promptHint: "a stunning fashion model with editorial poise, refined features, and high-fashion presence" },
   { id: "supermodel",        label: "Supermodel",         group: "Realistic — Style",    dimension: "type", description: "Iconic, top-tier runway and cover star", promptHint: "a supermodel — iconic top-tier presence with magnetic statement features, a striking silhouette and the unmistakable runway-and-cover aura that commands attention" },
-  { id: "femme-fatale",      label: "Femme Fatale",       group: "Realistic — Style",    dimension: "type", description: "Alluring, dangerous noir seductress", promptHint: "a femme fatale — alluring, mysterious, and dangerous with classic noir seduction" },
+  { id: "femme-fatale",      label: "Femme Fatale",       group: "Realistic — Style",    dimension: "type", description: "Alluring, dangerous noir seductress", promptHint: "a femme fatale — alluring, mysterious, and dangerous with classic noir seduction" , adultOnly: true },
   { id: "tough-guy",         label: "Tough Guy",          group: "Realistic — Style",    dimension: "type", description: "Hardened, tough man",           promptHint: "a tough, hardened man" },
   // Aesthetic archetypes that traditionally read older — hints kept gender +
   // look-focused so the Age dimension stays in control of the literal age.
@@ -149,7 +165,7 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "twink",             label: "Twink",              group: "Realistic — Style",    dimension: "type", description: "Slim, smooth, soft gay-male type", promptHint: "a twink — slim, smooth, soft masculine presence with a delicate, gender-fluid vibe" },
   { id: "soft-butch",        label: "Soft Butch",         group: "Realistic — Style",    dimension: "type", description: "Gentle masculine-of-center woman", promptHint: "a soft-butch woman — gentle masculine-of-center styling and energy" },
   { id: "tomboy",            label: "Tomboy",             group: "Realistic — Style",    dimension: "type", description: "Boyish styling and energy on a feminine body", promptHint: "a tomboy — boyish styling and energy on a feminine body" },
-  { id: "thick",             label: "Thick",              group: "Realistic — Style",    dimension: "type", description: "Voluptuous body-positive figure with curves", promptHint: "a thick, voluptuous body-positive figure with full curves", term: "thick voluptuous figure" },
+  { id: "thick",             label: "Thick",              group: "Realistic — Style",    dimension: "type", description: "Voluptuous body-positive figure with curves", promptHint: "a thick, voluptuous body-positive figure with full curves", term: "thick voluptuous figure" , adultOnly: true },
   { id: "androgynous",       label: "Androgynous",        group: "Realistic — Style",    dimension: "type", description: "Deliberately blended masculine + feminine cues", promptHint: "an androgynous figure with deliberately blended masculine and feminine cues", term: "androgynous figure" },
   { id: "goth",              label: "Goth",               group: "Realistic — Style",    dimension: "type", description: "Goth subculture aesthetic — dark, romantic, dramatic", promptHint: "a goth figure with a dark romantic dramatic subculture aesthetic" },
   { id: "bear",              label: "Bear",               group: "Realistic — Style",    dimension: "type", description: "Big, bearded, hairy masculine type", promptHint: "a bear — a big, bearded, hairy man with a warm masculine presence", term: "big bearded hairy man" },
@@ -158,7 +174,7 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "caveman",           label: "Caveman",            group: "Primitive / Wild",     dimension: "type", description: "Stone Age primitive man",       promptHint: "a caveman — Stone Age primitive in animal furs, with shaggy hair, a heavy brow and a sturdy frame" },
   { id: "cavewoman",         label: "Cavewoman",          group: "Primitive / Wild",     dimension: "type", description: "Stone Age primitive woman",     promptHint: "a cavewoman — Stone Age primitive in animal furs, with shaggy hair and a sturdy frame" },
   { id: "apeman",            label: "Apeman",             group: "Primitive / Wild",     dimension: "type", description: "Half-human half-ape hybrid",    promptHint: "an apeman — half-human half-ape hybrid with simian features, broad shoulders and a heavy stooped build" },
-  { id: "feral-wildman",     label: "Feral Wild-Human",   group: "Primitive / Wild",     dimension: "type", description: "Overgrown, primal feral human", promptHint: "a feral wild-human — overgrown matted hair, primal eyes and a near-naked, bestial bearing" },
+  { id: "feral-wildman",     label: "Feral Wild-Human",   group: "Primitive / Wild",     dimension: "type", description: "Overgrown, primal feral human", promptHint: "a feral wild-human — overgrown matted hair, primal eyes and a near-naked, bestial bearing" , adultOnly: true },
   { id: "neanderthal",       label: "Neanderthal",        group: "Primitive / Wild",     dimension: "type", description: "Pre-modern human species",      promptHint: "a neanderthal — heavy brow, broad nose, stocky pre-modern human build with weather-toughened skin" },
 
   // ----- Fantasy (humanoid) -----
@@ -173,7 +189,7 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "faun",              label: "Faun / Satyr",       group: "Fantasy",              dimension: "type", description: "Goat-legged horned humanoid",   promptHint: "a faun — humanoid with goat legs, small curling horns and a woodland presence", term: "faun" },
   { id: "centaur",           label: "Centaur",            group: "Fantasy",              dimension: "type", description: "Human torso on a horse body",   promptHint: "a centaur — human torso fused to the body of a horse" },
   { id: "vampire-man",       label: "Vampire (Male)",     group: "Fantasy",              dimension: "type", description: "Masculine fanged immortal",     promptHint: "a male vampire — pale, fanged immortal man in formal evening wear with gothic elegance and a quiet predatory poise", term: "male vampire" },
-  { id: "vampire-woman",     label: "Vampire (Female)",   group: "Fantasy",              dimension: "type", description: "Feminine fanged immortal",      promptHint: "a female vampire — pale, fanged immortal woman in flowing gothic attire with seductive elegance and a quiet predatory poise", term: "female vampire" },
+  { id: "vampire-woman",     label: "Vampire (Female)",   group: "Fantasy",              dimension: "type", description: "Feminine fanged immortal",      promptHint: "a female vampire — pale, fanged immortal woman in flowing gothic attire with seductive elegance and a quiet predatory poise", term: "female vampire" , adultOnly: true },
   { id: "vampire",           label: "Vampire",            group: "Fantasy",              dimension: "type", description: "Pale, fanged immortal",         promptHint: "a vampire — pale, fanged immortal with a pristine gothic elegance and a quiet predatory poise" },
   { id: "werewolf",          label: "Werewolf",           group: "Fantasy",              dimension: "type", description: "Partially transformed lycanthrope", promptHint: "a werewolf — partially transformed humanoid with wolfish snout, fur, claws and a feral musculature" },
   { id: "mermaid",           label: "Mermaid",            group: "Fantasy",              dimension: "type", description: "Female humanoid with a fish tail", promptHint: "a mermaid — humanoid woman from the waist up with a long iridescent fish tail below" },
@@ -418,25 +434,25 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "mass-heavy",   label: "Heavy",   dimension: "body-mass", description: "Heavy-set, large build",   promptHint: "heavy-set build", term: "heavy-set build" },
 
   // ----- Bust (applicable subjects; ungated like Facial Hair, neutral = no-op) -----
-  { id: "bust-small",     label: "Small",     dimension: "bust", description: "Small bust",     promptHint: "small bust", term: "small bust" },
+  { id: "bust-small",     label: "Small",     dimension: "bust", description: "Small bust",     promptHint: "small bust", term: "small bust" , adultOnly: true },
   { id: "bust-average",   label: "Average",   dimension: "bust", description: "Average bust",   promptHint: "" },
-  { id: "bust-full",      label: "Full",      dimension: "bust", description: "Full bust",      promptHint: "full bust", term: "full bust" },
-  { id: "bust-very-full", label: "Very Full", dimension: "bust", description: "Very full bust", promptHint: "very full bust", term: "very full bust" },
+  { id: "bust-full",      label: "Full",      dimension: "bust", description: "Full bust",      promptHint: "full bust", term: "full bust" , adultOnly: true },
+  { id: "bust-very-full", label: "Very Full", dimension: "bust", description: "Very full bust", promptHint: "very full bust", term: "very full bust" , adultOnly: true },
 
   // ----- Waist -----
-  { id: "waist-defined",  label: "Defined",  dimension: "waist", description: "Defined, cinched waist",    promptHint: "defined waist", term: "defined waist" },
+  { id: "waist-defined",  label: "Defined",  dimension: "waist", description: "Defined, cinched waist",    promptHint: "defined waist", term: "defined waist" , adultOnly: true },
   { id: "waist-average",  label: "Average",  dimension: "waist", description: "Average waist",             promptHint: "" },
-  { id: "waist-straight", label: "Straight", dimension: "waist", description: "Straight, undefined waist", promptHint: "straight waistline", term: "straight waistline" },
+  { id: "waist-straight", label: "Straight", dimension: "waist", description: "Straight, undefined waist", promptHint: "straight waistline", term: "straight waistline" , adultOnly: true },
 
   // ----- Hips -----
-  { id: "hips-narrow",   label: "Narrow",   dimension: "hips", description: "Narrow hips",   promptHint: "narrow hips", term: "narrow hips" },
+  { id: "hips-narrow",   label: "Narrow",   dimension: "hips", description: "Narrow hips",   promptHint: "narrow hips", term: "narrow hips" , adultOnly: true },
   { id: "hips-balanced", label: "Balanced", dimension: "hips", description: "Balanced hips", promptHint: "" },
-  { id: "hips-wide",     label: "Wide",     dimension: "hips", description: "Wide hips",     promptHint: "wide hips", term: "wide hips" },
+  { id: "hips-wide",     label: "Wide",     dimension: "hips", description: "Wide hips",     promptHint: "wide hips", term: "wide hips" , adultOnly: true },
 
   // ----- Silhouette (overall body shape; optional, no neutral) -----
-  { id: "silhouette-hourglass",   label: "Hourglass",         dimension: "silhouette", description: "Balanced bust + hips, defined waist", promptHint: "hourglass silhouette", term: "hourglass silhouette" },
+  { id: "silhouette-hourglass",   label: "Hourglass",         dimension: "silhouette", description: "Balanced bust + hips, defined waist", promptHint: "hourglass silhouette", term: "hourglass silhouette" , adultOnly: true },
   { id: "silhouette-rectangular", label: "Rectangular",       dimension: "silhouette", description: "Straight up-and-down silhouette",      promptHint: "rectangular silhouette", term: "rectangular silhouette" },
-  { id: "silhouette-pear",        label: "Pear",              dimension: "silhouette", description: "Hips wider than shoulders",            promptHint: "pear-shaped silhouette", term: "pear-shaped silhouette" },
+  { id: "silhouette-pear",        label: "Pear",              dimension: "silhouette", description: "Hips wider than shoulders",            promptHint: "pear-shaped silhouette", term: "pear-shaped silhouette" , adultOnly: true },
   { id: "silhouette-inverted",    label: "Inverted Triangle", dimension: "silhouette", description: "Broad shoulders, narrow hips",         promptHint: "inverted-triangle silhouette", term: "inverted-triangle silhouette" },
   { id: "silhouette-athletic",    label: "Athletic",          dimension: "silhouette", description: "Lean, toned, V-taper",                 promptHint: "athletic silhouette", term: "athletic silhouette" },
 
@@ -537,17 +553,17 @@ export const PEOPLE: ReadonlyArray<Person> = [
 
   // -------------------- Lip State (what the lips are doing / wearing) --------------------
   { id: "lip-state-chapped",   label: "Chapped",   dimension: "lip-state", description: "Cracked, dry, weather-worn lips", promptHint: "with chapped, cracked, weather-worn dry lips", term: "chapped dry lips" },
-  { id: "lip-state-glossy",    label: "Glossy",    dimension: "lip-state", description: "High-shine, wet-look lips",       promptHint: "with high-shine glossy wet-look lips", term: "glossy wet-look lips" },
+  { id: "lip-state-glossy",    label: "Glossy",    dimension: "lip-state", description: "High-shine, wet-look lips",       promptHint: "with high-shine glossy wet-look lips", term: "glossy wet-look lips" , adultOnly: true },
   { id: "lip-state-bare",      label: "Bare",      dimension: "lip-state", description: "Natural, untreated, no makeup",   promptHint: "with bare, natural, untreated lips", term: "bare natural lips" },
   { id: "lip-state-bold-red",  label: "Bold Red",  dimension: "lip-state", description: "Saturated red lipstick statement", promptHint: "with a bold, saturated red lipstick statement", term: "bold red lipstick" },
-  { id: "lip-state-bitten",    label: "Bitten",    dimension: "lip-state", description: "Slight playful lip-bite, lower lip caught", promptHint: "playfully biting the lower lip", term: "biting the lower lip" },
-  { id: "lip-state-parted",    label: "Parted",    dimension: "lip-state", description: "Lips slightly parted, breath of air", promptHint: "with lips slightly parted, taking a soft breath", term: "lips slightly parted" },
+  { id: "lip-state-bitten",    label: "Bitten",    dimension: "lip-state", description: "Slight playful lip-bite, lower lip caught", promptHint: "playfully biting the lower lip", term: "biting the lower lip" , adultOnly: true },
+  { id: "lip-state-parted",    label: "Parted",    dimension: "lip-state", description: "Lips slightly parted, breath of air", promptHint: "with lips slightly parted, taking a soft breath", term: "lips slightly parted" , adultOnly: true },
   { id: "lip-state-pursed",    label: "Pursed",    dimension: "lip-state", description: "Lips pressed and pushed forward", promptHint: "with lips pursed, pressed and pushed forward", term: "pursed lips" },
   { id: "lip-state-bold-black", label: "Bold Black", dimension: "lip-state", description: "Saturated black lipstick statement (goth / avant-garde)", promptHint: "with a bold, saturated black lipstick statement, goth / avant-garde", term: "bold black lipstick" },
   { id: "lip-state-burgundy",   label: "Burgundy",   dimension: "lip-state", description: "Deep wine-red lipstick", promptHint: "with deep wine-red burgundy lipstick", term: "burgundy lipstick" },
   { id: "lip-state-plum",       label: "Plum",       dimension: "lip-state", description: "Dark purple-toned lipstick", promptHint: "with dark purple-toned plum lipstick", term: "plum lipstick" },
   { id: "lip-state-mauve",      label: "Mauve",      dimension: "lip-state", description: "Muted mauve / dusty-pink lipstick", promptHint: "with muted mauve, dusty-pink lipstick", term: "mauve lipstick" },
-  { id: "lip-state-pouting",   label: "Pouting",   dimension: "lip-state", description: "Full pout",                       promptHint: "with a full pouting expression", term: "full pouting expression" },
+  { id: "lip-state-pouting",   label: "Pouting",   dimension: "lip-state", description: "Full pout",                       promptHint: "with a full pouting expression", term: "full pouting expression" , adultOnly: true },
 
   // -------------------- Hair Color --------------------
   // Blonde family (light → warm → cool)
@@ -660,7 +676,7 @@ export const PEOPLE: ReadonlyArray<Person> = [
 
   // -------------------- Eye State (what the eyes are doing / where they look) --------------------
   { id: "eye-state-closed",         label: "Closed",            dimension: "eye-state", description: "Eyes fully closed, peaceful",       promptHint: "with eyes fully closed in a peaceful expression", term: "eyes fully closed" },
-  { id: "eye-state-half-lidded",    label: "Half-lidded",       dimension: "eye-state", description: "Heavy-lidded sleepy gaze",          promptHint: "with heavy half-lidded sleepy eyes", term: "half-lidded sleepy eyes" },
+  { id: "eye-state-half-lidded",    label: "Half-lidded",       dimension: "eye-state", description: "Heavy-lidded sleepy gaze",          promptHint: "with heavy half-lidded sleepy eyes", term: "half-lidded sleepy eyes" , adultOnly: true },
   { id: "eye-state-wide-eyed",      label: "Wide-eyed",         dimension: "eye-state", description: "Eyes wide open, alert / surprised", promptHint: "with eyes wide open, alert and surprised" },
   { id: "eye-state-staring-camera", label: "Staring at Camera", dimension: "eye-state", description: "Direct unbroken eye contact with the lens", promptHint: "staring directly at the camera with unbroken eye contact" },
   { id: "eye-state-gazing-away",    label: "Gazing Away",       dimension: "eye-state", description: "Looking off-camera, contemplative", promptHint: "gazing off-camera with a contemplative expression", term: "gazing off-camera" },
@@ -682,20 +698,20 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "texture-wrinkled",   label: "Wrinkled",    dimension: "skin-texture", description: "Aged, deeply lined skin",     promptHint: "with deep wrinkles and aged skin texture", term: "deeply wrinkled aged skin" },
   { id: "texture-goosebumps", label: "Goosebumps",  dimension: "skin-texture", description: "Raised goosebumps on skin",   promptHint: "with goosebumps raised on the skin" },
   { id: "texture-dewy",       label: "Dewy",        dimension: "skin-texture", description: "Glowing, dewy fresh skin",    promptHint: "with dewy, glowing skin and a fresh sheen", term: "dewy glowing skin" },
-  { id: "texture-glistening", label: "Glistening",  dimension: "skin-texture", description: "Sweat or oil sheen",          promptHint: "with glistening skin, sweat or oil catching the light", term: "glistening skin" },
+  { id: "texture-glistening", label: "Glistening",  dimension: "skin-texture", description: "Sweat or oil sheen",          promptHint: "with glistening skin, sweat or oil catching the light", term: "glistening skin" , adultOnly: true },
   { id: "texture-weathered",  label: "Weathered",   dimension: "skin-texture", description: "Sun-aged rough skin",         promptHint: "with weathered, sun-worn rough skin", term: "weathered sun-worn skin" },
   { id: "texture-porcelain",  label: "Porcelain",   dimension: "skin-texture", description: "Flawless near-translucent porcelain", promptHint: "with flawless, near-translucent porcelain skin", term: "porcelain skin" },
   { id: "texture-sun-kissed", label: "Sun-kissed",  dimension: "skin-texture", description: "Warm tan with healthy glow",  promptHint: "with sun-kissed skin, warmly tanned with a healthy glow", term: "sun-kissed skin" },
   { id: "texture-tanned",     label: "Tanned",      dimension: "skin-texture", description: "Deeply, evenly tanned skin",  promptHint: "with deeply, evenly bronzed tanned skin", term: "deeply tanned skin" },
-  { id: "texture-tan-lines",  label: "Tan Lines",   dimension: "skin-texture", description: "Visible tan lines from swimwear", promptHint: "with visible swimwear tan lines on the skin", term: "visible swimwear tan lines" },
+  { id: "texture-tan-lines",  label: "Tan Lines",   dimension: "skin-texture", description: "Visible tan lines from swimwear", promptHint: "with visible swimwear tan lines on the skin", term: "visible swimwear tan lines" , adultOnly: true },
   { id: "texture-freckled",   label: "Freckled",    dimension: "skin-texture", description: "Freckles across cheeks and nose", promptHint: "with visible freckles scattered across cheeks and the bridge of the nose", term: "freckled skin" },
   { id: "texture-ruddy",      label: "Ruddy",       dimension: "skin-texture", description: "Pink-flushed cheeks and nose", promptHint: "with ruddy, warm pink-flushed cheeks and nose", term: "ruddy flushed complexion" },
   { id: "texture-ashen",      label: "Ashen / Pale", dimension: "skin-texture", description: "Cool pale, near-bloodless undertone", promptHint: "with ashen, cool pale, near-bloodless skin", term: "ashen pale skin" },
-  { id: "texture-oily",       label: "Oily / Shiny", dimension: "skin-texture", description: "Slight oil sheen on T-zone", promptHint: "with a slight oily sheen across the T-zone", term: "oily shiny skin" },
+  { id: "texture-oily",       label: "Oily / Shiny", dimension: "skin-texture", description: "Slight oil sheen on T-zone", promptHint: "with a slight oily sheen across the T-zone", term: "oily shiny skin" , adultOnly: true },
   { id: "texture-matte",      label: "Matte",       dimension: "skin-texture", description: "Poreless matte finish",       promptHint: "with a poreless, matte skin finish", term: "matte skin finish" },
   { id: "texture-blemished",  label: "Blemished",   dimension: "skin-texture", description: "Visible blemishes, real-skin imperfections", promptHint: "with visible blemishes and natural real-skin imperfections", term: "blemished skin" },
   { id: "texture-baby-soft",  label: "Baby-soft",   dimension: "skin-texture", description: "Smooth, fine-pored youthful skin", promptHint: "with baby-soft, fine-pored, youthful smooth skin", term: "baby-soft skin" },
-  { id: "texture-shower-fresh-wet", label: "Shower-Fresh Wet", dimension: "skin-texture", description: "Just-out-of-shower wet skin with water beads", promptHint: "with just-out-of-the-shower wet skin, water beading on the surface and rolling in slow droplets down the curves of the body", term: "shower-fresh wet skin" },
+  { id: "texture-shower-fresh-wet", label: "Shower-Fresh Wet", dimension: "skin-texture", description: "Just-out-of-shower wet skin with water beads", promptHint: "with just-out-of-the-shower wet skin, water beading on the surface and rolling in slow droplets down the curves of the body", term: "shower-fresh wet skin" , adultOnly: true },
   { id: "texture-acne-scarred", label: "Acne-scarred", dimension: "skin-texture", description: "Visible acne scarring (distinct from blemished — healed scar pattern)", promptHint: "with visible acne scarring, healed pitted-skin texture and uneven surface from past breakouts", term: "acne-scarred skin" },
 
   // -------------------- Distinctive Features --------------------
@@ -717,18 +733,18 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "feature-sleeve-tattoo", label: "Sleeve Tattoo", dimension: "distinctive-features", description: "Full one-arm tattoo sleeve", promptHint: "with a full tattoo sleeve covering one arm in intricate ink" },
   { id: "feature-face-tattoo", label: "Face Tattoo", dimension: "distinctive-features", description: "Small face tattoo near eye or cheekbone", promptHint: "with a small face tattoo near the eye or cheekbone" },
   { id: "feature-hand-tattoos", label: "Hand Tattoos", dimension: "distinctive-features", description: "Knuckle / finger tattoos", promptHint: "with hand tattoos across knuckles and fingers" },
-  { id: "feature-back-tattoo", label: "Back Tattoo", dimension: "distinctive-features", description: "Large piece across the back", promptHint: "with a large back-piece tattoo across the upper back" },
-  { id: "feature-chest-tattoo", label: "Chest Tattoo", dimension: "distinctive-features", description: "Tattoo across chest / décolletage", promptHint: "with a tattoo across the chest and décolletage" },
-  { id: "feature-leg-tattoo", label: "Leg Tattoo", dimension: "distinctive-features", description: "Visible tattoo on leg / calf / thigh", promptHint: "with a visible tattoo on the leg, running across the calf or thigh" },
+  { id: "feature-back-tattoo", label: "Back Tattoo", dimension: "distinctive-features", description: "Large piece across the back", promptHint: "with a large back-piece tattoo across the upper back" , adultOnly: true },
+  { id: "feature-chest-tattoo", label: "Chest Tattoo", dimension: "distinctive-features", description: "Tattoo across chest / décolletage", promptHint: "with a tattoo across the chest and décolletage" , adultOnly: true },
+  { id: "feature-leg-tattoo", label: "Leg Tattoo", dimension: "distinctive-features", description: "Visible tattoo on leg / calf / thigh", promptHint: "with a visible tattoo on the leg, running across the calf or thigh" , adultOnly: true },
   { id: "feature-forearm-tattoo", label: "Forearm Tattoo", dimension: "distinctive-features", description: "Tattoo on inner or outer forearm", promptHint: "with a tattoo on the forearm, visible on the inner or outer side" },
   { id: "feature-visible-piercings", label: "Visible Piercings", dimension: "distinctive-features", description: "Multiple visible piercings (septum, nose, lip, multi-ear)", promptHint: "with multiple visible piercings — septum, nose, lip, and multi-ear", term: "multiple visible piercings" },
   { id: "feature-ear-piercings", label: "Ear Piercings", dimension: "distinctive-features", description: "Multiple stacked ear piercings (cartilage, helix, conch)", promptHint: "with multiple stacked ear piercings — cartilage, helix, and conch", term: "multiple stacked ear piercings" },
   { id: "feature-lip-piercing", label: "Lip Piercing", dimension: "distinctive-features", description: "Lip ring / labret stud", promptHint: "with a lip piercing, a small ring or labret stud at the lip" },
   { id: "feature-nostril-piercing", label: "Nostril Piercing", dimension: "distinctive-features", description: "Single nostril stud or ring", promptHint: "with a single nostril piercing, a small stud or ring at the nostril" },
-  { id: "feature-bare-shoulders", label: "Bare Shoulders", dimension: "distinctive-features", description: "Bare shoulders exposed", promptHint: "with bare shoulders exposed, the line of the collarbone and shoulder muscles uncovered" },
-  { id: "feature-collarbone-visible", label: "Collarbone Visible", dimension: "distinctive-features", description: "Prominent collarbone catching light", promptHint: "with a prominent collarbone clearly defined and catching the light", term: "visible collarbone" },
-  { id: "feature-midriff-visible", label: "Midriff Visible", dimension: "distinctive-features", description: "Exposed midriff between top and bottom", promptHint: "wearing a cropped style with the midriff visible", term: "visible midriff" },
-  { id: "feature-navel-visible", label: "Navel Visible", dimension: "distinctive-features", description: "Visible navel on bare stomach", promptHint: "with the navel visible", term: "visible navel" },
+  { id: "feature-bare-shoulders", label: "Bare Shoulders", dimension: "distinctive-features", description: "Bare shoulders exposed", promptHint: "with bare shoulders exposed, the line of the collarbone and shoulder muscles uncovered" , adultOnly: true },
+  { id: "feature-collarbone-visible", label: "Collarbone Visible", dimension: "distinctive-features", description: "Prominent collarbone catching light", promptHint: "with a prominent collarbone clearly defined and catching the light", term: "visible collarbone" , adultOnly: true },
+  { id: "feature-midriff-visible", label: "Midriff Visible", dimension: "distinctive-features", description: "Exposed midriff between top and bottom", promptHint: "wearing a cropped style with the midriff visible", term: "visible midriff" , adultOnly: true },
+  { id: "feature-navel-visible", label: "Navel Visible", dimension: "distinctive-features", description: "Visible navel on bare stomach", promptHint: "with the navel visible", term: "visible navel" , adultOnly: true },
   { id: "feature-elongated-neck", label: "Elongated Neck", dimension: "distinctive-features", description: "Long swan-like neck", promptHint: "with an elongated, swan-like neck, long and gracefully extended", term: "elongated swan-like neck" },
   { id: "feature-under-eye-circles", label: "Under-Eye Circles", dimension: "distinctive-features", description: "Subtle dark circles under the eyes (distinct from puffy eye-bags)", promptHint: "with subtle dark circles under the eyes", term: "dark under-eye circles" },
   { id: "feature-fangs",          label: "Fangs",            dimension: "distinctive-features", description: "Visible fangs (vampire / character archetype)", promptHint: "with visible fangs at the canines, character / vampire archetype", term: "visible fangs at the canines" },
@@ -816,7 +832,7 @@ export const PEOPLE: ReadonlyArray<Person> = [
   // ----- Latin America -----
   { id: "carioca-rio",           label: "Carioca (Rio)",       group: "Latin America", dimension: "regional-aesthetic", description: "Rio de Janeiro beach-and-favela-music Brazilian aesthetic", promptHint: "a Carioca aesthetic — Rio de Janeiro beach-and-favela-music vibe, sun-warmed Brazilian energy", term: "carioca aesthetic" },
   { id: "paulista",              label: "Paulista (São Paulo)", group: "Latin America", dimension: "regional-aesthetic", description: "São Paulo metropolitan Brazilian creative-class aesthetic", promptHint: "a Paulista aesthetic — São Paulo metropolitan vibe, urban-Brazilian creative-class polish", term: "paulista aesthetic" },
-  { id: "buenos-aires-tango",    label: "Buenos Aires Tango",  group: "Latin America", dimension: "regional-aesthetic", description: "Buenos Aires Recoleta / San Telmo tango aesthetic (feminine)", promptHint: "a Buenos Aires tango aesthetic — Recoleta / San Telmo vibe, sultry porteña confidence", term: "buenos aires tango aesthetic" },
+  { id: "buenos-aires-tango",    label: "Buenos Aires Tango",  group: "Latin America", dimension: "regional-aesthetic", description: "Buenos Aires Recoleta / San Telmo tango aesthetic (feminine)", promptHint: "a Buenos Aires tango aesthetic — Recoleta / San Telmo vibe, sultry porteña confidence", term: "buenos aires tango aesthetic" , adultOnly: true },
   { id: "porteño",               label: "Porteño",             group: "Latin America", dimension: "regional-aesthetic", description: "Buenos Aires refined milonguero aesthetic (masculine)", promptHint: "a Porteño aesthetic — Buenos Aires vibe, refined milonguero presence", term: "porteño aesthetic" },
   { id: "mexico-city-chic",      label: "Mexico City Chic",    group: "Latin America", dimension: "regional-aesthetic", description: "CDMX Roma / Polanco modern-Mexican aesthetic", promptHint: "a Mexico City chic aesthetic — CDMX Roma / Polanco vibe, modern-Mexican polish", term: "mexico city chic aesthetic" },
   { id: "chilango-traditional",  label: "Chilango Traditional", group: "Latin America", dimension: "regional-aesthetic", description: "Mexico City warm folk-and-feast aesthetic", promptHint: "a Chilango traditional aesthetic — Mexico City vibe, warm folk-and-feast mood", term: "chilango traditional aesthetic" },
@@ -1322,7 +1338,11 @@ function emitIndependentFragments(value: unknown, fragmentFor: PersonFragmentFor
   const navel = ids.includes("feature-navel-visible")
   for (const id of ids) {
     if (midriff && navel && (id === "feature-midriff-visible" || id === "feature-navel-visible")) {
-      if (id === "feature-midriff-visible") out.push("wearing a cropped style, midriff and navel visible")
+      // The fold pushes a literal string without consulting `fragmentFor` — a
+      // floored `fragmentFor` (see `emit` in collectPersonFragments) returns
+      // "" for a flagged id, so gate the fold on that instead of hardcoding
+      // the minor check here.
+      if (id === "feature-midriff-visible" && fragmentFor(id) !== "") out.push("wearing a cropped style, midriff and navel visible")
       continue
     }
     const fragment = fragmentFor(id)
@@ -1348,6 +1368,19 @@ function collectPersonFragments(
   const pre = typeof data.preText === "string" ? data.preText.trim() : ""
   if (pre) hints.push(pre)
 
+  // W1-a minor-age floor (Layer 1): a minor subject never emits an adultOnly
+  // entry — drop, never soften. Adults are untouched (the golden fixture pins
+  // that). The drop is checked on the ENTRY the collector itself resolves for
+  // that id (`getPerson`, the same pack-composed lookup `fragmentFor` already
+  // reads through) — not a separately-sourced id set — so pack-registered and
+  // built-in entries are both covered by construction. `fragmentFor` is
+  // wrapped so every branch below (independent fragments, the midriff+navel
+  // fold, custom text) sees the same rule.
+  const floored = isMinorAge(data)
+  const emit: PersonFragmentFor = floored
+    ? (id) => (typeof id === "string" && getPerson(id)?.adultOnly === true ? "" : fragmentFor(id))
+    : fragmentFor
+
   const fieldByDimension = getRegisteredPersonFieldByDimension()
   for (const dimension of getRegisteredPersonDimensionOrder()) {
     const field = fieldByDimension[dimension]
@@ -1356,22 +1389,22 @@ function collectPersonFragments(
     if (dimension === "age") {
       const ageId = typeof raw === "string" ? raw : undefined
       const customAge = typeof data.customAge === "number" ? data.customAge : undefined
-      const h = buildAgeFragment(ageId, customAge, fragmentFor)
+      const h = buildAgeFragment(ageId, customAge, emit)
       if (h) hints.push(h)
       continue
     }
     if (dimension === "ethnicity") {
-      const h = buildEthnicityFragment(raw, fragmentFor)
+      const h = buildEthnicityFragment(raw, emit)
       if (h) hints.push(h)
       continue
     }
     if (dimension === "hair-color") {
-      const h = buildHairColorFragment(raw, fragmentFor)
+      const h = buildHairColorFragment(raw, emit)
       if (h) hints.push(h)
       continue
     }
     if (dimension === "eye-color") {
-      for (const h of buildEyeColorFragments(raw, fragmentFor)) hints.push(h)
+      for (const h of buildEyeColorFragments(raw, emit)) hints.push(h)
       continue
     }
     if (
@@ -1381,11 +1414,11 @@ function collectPersonFragments(
       dimension === "skin-texture" ||
       dimension === "regional-aesthetic"
     ) {
-      for (const h of emitIndependentFragments(raw, fragmentFor)) hints.push(h)
+      for (const h of emitIndependentFragments(raw, emit)) hints.push(h)
       continue
     }
     if (typeof raw !== "string" || raw.length === 0) continue
-    const hint = fragmentFor(raw)
+    const hint = emit(raw)
     if (hint) hints.push(hint)
   }
 
@@ -1400,7 +1433,7 @@ function collectPersonFragments(
     !data.lipFullness &&
     !data.lipShape
   ) {
-    const legacyLips = fragmentFor(data.lips)
+    const legacyLips = emit(data.lips)
     if (legacyLips) hints.push(legacyLips)
   }
 

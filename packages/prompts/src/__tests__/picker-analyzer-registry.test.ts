@@ -7,6 +7,7 @@ import {
 import {
   buildPickerAnalyzerSpec,
   buildPickerZodSchema,
+  PICKER_ANALYZER_REGISTRY,
 } from "../picker-analyzer-registry.js"
 // NOTE: the existing test file already imports `buildPickerAnalyzerSpec` from
 // "../picker-analyzer-registry.js" — do NOT re-import it here (duplicate-identifier
@@ -114,5 +115,18 @@ describe("registry invariants (all analyzable pickers)", () => {
   })
   it("lens enum equals LENSES ids", () => {
     expect(buildPickerAnalyzerSpec("lens").dimensions[0].entryIds).toEqual(LENSES.map((l) => l.id))
+  })
+})
+
+describe("personCleanup (W1-a: minor-age floor)", () => {
+  it("drops flagged ids from the patch when the patch itself is a minor", () => {
+    const patch: Record<string, unknown> = {
+      age: "age-child",
+      bust: "bust-full",
+      lipState: ["lip-state-glossy", "lip-state-bold-red"],
+    }
+    PICKER_ANALYZER_REGISTRY.person.cleanup?.(patch, "fill-empty")
+    expect(patch.bust).toBeUndefined()
+    expect(patch.lipState).toEqual(["lip-state-bold-red"])
   })
 })

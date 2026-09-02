@@ -47,6 +47,12 @@
  */
 
 import { resolveTerm, type PickerHintMode } from "./term.js"
+// W1-a minor-age floor: `age-signal.ts` is an import-free leaf (no runtime
+// deps at all), so this import is cycle-safe unconditionally — unlike
+// `age-floor.js`, which pulls in the catalog funnel (`person-packs.js` /
+// `picker-catalogs.js`) and would reopen the person → age-floor →
+// picker-catalogs load-time cycle if imported from here.
+import { isMinorAge } from "./age-signal.js"
 
 export type StylingDimension =
   | "makeup"
@@ -73,6 +79,16 @@ export interface Styling {
   readonly dimension: StylingDimension
   readonly description: string
   readonly promptHint: string
+  /**
+   * W1-a minor-age floor (spec 2026-09-01 §3.3). `true` marks an entry whose
+   * hint describes body exposure, sheer/wet clothing, swimwear/lingerie, a
+   * seductive expression or gaze, or a body-placed tattoo. The fragment
+   * collectors DROP flagged entries for a minor subject (`isMinorAge`), the
+   * picker hides their tiles, the analyzer never emits them, and the backend
+   * policy strips their wording from free text. Hand-curated; the
+   * `adult-only-ratchet` test only ratchets. Never set on neutral defaults.
+   */
+  readonly adultOnly?: true
   /**
    * Compact professional term for hint-compact mode (see `term.ts`).
    *
@@ -220,14 +236,14 @@ export const STYLINGS: ReadonlyArray<Styling> = [
   { id: "jewelry-pearl",      label: "Pearl",      dimension: "jewelry", description: "Pearl necklace / earrings", promptHint: "wearing a pearl necklace and pearl earrings", term: "pearl jewelry" },
   { id: "jewelry-chunky",     label: "Chunky",     dimension: "jewelry", description: "Chunky chains and rings",   promptHint: "wearing chunky chains and oversized rings", term: "chunky chains and rings" },
   { id: "jewelry-smart-watch", label: "Smart Watch", dimension: "jewelry", description: "Modern smart watch on wrist", promptHint: "wearing a modern smart watch on the wrist with a sleek digital face and silicone band" },
-  { id: "jewelry-choker-leather", label: "Leather Choker", dimension: "jewelry", description: "Black leather choker close to throat", promptHint: "wearing a black leather choker fitted close around the throat" },
-  { id: "jewelry-choker-velvet", label: "Velvet Choker", dimension: "jewelry", description: "Velvet ribbon choker, dressy and vintage", promptHint: "wearing a velvet ribbon choker around the throat, a dressy vintage touch with a small pendant at the front" },
-  { id: "jewelry-choker-chain", label: "Chain Choker", dimension: "jewelry", description: "Thin metal-chain choker", promptHint: "wearing a thin metal-chain choker tight around the throat" },
+  { id: "jewelry-choker-leather", label: "Leather Choker", dimension: "jewelry", description: "Black leather choker close to throat", promptHint: "wearing a black leather choker fitted close around the throat" , adultOnly: true },
+  { id: "jewelry-choker-velvet", label: "Velvet Choker", dimension: "jewelry", description: "Velvet ribbon choker, dressy and vintage", promptHint: "wearing a velvet ribbon choker around the throat, a dressy vintage touch with a small pendant at the front" , adultOnly: true },
+  { id: "jewelry-choker-chain", label: "Chain Choker", dimension: "jewelry", description: "Thin metal-chain choker", promptHint: "wearing a thin metal-chain choker tight around the throat" , adultOnly: true },
   { id: "jewelry-stud-earrings", label: "Stud Earrings", dimension: "jewelry", description: "Small simple studs", promptHint: "wearing small simple stud earrings" },
   { id: "jewelry-hoop-earrings", label: "Hoop Earrings", dimension: "jewelry", description: "Gold or silver hoops", promptHint: "wearing gold or silver hoop earrings" },
   { id: "jewelry-ear-cuff", label: "Ear Cuff", dimension: "jewelry", description: "Sculptural cuff climbing the cartilage", promptHint: "wearing a sculptural ear cuff climbing the cartilage of one ear" },
   { id: "jewelry-septum-ring", label: "Septum Ring", dimension: "jewelry", description: "Septum nose ring", promptHint: "wearing a septum nose ring through the center of the nose" },
-  { id: "jewelry-body-chain", label: "Body Chain", dimension: "jewelry", description: "Thin metallic chain across torso", promptHint: "wearing a thin metallic body chain draped across the torso" },
+  { id: "jewelry-body-chain", label: "Body Chain", dimension: "jewelry", description: "Thin metallic chain across torso", promptHint: "wearing a thin metallic body chain draped across the torso" , adultOnly: true },
 
   // -------------------- Nails --------------------
   { id: "nails-polished",     label: "Polished",     dimension: "nails", description: "Clear or nude polished nails", promptHint: "with polished nude nails", term: "polished nude nails" },
@@ -263,10 +279,10 @@ export const STYLINGS: ReadonlyArray<Styling> = [
   { id: "fabric-chiffon",  label: "Chiffon",  dimension: "fabric", description: "Sheer flowing chiffon",         promptHint: "wearing sheer chiffon with a lightweight floating drape and soft translucent layers" },
   { id: "fabric-fur",      label: "Fur",      dimension: "fabric", description: "Thick plush fur",               promptHint: "wearing thick plush fur with long dense strands and natural variation", term: "fur garment" },
   { id: "fabric-sequins",  label: "Sequins",  dimension: "fabric", description: "Sparkling sequin fabric",       promptHint: "wearing sparkling sequined fabric catching light with countless tiny reflective facets" },
-  { id: "fabric-latex",    label: "Latex",    dimension: "fabric", description: "Glossy latex",                  promptHint: "wearing glossy latex with a high-shine liquid look clinging to the body" },
+  { id: "fabric-latex",    label: "Latex",    dimension: "fabric", description: "Glossy latex",                  promptHint: "wearing glossy latex with a high-shine liquid look clinging to the body" , adultOnly: true },
 
   // -------------------- Outfit (single-pick complete look — overrides individual pieces) --------------------
-  { id: "outfit-school-uniform",   label: "School Uniform",   dimension: "outfit", description: "Classic school uniform set",        promptHint: "dressed in a classic school uniform — collared blouse, pleated skirt and knee-high socks" },
+  { id: "outfit-school-uniform",   label: "School Uniform",   dimension: "outfit", description: "Classic school uniform set",        promptHint: "dressed in a classic school uniform — collared blouse, pleated skirt and knee-high socks" , adultOnly: true },
   { id: "outfit-business-suit",    label: "Business Suit",    dimension: "outfit", description: "Tailored two-piece business suit",  promptHint: "dressed in a sharp tailored two-piece business suit with a crisp shirt underneath" },
   { id: "outfit-tuxedo",           label: "Tuxedo",           dimension: "outfit", description: "Black-tie tuxedo",                  promptHint: "dressed in a black tuxedo with satin lapels and a bow tie" },
   { id: "outfit-evening-gown",     label: "Evening Gown",     dimension: "outfit", description: "Floor-length formal gown",          promptHint: "dressed in a floor-length evening gown with a fitted bodice and a flowing skirt" },
@@ -280,9 +296,9 @@ export const STYLINGS: ReadonlyArray<Styling> = [
   { id: "outfit-athleisure",       label: "Athleisure Set",   dimension: "outfit", description: "Matching athleisure top and bottom", promptHint: "dressed in a matching athleisure set — a fitted top and leggings in the same tone" },
   { id: "outfit-tracksuit",        label: "Tracksuit",        dimension: "outfit", description: "Two-piece zip-front tracksuit",     promptHint: "dressed in a two-piece tracksuit — a zip-front jacket and matching joggers" },
   { id: "outfit-soccer-jersey",    label: "Soccer Jersey",    dimension: "outfit", description: "National-team football jersey with crest", promptHint: "wearing a national-team soccer jersey — team colors and trim with the team crest on the chest" },
-  { id: "outfit-bikini",           label: "Bikini",           dimension: "outfit", description: "Two-piece swimsuit",                promptHint: "in a two-piece bikini" },
-  { id: "outfit-one-piece-swim",   label: "One-Piece Swimsuit", dimension: "outfit", description: "Fitted one-piece swimsuit",       promptHint: "in a fitted one-piece swimsuit" },
-  { id: "outfit-lingerie",         label: "Lingerie Set",     dimension: "outfit", description: "Matching lingerie set",             promptHint: "in a matching lingerie set" },
+  { id: "outfit-bikini",           label: "Bikini",           dimension: "outfit", description: "Two-piece swimsuit",                promptHint: "in a two-piece bikini" , adultOnly: true },
+  { id: "outfit-one-piece-swim",   label: "One-Piece Swimsuit", dimension: "outfit", description: "Fitted one-piece swimsuit",       promptHint: "in a fitted one-piece swimsuit" , adultOnly: true },
+  { id: "outfit-lingerie",         label: "Lingerie Set",     dimension: "outfit", description: "Matching lingerie set",             promptHint: "in a matching lingerie set" , adultOnly: true },
   { id: "outfit-pajamas",          label: "Pajamas",          dimension: "outfit", description: "Soft cotton pajama set",            promptHint: "in a soft cotton pajama set — a button-up top and matching pants" },
   { id: "outfit-bathrobe",         label: "Bathrobe",         dimension: "outfit", description: "Plush terrycloth robe",             promptHint: "wrapped in a plush terrycloth bathrobe tied at the waist" },
   { id: "outfit-kimono",           label: "Kimono",           dimension: "outfit", description: "Traditional Japanese kimono",       promptHint: "dressed in a traditional Japanese kimono with an obi sash" },
@@ -316,14 +332,14 @@ export const STYLINGS: ReadonlyArray<Styling> = [
   { id: "top-polo",          label: "Polo Shirt",     dimension: "top", description: "Short-sleeve polo",              promptHint: "wearing a fitted polo shirt with a small ribbed collar and short sleeves" },
   { id: "top-tube-top",      label: "Tube Top",       dimension: "top", description: "Strapless tube top",             promptHint: "wearing a strapless tube top fitted across the chest" },
   { id: "top-camisole",      label: "Camisole",       dimension: "top", description: "Thin satin cami",                promptHint: "wearing a thin satin camisole with delicate spaghetti straps" },
-  { id: "top-corset",        label: "Corset",         dimension: "top", description: "Structured corset top",          promptHint: "wearing a structured corset top with boning and visible lacing" },
-  { id: "top-bra-top",       label: "Bra Top",        dimension: "top", description: "Bra-style top showing midriff", promptHint: "wearing a fitted bra-style top with the midriff exposed" },
+  { id: "top-corset",        label: "Corset",         dimension: "top", description: "Structured corset top",          promptHint: "wearing a structured corset top with boning and visible lacing" , adultOnly: true },
+  { id: "top-bra-top",       label: "Bra Top",        dimension: "top", description: "Bra-style top showing midriff", promptHint: "wearing a fitted bra-style top with the midriff exposed" , adultOnly: true },
   { id: "top-sports-bra",    label: "Sports Bra",     dimension: "top", description: "Athletic sports bra",            promptHint: "wearing a structured sports bra with athletic strapping" },
-  { id: "top-bikini-top",    label: "Bikini Top",     dimension: "top", description: "Triangle bikini top",            promptHint: "wearing a triangle bikini top tied behind the neck and back" },
+  { id: "top-bikini-top",    label: "Bikini Top",     dimension: "top", description: "Triangle bikini top",            promptHint: "wearing a triangle bikini top tied behind the neck and back" , adultOnly: true },
   { id: "top-bodysuit",      label: "Bodysuit",       dimension: "top", description: "Fitted one-piece torso garment", promptHint: "wearing a fitted bodysuit, a one-piece torso garment snapped at the inseam" },
   { id: "top-leotard",       label: "Leotard",        dimension: "top", description: "Dance-style fitted top with sleeves", promptHint: "wearing a dance-style leotard, a fitted one-piece top with sleeves" },
-  { id: "top-mesh-top",      label: "Mesh Top",       dimension: "top", description: "Sheer mesh fabric top",          promptHint: "wearing a sheer mesh top, the open-weave fabric letting skin show through" },
-  { id: "top-sheer-top",     label: "Sheer Top",      dimension: "top", description: "Translucent fabric top",          promptHint: "wearing a sheer translucent top with a soft drape, hinting at the silhouette underneath" },
+  { id: "top-mesh-top",      label: "Mesh Top",       dimension: "top", description: "Sheer mesh fabric top",          promptHint: "wearing a sheer mesh top, the open-weave fabric letting skin show through" , adultOnly: true },
+  { id: "top-sheer-top",     label: "Sheer Top",      dimension: "top", description: "Translucent fabric top",          promptHint: "wearing a sheer translucent top with a soft drape, hinting at the silhouette underneath" , adultOnly: true },
   { id: "top-bandeau",       label: "Bandeau",        dimension: "top", description: "Strapless tube top",              promptHint: "wearing a strapless bandeau top wrapped across the chest" },
 
   // -------------------- Bottom (lower-body garment) --------------------
@@ -366,11 +382,11 @@ export const STYLINGS: ReadonlyArray<Styling> = [
 
   // -------------------- Legwear (between bottom and footwear) --------------------
   { id: "legwear-bare",             label: "Bare Legs",        dimension: "legwear", description: "Bare legs, no hosiery",      promptHint: "with bare legs, no hosiery" },
-  { id: "legwear-sheer-tights",     label: "Sheer Tights",     dimension: "legwear", description: "Sheer nude pantyhose",       promptHint: "with sheer nude pantyhose" },
+  { id: "legwear-sheer-tights",     label: "Sheer Tights",     dimension: "legwear", description: "Sheer nude pantyhose",       promptHint: "with sheer nude pantyhose" , adultOnly: true },
   { id: "legwear-opaque-tights",    label: "Opaque Tights",    dimension: "legwear", description: "Solid opaque tights",        promptHint: "with opaque black tights covering the legs" },
-  { id: "legwear-fishnets",         label: "Fishnets",         dimension: "legwear", description: "Diamond-mesh fishnets",      promptHint: "with fishnet stockings, the skin showing through the diamond mesh", term: "fishnet stockings" },
-  { id: "legwear-thigh-highs",      label: "Thigh-High Stockings", dimension: "legwear", description: "Thigh-high stockings",   promptHint: "with thigh-high stockings stopping mid-thigh" },
-  { id: "legwear-lace-top-stockings", label: "Lace-Top Stockings", dimension: "legwear", description: "Lace-banded thigh-highs", promptHint: "with lace-topped thigh-high stockings cinched mid-thigh" },
+  { id: "legwear-fishnets",         label: "Fishnets",         dimension: "legwear", description: "Diamond-mesh fishnets",      promptHint: "with fishnet stockings, the skin showing through the diamond mesh", term: "fishnet stockings" , adultOnly: true },
+  { id: "legwear-thigh-highs",      label: "Thigh-High Stockings", dimension: "legwear", description: "Thigh-high stockings",   promptHint: "with thigh-high stockings stopping mid-thigh" , adultOnly: true },
+  { id: "legwear-lace-top-stockings", label: "Lace-Top Stockings", dimension: "legwear", description: "Lace-banded thigh-highs", promptHint: "with lace-topped thigh-high stockings cinched mid-thigh" , adultOnly: true },
   { id: "legwear-knee-highs",       label: "Knee-High Socks",  dimension: "legwear", description: "Knee-high socks",            promptHint: "with knee-high socks pulled up the calf" },
   { id: "legwear-crew-socks",       label: "Crew Socks",       dimension: "legwear", description: "Mid-calf crew socks",        promptHint: "with simple crew socks visible above the shoes" },
   { id: "legwear-ankle-socks",      label: "Ankle Socks",      dimension: "legwear", description: "Low-cut ankle socks",        promptHint: "with low-cut ankle socks barely showing above the shoes" },
@@ -385,7 +401,7 @@ export const STYLINGS: ReadonlyArray<Styling> = [
   { id: "footwear-platforms",       label: "Platform Shoes",   dimension: "footwear", description: "Tall platform soles",      promptHint: "in platform shoes with thick chunky soles" },
   { id: "footwear-ankle-boots",     label: "Ankle Boots",      dimension: "footwear", description: "Fitted ankle boots",       promptHint: "in fitted black ankle boots" },
   { id: "footwear-knee-boots",      label: "Knee-High Boots",  dimension: "footwear", description: "Tall knee-high boots",     promptHint: "in tall knee-high leather boots" },
-  { id: "footwear-thigh-high-boots", label: "Thigh-High Boots", dimension: "footwear", description: "Thigh-high boots",        promptHint: "in over-the-knee thigh-high leather boots" },
+  { id: "footwear-thigh-high-boots", label: "Thigh-High Boots", dimension: "footwear", description: "Thigh-high boots",        promptHint: "in over-the-knee thigh-high leather boots" , adultOnly: true },
   { id: "footwear-combat-boots",    label: "Combat Boots",     dimension: "footwear", description: "Laced combat boots",       promptHint: "in laced black combat boots with a chunky lugged sole" },
   { id: "footwear-chelsea-boots",   label: "Chelsea Boots",    dimension: "footwear", description: "Slip-on Chelsea boots",    promptHint: "in clean Chelsea boots with elastic side panels" },
   { id: "footwear-cowboy-boots",    label: "Cowboy Boots",     dimension: "footwear", description: "Pointed-toe cowboy boots", promptHint: "in pointed-toe cowboy boots with a stacked heel and decorative stitching" },
@@ -405,18 +421,18 @@ export const STYLINGS: ReadonlyArray<Styling> = [
 
   // -------------------- Wardrobe State (modifier — composes with any garment) --------------------
   { id: "state-oversized",     label: "Oversized",       dimension: "wardrobe-state", description: "Loose, oversized fit",      promptHint: "the clothing loose and oversized, draping freely well past the body", term: "oversized fit" },
-  { id: "state-fitted",        label: "Fitted",          dimension: "wardrobe-state", description: "Form-fitting silhouette",   promptHint: "the clothing fitted and form-conscious, hugging the contours of the body", term: "form-fitting clothing" },
-  { id: "state-cropped",       label: "Cropped",         dimension: "wardrobe-state", description: "Top cropped at midriff",    promptHint: "the top cropped above the midriff with the stomach visible", term: "cropped top" },
-  { id: "state-sheer",         label: "Sheer",           dimension: "wardrobe-state", description: "Translucent fabric",        promptHint: "the fabric translucent and sheer, hinting at the silhouette underneath", term: "sheer clothing" },
-  { id: "state-wet",           label: "Wet",             dimension: "wardrobe-state", description: "Soaked, water-clinging",    promptHint: "the clothing soaked and wet, the fabric clinging to the body and dripping water", term: "wet clothing" },
+  { id: "state-fitted",        label: "Fitted",          dimension: "wardrobe-state", description: "Form-fitting silhouette",   promptHint: "the clothing fitted and form-conscious, hugging the contours of the body", term: "form-fitting clothing" , adultOnly: true },
+  { id: "state-cropped",       label: "Cropped",         dimension: "wardrobe-state", description: "Top cropped at midriff",    promptHint: "the top cropped above the midriff with the stomach visible", term: "cropped top" , adultOnly: true },
+  { id: "state-sheer",         label: "Sheer",           dimension: "wardrobe-state", description: "Translucent fabric",        promptHint: "the fabric translucent and sheer, hinting at the silhouette underneath", term: "sheer clothing" , adultOnly: true },
+  { id: "state-wet",           label: "Wet",             dimension: "wardrobe-state", description: "Soaked, water-clinging",    promptHint: "the clothing soaked and wet, the fabric clinging to the body and dripping water", term: "wet clothing" , adultOnly: true },
   { id: "state-ripped",        label: "Ripped",          dimension: "wardrobe-state", description: "Torn and frayed",           promptHint: "the fabric torn and ripped at the seams, with frayed edges", term: "ripped clothing" },
   { id: "state-distressed",    label: "Distressed",      dimension: "wardrobe-state", description: "Worn, faded, weathered",    promptHint: "the clothing distressed and weathered, with faded color and worn-down edges", term: "distressed clothing" },
   { id: "state-vintage",       label: "Vintage",         dimension: "wardrobe-state", description: "Worn, retro character",     promptHint: "the clothing carrying vintage character — softened color, broken-in fit, retro silhouette", term: "vintage clothing" },
   { id: "state-tucked-in",     label: "Tucked In",       dimension: "wardrobe-state", description: "Top tucked into bottom",    promptHint: "the top neatly tucked into the bottom", term: "top tucked in" },
   { id: "state-half-tucked",   label: "Half-Tucked",     dimension: "wardrobe-state", description: "Front-tucked, back loose",  promptHint: "the top half-tucked — front neatly tucked in, back hanging loose", term: "top half-tucked" },
-  { id: "state-off-shoulder",  label: "Off-Shoulder",    dimension: "wardrobe-state", description: "Slipped off one shoulder",  promptHint: "the top slipped off one shoulder, baring the skin and collarbone", term: "off-the-shoulder top" },
-  { id: "state-halter-neck",   label: "Halter Neck",     dimension: "wardrobe-state", description: "Straps tied behind the neck", promptHint: "the top cut as a halter — straps tied behind the neck, shoulders and upper back bare", term: "halter neckline" },
-  { id: "state-plunging-neck", label: "Plunging Neckline", dimension: "wardrobe-state", description: "Deep plunging V neckline",  promptHint: "the neckline cut in a deep plunging V" },
+  { id: "state-off-shoulder",  label: "Off-Shoulder",    dimension: "wardrobe-state", description: "Slipped off one shoulder",  promptHint: "the top slipped off one shoulder, baring the skin and collarbone", term: "off-the-shoulder top" , adultOnly: true },
+  { id: "state-halter-neck",   label: "Halter Neck",     dimension: "wardrobe-state", description: "Straps tied behind the neck", promptHint: "the top cut as a halter — straps tied behind the neck, shoulders and upper back bare", term: "halter neckline" , adultOnly: true },
+  { id: "state-plunging-neck", label: "Plunging Neckline", dimension: "wardrobe-state", description: "Deep plunging V neckline",  promptHint: "the neckline cut in a deep plunging V" , adultOnly: true },
   { id: "state-unbuttoned",    label: "Unbuttoned",      dimension: "wardrobe-state", description: "Open / unbuttoned",         promptHint: "the outerwear hanging open and unbuttoned, falling loose at the sides", term: "worn open and unbuttoned" },
   { id: "state-rolled-sleeves", label: "Rolled Sleeves", dimension: "wardrobe-state", description: "Sleeves rolled up forearm", promptHint: "the sleeves rolled up to the forearm", term: "rolled-up sleeves" },
   { id: "state-layered",       label: "Layered",         dimension: "wardrobe-state", description: "Multiple stacked layers",   promptHint: "the outfit composed of multiple stacked layers, each piece visible at the edges", term: "layered outfit" },
@@ -623,6 +639,15 @@ function collectStylingFragments(
     ? lipStateRaw.includes("lip-state-bold-red")
     : lipStateRaw === "lip-state-bold-red"
 
+  // W1-a (Layer 1): the subject fold passes person + styling as ONE flat bag,
+  // so the age is readable here; drop adultOnly garments for a minor. The
+  // drop is checked on the ENTRY the collector itself resolves for that id
+  // (`getStyling`, the same lookup `fragmentFor` already reads through), not
+  // a separately-sourced id set. A separate styling node carries no age and
+  // is left alone (Layer 2 — the backend policy — covers that path).
+  const floored = isMinorAge(data as { age?: string; customAge?: number; type?: string })
+  const emit = floored ? (id: string) => (getStyling(id)?.adultOnly === true ? "" : fragmentFor(id)) : fragmentFor
+
   for (const dimension of STYLING_DIMENSION_ORDER) {
     const field = STYLING_FIELD_BY_DIMENSION[dimension]
     const raw = data[field]
@@ -630,12 +655,12 @@ function collectStylingFragments(
     // jewelry / wardrobe-state / hair-state are multi-pick (string | string[]);
     // emit each id's fragment independently and let the comma-join compose.
     if (typeof raw === "string" && raw.length > 0) {
-      const fragment = fragmentFor(raw)
+      const fragment = emit(raw)
       if (fragment) out.push(fragment)
     } else if (Array.isArray(raw)) {
       for (const item of raw) {
         if (typeof item !== "string" || item.length === 0) continue
-        const fragment = fragmentFor(item)
+        const fragment = emit(item)
         if (fragment) out.push(fragment)
       }
     }

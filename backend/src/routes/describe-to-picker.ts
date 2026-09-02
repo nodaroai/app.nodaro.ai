@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { maybeProxyLlmRouteToCloud } from "../lib/cloud-llm-proxy.js"
 import { z } from "zod"
-import { buildMultiPickerAnalyzerSpec, PICKER_TYPES, type PickerType, type PickerGaps } from "@nodaro/prompts"
+import { buildMultiPickerAnalyzerSpec, applyMinorAgeFloorToPickerValues, PICKER_TYPES, type PickerType, type PickerGaps } from "@nodaro/prompts"
 import { buildLlmCreditIdentifier, resolveLlmCreditId, getLlmModel, LLM_FEATURE_DEFAULTS, LLM_MODEL_IDS, LLM_REASONING_EFFORTS, STRUCTURED_VISION_MODELS } from "@nodaro/shared"
 import { supabase } from "../lib/supabase.js"
 import { insertJob } from "../lib/insert-job.js"
@@ -241,12 +241,15 @@ export async function describeToPickerRoutes(app: FastifyInstance) {
         )
 
         const { gaps, ...pickerJson } = output as Record<string, unknown> & { gaps?: PickerGaps }
+        // W1-a: a minor person value floors the styling/pose/mood values from
+        // the same analysis (the per-picker cleanup only sees its own patch).
+        const flooredPickerJson = applyMinorAgeFloorToPickerValues(pickerJson as Record<string, unknown>)
 
         await supabase
           .from("jobs")
           .update({
             status: "completed",
-            output_data: { json: pickerJson, targetPickers, usage: { inputTokens, outputTokens } },
+            output_data: { json: flooredPickerJson, targetPickers, usage: { inputTokens, outputTokens } },
           })
           .eq("id", job.id)
           .eq("user_id", userId)
@@ -265,14 +268,14 @@ export async function describeToPickerRoutes(app: FastifyInstance) {
           jobId: job.id,
         })
         await Promise.all([
-          ...buildGapRecords(gaps, pickerJson, userId).map(async (rec) => {
+          ...buildGapRecords(gaps, flooredPickerJson, userId).map(async (rec) => {
             const { error: gapErr } = await supabase.rpc("record_picker_catalog_gap", rec)
             if (gapErr) req.log.warn({ err: gapErr.message }, "picker gap upsert failed")
           }),
           ...(missingReport ? [insertAppReport(missingReport)] : []),
         ])
 
-        return reply.send({ jobId: job.id, pickerJson, gaps })
+        return reply.send({ jobId: job.id, pickerJson: flooredPickerJson, gaps })
       } catch (err) {
         const message = err instanceof Error ? err.message : "Picker analysis failed"
         await supabase.from("jobs").update({ status: "failed", output_data: { error: message } }).eq("id", job.id).eq("user_id", userId)

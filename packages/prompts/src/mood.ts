@@ -34,6 +34,16 @@ export interface Mood {
   readonly description: string
   readonly promptHint: string
   /**
+   * W1-a minor-age floor (spec 2026-09-01 §3.3). `true` marks an entry whose
+   * hint describes body exposure, sheer/wet clothing, swimwear/lingerie, a
+   * seductive expression or gaze, or a body-placed tattoo. The fragment
+   * collectors DROP flagged entries for a minor subject (`isMinorAge`), the
+   * picker hides their tiles, the analyzer never emits them, and the backend
+   * policy strips their wording from free text. Hand-curated; the
+   * `adult-only-ratchet` test only ratchets. Never set on neutral defaults.
+   */
+  readonly adultOnly?: true
+  /**
    * Compact professional term injected in compact hint mode (see `term.ts`).
    *
    * Written in the SAME register as the `promptHint`: this catalog describes
@@ -91,10 +101,10 @@ export const MOODS: ReadonlyArray<Mood> = [
   { id: "determined",  label: "Determined",   category: "intense",  description: "Resolute, focused will",      promptHint: "with a determined, resolute expression and iron focus", term: "determined, resolute expression" },
   { id: "passionate",  label: "Passionate",   category: "intense",  description: "Burning passion",             promptHint: "with a passionate, burning expression full of conviction", term: "passionate expression" },
   { id: "brooding",    label: "Brooding",     category: "intense",  description: "Dark, brooding melancholy",   promptHint: "with a brooding, dark expression and moody introspection", term: "brooding expression" },
-  { id: "seductive",   label: "Seductive",    category: "intense",  description: "Alluring, seductive",         promptHint: "with a seductive, alluring expression and lidded gaze", term: "seductive expression" },
+  { id: "seductive",   label: "Seductive",    category: "intense",  description: "Alluring, seductive",         promptHint: "with a seductive, alluring expression and lidded gaze", term: "seductive expression" , adultOnly: true },
   { id: "defiant",     label: "Defiant",      category: "intense",  description: "Defiant, unyielding",         promptHint: "with a defiant, unyielding expression and challenging stance", term: "defiant expression" },
-  { id: "sultry",      label: "Sultry",       category: "intense",  description: "Smoldering, heavy-lidded",    promptHint: "with a sultry, smoldering expression, heavy-lidded gaze and lips softly parted", term: "sultry expression" },
-  { id: "smoldering",  label: "Smoldering",   category: "intense",  description: "Coiled, slow-burning intensity", promptHint: "with a smoldering, coiled expression, slow-burning intensity behind half-closed eyes and a still, predatory calm", term: "smoldering intensity" },
+  { id: "sultry",      label: "Sultry",       category: "intense",  description: "Smoldering, heavy-lidded",    promptHint: "with a sultry, smoldering expression, heavy-lidded gaze and lips softly parted", term: "sultry expression" , adultOnly: true },
+  { id: "smoldering",  label: "Smoldering",   category: "intense",  description: "Coiled, slow-burning intensity", promptHint: "with a smoldering, coiled expression, slow-burning intensity behind half-closed eyes and a still, predatory calm", term: "smoldering intensity" , adultOnly: true },
   { id: "sinister",    label: "Sinister",     category: "intense",  description: "Dark, malicious, threatening", promptHint: "with a sinister expression, a slow crooked smile and eyes glinting with dark malicious intent", term: "sinister expression" },
   { id: "wiccan-mystical", label: "Wiccan / Mystical", category: "intense", description: "Quietly otherworldly, occult", promptHint: "with a quietly mystical, otherworldly expression, eyes distant and knowing as if reading something the camera cannot see", term: "occult, otherworldly mystical expression" },
   { id: "lazy-shy",    label: "Lazy Shy",     category: "neutral",  description: "Drowsy, soft, half-shy",      promptHint: "with a soft, drowsy half-shy expression, eyes lowered and barely-there smile, languid and unbothered", term: "drowsy, half-shy expression" },
@@ -102,7 +112,7 @@ export const MOODS: ReadonlyArray<Mood> = [
   { id: "shocked",     label: "Shocked",      category: "intense",  description: "Surprised, mouth open",       promptHint: "with a shocked, surprised expression, eyes wide, brows raised and mouth open", term: "shocked expression" },
 
   // -------------------- Micro-emotions --------------------
-  { id: "flirty",      label: "Flirty",       category: "positive", description: "Playful flirtation, lingering smile, sustained eye contact", promptHint: "with a flirty expression, a lingering playful smile and sustained, knowing eye contact with the camera", term: "flirty expression" },
+  { id: "flirty",      label: "Flirty",       category: "positive", description: "Playful flirtation, lingering smile, sustained eye contact", promptHint: "with a flirty expression, a lingering playful smile and sustained, knowing eye contact with the camera", term: "flirty expression" , adultOnly: true },
   { id: "suspicious",  label: "Suspicious",   category: "negative", description: "Wary distrust, narrowed eyes, side-eye", promptHint: "with a suspicious, wary expression, eyes narrowed in distrust and a sidelong side-eye glance", term: "suspicious, wary expression" },
   { id: "resigned",    label: "Resigned",     category: "neutral",  description: "Quiet acceptance of an unpleasant situation, sigh", promptHint: "with a resigned expression of quiet acceptance, shoulders softly dropped mid-sigh and a tired half-closed gaze", term: "resigned expression of quiet acceptance" },
   { id: "conflicted",  label: "Conflicted",   category: "neutral",  description: "Visible internal struggle, brow furrowed, gaze unfocused", promptHint: "with a conflicted expression of visible internal struggle, brow furrowed and gaze unfocused, caught between two impulses", term: "conflicted, torn expression" },

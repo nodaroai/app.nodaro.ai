@@ -8,7 +8,7 @@ import { normalizeCollageLabels } from "../../providers/image/collage-badges.js"
 
 // Shared logic from packages/shared — single source of truth
 import { resolveSlideshowTransition, collectAncestorRefs as sharedCollectAncestorRefs, applyDefaultVideoSelection, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionableAssetArrays, buildCreditModelIdentifier, resolveImageGenCreditIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, resolveVideoModeForInputs, videoProviderRequiresImage, isVeoProvider, buildLipSyncCreditId, isPerSecondLipSyncProvider, resolveAiAvatarCreditId, resolveSwitchXCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, buildVideoAuditCreditId, resolveVideoAnalysisModel, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName, validateAiAvatarPayload, validateCinematicAvatarPayload, resolveNodeRefs, resolveEffectiveSourceType, PARAMETER_NODE_TYPES, characterMentionSlug, expandExtraRefsToConnectedReferences, PLATFORM_SPECS, isSeedance2Provider, isMinimaxH3Provider, isWan3Provider, isGeminiOmniProvider, PRICING_DEFAULT_RESOLUTION, supportsExtendRender, MODEL_CATALOG, hasFeature, referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality, COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS, buildLlmCreditIdentifier, motionGraphicsFeature, FLUX_LORA_CHARACTER_MODEL_ID, extractCharacterLoraFields, clampSmartCutWindow, resolveGvpAnchorWire, normalizeModelInput, readPromptAffixes, findImageMentionTokens, knownImageSlugsFromRefs, findEntityMentionTokens, knownEntitySlugsFromRefs, uiAspectRatioFill, uiResolutionFill } from "@nodaro/shared"
-import { composeNegative, resolveTemplate, applyTemplate, computeNodePrompt, assembleImageInput, readDirectionFields, readStructuredFields, readSubjectFields, buildImagePrompt, buildScenePrompt, collectIdentityLockClause as sharedCollectIdentityLockClause, getParameterPromptHint, characterLockToRefLock, buildCharacterPrompt, buildObjectPrompt, buildCreaturePrompt, buildLocationPrompt, buildFaceTemplateInputs, appendMusicMeta, composeSoundHintFromConnections, truncateForField, appendField, assembleSunoInput, type SoundConsumerType, type SoundComposition, resolveVideoReferenceCore, applyPromptAffixes, composeVideoPromptText, type DirectionFields, type StructuredPromptFields, type SubjectFields } from "@nodaro/prompts"
+import { composeNegative, resolveTemplate, applyTemplate, computeNodePrompt, assembleImageInput, readDirectionFields, readStructuredFields, readSubjectFields, buildImagePrompt, buildScenePrompt, collectIdentityLockClause as sharedCollectIdentityLockClause, getParameterPromptHint, characterLockToRefLock, buildCharacterPrompt, buildObjectPrompt, buildCreaturePrompt, buildLocationPrompt, buildFaceTemplateInputs, appendMusicMeta, composeSoundHintFromConnections, truncateForField, appendField, assembleSunoInput, type SoundConsumerType, type SoundComposition, resolveVideoReferenceCore, applyPromptAffixes, composeVideoPromptText, isMinorAge, containsMinorAgeHint, type DirectionFields, type StructuredPromptFields, type SubjectFields } from "@nodaro/prompts"
 import type { CharacterDef, ConnectedReference, SceneData, ExtraRefInput, ExtraRefCharacterContext } from "@nodaro/shared"
 import type { CharacterMeta } from "@nodaro/prompts"
 import { resolveEntityImageCreditIdentifier } from "../../lib/entity-credit-identifier.js"
@@ -5293,6 +5293,20 @@ export function buildPayload(
           sourceImageUrl: data.sourceImageUrl,
           provider,
           referenceImageUrls: resolvedInputs.referenceImageUrls,
+          // W1-a minor-age floor: the DAG lane's age decision, made once from
+          // the node's `person` picker value — the same input the route reads
+          // off the character row — OR from the assembled text when there is no
+          // picker value (a node written straight into workflow JSON by an
+          // agent / import / template carries prompt text and nothing else).
+          // Here the detector runs on `entityPrompt` itself rather than on a
+          // field list: this lane assembles via `buildCharacterPrompt` with no
+          // scaffolding function, so nothing feeds back into assembly and the
+          // exact text the provider will see is already in hand. That also makes
+          // the policy at the entity image chokepoint this lane's only Layer-2
+          // point, and this flag is what arms it.
+          subjectMinor:
+            isMinorAge((data as { person?: { age?: string; customAge?: number; type?: string } }).person ?? null) ||
+            containsMinorAgeHint(entityPrompt),
           usageLogId,
         },
       }
@@ -5327,6 +5341,20 @@ export function buildPayload(
           sourceImageUrl: data.sourceImageUrl,
           provider,
           referenceImageUrls: resolvedInputs.referenceImageUrls,
+          // W1-a — the DAG twin of POST /v1/generate-face. Same entity-image
+          // handler, same chokepoint, so it must make the same age decision.
+          // A face node carries no `person` picker value (FaceNodeData has no
+          // such field), so the text signal is the whole signal. Unlike
+          // `case "character"`, the raw fields are read alongside the assembled
+          // prompt: the "face-generation" template is user- and flow-overridable
+          // and an override that drops `{description}` would otherwise hide the
+          // age from the detector. Joined with a sentence break so no needle can
+          // be formed across a field boundary.
+          subjectMinor: containsMinorAgeHint(
+            [entityPrompt, name, data.description, data.prompt]
+              .filter((t): t is string => typeof t === "string" && t.length > 0)
+              .join(". "),
+          ),
           usageLogId,
         },
       }

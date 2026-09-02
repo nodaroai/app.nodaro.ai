@@ -17,12 +17,18 @@ interface StylingPickerProps {
   readonly value: StylingValue
   readonly onChange: (patch: Partial<StylingValue>) => void
   readonly className?: string
+  /** True when the subject the styling applies to is a minor. Hides
+   *  `adultOnly` styling tiles. Callers that already gate on the minor-age
+   *  floor elsewhere (e.g. the platform config panel via Layer 2) can omit
+   *  this — it defaults to false, i.e. no additional hiding here. */
+  readonly subjectMinor?: boolean
 }
 
 export const StylingPicker = memo(function StylingPicker({
   value,
   onChange,
   className,
+  subjectMinor,
 }: StylingPickerProps) {
   const [query, setQuery] = useState("")
   /** Multi-select dims (max > 1) intentionally start empty when toggled on —
@@ -34,6 +40,7 @@ export const StylingPicker = memo(function StylingPicker({
   const grouped = useMemo(() => {
     const byDimension = new Map<StylingDimension, Styling[]>()
     for (const styling of STYLINGS) {
+      if (subjectMinor && styling.adultOnly) continue
       if (!matches(styling.id, styling.label, styling.description, query)) {
         continue
       }
@@ -45,7 +52,7 @@ export const StylingPicker = memo(function StylingPicker({
       dimension: dim,
       entries: byDimension.get(dim) ?? [],
     }))
-  }, [query, matches])
+  }, [query, matches, subjectMinor])
 
   const anyVisible = grouped.some((g) => g.entries.length > 0)
 

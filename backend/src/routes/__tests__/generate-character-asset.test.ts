@@ -86,6 +86,8 @@ vi.mock("@/lib/url-validator.js", async () => {
 import { generateCharacterAssetRoutes } from "../generate-character-asset.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
+import { CLOTHED_DEFAULT, CLOTHED_MATCH_REFERENCES } from "../../lib/character-prompts.js"
+import { MODEST_ATTIRE_CLAUSE } from "../../lib/prompt-policies/index.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
 import { llmComplete } from "../../lib/llm-client.js"
 
@@ -998,5 +1000,156 @@ describe("POST /v1/generate-character-asset — identity references", () => {
     expect(vi.mocked(reserveCreditsForJob)).toHaveBeenCalledWith(
       expect.anything(), expect.anything(), "job-1", "flux-2-max:2MP:2ref",
     )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// W1-a minor-age floor — the asset route decides the subject's age ONCE from
+// the character row's `person` value and rides the decision to the worker.
+// ---------------------------------------------------------------------------
+describe("POST /v1/generate-character-asset — minor-age floor (W1-a)", () => {
+  it("adult byte-identity pin: the enqueued prompt is the pre-change string", async () => {
+    setupSupabaseMock({
+      charRow: {
+        source_image_url: "https://example.com/portrait.png",
+        canonical_description: "tall woman",
+        person: { age: "age-30s" },
+      },
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-character-asset",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        assetType: "expressions",
+        variant: "smile",
+        name: "Kira",
+        attachToCharacterId: TEST_CHARACTER_ID,
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    const enqueued = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+    // Literal, NOT the CLOTHED_MATCH_REFERENCES constant — the pin has to fail
+    // if the adult clothing floor itself ever changes.
+    expect(enqueued.prompt).toBe(
+      "Portrait headshot of the person from reference image A, gentle warm smile, looking at camera. Single character character Kira, warm closed-mouth smile, eyes softened, in their 30s. realistic art style, 4k, highly detailed, wearing the same outfit as shown in the reference images unless a different outfit is described; if no outfit is visible or described, fully clothed in simple everyday attire, white/plain background, no text, no labels, no watermarks.",
+    )
+  })
+
+  it("adult: subjectMinor rides the job as false", async () => {
+    setupSupabaseMock({
+      charRow: {
+        source_image_url: "https://example.com/portrait.png",
+        canonical_description: "tall woman",
+        person: { age: "age-30s" },
+      },
+    })
+
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-character-asset",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        assetType: "expressions",
+        variant: "smile",
+        name: "Kira",
+        attachToCharacterId: TEST_CHARACTER_ID,
+      },
+    })
+
+    const enqueued = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+    expect(enqueued.subjectMinor).toBe(false)
+  })
+
+  it("row.person is null: the text signal reads the row's canonical description (incident-path shape)", async () => {
+    // The asset route's incident shape: the picker value was never persisted,
+    // so the row's own description is the only age-bearing text — and it is
+    // what the LLM drafts `description` from, so it reaches the prompt anyway.
+    setupSupabaseMock({
+      charRow: {
+        source_image_url: "https://example.com/portrait.png",
+        canonical_description: "a young child around 5 years old, brown hair",
+        person: null,
+      },
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-character-asset",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        assetType: "expressions",
+        variant: "smile",
+        name: "Kira",
+        attachToCharacterId: TEST_CHARACTER_ID,
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    const enqueued = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+    expect(enqueued.subjectMinor).toBe(true)
+    const prompt = enqueued.prompt as string
+    expect(prompt.split(MODEST_ATTIRE_CLAUSE).length - 1).toBe(1)
+    expect(prompt).not.toContain(CLOTHED_MATCH_REFERENCES)
+  })
+
+  it("row.person is null: the text signal reads the caller's userPrompt", async () => {
+    setupSupabaseMock({
+      charRow: {
+        source_image_url: "https://example.com/portrait.png",
+        canonical_description: "tall woman",
+        person: null,
+      },
+    })
+
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-character-asset",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        assetType: "custom",
+        variant: "custom",
+        name: "Kira",
+        userPrompt: "a 12 year old sitting on a bench",
+        attachToCharacterId: TEST_CHARACTER_ID,
+      },
+    })
+
+    const enqueued = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+    expect(enqueued.subjectMinor).toBe(true)
+  })
+
+  it("minor: subjectMinor rides the job as true and the base carries the modest clause once (neither self-disabling floor)", async () => {
+    setupSupabaseMock({
+      charRow: {
+        source_image_url: "https://example.com/portrait.png",
+        canonical_description: "a child",
+        person: { age: "age-child", bust: "bust-full" },
+      },
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-character-asset",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        assetType: "expressions",
+        variant: "smile",
+        name: "Kira",
+        attachToCharacterId: TEST_CHARACTER_ID,
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    const enqueued = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+    expect(enqueued.subjectMinor).toBe(true)
+    const prompt = enqueued.prompt as string
+    expect(prompt.split(MODEST_ATTIRE_CLAUSE).length - 1).toBe(1)
+    expect(prompt).not.toContain(CLOTHED_DEFAULT)
+    expect(prompt).not.toContain(CLOTHED_MATCH_REFERENCES)
+    // Layer 1 already dropped the flagged picker hint from the person value.
+    expect(prompt).not.toMatch(/full bust/)
   })
 })

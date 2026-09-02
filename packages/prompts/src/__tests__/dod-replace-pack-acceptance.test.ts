@@ -39,3 +39,20 @@ describe("DoD — adopt a vendored replacement pack by registration", () => {
     expect(JSON.stringify(PICKER_CATALOGS)).toBe(upstreamSnapshot)
   })
 })
+
+describe("adultOnly survives packs (W1-a)", () => {
+  it("a replace pack keeps the flag on its options; an extend pack adds a flagged option", () => {
+    const upstreamMood = PICKER_CATALOGS.find((c) => c.catalogId === "mood")!
+    const vendored: PickerCatalog = {
+      ...upstreamMood,
+      options: [
+        { id: "calm", label: "Calm", promptHint: "with a calm mood", term: "calm", category: upstreamMood.options![0].category },
+        { id: "sultry", label: "Sultry", promptHint: "with a sultry expression", term: "sultry", category: upstreamMood.options![0].category, adultOnly: true },
+      ],
+    }
+    registerCatalogPack({ id: "sai/mood", catalogId: "mood", mode: "replace", catalog: vendored })
+    const out = getRegisteredPickerCatalogs().find((c) => c.catalogId === "mood")!.options!
+    expect(out.find((o) => o.id === "sultry")!.adultOnly).toBe(true)
+    expect(out.find((o) => o.id === "calm")!.adultOnly).toBeUndefined()
+  })
+})

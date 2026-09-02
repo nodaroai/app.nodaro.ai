@@ -64,6 +64,7 @@ export function registerPersonPack(pack: PersonPack): void {
       category: e.group,
       promptHint: e.promptHint,
       term: resolveTerm(e),
+      adultOnly: e.adultOnly,
     }
     const existing = byField.get(dim.field)
     if (existing) existing.options.push(opt)
@@ -110,6 +111,7 @@ function personEntriesFromDims(
       description?: string
       category?: string
       promptHint: string
+      adultOnly?: true
     }>
   }>,
 ): RegisteredPersonEntry[] {
@@ -125,6 +127,7 @@ function personEntriesFromDims(
         group: o.category,
         promptHint: o.promptHint,
         dimension,
+        adultOnly: o.adultOnly,
       } as RegisteredPersonEntry)
     }
   }

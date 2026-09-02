@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { isMinorAge, getAdultOnlyIds } from "./age-floor.js"
 import {
   PEOPLE,
   PERSON_DIMENSION_ORDER,
@@ -103,6 +104,14 @@ const personCleanup: ApplyCleanup = (patch, mode) => {
     patch.lips = undefined
   } else if ("age" in patch && patch.age !== "age-custom") {
     patch.customAge = undefined
+  }
+  // W1-a: an analysis that returned a minor age never carries a flagged id.
+  if (isMinorAge(patch as { age?: string; customAge?: number; type?: string })) {
+    const drop = getAdultOnlyIds()
+    for (const [k, v] of Object.entries(patch)) {
+      if (typeof v === "string" && drop.has(v)) (patch as Record<string, unknown>)[k] = undefined
+      else if (Array.isArray(v)) (patch as Record<string, unknown>)[k] = v.filter((x) => !(typeof x === "string" && drop.has(x)))
+    }
   }
 }
 
