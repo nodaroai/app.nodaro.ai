@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import Fastify, { type FastifyInstance } from "fastify"
+import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify"
 
 // ---------------------------------------------------------------------------
 // Mocks — hoisted before any route import
@@ -76,9 +76,11 @@ vi.mock("@/lib/url-validator.js", async () => {
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { editImageRoutes } from "../edit-image.js"
+import { editImageRoutes, resolveEditImageCreditIdentifier, editImageBody } from "../edit-image.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
+import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
+import { IMAGE_ASPECT_RATIO_VALUES } from "@nodaro/shared"
 
 // ---------------------------------------------------------------------------
 // Test app setup
@@ -552,5 +554,203 @@ describe("TASK_CHAINED_EDIT_PROVIDERS ↔ KIE imageParam task_id sync", () => {
     for (const provider of TASK_CHAINED_EDIT_PROVIDERS) {
       expect(editEnum.has(provider), `${provider} missing from IMAGE_EDIT_PROVIDERS`).toBe(true)
     }
+  })
+})
+
+
+// ---------------------------------------------------------------------------
+// Task 5: `aspectRatio` was `z.string().max(20)` and went straight to KIE as
+// `image_size`. It now takes the SHARED image ratio vocabulary
+// (`IMAGE_ASPECT_RATIO_VALUES` — the same enum generate-image and
+// image-to-image declare) and is snapped against MODEL_CATALOG, so a provider
+// with no aspect lever drops it instead of forwarding a meaningless
+// `image_size`. `targetResolution` is deliberately NOT snapped: it is this
+// route's PRICING dimension and recraft-upscale declares no `resolutions`, so
+// a snap would drop a tier the user paid for.
+// ---------------------------------------------------------------------------
+
+describe("POST /v1/edit-image — aspect-ratio enum + catalog snap", () => {
+  const VALID_UUID = "00000000-0000-4000-8000-000000000001"
+
+  it("400s a free-form aspectRatio", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/edit-image",
+      payload: {
+        imageUrl: "https://r2.nodaro.ai/in.png",
+        userId: VALID_UUID,
+        provider: "nano-banana-edit",
+        prompt: "brighten it",
+        aspectRatio: "square_hd",
+      },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
+  it("drops the aspect ratio for a provider that has no such lever, and says so", async () => {
+    vi.clearAllMocks()
+    const { mockInsert } = mockJobInsert({ data: { id: "job-1" }, error: null })
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/edit-image",
+      payload: {
+        imageUrl: "https://r2.nodaro.ai/in.png",
+        userId: VALID_UUID,
+        provider: "recraft-upscale",
+        aspectRatio: "16:9",
+      },
+    })
+    expect(res.statusCode).toBe(200)
+    const body = res.json() as { adjustments?: { field: string; from: string; to?: string }[] }
+    const adj = body.adjustments?.find((a) => a.field === "aspectRatio")
+    expect(adj?.from).toBe("16:9")
+    // A DROPPED lever has no replacement: `to` is absent from the wire body
+    // (JSON strips the undefined), so assert its absence rather than
+    // `toMatchObject({ to: undefined })`, which subset-matching would fail on.
+    expect(adj).not.toHaveProperty("to")
+
+    const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as { aspectRatio?: string }
+    expect(queued.aspectRatio).toBeUndefined()
+    // …and the job row records what actually ran, not the caller's raw value.
+    const row = mockInsert.mock.calls.at(-1)?.[0] as { input_data: Record<string, unknown> }
+    expect(row.input_data.aspectRatio).toBeUndefined()
+  })
+
+  it("leaves targetResolution alone — pricing is unchanged", async () => {
+    vi.clearAllMocks()
+    mockJobInsert({ data: { id: "job-1" }, error: null })
+    await app.inject({
+      method: "POST",
+      url: "/v1/edit-image",
+      payload: {
+        imageUrl: "https://r2.nodaro.ai/in.png",
+        userId: VALID_UUID,
+        provider: "topaz-image-upscale",
+        targetResolution: "4K",
+        aspectRatio: "16:9",
+      },
+    })
+    expect(vi.mocked(reserveCreditsForJob).mock.calls.at(-1)?.[3]).toBe("topaz-image-upscale:4K")
+    const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as { targetResolution?: string }
+    expect(queued.targetResolution).toBe("4K")
+  })
+
+  it("keeps a valid ratio for a provider that does have the lever", async () => {
+    vi.clearAllMocks()
+    mockJobInsert({ data: { id: "job-1" }, error: null })
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/edit-image",
+      payload: {
+        imageUrl: "https://r2.nodaro.ai/in.png",
+        userId: VALID_UUID,
+        provider: "nano-banana-edit",
+        prompt: "brighten it",
+        aspectRatio: "16:9",
+      },
+    })
+    expect(res.statusCode).toBe(200)
+    // Catalog-valid request → byte-identical to the pre-snap 200 body.
+    expect(res.json()).toEqual({ jobId: expect.any(String) })
+    const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as { aspectRatio?: string }
+    expect(queued.aspectRatio).toBe("16:9")
+  })
+
+  it("snaps an off-list ratio to one the model declares and discloses it", async () => {
+    vi.clearAllMocks()
+    mockJobInsert({ data: { id: "job-1" }, error: null })
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/edit-image",
+      payload: {
+        imageUrl: "https://r2.nodaro.ai/in.png",
+        userId: VALID_UUID,
+        provider: "nano-banana-edit",
+        prompt: "brighten it",
+        // In the shared vocabulary (Nano Banana 2 Lite declares it) but NOT in
+        // nano-banana-edit's own ratio list — corrected, never rejected.
+        aspectRatio: "8:1",
+      },
+    })
+    expect(res.statusCode).toBe(200)
+    const body = res.json() as { adjustments?: { field: string; from: string; to?: string }[] }
+    const adj = body.adjustments?.find((a) => a.field === "aspectRatio")
+    expect(adj?.from).toBe("8:1")
+    expect(adj?.to).toBe("1:1")
+    const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as { aspectRatio?: string }
+    expect(queued.aspectRatio).toBe("1:1")
+  })
+
+  it("declares the SHARED image ratio vocabulary, not a private copy", () => {
+    const options = (editImageBody.shape.aspectRatio.unwrap() as { options: readonly string[] }).options
+    expect([...options]).toEqual([...IMAGE_ASPECT_RATIO_VALUES])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// R3 / billing parity. `resolveEditImageCreditIdentifier` is the exact
+// preHandler closure the route registers with `creditGuard` (mocked to a no-op
+// in every route test here), so calling it directly is the only way to
+// exercise the real CHECK pricing. The aspect snap must be billing-NEUTRAL on
+// this route: pricing keys on `targetResolution` alone.
+// ---------------------------------------------------------------------------
+
+describe("POST /v1/edit-image — CHECK === DEBIT", () => {
+  const VALID_UUID = "00000000-0000-4000-8000-000000000001"
+
+  async function debitFor(payload: Record<string, unknown>): Promise<{
+    identifier: string | undefined
+    inputData: Record<string, unknown>
+  }> {
+    vi.clearAllMocks()
+    const { mockInsert } = mockJobInsert({ data: { id: "job-1" }, error: null })
+    const res = await app.inject({ method: "POST", url: "/v1/edit-image", payload })
+    expect(res.statusCode).toBe(200)
+    const row = mockInsert.mock.calls.at(-1)?.[0] as { input_data: Record<string, unknown> }
+    return {
+      identifier: vi.mocked(reserveCreditsForJob).mock.calls.at(-1)?.[3],
+      inputData: row.input_data,
+    }
+  }
+
+  it("a dropped aspect ratio does not move the price (recraft-upscale)", async () => {
+    const payload = {
+      imageUrl: "https://r2.nodaro.ai/in.png",
+      userId: VALID_UUID,
+      provider: "recraft-upscale",
+      aspectRatio: "16:9",
+    }
+    const { identifier: debit, inputData } = await debitFor(payload)
+    const check = resolveEditImageCreditIdentifier({ body: payload } as FastifyRequest)
+    expect(check).toBe(debit)
+    expect(check).toBe("recraft-upscale")
+    // The ratio was dropped from the job row; the price is the base tier.
+    expect(inputData.aspectRatio).toBeUndefined()
+  })
+
+  it("targetResolution still tiers the price, with an aspect ratio alongside it", async () => {
+    const payload = {
+      imageUrl: "https://r2.nodaro.ai/in.png",
+      userId: VALID_UUID,
+      provider: "topaz-image-upscale",
+      targetResolution: "4K",
+      aspectRatio: "16:9",
+    }
+    const { identifier: debit, inputData } = await debitFor(payload)
+    const check = resolveEditImageCreditIdentifier({ body: payload } as FastifyRequest)
+    expect(check).toBe(debit)
+    expect(check).toBe("topaz-image-upscale:4K")
+    expect(inputData.targetResolution).toBe("4K")
+    expect(inputData.aspectRatio).toBeUndefined()
+  })
+
+  it("resolver does not throw on a non-object body", () => {
+    expect(() =>
+      resolveEditImageCreditIdentifier({ body: null } as unknown as FastifyRequest),
+    ).not.toThrow()
+    expect(resolveEditImageCreditIdentifier({ body: null } as unknown as FastifyRequest)).toBe(
+      "recraft-upscale",
+    )
   })
 })

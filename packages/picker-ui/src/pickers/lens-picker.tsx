@@ -2,12 +2,13 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { LENSES } from "@nodaro/prompts"
+import { LENSES as BASE_LENSES } from "@nodaro/prompts"
 import { Input } from "../ui/input"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"
 import { LensPreview } from "../previews/lens-preview"
 import { useLocalizedCatalog } from "../i18n"
+import { useCuratedEntries } from "../curated.js"
 
 interface LensPickerProps {
   readonly value: string
@@ -20,6 +21,10 @@ export const LensPicker = memo(function LensPicker({
   onValueChange,
   className,
 }: LensPickerProps) {
+  // Curated view of the bundled catalog: filtered to ids this deployment
+  // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
+  // registration re-renders. Identity-equal to the base on mainline.
+  const LENSES = useCuratedEntries("lens", BASE_LENSES)
   const [query, setQuery] = useState("")
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("lens")
 

@@ -20,6 +20,7 @@
  */
 
 import { resolveTerm, type PickerHintMode } from "./term.js"
+import { overlayEntry } from "./catalog-overlay.js"
 
 export type ExposureCategory = "aperture" | "shutter-speed" | "iso"
 
@@ -97,7 +98,7 @@ const exposureById = new Map<string, ExposureSettings>(
 
 export function getExposure(id: string | undefined | null): ExposureSettings | undefined {
   if (!id) return undefined
-  return exposureById.get(id)
+  return overlayEntry("exposure-settings", id, exposureById.get(id))
 }
 
 export function getExposureLabel(id: string | undefined | null, fallback?: string): string {

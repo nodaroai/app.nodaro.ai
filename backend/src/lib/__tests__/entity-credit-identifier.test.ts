@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest"
-import { resolveEntityImageCreditIdentifier } from "../entity-credit-identifier.js"
+import { resolveEntityImageCreditIdentifier, resolveEntityImageParams } from "../entity-credit-identifier.js"
+import { MODEL_CATALOG } from "@nodaro/shared"
 
 /**
  * The entity routes' CHECK===DEBIT contract: the credit-guard preHandler runs
@@ -48,9 +49,10 @@ describe("resolveEntityImageCreditIdentifier", () => {
     ).toBe("flux:2K")
   })
 
-  it("a lever the model doesn't support is IGNORED (no composite, never an error)", () => {
-    // nano-banana has no quality tiering — the value rides to the worker where
-    // the provider ignores it; pricing stays the base id.
+  it("a lever the model doesn't support is DROPPED (no composite, never an error)", () => {
+    // nano-banana has no quality tiering — the catalog snap DROPS the value
+    // (see the `resolveEntityImageParams` block below, which asserts the worker
+    // never receives it); pricing stays the base id either way.
     expect(
       resolveEntityImageCreditIdentifier({ provider: "nano-banana", quality: "high" }),
     ).toBe("nano-banana")
@@ -115,5 +117,109 @@ describe("resolveEntityImageCreditIdentifier — refCountOverride (multi-image a
     expect(
       resolveEntityImageCreditIdentifier({ provider: "flux-2-max", resolution: "2 MP" }),
     ).toBe("flux-2-max:2MP:0ref")
+  })
+})
+
+describe("catalog snap inside the entity credit identifier", () => {
+  it("drops a resolution the model does not have", () => {
+    const out = resolveEntityImageParams({ provider: "nano-banana", resolution: "2K" })
+    expect(out.resolution).toBeUndefined()
+    expect(out.identifier).toBe("nano-banana")
+  })
+
+  it("snaps a quality the model does not accept, without changing the price", () => {
+    const out = resolveEntityImageParams({ provider: "gpt-image", quality: "basic" })
+    // gpt-image declares ["medium", "high"] -> allowed[0]
+    expect(out.quality).toBe("medium")
+    expect(out.identifier).toBe("gpt-image")
+  })
+
+  it("keeps a declared quality and its composite price", () => {
+    const out = resolveEntityImageParams({ provider: "gpt-image", quality: "high" })
+    expect(out.quality).toBe("high")
+    expect(out.identifier).toBe("gpt-image:high")
+  })
+
+  it("keeps the 2K/4K composite for a model that declares it", () => {
+    expect(resolveEntityImageParams({ provider: "nano-banana-pro", resolution: "4K" }).identifier)
+      .toBe("nano-banana-pro:4K")
+  })
+
+  it("resolveEntityImageCreditIdentifier stays byte-identical to resolveEntityImageParams().identifier", () => {
+    const body = { provider: "gpt-image", quality: "high", sourceImageUrl: "https://r2.nodaro.ai/a.png" }
+    expect(resolveEntityImageCreditIdentifier(body)).toBe(resolveEntityImageParams(body).identifier)
+  })
+
+  it("leaves a catalog-valid pair byte-identical (no gratuitous rewrite)", () => {
+    const out = resolveEntityImageParams({ provider: "nano-banana-pro", resolution: "4K", quality: "high" })
+    expect(out.resolution).toBe("4K")
+    // nano-banana-pro declares no qualities -> the lever is dropped, not invented.
+    expect(out.quality).toBeUndefined()
+  })
+
+  it("passes an unknown provider through untouched (the route enum is the gate)", () => {
+    const out = resolveEntityImageParams({ provider: "not-a-model", resolution: "4K", quality: "high" })
+    expect(out.resolution).toBe("4K")
+    expect(out.quality).toBe("high")
+    expect(out.identifier).toBe("not-a-model")
+  })
+
+  it("still carries the refCountOverride through the snap (Flux 2 per-ref pricing)", () => {
+    const out = resolveEntityImageParams({ provider: "flux-2-max", resolution: "1K" }, 3)
+    // "1K" is not a Flux 2 tier -> snapped onto the model's default megapixels.
+    expect(out.resolution).toBe("2 MP")
+    expect(out.identifier).toBe("flux-2-max:2MP:3ref")
+  })
+})
+
+/**
+ * The routes write the snapped pair back onto their Zod-parsed body through
+ * `applySnappedLevers`, which re-parses each value through the route's OWN enum
+ * and LEAVES THE CALLER'S VALUE ALONE when the enum cannot carry it. That
+ * fallback would split the persisted `input_data` from the identifier the run
+ * was priced on, so it must be unreachable — which is only true while every
+ * value the snap can return for a lever the entity enums declare is itself in
+ * that enum. Asserted here rather than assumed: a future catalog entry that
+ * breaks it fails this test instead of silently mis-recording a job row.
+ */
+describe("the entity route enums can carry every value the snap returns", () => {
+  // Mirrors `resolution` / `quality` in all four entity route bodies.
+  const ROUTE_RESOLUTIONS = ["1K", "2K", "4K", "0.5 MP", "1 MP", "2 MP", "4 MP"] as const
+  const ROUTE_QUALITIES = ["medium", "high", "basic"] as const
+
+  it("snaps every route-enum resolution to a route-enum resolution, for every image model", () => {
+    const allowed = new Set<string>(ROUTE_RESOLUTIONS)
+    const offenders: string[] = []
+    let checked = 0
+    for (const [id, entry] of Object.entries(MODEL_CATALOG)) {
+      if (entry.kind !== "image") continue
+      for (const resolution of ROUTE_RESOLUTIONS) {
+        checked++
+        const out = resolveEntityImageParams({ provider: id, resolution })
+        if (out.resolution !== undefined && !allowed.has(out.resolution)) {
+          offenders.push(`${id} + "${resolution}" -> "${out.resolution}"`)
+        }
+      }
+    }
+    expect(offenders).toEqual([])
+    expect(checked).toBeGreaterThan(100)
+  })
+
+  it("snaps every route-enum quality to a route-enum quality, for every image model", () => {
+    const allowed = new Set<string>(ROUTE_QUALITIES)
+    const offenders: string[] = []
+    let checked = 0
+    for (const [id, entry] of Object.entries(MODEL_CATALOG)) {
+      if (entry.kind !== "image") continue
+      for (const quality of ROUTE_QUALITIES) {
+        checked++
+        const out = resolveEntityImageParams({ provider: id, quality })
+        if (out.quality !== undefined && !allowed.has(out.quality)) {
+          offenders.push(`${id} + "${quality}" -> "${out.quality}"`)
+        }
+      }
+    }
+    expect(offenders).toEqual([])
+    expect(checked).toBeGreaterThan(100)
   })
 })

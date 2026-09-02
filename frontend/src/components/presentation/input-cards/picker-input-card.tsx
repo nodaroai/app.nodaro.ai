@@ -27,6 +27,7 @@ import { usePickerDir } from "@/lib/locale-store"
 import { cn } from "@/lib/utils"
 import {
   getParameterPickerMeta,
+  useCatalogPacksVersion,
   type MultiDimParameterPickerMeta,
   type MultiDimValue,
   type ParameterPickerMeta,
@@ -64,6 +65,9 @@ interface PickerInputCardProps {
  * apply if absent.
  */
 export function PickerInputCard(props: PickerInputCardProps) {
+  // getParameterPickerMeta curates at read but is not a hook: subscribe here
+  // so a registration landing after this card mounted re-renders it.
+  useCatalogPacksVersion()
   const meta = getParameterPickerMeta(props.nodeType)
   if (!meta) return null
   if (meta.kind === "multi") return <MultiPickerCard {...props} meta={meta} />

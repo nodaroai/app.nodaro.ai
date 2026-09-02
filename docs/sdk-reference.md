@@ -1003,6 +1003,27 @@ if ("jobId" in result) {
 }
 ```
 
+> **Parameter corrections.** For the image node types (`generate-image`,
+> `image-to-image`, `edit-image`) the result may carry `adjustments` — one
+> entry per parameter the server corrected because the chosen model does not
+> accept the value you sent. The run proceeds with the corrected value and the
+> credits reserved match it. `adjustments` is absent when nothing changed.
+>
+> ```ts
+> const result = await client.nodes.run("generate-image", {
+>   prompt: "a snow leopard",
+>   provider: "gpt-image-2",
+>   aspectRatio: "3:2",
+> })
+> if ("adjustments" in result && result.adjustments?.length) {
+>   for (const a of result.adjustments) {
+>     console.warn(`${a.field}: ${a.from} → ${a.to ?? "(dropped)"} — ${a.reason}`)
+>   }
+> }
+> ```
+>
+> Full semantics: [Parameter corrections](./api-integration.md#4d-parameter-corrections-adjustments).
+
 > **Seedance 2 video** (`run("text-to-video" | "generate-video", …)`):
 > `seedance-2` (full) accepts `resolution: "4k"` and `aspectRatio: "adaptive"`
 > (plus `"21:9"`); `seedance-2-fast` / `seedance-2-mini` are 480p / 720p only,
@@ -4126,6 +4147,7 @@ not two.
 - `NodeInputField`, `NodeInputSchema` — input-schema shapes
 - `PromptAffixFields` — the `{ promptPrefix?, promptSuffix? }` node-data contract for [pre & post text](./prompt-pre-post-text.md); `PROMPT_PREFIX_KEY` / `PROMPT_SUFFIX_KEY` are the matching key constants (value exports, not types)
 - `RunNodeResult` — `{ jobId: string; ... } | Record<string, unknown>` (discriminated on presence of `jobId`)
+- `RunNodeAdjustment` — one parameter correction on the image node types: `{ field: "aspectRatio" | "resolution" | "quality" | "duration", from, to?, reason }` (re-exported from `@nodaro/shared`'s `ModelInputAdjustment`); see [Parameter corrections](./api-integration.md#4d-parameter-corrections-adjustments)
 - `NodeJobOutput` — typed `output_data` shape: `{ audioUrl?, videoUrl?, imageUrl?, thumbnailUrl?, [k]: unknown }`
 - `RunAndWaitOptions` — `{ signal?, onProgress?, pollMs?, maxMs? }`
 - `RunManyResult` — `{ jobId: string; output: NodeJobOutput }`

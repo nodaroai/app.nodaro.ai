@@ -2,11 +2,12 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { WEAPONS, WEAPON_SUBCATEGORY_LABELS, WEAPON_SUBCATEGORY_ORDER, type Weapon, type WeaponSubcategory } from "@nodaro/shared"
+import { WEAPONS as BASE_WEAPONS, WEAPON_SUBCATEGORY_LABELS, WEAPON_SUBCATEGORY_ORDER, type Weapon, type WeaponSubcategory } from "@nodaro/shared"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog } from "../i18n"
 import { WEAPON_ICON_FOR } from "../icons/parameter-picker-icons-weapons"
+import { useCuratedEntries } from "../curated.js"
 
 interface WeaponPickerProps {
   readonly value: string
@@ -28,6 +29,10 @@ export const WeaponPicker = memo(function WeaponPicker({
   onValueChange,
   className,
 }: WeaponPickerProps) {
+  // Curated view of the bundled catalog: filtered to ids this deployment
+  // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
+  // registration re-renders. Identity-equal to the base on mainline.
+  const WEAPONS = useCuratedEntries("weapons", BASE_WEAPONS)
   const [query, setQuery] = useState("")
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("weapons")
 

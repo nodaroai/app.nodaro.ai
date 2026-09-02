@@ -23,6 +23,7 @@
  */
 
 import { resolveTerm, type PickerHintMode } from "./term.js"
+import { overlayEntry } from "./catalog-overlay.js"
 
 export type HeldPropCategory =
   | "device"
@@ -142,7 +143,7 @@ const heldPropById = new Map<string, HeldProp>(HELD_PROPS.map((p) => [p.id, p]))
 
 export function getHeldProp(id: string | undefined | null): HeldProp | undefined {
   if (!id) return undefined
-  return heldPropById.get(id)
+  return overlayEntry("held-prop", id, heldPropById.get(id))
 }
 
 export function getHeldPropLabel(id: string | undefined | null, fallback?: string): string {

@@ -2,12 +2,13 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { SETTINGS, SETTING_CATEGORY_LABELS, type Setting, type SettingCategory } from "@nodaro/prompts"
+import { SETTINGS as BASE_SETTINGS, SETTING_CATEGORY_LABELS, type Setting, type SettingCategory } from "@nodaro/prompts"
 import { Input } from "../ui/input"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"
 import { SettingPreview } from "../previews/setting-preview"
 import { useLocalizedCatalog } from "../i18n"
+import { useCuratedEntries } from "../curated.js"
 
 interface SettingPickerProps {
   readonly value: string
@@ -32,6 +33,10 @@ export const SettingPicker = memo(function SettingPicker({
   onValueChange,
   className,
 }: SettingPickerProps) {
+  // Curated view of the bundled catalog: filtered to ids this deployment
+  // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
+  // registration re-renders. Identity-equal to the base on mainline.
+  const SETTINGS = useCuratedEntries("setting", BASE_SETTINGS)
   const [query, setQuery] = useState("")
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("setting")
 

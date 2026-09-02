@@ -2,7 +2,7 @@
 
 import { memo, useId, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { LIGHTINGS, LIGHTING_CATEGORY_ORDER, LIGHTING_CATEGORY_LABELS, LIGHTING_FIELD_BY_CATEGORY, type Lighting, type LightingCategory, type LightingValue } from "@nodaro/prompts"
+import { LIGHTINGS as BASE_LIGHTINGS, LIGHTING_CATEGORY_ORDER, LIGHTING_CATEGORY_LABELS, LIGHTING_FIELD_BY_CATEGORY, type Lighting, type LightingCategory, type LightingValue } from "@nodaro/prompts"
 import { pickIds, togglePick } from "@nodaro/shared"
 import { Input } from "../ui/input"
 import { Switch } from "../ui/switch"
@@ -11,6 +11,7 @@ import { cn } from "../lib/cn"
 import { LightingPreview } from "../previews/lighting-preview"
 import { useLocalizedCatalog } from "../i18n"
 import { MultiPickBadge } from "./multi-pick-ui"
+import { useCuratedEntries } from "../curated.js"
 
 /** Per-category multi-select cap. style (lighting style) supports 2 picks
  *  (key + rim, soft + hard, beauty-dish + accent). All other categories
@@ -37,6 +38,10 @@ export const LightingPicker = memo(function LightingPicker({
   onChange,
   className,
 }: LightingPickerProps) {
+  // Curated view of the bundled catalog: filtered to ids this deployment
+  // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
+  // registration re-renders. Identity-equal to the base on mainline.
+  const LIGHTINGS = useCuratedEntries("lighting", BASE_LIGHTINGS)
   const [query, setQuery] = useState("")
   /** Multi-select dims (max > 1) intentionally start empty when toggled on —
    *  user picks what they want. We track explicit enable here so the section

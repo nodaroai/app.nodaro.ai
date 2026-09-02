@@ -28,7 +28,7 @@ import {
   getVideoAudioCapability,
 } from "./model-constants.js"
 import { isFlux2Model } from "./flux2-pricing.js"
-import { MODEL_CATALOG } from "./model-catalog.js"
+import { MODEL_CATALOG, normalizeModelInput, type ModelInputAdjustment } from "./model-catalog.js"
 
 /**
  * Compute composite model identifier for variable credit pricing.
@@ -81,6 +81,90 @@ export function buildCreditModelIdentifier(
 }
 
 /**
+ * An image request's catalog-snapped parameters PLUS the credit identifier
+ * priced off them.
+ *
+ * `adjustments` is the disclosure channel: every lever this changed, why, and
+ * to what. Routes return it in the 200 body so a caller learns their value was
+ * corrected instead of silently getting something else.
+ */
+export interface NormalizedImageGen {
+  /** Credit identifier, priced off the SNAPPED `resolution` / `quality`. */
+  identifier: string
+  /** The catalog model id the params were snapped against (post T2I→I2I swap). */
+  modelId: string
+  aspectRatio?: string
+  resolution?: string
+  quality?: string
+  /** Empty when the caller's values were already valid for `modelId`. */
+  adjustments: ModelInputAdjustment[]
+}
+
+/**
+ * Snap an image request's catalog-governed levers to a combination the model
+ * actually accepts, and price the credit identifier off the SNAPPED values.
+ *
+ * WHY THE SNAP LIVES HERE and not at the call site. Both image routes compute
+ * their credit identifier TWICE — once in the `creditGuard` preHandler (the
+ * CHECK) and once at the handler's `reserveCreditsForJob` (the DEBIT) — and a
+ * dedicated test asserts the two stay byte-identical (see
+ * `backend/src/routes/__tests__/generate-image.test.ts`, "CHECK === DEBIT").
+ * `resolution` and `quality` are pricing dimensions, so a snap applied at only
+ * one of those sites breaks that invariant, and `commit_credits` never collects
+ * an upward delta — the reserve IS the charge. Putting the snap inside the
+ * primitive makes CHECK, DEBIT and the workflow orchestrator agree by
+ * construction rather than by everyone remembering to call a normalizer.
+ *
+ * Inputs are typed `unknown` on purpose: the preHandler runs BEFORE Zod, so a
+ * caller can put a number or an object in `resolution`. Non-strings become
+ * `undefined` rather than reaching `normalizeModelInput` as a lie.
+ *
+ * Unknown model ids pass through untouched (same contract as
+ * `normalizeModelInput`) — the route's provider enum is the gate for those.
+ */
+export function resolveNormalizedImageGen(opts: {
+  provider: string | undefined
+  aspectRatio?: unknown
+  quality?: unknown
+  resolution?: unknown
+  renderingSpeed?: unknown
+  refCount: number
+  swapToI2i?: boolean
+}): NormalizedImageGen {
+  const str = (v: unknown): string | undefined =>
+    typeof v === "string" && v.length > 0 ? v : undefined
+
+  const provider = str(opts.provider) ?? "nano-banana"
+  // Same swap `resolveEffectiveProvider` applies in the route: refs attached to
+  // a bare T2I provider route the run to its i2i sibling, which has its OWN
+  // catalog entry and its own lever lists.
+  const modelId =
+    opts.swapToI2i && opts.refCount > 0 ? (T2I_TO_I2I_VARIANT[provider] ?? provider) : provider
+
+  const n = normalizeModelInput(modelId, {
+    aspectRatio: str(opts.aspectRatio),
+    resolution: str(opts.resolution),
+    quality: str(opts.quality),
+  })
+
+  return {
+    identifier: buildCreditModelIdentifier(
+      modelId,
+      n.quality,
+      n.resolution,
+      str(opts.renderingSpeed),
+      undefined,
+      opts.refCount,
+    ),
+    modelId,
+    aspectRatio: n.aspectRatio,
+    resolution: n.resolution,
+    quality: n.quality,
+    adjustments: n.adjustments,
+  }
+}
+
+/**
  * Reference-aware image-generation credit identifier — the SINGLE source of
  * truth shared by the single-node routes (`/v1/generate-image`,
  * `/v1/image-to-image`) and the workflow orchestrator
@@ -107,17 +191,7 @@ export function resolveImageGenCreditIdentifier(opts: {
   refCount: number
   swapToI2i?: boolean
 }): string {
-  const provider = opts.provider || "nano-banana"
-  const effectiveProvider =
-    opts.swapToI2i && opts.refCount > 0 ? (T2I_TO_I2I_VARIANT[provider] ?? provider) : provider
-  return buildCreditModelIdentifier(
-    effectiveProvider,
-    opts.quality,
-    opts.resolution,
-    opts.renderingSpeed,
-    undefined,
-    opts.refCount,
-  )
+  return resolveNormalizedImageGen(opts).identifier
 }
 
 // T2V-specific credit overrides: some providers have different costs for T2V

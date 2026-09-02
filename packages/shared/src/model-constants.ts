@@ -14,6 +14,42 @@ export const CREDIT_BASE_USD = 0.002
 export const IMAGE_PROMPT_MAX = 5000
 
 /**
+ * The ONE aspect-ratio vocabulary the image routes' Zod enums are built from —
+ * `/v1/generate-image`, `/v1/image-to-image` and `/v1/edit-image` all declare
+ * `z.enum(IMAGE_ASPECT_RATIO_VALUES)` instead of keeping three literal lists
+ * that drift.
+ *
+ * It is the UNION of every ratio any `kind: "image"` catalog entry declares, so
+ * a value the picker offers can never 400 at the route. That gap has shipped
+ * twice — Wan 2.7's ultra-wide `8:1`/`1:8` (fixed on generate-image only) and
+ * Nano Banana 2 Lite's banner `4:1`/`1:4` (still open until this tuple landed).
+ * `packages/shared/src/__tests__/image-pricing-catalog-coverage.test.ts` fails
+ * the build if a new model declares a ratio this tuple is missing.
+ *
+ * This enum is a VOCABULARY BOUND, not a per-model gate: it only stops a
+ * free-form string from reaching a provider as `image_size`. The per-model gate
+ * is the catalog snap (`resolveNormalizedImageGen` → `normalizeModelInput`),
+ * which CORRECTS an unsupported ratio and discloses it in the response's
+ * `adjustments` — never rejects. So widening this tuple is always safe: it
+ * defers a rejection to the correcting snap, which is the desired behaviour.
+ *
+ * `auto` is model-specific (GPT Image 2 / Nano Banana 2 Lite treat it as
+ * "native"); it lives here for the same reason as the rest — the snap drops or
+ * replaces it for models that do not declare it.
+ */
+export const IMAGE_ASPECT_RATIO_VALUES = [
+  "auto",
+  "1:1", "16:9", "9:16", "4:3", "3:4",
+  "3:2", "2:3", "5:4", "4:5", "21:9",
+  // Ultra-wide / ultra-tall banner ratios: Wan 2.7 + Wan 2.7 Pro (8:1, 1:8)
+  // and Nano Banana 2 Lite (4:1, 1:4, 8:1, 1:8).
+  "4:1", "1:4", "8:1", "1:8",
+] as const
+
+/** A ratio string the image routes accept (pre-snap vocabulary, not a per-model guarantee). */
+export type ImageAspectRatio = typeof IMAGE_ASPECT_RATIO_VALUES[number]
+
+/**
  * Per-provider maximum ASSEMBLED image-prompt length (chars), VERIFIED against
  * each model's official docs.kie.ai schema (2026-06). Providers absent here use
  * {@link IMAGE_PROMPT_MAX} (the documented KIE "standard" of 5000). Read via

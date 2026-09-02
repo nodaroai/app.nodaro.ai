@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify"
+import type { FastifyInstance, FastifyRequest } from "fastify"
 import { sendInternalError } from "../lib/http-errors.js"
 import { insertJob } from "../lib/insert-job.js"
 import { z } from "zod"
@@ -9,9 +9,10 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { applySnappedLevers, withAdjustments } from "../lib/image-gen-normalize.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { llmComplete } from "../lib/llm-client.js"
-import { MODIFY_IMAGE_PROVIDERS, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING, resolveImageGenCreditIdentifier } from "@nodaro/shared"
+import { MODIFY_IMAGE_PROVIDERS, IMAGE_ASPECT_RATIO_VALUES, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING, resolveNormalizedImageGen } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 import {
   ASSET_DESCRIPTION_SYSTEM_PROMPT,
@@ -33,14 +34,12 @@ export const imageToImageBody = z.object({
   resolution: z.enum(["1K", "2K", "4K", "0.5 MP", "1 MP", "2 MP", "4 MP"]).optional(),
   quality: z.enum(["medium", "high", "basic"]).optional(),
   strength: z.number().min(0).max(1).optional(),
-  // "auto" is gpt-image-2 specific (KIE constrains it to 1K) — kept here
-  // for symmetry with generate-image; per-provider gating lives in the
-  // frontend config panels' fail-safe.
-  aspectRatio: z.enum([
-    "auto",
-    "1:1", "16:9", "9:16", "4:3", "3:4",
-    "3:2", "2:3", "5:4", "4:5", "21:9",
-  ]).optional(),
+  // The SAME shared vocabulary /v1/generate-image and /v1/edit-image declare
+  // (`IMAGE_ASPECT_RATIO_VALUES`) — one tuple, not three drifting literal
+  // lists. Per-model gating is the catalog snap below (it corrects, never
+  // rejects), so the wider vocabulary only defers a 400 to a disclosed
+  // correction.
+  aspectRatio: z.enum(IMAGE_ASPECT_RATIO_VALUES).optional(),
   negativePrompt: z.string().max(5000).optional(),
   seed: z.number().int().min(0).optional(),
   renderingSpeed: z.enum(["TURBO", "BALANCED", "QUALITY"]).optional(),
@@ -76,22 +75,34 @@ export const imageToImageBody = z.object({
 const IDENTITY_PRESERVE_SUFFIX =
   "The subject must remain exactly the same person — preserve facial identity, eye color, hair color, skin tone, and unique features."
 
+/**
+ * The credit-CHECK model-identifier resolver (preHandler side). Named + exported
+ * so the CHECK===DEBIT billing-parity test can run the EXACT pricing the live
+ * preHandler runs — every route test mocks `creditGuard` to a no-op, so this
+ * closure would otherwise never execute. Keep in lock-step with the handler's
+ * reservation identifier below.
+ */
+export function resolveImageToImageCreditIdentifier(req: FastifyRequest): string {
+  const body = req.body as Record<string, unknown> | null
+  const provider = extractProvider(req.body, "nano-banana")
+  // flux-2-max bills per reference image. In image-to-image the primary
+  // `imageUrl` is always one input plus any extra `referenceImageUrls` — so
+  // refCount = 1 + extras (the worker concatenates them into `allImages` before
+  // dispatching). swapToI2i:false because i2i is already an i2i provider.
+  const extraRefs = (body?.referenceImageUrls as string[] | undefined)?.length ?? 0
+  return resolveNormalizedImageGen({
+    provider,
+    aspectRatio: body?.aspectRatio,
+    quality: body?.quality,
+    resolution: body?.resolution,
+    renderingSpeed: body?.renderingSpeed,
+    refCount: 1 + extraRefs,
+    swapToI2i: false,
+  }).identifier
+}
+
 export async function imageToImageRoutes(app: FastifyInstance) {
-  app.post("/v1/image-to-image", { preHandler: creditGuard((req) => {
-    const body = req.body as Record<string, unknown>
-    const provider = extractProvider(req.body, "nano-banana")
-    const quality = body?.quality as string | undefined
-    const resolution = body?.resolution as string | undefined
-    const renderingSpeed = body?.renderingSpeed as string | undefined
-    // flux-2-max bills per reference image. In image-to-image the primary
-    // `imageUrl` is always one input plus any extra `referenceImageUrls` — so
-    // refCount = 1 + extras (worker concatenates them into `allImages` before
-    // dispatching to the provider). Shared builder (also used by the workflow
-    // orchestrator); swapToI2i:false because i2i is already an i2i provider.
-    const extraRefs = (body?.referenceImageUrls as string[] | undefined)?.length ?? 0
-    const refCount = 1 + extraRefs
-    return resolveImageGenCreditIdentifier({ provider, quality, resolution, renderingSpeed, refCount, swapToI2i: false })
-  }) }, async (req, reply) => {
+  app.post("/v1/image-to-image", { preHandler: creditGuard(resolveImageToImageCreditIdentifier) }, async (req, reply) => {
     const parsed = imageToImageBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -99,7 +110,11 @@ export async function imageToImageRoutes(app: FastifyInstance) {
       })
     }
 
-    const { imageUrl, prompt: rawPrompt, provider, referenceImageUrls, resolution, quality, strength, aspectRatio, negativePrompt, seed, renderingSpeed, guidanceScale, maskUrl } = parsed.data
+    // The three catalog-governed levers are destructured as `raw*` on purpose:
+    // `applySnappedLevers` below rewrites them on `parsed.data`, so these locals
+    // are the caller's PRE-snap values and are only ever valid as INPUT to the
+    // normalizer. Everything downstream reads `parsed.data.*`.
+    const { imageUrl, prompt: rawPrompt, provider, referenceImageUrls, resolution: rawResolution, quality: rawQuality, strength, aspectRatio: rawAspectRatio, negativePrompt, seed, renderingSpeed, guidanceScale, maskUrl } = parsed.data
     let prompt = rawPrompt
     const userId = req.userId
 
@@ -109,18 +124,27 @@ export async function imageToImageRoutes(app: FastifyInstance) {
       })
     }
 
-    // Must mirror the preHandler's identifier — flux-2-max bills per reference image,
-    // and in i2i the primary `imageUrl` counts as one of the up-to-8 refs (the worker
-    // concatenates [imageUrl, ...refs] before dispatch). Shared builder, swapToI2i:false.
+    // Must mirror the preHandler's identifier — flux-2-max bills per reference
+    // image, and in i2i the primary `imageUrl` counts as one of the refs (the
+    // worker concatenates [imageUrl, ...refs] before dispatch). One derivation
+    // gives both the reserved tier and the parameters we actually send.
     const i2iRefCount = 1 + (referenceImageUrls?.length ?? 0)
-    const modelIdentifier = resolveImageGenCreditIdentifier({
+    const normalized = resolveNormalizedImageGen({
       provider,
-      quality,
-      resolution,
+      aspectRatio: rawAspectRatio,
+      quality: rawQuality,
+      resolution: rawResolution,
       renderingSpeed,
       refCount: i2iRefCount,
       swapToI2i: false,
     })
+    const modelIdentifier = normalized.identifier
+
+    // Write the snapped levers back onto the parsed body — `input_data` and the
+    // queue payload below both read from it, so what we persist and what we
+    // send the provider are the values we just priced.
+    applySnappedLevers(parsed.data, normalized, imageToImageBody)
+    const adjustments = normalized.adjustments
 
     // ─────────────────────────────────────────────────────────────────────
     // Studio path — when attachToCharacterId is set AND the caller has NOT
@@ -269,10 +293,10 @@ export async function imageToImageRoutes(app: FastifyInstance) {
       referenceImageUrls,
       prompt,
       provider,
-      resolution,
-      quality,
+      resolution: parsed.data.resolution,
+      quality: parsed.data.quality,
       strength,
-      aspectRatio,
+      aspectRatio: parsed.data.aspectRatio,
       negativePrompt: finalNegativePrompt,
       seed,
       renderingSpeed,
@@ -293,6 +317,6 @@ export async function imageToImageRoutes(app: FastifyInstance) {
       usageLogId,
     })
 
-    return { jobId: job.id }
+    return withAdjustments({ jobId: job.id }, adjustments)
   })
 }

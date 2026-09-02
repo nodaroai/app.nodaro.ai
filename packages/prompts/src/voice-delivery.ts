@@ -4,6 +4,7 @@
  */
 
 import { resolveTerm, type PickerHintMode } from "./term.js"
+import { overlayEntry } from "./catalog-overlay.js"
 
 export interface VoiceDeliveryEntry {
   readonly id: string
@@ -102,9 +103,9 @@ const PACE_BY_ID = new Map(VOICE_PACES.map((x) => [x.id, x]))
 const EMOTION_BY_ID = new Map(VOICE_EMOTIONS.map((x) => [x.id, x]))
 const ARCHETYPE_BY_ID = new Map(VOICE_ARCHETYPES.map((x) => [x.id, x]))
 
-export function getVoicePace(id: string | undefined) { return id ? PACE_BY_ID.get(id) : undefined }
-export function getVoiceEmotion(id: string | undefined) { return id ? EMOTION_BY_ID.get(id) : undefined }
-export function getVoiceArchetype(id: string | undefined) { return id ? ARCHETYPE_BY_ID.get(id) : undefined }
+export function getVoicePace(id: string | undefined) { return id ? overlayEntry("voice-delivery", id, PACE_BY_ID.get(id)) : undefined }
+export function getVoiceEmotion(id: string | undefined) { return id ? overlayEntry("voice-delivery", id, EMOTION_BY_ID.get(id)) : undefined }
+export function getVoiceArchetype(id: string | undefined) { return id ? overlayEntry("voice-delivery", id, ARCHETYPE_BY_ID.get(id)) : undefined }
 
 /**
  * The COMPACT counterparts of the three lookups above: the short professional

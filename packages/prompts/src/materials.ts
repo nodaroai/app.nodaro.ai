@@ -24,6 +24,7 @@
  */
 
 import { resolveTerm, type PickerHintMode } from "./term.js"
+import { overlayEntry } from "./catalog-overlay.js"
 
 export type MaterialCategory =
   | "fabric"
@@ -139,7 +140,7 @@ const materialById = new Map<string, Material>(MATERIALS.map((m) => [m.id, m]))
 
 export function getMaterial(id: string | undefined | null): Material | undefined {
   if (!id) return undefined
-  return materialById.get(id)
+  return overlayEntry("materials", id, materialById.get(id))
 }
 
 export function getMaterialLabel(id: string | undefined | null, fallback?: string): string {

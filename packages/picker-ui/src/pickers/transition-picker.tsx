@@ -2,11 +2,12 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { TRANSITIONS, TRANSITION_CATEGORY_LABELS, TRANSITION_CATEGORY_ORDER, type Transition, type TransitionCategory } from "@nodaro/prompts"
+import { TRANSITIONS as BASE_TRANSITIONS, TRANSITION_CATEGORY_LABELS, TRANSITION_CATEGORY_ORDER, type Transition, type TransitionCategory } from "@nodaro/prompts"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog } from "../i18n"
 import { MultiPickBadge, useMultiPick } from "./multi-pick-ui"
+import { useCuratedEntries } from "../curated.js"
 
 interface TransitionPickerProps {
   readonly value: string | ReadonlyArray<string> | undefined
@@ -32,6 +33,10 @@ export const TransitionPicker = memo(function TransitionPicker({
   className,
   maxSelected = 2,
 }: TransitionPickerProps) {
+  // Curated view of the bundled catalog: filtered to ids this deployment
+  // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
+  // registration re-renders. Identity-equal to the base on mainline.
+  const TRANSITIONS = useCuratedEntries("transitions", BASE_TRANSITIONS)
   const [query, setQuery] = useState("")
   const [activeTab, setActiveTab] = useState<TransitionCategory>("standard")
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("transitions")

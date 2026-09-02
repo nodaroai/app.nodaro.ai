@@ -2,7 +2,7 @@ import { hasCredits } from "@/lib/edition"
 import { creditUnits, creditUnitLabel, formatCreditUnits } from "@/lib/credit-units"
 import { isModelUnavailable } from "@/lib/surface-availability"
 import { aspectRatioOptionsByKind, resolutionOptionsByKind, qualityOptionsByKind, durationsByMode, creditRangesAll, modelsWithFeature, isFlux2Model, isGvpSupportedProvider, isSeedance2Provider, GVP_SUPPORTED_PROVIDERS, VIDEO_GEN_COLLAPSED_T2V_IDS, type LabeledOption } from "@nodaro/shared"
-import { STYLES } from "@nodaro/prompts"
+import { STYLES, curateEntries } from "@nodaro/prompts"
 import type { ImageGenProvider, ImageI2IProvider, ImageToVideoProvider, LipSyncProvider, MotionTransferProviderType, TextToVideoProvider, VideoGenProvider, VideoToVideoProvider } from "@nodaro/shared"
 export { MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX, NATIVE_NEGATIVE_PROMPT_MODELS, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, IMAGE_MASK_MODE, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT } from "@nodaro/shared"
 export type { ImageMaskMode } from "@nodaro/shared"
@@ -559,7 +559,20 @@ export const KIE_VIDEO_DURATIONS: Record<string, number[]> = durationsByMode("i2
 
 /** Inline Style dropdown options for image config panels. Derived from the
  *  canonical STYLES catalog so the dropdown and the standalone Style node
- *  stay in sync — both resolve to the same promptHint at execution time. */
+ *  stay in sync — both resolve to the same promptHint at execution time.
+ *
+ *  A FUNCTION, not a constant: it is read through the deployment's curated
+ *  view, so a style a pack removed is not offered (and a pack's relabel
+ *  shows). Callers inside components should pair it with
+ *  `useCatalogPacksVersion()` so a late registration re-renders; by identity
+ *  to the bundled list on a deployment with no packs. */
+export function imageStylePresets(): ReadonlyArray<{ value: string; label: string }> {
+  return curateEntries("style", STYLES).map((s) => ({ value: s.id, label: s.label }))
+}
+/** The STOCK list, for the one consumer that is a module-scope table
+ *  (types/nodes.ts NODE_DEFINITIONS) and cannot read at render time. The
+ *  renderer's own `style` case never uses that table's options — it calls
+ *  imageStylePresets() — so nothing curated is offered from here. */
 export const IMAGE_STYLE_PRESETS: ReadonlyArray<{ value: string; label: string }> =
   STYLES.map((s) => ({ value: s.id, label: s.label }))
 

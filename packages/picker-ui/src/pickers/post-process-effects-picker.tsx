@@ -2,12 +2,13 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { POST_PROCESS_EFFECTS } from "@nodaro/prompts"
+import { POST_PROCESS_EFFECTS as BASE_POST_PROCESS_EFFECTS } from "@nodaro/prompts"
 import { Input } from "../ui/input"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog } from "../i18n"
 import { MultiPickBadge, useMultiPick } from "./multi-pick-ui"
+import { useCuratedEntries } from "../curated.js"
 
 interface PostProcessEffectsPickerProps {
   readonly value: string | ReadonlyArray<string> | undefined
@@ -22,6 +23,10 @@ export const PostProcessEffectsPicker = memo(function PostProcessEffectsPicker({
   className,
   maxSelected = 1,
 }: PostProcessEffectsPickerProps) {
+  // Curated view of the bundled catalog: filtered to ids this deployment
+  // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
+  // registration re-renders. Identity-equal to the base on mainline.
+  const POST_PROCESS_EFFECTS = useCuratedEntries("post-process-effects", BASE_POST_PROCESS_EFFECTS)
   const [query, setQuery] = useState("")
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("post-process-effects")
   const { selectedIds, isMulti, handlePick, activateMulti, demoteToSingle } =

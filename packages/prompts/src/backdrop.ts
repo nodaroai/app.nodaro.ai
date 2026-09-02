@@ -23,6 +23,7 @@
  */
 
 import { resolveTerm } from "./term.js"
+import { overlayEntry } from "./catalog-overlay.js"
 
 export type BackdropCategory =
   | "solid"
@@ -105,7 +106,7 @@ const backdropById = new Map<string, Backdrop>(BACKDROPS.map((b) => [b.id, b]))
 
 export function getBackdrop(id: string | undefined | null): Backdrop | undefined {
   if (!id) return undefined
-  return backdropById.get(id)
+  return overlayEntry("backdrop", id, backdropById.get(id))
 }
 
 export function getBackdropLabel(id: string | undefined | null, fallback?: string): string {

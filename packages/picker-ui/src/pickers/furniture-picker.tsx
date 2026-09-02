@@ -2,10 +2,11 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { FURNITURE, FURNITURE_SUBCATEGORY_LABELS, FURNITURE_SUBCATEGORY_ORDER, type Furniture, type FurnitureSubcategory } from "@nodaro/shared"
+import { FURNITURE as BASE_FURNITURE, FURNITURE_SUBCATEGORY_LABELS, FURNITURE_SUBCATEGORY_ORDER, type Furniture, type FurnitureSubcategory } from "@nodaro/shared"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog } from "../i18n"
+import { useCuratedEntries } from "../curated.js"
 
 interface FurniturePickerProps {
   readonly value: string
@@ -76,6 +77,10 @@ export const FurniturePicker = memo(function FurniturePicker({
   onValueChange,
   className,
 }: FurniturePickerProps) {
+  // Curated view of the bundled catalog: filtered to ids this deployment
+  // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
+  // registration re-renders. Identity-equal to the base on mainline.
+  const FURNITURE = useCuratedEntries("furniture", BASE_FURNITURE)
   const [query, setQuery] = useState("")
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("furniture")
 

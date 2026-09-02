@@ -2,7 +2,7 @@
 
 import { memo, useId, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { STYLINGS, STYLING_DIMENSION_ORDER, STYLING_DIMENSION_LABELS, STYLING_FIELD_BY_DIMENSION, MAX_SELECTED_BY_STYLING_DIMENSION, type Styling, type StylingDimension, type StylingValue } from "@nodaro/prompts"
+import { STYLINGS as BASE_STYLINGS, STYLING_DIMENSION_ORDER, STYLING_DIMENSION_LABELS, STYLING_FIELD_BY_DIMENSION, MAX_SELECTED_BY_STYLING_DIMENSION, type Styling, type StylingDimension, type StylingValue } from "@nodaro/prompts"
 import { pickIds, togglePick } from "@nodaro/shared"
 import { Input } from "../ui/input"
 import { Switch } from "../ui/switch"
@@ -12,6 +12,7 @@ import { HairCutBrowser } from "./hair-cut-browser"
 import { EyewearIcon, HeadwearIcon } from "../previews/small-silhouette-icons"
 import { useLocalizedCatalog } from "../i18n"
 import { MultiPickBadge } from "./multi-pick-ui"
+import { useCuratedEntries } from "../curated.js"
 
 interface StylingPickerProps {
   readonly value: StylingValue
@@ -30,6 +31,10 @@ export const StylingPicker = memo(function StylingPicker({
   className,
   subjectMinor,
 }: StylingPickerProps) {
+  // Curated view of the bundled catalog: filtered to ids this deployment
+  // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
+  // registration re-renders. Identity-equal to the base on mainline.
+  const STYLINGS = useCuratedEntries("styling", BASE_STYLINGS)
   const [query, setQuery] = useState("")
   /** Multi-select dims (max > 1) intentionally start empty when toggled on —
    *  user picks what they want. We track explicit enable here so the section
@@ -52,7 +57,7 @@ export const StylingPicker = memo(function StylingPicker({
       dimension: dim,
       entries: byDimension.get(dim) ?? [],
     }))
-  }, [query, matches, subjectMinor])
+  }, [query, matches, subjectMinor, STYLINGS])
 
   const anyVisible = grouped.some((g) => g.entries.length > 0)
 

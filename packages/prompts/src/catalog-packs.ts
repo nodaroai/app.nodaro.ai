@@ -59,19 +59,44 @@ export interface CatalogPack {
 
 let packs: CatalogPack[] = []
 let version = 0
+// Registration can land AFTER a consumer first read (the browser fetches a
+// deployment's composed catalogs at boot; a picker may already be mounted).
+// A read-only memo keyed on `version` sees the change on its NEXT read, but
+// nothing re-runs a React render for it — that gap is how a deployment's
+// curation once rendered as the stock catalogs for a whole session. Listeners
+// let a UI hook subscribe to the version instead of polling it.
+const listeners = new Set<() => void>()
+function bump(): void {
+  version++
+  for (const l of listeners) l()
+}
 
 export function registerCatalogPack(pack: CatalogPack): void {
   if (packs.some((p) => p.id === pack.id)) throw new Error(`duplicate catalog pack id "${pack.id}"`)
   packs = [...packs, pack]
-  version++
   // Push this pack's localized sidecars into the shared app-UI localizer (G10)
   // so pack-added entries resolve in `resolveLabel`/`resolveDescription`/search.
   // One generic point covers every pack, incl. the person extend fan-out.
   registerCatalogSidecars(pack.catalogId, pack.sidecars)
+  bump()
 }
 export function getRegisteredCatalogPacks(): readonly CatalogPack[] { return packs }
-export function resetCatalogPacks(): void { packs = []; version++; resetCatalogSidecars() }
+export function resetCatalogPacks(): void { packs = []; resetCatalogSidecars(); bump() }
 export function catalogPacksVersion(): number { return version }
+
+/** True when at least one pack targets this catalog — i.e. this deployment
+ *  CURATES it and the base constants are no longer the truth for it. */
+export function hasCatalogPacksFor(catalogId: string): boolean {
+  return packs.some((p) => p.catalogId === catalogId)
+}
+
+/** Subscribe to registrations/resets. Returns the unsubscribe. */
+export function subscribeCatalogPacks(listener: () => void): () => void {
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
+  }
+}
 
 function cloneCatalog(c: PickerCatalogInput): PickerCatalog {
   return {

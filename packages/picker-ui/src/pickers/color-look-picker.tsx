@@ -2,12 +2,13 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { COLOR_LOOKS, COLOR_LOOK_CATEGORY_ORDER, COLOR_LOOK_CATEGORY_LABELS, type ColorLook, type ColorLookCategory } from "@nodaro/prompts"
+import { COLOR_LOOKS as BASE_COLOR_LOOKS, COLOR_LOOK_CATEGORY_ORDER, COLOR_LOOK_CATEGORY_LABELS, type ColorLook, type ColorLookCategory } from "@nodaro/prompts"
 import { Input } from "../ui/input"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"
 import { ColorLookPreview } from "../previews/color-look-preview"
 import { useLocalizedCatalog } from "../i18n"
+import { useCuratedEntries } from "../curated.js"
 
 interface ColorLookPickerProps {
   readonly value: string
@@ -20,6 +21,10 @@ export const ColorLookPicker = memo(function ColorLookPicker({
   onValueChange,
   className,
 }: ColorLookPickerProps) {
+  // Curated view of the bundled catalog: filtered to ids this deployment
+  // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
+  // registration re-renders. Identity-equal to the base on mainline.
+  const COLOR_LOOKS = useCuratedEntries("color-look", BASE_COLOR_LOOKS)
   const [query, setQuery] = useState("")
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("color-look")
 

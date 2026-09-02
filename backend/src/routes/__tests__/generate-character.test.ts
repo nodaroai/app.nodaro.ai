@@ -103,6 +103,7 @@ import { generateCharacterRoutes } from "../generate-character.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
+import { resolveEntityImageParams } from "../../lib/entity-credit-identifier.js"
 import { PORTRAIT_SCAFFOLDING, CLOTHED_DEFAULT } from "../../lib/character-prompts.js"
 import { MODEST_ATTIRE_CLAUSE, registerMainlinePromptPolicies } from "../../lib/prompt-policies/index.js"
 import { applyPromptPolicies, clearPromptPolicies } from "../../lib/prompt-policy.js"
@@ -1414,5 +1415,75 @@ describe("POST /v1/generate-character — minor-age floor (W1-a)", () => {
       "generate-character",
       expect.objectContaining({ subjectMinor: true }),
     )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Catalog-snap parity: CHECK === DEBIT === input_data === queue payload
+// ---------------------------------------------------------------------------
+/**
+ * `resolution` / `quality` are PRICING dimensions on this route (composite ids
+ * like "gpt-image:high"), and the entity worker forwards both verbatim into
+ * `extraParams`. So the catalog snap lives inside the ONE resolver the
+ * preHandler CHECK and the handler DEBIT share — anything else splits the two,
+ * and `commit_credits` never collects an upward delta (the reserve IS the
+ * charge). `creditGuard` is mocked to a no-op here, so the CHECK is exercised
+ * by calling that exact resolver directly on the same raw body.
+ *
+ * The assertion is four-way on purpose: a run that reserves one tier, records
+ * another on the job row and sends a third to the provider is the exact bug
+ * this block exists to make impossible.
+ */
+describe("POST /v1/generate-character — catalog snap parity", () => {
+  async function run(payload: Record<string, unknown>) {
+    const { insert } = mockJobsInsertChain()
+    vi.mocked(supabase.from).mockReturnValue({ insert, ...charSelectChain() } as never)
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-character",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { name: "Kira", seedPrompt: "young woman, designer glasses", ...payload },
+    })
+    expect(res.statusCode).toBe(200)
+    return {
+      check: resolveEntityImageParams({ name: "Kira", seedPrompt: "young woman, designer glasses", ...payload }).identifier,
+      debit: vi.mocked(reserveCreditsForJob).mock.calls.at(-1)?.[3],
+      inputData: (insert.mock.calls[0][0] as { input_data: Record<string, unknown> }).input_data,
+      enqueued: vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>,
+    }
+  }
+
+  it("snaps a quality gpt-image does not accept, everywhere at once", async () => {
+    const { check, debit, inputData, enqueued } = await run({ provider: "gpt-image", quality: "basic" })
+    expect(check).toBe(debit)
+    // gpt-image declares ["medium", "high"]; "medium" is the base tier.
+    expect(check).toBe("gpt-image")
+    expect(inputData.quality).toBe("medium")
+    expect(enqueued.quality).toBe("medium")
+  })
+
+  it("drops a resolution nano-banana does not have (never reaches the worker)", async () => {
+    const { check, debit, inputData, enqueued } = await run({ provider: "nano-banana", resolution: "2K" })
+    expect(check).toBe(debit)
+    expect(check).toBe("nano-banana")
+    expect(inputData.resolution).toBeUndefined()
+    expect(enqueued.resolution).toBeUndefined()
+  })
+
+  it("leaves a catalog-valid pair byte-identical, composite price included", async () => {
+    const { check, debit, inputData, enqueued } = await run({ provider: "gpt-image", quality: "high" })
+    expect(check).toBe(debit)
+    expect(check).toBe("gpt-image:high")
+    expect(inputData.quality).toBe("high")
+    expect(enqueued.quality).toBe("high")
+  })
+
+  it("never lets the snap erase the resolved aspect ratio", async () => {
+    // aspectRatio is NOT a lever the entity snap owns — `resolveCharacterAspectRatio`
+    // and the worker's per-model clamp do. A write-back that wiped it would
+    // silently re-frame every character render.
+    const { enqueued, inputData } = await run({ provider: "gpt-image", quality: "basic", aspectRatio: "16:9" })
+    expect(enqueued.aspectRatio).toBe("16:9")
+    expect(inputData.aspectRatio).toBe("16:9")
   })
 })

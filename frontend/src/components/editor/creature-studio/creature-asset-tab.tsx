@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
-import { POSES, POSE_CATEGORY_LABELS, POSE_CATEGORY_ORDER, getPoseLabel, getPosePromptHint, type PoseCategory } from "@nodaro/prompts"
+import { POSES as BASE_POSES, POSE_CATEGORY_LABELS, POSE_CATEGORY_ORDER, getPoseLabel, getPosePromptHint, type PoseCategory } from "@nodaro/prompts"
 import { resolveEntityAspect, aspectRatioToNumber } from "@nodaro/shared"
 import { generateCreatureAsset, removeCreatureAsset } from "@/lib/api"
 import { MultiImageLightbox } from "@/components/ui/multi-image-lightbox"
@@ -11,6 +11,7 @@ import { lowerNameSet } from "../studio-shell/preset-state"
 import { StudioAssetMedia } from "../studio-shell/studio-asset-media"
 import type { CreatureStudioState } from "./use-creature-studio"
 import type { ObjectAssetItem, CreatureNodeData } from "@/types/nodes"
+import { useCuratedEntries } from "@/lib/picker-ui"
 
 /**
  * Shared workhorse for the 3 creature image-asset tabs — Angles, Poses,
@@ -321,6 +322,9 @@ interface PoseCatalogBrowserProps {
 }
 
 export function PoseCatalogBrowser({ disabled, onPick }: PoseCatalogBrowserProps) {
+  // The catalog as THIS deployment offers it — a pack may have removed or
+  // reworded entries, and a pick here becomes a generation prompt directly.
+  const POSES = useCuratedEntries("pose", BASE_POSES)
   // Pre-bucket the catalog by category once so the render path doesn't
   // iterate the full list per category section.
   const byCategory = useMemo(() => {
@@ -331,7 +335,7 @@ export function PoseCatalogBrowser({ disabled, onPick }: PoseCatalogBrowserProps
       map.set(p.category, arr)
     }
     return map
-  }, [])
+  }, [POSES])
 
   return (
     <div

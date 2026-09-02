@@ -10,6 +10,7 @@
  */
 
 import { resolveTerm } from "./term.js"
+import { overlayEntry } from "./catalog-overlay.js"
 
 export interface CameraFormat {
   readonly id: string
@@ -76,7 +77,7 @@ const formatById = new Map<string, CameraFormat>(CAMERA_FORMATS.map((f) => [f.id
 
 export function getCameraFormat(id: string | undefined | null): CameraFormat | undefined {
   if (!id) return undefined
-  return formatById.get(id)
+  return overlayEntry("camera-format", id, formatById.get(id))
 }
 
 export function getCameraFormatLabel(id: string | undefined | null, fallback?: string): string {

@@ -2,12 +2,13 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { CAMERA_FORMATS } from "@nodaro/prompts"
+import { CAMERA_FORMATS as BASE_CAMERA_FORMATS } from "@nodaro/prompts"
 import { Input } from "../ui/input"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"
 import { CameraFormatPreview } from "../previews/camera-format-preview"
 import { useLocalizedCatalog } from "../i18n"
+import { useCuratedEntries } from "../curated.js"
 
 interface CameraFormatPickerProps {
   readonly value: string
@@ -20,6 +21,10 @@ export const CameraFormatPicker = memo(function CameraFormatPicker({
   onValueChange,
   className,
 }: CameraFormatPickerProps) {
+  // Curated view of the bundled catalog: filtered to ids this deployment
+  // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
+  // registration re-renders. Identity-equal to the base on mainline.
+  const CAMERA_FORMATS = useCuratedEntries("camera-format", BASE_CAMERA_FORMATS)
   const [query, setQuery] = useState("")
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("camera-format")
 

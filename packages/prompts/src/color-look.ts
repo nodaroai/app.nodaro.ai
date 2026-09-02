@@ -12,6 +12,7 @@
  */
 
 import { resolveTerm } from "./term.js"
+import { overlayEntry } from "./catalog-overlay.js"
 
 export type ColorLookCategory = "palette" | "film-emulation" | "social-preset"
 
@@ -98,7 +99,7 @@ const colorLookById = new Map<string, ColorLook>(COLOR_LOOKS.map((c) => [c.id, c
 
 export function getColorLook(id: string | undefined | null): ColorLook | undefined {
   if (!id) return undefined
-  return colorLookById.get(id)
+  return overlayEntry("color-look", id, colorLookById.get(id))
 }
 
 export function getColorLookLabel(id: string | undefined | null, fallback?: string): string {

@@ -2,7 +2,7 @@
 
 import { memo, useId, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { FRAMINGS, FRAMING_CATEGORY_ORDER, FRAMING_CATEGORY_LABELS, FRAMING_FIELD_BY_CATEGORY, MAX_SELECTED_BY_FRAMING_CATEGORY, type Framing, type FramingCategory, type FramingValue } from "@nodaro/prompts"
+import { FRAMINGS as BASE_FRAMINGS, FRAMING_CATEGORY_ORDER, FRAMING_CATEGORY_LABELS, FRAMING_FIELD_BY_CATEGORY, MAX_SELECTED_BY_FRAMING_CATEGORY, type Framing, type FramingCategory, type FramingValue } from "@nodaro/prompts"
 import { pickIds, togglePick } from "@nodaro/shared"
 import { Input } from "../ui/input"
 import { Switch } from "../ui/switch"
@@ -11,6 +11,7 @@ import { cn } from "../lib/cn"
 import { FramingPreview } from "../previews/framing-preview"
 import { useLocalizedCatalog } from "../i18n"
 import { MultiPickBadge } from "./multi-pick-ui"
+import { useCuratedEntries } from "../curated.js"
 
 interface FramingPickerProps {
   readonly value: FramingValue
@@ -30,6 +31,10 @@ export const FramingPicker = memo(function FramingPicker({
   onChange,
   className,
 }: FramingPickerProps) {
+  // Curated view of the bundled catalog: filtered to ids this deployment
+  // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
+  // registration re-renders. Identity-equal to the base on mainline.
+  const FRAMINGS = useCuratedEntries("framing", BASE_FRAMINGS)
   const [query, setQuery] = useState("")
   /** Multi-select dims (max > 1) intentionally start empty when toggled on —
    *  user picks what they want. We track explicit enable here so the section

@@ -2,12 +2,13 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { PHOTOGRAPHERS, PHOTOGRAPHER_CATEGORY_LABELS, PHOTOGRAPHER_CATEGORY_ORDER, type Photographer, type PhotographerCategory } from "@nodaro/prompts"
+import { PHOTOGRAPHERS as BASE_PHOTOGRAPHERS, PHOTOGRAPHER_CATEGORY_LABELS, PHOTOGRAPHER_CATEGORY_ORDER, type Photographer, type PhotographerCategory } from "@nodaro/prompts"
 import { Input } from "../ui/input"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog } from "../i18n"
 import { MultiPickBadge, useMultiPick } from "./multi-pick-ui"
+import { useCuratedEntries } from "../curated.js"
 
 interface PhotographerPickerProps {
   readonly value: string | ReadonlyArray<string> | undefined
@@ -29,6 +30,10 @@ export const PhotographerPicker = memo(function PhotographerPicker({
   className,
   maxSelected = 1,
 }: PhotographerPickerProps) {
+  // Curated view of the bundled catalog: filtered to ids this deployment
+  // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
+  // registration re-renders. Identity-equal to the base on mainline.
+  const PHOTOGRAPHERS = useCuratedEntries("photographer", BASE_PHOTOGRAPHERS)
   const [query, setQuery] = useState("")
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("photographer")
   const { selectedIds, isMulti, handlePick, activateMulti, demoteToSingle } =

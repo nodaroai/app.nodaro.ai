@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
-import { MATERIALS, MATERIAL_CATEGORY_LABELS, MATERIAL_CATEGORY_ORDER, getMaterialLabel, getMaterialPromptHint, type MaterialCategory } from "@nodaro/prompts"
+import { MATERIALS as BASE_MATERIALS, MATERIAL_CATEGORY_LABELS, MATERIAL_CATEGORY_ORDER, getMaterialLabel, getMaterialPromptHint, type MaterialCategory } from "@nodaro/prompts"
 import { resolveEntityAspect, aspectRatioToNumber } from "@nodaro/shared"
 import { generateObjectAsset, removeObjectAsset } from "@/lib/api"
 import { MultiImageLightbox } from "@/components/ui/multi-image-lightbox"
@@ -11,6 +11,7 @@ import { lowerNameSet } from "../studio-shell/preset-state"
 import { StudioAssetMedia } from "../studio-shell/studio-asset-media"
 import type { ObjectStudioState } from "./use-object-studio"
 import type { ObjectAssetItem, ObjectNodeData } from "@/types/nodes"
+import { useCuratedEntries } from "@/lib/picker-ui"
 
 /**
  * Shared workhorse for the 3 object image-asset tabs — Angles, Materials,
@@ -322,6 +323,9 @@ interface MaterialCatalogBrowserProps {
 }
 
 export function MaterialCatalogBrowser({ disabled, onPick }: MaterialCatalogBrowserProps) {
+  // The catalog as THIS deployment offers it — a pack may have removed or
+  // reworded entries, and a pick here becomes a generation prompt directly.
+  const MATERIALS = useCuratedEntries("materials", BASE_MATERIALS)
   // Pre-bucket the catalog by category once so the render path doesn't
   // iterate the full list per category section.
   const byCategory = useMemo(() => {
@@ -332,7 +336,7 @@ export function MaterialCatalogBrowser({ disabled, onPick }: MaterialCatalogBrow
       map.set(m.category, arr)
     }
     return map
-  }, [])
+  }, [MATERIALS])
 
   return (
     <div

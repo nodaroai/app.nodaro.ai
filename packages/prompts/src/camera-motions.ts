@@ -8,6 +8,7 @@
  */
 
 import { resolveTerm, type PickerHintMode } from "./term.js"
+import { overlayEntry } from "./catalog-overlay.js"
 
 export type CameraMotionCategory =
   | "default"
@@ -605,7 +606,7 @@ const motionById = new Map<string, CameraMotion>(
 
 export function getCameraMotion(id: string | undefined | null): CameraMotion | undefined {
   if (!id) return undefined
-  return motionById.get(id)
+  return overlayEntry("camera-motions", id, motionById.get(id))
 }
 
 /** Human-readable label for the given motion id. Falls back to the id if unknown. */

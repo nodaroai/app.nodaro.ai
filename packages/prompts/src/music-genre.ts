@@ -15,6 +15,7 @@
 import { pickIds } from "@nodaro/shared"
 
 import { resolveTerm, type PickerHintMode } from "./term.js"
+import { overlayEntry } from "./catalog-overlay.js"
 
 export type MusicGenreCategory =
   | "hip-hop-rnb"
@@ -610,12 +611,12 @@ const ERA_BY_ID = new Map(MUSIC_ERAS.map((e) => [e.id, e]))
 
 export function getMusicGenre(id: string | undefined): MusicGenre | undefined {
   if (!id) return undefined
-  return GENRE_BY_ID.get(id)
+  return overlayEntry("music-genre", id, GENRE_BY_ID.get(id))
 }
 
 export function getMusicGenreLabel(id: string | undefined): string {
   if (!id) return ""
-  return GENRE_BY_ID.get(id)?.label ?? id
+  return getMusicGenre(id)?.label ?? id
 }
 
 export function getMusicSubgenre(
@@ -624,12 +625,12 @@ export function getMusicSubgenre(
 ): MusicSubgenre | undefined {
   if (!genreId || !subgenreId) return undefined
   const genre = GENRE_BY_ID.get(genreId)
-  return genre?.subgenres.find((s) => s.id === subgenreId)
+  return overlayEntry("music-genre", subgenreId, genre?.subgenres.find((s) => s.id === subgenreId))
 }
 
 export function getMusicEra(id: string | undefined): MusicEra | undefined {
   if (!id) return undefined
-  return ERA_BY_ID.get(id)
+  return overlayEntry("music-genre", id, ERA_BY_ID.get(id))
 }
 
 /**

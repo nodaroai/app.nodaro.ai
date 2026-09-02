@@ -1,4 +1,4 @@
-import { buildCreditModelIdentifier } from "@nodaro/shared"
+import { resolveNormalizedImageGen } from "@nodaro/shared"
 import { extractProvider } from "./request-helpers.js"
 
 /**
@@ -27,13 +27,42 @@ import { extractProvider } from "./request-helpers.js"
  * authoritative atomic gate, so the delta can only reject a truly over-budget
  * request, never over-charge. For non-ref-priced providers the override is inert
  * (`buildCreditModelIdentifier` ignores refCount off the Flux 2 family).
+ *
+ * The `resolution` / `quality` levers are SNAPPED to `MODEL_CATALOG` here, not
+ * at the routes: they are pricing dimensions (`gpt-image:high`,
+ * `nano-banana-pro:4K`), and a snap applied only in a handler would leave the
+ * preHandler CHECK pricing an un-snapped value. The entity worker forwards both
+ * verbatim into `extraParams` (workers/handlers/entity.ts), so a lever the model
+ * does not declare would otherwise reach KIE. The aspect ratio is NOT handled
+ * here — `makeEntityImageHandler` already clamps it per-model via
+ * `clampAspectRatioToModel` (workers/handlers/entity.ts), and the routes resolve
+ * it through `resolveCharacterAspectRatio`; feeding it through this resolver
+ * would let a write-back erase a ratio those two own.
+ *
+ * Returns the snapped pair alongside the identifier so a route can record and
+ * enqueue exactly what it paid for. `resolveEntityImageCreditIdentifier` is the
+ * identifier-only view of the SAME derivation, so the six existing call sites
+ * (four route CHECKs + the two payload-builder entity branches) need no edit.
  */
-export function resolveEntityImageCreditIdentifier(body: unknown, refCountOverride?: number): string {
+export function resolveEntityImageParams(
+  body: unknown,
+  refCountOverride?: number,
+): { identifier: string; resolution?: string; quality?: string } {
   const b = (body && typeof body === "object" ? body : {}) as Record<string, unknown>
-  const provider = extractProvider(body, "nano-banana")
-  const quality = typeof b.quality === "string" ? b.quality : undefined
-  const resolution = typeof b.resolution === "string" ? b.resolution : undefined
   const refCount =
     refCountOverride ?? (typeof b.sourceImageUrl === "string" && b.sourceImageUrl.length > 0 ? 1 : 0)
-  return buildCreditModelIdentifier(provider, quality, resolution, undefined, undefined, refCount)
+  const n = resolveNormalizedImageGen({
+    provider: extractProvider(body, "nano-banana"),
+    quality: b.quality,
+    resolution: b.resolution,
+    refCount,
+    // Entity routes never auto-swap to an i2i sibling — the worker sends
+    // `sourceImageUrl` as a reference to the SAME model.
+    swapToI2i: false,
+  })
+  return { identifier: n.identifier, resolution: n.resolution, quality: n.quality }
+}
+
+export function resolveEntityImageCreditIdentifier(body: unknown, refCountOverride?: number): string {
+  return resolveEntityImageParams(body, refCountOverride).identifier
 }

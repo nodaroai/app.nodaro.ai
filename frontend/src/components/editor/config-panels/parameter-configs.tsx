@@ -64,7 +64,7 @@ import type {
   TransitionIntensity,
   CharacterFxData,
 } from "@/types/nodes"
-import { CameraMotionPicker } from "@/lib/picker-ui"
+import { CameraMotionPicker, useCuratedEntries } from "@/lib/picker-ui"
 import { FramingPicker } from "@/lib/picker-ui"
 import { LensPicker } from "@/lib/picker-ui"
 import { CameraFormatPicker } from "@/lib/picker-ui"
@@ -76,7 +76,7 @@ import { StylePicker } from "@/lib/picker-ui"
 import { SettingPicker } from "@/lib/picker-ui"
 import { LoopSubjectPicker } from "@/lib/picker-ui"
 import { PersonPicker } from "@/lib/picker-ui"
-import { MOODS, POSES, buildFramingHints, getLensPromptHint, getCameraFormatPromptHint, buildLightingHints, getColorLookPromptHint, buildAtmosphereHints, buildActionFxHints, getStylePromptHint, getSettingPromptHint, getLoopSubjectPromptHint, buildMoodHints, buildPoseHints, buildStylingHints, buildTemporalHints, buildMaterialHints, getPhotoGenrePromptHint, getBackdropPromptHint, buildHeldPropHints, buildPhotographerHints, buildAestheticHints, getEraPromptHint, buildExposureHints, getRenderQualityPromptHint, getCompositionEffectPromptHint, buildPostProcessHints, buildPersonHints, TRANSITION_POSITIONS, TRANSITION_DURATIONS, TRANSITION_INTENSITIES, CHARACTER_FX_POSITIONS, CHARACTER_FX_DURATIONS, CHARACTER_FX_INTENSITIES } from "@nodaro/prompts"
+import { MOODS as BASE_MOODS, POSES as BASE_POSES, buildFramingHints, getLensPromptHint, getCameraFormatPromptHint, buildLightingHints, getColorLookPromptHint, buildAtmosphereHints, buildActionFxHints, getStylePromptHint, getSettingPromptHint, getLoopSubjectPromptHint, buildMoodHints, buildPoseHints, buildStylingHints, buildTemporalHints, buildMaterialHints, getPhotoGenrePromptHint, getBackdropPromptHint, buildHeldPropHints, buildPhotographerHints, buildAestheticHints, getEraPromptHint, buildExposureHints, getRenderQualityPromptHint, getCompositionEffectPromptHint, buildPostProcessHints, buildPersonHints, TRANSITION_POSITIONS, TRANSITION_DURATIONS, TRANSITION_INTENSITIES, CHARACTER_FX_POSITIONS, CHARACTER_FX_DURATIONS, CHARACTER_FX_INTENSITIES } from "@nodaro/prompts"
 import { getAnimal, getVehicle, getWeapon, getFurniture } from "@nodaro/shared"
 import { MoodEmoji } from "@/lib/picker-ui"
 import { DimensionTileGrid } from "@/lib/picker-ui"
@@ -699,6 +699,7 @@ export function PersonConfig({ data, onUpdate }: ConfigProps<PersonData>) {
 }
 
 export function MoodConfig({ data, onUpdate }: ConfigProps<MoodData>) {
+  const MOODS = useCuratedEntries("mood", BASE_MOODS)
   const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
@@ -819,6 +820,7 @@ export function EraConfig({ data, onUpdate }: ConfigProps<EraData>) {
 }
 
 export function PoseConfig({ data, onUpdate }: ConfigProps<PoseData>) {
+  const POSES = useCuratedEntries("pose", BASE_POSES)
   const dir = usePickerDir()
   return (
     <div className="flex flex-col gap-3" dir={dir}>

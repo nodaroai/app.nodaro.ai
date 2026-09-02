@@ -1,5 +1,7 @@
 import {
   buildCreditModelIdentifier,
+  resolveImageGenCreditIdentifier,
+  resolveNormalizedImageGen,
   buildVideoCreditModelIdentifier,
   buildMotionCreditModelIdentifier,
 } from "../credit-identifiers.js"
@@ -868,5 +870,136 @@ describe("gemini-omni-flash", () => {
         expect(id({ duration: d, resolution: r })).not.toBe("gemini-omni-flash")
       }
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// resolveNormalizedImageGen
+// ---------------------------------------------------------------------------
+describe("resolveNormalizedImageGen", () => {
+  it("snaps an off-list aspect ratio and reports it", () => {
+    const out = resolveNormalizedImageGen({
+      provider: "gpt-image-2",
+      aspectRatio: "3:2",
+      resolution: "4K",
+      refCount: 0,
+      swapToI2i: true,
+    })
+    // 3:2 is not in GPT_IMAGE_2_RATIOS -> allowed[0] ("auto"), which then
+    // cascades resolution to 1K via the model's cross-field rule.
+    expect(out.aspectRatio).toBe("auto")
+    expect(out.resolution).toBe("1K")
+    expect(out.identifier).toBe("gpt-image-2")
+    expect(out.adjustments.map((a) => a.field)).toEqual(["aspectRatio", "resolution"])
+  })
+
+  it("prices the SNAPPED resolution — gpt-image-2 auto + 2K reserves the 1K tier", () => {
+    const out = resolveNormalizedImageGen({
+      provider: "gpt-image-2",
+      aspectRatio: "auto",
+      resolution: "2K",
+      refCount: 0,
+      swapToI2i: true,
+    })
+    expect(out.resolution).toBe("1K")
+    expect(out.identifier).toBe("gpt-image-2")
+  })
+
+  it("drops a lever the model does not have, and reports it", () => {
+    const out = resolveNormalizedImageGen({
+      provider: "recraft-upscale",
+      aspectRatio: "16:9",
+      refCount: 0,
+    })
+    expect(out.aspectRatio).toBeUndefined()
+    expect(out.adjustments).toHaveLength(1)
+    expect(out.adjustments[0].field).toBe("aspectRatio")
+    expect(out.adjustments[0].to).toBeUndefined()
+  })
+
+  // grok-i2i deliberately has NO `aspectRatios` on its catalog entry, and that
+  // is the HONEST declaration: KIE's grok-imagine/image-to-image schema accepts
+  // only prompt / image_urls / nsfw_checker — there is no aspect_ratio param
+  // (https://docs.kie.ai/market/grok-imagine/image-to-image.md). That is why
+  // kie/models.ts gives it `extraParams: {}` while its t2i sibling gets
+  // `{ aspect_ratio: "16:9" }`, and why kie/CLAUDE.md lists grok-i2i under
+  // "No aspect ratio control". Declaring the t2i ratios here to "preserve" a
+  // caller's value would put a lie in the catalog and keep forwarding a param
+  // the endpoint ignores; dropping it and disclosing that via `adjustments` is
+  // the correct behaviour. Do not "fix" this by adding GROK_RATIOS.
+  it("drops the aspect ratio when grok auto-swaps to its ratio-less i2i sibling", () => {
+    const out = resolveNormalizedImageGen({
+      provider: "grok",
+      aspectRatio: "16:9",
+      refCount: 1,
+      swapToI2i: true,
+    })
+    expect(out.modelId).toBe("grok-i2i")
+    expect(out.aspectRatio).toBeUndefined()
+    expect(out.adjustments).toHaveLength(1)
+    expect(out.adjustments[0].field).toBe("aspectRatio")
+    expect(out.adjustments[0].from).toBe("16:9")
+    expect(out.adjustments[0].to).toBeUndefined()
+    expect(out.identifier).toBe("grok-i2i")
+  })
+
+  it("snaps against the i2i variant when the T2I provider auto-swaps", () => {
+    const out = resolveNormalizedImageGen({
+      provider: "gpt-image-2",
+      aspectRatio: "3:4",
+      refCount: 2,
+      swapToI2i: true,
+    })
+    expect(out.modelId).toBe("gpt-image-2-i2i")
+    expect(out.aspectRatio).toBe("3:4")
+    expect(out.adjustments).toEqual([])
+  })
+
+  it("coerces non-string levers to undefined (the preHandler runs pre-Zod)", () => {
+    const out = resolveNormalizedImageGen({
+      provider: "gpt-image-2",
+      aspectRatio: 169,
+      resolution: null,
+      quality: {},
+      refCount: 0,
+    })
+    expect(out.aspectRatio).toBeUndefined()
+    expect(out.resolution).toBeUndefined()
+    expect(out.quality).toBeUndefined()
+    expect(out.adjustments).toEqual([])
+    expect(out.identifier).toBe("gpt-image-2")
+  })
+
+  it("passes an unknown model id through untouched", () => {
+    const out = resolveNormalizedImageGen({
+      provider: "not-a-model",
+      aspectRatio: "13:7",
+      resolution: "9K",
+      refCount: 0,
+    })
+    expect(out.aspectRatio).toBe("13:7")
+    expect(out.resolution).toBe("9K")
+    expect(out.adjustments).toEqual([])
+    expect(out.identifier).toBe("not-a-model")
+  })
+})
+
+// Regression pins: identifiers that are correct TODAY must be byte-identical
+// once resolveImageGenCreditIdentifier delegates through the normalizer.
+describe("resolveImageGenCreditIdentifier is unchanged for already-valid input", () => {
+  it.each([
+    [{ provider: "flux-2-max", refCount: 3, swapToI2i: true }, "flux-2-max:1MP:3ref"],
+    [{ provider: "flux-2-max", resolution: "4 MP", refCount: 8, swapToI2i: true }, "flux-2-max:4MP:8ref"],
+    [{ provider: "flux-2-pro", refCount: 0, swapToI2i: true }, "flux-2-pro:1MP:0ref"],
+    [{ provider: "seedream-5-lite", refCount: 1, swapToI2i: true }, "seedream-5-lite-i2i"],
+    [{ provider: "seedream", quality: "high", refCount: 0, swapToI2i: true }, "seedream:high"],
+    [{ provider: "gpt-image", quality: "high", refCount: 0, swapToI2i: true }, "gpt-image:high"],
+    [{ provider: "flux", resolution: "2K", refCount: 0, swapToI2i: true }, "flux:2K"],
+    [{ provider: "nano-banana-pro", resolution: "4K", refCount: 0, swapToI2i: true }, "nano-banana-pro:4K"],
+    [{ provider: "gpt-image-2", resolution: "4K", aspectRatio: "16:9", refCount: 0, swapToI2i: true }, "gpt-image-2:4K"],
+    [{ provider: "ideogram-v3", renderingSpeed: "TURBO", refCount: 0, swapToI2i: true }, "ideogram-v3:TURBO"],
+    [{ provider: undefined, refCount: 0, swapToI2i: true }, "nano-banana"],
+  ] as const)("%o -> %s", (opts, expected) => {
+    expect(resolveImageGenCreditIdentifier({ ...opts } as Parameters<typeof resolveImageGenCreditIdentifier>[0])).toBe(expected)
   })
 })

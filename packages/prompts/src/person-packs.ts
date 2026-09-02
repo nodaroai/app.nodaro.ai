@@ -5,7 +5,7 @@ import {
   PERSON_FIELD_BY_DIMENSION,
   type Person,
 } from "./person.js"
-import { registerCatalogPack, getRegisteredCatalogPacks } from "./catalog-packs.js"
+import { registerCatalogPack, getRegisteredCatalogPacks, catalogPacksVersion } from "./catalog-packs.js"
 import type { PickerDimension, PickerOption } from "./picker-catalogs.js"
 import { resolveTerm } from "./term.js"
 import { setRegisteredPersonPackFields } from "@nodaro/shared"
@@ -86,8 +86,17 @@ export function resetPersonPacks(): void {
   version++
   syncPersonPackFields()
 }
+/**
+ * The version every person memo keys on. It moves when a PERSON pack registers
+ * AND when a CATALOG pack for `person` does: `getRegisteredPeople()` folds
+ * both, so a memo keyed on the person-pack counter alone kept serving a
+ * denied id after a `deny` catalog pack for person landed — correct on the
+ * server only because the Haredi person pack happened to register afterwards
+ * and bump this, and wrong in the browser, where only catalog packs arrive.
+ * Folding the catalog version in makes the memo honest regardless of order.
+ */
 export function personPacksVersion(): number {
-  return version
+  return version * 1_000_003 + catalogPacksVersion()
 }
 
 /** Reverse of the registered dimension→field map, for reconstructing entries

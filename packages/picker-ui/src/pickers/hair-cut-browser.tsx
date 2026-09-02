@@ -2,9 +2,10 @@
 
 import { memo, useMemo } from "react"
 import { Scissors } from "lucide-react"
-import { STYLINGS, type Styling } from "@nodaro/prompts"
+import { STYLINGS as BASE_STYLINGS, type Styling } from "@nodaro/prompts"
 import { DimensionModalBrowser } from "./dimension-modal-browser"
 import { HairIcon } from "./hair-icon"
+import { useCuratedEntries } from "../curated.js"
 
 /**
  * Hair-cut modal picker. 45 entries — too many for inline chips in the side
@@ -25,9 +26,10 @@ export const HairCutBrowser = memo(function HairCutBrowser({
   readonly className?: string
   readonly variant?: "full" | "compact"
 }) {
+  const STYLINGS = useCuratedEntries("styling", BASE_STYLINGS)
   const entries = useMemo<ReadonlyArray<Styling>>(
     () => STYLINGS.filter((s) => s.dimension === "hair-cut"),
-    [],
+    [STYLINGS],
   )
 
   return (

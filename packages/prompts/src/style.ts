@@ -21,6 +21,7 @@
  */
 
 import { resolveTerm } from "./term.js"
+import { overlayEntry } from "./catalog-overlay.js"
 
 export interface Style {
   readonly id: string
@@ -96,7 +97,21 @@ const styleById = new Map<string, Style>(STYLES.map((s) => [s.id, s]))
 
 export function getStyle(id: string | undefined | null): Style | undefined {
   if (!id) return undefined
-  return styleById.get(id)
+  return overlayEntry("style", id, styleById.get(id))
+}
+
+/**
+ * The inline `style` field on an image node is id-OR-free-text: a catalog id
+ * resolves to its hint, anything else is the user's own words and is folded
+ * verbatim. That fallback has a hole on a curated deployment — a style id the
+ * pack REMOVED resolves to nothing, so the fold would treat it as prose and
+ * ship the raw id. This tells the fold apart: true for an id the stock
+ * catalog knows but this deployment does not offer. Such a value is neither
+ * a hint nor prose; it is dropped.
+ */
+export function isDeniedStyleId(value: string | undefined | null): boolean {
+  if (!value) return false
+  return styleById.has(value) && getStyle(value) === undefined
 }
 
 export function getStyleLabel(id: string | undefined | null, fallback?: string): string {

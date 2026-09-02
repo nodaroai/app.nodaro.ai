@@ -37,7 +37,7 @@ import type {
   ManualReferenceImage,
   ImageProvider,
 } from "@/types/nodes"
-import { IMAGE_GEN_MODELS, MODIFY_IMAGE_MODELS, UPSCALE_IMAGE_MODELS, IMAGE_STYLE_PRESETS, getAspectRatiosForModel, IMAGE_RESOLUTION_OPTIONS, IMAGE_QUALITY_OPTIONS, TOPAZ_IMAGE_RESOLUTIONS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT, defaultResolutionFor, withoutDeniedModels } from "./model-options"
+import { IMAGE_GEN_MODELS, MODIFY_IMAGE_MODELS, UPSCALE_IMAGE_MODELS, imageStylePresets, getAspectRatiosForModel, IMAGE_RESOLUTION_OPTIONS, IMAGE_QUALITY_OPTIONS, TOPAZ_IMAGE_RESOLUTIONS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT, defaultResolutionFor, withoutDeniedModels } from "./model-options"
 import { ModelSelectOption } from "./model-select-option"
 import { ModelSearchSelect } from "./model-search-select"
 import { ModelDescriptionHint } from "./model-description-hint"
@@ -50,7 +50,7 @@ import { InjectedReferenceList } from "./injected-reference-list"
 import { removeMentionToken, makeRemoveWiredSource, appendSuppressedSlug } from "./injected-reference-helpers"
 import { ExtraRefsSection } from "./extra-refs-section"
 import type { RefImageItem } from "./tag-textarea"
-import { PromptEditor } from "@/lib/picker-ui"
+import { PromptEditor, useCatalogPacksVersion } from "@/lib/picker-ui"
 import { usePromptEditorRefs } from "@/components/nodes/inline-node-prompt/use-prompt-editor-refs"
 import { ReferenceSupportWarning } from "./reference-support-warning"
 import { DEFAULT_LABEL_BY_SOURCE, characterMentionSlug, locationMentionSlug, expandExtraRefsToConnectedReferences, getMaxImagePromptChars, getMaxNegativePromptChars, resolveEffectiveSourceType, sourceRefKey } from "@nodaro/shared"
@@ -148,6 +148,8 @@ function expandLocationSourceForAutocomplete(
 // REF_IMAGE_MAX_LIMITS / DEFAULT_REF_IMAGE_MAX live in @nodaro/shared (model-constants).
 
 function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, variableDisplayMode, nodeId }: ConfigProps<GenerateImageData> & { nodeId?: string }) {
+  // imageStylePresets() curates at read; subscribe so a late pack registration re-renders the dropdown.
+  useCatalogPacksVersion()
   // Re-render when the deployment's availability sets arrive: they land
   // after the first paint, and without a subscription this dropdown would
   // keep showing every model for the rest of the session.
@@ -271,7 +273,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [isCustomStyle, setIsCustomStyle] = useState(
-    () => !!data.style && !IMAGE_STYLE_PRESETS.some((p) => p.value === data.style)
+    () => !!data.style && !imageStylePresets().some((p) => p.value === data.style)
   )
   const styleNodeConnected = hasConnectedStyleNode(nodeId, nodes, edges ?? [])
   const [showAssetLibrary, setShowAssetLibrary] = useState(false)
@@ -464,7 +466,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
           <SelectTrigger aria-label={t("field.style")}><SelectValue placeholder={t("imgcfg.noStyle")} /></SelectTrigger>
           <SelectContent>
             <SelectItem value="__none__">{t("imgcfg.noStyle")}</SelectItem>
-            {IMAGE_STYLE_PRESETS.map((p) => (
+            {imageStylePresets().map((p) => (
               <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
             ))}
             <SelectItem value="__custom__">{t("imgcfg.customOption")}</SelectItem>
@@ -901,6 +903,8 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
 export const GenerateImageConfig = memo(GenerateImageConfigImpl)
 
 function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ModifyImageData> & { nodeId?: string }) {
+  // imageStylePresets() curates at read; subscribe so a late pack registration re-renders the dropdown.
+  useCatalogPacksVersion()
   const t = useT()
   const promptSnippets = useSnippetPool("image", "prompt")
   const negativeSnippets = useSnippetPool("image", "negative")
@@ -971,7 +975,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
   }, [currentProvider, data.aspectRatio]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [isCustomStyle, setIsCustomStyle] = useState(
-    () => !!data.style && !IMAGE_STYLE_PRESETS.some((p) => p.value === data.style)
+    () => !!data.style && !imageStylePresets().some((p) => p.value === data.style)
   )
   const styleNodeConnected = hasConnectedStyleNode(nodeId, nodes, edges ?? [])
   const [showAssetLibrary, setShowAssetLibrary] = useState(false)
@@ -1389,7 +1393,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           <SelectTrigger aria-label={t("field.style")}><SelectValue placeholder={t("imgcfg.noStyle")} /></SelectTrigger>
           <SelectContent>
             <SelectItem value="__none__">{t("imgcfg.noStyle")}</SelectItem>
-            {IMAGE_STYLE_PRESETS.map((p) => (
+            {imageStylePresets().map((p) => (
               <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
             ))}
             <SelectItem value="__custom__">{t("imgcfg.customOption")}</SelectItem>

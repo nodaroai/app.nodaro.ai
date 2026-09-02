@@ -44,6 +44,8 @@ import { VEHICLE_ICON_FOR } from "./icons/parameter-picker-icons-vehicles"
 import { WEAPON_ICON_FOR } from "./icons/parameter-picker-icons-weapons"
 
 import type { DimensionEntry } from "./pickers/dimension-modal-browser"
+import { hasCatalogPacksFor, catalogPacksVersion } from "@nodaro/prompts"
+import { curateEntries } from "./curated.js"
 
 export interface PickerCatalogEntry extends DimensionEntry {
   /** Optional group key for category headers. */
@@ -575,9 +577,32 @@ const PICKER_MAP = new Map<string, ParameterPickerMeta>(
   ALL_PICKERS.map((p) => [p.nodeType, p]),
 )
 
+// The tables above are built ONCE from the bundled constants, and the
+// presentation surfaces (/app, /present, /embed — anonymous, outside the
+// editor) render straight from them. A deployment's catalog packs compose a
+// different catalog; without this pass those surfaces showed the stock
+// entries on a curated deployment. Curation is applied at READ, memoized on
+// the pack version, and on mainline (no packs) the meta is returned by
+// identity — nothing allocates.
+let curatedMemo: { v: number; byType: Map<string, ParameterPickerMeta> } | null = null
+function curatedMeta(meta: ParameterPickerMeta): ParameterPickerMeta {
+  if (!hasCatalogPacksFor(meta.catalogId)) return meta
+  const v = catalogPacksVersion()
+  if (!curatedMemo || curatedMemo.v !== v) curatedMemo = { v, byType: new Map() }
+  const hit = curatedMemo.byType.get(meta.nodeType)
+  if (hit) return hit
+  const out: ParameterPickerMeta =
+    meta.kind === "single"
+      ? { ...meta, entries: curateEntries(meta.catalogId, meta.entries) }
+      : { ...meta, catalogEntries: curateEntries(meta.catalogId, meta.catalogEntries) }
+  curatedMemo.byType.set(meta.nodeType, out)
+  return out
+}
+
 export function getParameterPickerMeta(nodeType: string | undefined | null): ParameterPickerMeta | undefined {
   if (!nodeType) return undefined
-  return PICKER_MAP.get(nodeType)
+  const meta = PICKER_MAP.get(nodeType)
+  return meta ? curatedMeta(meta) : undefined
 }
 
 

@@ -2,11 +2,12 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { VOICE_PACES, VOICE_EMOTIONS, VOICE_ARCHETYPES, type VoiceDeliveryEntry } from "@nodaro/prompts"
+import { VOICE_PACES as BASE_VOICE_PACES, VOICE_EMOTIONS as BASE_VOICE_EMOTIONS, VOICE_ARCHETYPES as BASE_VOICE_ARCHETYPES, type VoiceDeliveryEntry } from "@nodaro/prompts"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog } from "../i18n"
 import { SoundDimensionSection } from "./sound-dimension-section"
+import { useCuratedEntries } from "../curated.js"
 
 export interface VoiceDeliveryValue {
   readonly pace?: string
@@ -26,11 +27,15 @@ interface Section {
   readonly entries: ReadonlyArray<VoiceDeliveryEntry>
 }
 
-const SECTIONS: ReadonlyArray<Section> = [
-  { key: "pace",       label: "Pace",       entries: VOICE_PACES       },
-  { key: "emotion",    label: "Emotion",    entries: VOICE_EMOTIONS    },
-  { key: "archetype",  label: "Archetype",  entries: VOICE_ARCHETYPES  },
-]
+// Built per render from the CURATED lists, not at module scope from the
+// bundled constants — a deployment's packs may remove or reword entries.
+function buildSections(VOICE_ARCHETYPES: typeof BASE_VOICE_ARCHETYPES, VOICE_EMOTIONS: typeof BASE_VOICE_EMOTIONS, VOICE_PACES: typeof BASE_VOICE_PACES): ReadonlyArray<Section> {
+  return [
+    { key: "pace",       label: "Pace",       entries: VOICE_PACES       },
+    { key: "emotion",    label: "Emotion",    entries: VOICE_EMOTIONS    },
+    { key: "archetype",  label: "Archetype",  entries: VOICE_ARCHETYPES  },
+  ]
+}
 
 /**
  * Three single-select dimensions (pace / emotion / archetype). Each
@@ -42,6 +47,13 @@ export const VoiceDeliveryPicker = memo(function VoiceDeliveryPicker({
   onChange,
   className,
 }: VoiceDeliveryPickerProps) {
+  // Curated view of the bundled catalog: filtered to ids this deployment
+  // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
+  // registration re-renders. Identity-equal to the base on mainline.
+  const VOICE_PACES = useCuratedEntries("voice-delivery", BASE_VOICE_PACES)
+  const VOICE_EMOTIONS = useCuratedEntries("voice-delivery", BASE_VOICE_EMOTIONS)
+  const VOICE_ARCHETYPES = useCuratedEntries("voice-delivery", BASE_VOICE_ARCHETYPES)
+  const SECTIONS = useMemo(() => buildSections(VOICE_ARCHETYPES, VOICE_EMOTIONS, VOICE_PACES), [VOICE_ARCHETYPES, VOICE_EMOTIONS, VOICE_PACES])
   const [query, setQuery] = useState("")
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("voice-delivery")
 

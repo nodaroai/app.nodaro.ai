@@ -18,6 +18,7 @@
  */
 
 import { resolveTerm, type PickerHintMode } from "./term.js"
+import { overlayEntry } from "./catalog-overlay.js"
 
 export type ActionFxCategory =
   | "disaster"
@@ -224,7 +225,7 @@ const actionFxById = new Map<string, ActionFx>(ACTION_FX.map((fx) => [fx.id, fx]
 
 export function getActionFx(id: string | undefined | null): ActionFx | undefined {
   if (!id) return undefined
-  return actionFxById.get(id)
+  return overlayEntry("action-fx", id, actionFxById.get(id))
 }
 
 export function getActionFxLabel(id: string | undefined | null, fallback?: string): string {

@@ -35,11 +35,12 @@ import {
   Sparkles,
   Shield,
 } from "lucide-react"
-import { CHARACTER_FX, CHARACTER_FX_CATEGORY_LABELS, CHARACTER_FX_CATEGORY_ORDER, type CharacterFx, type CharacterFxCategory } from "@nodaro/prompts"
+import { CHARACTER_FX as BASE_CHARACTER_FX, CHARACTER_FX_CATEGORY_LABELS, CHARACTER_FX_CATEGORY_ORDER, type CharacterFx, type CharacterFxCategory } from "@nodaro/prompts"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog } from "../i18n"
 import { MultiPickBadge, useMultiPick } from "./multi-pick-ui"
+import { useCuratedEntries } from "../curated.js"
 
 // 57 entries — lucide icons matched to each effect. Fallback: <Sparkles />
 const CHARACTER_FX_ICONS: Record<string, ReactNode> = {
@@ -136,6 +137,10 @@ export const CharacterFxPicker = memo(function CharacterFxPicker({
   className,
   maxSelected = 2,
 }: CharacterFxPickerProps) {
+  // Curated view of the bundled catalog: filtered to ids this deployment
+  // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
+  // registration re-renders. Identity-equal to the base on mainline.
+  const CHARACTER_FX = useCuratedEntries("character-fx", BASE_CHARACTER_FX)
   const [query, setQuery] = useState("")
   const [activeTab, setActiveTab] = useState<CharacterFxCategory>("transformation")
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("character-fx")

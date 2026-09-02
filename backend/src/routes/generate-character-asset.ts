@@ -6,7 +6,8 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractNodeId } from "../lib/request-helpers.js"
-import { resolveEntityImageCreditIdentifier } from "../lib/entity-credit-identifier.js"
+import { resolveEntityImageCreditIdentifier, resolveEntityImageParams } from "../lib/entity-credit-identifier.js"
+import { applySnappedLevers } from "../lib/image-gen-normalize.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { llmComplete } from "../lib/llm-client.js"
@@ -63,8 +64,11 @@ const generateCharacterAssetBody = z.object({
   realLifeRefs: z.array(safeUrlSchema).max(5).optional(),
   provider: z.string().optional().default("nano-banana"),
   // Credit-affecting output levers (mirrors generate-image). The enums are
-  // PERMISSIVE on purpose — a value the chosen model doesn't support is
-  // ignored by the per-provider param routing / worker fail-safe, never 400d.
+  // PERMISSIVE on purpose — a value the chosen model doesn't support is never
+  // 400d. It is SNAPPED to the model's catalog entry inside
+  // `resolveEntityImageParams` (the resolver the CHECK and the DEBIT share) and
+  // the snapped value is what gets recorded and enqueued, so an unsupported
+  // lever no longer rides through to the provider.
   resolution: z.enum(["1K", "2K", "4K", "0.5 MP", "1 MP", "2 MP", "4 MP"]).optional(),
   quality: z.enum(["medium", "high", "basic"]).optional(),
   userId: z.string().uuid().optional(),
@@ -435,7 +439,18 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
       assembledReferenceUrls.length,
       entityImageRefCap(parsed.data.provider),
     )
-    const modelIdentifier = resolveEntityImageCreditIdentifier(parsed.data, effectiveRefCount)
+    const entityParams = resolveEntityImageParams(parsed.data, effectiveRefCount)
+    const modelIdentifier = entityParams.identifier
+    // Record and enqueue the levers this run was PRICED on. `aspectRatio` is
+    // pinned to the caller's own value on purpose: the entity lane owns it
+    // elsewhere (`resolveCharacterAspectRatio` here, `clampAspectRatioToModel`
+    // in the worker), so the image normalizer never sees it and a write-back
+    // must not be allowed to erase it.
+    applySnappedLevers(
+      parsed.data,
+      { aspectRatio: parsed.data.aspectRatio, resolution: entityParams.resolution, quality: entityParams.quality },
+      generateCharacterAssetBody,
+    )
 
     // W1-a minor-age floor — TWO signals, decided ONCE, before assembly.
     // `isMinorAge` reads the row's picker value; `containsMinorAgeHint` reads

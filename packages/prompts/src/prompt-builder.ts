@@ -6,7 +6,7 @@
 
 import { resolveTemplate, applyTemplate } from "./prompt-templates.js"
 import { NATIVE_NEGATIVE_PROMPT_MODELS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, imageReferenceLimit, getMaxImagePromptChars, getMaxNegativePromptChars } from "@nodaro/shared"
-import { getStylePromptHint } from "./style.js"
+import { getStylePromptHint, isDeniedStyleId } from "./style.js"
 import {
   STYLE_SECTION_GAP,
   STYLE_SECTION_HEADER,
@@ -2812,7 +2812,7 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
     }
 
     const styleText = style?.trim()
-    const styleLine = styleText ? `Style: ${getStylePromptHint(styleText) || styleText}` : ""
+    const styleLine = styleText && !isDeniedStyleId(styleText) ? `Style: ${getStylePromptHint(styleText) || styleText}` : ""
 
     const negPrompt = negativePrompt?.trim()
     let nativeNegativePrompt: string | undefined
@@ -2937,7 +2937,7 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
   // the richer promptHint; otherwise fall back to the raw text (covers custom
   // free-text styles that don't match a preset).
   const styleText = style?.trim()
-  const styleLine = styleText ? `Style: ${getStylePromptHint(styleText) || styleText}` : ""
+  const styleLine = styleText && !isDeniedStyleId(styleText) ? `Style: ${getStylePromptHint(styleText) || styleText}` : ""
 
   // Handle negative prompt: native support vs prompt-appended
   const negPrompt = negativePrompt?.trim()

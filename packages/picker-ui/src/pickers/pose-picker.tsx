@@ -2,11 +2,12 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { POSES, POSE_CATEGORY_LABELS, POSE_CATEGORY_ORDER, type Pose, type PoseCategory } from "@nodaro/prompts"
+import { POSES as BASE_POSES, POSE_CATEGORY_LABELS, POSE_CATEGORY_ORDER, type Pose, type PoseCategory } from "@nodaro/prompts"
 import { Input } from "../ui/input"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog } from "../i18n"
+import { useCuratedEntries } from "../curated.js"
 
 interface PosePickerProps {
   readonly value: string
@@ -24,6 +25,10 @@ export const PosePicker = memo(function PosePicker({
   onValueChange,
   className,
 }: PosePickerProps) {
+  // Curated view of the bundled catalog: filtered to ids this deployment
+  // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
+  // registration re-renders. Identity-equal to the base on mainline.
+  const POSES = useCuratedEntries("pose", BASE_POSES)
   const [query, setQuery] = useState("")
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("pose")
 

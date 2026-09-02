@@ -2,11 +2,12 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { COMPOSITION_EFFECTS } from "@nodaro/prompts"
+import { COMPOSITION_EFFECTS as BASE_COMPOSITION_EFFECTS } from "@nodaro/prompts"
 import { Input } from "../ui/input"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog } from "../i18n"
+import { useCuratedEntries } from "../curated.js"
 
 interface CompositionEffectsPickerProps {
   readonly value: string
@@ -19,6 +20,10 @@ export const CompositionEffectsPicker = memo(function CompositionEffectsPicker({
   onValueChange,
   className,
 }: CompositionEffectsPickerProps) {
+  // Curated view of the bundled catalog: filtered to ids this deployment
+  // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
+  // registration re-renders. Identity-equal to the base on mainline.
+  const COMPOSITION_EFFECTS = useCuratedEntries("composition-effects", BASE_COMPOSITION_EFFECTS)
   const [query, setQuery] = useState("")
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("composition-effects")
 

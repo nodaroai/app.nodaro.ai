@@ -78,6 +78,7 @@ import { generateLocationAssetRoutes } from "../generate-location-asset.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
+import { resolveEntityImageParams } from "../../lib/entity-credit-identifier.js"
 
 // ---------------------------------------------------------------------------
 // Test app setup
@@ -495,7 +496,7 @@ describe("POST /v1/generate-location-asset — extended asset types (Task 9)", (
 // ---------------------------------------------------------------------------
 
 describe("POST /v1/generate-location-asset — quality / resolution levers", () => {
-  it("quality=high + gpt-image reserves the composite id and threads levers to the queue", async () => {
+  it("quality=high + gpt-image reserves the composite id and threads the SNAPPED levers to the queue", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/generate-location-asset",
@@ -514,9 +515,13 @@ describe("POST /v1/generate-location-asset — quality / resolution levers", () 
     expect(vi.mocked(reserveCreditsForJob)).toHaveBeenCalledWith(
       expect.anything(), expect.anything(), "job-1", "gpt-image:high",
     )
+    // `resolution: "1K"` is DROPPED: gpt-image declares no resolutions at all,
+    // and the catalog snap now removes a lever the model does not have instead
+    // of forwarding it into the worker's `extraParams`. `quality: "high"` is
+    // declared, so it survives and keeps its composite price.
     expect(videoQueue.add).toHaveBeenCalledWith(
       "generate-location-asset",
-      expect.objectContaining({ quality: "high", resolution: "1K" }),
+      expect.objectContaining({ quality: "high", resolution: undefined }),
     )
   })
 
@@ -544,5 +549,80 @@ describe("POST /v1/generate-location-asset — quality / resolution levers", () 
 
     expect(res.statusCode).toBe(400)
     expect(res.json().error.code).toBe("validation_error")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Catalog-snap parity: CHECK === DEBIT === input_data === queue payload
+// ---------------------------------------------------------------------------
+/**
+ * `resolution` / `quality` are PRICING dimensions on this route (composite ids
+ * like "gpt-image:high"), and the entity worker forwards both verbatim into
+ * `extraParams`. So the catalog snap lives inside the ONE resolver the
+ * preHandler CHECK and the handler DEBIT share — anything else splits the two,
+ * and `commit_credits` never collects an upward delta (the reserve IS the
+ * charge). `creditGuard` is mocked to a no-op here, so the CHECK is exercised
+ * by calling that exact resolver directly on the same raw body.
+ *
+ * The assertion is four-way on purpose: a run that reserves one tier, records
+ * another on the job row and sends a third to the provider is the exact bug
+ * this block exists to make impossible.
+ */
+describe("POST /v1/generate-location-asset — catalog snap parity", () => {
+  const BASE = { assetType: "seasons", variant: "winter", name: "Forest Glade" }
+
+  async function run(payload: Record<string, unknown>) {
+    // Re-point `jobs` at a capturing insert (beforeEach's chain isn't exposed).
+    const jobSingle = vi.fn().mockResolvedValue({ data: { id: "job-1" }, error: null })
+    const jobSelect = vi.fn().mockReturnValue({ single: jobSingle })
+    const jobInsert = vi.fn().mockReturnValue({ select: jobSelect })
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "jobs") return { insert: jobInsert } as never
+      return {} as never
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-location-asset",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { ...BASE, ...payload },
+    })
+    expect(res.statusCode).toBe(200)
+    return {
+      check: resolveEntityImageParams({ ...BASE, ...payload }).identifier,
+      debit: vi.mocked(reserveCreditsForJob).mock.calls.at(-1)?.[3],
+      inputData: (jobInsert.mock.calls[0][0] as { input_data: Record<string, unknown> }).input_data,
+      enqueued: vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>,
+    }
+  }
+
+  it("snaps a quality gpt-image does not accept, everywhere at once", async () => {
+    const { check, debit, inputData, enqueued } = await run({ provider: "gpt-image", quality: "basic" })
+    expect(check).toBe(debit)
+    expect(check).toBe("gpt-image")
+    expect(inputData.quality).toBe("medium")
+    expect(enqueued.quality).toBe("medium")
+  })
+
+  it("drops a resolution nano-banana does not have (never reaches the worker)", async () => {
+    const { check, debit, inputData, enqueued } = await run({ provider: "nano-banana", resolution: "2K" })
+    expect(check).toBe(debit)
+    expect(check).toBe("nano-banana")
+    expect(inputData.resolution).toBeUndefined()
+    expect(enqueued.resolution).toBeUndefined()
+  })
+
+  it("leaves a catalog-valid pair byte-identical, composite price included", async () => {
+    const { check, debit, inputData, enqueued } = await run({ provider: "nano-banana-pro", resolution: "4K" })
+    expect(check).toBe(debit)
+    expect(check).toBe("nano-banana-pro:4K")
+    expect(inputData.resolution).toBe("4K")
+    expect(enqueued.resolution).toBe("4K")
+  })
+
+  it("never lets the snap erase the caller's aspect ratio", async () => {
+    const { enqueued, inputData } = await run({ provider: "gpt-image", quality: "basic", aspectRatio: "16:9" })
+    expect(enqueued.aspectRatio).toBe("16:9")
+    expect(inputData.aspectRatio).toBe("16:9")
   })
 })

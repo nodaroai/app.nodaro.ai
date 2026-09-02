@@ -53,6 +53,9 @@ import { resolveTerm, type PickerHintMode } from "./term.js"
 // `picker-catalogs.js`) and would reopen the person → age-floor →
 // picker-catalogs load-time cycle if imported from here.
 import { isMinorAge } from "./age-signal.js"
+// Same discipline: catalog-overlay.ts imports only the pack registry, never
+// the catalog funnel, so this is cycle-safe from every catalog module.
+import { overlayEntry } from "./catalog-overlay.js"
 
 export type StylingDimension =
   | "makeup"
@@ -586,7 +589,7 @@ const stylingById = new Map<string, Styling>(STYLINGS.map((s) => [s.id, s]))
 
 export function getStyling(id: string | undefined | null): Styling | undefined {
   if (!id) return undefined
-  return stylingById.get(id)
+  return overlayEntry("styling", id, stylingById.get(id))
 }
 
 export function getStylingLabel(id: string | undefined | null, fallback?: string): string {
