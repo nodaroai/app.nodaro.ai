@@ -11,6 +11,9 @@
 import { useCallback, useMemo, useRef, useState } from "react"
 import { Link2, Unlink } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useT } from "@/lib/i18n"
+import { useLocalizeHandleLabel, useLocalizeNodeLabel } from "@/lib/i18n/labels"
+import { useAppDir } from "@/lib/locale-store"
 import { useClickOutside } from "@/hooks/use-click-outside"
 import type { ConnectionOption, ConnectionOptions } from "@/lib/enumerate-connection-options"
 
@@ -34,6 +37,18 @@ type Row =
   | { kind: "none" }
 
 export function ConnectNodeDialog({ focusedLabel, newLabel, options, onConfirm, onCancel }: ConnectNodeDialogProps) {
+  const t = useT()
+  // Node names come in as the English defaults (the same strings the canvas
+  // persists); handle names as the registry's English labels. Both localize
+  // through the tables the picker and the pips already use, so this dialog
+  // reads like the surfaces on either side of it. Custom names pass through.
+  const localizeNode = useLocalizeNodeLabel()
+  const localizeHandle = useLocalizeHandleLabel()
+  // Read live, never a `rtl:` variant (rtl-direction-guards.test.ts): the
+  // flow glyphs must point along the reading direction.
+  const isRtl = useAppDir() === "rtl"
+  const newName = localizeNode(newLabel)
+  const focusedName = localizeNode(focusedLabel)
   const rows = useMemo<Row[]>(
     () => [
       ...options.handles.map((opt) => ({ kind: "handle" as const, opt })),
@@ -43,7 +58,12 @@ export function ConnectNodeDialog({ focusedLabel, newLabel, options, onConfirm, 
     [options],
   )
 
-  const [name, setName] = useState(newLabel)
+  // Empty, with the localized default as placeholder. Seeding the field with
+  // the English default shows raw English under a Hebrew heading; seeding it
+  // with the Hebrew name would persist a custom label that never localizes
+  // back (the canvas localizes by the English default string). An untouched
+  // field still confirms the English default — see `confirm`.
+  const [name, setName] = useState("")
   const [highlight, setHighlight] = useState(options.handles.length > 0 ? 0 : rows.length - 1)
 
   const dialogRef = useRef<HTMLDivElement>(null)
@@ -91,7 +111,7 @@ export function ConnectNodeDialog({ focusedLabel, newLabel, options, onConfirm, 
 
   const rowClass = (active: boolean) =>
     cn(
-      "w-full flex items-center gap-3 px-4 py-2 text-left transition-colors relative",
+      "w-full flex items-center gap-3 px-4 py-2 text-start transition-colors relative",
       active ? "bg-[#F1F5F9] dark:bg-[#2D2D2D]" : "hover:bg-[#F8FAFC] dark:hover:bg-[#252525]",
     )
 
@@ -99,7 +119,7 @@ export function ConnectNodeDialog({ focusedLabel, newLabel, options, onConfirm, 
     <div
       ref={dialogRef}
       role="dialog"
-      aria-label={`Connect ${newLabel} to ${focusedLabel}`}
+      aria-label={t("connect.dialogAria", { newLabel: newName, focusedLabel: focusedName })}
       onKeyDown={onKeyDown}
       className={cn(
         "fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[100] w-[28rem] max-w-[calc(100vw-16px)] flex flex-col",
@@ -109,18 +129,19 @@ export function ConnectNodeDialog({ focusedLabel, newLabel, options, onConfirm, 
       {/* Header */}
       <div className="px-4 py-3 border-b border-[#E2E8F0] dark:border-[#2D2D2D]">
         <h3 className="text-[15px] font-semibold text-[#1E293B] dark:text-white flex items-center gap-2">
-          <span>Add &ldquo;{newLabel}&rdquo;</span>
-          <span className="text-[#94A3B8]">&rarr;</span>
-          <span className="text-[#ff0073]">{focusedLabel}</span>
+          <span>{t("connect.title", { newLabel: newName })}</span>
+          <span className="text-[#94A3B8]">{isRtl ? "←" : "→"}</span>
+          <span className="text-[#ff0073]">{focusedName}</span>
         </h3>
       </div>
 
       {/* Name */}
       <div className="px-4 pt-3 pb-1">
-        <label className="block text-xs font-semibold text-[#475569] dark:text-[#cbd5e1] mb-1.5">Name</label>
+        <label className="block text-xs font-semibold text-[#475569] dark:text-[#cbd5e1] mb-1.5">{t("connect.name")}</label>
         <input
           autoFocus
-          aria-label="Node name"
+          aria-label={t("connect.nameAria")}
+          placeholder={newName}
           value={name}
           onChange={(e) => setName(e.target.value)}
           className={cn(
@@ -133,7 +154,7 @@ export function ConnectNodeDialog({ focusedLabel, newLabel, options, onConfirm, 
 
       <div className="py-1 max-h-[50vh] overflow-y-auto">
         {options.handles.length > 0 && (
-          <div className="px-4 pt-2 pb-1 text-[10.5px] font-bold tracking-wider uppercase text-[#94A3B8]">Handles</div>
+          <div className="px-4 pt-2 pb-1 text-[10.5px] font-bold tracking-wider uppercase text-[#94A3B8]">{t("connect.handles")}</div>
         )}
         {rows.map((row, i) => {
           if (row.kind !== "handle") return null
@@ -147,12 +168,12 @@ export function ConnectNodeDialog({ focusedLabel, newLabel, options, onConfirm, 
             <button
               key={`h-${row.opt.direction}-${row.opt.fHandle}-${row.opt.nHandle}`}
               type="button"
-              aria-label={`${isAfter ? "After" : "Before"}: wires into ${isAfter ? "new" : "current"} node, ${row.opt.label}`}
+              aria-label={t(isAfter ? "connect.optionAriaAfter" : "connect.optionAriaBefore", { handle: localizeHandle(row.opt.label) })}
               className={rowClass(i === highlight)}
               onMouseEnter={() => setHighlight(i)}
               onClick={() => confirm(i)}
             >
-              {i === highlight && <span className="absolute left-0 top-1 bottom-1 w-[2.5px] rounded bg-[#ff0073]" />}
+              {i === highlight && <span className="absolute start-0 top-1 bottom-1 w-[2.5px] rounded bg-[#ff0073]" />}
               <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: row.opt.color ?? "#94A3B8" }} />
               <span className="flex flex-1 items-center gap-1.5 min-w-0">
                 <span
@@ -164,26 +185,29 @@ export function ConnectNodeDialog({ focusedLabel, newLabel, options, onConfirm, 
                       : "bg-[#3B82F6]/15 text-[#2563EB] dark:text-[#60A5FA]",
                   )}
                 >
-                  {isAfter ? "After" : "Before"}
+                  {t(isAfter ? "connect.after" : "connect.before")}
                 </span>
-                <span className="shrink-0 text-xs text-[#94A3B8]">wires into</span>
+                <span className="shrink-0 text-xs text-[#94A3B8]">{t("connect.wiresInto")}</span>
                 <span
                   className={cn(
                     "shrink-0 text-xs font-semibold",
                     isAfter ? "text-[#1E293B] dark:text-[#e8eaed]" : "text-[#ff0073]",
                   )}
                 >
-                  {isAfter ? "New" : "Current"}
+                  {t(isAfter ? "connect.roleNew" : "connect.roleCurrent")}
                 </span>
-                <span className="shrink-0 text-[#94A3B8]" aria-hidden="true">&rsaquo;</span>
-                <span className="flex-1 truncate text-sm font-medium text-[#1E293B] dark:text-[#e8eaed]">{row.opt.label}</span>
+                {/* U+203A is Bidi_Mirrored: under dir="rtl" the browser draws it
+                    pointing left on its own. A hand-picked ‹ would be mirrored
+                    right back to › — do not add an isRtl branch here. */}
+                <span className="shrink-0 text-[#94A3B8]" aria-hidden="true">›</span>
+                <span className="flex-1 truncate text-sm font-medium text-[#1E293B] dark:text-[#e8eaed]">{localizeHandle(row.opt.label)}</span>
               </span>
             </button>
           )
         })}
 
         {options.variables.length > 0 && (
-          <div className="px-4 pt-2 pb-1 text-[10.5px] font-bold tracking-wider uppercase text-[#94A3B8]">Missing variables</div>
+          <div className="px-4 pt-2 pb-1 text-[10.5px] font-bold tracking-wider uppercase text-[#94A3B8]">{t("connect.missingVariables")}</div>
         )}
         {rows.map((row, i) => {
           if (row.kind === "variable") {
@@ -195,10 +219,10 @@ export function ConnectNodeDialog({ focusedLabel, newLabel, options, onConfirm, 
                 onMouseEnter={() => select(i)}
                 onClick={() => confirm(i)}
               >
-                {i === highlight && <span className="absolute left-0 top-1 bottom-1 w-[2.5px] rounded bg-[#ff0073]" />}
+                {i === highlight && <span className="absolute start-0 top-1 bottom-1 w-[2.5px] rounded bg-[#ff0073]" />}
                 <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 bg-[#F59E0B]" />
                 <span className="flex-1 text-sm font-semibold text-[#d97706] dark:text-[#F59E0B]">{`{${row.opt.variableName}}`}</span>
-                <span className="text-xs text-[#94A3B8]">{`names node "${row.opt.variableName}" · wires ${row.opt.label}`}</span>
+                <span className="text-xs text-[#94A3B8]">{t("connect.variableHint", { name: row.opt.variableName ?? "", handle: localizeHandle(row.opt.label) })}</span>
               </button>
             )
           }
@@ -210,9 +234,9 @@ export function ConnectNodeDialog({ focusedLabel, newLabel, options, onConfirm, 
           const i = rows.length - 1
           return (
             <button type="button" className={rowClass(i === highlight)} onMouseEnter={() => setHighlight(i)} onClick={() => confirm(i)}>
-              {i === highlight && <span className="absolute left-0 top-1 bottom-1 w-[2.5px] rounded bg-[#ff0073]" />}
+              {i === highlight && <span className="absolute start-0 top-1 bottom-1 w-[2.5px] rounded bg-[#ff0073]" />}
               <Unlink className="w-[15px] h-[15px] text-[#94A3B8]" />
-              <span className="flex-1 text-sm font-medium text-[#94A3B8]">Don&rsquo;t connect (just add)</span>
+              <span className="flex-1 text-sm font-medium text-[#94A3B8]">{t("connect.dontConnect")}</span>
             </button>
           )
         })()}
@@ -220,16 +244,16 @@ export function ConnectNodeDialog({ focusedLabel, newLabel, options, onConfirm, 
 
       <div className="px-4 py-2.5 border-t border-[#E2E8F0] dark:border-[#2D2D2D] flex gap-3.5 text-[11.5px] text-[#94A3B8]">
         <span className="flex items-center gap-1">
-          <Link2 className="w-3 h-3" /> auto-connect
+          <Link2 className="w-3 h-3" /> {t("connect.autoConnect")}
         </span>
         <span>
-          <b className="text-[#64748B] dark:text-[#cbd5e1]">↑↓</b> navigate
+          <b className="text-[#64748B] dark:text-[#cbd5e1]">↑↓</b> {t("connect.navigate")}
         </span>
         <span>
-          <b className="text-[#64748B] dark:text-[#cbd5e1]">↵</b> confirm
+          <b className="text-[#64748B] dark:text-[#cbd5e1]">↵</b> {t("connect.confirm")}
         </span>
         <span>
-          <b className="text-[#64748B] dark:text-[#cbd5e1]">esc</b> cancel
+          <b className="text-[#64748B] dark:text-[#cbd5e1]">esc</b> {t("connect.cancel")}
         </span>
       </div>
     </div>

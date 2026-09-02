@@ -5,7 +5,7 @@ import Fastify, { type FastifyInstance } from "fastify"
 // Mocks — hoisted before any route import
 // ---------------------------------------------------------------------------
 
-const { mockVideoQueueAdd, mockReserveCreditsForJob, mockSunoStyleBoost, mockCommitCredits, mockRefundCredits } = vi.hoisted(() => ({
+const { mockVideoQueueAdd, mockReserveCreditsForJob, mockSunoStyleBoost, mockCommitCredits, mockRefundCredits, mockJobInsert } = vi.hoisted(() => ({
   mockVideoQueueAdd: vi.fn().mockResolvedValue({ id: "queue-job-1" }),
   mockReserveCreditsForJob: vi.fn().mockResolvedValue({
     usageLogId: "usage-1",
@@ -15,6 +15,10 @@ const { mockVideoQueueAdd, mockReserveCreditsForJob, mockSunoStyleBoost, mockCom
   mockSunoStyleBoost: vi.fn().mockResolvedValue({ text: "boosted style text" }),
   mockCommitCredits: vi.fn().mockResolvedValue(undefined),
   mockRefundCredits: vi.fn().mockResolvedValue(undefined),
+  // Spies the row `insertJob` passes to `.insert(...)`, so a test can assert
+  // `input_data` (the UNCLAMPED original) separately from the enqueued
+  // (CLAMPED) payload asserted via mockVideoQueueAdd.
+  mockJobInsert: vi.fn(),
 }))
 
 vi.mock("@/lib/supabase.js", () => {
@@ -126,7 +130,7 @@ beforeEach(async () => {
   // Default supabase mock: insert returns a job row
   const mockFrom = vi.mocked(supabase.from)
   mockFrom.mockReturnValue({
-    insert: vi.fn().mockReturnValue({
+    insert: mockJobInsert.mockReturnValue({
       select: vi.fn().mockReturnValue({
         single: vi.fn().mockResolvedValue({
           data: { id: TEST_JOB_ID },
@@ -761,5 +765,148 @@ describe("POST /v1/suno/upload-extend", () => {
       "suno-upload-extend",
       expect.objectContaining({ instrumental: true }),
     )
+  })
+})
+
+// ==========================================================================
+// Suno text ceilings and clamps (P7)
+// ==========================================================================
+
+describe("Suno text ceilings and clamps (P7)", () => {
+  const long = (n: number) => "a".repeat(n)
+
+  it("accepts a 10000-char generate prompt instead of 400ing, and clamps it to 5000", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/suno/generate",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { prompt: long(10_000), model: "V5_5", customMode: true },
+    })
+    expect(res.statusCode).toBe(200)
+    const enqueued = mockVideoQueueAdd.mock.calls.at(-1)?.[1] as { prompt?: string }
+    expect(enqueued.prompt?.length).toBe(5000)
+  })
+
+  it("clamps the cover prompt and lyrics to the version cap (no clamp existed here)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/suno/cover",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        prompt: long(9000),
+        lyrics: long(9000),
+        uploadUrl: "https://example.com/a.mp3",
+        model: "V4",
+        customMode: true,
+      },
+    })
+    expect(res.statusCode).toBe(200)
+    const enqueued = mockVideoQueueAdd.mock.calls.at(-1)?.[1] as { prompt?: string; lyrics?: string }
+    // V4 custom mode = 3000
+    expect(enqueued.prompt?.length).toBe(3000)
+    expect(enqueued.lyrics?.length).toBe(3000)
+  })
+
+  it("clamps the extend prompt to the version cap", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/suno/extend",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { audioId: "track-1", prompt: long(9000), model: "V5_5" },
+    })
+    expect(res.statusCode).toBe(200)
+    const enqueued = mockVideoQueueAdd.mock.calls.at(-1)?.[1] as { prompt?: string }
+    expect(enqueued.prompt?.length).toBe(5000)
+  })
+
+  it("clamps the mashup style to the version cap (mashup has no prompt field)", async () => {
+    // 900, NOT 4000: `sunoMashupBody.style` is `z.string().max(1000)` and this
+    // PR deliberately does not raise the style bounds, so a 4000-char style is
+    // a Zod 400 and could never reach the clamp under test.
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/suno/mashup",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        uploadUrlList: ["https://example.com/a.mp3", "https://example.com/b.mp3"],
+        model: "V4",
+        style: long(900),
+      },
+    })
+    expect(res.statusCode).toBe(200)
+    const enqueued = mockVideoQueueAdd.mock.calls.at(-1)?.[1] as { style?: string }
+    expect(enqueued.style?.length).toBe(200) // V4 style cap
+  })
+
+  it("clamps replace-section prompt + fullLyrics", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/suno/replace-section",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        taskId: "t1", audioId: "a1", infillStartS: 0, infillEndS: 20,
+        prompt: long(9000), fullLyrics: long(9000), tags: "rock",
+      },
+    })
+    expect(res.statusCode).toBe(200)
+    const enqueued = mockVideoQueueAdd.mock.calls.at(-1)?.[1] as { prompt?: string; fullLyrics?: string }
+    expect(enqueued.prompt?.length).toBe(5000)
+    expect(enqueued.fullLyrics?.length).toBe(5000)
+  })
+
+  it("clamps style-boost content", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/suno/style-boost",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { content: long(9000) },
+    })
+    expect(res.statusCode).toBe(200)
+    // sunoStyleBoost takes an OBJECT, not a bare string — the existing case at
+    // suno.test.ts:597 asserts `toHaveBeenCalledWith({ content: "rock pop" })`.
+    expect(mockSunoStyleBoost.mock.calls.at(-1)?.[0].content).toHaveLength(5000)
+  })
+
+  it("still rejects past the hard ceiling", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/suno/generate",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { prompt: long(30_001), model: "V5_5" },
+    })
+    expect(res.statusCode).toBe(400)
+  })
+
+  it("clamps upload-extend style to the version cap (no prompt field, no customMode flag)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/suno/upload-extend",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        model: "V4",
+        style: long(900),
+        uploadUrl: "https://example.com/a.mp3",
+        continueAt: 10,
+      },
+    })
+    expect(res.statusCode).toBe(200)
+    const enqueued = mockVideoQueueAdd.mock.calls.at(-1)?.[1] as { style?: string }
+    expect(enqueued.style?.length).toBe(200) // V4 style cap
+  })
+
+  it("input_data keeps the UNCLAMPED text the user submitted; the enqueued payload is clamped", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/suno/generate",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { prompt: long(10_000), model: "V5_5", customMode: true },
+    })
+    expect(res.statusCode).toBe(200)
+
+    const insertedRow = mockJobInsert.mock.calls.at(-1)?.[0] as { input_data?: { prompt?: string } }
+    expect(insertedRow.input_data?.prompt).toHaveLength(10_000)
+
+    const enqueued = mockVideoQueueAdd.mock.calls.at(-1)?.[1] as { prompt?: string }
+    expect(enqueued.prompt).toHaveLength(5000)
   })
 })

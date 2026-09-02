@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { X, Play, Maximize2, Minimize2, Loader2, FastForward } from "lucide-react"
 import { useIsMobile } from "@/hooks/use-is-mobile"
+import { useAppDir } from "@/lib/locale-store"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -15,6 +16,7 @@ import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 const Kling3DirectorModal = lazy(() => import("@/components/editor/kling3-director-modal").then(m => ({ default: m.Kling3DirectorModal })))
 import { GenerateButton } from "@/ee/components/credits/GenerateButton"
 import { RUN_BUTTON_CLASS } from "@/lib/run-button-style"
+import { videoImageGateBlocked } from "@/lib/video-image-gate"
 import { useProvidersCreditsSum } from "@/ee/hooks/use-providers-credits-sum"
 import { createClient } from "@/lib/supabase"
 import { pipelinesApi } from "@/lib/pipelines-api"
@@ -566,7 +568,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
         <TextToVideoConfig {...configProps} nodeId={selectedNodeId} />
         {(nodeData as TextToVideoData).provider === "kling-3.0" && (
           <Button variant="outline" className="w-full mt-2" onClick={onExpandDirector}>
-            <Maximize2 className="w-4 h-4 mr-2" />
+            <Maximize2 className="w-4 h-4 me-2" />
             {t("configPanel.expandDirector")}
           </Button>
         )}
@@ -581,7 +583,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
         <GenerateVideoConfig {...configProps} onUpdateNode={updateNodeData} nodeId={selectedNodeId} />
         {(nodeData as GenerateVideoNodeData).provider === "kling-3.0" && (
           <Button variant="outline" className="w-full mt-2" onClick={onExpandDirector}>
-            <Maximize2 className="w-4 h-4 mr-2" />
+            <Maximize2 className="w-4 h-4 me-2" />
             {t("configPanel.expandDirector")}
           </Button>
         )}
@@ -800,6 +802,11 @@ export function ConfigPanel() {
   // the new SceneNode uses the pipeline panel for editing, not a legacy modal.
   const [expandDirectorOpen, setExpandDirectorOpen] = useState(false)
   const isMobile = useIsMobile()
+  // The desktop drawer pins to the inline END — the edge the canvas toolbar
+  // rail does NOT occupy (the rail sits at the inline start; both flip
+  // together under RTL). Its off-screen slide has no logical form, so pick the
+  // side by the live direction — never a `rtl:` variant.
+  const isRtl = useAppDir() === "rtl"
   // `isExpanded` is sourced from the store so external code — e.g. picker-node
   // creation in workflow-canvas / node-toolbar — can open the panel in fullscreen
   // by calling `setConfigPanelFullscreen(true)`.
@@ -981,7 +988,7 @@ export function ConfigPanel() {
     // On mobile, render nothing when no node selected (bottom sheet simply gone)
     if (isMobile) return null
     return (
-      <div className="absolute inset-0 z-10 bg-white dark:bg-[#1E1E1E] shadow-2xl flex flex-col sm:inset-auto sm:top-0 sm:right-0 sm:h-full sm:w-96 sm:border-l border-gray-200 dark:border-[#2D2D2D] transition-transform duration-200 ease-in-out translate-x-full pointer-events-none" />
+      <div className={`absolute inset-0 z-10 bg-white dark:bg-[#1E1E1E] shadow-2xl flex flex-col sm:inset-auto sm:top-0 sm:end-0 sm:h-full sm:w-96 sm:border-s border-gray-200 dark:border-[#2D2D2D] transition-transform duration-200 ease-in-out ${isRtl ? "-translate-x-full" : "translate-x-full"} pointer-events-none`} />
     )
   }
 
@@ -993,6 +1000,13 @@ export function ConfigPanel() {
   // fullscreen toggle stay interactive — see the fieldset around NodeTypeConfig.
   const isNodeRunning =
     nodeData.executionStatus === "running" || nodeData.executionStatus === "pending"
+  // Engine-parity Run gate for an image-required video model with no image
+  // wired — see frontend/src/lib/video-image-gate.ts. No-op for every other
+  // node type (the predicate itself checks `type === "generate-video"`).
+  const imageGateBlocked = videoImageGateBlocked(
+    selectedNode as { id: string; type?: string; data?: Record<string, unknown> } | undefined,
+    edges,
+  )
 
   // Cross-cutting preset dropdown — one component, reads its node from the store by id. Self-hides
   // for nodes with no portable config (and asset/structural nodes). Placed below the heading in the
@@ -1054,8 +1068,8 @@ export function ConfigPanel() {
     <div className={isExpanded
       ? "fixed inset-0 z-50 flex items-center justify-center"
       : isMobile
-        ? `fixed bottom-0 left-0 right-0 z-50 transition-transform duration-200 ease-in-out ${isVisible ? "translate-y-0" : "translate-y-full pointer-events-none"}`
-        : `absolute inset-0 z-10 bg-white dark:bg-[#1E1E1E] shadow-2xl flex flex-col sm:inset-auto sm:top-0 sm:right-0 sm:h-full sm:w-96 sm:border-l border-gray-200 dark:border-[#2D2D2D] ${isVisible && !isExpanded ? "transition-transform duration-200 ease-in-out translate-x-0" : "hidden"}`
+        ? `fixed bottom-0 inset-x-0 z-50 transition-transform duration-200 ease-in-out ${isVisible ? "translate-y-0" : "translate-y-full pointer-events-none"}`
+        : `absolute inset-0 z-10 bg-white dark:bg-[#1E1E1E] shadow-2xl flex flex-col sm:inset-auto sm:top-0 sm:end-0 sm:h-full sm:w-96 sm:border-s border-gray-200 dark:border-[#2D2D2D] ${isVisible && !isExpanded ? "transition-transform duration-200 ease-in-out translate-x-0" : "hidden"}`
     }>
       {isExpanded && (
         <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={(e) => { e.stopPropagation(); closeFullscreenSettings() }} />
@@ -1284,6 +1298,12 @@ export function ConfigPanel() {
                     userId={userId ?? ""}
                     label={t("configPanel.runThisNode")}
                     isRunning={nodeData.executionStatus === "running"}
+                    disabled={imageGateBlocked}
+                    disabledReason={
+                      imageGateBlocked
+                        ? t("node.imageRequiredHint", { model: (nodeData.provider as string | undefined) ?? "" })
+                        : undefined
+                    }
                     creditOverride={
                       nodeType === "component"
                         ? (nodeData.estimatedCredits as number) || undefined

@@ -201,6 +201,99 @@ export function workspaceCommand(): Command {
       }
     })
 
+  cmd
+    .command("usage [id]")
+    .description("credits by member, model or day for a workspace (yours if id omitted)")
+    .option("--from <YYYY-MM-DD>", "inclusive start date")
+    .option("--to <YYYY-MM-DD>", "inclusive end date")
+    .option("--tz <iana>", "IANA time zone (default: your local zone)")
+    .option("--group-by <dim>", "member | model | day | none", "day")
+    .option("--user <id>", "narrow to one member (admins only)")
+    .option("--limit <n>", "rows page size (with --group-by none)", (v) => Number(v))
+    .option("--cursor <cursor>", "continue a rows page")
+    .option("--csv", "write the report as CSV to stdout")
+    .option("--profile <name>")
+    .option("--json")
+    .action(
+      async (
+        id: string | undefined,
+        opts: {
+          from?: string
+          to?: string
+          tz?: string
+          groupBy: string
+          user?: string
+          limit?: number
+          cursor?: string
+          csv?: boolean
+        } & GlobalOpts,
+      ) => {
+        try {
+          const workspaceId = id ?? resolveWorkspace(getProfile(opts.profile).profile).workspaceId
+          if (!workspaceId) {
+            handleError(new Error("no workspace selected; pass an id or run nodaro workspace use <id>"))
+            return
+          }
+          const client = buildClient(opts.profile)
+          const tz = opts.tz ?? Intl.DateTimeFormat().resolvedOptions().timeZone
+          const common = { from: opts.from, to: opts.to, tz, userId: opts.user }
+          if (opts.csv) {
+            process.stdout.write(
+              await client.workspaces.usageCsv(workspaceId, {
+                ...common,
+                groupBy: opts.groupBy as "member" | "model" | "day" | "none",
+              }),
+            )
+            return
+          }
+          if (opts.groupBy === "none") {
+            const page = await client.workspaces.usageRows(workspaceId, { ...common, limit: opts.limit, cursor: opts.cursor })
+            if (opts.json) {
+              emit(page, opts)
+              return
+            }
+            table(
+              page.data.map((e) => ({
+                at: e.createdAt,
+                member: e.member?.displayName ?? e.member?.email ?? e.member?.userId ?? "",
+                model: e.model,
+                status: e.status,
+                credits: e.credits,
+              })),
+              ["at", "member", "model", "status", "credits"],
+            )
+            if (page.nextCursor) dim(`more: --cursor ${page.nextCursor}`)
+            return
+          }
+          const { data: report } = await client.workspaces.usage(workspaceId, {
+            ...common,
+            groupBy: opts.groupBy as "member" | "model" | "day",
+          })
+          if (opts.json) {
+            emit(report, opts)
+            return
+          }
+          table(
+            report.rows.map((r) => ({
+              group: r.member ? (r.member.displayName ?? r.member.email ?? r.member.userId) : (r.model ?? r.day ?? r.key),
+              runs: r.runCount,
+              credits: r.credits,
+              settled: r.settledCredits,
+              in_flight: r.inFlightCredits,
+            })),
+            ["group", "runs", "credits", "settled", "in_flight"],
+          )
+          dim(
+            `total: ${report.totals.credits} credits (${report.totals.settledCredits} settled, ` +
+              `${report.totals.inFlightCredits} in flight, ${report.totals.platformAbsorbedCredits} platform-absorbed overrun, ${report.totals.appMarkupAbsorbedCredits} app-markup absorbed)`,
+          )
+          if (report.truncated) warn("report truncated at 5000 groups — narrow the window")
+        } catch (err) {
+          handleError(err)
+        }
+      },
+    )
+
   return cmd
 }
 

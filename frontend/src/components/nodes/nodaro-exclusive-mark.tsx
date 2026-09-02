@@ -3,6 +3,7 @@ import { hasCredits } from "@/lib/edition"
 import { useNodaroConnection } from "@/hooks/use-nodaro-connection"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { cn } from "@/lib/utils"
+import { useT } from "@/lib/i18n"
 
 /**
  * The NODARO provenance mark for the exclusive nodes (4b).
@@ -24,6 +25,7 @@ export function showNodaroMark(type: string | undefined | null): boolean {
 
 /** Compact brand pill for picker/sidebar rows. Render iff {@link showNodaroMark}. */
 export function NodaroMark({ className }: { readonly className?: string }) {
+  const t = useT()
   return (
     <span
       className={cn(
@@ -31,7 +33,7 @@ export function NodaroMark({ className }: { readonly className?: string }) {
         "bg-[#ff0073]/12 text-[#ff0073]",
         className,
       )}
-      title="Runs on nodaro.ai"
+      title={t("node.runsOnNodaro")}
     >
       NODARO
     </span>

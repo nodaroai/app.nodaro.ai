@@ -4,8 +4,9 @@ import { Plus, Search, ScanSearch, Package, Film, StickyNote, Wand2, PanelLeft, 
 import { useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { cn } from "@/lib/utils"
+import { useT } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
 import { SHORTCUTS, formatBinding, isMacPlatform } from "@/lib/shortcuts"
-import { useIsMobile } from "@/hooks/use-is-mobile"
 import { useCopilotRailWidth } from "@/hooks/use-copilot-ui-store"
 import {
   Tooltip,
@@ -14,6 +15,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { useSidebar } from "@/components/layout/sidebar-context"
+import { MARKETPLACE_POPUP_WIDTH } from "./marketplace-popup-geometry"
 
 interface CanvasToolbarProps {
   readonly onAddNode: (position?: { x: number; y: number }, placeAtCenter?: boolean) => void
@@ -46,6 +48,8 @@ interface ToolbarButtonProps {
 }
 
 function ToolbarButton({ icon, label, shortcut, onClick, active, disabled }: ToolbarButtonProps) {
+  // The tooltip opens away from the edge the rail is anchored to.
+  const side = useAppDir() === "rtl" ? "left" : "right"
   return (
     <TooltipProvider delayDuration={200}>
       <Tooltip>
@@ -72,7 +76,7 @@ function ToolbarButton({ icon, label, shortcut, onClick, active, disabled }: Too
           </button>
         </TooltipTrigger>
         <TooltipContent
-          side="right"
+          side={side}
           sideOffset={8}
           className={cn(
             "rounded-lg px-3 py-2 flex items-center gap-2",
@@ -146,15 +150,20 @@ export function CanvasToolbar({
   canRedo,
   onShowShortcuts,
 }: CanvasToolbarProps) {
+  const t = useT()
   const { sidebarWidth } = useSidebar()
-  const isMobile = useIsMobile()
   const navigate = useNavigate()
+  // Under RTL the app sidebar (`start-0`) sits on the physical RIGHT, so the
+  // never-dragged rail anchors to that edge by the same offset — otherwise it
+  // floats sidebar-width px into the canvas, away from the Add Node panel it
+  // toggles (node-toolbar.tsx, `start-16`). Read live, never a `rtl:` variant.
+  const isRtl = useAppDir() === "rtl"
   // This bar is `position: fixed`, so it does not participate in the editor's
   // flex row and has to be told about anything occupying the left edge. The
   // Copilot rail is a real column there; without its width the bar floats on
   // top of the chat.
   const copilotRailWidth = useCopilotRailWidth()
-  // Position to the right of the sidebar and the rail + 12px gap
+  // Inline-start offset past the sidebar and the rail + 12px gap
   const leftPosition = sidebarWidth + copilotRailWidth + 12
 
   // Draggable rail. Once the user drags it, `pos` (viewport coordinates) takes
@@ -227,7 +236,7 @@ export function CanvasToolbar({
       {/* Mobile: horizontal top bar */}
       <div
         className={cn(
-          "absolute top-2 left-2 right-2 z-10 md:hidden",
+          "absolute top-2 inset-x-2 z-10 md:hidden",
           "p-1.5 rounded-xl",
           "flex items-center gap-1",
           "backdrop-blur-md",
@@ -236,54 +245,55 @@ export function CanvasToolbar({
         )}
       >
         <MobileToolbarButton
-          icon={<ChevronLeft className="w-5 h-5" />}
-          label="Back"
+          icon={<ChevronLeft className={cn("w-5 h-5", isRtl && "rotate-180")} />}
+          label={t("common.back")}
           onClick={() => navigate(-1)}
         />
         <div className="w-px h-5 bg-[#E2E8F0] dark:bg-[#2D2D2D]" />
         <MobileToolbarButton
           icon={<Plus className="w-5 h-5" />}
-          label="Add Node"
+          label={t("toolbar.addNode")}
           onClick={(e) => {
             const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-            onAddNode({ x: rect.right + 8, y: rect.bottom + 8 }, true)
+            const x = isRtl ? rect.left - 8 - MARKETPLACE_POPUP_WIDTH : rect.right + 8
+            onAddNode({ x, y: rect.bottom + 8 }, true)
           }}
         />
         <MobileToolbarButton
           icon={<Puzzle className="w-5 h-5" />}
-          label="Components"
+          label={t("marketplace.title")}
           onClick={onComponents}
         />
         <MobileToolbarButton
           icon={<Undo2 className="w-5 h-5" />}
-          label="Undo"
+          label={t("ctb.undo")}
           onClick={onUndo}
           disabled={!canUndo}
         />
         <MobileToolbarButton
           icon={<Redo2 className="w-5 h-5" />}
-          label="Redo"
+          label={t("ctb.redo")}
           onClick={onRedo}
           disabled={!canRedo}
         />
         <MobileToolbarButton
           icon={<Package className="w-5 h-5" />}
-          label="My Library"
+          label={t("canvas.myLibrary")}
           onClick={onAssetLibrary}
         />
         <MobileToolbarButton
           icon={<Film className="w-5 h-5" />}
-          label="Media Library"
+          label={t("canvas.mediaLibrary")}
           onClick={onMediaLibrary}
         />
         <MobileToolbarButton
           icon={<Wand2 className="w-5 h-5" />}
-          label="Tidy Up"
+          label={t("ctb.tidyUp")}
           onClick={onTidyUp}
         />
         <MobileToolbarButton
           icon={<PanelLeft className="w-5 h-5" />}
-          label="Toggle Sidebar"
+          label={t("ctb.toggleSidebar")}
           onClick={onToggleSidebar}
           active={sidebarVisible}
         />
@@ -307,7 +317,14 @@ export function CanvasToolbar({
           // Dark mode: dark glass with deeper shadow
           "dark:bg-[#1E1E1E]/90 dark:border-[#2D2D2D] dark:shadow-2xl dark:shadow-black/20"
         )}
-        style={pos ? { left: `${pos.x}px`, top: `${pos.y}px` } : { left: `${leftPosition}px` }}
+        style={
+          pos
+            // A dragged position is explicit viewport coordinates — physical by design.
+            ? { left: `${pos.x}px`, top: `${pos.y}px` }
+            : isRtl
+              ? { right: `${leftPosition}px` }
+              : { left: `${leftPosition}px` }
+        }
       >
         {/* Drag handle */}
         <button
@@ -318,8 +335,8 @@ export function CanvasToolbar({
           onPointerCancel={onDragEnd}
           onDoubleClick={resetPos}
           className="flex items-center justify-center h-4 mb-0.5 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-foreground transition-colors touch-none"
-          aria-label="Drag toolbar (double-click to reset)"
-          title="Drag to move the toolbar · double-click to reset"
+          aria-label={t("ctb.dragAria")}
+          title={t("ctb.dragTitle")}
         >
           <GripHorizontal className="w-4 h-4" />
         </button>
@@ -327,52 +344,58 @@ export function CanvasToolbar({
         {/* Primary actions */}
         <ToolbarButton
           icon={<Plus className="w-5 h-5" />}
-          label="Add Node"
+          label={t("toolbar.addNode")}
           shortcut={formatBinding(SHORTCUTS.addNode.bindings[0], isMac)}
           onClick={(e) => {
             const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-            onAddNode({ x: rect.right + 8, y: rect.top }, true)
+            // Forwarded through the (viewport-centred) node picker to the
+            // component browser popup, which grows rightward from the x it is
+            // given: beside a right-anchored rail its LEFT edge must sit a popup
+            // width (plus the gap) before the rail; beside a left-anchored one,
+            // just past it.
+            const x = isRtl ? rect.left - 8 - MARKETPLACE_POPUP_WIDTH : rect.right + 8
+            onAddNode({ x, y: rect.top }, true)
           }}
         />
 
         <ToolbarButton
           icon={<Puzzle className="w-5 h-5" />}
-          label="Components"
+          label={t("marketplace.title")}
           shortcut=""
           onClick={onComponents}
         />
 
         <ToolbarButton
           icon={<Search className="w-5 h-5" />}
-          label="Search workflows"
+          label={t("ctb.searchWorkflows")}
           shortcut={formatBinding(SHORTCUTS.search.bindings[0], isMac)}
           onClick={onSearch}
         />
 
         <ToolbarButton
           icon={<ScanSearch className="w-5 h-5" />}
-          label="Find in workflow"
+          label={t("ctb.findInWorkflow")}
           shortcut={formatBinding(SHORTCUTS.findNode.bindings[0], isMac)}
           onClick={onFindInWorkflow}
         />
 
         <ToolbarButton
           icon={<History className="w-5 h-5" />}
-          label="Previous focus"
+          label={t("ctb.previousFocus")}
           shortcut={formatBinding(SHORTCUTS.previousFocus.bindings[0], isMac)}
           onClick={onPreviousFocus}
         />
 
         <ToolbarButton
           icon={<Package className="w-5 h-5" />}
-          label="My Library"
+          label={t("canvas.myLibrary")}
           shortcut={formatBinding(SHORTCUTS.myLibrary.bindings[0], isMac)}
           onClick={onAssetLibrary}
         />
 
         <ToolbarButton
           icon={<Film className="w-5 h-5" />}
-          label="Media Library"
+          label={t("canvas.mediaLibrary")}
           shortcut={formatBinding(SHORTCUTS.mediaLibrary.bindings[0], isMac)}
           onClick={onMediaLibrary}
         />
@@ -382,14 +405,14 @@ export function CanvasToolbar({
         {/* Canvas tools */}
         <ToolbarButton
           icon={<StickyNote className="w-5 h-5" />}
-          label="Add Sticky Note"
+          label={t("ctb.addStickyNote")}
           shortcut={formatBinding(SHORTCUTS.stickyNote.bindings[0], isMac)}
           onClick={onAddStickyNote}
         />
 
         <ToolbarButton
           icon={<Wand2 className="w-5 h-5" />}
-          label="Tidy Up"
+          label={t("ctb.tidyUp")}
           shortcut={formatBinding(SHORTCUTS.tidyUp.bindings[0], isMac)}
           onClick={onTidyUp}
         />
@@ -399,7 +422,7 @@ export function CanvasToolbar({
         {/* Undo / Redo */}
         <ToolbarButton
           icon={<Undo2 className="w-5 h-5" />}
-          label="Undo"
+          label={t("ctb.undo")}
           shortcut={formatBinding(SHORTCUTS.undo.bindings[0], isMac)}
           onClick={onUndo}
           disabled={!canUndo}
@@ -407,7 +430,7 @@ export function CanvasToolbar({
 
         <ToolbarButton
           icon={<Redo2 className="w-5 h-5" />}
-          label="Redo"
+          label={t("ctb.redo")}
           shortcut={formatBinding(SHORTCUTS.redo.bindings[0], isMac)}
           onClick={onRedo}
           disabled={!canRedo}
@@ -418,7 +441,7 @@ export function CanvasToolbar({
         {/* View controls */}
         <ToolbarButton
           icon={<PanelLeft className="w-5 h-5" />}
-          label="Toggle Sidebar"
+          label={t("ctb.toggleSidebar")}
           shortcut={formatBinding(SHORTCUTS.sidebar.bindings[0], isMac)}
           onClick={onToggleSidebar}
           active={sidebarVisible}
@@ -429,7 +452,7 @@ export function CanvasToolbar({
         {/* Help */}
         <ToolbarButton
           icon={<Keyboard className="w-5 h-5" />}
-          label="Keyboard shortcuts"
+          label={t("ctb.keyboardShortcuts")}
           shortcut={formatBinding(SHORTCUTS.help.bindings[0], isMac)}
           onClick={onShowShortcuts}
         />

@@ -8,7 +8,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { SUNO_MODELS, SUNO_ADD_TRACK_MODELS, SUNO_TEXT_MAX, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars } from "@nodaro/shared"
+import { SUNO_MODELS, SUNO_ADD_TRACK_MODELS, SUNO_HARD_CEILING, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars } from "@nodaro/shared"
 import {
   sunoStyleBoost,
   sunoVoiceValidate,
@@ -53,11 +53,17 @@ const sunoAddTrackModelEnum = z.enum(SUNO_ADD_TRACK_MODELS).optional().default("
 
 const personaModelEnum = z.enum(["voice_persona", "style_persona"])
 
+// Zod bounds are the generous SUNO_HARD_CEILING; clampSunoFields() below trims
+// every text field to the SELECTED VERSION's verified provider cap before the
+// job row is built. Warn-don't-block: the editor warns at the per-version cap,
+// and a programmatically-set prompt (agent / app run / FieldMapping) is trimmed
+// rather than 400'd. Do not put a per-version number in a schema — the schema
+// is built once at module load and cannot see `model`.
 const sunoGenerateBody = z.object({
-  prompt: z.string().min(1).max(SUNO_TEXT_MAX),
-  userPrompt: z.string().max(8000).optional(),
+  prompt: z.string().min(1).max(SUNO_HARD_CEILING),
+  userPrompt: z.string().max(SUNO_HARD_CEILING).optional(),
   model: sunoModelEnum,
-  lyrics: z.string().max(SUNO_TEXT_MAX).optional(),
+  lyrics: z.string().max(SUNO_HARD_CEILING).optional(),
   style: z.string().max(1000).optional(),
   title: z.string().max(SUNO_TITLE_MAX).optional(),
   negativeStyle: z.string().max(500).optional(),
@@ -76,11 +82,11 @@ const sunoGenerateBody = z.object({
 })
 
 const sunoCoverBody = z.object({
-  prompt: z.string().min(1).max(SUNO_TEXT_MAX),
-  userPrompt: z.string().max(8000).optional(),
+  prompt: z.string().min(1).max(SUNO_HARD_CEILING),
+  userPrompt: z.string().max(SUNO_HARD_CEILING).optional(),
   uploadUrl: safeUrlSchema,
   model: sunoModelEnum,
-  lyrics: z.string().max(SUNO_TEXT_MAX).optional(),
+  lyrics: z.string().max(SUNO_HARD_CEILING).optional(),
   style: z.string().max(1000).optional(),
   title: z.string().max(SUNO_TITLE_MAX).optional(),
   negativeStyle: z.string().max(500).optional(),
@@ -95,8 +101,8 @@ const sunoCoverBody = z.object({
 const sunoExtendBody = z.object({
   audioId: z.string().min(1),
   defaultParamFlag: z.boolean().optional().default(true),
-  prompt: z.string().max(5000).optional(),
-  userPrompt: z.string().max(8000).optional(),
+  prompt: z.string().max(SUNO_HARD_CEILING).optional(),
+  userPrompt: z.string().max(SUNO_HARD_CEILING).optional(),
   model: sunoModelEnum,
   style: z.string().max(1000).optional(),
   title: z.string().max(80).optional(),
@@ -113,7 +119,7 @@ const sunoExtendBody = z.object({
 
 const sunoLyricsBody = z.object({
   prompt: z.string().min(1).max(1000),
-  userPrompt: z.string().max(8000).optional(),
+  userPrompt: z.string().max(SUNO_HARD_CEILING).optional(),
   userId: z.string().uuid().optional(),
 })
 
@@ -146,11 +152,11 @@ const sunoReplaceSectionBody = z.object({
   audioId: z.string().min(1),
   infillStartS: z.number().min(0),
   infillEndS: z.number().min(0),
-  prompt: z.string().min(1).max(SUNO_TEXT_MAX),
-  userPrompt: z.string().max(8000).optional(),
+  prompt: z.string().min(1).max(SUNO_HARD_CEILING),
+  userPrompt: z.string().max(SUNO_HARD_CEILING).optional(),
   tags: z.string().max(500),
   title: z.string().max(SUNO_TITLE_MAX).optional(),
-  fullLyrics: z.string().max(SUNO_TEXT_MAX).optional(),
+  fullLyrics: z.string().max(SUNO_HARD_CEILING).optional(),
   negativeTags: z.string().max(500).optional(),
   userId: z.string().uuid().optional(),
 }).refine(
@@ -162,8 +168,8 @@ const sunoReplaceSectionBody = z.object({
 )
 
 const sunoStyleBoostBody = z.object({
-  content: z.string().min(1).max(SUNO_TEXT_MAX),
-  userPrompt: z.string().max(8000).optional(),
+  content: z.string().min(1).max(SUNO_HARD_CEILING),
+  userPrompt: z.string().max(SUNO_HARD_CEILING).optional(),
   userId: z.string().uuid().optional(),
 })
 
@@ -240,6 +246,45 @@ const sunoUploadExtendBody = z.object({
   userId: z.string().uuid().optional(),
 })
 
+/**
+ * Return a COPY of the parsed Suno body with every text field trimmed to the
+ * SELECTED VERSION's verified provider caps.
+ *
+ * The route schemas bound these fields at SUNO_HARD_CEILING (a Zod schema is
+ * built once and cannot read `model`), so this is the only place the real
+ * caps apply. Does NOT mutate `data` — callers pass the clamped copy to the
+ * queue/provider call and keep the ORIGINAL `parsed.data` for
+ * `buildJobInputData`, so `input_data` records exactly what the user
+ * submitted while the provider only ever receives text it can accept.
+ *
+ * prompt / lyrics / fullLyrics / content -> getMaxSunoPromptChars(model, custom)
+ * style                                  -> getMaxSunoStyleChars(model)
+ * title                                  -> already Zod-capped at SUNO_TITLE_MAX
+ */
+function clampSunoFields<
+  T extends {
+    model?: string
+    customMode?: boolean
+    prompt?: string
+    lyrics?: string
+    fullLyrics?: string
+    content?: string
+    style?: string
+  },
+>(data: T, opts?: { customMode?: boolean }): T {
+  const custom = opts?.customMode ?? data.customMode ?? false
+  const promptCap = getMaxSunoPromptChars(data.model, custom)
+  const styleCap = getMaxSunoStyleChars(data.model)
+  return {
+    ...data,
+    ...(data.prompt !== undefined ? { prompt: data.prompt.slice(0, promptCap) } : {}),
+    ...(data.lyrics !== undefined ? { lyrics: data.lyrics.slice(0, promptCap) } : {}),
+    ...(data.fullLyrics !== undefined ? { fullLyrics: data.fullLyrics.slice(0, promptCap) } : {}),
+    ...(data.content !== undefined ? { content: data.content.slice(0, promptCap) } : {}),
+    ...(data.style !== undefined ? { style: data.style.slice(0, styleCap) } : {}),
+  }
+}
+
 export async function sunoRoutes(app: FastifyInstance) {
   // ── Generate Song ──
   app.post(
@@ -258,24 +303,14 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
-      // Clamp text to each Suno version's verified caps before the job is built
-      // (warn-don't-block: the editor warns first; this is the graceful net).
-      // prompt/lyrics: 5000 for V4.5+/V5, 3000 for V4, 500 non-custom; style:
-      // 1000 for V4.5+, 200 for V4. (title is already Zod-capped at SUNO_TITLE_MAX.)
-      {
-        const promptCap = getMaxSunoPromptChars(parsed.data.model, parsed.data.customMode ?? false)
-        const styleCap = getMaxSunoStyleChars(parsed.data.model)
-        if (parsed.data.prompt) parsed.data.prompt = parsed.data.prompt.slice(0, promptCap)
-        if (parsed.data.lyrics) parsed.data.lyrics = parsed.data.lyrics.slice(0, promptCap)
-        if (parsed.data.style) parsed.data.style = parsed.data.style.slice(0, styleCap)
-      }
+      const clamped = clampSunoFields(parsed.data)
 
       const {
         prompt, model, lyrics, style, title,
         negativeStyle, vocalGender, styleWeight,
         weirdnessConstraint, audioWeight, customMode,
         instrumental, duration, personaId, personaModel,
-      } = parsed.data
+      } = clamped
       const userId = req.userId
 
       if (!userId) {
@@ -346,11 +381,13 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
+      const clamped = clampSunoFields(parsed.data)
+
       const {
         prompt, uploadUrl, model, lyrics, style,
         title, negativeStyle, vocalGender, customMode,
         instrumental, personaId, personaModel,
-      } = parsed.data
+      } = clamped
       const userId = req.userId
 
       if (!userId) {
@@ -418,12 +455,19 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
+      // `customMode: true` = the LARGER of the two per-version caps (5000 for
+      // V4.5+/V5, 3000 for V4). This route carries no customMode flag —
+      // `defaultParamFlag` is a different lever ("use default parameters"), not
+      // the custom/inspiration switch — and clamping to the larger cap can only
+      // ever preserve text the previous flat bound already allowed.
+      const clamped = clampSunoFields(parsed.data, { customMode: true })
+
       const {
         audioId, defaultParamFlag, prompt, model, style,
         title, continueAt, negativeStyle, vocalGender,
         styleWeight, weirdnessConstraint, audioWeight,
         personaId, personaModel,
-      } = parsed.data
+      } = clamped
       const userId = req.userId
 
       if (!userId) {
@@ -656,10 +700,12 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
+      const clamped = clampSunoFields(parsed.data)
+
       const {
         uploadUrlList, model, customMode, style,
         title, negativeStyle, vocalGender,
-      } = parsed.data
+      } = clamped
       const userId = req.userId
 
       if (!userId) {
@@ -718,7 +764,13 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
-      const { taskId, audioId, infillStartS, infillEndS, prompt, tags, title, fullLyrics, negativeTags } = parsed.data
+      // `customMode: true` = the LARGER of the two per-version caps (5000 for
+      // V4.5+/V5, 3000 for V4). This route carries no customMode flag at all,
+      // and clamping to the larger cap can only ever preserve text the
+      // previous flat bound already allowed.
+      const clamped = clampSunoFields(parsed.data, { customMode: true })
+
+      const { taskId, audioId, infillStartS, infillEndS, prompt, tags, title, fullLyrics, negativeTags } = clamped
       const userId = req.userId
 
       if (!userId) {
@@ -779,7 +831,13 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
-      const { content } = parsed.data
+      // `customMode: true` = the LARGER of the two per-version caps (5000 for
+      // V4.5+/V5, 3000 for V4). This route carries no customMode flag at all,
+      // and clamping to the larger cap can only ever preserve text the
+      // previous flat bound already allowed.
+      const clamped = clampSunoFields(parsed.data, { customMode: true })
+
+      const { content } = clamped
       const userId = req.userId
 
       if (!userId) {
@@ -1024,10 +1082,12 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
+      const clamped = clampSunoFields(parsed.data)
+
       const {
         uploadUrl, continueAt, defaultParamFlag, instrumental, model,
         style, title, negativeStyle, vocalGender,
-      } = parsed.data
+      } = clamped
       const userId = req.userId
 
       if (!userId) {

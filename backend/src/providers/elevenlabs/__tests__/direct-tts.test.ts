@@ -172,4 +172,45 @@ describe("directElevenLabsTTS", () => {
       vi.useRealTimers()
     }
   })
+
+  it("normalizes a 639-3 languageCode to 639-1 before it reaches the wire", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => new ArrayBuffer(8),
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    await directElevenLabsTTS("shalom", "Rachel", "elevenlabs-v3", { languageCode: "heb" })
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string)
+    expect(body.language_code).toBe("he")
+  })
+
+  // Byte-identity pin: a plain ISO 639-1 code on a non-multilingual model
+  // must reach the wire unchanged.
+  it("passes a two-letter languageCode through unchanged on elevenlabs-turbo", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => new ArrayBuffer(8),
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    await directElevenLabsTTS("hi", "Rachel", "elevenlabs-turbo", { languageCode: "en" })
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string)
+    expect(body.language_code).toBe("en")
+  })
+
+  it("omits language_code entirely on elevenlabs-multilingual", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => new ArrayBuffer(8),
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    await directElevenLabsTTS("hola", "Rachel", "elevenlabs-multilingual", { languageCode: "spa" })
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string)
+    expect(body).not.toHaveProperty("language_code")
+  })
 })

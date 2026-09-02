@@ -55,6 +55,7 @@ import { searchModelVariants, type ModelKind, type ModelTreeVariant } from "@nod
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useT, type MessageKey } from "@/lib/i18n";
 import { useLocalizeNodeLabel, useLocalizeNodeGroup } from "@/lib/i18n/labels";
+import { useAppDir } from "@/lib/locale-store";
 import { useAuth } from "@/hooks/use-auth";
 import { useUserSettings } from "@/hooks/queries/use-user-settings-queries";
 import { useNodeSelectionHistoryStore, type HistoryEntry } from "@/hooks/use-node-selection-history-store";
@@ -293,6 +294,15 @@ export const SEARCH_BLOCK_ORDER: Record<AddNodeMenuTab, readonly SearchBlock[]> 
   publish: ["nodeOwn", "nodeOther", "models"],
 };
 
+/** The edge-drop "Connect to" chip: the handle id plus a flow arrow pointing
+ *  along the reading direction. U+2192 is bidi-neutral, so under RTL a trailing
+ *  "→" is reordered to the LEFT of the LTR handle id while still pointing
+ *  right — the flow would read backwards. Pick the glyph by direction. */
+export function connectChipLabel(handleId: string, direction: "source" | "target", isRtl: boolean): string {
+  const arrow = isRtl ? "←" : "→";
+  return direction === "source" ? `${handleId} ${arrow}` : `${arrow} ${handleId}`;
+}
+
 /** "From other tabs" is deliberately explicit: a search must never look like
  *  a dead end just because the match lives on a different tab. */
 const SEARCH_BLOCK_HEADER: Record<SearchBlock, MessageKey> = { nodeOwn: "addnode.blockNodes", models: "addnode.blockModels", nodeOther: "addnode.blockOther" };
@@ -384,6 +394,9 @@ export function AddNodePopup({
   // them through the shared node-label table so the list matches the canvas.
   const localizeNode = useLocalizeNodeLabel();
   const localizeGroup = useLocalizeNodeGroup();
+  // Icon flips read the live direction (a `rtl:` variant would pierce the
+  // canvas's LTR pin — see rtl-direction-guards.test.ts).
+  const isRtl = useAppDir() === "rtl";
   const { isAdmin, user } = useAuth();
   const { data: userSettings } = useUserSettings(user?.id);
   const openPickerForNode = useWorkflowStore((s) => s.openPickerForNode);
@@ -698,7 +711,9 @@ export function AddNodePopup({
     if (!recent.length) return built;
     return {
       ...built,
-      sections: [{ id: "common-recent", label: t("nodecat.Recent"), options: recent }, ...built.sections],
+      // `family` is the English name the header localizes through the
+      // node-group table, same as every registry section.
+      sections: [{ id: "common-recent", label: t("nodecat.Recent"), family: "Recent", options: recent }, ...built.sections],
     };
   }, [activeTab, effectivePool, browsePool, isFiltered, showRecentNodes, history, optionByType, t]);
 
@@ -796,13 +811,15 @@ export function AddNodePopup({
         return;
       }
 
-      // ←/→ cycle tabs while the query is empty — the footer advertises
-      // "→ Tabs", so the shortcut has to work. Placed above the Models bail
-      // because the model tree only claims ArrowLeft when a series is drilled
-      // open (it stops propagation there, and backing out wins over cycling).
+      // ←/→ cycle tabs while the query is empty. Arrow keys follow the VISUAL
+      // direction: forward is → in LTR and ← under RTL, where the tablist is
+      // mirrored. Placed above the Models bail because the model tree only
+      // claims the "back" arrow when a series is drilled open (it stops
+      // propagation there, and backing out wins over cycling).
       if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && !searchQuery && !isFiltered) {
         e.preventDefault();
-        switchTab(nextAddNodeMenuTab(activeTab, e.key === "ArrowRight" ? 1 : -1));
+        const forward = isRtl ? e.key === "ArrowLeft" : e.key === "ArrowRight";
+        switchTab(nextAddNodeMenuTab(activeTab, forward ? 1 : -1));
         return;
       }
 
@@ -860,6 +877,7 @@ export function AddNodePopup({
     searchQuery,
     isFiltered,
     activeTab,
+    isRtl,
     switchTab,
     onClose,
     handleNodeSelect,
@@ -924,7 +942,7 @@ export function AddNodePopup({
               }}
               className="flex items-center gap-2 hover:text-[var(--npk-accent)] transition-colors"
             >
-              <ArrowLeft className="w-4 h-4" />
+              <ArrowLeft className={cn("w-4 h-4", isRtl && "rotate-180")} />
               {nodeCategory(selectedCategory)}
             </button>
           ) : isFiltered && connectionContext ? (
@@ -948,9 +966,7 @@ export function AddNodePopup({
                     )}
                     style={style}
                   >
-                    {connectionContext.direction === "source"
-                      ? `${connectionContext.handleId} →`
-                      : `→ ${connectionContext.handleId}`}
+                    {connectChipLabel(connectionContext.handleId, connectionContext.direction, isRtl)}
                   </span>
                 )
               })()}
@@ -958,7 +974,7 @@ export function AddNodePopup({
           ) : autoConnectCtx ? (
             <span className="flex items-center gap-1.5">
               <span>{t("addnode.connectingNewNodeTo")}</span>
-              <span className="text-[var(--npk-accent)]">{autoConnectCtx.focusedLabel}</span>
+              <span className="text-[var(--npk-accent)]">{localizeNode(autoConnectCtx.focusedLabel)}</span>
             </span>
           ) : (
             t("addnode.whatCreate")
@@ -974,7 +990,7 @@ export function AddNodePopup({
       <div className="px-3 py-2 border-b border-[var(--npk-border)]">
         <div className="flex items-center gap-2">
           <div className={cn("relative", isFiltered ? "flex-1" : "w-[300px] max-w-full")}>
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--npk-muted)]" />
+            <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--npk-muted)]" />
             <input
               ref={searchInputRef}
               type="text"
@@ -982,7 +998,7 @@ export function AddNodePopup({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className={cn(
-                "w-full pl-9 pr-3 py-2 text-base",
+                "w-full ps-9 pe-3 py-2 text-base",
                 "bg-[var(--npk-footer)]",
                 "border border-[var(--npk-border)]",
                 "rounded-lg",
@@ -999,7 +1015,7 @@ export function AddNodePopup({
               to sit beside it is intentionally hidden — Smart is force-OFF in
               auto-connect-pref.ts so picking a node always opens the dialog. */}
           {autoConnectCtx && (
-            <div className="flex items-center gap-3 shrink-0 ml-auto">
+            <div className="flex items-center gap-3 shrink-0 ms-auto">
               <ToggleLabel
                 icon={<Link2 className="w-3.5 h-3.5 text-[var(--npk-accent)]" />}
                 label={t("addnode.autoConnect")}
@@ -1134,7 +1150,7 @@ export function AddNodePopup({
                     type="button"
                     onClick={() => handleNodeSelect(node.type)}
                     className={cn(
-                      "w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors",
+                      "w-full flex items-center gap-3 px-4 py-2.5 text-start transition-colors",
                       index === highlightedIndex
                         ? "bg-[var(--npk-sel-bg)]"
                         : "hover:bg-[var(--npk-hover)]",
@@ -1167,7 +1183,7 @@ export function AddNodePopup({
                       type="button"
                       onClick={() => handleNodeSelect(node.type)}
                       className={cn(
-                        "w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors",
+                        "w-full flex items-center gap-3 px-4 py-2.5 text-start transition-colors",
                         index === highlightedIndex
                           ? "bg-[var(--npk-sel-bg)]"
                           : "hover:bg-[var(--npk-hover)]",
@@ -1219,7 +1235,7 @@ export function AddNodePopup({
                   type="button"
                   onClick={() => handleNodeSelect(node.type)}
                   className={cn(
-                    "w-full flex items-center gap-3 px-4 py-2.5 text-left",
+                    "w-full flex items-center gap-3 px-4 py-2.5 text-start",
                     "transition-colors",
                     index === highlightedIndex
                       ? "bg-[var(--npk-sel-bg)]"
@@ -1239,7 +1255,7 @@ export function AddNodePopup({
                     {localizeNode(node.label)}
                   </span>
                   {directMatchTypes.has(node.type) && (
-                    <MatchBadge label={matchLabel} className="ml-auto" />
+                    <MatchBadge label={matchLabel} className="ms-auto" />
                   )}
                 </button>
               </div>
@@ -1279,7 +1295,7 @@ export function AddNodePopup({
                 searchInputRef.current?.focus();
               }}
               className={cn(
-                "w-full flex items-center gap-3 px-4 py-3 text-left",
+                "w-full flex items-center gap-3 px-4 py-3 text-start",
                 "transition-colors",
                 index === highlightedIndex
                   ? "bg-[var(--npk-sel-bg)]"
@@ -1301,7 +1317,7 @@ export function AddNodePopup({
                 </div>
                 <div className="text-sm text-[var(--npk-muted)]">{t(cat.descKey)}</div>
               </div>
-              <ChevronRight className="w-4 h-4 text-[var(--npk-muted)]" />
+              <ChevronRight className={cn("w-4 h-4 text-[var(--npk-muted)]", isRtl && "rotate-180")} />
             </button>
           ))
         )}
@@ -1340,7 +1356,7 @@ export function AddNodePopup({
           {/* Count of what is actually on screen right now — derived, never a
               hardcoded catalog total, so it stays honest as families collapse
               or the edition hides Cloud-only nodes. */}
-          <span className="ml-auto tabular-nums text-[var(--npk-faint)]">
+          <span className="ms-auto tabular-nums text-[var(--npk-faint)]">
             {renderedNodeCount} {renderedNodeCount === 1 ? t("addnode.unitNode") : t("addnode.unitNodes")}
           </span>
         </div>

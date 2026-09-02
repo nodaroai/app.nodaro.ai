@@ -1491,7 +1491,10 @@ describe("POST /v1/characters", () => {
     expect(res.statusCode).toBe(200)
   })
 
-  it("rejects seed_prompt > 2000 chars (400)", async () => {
+  it("accepts a 4000-char seedPrompt (raised from 2000, migration 371)", async () => {
+    const { mockInsert } = mockInsertCapture()
+    vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
+
     const res = await app.inject({
       method: "POST",
       url: "/v1/characters",
@@ -1499,7 +1502,23 @@ describe("POST /v1/characters", () => {
         name: "Hero",
         nodeId: "node-1",
         userId: TEST_USER_ID,
-        seedPrompt: "x".repeat(2001),
+        seedPrompt: "x".repeat(4000),
+      },
+    })
+    // Assert the real success status, not `not.toBe(400)` — that stays green
+    // through a 401 or a 500 and would guard nothing.
+    expect(res.statusCode).toBe(200)
+  })
+
+  it("rejects seed_prompt > 4000 chars (400) — mirrors the characters_seed_prompt_4000_check CHECK", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: {
+        name: "Hero",
+        nodeId: "node-1",
+        userId: TEST_USER_ID,
+        seedPrompt: "x".repeat(4001),
       },
     })
     expect(res.statusCode).toBe(400)

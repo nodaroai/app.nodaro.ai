@@ -16,18 +16,23 @@ import {
   Box,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useT } from "@/lib/i18n"
+import { useAppDir } from "@/lib/locale-store"
 import { ADD_NODE_MENU_TABS, type AddNodeMenuTab } from "@/lib/add-node-menu-tab"
+import { PICKER_TAB_LABEL_KEY } from "@/lib/node-picker-i18n"
 
-const TAB_META: Record<AddNodeMenuTab, { label: string; icon: React.ReactNode }> = {
-  common: { label: "Common", icon: <Star className="h-[13px] w-[13px]" /> },
-  image: { label: "Image", icon: <ImageIcon className="h-[13px] w-[13px]" /> },
-  video: { label: "Video", icon: <Film className="h-[13px] w-[13px]" /> },
-  audio: { label: "Audio", icon: <Music className="h-[13px] w-[13px]" /> },
-  models: { label: "Models", icon: <Layers className="h-[13px] w-[13px]" /> },
-  assets: { label: "Assets", icon: <Box className="h-[13px] w-[13px]" /> },
-  automate: { label: "Automate", icon: <Workflow className="h-[13px] w-[13px]" /> },
-  publish: { label: "Publish", icon: <Send className="h-[13px] w-[13px]" /> },
-  all: { label: "All", icon: <LayoutGrid className="h-[13px] w-[13px]" /> },
+// Labels come from the chrome dict (PICKER_TAB_LABEL_KEY) so the tablist
+// follows the user's language like the rest of the popup.
+const TAB_ICON: Record<AddNodeMenuTab, React.ReactNode> = {
+  common: <Star className="h-[13px] w-[13px]" />,
+  image: <ImageIcon className="h-[13px] w-[13px]" />,
+  video: <Film className="h-[13px] w-[13px]" />,
+  audio: <Music className="h-[13px] w-[13px]" />,
+  models: <Layers className="h-[13px] w-[13px]" />,
+  assets: <Box className="h-[13px] w-[13px]" />,
+  automate: <Workflow className="h-[13px] w-[13px]" />,
+  publish: <Send className="h-[13px] w-[13px]" />,
+  all: <LayoutGrid className="h-[13px] w-[13px]" />,
 }
 
 interface PickerTabBarProps {
@@ -37,6 +42,11 @@ interface PickerTabBarProps {
 
 export function PickerTabBar({ activeTab, onSelect }: PickerTabBarProps) {
   const activeRef = useRef<HTMLButtonElement>(null)
+  const t = useT()
+  // Read the live direction rather than a `rtl:` variant: Tailwind compiles
+  // that to a `[dir="rtl"] *` descendant selector, which pierces the canvas's
+  // LTR pin (see rtl-direction-guards.test.ts).
+  const isRtl = useAppDir() === "rtl"
 
   // At narrow viewports the strip scrolls, and Tab-cycling can land on a tab
   // that is off-screen or half-hidden behind the right-edge fade. Pull the
@@ -48,12 +58,13 @@ export function PickerTabBar({ activeTab, onSelect }: PickerTabBarProps) {
   return (
     <div className="relative px-3 pb-0.5">
       <div
-        className="npk-tabs flex gap-0.5 overflow-x-auto pr-[22px]"
+        className="npk-tabs flex gap-0.5 overflow-x-auto pe-[22px]"
         role="tablist"
-        aria-label="Node menu mode"
+        aria-label={t("addnode.tablistAria")}
       >
         {ADD_NODE_MENU_TABS.map((id) => {
-          const { label, icon } = TAB_META[id]
+          const icon = TAB_ICON[id]
+          const label = t(PICKER_TAB_LABEL_KEY[id])
           const active = activeTab === id
           return (
             <button
@@ -77,10 +88,15 @@ export function PickerTabBar({ activeTab, onSelect }: PickerTabBarProps) {
           )
         })}
       </div>
-      {/* Fade painted in the surface colour so the strip reads as clipped, not cut. */}
+      {/* Fade painted in the surface colour so the strip reads as clipped, not
+          cut. It sits on the inline END (the overflow side), so under RTL it
+          moves to the left edge and the gradient flips with it. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-y-0 right-3 w-5 bg-gradient-to-l from-[var(--npk-surface)] to-transparent"
+        className={cn(
+          "pointer-events-none absolute inset-y-0 end-3 w-5 from-[var(--npk-surface)] to-transparent",
+          isRtl ? "bg-gradient-to-r" : "bg-gradient-to-l",
+        )}
       />
     </div>
   )

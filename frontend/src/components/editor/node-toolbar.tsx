@@ -8,6 +8,8 @@ import {
   X,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
+import { useAppDir } from "@/lib/locale-store"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useReactFlow } from "@xyflow/react"
 import { useT } from "@/lib/i18n"
@@ -105,6 +107,10 @@ interface NodeToolbarProps {
 
 export function NodeToolbar({ visible = false }: NodeToolbarProps) {
   const t = useT()
+  // The panel is chrome outside the canvas, so it inherits <html dir>. Its
+  // slide-in has no logical form, so pick the edge by the live direction —
+  // never a `rtl:` variant (rtl-direction-guards.test.ts).
+  const isRtl = useAppDir() === "rtl"
   const addNode = useWorkflowStore((s) => s.addNode)
   const addNodeAndOpenPicker = useWorkflowStore((s) => s.addNodeAndOpenPicker)
   const { getViewport } = useReactFlow()
@@ -162,7 +168,14 @@ export function NodeToolbar({ visible = false }: NodeToolbarProps) {
     <>
       {/* Desktop: static sidebar panel - hidden by default, shown when visible prop is true */}
       {visible && (
-        <div className="absolute top-4 left-16 z-10 hidden md:flex flex-col gap-2 bg-[var(--npk-surface-veil)] dark:backdrop-blur-sm border border-[var(--npk-border)] rounded-xl px-3 py-4 w-52 max-h-[calc(100vh-6rem)] overflow-y-auto shadow-lg animate-in slide-in-from-left-2 duration-200">
+        <div
+          className={cn(
+            // start-16 clears the canvas toolbar rail, which anchors to the
+            // same inline-start edge (canvas-toolbar.tsx) — the two move together.
+            "absolute top-4 start-16 z-10 hidden md:flex flex-col gap-2 bg-[var(--npk-surface-veil)] dark:backdrop-blur-sm border border-[var(--npk-border)] rounded-xl px-3 py-4 w-52 max-h-[calc(100vh-6rem)] overflow-y-auto shadow-lg animate-in duration-200",
+            isRtl ? "slide-in-from-right-2" : "slide-in-from-left-2",
+          )}
+        >
           <span className="font-sans text-[11px] font-semibold uppercase tracking-wider text-[var(--npk-dim)] dark:text-[var(--npk-accent)] mb-1">
             {t("toolbar.addNode")}
           </span>
@@ -173,7 +186,7 @@ export function NodeToolbar({ visible = false }: NodeToolbarProps) {
       {/* Mobile: FAB - always visible on mobile */}
       <Button
         size="sm"
-        className="absolute bottom-4 right-4 z-10 h-12 w-12 rounded-full p-0 shadow-lg md:hidden"
+        className="absolute bottom-4 end-4 z-10 h-12 w-12 rounded-full p-0 shadow-lg md:hidden"
         onClick={() => setSheetOpen(true)}
       >
         <Plus className="h-6 w-6" />
@@ -188,7 +201,7 @@ export function NodeToolbar({ visible = false }: NodeToolbarProps) {
             onClick={() => setSheetOpen(false)}
           />
           {/* Sheet */}
-          <div className="absolute bottom-0 left-0 right-0 bg-[var(--npk-surface-veil)] dark:backdrop-blur-sm border-t border-[var(--npk-border)] rounded-t-xl shadow-xl animate-in slide-in-from-bottom duration-200">
+          <div className="absolute bottom-0 inset-x-0 bg-[var(--npk-surface-veil)] dark:backdrop-blur-sm border-t border-[var(--npk-border)] rounded-t-xl shadow-xl animate-in slide-in-from-bottom duration-200">
             <div className="flex items-center justify-between px-4 pt-3 pb-2">
               <span className="text-sm font-semibold text-[var(--npk-t1)]">{t("toolbar.addNode")}</span>
               <Button

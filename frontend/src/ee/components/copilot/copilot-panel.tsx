@@ -159,7 +159,7 @@ export default function CopilotPanel({
       aria-label={S.title}
       style={fullScreen ? undefined : { width: COPILOT_RAIL_WIDTH }}
       className={`bg-[var(--copilot-panel)] flex flex-col min-h-0 ${
-        fullScreen ? "absolute inset-0 z-40" : "flex-none border-r border-border"
+        fullScreen ? "absolute inset-0 z-40" : "flex-none border-e border-border"
       }`}
     >
       <CopilotHeader onClose={onClose} onChangeSettings={setSettings} />

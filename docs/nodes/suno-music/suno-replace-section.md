@@ -11,9 +11,9 @@ Suno Replace Section targets a precise time range within an existing Suno track 
 |-------|------|---------|-------------|
 | Start Time | number (seconds) | `0` | Beginning of the section to replace (minimum 0). |
 | End Time | number (seconds) | `30` | End of the section to replace. The replaced **interval** (End − Start) must be between 6 and 60 seconds and at most 50% of the song — the end timestamp itself can be anywhere in the track (e.g. 100s→130s is valid). |
-| Prompt | string (max 3000) | `""` | The new lyrics/content for the replaced section (required). |
+| Prompt | string | `""` | The new lyrics/content for the replaced section (required). Max 5000; longer input is truncated rather than rejected. |
 | Tags | string (max 500) | `""` | Style/genre tags for the replacement section (required). |
-| Title | string (max 200) | `""` | Optional title for the replacement. |
+| Title | string (max 80) | `""` | Optional title for the replacement. |
 | Full Lyrics | string | `""` | Complete post-edit lyrics of the **whole song** — modified and unmodified parts combined. Suno uses it as the full lyric sheet after the replacement. |
 | Negative Tags | string (max 500) | `""` | Styles to exclude from the replacement segment (e.g. "rock"). |
 | Task ID | string | `""` | Suno task ID — auto-filled from a connected Suno node, or paste one manually to edit a track from an earlier session. |

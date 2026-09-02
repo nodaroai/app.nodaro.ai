@@ -15,7 +15,8 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { insertJobIdempotent } from "../lib/insert-job.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
-import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, isMinimaxH3Provider, isVeoProvider, estimateLoopTrimAddonCredits, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, buildVideoCreditModelIdentifier, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, type ConnectedReference } from "@nodaro/shared"
+import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, isMinimaxH3Provider, isVeoProvider, estimateLoopTrimAddonCredits, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, buildVideoCreditModelIdentifier, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, type ConnectedReference } from "@nodaro/shared"
+import { imageRequiredError } from "../lib/video-image-required.js"
 import { resolveVideoReferenceCore, resolveReferenceTokens, resolveRefIdTokens, composeVideoPromptText, type VideoExtraRef, type CharacterMeta } from "@nodaro/prompts"
 import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
 import { directionSchema } from "../lib/direction-schema.js"
@@ -794,8 +795,23 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     }
 
     if (!imageUrl && generationType !== "REFERENCE_2_VIDEO" && !hasMultimodalRef) {
+      // Two very different situations behind one old message. A model with NO
+      // text-to-video mode genuinely needs an image and there is no other lane
+      // to send the caller to; every other provider is simply on the wrong
+      // endpoint. Membership is catalog-derived (VIDEO_PROVIDERS_REQUIRING_IMAGE),
+      // so a new i2v-only model is covered the moment its catalog `modes` are
+      // honest — never add a provider list here. The "image-to-video" lane tells
+      // imageRequiredMessage that references ARE an alternative here for a
+      // ref-capable model (we only reach this line with hasMultimodalRef false).
+      if (videoProviderRequiresImage(provider)) {
+        return reply.status(400).send(imageRequiredError(provider, "image-to-video"))
+      }
       return reply.status(400).send({
-        error: { code: "validation_error", message: "imageUrl is required" },
+        error: {
+          code: "validation_error",
+          message:
+            "imageUrl is required — this endpoint is the image-to-video lane. For a prompt-only run use POST /v1/text-to-video.",
+        },
       })
     }
 

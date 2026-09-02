@@ -390,7 +390,7 @@ function registerWriteTools(opts: RegisterCharacterToolsOpts): void {
         base_outfit: z.string().max(1000).optional(),
         seed_prompt: z
           .string()
-          .max(2000)
+          .max(4000)
           .optional()
           .describe("Short prompt fragment that scaffolds the canonical portrait."),
         identity_lock: z
@@ -461,7 +461,7 @@ function registerWriteTools(opts: RegisterCharacterToolsOpts): void {
         gender: z.string().max(50).optional(),
         style: STYLE_FIELD.optional(),
         base_outfit: z.string().max(1000).optional(),
-        seed_prompt: z.string().max(2000).optional(),
+        seed_prompt: z.string().max(4000).optional(),
         identity_lock: z.enum(["off", "soft", "strict"]).optional(),
         expected_updated_at: z
           .string()

@@ -260,7 +260,19 @@ export class NodaroClient {
     })
   }
 
-  async request<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {
+  /**
+   * The transport: build the request, send it, throw the typed error on a
+   * non-2xx via {@link throwFromResponse}, then read the body via `read` — all
+   * inside the abort timer, so `timeoutMs` bounds the body download too (a
+   * stalled CSV stream aborts, it does not hang forever). Both the JSON path
+   * ({@link request}) and the text path ({@link requestText}) go through here.
+   */
+  private async send<T>(
+    method: string,
+    path: string,
+    options: RequestOptions,
+    read: (res: Response) => Promise<T>,
+  ): Promise<T> {
     const url = this.buildUrl(path, options.query)
 
     const token = await this.auth.getToken()
@@ -309,12 +321,26 @@ export class NodaroClient {
         throwFromResponse(res.status, errBody)
       }
 
-      // 204 No Content
-      if (res.status === 204) return undefined as T
-      return await res.json() as T
+      return await read(res)
     } finally {
       clearTimeout(timeoutId)
     }
+  }
+
+  async request<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {
+    return this.send(method, path, options, async (res) =>
+      // 204 No Content
+      res.status === 204 ? (undefined as T) : ((await res.json()) as T),
+    )
+  }
+
+  /**
+   * Like {@link request}, for endpoints that answer text (CSV exports). Errors
+   * are still the JSON envelope and throw the same typed errors, and the read is
+   * bounded by the same timeout as the request.
+   */
+  async requestText(method: string, path: string, options: RequestOptions = {}): Promise<string> {
+    return this.send(method, path, options, (res) => res.text())
   }
 
   /**

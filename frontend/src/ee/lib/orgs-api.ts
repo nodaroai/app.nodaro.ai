@@ -12,6 +12,9 @@ import type {
   OrgPage as Page,
   OrgRole,
   OrgSettings,
+  UsageLogEntry,
+  UsageQuery,
+  UsageReport,
   WorkspaceMemberView,
   WorkspaceRole,
   WorkspaceSettings,
@@ -28,6 +31,9 @@ export type {
   OrganizationView,
   OrgMemberView,
   Page,
+  UsageLogEntry,
+  UsageQuery,
+  UsageReport,
   WorkspaceMemberView,
   WorkspaceView,
 }
@@ -220,6 +226,49 @@ export const actOnJoinCode = (workspaceId: string, action: "rotate" | "enable" |
   request<JoinCodeView>(`/v1/workspaces/${workspaceId}/join-code`, { method: "POST", body: { action } })
 export const joinByCode = (code: string) =>
   request<{ orgId: string; workspaceId: string }>("/v1/workspaces/join", { method: "POST", body: { code } })
+
+// ---------------------------------------------------------------------------
+// Usage (P15 data seam — P16 mounts the card; NO page here)
+// ---------------------------------------------------------------------------
+
+export const getOrgUsage = (
+  orgId: string,
+  opts: Omit<UsageQuery, "cursor" | "limit" | "groupBy"> & { groupBy?: Exclude<UsageQuery["groupBy"], "none"> } = {},
+) => request<UsageReport>(`/v1/orgs/${orgId}/usage${query({ ...opts })}`)
+
+export const listOrgUsageRows = (orgId: string, opts: Omit<UsageQuery, "groupBy"> = {}) =>
+  requestPage<UsageLogEntry>(`/v1/orgs/${orgId}/usage${query({ ...opts, groupBy: "none" })}`)
+
+export const getWorkspaceUsage = (
+  workspaceId: string,
+  opts: Omit<UsageQuery, "cursor" | "limit" | "workspaceId" | "groupBy"> & { groupBy?: "member" | "model" | "day" } = {},
+) => request<UsageReport>(`/v1/workspaces/${workspaceId}/usage${query({ ...opts })}`)
+
+export const listWorkspaceUsageRows = (workspaceId: string, opts: Omit<UsageQuery, "groupBy" | "workspaceId"> = {}) =>
+  requestPage<UsageLogEntry>(`/v1/workspaces/${workspaceId}/usage${query({ ...opts, groupBy: "none" })}`)
+
+/**
+ * THE CSV seam (X-09): fetches the CSV with auth headers and returns it as a
+ * Blob plus the server's filename. P16's usage-report card turns the blob into
+ * a download; it must not open its own fetch to the usage route.
+ */
+export async function fetchUsageCsv(
+  path: "org" | "workspace",
+  id: string,
+  opts: Omit<UsageQuery, "cursor" | "limit"> = {},
+): Promise<{ blob: Blob; filename: string }> {
+  const base = path === "org" ? `/v1/orgs/${id}/usage` : `/v1/workspaces/${id}/usage`
+  const headers = await getAuthHeaders()
+  const res = await fetch(`${base}${query({ ...opts, format: "csv" })}`, { headers })
+  if (!res.ok) {
+    const payload = (await res.json().catch(() => null)) as { error?: { code?: string; message?: string } } | null
+    const error = payload?.error
+    throw new OrgApiError(error?.code ?? "internal_error", error?.message ?? "Something went wrong", res.status)
+  }
+  const blob = await res.blob()
+  const match = /filename="?([^"]+)"?/.exec(res.headers.get("Content-Disposition") ?? "")
+  return { blob, filename: match?.[1] ?? "usage.csv" }
+}
 
 // ---------------------------------------------------------------------------
 

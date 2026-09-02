@@ -125,6 +125,7 @@ import { generateSurroundContinuationRoutes } from "./routes/generate-surround-c
 import { generateLocationMotionRoutes } from "./routes/generate-location-motion.js"
 import { adminSettingsRoutes } from "./ee/routes/admin-settings.js"
 import { adminAvailabilityRoutes } from "./ee/routes/admin-availability.js"
+import { consentRoutes } from "./ee/routes/consent.js"
 import { motionTransferRoutes } from "./routes/motion-transfer.js"
 import { videoUpscaleRoutes } from "./routes/video-upscale.js"
 import { faceSwapRoutes } from "./routes/face-swap.js"
@@ -546,6 +547,8 @@ export async function buildApp() {
   if (hasCredits()) await registerCopilotRoutes(app)
   if (hasCredits()) await app.register(claimSignupGrantRoutes)
   if (hasCredits()) await app.register(freeGrantActivationRoutes)
+  // Marketing-email consent prompt + Loops sync (Cloud-only).
+  if (hasCredits()) await app.register(consentRoutes)
   // The review surface only means something where the grant exists.
   if (hasCredits()) await app.register(adminFreeGrantRoutes)
   if (hasAdmin()) await app.register(adminRoutes)

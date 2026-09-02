@@ -14,7 +14,7 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { SUNO_MODELS, SUNO_ADD_TRACK_MODELS, SUNO_TITLE_MAX, AUDIO_FX_PRESETS, readPromptAffixes } from "@nodaro/shared"
+import { SUNO_MODELS, SUNO_ADD_TRACK_MODELS, SUNO_TITLE_MAX, SUNO_TEXT_MAX, AUDIO_FX_PRESETS, readPromptAffixes } from "@nodaro/shared"
 import { applyPromptAffixes } from "@nodaro/prompts"
 import { resolvePreset } from "../../presets/resolve-preset.js"
 import { mcpInject } from "../internal-request.js"
@@ -1733,10 +1733,10 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "Provide `lyrics` to override the lyrics; otherwise Suno reuses what " +
         "it transcribes from the source.",
       inputSchema: {
-        prompt: z.string().min(1).max(3000).describe("Style description for the cover."),
+        prompt: z.string().min(1).max(SUNO_TEXT_MAX).describe("Style description for the cover."),
         audio_url: z.string().url().optional(),
         audio_asset_id: z.string().optional(),
-        lyrics: z.string().max(3000).optional(),
+        lyrics: z.string().max(SUNO_TEXT_MAX).optional(),
         style: z.string().max(500).optional(),
         title: z.string().max(SUNO_TITLE_MAX).optional(),
         instrumental: z.boolean().optional(),
@@ -2250,12 +2250,17 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "explicitly — Suno uses them verbatim instead of generating them from " +
         "the prompt.\n\n" +
         `Models: ${SUNO_MODELS.join(", ")}. Default V5_5.`,
+      // Caps track SUNO_TEXT_MAX — the largest value getMaxSunoPromptChars can
+      // return. The route clamps to the SELECTED version's cap, so a longer
+      // value is trimmed there rather than round-tripped as a tool error.
+      // (generate_music's 2000 cap above is deliberate and stays: it is the
+      // tighter of its two downstream routes.)
       inputSchema: {
-        prompt: z.string().min(1).max(3000).describe("Song description or inspiration prompt."),
+        prompt: z.string().min(1).max(SUNO_TEXT_MAX).describe("Song description or inspiration prompt."),
         model: z.enum(SUNO_MODELS).optional().describe(`Suno model. Default V5_5. Options: ${SUNO_MODELS.join(", ")}.`),
         style: z.string().max(500).optional().describe("Musical style tags (e.g. 'lo-fi hip-hop, melancholy, piano')."),
         title: z.string().max(SUNO_TITLE_MAX).optional(),
-        lyrics: z.string().max(3000).optional().describe("Full lyrics (only used when custom_mode=true)."),
+        lyrics: z.string().max(SUNO_TEXT_MAX).optional().describe("Full lyrics (only used when custom_mode=true)."),
         negative_style: z.string().max(500).optional().describe("Styles to avoid."),
         vocal_gender: z.enum(["male", "female"]).optional(),
         custom_mode: z.boolean().optional().describe("When true, uses prompt as style descriptor and lyrics verbatim."),
@@ -2375,7 +2380,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         audio_asset_id: z.string().min(1).describe("Nodaro audio job id of a Suno track."),
         infill_start_s: z.number().min(0).describe("Start time in seconds of the region to replace."),
         infill_end_s: z.number().min(6).describe("End time in seconds. The replaced interval (end − start) must be 6-60s and at most 50% of the song."),
-        prompt: z.string().min(1).max(3000).describe("Description of what to generate for the replaced region."),
+        prompt: z.string().min(1).max(SUNO_TEXT_MAX).describe("Description of what to generate for the replaced region."),
         tags: z.string().max(500).describe("Style tags for the replacement segment."),
         title: z.string().max(SUNO_TITLE_MAX).optional(),
         full_lyrics: z.string().max(5000).optional().describe("Complete post-edit lyrics of the whole song (modified + unmodified parts)."),
@@ -2418,7 +2423,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "Returns a job_id; the improved style string is in the job output. Use the result " +
         "as `style` in suno_generate.",
       inputSchema: {
-        content: z.string().min(1).max(3000).describe("Style description to enhance (e.g. 'lo-fi chill')."),
+        content: z.string().min(1).max(SUNO_TEXT_MAX).describe("Style description to enhance (e.g. 'lo-fi chill')."),
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },

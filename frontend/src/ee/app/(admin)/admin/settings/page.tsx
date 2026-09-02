@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { Loader2, Settings, Server, Percent, Check, AlertCircle, Film, Plus, Trash2, Bot } from "lucide-react"
+import { Loader2, Settings, Server, Percent, Check, AlertCircle, Film, Plus, Trash2, Bot, Mail } from "lucide-react"
 import { useAdminSettings } from "@/ee/hooks/queries/use-admin-queries"
 import { useUpdateSettingMutation, type AppSettings } from "@/hooks/queries/use-app-settings-queries"
 import { isFeatureEnabled, isCloud } from "@/lib/edition"
@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Select,
   SelectContent,
@@ -67,6 +68,14 @@ export default function AdminSettingsPage() {
     })
   const [appsLimit, setAppsLimit] = useState(20)
   const [autoScrollSeconds, setAutoScrollSeconds] = useState(4)
+  // Marketing-email consent prompt knobs (Cloud-only).
+  const [consentEnabled, setConsentEnabled] = useState(false)
+  const [consentCadenceHours, setConsentCadenceHours] = useState(24)
+  const [consentMaxAsks, setConsentMaxAsks] = useState(5)
+  const [consentWithdrawnHours, setConsentWithdrawnHours] = useState(720)
+  const [consentLoginDef, setConsentLoginDef] = useState<"session" | "app_open">("session")
+  const [consentText, setConsentText] = useState("")
+  const [consentVersion, setConsentVersion] = useState(1)
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -85,6 +94,13 @@ export default function AdminSettingsPage() {
       setTierCaps((settings.copilot_tier_caps ?? {}) as CopilotTierCaps)
       setAppsLimit(settings.featured_apps_limit)
       setAutoScrollSeconds(settings.apps_auto_scroll_seconds)
+      setConsentEnabled(settings.consent_enabled ?? false)
+      setConsentCadenceHours(settings.consent_cadence_hours ?? 24)
+      setConsentMaxAsks(settings.consent_max_asks ?? 5)
+      setConsentWithdrawnHours(settings.consent_withdrawn_cadence_hours ?? 720)
+      setConsentLoginDef(settings.consent_login_definition ?? "session")
+      setConsentText(settings.consent_text ?? "")
+      setConsentVersion(settings.consent_version ?? 1)
     }
   }, [settings])
 
@@ -143,6 +159,14 @@ export default function AdminSettingsPage() {
       updates.push({ key: "apps_auto_scroll_seconds", value: autoScrollSeconds })
     }
 
+    if (consentEnabled !== (settings?.consent_enabled ?? false)) updates.push({ key: "consent_enabled", value: consentEnabled })
+    if (consentCadenceHours !== (settings?.consent_cadence_hours ?? 24)) updates.push({ key: "consent_cadence_hours", value: consentCadenceHours })
+    if (consentMaxAsks !== (settings?.consent_max_asks ?? 5)) updates.push({ key: "consent_max_asks", value: consentMaxAsks })
+    if (consentWithdrawnHours !== (settings?.consent_withdrawn_cadence_hours ?? 720)) updates.push({ key: "consent_withdrawn_cadence_hours", value: consentWithdrawnHours })
+    if (consentLoginDef !== (settings?.consent_login_definition ?? "session")) updates.push({ key: "consent_login_definition", value: consentLoginDef })
+    if (consentText.trim() && consentText.trim() !== (settings?.consent_text ?? "")) updates.push({ key: "consent_text", value: consentText.trim() })
+    if (consentVersion !== (settings?.consent_version ?? 1)) updates.push({ key: "consent_version", value: consentVersion })
+
     let allSuccess = true
     for (const update of updates) {
       try {
@@ -174,7 +198,14 @@ export default function AdminSettingsPage() {
     (copilotDefaultTier !== "" && copilotDefaultTier !== settings.copilot_default_tier) ||
     tierCapsDirty ||
     appsLimit !== settings.featured_apps_limit ||
-    autoScrollSeconds !== settings.apps_auto_scroll_seconds
+    autoScrollSeconds !== settings.apps_auto_scroll_seconds ||
+    consentEnabled !== (settings.consent_enabled ?? false) ||
+    consentCadenceHours !== (settings.consent_cadence_hours ?? 24) ||
+    consentMaxAsks !== (settings.consent_max_asks ?? 5) ||
+    consentWithdrawnHours !== (settings.consent_withdrawn_cadence_hours ?? 720) ||
+    consentLoginDef !== (settings.consent_login_definition ?? "session") ||
+    (consentText.trim() !== "" && consentText.trim() !== (settings.consent_text ?? "")) ||
+    consentVersion !== (settings.consent_version ?? 1)
   )
 
   if (loading && !settings) {
@@ -505,6 +536,76 @@ export default function AdminSettingsPage() {
             <p className="text-xs text-muted-foreground">
               Time between auto-scroll steps in the carousel (0 to disable). Pauses on hover.
             </p>
+          </div>
+        </div>
+
+        {/* Marketing-email consent prompt (Cloud-only) */}
+        <div className="border rounded-lg p-4 bg-card">
+          <div className="flex items-center gap-2 mb-4">
+            <Mail className="h-4 w-4 text-muted-foreground" />
+            <h2 className="font-medium">Email consent prompt</h2>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="pr-4">
+              <Label htmlFor="consent-enabled">Show the consent prompt</Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                When on, users who haven&apos;t answered see a dismissible prompt asking to opt in to marketing email. Off = never shown, anywhere.
+              </p>
+            </div>
+            <Switch id="consent-enabled" checked={consentEnabled} onCheckedChange={setConsentEnabled} />
+          </div>
+
+          <div className="mt-4 space-y-2">
+            <Label htmlFor="consent-text">Prompt text</Label>
+            <Textarea
+              id="consent-text"
+              value={consentText}
+              maxLength={500}
+              rows={2}
+              onChange={(e) => setConsentText(e.target.value)}
+              placeholder="We'll email you when we ship something worth knowing about…"
+            />
+            <p className="text-xs text-muted-foreground">Shown under the heading. Plain text, up to 500 characters.</p>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-4 max-w-md">
+            <div className="space-y-1.5">
+              <Label htmlFor="consent-cadence">Re-ask every (hours)</Label>
+              <Input id="consent-cadence" type="number" min={1} max={8760} value={consentCadenceHours}
+                onChange={(e) => setConsentCadenceHours(Math.max(1, Math.min(8760, Number(e.target.value) || 1)))} />
+              <p className="text-xs text-muted-foreground">Users who haven&apos;t answered.</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="consent-max">Max times to ask</Label>
+              <Input id="consent-max" type="number" min={1} max={50} value={consentMaxAsks}
+                onChange={(e) => setConsentMaxAsks(Math.max(1, Math.min(50, Number(e.target.value) || 1)))} />
+              <p className="text-xs text-muted-foreground">Lifetime cap, then stop. Raise it to re-open.</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="consent-withdrawn">Re-ask unsubscribers (hours)</Label>
+              <Input id="consent-withdrawn" type="number" min={1} max={8760} value={consentWithdrawnHours}
+                onChange={(e) => setConsentWithdrawnHours(Math.max(1, Math.min(8760, Number(e.target.value) || 1)))} />
+              <p className="text-xs text-muted-foreground">Users who opted out in Settings.</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="consent-version">Text version</Label>
+              <Input id="consent-version" type="number" min={1} value={consentVersion}
+                onChange={(e) => setConsentVersion(Math.max(1, Number(e.target.value) || 1))} />
+              <p className="text-xs text-muted-foreground">Bump when the copy changes materially.</p>
+            </div>
+          </div>
+
+          <div className="mt-4 max-w-xs space-y-1.5">
+            <Label htmlFor="consent-login-def">What counts as a &quot;login&quot;</Label>
+            <Select value={consentLoginDef} onValueChange={(v) => setConsentLoginDef(v as "session" | "app_open")}>
+              <SelectTrigger id="consent-login-def"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="session">Real sign-in</SelectItem>
+                <SelectItem value="app_open">App open</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">Cadence is time-based today; this is informational until a login counter exists.</p>
           </div>
         </div>
 

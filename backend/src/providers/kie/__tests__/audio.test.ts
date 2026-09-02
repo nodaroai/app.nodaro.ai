@@ -18,6 +18,7 @@ vi.mock("../models.js", () => ({
   },
   KIE_TTS_MODELS: {
     "elevenlabs-turbo": { model: "elevenlabs/text-to-speech-turbo-2-5", cost: 0.01 },
+    "elevenlabs-multilingual": { model: "elevenlabs/text-to-speech-multilingual-v2", cost: 0.01 },
   },
   KIE_SOUND_EFFECT_MODELS: {
     "elevenlabs-sfx": { model: "elevenlabs/sound-effect-v2", cost: 0.01 },
@@ -93,6 +94,24 @@ describe("KieAudioProvider.textToSpeech", () => {
       undefined,
       expect.objectContaining({ modelKey: "elevenlabs-turbo" }),
     )
+  })
+
+  // P6 language funnel request-body pins (mirrors direct-tts.test.ts's harness).
+  it("normalizes a 639-3 languageCode to 639-1 before it reaches the KIE proxy", async () => {
+    await provider.textToSpeech("Shalom", undefined, "elevenlabs-turbo", { languageCode: "heb" })
+    expect(mocks.mockRunKieTask).toHaveBeenCalledWith(
+      "elevenlabs/text-to-speech-turbo-2-5",
+      expect.objectContaining({ language_code: "he" }),
+      undefined,
+      undefined,
+      expect.objectContaining({ modelKey: "elevenlabs-turbo" }),
+    )
+  })
+
+  it("omits language_code entirely on elevenlabs-multilingual", async () => {
+    await provider.textToSpeech("Hola", undefined, "elevenlabs-multilingual", { languageCode: "spa" })
+    const input = mocks.mockRunKieTask.mock.calls[0]![1] as Record<string, unknown>
+    expect(input).not.toHaveProperty("language_code")
   })
 
   it("throws when no result URL", async () => {

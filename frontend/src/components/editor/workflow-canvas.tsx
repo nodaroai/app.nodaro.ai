@@ -77,6 +77,8 @@ import { useWorkflowStore, migrateImageNodes, buildDuplicatedNodeData } from "@/
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { useUndoRedoActions } from "@/hooks/use-undo-redo"
 import { useIsMobile } from "@/hooks/use-is-mobile"
+import { useAppDir } from "@/lib/locale-store"
+import { minimapPosition } from "./canvas-corner-layout"
 import { MobileCanvasContext } from "./mobile-canvas-context"
 import { CanvasZoomContext } from "./canvas-zoom-context"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
@@ -572,6 +574,9 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const [guideLines, setGuideLines] = useState<GuideLine[]>([])
   const computeGuides = useAlignmentGuides()
   const isMobile = useIsMobile()
+  // Chrome inside the LTR-pinned canvas (the MiniMap) mirrors by prop, chrome
+  // outside it by logical class — both read the live direction, never `rtl:`.
+  const isRtl = useAppDir() === "rtl"
   const copilotTurnActive = useCopilotUiStore((s) => s.turnActive)
   const zoom = useStore((s) => s.transform[2])
   const lastMousePositionRef = useRef({ x: 0, y: 0 })
@@ -2966,6 +2971,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         >
           {!isMobile && showMiniMap && (
             <MiniMap
+              position={minimapPosition(isRtl)}
               className="!bg-card !border !shadow-sm"
               nodeColor={getMiniMapNodeColor}
               maskColor="rgba(0, 0, 0, 0.2)"
@@ -2990,10 +2996,10 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
             size="sm"
             variant="outline"
             onClick={followBuild}
-            className="absolute top-3 right-3 z-30 shadow-sm bg-background"
+            className="absolute top-3 end-3 z-30 shadow-sm bg-background"
             data-testid="follow-build-button"
           >
-            Follow build →
+            Follow build {isRtl ? "←" : "→"}
           </Button>
         )}
         {/* Workflow-loading surface. Shown for the whole fetch window
@@ -3060,7 +3066,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           >
             <button
               type="button"
-              className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent transition-colors"
+              className="w-full text-start px-3 py-1.5 text-sm hover:bg-accent transition-colors"
               onClick={() => {
                 replaceEdgeWithTeleporter(edgeContextMenu.edgeId)
                 setEdgeContextMenu(null)

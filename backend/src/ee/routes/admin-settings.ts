@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
 import { invalidateSettingsCache } from "../../lib/app-settings.js"
+import { invalidateConsentConfigCache } from "../lib/consent-config.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { requirePlatformOperator } from "../middleware/require-platform-operator.js"
 
@@ -201,6 +202,54 @@ export async function adminSettingsRoutes(app: FastifyInstance) {
       }
     }
 
+    if (key === "consent_enabled") {
+      if (typeof value !== "boolean") {
+        return reply.status(400).send({
+          error: { code: "validation_error", message: "consent_enabled must be a boolean" },
+        })
+      }
+    }
+
+    if (key === "consent_login_definition") {
+      if (value !== "session" && value !== "app_open") {
+        return reply.status(400).send({
+          error: { code: "validation_error", message: "consent_login_definition must be 'session' or 'app_open'" },
+        })
+      }
+    }
+
+    if (key === "consent_text") {
+      if (typeof value !== "string" || value.trim().length === 0 || value.length > 500) {
+        return reply.status(400).send({
+          error: { code: "validation_error", message: "consent_text must be a non-empty string up to 500 characters" },
+        })
+      }
+    }
+
+    if (key === "consent_cadence_hours" || key === "consent_withdrawn_cadence_hours") {
+      if (typeof value !== "number" || !Number.isFinite(value) || value <= 0 || value > 8760) {
+        return reply.status(400).send({
+          error: { code: "validation_error", message: `${key} must be a number of hours between 0 and 8760` },
+        })
+      }
+    }
+
+    if (key === "consent_max_asks") {
+      if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 50) {
+        return reply.status(400).send({
+          error: { code: "validation_error", message: "consent_max_asks must be an integer between 1 and 50" },
+        })
+      }
+    }
+
+    if (key === "consent_version") {
+      if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
+        return reply.status(400).send({
+          error: { code: "validation_error", message: "consent_version must be an integer >= 1" },
+        })
+      }
+    }
+
     if (key === "featured_app_ids") {
       if (!Array.isArray(value) || !value.every((v: unknown) => typeof v === "string")) {
         return reply.status(400).send({
@@ -255,6 +304,7 @@ export async function adminSettingsRoutes(app: FastifyInstance) {
 
     // Invalidate cached settings so changes take effect immediately
     invalidateSettingsCache()
+    invalidateConsentConfigCache()
 
     return {
       key: data.key,

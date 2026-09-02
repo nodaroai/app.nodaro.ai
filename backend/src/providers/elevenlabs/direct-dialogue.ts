@@ -3,6 +3,7 @@ import { requireProviderKey } from "../provider-keys.js"
 import { providerFetch, type EgressMeta } from "../egress.js"
 import { ELEVENLABS_BASE_URL } from "./client.js"
 import { resolveDirectVoiceId } from "./direct-tts.js"
+import { languageCodeForModel } from "./language-code.js"
 
 /** One script line: what to say, and which voice says it. */
 export interface DialogueInputLine {
@@ -52,7 +53,10 @@ export async function directElevenLabsDialogue(
     model_id: "eleven_v3",
   }
   if (options?.stability != null) body.settings = { stability: options.stability }
-  if (options?.languageCode) body.language_code = options.languageCode
+  // This funnel hardcodes model_id "eleven_v3" (above), so pass that provider
+  // id to the language funnel rather than a caller-supplied one.
+  const languageCode = languageCodeForModel("elevenlabs-v3", options?.languageCode)
+  if (languageCode) body.language_code = languageCode
   if (options?.seed != null) body.seed = options.seed
   if (options?.applyTextNormalization) body.apply_text_normalization = options.applyTextNormalization
 

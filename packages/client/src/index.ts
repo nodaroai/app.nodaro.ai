@@ -428,11 +428,18 @@ export type {
   OrgSettings,
   OrgStatus,
   MemberStatus,
+  UsageGroupBy,
+  UsageLogEntry,
+  UsageQuery,
+  UsageReport,
+  UsageReportRow,
+  UsageReportTotals,
+  UsageVarianceRow,
   WorkspaceMemberView,
   WorkspaceRole,
   WorkspaceSettings,
   WorkspaceSummary,
   WorkspaceView,
 } from "@nodaro/shared"
-export { WORKSPACE_HEADER } from "@nodaro/shared"
+export { USAGE_GROUP_BYS, WORKSPACE_HEADER } from "@nodaro/shared"
 export { PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY } from "@nodaro/shared"
