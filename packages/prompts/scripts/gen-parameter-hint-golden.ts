@@ -363,6 +363,67 @@ add("setting/empty-data", "no value selected injects nothing", {
 })
 
 // ---------------------------------------------------------------------------
+// 5. W1-b rephrase coverage — spec 2026-09-01-app-reports-triage-design.md
+//    §3.3. The positional sampler above reaches only three of the reworded
+//    hints, so every one is pinned here by id. A diff on any of these cases
+//    means the safety-motivated wording moved — which is exactly what this
+//    fixture exists to make loud.
+//
+//    eye-state-half-lidded and feature-collarbone-visible are DELIBERATELY
+//    excluded: per the replay-harness go/no-go verdict (internal validation
+//    results, 2026-09-02), those two attributes
+//    rendered 0/10 and 0/22 times under either wording in validation, so the
+//    approved rewording could not be confirmed and both were left byte-
+//    identical to their pre-W1-b wording. Pinning them here would just be
+//    re-asserting old strings under a `w1b:` key — do not add cases for them.
+// ---------------------------------------------------------------------------
+
+/** [id, data field, value] per reworded person entry. */
+const W1B_PERSON: ReadonlyArray<readonly [string, string, string | string[]]> = [
+  ["bust-very-full", "bust", "bust-very-full"],
+  ["silhouette-hourglass", "silhouette", "silhouette-hourglass"],
+  ["waist-defined", "waist", "waist-defined"],
+  ["lip-state-glossy", "lipState", ["lip-state-glossy"]],
+  ["lip-state-parted", "lipState", ["lip-state-parted"]],
+  ["lip-state-bitten", "lipState", ["lip-state-bitten"]],
+  ["eye-state-staring-camera", "eyeState", ["eye-state-staring-camera"]],
+  ["texture-dewy", "skinTexture", ["texture-dewy"]],
+  ["texture-glistening", "skinTexture", ["texture-glistening"]],
+  ["texture-baby-soft", "skinTexture", ["texture-baby-soft"]],
+  ["texture-shower-fresh-wet", "skinTexture", ["texture-shower-fresh-wet"]],
+  ["feature-bare-shoulders", "distinctiveFeature", ["feature-bare-shoulders"]],
+  ["feature-midriff-visible", "distinctiveFeature", ["feature-midriff-visible"]],
+]
+
+for (const [id, field, value] of W1B_PERSON) {
+  add(`person/w1b:${id}`, `W1-b reworded hint — ${id}`, {
+    id: "n1",
+    type: "person",
+    data: { [field]: value },
+  })
+}
+
+add(
+  "person/w1b:midriff+navel-fold",
+  "W1-b reworded hard-coded midriff+navel fold clause",
+  { id: "n1", type: "person", data: { distinctiveFeature: ["feature-midriff-visible", "feature-navel-visible"] } },
+)
+
+for (const id of ["state-fitted", "state-wet"] as const) {
+  add(`styling/w1b:${id}`, `W1-b reworded hint — ${id}`, {
+    id: "n1",
+    type: "styling",
+    data: { wardrobeState: [id] },
+  })
+}
+
+add("pose/w1b:biting-lip", "W1-b reworded pose twin of lip-state-bitten", {
+  id: "n1",
+  type: "pose",
+  data: { pose: "biting-lip" },
+})
+
+// ---------------------------------------------------------------------------
 // Emit
 // ---------------------------------------------------------------------------
 

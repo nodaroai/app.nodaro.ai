@@ -156,7 +156,7 @@ describe("subjectSchema — the flat bag, through the wire", () => {
       distinctiveFeature: ["feature-midriff-visible", "feature-navel-visible"],
     })
     expect(renderSubjectHints(parsed, { surface: "image" })).toEqual([
-      "wearing a cropped style, midriff and navel visible",
+      "with a cropped hemline and the navel showing",
     ])
   })
 

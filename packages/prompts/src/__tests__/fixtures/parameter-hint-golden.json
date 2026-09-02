@@ -686,30 +686,30 @@
       "expected": "shot on location, warm color palette, orange and red tones throughout the image with golden highlights, no text overlays"
     },
     {
-      "key": "composition-effects/id:bursting-through-frame",
+      "key": "composition-effects/id:glitch-distortion",
       "note": "single-dim catalog id",
       "node": {
         "id": "n1",
         "type": "composition-effects",
         "data": {
-          "compositionEffect": "bursting-through-frame"
+          "compositionEffect": "glitch-distortion"
         }
       },
       "ctx": null,
-      "expected": "the subject bursting forward through a torn paper frame in a 3D paper-tear effect, head and shoulders breaking the plane of the canvas with ragged paper edges curling outward"
+      "expected": "the subject distorted by digital glitch artifacts with RGB channel separation, scanline tearing and datamoshed compression bands cutting horizontally across the figure"
     },
     {
-      "key": "composition-effects/id:doubled-mirror",
+      "key": "composition-effects/id:none",
       "note": "single-dim catalog id",
       "node": {
         "id": "n1",
         "type": "composition-effects",
         "data": {
-          "compositionEffect": "doubled-mirror"
+          "compositionEffect": "none"
         }
       },
       "ctx": null,
-      "expected": "the subject duplicated in mirror reflections, multiplied identity with two or more echoed versions of the figure stitched along an invisible mirror seam"
+      "expected": ""
     },
     {
       "key": "composition-effects/id:prism-flares",
@@ -907,7 +907,7 @@
         "id": "n1",
         "type": "framing",
         "data": {
-          "shotSize": "big-close-up",
+          "shotSize": "ecu-hands",
           "angle": "worms-eye-angle",
           "coverage": "selfie-framing",
           "composition": "contact-sheet",
@@ -915,7 +915,7 @@
         }
       },
       "ctx": null,
-      "expected": "big close-up, tighter than a standard close-up with just the face from chin to forehead, no headroom, worm's eye view, extreme low angle from ground level looking up, selfie framing, subject holding the camera at arm's length to frame themselves, slightly high angle from above, phone-camera perspective with the subject's face and upper body dominant in frame, arm or phone edge sometimes visible, contact sheet layout, multiple sequential thumbnail frames arranged in rows on a black or dark grey background, frame numbers along the edge, mimicking a 35mm film proof sheet, profile shot from the subject's right side"
+      "expected": "extreme close-up tight on the hands, every finger and crease visible, worm's eye view, extreme low angle from ground level looking up, selfie framing, subject holding the camera at arm's length to frame themselves, slightly high angle from above, phone-camera perspective with the subject's face and upper body dominant in frame, arm or phone edge sometimes visible, contact sheet layout, multiple sequential thumbnail frames arranged in rows on a black or dark grey background, frame numbers along the edge, mimicking a 35mm film proof sheet, profile shot from the subject's right side"
     },
     {
       "key": "framing/multi-pick",
@@ -1016,30 +1016,17 @@
       "expected": "shot on location, including a sofa, Three-seater sofa with plush cushioned back and seat, low armrests and upholstery in a neutral tone, no text overlays"
     },
     {
-      "key": "held-prop/id:chalk",
+      "key": "held-prop/id:handbag",
       "note": "single-dim catalog id",
       "node": {
         "id": "n1",
         "type": "held-prop",
         "data": {
-          "heldProp": "chalk"
+          "heldProp": "handbag"
         }
       },
       "ctx": null,
-      "expected": "holding a short stick of white chalk between thumb and forefinger, faint chalk dust drifting from the tip as if mid-stroke"
-    },
-    {
-      "key": "held-prop/id:shield",
-      "note": "single-dim catalog id",
-      "node": {
-        "id": "n1",
-        "type": "held-prop",
-        "data": {
-          "heldProp": "shield"
-        }
-      },
-      "ctx": null,
-      "expected": "holding a medieval shield raised across the body with one arm strapped through the back, the front face angled forward in a defensive stance"
+      "expected": "carrying a structured designer handbag by the top handles in one hand at hip height, the bag positioned cleanly in frame"
     },
     {
       "key": "held-prop/id:smartphone",
@@ -1053,6 +1040,19 @@
       },
       "ctx": null,
       "expected": "holding a modern smartphone in one hand, screen lightly catching the ambient light, fingers wrapped naturally around the device"
+    },
+    {
+      "key": "held-prop/id:work-gloves",
+      "note": "single-dim catalog id",
+      "node": {
+        "id": "n1",
+        "type": "held-prop",
+        "data": {
+          "heldProp": "work-gloves"
+        }
+      },
+      "ctx": null,
+      "expected": "holding a worn pair of tan leather work gloves in both hands at waist height, the thick weathered leather clearly visible"
     },
     {
       "key": "held-prop/multi-pick",
@@ -1760,7 +1760,7 @@
           "type": "crusader",
           "age": "age-early-20s",
           "ethnicity": "norwegian",
-          "regionalAesthetic": "ginza-office",
+          "regionalAesthetic": "shibuya-streetwear",
           "frame": "frame-average",
           "bodyMass": "mass-full",
           "bust": "bust-full",
@@ -1793,7 +1793,7 @@
         }
       },
       "ctx": null,
-      "expected": "a Crusader knight — chainmail hauberk under a white surcoat with a red cross emblem, conical helm, longsword and kite shield, devout warrior bearing, in their early 20s, around 21 years old, of Norwegian descent, a Ginza Tokyo office aesthetic — buttoned-up Japanese corporate-elegant vibe, full-figured, full bust, pear-shaped silhouette, a heart-shaped face with a wide forehead and pointed chin, a pointed chin with a narrow jawline, high, defined cheekbones, a lean face with low facial fat and subtle hollowing beneath the cheekbones, double-eyelid eyes with a clearly defined upper crease, droopy eyes with the upper lids sitting low for a soft, sleepy gaze, upturned eyes with the outer corners lifted, positive canthal tilt, close-set eyes set close together, eyes set close beneath the brow with little brow-to-eye distance, hunter eyes, a small button nose with a rounded tip, a slightly upturned nose tip, full plump lips, a wide mouth, with lips pursed, pressed and pushed forward, long straight hair, gray hair, bold defined dark full eyebrows, tan skin, with visible swimwear tan lines on the skin, rare violet eyes with a deep purple iris, gazing off-camera with a contemplative expression, a goatee, with a small face tattoo near the eye or cheekbone"
+      "expected": "a Crusader knight — chainmail hauberk under a white surcoat with a red cross emblem, conical helm, longsword and kite shield, devout warrior bearing, in their early 20s, around 21 years old, of Norwegian descent, a Shibuya streetwear aesthetic — Tokyo street-fashion vibe, layered post-modern mood, full-figured, full bust, pear-shaped silhouette, a heart-shaped face with a wide forehead and pointed chin, a pointed chin with a narrow jawline, high, defined cheekbones, a lean face with low facial fat and subtle hollowing beneath the cheekbones, double-eyelid eyes with a clearly defined upper crease, droopy eyes with the upper lids sitting low for a soft, sleepy gaze, upturned eyes with the outer corners lifted, positive canthal tilt, close-set eyes set close together, eyes set close beneath the brow with little brow-to-eye distance, hunter eyes, a small button nose with a rounded tip, a slightly upturned nose tip, full plump lips, a wide mouth, with lips pursed, pressed and pushed forward, long straight hair, gray hair, bold defined dark full eyebrows, tan skin, with visible swimwear tan lines on the skin, rare violet eyes with a deep purple iris, gazing off-camera with a contemplative expression, a goatee, with a small face tattoo near the eye or cheekbone"
     },
     {
       "key": "person/one-dimension",
@@ -1822,6 +1822,211 @@
       },
       "ctx": null,
       "expected": "shot on location, a man, no text overlays"
+    },
+    {
+      "key": "person/w1b:bust-very-full",
+      "note": "W1-b reworded hint — bust-very-full",
+      "node": {
+        "id": "n1",
+        "type": "person",
+        "data": {
+          "bust": "bust-very-full"
+        }
+      },
+      "ctx": null,
+      "expected": "a fuller bust"
+    },
+    {
+      "key": "person/w1b:eye-state-staring-camera",
+      "note": "W1-b reworded hint — eye-state-staring-camera",
+      "node": {
+        "id": "n1",
+        "type": "person",
+        "data": {
+          "eyeState": [
+            "eye-state-staring-camera"
+          ]
+        }
+      },
+      "ctx": null,
+      "expected": "looking directly into the camera"
+    },
+    {
+      "key": "person/w1b:feature-bare-shoulders",
+      "note": "W1-b reworded hint — feature-bare-shoulders",
+      "node": {
+        "id": "n1",
+        "type": "person",
+        "data": {
+          "distinctiveFeature": [
+            "feature-bare-shoulders"
+          ]
+        }
+      },
+      "ctx": null,
+      "expected": "with the shoulders uncovered"
+    },
+    {
+      "key": "person/w1b:feature-midriff-visible",
+      "note": "W1-b reworded hint — feature-midriff-visible",
+      "node": {
+        "id": "n1",
+        "type": "person",
+        "data": {
+          "distinctiveFeature": [
+            "feature-midriff-visible"
+          ]
+        }
+      },
+      "ctx": null,
+      "expected": "with a cropped hemline"
+    },
+    {
+      "key": "person/w1b:lip-state-bitten",
+      "note": "W1-b reworded hint — lip-state-bitten",
+      "node": {
+        "id": "n1",
+        "type": "person",
+        "data": {
+          "lipState": [
+            "lip-state-bitten"
+          ]
+        }
+      },
+      "ctx": null,
+      "expected": "lightly biting the lower lip"
+    },
+    {
+      "key": "person/w1b:lip-state-glossy",
+      "note": "W1-b reworded hint — lip-state-glossy",
+      "node": {
+        "id": "n1",
+        "type": "person",
+        "data": {
+          "lipState": [
+            "lip-state-glossy"
+          ]
+        }
+      },
+      "ctx": null,
+      "expected": "with a glossy lip finish"
+    },
+    {
+      "key": "person/w1b:lip-state-parted",
+      "note": "W1-b reworded hint — lip-state-parted",
+      "node": {
+        "id": "n1",
+        "type": "person",
+        "data": {
+          "lipState": [
+            "lip-state-parted"
+          ]
+        }
+      },
+      "ctx": null,
+      "expected": "with lips relaxed and slightly open, as if mid-sentence"
+    },
+    {
+      "key": "person/w1b:midriff+navel-fold",
+      "note": "W1-b reworded hard-coded midriff+navel fold clause",
+      "node": {
+        "id": "n1",
+        "type": "person",
+        "data": {
+          "distinctiveFeature": [
+            "feature-midriff-visible",
+            "feature-navel-visible"
+          ]
+        }
+      },
+      "ctx": null,
+      "expected": "with a cropped hemline and the navel showing"
+    },
+    {
+      "key": "person/w1b:silhouette-hourglass",
+      "note": "W1-b reworded hint — silhouette-hourglass",
+      "node": {
+        "id": "n1",
+        "type": "person",
+        "data": {
+          "silhouette": "silhouette-hourglass"
+        }
+      },
+      "ctx": null,
+      "expected": "an hourglass figure"
+    },
+    {
+      "key": "person/w1b:texture-baby-soft",
+      "note": "W1-b reworded hint — texture-baby-soft",
+      "node": {
+        "id": "n1",
+        "type": "person",
+        "data": {
+          "skinTexture": [
+            "texture-baby-soft"
+          ]
+        }
+      },
+      "ctx": null,
+      "expected": "with soft, fine-pored skin"
+    },
+    {
+      "key": "person/w1b:texture-dewy",
+      "note": "W1-b reworded hint — texture-dewy",
+      "node": {
+        "id": "n1",
+        "type": "person",
+        "data": {
+          "skinTexture": [
+            "texture-dewy"
+          ]
+        }
+      },
+      "ctx": null,
+      "expected": "with dewy, luminous skin"
+    },
+    {
+      "key": "person/w1b:texture-glistening",
+      "note": "W1-b reworded hint — texture-glistening",
+      "node": {
+        "id": "n1",
+        "type": "person",
+        "data": {
+          "skinTexture": [
+            "texture-glistening"
+          ]
+        }
+      },
+      "ctx": null,
+      "expected": "with a light glistening sheen on the skin"
+    },
+    {
+      "key": "person/w1b:texture-shower-fresh-wet",
+      "note": "W1-b reworded hint — texture-shower-fresh-wet",
+      "node": {
+        "id": "n1",
+        "type": "person",
+        "data": {
+          "skinTexture": [
+            "texture-shower-fresh-wet"
+          ]
+        }
+      },
+      "ctx": null,
+      "expected": "fresh, water-dappled skin as if just out of the shower"
+    },
+    {
+      "key": "person/w1b:waist-defined",
+      "note": "W1-b reworded hint — waist-defined",
+      "node": {
+        "id": "n1",
+        "type": "person",
+        "data": {
+          "waist": "waist-defined"
+        }
+      },
+      "ctx": null,
+      "expected": "a defined waistline"
     },
     {
       "key": "photo-genre/id:fashion-editorial",
@@ -1986,6 +2191,19 @@
       "expected": "shot on location, standing upright in a relaxed natural posture, no text overlays"
     },
     {
+      "key": "pose/w1b:biting-lip",
+      "note": "W1-b reworded pose twin of lip-state-bitten",
+      "node": {
+        "id": "n1",
+        "type": "pose",
+        "data": {
+          "pose": "biting-lip"
+        }
+      },
+      "ctx": null,
+      "expected": "lightly biting the lower lip, a subtle playful expression"
+    },
+    {
       "key": "post-process-effects/id:film-burn",
       "note": "single-dim catalog id",
       "node": {
@@ -2134,17 +2352,17 @@
       "expected": "set in a cozy coffee shop interior with warm pendant lights, exposed brick walls and steam drifting over espresso machines"
     },
     {
-      "key": "setting/id:neon-alley",
+      "key": "setting/id:park",
       "note": "single-dim catalog id",
       "node": {
         "id": "n1",
         "type": "setting",
         "data": {
-          "setting": "neon-alley"
+          "setting": "park"
         }
       },
       "ctx": null,
-      "expected": "set in a rain-soaked neon-lit alley in a Tokyo-style nightlife district with glowing kanji signs, steam vents and reflective puddles"
+      "expected": "set in a leafy urban park with winding footpaths, wooden benches, tall shade trees, people lounging on grass and sunlight filtering through leaves"
     },
     {
       "key": "setting/id:wasteland",
@@ -2214,6 +2432,19 @@
       "expected": "3D rendered style, modern CGI aesthetic with clean shading, subtle ambient occlusion and crisp materials"
     },
     {
+      "key": "style/id:early-color-photo",
+      "note": "single-dim catalog id",
+      "node": {
+        "id": "n1",
+        "type": "style",
+        "data": {
+          "style": "early-color-photo"
+        }
+      },
+      "ctx": null,
+      "expected": "rendered as an early-1900s color photograph in the Prokudin-Gorsky / autochrome tradition — soft three-colour-separation registration, muted dye-toned palette, fine grain and a gentle antique warmth"
+    },
+    {
       "key": "style/id:isometric",
       "note": "single-dim catalog id",
       "node": {
@@ -2225,19 +2456,6 @@
       },
       "ctx": null,
       "expected": "isometric style, 3/4 axonometric projection with clean geometric forms, bright saturated flat colors and uniform lighting like a tile-based game or architectural diagram"
-    },
-    {
-      "key": "style/id:manga",
-      "note": "single-dim catalog id",
-      "node": {
-        "id": "n1",
-        "type": "style",
-        "data": {
-          "style": "manga"
-        }
-      },
-      "ctx": null,
-      "expected": "rendered as inked manga panel art, crisp black ink on white with confident line weight variation, screen-tone dot patterns for shading, dramatic speed lines and the distinctly Japanese black-and-white comic aesthetic — separate from full-color anime"
     },
     {
       "key": "style/pre-post",
@@ -2299,7 +2517,7 @@
           "jewelry": "jewelry-body-chain",
           "nails": "nails-french",
           "facePaint": "face-paint-warpaint",
-          "outfit": "outfit-pharaoh",
+          "outfit": "outfit-caftan",
           "top": "top-bandeau",
           "bottom": "bottom-bike-shorts",
           "outerwear": "outerwear-fur-coat",
@@ -2310,7 +2528,7 @@
         }
       },
       "ctx": null,
-      "expected": "with dewy makeup, glowing fresh skin and minimal coverage, in thin neat sisterlocks, with a rooted look — visible darker roots blending into lighter lengths, with hair flowing freely, strands cascading and rippling with subtle movement, wearing wraparound sport sunglasses, wearing a wide-brim Western cowboy hat with a creased crown, wearing a thin metallic body chain draped across the torso, with classic French tip manicure, with warrior war paint streaked across the face, wearing ancient Egyptian pharaoh regalia — a broad beaded usekh collar, a jeweled falcon pectoral, and a pleated linen shendyt kilt with golden arm cuffs, wearing a strapless bandeau top wrapped across the chest, in fitted lycra bike shorts ending mid-thigh, wearing a plush fur coat with a deep textured pile, with bunched knit leg warmers stacked over the calves, in woven jute-sole espadrilles with a canvas upper, a casual summer shoe, wearing glossy latex with a high-shine liquid look clinging to the body, the outfit composed of multiple stacked layers, each piece visible at the edges"
+      "expected": "with dewy makeup, glowing fresh skin and minimal coverage, in thin neat sisterlocks, with a rooted look — visible darker roots blending into lighter lengths, with hair flowing freely, strands cascading and rippling with subtle movement, wearing wraparound sport sunglasses, wearing a wide-brim Western cowboy hat with a creased crown, wearing a thin metallic body chain draped across the torso, with classic French tip manicure, with warrior war paint streaked across the face, dressed in a long flowing caftan robe, a full-length garment worn across the Middle East and North Africa, wearing a strapless bandeau top wrapped across the chest, in fitted lycra bike shorts ending mid-thigh, wearing a plush fur coat with a deep textured pile, with bunched knit leg warmers stacked over the calves, in woven jute-sole espadrilles with a canvas upper, a casual summer shoe, wearing glossy latex with a high-shine liquid look clinging to the body, the outfit composed of multiple stacked layers, each piece visible at the edges"
     },
     {
       "key": "styling/mid-of-each",
@@ -2328,7 +2546,7 @@
           "jewelry": "jewelry-choker-leather",
           "nails": "nails-dark",
           "facePaint": "face-paint-tribal",
-          "outfit": "outfit-pajamas",
+          "outfit": "outfit-bathrobe",
           "top": "top-camisole",
           "bottom": "bottom-shorts",
           "outerwear": "outerwear-puffer",
@@ -2339,7 +2557,7 @@
         }
       },
       "ctx": null,
-      "expected": "with bold lips, a strong red or dark lipstick as the focal point, side-swept across the face with strands falling over one eye, with sombré — a subtle, soft ombré gradient, with hair full of volume, blown out and bouncy with body and lift at the roots, wearing round wire-frame glasses, John Lennon style, wearing a striped pharaonic nemes headdress with a golden uraeus cobra at the brow, wearing a black leather choker fitted close around the throat, with dark black nail polish, with tribal-inspired face markings, in a soft cotton pajama set — a button-up top and matching pants, wearing a thin satin camisole with delicate spaghetti straps, in casual mid-thigh shorts, wearing a quilted puffer jacket with horizontal baffles and a stand-up collar, with lace-topped thigh-high stockings cinched mid-thigh, in polished leather penny loafers, wearing warm woven wool with a soft matte surface and visible fibers, the top neatly tucked into the bottom"
+      "expected": "with bold lips, a strong red or dark lipstick as the focal point, side-swept across the face with strands falling over one eye, with sombré — a subtle, soft ombré gradient, with hair full of volume, blown out and bouncy with body and lift at the roots, wearing round wire-frame glasses, John Lennon style, wearing a striped pharaonic nemes headdress with a golden uraeus cobra at the brow, wearing a black leather choker fitted close around the throat, with dark black nail polish, with tribal-inspired face markings, wrapped in a plush terrycloth bathrobe tied at the waist, wearing a thin satin camisole with delicate spaghetti straps, in casual mid-thigh shorts, wearing a quilted puffer jacket with horizontal baffles and a stand-up collar, with lace-topped thigh-high stockings cinched mid-thigh, in polished leather penny loafers, wearing warm woven wool with a soft matte surface and visible fibers, the top neatly tucked into the bottom"
     },
     {
       "key": "styling/one-dimension",
@@ -2368,6 +2586,36 @@
       },
       "ctx": null,
       "expected": "shot on location, with natural, subtle no-makeup makeup, no text overlays"
+    },
+    {
+      "key": "styling/w1b:state-fitted",
+      "note": "W1-b reworded hint — state-fitted",
+      "node": {
+        "id": "n1",
+        "type": "styling",
+        "data": {
+          "wardrobeState": [
+            "state-fitted"
+          ]
+        }
+      },
+      "ctx": null,
+      "expected": "tailored, close-fitting clothing"
+    },
+    {
+      "key": "styling/w1b:state-wet",
+      "note": "W1-b reworded hint — state-wet",
+      "node": {
+        "id": "n1",
+        "type": "styling",
+        "data": {
+          "wardrobeState": [
+            "state-wet"
+          ]
+        }
+      },
+      "ctx": null,
+      "expected": "the clothing soaked through and dripping"
     },
     {
       "key": "temporal/first-of-each",
@@ -2511,17 +2759,17 @@
       "expected": "the first and second scenes blend as a translucent double exposure where both images coexist semi-transparently on the frame, the first image then gradually fades out leaving the second image fully resolved"
     },
     {
-      "key": "transition/id:wireframe-morph",
+      "key": "transition/id:dream-ripple",
       "note": "single-dim catalog id",
       "node": {
         "id": "n1",
         "type": "transition",
         "data": {
-          "transition": "wireframe-morph"
+          "transition": "dream-ripple"
         }
       },
       "ctx": null,
-      "expected": "the first subject's surface peels away to reveal a glowing geometric wireframe of polygons and edges, the wireframe flexes and re-tessellates into the topology of the new subject, then the new surface skins over the wireframe"
+      "expected": "a circular ripple radiates outward across the frame as if the image were the surface of water, and where the ripple passes the first scene is replaced by the second scene"
     },
     {
       "key": "transition/multi-pick",

@@ -21,9 +21,9 @@ describe("Layer 1 — the collectors drop adultOnly entries for a minor", () => 
     const joined = hints.join(", ")
     expect(joined).toContain("a young child around 5 years old")
     expect(joined).toContain("slim")
-    expect(joined).not.toMatch(/bust|midriff|lips slightly parted|soft breath/i)
+    expect(joined).not.toMatch(/bust|midriff|cropped hemline|slightly open|mid-sentence/i)
     // eye-state-staring-camera and texture-baby-soft are NOT flagged — they stay.
-    expect(joined).toContain("staring directly at the camera with unbroken eye contact")
+    expect(joined).toContain("looking directly into the camera")
   })
 
   it("compact mode drops the same ids", () => {
@@ -34,13 +34,13 @@ describe("Layer 1 — the collectors drop adultOnly entries for a minor", () => 
   it("styling on the flat subject bag drops flagged garments when the bag says minor", () => {
     const hints = buildStylingHints({ age: "age-child", wardrobeState: ["state-fitted"], top: "top-crop-top", outfit: "outfit-bikini" } as never)
     const joined = hints.join(", ")
-    expect(joined).not.toMatch(/hugging the contours|bikini/i)
+    expect(joined).not.toMatch(/close-fitting|bikini/i)
     expect(joined).toMatch(/cropped top/i) // top-crop-top is deliberately NOT flagged
   })
 
   it("styling with no age signal on the bag is untouched (separate-node consumers; Layer 2 covers them)", () => {
     const hints = buildStylingHints({ wardrobeState: ["state-fitted"] } as never)
-    expect(hints.join(", ")).toMatch(/hugging the contours/i)
+    expect(hints.join(", ")).toMatch(/close-fitting/i)
   })
 
   it("adults are byte-identical to before: every flagged entry still emits for age-30s", () => {
