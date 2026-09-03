@@ -1,5 +1,32 @@
 # @nodaro/prompts
 
+## 1.16.0
+
+### Minor Changes
+
+- b47bd25: Adult output CHANGES in this release — supersedes the "Adult output is unchanged" note from the minor-age floor changeset, which ships in the same version.
+
+  Sixteen picker-catalog hints are reworded to describe the garment or the look rather than exposed skin (person: `bust-very-full`, `silhouette-hourglass`, `waist-defined`, `lip-state-glossy`, `lip-state-parted`, `lip-state-bitten`, `texture-glistening`, `texture-shower-fresh-wet`, `texture-dewy`, `texture-baby-soft`, `eye-state-staring-camera`, `feature-bare-shoulders`, `feature-midriff-visible`; styling: `state-fitted`, `state-wet`; pose: `biting-lip`), plus the hard-coded midriff+navel fold clause. Both `promptHint` and `term` change on every reworded entry. Two entries the replay harness could not validate (`eye-state-half-lidded`, `feature-collarbone-visible`) keep their current wording. A cross-catalog de-stack now emits at most one "cropped" clause per subject.
+
+  The minor-age floor did not narrow: `RETIRED_ADULT_ONLY_HINT_STRINGS` keeps every pre-rephrase string in the strip set, so a client still on an older `@nodaro/prompts` (client-assembled seed prompts) is stripped exactly as before, and the new wording is a live needle too. Thin clients should bump to this release and re-validate any prompt snapshots.
+
+### Patch Changes
+
+- 7ba3b9e: Reword the two `person` picker hints the original W1-b rephrase (2026-09-01 app-reports triage) left byte-identical — `eye-state-half-lidded` and `feature-collarbone-visible` — because the replay harness could not confirm their approved rewording rendered on the model (0/10 and 0/22). A follow-up staging replay found wordings that DO render, approved 2026-09-03: `eye-state-half-lidded` now reads `"with drowsy, partly closed eyes, the lids sitting low over the iris"`, and `feature-collarbone-visible` now reads `"with an open neckline that leaves the collarbones uncovered"`. `label`, `description`, `term` and `adultOnly` are unchanged on both entries.
+
+  The minor-age floor did not narrow: both entries' pre-rework `promptHint` strings were already in `RETIRED_ADULT_ONLY_HINT_STRINGS` (added alongside the rest of W1-b's flagged hints as "harmless double coverage" at the time), so a client still on an older `@nodaro/prompts` is stripped exactly as before, and the new wording is a live needle too via the same `adultOnly` derivation.
+
+- 5955108: Fix `texture-shower-fresh-wet`'s `promptHint` to carry the `"with "` lead-in every other independent-dimension skin-texture hint uses (`"with fresh, water-dappled skin as if just out of the shower"`), so it no longer joins mid-fragment as "…sheen on the skin, fresh, water-dappled skin…". `term` and `label` are unchanged.
+- Updated dependencies [94d22ab]
+- Updated dependencies [bb58724]
+- Updated dependencies [14f930d]
+- Updated dependencies [14f930d]
+- Updated dependencies [bb58724]
+- Updated dependencies [7810119]
+- Updated dependencies [bb58724]
+- Updated dependencies [bb58724]
+  - @nodaro/shared@2.21.0
+
 ## 1.15.0
 
 ### Minor Changes
