@@ -942,6 +942,113 @@ describe("POST /v1/workflow-executions/:id/cancel", () => {
     expect(res.json().success).toBe(true)
   })
 
+  /**
+   * Cross-environment scoping (migration 374). A `pending` execution moved to
+   * `stopping` never passes through the orchestrator's claim write, so this is
+   * the ONE other path that can leave a row in a status the reconcile sweeps
+   * scan. Unstamped, it is invisible to every environment but production —
+   * and stuck in `stopping` forever on staging or a self-host.
+   */
+  it("stamps runtime_env when after_current stops a never-claimed (pending) execution", async () => {
+    const saved = process.env.RUNTIME_ENV
+    process.env.RUNTIME_ENV = "staging"
+    try {
+      const mockFrom = vi.mocked(supabase.from)
+      const updateSpy = vi.fn().mockReturnValue({
+        eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+      })
+      let callNum = 0
+      mockFrom.mockImplementation(() => {
+        callNum++
+        if (callNum === 1) {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  single: vi.fn().mockResolvedValue({
+                    data: { id: TEST_EXEC_ID, status: "pending" },
+                    error: null,
+                  }),
+                }),
+              }),
+            }),
+          } as never
+        }
+        if (callNum === 2) return { update: updateSpy } as never
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              in: vi.fn().mockResolvedValue({ data: [], error: null }),
+            }),
+          }),
+        } as never
+      })
+
+      const res = await authedPost(`/v1/workflow-executions/${TEST_EXEC_ID}/cancel`, {
+        mode: "after_current",
+      })
+
+      expect(res.statusCode).toBe(200)
+      expect(updateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "stopping", runtime_env: "staging" }),
+      )
+    } finally {
+      if (saved === undefined) delete process.env.RUNTIME_ENV
+      else process.env.RUNTIME_ENV = saved
+    }
+  })
+
+  it("does NOT re-stamp runtime_env when stopping an already-claimed (running) execution", async () => {
+    const saved = process.env.RUNTIME_ENV
+    process.env.RUNTIME_ENV = "staging"
+    try {
+      const mockFrom = vi.mocked(supabase.from)
+      const updateSpy = vi.fn().mockReturnValue({
+        eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+      })
+      let callNum = 0
+      mockFrom.mockImplementation(() => {
+        callNum++
+        if (callNum === 1) {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  single: vi.fn().mockResolvedValue({
+                    data: { id: TEST_EXEC_ID, status: "running" },
+                    error: null,
+                  }),
+                }),
+              }),
+            }),
+          } as never
+        }
+        if (callNum === 2) return { update: updateSpy } as never
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              in: vi.fn().mockResolvedValue({ data: [], error: null }),
+            }),
+          }),
+        } as never
+      })
+
+      await authedPost(`/v1/workflow-executions/${TEST_EXEC_ID}/cancel`, {
+        mode: "after_current",
+      })
+
+      // The orchestrator that claimed it already owns the row; overwriting the
+      // stamp from another environment's API would hand the row to the wrong
+      // sweep while it is still live.
+      const payload = updateSpy.mock.calls[0][0] as Record<string, unknown>
+      expect(payload.status).toBe("stopping")
+      expect(payload).not.toHaveProperty("runtime_env")
+    } finally {
+      if (saved === undefined) delete process.env.RUNTIME_ENV
+      else process.env.RUNTIME_ENV = saved
+    }
+  })
+
   it("returns success with discard mode, writes status discarded, and does NOT cancel/refund jobs", async () => {
     const mockFrom = vi.mocked(supabase.from)
     const updateSpy = vi.fn().mockReturnValue({

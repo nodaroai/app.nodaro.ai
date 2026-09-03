@@ -10,6 +10,20 @@
  *
  * Recovery latency: at most TICK_INTERVAL_MS + BACKOFF_FROM_START_MS.
  *
+ * ONE ENVIRONMENT, ONE SCAN (migration 374). Several deployments can share a
+ * single Supabase database while each has its OWN Redis — that is exactly how
+ * staging (next.nodaro.ai) and production (app.nodaro.ai) run. The orphan gate
+ * below asks `orchestrationQueue.getJob(row.id)`, which can only ever see jobs
+ * THIS environment enqueued, so an execution belonging to another environment
+ * looks orphaned no matter how healthy it is. Unscoped, this tick killed live
+ * runs across the environment boundary (internal validation: a staging
+ * execution marked "Execution orphaned" by production's cron 2m38s after it
+ * started, while its nodes were still progressing — and the generation already
+ * in flight was charged for output the closed execution could not deliver).
+ * The scan is therefore scoped through `scopeToRuntimeEnv` (lib/runtime-env.ts),
+ * the same helper the boot sweep uses. Rows claimed before 374 have a NULL
+ * `runtime_env` and are reconciled by the environment named `production` only.
+ *
  * See the stuck-execution prevention design for the broader picture.
  */
 import { supabase } from "../supabase.js"
@@ -18,6 +32,7 @@ import { ORCHESTRATOR_ALIVE_STATES } from "../orchestration-queue-config.js"
 import { reconcileNodeStatesFromJobs } from "./node-states.js"
 import { updateExecutionWithRetry } from "../execution-writes.js"
 import { redactProviderDetail } from "../provider-error-detail.js"
+import { scopeToRuntimeEnv } from "../runtime-env.js"
 import type { NodeExecutionState } from "../../services/workflow-engine/types.js"
 
 /** Every queued-or-running BullMQ state for the orchestration queue — defined
@@ -83,11 +98,18 @@ export async function reconcileWorkflowExecutionsTick(): Promise<void> {
   const now = Date.now()
   const backoffCutoff = new Date(now - BACKOFF_FROM_START_MS).toISOString()
 
-  const { data: rows, error } = await supabase
+  const scan = supabase
     .from("workflow_executions")
     .select("id, started_at, node_states")
     .in("status", ["running", "stopping"])
     .lt("started_at", backoffCutoff)
+
+  // Only THIS environment's rows. Staging and production share one database
+  // but have separate Redis instances, so `orchestrationQueue.getJob` below
+  // can only ever find jobs this environment enqueued — without the scope,
+  // every healthy execution of the other environment reads as orphaned and
+  // gets killed mid-run. Same helper as the boot sweep, so they can't drift.
+  const { data: rows, error } = await scopeToRuntimeEnv(scan)
     // Oldest-first ordering for the same reason as cleanupStaleExecutions:
     // a backlog with persistent write failures shouldn't re-process the
     // same heap-order rows on every tick.

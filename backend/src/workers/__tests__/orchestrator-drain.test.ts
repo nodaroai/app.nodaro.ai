@@ -35,6 +35,8 @@ const mocks = vi.hoisted(() => {
   /** Raw supabase `.update()` payloads, as a second net under the above. */
   const supabaseUpdates: Array<{ table: string; payload: Record<string, unknown> }> = []
   const fromCalls: string[] = []
+  /** Runtime-env scope calls the boot sweep's scan made, verbatim (migration 374). */
+  const scanFilters: Array<{ method: "eq" | "or"; args: string[] }> = []
 
   let workflowRow: Record<string, unknown> | null = null
   let staleRows: Array<Record<string, unknown>> = []
@@ -52,7 +54,17 @@ const mocks = vi.hoisted(() => {
     const self = () => chain
     Object.assign(chain, {
       select: vi.fn(self),
-      eq: vi.fn(self),
+      // The stale-execution sweep scopes its scan to this environment's rows;
+      // record the predicate so a test can assert it verbatim. Every other
+      // .eq() (id, status, …) passes through untouched.
+      eq: vi.fn((column?: string, value?: string) => {
+        if (column === "runtime_env") scanFilters.push({ method: "eq", args: [column, String(value)] })
+        return chain
+      }),
+      or: vi.fn((filters: string) => {
+        scanFilters.push({ method: "or", args: [filters] })
+        return chain
+      }),
       is: vi.fn(self),
       in: vi.fn(self),
       neq: vi.fn(self),
@@ -92,6 +104,7 @@ const mocks = vi.hoisted(() => {
     executionWrites,
     supabaseUpdates,
     fromCalls,
+    scanFilters,
     from,
     getJob,
     updateExecutionWithRetry,
@@ -104,6 +117,7 @@ const mocks = vi.hoisted(() => {
       executionWrites.length = 0
       supabaseUpdates.length = 0
       fromCalls.length = 0
+      scanFilters.length = 0
       staleRows = []
       queueJobState = null
       executeNodeImpl = async () => ({ output: { text: "x" }, creditsUsed: 0 })
@@ -358,6 +372,74 @@ describe("orchestrator boot sweep — queue gate", () => {
   })
 })
 
+
+// ---------------------------------------------------------------------------
+// Cross-environment scoping (migration 374).
+//
+// Staging and production share ONE Supabase database and have SEPARATE Redis
+// instances, so the boot sweep's `orchestrationQueue.getJob` can only ever
+// find jobs THIS environment enqueued. Without the scope it read every other
+// environment's healthy execution as orphaned and marked it failed.
+// ---------------------------------------------------------------------------
+
+describe("orchestrator runtime-env scoping", () => {
+  const SAVED_ENV: Record<string, string | undefined> = {}
+  const ENV_KEYS = ["RUNTIME_ENV", "RAILWAY_ENVIRONMENT_NAME"] as const
+
+  beforeEach(() => {
+    mocks.reset()
+    vi.mocked(mocks.executeNode).mockClear()
+    for (const k of ENV_KEYS) {
+      SAVED_ENV[k] = process.env[k]
+      delete process.env[k]
+    }
+  })
+
+  afterEach(() => {
+    for (const k of ENV_KEYS) {
+      if (SAVED_ENV[k] === undefined) delete process.env[k]
+      else process.env[k] = SAVED_ENV[k]
+    }
+  })
+
+  it("the boot sweep scans only its own environment's rows", async () => {
+    process.env.RUNTIME_ENV = "staging"
+    mocks.setStaleRows([])
+
+    await cleanupStaleExecutions()
+
+    expect(mocks.scanFilters).toEqual([{ method: "eq", args: ["runtime_env", "staging"] }])
+  })
+
+  it("the boot sweep in production also claims legacy (NULL runtime_env) rows", async () => {
+    process.env.RUNTIME_ENV = "production"
+    mocks.setStaleRows([])
+
+    await cleanupStaleExecutions()
+
+    // Byte-identical to the cron's predicate — both come from the same helper.
+    expect(mocks.scanFilters).toEqual([
+      { method: "or", args: ["runtime_env.eq.production,runtime_env.is.null"] },
+    ])
+  })
+
+  it("the claim write stamps the environment on the row", async () => {
+    process.env.RUNTIME_ENV = "staging"
+    mocks.setExecuteNodeImpl(async () => { throw new Error("provider 503") })
+
+    const job = makeJob()
+    await runOrchestratorJob(job, "tok").catch(() => {})
+
+    // Step 6 of the orchestrator: the row goes to `running`. That write is the
+    // ONE place a claimed execution learns which environment owns it — without
+    // it the sweeps have nothing to filter on.
+    const claim = mocks.supabaseUpdates.find(
+      (u) => u.table === "workflow_executions" && u.payload.status === "running",
+    )
+    expect(claim, "orchestrator never wrote the claim payload").toBeDefined()
+    expect(claim!.payload.runtime_env).toBe("staging")
+  })
+})
 
 describe("orchestrator entrypoint shutdown", () => {
   it("the dedicated orchestrator process drains and hard-exits", async () => {

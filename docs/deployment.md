@@ -130,6 +130,7 @@ added to `config.ts` without a row here.
 | `PORT` / `HOST` | `8000` / `0.0.0.0` | Where the API listens (in the image the API sits on 9000 behind Caddy on 3000) |
 | `NODE_ENV` | `development` | `production` in every image |
 | `REDIS_URL` | `redis://localhost:6379` | BullMQ queues + caches (bundled: `redis://redis:6379`) |
+| `RUNTIME_ENV` | `RAILWAY_ENVIRONMENT_NAME`, else `local` | Names this deployment. Only matters when two installs share ONE database but have SEPARATE Redis instances (a staging + production pair): each install's stale-execution sweeps then reconcile only the runs its own orchestrator claimed, instead of marking the other install's healthy executions "orphaned". On Railway, `RAILWAY_ENVIRONMENT_NAME` already supplies it — set `RUNTIME_ENV` yourself only elsewhere. Every container of one install (API, workers, orchestrator) must use the SAME value |
 | `DATABASE_URL` | `""` | Direct Postgres URL — used only to apply migrations on boot |
 | `RUN_MIGRATIONS_ON_BOOT` | `false` (compose: `true`) | Apply `supabase/migrations` before the API starts; `false` on a managed Supabase project (see 2c) |
 | `KIE_API_KEY` | `""` | KIE.ai — broadest media/LLM coverage (or paste it on Install health) |
@@ -671,6 +672,18 @@ A typical split:
 All containers share the same Redis + Supabase + R2. They don't talk
 to each other directly — Redis (BullMQ) is the only coordination
 point.
+
+**Two installs, one database**: if you point a second install (a
+staging copy, a preview environment) at the SAME Supabase project but
+give it its OWN Redis, name each install with `RUNTIME_ENV` — on
+Railway `RAILWAY_ENVIRONMENT_NAME` already does this for you. Workflow
+executions record the name of the install whose orchestrator claimed
+them, and each install's stale-execution sweeps only reconcile its own.
+Without distinct names, each install looks for the other's
+orchestration jobs in its own Redis, fails to find them, and marks
+perfectly healthy runs failed with "Execution orphaned". Rows already
+running at the moment you upgrade carry no name yet; the install named
+`production` reconciles those.
 
 **Redis HA**: BullMQ supports Redis cluster mode out of the box. Set
 `REDIS_URL` to a cluster endpoint or a Sentinel URL.

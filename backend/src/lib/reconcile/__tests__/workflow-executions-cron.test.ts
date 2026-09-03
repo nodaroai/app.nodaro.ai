@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 interface JobRow {
   id: string
@@ -12,6 +12,8 @@ interface ExecutionRow {
   id: string
   started_at: string | null
   node_states: Record<string, { status: string; jobId?: string; iterationTotal?: number }>
+  /** Which environment claimed the row (migration 374). Absent = legacy NULL. */
+  runtime_env?: string | null
 }
 
 const mocks = vi.hoisted(() => ({
@@ -23,6 +25,8 @@ const mocks = vi.hoisted(() => ({
     string,
     { state: string; failedReason?: string; attemptsMade?: number } | undefined
   >(),
+  /** Every runtime-env scope call the scan made, verbatim. */
+  scanFilters: [] as Array<{ method: "eq" | "or"; args: string[] }>,
 }))
 
 vi.mock("../../supabase.js", () => {
@@ -31,15 +35,47 @@ vi.mock("../../supabase.js", () => {
       return {
         select: () => ({
           in: () => ({
-            lt: () => ({
+            lt: () => {
               // Production chain added .order(...).limit() — the order
               // call must be supported even though the mock doesn't use
               // its arguments (it just returns the predetermined dataset).
-              order: () => ({
-                limit: () =>
-                  Promise.resolve({ data: mocks.executions, error: null }),
-              }),
-            }),
+              const terminal = (rows: ExecutionRow[]) => ({
+                order: () => ({
+                  limit: () => Promise.resolve({ data: rows, error: null }),
+                }),
+              })
+              // The scan is scoped to this environment's rows (lib/runtime-env.ts).
+              // The mock RECORDS the predicate AND APPLIES it, so a test can assert
+              // both the filter string and the rows it actually excludes. Leaving
+              // .order/.limit reachable unscoped keeps the pre-fix chain (every row,
+              // regardless of environment) expressible — that is the bug shape.
+              return {
+                ...terminal(mocks.executions),
+                eq: (column: string, value: string) => {
+                  mocks.scanFilters.push({ method: "eq", args: [column, value] })
+                  return terminal(
+                    mocks.executions.filter((r) => (r.runtime_env ?? null) === value),
+                  )
+                },
+                or: (filters: string) => {
+                  mocks.scanFilters.push({ method: "or", args: [filters] })
+                  // Interpret the predicate rather than restating its rule: the
+                  // mock follows whatever `runtime_env.eq.X` / `runtime_env.is.null`
+                  // terms the production string carries.
+                  const terms = filters.split(",")
+                  const allowed = terms
+                    .filter((t) => t.startsWith("runtime_env.eq."))
+                    .map((t) => t.slice("runtime_env.eq.".length))
+                  const allowNull = terms.includes("runtime_env.is.null")
+                  return terminal(
+                    mocks.executions.filter((r) => {
+                      const v = r.runtime_env ?? null
+                      return v === null ? allowNull : allowed.includes(v)
+                    }),
+                  )
+                },
+              }
+            },
           }),
         }),
         update: (updates: Record<string, unknown>) => ({
@@ -115,11 +151,30 @@ vi.mock("../../orchestration-queue.js", () => ({
 import { reconcileWorkflowExecutionsTick } from "../workflow-executions-cron.js"
 
 describe("reconcileWorkflowExecutionsTick", () => {
+  const SAVED_ENV: Record<string, string | undefined> = {}
+  const ENV_KEYS = ["RUNTIME_ENV", "RAILWAY_ENVIRONMENT_NAME"] as const
+
   beforeEach(() => {
     mocks.executions.length = 0
     mocks.jobs.length = 0
     mocks.updates.length = 0
     mocks.orchJob.clear()
+    mocks.scanFilters.length = 0
+    for (const k of ENV_KEYS) {
+      SAVED_ENV[k] = process.env[k]
+      delete process.env[k]
+    }
+    // Default the suite to production: the cases below seed rows with no
+    // runtime_env (the legacy, pre-374 shape), and production is the one
+    // environment that reconciles those. Cross-environment cases set their own.
+    process.env.RUNTIME_ENV = "production"
+  })
+
+  afterEach(() => {
+    for (const k of ENV_KEYS) {
+      if (SAVED_ENV[k] === undefined) delete process.env[k]
+      else process.env[k] = SAVED_ENV[k]
+    }
   })
 
   /**
@@ -521,5 +576,76 @@ describe("reconcileWorkflowExecutionsTick", () => {
     } finally {
       errorSpy.mockRestore()
     }
+  })
+  // -------------------------------------------------------------------------
+  // Cross-environment scoping (migration 374).
+  //
+  // Staging and production share one database and have separate Redis
+  // instances, so before this scope existed each environment's cron saw the
+  // other's healthy executions as orphaned and killed them mid-run.
+  // -------------------------------------------------------------------------
+
+  it("does NOT touch another environment's execution, even with no job in this queue", async () => {
+    process.env.RUNTIME_ENV = "staging"
+    seedRunningExecution("exec-prod-owned")
+    mocks.executions[0].runtime_env = "production"
+    // No orchestration job in THIS environment's Redis — production's job lives
+    // in production's Redis, which staging cannot see. Pre-fix, this row was
+    // marked "Execution orphaned" while production was still running it.
+    mocks.orchJob.set("exec-prod-owned", undefined)
+
+    await reconcileWorkflowExecutionsTick()
+
+    expect(mocks.scanFilters).toEqual([{ method: "eq", args: ["runtime_env", "staging"] }])
+    expect(mocks.updates).toEqual([])
+  })
+
+  it("DOES abandon its own environment's orphaned execution", async () => {
+    process.env.RUNTIME_ENV = "staging"
+    seedRunningExecution("exec-staging-owned")
+    mocks.executions[0].runtime_env = "staging"
+    mocks.orchJob.set("exec-staging-owned", undefined)
+
+    await reconcileWorkflowExecutionsTick()
+
+    expect(mocks.scanFilters).toEqual([{ method: "eq", args: ["runtime_env", "staging"] }])
+    expect(mocks.updates).toHaveLength(1)
+    expect(mocks.updates[0].id).toBe("exec-staging-owned")
+    expect(mocks.updates[0].updates.status).toBe("failed")
+    expect(mocks.updates[0].updates.error_message).toContain("Execution orphaned")
+  })
+
+  it("production also scans legacy rows (NULL runtime_env), and only those", async () => {
+    process.env.RUNTIME_ENV = "production"
+    seedRunningExecution("exec-legacy")       // no runtime_env → pre-374 row
+    seedRunningExecution("exec-staging-live") // another environment's row
+    mocks.executions[1].runtime_env = "staging"
+    mocks.orchJob.set("exec-legacy", undefined)
+    mocks.orchJob.set("exec-staging-live", undefined)
+
+    await reconcileWorkflowExecutionsTick()
+
+    expect(mocks.scanFilters).toEqual([
+      { method: "or", args: ["runtime_env.eq.production,runtime_env.is.null"] },
+    ])
+    expect(mocks.updates.map((u) => u.id)).toEqual(["exec-legacy"])
+  })
+
+  it("reads the environment per tick — a redeploy under a new name re-scopes", async () => {
+    process.env.RUNTIME_ENV = "staging"
+    seedRunningExecution("exec-a")
+    mocks.executions[0].runtime_env = "staging"
+    mocks.orchJob.set("exec-a", undefined)
+    await reconcileWorkflowExecutionsTick()
+
+    process.env.RUNTIME_ENV = "preview-42"
+    mocks.updates.length = 0
+    await reconcileWorkflowExecutionsTick()
+
+    expect(mocks.scanFilters).toEqual([
+      { method: "eq", args: ["runtime_env", "staging"] },
+      { method: "eq", args: ["runtime_env", "preview-42"] },
+    ])
+    expect(mocks.updates).toEqual([])
   })
 })

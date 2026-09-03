@@ -18,6 +18,7 @@ import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 import { resolveBillingContext, shouldRefuseDegradedRun } from "../lib/billing-context.js"
 import { billingPairColumns } from "../lib/insert-job.js"
 import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
+import { getRuntimeEnv } from "../lib/runtime-env.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
 import { CreditsService } from "../ee/billing/credits.js"
@@ -728,6 +729,15 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     // Only an immediate cancel finalizes here. "stopping"/"discarded" are handled
     // by the orchestrator, which sets completed_at once jobs settle.
     if (targetStatus === "cancelled") updates.completed_at = new Date().toISOString()
+    // A row that was still `pending` never reached the orchestrator's claim
+    // write, so nothing has stamped its environment (migration 374) — yet
+    // "stopping" IS a status the reconcile sweeps scan. Stamp it here, and
+    // ONLY here: a row an orchestrator already claimed owns its stamp, and
+    // overwriting it would hand a live execution to the wrong environment's
+    // sweep.
+    if (targetStatus === "stopping" && execution.status === "pending") {
+      updates.runtime_env = getRuntimeEnv()
+    }
 
     await supabase
       .from("workflow_executions")
