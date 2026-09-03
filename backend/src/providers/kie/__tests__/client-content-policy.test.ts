@@ -185,6 +185,13 @@ describe('pollKieTask — state:"fail" content-policy classification', () => {
 })
 
 describe("classifyContentPolicyClass — copyright / likeness / safety", () => {
+  it("safety — the output-side \"appear to be unsafe\" wording gpt-image-2 returns through KIE", () => {
+    expect(classifyContentPolicyClass("[400] The generated images appear to be unsafe. Try modifying the prompts.")).toBe("safety")
+    expect(classifyContentPolicyClass("unsafe content detected")).toBe("safety")
+    // a parameter complaint that merely contains the letters is NOT a block
+    expect(classifyContentPolicyClass("unsafeguarded value out of range for duration")).toBeNull()
+  })
+
   it("copyright", () => {
     expect(classifyContentPolicyClass("output video may be related to copyright restrictions")).toBe("copyright")
     expect(classifyContentPolicyClass("intellectual property concern")).toBe("copyright")

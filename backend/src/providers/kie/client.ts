@@ -222,7 +222,11 @@ export function createSanitizedError(
     lowerMsg.includes("moderation") ||
     lowerMsg.includes("violat") ||
     lowerMsg.includes("nsfw") ||
-    lowerMsg.includes("inappropriate")
+    lowerMsg.includes("inappropriate") ||
+    // "[400] The generated images appear to be unsafe. Try modifying the prompts."
+    // — gpt-image-2 via KIE, seen on the 2026-09-03 staging replay of PR 9:
+    // an output-side safety block that carried none of the phrases above.
+    lowerMsg.includes("unsafe")
   ) {
     sanitizedMessage =
       "Content policy violation: The output was blocked by the provider's safety filter. Try modifying your prompt or input image."
@@ -308,7 +312,7 @@ const LIKENESS_RE = /public.?figure|celebrit|real.?person|likeness/i
  * `flagged.?by.?the.?safety` is belt-and-braces for the first group; keeping
  * both means a provider that drops the noun still classifies.
  */
-const SAFETY_RE = /content.?polic|prohibited.?content|sensitive.?content|safety.?(?:filter|policy|system)|flagged.?by.?the.?safety|flagged.?as.?sensitive|moderation|nsfw|inappropriate/i
+const SAFETY_RE = /content.?polic|prohibited.?content|sensitive.?content|safety.?(?:filter|policy|system)|flagged.?by.?the.?safety|flagged.?as.?sensitive|moderation|nsfw|inappropriate|\bunsafe\b/i
 
 /**
  * The one WEAK signal from the log pull (1 row): "Your input was rejected."
