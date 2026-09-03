@@ -579,6 +579,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     label: "GPT Image 2 (I2I)",
     series: "GPT Image",
     description: "Image-to-image with GPT Image 2.",
+    safetyFilter: { stochastic: true, fallback: "nano-banana-pro" },
     useCases: ["edit", "high-res"],
     features: ["reference-image"],
     aspectRatios: GPT_IMAGE_2_RATIOS,
