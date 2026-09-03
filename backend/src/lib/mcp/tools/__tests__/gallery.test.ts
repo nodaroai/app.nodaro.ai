@@ -402,6 +402,51 @@ describe("get_asset tool", () => {
     expect(sc?.errorMessage).toMatch(/safety filter/)
   })
 
+  it("PR9: offers suggestedProvider + retry guidance for a safety-block hint with a catalog fallback", async () => {
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      makeChainableSingle({
+        id: "failed-safety",
+        user_id: "u1",
+        status: "failed",
+        job_type: "generate-image",
+        output_data: {},
+        error_message: "The provider's safety filter blocked this output.",
+        error_hint: { kind: "safety-block", class: "safety", retried: true, suggestedProvider: "nano-banana-pro" },
+      }),
+    )
+    const server = buildServer()
+    registerGallery({ server, session: readSession(), fastify: Fastify() })
+    const result = await callTool(server, "get_asset", { job_id: JOB_UUID })
+    expect(result.isError).toBeUndefined()
+    expect(result.content[0]?.text).toMatch(/retry the SAME/)
+    expect(result.content[0]?.text).toContain("nano-banana-pro")
+    const sc = (result as { structuredContent?: Record<string, unknown> }).structuredContent
+    expect(sc?.retryable).toBe(false)
+    expect(sc?.suggestedProvider).toBe("nano-banana-pro")
+  })
+
+  it("PR9: omits suggestedProvider for a safety-block hint with no catalog fallback", async () => {
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      makeChainableSingle({
+        id: "failed-copyright",
+        user_id: "u1",
+        status: "failed",
+        job_type: "generate-image",
+        output_data: {},
+        error_message: "Blocked for copyright: the provider refused this generation.",
+        error_hint: { kind: "safety-block", class: "copyright", retried: false },
+      }),
+    )
+    const server = buildServer()
+    registerGallery({ server, session: readSession(), fastify: Fastify() })
+    const result = await callTool(server, "get_asset", { job_id: JOB_UUID })
+    expect(result.isError).toBeUndefined()
+    expect(result.content[0]?.text).toMatch(/change the prompt or the input image/)
+    const sc = (result as { structuredContent?: Record<string, unknown> }).structuredContent
+    expect(sc?.retryable).toBe(false)
+    expect(sc).not.toHaveProperty("suggestedProvider")
+  })
+
   it("marks a transient failure retryable", async () => {
     ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
       makeChainableSingle({

@@ -135,6 +135,22 @@ Region editing is grok-2-only: the underlying endpoint references the prior grok
 
 An inpaint or refine edit is **one generation at the provider's normal cost** — there is **no extra surcharge** for the mask or the composite step. The price is exactly the per-provider Generate Image cost listed in [Supported Providers](#supported-providers) above (e.g. nano-banana-pro inpaint costs the same as a fresh nano-banana-pro generation). The same holds for a grok-2 region edit, and its region detection is free.
 
+## When the provider's safety filter blocks a request
+
+A provider's safety filter can occasionally block a benign prompt. For models the catalog flags as having a non-deterministic filter (currently **gpt-image-2**), Nodaro automatically retries the identical request once, at no extra cost, before giving up. A model without that flag — and every model on a second block — fails after a single attempt.
+
+- **Fallback offer.** When the catalog declares a fallback for the model that failed, the node shows the block in amber with a one-click **"Try on Nano Banana Pro"** button — it switches the node's provider and re-runs the request. Nodaro never switches models on its own; you always click through.
+- **Copyright and likeness blocks are never retried.** A match against protected IP or a real person's likeness doesn't change on a second try, so the job fails after one attempt with the provider's own rejection reason.
+- **Credits are always refunded** for a blocked generation. The reservation is released and the job's `credit_status` reads `"refunded"` — see [API integration §12](../../api-integration.md#12-credits-cloud-edition).
+
+The failed job carries a structured `error_hint` that an API/SDK/MCP caller can read instead of parsing `error_message`:
+
+```json
+{ "kind": "safety-block", "class": "safety", "retried": true, "suggestedProvider": "nano-banana-pro" }
+```
+
+`class` is `"copyright"`, `"likeness"`, or `"safety"`; `retried` is `true` only when the automatic retry already ran; `suggestedProvider` is present only when a fallback model is available for the one that failed. Full shape: [API integration §8](../../api-integration.md#8-error-envelope).
+
 ## Cinematic direction by id (`direction`, API / SDK)
 
 On the canvas you set a look by **wiring parameter-picker nodes** into the

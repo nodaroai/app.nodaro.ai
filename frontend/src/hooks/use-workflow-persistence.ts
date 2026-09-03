@@ -7,7 +7,7 @@ import { reconcileWorkflowNodeResults } from "@/lib/reconcile-node-results"
 import { reconcileCompletedSingleNodeJobs } from "@/lib/reconcile-completed-jobs"
 import { prefetchModelCredits } from "@/ee/hooks/queries/use-credits-queries"
 import { toast } from "sonner"
-import type { WorkflowNode, WorkflowEdge, CharacterDefinition, GeneratedResult, SceneNodeData } from "@/types/nodes"
+import type { WorkflowNode, WorkflowEdge, CharacterDefinition, GeneratedResult, SceneNodeData, JobErrorHint } from "@/types/nodes"
 import { filterCloneNodes, stripTransientRuntimeData } from "@nodaro/shared"
 import { buildWorkflowDelta, applyDeltaToGraph, findContestedNodes } from "@/lib/workflow-delta"
 import { orderNodesParentFirst } from "@/components/editor/workflow-editor/group-coords"
@@ -70,6 +70,8 @@ interface NodeExecutionState {
   error?: string
   /** Stable billing-refusal code — mirrors backend NodeExecutionState. */
   errorCode?: string
+  /** Structured safety-block detail mirrored from the failed job (see `JobErrorHint`). */
+  errorHint?: JobErrorHint
 }
 
 interface SaveResult {
@@ -305,6 +307,7 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
           ...data,
           executionStatus: "failed",
           errorMessage: job.error_message ?? "Job failed",
+          errorHint: job.error_hint ?? undefined,
           currentJobId: undefined,
           currentJobProgress: undefined,
         }
@@ -406,6 +409,7 @@ function applyBackendExecutionState(
     } else if (state.status === "failed") {
       data.executionStatus = "failed"
       if (state.error) data.errorMessage = state.error
+      if (state.errorHint) data.errorHint = state.errorHint
     }
     // "skipped" → leave as-is (idle)
 

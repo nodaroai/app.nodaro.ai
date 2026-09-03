@@ -165,6 +165,22 @@ describe("sanitizeJobForPublic", () => {
       ].sort(),
     )
   })
+
+  it("passes error_hint through for non-admin callers — user-safe by construction (PR9)", () => {
+    const withHint = {
+      ...sampleJob,
+      error_hint: { kind: "safety-block", class: "safety", retried: true, suggestedProvider: "nano-banana-pro" },
+    } as JobRecord
+    const regular = sanitizeJobForPublic(withHint, false) as unknown as Record<string, unknown>
+    const admin = sanitizeJobForPublic(withHint, true) as unknown as Record<string, unknown>
+    expect(regular.error_hint).toEqual({
+      kind: "safety-block",
+      class: "safety",
+      retried: true,
+      suggestedProvider: "nano-banana-pro",
+    })
+    expect(admin.error_hint).toEqual(regular.error_hint)
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -232,6 +248,8 @@ interface SeedJob {
   output_data: unknown
   progress?: number
   error_message?: string | null
+  error_hint?: unknown
+  usage_log_id?: string | null
 }
 
 /** The projection the route last asked Supabase for, as a column list. */
@@ -248,10 +266,26 @@ let capturedSelect: string[] = []
  * missing column invisible to every response assertion, which is precisely how
  * `progress` and `error_message` went missing from this endpoint unnoticed
  * while the tests stayed green.
+ *
+ * `usageLogStatuses` (id -> status) backs the route's follow-up
+ * `usage_logs` lookup for `credit_status` — omit it (or a job's
+ * `usage_log_id`) to exercise the "no usage log" -> null path.
  */
-function seedJobs(rows: SeedJob[]) {
+function seedJobs(rows: SeedJob[], usageLogStatuses: Record<string, string> = {}) {
   capturedSelect = []
   vi.mocked(supabase.from).mockImplementation((table: string) => {
+    if (table === "usage_logs") {
+      return {
+        select: vi.fn().mockReturnValue({
+          in: vi.fn().mockImplementation((_col: string, ids: string[]) => {
+            const data = ids
+              .filter((id) => id in usageLogStatuses)
+              .map((id) => ({ id, status: usageLogStatuses[id] }))
+            return Promise.resolve({ data, error: null })
+          }),
+        }),
+      } as never
+    }
     if (table !== "jobs") throw new Error(`Unexpected table "${table}"`)
     let capturedIds: string[] = []
     let capturedUserId: string | undefined
@@ -370,6 +404,56 @@ describe("GET /v1/jobs/status", () => {
     expect(res.json().jobs[0].error_message).toBe("Provider rejected the prompt")
   })
 
+  it("carries error_hint (PR9 migration 376) so a safety-block failure is machine-readable", async () => {
+    seedJobs([
+      {
+        id: "job-a",
+        user_id: TEST_USER_ID,
+        status: "failed",
+        output_data: null,
+        error_message: "The provider's safety filter blocked this output.",
+        error_hint: { kind: "safety-block", class: "safety", retried: true, suggestedProvider: "nano-banana-pro" },
+      },
+    ])
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/jobs/status?ids=job-a&__userId=${TEST_USER_ID}`,
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().jobs[0].error_hint).toEqual({
+      kind: "safety-block",
+      class: "safety",
+      retried: true,
+      suggestedProvider: "nano-banana-pro",
+    })
+  })
+
+  it("derives credit_status from usage_logs.status, one extra query for every id in the response", async () => {
+    seedJobs(
+      [
+        { id: "job-a", user_id: TEST_USER_ID, status: "failed", output_data: null, usage_log_id: "ul-a" },
+        { id: "job-b", user_id: TEST_USER_ID, status: "completed", output_data: null, usage_log_id: "ul-b" },
+        { id: "job-c", user_id: TEST_USER_ID, status: "queued", output_data: null },
+      ],
+      { "ul-a": "refunded", "ul-b": "committed" },
+    )
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/jobs/status?ids=job-a,job-b,job-c&__userId=${TEST_USER_ID}`,
+    })
+
+    expect(res.statusCode).toBe(200)
+    const byId = Object.fromEntries(
+      res.json().jobs.map((j: { id: string; credit_status: unknown }) => [j.id, j.credit_status]),
+    )
+    expect(byId).toEqual({ "job-a": "refunded", "job-b": "committed", "job-c": null })
+    // The raw usage_log_id never leaks — only the derived status.
+    expect(JSON.stringify(res.json())).not.toContain("usage_log_id")
+  })
+
   it("asks Supabase for exactly the columns a poller needs, and no cost columns", async () => {
     // Pinned directly, because the projection is where the two fields above
     // were silently missing. Cost/provider columns stay out: this route does
@@ -380,7 +464,9 @@ describe("GET /v1/jobs/status", () => {
       url: `/v1/jobs/status?ids=job-a&__userId=${TEST_USER_ID}`,
     })
 
-    expect(capturedSelect).toEqual(["id", "status", "progress", "output_data", "error_message"])
+    expect(capturedSelect).toEqual([
+      "id", "status", "progress", "output_data", "error_message", "error_hint", "usage_log_id",
+    ])
     for (const secret of ["provider_cost", "display_cost", "credits", "provider"]) {
       expect(capturedSelect).not.toContain(secret)
     }
@@ -497,6 +583,77 @@ describe("GET /v1/jobs/:id/status", () => {
     expect(res.json().data.output_data).toEqual({
       pro: { finalUrl: "https://public.example/final.mp4" },
     })
+  })
+
+  it("carries error_hint and derives credit_status from usage_logs.status", async () => {
+    const row = {
+      id: "job-a",
+      user_id: TEST_USER_ID,
+      status: "failed",
+      progress: 0,
+      output_data: null,
+      error_message: "The provider's safety filter blocked this output.",
+      error_hint: { kind: "safety-block", class: "safety", retried: true },
+      reconcile_attempts: 0,
+      usage_log_id: "ul-a",
+    }
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "usage_logs") {
+        return {
+          select: vi.fn().mockReturnValue({
+            in: vi.fn().mockResolvedValue({ data: [{ id: "ul-a", status: "refunded" }], error: null }),
+          }),
+        } as never
+      }
+      // Chainable jobs mock — the route calls `.eq()` twice for a non-admin
+      // caller (`.eq("id", id)` then `.eq("user_id", userId)`).
+      const chain = {
+        select: vi.fn(() => chain),
+        eq: vi.fn(() => chain),
+        single: vi.fn().mockResolvedValue({ data: row, error: null }),
+      }
+      return chain as never
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/jobs/job-a/status?__userId=${TEST_USER_ID}`,
+    })
+
+    expect(res.statusCode).toBe(200)
+    const data = res.json().data
+    expect(data.error_hint).toEqual({ kind: "safety-block", class: "safety", retried: true })
+    expect(data.credit_status).toBe("refunded")
+    expect(data).not.toHaveProperty("usage_log_id")
+  })
+
+  it("credit_status is null when the job has no usage_log_id", async () => {
+    const row = {
+      id: "job-b",
+      user_id: TEST_USER_ID,
+      status: "completed",
+      progress: 100,
+      output_data: null,
+      error_message: null,
+      reconcile_attempts: 0,
+    }
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "usage_logs") throw new Error("must not query usage_logs with no usage_log_id")
+      const chain = {
+        select: vi.fn(() => chain),
+        eq: vi.fn(() => chain),
+        single: vi.fn().mockResolvedValue({ data: row, error: null }),
+      }
+      return chain as never
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/jobs/job-b/status?__userId=${TEST_USER_ID}`,
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.credit_status).toBeNull()
   })
 })
 
@@ -656,6 +813,74 @@ describe("GET /v1/jobs/:id — job_type", () => {
   })
 })
 
+describe("GET /v1/jobs/:id — credit_status (PR9)", () => {
+  it("returns credit_status: \"refunded\" when the job's usage log was refunded", async () => {
+    const row = { ...sampleJob, user_id: TEST_USER_ID, usage_log_id: "ul-refunded" }
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "usage_logs") {
+        return {
+          select: vi.fn().mockReturnValue({
+            in: vi.fn().mockResolvedValue({ data: [{ id: "ul-refunded", status: "refunded" }], error: null }),
+          }),
+        } as never
+      }
+      const chain = {
+        select: vi.fn(() => chain),
+        eq: vi.fn(() => chain),
+        single: vi.fn().mockResolvedValue({ data: row, error: null }),
+      }
+      return chain as never
+    })
+
+    const res = await app.inject({ method: "GET", url: `/v1/jobs/job-1?__userId=${TEST_USER_ID}` })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.credit_status).toBe("refunded")
+  })
+
+  it("returns credit_status: null when the job has no usage log", async () => {
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "usage_logs") throw new Error("must not query usage_logs with no usage_log_id")
+      const chain = {
+        select: vi.fn(() => chain),
+        eq: vi.fn(() => chain),
+        single: vi.fn().mockResolvedValue({ data: { ...sampleJob, user_id: TEST_USER_ID }, error: null }),
+      }
+      return chain as never
+    })
+
+    const res = await app.inject({ method: "GET", url: `/v1/jobs/job-1?__userId=${TEST_USER_ID}` })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.credit_status).toBeNull()
+  })
+
+  it("never leaks the raw usage_log_id", async () => {
+    const row = { ...sampleJob, user_id: TEST_USER_ID, usage_log_id: "ul-committed" }
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "usage_logs") {
+        return {
+          select: vi.fn().mockReturnValue({
+            in: vi.fn().mockResolvedValue({ data: [{ id: "ul-committed", status: "committed" }], error: null }),
+          }),
+        } as never
+      }
+      const chain = {
+        select: vi.fn(() => chain),
+        eq: vi.fn(() => chain),
+        single: vi.fn().mockResolvedValue({ data: row, error: null }),
+      }
+      return chain as never
+    })
+
+    const res = await app.inject({ method: "GET", url: `/v1/jobs/job-1?__userId=${TEST_USER_ID}` })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).not.toHaveProperty("usage_log_id")
+    expect(res.json().data.credit_status).toBe("committed")
+  })
+})
+
 describe("POST /v1/jobs/batch-status", () => {
   it("redacts private remux bases from the direct status projection", async () => {
     seedJobs([
@@ -678,5 +903,27 @@ describe("POST /v1/jobs/batch-status", () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.json().data[0].output_data).toEqual({ url: "https://public.example/final.mp4" })
+  })
+
+  it("carries error_hint (PR9 migration 376)", async () => {
+    seedJobs([
+      {
+        id: "job-a",
+        user_id: TEST_USER_ID,
+        status: "failed",
+        output_data: null,
+        error_message: "Blocked for copyright.",
+        error_hint: { kind: "safety-block", class: "copyright", retried: false },
+      },
+    ])
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/jobs/batch-status?__userId=${TEST_USER_ID}`,
+      payload: { jobIds: ["job-a"] },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data[0].error_hint).toEqual({ kind: "safety-block", class: "copyright", retried: false })
   })
 })

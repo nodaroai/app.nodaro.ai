@@ -8,6 +8,7 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { JOB_STATUSES } from "../lib/job-status.js"
 import { redactPrivateJobData } from "../lib/public-job-data.js"
 import { deleteJobWithPrivateMedia } from "../lib/workflow-delete.js"
+import type { ErrorHint } from "../lib/safety-block.js"
 
 const batchStatusBody = z.object({
   jobIds: z.array(z.string().min(1)).min(1).max(100),
@@ -119,6 +120,10 @@ export interface JobRecord {
   error_message: string | null
   /** W0: redacted raw provider error. Admin-only — see sanitizeJobForPublic. */
   error_detail?: string | null
+  /** Migration 376: a user-safe, machine-readable failure verdict written by
+   *  the worker on a final content-policy block. User-safe by construction —
+   *  `sanitizeJobForPublic` passes it through to non-admins. */
+  error_hint?: ErrorHint | null
   created_at: string
   started_at: string | null
   completed_at: string | null
@@ -142,8 +147,8 @@ export interface JobRecord {
  *  column now requires adding it here on purpose. `recovering` is derived. */
 export const PUBLIC_JOB_KEYS = [
   "id", "status", "progress", "input_data", "output_data", "error_message",
-  "created_at", "started_at", "completed_at", "user_id", "credits", "job_type",
-  "source", "source_detail",
+  "error_hint", "created_at", "started_at", "completed_at", "user_id", "credits",
+  "job_type", "source", "source_detail",
 ] as const
 
 /** Keys admins see in addition — provider internals, USD costs, the raw
@@ -192,6 +197,48 @@ export function sanitizeJobForPublic(job: JobRecord, isAdmin: boolean): JobRecor
   }
 
   return picked as unknown as JobRecord | PublicJob
+}
+
+export type CreditStatus = "reserved" | "committed" | "refunded"
+
+/**
+ * The billing-lifecycle twin of a job's `credits` field (PR9, migration 376's
+ * neighbor): `credits` is the amount reserved and never changes meaning once
+ * set, but a caller polling a job has no way to tell whether that reservation
+ * is still held, was committed on delivery, or was refunded on failure.
+ * `usage_logs.status` is that answer — a real column (019/025 migrations),
+ * not a metadata key.
+ *
+ * ONE query for every id in the response (never one per job): callers pass
+ * every `usage_log_id` they have, including duplicates/nulls, and get back a
+ * `Map` keyed by usage_log_id. A job with no usage log (nothing to reserve
+ * against, e.g. a free/zero-cost run) is simply absent from the map —
+ * `creditStatusOf` below is what turns that into the documented `null`.
+ */
+export async function creditStatusMapFor(
+  usageLogIds: readonly (string | null | undefined)[],
+): Promise<Map<string, CreditStatus>> {
+  const ids = Array.from(new Set(usageLogIds.filter((id): id is string => Boolean(id))))
+  const map = new Map<string, CreditStatus>()
+  if (ids.length === 0) return map
+
+  const { data } = await supabase.from("usage_logs").select("id, status").in("id", ids)
+  for (const row of (data ?? []) as { id: string; status?: string | null }[]) {
+    if (row.status === "reserved" || row.status === "committed" || row.status === "refunded") {
+      map.set(row.id, row.status)
+    }
+  }
+  return map
+}
+
+/** `null` for both "no usage log" and "usage log row missing/unrecognized
+ *  status" — the caller never needs to distinguish those two, and `null`
+ *  is already the documented "not available" spelling for this field. */
+export function creditStatusOf(
+  usageLogId: string | null | undefined,
+  map: Map<string, CreditStatus>,
+): CreditStatus | null {
+  return usageLogId ? map.get(usageLogId) ?? null : null
 }
 
 /**
@@ -262,10 +309,12 @@ export async function jobRoutes(app: FastifyInstance) {
     // and every failure reads as a generic one.
     //
     // Same ownership filter as before, and the same fields the lean per-job
-    // status route already exposes, so this widens no boundary.
+    // status route already exposes, so this widens no boundary. error_hint
+    // (migration 376) and usage_log_id (credit_status, PR9) piggyback for the
+    // same reason.
     const { data, error } = await supabase
       .from("jobs")
-      .select("id, status, progress, output_data, error_message")
+      .select("id, status, progress, output_data, error_message, error_hint, usage_log_id")
       .in("id", ids)
       .eq("user_id", req.userId)
 
@@ -273,7 +322,14 @@ export async function jobRoutes(app: FastifyInstance) {
       return sendInternalError(reply, req, error, "Failed to fetch job statuses")
     }
 
-    return { jobs: redactPrivateJobData(data ?? []) }
+    const rows = (data ?? []) as (Record<string, unknown> & { usage_log_id?: string | null })[]
+    const creditMap = await creditStatusMapFor(rows.map((r) => r.usage_log_id))
+    const withCreditStatus = rows.map(({ usage_log_id: usageLogId, ...rest }) => ({
+      ...rest,
+      credit_status: creditStatusOf(usageLogId, creditMap),
+    }))
+
+    return { jobs: redactPrivateJobData(withCreditStatus) }
   })
 
   app.get<{ Params: { id: string } }>("/v1/jobs/:id", async (req, reply) => {
@@ -293,7 +349,7 @@ export async function jobRoutes(app: FastifyInstance) {
 
     let query = supabase
       .from("jobs")
-      .select("id, status, progress, input_data, output_data, error_message, error_detail, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, job_type, reconcile_attempts, source, source_detail")
+      .select("id, status, progress, input_data, output_data, error_message, error_detail, error_hint, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, job_type, reconcile_attempts, source, source_detail, usage_log_id")
       .eq("id", id)
 
     if (!isAdmin) {
@@ -308,7 +364,15 @@ export async function jobRoutes(app: FastifyInstance) {
       })
     }
 
-    return { data: sanitizeJobForPublic(job as unknown as JobRecord, isAdmin) }
+    const usageLogId = (job as { usage_log_id?: string | null }).usage_log_id ?? null
+    const creditMap = await creditStatusMapFor([usageLogId])
+
+    return {
+      data: {
+        ...sanitizeJobForPublic(job as unknown as JobRecord, isAdmin),
+        credit_status: creditStatusOf(usageLogId, creditMap),
+      },
+    }
   })
 
   // Lean status poll for the per-node 3s poll path. Same auth + ownership
@@ -332,7 +396,7 @@ export async function jobRoutes(app: FastifyInstance) {
 
     let query = supabase
       .from("jobs")
-      .select("id, status, progress, output_data, error_message, reconcile_attempts")
+      .select("id, status, progress, output_data, error_message, error_hint, reconcile_attempts, usage_log_id")
       .eq("id", id)
 
     if (!isAdmin) {
@@ -349,10 +413,16 @@ export async function jobRoutes(app: FastifyInstance) {
 
     // Recovery visibility (audit UX): a processing row the reconcile system
     // has touched is being self-healed, not just slow — let pollers say so.
-    const { reconcile_attempts: attempts, ...rest } = job as Record<string, unknown>
+    const {
+      reconcile_attempts: attempts,
+      usage_log_id: usageLogId,
+      ...rest
+    } = job as Record<string, unknown> & { usage_log_id?: string | null }
+    const creditMap = await creditStatusMapFor([usageLogId])
     return redactPrivateJobData({
       data: {
         ...rest,
+        credit_status: creditStatusOf(usageLogId, creditMap),
         ...(job.status === "processing" && ((attempts as number | null) ?? 0) > 0
           ? { recovering: true }
           : {}),
@@ -391,7 +461,7 @@ export async function jobRoutes(app: FastifyInstance) {
 
     let query = supabase
       .from("jobs")
-      .select("id, status, progress, input_data, output_data, error_message, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, job_type, source, source_detail, workflow_executions!left(is_component_execution)")
+      .select("id, status, progress, input_data, output_data, error_message, error_hint, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, job_type, source, source_detail, workflow_executions!left(is_component_execution)")
       .or("workflow_execution_id.is.null,workflow_executions.is_component_execution.neq.true")
       .order("created_at", { ascending: false })
       .limit(limitNum)
@@ -486,7 +556,7 @@ export async function jobRoutes(app: FastifyInstance) {
 
     let query = supabase
       .from("jobs")
-      .select("id, status, output_data, error_message")
+      .select("id, status, output_data, error_message, error_hint")
       .in("id", jobIds)
 
     if (!isAdmin) {

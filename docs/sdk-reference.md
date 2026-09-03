@@ -690,10 +690,17 @@ const { data: job } = await client.jobs.get(jobId)
 
 The returned `Job` uses snake_case fields to match the wire format. Non-admin
 callers receive an explicit allowlist of job fields — `id`, `status`,
-`progress`, `input_data`, `output_data`, `error_message`, `created_at`,
-`started_at`, `completed_at`, `user_id`, `credits`, `job_type`, `source`,
-`source_detail`, plus `recovering` while a processing job is being recovered.
-Admin callers additionally receive `provider`, `provider_cost`, `display_cost`,
+`progress`, `input_data`, `output_data`, `error_message`, `error_hint`,
+`created_at`, `started_at`, `completed_at`, `user_id`, `credits`, `job_type`,
+`source`, `source_detail`, plus `recovering` while a processing job is being
+recovered and `credit_status` (the job's credit-reservation lifecycle —
+`"reserved"` | `"committed"` | `"refunded"` | `null`, derived server-side
+from the usage log). `error_hint` is a structured, user-safe failure verdict
+(`JobErrorHint`) present only on a job the worker classified as a final
+provider content-policy block — see [Generate
+Image](./nodes/ai-image/generate-image.md#when-the-providers-safety-filter-blocks-a-request)
+for what it means and when a fallback model is offered. Admin callers
+additionally receive `provider`, `provider_cost`, `display_cost`,
 `credits_actual`, `error_detail` (the provider's redacted raw error) and
 `reconcile_attempts`. Any other column never reaches any caller. Server-only
 values inside job JSON, including Recast's private pre-watermark remux base,
@@ -721,8 +728,9 @@ const { data: runs, next } = await client.jobs.list({ type: "llm-structured", or
 getStatus(id: string): Promise<{ data: JobStatusResult }>
 ```
 
-Returns the lean status of a job — id, status, progress, output_data, and
-error_message (`GET /v1/jobs/:id/status`). Far less wire + CPU cost than
+Returns the lean status of a job — id, status, progress, output_data,
+error_message, error_hint, and credit_status (`GET /v1/jobs/:id/status`).
+Far less wire + CPU cost than
 `get()` because it skips `input_data` JSONB and cost/provider columns. Its
 `output_data` still receives the server-only JSON redaction described above.
 Intended for poll loops. Same auth and ownership semantics as `get()`.

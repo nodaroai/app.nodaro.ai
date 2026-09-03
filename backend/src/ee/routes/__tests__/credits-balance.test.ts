@@ -367,6 +367,35 @@ describe("GET /v1/credits/transactions", () => {
     expect(res.json().error.code).toBe("internal_error")
   })
 
+  it("PR9: carries the usage_logs.status lifecycle column on each row", async () => {
+    const rows = [
+      {
+        id: "log-refunded",
+        created_at: "2026-04-29T10:00:00Z",
+        credits_used: 5,
+        action: "generate-video",
+        provider: "kie",
+        status: "refunded",
+        metadata: {},
+      },
+    ]
+    const selectSpy = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        order: vi.fn().mockReturnValue({
+          limit: vi.fn().mockResolvedValue({ data: rows, error: null }),
+        }),
+      }),
+    })
+    vi.mocked(supabase.from).mockReturnValue({ select: selectSpy } as never)
+
+    const res = await authedGet("/v1/credits/transactions?limit=20")
+    expect(res.statusCode).toBe(200)
+    // The route MUST select status — a mock that bakes the column into `rows`
+    // without the route actually asking for it would stay green otherwise.
+    expect(selectSpy).toHaveBeenCalledWith(expect.stringContaining("status"))
+    expect(res.json().data[0].status).toBe("refunded")
+  })
+
   it("strips Nodaro's USD valuation from metadata, both spellings", async () => {
     const rows = [
       {

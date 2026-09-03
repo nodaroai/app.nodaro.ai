@@ -149,7 +149,12 @@ export async function registerCreditsBalanceRoutes(app: FastifyInstance): Promis
 
     let query = supabase
       .from("usage_logs")
-      .select("id, created_at, credits_used, action, provider, metadata, workspace_id")
+      // `status` (PR9) is the reserved/committed/refunded lifecycle COLUMN
+      // (019/025 migrations) — real credit-status data, not economics, so it
+      // rides straight through to `rest` below like every other top-level
+      // column. Distinct from `metadata.status` in the allowlist above,
+      // which no INSERT actually populates.
+      .select("id, created_at, credits_used, action, provider, status, metadata, workspace_id")
       .eq("user_id", req.userId)
       .order("created_at", { ascending: false })
       .limit(limit)

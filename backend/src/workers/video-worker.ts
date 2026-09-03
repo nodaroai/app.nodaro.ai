@@ -1,4 +1,4 @@
-import { Worker, DelayedError, type ConnectionOptions } from "bullmq"
+import { Worker, DelayedError, UnrecoverableError, type ConnectionOptions } from "bullmq"
 import IORedis from "ioredis"
 import { config, hasCredits } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
@@ -11,6 +11,13 @@ import { isPostProcessingError } from "../lib/post-processing-error.js"
 import { providerDetailOf } from "../lib/provider-error-detail.js"
 import { isReconcileRecoverable } from "../lib/reconcile/types.js"
 import { DrainAbortError } from "../lib/worker-drain.js"
+import {
+  safetyBlockOf,
+  isFinalAttemptFor,
+  errorHintFor,
+  safetyBlockMessage,
+  fallbackLabelOf,
+} from "../lib/safety-block.js"
 import { resolveIsPublicOutput, mcpClientForcesPrivate } from "./output-visibility.js"
 import { isPromptBlocked } from "../config/content-filter.js"
 import { refundJobCredits, createAssetFromJob, isFinalJobAttempt, type HandlerFn, type JobContext } from "./shared.js"
@@ -312,7 +319,19 @@ export function createVideoWorker() {
           console.error(`[worker] Job ${jobId} failed:`, message)
         }
 
-        const finalAttempt = isFinalJobAttempt(job)
+        // A provider content-policy block gets its OWN bounded retry policy
+        // (backend/src/lib/safety-block.ts), decoupled from the queue's global
+        // `attempts: 3` — a stochastic `safety` block on a flagged model
+        // retries once (maxAttempts 2), everything else (copyright/likeness,
+        // or an unflagged model's safety block) gets exactly one attempt. The
+        // model id rides in `job.data` as `provider` (route enqueue shape);
+        // `model` wins when set (the LoRA path only).
+        const modelId =
+          (job.data as { provider?: string; model?: string }).model ??
+          (job.data as { provider?: string }).provider ??
+          null
+        const block = safetyBlockOf(err, modelId)
+        const finalAttempt = block ? isFinalAttemptFor(job, block) : isFinalJobAttempt(job)
 
         // Post-provider self-heal (audit spec, worker branch). On the FINAL
         // attempt, a PostProcessingError means the provider already delivered
@@ -359,6 +378,14 @@ export function createVideoWorker() {
         // with the reservation intact.
         if (finalAttempt) {
           // Save the sanitized message (user-facing) plus the redacted provider detail (operator-facing).
+          // A `safety`-class block gets its own honest final message (names the
+          // fallback model when the catalog offers one) — copyright/likeness
+          // blocks are deterministic on the same input and keep KIE's existing
+          // CONTENT_POLICY_MESSAGES text unchanged.
+          const errorMessage =
+            block && block.class === "safety"
+              ? safetyBlockMessage(block.fallback ? fallbackLabelOf(block.fallback) : undefined, job.attemptsMade > 0)
+              : message
           // CAS on status so a job a concurrent writer already moved to a terminal
           // state (inflight-reconcile cron completing it, or a stall re-pick) is NOT
           // trampled from "completed"/"cancelled" → "failed" (which would orphan its
@@ -368,10 +395,14 @@ export function createVideoWorker() {
             .from("jobs")
             .update({
               status: "failed",
-              error_message: message,
+              error_message: errorMessage,
               // W0: the provider's own error, redacted — the sanitized message
               // above is what the user sees; this is what the operator needs.
               error_detail: providerDetailOf(err),
+              // Migration 376: a user-safe, machine-readable hint the editor/MCP
+              // can act on (offer the fallback model) without parsing prose.
+              // NULL for anything that isn't a classified content-policy block.
+              ...(block ? { error_hint: errorHintFor(block, job.attemptsMade > 0) } : {}),
               completed_at: new Date().toISOString(),
             })
             .eq("id", jobId)
@@ -388,6 +419,16 @@ export function createVideoWorker() {
             // failure (R2 upload, watermark, transcode, merge) skips the refund
             // because the provider already billed us; everything else refunds.
             await refundJobCredits(usageLogId, jobId, err)
+          }
+
+          // A content-policy block has already exhausted ITS OWN bounded
+          // policy (not the queue's global `attempts: 3`) — BullMQ must not
+          // spend another attempt re-running a request that will fail
+          // identically. UnrecoverableError short-circuits its retry
+          // machinery (precedent: social-publish-worker.ts's `definitive`
+          // branch).
+          if (block) {
+            throw new UnrecoverableError(errorMessage)
           }
         }
         throw err

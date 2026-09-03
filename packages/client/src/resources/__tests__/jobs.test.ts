@@ -90,4 +90,61 @@ describe("jobs resource", () => {
     await c.jobs.list()
     expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/jobs")
   })
+
+  it("get() carries error_hint and credit_status untouched (PR9)", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockOk({
+        data: {
+          id: "job-1",
+          status: "failed",
+          progress: 0,
+          user_id: "u1",
+          input_data: {},
+          output_data: null,
+          error_message: "The provider's safety filter blocked this output.",
+          error_hint: {
+            kind: "safety-block",
+            class: "safety",
+            retried: true,
+            suggestedProvider: "nano-banana-pro",
+          },
+          credit_status: "refunded",
+          credits: 5,
+          job_type: "generate-image",
+          created_at: "2026-09-03T00:00:00Z",
+          started_at: null,
+          completed_at: null,
+        },
+      }),
+    )
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const { data } = await c.jobs.get("job-1")
+    expect(data.error_hint).toEqual({
+      kind: "safety-block",
+      class: "safety",
+      retried: true,
+      suggestedProvider: "nano-banana-pro",
+    })
+    expect(data.credit_status).toBe("refunded")
+  })
+
+  it("getStatus() carries error_hint and credit_status untouched (PR9)", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockOk({
+        data: {
+          id: "job-1",
+          status: "failed",
+          progress: 0,
+          output_data: null,
+          error_message: "Blocked for copyright.",
+          error_hint: { kind: "safety-block", class: "copyright", retried: false },
+          credit_status: null,
+        },
+      }),
+    )
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const { data } = await c.jobs.getStatus("job-1")
+    expect(data.error_hint).toEqual({ kind: "safety-block", class: "copyright", retried: false })
+    expect(data.credit_status).toBeNull()
+  })
 })

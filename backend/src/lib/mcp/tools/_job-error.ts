@@ -105,3 +105,55 @@ export function isRetryableFailure(errorMessage: string | null | undefined): boo
   if (isLocalFfmpegError(lower)) return true
   return !NON_RETRYABLE_PATTERNS.some((p) => lower.includes(p))
 }
+
+/**
+ * PR9 (2026-09-03) — `jobs.error_hint` (migration 376) carries the worker's
+ * OWN safety-block verdict, which is strictly more useful to an MCP client
+ * than re-deriving one from `error_message` keywords: it names the exact
+ * class, whether the worker already spent its one bonus attempt, and — when
+ * the catalog declares a fallback for the model that failed — a REAL model id
+ * the same prompt/references can be retried on.
+ *
+ * `retryable` stays exactly `isRetryableFailure(error_message)` — a
+ * safety-block is never retryable as the SAME request, and every
+ * `safetyBlockMessage()` / KIE content-policy string already reads as
+ * non-retryable via the keyword classifier above, so there is nothing to
+ * override. `error_hint` only changes `guidance` (and adds `suggestedProvider`
+ * when the hint offers one) — it is additive, not a second source of truth
+ * for `retryable`.
+ */
+export function failureGuidance(job: {
+  error_message?: string | null
+  error_hint?: unknown
+}): { retryable: boolean; suggestedProvider?: string; guidance: string } {
+  const retryable = isRetryableFailure(job.error_message)
+  const hint = job.error_hint as
+    | { kind?: unknown; suggestedProvider?: unknown }
+    | null
+    | undefined
+
+  if (hint && hint.kind === "safety-block") {
+    const suggestedProvider =
+      typeof hint.suggestedProvider === "string" ? hint.suggestedProvider : undefined
+    return suggestedProvider
+      ? {
+          retryable,
+          suggestedProvider,
+          guidance:
+            `The provider's safety filter blocked this output twice; retry the SAME ` +
+            `prompt and references with provider "${suggestedProvider}".`,
+        }
+      : {
+          retryable,
+          guidance: "The provider's safety filter blocked this output; change the prompt or the input image.",
+        }
+  }
+
+  return {
+    retryable,
+    guidance: retryable
+      ? "This may be transient — retrying the same request is reasonable."
+      : "This is a permanent failure for this input: do NOT retry the same " +
+        "request unchanged. Change the prompt/input, or report the reason to the user.",
+  }
+}

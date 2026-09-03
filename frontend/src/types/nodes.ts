@@ -65,6 +65,23 @@ export interface GeneratedResult {
   readonly kieTaskId?: string
 }
 
+/**
+ * Structured hint attached to a job's failure when the provider's safety
+ * filter blocked the generation (after the backend's automatic retry).
+ * Carried on `Job.error_hint` / `JobStatusLean.error_hint` / `BatchJobStatus.error_hint`
+ * (`frontend/src/lib/api.ts`) and on the DAG orchestrator's per-node
+ * execution state (`NodeExecutionState.errorHint`) — mirrored verbatim from
+ * the backend shape. `suggestedProvider` is a `@nodaro/shared` model-catalog
+ * id (e.g. "nano-banana-pro") the editor can offer as a one-click fallback;
+ * the editor must never switch the model without the user clicking through.
+ */
+export interface JobErrorHint {
+  readonly kind: "safety-block"
+  readonly class: "copyright" | "likeness" | "safety"
+  readonly retried: boolean
+  readonly suggestedProvider?: string
+}
+
 /** Named region from a grok-2 segment map (RefineRegionsSection). */
 export interface GrokSegmentInfo {
   /** Provider index passed through VERBATIM — what grok-2-edit's maskIndexes
@@ -1571,6 +1588,10 @@ export type GenerateImageData = PromptAffixFields & {
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
+  /** Structured detail for a safety-filter block (see `JobErrorHint`). Set
+   *  alongside `errorMessage` on failure, cleared alongside it on the next
+   *  run/success. */
+  errorHint?: JobErrorHint
   generatedImageUrl?: string
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number

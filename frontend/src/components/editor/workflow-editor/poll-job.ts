@@ -314,6 +314,9 @@ export function pollJobWithNodeUpdate(
                   updateNodeData(nodeId, {
                     executionStatus: "failed",
                     errorMessage: errMsg,
+                    // Defensive: this is a different failure than any prior
+                    // safety-block, so a stale hint must not survive onto it.
+                    errorHint: undefined,
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
@@ -326,6 +329,11 @@ export function pollJobWithNodeUpdate(
                 updateNodeData(nodeId, {
                   executionStatus: "failed",
                   errorMessage: errMsg,
+                  // Structured safety-block detail (kind/class/retried/suggestedProvider),
+                  // when the backend attached one — the editor's one-click fallback
+                  // (e.g. "Try on Nano Banana Pro") reads this. `?? undefined` clears
+                  // any hint left over from a previous, unrelated failure.
+                  errorHint: job.error_hint ?? undefined,
                   currentJobId: undefined,
                   currentJobProgress: undefined,
                 });

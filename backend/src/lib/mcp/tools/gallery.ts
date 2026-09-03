@@ -7,7 +7,7 @@ import { supabase } from "../../supabase.js"
 import { type GalleryItem } from "../widgets/gallery.js"
 import { JOB_AUTO_TEXT_OUTPUT_KEYS } from "../widgets/job-auto.js"
 import { isUuid } from "./_id-guard.js"
-import { isRetryableFailure } from "./_job-error.js"
+import { failureGuidance } from "./_job-error.js"
 import { redactPrivateJobData } from "../../public-job-data.js"
 import { escapeLikeArgument } from "./_like-escape.js"
 
@@ -702,7 +702,8 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
             // error_message is REQUIRED here: without it a failed job returns
             // status="failed" with no reason, and the polling model assumes a
             // transient error and re-runs a permanently-blocked request.
-            "id, status, progress, job_type, input_data, output_data, error_message, created_at, completed_at, credits, user_id",
+            // error_hint (migration 376) backs failureGuidance's suggestedProvider.
+            "id, status, progress, job_type, input_data, output_data, error_message, error_hint, created_at, completed_at, credits, user_id",
           )
           .eq("id", args.job_id)
           .or(
@@ -767,11 +768,14 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         // status="failed", assumes it is transient, and re-runs a permanently
         // blocked request. The widget reads the same signal off structuredContent.
         if (data.status === "failed" || data.status === "cancelled") {
-          const retryable = isRetryableFailure(reason)
-          const guidance = retryable
-            ? "This may be transient — retrying the same request is reasonable."
-            : "This is a permanent failure for this input: do NOT retry the same " +
-              "request unchanged. Change the prompt/input, or report the reason to the user."
+          // PR9: `guidance` now folds in the worker's own safety-block verdict
+          // (error_hint, migration 376) — a real `suggestedProvider` model id
+          // to retry on when the catalog offers one, else the plain
+          // retryable/non-retryable sentences unchanged.
+          const { retryable, guidance, suggestedProvider } = failureGuidance({
+            error_message: reason,
+            error_hint: (data as { error_hint?: unknown }).error_hint,
+          })
           return {
             content: [
               {
@@ -791,6 +795,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
               completedAt: data.completed_at,
               errorMessage: reason,
               retryable,
+              ...(suggestedProvider ? { suggestedProvider } : {}),
               outputData: out,
             },
           }

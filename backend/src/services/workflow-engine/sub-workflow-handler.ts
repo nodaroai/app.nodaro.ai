@@ -312,6 +312,11 @@ export async function executeSubWorkflow(
         const wrapped = new Error(`Sub-workflow node ${executableNodes[i].id} failed: ${error}`)
         const code = (result.reason as { errorCode?: string } | null)?.errorCode
         if (code) (wrapped as Error & { errorCode?: string }).errorCode = code
+        // PR9: same carry for a worker safety-block verdict — otherwise a
+        // sub-workflow-nested node's error_hint is dropped at exactly this
+        // rewrap while errorCode survives it.
+        const hint = (result.reason as { errorHint?: NodeExecutionState["errorHint"] } | null)?.errorHint
+        if (hint) (wrapped as Error & { errorHint?: NodeExecutionState["errorHint"] }).errorHint = hint
         throw wrapped
       }
       creditsUsed += result.value.creditsUsed ?? 0

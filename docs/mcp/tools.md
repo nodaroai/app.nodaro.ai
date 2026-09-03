@@ -1119,8 +1119,12 @@ List your favorited gallery items, most recent first.
 Fetch metadata for a single asset (job) by id, including output URL, prompt,
 provider. Visible for your own jobs (any status) and any user's public
 completed jobs. For a **failed** job it returns the failure reason plus a
-`retryable` flag — `retryable: false` (e.g. a content-policy block) means the
-same request will fail again, so change the input rather than re-running.
+`retryable` flag, a `guidance` sentence, and — when the provider's safety
+filter blocked the output and the catalog offers a fallback model —
+`suggestedProvider`. `retryable: false` (e.g. a content-policy block) means
+the same request will fail again unchanged; when `suggestedProvider` is
+present, retry the SAME prompt and references with that model id instead of
+guessing at a new one.
 
 **Input:** `{ job_id: string }`
 
@@ -1180,7 +1184,11 @@ cursor pagination.
 **Scope:** `jobs:read`
 
 Fetch full metadata for a single job by id, including `output_url`,
-`status`, `progress`, `provider`, and `output_data`.
+`status`, `progress`, `provider`, and `output_data`. On a **failed** or
+**cancelled** job the payload also carries `retryable`, a `guidance`
+sentence, and — when available — `suggestedProvider`: see
+[`get_asset`](#get_asset) for what these mean and when the fallback model
+appears.
 
 **Input:** `{ job_id: uuid }`
 
