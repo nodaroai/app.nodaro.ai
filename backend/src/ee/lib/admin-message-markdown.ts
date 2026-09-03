@@ -149,6 +149,29 @@ export function renderAdminMessageBody(text: string): string {
     .join("<br /><br />")
 }
 
+/**
+ * The inbox PREHEADER — the grey line a mail client shows beside the subject.
+ *
+ * Plain words, never markup: it is read before the email is opened, so an
+ * anchor tag or a bare URL there is noise. Links collapse to their label,
+ * every line break becomes a space, and a long body is cut on a word boundary.
+ *
+ * Required, and required NON-EMPTY: Loops counts an empty data variable as a
+ * missing one and refuses the whole send, which is why the caller falls back
+ * to the subject rather than letting an exotic body produce a blank.
+ */
+export const PREVIEW_TEXT_MAX = 140
+
+export function previewTextFrom(text: string, max: number = PREVIEW_TEXT_MAX): string {
+  const unlinked = text.replace(LINK_PATTERN, (_whole, label: string) => label)
+  const flat = sanitizeHeaderText(unlinked)
+  if (flat.length <= max) return flat
+  const cut = flat.slice(0, max - 1)
+  const lastSpace = cut.lastIndexOf(" ")
+  const trimmed = lastSpace > max / 2 ? cut.slice(0, lastSpace) : cut
+  return `${trimmed.trimEnd()}…`
+}
+
 // `renderAdminMessagePlain` used to live here as the fallback for "what if
 // Loops escapes HTML in its variables". A live send answered that — it does
 // not — so the fallback was dead code hedging against a settled question, and

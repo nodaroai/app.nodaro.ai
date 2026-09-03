@@ -4236,6 +4236,8 @@ export const en = {
   "node.videoWinsAudioIgnored": "Video wins — audio input ignored",
   "node.generatedAlt": "Generated",
   "node.blockedBySafetyFilter": "Blocked by provider safety filter. Try a different prompt or image.",
+  "node.safetyBlockRetried": "The provider's safety filter blocked this output twice. It is not always consistent — try another model or adjust the prompt.",
+  "node.tryOnProvider": "Try on {label}",
   "node.showRawText": "Show raw text",
   "node.viewAsJson": "View as JSON",
   "node.viewAsMarkdown": "View as Markdown",

@@ -3,13 +3,16 @@
  * dataVariables, the stored record, and the Loops template. Three of those are
  * produced here; these tests pin the ones that can drift silently.
  */
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi } from "vitest"
 import { escapeHtml } from "../admin-message-markdown.js"
 import {
   ADMIN_MESSAGE_TEMPLATES,
   getAdminMessageTemplate,
   parseAdminMessage,
 } from "../admin-message-templates.js"
+
+/** The one-character ellipsis previewTextFrom appends. */
+const ELLIPSIS = String.fromCharCode(0x2026)
 
 const ISSUE = {
   whatHappened: "Your video job failed partway through.",
@@ -53,6 +56,7 @@ describe("issue_detected", () => {
     expect(r.ok).toBe(true)
     if (!r.ok) return
     expect(Object.keys(r.value.dataVariables).sort()).toEqual([
+      "firstName",
       "nextStep",
       "whatHappened",
       "whatWeDid",
@@ -122,15 +126,20 @@ describe("general_followup", () => {
     expect(r.value.subject).toBe("About your account")
   })
 
-  it("sends every optional variable as an empty string when unused", () => {
-    // Loops renders an ABSENT variable as a literal {{ctaLabel}} in the email,
-    // so "no button" must be present-and-empty, never omitted.
+  it("sends NO variable for an unused button or screenshot", () => {
+    // The inverse of what this file used to assert, and the fix for the bug
+    // that made every general follow-up bounce: the four optional values went
+    // out as "", Loops counts an empty variable as a missing one, and refused
+    // the send with "Missing required data variable(s): ctaUrl, ctaLabel".
+    // They are composed into the body variable now, where "no button" can
+    // simply be no markup.
     const r = parseAdminMessage("general_followup", BASE)
     expect(r.ok).toBe(true)
     if (!r.ok) return
     for (const k of ["ctaLabel", "ctaUrl", "imageUrl", "imageLabel"]) {
-      expect(r.value.dataVariables[k]).toBe("")
+      expect(r.value.dataVariables).not.toHaveProperty(k)
     }
+    expect(r.value.dataVariables.bodyText).not.toContain("<a href")
   })
 
   it("renders a CTA button when both halves are given", () => {
@@ -142,8 +151,9 @@ describe("general_followup", () => {
     expect(r.ok).toBe(true)
     if (!r.ok) return
     expect(r.value.bodyHtml).toContain("Open your run")
-    expect(r.value.dataVariables.ctaUrl).toBe("https://app.nodaro.ai/r/1")
-    expect(r.value.dataVariables.ctaLabel).toBe("Open your run")
+    // Inside the body variable, not beside it -- see "sends NO variable" above.
+    expect(r.value.dataVariables.bodyText).toContain('<a href="https://app.nodaro.ai/r/1"')
+    expect(r.value.dataVariables.bodyText).toContain("Open your run")
   })
 
   it("refuses half a CTA — a button with no destination reaches the customer broken", () => {
@@ -173,7 +183,8 @@ describe("general_followup", () => {
     if (!r.ok) return
     expect(r.value.bodyHtml).not.toContain("<img")
     expect(r.value.bodyHtml).toContain("See the screenshot")
-    expect(r.value.dataVariables.imageLabel).toBe("See the screenshot")
+    expect(r.value.dataVariables.bodyText).toContain("See the screenshot")
+    expect(r.value.dataVariables.bodyText).toContain('<a href="https://cdn.test/uploads/a.png"')
   })
 
   it("refuses a non-http CTA or image URL", () => {
@@ -250,6 +261,9 @@ describe("getAdminMessageTemplate", () => {
  */
 const HOSTILE = '<img src=x onerror=alert(1)>"><b>x</b>'
 
+/** The variables the Loops template renders outside the body block. */
+const NOT_IN_BODY = new Set(["subjectLine", "firstName", "previewText"])
+
 const HOSTILE_INPUT: Record<string, Record<string, unknown>> = {
   issue_detected: { whatHappened: HOSTILE, whatWeDid: HOSTILE, nextStep: HOSTILE },
   credits_refunded: { amount: 10, reason: HOSTILE },
@@ -301,8 +315,14 @@ describe("every template, one escaping policy", () => {
         // relationship instead of `toContain(value)` is what stops this passing
         // on a fixture that happens to contain no `&`.
         for (const [key, value] of Object.entries(dataVariables)) {
-          // `subjectLine` is the subject line; bodyHtml is the body.
-          if (!value || key === "subjectLine") continue
+          // Three variables are rendered by the Loops template OUTSIDE the body
+          // block, so they are deliberately absent from our reconstruction of
+          // it: subjectLine is the subject, firstName is the template's own
+          // greeting (whose wording lives in the Loops dashboard -- inventing a
+          // copy here would put an unverifiable sentence in the stored record),
+          // and previewText is the inbox preheader: a flattened, truncated
+          // derivative of the body rather than a slice of it.
+          if (!value || NOT_IN_BODY.has(key)) continue
           const expected = key.toLowerCase().includes("url") ? escapeHtml(value) : value
           expect(bodyHtml, `${key} is not in bodyHtml as sent`).toContain(expected)
         }
@@ -329,11 +349,12 @@ describe("URL normalisation", () => {
     })
     expect(r.ok).toBe(true)
     if (!r.ok) return
-    const url = r.value.dataVariables.ctaUrl
+    const url = r.value.input.ctaUrl as string
     expect(url).toContain("%22")
     expect(url).not.toContain('"')
-    // And it is the SAME canonical string in the stored input.
-    expect(r.value.input.ctaUrl).toBe(url)
+    // And the SAME canonical string is what the email carries -- escaped for
+    // the href it sits in, which is the one transformation between them.
+    expect(r.value.dataVariables.bodyText).toContain('<a href="' + escapeHtml(url) + '"')
   })
 })
 
@@ -399,5 +420,146 @@ describe("credits_refunded amount", () => {
     expect(r.value.dataVariables.amount).toBe("1500 credits")
     expect(r.value.bodyHtml).toContain("1500 credits")
     expect(r.value.bodyHtml).not.toContain("1,500")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The contract with Loops
+// ---------------------------------------------------------------------------
+
+/**
+ * THE TEST THAT WOULD HAVE CAUGHT THE OUTAGE.
+ *
+ * Loops validates a send against the variables its template declares and
+ * refuses one whose variable is absent OR empty. Every admin message ever sent
+ * failed on exactly that: all three templates declare `firstName` and the code
+ * sent none of them, and general follow-up additionally sent `""` for an unused
+ * button. Neither was visible to a suite that checked one template in one
+ * combination, so this checks every template, in every optional-field
+ * combination, against the declared list.
+ */
+const FOLLOWUP_BASE = { subjectLine: "About your account", bodyText: "Body." }
+const CTA = { ctaLabel: "Open your run", ctaUrl: "https://app.nodaro.ai/r/1" }
+const SHOT = { imageUrl: "https://cdn.test/uploads/a.png", imageLabel: "See the screenshot" }
+
+const COMBOS: Record<string, Record<string, unknown>[]> = {
+  issue_detected: [ISSUE],
+  credits_refunded: [{ amount: 10, reason: "Refunded a failed render." }],
+  general_followup: [
+    FOLLOWUP_BASE,
+    { ...FOLLOWUP_BASE, ...CTA },
+    { ...FOLLOWUP_BASE, ...SHOT },
+    { ...FOLLOWUP_BASE, ...CTA, ...SHOT },
+  ],
+}
+
+/** Named, unnamed and blank-named: the greeting has to survive all of them. */
+const RECIPIENTS = [{}, { fullName: "Ada Lovelace" }, { fullName: "   " }, { fullName: null }]
+
+describe("the payload Loops receives", () => {
+  it("is checked for every template - a fourth one cannot ship uncovered", () => {
+    expect(Object.keys(COMBOS).sort()).toEqual(ADMIN_MESSAGE_TEMPLATES.map((t) => t.id).sort())
+  })
+
+  for (const template of ADMIN_MESSAGE_TEMPLATES) {
+    for (const [i, input] of (COMBOS[template.id] ?? []).entries()) {
+      it(`${template.id} #${i}: exactly the declared variables, none of them blank`, () => {
+        for (const recipient of RECIPIENTS) {
+          const r = parseAdminMessage(template.id, input, recipient)
+          if (!r.ok) throw new Error(`rejected: ${r.message}`)
+          expect(Object.keys(r.value.dataVariables).sort()).toEqual(
+            [...template.dataVariableNames].sort(),
+          )
+          for (const [key, value] of Object.entries(r.value.dataVariables)) {
+            expect(value.trim(), `${key} is blank, which Loops reads as missing`).not.toBe("")
+          }
+        }
+      })
+    }
+  }
+
+  it("refuses a payload the provider would reject, instead of letting it 502", () => {
+    // Mutation test: make `render` drop the greeting, and the backstop must
+    // catch it. Without this, the check is a line nobody has ever seen fire.
+    const template = getAdminMessageTemplate("issue_detected")
+    if (!template) throw new Error("template missing")
+    const spy = vi
+      .spyOn(template as unknown as { render: () => unknown }, "render")
+      .mockReturnValue({
+        subject: "s",
+        bodyHtml: "<p>b</p>",
+        dataVariables: { whatHappened: "a", whatWeDid: "b", nextStep: "c" },
+      })
+    try {
+      const r = parseAdminMessage("issue_detected", ISSUE)
+      expect(r.ok).toBe(false)
+      if (r.ok) return
+      expect(r.message).toContain("firstName")
+    } finally {
+      spy.mockRestore()
+    }
+  })
+})
+
+describe("the greeting", () => {
+  it("is the recipient's first name", () => {
+    const r = parseAdminMessage("issue_detected", ISSUE, { fullName: "Ada Lovelace" })
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.value.dataVariables.firstName).toBe("Ada")
+  })
+
+  it("falls back to a WORD when there is no name, never a blank", () => {
+    for (const fullName of [undefined, null, "", "   "]) {
+      const r = parseAdminMessage("issue_detected", ISSUE, { fullName })
+      expect(r.ok).toBe(true)
+      if (!r.ok) return
+      expect(r.value.dataVariables.firstName).toBe("there")
+    }
+  })
+
+  it("escapes a name carrying markup, because Loops does not escape variables", () => {
+    const r = parseAdminMessage("issue_detected", ISSUE, { fullName: "<b>x</b> Smith" })
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.value.dataVariables.firstName).toBe("&lt;b&gt;x&lt;/b&gt;")
+  })
+})
+
+describe("the inbox preheader", () => {
+  it("is the body as plain words: no markup, no line breaks", () => {
+    const r = parseAdminMessage("general_followup", {
+      subjectLine: "s",
+      bodyText: "First line.\n\nSee [the run](https://app.nodaro.ai/r/1) for details.",
+    })
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.value.dataVariables.previewText).toBe("First line. See the run for details.")
+  })
+
+  it("cuts a long body on a word boundary", () => {
+    const r = parseAdminMessage("general_followup", {
+      subjectLine: "s",
+      bodyText: "word ".repeat(80),
+    })
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    const preview = r.value.dataVariables.previewText
+    expect(preview.length).toBeLessThanOrEqual(140)
+    expect(preview.endsWith(ELLIPSIS)).toBe(true)
+    expect(preview).not.toContain("wor" + ELLIPSIS)
+  })
+
+  it("falls back to the subject rather than sending an empty variable", () => {
+    // A body of nothing but a C1 control character survives Zod's `.min(1)`
+    // (JS `trim` does not strip U+0085) and then flattens to "". Loops would
+    // refuse the entire send over it.
+    const r = parseAdminMessage("general_followup", {
+      subjectLine: "About your account",
+      bodyText: String.fromCharCode(0x85),
+    })
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.value.dataVariables.previewText).toBe("About your account")
   })
 })

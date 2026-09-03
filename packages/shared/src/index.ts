@@ -758,6 +758,11 @@ export type {
   NormalizedModelInput,
 } from "./model-catalog.js"
 
+// Per-model safety-filter retry/fallback policy (derives from
+// `ModelCatalogEntry.safetyFilter` above).
+export { safetyRetryPolicy } from "./safety-retry-policy.js"
+export type { SafetyRetryPolicy } from "./safety-retry-policy.js"
+
 export {
   STATIC_CAPTION_STYLES,
   KINETIC_CAPTION_STYLES,

@@ -5,6 +5,7 @@
 import type { MediaItem } from "../social/platforms/index.js"
 import type { BillingContext } from "../../lib/billing-context.js"
 import type { Caption } from "@remotion/captions"
+import type { ErrorHint } from "../../lib/safety-block.js"
 
 // ---------------------------------------------------------------------------
 // Node execution state (stored in workflow_executions.node_states JSONB)
@@ -145,6 +146,11 @@ export interface NodeExecutionState {
    *  (`video_too_long`). PRESENCE alone does not mean "billing" — read the
    *  specific code, the way `isInputWarningCode` does on the frontend. */
   errorCode?: string
+  /** PR9 (2026-09-03): the worker's structured content-policy verdict
+   *  (`jobs.error_hint`, migration 376), carried through unchanged from
+   *  `pollJobToCompletion`'s thrown Error the same way `errorCode` rides a
+   *  mapped billing refusal — never re-derived from `error`'s free text. */
+  errorHint?: ErrorHint
   startedAt?: string
   completedAt?: string
   /** Total fan-out iterations (when node runs via list/loop) */

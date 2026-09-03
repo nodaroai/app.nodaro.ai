@@ -4210,6 +4210,8 @@ export const he: ChromeDict = {
   "node.videoWinsAudioIgnored": "הווידאו גובר — קלט האודיו לא בשימוש",
   "node.generatedAlt": "תוצאה שנוצרה",
   "node.blockedBySafetyFilter": "נחסם על ידי מסנן הבטיחות של הספק. נסו פרומפט או תמונה אחרים.",
+  "node.safetyBlockRetried": "מסנן הבטיחות של הספק חסם את הפלט הזה פעמיים. התוצאה לא תמיד עקבית — נסו מודל אחר או התאימו את הפרומפט.",
+  "node.tryOnProvider": "נסו עם {label}",
   "node.showRawText": "הצגת טקסט גולמי",
   "node.viewAsJson": "הצגה כ-JSON",
   "node.viewAsMarkdown": "הצגה כ-Markdown",

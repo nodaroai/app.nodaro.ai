@@ -43,6 +43,7 @@ import { isSourceNode, isSkipNode } from "./execution-graph.js"
 import { cancelInFlightChildJobs } from "../../lib/reconcile/cancel-inflight-jobs.js"
 import { refundReservedCreditsForJob } from "../../lib/credits-job-lifecycle.js"
 import { isWorkerDraining, DrainAbortError } from "../../lib/worker-drain.js"
+import type { ErrorHint } from "../../lib/safety-block.js"
 
 // ---------------------------------------------------------------------------
 // Sync HTTP node types — called via internal fetch
@@ -1740,10 +1741,13 @@ async function pollJobToCompletion(
 
     // Poll job status. credits_actual lets sync-HTTP nodes (which reserve +
     // commit inside their own route, so the orchestrator never received a
-    // creditsUsed) report what they spent into the execution total.
+    // creditsUsed) report what they spent into the execution total. error_hint
+    // (migration 376) is the worker's structured safety-block verdict — carried
+    // onto the thrown Error below so it can ride into nodeStates[nodeId] the
+    // way a mapped billing refusal's errorCode already does.
     const { data: jobRecord } = await supabase
       .from("jobs")
-      .select("status, output_data, error_message, progress, credits_actual")
+      .select("status, output_data, error_message, progress, credits_actual, error_hint")
       .eq("id", jobId)
       .single()
 
@@ -1768,7 +1772,14 @@ async function pollJobToCompletion(
 
     if (status === "failed" || status === "cancelled") {
       const errorMsg = (jobRecord.error_message as string) ?? `Job ${status}`
-      throw new Error(errorMsg)
+      const err = new Error(errorMsg) as Error & { errorHint?: ErrorHint }
+      // Mirrors the mapped-billing-refusal errorCode precedent above:
+      // the caller (orchestrator-worker.ts) copies this onto
+      // nodeStates[nodeId] so the editor/MCP can act on it without
+      // re-parsing the error_message prose.
+      const hint = jobRecord.error_hint as ErrorHint | null | undefined
+      if (hint) err.errorHint = hint
+      throw err
     }
 
     // Detect when worker picks up the job (status transitions from "pending")

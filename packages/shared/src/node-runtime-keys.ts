@@ -16,6 +16,11 @@ export const EXECUTION_DATA_KEYS: ReadonlySet<string> = new Set([
   "currentJobId",
   "currentJobProgress",
   "errorMessage",
+  // Structured detail alongside errorMessage for a safety-filter block
+  // (see `JobErrorHint` in the app's frontend/src/types/nodes.ts). Same
+  // lifecycle as errorMessage: a RESULT the user expects to survive reload,
+  // never user-edited config.
+  "errorHint",
   "isStreaming",
   "generatedImageUrl",
   "generatedVideoUrl",

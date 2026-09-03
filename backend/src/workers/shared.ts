@@ -46,8 +46,17 @@ export type HandlerFn = (job: Job, ctx: JobContext) => Promise<void>
  * processing and is incremented only AFTER a failure, and a retry happens iff
  * `attemptsMade + 1 < opts.attempts`. So "final attempt" is the exact inverse:
  * `attemptsMade + 1 >= attempts`. This holds because these queues use a plain
- * exponential backoff (no strategy returning -1) and never throw
- * UnrecoverableError — the only other ways BullMQ would skip a retry early.
+ * exponential backoff (no strategy returning -1), the only other way BullMQ
+ * itself would skip a retry early.
+ *
+ * PR9 exception: `video-worker.ts` now throws `UnrecoverableError` on a FINAL
+ * content-policy block (`lib/safety-block.ts`'s bounded retry policy, which
+ * can cap a flagged model at fewer attempts than the queue's global
+ * `opts.attempts`). That throw only ever happens after the block's own policy
+ * — or this function as its fallback — has already decided the attempt is
+ * final, so it does not change what "final" means here; it is the CODE, not
+ * BullMQ's own backoff, additionally refusing a retry BullMQ's plain count
+ * alone might still have granted.
  */
 export function isFinalJobAttempt(job: Pick<Job, "attemptsMade" | "opts">): boolean {
   const attempts = job.opts?.attempts ?? 1

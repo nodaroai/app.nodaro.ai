@@ -166,6 +166,35 @@ describe("get_job tool", () => {
     expect(result.content[0]?.text).toMatch(/Content policy violation/)
   })
 
+  it("PR9: offers suggestedProvider + guidance for a safety-block failure with a catalog fallback", async () => {
+    mockGetJob({
+      id: "44444444-4444-4444-8444-444444444444",
+      user_id: "u1",
+      status: "failed",
+      error_message: "The provider's safety filter blocked this output.",
+      error_hint: { kind: "safety-block", class: "safety", retried: true, suggestedProvider: "nano-banana-pro" },
+    })
+    const server = buildServer()
+    registerJobs({
+      server,
+      session: newSession({
+        userId: "u1",
+        scopes: ["jobs:read"] as Scope[],
+        clientName: "Claude",
+      }),
+      fastify: Fastify(),
+    })
+    const result = await callTool(server, "get_job", {
+      job_id: "44444444-4444-4444-8444-444444444444",
+    })
+    expect(result.isError).toBeUndefined()
+    const parsed = JSON.parse(result.content[0]?.text as string)
+    expect(parsed.retryable).toBe(false)
+    expect(parsed.suggestedProvider).toBe("nano-banana-pro")
+    expect(parsed.guidance).toMatch(/retry the SAME/)
+    expect(parsed.guidance).toContain("nano-banana-pro")
+  })
+
   it("redacts private remux bases from input and output data", async () => {
     mockGetJob({
       id: "33333333-3333-4333-8333-333333333333",

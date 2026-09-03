@@ -163,6 +163,7 @@ solve for people.
 | Field | Type | Description |
 |-------|------|-------------|
 | `style` | string, optional | The rendering **medium** — *"live-action photoreal"*, *"2D anime"*, *"stop-motion claymation"*, *"3D render"*. Orthogonal to everything else here and the most consequential of them: two shots with identical grade, lens, lighting and framing look nothing alike when one is live action and the other an oil painting. |
+| `styleId` | string, optional | The **Style-catalog id** the `style` prose corresponds to — the analyzer's *pick*, e.g. `"pixar-3d"` beside *"3D stylized animation"*. Worth more than the prose it accompanies: an id addresses the catalog, so a recreation renders the medium the Style picker itself would render instead of re-interpreting a sentence. Absent when the analyzer read a medium it could not place, in which case `style` carries the whole answer. |
 | `grade` | string, optional | Colour grade / palette — *"muted teal-and-orange, crushed blacks"*. |
 | `format` | string, optional | Camera or film **format and stock** — *"anamorphic digital"*, *"16mm film grain"*. |
 | `lens` | string, optional | Lens character — *"wide-angle, shallow depth of field throughout"*. |
@@ -284,10 +285,11 @@ there is no `silence` mode. Each layer:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `mode` | enum | `speech` / `music` / `sfx`. |
+| `mode` | enum | `speech` / `music` / `sfx` / `ambience`. **`ambience` is accepted by the contract but not yet emitted** — the analyzer still writes continuous beds (room tone, distant traffic) as `sfx`. It is its own member because a bed and a discrete hit are recreated by different means; consumers should handle it, and existing analyses will not contain it. |
 | `content` | string | `speech`: the words, verbatim as spoken — or translated when [Translate speech](#output-language) is on; `music` / `sfx`: generation-ready description. |
 | `voice` | string, optional | Voice-casting descriptor (`"male, warm, conversational"`) — `speech` layers only. Describes the *voice*, not who owns it. |
 | `speakerSlot` | string, optional | `slotId` of the on-screen speaker — `speech` layers only. See below. |
+| `speaker` | string, optional | The speaker's **name**, as plain prose — `speech` layers only, and the second of two ways to say who is talking (`speakerSlot` addresses a slot of *this* analysis by id; `speaker` is what a document keying its cast by name uses). **Accepted by the contract but not yet emitted** — the analyzer produces `speakerSlot` only. Unlike `speakerSlot` it is *not* swept by the orphan-attribution pass, which can only judge an id against the surviving slot list. |
 
 **Soundtrack vocals are `music`, not `speech`.** `speech` is reserved for words
 uttered *inside the story world* — spoken, shouted, or sung by a character or an

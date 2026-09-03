@@ -2,9 +2,11 @@ import { z } from "zod"
 import {
   escapeHtml,
   normalizeLinkUrl,
+  previewTextFrom,
   renderAdminMessageBody,
   sanitizeHeaderText,
 } from "./admin-message-markdown.js"
+import { greetingNameFrom } from "./recipient-first-name.js"
 
 /**
  * The three admin → user email templates, and the ONE place that turns an
@@ -169,6 +171,24 @@ function para(body: string): string {
 const proseVar = renderAdminMessageBody
 const phraseVar = escapeHtml
 
+/**
+ * WHO the email is addressed to.
+ *
+ * `firstName` is the one variable that is not the admin's input, and all three
+ * Loops templates open with it. It is PASSED IN rather than looked up here so
+ * that rendering stays a pure function of (input, recipient) — which is what
+ * lets the preview and the send keep sharing one code path.
+ */
+export interface AdminMessageRecipient {
+  /** The recipient's name as `profiles.full_name` has it. Often absent. */
+  readonly fullName?: string | null
+}
+
+/** The greeting name, escaped like every other value that lands in the HTML. */
+function greetingVar(recipient: AdminMessageRecipient): string {
+  return phraseVar(greetingNameFrom(recipient.fullName))
+}
+
 // ---------------------------------------------------------------------------
 // The registry
 // ---------------------------------------------------------------------------
@@ -191,6 +211,24 @@ export interface AdminMessageTemplate {
   readonly id: AdminMessageTemplateId
   /** Loops transactional id. Bound to the variable names below — see header. */
   readonly transactionalId: string
+  /**
+   * EXACTLY the variables the Loops template declares — the contract the
+   * provider validates every send against.
+   *
+   * Loops refuses a send when a declared variable is absent OR empty
+   * ("Missing required data variable(s): …"), and it does not care that the
+   * value was optional to us. This list is the transactional id's twin: the id
+   * names a template, this names what that template asks for, and neither is
+   * runtime-editable for the same reason.
+   *
+   * Checked two ways rather than trusted: the totality test renders every
+   * optional-field combination and compares key sets against this list, and
+   * `backend/scripts/check-loops-templates.ts` compares it against the live
+   * Loops API. Both exist because the first admin → user email ever sent failed
+   * on exactly this: `firstName` was declared by all three templates and sent by
+   * none, so every message bounced with a 502 until it was fixed.
+   */
+  readonly dataVariableNames: readonly string[]
   readonly label: string
   /** One line telling the admin when this template is the right one. */
   readonly description: string
@@ -209,7 +247,7 @@ export interface AdminMessageTemplate {
    */
   readonly subjectIsAuthored: boolean
   readonly schema: z.ZodType<unknown>
-  readonly render: (input: never) => RenderedAdminMessage
+  readonly render: (input: never, recipient: AdminMessageRecipient) => RenderedAdminMessage
 }
 
 /**
@@ -250,8 +288,12 @@ const issueDetected: AdminMessageTemplate = {
   description: "We noticed something went wrong on their side and want to get ahead of it.",
   supportsImage: false,
   subjectIsAuthored: false,
+  dataVariableNames: ["firstName", "whatHappened", "whatWeDid", "nextStep"],
   schema: issueDetectedInput,
-  render: (input: z.infer<typeof issueDetectedInput>): RenderedAdminMessage => ({
+  render: (
+    input: z.infer<typeof issueDetectedInput>,
+    recipient: AdminMessageRecipient,
+  ): RenderedAdminMessage => ({
     subject: TEMPLATE_OWNED_SUBJECT.issue_detected,
     // Three plain paragraphs, in template order. No "WHAT HAPPENED" headings:
     // the Loops template already structures these three variables, so labels
@@ -259,6 +301,11 @@ const issueDetected: AdminMessageTemplate = {
     // nowhere in the actual email.
     bodyHtml: [para(input.whatHappened), para(input.whatWeDid), para(input.nextStep)].join("\n"),
     dataVariables: {
+      // The template's own greeting. Not mirrored into `bodyHtml` above: the
+      // wording of "Hi {firstName}," lives in Loops, and inventing a copy of it
+      // here would put a sentence in the preview and the stored record that
+      // nobody can verify against the real email.
+      firstName: greetingVar(recipient),
       whatHappened: proseVar(input.whatHappened),
       whatWeDid: proseVar(input.whatWeDid),
       nextStep: proseVar(input.nextStep),
@@ -273,8 +320,12 @@ const creditsRefunded: AdminMessageTemplate = {
   description: "Credits have been returned to their balance and we're telling them why.",
   supportsImage: false,
   subjectIsAuthored: false,
+  dataVariableNames: ["firstName", "amount", "reason"],
   schema: creditsRefundedInput,
-  render: (input: z.infer<typeof creditsRefundedInput>): RenderedAdminMessage => ({
+  render: (
+    input: z.infer<typeof creditsRefundedInput>,
+    recipient: AdminMessageRecipient,
+  ): RenderedAdminMessage => ({
     subject: TEMPLATE_OWNED_SUBJECT.credits_refunded,
     bodyHtml: [
       // The template's own sentence with the variable in it, so the preview and
@@ -284,6 +335,7 @@ const creditsRefunded: AdminMessageTemplate = {
       para(input.reason),
     ].join("\n"),
     dataVariables: {
+      firstName: greetingVar(recipient),
       // WITH the unit. The template reads "We've credited {amount} back to your
       // Nodaro account" and supplies no noun, so a bare "1500" would reach the
       // recipient as "We've credited 1500 back to your Nodaro account".
@@ -300,55 +352,65 @@ const generalFollowup: AdminMessageTemplate = {
   description: "Anything else service-related — you write the subject and the message.",
   supportsImage: true,
   subjectIsAuthored: true,
-  schema: generalFollowupInput,
   /**
-   * PENDING TEMPLATE CHANGE — the CTA and the screenshot link.
+   * THE BUTTON AND THE SCREENSHOT ARE NOT VARIABLES, and cannot be.
    *
-   * They ship today as their own variables, which the Loops template renders
-   * itself. LMX has no conditionals, so an unused pair renders an empty button
-   * or an empty link rather than nothing. The template is being restructured to
-   * drop both, after which they belong INSIDE `bodyText`, where this file can
-   * give them the real conditionals it already computes.
+   * They are optional; LMX has no conditionals; and Loops refuses a send whose
+   * declared variable is empty. Those three facts together leave a template
+   * that declares `ctaUrl` with exactly two possible behaviours — every
+   * message carries a button, or no message sends at all. It shipped as the
+   * second: an unused pair went out as `""` and Loops answered "Missing
+   * required data variable(s): ctaUrl, ctaLabel", so every general follow-up
+   * bounced.
    *
-   * When that lands: append the two `parts` fragments below into the `bodyText`
-   * variable and stop sending `ctaLabel` / `ctaUrl` / `imageLabel` / `imageUrl`
-   * separately. `bodyHtml` already composes them in that order, so the preview
-   * and the stored record do not change — which is the point of having built it
-   * this way. Until then, keep sending them separately; the empty elements are
-   * cosmetic and expected.
+   * So the conditionals live HERE, where they already existed, and the links
+   * are composed into `bodyText`. The Loops template must therefore declare
+   * these four variables and no others — its button block and its
+   * screenshot-link block have no value to render any more, and while it still
+   * declares them every send is refused. `backend/scripts/check-loops-templates.ts`
+   * is what confirms the dashboard agrees; this comment cannot.
    */
-  render: (input: z.infer<typeof generalFollowupInput>): RenderedAdminMessage => {
-    const parts = [`<p ${P}>${renderAdminMessageBody(input.bodyText)}</p>`]
+  dataVariableNames: ["firstName", "subjectLine", "previewText", "bodyText"],
+  schema: generalFollowupInput,
+  render: (
+    input: z.infer<typeof generalFollowupInput>,
+    recipient: AdminMessageRecipient,
+  ): RenderedAdminMessage => {
+    const parts = [renderAdminMessageBody(input.bodyText)]
     if (input.ctaLabel && input.ctaUrl) {
       parts.push(
-        `<p ${P}><a href="${escapeHtml(input.ctaUrl)}" ${BUTTON}>${escapeHtml(input.ctaLabel)}</a></p>`,
+        `<a href="${escapeHtml(input.ctaUrl)}" ${BUTTON}>${escapeHtml(input.ctaLabel)}</a>`,
       )
     }
     if (input.imageUrl && input.imageLabel) {
       parts.push(
-        `<p ${P}><a href="${escapeHtml(input.imageUrl)}" ${IMAGE_LINK}>${escapeHtml(input.imageLabel)}</a></p>`,
+        `<a href="${escapeHtml(input.imageUrl)}" ${IMAGE_LINK}>${escapeHtml(input.imageLabel)}</a>`,
       )
     }
+    // `<br /><br />` and not `<p>`: this string is substituted INTO the
+    // template's own text block, and a paragraph nested inside the paragraph
+    // Loops wraps it in is invalid HTML that clients render inconsistently.
+    // It is also the separator `renderAdminMessageBody` already puts between
+    // the admin's own paragraphs, so the spacing stays uniform.
+    const body = parts.join("<br /><br />")
+    // A subject is a mail HEADER, not markup: stripped of the line breaks that
+    // would forge one, and NOT HTML-escaped (which would show the recipient a
+    // literal `&amp;`).
+    const subject = sanitizeHeaderText(input.subjectLine)
     return {
-      // A subject is a mail HEADER, not markup: stripped of the line breaks
-      // that would forge one, and NOT HTML-escaped (which would show the
-      // recipient a literal `&amp;`).
-      subject: sanitizeHeaderText(input.subjectLine),
-      bodyHtml: parts.join("\n"),
+      subject,
+      // ONE paragraph, because one block is now what the recipient gets. This
+      // wraps the exact string sent as `bodyText`, so the preview, the stored
+      // record and the email cannot disagree about the button or the link.
+      bodyHtml: `<p ${P}>${body}</p>`,
       dataVariables: {
-        subjectLine: sanitizeHeaderText(input.subjectLine),
-        bodyText: proseVar(input.bodyText),
-        // The labels are escaped exactly as `bodyHtml` escapes them, so the
-        // approved preview and the delivered email cannot disagree.
-        // Empty strings, never omitted: Loops renders an unknown variable as a
-        // literal `{{ctaLabel}}` in the email, so "no button" has to be sent as
-        // a present-and-empty value.
-        ctaLabel: input.ctaLabel ? phraseVar(input.ctaLabel) : "",
-        // Already canonical — `linkUrl` normalised it at the schema edge, so
-        // there is nothing here that could break out of an href.
-        ctaUrl: input.ctaUrl ?? "",
-        imageUrl: input.imageUrl ?? "",
-        imageLabel: input.imageLabel ? phraseVar(input.imageLabel) : "",
+        firstName: greetingVar(recipient),
+        subjectLine: subject,
+        // The preheader — the grey line beside the subject in the inbox list.
+        // Falls back to the subject rather than risk an empty variable, which
+        // Loops counts as a missing one and refuses the whole send over.
+        previewText: phraseVar(previewTextFrom(input.bodyText) || subject),
+        bodyText: body,
       },
     }
   },
@@ -389,7 +451,11 @@ export type ParseResult =
  * this, so a preview can never be produced from input the send would reject —
  * or, worse, the other way round.
  */
-export function parseAdminMessage(templateId: string, raw: unknown): ParseResult {
+export function parseAdminMessage(
+  templateId: string,
+  raw: unknown,
+  recipient: AdminMessageRecipient = {},
+): ParseResult {
   const template = getAdminMessageTemplate(templateId)
   if (!template) {
     return { ok: false, message: `Unknown template: ${templateId}` }
@@ -417,6 +483,40 @@ export function parseAdminMessage(templateId: string, raw: unknown): ParseResult
     return { ok: false, message: `${where}${issue?.message ?? "Invalid input"}` }
   }
   const input = parsed.data as Record<string, unknown>
-  const rendered = template.render(input as never)
+  const rendered = template.render(input as never, recipient)
+
+  // THE BACKSTOP, and the reason this class of bug cannot reach a customer
+  // again. Loops validates our payload against the variables the template
+  // declares and refuses the send when one is absent OR empty — which is how
+  // every admin message failed between shipping and this fix: `firstName` was
+  // declared by all three templates and sent by none, and the admin saw a bare
+  // 502 from a provider they cannot see. Checking it here turns a silent
+  // provider rejection into an answer that names the problem.
+  const problem = checkDataVariables(template, rendered.dataVariables)
+  if (problem) return { ok: false, message: problem }
+
   return { ok: true, value: { ...rendered, template, input } }
+}
+
+/**
+ * Every declared variable present and non-blank, and nothing sent that the
+ * template did not ask for. Both directions matter: a missing one is a refused
+ * send, and an extra one means this file and the Loops dashboard have drifted —
+ * which is worth knowing BEFORE it becomes the missing one.
+ */
+function checkDataVariables(
+  template: AdminMessageTemplate,
+  vars: Readonly<Record<string, string>>,
+): string | null {
+  const declared = new Set(template.dataVariableNames)
+  const blank = template.dataVariableNames.filter((name) => !(vars[name] ?? "").trim())
+  const extra = Object.keys(vars).filter((name) => !declared.has(name))
+  if (blank.length === 0 && extra.length === 0) return null
+  const detail = [
+    blank.length > 0 ? `missing ${blank.join(", ")}` : "",
+    extra.length > 0 ? `unexpected ${extra.join(", ")}` : "",
+  ]
+    .filter(Boolean)
+    .join("; ")
+  return `The "${template.label}" email could not be built (${detail}). This is a bug in Nodaro, not in what you typed — please report it.`
 }

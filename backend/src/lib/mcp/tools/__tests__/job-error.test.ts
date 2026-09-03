@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { isContentRejection, isRetryableFailure, rejectionClassOf } from "../_job-error.js"
+import { isContentRejection, isRetryableFailure, rejectionClassOf, failureGuidance } from "../_job-error.js"
 
 describe("isRetryableFailure", () => {
   it("marks content-policy / safety failures NON-retryable", () => {
@@ -104,5 +104,67 @@ describe("copyright / likeness messages are rejections (W0)", () => {
     expect(rejectionClassOf(SAFETY)).toBe("safety")
     expect(rejectionClassOf("Provider timeout after 30s")).toBeNull()
     expect(rejectionClassOf(null)).toBeNull()
+  })
+})
+
+describe("failureGuidance (PR9 — offers the safety-block fallback)", () => {
+  it("offers the suggestedProvider when the safety-block hint carries one", () => {
+    const result = failureGuidance({
+      error_message: "The provider's safety filter blocked this output.",
+      error_hint: { kind: "safety-block", class: "safety", retried: true, suggestedProvider: "nano-banana-pro" },
+    })
+    expect(result.retryable).toBe(false)
+    expect(result.suggestedProvider).toBe("nano-banana-pro")
+    expect(result.guidance).toBe(
+      'The provider\'s safety filter blocked this output twice; retry the SAME prompt and references with provider "nano-banana-pro".',
+    )
+  })
+
+  it("offers the change-the-input guidance when the hint has no fallback", () => {
+    const result = failureGuidance({
+      error_message: "Blocked for copyright: the provider refused this generation.",
+      error_hint: { kind: "safety-block", class: "copyright", retried: false },
+    })
+    expect(result.retryable).toBe(false)
+    expect(result.suggestedProvider).toBeUndefined()
+    expect(result.guidance).toBe(
+      "The provider's safety filter blocked this output; change the prompt or the input image.",
+    )
+  })
+
+  it("falls back to the existing retryable/non-retryable sentences with no error_hint", () => {
+    const nonRetryable = failureGuidance({
+      error_message: "Content policy violation: The output was blocked by the provider's safety filter.",
+    })
+    expect(nonRetryable.retryable).toBe(false)
+    expect(nonRetryable.suggestedProvider).toBeUndefined()
+    expect(nonRetryable.guidance).toMatch(/do NOT retry/)
+
+    const retryable = failureGuidance({ error_message: "Provider timeout after 30s" })
+    expect(retryable.retryable).toBe(true)
+    expect(retryable.suggestedProvider).toBeUndefined()
+    expect(retryable.guidance).toMatch(/may be transient/)
+  })
+
+  it("retryable is isRetryableFailure(error_message) — unaffected by the hint's presence", () => {
+    // A safety-block hint's message already reads as non-retryable via the
+    // keyword classifier, so `retryable` agrees without special-casing it.
+    const message = "The provider's safety filter blocked this output."
+    const result = failureGuidance({
+      error_message: message,
+      error_hint: { kind: "safety-block", class: "safety", retried: true },
+    })
+    expect(result.retryable).toBe(isRetryableFailure(message))
+    expect(result.retryable).toBe(false)
+  })
+
+  it("ignores a malformed/unknown error_hint shape and falls back to the plain sentences", () => {
+    const result = failureGuidance({
+      error_message: "Provider timeout after 30s",
+      error_hint: { kind: "something-else" },
+    })
+    expect(result.retryable).toBe(true)
+    expect(result.suggestedProvider).toBeUndefined()
+    expect(result.guidance).toMatch(/may be transient/)
   })
 })

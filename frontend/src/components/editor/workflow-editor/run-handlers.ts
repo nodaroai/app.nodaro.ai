@@ -11,7 +11,7 @@ import { setSkipUndoCapture } from "@/hooks/undo-flags";
 import { queryClient } from "@/lib/query-client";
 import { queryKeys } from "@/lib/query-keys";
 import { getCachedCredits } from "@/ee/hooks/use-model-credits";
-import type { GeneratedResult, WorkflowNode, WorkflowEdge } from "@/types/nodes";
+import type { GeneratedResult, WorkflowNode, WorkflowEdge, JobErrorHint } from "@/types/nodes";
 import {
   MAX_CONSECUTIVE_POLL_FAILURES,
   isExecutableNode,
@@ -1231,6 +1231,8 @@ interface NodeExecutionState {
   error?: string;
   /** Stable billing-refusal code (backend reserve-errors.ts) — branch on this, never on text. */
   errorCode?: string;
+  /** Structured safety-block detail mirrored from the failed job (see `JobErrorHint`). */
+  errorHint?: JobErrorHint;
   jobId?: string;
   /** Per-iteration job IDs for fan-out runs (list / loop iterations). */
   jobIds?: string[];
@@ -1468,6 +1470,7 @@ function syncNodeStatesToStore(
       patchMap.set(node.id, {
         executionStatus: "failed",
         errorMessage: state.error ?? "Node failed",
+        errorHint: state.errorHint,
       });
     } else if (state.status === "skipped" && currentStatus !== "completed") {
       // Router-gated node: mark as idle (not stuck in "pending")

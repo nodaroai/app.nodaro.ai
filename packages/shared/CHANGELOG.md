@@ -1,5 +1,71 @@
 # @nodaro/shared
 
+## 2.21.0
+
+### Minor Changes
+
+- 94d22ab: Three gaps a third-party consumer of the analysis contract ran into.
+
+  `clipLookSchema` gains `styleId` — the Style catalog id the analyzer PICKED, beside the prose in `style` it corresponds to (`{ styleId: "pixar-3d", style: "3D stylized animation" }`). The analyzer has emitted it for months, but a `z.object` drops what it does not declare, so anything reading an analysis back through this schema lost the pick and fell back to re-interpreting a sentence. It is a free `string`, not an enum: the producer already validates against the catalog, and a second copy of the vocabulary here would drift — and would reject a catalog entry newer than the installed package, which is exactly the analysis a consumer most wants to read. `mergeClipLook` folds it like every other field.
+
+  `AudioLayer` gains the `ambience` mode and a name-keyed `speaker`. Ambience and sfx are different layers of a real mix, recreated by different means — a continuous bed (room tone, distant traffic) versus a discrete hit (a door slam) — and folding them onto `sfx` handed anything recreating the mix a guess. `speaker` is the second way to say who is talking: the plain cast name, for a document that keys its cast by name rather than by a slot id of this analysis; `speakerSlot` is unchanged and a layer may carry both. `dropUnknownSpeakers` remains the SLOT channel's sanitizer — it now strips slot attribution from an `ambience` layer as it always did from `music`/`sfx`, and leaves the name alone, since a name has no id space to be unknown in. The mode vocabulary is exported as `VIDEO_ANALYSIS_AUDIO_MODES` so a consumer imports it instead of restating it.
+
+  `VIDEO_AUDIO_CAPABILITY` finally declares the two Gemini Omni SKUs, `gemini-omni-video` and `gemini-omni-flash`, as `{ mode: "ambient", alwaysOn: true }`. They were unlisted, so `getVideoAudioCapability` reported them as silent while `MODEL_CATALOG` had described both as native audio since they landed — anything reading the map told authors those models make no sound. Settled from Google's own documentation: the model generates an audio track by default and the request schema carries no on/off lever (hence `alwaysOn`, no toggle field), while spoken dialogue is documented only for multi-turn extension via `previous_interaction_id`, a path our transport does not expose — so they are held to the same bar as the Wan 3.0 family and classified ambient rather than `native_speech`, with an upgrade reserved for a live probe. No dialogue routing changes: `videoModelCanSpeakDialogue` still answers `false` for both.
+
+- bb58724: `MODEL_CATALOG` now carries `ltx-2.3-pro` and `ltx-2.3-fast` (modes, aspect ratios, resolutions, durations and the full pricing table). They were the last two `VIDEO_GEN_PROVIDERS` members outside the catalog, which meant `/v1/models`, MCP `list_models` and every catalog-driven normalizer skipped them and the frontend option menus were hand-spliced. A new totality test fails the build if another video provider is added without an entry.
+- 14f930d: `ModelCatalogEntry` gains an optional `safetyFilter: { stochastic: true; fallback?: string }` flag for models whose provider safety filter is known to be non-deterministic — a benign prompt can trip it once and pass on an identical retry. `gpt-image-2` now declares it with `fallback: "nano-banana-pro"`.
+
+  New `safetyRetryPolicy(modelId)` reads the flag and returns `{ maxAttempts: 2, fallback }` for a flagged model (fallback omitted unless it resolves to a real catalog entry) and `{ maxAttempts: 1 }` for everything else, including unknown ids. A catalog-wide guard test requires every declared `fallback` to point at an entry that actually covers the flagged model: it must produce an image, support every mode the flagged model supports, and accept a reference image.
+
+- bb58724: `resolveTopazUpscale()` collapses the Topaz image-upscale node's two levers onto the one parameter KIE accepts (`upscale_factor` ∈ 1/2/4) and returns the credit tier that matches what is actually sent. The legacy `targetResolution` (2K/4K/8K) is accepted and mapped forward (8K → the 4x tier, with an adjustment; an invalid factor falls through to a legacy tier rather than freezing the default first). A valid `upscaleFactor` overriding a disagreeing stored `targetResolution` is disclosed via an informational adjustment rather than dropped silently. Consumers must pass the returned `creditTier` — not the raw request value — into `buildCreditModelIdentifier`.
+
+  The `topaz-image-upscale` `MODEL_CATALOG` entry follows: it no longer declares `resolutions` (the 2K/4K/8K menu had no provider parameter behind it) and its `pricing[]` drops the `:8K` row, which nothing can reserve any more. The `:8K` price key stays in the platform's static/DB pricing so historical usage still resolves. `MODEL_RECOMMENDATIONS` stops advertising an 8K Topaz tier.
+
+- 7810119: Add `classifyRefToken`, `unresolvedRefTokens` and `REF_TOKEN_NAMESPACE_PREFIXES`: the shared `{Label}` token classifier the execution engine uses to refuse dispatching a prompt that still carries an unresolvable reference.
+
+  The namespace exclusion set widens from `image:` to `image:` / `video:` / `audio:` / `slot:` / `ref:` (matched case-insensitively, as the resolvers themselves match), so reference-handle (`{video:1}`, `{audio:1}`), id-addressed reference (`{ref:hero}`) and recast (`{slot:x}`) tokens are no longer classified as missing node refs. This also changes the editor: such tokens stop rendering as missing-reference warnings and stop suppressing auto-injection of a connected node.
+
+  Runtime behaviour the backend engine builds on this classifier: a `{Label}` naming a node that EXISTS in the workflow but produced nothing now resolves to empty text (or to its `|| fallback`) instead of shipping the literal token to the provider. That includes a `{Label}` naming a node that is not connected to the consumer — it resolves to empty text rather than refusing or shipping the literal, so an unconnected reference produces no visible signal. Only a `{Label}` naming no node at all refuses.
+
+- bb58724: `VIDEO_REF_VIDEO_DURATION_LIMITS` + `checkRefVideoDurations(provider, durationsSec)` — per-provider reference-video duration bounds, alongside the existing reference-COUNT caps in `VIDEO_REF_LIMITS_BY_PROVIDER`. Both video routes already ffprobe reference videos to price a run; the durations are now checked against the provider's limits so an out-of-bounds clip is a 400 before the job exists instead of a post-payment provider reject ("Each reference video must be between 2 and 30 seconds"). Data-driven like the reference-audio cap: only providers with a verified documented limit are listed, so an unknown provider is never false-rejected, and a failed probe (a non-finite or non-positive duration) is ignored rather than turned into a user-facing rejection. Two providers are declared: `seedance-2-5` (2–30s per clip, ≤30s total) and `minimax-h3` (2–15s per clip, ≤15s total — the bound behind "video duration 52838 ms, expected [2000, 15000] ms").
+- bb58724: Two new video-lane helpers that make the tier we RESERVE the tier we SEND.
+
+  `normalizeVideoRequestParams(modelId, { aspectRatio, resolution })` — the video
+  lane's limited catalog snap. Unlike `normalizeModelInput` it never drops a lever
+  (on the video lane `resolution` is a pricing input, and dropping it would
+  under-reserve), it passes `Auto` / `adaptive` through for the provider adapter to
+  resolve, and it snaps to the NEAREST supported option rather than the first — so
+  the route, the orchestrator, the provider adapters and the MCP normalizer all
+  give one answer. Case is canonicalised to the catalog's spelling, which the
+  credit identifiers key on.
+
+  `pricedVideoSelection({ provider, resolution, duration })` — what the credit
+  identifier actually PRICES for a request: the resolution band it assumes when
+  the request omits one (only where the platform declares that band as the
+  provider's own default), and the seeded LTX duration tier it snaps onto. Callers
+  carry those to the wire so a reservation can never be made at one resolution and
+  rendered at another.
+
+  Both are pure, so every credit-identifier site and the payload build can call
+  them and cannot disagree.
+
+  `ModelCatalogEntry.unlistedResolutionRendersAs` lets a model declare that it
+  COLLAPSES an unrecognised resolution to a fixed default (MiniMax H3 → 2K, Wan
+  3.0 → 720p) rather than honouring the nearest band. For those models the nearest
+  band is wrong in the expensive direction — snapping a stale "720p" to H3's cheap
+  768P would send a value the provider ignores and bill the cheap tier against a 2K
+  render. A guard test pins each declaration to what the provider's own normalizer
+  returns.
+
+### Patch Changes
+
+- 14f930d: `EXECUTION_DATA_KEYS` now includes `errorHint` — the structured safety-block
+  detail a node carries alongside `errorMessage` on a failed run (editor-side
+  `JobErrorHint`). Keeps it in the runtime/result key set: excluded from node
+  presets, exempt from undo capture like every other execution-state field, but
+  (unlike `TRANSIENT_RUNTIME_KEYS`) persisted across reload the same as
+  `errorMessage`.
+
 ## 2.20.0
 
 ### Minor Changes

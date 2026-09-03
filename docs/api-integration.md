@@ -537,6 +537,35 @@ All errors share the same shape:
 Treat anything in the 5xx range as transient — retry with exponential
 backoff. Treat 4xx as terminal — don't retry without fixing the request.
 
+### Job failure hints (`error_hint`) and credit status
+
+The table above covers request-level errors — a call that never produced a
+job. A **job** that later fails carries its own detail in `error_message`
+plus, for a provider content-policy block, a structured `error_hint`:
+
+```json
+{ "kind": "safety-block", "class": "copyright" | "likeness" | "safety", "retried": boolean, "suggestedProvider"?: string }
+```
+
+`error_hint` is `null`/absent on every other failure. `class` distinguishes a
+deterministic block (`copyright`, `likeness` — retrying the identical request
+never helps) from `safety`, whose filter is known to be non-deterministic for
+some models: `retried` reports whether the platform already spent its one
+automatic retry on the same request, and `suggestedProvider` — present only
+when the model's catalog entry declares a fallback — is a real model id you
+can retry the same prompt/references on. `error_hint` is included on every
+job payload that carries `error_message`: `GET /v1/jobs`, `GET /v1/jobs/:id`,
+`GET /v1/jobs/:id/status`, `GET /v1/jobs/status`, and
+`POST /v1/jobs/batch-status`.
+
+`GET /v1/jobs/:id`, `GET /v1/jobs/:id/status`, and `GET /v1/jobs/status` also
+carry `credit_status: "reserved" | "committed" | "refunded" | null` — the
+job's credit reservation lifecycle, derived server-side from the usage log.
+`null` when the job has no usage log to report; never present on the plain
+`GET /v1/jobs` list or `POST /v1/jobs/batch-status`. A generation that ends in
+a safety-filter block is always refunded — see
+[§12 Credits](#12-credits-cloud-edition).
+
 ## 8b. Pay-as-you-go accounts
 
 You do not need a subscription to use the API. Buying any credit pack —
@@ -1610,9 +1639,17 @@ not registered and return 404.
 | `GET` | `/v1/credits/transactions` | `limit` (1–50, default 20), `cursor` (ISO timestamp for page-forward) | Return `{ data: Transaction[], nextCursor }`. Cursor is the `created_at` of the last row; pass it as `?cursor=` on the next request. `nextCursor` is `null` when there are no more rows. |
 
 `Transaction` fields: `id`, `created_at`, `credits_used`, `action`,
-`provider`, `metadata`, `payer` (`"user"` or `"workspace"`) and `workspaceId`
-(`string | null`). Rows with `payer: "workspace"` were paid by a class or team
-budget, not your balance.
+`provider`, `status`, `metadata`, `payer` (`"user"` or `"workspace"`) and
+`workspaceId` (`string | null`). Rows with `payer: "workspace"` were paid by a
+class or team budget, not your balance.
+
+`status` is the reservation's billing lifecycle: `"reserved"` (credits held,
+not yet resolved), `"committed"` (charged — the run delivered), or
+`"refunded"` (the reservation was released — e.g. a provider safety-filter
+block, see [Generate Image](./nodes/ai-image/generate-image.md#when-the-providers-safety-filter-blocks-a-request)).
+The same lifecycle is exposed on job payloads as `credit_status`
+([§8](#8-error-envelope)), so you don't have to look up the transaction to
+know whether a given job's reservation was refunded.
 
 `metadata` is an object carrying the run's billing mechanics, projected to a
 fixed set of keys. Present when the ledger recorded them: `model`, `from_sub`
@@ -1694,8 +1731,8 @@ The listing, plus two endpoints that poll multiple job statuses in a single roun
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/v1/jobs?limit=&cursor=&type=&origin=&attachToCharacterId=` | Your jobs, newest first, cursor-paginated: `{ data: Job[], next }` (`limit` ≤ 100; pass `next` back as `cursor`). `type` matches `input_data.type` — the route that created the job (`llm-structured`, `video-analysis`, …); `origin` matches `input_data.origin` — the client app that sent it (`studio`, …). Both are exact-match and combine. `attachToCharacterId` is the per-character archive described under characters. |
-| `GET` | `/v1/jobs/status?ids=a,b,c` | Comma-separated IDs, max 100. Returns `{ jobs: { id, status, output_data }[] }`. Cross-user / non-existent IDs are silently omitted — reconcile locally. |
-| `POST` | `/v1/jobs/batch-status` | Body `{ jobIds: string[] }`, max 100. Returns `{ data: { id, status, output_data, error_message }[] }`. |
+| `GET` | `/v1/jobs/status?ids=a,b,c` | Comma-separated IDs, max 100. Returns `{ jobs: { id, status, output_data, error_message, error_hint, credit_status }[] }`. Cross-user / non-existent IDs are silently omitted — reconcile locally. |
+| `POST` | `/v1/jobs/batch-status` | Body `{ jobIds: string[] }`, max 100. Returns `{ data: { id, status, output_data, error_message, error_hint }[] }` (no `credit_status` on this route). |
 
 All three require `jobs:read` scope when using an OAuth token; admin tokens may
 see cross-user jobs. These endpoints are public API — they are used by the

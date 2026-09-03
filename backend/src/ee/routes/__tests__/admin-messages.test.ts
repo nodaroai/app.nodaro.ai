@@ -126,7 +126,10 @@ function orderOf(table: string, method: string): number {
 const insertInvocationOrder = () => orderOf("admin_messages", "insert")
 const updateInvocationOrder = () => orderOf("admin_messages", "update")
 
-const PROFILE = { data: { id: TARGET, email: "user@test.com" }, error: null }
+const PROFILE = {
+  data: { id: TARGET, email: "user@test.com", full_name: "Ada Lovelace" },
+  error: null,
+}
 const ADMIN_PROFILE = { data: { email: "admin@test.com" }, error: null }
 const COUNT_OK = { data: null, error: null, count: 0 }
 const ROW = {
@@ -364,7 +367,16 @@ describe("POST .../messages", () => {
     ]
     expect(transactionalId).toBe("cmtl3elqj0b9k0i0bjfd4vtxp")
     expect(email).toBe("user@test.com")
-    expect(Object.keys(vars).sort()).toEqual(["nextStep", "whatHappened", "whatWeDid"])
+    expect(Object.keys(vars).sort()).toEqual([
+      "firstName",
+      "nextStep",
+      "whatHappened",
+      "whatWeDid",
+    ])
+    // Proof the recipient reaches the renderer. Every Loops template opens with
+    // this variable and refuses the send without it, and the only place the
+    // name exists is the profile row this route reads.
+    expect(vars.firstName).toBe("Ada")
   })
 
   it("stores the rendered subject and body — the record of what they saw", async () => {
@@ -463,6 +475,7 @@ describe("POST .../messages", () => {
   })
 
   it("refuses a third-party image URL — our From domain must not carry it", async () => {
+    queueTable("profiles", PROFILE)
     const res = await send(withImage("https://evil.test/tracker.png"))
     expect(res.statusCode).toBe(400)
     expect(res.json().error.message).toContain("uploaded here")
@@ -470,17 +483,20 @@ describe("POST .../messages", () => {
   })
 
   it("refuses an object of ours from outside the upload prefix", async () => {
+    queueTable("profiles", PROFILE)
     const res = await send(withImage("https://cdn.test/videos/someone-elses.png"))
     expect(res.statusCode).toBe(400)
   })
 
   it("refuses a non-image extension", async () => {
+    queueTable("profiles", PROFILE)
     const res = await send(withImage("https://cdn.test/uploads/payload.svg"))
     expect(res.statusCode).toBe(400)
     expect(res.json().error.message).toContain("Unsupported image type")
   })
 
   it("refuses an object that is no longer in storage", async () => {
+    queueTable("profiles", PROFILE)
     mockGetR2ObjectSize.mockResolvedValue(0)
     const res = await send(withImage("https://cdn.test/uploads/gone.png"))
     expect(res.statusCode).toBe(400)
@@ -488,6 +504,7 @@ describe("POST .../messages", () => {
   })
 
   it("refuses an object over the 5 MB cap", async () => {
+    queueTable("profiles", PROFILE)
     mockGetR2ObjectSize.mockResolvedValue(6 * 1024 * 1024)
     const res = await send(withImage("https://cdn.test/uploads/huge.png"))
     expect(res.statusCode).toBe(400)
@@ -496,7 +513,9 @@ describe("POST .../messages", () => {
 
   it("refuses a screenshot on a template whose Loops design cannot show one", async () => {
     // The fixtures are the HAPPY path, so a 400 here can only come from the
-    // image guard — not from a missing profile or an empty queue.
+    // image guard — not from an empty queue. (The cases above queue only the
+    // recipient: the guard runs after that lookup and before the send-limit
+    // read, so a 400 there is the guard and a 500 would be the queue.)
     queueHappyPath()
     const res = await send({
       templateId: "issue_detected",

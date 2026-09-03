@@ -1221,12 +1221,16 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
           // state (attached at the node-executor throw site) — text stays
           // display-only.
           const errorCode = (result.reason as { errorCode?: string } | null)?.errorCode
+          // PR9: a worker safety-block verdict rides the same way (attached
+          // at pollJobToCompletion's throw site, node-executor.ts).
+          const errorHint = (result.reason as { errorHint?: NodeExecutionState["errorHint"] } | null)?.errorHint
 
           nodeStates[node.id] = {
             status: "failed",
             nodeType: node.type,
             error,
             ...(errorCode ? { errorCode } : {}),
+            ...(errorHint ? { errorHint } : {}),
             inputs: nodeStates[node.id]?.inputs,
             jobId: nodeStates[node.id]?.jobId,
             startedAt: nodeStates[node.id]?.startedAt,

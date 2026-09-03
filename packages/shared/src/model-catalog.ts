@@ -173,6 +173,12 @@ export interface ModelCatalogEntry {
    * Frontend pickers ignore this flag.
    */
   mcpHidden?: boolean
+  /**
+   * The provider's safety filter is known to be non-deterministic on this
+   * model — the platform retries a blocked request once; `fallback` names
+   * the catalog model to offer when it blocks again.
+   */
+  safetyFilter?: { stochastic: true; fallback?: string }
 }
 
 /**
@@ -563,6 +569,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "gpt-image-2:2K", credits: 30, note: "2K" },
       { identifier: "gpt-image-2:4K", credits: 60, note: "4K" },
     ],
+    safetyFilter: { stochastic: true, fallback: "nano-banana-pro" },
   },
   "gpt-image-2-i2i": {
     id: "gpt-image-2-i2i",

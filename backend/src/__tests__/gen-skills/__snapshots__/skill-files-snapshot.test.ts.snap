@@ -118,6 +118,7 @@ _Generated from \`IMAGE_REFERENCE_PROMPT_DOCTRINE\` in \`@nodaro/prompts\` — e
 - \`extraRefs?: readonly ExtraRef[]\`
 - \`executionStatus?: "idle" | "running" | "completed" | "failed"\`
 - \`errorMessage?: string\`
+- \`errorHint?: JobErrorHint\`
 - \`generatedImageUrl?: string\`
 - \`generatedResults?: GeneratedResult[]\`
 - \`activeResultIndex?: number\`

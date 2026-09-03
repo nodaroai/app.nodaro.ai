@@ -1,7 +1,7 @@
 ---
 node_type: generate-image
-generated_at: 2026-08-30T20:39:35.092Z
-generated_from: 6e53f4c92
+generated_at: 2026-09-03T14:25:04.037Z
+generated_from: c403db2c5
 ---
 
 # generate-image
@@ -55,6 +55,7 @@ generated_from: 6e53f4c92
 - `extraRefs?: readonly ExtraRef[]`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
+- `errorHint?: JobErrorHint`
 - `generatedImageUrl?: string`
 - `generatedResults?: GeneratedResult[]`
 - `activeResultIndex?: number`

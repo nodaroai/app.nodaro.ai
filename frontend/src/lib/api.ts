@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase"
 import { WORKSPACE_HEADER } from "@nodaro/shared"
 import { clearActiveWorkspaceAfterRefusal, getActiveWorkspaceId } from "@/lib/workspace-context"
 import { nodaroClient } from "@/lib/nodaro-client"
-import type { SubWorkflowRouteSnapshot, SocialConnection, CharacterVoice } from "@/types/nodes"
+import type { SubWorkflowRouteSnapshot, SocialConnection, CharacterVoice, JobErrorHint } from "@/types/nodes"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
 import type { ReduceMeta, ImageCriticMode, WorkflowExport, WorkflowImportReport, ReferenceSheet, TtsProvider, SheetType, SheetSkin, SheetFlavour, EntityKind, CharacterAttachColumn, ObjectAttachColumn, CreatureAttachColumn, LocationAttachColumn, CommunityCard, CommunitySort } from "@nodaro/shared"
@@ -4844,6 +4844,9 @@ export interface Job {
     [key: string]: unknown
   }
   error_message?: string
+  /** Structured detail when `error_message` is a provider safety-filter block
+   *  (after the backend's automatic retry). See `JobErrorHint`. */
+  error_hint?: JobErrorHint | null
   created_at: string
   started_at?: string
   completed_at?: string
@@ -4876,6 +4879,8 @@ export type JobStatusLean = {
   // (`job.output_data?.imageUrl`, etc.) keep their precise field types.
   output_data?: Job["output_data"]
   error_message?: string
+  /** See `Job.error_hint`. */
+  error_hint?: JobErrorHint | null
 }
 
 /**
@@ -4928,6 +4933,8 @@ export interface BatchJobStatus {
   status: string
   output_data: { imageUrl?: string; videoUrl?: string; audioUrl?: string; script?: unknown } | null
   error_message: string | null
+  /** See `Job.error_hint`. */
+  error_hint?: JobErrorHint | null
 }
 
 export async function getBatchJobStatus(jobIds: string[]): Promise<BatchJobStatus[]> {

@@ -5,7 +5,7 @@ import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
 import { isUuid } from "./_id-guard.js"
-import { isRetryableFailure } from "./_job-error.js"
+import { failureGuidance } from "./_job-error.js"
 import { redactPrivateJobData } from "../../public-job-data.js"
 
 const jobsReadGate: ToolGate = { required: ["jobs:read"] }
@@ -210,7 +210,8 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
         .from("jobs")
         .select(
           // display_cost (USD) excluded — see list_jobs comment above.
-          "id, status, progress, input_data, output_data, error_message, created_at, started_at, completed_at, job_type, credits, user_id",
+          // error_hint (migration 376) backs failureGuidance's suggestedProvider.
+          "id, status, progress, input_data, output_data, error_message, error_hint, created_at, started_at, completed_at, job_type, credits, user_id",
         )
         .eq("id", args.job_id)
         .eq("user_id", session.userId)
@@ -227,14 +228,19 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
           isError: true,
         }
       }
-      // On failure, add an explicit `retryable` flag (mirrors get_asset).
-      // error_message is already in `data`, but the flag makes the
-      // "content policy → do NOT re-run the same request" signal
-      // unambiguous so the model stops retrying a permanent block.
+      // On failure, add an explicit `retryable` flag (mirrors get_asset) plus
+      // `guidance` and — for a safety-block with a catalog fallback —
+      // `suggestedProvider`, a real model id the SAME request can retry on.
       const publicData = redactPrivateJobData(data)
       const failed = publicData.status === "failed" || publicData.status === "cancelled"
       const payload = failed
-        ? { data: publicData, retryable: isRetryableFailure(publicData.error_message as string | null) }
+        ? {
+            data: publicData,
+            ...failureGuidance({
+              error_message: publicData.error_message as string | null,
+              error_hint: (publicData as { error_hint?: unknown }).error_hint,
+            }),
+          }
         : { data: publicData }
       return {
         content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],

@@ -42,12 +42,14 @@ import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { useProvidersCreditsSum } from "@/ee/hooks/use-providers-credits-sum"
 import { buildCreditModelIdentifier } from "@/components/editor/config-panels/helpers"
 import { EditableNodeLabel } from "./editable-node-label"
+import { getModel } from "@nodaro/shared"
 import type { GenerateImageData, ExtractedReference } from "@/types/nodes"
 
 function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
   const nodeData = data as GenerateImageData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
+  const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   // When a dropdown inside the bottom quick-toolbar is open, pin the
   // toolbar visible so the cursor moving into the portaled menu doesn't
   // dismiss it via the node-hover timer.
@@ -75,6 +77,14 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   // Treat empty strings as undefined (falsy check)
   const activeUrl = rawUrl && rawUrl.trim() ? rawUrl : undefined
   const isContentPolicy = status === "failed" && nodeData.errorMessage?.toLowerCase().includes("content policy")
+  // Structured safety-block detail (backend-attached after its automatic
+  // retry) supersedes the legacy string-sniff above when present, but the
+  // sniff stays as a fallback for jobs the backend hasn't tagged yet.
+  const hint = nodeData.errorHint
+  const isSafetyBlock = status === "failed" && (hint?.kind === "safety-block" || isContentPolicy)
+  const suggestedProviderLabel = hint?.suggestedProvider
+    ? (getModel(hint.suggestedProvider)?.label ?? hint.suggestedProvider)
+    : undefined
   const openImageEdit = useWorkflowStore((s) => s.openImageEdit)
   const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
   const allCharDefs = useWorkflowStore((s) => s.characterDefinitions)
@@ -261,15 +271,38 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
 
         {/* Failed state */}
         {status === "failed" && !activeUrl && (
-          <div className={`flex flex-col items-center justify-center gap-1 ${previewRounding} p-2 h-[180px] ${isContentPolicy ? "bg-amber-500/10 text-amber-500" : "bg-red-500/5 text-red-500"}`}>
+          <div className={`flex flex-col items-center justify-center gap-1 ${previewRounding} p-2 h-[180px] ${isSafetyBlock ? "bg-amber-500/10 text-amber-500" : "bg-red-500/5 text-red-500"}`}>
             <div className="flex items-center gap-1.5">
-              {isContentPolicy ? <ShieldAlert className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
-              <span className="font-medium">{isContentPolicy ? t("node.prohibited") : t("node.failed")}</span>
+              {isSafetyBlock ? <ShieldAlert className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+              <span className="font-medium">{isSafetyBlock ? t("node.prohibited") : t("node.failed")}</span>
             </div>
-            {(isContentPolicy || nodeData.errorMessage) && (
-              <p className={`text-[10px] text-center line-clamp-2 ${isContentPolicy ? "text-amber-400" : "text-red-400"}`} title={nodeData.errorMessage}>
-                {isContentPolicy ? t("node.blockedBySafetyFilter") : nodeData.errorMessage}
+            {(isSafetyBlock || nodeData.errorMessage) && (
+              <p className={`text-[10px] text-center line-clamp-2 ${isSafetyBlock ? "text-amber-400" : "text-red-400"}`} title={nodeData.errorMessage}>
+                {isSafetyBlock
+                  ? (hint?.kind === "safety-block" && hint.retried
+                      ? t("node.safetyBlockRetried")
+                      : t("node.blockedBySafetyFilter"))
+                  : nodeData.errorMessage}
               </p>
+            )}
+            {isSafetyBlock && suggestedProviderLabel && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  const provider = hint!.suggestedProvider!
+                  updateNodeData(id, {
+                    provider,
+                    errorMessage: undefined,
+                    errorHint: undefined,
+                    executionStatus: "idle",
+                  })
+                  runSingleNode?.(id)
+                }}
+                className="mt-0.5 px-2 py-0.5 text-[10px] font-medium rounded-full bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-300 border border-amber-500/30 transition-colors"
+              >
+                {t("node.tryOnProvider", { label: suggestedProviderLabel })}
+              </button>
             )}
           </div>
         )}
