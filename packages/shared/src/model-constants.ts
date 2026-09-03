@@ -2170,8 +2170,8 @@ export interface VideoAudioCapability {
 /**
  * Per-model audio capability. Only models that produce SOME audio are listed;
  * anything absent defaults to `{ mode: "none" }` via `getVideoAudioCapability`,
- * so silent models (minimax, hailuo, wan, grok-i2v, gemini-omni-video, runway,
- * pika, …) need no entry. New audio-capable models MUST be added here — the
+ * so silent models (minimax, hailuo, wan-i2v, grok-i2v, runway, pika, …) need
+ * no entry. New audio-capable models MUST be added here — the
  * `video-audio-capability` guard test cross-checks this map against the model
  * configs' `extraParams.sound` / `generate_audio` + VEO/Seedance-2 sets so a
  * forgotten entry fails CI rather than silently disabling audio.
@@ -2220,10 +2220,39 @@ export const VIDEO_AUDIO_CAPABILITY: Record<string, VideoAudioCapability> = {
   // and skip the lip-sync pass. `defaultOn` mirrors the KIE default so an
   // intent-less request is described honestly; audio is priced into the uniform
   // per-second rate, so NOT cost-affecting (no `:audio` composite).
-  // gemini-omni-flash is deliberately ABSENT — gemini-omni-video is absent too
-  // (mode "none"), and the siblings must not disagree.
   "wan-3": { mode: "ambient", field: "audio", defaultOn: true },
   "wan-3-prime": { mode: "ambient", field: "audio", defaultOn: true },
+  // Gemini Omni (both SKUs — the pro `gemini-omni-video` and the faster
+  // `gemini-omni-flash`; one model at two speeds, so their rows are identical
+  // and a test pins that). Settled 2026-09-03 from Google's own documentation
+  // at https://ai.google.dev/gemini-api/docs/omni, having been unlisted — and
+  // therefore reported as SILENT — while the catalog described both as "native
+  // audio".
+  //
+  // "ambient", and alwaysOn with no toggle field, on three sentences from that
+  // page:
+  //   - "By default the model will try to generate an appropriate audio track
+  //     for a video." Audio on every render, and the KIE input schema
+  //     (prompt / image_urls / first+last_frame_url / audio_ids / video_list /
+  //     character_ids / duration / aspect_ratio / seed / resolution — see
+  //     docs.kie.ai/market/gemini-omni-video and
+  //     docs.kie.ai/market/google/gemini-omni-flash-1-1) carries no on/off
+  //     lever, so there is nothing for applyVideoAudioToggle to write.
+  //   - NOT native_speech: "Multi-turn voice extension: Generating spoken
+  //     dialogue or speech is supported when extending previously generated
+  //     videos via multi-turn (`previous_interaction_id`)" — a field KIE's
+  //     createTask schema does not expose, so the dialogue path is unreachable
+  //     on our transport. Held to the Wan 3.0 bar: no documented dialogue
+  //     guarantee on the path we actually drive ⇒ ambient, and upgrade only on
+  //     a live probe (the kling-3.0 standard). Classifying it native_speech
+  //     would reroute the Story→Video dialogue pipeline past the lip-sync pass.
+  //   - NOT audio_driven either: "Uploading audio references is unsupported in
+  //     the current version of the API", and "any audio in a video reference is
+  //     ignored" — there is no reference-audio transport to be driven by, and
+  //     runGeminiOmni never sends `audio_ids`.
+  // Audio is priced into the per-tier rate, so NOT cost-affecting.
+  "gemini-omni-video": { mode: "ambient", alwaysOn: true },
+  "gemini-omni-flash": { mode: "ambient", alwaysOn: true },
 }
 
 const VIDEO_AUDIO_NONE: VideoAudioCapability = { mode: "none" }

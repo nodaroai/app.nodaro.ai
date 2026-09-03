@@ -78,16 +78,37 @@ describe("getVideoAudioCapability", () => {
     }
   })
 
+  it("returns ambient (always on) for both Gemini Omni SKUs", () => {
+    // Google's own docs: "By default the model will try to generate an
+    // appropriate audio track for a video." Not `none` — the catalog has said
+    // "native audio" since the SKUs landed, and this map was the one place that
+    // disagreed, so every reader of it described the models as silent.
+    //
+    // Not `native_speech` either: the SAME page scopes dialogue to a path we do
+    // not drive — "Multi-turn voice extension: Generating spoken dialogue or
+    // speech is supported when extending previously generated videos via
+    // multi-turn (`previous_interaction_id`)" — and KIE's createTask schema
+    // exposes no such field. Same bar Wan 3.0 was held to.
+    for (const m of ["gemini-omni-video", "gemini-omni-flash"]) {
+      const cap = getVideoAudioCapability(m)
+      expect(cap.mode, m).toBe("ambient")
+      // No on/off parameter anywhere in the KIE input schema ⇒ alwaysOn, no field.
+      expect(cap.alwaysOn, m).toBe(true)
+      expect(cap.field, m).toBeUndefined()
+      expect(cap.affectsCost, m).toBeUndefined()
+    }
+  })
+
+  it("the two Omni SKUs never disagree — they are one model at two speeds", () => {
+    expect(VIDEO_AUDIO_CAPABILITY["gemini-omni-flash"]).toEqual(VIDEO_AUDIO_CAPABILITY["gemini-omni-video"])
+  })
+
   it("defaults to none for silent / unknown / undefined models", () => {
     for (const m of [
       "minimax",
       "hailuo-2.3",
       "wan-i2v",
       "grok-i2v",
-      "gemini-omni-video",
-      // Gemini Omni Flash mirrors its sibling: deliberately unlisted, so both
-      // Omni SKUs report the same audio capability.
-      "gemini-omni-flash",
       "runway",
       "pika",
       "totally-unknown-model",
@@ -105,6 +126,8 @@ describe("videoModelSupportsAudio", () => {
     expect(videoModelSupportsAudio("kling-3-omni")).toBe(true)
     expect(videoModelSupportsAudio("seedance-2")).toBe(true)
     expect(videoModelSupportsAudio("seedance")).toBe(true)
+    expect(videoModelSupportsAudio("gemini-omni-video")).toBe(true)
+    expect(videoModelSupportsAudio("gemini-omni-flash")).toBe(true)
     expect(videoModelSupportsAudio("minimax")).toBe(false)
     expect(videoModelSupportsAudio(undefined)).toBe(false)
   })
@@ -124,6 +147,10 @@ describe("videoModelCanSpeakDialogue", () => {
     expect(videoModelCanSpeakDialogue("kling-3-omni")).toBe(true)
     // ambient-only models are NOT dialogue-capable — their audio is SFX/ambient
     expect(videoModelCanSpeakDialogue("seedance")).toBe(false)
+    // Gemini Omni generates an audio track on every render, but its documented
+    // dialogue path is multi-turn extension, which our transport cannot reach.
+    expect(videoModelCanSpeakDialogue("gemini-omni-video")).toBe(false)
+    expect(videoModelCanSpeakDialogue("gemini-omni-flash")).toBe(false)
     expect(videoModelCanSpeakDialogue("minimax")).toBe(false)
     expect(videoModelCanSpeakDialogue(undefined)).toBe(false)
   })
@@ -257,6 +284,13 @@ describe("applyVideoAudioToggle — neutral audio intent → per-model KIE field
   it("is a no-op for always-on VEO — there is no user toggle to honour", () => {
     const input: Record<string, unknown> = {}
     applyVideoAudioToggle(input, "veo3", { sound: false })
+    expect(input).toEqual({})
+  })
+
+  it("is a no-op for always-on Gemini Omni — the KIE schema has no audio lever", () => {
+    const input: Record<string, unknown> = {}
+    applyVideoAudioToggle(input, "gemini-omni-video", { sound: false })
+    applyVideoAudioToggle(input, "gemini-omni-flash", { generateAudio: true })
     expect(input).toEqual({})
   })
 
