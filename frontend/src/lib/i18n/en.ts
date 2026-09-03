@@ -165,6 +165,9 @@ export const en = {
   "dash.created": "Created",
   "dash.seeAllTemplatesArrow": "See all templates →",
   "dash.seeAllTemplates": "See all templates",
+  "dash.workflowRename": "Rename",
+  "dash.workflowDuplicate": "Duplicate",
+  "dash.workflowDelete": "Delete",
 
   // ── Editor toolbar ──────────────────────────────────────────────────────
   "editor.backToProject": "Back to project",
@@ -3399,6 +3402,7 @@ export const en = {
   "crumb.subWorkflowNav": "Sub-workflow navigation",
   "crumb.backToOriginal": "Back to original workflow",
   "projects.defaultName": "My Recent Flows",
+  "projects.defaultDescription": "Auto-created workspace for new workflows",
   "nodecat.Recent": "Recent",
   "nodecat.Common": "Common",
   "nodecat.Input": "Input",

@@ -1,4 +1,5 @@
 import type { DragEvent } from "react"
+import { useT } from "@/lib/i18n"
 import { Link } from "react-router-dom"
 import { MoreHorizontal, Copy, Trash2, Pencil } from "lucide-react"
 import {
@@ -19,6 +20,7 @@ interface WorkflowCardProps {
 }
 
 export function WorkflowCard({ workflow, onDuplicate, onDelete, readOnly }: WorkflowCardProps) {
+  const t = useT()
   function handleDragStart(e: DragEvent) {
     e.dataTransfer.setData("application/x-workflow-id", workflow.id)
     e.dataTransfer.effectAllowed = "move"
@@ -44,14 +46,14 @@ export function WorkflowCard({ workflow, onDuplicate, onDelete, readOnly }: Work
         </div>
       </Link>
       {!readOnly && (
-        <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="absolute top-1.5 end-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="secondary"
                 size="sm"
                 className="h-7 w-7 p-0 shadow-sm"
-                aria-label={`Workflow options for ${workflow.name}`}
+                aria-label={t("dash.workflowOptions", { name: workflow.name })}
               >
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
@@ -59,18 +61,18 @@ export function WorkflowCard({ workflow, onDuplicate, onDelete, readOnly }: Work
             <DropdownMenuContent align="end">
               <DropdownMenuItem disabled>
                 <Pencil className="h-3.5 w-3.5 mr-2" />
-                Rename
+                {t("dash.workflowRename")}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onDuplicate(workflow.id)}>
                 <Copy className="h-3.5 w-3.5 mr-2" />
-                Duplicate
+                {t("dash.workflowDuplicate")}
               </DropdownMenuItem>
               <DropdownMenuItem
                 className="text-destructive"
                 onClick={() => onDelete(workflow.id)}
               >
                 <Trash2 className="h-3.5 w-3.5 mr-2" />
-                Delete
+                {t("dash.workflowDelete")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

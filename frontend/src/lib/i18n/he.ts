@@ -160,6 +160,9 @@ export const he: ChromeDict = {
   "dash.created": "נוצר",
   "dash.seeAllTemplatesArrow": "לכל התבניות ←",
   "dash.seeAllTemplates": "לכל התבניות",
+  "dash.workflowRename": "שינוי שם",
+  "dash.workflowDuplicate": "שכפול",
+  "dash.workflowDelete": "מחיקה",
 
   // Editor toolbar
   "editor.backToProject": "חזרה לפרויקט",
@@ -3378,6 +3381,7 @@ export const he: ChromeDict = {
   "crumb.subWorkflowNav": "ניווט תת־תהליך",
   "crumb.backToOriginal": "חזרה לתהליך המקורי",
   "projects.defaultName": "הזרימות האחרונות שלי",
+  "projects.defaultDescription": "סביבת עבודה שנוצרה אוטומטית לזרימות חדשות",
   "nodecat.Recent": "אחרונים",
   "nodecat.Common": "נפוצים",
   "nodecat.Input": "קלט",

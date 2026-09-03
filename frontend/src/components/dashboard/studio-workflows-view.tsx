@@ -1,3 +1,4 @@
+import { useProjectDisplayName } from "@/lib/project-display-name"
 import { useState, useMemo } from "react"
 import { Link } from "react-router-dom"
 import { Loader2, Search } from "lucide-react"
@@ -22,6 +23,7 @@ interface StudioWorkflowsViewProps {
  * projects, as elsewhere).
  */
 export function StudioWorkflowsView({ showAll }: StudioWorkflowsViewProps) {
+  const projectDisplayName = useProjectDisplayName()
   const mine = useMyStudioWorkflows()
   const all = useAllStudioWorkflows(showAll)
 
@@ -36,7 +38,8 @@ export function StudioWorkflowsView({ showAll }: StudioWorkflowsViewProps) {
       (w) =>
         w.name.toLowerCase().includes(needle) ||
         (w.ownerEmail?.toLowerCase().includes(needle) ?? false) ||
-        w.projectName.toLowerCase().includes(needle),
+        w.projectName.toLowerCase().includes(needle) ||
+        projectDisplayName({ name: w.projectName, isDefault: w.projectIsDefault }).toLowerCase().includes(needle),
     )
   }, [workflows, search])
 

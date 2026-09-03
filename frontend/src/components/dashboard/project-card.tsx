@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useT } from "@/lib/i18n"
-import { useProjectDisplayName } from "@/lib/project-display-name"
+import { useProjectDisplayName, useProjectDisplayDescription } from "@/lib/project-display-name"
 import { Link } from "react-router-dom"
 import { MoreHorizontal, Trash2, Pencil, FolderOpen, Star } from "lucide-react"
 import {
@@ -37,6 +37,7 @@ export function ProjectCard({ project, onDelete, onRename, isOwn, showOwner, vie
   const t = useT()
   const projectDisplayName = useProjectDisplayName()
   const displayName = projectDisplayName(project)
+  const displayDescription = useProjectDisplayDescription()(project)
   const [renameOpen, setRenameOpen] = useState(false)
   const [newName, setNewName] = useState(project.name)
   const [renaming, setRenaming] = useState(false)
@@ -187,9 +188,9 @@ export function ProjectCard({ project, onDelete, onRename, isOwn, showOwner, vie
                 {project.ownerEmail}
               </p>
             )}
-            {project.description && (
+            {displayDescription && (
               <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                {project.description}
+                {displayDescription}
               </p>
             )}
             <p className="text-[10px] text-muted-foreground mt-1">
