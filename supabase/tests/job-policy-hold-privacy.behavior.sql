@@ -1,6 +1,7 @@
 -- ============================================================================
 -- Behavioral proof: `pending_review` is a status only the PLATFORM can write
--- (migrations 377 + 378 + 379).
+-- (migrations 377 + 378 + 379), and the audit table stays service-role only
+-- across 380's new `user_message` column.
 --
 -- WHY THIS FILE EXISTS. 377 widens `jobs_status_check` to admit
 -- 'pending_review'. That value is the ONLY authority the review queue has:
@@ -136,6 +137,15 @@ EXCEPTION WHEN insufficient_privilege THEN
   RAISE NOTICE 'ok  authenticated cannot SELECT job_policy_decisions';
 END $$;
 
+-- 6b. 380's `user_message` inherits that posture and needs no grant of its own.
+--     Named explicitly because the column is the one piece of this table that
+--     IS user-safe text, which is exactly the argument someone will one day use
+--     for exposing it — the row it sits on still carries the machine `reason`.
+SELECT pg_temp.assert_eq('the owner cannot SELECT job_policy_decisions.user_message',
+  has_column_privilege('authenticated', 'public.job_policy_decisions', 'user_message', 'SELECT')::text, 'false');
+SELECT pg_temp.assert_eq('anon cannot SELECT job_policy_decisions.user_message',
+  has_column_privilege('anon', 'public.job_policy_decisions', 'user_message', 'SELECT')::text, 'false');
+
 RESET ROLE;
 
 -- 7. ...and the backend is not locked out of any of it.
@@ -143,6 +153,12 @@ SELECT pg_temp.assert_eq('service_role still writes job_policy_decisions',
   has_table_privilege('service_role', 'public.job_policy_decisions', 'INSERT')::text, 'true');
 SELECT pg_temp.assert_eq('service_role still reads jobs.held_output_data',
   has_column_privilege('service_role', 'public.jobs', 'held_output_data', 'SELECT')::text, 'true');
+-- 380 wrote no GRANT: the column rides the table-level GRANT ALL to
+-- service_role that 377:104 already issued. This asserts that it does.
+SELECT pg_temp.assert_eq('service_role reads job_policy_decisions.user_message',
+  has_column_privilege('service_role', 'public.job_policy_decisions', 'user_message', 'SELECT')::text, 'true');
+SELECT pg_temp.assert_eq('service_role writes job_policy_decisions.user_message',
+  has_column_privilege('service_role', 'public.job_policy_decisions', 'user_message', 'INSERT')::text, 'true');
 
 DO $$ BEGIN RAISE NOTICE 'ALL BEHAVIOR ASSERTIONS PASSED'; END $$;
 

@@ -18,7 +18,7 @@ import { dirname, relative, resolve } from "node:path"
  * the poller giving up), and the user reads run 1's moderation sentence with no
  * trace of what actually just happened.
  *
- * 28 of the 38 run-start patches cleared `errorMessage` only, and 8 cleared
+ * 28 of the 39 run-start patches cleared `errorMessage` only, and 8 cleared
  * nothing at all. Fixing them one by one is what this guard exists to make
  * permanent: `RUN_START_RESET` is the single spread, and a new loop that spells
  * the status out by hand fails the build with the file and line.

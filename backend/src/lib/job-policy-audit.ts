@@ -48,10 +48,19 @@ export interface JobPolicyDecisionInput {
   readonly verdict: DecisionVerdict
   /** MACHINE text. The user's copy lives in `jobs.error_hint.reason`. */
   readonly reason?: string | null
+  /** USER-SAFE text — the sentence this decision actually put in front of the
+   *  job's owner, recorded so a RE-APPLY of a stored verdict reproduces exactly
+   *  what the first application said (D13). NULL when the decision showed
+   *  nothing: an `allow`/`flag`, and a `hold`, which parks the job without a
+   *  message. NEVER `reason` — that is the leak the column exists to close. */
+  readonly userMessage?: string | null
   readonly labels?: readonly string[] | null
   readonly payloadHash?: string | null
-  /** Whether the verdict's write actually flipped a row. NULL = not applicable
-   *  (allow/flag write nothing). */
+  /** Whether the verdict's ACTION landed, in three states. NULL = not
+   *  applicable (an allow/flag writes nothing, and the request gate's action is
+   *  simply not inserting the job) OR not yet applied — a block/hold row is
+   *  written BEFORE its CAS on purpose. TRUE = the action completed. FALSE =
+   *  the CAS matched no row: a concurrent terminal writer won. */
   readonly applied?: boolean | null
   readonly holdDowngraded?: boolean
   readonly userId?: string | null
@@ -72,6 +81,7 @@ export async function recordJobPolicyDecision(input: JobPolicyDecisionInput): Pr
         policy_id: input.policyId,
         verdict: input.verdict,
         reason: input.reason ?? null,
+        user_message: input.userMessage ?? null,
         labels: input.labels ? [...input.labels] : null,
         payload_hash: input.payloadHash ?? null,
         applied: input.applied ?? null,
@@ -116,10 +126,16 @@ export interface ReusedDecision {
    *  `applied` on the EXISTING record instead of writing a second one. */
   readonly id: string | null
   readonly verdict: (typeof REUSABLE_VERDICTS)[number]
-  /** MACHINE text (D13). Anything user-visible derived from it must go through
-   *  the caller's own mapping — `hold_downgraded` and the `platform` policy id
-   *  both mean "this reason must never reach a user". */
+  /** MACHINE text (D13) — kept for logs and the admin decisions tab, and read
+   *  by NOTHING user-visible. The sentence a re-apply shows comes from
+   *  `userMessage` below, or from a platform-owned constant when that is null;
+   *  it is never derived from this field. */
   readonly reason: string | null
+  /** USER-SAFE text: the sentence the FIRST application of this verdict showed.
+   *  NULL for a row written before migration 380 and for any verdict that
+   *  showed nothing — the caller substitutes a platform sentence, never
+   *  `reason`. */
+  readonly userMessage: string | null
   readonly policyId: string
   /** Reported, deliberately NOT filtered on. `applied` is written after the CAS
    *  now, but a process that died between the INSERT and the CAS can still
@@ -155,7 +171,7 @@ export async function findReusableDecision(
 ): Promise<ReusedDecision | null> {
   try {
     const { data, error } = await (supabase.from("job_policy_decisions" as "assets") as any)
-      .select("id, verdict, reason, policy_id, applied, hold_downgraded")
+      .select("id, verdict, reason, user_message, policy_id, applied, hold_downgraded")
       .eq("job_id", jobId)
       .eq("hook_point", hookPoint)
       .eq("payload_hash", payloadHash)
@@ -171,6 +187,7 @@ export async function findReusableDecision(
         id?: string
         verdict: string
         reason: string | null
+        user_message?: string | null
         policy_id: string
         applied?: boolean | null
         hold_downgraded?: boolean | null
@@ -181,6 +198,10 @@ export async function findReusableDecision(
       id: row.id ?? null,
       verdict: row.verdict as ReusedDecision["verdict"],
       reason: row.reason,
+      // `?? null` and not `?? row.reason`: a database that has not run 380 yet
+      // returns the key undefined, and the honest answer there is "no user-safe
+      // text was recorded", which the caller resolves to a platform sentence.
+      userMessage: row.user_message ?? null,
       policyId: row.policy_id,
       applied: row.applied ?? null,
       holdDowngraded: row.hold_downgraded === true,

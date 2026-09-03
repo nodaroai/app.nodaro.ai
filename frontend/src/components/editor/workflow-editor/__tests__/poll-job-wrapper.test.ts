@@ -23,11 +23,12 @@ const DIRS = [DIR, resolve(EDITOR, "config-panels")]
 /**
  * `jobAwaitingReview` is READ centrally (BaseNode mounts <NodePolicyOverlay>
  * once, so all 98 node cards get it) but must be WRITTEN by every node-owning
- * poll loop — and there are ~19 of them, in five files.
+ * poll loop — and there are 22 of them, in seven files (the count the second
+ * assertion below pins, file by file).
  *
  * `jobRecovering` is the cautionary tale: it was added as a PROP on the node
  * cards and is passed by 1 of 98 call sites, so "Recovering…" has never
- * reached a user. This guard is why loop #20 cannot repeat that: a new poll
+ * reached a user. This guard is why loop #23 cannot repeat that: a new poll
  * loop that calls `getJobStatusLean` directly fails the build with the file
  * and line, and the fix is one identifier.
  *

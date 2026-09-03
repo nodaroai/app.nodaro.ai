@@ -322,8 +322,15 @@ describe("holdEligible is the platform's call, not the policy's (D8)", () => {
  * row says it never landed, and returned untouched otherwise.
  */
 describe("idempotency (D24) — the policy is asked once, the verdict is applied until it lands", () => {
-  const REUSED_BLOCK = { id: "decision-9", verdict: "block", reason: "explicit", policyId: "p", applied: true, holdDowngraded: false }
-  const REUSED_HOLD = { id: "decision-9", verdict: "hold", reason: "needs eyes", policyId: "p", applied: null, holdDowngraded: false }
+  // `reason` is MACHINE text and `userMessage` is the sentence the first
+  // application actually put on the user's canvas. They are DIFFERENT strings on
+  // purpose: every assertion below that reads `error_message` is therefore also
+  // an assertion that the re-apply did not reach for the machine column.
+  const REUSED_BLOCK = {
+    id: "decision-9", verdict: "block", reason: "nsfw_score=0.98 label=explicit",
+    userMessage: "This image could not be published", policyId: "p", applied: true, holdDowngraded: false,
+  }
+  const REUSED_HOLD = { id: "decision-9", verdict: "hold", reason: "needs eyes", userMessage: null, policyId: "p", applied: null, holdDowngraded: false }
 
   it("a stored verdict never re-asks the policy — no second paid moderation call, no second audit row", async () => {
     audit.findReusableDecision.mockResolvedValue(REUSED_BLOCK)
@@ -351,7 +358,7 @@ describe("idempotency (D24) — the policy is asked once, the verdict is applied
     expect(await applyResultGate("job-1", { output_data: OUT }, "finalize")).toBe("blocked")
     expect(failure.markJobFailedDetailed).toHaveBeenCalledTimes(1)
     const arg = failure.markJobFailedDetailed.mock.calls[0]![1] as Record<string, any>
-    expect(arg.error_message).toBe("explicit")
+    expect(arg.error_message).toBe("This image could not be published")
     expect(arg.extra).toHaveProperty("output_data", null)
     expect(credits.refundReservedCreditsForJob).toHaveBeenCalledWith("job-1")
     expect(storage.batchDeleteFromR2).toHaveBeenCalledWith(["images/job-1.png"])
@@ -403,6 +410,66 @@ describe("idempotency (D24) — the policy is asked once, the verdict is applied
     await applyResultGate("job-1", { output_data: OUT }, "finalize")
     const arg = failure.markJobFailedDetailed.mock.calls[0]![1] as Record<string, any>
     expect(arg.error_message).toBe("This result was blocked by content policy")
+  })
+
+  it("a re-applied block speaks the STORED user-safe sentence, never the machine reason (D13)", async () => {
+    audit.findReusableDecision.mockResolvedValue({
+      id: "decision-9", verdict: "block", reason: "nsfw_score=0.98 label=explicit",
+      userMessage: "This image could not be published", policyId: "p", applied: null, holdDowngraded: false,
+    })
+    registerJobPolicy({ id: "p", checkResult: () => ({ verdict: "allow" }) })
+    await applyResultGate("job-1", { output_data: OUT }, "finalize")
+    const arg = failure.markJobFailedDetailed.mock.calls[0]![1] as Record<string, any>
+    expect(arg.error_message).toBe("This image could not be published")
+    expect(arg.error_hint.reason).toBe("This image could not be published")
+    // Both columns reach the owner's canvas verbatim (error_message and
+    // error_hint are on PUBLIC_JOB_KEYS), so the scores must be in NEITHER.
+    expect(arg.error_message).not.toContain("nsfw_score")
+    expect(arg.error_hint.reason).not.toContain("nsfw_score")
+  })
+
+  it("a re-applied block from a row written BEFORE user_message speaks the PLATFORM's sentence, not the machine reason", async () => {
+    // Migration 380 added the column; a decision recorded before it carries a
+    // machine `reason` and nothing else. The fallback must be platform-owned —
+    // falling back to `reason` is precisely the leak D13 forbids.
+    audit.findReusableDecision.mockResolvedValue({
+      id: "decision-9", verdict: "block", reason: "nsfw_score=0.98 label=explicit",
+      userMessage: null, policyId: "p", applied: null, holdDowngraded: false,
+    })
+    registerJobPolicy({ id: "p", checkResult: () => ({ verdict: "allow" }) })
+    await applyResultGate("job-1", { output_data: OUT }, "finalize")
+    const arg = failure.markJobFailedDetailed.mock.calls[0]![1] as Record<string, any>
+    expect(arg.error_message).toBe("This result was blocked by content policy")
+    expect(arg.error_hint.reason).toBe("This result was blocked by content policy")
+    expect(arg.error_message).not.toContain("nsfw_score")
+    expect(arg.error_hint.reason).not.toContain("nsfw_score")
+  })
+
+  it("a FRESH block records the very sentence it showed, so the re-apply can reproduce it", async () => {
+    // The other half: without this write, the re-apply above has nothing to
+    // prefer and every stored block degrades to the generic platform sentence.
+    registerJobPolicy({
+      id: "p",
+      checkResult: () => ({ verdict: "block", reason: "nsfw_score=0.98 label=explicit", userMessage: "This image could not be published" }),
+    })
+    expect(await applyResultGate("job-1", { output_data: OUT }, "finalize")).toBe("blocked")
+    const recorded = audit.recordJobPolicyDecision.mock.calls[0]![0] as Record<string, any>
+    const shown = failure.markJobFailedDetailed.mock.calls[0]![1] as Record<string, any>
+    expect(recorded.reason).toBe("nsfw_score=0.98 label=explicit")
+    expect(recorded.userMessage).toBe("This image could not be published")
+    expect(recorded.userMessage).toBe(shown.error_message)
+  })
+
+  it("a FRESH hold records NO user message — a park shows the owner nothing to reproduce", async () => {
+    // `applyJobResultPolicies` fills a hold's `userMessage` from its machine
+    // `reason` (job-policy.ts:316). Writing that into `user_message` would seed
+    // the very column this fix exists to keep user-safe.
+    registerJobPolicy({ id: "p", checkResult: () => ({ verdict: "hold", reason: "nsfw_score=0.71 label=suggestive" }) })
+    expect(await applyResultGate("job-1", { output_data: OUT }, "finalize")).toBe("held")
+    const recorded = audit.recordJobPolicyDecision.mock.calls[0]![0] as Record<string, any>
+    expect(recorded.verdict).toBe("hold")
+    expect(recorded.reason).toBe("nsfw_score=0.71 label=suggestive")
+    expect(recorded.userMessage ?? null).toBeNull()
   })
 
   it("an UNREADABLE row on the reuse path returns the stored verdict and writes nothing", async () => {

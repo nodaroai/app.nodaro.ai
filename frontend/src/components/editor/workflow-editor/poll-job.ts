@@ -25,10 +25,10 @@ import {
  * bare, unexplained spinner.
  *
  * It exists because the flag is READ centrally (one `<NodePolicyOverlay>`
- * mounted by BaseNode) but must be WRITTEN by ~21 independent poll loops in six
+ * mounted by BaseNode) but must be WRITTEN by 22 independent poll loops in seven
  * files — and `jobRecovering` proved that "each loop remembers to do it" does
  * not survive contact with this codebase (1 of 98 call sites remembered).
- * `__tests__/poll-job-wrapper.test.ts` fails the build on loop #22 — and on any
+ * `__tests__/poll-job-wrapper.test.ts` fails the build on loop #23 — and on any
  * raw read whose call site does not carry a `raw-status-ok` marker comment
  * naming the reason it owns no node.
  *
@@ -103,11 +103,13 @@ const OUTPUT_URLS_KEY: Record<OutputKey, string | undefined> = {
  * no trace of run 2's actual error.
  *
  * Exported so the other run-start patches spread ONE object instead of each
- * remembering the list. All 37 of them now do — execute-node.ts's 27 (20 of
+ * remembering the list. All 39 of them now do — execute-node.ts's 27 (20 of
  * which used to clear `errorMessage` and nothing else, 7 of which cleared
- * nothing at all), plus asset-executors, node-executors, component-executor,
- * list-execution and sub-workflow-executor. `__tests__/run-start-reset.test.ts`
- * fails the build on the 38th, and on any key dropped from this object.
+ * nothing at all), plus asset-executors' 5, node-executors' 2,
+ * component-executor, list-execution, sub-workflow-executor and this file's own
+ * two (pollJobWithNodeUpdate + pollImageRefineToNode).
+ * `__tests__/run-start-reset.test.ts` pins that per-file count, so it fails the
+ * build on the 40th — and on any key dropped from this object.
  */
 export const RUN_START_RESET = {
   executionStatus: "running",

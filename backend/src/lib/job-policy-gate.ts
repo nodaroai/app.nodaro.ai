@@ -367,17 +367,31 @@ async function applyBlock(
 /**
  * The user-visible sentence for a block we are RE-applying.
  *
- * The audit row keeps only the MACHINE `reason` (D13) — the `userMessage` a
- * policy supplied is not stored. Two of those machine reasons must never reach
- * a user's canvas, and both are identifiable from the stored row: a `platform`
- * verdict is an outage, not a moral judgement, and a downgraded hold carries
- * the policy's raw scores. Everything else follows D13's own default
- * (`userMessage` defaults to `reason`).
+ * `reason` IS NOT A CANDIDATE HERE, at any point in this function. It is the
+ * policy's machine text — `nsfw_score=0.98 label=explicit` — and D13 is flat
+ * about it: the reason is for the audit log, only `userMessage` is ever shown
+ * to a user. A re-applied block writes `error_message` and `error_hint.reason`,
+ * both on PUBLIC_JOB_KEYS, so anything this returns lands on the owner's canvas
+ * verbatim. Migration 380 added `user_message` precisely so that the sentence
+ * the FIRST application showed can be reproduced instead of guessed at.
+ *
+ * The order matters, and the two platform checks come first ON PURPOSE: they
+ * are the compatibility path for a decision recorded BEFORE 380, where
+ * `userMessage` is null and the stored row still identifies itself — a
+ * `platform` verdict is an outage rather than a moral judgement, and a
+ * downgraded hold's `reason` is raw scores nobody was ever going to be shown.
+ *
+ * The final fallback is DEFAULT_BLOCK_MESSAGE and not POLICY_UNAVAILABLE_MESSAGE:
+ * a pre-380 row from a real policy block was a genuine content decision, and
+ * relabelling it "could not be verified" would tell the user the platform
+ * failed when it did not.
  */
 function storedBlockMessage(reused: ReusedDecision): string {
   if (reused.policyId === PLATFORM_POLICY_ID) return POLICY_UNAVAILABLE_MESSAGE
   if (reused.holdDowngraded) return HOLD_DOWNGRADED_MESSAGE
-  return reused.reason ?? DEFAULT_BLOCK_MESSAGE
+  // `||` and not `??`: an empty or whitespace-only stored string is not a
+  // sentence, and printing it would leave the user a blank explanation.
+  return reused.userMessage?.trim() || DEFAULT_BLOCK_MESSAGE
 }
 
 /**
@@ -450,6 +464,7 @@ async function failClosedOnUnreadableRow(
     policyId: PLATFORM_POLICY_ID,
     verdict: "block",
     reason: POLICY_UNAVAILABLE_REASON,
+    userMessage: POLICY_UNAVAILABLE_MESSAGE,
     payloadHash,
     applied: null,
     userId: null,
@@ -522,6 +537,12 @@ export async function applyResultGate(
   const decision: JobResultDecision = await applyJobResultPolicies(ctx)
   const latencyMs = Date.now() - startedAt
 
+  // The user-facing sentence, resolved ONCE and read twice: the audit row below
+  // records it and `applyBlock` puts it on the job. Deriving it separately in
+  // the two places is how they would drift, and a drifted audit row is exactly
+  // what a re-apply then reproduces.
+  const userMessage = decision.userMessage ?? decision.reason ?? DEFAULT_BLOCK_MESSAGE
+
   // 3. The audit row is written BEFORE the action, so a crash in between leaves
   //    the record and the retry's idempotency lookup finds it — and, finding a
   //    row that is still live, re-applies the verdict instead of re-asking for
@@ -534,6 +555,13 @@ export async function applyResultGate(
     policyId: decision.policyId ?? (decision.verdict === "allow" ? ALL_POLICIES_ALLOWED_ID : PLATFORM_POLICY_ID),
     verdict: decision.verdict,
     reason: decision.reason ?? null,
+    // ONLY a block. `applyJobResultPolicies` fills a hold's `userMessage` from
+    // its machine `reason` (job-policy.ts:316) because a hold shows the owner
+    // nothing — it parks the job behind the "Awaiting review" overlay. Writing
+    // that here would seed `user_message` with the exact scores this column
+    // exists to keep away from a user, so a hold records NULL: honest, and it
+    // means nothing downstream can mistake it for a sentence.
+    userMessage: decision.verdict === "block" ? userMessage : null,
     labels: decision.labels ?? null,
     payloadHash,
     applied: null,
@@ -550,7 +578,6 @@ export async function applyResultGate(
     return await applyHold(jobId, fields, owned, commitReplay, decisionId, decision.policyId ?? null, row.job_type, row.user_id)
   }
 
-  const userMessage = decision.userMessage ?? decision.reason ?? DEFAULT_BLOCK_MESSAGE
   return await applyBlock(
     jobId,
     fields,
@@ -654,6 +681,8 @@ export async function rejectHeldJobRow(jobId: string, input: HeldRejectionInput)
     policyId: input.policyId,
     verdict: input.verdict,
     reason: input.machineReason,
+    // The sentence the reject/expiry just wrote onto `error_message`.
+    userMessage: input.userMessage,
     applied: true,
     userId: row.user_id,
     resolverUserId: input.resolverUserId ?? null,

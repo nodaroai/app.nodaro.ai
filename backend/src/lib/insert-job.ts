@@ -158,12 +158,18 @@ async function gateJobInsert(rows: ReadonlyArray<Record<string, unknown>>): Prom
 
   // A BLOCK keeps job_id NULL — no row was ever created, which is the point of
   // gating pre-insert (D25). It is joined by user_id + created_at + hash.
+  const message = d.userMessage ?? d.reason ?? "This request is not allowed on this deployment"
   await recordJobPolicyDecision({
     jobId: null,
     hookPoint: "request",
     policyId: d.policyId ?? "unknown",
     verdict: "block",
     reason: d.reason ?? null,
+    // The 422 body's sentence, recorded alongside the machine reason so the
+    // column means the same thing at BOTH hook points: "what the user was
+    // told". Nothing re-applies a request-gate verdict (there is no row to
+    // re-apply it to), so this one is for the audit alone.
+    userMessage: message,
     payloadHash: hash,
     userId: ctx.userId,
     jobType: ctx.jobType,
@@ -172,7 +178,7 @@ async function gateJobInsert(rows: ReadonlyArray<Record<string, unknown>>): Prom
     block: {
       code: "job_blocked",
       policyId: d.policyId ?? "unknown",
-      message: d.userMessage ?? d.reason ?? "This request is not allowed on this deployment",
+      message,
     },
   }
 }
