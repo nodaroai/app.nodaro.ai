@@ -1,3 +1,4 @@
+import { tx } from "@/lib/i18n"
 import { useEffect, useRef, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { createClient } from "@/lib/supabase"
@@ -82,7 +83,7 @@ export function useWorkflowSearch(search: string, projectMap: Map<string, string
             nodeTypes: null,
             createdAt: row.created_at,
             updatedAt: row.updated_at,
-            projectName: map.get(row.project_id) ?? "Unknown Project",
+            projectName: map.get(row.project_id) ?? tx("project.unknown"),
           })),
         )
       } finally {

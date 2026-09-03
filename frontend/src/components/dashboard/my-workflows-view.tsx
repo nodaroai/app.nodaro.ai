@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { WorkflowThumbnail } from "./workflow-thumbnail"
 import { useT } from "@/lib/i18n"
+import { useProjectDisplayName } from "@/lib/project-display-name"
 import { useAuth } from "@/hooks/use-auth"
 import { useMyWorkflows, type MyWorkflow } from "@/hooks/queries/use-my-workflows-queries"
 import { useDemoSeed } from "@/hooks/use-demo-seed"
@@ -26,6 +27,7 @@ interface MyWorkflowsViewProps {
 
 export function MyWorkflowsView({ onCreateWorkflow, onMoveWorkflow, isCreating }: MyWorkflowsViewProps) {
   const t = useT()
+  const projectDisplayName = useProjectDisplayName()
   const { data: workflows = [], isLoading } = useMyWorkflows()
   const { user } = useAuth()
   // First-time users get the Welcome Demo seeded into their default project.
@@ -42,7 +44,8 @@ export function MyWorkflowsView({ onCreateWorkflow, onMoveWorkflow, isCreating }
     return workflows.filter(
       (w) =>
         w.name.toLowerCase().includes(needle) ||
-        w.projectName.toLowerCase().includes(needle),
+        w.projectName.toLowerCase().includes(needle) ||
+        projectDisplayName({ name: w.projectName, isDefault: w.projectIsDefault }).toLowerCase().includes(needle),
     )
   }, [workflows, search])
 
@@ -120,7 +123,7 @@ export function MyWorkflowsView({ onCreateWorkflow, onMoveWorkflow, isCreating }
                         aria-label={t("dash.defaultWorkspace")}
                       />
                     )}
-                    <span className="truncate">{wf.projectName}</span>
+                    <span className="truncate">{projectDisplayName({ name: wf.projectName, isDefault: wf.projectIsDefault })}</span>
                     <span aria-hidden>·</span>
                     <span className="flex-shrink-0">{new Date(wf.updatedAt).toLocaleDateString()}</span>
                   </p>

@@ -165,6 +165,9 @@ export const en = {
   "dash.created": "Created",
   "dash.seeAllTemplatesArrow": "See all templates →",
   "dash.seeAllTemplates": "See all templates",
+  "dash.workflowRename": "Rename",
+  "dash.workflowDuplicate": "Duplicate",
+  "dash.workflowDelete": "Delete",
 
   // ── Editor toolbar ──────────────────────────────────────────────────────
   "editor.backToProject": "Back to project",
@@ -3399,6 +3402,7 @@ export const en = {
   "crumb.subWorkflowNav": "Sub-workflow navigation",
   "crumb.backToOriginal": "Back to original workflow",
   "projects.defaultName": "My Recent Flows",
+  "projects.defaultDescription": "Auto-created workspace for new workflows",
   "nodecat.Recent": "Recent",
   "nodecat.Common": "Common",
   "nodecat.Input": "Input",
@@ -3462,6 +3466,14 @@ export const en = {
   "project.namePlaceholder": "Project name",
   "project.renaming": "Renaming...",
   "project.viewOnly": "View only",
+  "project.optionsFor": "Project options for {name}",
+  "project.studioBadge": "Studio",
+  "project.remixTitle": "Clone & Remix",
+  "project.remixDesc": "Choose a project for your editable copy.",
+  "project.remixSelect": "Select a project",
+  "project.defaultSuffix": "(default)",
+  "project.unknown": "Unknown Project",
+  "project.remixCloning": "Cloning…",
 
   // ── Pipeline / film page ──
   "pipe.autonomyAiDirector": "AI Director",

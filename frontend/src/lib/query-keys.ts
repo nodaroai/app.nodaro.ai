@@ -275,6 +275,9 @@ export const queryKeys = {
       ["admin", "reports", page, status ?? ""] as const,
     alerts: () => ["admin", "alerts"] as const,
     settings: () => ["admin", "settings"] as const,
+    messageTemplates: () => ["admin", "message-templates"] as const,
+    userMessages: (userId: string) =>
+      ["admin", "user-messages", userId] as const,
     userTransactions: (userId: string) =>
       ["admin", "user-transactions", userId] as const,
     userSubscription: (userId: string) =>

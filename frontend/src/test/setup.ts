@@ -57,6 +57,25 @@ if (typeof Element !== "undefined") {
   Element.prototype.scrollIntoView = function scrollIntoView() {}
 }
 
+// jsdom does not implement the Pointer Capture API at all, and Radix’s Select
+// calls hasPointerCapture on pointerdown — so ANY test that opens a Radix
+// Select throws “target.hasPointerCapture is not a function” before the listbox
+// ever renders. Added as missing-method guards (unlike scrollIntoView above,
+// which jsdom defines as a thrower and must be overridden).
+if (typeof Element !== "undefined") {
+  if (!Element.prototype.hasPointerCapture) {
+    Element.prototype.hasPointerCapture = function hasPointerCapture() {
+      return false
+    }
+  }
+  if (!Element.prototype.setPointerCapture) {
+    Element.prototype.setPointerCapture = function setPointerCapture() {}
+  }
+  if (!Element.prototype.releasePointerCapture) {
+    Element.prototype.releasePointerCapture = function releasePointerCapture() {}
+  }
+}
+
 // Polyfill ImageData for test environment (jsdom does not implement it)
 if (typeof globalThis.ImageData === "undefined") {
   globalThis.ImageData = class ImageData {

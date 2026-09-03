@@ -160,6 +160,9 @@ export const he: ChromeDict = {
   "dash.created": "נוצר",
   "dash.seeAllTemplatesArrow": "לכל התבניות ←",
   "dash.seeAllTemplates": "לכל התבניות",
+  "dash.workflowRename": "שינוי שם",
+  "dash.workflowDuplicate": "שכפול",
+  "dash.workflowDelete": "מחיקה",
 
   // Editor toolbar
   "editor.backToProject": "חזרה לפרויקט",
@@ -3378,6 +3381,7 @@ export const he: ChromeDict = {
   "crumb.subWorkflowNav": "ניווט תת־תהליך",
   "crumb.backToOriginal": "חזרה לתהליך המקורי",
   "projects.defaultName": "הזרימות האחרונות שלי",
+  "projects.defaultDescription": "סביבת עבודה שנוצרה אוטומטית לזרימות חדשות",
   "nodecat.Recent": "אחרונים",
   "nodecat.Common": "נפוצים",
   "nodecat.Input": "קלט",
@@ -3441,6 +3445,14 @@ export const he: ChromeDict = {
   "project.namePlaceholder": "שם הפרויקט",
   "project.renaming": "משנה שם…",
   "project.viewOnly": "לצפייה בלבד",
+  "project.optionsFor": "אפשרויות הפרויקט {name}",
+  "project.studioBadge": "Studio",
+  "project.remixTitle": "שכפול ורמיקס",
+  "project.remixDesc": "בחרו פרויקט לעותק הניתן לעריכה.",
+  "project.remixSelect": "בחרו פרויקט",
+  "project.defaultSuffix": "(ברירת מחדל)",
+  "project.unknown": "פרויקט לא ידוע",
+  "project.remixCloning": "משכפל…",
 
   // ── Pipeline / film page ──
   "pipe.autonomyAiDirector": "במאי AI",

@@ -1,4 +1,6 @@
 import { useState } from "react"
+import { useT } from "@/lib/i18n"
+import { useProjectDisplayName, useProjectDisplayDescription } from "@/lib/project-display-name"
 import { Link } from "react-router-dom"
 import { MoreHorizontal, Trash2, Pencil, FolderOpen, Star } from "lucide-react"
 import {
@@ -32,6 +34,10 @@ interface ProjectCardProps {
 }
 
 export function ProjectCard({ project, onDelete, onRename, isOwn, showOwner, viewMode = "grid", readOnly }: ProjectCardProps) {
+  const t = useT()
+  const projectDisplayName = useProjectDisplayName()
+  const displayName = projectDisplayName(project)
+  const displayDescription = useProjectDisplayDescription()(project)
   const [renameOpen, setRenameOpen] = useState(false)
   const [newName, setNewName] = useState(project.name)
   const [renaming, setRenaming] = useState(false)
@@ -60,7 +66,7 @@ export function ProjectCard({ project, onDelete, onRename, isOwn, showOwner, vie
             ? "h-7 w-7 p-0 hover:bg-muted"
             : "h-7 w-7 p-0 bg-background/80 hover:bg-background shadow-sm"}
           onClick={(e) => e.preventDefault()}
-          aria-label={`Project options for ${project.name}`}
+          aria-label={t("project.optionsFor", { name: displayName })}
         >
           <MoreHorizontal className="h-4 w-4" />
         </Button>
@@ -73,8 +79,8 @@ export function ProjectCard({ project, onDelete, onRename, isOwn, showOwner, vie
             setRenameOpen(true)
           }}
         >
-          <Pencil className="h-3.5 w-3.5 mr-2" />
-          Rename
+          <Pencil className="h-3.5 w-3.5 me-2" />
+          {t("project.rename")}
         </DropdownMenuItem>
         {!project.isDefault && (
           <DropdownMenuItem
@@ -84,8 +90,8 @@ export function ProjectCard({ project, onDelete, onRename, isOwn, showOwner, vie
               onDelete(project.id)
             }}
           >
-            <Trash2 className="h-3.5 w-3.5 mr-2" />
-            Delete
+            <Trash2 className="h-3.5 w-3.5 me-2" />
+            {t("common.delete")}
           </DropdownMenuItem>
         )}
       </DropdownMenuContent>
@@ -105,19 +111,19 @@ export function ProjectCard({ project, onDelete, onRename, isOwn, showOwner, vie
           <div className="flex items-center gap-1.5 flex-1 min-w-0">
             {project.isDefault && (
               <span
-                title="Auto-created — your default workspace"
+                title={t("project.autoCreated")}
                 className="flex-shrink-0"
               >
                 <Star
                   className="h-3.5 w-3.5 text-[#ff0073] fill-[#ff0073]"
-                  aria-label="Default workspace"
+                  aria-label={t("project.defaultWorkspace")}
                 />
               </span>
             )}
-            <h2 className="font-medium text-sm truncate">{project.name}</h2>
+            <h2 className="font-medium text-sm truncate">{displayName}</h2>
             {readOnly && (
               <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-[#ff0073]/40 text-[#ff0073] flex-shrink-0">
-                Studio
+                {t("project.studioBadge")}
               </Badge>
             )}
           </div>
@@ -156,19 +162,19 @@ export function ProjectCard({ project, onDelete, onRename, isOwn, showOwner, vie
             <div className="flex items-center gap-1.5">
               {project.isDefault && (
                 <span
-                  title="Auto-created — your default workspace"
+                  title={t("project.autoCreated")}
                   className="flex-shrink-0"
                 >
                   <Star
                     className="h-3.5 w-3.5 text-[#ff0073] fill-[#ff0073]"
-                    aria-label="Default workspace"
+                    aria-label={t("project.defaultWorkspace")}
                   />
                 </span>
               )}
-              <h2 className="font-medium text-sm truncate">{project.name}</h2>
+              <h2 className="font-medium text-sm truncate">{displayName}</h2>
               {readOnly && (
                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-[#ff0073]/40 text-[#ff0073] flex-shrink-0">
-                  Studio
+                  {t("project.studioBadge")}
                 </Badge>
               )}
               {showOwner && isOwn && (
@@ -182,9 +188,9 @@ export function ProjectCard({ project, onDelete, onRename, isOwn, showOwner, vie
                 {project.ownerEmail}
               </p>
             )}
-            {project.description && (
+            {displayDescription && (
               <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                {project.description}
+                {displayDescription}
               </p>
             )}
             <p className="text-[10px] text-muted-foreground mt-1">
@@ -197,20 +203,20 @@ export function ProjectCard({ project, onDelete, onRename, isOwn, showOwner, vie
       <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
-            <DialogTitle>Rename Project</DialogTitle>
+            <DialogTitle>{t("project.renameTitle")}</DialogTitle>
             <DialogDescription>
-              Enter a new name for this project.
+              {t("project.renameDesc")}
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
             <Label htmlFor="project-name" className="sr-only">
-              Project name
+              {t("project.namePlaceholder")}
             </Label>
             <Input
               id="project-name"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder="Project name"
+              placeholder={t("project.namePlaceholder")}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !renaming) {
                   handleRename()
@@ -221,10 +227,10 @@ export function ProjectCard({ project, onDelete, onRename, isOwn, showOwner, vie
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRenameOpen(false)} disabled={renaming}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button onClick={handleRename} disabled={renaming || !newName.trim()}>
-              {renaming ? "Renaming..." : "Rename"}
+              {renaming ? t("project.renaming") : t("project.rename")}
             </Button>
           </DialogFooter>
         </DialogContent>

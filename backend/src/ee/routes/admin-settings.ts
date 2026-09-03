@@ -4,6 +4,12 @@ import { supabase } from "../../lib/supabase.js"
 import { invalidateSettingsCache } from "../../lib/app-settings.js"
 import { invalidateConsentConfigCache } from "../lib/consent-config.js"
 import { invalidateNotifyConfigCache } from "../notifications/notify-config.js"
+import {
+  ADMIN_MESSAGES_DAILY_LIMIT_KEY,
+  ADMIN_MESSAGES_DAILY_LIMIT_MAX,
+  ADMIN_MESSAGES_DAILY_LIMIT_MIN,
+  invalidateAdminMessageConfigCache,
+} from "../lib/admin-message-config.js"
 import { isSlackWebhookValid } from "../notifications/slack-client.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { requirePlatformOperator } from "../middleware/require-platform-operator.js"
@@ -286,6 +292,26 @@ export async function adminSettingsRoutes(app: FastifyInstance) {
       }
     }
 
+    // Admin -> user email: how many one admin may send per UTC day. An
+    // out-of-range or non-integer value would be ignored by the reader and
+    // silently leave the limit at the compiled default, so refuse it here
+    // rather than accept a number that does nothing.
+    if (key === ADMIN_MESSAGES_DAILY_LIMIT_KEY) {
+      if (
+        typeof value !== "number" ||
+        !Number.isInteger(value) ||
+        value < ADMIN_MESSAGES_DAILY_LIMIT_MIN ||
+        value > ADMIN_MESSAGES_DAILY_LIMIT_MAX
+      ) {
+        return reply.status(400).send({
+          error: {
+            code: "validation_error",
+            message: `${ADMIN_MESSAGES_DAILY_LIMIT_KEY} must be an integer between ${ADMIN_MESSAGES_DAILY_LIMIT_MIN} and ${ADMIN_MESSAGES_DAILY_LIMIT_MAX} (0 disables sending)`,
+          },
+        })
+      }
+    }
+
     if (key === "featured_app_ids") {
       if (!Array.isArray(value) || !value.every((v: unknown) => typeof v === "string")) {
         return reply.status(400).send({
@@ -342,6 +368,7 @@ export async function adminSettingsRoutes(app: FastifyInstance) {
     invalidateSettingsCache()
     invalidateConsentConfigCache()
     invalidateNotifyConfigCache()
+    invalidateAdminMessageConfigCache()
 
     return {
       key: data.key,

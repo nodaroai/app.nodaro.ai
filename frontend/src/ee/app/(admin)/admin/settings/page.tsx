@@ -82,6 +82,10 @@ export default function AdminSettingsPage() {
   const [notifyMilestonesEnabled, setNotifyMilestonesEnabled] = useState(true)
   const [notifyEverySignupEnabled, setNotifyEverySignupEnabled] = useState(false)
   const [notifySlackWebhookUrl, setNotifySlackWebhookUrl] = useState("")
+  const [adminMessagesDailyLimit, setAdminMessagesDailyLimit] = useState(50)
+  // What the input shows while it is being edited. Kept as a string so the
+  // box can legitimately be empty mid-keystroke without that reading as 0.
+  const [adminMessagesLimitDraft, setAdminMessagesLimitDraft] = useState("50")
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -112,6 +116,8 @@ export default function AdminSettingsPage() {
       setNotifyMilestonesEnabled(settings.notify_milestones_enabled ?? true)
       setNotifyEverySignupEnabled(settings.notify_every_signup_enabled ?? false)
       setNotifySlackWebhookUrl(settings.notify_slack_webhook_url ?? "")
+      setAdminMessagesDailyLimit(settings.admin_messages_daily_limit ?? 50)
+      setAdminMessagesLimitDraft(String(settings.admin_messages_daily_limit ?? 50))
     }
   }, [settings])
 
@@ -185,6 +191,7 @@ export default function AdminSettingsPage() {
     // The webhook may legitimately be cleared to "" (turns notifications off), so
     // unlike consent_text this pushes even an empty value when it changed.
     if (notifySlackWebhookUrl.trim() !== (settings?.notify_slack_webhook_url ?? "")) updates.push({ key: "notify_slack_webhook_url", value: notifySlackWebhookUrl.trim() })
+    if (adminMessagesDailyLimit !== (settings?.admin_messages_daily_limit ?? 50)) updates.push({ key: "admin_messages_daily_limit", value: adminMessagesDailyLimit })
 
     let allSuccess = true
     for (const update of updates) {
@@ -229,7 +236,8 @@ export default function AdminSettingsPage() {
     notifyDigestHour !== (settings.notify_digest_hour ?? 8) ||
     notifyMilestonesEnabled !== (settings.notify_milestones_enabled ?? true) ||
     notifyEverySignupEnabled !== (settings.notify_every_signup_enabled ?? false) ||
-    notifySlackWebhookUrl.trim() !== (settings.notify_slack_webhook_url ?? "")
+    notifySlackWebhookUrl.trim() !== (settings.notify_slack_webhook_url ?? "") ||
+    adminMessagesDailyLimit !== (settings.admin_messages_daily_limit ?? 50)
   )
 
   if (loading && !settings) {
@@ -630,6 +638,53 @@ export default function AdminSettingsPage() {
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">Cadence is time-based today; this is informational until a login counter exists.</p>
+          </div>
+        </div>
+
+        {/* Admin -> user email (Loops transactional; Cloud-only) */}
+        <div className="border rounded-lg p-4 bg-card">
+          <div className="flex items-center gap-2 mb-4">
+            <Bell className="h-4 w-4 text-muted-foreground" />
+            <h2 className="font-medium">Admin messages</h2>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="admin-messages-limit">Messages per admin per day</Label>
+            <Input
+              id="admin-messages-limit"
+              type="number"
+              min={0}
+              max={1000}
+              value={adminMessagesLimitDraft}
+              onChange={(e) => {
+                // The box holds a DRAFT STRING, and only a valid draft is
+                // promoted to the saved number.
+                //
+                // Two failure modes, one on each side. `Number("")` is 0, which
+                // here is the documented "nobody may send" switch — so a
+                // clear-then-retype used to disable the feature if the admin
+                // saved in between. But refusing to update state on "" while
+                // the input was bound to the NUMBER made the field impossible
+                // to empty at all: React restored the old value on every
+                // backspace. A draft string is the only shape with neither.
+                const raw = e.target.value
+                setAdminMessagesLimitDraft(raw)
+                const next = Number(raw)
+                if (raw !== "" && Number.isInteger(next) && next >= 0 && next <= 1000) {
+                  setAdminMessagesDailyLimit(next)
+                }
+              }}
+              onBlur={() => {
+                // Leaving the box empty or out of range is not a value — put
+                // back the number that will actually be saved, so what is on
+                // screen is what the server will get.
+                setAdminMessagesLimitDraft(String(adminMessagesDailyLimit))
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              How many emails one admin may send to users in a UTC day. Counts sent and
+              in-flight messages, not failed ones. 0 stops sending entirely.
+            </p>
           </div>
         </div>
 
