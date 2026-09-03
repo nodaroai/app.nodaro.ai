@@ -9,12 +9,19 @@
  * mode, so both actions stay reachable at once: mouse does one, keyboard the
  * other.
  */
+import { tx } from "@/lib/i18n"
+
 export type NodeDoubleClickAction = "zoom" | "settings"
 
 export const DEFAULT_NODE_DOUBLE_CLICK_ACTION: NodeDoubleClickAction = "settings"
 
-/** The label shown for each mode — the toolbar toggle and its tooltip share it. */
-export const NODE_DOUBLE_CLICK_LABEL: Record<NodeDoubleClickAction, string> = {
-  zoom: "Enlarge node",
-  settings: "Node settings",
+/**
+ * The label shown for each mode — the toolbar toggle and its tooltip share it.
+ * A getter, not a module constant: the copy resolves through the live locale.
+ */
+export function NODE_DOUBLE_CLICK_LABEL(): Record<NodeDoubleClickAction, string> {
+  return {
+    zoom: tx("editor.dblClickLabelZoom"),
+    settings: tx("editor.dblClickLabelSettings"),
+  }
 }

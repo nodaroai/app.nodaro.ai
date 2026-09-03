@@ -38,6 +38,7 @@ import {
 const FlowTemplatesDialog = lazy(() => import("./flow-templates-dialog").then(m => ({ default: m.FlowTemplatesDialog })))
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
+import { useProjectDisplayName } from "@/lib/project-display-name"
 import {
   exportWorkflow,
   importWorkflow,
@@ -95,6 +96,7 @@ function describeMediaRefNodes(refs: ReadonlyArray<{ nodeId: string; nodeLabel?:
 
 export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab = "editor", onTabChange }: EditorToolbarProps) {
   const t = useT()
+  const projectDisplayName = useProjectDisplayName()
   const isRtl = useAppDir() === "rtl"
   const workflowName = useWorkflowStore((s) => s.workflowName)
   const setWorkflowName = useWorkflowStore((s) => s.setWorkflowName)
@@ -468,7 +470,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
                 onClick={() => onNavigate?.(`/projects/${projectId}`)}
                 className="text-muted-foreground hover:text-foreground transition-colors max-w-[120px] truncate"
               >
-                {project.name}
+                {projectDisplayName(project)}
               </button>
             </>
           )}
