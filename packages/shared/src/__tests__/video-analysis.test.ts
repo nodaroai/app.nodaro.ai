@@ -246,7 +246,9 @@ describe("the audio grammar (mode vocabulary + who is speaking)", () => {
 
   it("dropUnknownSpeakers strips slot attribution from an AMBIENCE layer too — nobody is speaking", () => {
     // The new mode must land on the non-speech side of the sanitizer, not slip
-    // through it as an unrecognised value.
+    // through it as an unrecognised value. This one's RED was a `tsc` error on
+    // the literal, not a runtime failure — the sanitizer never validated the
+    // mode; the sibling parse case above carries the runtime pin.
     const r = dropUnknownSpeakers([{ mode: "ambience", content: "room tone", speakerSlot: "hero" }], new Set(["hero"]))
     expect(r.audio[0]).not.toHaveProperty("speakerSlot")
     expect(r.dropped).toEqual(["hero"])

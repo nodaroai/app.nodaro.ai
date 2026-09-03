@@ -352,6 +352,13 @@ const audioLayerSchema = z.object({
    * sanitizer — it judges an id against the surviving slot list, and a name has
    * no id space to be unknown in. The asymmetry is deliberate and pinned by
    * test; whoever owns the name's vocabulary sanitizes the name.
+   *
+   * The residual that leaves: a layer can keep a `speaker` naming someone
+   * `stripOrphanSlots` already pruned as a phantom, where the same claim spelled
+   * `speakerSlot` would have been dropped — the invented-narrator defect, in the
+   * one spelling the sweep cannot see. LATENT today, since nothing in this
+   * repo emits `speaker`; the day the analyzer does, that sweep is what has to
+   * grow, not this field.
    */
   speaker: z.string().optional(),
 })
