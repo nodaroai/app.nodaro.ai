@@ -711,7 +711,7 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "texture-matte",      label: "Matte",       dimension: "skin-texture", description: "Poreless matte finish",       promptHint: "with a poreless, matte skin finish", term: "matte skin finish" },
   { id: "texture-blemished",  label: "Blemished",   dimension: "skin-texture", description: "Visible blemishes, real-skin imperfections", promptHint: "with visible blemishes and natural real-skin imperfections", term: "blemished skin" },
   { id: "texture-baby-soft",  label: "Baby-soft",   dimension: "skin-texture", description: "Smooth, fine-pored youthful skin", promptHint: "with soft, fine-pored skin", term: "soft fine-pored skin" },
-  { id: "texture-shower-fresh-wet", label: "Shower-Fresh Wet", dimension: "skin-texture", description: "Just-out-of-shower wet skin with water beads", promptHint: "fresh, water-dappled skin as if just out of the shower", term: "water-dappled skin" , adultOnly: true },
+  { id: "texture-shower-fresh-wet", label: "Shower-Fresh Wet", dimension: "skin-texture", description: "Just-out-of-shower wet skin with water beads", promptHint: "with fresh, water-dappled skin as if just out of the shower", term: "water-dappled skin" , adultOnly: true },
   { id: "texture-acne-scarred", label: "Acne-scarred", dimension: "skin-texture", description: "Visible acne scarring (distinct from blemished — healed scar pattern)", promptHint: "with visible acne scarring, healed pitted-skin texture and uneven surface from past breakouts", term: "acne-scarred skin" },
 
   // -------------------- Distinctive Features --------------------
