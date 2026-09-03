@@ -1,3 +1,4 @@
+import { T2I_TO_I2I_VARIANT } from "../model-constants.js"
 import { describe, it, expect } from "vitest"
 import { safetyRetryPolicy } from "../safety-retry-policy.js"
 import { MODEL_CATALOG, getModel } from "../model-catalog.js"
@@ -42,6 +43,20 @@ describe("safetyRetryPolicy", () => {
         fallbackEntry!.features ?? [],
         `${entry.id}'s fallback "${fallbackId}" does not accept a reference image`,
       ).toContain("reference-image")
+    }
+  })
+})
+
+describe("i2i variants inherit their base model's safety policy", () => {
+  it("resolves the referenced-request id (gpt-image-2-i2i) to the same policy as gpt-image-2", () => {
+    expect(safetyRetryPolicy("gpt-image-2-i2i")).toEqual({ maxAttempts: 2, fallback: "nano-banana-pro" })
+  })
+
+  it("every T2I_TO_I2I_VARIANT pair declares the same safetyFilter on both sides", () => {
+    for (const [t2i, i2i] of Object.entries(T2I_TO_I2I_VARIANT)) {
+      const base = MODEL_CATALOG[t2i]?.safetyFilter ?? null
+      const twin = MODEL_CATALOG[i2i]?.safetyFilter ?? null
+      expect({ pair: `${t2i} -> ${i2i}`, twin }).toEqual({ pair: `${t2i} -> ${i2i}`, twin: base })
     }
   })
 })
