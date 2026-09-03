@@ -121,6 +121,7 @@ describe("useAppSettings", () => {
       notify_milestones_enabled: true,
       notify_every_signup_enabled: false,
       notify_slack_webhook_url: "",
+      admin_messages_daily_limit: 50,
     })
   })
 

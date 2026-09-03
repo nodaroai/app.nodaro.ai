@@ -38,6 +38,7 @@ import {
 } from "@/ee/hooks/queries/use-admin-queries"
 import { getScheduledCancelDate } from "@/ee/lib/subscription"
 import { useAuth } from "@/hooks/use-auth"
+import { UserMessagesSection } from "@/ee/components/admin/user-messages/user-messages-section"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -483,6 +484,12 @@ function UserExpandedRow({
               )}
             </div>
           </div>
+        </div>
+
+        {/* Full width: admin -> user email, and the shared log of everything
+            any admin has already said to this person. */}
+        <div className="mt-6 border-t pt-4">
+          <UserMessagesSection userId={user.id} userEmail={user.email} />
         </div>
       </td>
     </tr>
