@@ -67,8 +67,12 @@ describe("373 — it only reads", () => {
 })
 
 describe("373 — the allocator lock", () => {
-  it("bumps .sequence in the same PR", () => {
+  it("bumps .sequence at least to 373 (later migrations move it further)", () => {
+    // A hard `toBe("373")` pin broke the first PR that added migration 374.
+    // The shared migration-versions test already enforces ".sequence ==
+    // highest migration"; this test only needs to prove 373 itself was
+    // accounted for, so it is a floor, not an equality.
     const sequence = readFileSync(join(import.meta.dirname, "../../../supabase/migrations/.sequence"), "utf8").trim()
-    expect(sequence).toBe("373")
+    expect(Number(sequence)).toBeGreaterThanOrEqual(373)
   })
 })

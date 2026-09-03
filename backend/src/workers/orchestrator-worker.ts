@@ -21,6 +21,9 @@ import { updateExecutionWithRetry } from "../lib/execution-writes.js"
 // opens the orchestration queue connection. The live queue below is still
 // loaded lazily, inside the one sweep that needs it.
 import { ORCHESTRATION_JOB_ATTEMPTS, ORCHESTRATOR_ALIVE_STATES } from "../lib/orchestration-queue-config.js"
+// Redis-free leaf too: which deployment this process is, and the one scope
+// predicate both stale-execution sweeps share (migration 374).
+import { getRuntimeEnv, scopeToRuntimeEnv } from "../lib/runtime-env.js"
 import {
   buildExecutionLevels,
   getEffectivelySkippedIds,
@@ -95,10 +98,17 @@ const STALE_EXECUTION_THRESHOLD_MS = 4 * 60 * 60 * 1000 // 4 hours
 const STARTUP_RECONCILE_BATCH_LIMIT = 100
 
 export async function cleanupStaleExecutions(): Promise<void> {
-  const { data: rows, error } = await supabase
+  const scan = supabase
     .from("workflow_executions")
     .select("id, started_at, node_states")
     .in("status", ["running", "stopping"])
+
+  // Only THIS environment's rows. Staging and production share one Supabase
+  // database but have separate Redis instances, so the queue gate below can
+  // only ever find jobs this environment enqueued — unscoped, this sweep
+  // marks every healthy execution of the OTHER environment orphaned. Same
+  // helper as the 90-second cron, so the two cannot drift apart.
+  const { data: rows, error } = await scopeToRuntimeEnv(scan)
     // ORDER BY started_at ASC so oldest stuck rows are processed first.
     // Without an explicit order, PostgREST returns heap-order rows —
     // a deployment with a persistent backlog and write failures could
@@ -913,6 +923,10 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         started_at: new Date().toISOString(),
         total_nodes: totalExecutions,
         node_states: nodeStates,
+        // The claim stamps which environment owns this run. Both stale-execution
+        // sweeps filter on it: the orchestration job lives in THIS environment's
+        // Redis, so only this environment can tell whether the row is orphaned.
+        runtime_env: getRuntimeEnv(),
       })
       .eq("id", executionId)
 
