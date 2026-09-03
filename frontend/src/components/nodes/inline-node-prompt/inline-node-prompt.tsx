@@ -163,6 +163,7 @@ export function InlineNodePrompt({ nodeId, onFocusChange, affordancesVisible = f
           floating buttons sit clear of the prompt text below. */}
       <div className="nodrag relative flex items-center mb-1 px-0.5 min-h-[1.5rem]">
         <div className="inline-flex items-center overflow-hidden rounded-md border border-border/60 text-[10px] leading-none">
+          {/* The segment TEXT is copy, not the mode id — the id only keys state. */}
           {(["edit", "final", "both"] as const).map((m) => (
             <button
               key={m}
@@ -170,13 +171,13 @@ export function InlineNodePrompt({ nodeId, onFocusChange, affordancesVisible = f
               aria-pressed={view === m}
               title={m === "edit" ? t("node.editPromptMode") : m === "final" ? t("node.showFinalPromptMode") : t("node.showEditAndFinalMode")}
               onClick={() => updateNodeData(nodeId, { inlinePromptView: m })}
-              className={`px-1.5 py-0.5 capitalize transition-colors ${
+              className={`px-1.5 py-0.5 transition-colors ${
                 view === m
                   ? "bg-muted text-foreground font-medium"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              {m}
+              {m === "edit" ? t("node.promptViewEdit") : m === "final" ? t("node.promptViewFinal") : t("node.promptViewBoth")}
             </button>
           ))}
         </div>

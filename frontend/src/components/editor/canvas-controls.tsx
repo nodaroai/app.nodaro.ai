@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent } from "react"
 import { Maximize2, ZoomIn, ZoomOut, Map, Magnet, Ruler, Crosshair, TextCursorInput } from "lucide-react"
 import { useReactFlow, useStoreApi } from "@xyflow/react"
@@ -100,6 +101,7 @@ function ZoomControl({
   readonly onSetZoom: (zoom: number, opts?: { animate?: boolean }) => void
   readonly onReset: () => void
 }) {
+  const t = useT()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState("")
   const dragRef = useRef<{ startY: number; startZoom: number; moved: boolean } | null>(null)
@@ -227,7 +229,7 @@ function ZoomControl({
           <button
             type="button"
             data-testid="zoom-value"
-            aria-label={`Zoom ${label}. Click to type a value, double-click to reset to 100%, drag to zoom.`}
+            aria-label={t("canvas.zoomReadoutAria", { label })}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
@@ -260,6 +262,7 @@ function ZoomControl({
 export { ZoomControl }
 
 export function CanvasControls({ zoom, showMiniMap, onToggleMiniMap, snapEnabled, onToggleSnap, alignmentEnabled, onToggleAlignment, inlinePromptEnabled, onToggleInlinePrompt, isMobile }: CanvasControlsProps) {
+  const t = useT()
   const { fitView, zoomTo, getNodes, setCenter } = useReactFlow()
   const storeApi = useStoreApi()
   const selectNode = useWorkflowStore((s) => s.selectNode)
@@ -300,19 +303,19 @@ export function CanvasControls({ zoom, showMiniMap, onToggleMiniMap, snapEnabled
     >
       <ControlButton
         icon={<Maximize2 className="w-4 h-4" />}
-        label="Fit to Screen"
+        label={t("canvas.fitToScreen")}
         onClick={() => fitView({ padding: 0.2 })}
       />
       <ControlButton
         icon={<Crosshair className="w-4 h-4" />}
-        label="Focus nearest node"
+        label={t("canvas.focusNearestNode")}
         onClick={handleAutoFocus}
       />
       {/* Familiar  −  100%  +  cluster. +/− snap to the zoom ladder; the % reads
           the live zoom and is itself an editor/scrubber/reset (see ZoomControl). */}
       <ControlButton
         icon={<ZoomOut className="w-4 h-4" />}
-        label="Zoom Out"
+        label={t("canvas.zoomOut")}
         onClick={() => zoomTo(snapZoom(zoom, -1), { duration: 200 })}
       />
       <ZoomControl
@@ -322,7 +325,7 @@ export function CanvasControls({ zoom, showMiniMap, onToggleMiniMap, snapEnabled
       />
       <ControlButton
         icon={<ZoomIn className="w-4 h-4" />}
-        label="Zoom In"
+        label={t("canvas.zoomIn")}
         onClick={() => zoomTo(snapZoom(zoom, 1), { duration: 200 })}
       />
       {!isMobile && (
@@ -330,25 +333,25 @@ export function CanvasControls({ zoom, showMiniMap, onToggleMiniMap, snapEnabled
           <div className="w-px h-5 bg-[#E2E8F0] dark:bg-[#2D2D2D] mx-0.5" />
           <ControlButton
             icon={<Map className="w-4 h-4" />}
-            label="Toggle MiniMap"
+            label={t("canvas.toggleMiniMap")}
             onClick={onToggleMiniMap}
             active={showMiniMap}
           />
           <ControlButton
             icon={<Magnet className="w-4 h-4" />}
-            label={`Snap to Grid (${formatBinding(SHORTCUTS.gridSnap.bindings[0], isMac)})`}
+            label={t("canvas.snapToGrid", { sc: formatBinding(SHORTCUTS.gridSnap.bindings[0], isMac) })}
             onClick={onToggleSnap}
             active={snapEnabled}
           />
           <ControlButton
             icon={<Ruler className="w-4 h-4" />}
-            label={`Alignment Guides (${formatBinding(SHORTCUTS.alignmentGuides.bindings[0], isMac)})`}
+            label={t("canvas.alignmentGuides", { sc: formatBinding(SHORTCUTS.alignmentGuides.bindings[0], isMac) })}
             onClick={onToggleAlignment}
             active={alignmentEnabled}
           />
           <ControlButton
             icon={<TextCursorInput className="w-4 h-4" />}
-            label="Inline Prompts"
+            label={t("canvas.inlinePrompts")}
             onClick={onToggleInlinePrompt}
             active={inlinePromptEnabled}
           />

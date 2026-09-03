@@ -1,3 +1,4 @@
+import { tx } from "@/lib/i18n"
 import { useNodeFinalPrompt } from "@/components/editor/config-panels/use-node-final-prompt"
 import { PromptFieldFinalView } from "@/components/editor/config-panels/prompt-field-final-view"
 
@@ -14,7 +15,7 @@ export function InlineFinalPrompt({ nodeId }: { readonly nodeId: string }) {
     <PromptFieldFinalView
       segments={finalPrompt.promptSegments}
       plainText={finalPrompt.promptText}
-      placeholder="Final prompt preview — nothing to assemble yet"
+      placeholder={tx("node.phFinalPromptPreviewEmpty")}
       minHeightRem={2 * 1.5}
     />
   )

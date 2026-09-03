@@ -3299,6 +3299,15 @@ export const en = {
   "canvas.mediaLibrary": "Media Library",
   "canvas.templates": "Templates",
   "canvas.tutorials": "Tutorials",
+  "canvas.fitToScreen": "Fit to Screen",
+  "canvas.focusNearestNode": "Focus nearest node",
+  "canvas.zoomOut": "Zoom Out",
+  "canvas.zoomIn": "Zoom In",
+  "canvas.toggleMiniMap": "Toggle MiniMap",
+  "canvas.snapToGrid": "Snap to Grid ({sc})",
+  "canvas.alignmentGuides": "Alignment Guides ({sc})",
+  "canvas.inlinePrompts": "Inline Prompts",
+  "canvas.zoomReadoutAria": "Zoom {label}. Click to type a value, double-click to reset to 100%, drag to zoom.",
   "toolbar.library": "Library",
   "toolbar.addNode": "Add Node",
   "toolbar.expandAll": "Expand all",
@@ -4532,6 +4541,10 @@ export const en = {
   "node.editPromptMode": "Edit prompt",
   "node.showFinalPromptMode": "Show the assembled final prompt",
   "node.showEditAndFinalMode": "Show edit + final",
+  "node.promptViewEdit": "Edit",
+  "node.promptViewFinal": "Final",
+  "node.promptViewBoth": "Both",
+  "node.phFinalPromptPreviewEmpty": "Final prompt preview — nothing to assemble yet",
 } as const
 
 export type MessageKey = keyof typeof en

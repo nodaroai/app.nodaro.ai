@@ -187,6 +187,12 @@ describe("the raw-English scan (self-check)", () => {
     expect(BRAND_ALLOW.test("Banana bread is not a brand")).toBe(false)
     expect(ALLOW_SINGLE.has("Pro")).toBe(true)
   })
+  it("catches a mode id rendered as the segment's visible text", () => {
+    const leak = `{(["edit", "final", "both"] as const).map((m) => (\n  <button key={m} title={t("x")}>\n    {m}\n  </button>\n))}`
+    expect(scanRawEnglish(leak).map((h) => `${h.kind}:${h.snippet}`)).toEqual(["id-as-text:m"])
+    const keyed = `{(["edit", "final"] as const).map((m) => (<button key={m}>{m === "edit" ? t("a") : t("b")}</button>))}`
+    expect(scanRawEnglish(keyed)).toEqual([])
+  })
   it("spares a handle pip's label= only when the handle-label table knows it", () => {
     const known = `<HandleWithPopover nodeId={id} label="Start Frame" color={c} />`
     const unknown = `<HandleWithPopover nodeId={id} label="Some New Pip" color={c} />`
