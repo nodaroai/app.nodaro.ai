@@ -36,6 +36,7 @@ import type { BillingContext } from "./billing-context.js"
 import {
   ALL_POLICIES_ALLOWED_ID,
   applyJobRequestPolicies,
+  DEFAULT_REQUEST_BLOCK_MESSAGE,
   hasJobPolicyFor,
   JobBlockedError,
   type InsertJobBlock,
@@ -158,7 +159,11 @@ async function gateJobInsert(rows: ReadonlyArray<Record<string, unknown>>): Prom
 
   // A BLOCK keeps job_id NULL — no row was ever created, which is the point of
   // gating pre-insert (D25). It is joined by user_id + created_at + hash.
-  const message = d.userMessage ?? d.reason ?? "This request is not allowed on this deployment"
+  // `d.reason` is NOT a candidate (D13): it is the policy's machine text and
+  // this string is the 422 body. `applyJobRequestPolicies` has already resolved
+  // the sentence — the policy's own or the platform's — so the fallback here is
+  // only for a decision shape that carries neither.
+  const message = d.userMessage ?? DEFAULT_REQUEST_BLOCK_MESSAGE
   await recordJobPolicyDecision({
     jobId: null,
     hookPoint: "request",

@@ -121,7 +121,12 @@ const reports = vi.hoisted(() => ({ insertAppReport: vi.fn(async (_r: Record<str
 vi.mock("../app-reports.js", () => reports)
 
 import { applyResultGate, rejectHeldJobRow, withdrawHeldJob } from "../job-policy-gate.js"
-import { registerJobPolicy, clearJobPolicies, type JobResultContext } from "../job-policy.js"
+import {
+  registerJobPolicy,
+  clearJobPolicies,
+  DEFAULT_RESULT_BLOCK_MESSAGE,
+  type JobResultContext,
+} from "../job-policy.js"
 import { extractJobOutputs, ownedHeldObjects, isOwnedObjectKey, mediaKindOf, MAX_HELD_OBJECTS } from "../job-policy-outputs.js"
 
 const OUT = { imageUrl: "https://cdn.example.com/images/job-1.png" }
@@ -460,10 +465,33 @@ describe("idempotency (D24) — the policy is asked once, the verdict is applied
     expect(recorded.userMessage).toBe(shown.error_message)
   })
 
+  it("a FRESH block with NO userMessage shows the PLATFORM's sentence, never the machine reason (D13)", async () => {
+    // The re-apply path was fixed for this (migration 380); the FRESH path is
+    // the other half. `error_message` and `error_hint.reason` are both on
+    // PUBLIC_JOB_KEYS, so whatever this resolves to lands on the owner's canvas
+    // verbatim — a policy that omits `userMessage` must not thereby publish its
+    // own classifier output.
+    registerJobPolicy({
+      id: "p",
+      checkResult: () => ({ verdict: "block", reason: "nsfw_score=0.98 label=explicit" }),
+    })
+    expect(await applyResultGate("job-1", { output_data: OUT }, "finalize")).toBe("blocked")
+    const shown = failure.markJobFailedDetailed.mock.calls[0]![1] as Record<string, any>
+    expect(shown.error_message).toBe(DEFAULT_RESULT_BLOCK_MESSAGE)
+    expect(shown.error_hint.reason).toBe(DEFAULT_RESULT_BLOCK_MESSAGE)
+    expect(shown.error_message).not.toContain("nsfw_score")
+    expect(shown.error_hint.reason).not.toContain("nsfw_score")
+    // The audit row keeps the machine reason AND records the sentence actually
+    // shown, so a re-apply reproduces the same platform words.
+    const recorded = audit.recordJobPolicyDecision.mock.calls[0]![0] as Record<string, any>
+    expect(recorded.reason).toBe("nsfw_score=0.98 label=explicit")
+    expect(recorded.userMessage).toBe(DEFAULT_RESULT_BLOCK_MESSAGE)
+  })
+
   it("a FRESH hold records NO user message — a park shows the owner nothing to reproduce", async () => {
-    // `applyJobResultPolicies` fills a hold's `userMessage` from its machine
-    // `reason` (job-policy.ts:316). Writing that into `user_message` would seed
-    // the very column this fix exists to keep user-safe.
+    // A hold carries no `userMessage` at all, so the gate's local resolves to
+    // the generic block sentence — and writing THAT into `user_message` would
+    // claim the owner was shown something they never were.
     registerJobPolicy({ id: "p", checkResult: () => ({ verdict: "hold", reason: "nsfw_score=0.71 label=suggestive" }) })
     expect(await applyResultGate("job-1", { output_data: OUT }, "finalize")).toBe("held")
     const recorded = audit.recordJobPolicyDecision.mock.calls[0]![0] as Record<string, any>

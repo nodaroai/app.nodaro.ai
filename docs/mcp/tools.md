@@ -1203,6 +1203,12 @@ held too. The job later resolves to `completed` (approved), `failed`
 (rejected, with `error_hint.kind === "policy-block"` and a user-safe
 `reason`) or `cancelled`.
 
+A client driving the same job through the MCP `tasks/*` API sees that state as
+task status **`input_required`**. The decision belongs to a human reviewer, not
+to you: do not prompt the user for more parameters and do not re-run the job —
+call `tasks/result` again later, and it completes on approval or fails with a
+policy reason if the review rejects it.
+
 **Input:** `{ job_id: uuid }`
 
 ---

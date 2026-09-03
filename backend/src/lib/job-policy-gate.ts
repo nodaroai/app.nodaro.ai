@@ -32,6 +32,7 @@ import { policyBlockHint } from "./safety-block.js"
 import {
   ALL_POLICIES_ALLOWED_ID,
   applyJobResultPolicies,
+  DEFAULT_RESULT_BLOCK_MESSAGE,
   hasJobPolicyFor,
   HOLD_DOWNGRADED_MESSAGE,
   PLATFORM_POLICY_ID,
@@ -93,9 +94,6 @@ const GATE_ROW_COLUMNS =
  */
 const LIVE_JOB_STATUSES: readonly string[] = IN_FLIGHT_JOB_STATUSES.filter((s) => !isParkedJobStatus(s))
 const isLiveStatus = (status: string): boolean => LIVE_JOB_STATUSES.includes(status)
-
-/** The default user-visible sentence for a block whose policy supplied none. */
-const DEFAULT_BLOCK_MESSAGE = "This result was blocked by content policy"
 
 /** What a single-row read can honestly say. Collapsing the last two into `null`
  *  is what made the gate fail OPEN on a transient DB failure (D20). */
@@ -381,7 +379,8 @@ async function applyBlock(
  * `platform` verdict is an outage rather than a moral judgement, and a
  * downgraded hold's `reason` is raw scores nobody was ever going to be shown.
  *
- * The final fallback is DEFAULT_BLOCK_MESSAGE and not POLICY_UNAVAILABLE_MESSAGE:
+ * The final fallback is DEFAULT_RESULT_BLOCK_MESSAGE and not
+ * POLICY_UNAVAILABLE_MESSAGE:
  * a pre-380 row from a real policy block was a genuine content decision, and
  * relabelling it "could not be verified" would tell the user the platform
  * failed when it did not.
@@ -391,7 +390,7 @@ function storedBlockMessage(reused: ReusedDecision): string {
   if (reused.holdDowngraded) return HOLD_DOWNGRADED_MESSAGE
   // `||` and not `??`: an empty or whitespace-only stored string is not a
   // sentence, and printing it would leave the user a blank explanation.
-  return reused.userMessage?.trim() || DEFAULT_BLOCK_MESSAGE
+  return reused.userMessage?.trim() || DEFAULT_RESULT_BLOCK_MESSAGE
 }
 
 /**
@@ -541,7 +540,11 @@ export async function applyResultGate(
   // records it and `applyBlock` puts it on the job. Deriving it separately in
   // the two places is how they would drift, and a drifted audit row is exactly
   // what a re-apply then reproduces.
-  const userMessage = decision.userMessage ?? decision.reason ?? DEFAULT_BLOCK_MESSAGE
+  // `decision.reason` IS NOT A CANDIDATE, here or anywhere: `applyJobResultPolicies`
+  // already resolved every block's sentence to the policy's own `userMessage`
+  // or to the platform's, so the only thing left to guard is a decision shape
+  // that carries neither (a `flag`/`hold`, whose sentence is never shown).
+  const userMessage = decision.userMessage ?? DEFAULT_RESULT_BLOCK_MESSAGE
 
   // 3. The audit row is written BEFORE the action, so a crash in between leaves
   //    the record and the retry's idempotency lookup finds it — and, finding a
@@ -555,12 +558,12 @@ export async function applyResultGate(
     policyId: decision.policyId ?? (decision.verdict === "allow" ? ALL_POLICIES_ALLOWED_ID : PLATFORM_POLICY_ID),
     verdict: decision.verdict,
     reason: decision.reason ?? null,
-    // ONLY a block. `applyJobResultPolicies` fills a hold's `userMessage` from
-    // its machine `reason` (job-policy.ts:316) because a hold shows the owner
-    // nothing — it parks the job behind the "Awaiting review" overlay. Writing
-    // that here would seed `user_message` with the exact scores this column
-    // exists to keep away from a user, so a hold records NULL: honest, and it
-    // means nothing downstream can mistake it for a sentence.
+    // ONLY a block. A hold shows the owner nothing — it parks the job behind
+    // the "Awaiting review" overlay — so `applyJobResultPolicies` leaves its
+    // `userMessage` unset and the local above would resolve it to the generic
+    // block sentence. Recording THAT would claim the owner was told something
+    // they were not, so a hold records NULL: honest, and nothing downstream can
+    // mistake it for a sentence a re-apply should reproduce.
     userMessage: decision.verdict === "block" ? userMessage : null,
     labels: decision.labels ?? null,
     payloadHash,

@@ -530,7 +530,7 @@ All errors share the same shape:
 | 404 | `not_found` | — | Workflow, execution, or token not found. |
 | 404 | `workspace_not_found` | — | (Cloud edition, organizations) The workspace named by workspace-paid work does not exist (or was deleted mid-flight). Rollout-gated. |
 | 409 | `workspace_archived` | — | (Cloud edition, organizations) Workspace-paid work into an archived workspace. Unarchive it or move the work. Rollout-gated. |
-| 422 | `job_blocked` | — | A job policy registered by this deployment refused the generation before it ran. `message` is user-facing text written by the deployment's policy — show it as-is. No job was created and nothing was charged. The platform does not retry a refused request; whether the same request would be judged differently is the deployment's policy's business. Only occurs on deployments that register a job policy — see [deployment.md](./deployment.md#surface-profile-nodaro_surface_profile). |
+| 422 | `job_blocked` | — | A job policy registered by this deployment refused the generation before it ran. `message` is user-facing text written by the deployment's policy (or by the platform, when the policy supplies none) — show it as-is. No job was created and nothing was charged. The platform does not retry a refused request; whether the same request would be judged differently is the deployment's policy's business. Only occurs on deployments that register a job policy — see [deployment.md](./deployment.md#surface-profile-nodaro_surface_profile). Two bookkeeping inserts are the honest exception: the Suno voice-persona ownership rows and the connected-cloud LLM mirror row treat a block as best-effort — the operation proceeds and its row is simply not recorded — so a policy blocking one of those neither stops the call nor reaches you as a 422. |
 | 422 | `upload_blocked` | — | An upload policy registered by this deployment refused the upload before it was stored (every byte-carrying ingestion lane: `POST /v1/upload*`, the proxy PUT and the handoff POST). `message` is the deployment's own reason — show it as-is. Nothing was written. Only occurs on deployments that register an upload policy. |
 | 429 | `rate_limited` | — | You've exceeded the per-minute bucket. Back off. |
 | 500 | `internal_error` | — | Server bug or downstream dependency failure. Retry with backoff. |
@@ -557,11 +557,13 @@ Or, on a deployment that registers a job policy, a rejection by that policy:
 { "kind": "policy-block", "policyId": string, "reason": string, "hookPoint": "request" | "result" }
 ```
 
-`reason` is user-safe text written by the deployment's policy — show it as-is.
+`reason` is user-safe text written by the deployment's policy (or by the platform, when the policy supplies none) — show it as-is.
 `hookPoint` says whether the request was refused before the job ran or the
 output was rejected after it was produced (including a reviewer rejecting a
-job that had been held in `pending_review`). The reservation was refunded in
-full. Unlike `safety-block`, the platform does not retry a policy rejection
+job that had been held in `pending_review`). The reservation is refunded. (The
+rare exception is a job whose credits were already settled before the gate
+spoke — there is then nothing left to return, and no platform message claims
+otherwise.) Unlike `safety-block`, the platform does not retry a policy rejection
 and offers no fallback model: whether the same request would be judged
 differently is the deployment's policy's business, not the platform's.
 

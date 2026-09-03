@@ -77,10 +77,14 @@ type JobResultVerdict =
   | { verdict: "hold";  reason: string }
 ```
 
-A block carries **two** strings on purpose. `reason` is machine text and goes
-to the audit row; `userMessage` (defaulting to `reason`) is what the user sees
-— in the 422 body and in `error_hint.reason`. A moderation label that reads
-like a classifier's output must never be the sentence a person is shown.
+A block carries **two** strings on purpose, and they never substitute for one
+another. `reason` is machine text: it goes to the audit row and nowhere else.
+`userMessage` is what the user sees — in the 422 body and in
+`error_hint.reason`. A policy that omits `userMessage` gets a **platform-owned**
+sentence for that hook point ("This request is not allowed on this deployment",
+"This result was blocked by content policy"), never its own `reason`. A
+moderation label that reads like a classifier's output must never be the
+sentence a person is shown, and no default quietly makes it one.
 
 The result context hands the policy `outputs[]` — every `http(s)` URL found in
 the job's `output_data`, each with the storage key when the object is the
@@ -106,7 +110,7 @@ policy — an audit wants each one's opinion — and combines by severity
 | `allow` | — | — | — | — |
 | `block` (request) | no row created | no reservation taken | nothing written | `422 { error: { code: "job_blocked", message } }`; an internal creator gets a typed error it must handle |
 | `flag` (result) | completes; nothing is written on the job row | commits | publishes | nothing withheld; the annotation lives only in the audit row |
-| `block` (result) | `failed`, `error_hint = { kind: "policy-block", policyId, reason, hookPoint }` | refunded in full | the produced object is deleted | the failure, with a user-safe reason |
+| `block` (result) | `failed`, `error_hint = { kind: "policy-block", policyId, reason, hookPoint }` | refunded in full | `output_data` is cleared (a checkpoint already on the row moves to `held_output_data`) and every object in the job's own key family is deleted | the failure, with a user-safe reason |
 | `hold` (result) | `pending_review` | stay reserved | written, not published | "awaiting review"; the job stays in flight |
 
 `pending_review` is a job status in the **in-flight** set: waiters keep waiting,
@@ -124,12 +128,15 @@ own (no workflow execution, pipeline or parent job; not the director lane), on
 an edition that has an admin surface to review it. The platform computes this
 `holdEligible` flag itself and hands it to the policy. A `hold` on any other job
 is applied as a `block` and recorded with `hold_downgraded = true` — never
-quietly softened to `flag`, so the audit stays honest. The reason is mechanical:
-the finalize funnel's post-completion tail (gallery asset, execution reopen,
-reference-video attach) is extracted and replayable; the many direct completion
-callers each run bespoke side effects after their completion write that an
-approve hours later cannot reproduce. Widening eligibility is a config change
-once those callers are made replayable, and is a named follow-up.
+quietly softened to `flag`, so the audit stays honest. The user sees a
+platform-owned sentence for that block rather than the hold's own text: a `hold`
+carries no `userMessage`, so its `reason` was never written for a person to
+read. The reason for the narrowness is mechanical: the finalize funnel's
+post-completion tail (gallery asset, execution reopen, reference-video attach)
+is extracted and replayable; the many direct completion callers each run bespoke
+side effects after their completion write that an approve hours later cannot
+reproduce. Widening eligibility is a config change once those callers are made
+replayable, and is a named follow-up.
 
 Why `block` deletes the object rather than leaving it unreferenced: outputs live
 in a public-read bucket at keys derived from the job id with a long immutable
@@ -139,13 +146,30 @@ an edge already served**, which is the honest limit of a post-generation gate on
 this storage posture; deferred publication (a private staging key, copied to the
 public key on allow) is the fix and is not built. Deletion is by the job's own
 key family, never by URL: `output_data` routinely echoes the user's *input*
-URLs, and a URL-driven delete would destroy them.
+URLs, and a URL-driven delete would destroy them. The family is the key's stem —
+`<jobId>` itself and anything under a `<jobId>-` prefix, so a plugin's
+per-segment and intermediate objects go with the block while a continuation's
+parent-owned objects stay with their parent — and the delete is uncapped:
+truncating it would leave the tail of a long job live at guessable public keys
+forever.
+
+A `block` also **clears** `output_data` rather than merely declining to write
+it. A long job may have checkpointed segment URLs into that column mid-run, and
+those are owner-readable; stripping a key is not clearing a column. Whatever was
+already there is *moved* into `held_output_data`, which no client-facing query
+and no realtime payload can reach — the evidence stays available to an operator
+without being published.
 
 The same limit applies to `hold`: a held job's output is **unlisted, not
-unreachable**. The job row's `output_data` stays NULL, the held payload lives in
-columns no client-facing query can read, and a reviewer sees the media by
-streaming it through the admin route — never through a public URL — but the
-object itself sits at its deterministic key until approve or reject.
+unreachable**. The job row's `output_data` is cleared to NULL, the held payload
+lives in columns no client-facing query can read, and a reviewer sees the media
+by streaming it through the admin route — never through a public URL — but the
+object itself sits at its deterministic key until the review resolves: approve
+publishes it; reject, cancel and expiry delete it.
+
+`pending_review` is also a status a client cannot put a row *into*. The `jobs`
+insert policy refuses it outright, so a signed-in user writing to the database
+directly cannot plant a row in a reviewer's queue.
 
 ## Fail-closed
 
@@ -162,12 +186,21 @@ prefers availability over enforcement catches inside its own check and returns
 allow — the same escape hatch the upload policy documents, and deliberately not
 an environment variable: it is a decision about what the product is.
 
+The same stance covers the one input the gate cannot do without. The result gate
+reads the job row once — for `holdEligible`, and for whatever a mid-run
+checkpoint may already have written — and a read that *fails* is not a job that
+is *gone*: the database driver reports both as an empty result. Only a confirmed
+zero-row read answers allow. Any other error is retried once and then **blocks**,
+recorded the same way (`policy_id = "platform"`, `reason = "policy-unavailable"`).
+It never holds: hold eligibility is mostly columns on the row nobody could read,
+and unknown eligibility is not eligibility.
+
 ## Asked once per payload
 
 Every decision — `allow` included — is written to `job_policy_decisions`
-(`job_id`, `hook_point`, `policy_id`, `verdict`, `reason`, `labels`,
-`payload_hash`, `applied`, `hold_downgraded`, `created_at`, plus the resolver
-on review rows), and a verdict already recorded for
+(`job_id`, `hook_point`, `policy_id`, `verdict`, `reason`, `user_message`,
+`labels`, `payload_hash`, `applied`, `hold_downgraded`, `created_at`, plus the
+resolver on review rows), and a verdict already recorded for
 `(job_id, hook_point, payload_hash)` is **never re-asked**. That is
 what makes the seam safe under the two things that legitimately re-run a job:
 the queue's own stall retries and the reconcile cron, both of which re-derive
@@ -178,13 +211,16 @@ simply returned, and costs not even a row read. A `block` or `hold` hit reads
 the job row once: if the job has already reached the verdict's outcome — failed,
 cancelled, completed, or parked for review — the stored verdict is returned and
 nothing is written. If the job is somehow still running, the **stored** verdict
-is applied to it now, through the same compare-and-set as a fresh one. That case
-exists because the decision is recorded before it is carried out: a process that
-dies in between, or a database that refuses the write, would otherwise leave a
-job that a policy has judged but nothing ever acted on — running forever with
-its credits held. The policy is still asked only once, and only the first
-recording is kept. Recording `allow` is not
-bookkeeping — it *is* the idempotency key; without it every retry re-asks the
+is applied to it now, through the same compare-and-set as a fresh one. What the
+user is shown then is the sentence that decision recorded in `user_message` —
+never its `reason`, which is machine text kept for the audit; a decision written
+before that column existed falls back to a platform-owned sentence rather than
+guessing. That case exists because the decision is recorded before it is carried
+out: a process that dies in between, or a database that refuses the write, would
+otherwise leave a job that a policy has judged but nothing ever acted on —
+running forever with its credits held. The policy is still asked only once, and
+only the first recording is kept. Recording `allow` is not bookkeeping — it *is*
+the idempotency key; without it every retry re-asks the
 deployment's gate, and a gate that costs money or rate-limits would be asked an
 unbounded number of times for one job. An `allow` row is written at a hook point
 only when some registered policy implements that hook, so a policy that checks
@@ -233,8 +269,12 @@ the current status; it is a normal outcome, not an error.
 **A hold has a clock.** `JOB_HOLD_TTL_HOURS` (`docs/deployment.md`) bounds
 how long a job may wait in `pending_review`. On expiry the platform
 **auto-rejects**: refund, delete, and an audit row with `policy_id =
-"platform"`, `reason = "hold-expired"`. Unset, holds never expire and the
-reservation waits for a human. This is the one sweep permitted to touch a
+"platform"`, `reason = "hold-expired"`. The sentence the owner is left with is
+checked against what the refund actually moved: if nothing was still reserved,
+the expiry says so instead of promising credits back, and an operator report is
+filed — a hold that expires with nothing to refund is a billing defect, not a
+message to soften. Unset, holds never expire and the reservation waits for a
+human. This is the one sweep permitted to touch a
 `pending_review` row, stated as an explicit exception to the exemption above.
 Auto-approve is deliberately not offered: it would publish exactly the output
 a human declined to look at.

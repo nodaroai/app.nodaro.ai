@@ -174,7 +174,7 @@ added to `config.ts` without a row here.
 | `MCP_ENABLED` | off | Serve the MCP endpoint (§10) |
 | `COPILOT_ENABLED` | off | Cloud only — the in-app [Workflow Copilot](./features/workflow-copilot.md). Needs `ANTHROPIC_API_KEY`; admins can also pause it at runtime from Settings |
 | `CHARACTER_LORA_ROUTING_ENABLED` | on | Route generations that mention a trained character through its LoRA; off = plain reference-image injection |
-| `JOB_HOLD_TTL_HOURS` | `""` (holds never expire) | Only matters on a deployment that registers a **job policy** (see "Job policy" under Surface profile). Hours a job may wait in `pending_review` before the platform **auto-rejects** it: the reservation is refunded, the withheld output is deleted, and the decision is recorded with `policy_id = "platform"`, `reason = "hold-expired"`. Unset = a held job waits for a human indefinitely, with its credits reserved the whole time. This is the one sweep allowed to touch a `pending_review` row. Auto-approve is deliberately not an option — it would publish exactly the output a human declined to look at |
+| `JOB_HOLD_TTL_HOURS` | `""` (holds never expire) | Only matters on a deployment that registers a **job policy** (see "Job policy" under Surface profile). Hours a job may wait in `pending_review` before the platform **auto-rejects** it: the reservation is refunded, the withheld output is deleted, and the decision is recorded with `policy_id = "platform"`, `reason = "hold-expired"`. The message the owner is left with is checked against what the refund actually moved — if nothing was still reserved it says so rather than promising credits back, and an operator report is filed. Unset = a held job waits for a human indefinitely, with its credits reserved the whole time. This is the one sweep allowed to touch a `pending_review` row. Auto-approve is deliberately not an option — it would publish exactly the output a human declined to look at |
 | `META_APP_ID` … `DISCORD_CLIENT_SECRET` | `""` | Social network OAuth apps — see 2b-2 |
 
 ### 2b. Generate internal secrets
@@ -626,7 +626,10 @@ it, from **Admin → Review** (`/v1/admin/review/jobs…`). Both gates are
 **fail-closed** once a policy is registered: a check that throws never publishes —
 the request gate blocks, the result gate holds when the job is hold-eligible and
 blocks otherwise, recorded with `reason: "policy-unavailable"` and a
-platform-owned user message, never the policy's own wording. Every decision,
+platform-owned user message, never the policy's own wording. A job row the
+result gate cannot read is treated the same way: the read is retried once and
+then blocks (never holds — eligibility is a property of the row it could not
+read), while only a confirmed missing row answers allow. Every decision,
 `allow` included, is recorded in `job_policy_decisions` keyed by
 `(job_id, hook_point, payload_hash)`, which is also the idempotency key: queue
 retries and the reconcile cron reuse a recorded result-gate verdict instead of

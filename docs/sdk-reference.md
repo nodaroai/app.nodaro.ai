@@ -329,7 +329,7 @@ retry with its fresh token instead of clobbering the other writer.
 
 HTTP 422 `job_blocked`. A job policy registered by this deployment refused the
 generation **before it ran** — no job was created and nothing was charged.
-`message` is user-safe text written by the deployment's policy; show it as-is.
+`message` is user-safe text written by the deployment's policy (or by the platform, when the policy supplies none); show it as-is.
 Do not retry the identical request: the platform does not retry a refused
 request, and whether it would be judged differently is the deployment's
 policy's business. Only occurs on deployments that register a job policy (see
@@ -729,7 +729,7 @@ Image](./nodes/ai-image/generate-image.md#when-the-providers-safety-filter-block
 for what it means and when a fallback model is offered) or that a job policy
 registered by the deployment rejected (`kind: "policy-block"`, carrying
 `policyId`, `hookPoint: "request" | "result"` and `reason` — user-safe text
-written by the deployment's policy; show it as-is). Admin callers
+written by the deployment's policy, or by the platform when the policy supplies none; show it as-is). Admin callers
 additionally receive `provider`, `provider_cost`, `display_cost`,
 `credits_actual`, `error_detail` (the provider's redacted raw error) and
 `reconcile_attempts`. Any other column never reaches any caller. Server-only

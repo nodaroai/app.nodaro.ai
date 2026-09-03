@@ -137,8 +137,12 @@ interface BaseDecision {
   /** MACHINE text → `job_policy_decisions.reason`. May carry scores and labels;
    *  it must never reach a user. */
   readonly reason?: string
-  /** USER-SAFE text → `error_hint.reason` and the 422 body. Defaults to
-   *  `reason` when a policy does not distinguish them. */
+  /** USER-SAFE text → `error_hint.reason`, `job_policy_decisions.user_message`
+   *  and the 422 body. A policy that omits it gets the PLATFORM's own sentence
+   *  (`DEFAULT_REQUEST_BLOCK_MESSAGE` / `DEFAULT_RESULT_BLOCK_MESSAGE`) — never
+   *  `reason`, which is machine text (D13). Set on every BLOCK the platform
+   *  resolves; `undefined` on a `flag` and a `hold`, which show the user no
+   *  sentence at all. */
   readonly userMessage?: string
   /** The deciding policy's id — logs + the audit row, never the client. */
   readonly policyId?: string
@@ -179,11 +183,31 @@ export const POLICY_UNAVAILABLE_REASON = "policy-unavailable"
  *  person who made the request as a moral judgement about their prompt. */
 export const POLICY_UNAVAILABLE_MESSAGE = "Generation could not be verified"
 
+/**
+ * The PLATFORM's own sentence for a block whose policy supplied no
+ * `userMessage` — one per HOOK POINT, because the two are about different
+ * things ("we will not run this" vs "we will not publish this").
+ *
+ * D13 is the whole reason these exist: `reason` is MACHINE text for
+ * `job_policy_decisions.reason` — `nsfw_score=0.98 label=explicit` — and it is
+ * never a candidate for a user-visible string. A policy that distinguishes the
+ * two says so by setting `userMessage`; one that does not gets THESE, never its
+ * own reason. Every fresh-block site funnels through them (`applyJobRequest…`,
+ * `applyJobResult…`, the insert gate, the 422 body, the re-apply path), so a
+ * policy cannot leak a classifier's label onto an owner's canvas by omitting a
+ * field.
+ */
+export const DEFAULT_REQUEST_BLOCK_MESSAGE = "This request is not allowed on this deployment"
+export const DEFAULT_RESULT_BLOCK_MESSAGE = "This result was blocked by content policy"
+
 /** What the user sees when a policy asked for human review on a job this
  *  platform cannot park (D8). The policy's own `reason` is machine text — a
  *  `hold` was never going to be shown to anybody — so it must not become the
- *  block's user-visible sentence. */
-export const HOLD_DOWNGRADED_MESSAGE = "This result was blocked by content policy"
+ *  block's user-visible sentence. The SAME sentence as any other result block,
+ *  and deliberately an ALIAS rather than a second literal: to the owner a
+ *  downgraded hold simply IS a block, and the platform's inability to park the
+ *  job is not theirs to read. */
+export const HOLD_DOWNGRADED_MESSAGE = DEFAULT_RESULT_BLOCK_MESSAGE
 
 /**
  * How long the platform waits for a single check before resolving to the
@@ -273,7 +297,14 @@ export async function applyJobRequestPolicies(input: JobRequestContext): Promise
       }
     }
     if (v.verdict === "block") {
-      return { verdict: "block", reason: v.reason, userMessage: v.userMessage ?? v.reason, policyId: p.id }
+      // `?? v.reason` would be the D13 leak: a policy that did not bother to
+      // write a sentence would publish its classifier's label to the caller.
+      return {
+        verdict: "block",
+        reason: v.reason,
+        userMessage: v.userMessage ?? DEFAULT_REQUEST_BLOCK_MESSAGE,
+        policyId: p.id,
+      }
     }
   }
   return { verdict: "allow" }
@@ -307,13 +338,25 @@ export async function applyJobResultPolicies(input: JobResultContext): Promise<J
       return failClosedResult(input)
     }
     if (v.verdict === "block") {
-      return { verdict: "block", reason: v.reason, userMessage: v.userMessage ?? v.reason, policyId: p.id }
+      return {
+        verdict: "block",
+        reason: v.reason,
+        userMessage: v.userMessage ?? DEFAULT_RESULT_BLOCK_MESSAGE,
+        policyId: p.id,
+      }
     }
     if (RESULT_RANK[v.verdict] > RESULT_RANK[best.verdict]) {
       best = {
         verdict: v.verdict,
         reason: "reason" in v ? v.reason : undefined,
-        userMessage: "reason" in v ? v.reason : undefined,
+        // NO `userMessage`. Neither surviving verdict here shows the owner a
+        // sentence — a `flag` publishes and a `hold` parks behind "Awaiting
+        // review" — so there is nothing to say, and copying the machine
+        // `reason` in would dress a classifier's label up as user-safe text one
+        // downstream `??` away from a canvas. The one path that DOES need a
+        // sentence, the hold downgraded to a block below, is handed the
+        // platform's.
+        userMessage: undefined,
         labels: v.verdict === "flag" ? v.labels : undefined,
         policyId: p.id,
       }
@@ -430,13 +473,17 @@ export function jobBlockOf(e: unknown): InsertJobBlock | null {
 
 /** The uniform 422 body every job-creating lane sends — one shape for the
  *  frontend, mirroring `uploadBlockedBody` (lib/upload-policy.ts:109-118). */
-export function jobBlockedBody(d: { userMessage?: string; reason?: string }): {
+export function jobBlockedBody(d: { userMessage?: string }): {
   error: { code: "job_blocked"; message: string }
 } {
   return {
     error: {
+      // NO `reason` arm — the shape does not even accept one. The machine text
+      // is for `job_policy_decisions`, and a body that fell back to it would
+      // put a classifier's label in front of the caller (D13). `||` and not
+      // `??`: an empty string is not a sentence.
       code: "job_blocked",
-      message: d.userMessage || d.reason || "This request is not allowed on this deployment",
+      message: d.userMessage || DEFAULT_REQUEST_BLOCK_MESSAGE,
     },
   }
 }

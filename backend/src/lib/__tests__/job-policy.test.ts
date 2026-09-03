@@ -28,6 +28,8 @@ import {
   POLICY_UNAVAILABLE_REASON,
   POLICY_UNAVAILABLE_MESSAGE,
   HOLD_DOWNGRADED_MESSAGE,
+  DEFAULT_REQUEST_BLOCK_MESSAGE,
+  DEFAULT_RESULT_BLOCK_MESSAGE,
   HELD_COMMIT_REPLAY_KEYS,
   splitHeldCompletionFields,
   type JobRequestContext,
@@ -107,6 +109,21 @@ describe("job-policy registry", () => {
       expect(d.userMessage).toBe("לא ניתן")
     })
 
+    it("a block with NO userMessage shows the PLATFORM's sentence, never the reason (D13)", async () => {
+      // The leak this test exists for: `reason` is the classifier's own text and
+      // it lands on the 422 body verbatim if the platform defaults to it.
+      registerJobPolicy({
+        id: "a",
+        checkRequest: () => ({ verdict: "block", reason: "nsfw_score=0.98 label=explicit" }),
+      })
+      const d = await applyJobRequestPolicies(req())
+      // The machine reason still reaches the audit row untouched...
+      expect(d.reason).toBe("nsfw_score=0.98 label=explicit")
+      // ...and the user is shown the platform's words instead.
+      expect(d.userMessage).toBe(DEFAULT_REQUEST_BLOCK_MESSAGE)
+      expect(d.userMessage).not.toContain("nsfw_score")
+    })
+
     it("a policy that throws BLOCKS (fail-closed) with the platform's own words", async () => {
       registerJobPolicy({ id: "boom", checkRequest: () => { throw new Error("service down") } })
       const d = await applyJobRequestPolicies(req())
@@ -145,6 +162,32 @@ describe("job-policy registry", () => {
       registerJobPolicy({ id: "later", checkResult: later })
       expect(await applyJobResultPolicies(res())).toMatchObject({ verdict: "block", policyId: "b" })
       expect(later).not.toHaveBeenCalled()
+    })
+
+    it("a block with NO userMessage shows the PLATFORM's sentence, never the reason (D13)", async () => {
+      registerJobPolicy({
+        id: "b",
+        checkResult: () => ({ verdict: "block", reason: "nsfw_score=0.98 label=explicit" }),
+      })
+      const d = await applyJobResultPolicies(res())
+      expect(d.reason).toBe("nsfw_score=0.98 label=explicit")
+      expect(d.userMessage).toBe(DEFAULT_RESULT_BLOCK_MESSAGE)
+      expect(d.userMessage).not.toContain("nsfw_score")
+    })
+
+    it("a flag and a hold carry NO userMessage at all — nothing about them is shown", async () => {
+      // Neither verdict has a user-visible sentence: a flag publishes and a hold
+      // parks behind "Awaiting review". Copying their machine `reason` into
+      // `userMessage` made a string that is not user-safe look like one, one
+      // downstream `??` away from a canvas.
+      registerJobPolicy({ id: "f", checkResult: () => ({ verdict: "flag", reason: "nsfw_score=0.41" }) })
+      expect((await applyJobResultPolicies(res())).userMessage).toBeUndefined()
+      clearJobPolicies()
+      registerJobPolicy({ id: "h", checkResult: () => ({ verdict: "hold", reason: "nsfw_score=0.71" }) })
+      const held = await applyJobResultPolicies(res({ holdEligible: true }))
+      expect(held.verdict).toBe("hold")
+      expect(held.userMessage).toBeUndefined()
+      expect(held.reason).toBe("nsfw_score=0.71")
     })
 
     it("flag carries its labels", async () => {
@@ -205,8 +248,11 @@ describe("job-policy registry", () => {
       expect(jobBlockedBody({ userMessage: "not allowed here" })).toEqual({
         error: { code: "job_blocked", message: "not allowed here" },
       })
-      expect(jobBlockedBody({ reason: "machine" }).error.message).toBe("machine")
-      expect(jobBlockedBody({}).error.message).toMatch(/not allowed/i)
+      // No `reason` arm at all: the machine text is not a candidate for the
+      // 422 body, so the signature does not accept it and the empty case falls
+      // to the platform's own sentence.
+      expect(jobBlockedBody({}).error.message).toBe(DEFAULT_REQUEST_BLOCK_MESSAGE)
+      expect(jobBlockedBody({ userMessage: "" }).error.message).toBe(DEFAULT_REQUEST_BLOCK_MESSAGE)
     })
 
     it("jobBlockOf recognises both carriers and nothing else", () => {

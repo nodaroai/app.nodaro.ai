@@ -33,7 +33,12 @@ vi.mock("../job-policy-audit.js", () => audit)
 vi.mock("../app-reports.js", () => ({ insertAppReport: vi.fn(async () => true) }))
 
 import { insertJob, insertJobs, insertInternalJob, insertJobIdempotent } from "../insert-job.js"
-import { registerJobPolicy, clearJobPolicies, JobBlockedError } from "../job-policy.js"
+import {
+  registerJobPolicy,
+  clearJobPolicies,
+  JobBlockedError,
+  DEFAULT_REQUEST_BLOCK_MESSAGE,
+} from "../job-policy.js"
 import { sendInternalError } from "../http-errors.js"
 
 const req = {
@@ -175,6 +180,35 @@ describe("an ALLOWING policy", () => {
     registerJobPolicy({ id: "result-only", checkResult: () => ({ verdict: "allow" }) })
     await insertJob(req, row)
     expect(audit.recordJobPolicyDecision).not.toHaveBeenCalled()
+  })
+})
+
+describe("a BLOCKING policy that supplies NO userMessage", () => {
+  beforeEach(() => {
+    registerJobPolicy({
+      id: "test-policy",
+      checkRequest: () => ({ verdict: "block", reason: "nsfw_score=0.98 label=explicit" }),
+    })
+  })
+
+  it("the 422 body speaks the PLATFORM's sentence, never the machine reason (D13)", async () => {
+    const { error } = await insertJob(req, row)
+    const reply = makeReply()
+    sendInternalError(reply as unknown as FastifyReply, req, error, "Failed to create job")
+    expect(reply.statusCode).toBe(422)
+    expect(reply.body).toEqual({
+      error: { code: "job_blocked", message: DEFAULT_REQUEST_BLOCK_MESSAGE },
+    })
+    expect(JSON.stringify(reply.body)).not.toContain("nsfw_score")
+  })
+
+  it("the audit row still keeps the machine reason, alongside the sentence shown", async () => {
+    await insertJob(req, row)
+    expect(audit.recordJobPolicyDecision.mock.calls[0]![0]).toMatchObject({
+      verdict: "block",
+      reason: "nsfw_score=0.98 label=explicit",
+      userMessage: DEFAULT_REQUEST_BLOCK_MESSAGE,
+    })
   })
 })
 
