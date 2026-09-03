@@ -175,6 +175,26 @@ export const clipLookSchema = z.object({
    * insert) states the deviation in that scene's `visual`, as with `lighting`.
    */
   style: z.string().optional(),
+  /**
+   * The Style picker CATALOG ID the prose in `style` corresponds to — the
+   * analyzer's PICK ("pixar-3d" beside "3D stylized animation"), not a second
+   * description of it.
+   *
+   * Worth strictly more than the prose it accompanies: an id addresses the
+   * catalog, so a recreation renders the same medium the product's own Style
+   * picker would render, instead of re-interpreting a sentence. Absent when the
+   * analyzer read a medium it could not place in the catalog — `style` then
+   * carries the whole answer, as it always did.
+   *
+   * A free `string` here on purpose. The PRODUCER validates it against the
+   * catalog (the analyzer plugin's wire schema is an enum generated from
+   * `STYLES`, so an invented id never leaves it), while this package must not
+   * carry the catalog itself. A closed enum here would only add a second copy
+   * of the vocabulary to drift out of date — and, worse, would REJECT a
+   * catalog entry newer than the installed `@nodaro/shared`, which is exactly
+   * the analysis a consumer most wants to read.
+   */
+  styleId: z.string().optional(),
   /** Colour grade / palette — "muted teal-and-orange, crushed blacks". */
   grade: z.string().optional(),
   /** Camera or film FORMAT and stock — "anamorphic digital", "16mm film grain". */
@@ -266,13 +286,31 @@ export const entitySlotSchema = z.object({
 export type EntitySlot = z.infer<typeof entitySlotSchema>
 
 /**
+ * The sound LAYER vocabulary — what kind of thing this layer is.
+ *
+ * `ambience` is deliberately its own member rather than a flavour of `sfx`:
+ * they are different layers of a real mix and they are recreated by different
+ * means — ambience is the continuous bed a scene sits in (room tone, distant
+ * traffic, wind), an sfx is a discrete hit (a door slam, a gunshot). Folded
+ * together, a scene's bed and its one-off noises arrive indistinguishable and
+ * anything recreating the mix has to guess which it was told.
+ *
+ * Exported so a consumer keying its own document by these modes imports the
+ * vocabulary instead of restating it — the same reason every other closed
+ * vocabulary in this file is a const.
+ */
+export const VIDEO_ANALYSIS_AUDIO_MODES = ["speech", "music", "sfx", "ambience"] as const
+export type VideoAnalysisAudioMode = (typeof VIDEO_ANALYSIS_AUDIO_MODES)[number]
+
+/**
  * One concurrent sound layer in a scene. Real footage stacks sound (music bed
- * under dialogue over ambient sfx), so a scene carries an ARRAY of these — an
- * empty array means genuine silence. `content`: speech = verbatim words;
- * music/sfx = gen-ready description. `voice` is speech-only voice-casting.
+ * under dialogue over ambient room tone), so a scene carries an ARRAY of these
+ * — an empty array means genuine silence. `content`: speech = verbatim words;
+ * music/sfx/ambience = gen-ready description. `voice` is speech-only
+ * voice-casting.
  */
 const audioLayerSchema = z.object({
-  mode: z.enum(["speech", "music", "sfx"]),
+  mode: z.enum(VIDEO_ANALYSIS_AUDIO_MODES),
   content: z.string().min(1),
   voice: z.string().optional(),
   /**
@@ -296,6 +334,33 @@ const audioLayerSchema = z.object({
    * defect that `stripOrphanSlots` exists to kill.
    */
   speakerSlot: z.string().optional(),
+  /**
+   * SPEECH ONLY — WHO says these words, by NAME.
+   *
+   * The second of two ways to name a speaker, and the one for documents that
+   * have no slots: `speakerSlot` addresses an `EntitySlot` of THIS analysis by
+   * id, while `speaker` is the plain cast name a production keys its own cast
+   * by ("Jack Mercer"). A layer may legitimately carry both — the id for the
+   * analysis it came from, the name for the document it is going into — and a
+   * consumer that understands only one reads the one it understands.
+   *
+   * Optional, and not refined against `mode`, for the same reason
+   * `speakerSlot` is not: the window schema is the enforced decode grammar and
+   * must not throw away a whole roll over one mis-tagged field.
+   *
+   * NOT swept by `dropUnknownSpeakers`. That function is the SLOT channel's
+   * sanitizer — it judges an id against the surviving slot list, and a name has
+   * no id space to be unknown in. The asymmetry is deliberate and pinned by
+   * test; whoever owns the name's vocabulary sanitizes the name.
+   *
+   * The residual that leaves: a layer can keep a `speaker` naming someone
+   * `stripOrphanSlots` already pruned as a phantom, where the same claim spelled
+   * `speakerSlot` would have been dropped — the invented-narrator defect, in the
+   * one spelling the sweep cannot see. LATENT today, since nothing in this
+   * repo emits `speaker`; the day the analyzer does, that sweep is what has to
+   * grow, not this field.
+   */
+  speaker: z.string().optional(),
 })
 export type AudioLayer = z.infer<typeof audioLayerSchema>
 
@@ -502,7 +567,7 @@ export function rewriteSpeakerSlots(audio: AudioLayer[], slotRenames: Record<str
  * Strip attribution that no scene can honour — the `dropUnknownBindings` mirror
  * for the `audio` channel. Two cases, both model sloppiness rather than errors
  * worth failing a roll over:
- *   - a `speakerSlot` on a `music`/`sfx` layer (nobody is speaking)
+ *   - a `speakerSlot` on any non-`speech` layer (nobody is speaking)
  *   - a `speakerSlot` naming a slot that is not in the final list
  *
  * MUST run AFTER the orphan-slot sweep, and attribution must NEVER count as a
