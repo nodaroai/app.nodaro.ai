@@ -222,24 +222,25 @@ describe("video worker — safety-block handling", () => {
     expect(processor).toBeDefined()
   })
 
-  it("(a) safety block on gpt-image-2, attemptsMade 0 (policy allows 2) → rethrows the original error, no failed-row update, no refund", async () => {
+  it("(a) safety block on gpt-image-2 → ONE inline re-run of the same request; when it succeeds the job completes normally (no failed row, no refund, nothing rethrown)", async () => {
     const original = safetyKieError("safety", "Content policy violation: blocked")
-    mocks.mockHandler.mockRejectedValueOnce(original)
+    mocks.mockHandler.mockRejectedValueOnce(original).mockResolvedValueOnce(undefined)
 
     const job = makeBullJob("generate-image", { provider: "gpt-image-2" }, 0)
-    await expect(processor(job)).rejects.toBe(original)
+    await expect(processor(job)).resolves.toBeUndefined()
 
+    expect(mocks.mockHandler).toHaveBeenCalledTimes(2)
     expect(mocks.mockUpdate).not.toHaveBeenCalledWith(
       expect.objectContaining({ status: "failed" }),
     )
     expect(mocks.mockRefundJobCredits).not.toHaveBeenCalled()
   })
 
-  it("(b) safety block on gpt-image-2, attemptsMade 1 (final) → fallback sentence, error_hint with suggestedProvider, refund once, throws UnrecoverableError", async () => {
+  it("(b) safety block on gpt-image-2 twice (the inline re-run blocks too) → fallback sentence, error_hint retried + suggestedProvider, refund once, throws UnrecoverableError", async () => {
     const original = safetyKieError("safety", "Content policy violation: blocked")
-    mocks.mockHandler.mockRejectedValueOnce(original)
+    mocks.mockHandler.mockRejectedValueOnce(original).mockRejectedValueOnce(original)
 
-    const job = makeBullJob("generate-image", { provider: "gpt-image-2" }, 1)
+    const job = makeBullJob("generate-image", { provider: "gpt-image-2" }, 0)
     const rejection = await processor(job).catch((e) => e)
 
     expect(rejection).toBeInstanceOf(UnrecoverableError)
@@ -260,6 +261,7 @@ describe("video worker — safety-block handling", () => {
         },
       }),
     )
+    expect(mocks.mockHandler).toHaveBeenCalledTimes(2)
     expect(mocks.mockRefundJobCredits).toHaveBeenCalledTimes(1)
     expect(mocks.mockRefundJobCredits).toHaveBeenCalledWith("usage-1", "job-1", original)
   })
@@ -288,6 +290,7 @@ describe("video worker — safety-block handling", () => {
     )
     const failedCall = mocks.mockUpdate.mock.calls.map((c) => c[0]).find((c) => c.status === "failed")
     expect(failedCall.error_hint).not.toHaveProperty("suggestedProvider")
+    expect(mocks.mockHandler).toHaveBeenCalledTimes(1)
     expect(mocks.mockRefundJobCredits).toHaveBeenCalledTimes(1)
   })
 
@@ -307,6 +310,7 @@ describe("video worker — safety-block handling", () => {
         error_hint: { kind: "safety-block", class: "safety", retried: false },
       }),
     )
+    expect(mocks.mockHandler).toHaveBeenCalledTimes(1)
     expect(mocks.mockRefundJobCredits).toHaveBeenCalledTimes(1)
   })
 
