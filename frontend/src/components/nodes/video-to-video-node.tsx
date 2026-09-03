@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState, useEffect, useRef, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Clapperboard, Film, Type, Minus, Loader2, AlertCircle, X, Download, LayoutGrid, Expand, Link, Settings, Scissors, Aperture } from "lucide-react"
@@ -27,6 +28,7 @@ const ACCEPTS_PROMPT         = (t: string) => isValidVideoToVideoConnection("pro
 const ACCEPTS_NEGATIVE       = (t: string) => isValidVideoToVideoConnection("negative",       t, isPickerType)
 
 function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as VideoToVideoData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
@@ -217,7 +219,7 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
             <button
               type="button"
               className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-              aria-label="Remove result"
+              aria-label={t("node.removeResult")}
               onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}
             >
               <X className="w-3.5 h-3.5" />
@@ -231,7 +233,7 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
             <button
               type="button"
               className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-              aria-label="Expand preview"
+              aria-label={t("node.expandPreview")}
               onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
             >
               <Expand className="w-3.5 h-3.5" />
@@ -246,7 +248,7 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
             </button>
             <button
               type="button"
-              aria-label="Copy URL"
+              aria-label={t("cfgshared.copyUrl")}
               className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
               onClick={(e) => {
                 e.stopPropagation()
@@ -257,10 +259,10 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
             </button>
             <button
               type="button"
-              aria-label="Edit in NodarCut"
+              aria-label={t("node.editInNodarcut")}
               className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
               onClick={(e) => { e.stopPropagation(); openFreeCut(id, activeUrl!, activeResult?.freecutProjectUrl) }}
-              title="Edit in NodarCut"
+              title={t("node.editInNodarcut")}
             >
               <Scissors className="w-3.5 h-3.5" />
             </button>

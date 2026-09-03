@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { useState } from "react"
 import { Loader2 } from "lucide-react"
 import type { SubWorkflowViewProps } from "./view-mode-registry"
@@ -12,6 +13,7 @@ import { useFullResolution } from "@/hooks/use-full-resolution"
 import { WaveformAudioPlayer } from "@/components/audio-player"
 
 export function PortsView({ nodeId, data }: SubWorkflowViewProps) {
+  const t = useT()
   const useFull = useFullResolution(nodeId)
   const status = data.executionStatus ?? "idle"
 
@@ -33,7 +35,7 @@ export function PortsView({ nodeId, data }: SubWorkflowViewProps) {
     <>
       <div>
         {!data.referencedWorkflowId ? (
-          <p className="text-sm text-muted-foreground">Select a workflow...</p>
+          <p className="text-sm text-muted-foreground">{t("cfgext.subwfSelectWorkflow")}</p>
         ) : (
           <p className="text-xs font-medium truncate">{data.referencedWorkflowName || "Unnamed"}</p>
         )}

@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useCallback, useMemo, useState } from "react"
 import {
   NodeResizer,
@@ -46,6 +47,7 @@ function readableText(hex: string): string {
 }
 
 function GroupNodeComponent({ id, data, selected, height }: NodeProps) {
+  const t = useT()
   const nodeData = data as GroupNodeData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const [editing, setEditing] = useState(false)
@@ -150,7 +152,7 @@ function GroupNodeComponent({ id, data, selected, height }: NodeProps) {
           {/* Neutral (no tint) */}
           <div
             onClick={(e) => { e.stopPropagation(); updateNodeData(id, { color: undefined }) }}
-            title="No colour"
+            title={t("node.noColour")}
             className={`w-4 h-4 rounded-full cursor-pointer border-2 transition-transform hover:scale-110 ${!nodeData.color ? "border-foreground dark:border-white" : "border-foreground/15 dark:border-white/20"}`}
             style={{ backgroundColor: NEUTRAL_BORDER }}
           />
@@ -212,16 +214,16 @@ function GroupNodeComponent({ id, data, selected, height }: NodeProps) {
             className={`truncate cursor-text transition-colors ${tint ? "" : "hover:text-foreground dark:hover:text-white/90"}`}
             onDoubleClick={enterEditMode}
             onMouseDown={(e) => e.stopPropagation()}
-            title="Double-click to rename"
+            title={t("node.doubleClickToRename")}
           >
-            {nodeData.label || "New group"}
+            {nodeData.label || t("node.newGroup")}
           </span>
         )}
       </div>
 
       {types.length === 0 && (
         <div className="empty-hint p-4 text-center text-xs text-muted-foreground">
-          Drop nodes here
+          {t("node.dropNodesHere")}
         </div>
       )}
 

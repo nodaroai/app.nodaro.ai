@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState, useRef, useEffect, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { UserRound, Loader2, AlertCircle, AlertTriangle, Film, Volume2, Type, Image as ImageIcon, Expand, Download, Link, X, LayoutGrid, Scissors, Settings } from "lucide-react"
@@ -28,6 +29,7 @@ const ACCEPTS_AUDIO  = (t: string) => isValidAiAvatarConnection("audio",  t, isV
 const ACCEPTS_IMAGE  = (t: string) => isValidAiAvatarConnection("image",  t, isVisualPickerType)
 
 function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as AiAvatarData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
@@ -223,7 +225,7 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
               <button type="button"
                 className={`absolute ${status === "failed" ? "top-11" : "top-2"} left-2 flex items-center gap-1 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white text-[11px] rounded-md z-10 opacity-0 group-hover/video:opacity-100 transition-opacity`}
                 onClick={(e) => { e.stopPropagation(); setShowThumbnails((v) => !v) }}
-                title="Show versions">
+                title={t("node.showVersions")}>
                 <LayoutGrid className="w-3 h-3" />
                 <span className="text-[11px] font-medium">{results.length}</span>
               </button>
@@ -232,10 +234,10 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
             {/* Delete */}
             {results.length > 0 && (
               <div className={`absolute ${status === "failed" ? "top-11" : "top-2"} right-2 opacity-0 group-hover/video:opacity-100 transition-opacity`}>
-                <button type="button" aria-label="Remove result"
+                <button type="button" aria-label={t("node.removeResult")}
                   className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                   onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}
-                  title="Delete this result">
+                  title={t("node.deleteThisResult")}>
                   <X className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -243,7 +245,7 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
 
             {/* Bottom left: fullscreen + download + copy + freeCut */}
             <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover/video:opacity-100 transition-opacity">
-              <button type="button" aria-label="Expand preview"
+              <button type="button" aria-label={t("node.expandPreview")}
                 className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                 onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
                 title="Fullscreen">
@@ -255,16 +257,16 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
                 title="Download">
                 <Download className="w-3.5 h-3.5" />
               </button>
-              <button type="button" aria-label="Copy URL"
+              <button type="button" aria-label={t("cfgshared.copyUrl")}
                 className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                 onClick={(e) => { e.stopPropagation(); copyToClipboard(activeUrl!, "URL copied") }}
-                title="Copy URL">
+                title={t("cfgshared.copyUrl")}>
                 <Link className="w-3.5 h-3.5" />
               </button>
-              <button type="button" aria-label="Edit in NodarCut"
+              <button type="button" aria-label={t("node.editInNodarcut")}
                 className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                 onClick={(e) => { e.stopPropagation(); openFreeCut(id, activeUrl!, activeResult?.freecutProjectUrl) }}
-                title="Edit in NodarCut">
+                title={t("node.editInNodarcut")}>
                 <Scissors className="w-3.5 h-3.5" />
               </button>
             </div>

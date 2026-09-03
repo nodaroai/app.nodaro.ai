@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Mic, AlertCircle, Settings2, CheckCircle2, Loader2, User } from "lucide-react"
@@ -12,6 +13,7 @@ import { SunoVoiceSetupModal } from "./suno-voice-setup-modal"
 import type { SunoVoiceData } from "@/types/nodes"
 
 function SunoVoiceNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as SunoVoiceData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const [modalOpen, setModalOpen] = useState(false)
@@ -41,7 +43,7 @@ function SunoVoiceNodeComponent({ id, data, selected }: NodeProps) {
         <div className="flex flex-col gap-3 p-3" style={{ minHeight: 140 }}>
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1 min-w-0">
-              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Voice Persona</div>
+              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{t("audiocfg.voicePersona")}</div>
               <div className="text-sm font-semibold truncate">
                 {nodeData.voiceName?.trim() || (ready ? "Untitled voice" : "Not configured")}
               </div>
@@ -54,7 +56,7 @@ function SunoVoiceNodeComponent({ id, data, selected }: NodeProps) {
             {ready && (
               <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-medium">
                 <CheckCircle2 className="w-3 h-3" />
-                Ready
+                {t("node.ready")}
               </div>
             )}
             {inProgress && (
@@ -96,7 +98,7 @@ function SunoVoiceNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </BaseNode>
 
-      <HandleWithPopover nodeId={id} nodeType="suno-voice" handleId="voicePersona" type="source" position={Position.Right} label="Voice persona" color={HANDLE_COLORS.identity} icon={<User />} side="right" top="calc(50% - 4px)" />
+      <HandleWithPopover nodeId={id} nodeType="suno-voice" handleId="voicePersona" type="source" position={Position.Right} label={t("node.voicePersona")} color={HANDLE_COLORS.identity} icon={<User />} side="right" top="calc(50% - 4px)" />
 
       <SunoVoiceSetupModal
         nodeId={id}

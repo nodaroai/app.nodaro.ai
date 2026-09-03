@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import {
@@ -37,6 +38,7 @@ type PreviewMode = "overlay" | "mask" | "source"
 type MaskResult = { readonly imageUrl: string; readonly maskUrl: string }
 
 function GenerateMaskNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as GenerateMaskData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
@@ -160,7 +162,7 @@ function GenerateMaskNodeComponent({ id, data, selected }: NodeProps) {
               <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10 text-muted-foreground/40 h-[160px] px-3 text-center">
                 <Layers className="w-10 h-10" />
                 <span className="text-[10px] leading-tight">
-                  Connect an image and describe what to mask
+                  {t("node.connectAnImageAndDescribe")}
                 </span>
               </div>
             )}
@@ -170,7 +172,7 @@ function GenerateMaskNodeComponent({ id, data, selected }: NodeProps) {
               <div className="flex flex-col items-center justify-center gap-1 rounded-xl bg-red-500/5 text-red-500 h-[160px] p-2">
                 <div className="flex items-center gap-1.5">
                   <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span className="font-medium">Failed</span>
+                  <span className="font-medium">{t("node.failed")}</span>
                 </div>
                 {nodeData.errorMessage && (
                   <p className="text-[10px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
@@ -191,7 +193,7 @@ function GenerateMaskNodeComponent({ id, data, selected }: NodeProps) {
                       e.stopPropagation()
                       setShowThumbnails((v) => !v)
                     }}
-                    title="Show versions"
+                    title={t("node.showVersions")}
                   >
                     <LayoutGrid className="w-3 h-3" />
                     <span className="text-[11px] font-medium">{results.length}</span>
@@ -220,13 +222,13 @@ function GenerateMaskNodeComponent({ id, data, selected }: NodeProps) {
                   {results.length > 0 && (
                     <button
                       type="button"
-                      aria-label="Remove result"
+                      aria-label={t("node.removeResult")}
                       className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                       onClick={(e) => {
                         e.stopPropagation()
                         setDeleteConfirm(activeIndex)
                       }}
-                      title="Delete this result"
+                      title={t("node.deleteThisResult")}
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -237,7 +239,7 @@ function GenerateMaskNodeComponent({ id, data, selected }: NodeProps) {
                 <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover/mask:opacity-100 transition-opacity">
                   <button
                     type="button"
-                    aria-label="Expand preview"
+                    aria-label={t("node.expandPreview")}
                     className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                     onClick={(e) => {
                       e.stopPropagation()
@@ -249,7 +251,7 @@ function GenerateMaskNodeComponent({ id, data, selected }: NodeProps) {
                   </button>
                   <button
                     type="button"
-                    aria-label="Download mask"
+                    aria-label={t("node.downloadMask")}
                     className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                     onClick={(e) => {
                       e.stopPropagation()
@@ -259,19 +261,19 @@ function GenerateMaskNodeComponent({ id, data, selected }: NodeProps) {
                       a.download = `${nodeData.label || "mask"}.png`
                       a.click()
                     }}
-                    title="Download mask"
+                    title={t("node.downloadMask")}
                   >
                     <Download className="w-3.5 h-3.5" />
                   </button>
                   <button
                     type="button"
-                    aria-label="Copy mask URL"
+                    aria-label={t("node.copyMaskUrl")}
                     className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                     onClick={(e) => {
                       e.stopPropagation()
                       if (activeMaskUrl) copyToClipboard(activeMaskUrl, "Mask URL copied")
                     }}
-                    title="Copy mask URL"
+                    title={t("node.copyMaskUrl")}
                   >
                     <Link className="w-3.5 h-3.5" />
                   </button>
@@ -318,7 +320,7 @@ function GenerateMaskNodeComponent({ id, data, selected }: NodeProps) {
               config panel (Task 9). Mirrors generate-image's compact bottom row. */}
           <div className="shrink-0 px-2 py-1.5 border-t border-white/5 bg-black/20 flex items-center gap-2 text-[10px]">
             <span className="flex-1 truncate text-muted-foreground" title={nodeData.prompt || "No prompt set"}>
-              {nodeData.prompt ? nodeData.prompt : <span className="italic opacity-60">No prompt</span>}
+              {nodeData.prompt ? nodeData.prompt : <span className="italic opacity-60">{t("node.noPrompt")}</span>}
             </span>
             <span className="font-mono text-muted-foreground/80 shrink-0">
               t={typeof nodeData.threshold === "number" ? nodeData.threshold.toFixed(2) : "0.30"}

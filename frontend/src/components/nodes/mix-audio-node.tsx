@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Headphones, Loader2, AlertCircle, X, AudioLines } from "lucide-react"
@@ -18,6 +19,7 @@ import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { MixAudioData } from "@/types/nodes"
 
 function MixAudioNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as MixAudioData
   const credits = useModelCredits("ffmpeg", 1)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
@@ -62,7 +64,7 @@ function MixAudioNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex flex-col items-center justify-center gap-1 h-16 rounded-md bg-red-500/5 text-red-500 p-2">
             <div className="flex items-center gap-1.5">
               <AlertCircle className="w-4 h-4 shrink-0" />
-              <span className="font-medium">Failed</span>
+              <span className="font-medium">{t("node.failed")}</span>
             </div>
             {nodeData.errorMessage && (
               <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
@@ -78,7 +80,7 @@ function MixAudioNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex gap-1 overflow-x-auto">
             {results.slice(0, 5).map((r, i) => (
               <div key={`${r.jobId}-${i}`} className="relative group/thumb shrink-0">
-                <div role="button" aria-label="Play audio result" tabIndex={0} className={`w-10 h-10 flex items-center justify-center rounded cursor-pointer transition-opacity bg-muted ${i === activeIndex ? "opacity-100 ring-2 ring-primary" : "opacity-50 hover:opacity-80"}`} onClick={(e) => { e.stopPropagation(); updateNodeData(id, { activeResultIndex: i, generatedAudioUrl: r.url }) }} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); updateNodeData(id, { activeResultIndex: i, generatedAudioUrl: r.url }) } }}>
+                <div role="button" aria-label={t("node.playAudioResult")} tabIndex={0} className={`w-10 h-10 flex items-center justify-center rounded cursor-pointer transition-opacity bg-muted ${i === activeIndex ? "opacity-100 ring-2 ring-primary" : "opacity-50 hover:opacity-80"}`} onClick={(e) => { e.stopPropagation(); updateNodeData(id, { activeResultIndex: i, generatedAudioUrl: r.url }) }} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); updateNodeData(id, { activeResultIndex: i, generatedAudioUrl: r.url }) } }}>
                   <AudioLines className="w-4 h-4" />
                 </div>
                 <button type="button" aria-label="Remove" className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(i) }}><X className="w-2.5 h-2.5" /></button>

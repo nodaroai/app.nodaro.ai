@@ -9,6 +9,7 @@
 // Intentionally NOT added to NODE_PROMPT_FIELDS so the full PromptEditor
 // (TipTap + @-mentions) is never invoked for this node.
 
+import { useT } from "@/lib/i18n"
 import { useState } from "react"
 import {
   Dialog,
@@ -32,6 +33,7 @@ export function AiAvatarScriptModal({
   open,
   onClose,
 }: AiAvatarScriptModalProps) {
+  const t = useT()
   const nodeData = useWorkflowStore((s) =>
     s.nodes.find((n) => n.id === nodeId)?.data as AiAvatarData | undefined,
   )
@@ -71,7 +73,7 @@ export function AiAvatarScriptModal({
         onKeyDown={handleKeyDown}
       >
         <DialogHeader className="px-4 pt-4 pb-3 border-b">
-          <DialogTitle className="text-sm font-semibold">Script</DialogTitle>
+          <DialogTitle className="text-sm font-semibold">{t("node.script")}</DialogTitle>
         </DialogHeader>
 
         <div className="px-4 py-3 flex flex-col gap-2">
@@ -79,25 +81,25 @@ export function AiAvatarScriptModal({
             autoFocus
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder="What the avatar will say…"
+            placeholder={t("cfgext.aiAvPhScript")}
             className="min-h-[160px] text-sm resize-y leading-relaxed"
             maxLength={5000}
-            aria-label="Avatar script"
+            aria-label={t("node.avatarScript")}
           />
           <div className="flex items-center justify-between">
             <span className="text-[10px] text-muted-foreground tabular-nums">
               {charCount} / 5000
             </span>
-            <span className="text-[10px] text-muted-foreground">⌘↵ to save</span>
+            <span className="text-[10px] text-muted-foreground">{t("node.cmdEnterToSave")}</span>
           </div>
         </div>
 
         <div className="px-4 pb-4 flex justify-end gap-2">
           <Button type="button" variant="outline" size="sm" onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button type="button" size="sm" onClick={handleSave}>
-            Save
+            {t("node.save")}
           </Button>
         </div>
       </DialogContent>

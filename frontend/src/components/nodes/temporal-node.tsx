@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { Clock } from "lucide-react"
@@ -26,6 +27,7 @@ function collectEnabled(data: TemporalData): EnabledEntry[] {
 }
 
 function TemporalNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as TemporalData
   const enabled = collectEnabled(nodeData)
   const maxItemsPerRow = Math.max(1, Math.min(4, nodeData.maxItemsPerRow ?? 2))
@@ -71,7 +73,7 @@ function TemporalNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       ) : (
         <p className="text-muted-foreground text-sm italic">
-          Select a temporal category
+          {t("node.selectATemporalCategory")}
         </p>
       )}
     </ParameterNodeShell>

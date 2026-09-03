@@ -216,6 +216,17 @@ const NODE_LABELS_HE: Record<string, string> = {
 }
 
 const HANDLE_LABELS_HE: Record<string, string> = {
+  "Extend Source": "מקור להרחבה",
+  "Source video": "וידאו מקור",
+  "Cinematography": "צילום קולנועי",
+  "Inputs": "קלטים",
+  "Input": "קלט",
+  "URL": "כתובת",
+  "Column": "עמודה",
+  "Audio style": "סגנון אודיו",
+  "Negative style": "סגנון שלילי",
+  "Lyrics": "מילים",
+  "Title": "כותרת",
   "Analysis": "ניתוח",
   "Audio": "שמע",
   "Audio Refs": "ייחוסי שמע",

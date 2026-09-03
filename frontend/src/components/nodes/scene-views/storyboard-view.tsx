@@ -1,3 +1,4 @@
+import { useT } from "@/lib/i18n"
 import type { SceneViewProps } from "./view-mode-registry"
 import { registerSceneView } from "./view-mode-registry"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -12,6 +13,7 @@ import { CachedImage } from "@/components/ui/cached-image"
  * layout is the user-visible contract this view owns.
  */
 function StoryboardView({ data }: SceneViewProps) {
+  const t = useT()
   const shots = data.shots ?? []
   const keyframes = data.generated_keyframes ?? []
 
@@ -25,7 +27,7 @@ function StoryboardView({ data }: SceneViewProps) {
       </div>
       {shots.length === 0 ? (
         <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-zinc-200 dark:border-[#2D2D2D] text-[10px] text-zinc-400 dark:text-zinc-500">
-          No shots yet
+          {t("node.noShotsYet")}
         </div>
       ) : (
         <div className="grid grid-cols-4 gap-1.5">

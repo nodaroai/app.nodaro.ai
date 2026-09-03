@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Sparkles, Users } from "lucide-react"
@@ -22,6 +23,7 @@ const INPUT_HANDLES: ReadonlyArray<HandleConfig> = [
 ]
 
 function CharacterFxNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as CharacterFxData
   const ids = pickIds(nodeData.characterFx)
   const primaryId = ids[0] ?? "auto"
@@ -48,7 +50,7 @@ function CharacterFxNodeComponent({ id, data, selected }: NodeProps) {
           nodeType="character-fx"
           type="target"
           position={Position.Left}
-          label="Target subject"
+          label={t("node.targetSubject")}
           color={HANDLE_COLORS.identity}
           icon={<Users className="w-3.5 h-3.5" />}
           accepts={ACCEPTS_CHARACTER_REF}

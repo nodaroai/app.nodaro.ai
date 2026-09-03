@@ -9,6 +9,7 @@
 import { useCallback, useMemo, type ChangeEvent, type KeyboardEvent, type MouseEvent } from "react"
 import { AudioLines, Image as ImageIcon, Link2, Loader2, Upload, User, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { tx, useT } from "@/lib/i18n"
 import type { AiAvatarData } from "@/types/nodes"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useFileUpload } from "@/hooks/use-file-upload"
@@ -39,9 +40,9 @@ function fileNameOf(url: string): string {
   try {
     const path = new URL(url).pathname
     const last = decodeURIComponent(path.split("/").filter(Boolean).pop() ?? "")
-    return last || "Source image"
+    return last || tx("node.sourceImage")
   } catch {
-    return "Source image"
+    return tx("node.sourceImage")
   }
 }
 
@@ -50,6 +51,7 @@ function capitalize(s: string): string {
 }
 
 export function ConfiguredView({ data, wiring, onUpdate, onChangeAvatar }: ConfiguredViewProps) {
+  const t = useT()
   const source = data.avatarSource ?? "avatar"
   const mode = data.speechMode ?? "text"
   const engine = data.engine ?? "avatar-iv"
@@ -71,13 +73,13 @@ export function ConfiguredView({ data, wiring, onUpdate, onChangeAvatar }: Confi
 
   const engineLabel = AI_AVATAR_ENGINE_OPTIONS.find((o) => o.value === engine)?.label?.replace(/^HeyGen\s+/, "") ?? engine
   const title = isImage
-    ? (imageWired ? `Wired from ${wiring.imageSourceLabel ?? "the Image input"}` : fileNameOf(data.imageUrl ?? ""))
-    : (catalogLook?.name ?? data.avatarName ?? "Selected avatar")
+    ? (imageWired ? t("node.wiredFrom", { source: wiring.imageSourceLabel ?? t("node.theImageInput") }) : fileNameOf(data.imageUrl ?? ""))
+    : (catalogLook?.name ?? data.avatarName ?? t("node.selectedAvatar"))
   const subtitle = isImage
-    ? (imageWired ? "Arrives at run time" : "Uploaded portrait")
+    ? (imageWired ? t("node.arrivesAtRunTime") : t("node.uploadedPortrait"))
     : [
         catalogLook?.gender ? capitalize(catalogLook.gender) : "",
-        supportsV === true ? "Avatar V ready" : supportsV === false ? "Avatar IV" : "",
+        supportsV === true ? t("node.avatarVReady") : supportsV === false ? "Avatar IV" : "",
       ].filter(Boolean).join(" · ")
 
   // ── Replace image (image mode, not wired) ─────────────────────────────────
@@ -111,7 +113,7 @@ export function ConfiguredView({ data, wiring, onUpdate, onChangeAvatar }: Confi
           {portraitUrl ? (
             <CachedImage
               src={portraitUrl}
-              alt={isImage ? "Source image" : title}
+              alt={isImage ? t("node.sourceImage") : title}
               thumbnail
               thumbnailWidth={512}
               className="w-full h-full object-cover object-top"
@@ -128,7 +130,7 @@ export function ConfiguredView({ data, wiring, onUpdate, onChangeAvatar }: Confi
             )}
           >
             {isImage ? <Upload className="size-2.5" /> : <Zap className="size-2.5" />}
-            {isImage ? "Source image" : engineLabel}
+            {isImage ? t("node.sourceImage") : engineLabel}
           </span>
         </div>
 
@@ -141,18 +143,18 @@ export function ConfiguredView({ data, wiring, onUpdate, onChangeAvatar }: Confi
           {isImage ? (
             imageWired ? (
               <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/70">
-                <Link2 className="size-2.5" /> Wired input takes priority
+                <Link2 className="size-2.5" /> {t("node.wiredInputTakesPriority")}
               </span>
             ) : (
               <label className={cn(GHOST_BUTTON, "w-full", isUploading && "opacity-70 cursor-progress")} onClick={stop}>
                 {isUploading ? <Loader2 className="size-3 animate-spin" /> : null}
-                {isUploading ? "Uploading…" : "Replace image"}
-                <input type="file" accept="image/*" className="hidden" disabled={isUploading} aria-label="Replace image" onChange={handleReplace} />
+                {isUploading ? t("pipe.uploading") : t("node.replaceImage")}
+                <input type="file" accept="image/*" className="hidden" disabled={isUploading} aria-label={t("node.replaceImage")} onChange={handleReplace} />
               </label>
             )
           ) : (
             <button type="button" className={cn(GHOST_BUTTON, "w-full")} onClick={(e) => { stop(e); onChangeAvatar() }}>
-              Change avatar
+              {t("node.changeAvatar")}
             </button>
           )}
         </div>
@@ -169,12 +171,12 @@ export function ConfiguredView({ data, wiring, onUpdate, onChangeAvatar }: Confi
             />
             <div className="flex-1 min-h-0 flex flex-col gap-2 px-3 pt-2.5 pb-3">
               <div className="flex items-center justify-between gap-2 shrink-0">
-                <span className={KICKER}>{scriptWired ? `Script · wired from ${wiring.scriptSourceLabel ?? "input"}` : "Script · Text (TTS)"}</span>
+                <span className={KICKER}>{scriptWired ? t("node.scriptWiredFrom", { source: wiring.scriptSourceLabel ?? t("node.theInput") }) : t("node.scriptTextTts")}</span>
                 <span className={META_MONO}>{scriptMeta}</span>
               </div>
               {scriptWired ? (
                 <div className={cn(FIELD_SURFACE, "flex-1 min-h-0 overflow-y-auto nowheel px-3 py-2 text-[12px] leading-relaxed text-foreground/80 whitespace-pre-wrap")}>
-                  {wiring.upstreamScript ?? <span className="text-muted-foreground/60">The script arrives from the connected node at run time.</span>}
+                  {wiring.upstreamScript ?? <span className="text-muted-foreground/60">{t("node.theScriptArrivesFromThe")}</span>}
                 </div>
               ) : (
                 <textarea
@@ -185,8 +187,8 @@ export function ConfiguredView({ data, wiring, onUpdate, onChangeAvatar }: Confi
                   )}
                   value={script}
                   maxLength={SCRIPT_MAX}
-                  placeholder="What the avatar will say…"
-                  aria-label="Avatar script"
+                  placeholder={t("cfgext.aiAvPhScript")}
+                  aria-label={t("node.avatarScript")}
                   onChange={(e) => onUpdate({ script: e.target.value || undefined })}
                   onClick={stop}
                   onKeyDown={stop}
@@ -201,21 +203,21 @@ export function ConfiguredView({ data, wiring, onUpdate, onChangeAvatar }: Confi
                 <AudioLines className="size-3" />
               </span>
               <span className="flex flex-col min-w-0">
-                <span className="text-[12px] text-foreground truncate leading-tight">Wired audio</span>
+                <span className="text-[12px] text-foreground truncate leading-tight">{t("node.wiredAudio")}</span>
                 <span className="text-[10.5px] text-muted-foreground truncate leading-tight">
-                  {wiring.audio ? `From ${wiring.audioSourceLabel ?? "the Audio input"}` : "Nothing connected yet"}
+                  {wiring.audio ? t("node.fromSource", { source: wiring.audioSourceLabel ?? t("node.theAudioInput") }) : t("node.nothingConnectedYet")}
                 </span>
               </span>
             </div>
             <div className="flex-1 min-h-0 flex flex-col gap-2 px-3 pt-2.5 pb-3">
               <div className="flex items-center justify-between gap-2 shrink-0">
-                <span className={KICKER}>Audio · wired</span>
-                <span className={META_MONO}>≤ 10 min</span>
+                <span className={KICKER}>{t("node.audioWired")}</span>
+                <span className={META_MONO}>{t("node.maxTenMin")}</span>
               </div>
               <div className={cn(FIELD_SURFACE, "flex-1 min-h-0 px-3 py-2 text-[12px] leading-relaxed text-foreground/70")}>
                 {wiring.audio
-                  ? "The avatar lip-syncs to the connected audio at run time. Clips longer than 10 minutes are trimmed to 600s."
-                  : "Connect an audio node to the Audio input — the avatar lip-syncs to it. Switch the strip to Text (TTS) to type a script instead."}
+                  ? t("node.avatarLipSyncsToAudio")
+                  : t("node.connectAudioNodeHint")}
               </div>
             </div>
           </>

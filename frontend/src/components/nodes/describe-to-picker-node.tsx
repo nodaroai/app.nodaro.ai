@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Image as ImageIcon, ScanFace, AlertCircle } from "lucide-react"
@@ -17,6 +18,7 @@ import type { DescribeToPickerData } from "@/types/nodes"
 const ACCEPTS_IMAGE = (t: string) => isValidImageToTextConnection("image", t)
 
 function DescribeToPickerNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as DescribeToPickerData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const credits = useModelCredits(
@@ -61,7 +63,7 @@ function DescribeToPickerNodeComponent({ id, data, selected }: NodeProps) {
             <div className="flex flex-col items-center gap-1 text-red-500">
               <div className="flex items-center gap-1.5">
                 <AlertCircle className="w-4 h-4 shrink-0" />
-                <span className="text-xs font-medium">Analysis failed</span>
+                <span className="text-xs font-medium">{t("cfgext.phdAnalysisFailed")}</span>
               </div>
               {nodeData.errorMessage && (
                 <p className="text-[10px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
@@ -72,13 +74,13 @@ function DescribeToPickerNodeComponent({ id, data, selected }: NodeProps) {
           ) : detected > 0 ? (
             <p className="text-sm font-medium text-foreground">Detected {detected} traits</p>
           ) : (
-            <p className="text-xs text-muted-foreground">Connect an image, then run</p>
+            <p className="text-xs text-muted-foreground">{t("node.connectAnImageThenRun")}</p>
           )}
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground">&rarr; Person</p>
         </div>
       </BaseNode>
       <HandleWithPopover nodeId={id} nodeType="describe-to-picker" handleId="image" type="target" position={Position.Left} label="Image" color={HANDLE_COLORS.image} icon={<ImageIcon />} side="left" top="calc(100% - 24px)" accepts={ACCEPTS_IMAGE} />
-      <HandleWithPopover nodeId={id} nodeType="describe-to-picker" handleId="picker-json" type="source" position={Position.Right} label="Picker JSON" color={HANDLE_COLORS.pickerJson} icon={<ScanFace />} side="right" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="describe-to-picker" handleId="picker-json" type="source" position={Position.Right} label={t("node.pickerJson")} color={HANDLE_COLORS.pickerJson} icon={<ScanFace />} side="right" top="24px" />
     </div>
   )
 }

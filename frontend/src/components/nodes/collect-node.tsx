@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useMemo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Layers, Combine, Film, Music } from "lucide-react"
@@ -30,6 +31,7 @@ import type { CollectNodeData, WorkflowNode, WorkflowEdge } from "@/types/nodes"
 const ALL_LANES: AggregateableType[] = [...AGGREGATEABLE_TYPES]
 
 function CollectNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as CollectNodeData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
 
@@ -116,10 +118,10 @@ function CollectNodeComponent({ id, data, selected }: NodeProps) {
             and never executes anything. */}
         <div className="px-2 py-2 flex flex-col gap-1.5">
           {incomingCount === 0 ? (
-            <div className="px-1 text-xs text-muted-foreground">Connect inputs</div>
+            <div className="px-1 text-xs text-muted-foreground">{t("node.connectInputs")}</div>
           ) : !hasContent ? (
             <div className="px-1 text-xs text-muted-foreground">
-              {incomingCount} connection{incomingCount === 1 ? "" : "s"} · waiting for results
+              {t(incomingCount === 1 ? "node.connectionsWaitingOne" : "node.connectionsWaitingOther", { n: incomingCount })}
             </div>
           ) : (
             <>

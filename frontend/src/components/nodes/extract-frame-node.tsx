@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Frame, Loader2, AlertCircle, X, Film, ImageIcon, Expand, Download, Link, LayoutGrid } from "lucide-react"
@@ -22,6 +23,7 @@ import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import type { ExtractFrameData } from "@/types/nodes"
 
 function ExtractFrameNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as ExtractFrameData
   const credits = useModelCredits("ffmpeg", 1)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
@@ -91,19 +93,19 @@ function ExtractFrameNodeComponent({ id, data, selected }: NodeProps) {
                       : "bg-black/40 hover:bg-black/60 border-white/10 text-white opacity-0 group-hover:opacity-100"
                   }`}
                   onClick={(e) => { e.stopPropagation(); setShowThumbnails((v) => !v) }}
-                  title={showThumbnails ? "Hide versions" : "Show versions"}
+                  title={showThumbnails ? t("node.hideVersions") : t("node.showVersions")}
                   aria-pressed={showThumbnails}
                 >
                   <LayoutGrid className="w-3 h-3" />
                   <span className="text-[11px] font-medium">{results.length}</span>
                 </button>
               )}
-              <CachedImage src={activeUrl!} alt="Extracted frame" className="w-full h-full object-cover rounded-md" thumbnail thumbnailWidth={320} onLoadDimensions={handleLoadDimensions} onError={() => setImgError(true)} />
+              <CachedImage src={activeUrl!} alt={t("node.extractedFrame")} className="w-full h-full object-cover rounded-md" thumbnail thumbnailWidth={320} onLoadDimensions={handleLoadDimensions} onError={() => setImgError(true)} />
               <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">{modeLabel}</div>
               <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button type="button" aria-label="Expand" className="w-6 h-6 flex items-center justify-center bg-black/60 hover:bg-black/80 text-white rounded-full" onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}><Expand className="w-3 h-3" /></button>
                 <button type="button" aria-label="Download" className="w-6 h-6 flex items-center justify-center bg-black/60 hover:bg-black/80 text-white rounded-full" onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || 'frame'}.png`; a.click() }}><Download className="w-3 h-3" /></button>
-                <button type="button" aria-label="Copy URL" className="w-6 h-6 flex items-center justify-center bg-black/60 hover:bg-black/80 text-white rounded-full" onClick={(e) => { e.stopPropagation(); copyToClipboard(activeUrl!, "URL copied") }}><Link className="w-3 h-3" /></button>
+                <button type="button" aria-label={t("cfgshared.copyUrl")} className="w-6 h-6 flex items-center justify-center bg-black/60 hover:bg-black/80 text-white rounded-full" onClick={(e) => { e.stopPropagation(); copyToClipboard(activeUrl!, "URL copied") }}><Link className="w-3 h-3" /></button>
                 {results.length > 0 && (
                   <button type="button" aria-label="Remove" className="w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}><X className="w-3 h-3" /></button>
                 )}
@@ -114,7 +116,7 @@ function ExtractFrameNodeComponent({ id, data, selected }: NodeProps) {
           {status !== "running" && activeUrl && imgError && (
             <div className="w-full h-28 rounded-md bg-amber-500/10 border border-amber-500/30 flex flex-col items-center justify-center gap-1">
               <AlertCircle className="w-5 h-5 text-amber-500" />
-              <span className="text-[10px] text-amber-500">Image load failed</span>
+              <span className="text-[10px] text-amber-500">{t("node.imageLoadFailed")}</span>
             </div>
           )}
 
@@ -122,7 +124,7 @@ function ExtractFrameNodeComponent({ id, data, selected }: NodeProps) {
             <div className="flex flex-col items-center justify-center gap-1 h-16 rounded-md bg-red-500/5 text-red-500 p-2">
               <div className="flex items-center gap-1.5">
                 <AlertCircle className="w-4 h-4 shrink-0" />
-                <span className="font-medium">Failed</span>
+                <span className="font-medium">{t("node.failed")}</span>
               </div>
               {nodeData.errorMessage && <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>{nodeData.errorMessage}</p>}
             </div>

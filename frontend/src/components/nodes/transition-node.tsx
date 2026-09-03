@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { GitBranch, Frame, Sparkles } from "lucide-react"
@@ -25,6 +26,7 @@ const INPUT_HANDLES: ReadonlyArray<HandleConfig> = [
 ]
 
 function TransitionNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as TransitionData
   const ids = pickIds(nodeData.transition)
   const primaryId = ids[0] ?? "auto"
@@ -52,7 +54,7 @@ function TransitionNodeComponent({ id, data, selected }: NodeProps) {
             nodeType="transition"
             type="target"
             position={Position.Left}
-            label="Start state"
+            label={t("node.startState")}
             color={HANDLE_COLORS.look}
             icon={<Sparkles className="w-3.5 h-3.5" />}
             accepts={ACCEPTS_PARAMETER_PICKER}
@@ -68,7 +70,7 @@ function TransitionNodeComponent({ id, data, selected }: NodeProps) {
             nodeType="transition"
             type="target"
             position={Position.Left}
-            label="End state"
+            label={t("node.endState")}
             color={HANDLE_COLORS.look}
             icon={<Frame className="w-3.5 h-3.5" />}
             accepts={ACCEPTS_PARAMETER_PICKER}

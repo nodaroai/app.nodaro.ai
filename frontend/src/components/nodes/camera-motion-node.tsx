@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Video, Sparkles, Frame } from "lucide-react"
@@ -25,6 +26,7 @@ const INPUT_HANDLES: ReadonlyArray<HandleConfig> = [
 ]
 
 function CameraMotionNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as CameraMotionData
   const motionId = nodeData.cameraMotion || "static"
   const description = getCameraMotion(motionId)?.description
@@ -50,7 +52,7 @@ function CameraMotionNodeComponent({ id, data, selected }: NodeProps) {
             // fragments, not image frames; the runtime composes a transition
             // between two scene-state descriptions. "Frame" was misleading
             // (no image is expected here) and inconsistent with transition.
-            label="Start state"
+            label={t("node.startState")}
             color={HANDLE_COLORS.look}
             icon={<Sparkles className="w-3.5 h-3.5" />}
             accepts={ACCEPTS_PARAMETER_PICKER}
@@ -67,7 +69,7 @@ function CameraMotionNodeComponent({ id, data, selected }: NodeProps) {
             nodeType="camera-motion"
             type="target"
             position={Position.Left}
-            label="End state"
+            label={t("node.endState")}
             color={HANDLE_COLORS.look}
             icon={<Frame className="w-3.5 h-3.5" />}
             accepts={ACCEPTS_PARAMETER_PICKER}

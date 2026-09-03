@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useCallback, useEffect } from "react"
 import { CachedImage } from "@/components/ui/cached-image"
 import { Position, type NodeProps } from "@xyflow/react"
@@ -63,6 +64,7 @@ function PreviewItemRow({ item }: { readonly item: PreviewItem }) {
 }
 
 function PreviewNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as PreviewNodeData
   const allItems = nodeData.previewItems ?? []
   const visibleItems = allItems.filter((item) => item.visible !== false)
@@ -140,19 +142,19 @@ function PreviewNodeComponent({ id, data, selected }: NodeProps) {
             ))}
             {hiddenCount > 0 && (
               <span className="text-[10px] text-muted-foreground/60 text-center py-0.5">
-                +{hiddenCount} hidden
+                {t("node.plusNHidden", { n: hiddenCount })}
               </span>
             )}
           </div>
         ) : allItems.length > 0 ? (
           <div className="flex flex-col items-center justify-center h-14 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40 gap-1">
             <Eye className="w-5 h-5" />
-            <span className="text-[10px]">{allItems.length} items (all hidden)</span>
+            <span className="text-[10px]">{t("node.nItemsAllHidden", { n: allItems.length })}</span>
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center h-14 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40 gap-1">
             <Eye className="w-5 h-5" />
-            <span className="text-[10px]">Connect nodes to preview</span>
+            <span className="text-[10px]">{t("node.connectNodesToPreview")}</span>
           </div>
         )}
       </BaseNode>

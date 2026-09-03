@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { ChevronLeft, ChevronRight, FileText, Volume2, X } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -85,6 +86,7 @@ export function ResultsThumbnailsPanel<T extends { url?: string; text?: string; 
   mediaType = "image",
   onDelete,
 }: ResultsThumbnailsPanelProps<T>) {
+  const t = useT()
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState<number>(0)
 
@@ -188,8 +190,8 @@ export function ResultsThumbnailsPanel<T extends { url?: string; text?: string; 
       {needsPaging && (
         <button
           type="button"
-          aria-label="Previous page"
-          title="Previous page"
+          aria-label={t("node.previousPage")}
+          title={t("node.previousPage")}
           disabled={safePageIndex === 0}
           className="flex items-center justify-center rounded-md text-white/80 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-default transition-colors shrink-0"
           style={{ width: PAGE_BUTTON_PX, height: PAGE_BUTTON_PX }}
@@ -224,7 +226,7 @@ export function ResultsThumbnailsPanel<T extends { url?: string; text?: string; 
               {isTextTile || isAudioTile ? (
                 <button
                   type="button"
-                  aria-label={`Switch to result ${absoluteIndex + 1}`}
+                  aria-label={t("node.switchToResultN", { n: absoluteIndex + 1 })}
                   title={isTextTile ? (r.text ?? "").slice(0, 120) : `Result ${absoluteIndex + 1}`}
                   className={`${tileClass} flex items-center justify-center ${isActive ? "bg-[#ff0073]/15" : "bg-muted"}`}
                   onClick={handleClick}
@@ -257,7 +259,7 @@ export function ResultsThumbnailsPanel<T extends { url?: string; text?: string; 
                   />
                   <button
                     type="button"
-                    aria-label={`Switch to result ${absoluteIndex + 1}`}
+                    aria-label={t("node.switchToResultN", { n: absoluteIndex + 1 })}
                     className="absolute inset-0 cursor-pointer bg-transparent border-0 p-0"
                     onClick={handleClick}
                   />
@@ -265,7 +267,7 @@ export function ResultsThumbnailsPanel<T extends { url?: string; text?: string; 
               ) : (
                 <CachedImage
                   src={r.url ?? ""}
-                  alt={`Result ${absoluteIndex + 1}`}
+                  alt={t("node.resultN", { n: absoluteIndex + 1 })}
                   className={tileClass}
                   thumbnail
                   thumbnailWidth={96}
@@ -285,8 +287,8 @@ export function ResultsThumbnailsPanel<T extends { url?: string; text?: string; 
               {onDelete && (
                 <button
                   type="button"
-                  aria-label={`Delete result ${absoluteIndex + 1}`}
-                  title="Delete this result"
+                  aria-label={t("node.deleteResultN", { n: absoluteIndex + 1 })}
+                  title={t("node.deleteThisResult")}
                   className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity shadow"
                   onClick={(e) => {
                     e.stopPropagation()
@@ -303,8 +305,8 @@ export function ResultsThumbnailsPanel<T extends { url?: string; text?: string; 
       {needsPaging && (
         <button
           type="button"
-          aria-label="Next page"
-          title="Next page"
+          aria-label={t("node.nextPage")}
+          title={t("node.nextPage")}
           disabled={safePageIndex >= totalPages - 1}
           className="flex items-center justify-center rounded-md text-white/80 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-default transition-colors shrink-0"
           style={{ width: PAGE_BUTTON_PX, height: PAGE_BUTTON_PX }}

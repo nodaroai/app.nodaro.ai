@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useRef, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Music, Volume2, Upload, Link, Loader2, AlertCircle, X } from "lucide-react"
@@ -33,6 +34,7 @@ function formatDuration(seconds: number): string {
 }
 
 function UploadAudioNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as UploadAudioData
   const [mode, setMode] = useState<"upload" | "url">(nodeData.externalUrl ? "url" : "upload")
   const [previewOpen, setPreviewOpen] = useState(false)
@@ -171,7 +173,7 @@ function UploadAudioNodeComponent({ id, data, selected }: NodeProps) {
                     </div>
                     <button
                       type="button"
-                      aria-label="Remove audio"
+                      aria-label={t("proccfg.removeAudio")}
                       className="w-5 h-5 flex items-center justify-center hover:bg-red-600/20 text-muted-foreground/40 hover:text-red-400 rounded opacity-0 group-hover:opacity-100 transition-all shrink-0"
                       onClick={(e) => {
                         e.stopPropagation()

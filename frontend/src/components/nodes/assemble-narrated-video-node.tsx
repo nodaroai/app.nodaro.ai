@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState, useEffect, useMemo, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Merge, Loader2, AlertCircle, X, Film, AudioLines, LayoutGrid } from "lucide-react"
@@ -21,6 +22,7 @@ import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { AssembleNarratedVideoData } from "@/types/nodes"
 
 function AssembleNarratedVideoNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as AssembleNarratedVideoData
   // Block-scaled pre-run estimate (3 + ceil(N/6), N = wired "video" edges)
   // — same client-side estimator pattern as combine-videos, so the Run
@@ -124,10 +126,10 @@ function AssembleNarratedVideoNodeComponent({ id, data, selected }: NodeProps) {
               <div className="relative group">
                 <div className="w-full h-28 rounded-md bg-amber-500/10 border border-amber-500/30 flex flex-col items-center justify-center gap-1">
                   <AlertCircle className="w-5 h-5 text-amber-500" />
-                  <span className="text-[10px] text-amber-500">Video load failed</span>
-                  <a href={activeUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] text-blue-500 underline" onClick={(e) => e.stopPropagation()}>Open URL</a>
+                  <span className="text-[10px] text-amber-500">{t("node.videoLoadFailed")}</span>
+                  <a href={activeUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] text-blue-500 underline" onClick={(e) => e.stopPropagation()}>{t("node.openUrl")}</a>
                 </div>
-                <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">Assembled</div>
+                <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">{t("node.assembled")}</div>
                 {results.length > 0 && (
                   <button type="button" aria-label="Remove" className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); if (activeJobId) setDeleteConfirm(activeJobId) }}><X className="w-3 h-3" /></button>
                 )}
@@ -138,7 +140,7 @@ function AssembleNarratedVideoNodeComponent({ id, data, selected }: NodeProps) {
               <div className="flex flex-col items-center justify-center gap-1 h-16 rounded-md bg-red-500/5 text-red-500 p-2">
                 <div className="flex items-center gap-1.5">
                   <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span className="font-medium">Failed</span>
+                  <span className="font-medium">{t("node.failed")}</span>
                 </div>
                 {nodeData.errorMessage && (
                   <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
@@ -170,7 +172,7 @@ function AssembleNarratedVideoNodeComponent({ id, data, selected }: NodeProps) {
               : "bg-black/40 hover:bg-black/60 border-white/10 text-white opacity-0 group-hover/node:opacity-100"
           }`}
           onClick={(e) => { e.stopPropagation(); setShowThumbnails((v) => !v) }}
-          title={showThumbnails ? "Hide versions" : "Show versions"}
+          title={showThumbnails ? t("node.hideVersions") : t("node.showVersions")}
           aria-pressed={showThumbnails}
         >
           <LayoutGrid className="w-3 h-3" />

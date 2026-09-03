@@ -1,4 +1,5 @@
 "use client"
+import { useT } from "@/lib/i18n"
 import { useState, useRef, useEffect } from "react"
 import type { ReactNode } from "react"
 import { useStore, useNodeId } from "@xyflow/react"
@@ -6,6 +7,7 @@ import { NODE_VISUAL_SCALE_FLOOR } from "@/lib/zoom-floor"
 import { NODE_TITLE_TYPOGRAPHY } from "@/lib/node-title-style"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
+import { useNodeTextDir } from "./node-text-dir"
 
 interface EditableNodeLabelProps {
   label: string
@@ -18,10 +20,15 @@ interface EditableNodeLabelProps {
 }
 
 export function EditableNodeLabel({ label, icon, onSave, onIconClick }: EditableNodeLabelProps) {
+  const t = useT()
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState(label)
   const inputRef = useRef<HTMLInputElement>(null)
   const localizeNode = useLocalizeNodeLabel()
+  // Text direction for the NAME only. The row below is `[icon][title]` pinned
+  // to the card's top-left with the LTR canvas; a `dir` on the row would
+  // reverse it and park the icon on the far side. See node-text-dir.ts.
+  const textDir = useNodeTextDir()
   // Compensate React Flow's canvas scale when we drop below the floor. The
   // label is rendered inside the node, which is already CSS-scaled by RF
   // (`visual = DOM × zoom`). When `zoom < MIN_SCALE`, we apply an additional
@@ -68,13 +75,14 @@ export function EditableNodeLabel({ label, icon, onSave, onIconClick }: Editable
         className="nopan nodrag inline-flex items-center justify-center [&>svg]:size-4 transition-colors hover:text-[#ff0073] cursor-pointer"
         onClick={(e) => { e.stopPropagation(); handleIconClick() }}
         onMouseDown={(e) => e.stopPropagation()}
-        title="Open settings"
+        title={t("node.openSettings")}
       >
         {icon}
       </button>
       {editing ? (
         <input
           ref={inputRef}
+          dir={textDir}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onBlur={handleBlur}
@@ -90,10 +98,11 @@ export function EditableNodeLabel({ label, icon, onSave, onIconClick }: Editable
         />
       ) : (
         <span
+          dir={textDir}
           className="truncate cursor-text hover:text-[#ff0073] transition-colors"
           onClick={(e) => { e.stopPropagation(); setEditing(true) }}
           onMouseDown={(e) => e.stopPropagation()}
-          title="Click to rename"
+          title={t("node.clickToRename")}
         >
           {/* Display-only localization: a default label flips to the active
               locale, a custom rename passes through. The edit <input> above

@@ -129,7 +129,11 @@ export function scanRawEnglish(source: string, opts: ScanOptions = {}): Hit[] {
     for (const g of m.slice(1)) {
       if (!g) continue
       const s = g.trim()
-      if (ENGLISH_PHRASE.test(s) && !BRAND_ALLOW.test(s)) push("prop", m.index ?? 0, s)
+      if (!ENGLISH_PHRASE.test(s) || BRAND_ALLOW.test(s)) continue
+      // A `label=` on a handle pip is a LOOKUP key: HandleWithPopover
+      // localizes it through the handle-label table at render.
+      if (m[0].startsWith("label=") && isHandleLabelProp(src, m.index ?? 0) && opts.isLocalizedData?.(s)) continue
+      push("prop", m.index ?? 0, s)
     }
   }
   for (const m of src.matchAll(OBJECT_PROP)) {
@@ -139,6 +143,14 @@ export function scanRawEnglish(source: string, opts: ScanOptions = {}): Hit[] {
     push("object-prop", m.index ?? 0, s)
   }
   return hits
+}
+
+/** Is the prop at `index` inside a `<HandleWithPopover …>` (or a handle-def row) tag? */
+function isHandleLabelProp(src: string, index: number): boolean {
+  const open = src.lastIndexOf("<", index)
+  if (open < 0) return false
+  const tag = src.slice(open, index)
+  return /^<HandleWithPopover\b/.test(tag) && !tag.includes(">")
 }
 
 /**

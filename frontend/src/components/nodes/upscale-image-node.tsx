@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { ZoomIn, Loader2, AlertCircle, X, Settings, LayoutGrid, Expand, Download, ImageIcon, Link, Pencil } from "lucide-react"
@@ -25,6 +26,7 @@ import type { UpscaleImageData } from "@/types/nodes"
 const ACCEPTS_IMAGE = (t: string) => isValidUpscaleImageConnection("image", t)
 
 function UpscaleImageNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as UpscaleImageData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
@@ -144,7 +146,7 @@ function UpscaleImageNodeComponent({ id, data, selected }: NodeProps) {
             type="button"
             className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white text-[11px] rounded-md z-10 opacity-0 group-hover:opacity-100 transition-opacity"
             onClick={(e) => { e.stopPropagation(); setShowThumbnails(v => !v) }}
-            title="Show versions"
+            title={t("node.showVersions")}
           >
             <LayoutGrid className="w-3 h-3" />
             <span className="text-[11px] font-medium">{results.length}</span>
@@ -155,8 +157,8 @@ function UpscaleImageNodeComponent({ id, data, selected }: NodeProps) {
         {activeUrl && (
           <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             {results.length > 0 && (
-              <button type="button" aria-label="Remove result" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-                onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }} title="Delete this result">
+              <button type="button" aria-label={t("node.removeResult")} className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }} title={t("node.deleteThisResult")}>
                 <X className="w-3.5 h-3.5" />
               </button>
             )}
@@ -166,11 +168,11 @@ function UpscaleImageNodeComponent({ id, data, selected }: NodeProps) {
         {/* Bottom-left: edit + fullscreen + download + copy URL */}
         {activeUrl && (
           <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button type="button" aria-label="Edit image" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-              onClick={(e) => { e.stopPropagation(); openImageEdit(id, activeUrl!, activeResult?.filerobotDesignStateUrl) }} title="Edit image">
+            <button type="button" aria-label={t("node.editImage")} className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+              onClick={(e) => { e.stopPropagation(); openImageEdit(id, activeUrl!, activeResult?.filerobotDesignStateUrl) }} title={t("node.editImage")}>
               <Pencil className="w-3.5 h-3.5" />
             </button>
-            <button type="button" aria-label="Expand preview" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+            <button type="button" aria-label={t("node.expandPreview")} className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
               onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }} title="Fullscreen">
               <Expand className="w-3.5 h-3.5" />
             </button>
@@ -178,8 +180,8 @@ function UpscaleImageNodeComponent({ id, data, selected }: NodeProps) {
               onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || 'image'}.png`; a.click() }} title="Download">
               <Download className="w-3.5 h-3.5" />
             </button>
-            <button type="button" aria-label="Copy URL" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-              onClick={(e) => { e.stopPropagation(); copyToClipboard(activeUrl!, "URL copied") }} title="Copy URL">
+            <button type="button" aria-label={t("cfgshared.copyUrl")} className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+              onClick={(e) => { e.stopPropagation(); copyToClipboard(activeUrl!, "URL copied") }} title={t("cfgshared.copyUrl")}>
               <Link className="w-3.5 h-3.5" />
             </button>
           </div>

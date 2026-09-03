@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState, useCallback, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Link, X, Play, Video, Film, Music2, Camera, Hash, Download, AlertCircle, CheckCircle2, Loader2 } from "lucide-react"
@@ -93,6 +94,7 @@ function VideoPlayerModal({
   readonly platform: VideoPlatform
   readonly downloadedVideoUrl?: string
 }) {
+  const t = useT()
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose()
@@ -137,7 +139,7 @@ function VideoPlayerModal({
             className="w-full h-full rounded-lg"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
-            title="YouTube video player"
+            title={t("node.youtubeVideoPlayer")}
           />
         )}
         {showDownloadedPlayer && (
@@ -161,6 +163,7 @@ const HANDLES = [
 ] as const
 
 function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as YouTubeVideoData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const [playerOpen, setPlayerOpen] = useState(false)
@@ -334,7 +337,7 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
                 }}
                 onMouseDown={(e) => e.stopPropagation()}
                 onKeyDown={(e) => e.stopPropagation()}
-                placeholder="YouTube, Facebook, TikTok, Instagram, or X URL"
+                placeholder={t("inputcfg.youtubeFacebookTiktokInstagramOrX")}
                 className="w-full bg-transparent border-b border-muted-foreground/20 text-xs py-1 outline-none focus:border-[#38BDF8] transition-colors placeholder:text-muted-foreground/30"
               />
             </div>
@@ -352,7 +355,7 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
                 <div className="flex items-center gap-2">
                   <Loader2 className="w-4 h-4 text-[#38BDF8] animate-spin" />
                   <span className="text-xs text-muted-foreground">
-                    {nodeData.downloadPhase === "uploading" ? "Uploading..." : nodeData.downloadPhase === "processing" ? "Processing..." : "Downloading video..."}
+                    {nodeData.downloadPhase === "uploading" ? t("inputcfg.uploading") : nodeData.downloadPhase === "processing" ? t("credits.processing") : t("inputcfg.downloadingVideo")}
                   </span>
                   <span className="text-xs font-mono text-[#38BDF8]">{nodeData.downloadPercent ?? 0}%</span>
                 </div>
@@ -371,7 +374,7 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
                 <div className="flex items-center gap-1.5 p-2 rounded-md bg-red-500/5 text-red-500">
                   <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                   <p className="text-[10px] line-clamp-2" title={nodeData.downloadError}>
-                    {nodeData.downloadError || "Download failed"}
+                    {nodeData.downloadError || t("inputcfg.downloadFailed")}
                   </p>
                 </div>
                 <button
@@ -383,7 +386,7 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
                   }}
                 >
                   <Download className="w-3.5 h-3.5" />
-                  Retry Download
+                  {t("inputcfg.retryDownload")}
                 </button>
               </div>
             )}
@@ -419,7 +422,7 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
                   {downloadStatus === "completed" && !canEmbed && (
                     <div className="absolute bottom-1.5 left-1.5 bg-green-600/80 text-white text-[9px] px-1.5 py-0.5 rounded flex items-center gap-1">
                       <CheckCircle2 className="w-3 h-3" />
-                      <span>Ready</span>
+                      <span>{t("node.ready")}</span>
                     </div>
                   )}
                   {/* Play button */}
@@ -438,7 +441,7 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
                     e.stopPropagation()
                     handleClear()
                   }}
-                  title="Remove"
+                  title={t("imgcfg.remove")}
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -460,7 +463,7 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
                     </div>
                     <div className="min-w-0">
                       <p className="text-xs font-medium truncate">{nodeData.title || "Video"}</p>
-                      <p className="text-[10px] text-orange-400 truncate">Not downloaded</p>
+                      <p className="text-[10px] text-orange-400 truncate">{t("node.notDownloaded")}</p>
                     </div>
                   </div>
                   <button
@@ -472,7 +475,7 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
                     }}
                   >
                     <Download className="w-3.5 h-3.5" />
-                    Download Video
+                    {t("inputcfg.downloadVideo")}
                   </button>
                 </div>
                 <button
@@ -482,7 +485,7 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
                     e.stopPropagation()
                     handleClear()
                   }}
-                  title="Remove"
+                  title={t("imgcfg.remove")}
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -498,7 +501,7 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
                   </div>
                   <div className="min-w-0">
                     <p className="text-xs font-medium truncate">{nodeData.title || "Video"}</p>
-                    <p className="text-[10px] text-muted-foreground truncate">Loading thumbnail...</p>
+                    <p className="text-[10px] text-muted-foreground truncate">{t("node.loadingThumbnail")}</p>
                   </div>
                 </div>
                 <button
@@ -508,7 +511,7 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
                     e.stopPropagation()
                     handleClear()
                   }}
-                  title="Remove"
+                  title={t("imgcfg.remove")}
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -519,19 +522,19 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
             {nodeData.videoId && nodeData.audioDownloadStatus === "downloading" && (
               <div className="flex items-center gap-1.5 px-1 py-0.5">
                 <Loader2 className="w-3 h-3 text-[#38BDF8] animate-spin" />
-                <span className="text-[10px] text-muted-foreground">Downloading audio...</span>
+                <span className="text-[10px] text-muted-foreground">{t("cfgext.musicDownloadingAudio")}</span>
               </div>
             )}
             {nodeData.videoId && nodeData.audioDownloadStatus === "completed" && (
               <div className="flex items-center gap-1.5 px-1 py-0.5">
                 <CheckCircle2 className="w-3 h-3 text-green-500" />
-                <span className="text-[10px] text-green-600 dark:text-green-400">Audio ready</span>
+                <span className="text-[10px] text-green-600 dark:text-green-400">{t("inputcfg.audioReady")}</span>
               </div>
             )}
             {nodeData.videoId && nodeData.audioDownloadStatus === "failed" && (
               <div className="flex items-center gap-1.5 px-1 py-0.5">
                 <AlertCircle className="w-3 h-3 text-orange-500" />
-                <span className="text-[10px] text-orange-500" title={nodeData.audioDownloadError}>Audio failed</span>
+                <span className="text-[10px] text-orange-500" title={nodeData.audioDownloadError}>{t("node.audioFailed")}</span>
               </div>
             )}
 

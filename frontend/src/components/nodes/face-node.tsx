@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { SmilePlus, Loader2, AlertCircle, X, ImageIcon, Maximize2, Type, Download, Link, Pencil } from "lucide-react"
@@ -31,6 +32,7 @@ const STYLE_LABELS: Record<string, string> = {
 }
 
 function FaceNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as FaceNodeData
   const credits = useModelCredits((nodeData.provider as string | undefined) ?? "nano-banana", 2)
   const useFull = useFullResolution(id)
@@ -116,20 +118,20 @@ function FaceNodeComponent({ id, data, selected }: NodeProps) {
             {/* Edit image button */}
             <button
               type="button"
-              aria-label="Edit image"
+              aria-label={t("node.editImage")}
               className="absolute bottom-1 right-[73px] w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
               onClick={(e) => {
                 e.stopPropagation()
                 openImageEdit(id, activeUrl!, activeResult?.filerobotDesignStateUrl)
               }}
-              title="Edit image"
+              title={t("node.editImage")}
             >
               <Pencil className="w-3 h-3" />
             </button>
             {/* Download button */}
             <button
               type="button"
-              aria-label="Download image"
+              aria-label={t("node.downloadImage")}
               className="absolute bottom-1 right-[49px] w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
               onClick={(e) => {
                 e.stopPropagation()
@@ -145,13 +147,13 @@ function FaceNodeComponent({ id, data, selected }: NodeProps) {
             {/* Copy URL button */}
             <button
               type="button"
-              aria-label="Copy URL"
+              aria-label={t("cfgshared.copyUrl")}
               className="absolute bottom-1 right-[25px] w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
               onClick={(e) => {
                 e.stopPropagation()
                 copyToClipboard(activeUrl ?? '', "URL copied")
               }}
-              title="Copy URL"
+              title={t("cfgshared.copyUrl")}
             >
               <Link className="w-3 h-3" />
             </button>
@@ -175,7 +177,7 @@ function FaceNodeComponent({ id, data, selected }: NodeProps) {
                   e.stopPropagation()
                   setDeleteConfirm(activeIndex)
                 }}
-                title="Delete this result"
+                title={t("node.deleteThisResult")}
               >
                 <X className="w-3 h-3" />
               </button>
@@ -187,7 +189,7 @@ function FaceNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex flex-col items-center justify-center gap-1 h-16 rounded-md bg-red-500/5 text-red-500 p-2">
             <div className="flex items-center gap-1.5">
               <AlertCircle className="w-3 h-3 shrink-0" />
-              <span className="text-xs font-medium">Failed</span>
+              <span className="text-xs font-medium">{t("node.failed")}</span>
             </div>
             {nodeData.errorMessage && (
               <p className="text-[9px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>

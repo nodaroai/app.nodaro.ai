@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { useState, type ReactNode } from "react"
 import { Copy, Sparkles } from "lucide-react"
 import {
@@ -60,6 +61,7 @@ export function ResultSettingsInfo({
   onApply,
   hidePromptApply,
 }: ResultSettingsInfoProps) {
+  const t = useT()
   const [open, setOpen] = useState(false)
 
   function apply(includePrompt: boolean) {
@@ -72,8 +74,8 @@ export function ResultSettingsInfo({
     <>
       <button
         type="button"
-        aria-label={`Settings used for this output: ${summary}. Click to apply them to this node.`}
-        title="Settings used for this output — click to apply to the node"
+        aria-label={t("node.settingsUsedAria", { summary })}
+        title={t("node.settingsUsedTitle")}
         className="flex items-center gap-1 max-w-[200px] px-2 py-1 bg-black/55 hover:bg-black/75 border border-white/10 text-white rounded-full shadow-sm backdrop-blur-sm"
         onClick={(e) => {
           e.stopPropagation()
@@ -88,13 +90,13 @@ export function ResultSettingsInfo({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-[440px]" onClick={(e) => e.stopPropagation()}>
           <DialogHeader>
-            <DialogTitle className="text-primary">Apply this output&apos;s settings?</DialogTitle>
+            <DialogTitle className="text-primary">{t("node.applyOutputSettings")}</DialogTitle>
             <DialogDescription>
               {isLoading
-                ? "Loading the settings that produced this output…"
+                ? t("node.loadingOutputSettings")
                 : settings
-                  ? `Override this node's current configuration with the settings that produced this ${mediaNoun}.`
-                  : "The original settings for this output are no longer available."}
+                  ? t("node.overrideWithOutputSettings", { media: mediaNoun })
+                  : t("node.outputSettingsUnavailable")}
             </DialogDescription>
           </DialogHeader>
 
@@ -109,17 +111,17 @@ export function ResultSettingsInfo({
                 <div className="space-y-1">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-medium text-muted-foreground">
-                      Final prompt used
+                      {t("node.finalPromptUsed")}
                     </span>
                     <button
                       type="button"
-                      onClick={() => copyToClipboard(settings.finalPrompt!, "Prompt copied")}
+                      onClick={() => copyToClipboard(settings.finalPrompt!, t("node.promptCopied"))}
                       className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-                      title="Copy prompt"
-                      aria-label="Copy final prompt"
+                      title={t("node.copyPrompt")}
+                      aria-label={t("cfgshared.copyFinalPrompt")}
                     >
                       <Copy className="w-3.5 h-3.5" />
-                      Copy
+                      {t("node.copy")}
                     </button>
                   </div>
                   <div className="max-h-32 overflow-y-auto rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs whitespace-pre-wrap break-words text-foreground/90">
@@ -134,21 +136,21 @@ export function ResultSettingsInfo({
             {settings ? (
               hidePromptApply ? (
                 <Button className="sm:flex-1" onClick={() => apply(false)}>
-                  Apply settings
+                  {t("node.applySettings")}
                 </Button>
               ) : (
                 <>
                   <Button variant="outline" className="sm:flex-1" onClick={() => apply(true)}>
-                    Configuration + Prompt
+                    {t("node.configurationPrompt")}
                   </Button>
                   <Button className="sm:flex-1" onClick={() => apply(false)}>
-                    Configuration only
+                    {t("node.configurationOnly")}
                   </Button>
                 </>
               )
             ) : (
               <Button variant="outline" onClick={() => setOpen(false)}>
-                Close
+                {t("common.close")}
               </Button>
             )}
           </DialogFooter>

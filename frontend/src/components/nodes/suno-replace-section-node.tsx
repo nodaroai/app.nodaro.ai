@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Replace, Loader2, AlertCircle, Volume2, LayoutGrid, Scissors, Type } from "lucide-react"
@@ -23,6 +24,7 @@ const ACCEPTS_AUDIO  = (t: string) => isValidSunoReplaceSectionConnection("audio
 const ACCEPTS_PROMPT = (t: string) => isValidSunoReplaceSectionConnection("prompt", t, isVisualPicker)
 
 function SunoReplaceSectionNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as SunoReplaceSectionData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
@@ -125,7 +127,7 @@ function SunoReplaceSectionNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex flex-col items-center justify-center gap-1 h-12 rounded-md bg-red-500/5 text-red-500 p-2">
             <div className="flex items-center gap-1.5">
               <AlertCircle className="w-4 h-4 shrink-0" />
-              <span className="font-medium">Failed</span>
+              <span className="font-medium">{t("node.failed")}</span>
             </div>
             {nodeData.errorMessage && (
               <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>{nodeData.errorMessage}</p>
@@ -139,7 +141,7 @@ function SunoReplaceSectionNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
 
-        <span className="text-xs text-muted-foreground">Replace Section</span>
+        <span className="text-xs text-muted-foreground">{t("node.replaceSection")}</span>
       </div>
     </BaseNode>
     <HandleWithPopover nodeId={id} nodeType="suno-replace-section" handleId="audio"  type="target" position={Position.Left}  label="Audio"  color={HANDLE_COLORS.audio} icon={<Scissors />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} />

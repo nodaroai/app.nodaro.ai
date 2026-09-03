@@ -8,6 +8,7 @@
 // the bottom strip with Run, where every action on the node lives; rendered
 // by the node through NodeQuickStrip's `children` slot.
 
+import { useT } from "@/lib/i18n"
 import { RotateCw } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -19,11 +20,12 @@ interface AiAvatarNewRunToggleProps {
 }
 
 export function AiAvatarNewRunToggle({ active, onToggle, disabled = false }: AiAvatarNewRunToggleProps) {
+  const t = useT()
   return (
     <button
       type="button"
       data-testid="ai-avatar-new-run"
-      aria-label="New run"
+      aria-label={t("node.newRun")}
       aria-pressed={active}
       title={
         active
@@ -45,7 +47,7 @@ export function AiAvatarNewRunToggle({ active, onToggle, disabled = false }: AiA
       )}
     >
       <RotateCw aria-hidden />
-      <span>New run</span>
+      <span>{t("node.newRun")}</span>
     </button>
   )
 }

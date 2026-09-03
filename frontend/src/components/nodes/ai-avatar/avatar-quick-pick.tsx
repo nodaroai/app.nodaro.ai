@@ -9,6 +9,7 @@
 // serves as the in-place "Change avatar" view once an avatar is set (the
 // current one is ring-highlighted and ✕ goes back).
 
+import { useT } from "@/lib/i18n"
 import { useCallback, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type MouseEvent } from "react"
 import { AlertCircle, Image as ImageIcon, Search, User, X, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -59,6 +60,7 @@ interface LookTileProps {
  *  The account's own look that HeyGen is still building (or failed) shows its
  *  status and cannot be picked. */
 function LookTile({ avatar, selected, onPick }: LookTileProps) {
+  const t = useT()
   const { person, scene } = splitLookName(avatar.name)
   const statusLabel = avatarStatusLabel(avatar)
   const named = statusLabel
@@ -91,8 +93,8 @@ function LookTile({ avatar, selected, onPick }: LookTileProps) {
         />
         {avatarSupportsV(avatar) && (
           <span
-            aria-label="Supports Avatar V"
-            title="Supports Avatar V"
+            aria-label={t("node.supportsAvatarV")}
+            title={t("node.supportsAvatarV")}
             className="absolute top-1 left-1 grid place-items-center w-4 h-4 rounded bg-violet-600/90 text-white"
           >
             <Zap className="size-2.5" aria-hidden />
@@ -128,6 +130,7 @@ export function AvatarQuickPick({
   onUseImage,
   onCancel,
 }: AvatarQuickPickProps) {
+  const t = useT()
   // The catalog streams in (see heygen-catalog.ts): the first page shows at
   // once, later pages only ever ADD persons after the ones already featured,
   // so the row fills up without reshuffling. `complete` false → count is a floor.
@@ -182,13 +185,13 @@ export function AvatarQuickPick({
               onChange={handleQuery}
               onKeyDown={handleQueryKey}
               placeholder="Search avatars…"
-              aria-label="Search avatars"
+              aria-label={t("node.searchAvatars")}
               className="min-w-0 flex-1 bg-transparent text-[11px] text-foreground placeholder:text-muted-foreground/60 outline-none [&::-webkit-search-cancel-button]:hidden"
             />
             {searching && (
               <button
                 type="button"
-                aria-label="Clear search"
+                aria-label={t("node.clearSearch")}
                 className="grid place-items-center w-4 h-4 rounded text-muted-foreground hover:text-foreground"
                 onClick={(e) => { stop(e); setQuery("") }}
               >
@@ -199,14 +202,14 @@ export function AvatarQuickPick({
         )}
         {avatars.length > 0 && (
           <button type="button" className={PINK_LINK} onClick={handleBrowse}>
-            Browse all {avatars.length.toLocaleString("en-US")}{complete ? "" : "+"} ›
+            {t("node.browseAll")} {avatars.length.toLocaleString("en-US")}{complete ? "" : "+"} ›
           </button>
         )}
         {onCancel && (
           <button
             type="button"
-            aria-label="Keep the current avatar"
-            title="Keep the current avatar"
+            aria-label={t("node.keepTheCurrentAvatar")}
+            title={t("node.keepTheCurrentAvatar")}
             className="nodrag nopan w-5 h-5 grid place-items-center rounded text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/10"
             onClick={handleCancel}
           >
@@ -231,13 +234,13 @@ export function AvatarQuickPick({
         ) : isError ? (
           <div className="flex flex-col items-center justify-center gap-1.5 flex-1 text-center">
             <AlertCircle className="size-6 text-destructive/60" />
-            <p className="text-[11px] text-muted-foreground">Failed to load avatars</p>
+            <p className="text-[11px] text-muted-foreground">{t("node.failedToLoadAvatars")}</p>
           </div>
         ) : avatars.length === 0 ? (
           <KeylessNotice
             compact
             icon={User}
-            title="No HeyGen avatars"
+            title={t("node.noHeygenAvatars")}
             hint={keylessCatalogHint("avatars")}
             testId="ai-avatar-quick-pick-empty"
           />
@@ -252,7 +255,7 @@ export function AvatarQuickPick({
           // the canvas zoom.
           <div
             role="radiogroup"
-            aria-label="Matching avatars"
+            aria-label={t("node.matchingAvatars")}
             className="nowheel nodrag flex-1 min-h-0 overflow-y-auto grid grid-cols-5 gap-2 pr-0.5"
             style={{ gridAutoRows: "62%" }}
             data-testid="ai-avatar-search-results"
@@ -262,7 +265,7 @@ export function AvatarQuickPick({
             ))}
           </div>
         ) : (
-          <div role="radiogroup" aria-label="Featured avatars" className="grid grid-cols-5 gap-2 flex-1 min-h-0">
+          <div role="radiogroup" aria-label={t("node.featuredAvatars")} className="grid grid-cols-5 gap-2 flex-1 min-h-0">
             {shown.map((a) => (
               <LookTile key={a.avatarId} avatar={a} selected={!!currentAvatarId && a.avatarId === currentAvatarId} onPick={onPick} />
             ))}
@@ -272,10 +275,10 @@ export function AvatarQuickPick({
 
       {/* Alt: your own portrait */}
       <div className="flex items-center gap-2.5 shrink-0">
-        <span className="text-[11px] text-muted-foreground">Have your own portrait?</span>
+        <span className="text-[11px] text-muted-foreground">{t("node.haveYourOwnPortrait")}</span>
         <button type="button" className={GHOST_BUTTON} onClick={handleUseImage}>
           <ImageIcon className="size-3 opacity-70" />
-          Use an image instead
+          {t("node.useAnImageInstead")}
         </button>
       </div>
     </div>

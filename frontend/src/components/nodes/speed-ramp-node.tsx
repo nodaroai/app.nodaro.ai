@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Gauge, Loader2, AlertCircle, X, Film } from "lucide-react"
@@ -20,6 +21,7 @@ import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { SpeedRampData } from "@/types/nodes"
 
 function SpeedRampNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as SpeedRampData
   const credits = useModelCredits("ffmpeg", 1)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
@@ -75,12 +77,12 @@ function SpeedRampNodeComponent({ id, data, selected }: NodeProps) {
             <div className="relative group">
               <div className="w-full h-28 rounded-md bg-amber-500/10 border border-amber-500/30 flex flex-col items-center justify-center gap-1">
                 <AlertCircle className="w-5 h-5 text-amber-500" />
-                <span className="text-[10px] text-amber-500">Video load failed</span>
-                <a href={activeUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] text-blue-500 underline" onClick={(e) => e.stopPropagation()}>Open URL</a>
+                <span className="text-[10px] text-amber-500">{t("node.videoLoadFailed")}</span>
+                <a href={activeUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] text-blue-500 underline" onClick={(e) => e.stopPropagation()}>{t("node.openUrl")}</a>
               </div>
               <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">{speedLabel}</div>
               {results.length > 0 && (
-                <button type="button" aria-label="Remove result" className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}><X className="w-3 h-3" /></button>
+                <button type="button" aria-label={t("node.removeResult")} className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}><X className="w-3 h-3" /></button>
               )}
             </div>
           )}
@@ -88,7 +90,7 @@ function SpeedRampNodeComponent({ id, data, selected }: NodeProps) {
             <div className="flex flex-col items-center justify-center gap-1 h-16 rounded-md bg-red-500/5 text-red-500 p-2">
               <div className="flex items-center gap-1.5">
                 <AlertCircle className="w-4 h-4 shrink-0" />
-                <span className="font-medium">Failed</span>
+                <span className="font-medium">{t("node.failed")}</span>
               </div>
               {nodeData.errorMessage && (
                 <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
@@ -109,7 +111,7 @@ function SpeedRampNodeComponent({ id, data, selected }: NodeProps) {
                   ) : (
                     <video src={r.url} crossOrigin="anonymous" className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${i === activeIndex ? "opacity-100 ring-2 ring-primary" : "opacity-50 hover:opacity-80"}`} onClick={(e) => { e.stopPropagation(); updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url }) }} muted playsInline />
                   )}
-                  <button type="button" aria-label="Remove result" className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(i) }}><X className="w-2.5 h-2.5" /></button>
+                  <button type="button" aria-label={t("node.removeResult")} className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(i) }}><X className="w-2.5 h-2.5" /></button>
                 </div>
               ))}
             </div>

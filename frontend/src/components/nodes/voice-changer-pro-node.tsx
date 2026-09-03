@@ -11,6 +11,7 @@ import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { ResultsThumbnailsPanel } from "./results-thumbnails-panel"
 import { isValidVoiceChangerConnection } from "@/lib/audio-text-handles"
 import { useHandleConnections } from "@/hooks/use-handle-connections"
+import { useT } from "@/lib/i18n"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
@@ -26,6 +27,7 @@ const ACCEPTS_AUDIO = (t: string) => isValidVoiceChangerConnection("audio", t)
 const ACCEPTS_VIDEO = (t: string) => isValidVoiceChangerConnection("video", t)
 
 function VoiceChangerProNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as VoiceChangerProData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const selectNode = useWorkflowStore((s) => s.selectNode)
@@ -144,7 +146,7 @@ function VoiceChangerProNodeComponent({ id, data, selected }: NodeProps) {
           {audioIgnored && (
             <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/10 text-amber-600 text-[10px] leading-tight">
               <Film className="w-3 h-3 shrink-0" />
-              <span>Video wins — audio input ignored</span>
+              <span>{t("node.videoWinsAudioIgnored")}</span>
             </div>
           )}
 
@@ -184,7 +186,7 @@ function VoiceChangerProNodeComponent({ id, data, selected }: NodeProps) {
             <div className="flex flex-col items-center justify-center gap-1 h-12 rounded-md bg-red-500/5 text-red-500 p-2">
               <div className="flex items-center gap-1.5">
                 <AlertCircle className="w-4 h-4 shrink-0" />
-                <span className="font-medium">Failed</span>
+                <span className="font-medium">{t("node.failed")}</span>
               </div>
               {nodeData.errorMessage && (
                 <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
@@ -201,12 +203,12 @@ function VoiceChangerProNodeComponent({ id, data, selected }: NodeProps) {
           )}
 
           <div className="flex justify-between text-muted-foreground">
-            <span>Voice Changer Pro</span>
+            <span>{t("node.voiceChangerPro")}</span>
             {nodeData.orderedVoices?.length > 0 && (
               <span className="text-xs truncate max-w-[80px]">
                 {/* A null slot means "keep this speaker's original voice"
                     (cloud-plugins orderedVoices keep-slot contract). */}
-                {nodeData.orderedVoices[0] ? nodeData.orderedVoices[0].voiceLabel : "Keep original"}
+                {nodeData.orderedVoices[0] ? nodeData.orderedVoices[0].voiceLabel : t("audiocfg.keepOriginal")}
               </span>
             )}
           </div>

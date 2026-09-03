@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Eye, Image as ImageIcon, FileText, Check, X } from "lucide-react"
@@ -20,6 +21,7 @@ interface ImageCriticDetailsModalProps {
 }
 
 function ImageCriticDetailsModal({ isOpen, onClose, data }: ImageCriticDetailsModalProps) {
+  const t = useT()
   if (!isOpen) return null
   const score = data.score
   const approved = data.approved
@@ -50,7 +52,7 @@ function ImageCriticDetailsModal({ isOpen, onClose, data }: ImageCriticDetailsMo
             type="button"
             className="text-muted-foreground hover:text-foreground transition-colors"
             onClick={onClose}
-            aria-label="Close details"
+            aria-label={t("node.closeDetails")}
           >
             <X className="w-5 h-5" />
           </button>
@@ -58,7 +60,7 @@ function ImageCriticDetailsModal({ isOpen, onClose, data }: ImageCriticDetailsMo
         <div className="overflow-y-auto p-4 space-y-4">
           {feedback && (
             <div>
-              <div className="text-xs font-semibold text-muted-foreground mb-1">Feedback</div>
+              <div className="text-xs font-semibold text-muted-foreground mb-1">{t("node.feedback")}</div>
               <p className="text-sm whitespace-pre-wrap leading-relaxed">{feedback}</p>
             </div>
           )}
@@ -80,7 +82,7 @@ function ImageCriticDetailsModal({ isOpen, onClose, data }: ImageCriticDetailsMo
           )}
           {issues && issues.length > 0 && (
             <div>
-              <div className="text-xs font-semibold text-muted-foreground mb-1">Issues</div>
+              <div className="text-xs font-semibold text-muted-foreground mb-1">{t("node.issues")}</div>
               <ul className="text-xs space-y-1">
                 {issues.map((i, idx) => (
                   <li key={idx}>
@@ -109,6 +111,7 @@ function ImageCriticDetailsModal({ isOpen, onClose, data }: ImageCriticDetailsMo
 }
 
 function ImageCriticNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as ImageCriticData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
@@ -183,7 +186,7 @@ function ImageCriticNodeComponent({ id, data, selected }: NodeProps) {
             </button>
           ) : (
             <div className="rounded-md bg-muted/20 p-2 text-xs italic text-muted-foreground/60">
-              Not yet evaluated
+              {t("node.notYetEvaluated")}
             </div>
           )}
         </div>

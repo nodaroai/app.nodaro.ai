@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState, useEffect, useMemo, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Languages, Loader2, AlertCircle, LayoutGrid, Film, Link2 } from "lucide-react"
@@ -26,6 +27,7 @@ const ACCEPTS_AUDIO = (t: string) => isValidDubbingConnection("audio", t)
 const ACCEPTS_VIDEO = (t: string) => isValidDubbingConnection("video", t)
 
 function DubbingNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as DubbingData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const selectNode = useWorkflowStore((s) => s.selectNode)
@@ -190,7 +192,7 @@ function DubbingNodeComponent({ id, data, selected }: NodeProps) {
             <div className="flex flex-col items-center justify-center gap-1 h-12 rounded-md bg-red-500/5 text-red-500 p-2">
               <div className="flex items-center gap-1.5">
                 <AlertCircle className="w-4 h-4 shrink-0" />
-                <span className="font-medium">Failed</span>
+                <span className="font-medium">{t("node.failed")}</span>
               </div>
               {nodeData.errorMessage && (
                 <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
@@ -207,7 +209,7 @@ function DubbingNodeComponent({ id, data, selected }: NodeProps) {
           )}
 
           <div className="flex justify-between text-muted-foreground">
-            <span>Dubbing</span>
+            <span>{t("node.dubbing")}</span>
             {nodeData.targetLanguage && <span className="text-xs">{nodeData.targetLanguage}</span>}
           </div>
         </div>

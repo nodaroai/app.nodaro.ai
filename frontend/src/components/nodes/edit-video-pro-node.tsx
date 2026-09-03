@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState, useMemo, useEffect } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { useShallow } from "zustand/react/shallow"
@@ -59,6 +60,7 @@ const HANDLE_TOP = {
 } as const
 
 function EditVideoProNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as EditVideoProNodeData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
@@ -208,7 +210,7 @@ function EditVideoProNodeComponent({ id, data, selected }: NodeProps) {
               <div className="flex flex-col items-center justify-center gap-1 rounded-xl p-2 h-[180px] bg-red-500/5 text-red-500">
                 <div className="flex items-center gap-1.5">
                   <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span className="font-medium">Failed</span>
+                  <span className="font-medium">{t("node.failed")}</span>
                 </div>
                 {nodeData.errorMessage ? (
                   <p

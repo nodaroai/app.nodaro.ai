@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState, useRef, useCallback, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { ScanFace, Loader2, AlertCircle, X, Image as ImageIcon, Clapperboard, LayoutGrid, Expand, Download, Link, Settings, Scissors } from "lucide-react"
@@ -24,6 +25,7 @@ const ACCEPTS_FACE  = (t: string) => isValidFaceSwapConnection("face",  t)
 const ACCEPTS_VIDEO = (t: string) => isValidFaceSwapConnection("video", t)
 
 function FaceSwapNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as FaceSwapData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
@@ -158,7 +160,7 @@ function FaceSwapNodeComponent({ id, data, selected }: NodeProps) {
         {!activeUrl && status !== "running" && status !== "failed" && (
           <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10 text-muted-foreground/40 h-[160px]">
             <ScanFace className="w-10 h-10" />
-            <span className="text-[10px]">Face swap</span>
+            <span className="text-[10px]">{t("node.faceSwap")}</span>
           </div>
         )}
 
@@ -194,7 +196,7 @@ function FaceSwapNodeComponent({ id, data, selected }: NodeProps) {
             <button
               type="button"
               className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-              aria-label="Remove result"
+              aria-label={t("node.removeResult")}
               onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}
             >
               <X className="w-3.5 h-3.5" />
@@ -207,7 +209,7 @@ function FaceSwapNodeComponent({ id, data, selected }: NodeProps) {
             <button
               type="button"
               className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-              aria-label="Expand preview"
+              aria-label={t("node.expandPreview")}
               onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
             >
               <Expand className="w-3.5 h-3.5" />
@@ -222,7 +224,7 @@ function FaceSwapNodeComponent({ id, data, selected }: NodeProps) {
             </button>
             <button
               type="button"
-              aria-label="Copy URL"
+              aria-label={t("cfgshared.copyUrl")}
               className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
               onClick={(e) => { e.stopPropagation(); copyToClipboard(activeUrl!, "URL copied") }}
             >
@@ -230,7 +232,7 @@ function FaceSwapNodeComponent({ id, data, selected }: NodeProps) {
             </button>
             <button
               type="button"
-              aria-label="Edit in NodarCut"
+              aria-label={t("node.editInNodarcut")}
               className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
               onClick={(e) => { e.stopPropagation(); openFreeCut(id, activeUrl!, activeResult?.freecutProjectUrl) }}
             >

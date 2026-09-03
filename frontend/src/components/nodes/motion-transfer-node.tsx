@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Waypoints, Film, Image as ImageIcon, Type, Minus, Users, Loader2, AlertCircle, X, LayoutGrid, Expand, Download, Link, Settings, Scissors } from "lucide-react"
@@ -42,6 +43,7 @@ const HANDLE_TOP = {
 } as const
 
 function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as MotionTransferData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
@@ -243,7 +245,7 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
             <button
               type="button"
               className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-              aria-label="Remove result"
+              aria-label={t("node.removeResult")}
               onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}
             >
               <X className="w-3.5 h-3.5" />
@@ -257,7 +259,7 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
             <button
               type="button"
               className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-              aria-label="Expand preview"
+              aria-label={t("node.expandPreview")}
               onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
             >
               <Expand className="w-3.5 h-3.5" />
@@ -265,28 +267,28 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
             <button
               type="button"
               className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-              aria-label="Download"
+              aria-label={t("cfgshared.download")}
               onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || 'video'}.mp4`; a.click() }}
             >
               <Download className="w-3.5 h-3.5" />
             </button>
             <button
               type="button"
-              aria-label="Copy URL"
+              aria-label={t("cfgshared.copyUrl")}
               className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
               onClick={(e) => {
                 e.stopPropagation()
-                copyToClipboard(activeUrl!, "URL copied")
+                copyToClipboard(activeUrl!, t("apps.urlCopied"))
               }}
             >
               <Link className="w-3.5 h-3.5" />
             </button>
             <button
               type="button"
-              aria-label="Edit in NodarCut"
+              aria-label={t("node.editInNodarcut")}
               className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
               onClick={(e) => { e.stopPropagation(); openFreeCut(id, activeUrl!, activeResult?.freecutProjectUrl) }}
-              title="Edit in NodarCut"
+              title={t("node.editInNodarcut")}
             >
               <Scissors className="w-3.5 h-3.5" />
             </button>
@@ -298,10 +300,10 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
           <div className="absolute bottom-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
             <button
               type="button"
-              aria-label="Settings"
+              aria-label={t("nav.settings")}
               className={`w-7 h-7 flex items-center justify-center bg-black/50 hover:bg-black/70 border border-white/10 text-white rounded-full shadow-sm${isSettingsOpen ? " ring-1 ring-white/30" : ""}`}
               onClick={(e) => { e.stopPropagation(); selectNode(isSettingsOpen ? null : id) }}
-              title="Settings"
+              title={t("nav.settings")}
             >
               <Settings className="w-3.5 h-3.5" />
             </button>

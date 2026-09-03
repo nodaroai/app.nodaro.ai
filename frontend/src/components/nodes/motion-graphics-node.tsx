@@ -1,3 +1,4 @@
+import { useT } from "@/lib/i18n"
 import { memo, useEffect } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Shapes, Film, Layers, Loader2, AlertCircle } from "lucide-react"
@@ -12,6 +13,7 @@ import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS, motionGraphicsFeature }
 import type { MotionGraphicsData } from "@/types/nodes"
 
 function MotionGraphicsNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as MotionGraphicsData
   const mgFeature = motionGraphicsFeature(nodeData.engine)
   const credits = useModelCredits(buildLlmCreditIdentifier(mgFeature, nodeData.llmModel || LLM_FEATURE_DEFAULTS[mgFeature], nodeData.reasoningEffort, nodeData.advancedMode === true), 10)
@@ -87,7 +89,7 @@ function MotionGraphicsNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex flex-col items-center justify-center gap-1 h-16 rounded-md bg-red-500/5 text-red-500 p-2">
             <div className="flex items-center gap-1.5">
               <AlertCircle className="w-4 h-4 shrink-0" />
-              <span className="font-medium">Failed</span>
+              <span className="font-medium">{t("node.failed")}</span>
             </div>
             {nodeData.errorMessage && (
               <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
@@ -113,7 +115,7 @@ function MotionGraphicsNodeComponent({ id, data, selected }: NodeProps) {
     <HandleWithPopover nodeId={id} nodeType="motion-graphics" handleId="video"       type="target" position={Position.Left}  label="Video"       color={HANDLE_COLORS.video} icon={<Film />}   side="left"  top="calc(100% - 24px)" />
     <HandleWithPopover nodeId={id} nodeType="motion-graphics" handleId="composition" type="source" position={Position.Right} label="Composition" color={HANDLE_COLORS.control} icon={<Shapes />} side="right" top="24px" />
     {isLottieEngine && (
-      <HandleWithPopover nodeId={id} nodeType="motion-graphics" handleId="lottie" type="source" position={Position.Right} label="Lottie JSON" color={HANDLE_COLORS.control} icon={<Layers />} side="right" top="56px" />
+      <HandleWithPopover nodeId={id} nodeType="motion-graphics" handleId="lottie" type="source" position={Position.Right} label={t("node.lottieJson")} color={HANDLE_COLORS.control} icon={<Layers />} side="right" top="56px" />
     )}
     </div>
   )

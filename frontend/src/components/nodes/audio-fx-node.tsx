@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Waves, Loader2, AlertCircle, AudioLines } from "lucide-react"
@@ -19,6 +20,7 @@ import { AUDIO_FX_PRESET_LABELS } from "@nodaro/shared"
 import type { AudioFxData } from "@/types/nodes"
 
 function AudioFxNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as AudioFxData
   const credits = useModelCredits("audio-fx", 2)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
@@ -54,7 +56,7 @@ function AudioFxNodeComponent({ id, data, selected }: NodeProps) {
         )}
         {status === "failed" && !activeUrl && (
           <div className="flex flex-col items-center justify-center gap-1 h-16 rounded-md bg-red-500/5 text-red-500 p-2">
-            <div className="flex items-center gap-1.5"><AlertCircle className="w-4 h-4 shrink-0" /><span className="font-medium">Failed</span></div>
+            <div className="flex items-center gap-1.5"><AlertCircle className="w-4 h-4 shrink-0" /><span className="font-medium">{t("node.failed")}</span></div>
             {nodeData.errorMessage && (<p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>{nodeData.errorMessage}</p>)}
           </div>
         )}

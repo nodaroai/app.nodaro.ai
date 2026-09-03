@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState, useEffect, useRef, useCallback } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Wand2, Film, Image as ImageIcon, Layers, Clapperboard, Type, Loader2, AlertCircle, X, Download, LayoutGrid, Expand, Link, Settings, Scissors } from "lucide-react"
@@ -30,6 +31,7 @@ const ACCEPTS_MASK_VIDEO = (t: string) => isValidSwitchXConnection("mask-video",
 const ACCEPTS_PROMPT     = (t: string) => isValidSwitchXConnection("prompt", t, isPickerType)
 
 function SwitchXNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as SwitchXData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const selectNode = useWorkflowStore((s) => s.selectNode)
@@ -237,7 +239,7 @@ function SwitchXNodeComponent({ id, data, selected }: NodeProps) {
             <button
               type="button"
               className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-              aria-label="Remove result"
+              aria-label={t("node.removeResult")}
               onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}
             >
               <X className="w-3.5 h-3.5" />
@@ -250,7 +252,7 @@ function SwitchXNodeComponent({ id, data, selected }: NodeProps) {
             <button
               type="button"
               className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-              aria-label="Expand preview"
+              aria-label={t("node.expandPreview")}
               onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
             >
               <Expand className="w-3.5 h-3.5" />
@@ -265,7 +267,7 @@ function SwitchXNodeComponent({ id, data, selected }: NodeProps) {
             </button>
             <button
               type="button"
-              aria-label="Copy URL"
+              aria-label={t("cfgshared.copyUrl")}
               className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
               onClick={(e) => { e.stopPropagation(); copyToClipboard(activeUrl!, "URL copied") }}
             >
@@ -273,10 +275,10 @@ function SwitchXNodeComponent({ id, data, selected }: NodeProps) {
             </button>
             <button
               type="button"
-              aria-label="Edit in NodarCut"
+              aria-label={t("node.editInNodarcut")}
               className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
               onClick={(e) => { e.stopPropagation(); openFreeCut(id, activeUrl!, activeResult?.freecutProjectUrl) }}
-              title="Edit in NodarCut"
+              title={t("node.editInNodarcut")}
             >
               <Scissors className="w-3.5 h-3.5" />
             </button>
@@ -299,13 +301,13 @@ function SwitchXNodeComponent({ id, data, selected }: NodeProps) {
       </div>
     </BaseNode>
     <HandleWithPopover nodeId={id} nodeType="switchx" handleId="prompt" type="target" position={Position.Left}  label="Prompt"       color={TEXT_HANDLE_COLOR}  icon={<Type />}     side="left"  top="calc(100% - 24px)"  accepts={ACCEPTS_PROMPT} />
-    <HandleWithPopover nodeId={id} nodeType="switchx" handleId="video"  type="target" position={Position.Left}  label="Source video" color={HANDLE_COLORS.video} icon={<Film />}      side="left"  top="calc(100% - 56px)"  accepts={ACCEPTS_VIDEO} />
+    <HandleWithPopover nodeId={id} nodeType="switchx" handleId="video"  type="target" position={Position.Left}  label={t("node.sourceVideo2")} color={HANDLE_COLORS.video} icon={<Film />}      side="left"  top="calc(100% - 56px)"  accepts={ACCEPTS_VIDEO} />
     <HandleWithPopover nodeId={id} nodeType="switchx" handleId="image"  type="target" position={Position.Left}  label="Reference"    color={HANDLE_COLORS.image} icon={<ImageIcon />} side="left"  top="calc(100% - 88px)"  accepts={ACCEPTS_IMAGE} />
     {mode === "select" && (
       <HandleWithPopover nodeId={id} nodeType="switchx" handleId="mask"       type="target" position={Position.Left} label="Mask"       color={HANDLE_COLORS.mask}  icon={<Layers />}      side="left" top="calc(100% - 120px)" accepts={ACCEPTS_MASK} />
     )}
     {mode === "custom" && (
-      <HandleWithPopover nodeId={id} nodeType="switchx" handleId="mask-video" type="target" position={Position.Left} label="Mask video" color={HANDLE_COLORS.mask}  icon={<Clapperboard />} side="left" top="calc(100% - 120px)" accepts={ACCEPTS_MASK_VIDEO} />
+      <HandleWithPopover nodeId={id} nodeType="switchx" handleId="mask-video" type="target" position={Position.Left} label={t("node.maskVideo")} color={HANDLE_COLORS.mask}  icon={<Clapperboard />} side="left" top="calc(100% - 120px)" accepts={ACCEPTS_MASK_VIDEO} />
     )}
     <HandleWithPopover nodeId={id} nodeType="switchx" handleId="video"  type="source" position={Position.Right} label="Video"        color={HANDLE_COLORS.video} icon={<Film />}     side="right" top="24px" />
 

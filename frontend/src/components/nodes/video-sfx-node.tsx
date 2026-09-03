@@ -1,5 +1,6 @@
 "use client"
 
+import { useT, tx } from "@/lib/i18n"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import {
@@ -79,6 +80,7 @@ function bucketKeyForDuration(duration: number | null): string {
 }
 
 function VideoSfxNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as VideoSfxNodeData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const selectNode = useWorkflowStore((s) => s.selectNode)
@@ -258,13 +260,13 @@ function VideoSfxNodeComponent({ id, data, selected }: NodeProps) {
                 <div className="absolute top-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
                   <button
                     type="button"
-                    aria-label="Remove result"
+                    aria-label={t("node.removeResult")}
                     className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                     onClick={(e) => {
                       e.stopPropagation()
                       setDeleteConfirm(activeIndex)
                     }}
-                    title="Delete this result"
+                    title={t("node.deleteThisResult")}
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -274,19 +276,19 @@ function VideoSfxNodeComponent({ id, data, selected }: NodeProps) {
               <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover/video:opacity-100 transition-opacity">
                 <button
                   type="button"
-                  aria-label="Expand preview"
+                  aria-label={t("node.expandPreview")}
                   className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                   onClick={(e) => {
                     e.stopPropagation()
                     setPreviewOpen(true)
                   }}
-                  title="Fullscreen"
+                  title={t("node.fullscreen")}
                 >
                   <Expand className="w-3.5 h-3.5" />
                 </button>
                 <button
                   type="button"
-                  aria-label="Download"
+                  aria-label={t("cfgshared.download")}
                   className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                   onClick={(e) => {
                     e.stopPropagation()
@@ -295,31 +297,31 @@ function VideoSfxNodeComponent({ id, data, selected }: NodeProps) {
                     a.download = `${(nodeData.label as string) || "video-sfx"}.mp4`
                     a.click()
                   }}
-                  title="Download"
+                  title={t("cfgshared.download")}
                 >
                   <Download className="w-3.5 h-3.5" />
                 </button>
                 <button
                   type="button"
-                  aria-label="Copy URL"
+                  aria-label={t("cfgshared.copyUrl")}
                   className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                   onClick={(e) => {
                     e.stopPropagation()
-                    copyToClipboard(activeUrl, "URL copied")
+                    copyToClipboard(activeUrl, tx("apps.urlCopied"))
                   }}
-                  title="Copy URL"
+                  title={t("cfgshared.copyUrl")}
                 >
                   <Link className="w-3.5 h-3.5" />
                 </button>
                 <button
                   type="button"
-                  aria-label="Edit in NodarCut"
+                  aria-label={t("node.editInNodarcut")}
                   className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                   onClick={(e) => {
                     e.stopPropagation()
                     openFreeCut(id, activeUrl, activeResult?.freecutProjectUrl)
                   }}
-                  title="Edit in NodarCut"
+                  title={t("node.editInNodarcut")}
                 >
                   <Scissors className="w-3.5 h-3.5" />
                 </button>
@@ -329,7 +331,7 @@ function VideoSfxNodeComponent({ id, data, selected }: NodeProps) {
               <div className="absolute bottom-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
                 <button
                   type="button"
-                  aria-label="Settings"
+                  aria-label={t("node.settings")}
                   className={`w-7 h-7 flex items-center justify-center bg-black/50 hover:bg-black/70 border border-white/10 text-white rounded-full shadow-sm${
                     isSettingsOpen ? " ring-1 ring-white/30" : ""
                   }`}
@@ -337,7 +339,7 @@ function VideoSfxNodeComponent({ id, data, selected }: NodeProps) {
                     e.stopPropagation()
                     selectNode(isSettingsOpen ? null : id)
                   }}
-                  title="Settings"
+                  title={t("node.settings")}
                 >
                   <Settings className="w-3.5 h-3.5" />
                 </button>
@@ -350,7 +352,7 @@ function VideoSfxNodeComponent({ id, data, selected }: NodeProps) {
             <div className="flex flex-col items-center justify-center gap-1 rounded-xl p-2 h-[180px] bg-red-500/5 text-red-500">
               <div className="flex items-center gap-1.5">
                 <AlertCircle className="w-4 h-4 shrink-0" />
-                <span className="font-medium">Failed</span>
+                <span className="font-medium">{t("node.failed")}</span>
               </div>
               {nodeData.errorMessage ? (
                 <p
@@ -368,7 +370,7 @@ function VideoSfxNodeComponent({ id, data, selected }: NodeProps) {
             <div className="flex flex-col items-center justify-center gap-1 rounded-xl bg-muted/10 text-muted-foreground/40 h-[160px]">
               <Music2 className="w-10 h-10" />
               <span className="text-[10px] text-muted-foreground/60 px-2 text-center">
-                Wire a video and run to add SFX
+                {t("node.wireAVideoAndRun")}
               </span>
             </div>
           )}

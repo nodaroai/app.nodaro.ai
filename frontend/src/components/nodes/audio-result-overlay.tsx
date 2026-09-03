@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo } from "react"
 import { X, Expand, Download, Link } from "lucide-react"
 import { copyToClipboard } from "@/lib/utils"
@@ -21,6 +22,7 @@ function AudioResultOverlayComponent({
   onExpand,
   onDelete,
 }: AudioResultOverlayProps) {
+  const t = useT()
   return (
     <div className="relative group/audio">
       <WaveformAudioPlayer url={url} variant="compact" label={label} isInsideCanvas download={false} />
@@ -29,7 +31,7 @@ function AudioResultOverlayComponent({
         <div className="flex gap-1">
           <button
             type="button"
-            aria-label="Expand preview"
+            aria-label={t("node.expandPreview")}
             className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
             onClick={(e) => { e.stopPropagation(); onExpand() }}
           >
@@ -51,7 +53,7 @@ function AudioResultOverlayComponent({
           </button>
           <button
             type="button"
-            aria-label="Copy URL"
+            aria-label={t("cfgshared.copyUrl")}
             className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
             onClick={(e) => {
               e.stopPropagation()
@@ -66,7 +68,7 @@ function AudioResultOverlayComponent({
           {hasResults && (
             <button
               type="button"
-              aria-label="Remove result"
+              aria-label={t("node.removeResult")}
               className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
               onClick={(e) => { e.stopPropagation(); onDelete() }}
             >

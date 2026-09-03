@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Film, Loader2, AlertCircle, LayoutGrid } from "lucide-react"
@@ -22,6 +23,7 @@ import type { SunoMusicVideoData } from "@/types/nodes"
 const ACCEPTS_AUDIO = (t: string) => isValidSunoMusicVideoConnection("audio", t)
 
 function SunoMusicVideoNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as SunoMusicVideoData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
@@ -114,7 +116,7 @@ function SunoMusicVideoNodeComponent({ id, data, selected }: NodeProps) {
               <div className="flex flex-col items-center justify-center gap-1 h-12 rounded-md bg-red-500/5 text-red-500 p-2">
                 <div className="flex items-center gap-1.5">
                   <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span className="font-medium">Failed</span>
+                  <span className="font-medium">{t("node.failed")}</span>
                 </div>
                 {nodeData.errorMessage && (
                   <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
@@ -130,7 +132,7 @@ function SunoMusicVideoNodeComponent({ id, data, selected }: NodeProps) {
               </div>
             )}
 
-            <span className="text-xs text-muted-foreground">Music Video</span>
+            <span className="text-xs text-muted-foreground">{t("node.musicVideo")}</span>
           </div>
         )}
       </BaseNode>
@@ -140,7 +142,7 @@ function SunoMusicVideoNodeComponent({ id, data, selected }: NodeProps) {
           type="button"
           className="absolute top-2 left-2 z-20 flex items-center gap-1 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white text-[11px] rounded-md opacity-0 group-hover/node:opacity-100 transition-opacity"
           onClick={(e) => { e.stopPropagation(); setShowThumbnails(v => !v) }}
-          title="Show versions"
+          title={t("node.showVersions")}
         >
           <LayoutGrid className="w-3 h-3" />
           <span className="font-medium">{results.length}</span>

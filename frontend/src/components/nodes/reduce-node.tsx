@@ -1,5 +1,6 @@
 "use client"
 
+import { useT, tx } from "@/lib/i18n"
 import { useLocalizeModelDescription } from "@/lib/i18n/labels"
 import { memo, useMemo, type CSSProperties } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
@@ -73,7 +74,7 @@ function headlineSetting(strategyId: string, cfg: Record<string, unknown>): Head
   switch (strategyId) {
     case "pick-best-llm":
       return {
-        kind: "text", label: "Judge by", field: "criteria", multiline: true,
+        kind: "text", label: tx("cfgext.reduceFormJudgeBy"), field: "criteria", multiline: true,
         value: String(cfg.criteria ?? ""),
         placeholder: "Describe what a winner looks like — e.g. the most eye-catching cover, one clear focal point, readable as a thumbnail.",
       }
@@ -81,22 +82,22 @@ function headlineSetting(strategyId: string, cfg: Record<string, unknown>): Head
       return {
         kind: "text", label: "Separator", field: "separator", multiline: false,
         value: String(cfg.separator ?? "\n\n"),
-        placeholder: "Text placed between each candidate",
+        placeholder: tx("node.textPlacedBetweenEachCandidate"),
       }
     case "vote":
       return {
-        kind: "toggle", label: "Case sensitivity", field: "caseSensitive",
+        kind: "toggle", label: tx("node.caseSensitivity"), field: "caseSensitive",
         value: Boolean(cfg.caseSensitive),
         onLabel: "Different letter case counts as different answers",
         offLabel: "Different letter case counts as the same answer",
       }
     case "merge-json":
       return {
-        kind: "select", label: "How to merge", field: "strategy",
+        kind: "select", label: tx("cfgext.reduceFormHowToMerge"), field: "strategy",
         value: cfg.strategy === "shallow" ? "shallow" : "deep",
         options: [
-          { value: "deep", label: "Deep (nested objects too)" },
-          { value: "shallow", label: "Shallow (top level only)" },
+          { value: "deep", label: tx("cfgext.reduceFormDeep") },
+          { value: "shallow", label: tx("cfgext.reduceFormShallow") },
         ],
       }
     default:
@@ -110,6 +111,7 @@ const settingFieldClass =
   "focus:border-[#ff0073]/60 focus:bg-background/60 transition-colors"
 
 function ReduceNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as ReduceNodeData & { __upstreamCount?: number }
   const localizeDesc = useLocalizeModelDescription()
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
@@ -193,9 +195,9 @@ function ReduceNodeComponent({ id, data, selected }: NodeProps) {
         <div className="flex flex-col">
           {/* ── Head row: MODE · AI Model · count ─────────────────────── */}
           <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50 bg-muted/20 flex-wrap">
-            <span className={kickerClass}>Mode</span>
+            <span className={kickerClass}>{t("node.mode")}</span>
             <Select value={strategyId} onValueChange={setStrategy}>
-              <SelectTrigger className={chipTriggerClass} aria-label="What to do with the candidates" title="What to do with the candidates">
+              <SelectTrigger className={chipTriggerClass} aria-label={t("cfgext.reduceWhatToDo")} title={t("cfgext.reduceWhatToDo")}>
                 <SelectValue>{strategyLabel}</SelectValue>
               </SelectTrigger>
               <SelectContent className="node-menu-surface">
@@ -211,7 +213,7 @@ function ReduceNodeComponent({ id, data, selected }: NodeProps) {
             </Select>
             {isAI && (
               <Select value={judgeModelId} onValueChange={setJudgeModel}>
-                <SelectTrigger className={chipTriggerClass} aria-label="AI Model" title="AI Model">
+                <SelectTrigger className={chipTriggerClass} aria-label={t("cfgshared.aiModel")} title={t("cfgshared.aiModel")}>
                   <span className="w-1.5 h-1.5 rounded-full bg-[#5878c8] shrink-0" />
                   <SelectValue>{judgeModelLabel}</SelectValue>
                 </SelectTrigger>
@@ -233,7 +235,7 @@ function ReduceNodeComponent({ id, data, selected }: NodeProps) {
               // compared their links — a pick that looked real and wasn't.
               // Same list as the panel (REDUCE_INPUT_KIND_OPTIONS).
               <Select value={inputKind} onValueChange={(v) => setSettingField("inputKind", v)}>
-                <SelectTrigger className={chipTriggerClass} aria-label="The candidates are" title="The candidates are">
+                <SelectTrigger className={chipTriggerClass} aria-label={t("cfgext.reduceFormCandidatesAre")} title={t("cfgext.reduceFormCandidatesAre")}>
                   <SelectValue>{reduceInputKindLabel(inputKind)}</SelectValue>
                 </SelectTrigger>
                 <SelectContent className="node-menu-surface">
@@ -323,7 +325,7 @@ function ReduceNodeComponent({ id, data, selected }: NodeProps) {
             {/* ── Candidates grid ───────────────────────────────────────── */}
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
-                <span className={kickerClass}>Candidates</span>
+                <span className={kickerClass}>{t("cfgext.reduceTabCandidates")}</span>
                 <span className="text-[10px] text-muted-foreground/70">
                   {candidates.length === 0
                     ? (upstreamCount ? "run to see them" : "connect candidates")
@@ -371,7 +373,7 @@ function ReduceNodeComponent({ id, data, selected }: NodeProps) {
 
           {/* ── OUTPUT bar ─────────────────────────────────────────────── */}
           <div className="flex items-start gap-3 px-3 py-2.5 border-t border-border/50 bg-muted/20">
-            <span className={kickerClass + " pt-0.5"}>Output</span>
+            <span className={kickerClass + " pt-0.5"}>{t("node.output")}</span>
             {hasResult ? (
               <div className="flex-1 min-w-0 flex flex-col gap-1">
                 {isImageUrl(result) ? (

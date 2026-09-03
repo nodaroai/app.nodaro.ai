@@ -1,5 +1,7 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
+import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import { memo, useState, useEffect, useMemo, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { AudioWaveform, Loader2, AlertCircle, LayoutGrid, Film } from "lucide-react"
@@ -26,6 +28,8 @@ const ACCEPTS_AUDIO = (t: string) => isValidVoiceChangerConnection("audio", t)
 const ACCEPTS_VIDEO = (t: string) => isValidVoiceChangerConnection("video", t)
 
 function VoiceChangerNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
+  const localizeNodeLabel = useLocalizeNodeLabel()
   const nodeData = data as VoiceChangerData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const selectNode = useWorkflowStore((s) => s.selectNode)
@@ -184,7 +188,7 @@ function VoiceChangerNodeComponent({ id, data, selected }: NodeProps) {
             <div className="flex flex-col items-center justify-center gap-1 h-12 rounded-md bg-red-500/5 text-red-500 p-2">
               <div className="flex items-center gap-1.5">
                 <AlertCircle className="w-4 h-4 shrink-0" />
-                <span className="font-medium">Failed</span>
+                <span className="font-medium">{t("node.failed")}</span>
               </div>
               {nodeData.errorMessage && (
                 <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
@@ -201,7 +205,7 @@ function VoiceChangerNodeComponent({ id, data, selected }: NodeProps) {
           )}
 
           <div className="flex justify-between text-muted-foreground">
-            <span>Voice Changer</span>
+            <span>{localizeNodeLabel("Voice Changer")}</span>
             {nodeData.voiceLabel && <span className="text-xs truncate max-w-[80px]">{nodeData.voiceLabel}</span>}
           </div>
         </div>

@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useEffect, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Globe, Braces } from "lucide-react"
@@ -109,6 +110,7 @@ function StatusDot({ color }: { readonly color: string }) {
 }
 
 function WebScrapeNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as WebScrapeNodeData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
@@ -165,11 +167,11 @@ function WebScrapeNodeComponent({ id, data, selected }: NodeProps) {
               <div className="flex items-center justify-between text-[11px]">
                 <span className="flex items-center gap-1.5 text-muted-foreground">
                   <StatusDot color="var(--muted-foreground)" />
-                  Not run yet
+                  {t("node.notRunYet")}
                 </span>
                 <span className="text-muted-foreground/60">—</span>
               </div>
-              <p className="text-[10px] text-muted-foreground/70">Run to fetch results.</p>
+              <p className="text-[10px] text-muted-foreground/70">{t("node.runToFetchResults")}</p>
             </>
           )}
 
@@ -178,7 +180,7 @@ function WebScrapeNodeComponent({ id, data, selected }: NodeProps) {
               <div className="flex items-center justify-between text-[11px]">
                 <span className="flex items-center gap-1.5 text-muted-foreground">
                   <StatusDot color="#38BDF8" />
-                  Scraping…
+                  {t("node.scraping")}
                 </span>
                 <span className="tabular-nums text-muted-foreground/80">{elapsedLabel(state.startedAt, now)}</span>
               </div>
@@ -191,7 +193,7 @@ function WebScrapeNodeComponent({ id, data, selected }: NodeProps) {
             <>
               {state.stale && (
                 <div className="rounded-sm bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] px-1.5 py-0.5">
-                  Inputs changed — result is stale
+                  {t("node.inputsChangedStale")}
                 </div>
               )}
               <div className="flex items-center justify-between text-[11px]">
@@ -210,7 +212,7 @@ function WebScrapeNodeComponent({ id, data, selected }: NodeProps) {
                 {state.kind === "failed" && (
                   <span className="flex items-center gap-1.5 font-medium text-red-500">
                     <StatusDot color="#ef4444" />
-                    Failed
+                    {t("node.failed")}
                   </span>
                 )}
                 <span className="text-muted-foreground/60 tabular-nums">{relativeTime(state.at, now)}</span>
@@ -222,25 +224,28 @@ function WebScrapeNodeComponent({ id, data, selected }: NodeProps) {
                     <PeekRow key={i} glyph={peek.glyph(item, i)} text={webScrapePeekLine(actor, item)} href={webScrapeItemLink(actor, item)} />
                   ))}
                   {state.count > peekItems.length && (
-                    <span className="text-[10px] text-[#FF0073]">View all {state.count}</span>
+                    <span className="text-[10px] text-[#FF0073]">{t("node.viewAllN", { n: state.count })}</span>
                   )}
                 </div>
               )}
 
               {state.kind === "empty" && (
                 <p className="text-[10px] text-muted-foreground/70 leading-snug">
-                  The run completed. This query matched nothing — try broader wording or another source.
+                  {t("node.queryMatchedNothing")}
                 </p>
               )}
 
               {state.kind === "failed" && (
                 <p className="text-[10px] text-muted-foreground/80 leading-snug">
-                  {nodeData.errorMessage || "Scrape failed."}
+                  {nodeData.errorMessage || t("node.scrapeFailed")}
                   {state.kept && (
                     <>
                       {" "}
                       <span className="font-medium text-foreground/80">
-                        Previous result kept: {state.kept.count} items{state.kept.at ? `, ${relativeTime(state.kept.at, now)}` : ""}.
+                        {t(state.kept.count === 1 ? "node.previousResultKeptOne" : "node.previousResultKeptOther", {
+                          n: state.kept.count,
+                          when: state.kept.at ? `, ${relativeTime(state.kept.at, now)}` : "",
+                        })}
                       </span>
                     </>
                   )}

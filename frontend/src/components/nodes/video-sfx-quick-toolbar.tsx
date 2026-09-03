@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useStore } from "@xyflow/react"
 import { Copy, Music2 } from "lucide-react"
@@ -73,6 +74,7 @@ export function VideoSfxQuickToolbar({
   isRunning,
   onAnyOpenChange,
 }: VideoSfxQuickToolbarProps) {
+  const t = useT()
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
 
@@ -178,7 +180,7 @@ export function VideoSfxQuickToolbar({
           future MMAudio variants can join without disrupting the layout. */}
       <span
         className="flex items-center gap-1 px-1.5 py-1 rounded-md text-[10px] whitespace-nowrap text-neutral-900/85 dark:text-white/85"
-        title="MMAudio (Replicate)"
+        title={t("node.mmaudioReplicate")}
       >
         <Music2 className="w-3 h-3 opacity-70" />
         MMAudio
@@ -189,7 +191,7 @@ export function VideoSfxQuickToolbar({
           `creditGuard.computeCredits` on the route via `bucketBaseCreditsFor
           × versions`. */}
       <Select disabled={isRunning} value={String(versions)} onValueChange={handleVersionsChange} onOpenChange={handleOpenChange}>
-        <SelectTrigger className={ghostTriggerClass} title="Versions per run">
+        <SelectTrigger className={ghostTriggerClass} title={t("node.versionsPerRun")}>
           <Copy className="opacity-70" />
           <SelectValue>× {versions}</SelectValue>
         </SelectTrigger>

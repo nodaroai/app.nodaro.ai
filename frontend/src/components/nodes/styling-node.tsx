@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { Gem } from "lucide-react"
@@ -28,6 +29,7 @@ function collectEnabled(data: StylingData): EnabledEntry[] {
 }
 
 function StylingNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as StylingData
   const enabled = collectEnabled(nodeData)
   const maxItemsPerRow = Math.max(1, Math.min(4, nodeData.maxItemsPerRow ?? 2))
@@ -87,7 +89,7 @@ function StylingNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       ) : (
         <p className="text-muted-foreground text-sm italic">
-          Pick a styling dimension to begin
+          {t("node.pickAStylingDimensionTo")}
         </p>
       )}
     </ParameterNodeShell>

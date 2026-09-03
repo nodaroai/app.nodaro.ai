@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { Frame } from "lucide-react"
@@ -28,6 +29,7 @@ function collectEnabled(data: FramingData): EnabledEntry[] {
 }
 
 function FramingNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as FramingData
   const enabled = collectEnabled(nodeData)
   const maxItemsPerRow = Math.max(1, Math.min(5, nodeData.maxItemsPerRow ?? 2))
@@ -80,7 +82,7 @@ function FramingNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       ) : (
         <p className="text-muted-foreground text-sm italic">
-          Select a framing category
+          {t("node.selectAFramingCategory")}
         </p>
       )}
     </ParameterNodeShell>

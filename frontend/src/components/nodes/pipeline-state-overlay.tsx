@@ -1,5 +1,6 @@
 "use client"
 
+import { tx } from "@/lib/i18n"
 import type { PipelineState } from "@nodaro/shared"
 import {
   Tooltip,
@@ -37,31 +38,34 @@ interface StateMeta {
  * `isStale` adds an orange "stale" pill in the bottom-right corner. Driven by
  * `entity:stale` SSE events from `@nodaro/shared/pipeline-state-types`.
  */
-const STATE_META: Record<PipelineState, StateMeta> = {
+// A getter, not a module constant: the labels resolve through the live locale.
+function STATE_META(): Record<PipelineState, StateMeta> {
+  return {
   pipeline_owned_running: {
     borderColor: "ring-2 ring-zinc-400 animate-pulse",
     iconBg: "bg-zinc-500",
     icon: "⚙",
-    label: "Pipeline generating — config locked",
+    label: tx("node.pipelineGeneratingLocked"),
   },
   pipeline_owned_awaiting_approval: {
     borderColor: "ring-2 ring-amber-400",
     iconBg: "bg-amber-500",
     icon: "⏸",
-    label: "Awaiting your approval",
+    label: tx("node.awaitingYourApproval"),
   },
   pipeline_owned_approved: {
     borderColor: "ring-1 ring-blue-300",
     iconBg: "bg-blue-500",
     icon: "✓",
-    label: "Approved — downstream regen needed if edited",
+    label: tx("node.approvedRegenIfEdited"),
   },
   pipeline_orphaned: {
     borderColor: "",
     iconBg: "bg-zinc-300",
     icon: "",
-    label: "User-owned (forked)",
+    label: tx("node.userOwnedForked"),
   },
+  }
 }
 
 export function PipelineStateOverlay({ state, isStale = false }: Props) {
@@ -69,7 +73,7 @@ export function PipelineStateOverlay({ state, isStale = false }: Props) {
   // the canvas should look identical to a plain user-created node.
   const isManagedVisible = !!state && state !== "pipeline_orphaned"
   if (!isManagedVisible && !isStale) return null
-  const meta: StateMeta | null = state ? STATE_META[state] : null
+  const meta: StateMeta | null = state ? STATE_META()[state] : null
 
   // `<Tooltip>` (shadcn wrapper) already provides its own TooltipProvider —
   // mounting another one per entity node is redundant context overhead.

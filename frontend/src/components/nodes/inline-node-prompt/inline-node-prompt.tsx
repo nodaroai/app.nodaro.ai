@@ -1,4 +1,5 @@
 // frontend/src/components/nodes/inline-node-prompt/inline-node-prompt.tsx
+import { useT } from "@/lib/i18n"
 import { useEffect, useRef, useState } from "react"
 import { PromptEditor } from "@/lib/picker-ui"
 import { PromptHelperButton } from "@/components/editor/config-panels/prompt-helper-button"
@@ -28,6 +29,7 @@ export interface InlineNodePromptProps {
 const DRAG_THRESHOLD_PX = 2
 
 export function InlineNodePrompt({ nodeId, onFocusChange, affordancesVisible = false }: InlineNodePromptProps) {
+  const t = useT()
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const openPromptEditor = useWorkflowStore((s) => s.openPromptEditor)
   // Self-sufficient: derive type/data + the AI-helper context (provider,
@@ -166,7 +168,7 @@ export function InlineNodePrompt({ nodeId, onFocusChange, affordancesVisible = f
               key={m}
               type="button"
               aria-pressed={view === m}
-              title={m === "edit" ? "Edit prompt" : m === "final" ? "Show the assembled final prompt" : "Show edit + final"}
+              title={m === "edit" ? t("node.editPromptMode") : m === "final" ? t("node.showFinalPromptMode") : t("node.showEditAndFinalMode")}
               onClick={() => updateNodeData(nodeId, { inlinePromptView: m })}
               className={`px-1.5 py-0.5 capitalize transition-colors ${
                 view === m

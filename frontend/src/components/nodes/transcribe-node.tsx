@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { FileText, Loader2, AlertCircle, X, Type, AudioWaveform, Copy, Download } from "lucide-react"
@@ -29,6 +30,7 @@ function TranscriptPreviewModal({
   readonly text: string
   readonly language: string
 }) {
+  const t = useT()
   if (!isOpen) return null
 
   return createPortal(
@@ -43,7 +45,7 @@ function TranscriptPreviewModal({
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <div className="flex items-center gap-2">
             <FileText className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm font-medium">Transcript</span>
+            <span className="text-sm font-medium">{t("audiocfg.transcript")}</span>
             {language && language !== "auto" && language !== "unknown" && (
               <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
                 {language}
@@ -68,6 +70,7 @@ function TranscriptPreviewModal({
 }
 
 function TranscribeNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as TranscribeData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
@@ -138,7 +141,7 @@ function TranscribeNodeComponent({ id, data, selected }: NodeProps) {
                 <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
                     type="button"
-                    aria-label="Copy text"
+                    aria-label={t("node.copyText")}
                     className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
                     onClick={(e) => {
                       e.stopPropagation()
@@ -167,7 +170,7 @@ function TranscribeNodeComponent({ id, data, selected }: NodeProps) {
                         e.stopPropagation()
                         setDeleteConfirm(activeIndex)
                       }}
-                      title="Delete this result"
+                      title={t("node.deleteThisResult")}
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -180,7 +183,7 @@ function TranscribeNodeComponent({ id, data, selected }: NodeProps) {
               <div className="flex flex-col items-center justify-center gap-1 h-12 rounded-md bg-red-500/5 text-red-500 p-2">
                 <div className="flex items-center gap-1.5">
                   <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span className="font-medium">Failed</span>
+                  <span className="font-medium">{t("node.failed")}</span>
                 </div>
                 {nodeData.errorMessage && (
                   <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
@@ -192,7 +195,7 @@ function TranscribeNodeComponent({ id, data, selected }: NodeProps) {
 
             {status !== "running" && !activeText && status !== "failed" && (
               <div className="flex items-center justify-center py-6 text-muted-foreground/40">
-                <span className="text-xs">No output yet</span>
+                <span className="text-xs">{t("node.noOutputYet")}</span>
               </div>
             )}
 

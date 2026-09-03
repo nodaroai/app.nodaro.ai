@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Volume2, Loader2, AlertCircle, Type, LayoutGrid, Sparkles } from "lucide-react"
@@ -23,6 +24,7 @@ const ACCEPTS_PROMPT      = (t: string) => isValidTextToAudioConnection("prompt"
 const ACCEPTS_AUDIO_STYLE = (t: string) => isValidTextToAudioConnection("audio-style", t, isVisualPicker)
 
 function TextToAudioNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as TextToAudioData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
@@ -126,7 +128,7 @@ function TextToAudioNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex-1 flex flex-col items-center justify-center gap-1 min-h-[96px] rounded-md bg-red-500/5 text-red-500 p-2">
             <div className="flex items-center gap-1.5">
               <AlertCircle className="w-4 h-4 shrink-0" />
-              <span className="font-medium">Failed</span>
+              <span className="font-medium">{t("node.failed")}</span>
             </div>
             {nodeData.errorMessage && (
               <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
@@ -149,7 +151,7 @@ function TextToAudioNodeComponent({ id, data, selected }: NodeProps) {
       </div>
     </BaseNode>
     <HandleWithPopover nodeId={id} nodeType="text-to-audio" handleId="prompt"      type="target" position={Position.Left}  label="Prompt"      color={TEXT_HANDLE_COLOR} icon={<Type />}     side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
-    <HandleWithPopover nodeId={id} nodeType="text-to-audio" handleId="audio-style" type="target" position={Position.Left}  label="Audio style" color={HANDLE_COLORS.audio} icon={<Sparkles />} side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_AUDIO_STYLE} />
+    <HandleWithPopover nodeId={id} nodeType="text-to-audio" handleId="audio-style" type="target" position={Position.Left}  label={t("node.audioStyle")} color={HANDLE_COLORS.audio} icon={<Sparkles />} side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_AUDIO_STYLE} />
     <HandleWithPopover nodeId={id} nodeType="text-to-audio" handleId="audio"       type="source" position={Position.Right} label="Audio"       color={HANDLE_COLORS.audio} icon={<Volume2 />}  side="right" top="24px" />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}

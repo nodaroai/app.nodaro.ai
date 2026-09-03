@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo } from "react"
 import { Handle, Position, type NodeProps } from "@xyflow/react"
 import { Send, Download, ArrowRight, ArrowLeft } from "lucide-react"
@@ -13,6 +14,7 @@ type TeleporterNodeData = TeleportSendData | TeleportReceiveData
 const HIDDEN_HANDLE_STYLE = { opacity: 0, pointerEvents: "none" as const, width: 1, height: 1 }
 
 function TeleportNodeShell({ id, data, selected, variant }: NodeProps & { variant: "send" | "receive" }) {
+  const t = useT()
   const nodeData = data as TeleporterNodeData
   const partnerType = variant === "send" ? "teleport-receive" : "teleport-send"
   const Icon = variant === "send" ? Send : Download
@@ -63,8 +65,8 @@ function TeleportNodeShell({ id, data, selected, variant }: NodeProps & { varian
       style={{ color: nodeData.channelColor }}
       onClick={handleJump}
       onMouseDown={(e) => { e.stopPropagation(); e.preventDefault() }}
-      title="Jump to partner"
-      aria-label="Jump to partner"
+      title={t("node.jumpToPartner")}
+      aria-label={t("node.jumpToPartner")}
     >
       <JumpIcon className="w-3 h-3" />
     </button>

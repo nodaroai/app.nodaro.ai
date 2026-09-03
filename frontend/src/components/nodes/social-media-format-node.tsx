@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Share2, Loader2, AlertCircle, X, Expand, FileVideo, FileImage, Type, Download, Link, Scissors } from "lucide-react"
@@ -21,6 +22,7 @@ import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import type { SocialMediaPlatform } from "@/lib/social-media-specs"
 
 function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as SocialMediaFormatData
   const credits = useModelCredits("ffmpeg", 1)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
@@ -100,7 +102,7 @@ function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
                 <div className="absolute bottom-8 left-2 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
                     type="button"
-                    aria-label="Expand preview"
+                    aria-label={t("node.expandPreview")}
                     className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                     onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
                     title="Fullscreen"
@@ -124,22 +126,22 @@ function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
                   </button>
                   <button
                     type="button"
-                    aria-label="Copy URL"
+                    aria-label={t("cfgshared.copyUrl")}
                     className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                     onClick={(e) => {
                       e.stopPropagation()
                       copyToClipboard(activeUrl, "URL copied")
                     }}
-                    title="Copy URL"
+                    title={t("cfgshared.copyUrl")}
                   >
                     <Link className="w-3.5 h-3.5" />
                   </button>
                   <button
                     type="button"
-                    aria-label="Edit in NodarCut"
+                    aria-label={t("node.editInNodarcut")}
                     className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                     onClick={(e) => { e.stopPropagation(); openFreeCut(id, activeUrl, activeResult?.freecutProjectUrl) }}
-                    title="Edit in NodarCut"
+                    title={t("node.editInNodarcut")}
                   >
                     <Scissors className="w-3.5 h-3.5" />
                   </button>
@@ -148,10 +150,10 @@ function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
                 {results.length > 0 && (
                   <button
                     type="button"
-                    aria-label="Remove result"
+                    aria-label={t("node.removeResult")}
                     className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
                     onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}
-                    title="Delete this result"
+                    title={t("node.deleteThisResult")}
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -166,7 +168,7 @@ function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex flex-col items-center justify-center gap-1 rounded-xl bg-red-500/5 text-red-500 p-2 h-[180px]">
             <div className="flex items-center gap-1.5">
               <AlertCircle className="w-4 h-4 shrink-0" />
-              <span className="font-medium">Failed</span>
+              <span className="font-medium">{t("node.failed")}</span>
             </div>
             {nodeData.errorMessage && (
               <p className="text-[10px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
