@@ -1837,6 +1837,21 @@
       "expected": "a fuller bust"
     },
     {
+      "key": "person/w1b:eye-state-half-lidded",
+      "note": "W1-b reworded hint — eye-state-half-lidded",
+      "node": {
+        "id": "n1",
+        "type": "person",
+        "data": {
+          "eyeState": [
+            "eye-state-half-lidded"
+          ]
+        }
+      },
+      "ctx": null,
+      "expected": "with drowsy, partly closed eyes, the lids sitting low over the iris"
+    },
+    {
       "key": "person/w1b:eye-state-staring-camera",
       "note": "W1-b reworded hint — eye-state-staring-camera",
       "node": {
@@ -1865,6 +1880,21 @@
       },
       "ctx": null,
       "expected": "with the shoulders uncovered"
+    },
+    {
+      "key": "person/w1b:feature-collarbone-visible",
+      "note": "W1-b reworded hint — feature-collarbone-visible",
+      "node": {
+        "id": "n1",
+        "type": "person",
+        "data": {
+          "distinctiveFeature": [
+            "feature-collarbone-visible"
+          ]
+        }
+      },
+      "ctx": null,
+      "expected": "with an open neckline that leaves the collarbones uncovered"
     },
     {
       "key": "person/w1b:feature-midriff-visible",

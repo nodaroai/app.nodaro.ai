@@ -676,7 +676,7 @@ export const PEOPLE: ReadonlyArray<Person> = [
 
   // -------------------- Eye State (what the eyes are doing / where they look) --------------------
   { id: "eye-state-closed",         label: "Closed",            dimension: "eye-state", description: "Eyes fully closed, peaceful",       promptHint: "with eyes fully closed in a peaceful expression", term: "eyes fully closed" },
-  { id: "eye-state-half-lidded",    label: "Half-lidded",       dimension: "eye-state", description: "Heavy-lidded sleepy gaze",          promptHint: "with heavy half-lidded sleepy eyes", term: "half-lidded sleepy eyes" , adultOnly: true },
+  { id: "eye-state-half-lidded",    label: "Half-lidded",       dimension: "eye-state", description: "Heavy-lidded sleepy gaze",          promptHint: "with drowsy, partly closed eyes, the lids sitting low over the iris", term: "drowsy, partly closed eyes" , adultOnly: true },
   { id: "eye-state-wide-eyed",      label: "Wide-eyed",         dimension: "eye-state", description: "Eyes wide open, alert / surprised", promptHint: "with eyes wide open, alert and surprised" },
   { id: "eye-state-staring-camera", label: "Staring at Camera", dimension: "eye-state", description: "Direct unbroken eye contact with the lens", promptHint: "looking directly into the camera", term: "direct gaze to camera" },
   { id: "eye-state-gazing-away",    label: "Gazing Away",       dimension: "eye-state", description: "Looking off-camera, contemplative", promptHint: "gazing off-camera with a contemplative expression", term: "gazing off-camera" },
@@ -742,7 +742,7 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "feature-lip-piercing", label: "Lip Piercing", dimension: "distinctive-features", description: "Lip ring / labret stud", promptHint: "with a lip piercing, a small ring or labret stud at the lip" },
   { id: "feature-nostril-piercing", label: "Nostril Piercing", dimension: "distinctive-features", description: "Single nostril stud or ring", promptHint: "with a single nostril piercing, a small stud or ring at the nostril" },
   { id: "feature-bare-shoulders", label: "Bare Shoulders", dimension: "distinctive-features", description: "Bare shoulders exposed", promptHint: "with the shoulders uncovered", term: "shoulders uncovered" , adultOnly: true },
-  { id: "feature-collarbone-visible", label: "Collarbone Visible", dimension: "distinctive-features", description: "Prominent collarbone catching light", promptHint: "with a prominent collarbone clearly defined and catching the light", term: "visible collarbone" , adultOnly: true },
+  { id: "feature-collarbone-visible", label: "Collarbone Visible", dimension: "distinctive-features", description: "Prominent collarbone catching light", promptHint: "with an open neckline that leaves the collarbones uncovered", term: "open neckline, collarbones uncovered" , adultOnly: true },
   { id: "feature-midriff-visible", label: "Midriff Visible", dimension: "distinctive-features", description: "Exposed midriff between top and bottom", promptHint: "with a cropped hemline", term: "cropped hemline" , adultOnly: true },
   { id: "feature-navel-visible", label: "Navel Visible", dimension: "distinctive-features", description: "Visible navel on bare stomach", promptHint: "with the navel visible", term: "visible navel" , adultOnly: true },
   { id: "feature-elongated-neck", label: "Elongated Neck", dimension: "distinctive-features", description: "Long swan-like neck", promptHint: "with an elongated, swan-like neck, long and gracefully extended", term: "elongated swan-like neck" },
