@@ -66,10 +66,12 @@ export function getAdultOnlyIds(): ReadonlySet<string> {
 }
 
 /**
- * The pre-W1-b `promptHint` of every `adultOnly` entry the spec
+ * The pre-rework `promptHint` of every `adultOnly` entry the spec
  * (2026-09-01-app-reports-triage-design §3.3) listed for rewording — including
- * the two the harness kept at their current wording (harmless double coverage) —
- * plus the hard-coded midriff+navel fold clause. These strings are permanently part of the strip
+ * `eye-state-half-lidded` and `feature-collarbone-visible`, which the W1-b
+ * harness initially left byte-identical (0/10 and 0/22 render rate under
+ * either wording) and a 2026-09-03 replay then found renderable wordings for
+ * — plus the hard-coded midriff+navel fold clause. These strings are permanently part of the strip
  * set: a consumer that has not bumped `@nodaro/prompts` still emits them, and
  * the client-assembled `seedPrompt` path is exactly how the 2026-07-30
  * minor-age prompts reached a provider. Retiring can only ever cause an EXTRA

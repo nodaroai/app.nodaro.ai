@@ -369,13 +369,13 @@ add("setting/empty-data", "no value selected injects nothing", {
 //    means the safety-motivated wording moved — which is exactly what this
 //    fixture exists to make loud.
 //
-//    eye-state-half-lidded and feature-collarbone-visible are DELIBERATELY
+//    eye-state-half-lidded and feature-collarbone-visible were INITIALLY
 //    excluded: per the replay-harness go/no-go verdict (internal validation
-//    results, 2026-09-02), those two attributes
-//    rendered 0/10 and 0/22 times under either wording in validation, so the
-//    approved rewording could not be confirmed and both were left byte-
-//    identical to their pre-W1-b wording. Pinning them here would just be
-//    re-asserting old strings under a `w1b:` key — do not add cases for them.
+//    results, 2026-09-02), those two attributes rendered 0/10 and 0/22 times
+//    under either wording in validation, so the approved rewording could not
+//    be confirmed and both were left byte-identical to their pre-W1-b
+//    wording. A 2026-09-03 replay found wordings that DO render (approved the
+//    same day), so both are now pinned below like every other reworded id.
 // ---------------------------------------------------------------------------
 
 /** [id, data field, value] per reworded person entry. */
@@ -387,11 +387,13 @@ const W1B_PERSON: ReadonlyArray<readonly [string, string, string | string[]]> = 
   ["lip-state-parted", "lipState", ["lip-state-parted"]],
   ["lip-state-bitten", "lipState", ["lip-state-bitten"]],
   ["eye-state-staring-camera", "eyeState", ["eye-state-staring-camera"]],
+  ["eye-state-half-lidded", "eyeState", ["eye-state-half-lidded"]],
   ["texture-dewy", "skinTexture", ["texture-dewy"]],
   ["texture-glistening", "skinTexture", ["texture-glistening"]],
   ["texture-baby-soft", "skinTexture", ["texture-baby-soft"]],
   ["texture-shower-fresh-wet", "skinTexture", ["texture-shower-fresh-wet"]],
   ["feature-bare-shoulders", "distinctiveFeature", ["feature-bare-shoulders"]],
+  ["feature-collarbone-visible", "distinctiveFeature", ["feature-collarbone-visible"]],
   ["feature-midriff-visible", "distinctiveFeature", ["feature-midriff-visible"]],
 ]
 
