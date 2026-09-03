@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Wand2, Loader2, AlertCircle, Volume2, Type, LayoutGrid, Copy, Check, Sparkles, User } from "lucide-react"
@@ -23,6 +24,7 @@ const ACCEPTS_PROMPT      = (t: string) => isValidVoiceDesignConnection("prompt"
 const ACCEPTS_AUDIO_STYLE = (t: string) => isValidVoiceDesignConnection("audio-style", t, isVisualPicker)
 
 function VoiceDesignNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as VoiceDesignData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
@@ -135,7 +137,7 @@ function VoiceDesignNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex flex-col items-center justify-center gap-1 h-12 rounded-md bg-red-500/5 text-red-500 p-2">
             <div className="flex items-center gap-1.5">
               <AlertCircle className="w-4 h-4 shrink-0" />
-              <span className="font-medium">Failed</span>
+              <span className="font-medium">{t("node.failed")}</span>
             </div>
             {nodeData.errorMessage && (
               <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
@@ -164,14 +166,14 @@ function VoiceDesignNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         <div className="flex justify-between text-muted-foreground">
-          <span>Voice Design</span>
+          <span>{t("node.voiceDesign")}</span>
         </div>
       </div>
     </BaseNode>
     <HandleWithPopover nodeId={id} nodeType="voice-design" handleId="prompt"  type="target" position={Position.Left}  label="Prompt"   color={TEXT_HANDLE_COLOR} icon={<Type />}    side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
-    <HandleWithPopover nodeId={id} nodeType="voice-design" handleId="audio-style" type="target" position={Position.Left}  label="Audio style" color={HANDLE_COLORS.audio} icon={<Sparkles />} side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_AUDIO_STYLE} />
+    <HandleWithPopover nodeId={id} nodeType="voice-design" handleId="audio-style" type="target" position={Position.Left}  label={t("node.audioStyle")} color={HANDLE_COLORS.audio} icon={<Sparkles />} side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_AUDIO_STYLE} />
     <HandleWithPopover nodeId={id} nodeType="voice-design" handleId="audio"   type="source" position={Position.Right} label="Audio"    color={HANDLE_COLORS.audio} icon={<Wand2 />}   side="right" top="24px" />
-    <HandleWithPopover nodeId={id} nodeType="voice-design" handleId="voiceId" type="source" position={Position.Right} label="Voice ID" color={HANDLE_COLORS.identity} icon={<User />}    side="right" top="56px" />
+    <HandleWithPopover nodeId={id} nodeType="voice-design" handleId="voiceId" type="source" position={Position.Right} label={t("node.voiceId")} color={HANDLE_COLORS.identity} icon={<User />}    side="right" top="56px" />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
       onClose={() => setDeleteConfirm(null)}

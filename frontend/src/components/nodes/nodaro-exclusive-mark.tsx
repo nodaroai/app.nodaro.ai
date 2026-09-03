@@ -48,13 +48,14 @@ export function NodaroMark({ className }: { readonly className?: string }) {
  * fires for ordinary nodes or cloud builds.
  */
 export function NodaroHeaderChip() {
+  const t = useT()
   const { connected, checked } = useNodaroConnection()
 
   if (!checked || connected) {
     return (
       <span
         className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#ff0073]/15 text-[#ff0073] border border-[#ff0073]/30"
-        title="Runs on nodaro.ai"
+        title={t("node.runsOnNodaro")}
       >
         NODARO
       </span>
@@ -67,7 +68,7 @@ export function NodaroHeaderChip() {
       className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#ff0073] text-white hover:bg-[#e0005f] transition-colors"
       title="Requires nodaro.ai — connect your install (Integrations → nodaro.ai, or paste an API key from app.nodaro.ai → Settings → API)"
     >
-      CONNECT NODARO
+      {t("node.connectNodaro")}
     </a>
   )
 }

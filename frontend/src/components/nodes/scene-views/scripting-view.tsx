@@ -1,3 +1,4 @@
+import { useT } from "@/lib/i18n"
 import type { SceneViewProps } from "./view-mode-registry"
 import { registerSceneView } from "./view-mode-registry"
 import { storyMomentLabel } from "@/lib/story-moment-labels"
@@ -12,6 +13,7 @@ import { storyMomentLabel } from "@/lib/story-moment-labels"
  * camera-language live elsewhere — this view stays close to the script.
  */
 function ScriptingView({ data }: SceneViewProps) {
+  const t = useT()
   const shots = data.shots ?? []
 
   return (
@@ -25,7 +27,7 @@ function ScriptingView({ data }: SceneViewProps) {
       )}
       {shots.length === 0 ? (
         <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-zinc-200 dark:border-[#2D2D2D] text-[10px] text-zinc-400 dark:text-zinc-500">
-          No shots yet
+          {t("node.noShotsYet")}
         </div>
       ) : (
         <div className="flex flex-col gap-1.5">

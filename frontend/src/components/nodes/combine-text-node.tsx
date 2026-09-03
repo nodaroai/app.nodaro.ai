@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Merge, FileText, X, Copy, Type } from "lucide-react"
@@ -35,6 +36,7 @@ function TextPreviewModal({
   readonly onClose: () => void
   readonly text: string
 }) {
+  const t = useT()
   if (!isOpen) return null
 
   return createPortal(
@@ -49,7 +51,7 @@ function TextPreviewModal({
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <div className="flex items-center gap-2">
             <Merge className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm font-medium">Combined Text</span>
+            <span className="text-sm font-medium">{t("node.combinedText")}</span>
           </div>
           <button
             type="button"
@@ -69,6 +71,7 @@ function TextPreviewModal({
 }
 
 function CombineTextNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as CombineTextNodeData
   const combinedText = nodeData.combinedText
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
@@ -123,13 +126,13 @@ function CombineTextNodeComponent({ id, data, selected }: NodeProps) {
                   {lineCount} line{lineCount !== 1 ? "s" : ""} combined
                 </p>
                 <span className="text-[10px] text-muted-foreground mt-1 block">
-                  Click to expand
+                  {t("node.clickToExpand")}
                 </span>
               </div>
               <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
                   type="button"
-                  aria-label="Copy text"
+                  aria-label={t("node.copyText")}
                   className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
                   onClick={(e) => {
                     e.stopPropagation()

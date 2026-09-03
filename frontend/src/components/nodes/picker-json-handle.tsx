@@ -1,3 +1,4 @@
+import { useT } from "@/lib/i18n"
 import { Position } from "@xyflow/react"
 import { ScanFace } from "lucide-react"
 import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
@@ -32,6 +33,7 @@ export const PICKER_CONSUMER_INPUT_HANDLES: ReadonlyArray<HandleConfig> = [
 
 /** The visible picker-json input pip + popover, parameterized by node type. */
 export function PickerJsonHandleIcon({ nodeId, nodeType }: { nodeId: string; nodeType: string }) {
+  const t = useT()
   return (
     <HandleWithPopover
       nodeId={nodeId}
@@ -39,7 +41,7 @@ export function PickerJsonHandleIcon({ nodeId, nodeType }: { nodeId: string; nod
       nodeType={nodeType}
       type="target"
       position={Position.Left}
-      label="Picker JSON"
+      label={t("node.pickerJson")}
       color={HANDLE_COLORS.pickerJson}
       icon={<ScanFace className="w-3.5 h-3.5" />}
       accepts={ACCEPTS_PICKER_JSON}

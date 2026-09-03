@@ -9,6 +9,7 @@
 // (language, gender, preview clip), so a workflow authored elsewhere still
 // shows its voice on a keyless install.
 
+import { useT } from "@/lib/i18n"
 import { useMemo, useState, type KeyboardEvent, type MouseEvent } from "react"
 import { ChevronDown, Music, Pause, Play } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -35,6 +36,7 @@ function stop(e: MouseEvent | KeyboardEvent) {
 }
 
 export function VoiceRow({ voiceId, voiceName, onSelectVoice }: VoiceRowProps) {
+  const t = useT()
   const { data: voices } = useHeygenVoices()
   const voice = useMemo(
     () => (voiceId ? voices.find((v) => v.voiceId === voiceId) : undefined),
@@ -60,7 +62,7 @@ export function VoiceRow({ voiceId, voiceName, onSelectVoice }: VoiceRowProps) {
             type="button"
             className="nodrag nopan group/voice flex items-center gap-2.5 min-w-0 flex-1 text-left rounded-md -mx-1 px-1 py-0.5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
             onClick={stop}
-            title="Change voice"
+            title={t("node.changeVoice")}
             aria-label={voiceId ? `Voice: ${name}. Change voice` : "Choose a voice"}
             aria-expanded={open}
           >
@@ -75,8 +77,8 @@ export function VoiceRow({ voiceId, voiceName, onSelectVoice }: VoiceRowProps) {
                 </>
               ) : (
                 <>
-                  <span className="text-[12px] text-[#ff0073] leading-tight">Choose a voice</span>
-                  <span className="text-[10.5px] text-muted-foreground leading-tight">Needed for Text (TTS)</span>
+                  <span className="text-[12px] text-[#ff0073] leading-tight">{t("node.chooseAVoice")}</span>
+                  <span className="text-[10.5px] text-muted-foreground leading-tight">{t("node.neededForTextTts")}</span>
                 </>
               )}
             </span>
@@ -122,8 +124,8 @@ export function VoiceRow({ voiceId, voiceName, onSelectVoice }: VoiceRowProps) {
 
       <button
         type="button"
-        aria-label={isPlaying ? "Pause voice preview" : "Play voice preview"}
-        title={canPlay ? (isPlaying ? "Pause preview" : "Play preview") : "No preview available"}
+        aria-label={isPlaying ? t("cfgext.voicePausePreview") : t("cfgext.voicePlayPreview")}
+        title={canPlay ? (isPlaying ? t("node.pausePreview") : t("node.playPreview")) : "No preview available"}
         disabled={!canPlay}
         className={cn(
           "nodrag nopan grid place-items-center w-6 h-6 rounded-full border transition-colors shrink-0",

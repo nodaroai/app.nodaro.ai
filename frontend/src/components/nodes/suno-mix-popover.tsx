@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { useContext } from "react"
 import { Sliders } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -12,6 +13,7 @@ import type { SunoGenerateData } from "@/types/nodes"
  *  via NodeQuickStrip's `children` (no quick-config control kind). Pins the strip
  *  while open so the hover toolbar can't hide mid-adjust. */
 export function SunoMixPopover({ nodeId }: { readonly nodeId: string }) {
+  const t = useT()
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const setQuickStripPinned = useWorkflowStore((s) => s.setQuickStripPinned)
   const data = useWorkflowStore((s) => s.nodes.find((n) => n.id === nodeId)?.data) as SunoGenerateData | undefined
@@ -32,7 +34,7 @@ export function SunoMixPopover({ nodeId }: { readonly nodeId: string }) {
         className="h-6 px-1.5 inline-flex items-center gap-1 rounded-md text-[10px] text-neutral-900/85 hover:bg-black/10 dark:text-white/85 dark:hover:bg-white/10 [&_svg]:size-3 [&_svg]:opacity-70"
       >
         <Sliders />
-        <span>Mix</span>
+        <span>{t("node.mix")}</span>
       </PopoverTrigger>
       <PopoverContent
         className="node-menu-surface w-64 flex flex-col gap-3"

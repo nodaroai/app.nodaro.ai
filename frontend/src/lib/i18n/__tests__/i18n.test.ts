@@ -13,6 +13,7 @@ const LOCALE_IDS: readonly LocaleId[] = LANGUAGES.map((l) => l.id)
 /** Config-panel keys whose Hebrew value is legitimately Latin (reviewed one by one). */
 const LEGIT_LATIN_HE: readonly string[] = [
   "cfgshared.badgeI2I",
+  "node.creditsSuffix",
   "cfgext.compBlendMultiply",
   "cfgext.compBlendScreen",
   "cfgext.compBlendOverlay",
@@ -80,7 +81,7 @@ describe("i18n translate()", () => {
     // Values that are legitimately Latin: brand/model names, industry terms
     // kept in English (blend modes), format tokens.
     const LATIN_OK = new Set<string>(LEGIT_LATIN_HE)
-    const NS = /^(proccfg|utilcfg|paramcfg|inputcfg|txtcfg|scriptcfg|cfgshared|cfgext|imgcfg|vidcfg|audiocfg)\./
+    const NS = /^(proccfg|utilcfg|paramcfg|inputcfg|txtcfg|scriptcfg|cfgshared|cfgext|imgcfg|vidcfg|audiocfg|node)\./
     const HEBREW = /[\u0590-\u05FF]/
     const bad = Object.entries(he)
       .filter(([k, v]) => NS.test(k) && !LATIN_OK.has(k) && !HEBREW.test(v as string))

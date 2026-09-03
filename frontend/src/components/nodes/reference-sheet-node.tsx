@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import {
@@ -31,6 +32,7 @@ import { referenceSheetCreditId } from "@nodaro/shared"
 import type { GeneratedResult, ReferenceSheetData } from "@/types/nodes"
 
 function ReferenceSheetNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as ReferenceSheetData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const selectNode = useWorkflowStore((s) => s.selectNode)
@@ -143,7 +145,7 @@ function ReferenceSheetNodeComponent({ id, data, selected }: NodeProps) {
               <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10 text-muted-foreground/40 h-[160px] px-3 text-center">
                 <LayoutGrid className="w-10 h-10" />
                 <span className="text-[10px] leading-tight">
-                  Connect a character, object, or location with a main image
+                  {t("node.connectACharacterObjectOr")}
                 </span>
               </div>
             )}
@@ -153,7 +155,7 @@ function ReferenceSheetNodeComponent({ id, data, selected }: NodeProps) {
               <div className="flex flex-col items-center justify-center gap-1 rounded-xl bg-red-500/5 text-red-500 h-[160px] p-2">
                 <div className="flex items-center gap-1.5">
                   <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span className="font-medium">Failed</span>
+                  <span className="font-medium">{t("node.failed")}</span>
                 </div>
                 {nodeData.errorMessage && (
                   <p className="text-[10px] text-center text-red-400 line-clamp-3" title={nodeData.errorMessage}>
@@ -174,7 +176,7 @@ function ReferenceSheetNodeComponent({ id, data, selected }: NodeProps) {
                       e.stopPropagation()
                       setShowThumbnails((v) => !v)
                     }}
-                    title="Show versions"
+                    title={t("node.showVersions")}
                   >
                     <LayoutGrid className="w-3 h-3" />
                     <span className="text-[11px] font-medium">{results.length}</span>
@@ -197,7 +199,7 @@ function ReferenceSheetNodeComponent({ id, data, selected }: NodeProps) {
                 ) : (
                   <CachedImage
                     src={activeImageUrl}
-                    alt="Reference sheet"
+                    alt={t("node.referenceSheet")}
                     className="w-full h-full object-cover rounded-xl"
                     thumbnail={!useFull}
                     thumbnailWidth={400}
@@ -221,7 +223,7 @@ function ReferenceSheetNodeComponent({ id, data, selected }: NodeProps) {
                 <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover/sheet:opacity-100 transition-opacity">
                   <button
                     type="button"
-                    aria-label="Expand preview"
+                    aria-label={t("node.expandPreview")}
                     className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                     onClick={(e) => {
                       e.stopPropagation()
@@ -237,13 +239,13 @@ function ReferenceSheetNodeComponent({ id, data, selected }: NodeProps) {
                 <div className="absolute bottom-2 right-2 flex gap-1 opacity-0 group-hover/sheet:opacity-100 transition-opacity">
                   <button
                     type="button"
-                    aria-label="Remove result"
+                    aria-label={t("node.removeResult")}
                     className="w-7 h-7 flex items-center justify-center bg-black/50 hover:bg-black/70 border border-white/10 text-white rounded-full shadow-sm"
                     onClick={(e) => {
                       e.stopPropagation()
                       setDeleteConfirm(activeIndex)
                     }}
-                    title="Delete this sheet"
+                    title={t("node.deleteThisSheet")}
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>

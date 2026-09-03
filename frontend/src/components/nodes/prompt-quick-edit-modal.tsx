@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { useEffect, useMemo, useRef, useState } from "react"
 import {
   AlignLeft,
@@ -148,6 +149,7 @@ function getNodeTypeIcon(nodeType: string | undefined): LucideIcon {
  * Edits apply LIVE to the node (no Save button) — same as the config panel.
  */
 export function PromptQuickEditModal() {
+  const t = useT()
   const nodeId = useWorkflowStore((s) => s.promptEditNodeId)
   const close = useWorkflowStore((s) => s.closePromptEditor)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
@@ -367,7 +369,7 @@ export function PromptQuickEditModal() {
                 htmlFor="prompt-edit-toggle"
                 className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground cursor-pointer select-none"
               >
-                Edit
+                {t("common.edit")}
               </label>
               <Switch
                 id="prompt-edit-toggle"
@@ -383,7 +385,7 @@ export function PromptQuickEditModal() {
           <div className="space-y-1.5">
             <div className="flex items-center justify-between gap-2 min-h-[28px]">
               <label className="text-xs font-medium text-muted-foreground">
-                {isEditing ? "Edit Prompt" : "Final Prompt"}
+                {isEditing ? t("node.editPromptTitle") : t("node.finalPromptTitle")}
               </label>
               <span className="inline-flex items-center gap-0.5">
                 {isEditing && (
@@ -413,7 +415,7 @@ export function PromptQuickEditModal() {
               <PromptEditor
                 value={promptValue}
                 onChange={(v) => writeField(promptField, v)}
-                placeholder="Describe what you want to generate…  Type @ for references, { for variables"
+                placeholder={t("node.phDescribeWhatToGenerate")}
                 rows={PROMPT_ROWS}
                 scrollable
                 referenceImages={referenceImages}
@@ -425,7 +427,7 @@ export function PromptQuickEditModal() {
               <PromptFieldFinalView
                 segments={finalPrompt.promptSegments}
                 plainText={finalPrompt.promptText}
-                placeholder="Final prompt preview — node has no prompt yet"
+                placeholder={t("imgcfg.promptPreviewEmpty")}
                 minHeightRem={finalMinHeightRem}
                 scrollable
               />
@@ -436,7 +438,7 @@ export function PromptQuickEditModal() {
           {isEditing && negativeField && (
             <div className="space-y-1.5">
               <div className="flex items-center justify-between gap-2 min-h-[28px]">
-                <label className="text-xs font-medium text-muted-foreground">Edit Negative Prompt</label>
+                <label className="text-xs font-medium text-muted-foreground">{t("node.editNegativePrompt")}</label>
                 <SnippetMenuButton
                   pool={negativeSnippets}
                   value={negativeValue}
@@ -448,7 +450,7 @@ export function PromptQuickEditModal() {
               <PromptEditor
                 value={negativeValue}
                 onChange={(v) => writeField(negativeField, v)}
-                placeholder="What to avoid (optional)…"
+                placeholder={t("node.phWhatToAvoidOptional")}
                 rows={NEG_ROWS}
                 scrollable
                 referenceImages={referenceImages}

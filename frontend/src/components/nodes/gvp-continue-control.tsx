@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { RotateCw, ChevronDown } from "lucide-react"
 import { useShallow } from "zustand/react/shallow"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -30,6 +31,7 @@ const continueTriggerClass =
  * single-segment run (no segment accounting), or while running.
  */
 export function GvpContinueControl({ nodeId }: { nodeId: string }) {
+  const t = useT()
   const { status, gvpStopped, delivered, segCount, sourceJobId } = useWorkflowStore(
     useShallow((s) => {
       const node = s.nodes.find((n) => n.id === nodeId)
@@ -79,24 +81,24 @@ export function GvpContinueControl({ nodeId }: { nodeId: string }) {
           type="button"
           className={continueTriggerClass}
           onClick={(e) => e.stopPropagation()}
-          title="Continue this render from a segment"
+          title={t("node.continueThisRenderFromA")}
         >
           <RotateCw />
-          Continue
+          {t("node.continue")}
           <ChevronDown />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-56 node-menu-surface" onClick={(e) => e.stopPropagation()}>
         <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">
-          Rendered {done} of {total} segments
+          {t("node.renderedSegments", { done, total })}
         </DropdownMenuLabel>
         <DropdownMenuItem onClick={() => start(resume)}>
-          Resume — from segment {resume}
+          {t("node.resumeFromSegment", { n: resume })}
         </DropdownMenuItem>
         {redoOptions.length > 0 && <DropdownMenuSeparator />}
         {redoOptions.map((s) => (
           <DropdownMenuItem key={s} onClick={() => start(s)}>
-            Redo from segment {s}
+            {t("node.redoFromSegmentN", { n: s })}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

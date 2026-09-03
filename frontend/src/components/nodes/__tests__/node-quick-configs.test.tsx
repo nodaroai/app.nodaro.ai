@@ -388,7 +388,7 @@ describe("coerceQuickConfigValue", () => {
 import { NODE_QUICK_CONFIGS } from "../node-quick-configs"
 
 describe("suno-generate quick configs", () => {
-  const controls = NODE_QUICK_CONFIGS["suno-generate"]
+  const controls = NODE_QUICK_CONFIGS()["suno-generate"]
   it("is Model, Instrumental, Vocal", () => {
     expect(controls.map((c) => c.field)).toEqual(["model", "instrumental", "vocalGender"])
   })
@@ -406,7 +406,7 @@ describe("suno-generate quick configs", () => {
     expect(optsFn({ instrumental: false }).map((o) => o.value)).toEqual(["auto", "male", "female"])
   })
   it("other suno-* nodes keep just the model control", () => {
-    expect(NODE_QUICK_CONFIGS["suno-cover"].map((c) => c.field)).toEqual(["model"])
+    expect(NODE_QUICK_CONFIGS()["suno-cover"].map((c) => c.field)).toEqual(["model"])
   })
 })
 
@@ -416,32 +416,32 @@ describe("suno-generate quick configs", () => {
 describe("LLM-backed quick configs — reasoningEffortControl", () => {
   it("generate-script/qa-check/image-to-text/image-critic/motion-graphics/3d-title register [llmModel, reasoningEffort]", () => {
     for (const type of ["generate-script", "qa-check", "image-to-text", "image-critic", "motion-graphics", "3d-title"]) {
-      expect(NODE_QUICK_CONFIGS[type].map((c) => c.field), type).toEqual(["llmModel", "reasoningEffort"])
+      expect(NODE_QUICK_CONFIGS()[type].map((c) => c.field), type).toEqual(["llmModel", "reasoningEffort"])
     }
   })
 
   it("describe-to-picker registers [llmModel, reasoningEffort] via the vision-model control", () => {
-    expect(NODE_QUICK_CONFIGS["describe-to-picker"].map((c) => c.field)).toEqual(["llmModel", "reasoningEffort"])
+    expect(NODE_QUICK_CONFIGS()["describe-to-picker"].map((c) => c.field)).toEqual(["llmModel", "reasoningEffort"])
   })
 
   it("forced-alignment has NO quick-config entry (fixed-price node — ForcedAlignmentData has no llmModel/reasoningEffort field)", () => {
-    expect(NODE_QUICK_CONFIGS["forced-alignment"]).toBeUndefined()
+    expect(NODE_QUICK_CONFIGS()["forced-alignment"]).toBeUndefined()
   })
 
   it("returns [] for a model with no declared reasoning levels (control self-hides)", () => {
-    const effortControl = NODE_QUICK_CONFIGS["generate-script"].find((c) => c.field === "reasoningEffort")!
+    const effortControl = NODE_QUICK_CONFIGS()["generate-script"].find((c) => c.field === "reasoningEffort")!
     const opts = typeof effortControl.options === "function" ? effortControl.options({ llmModel: "gpt-5.2" }) : effortControl.options
     expect(opts).toEqual([])
   })
 
   it("returns [] when no llmModel is set on the node yet", () => {
-    const effortControl = NODE_QUICK_CONFIGS["qa-check"].find((c) => c.field === "reasoningEffort")!
+    const effortControl = NODE_QUICK_CONFIGS()["qa-check"].find((c) => c.field === "reasoningEffort")!
     const opts = typeof effortControl.options === "function" ? effortControl.options({}) : effortControl.options
     expect(opts).toEqual([])
   })
 
   it("returns Auto + the model's declared reasoning levels with friendly labels", () => {
-    const effortControl = NODE_QUICK_CONFIGS["generate-script"].find((c) => c.field === "reasoningEffort")!
+    const effortControl = NODE_QUICK_CONFIGS()["generate-script"].find((c) => c.field === "reasoningEffort")!
     const opts = typeof effortControl.options === "function" ? effortControl.options({ llmModel: "gpt-5.6-terra" }) : effortControl.options
     expect(opts.map((o) => o.value)).toEqual(["auto", "none", "low", "medium", "high", "xhigh", "max"])
     // Auto is the sentinel (unset ⇒ vendor default); levels use the shared friendly labels

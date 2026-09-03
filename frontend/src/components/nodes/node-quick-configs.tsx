@@ -1,5 +1,6 @@
 "use client"
 
+import { tx } from "@/lib/i18n"
 import { useEffect, useState } from "react"
 import type { LucideIcon } from "lucide-react"
 import { Sparkles, Languages, Image as ImageIcon, LayoutGrid, Palette, Ratio, Maximize2, Clock, Wand2, Hash, Music2, Mic, Volume2, Gauge, Layers } from "lucide-react"
@@ -179,7 +180,7 @@ const sunoInstrumentalControl: QuickConfigControl = {
   icon: Music2,
   boolean: true,
   options: [
-    { value: "false", label: "With vocals" },
+    { value: "false", label: tx("node.withVocals") },
     { value: "true", label: "Instrumental — no vocals" },
   ],
 }
@@ -358,9 +359,9 @@ const cinematicDurationControl: QuickConfigControl = {
 const maskThresholdControl: QuickConfigControl = {
   field: "threshold", ariaLabel: "Threshold", icon: Sparkles, numeric: true,
   options: [
-    { value: "0.2", label: "Threshold: Low" },
-    { value: "0.3", label: "Threshold: Med" },
-    { value: "0.45", label: "Threshold: High" },
+    { value: "0.2", label: tx("node.thresholdLow") },
+    { value: "0.3", label: tx("node.thresholdMed") },
+    { value: "0.45", label: tx("node.thresholdHigh") },
   ],
 }
 
@@ -385,7 +386,9 @@ const ASSEMBLE_NARRATED_VIDEO_MAX_SLOWDOWN_OPTIONS: ReadonlyArray<QuickConfigOpt
  *  separate label map to keep in sync with SHEET_TYPES/SHEET_SKINS). */
 const sheetLabel = (v: string) => v.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
 
-export const NODE_QUICK_CONFIGS: Readonly<Record<string, ReadonlyArray<QuickConfigControl>>> = {
+/** A getter, not a module constant: option labels resolve through the live locale. */
+export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<QuickConfigControl>>> {
+  return {
   // ── Generate Image (bespoke toolbar — model / aspect / resolution) ──
   "generate-image": [
     {
@@ -581,7 +584,7 @@ export const NODE_QUICK_CONFIGS: Readonly<Record<string, ReadonlyArray<QuickConf
       ariaLabel: "Numbers",
       icon: Hash,
       options: [
-        { value: "none", label: "None", description: "No sequence numbers" },
+        { value: "none", label: "None", description: tx("node.noSequenceNumbers") },
         { value: "top-left", label: "Top-left", description: "1, 2, 3… at each image's top-left" },
         { value: "top-right", label: "Top-right", description: "1, 2, 3… at each image's top-right" },
       ],
@@ -615,8 +618,8 @@ export const NODE_QUICK_CONFIGS: Readonly<Record<string, ReadonlyArray<QuickConf
       options: [
         { value: "auto", label: "Auto", description: "AI masks the subject — relight it or swap the background. No mask needed." },
         { value: "fill", label: "Fill", description: "No masking — restyle the entire frame. No mask needed." },
-        { value: "select", label: "Select", description: "You supply a mask for ONE frame; AI propagates it across the clip." },
-        { value: "custom", label: "Custom", description: "You supply a full per-frame matte video for exact control." },
+        { value: "select", label: "Select", description: tx("node.youSupplyAMaskFor") },
+        { value: "custom", label: "Custom", description: tx("node.youSupplyAFullPer") },
       ],
     },
     {
@@ -726,7 +729,7 @@ export const NODE_QUICK_CONFIGS: Readonly<Record<string, ReadonlyArray<QuickConf
       icon: Layers,
       defaultValue: "choose",
       options: [
-        { value: "choose", label: "Choose", description: "Keep the strongest pass" },
+        { value: "choose", label: "Choose", description: tx("node.keepTheStrongestPass") },
         { value: "combine", label: "Combine", description: "Fold in every pass — most complete" },
       ],
     },
@@ -801,11 +804,12 @@ export const NODE_QUICK_CONFIGS: Readonly<Record<string, ReadonlyArray<QuickConf
     },
     cinematicDurationControl,
   ],
+  }
 }
 
 /** Quick-config controls for a node type (empty array when none registered). */
 export function getQuickConfigs(nodeType: string | undefined): ReadonlyArray<QuickConfigControl> {
-  return (nodeType && NODE_QUICK_CONFIGS[nodeType]) || []
+  return (nodeType && NODE_QUICK_CONFIGS()[nodeType]) || []
 }
 
 const ghostTriggerClass =

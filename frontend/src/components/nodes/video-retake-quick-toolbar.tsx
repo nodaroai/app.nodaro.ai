@@ -1,5 +1,6 @@
 "use client"
 
+import { tx, useT } from "@/lib/i18n"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useStore } from "@xyflow/react"
 import { Sparkles, Ratio, Settings2, Copy, RefreshCw } from "lucide-react"
@@ -52,11 +53,15 @@ const ASPECT_OPTIONS = [
   { value: "9:16", label: "9:16 (Portrait)" },
 ] as const
 
-const MODE_OPTIONS = [
-  { value: "replace_audio", label: "Replace audio" },
-  { value: "replace_video", label: "Replace video" },
-  { value: "replace_audio_and_video", label: "Replace both" },
-] as const
+// Function, not a const: a module-level table built with `tx()` at load time
+// would freeze on the boot locale (see EFFORT_LABELS in reasoning-effort-select).
+function MODE_OPTIONS(): ReadonlyArray<{ value: string; label: string }> {
+  return [
+    { value: "replace_audio", label: tx("node.replaceAudio") },
+    { value: "replace_video", label: tx("node.replaceVideo") },
+    { value: "replace_audio_and_video", label: tx("node.replaceBoth") },
+  ]
+}
 
 export function VideoRetakeQuickToolbar({
   nodeId,
@@ -65,6 +70,7 @@ export function VideoRetakeQuickToolbar({
   isRunning,
   onAnyOpenChange,
 }: VideoRetakeQuickToolbarProps) {
+  const t = useT()
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
 
@@ -122,11 +128,16 @@ export function VideoRetakeQuickToolbar({
   const modelLabel = modelEntry.label
   const modelShort = "LTX Pro"
   const aspectShort = currentAspect
+  // `t` is in the deps on purpose: it is a fresh identity per locale, so the
+  // pill re-derives its label on a language switch. Without it the memo would
+  // hold the boot locale's string forever (MODE_OPTIONS() reads the LIVE
+  // locale, but nothing would call it again).
   const modeShort = useMemo(() => {
-    const m = MODE_OPTIONS.find((o) => o.value === currentMode)?.label ?? currentMode
-    // Strip leading "Replace " to keep the pill compact ("audio" / "video" / "both").
+    const m = MODE_OPTIONS().find((o) => o.value === currentMode)?.label ?? currentMode
+    // Strip a leading "Replace " to keep the pill compact ("audio" / "video" /
+    // "both"). English-only by design; other locales show the whole label.
     return m.replace(/^Replace\s+/i, "").toLowerCase()
-  }, [currentMode])
+  }, [currentMode, t])
 
   const handleModelChange = (value: string) => {
     updateNodeData(nodeId, { provider: value })
@@ -176,7 +187,7 @@ export function VideoRetakeQuickToolbar({
             <button
               type="button"
               className="flex items-center gap-1 h-6 px-2 text-[10px] rounded-md whitespace-nowrap text-neutral-900/85 hover:bg-black/10 dark:text-white/85 dark:hover:bg-white/10"
-              title="Settings"
+              title={t("nav.settings")}
             >
               <Settings2 className="w-3 h-3 opacity-70" />
               <span className="font-medium">{summary}</span>
@@ -192,7 +203,7 @@ export function VideoRetakeQuickToolbar({
             className="w-[240px] p-2 space-y-2 node-menu-surface"
             onClick={(e) => e.stopPropagation()}
           >
-            <ToolbarSetting label="Model" icon={<Sparkles className="w-3 h-3" />}>
+            <ToolbarSetting label={t("node.model")} icon={<Sparkles className="w-3 h-3" />}>
               <Select disabled={isRunning} value={currentProvider} onValueChange={handleModelChange} onOpenChange={handleOpenChange}>
                 <SelectTrigger className={ghostPopoverTriggerClass}>
                   <SelectValue />
@@ -206,7 +217,7 @@ export function VideoRetakeQuickToolbar({
                 </SelectContent>
               </Select>
             </ToolbarSetting>
-            <ToolbarSetting label="Aspect" icon={<Ratio className="w-3 h-3" />}>
+            <ToolbarSetting label={t("cfgext.refSheetAspectLabel")} icon={<Ratio className="w-3 h-3" />}>
               <Select disabled={isRunning} value={currentAspect} onValueChange={handleAspectChange} onOpenChange={handleOpenChange}>
                 <SelectTrigger className={ghostPopoverTriggerClass}>
                   <SelectValue />
@@ -218,13 +229,13 @@ export function VideoRetakeQuickToolbar({
                 </SelectContent>
               </Select>
             </ToolbarSetting>
-            <ToolbarSetting label="Mode" icon={<RefreshCw className="w-3 h-3" />}>
+            <ToolbarSetting label={t("node.mode")} icon={<RefreshCw className="w-3 h-3" />}>
               <Select disabled={isRunning} value={currentMode} onValueChange={handleModeChange} onOpenChange={handleOpenChange}>
                 <SelectTrigger className={ghostPopoverTriggerClass}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="node-menu-surface">
-                  {MODE_OPTIONS.map((opt) => (
+                  {MODE_OPTIONS().map((opt) => (
                     <SelectItem key={opt.value} value={opt.value} className="text-xs">
                       {opt.label}
                     </SelectItem>
@@ -232,7 +243,7 @@ export function VideoRetakeQuickToolbar({
                 </SelectContent>
               </Select>
             </ToolbarSetting>
-            <ToolbarSetting label="Versions" icon={<Copy className="w-3 h-3" />}>
+            <ToolbarSetting label={t("cfgext.sfxVersionsLabel")} icon={<Copy className="w-3 h-3" />}>
               <Select disabled={isRunning} value={String(repeatCount)} onValueChange={handleRepeatChange} onOpenChange={handleOpenChange}>
                 <SelectTrigger className={ghostPopoverTriggerClass}>
                   <SelectValue />
@@ -302,7 +313,7 @@ export function VideoRetakeQuickToolbar({
           <SelectValue>{modeShort}</SelectValue>
         </SelectTrigger>
         <SelectContent className="node-menu-surface">
-          {MODE_OPTIONS.map((opt) => (
+          {MODE_OPTIONS().map((opt) => (
             <SelectItem key={opt.value} value={opt.value} className="text-xs">
               {opt.label}
             </SelectItem>
@@ -312,7 +323,7 @@ export function VideoRetakeQuickToolbar({
 
       {/* Versions */}
       <Select disabled={isRunning} value={String(repeatCount)} onValueChange={handleRepeatChange} onOpenChange={handleOpenChange}>
-        <SelectTrigger className={ghostTriggerClass} title="Versions per run">
+        <SelectTrigger className={ghostTriggerClass} title={t("node.versionsPerRun")}>
           <Copy className="opacity-70" />
           <SelectValue>× {repeatCount}</SelectValue>
         </SelectTrigger>

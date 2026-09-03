@@ -27,7 +27,6 @@ const SRC = path.resolve(__dirname, "../../../..")
 const EXTRA_COPY_FILES = [
   "components/editor/save-to-library-button.tsx",
   "components/editor/asset-selection-modal.tsx",
-  "components/nodes/llm-chat-quick-toolbar.tsx",
 ]
 
 const setLocale = (l: "he" | "en") => act(() => useLocaleStore.getState().setLocale(l))
@@ -114,11 +113,13 @@ describe("config-panel copy in Hebrew", () => {
  * (node/handle names, model descriptions, option labels) are not leaks.
  */
 describe("config panels render no raw English", () => {
+  // The node CARDS (components/nodes/) share the panels' copy and render on
+  // the same canvas — covered by the same scan since the node-cards round.
   const files = [
-    ...listSourceFiles([path.join(SRC, "components/editor/config-panels")]),
+    ...listSourceFiles([path.join(SRC, "components/editor/config-panels"), path.join(SRC, "components/nodes")]),
     ...EXTRA_COPY_FILES.map((rel) => path.join(SRC, rel)),
   ]
-  expect(files.length).toBeGreaterThan(80)
+  expect(files.length).toBeGreaterThan(300)
   for (const f of files) {
     const rel = path.relative(SRC, f)
     it(`${rel} has no raw English text, string props or data labels`, () => {
@@ -185,6 +186,20 @@ describe("the raw-English scan (self-check)", () => {
     expect(BRAND_ALLOW.test("Nano Banana Pro")).toBe(true)
     expect(BRAND_ALLOW.test("Banana bread is not a brand")).toBe(false)
     expect(ALLOW_SINGLE.has("Pro")).toBe(true)
+  })
+  it("catches a mode id rendered as the segment's visible text", () => {
+    const leak = `{(["edit", "final", "both"] as const).map((m) => (\n  <button key={m} title={t("x")}>\n    {m}\n  </button>\n))}`
+    expect(scanRawEnglish(leak).map((h) => `${h.kind}:${h.snippet}`)).toEqual(["id-as-text:m"])
+    const keyed = `{(["edit", "final"] as const).map((m) => (<button key={m}>{m === "edit" ? t("a") : t("b")}</button>))}`
+    expect(scanRawEnglish(keyed)).toEqual([])
+  })
+  it("spares a handle pip's label= only when the handle-label table knows it", () => {
+    const known = `<HandleWithPopover nodeId={id} label="Start Frame" color={c} />`
+    const unknown = `<HandleWithPopover nodeId={id} label="Some New Pip" color={c} />`
+    const plain = `<Button label="Start Frame" />`
+    expect(scanRawEnglish(known, { isLocalizedData: isLocalizedTableKey })).toEqual([])
+    expect(scanRawEnglish(unknown, { isLocalizedData: isLocalizedTableKey }).map((h) => h.snippet)).toEqual(["Some New Pip"])
+    expect(scanRawEnglish(plain, { isLocalizedData: isLocalizedTableKey }).map((h) => h.snippet)).toEqual(["Start Frame"])
   })
   it("spares a data label that a runtime localizer translates", () => {
     const src = `const OPTS = [{ label: "From image" }, { label: "Photorealistic, high detail" }]`

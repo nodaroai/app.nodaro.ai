@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { AudioLines, Loader2, AlertCircle, LayoutGrid, Volume2, Film } from "lucide-react"
@@ -21,6 +22,7 @@ import type { ExtractAudioData } from "@/types/nodes"
 // demuxed audio track out. Modeled on trim-audio-node (audio output), but its
 // input is a VIDEO, not audio.
 function ExtractAudioNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as ExtractAudioData
   const credits = useModelCredits("ffmpeg", 1)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
@@ -121,7 +123,7 @@ function ExtractAudioNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex flex-col items-center justify-center gap-1 h-12 rounded-md bg-red-500/5 text-red-500 p-2">
             <div className="flex items-center gap-1.5">
               <AlertCircle className="w-4 h-4 shrink-0" />
-              <span className="font-medium">Failed</span>
+              <span className="font-medium">{t("node.failed")}</span>
             </div>
             {nodeData.errorMessage && (
               <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
@@ -137,7 +139,7 @@ function ExtractAudioNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
 
-        <span className="text-xs text-muted-foreground">Extract Audio</span>
+        <span className="text-xs text-muted-foreground">{t("inputcfg.extractAudio")}</span>
       </div>
     </BaseNode>
     <HandleWithPopover nodeId={id} nodeType="extract-audio" handleId="in"    type="target" position={Position.Left}  label="Video" color={FFMPEG_COLORS.video} icon={<Film />}       side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_VIDEO} />

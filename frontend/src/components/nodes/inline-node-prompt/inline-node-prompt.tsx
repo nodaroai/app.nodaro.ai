@@ -1,4 +1,5 @@
 // frontend/src/components/nodes/inline-node-prompt/inline-node-prompt.tsx
+import { useT } from "@/lib/i18n"
 import { useEffect, useRef, useState } from "react"
 import { PromptEditor } from "@/lib/picker-ui"
 import { PromptHelperButton } from "@/components/editor/config-panels/prompt-helper-button"
@@ -28,6 +29,7 @@ export interface InlineNodePromptProps {
 const DRAG_THRESHOLD_PX = 2
 
 export function InlineNodePrompt({ nodeId, onFocusChange, affordancesVisible = false }: InlineNodePromptProps) {
+  const t = useT()
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const openPromptEditor = useWorkflowStore((s) => s.openPromptEditor)
   // Self-sufficient: derive type/data + the AI-helper context (provider,
@@ -161,20 +163,21 @@ export function InlineNodePrompt({ nodeId, onFocusChange, affordancesVisible = f
           floating buttons sit clear of the prompt text below. */}
       <div className="nodrag relative flex items-center mb-1 px-0.5 min-h-[1.5rem]">
         <div className="inline-flex items-center overflow-hidden rounded-md border border-border/60 text-[10px] leading-none">
+          {/* The segment TEXT is copy, not the mode id — the id only keys state. */}
           {(["edit", "final", "both"] as const).map((m) => (
             <button
               key={m}
               type="button"
               aria-pressed={view === m}
-              title={m === "edit" ? "Edit prompt" : m === "final" ? "Show the assembled final prompt" : "Show edit + final"}
+              title={m === "edit" ? t("node.editPromptMode") : m === "final" ? t("node.showFinalPromptMode") : t("node.showEditAndFinalMode")}
               onClick={() => updateNodeData(nodeId, { inlinePromptView: m })}
-              className={`px-1.5 py-0.5 capitalize transition-colors ${
+              className={`px-1.5 py-0.5 transition-colors ${
                 view === m
                   ? "bg-muted text-foreground font-medium"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              {m}
+              {m === "edit" ? t("node.promptViewEdit") : m === "final" ? t("node.promptViewFinal") : t("node.promptViewBoth")}
             </button>
           ))}
         </div>

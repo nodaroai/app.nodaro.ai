@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { incomingSourcesFingerprint } from "@/lib/node-fingerprint"
@@ -108,6 +109,7 @@ interface ConnectedNodeInfo {
 }
 
 function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as LipSyncData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
@@ -440,7 +442,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
             type="button"
             className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white text-[11px] rounded-md z-10 opacity-0 group-hover/video:opacity-100 transition-opacity"
             onClick={(e) => { e.stopPropagation(); setShowThumbnails(v => !v) }}
-            title="Show versions"
+            title={t("node.showVersions")}
           >
             <LayoutGrid className="w-3 h-3" />
             <span className="text-[11px] font-medium">{results.length}</span>
@@ -450,9 +452,9 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
         {/* Delete - top right */}
         {results.length > 0 && (
           <div className="absolute top-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
-            <button type="button" aria-label="Remove result"
+            <button type="button" aria-label={t("node.removeResult")}
               className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-              onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }} title="Delete this result">
+              onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }} title={t("node.deleteThisResult")}>
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -460,32 +462,32 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
 
         {/* Bottom left: fullscreen + download + copy URL */}
         <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover/video:opacity-100 transition-opacity">
-          <button type="button" aria-label="Expand preview"
+          <button type="button" aria-label={t("node.expandPreview")}
             className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-            onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }} title="Fullscreen">
+            onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }} title={t("cfgext.compPositionFullscreen")}>
             <Expand className="w-3.5 h-3.5" />
           </button>
-          <button type="button" aria-label="Download"
+          <button type="button" aria-label={t("cfgshared.download")}
             className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-            onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || 'video'}.mp4`; a.click() }} title="Download">
+            onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || 'video'}.mp4`; a.click() }} title={t("cfgshared.download")}>
             <Download className="w-3.5 h-3.5" />
           </button>
-          <button type="button" aria-label="Copy URL"
+          <button type="button" aria-label={t("cfgshared.copyUrl")}
             className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-            onClick={(e) => { e.stopPropagation(); copyToClipboard(activeUrl!, "URL copied") }} title="Copy URL">
+            onClick={(e) => { e.stopPropagation(); copyToClipboard(activeUrl!, t("apps.urlCopied")) }} title={t("cfgshared.copyUrl")}>
             <Link className="w-3.5 h-3.5" />
           </button>
-          <button type="button" aria-label="Edit in NodarCut"
+          <button type="button" aria-label={t("node.editInNodarcut")}
             className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-            onClick={(e) => { e.stopPropagation(); openFreeCut(id, activeUrl!, activeResult?.freecutProjectUrl) }} title="Edit in NodarCut">
+            onClick={(e) => { e.stopPropagation(); openFreeCut(id, activeUrl!, activeResult?.freecutProjectUrl) }} title={t("node.editInNodarcut")}>
             <Scissors className="w-3.5 h-3.5" />
           </button>
         </div>
 
         {/* Bottom right: settings */}
         <div className="absolute bottom-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
-          <button type="button" aria-label="Settings" className={`w-7 h-7 flex items-center justify-center bg-black/50 hover:bg-black/70 border border-white/10 text-white rounded-full shadow-sm${isSettingsOpen ? " ring-1 ring-white/30" : ""}`}
-            onClick={(e) => { e.stopPropagation(); selectNode(isSettingsOpen ? null : id) }} title="Settings">
+          <button type="button" aria-label={t("nav.settings")} className={`w-7 h-7 flex items-center justify-center bg-black/50 hover:bg-black/70 border border-white/10 text-white rounded-full shadow-sm${isSettingsOpen ? " ring-1 ring-white/30" : ""}`}
+            onClick={(e) => { e.stopPropagation(); selectNode(isSettingsOpen ? null : id) }} title={t("nav.settings")}>
             <Settings className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -498,14 +500,14 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
             {/* Portrait Image - shown for image-input and flexible providers */}
             {(needsImageInput || needsBothInputs) && (
               <div className="flex flex-col gap-1">
-                <span className="text-[10px] text-muted-foreground/60 text-center">Portrait Image</span>
+                <span className="text-[10px] text-muted-foreground/60 text-center">{t("node.portraitImage")}</span>
                 {hasImageConnection ? (
                   <Select
                     value={nodeData.selectedImageNodeId ?? ""}
                     onValueChange={(v) => updateNodeData(id, { selectedImageNodeId: v || undefined })}
                   >
-                    <SelectTrigger className="bg-black/30 border-white/10 text-white/80 h-7 text-[11px]" aria-label="Select portrait image">
-                      <SelectValue placeholder="Select image...">
+                    <SelectTrigger className="bg-black/30 border-white/10 text-white/80 h-7 text-[11px]" aria-label={t("node.selectPortraitImage")}>
+                      <SelectValue placeholder={t("node.selectImage")}>
                         {selectedImage && (
                           <div className="flex items-center gap-2">
                             {selectedImage.thumbnailUrl ? (
@@ -535,7 +537,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
                   </Select>
                 ) : (
                   <div className="h-7 px-3 flex items-center text-[11px] text-white/30 bg-black/20 rounded-md border border-dashed border-white/10">
-                    Connect portrait image
+                    {t("node.connectPortraitImage")}
                   </div>
                 )}
               </div>
@@ -544,14 +546,14 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
             {/* Video Input - shown for video-input and flexible providers */}
             {(needsVideoInput || needsBothInputs) && (
               <div className="flex flex-col gap-1">
-                <span className="text-[10px] text-muted-foreground/60 text-center">Source Video</span>
+                <span className="text-[10px] text-muted-foreground/60 text-center">{t("node.sourceVideo")}</span>
                 {hasVideoConnection ? (
                   <Select
                     value={nodeData.selectedVideoNodeId ?? ""}
                     onValueChange={(v) => updateNodeData(id, { selectedVideoNodeId: v || undefined })}
                   >
-                    <SelectTrigger className="bg-black/30 border-white/10 text-white/80 h-7 text-[11px]" aria-label="Select source video">
-                      <SelectValue placeholder="Select video...">
+                    <SelectTrigger className="bg-black/30 border-white/10 text-white/80 h-7 text-[11px]" aria-label={t("node.selectSourceVideo")}>
+                      <SelectValue placeholder={t("node.selectVideo")}>
                         {selectedVideo && (
                           <div className="flex items-center gap-2">
                             <Clapperboard className="w-4 h-4 text-[#ff0073]" />
@@ -573,7 +575,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
                   </Select>
                 ) : (
                   <div className="h-7 px-3 flex items-center text-[11px] text-white/30 bg-black/20 rounded-md border border-dashed border-white/10">
-                    Connect source video
+                    {t("node.connectSourceVideo")}
                   </div>
                 )}
               </div>
@@ -581,14 +583,14 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
 
             {/* Audio Track - Required for all providers */}
             <div className="flex flex-col gap-1">
-              <span className="text-[10px] text-muted-foreground/60 text-center">Audio Track</span>
+              <span className="text-[10px] text-muted-foreground/60 text-center">{t("node.audioTrack")}</span>
               {hasAudioConnection ? (
                 <Select
                   value={nodeData.selectedAudioNodeId ?? ""}
                   onValueChange={(v) => updateNodeData(id, { selectedAudioNodeId: v || undefined })}
                 >
-                  <SelectTrigger className="bg-black/30 border-white/10 text-white/80 h-7 text-[11px]" aria-label="Select audio track">
-                    <SelectValue placeholder="Select audio...">
+                  <SelectTrigger className="bg-black/30 border-white/10 text-white/80 h-7 text-[11px]" aria-label={t("node.selectAudioTrack")}>
+                    <SelectValue placeholder={t("node.selectAudio")}>
                       {selectedAudio && (
                         <div className="flex items-center gap-2">
                           <Volume2 className="w-4 h-4 text-[#ff0073]" />
@@ -610,7 +612,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
                 </Select>
               ) : (
                 <div className="h-7 px-3 flex items-center text-[11px] text-white/30 bg-black/20 rounded-md border border-dashed border-white/10">
-                  Connect audio track
+                  {t("node.connectAudioTrack")}
                 </div>
               )}
             </div>

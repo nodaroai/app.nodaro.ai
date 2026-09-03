@@ -51,7 +51,7 @@ const PERSON_EXPECTED: ReadonlyArray<Expected> = [
   { id: "texture-dewy", promptHint: "with dewy, luminous skin", term: "dewy skin" },
   { id: "texture-glistening", promptHint: "with a light glistening sheen on the skin", term: "glistening sheen" },
   { id: "texture-baby-soft", promptHint: "with soft, fine-pored skin", term: "soft fine-pored skin" },
-  { id: "texture-shower-fresh-wet", promptHint: "fresh, water-dappled skin as if just out of the shower", term: "water-dappled skin" },
+  { id: "texture-shower-fresh-wet", promptHint: "with fresh, water-dappled skin as if just out of the shower", term: "water-dappled skin" },
   { id: "feature-bare-shoulders", promptHint: "with the shoulders uncovered", term: "shoulders uncovered" },
   { id: "feature-midriff-visible", promptHint: "with a cropped hemline", term: "cropped hemline" },
 ]

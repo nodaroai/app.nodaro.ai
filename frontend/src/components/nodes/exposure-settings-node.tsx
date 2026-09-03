@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { Aperture } from "lucide-react"
@@ -25,6 +26,7 @@ function collectEnabled(data: ExposureSettingsData): EnabledEntry[] {
 }
 
 function ExposureSettingsNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as ExposureSettingsData
   const enabled = collectEnabled(nodeData)
   const maxItemsPerRow = Math.max(1, Math.min(3, nodeData.maxItemsPerRow ?? 2))
@@ -69,7 +71,7 @@ function ExposureSettingsNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       ) : (
         <p className="text-muted-foreground text-sm italic">
-          Pick aperture, shutter, or ISO
+          {t("node.pickApertureShutterOrIso")}
         </p>
       )}
     </ParameterNodeShell>

@@ -1,5 +1,6 @@
 "use client"
 
+import { useT, tx } from "@/lib/i18n"
 import { memo, useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { incomingSourcesFingerprint } from "@/lib/node-fingerprint"
@@ -69,6 +70,7 @@ interface ConnectedNodeInfo {
 }
 
 function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as SpeechToVideoData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
@@ -213,7 +215,7 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
                 {r.thumbnailUrl ? (
                   <CachedImage
                     src={r.thumbnailUrl}
-                    alt={`Result ${i + 1}`}
+                    alt={t("node.resultN", { n: i + 1 })}
                     className={`w-16 h-16 object-cover rounded-lg cursor-pointer transition-all ${
                       i === activeIndex ? "ring-2 ring-[#ff0073]" : "opacity-60 hover:opacity-100"
                     }`}
@@ -267,7 +269,7 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
         {results.length > 1 && (
           <button type="button"
             className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white text-[11px] rounded-md z-10 opacity-0 group-hover/video:opacity-100 transition-opacity"
-            onClick={(e) => { e.stopPropagation(); setShowThumbnails(v => !v) }} title="Show versions">
+            onClick={(e) => { e.stopPropagation(); setShowThumbnails(v => !v) }} title={t("node.showVersions")}>
             <LayoutGrid className="w-3 h-3" />
             <span className="text-[11px] font-medium">{results.length}</span>
           </button>
@@ -276,9 +278,9 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
         {/* Delete - top right */}
         {results.length > 0 && (
           <div className="absolute top-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
-            <button type="button" aria-label="Remove result"
+            <button type="button" aria-label={t("node.removeResult")}
               className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-              onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }} title="Delete this result">
+              onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }} title={t("node.deleteThisResult")}>
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -286,32 +288,32 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
 
         {/* Bottom left: fullscreen + download + copy URL */}
         <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover/video:opacity-100 transition-opacity">
-          <button type="button" aria-label="Expand preview"
+          <button type="button" aria-label={t("node.expandPreview")}
             className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-            onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }} title="Fullscreen">
+            onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }} title={t("node.fullscreen")}>
             <Expand className="w-3.5 h-3.5" />
           </button>
-          <button type="button" aria-label="Download"
+          <button type="button" aria-label={t("cfgshared.download")}
             className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-            onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || 'video'}.mp4`; a.click() }} title="Download">
+            onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || 'video'}.mp4`; a.click() }} title={t("cfgshared.download")}>
             <Download className="w-3.5 h-3.5" />
           </button>
-          <button type="button" aria-label="Copy URL"
+          <button type="button" aria-label={t("cfgshared.copyUrl")}
             className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-            onClick={(e) => { e.stopPropagation(); copyToClipboard(activeUrl!, "URL copied") }} title="Copy URL">
+            onClick={(e) => { e.stopPropagation(); copyToClipboard(activeUrl!, tx("apps.urlCopied")) }} title={t("cfgshared.copyUrl")}>
             <Link className="w-3.5 h-3.5" />
           </button>
-          <button type="button" aria-label="Edit in NodarCut"
+          <button type="button" aria-label={t("node.editInNodarcut")}
             className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-            onClick={(e) => { e.stopPropagation(); openFreeCut(id, activeUrl!, activeResult?.freecutProjectUrl) }} title="Edit in NodarCut">
+            onClick={(e) => { e.stopPropagation(); openFreeCut(id, activeUrl!, activeResult?.freecutProjectUrl) }} title={t("node.editInNodarcut")}>
             <Scissors className="w-3.5 h-3.5" />
           </button>
         </div>
 
         {/* Bottom right: settings */}
         <div className="absolute bottom-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
-          <button type="button" aria-label="Settings" className={`w-7 h-7 flex items-center justify-center bg-black/50 hover:bg-black/70 border border-white/10 text-white rounded-full shadow-sm${isSettingsOpen ? " ring-1 ring-white/30" : ""}`}
-            onClick={(e) => { e.stopPropagation(); selectNode(isSettingsOpen ? null : id) }} title="Settings">
+          <button type="button" aria-label={t("node.settings")} className={`w-7 h-7 flex items-center justify-center bg-black/50 hover:bg-black/70 border border-white/10 text-white rounded-full shadow-sm${isSettingsOpen ? " ring-1 ring-white/30" : ""}`}
+            onClick={(e) => { e.stopPropagation(); selectNode(isSettingsOpen ? null : id) }} title={t("node.settings")}>
             <Settings className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -322,7 +324,7 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
         {!hasConnections && status !== "running" && (
           <div className="flex flex-col items-center justify-center gap-1 py-4 text-muted-foreground/60">
             <MessageSquare className="w-8 h-8" />
-            <span className="text-[10px] text-center">Connect image + audio + prompt</span>
+            <span className="text-[10px] text-center">{t("node.connectImageAudioPrompt")}</span>
           </div>
         )}
 
@@ -330,15 +332,15 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex flex-col gap-1 px-3 pt-2">
             <div className="flex items-center gap-1.5">
               <ImageIcon className={`w-3 h-3 ${hasImageConnection ? "text-green-400" : "text-white/30"}`} />
-              <span className="text-[10px] text-muted-foreground/60">{hasImageConnection ? "Image connected" : "Need image"}</span>
+              <span className="text-[10px] text-muted-foreground/60">{hasImageConnection ? t("node.imageConnected") : t("node.needImage")}</span>
             </div>
             <div className="flex items-center gap-1.5">
               <Volume2 className={`w-3 h-3 ${hasAudioConnection ? "text-green-400" : "text-white/30"}`} />
-              <span className="text-[10px] text-muted-foreground/60">{hasAudioConnection ? "Audio connected" : "Need audio"}</span>
+              <span className="text-[10px] text-muted-foreground/60">{hasAudioConnection ? t("node.audioConnected") : t("node.needAudio")}</span>
             </div>
             <div className="flex items-center gap-1.5">
               <Type className={`w-3 h-3 ${textNodes.length > 0 ? "text-green-400" : "text-white/30"}`} />
-              <span className="text-[10px] text-muted-foreground/60">{textNodes.length > 0 ? "Prompt connected" : "Using default prompt"}</span>
+              <span className="text-[10px] text-muted-foreground/60">{textNodes.length > 0 ? t("node.promptConnected") : t("node.usingDefaultPrompt")}</span>
             </div>
           </div>
         )}

@@ -1,3 +1,4 @@
+import { useT } from "@/lib/i18n"
 import type { SceneViewProps } from "./view-mode-registry"
 import { registerSceneView } from "./view-mode-registry"
 
@@ -21,6 +22,7 @@ import { registerSceneView } from "./view-mode-registry"
  * the scene's opening visual.
  */
 function VideoView({ data }: SceneViewProps) {
+  const t = useT()
   const compositeUrl =
     data.composite_video_url ?? data.composite_video?.url ?? null
   const clips = data.generated_clips ?? []
@@ -43,7 +45,7 @@ function VideoView({ data }: SceneViewProps) {
         />
       ) : (
         <div className="flex flex-col items-center justify-center aspect-video rounded-md border-2 border-dashed border-zinc-200 dark:border-[#2D2D2D] text-[10px] text-zinc-400 dark:text-zinc-500 gap-0.5">
-          <span>Stage 7 will populate this view.</span>
+          <span>{t("node.stage7WillPopulateThis")}</span>
           <span className="text-[9px]">
             {clips.length} clip{clips.length === 1 ? "" : "s"} rendered
           </span>

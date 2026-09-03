@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState, useMemo, useEffect } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Clapperboard, Loader2, AlertCircle, AlertTriangle, Type, Image as ImageIcon, Images, Film, Minus, Volume2, Music, Users, Aperture, Sparkles, Copy, ListChecks } from "lucide-react"
@@ -62,6 +63,7 @@ const HANDLE_TOP = {
 } as const
 
 function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as GenerateVideoProNodeData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
@@ -271,7 +273,7 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
               <div className="flex flex-col items-center justify-center gap-1 rounded-xl p-2 h-[180px] bg-red-500/5 text-red-500">
                 <div className="flex items-center gap-1.5">
                   <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span className="font-medium">Failed</span>
+                  <span className="font-medium">{t("node.failed")}</span>
                 </div>
                 {nodeData.errorMessage ? (
                   <p
@@ -311,7 +313,7 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
                 </div>
                 <button
                   type="button"
-                  aria-label="Copy plan JSON"
+                  aria-label={t("node.copyPlanJson")}
                   className="absolute top-0.5 right-0.5 w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
                   onClick={(e) => {
                     e.stopPropagation()

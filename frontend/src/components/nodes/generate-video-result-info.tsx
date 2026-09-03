@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { Volume2, VolumeX } from "lucide-react"
 import { toast } from "sonner"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -55,6 +56,7 @@ export function GenerateVideoResultInfo({
   result,
   data,
 }: GenerateVideoResultInfoProps) {
+  const t = useT()
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const jobId = result?.jobId && result.jobId.length > 0 ? result.jobId : undefined
   const { data: settings, isLoading } = useResultGenerationSettings(jobId)
@@ -88,9 +90,9 @@ export function GenerateVideoResultInfo({
   const audioIcon =
     typeof recordedAudio === "boolean" ? (
       recordedAudio ? (
-        <Volume2 className="w-3 h-3 shrink-0 opacity-80" aria-label="Audio on" />
+        <Volume2 className="w-3 h-3 shrink-0 opacity-80" aria-label={t("node.audioOn")} />
       ) : (
-        <VolumeX className="w-3 h-3 shrink-0 opacity-60" aria-label="Audio off" />
+        <VolumeX className="w-3 h-3 shrink-0 opacity-60" aria-label={t("node.audioOff")} />
       )
     ) : undefined
 

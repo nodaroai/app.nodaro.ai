@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useEffect, useMemo } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { LogOut } from "lucide-react"
@@ -38,6 +39,7 @@ function buildHandles(ports: ReadonlyArray<SubWorkflowPort>) {
 }
 
 function SubWorkflowOutputNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as SubWorkflowOutputData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const updateNodeInternals = useUpdateNodeInternals()
@@ -74,7 +76,7 @@ function SubWorkflowOutputNodeComponent({ id, data, selected }: NodeProps) {
       >
         <div style={{ minHeight: `${Math.max(40, ports.length * 28 + 8)}px` }}>
           {ports.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Click to add ports...</p>
+            <p className="text-sm text-muted-foreground">{t("node.clickToAddPorts")}</p>
           ) : (
             <div className="flex flex-col gap-1">
               {ports.map((port) => (

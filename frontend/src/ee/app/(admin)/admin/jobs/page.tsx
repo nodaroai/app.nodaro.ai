@@ -9,6 +9,7 @@ import { UserFilter, type UserFilterValue } from "@/components/user-filter"
 import { JobAssetView } from "@/components/admin/job-asset-view"
 import { JobSourceBadge } from "@/components/admin/job-source-badge"
 import { useAdminJobs, useAllAdminUsersLite, type AdminJob } from "@/ee/hooks/queries/use-admin-queries"
+import { JobsGallery } from "./jobs-gallery"
 
 const STATUS_OPTIONS = ["all", "pending", "queued", "processing", "completed", "failed", "cancelled"] as const
 
@@ -76,7 +77,19 @@ function CopyButton({ text }: { text: string }) {
   )
 }
 
-function JobDetailDialog({ job, open, onOpenChange }: { job: AdminJob; open: boolean; onOpenChange: (v: boolean) => void }) {
+function JobDetailDialog({
+  job,
+  open,
+  onOpenChange,
+  tab,
+  onTabChange,
+}: {
+  job: AdminJob
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  tab: string
+  onTabChange: (v: string) => void
+}) {
   const hasError = !!job.error_message
   const hasReconcileData =
     job.provider_kind != null ||
@@ -197,7 +210,7 @@ function JobDetailDialog({ job, open, onOpenChange }: { job: AdminJob; open: boo
           </div>
         )}
 
-        <Tabs defaultValue="input">
+        <Tabs value={tab} onValueChange={onTabChange}>
           <TabsList>
             <TabsTrigger value="input">Input</TabsTrigger>
             <TabsTrigger value="output">Output</TabsTrigger>
@@ -239,6 +252,10 @@ export default function AdminJobsPage() {
     userFilter.kind === "exclude_admins" ? adminIds : undefined
 
   const [selectedJob, setSelectedJob] = useState<AdminJob | null>(null)
+  // Table | Gallery view, and the detail dialog's active tab (controlled so a
+  // gallery tile can open straight to Output; the table opens Input as before).
+  const [view, setView] = useState<"table" | "gallery">("table")
+  const [detailTab, setDetailTab] = useState<string>("input")
   const filter = statusFilter === "all" ? undefined : statusFilter
   const { data: jobs = [], isLoading: loading } = useAdminJobs(
     page,
@@ -248,18 +265,28 @@ export default function AdminJobsPage() {
     excludeUserIds,
   )
 
-  if (loading && jobs.length === 0) {
-    return (
-      <div className="flex justify-center py-16">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    )
-  }
-
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-6 gap-4">
-        <h1 className="text-xl font-bold">Jobs</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-bold">Jobs</h1>
+          <div className="flex gap-1 rounded-lg border bg-background p-1">
+            <button
+              type="button"
+              onClick={() => setView("table")}
+              className={`rounded-md px-3 py-1 text-sm transition-colors ${view === "table" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              Table
+            </button>
+            <button
+              type="button"
+              onClick={() => setView("gallery")}
+              className={`rounded-md px-3 py-1 text-sm transition-colors ${view === "gallery" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              Gallery
+            </button>
+          </div>
+        </div>
         <div className="flex flex-wrap items-center gap-2 justify-end">
           {users.length > 0 && (
             <UserFilter
@@ -286,6 +313,13 @@ export default function AdminJobsPage() {
         </div>
       </div>
 
+      {view === "table" ? (
+        loading && jobs.length === 0 ? (
+        <div className="flex justify-center py-16">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : (
+      <>
       <div className="border rounded-lg overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-muted/50">
@@ -386,9 +420,33 @@ export default function AdminJobsPage() {
           Next
         </Button>
       </div>
+      </>
+      )
+      ) : (
+        <JobsGallery
+          statusFilter={filter}
+          userIdFilter={userIdFilter}
+          excludeUserIds={excludeUserIds}
+          onOpenJob={(job) => {
+            setSelectedJob(job)
+            setDetailTab("output")
+          }}
+        />
+      )}
 
       {selectedJob && (
-        <JobDetailDialog job={selectedJob} open={!!selectedJob} onOpenChange={(v) => { if (!v) setSelectedJob(null) }} />
+        <JobDetailDialog
+          job={selectedJob}
+          open={!!selectedJob}
+          onOpenChange={(v) => {
+            if (!v) {
+              setSelectedJob(null)
+              setDetailTab("input")
+            }
+          }}
+          tab={detailTab}
+          onTabChange={setDetailTab}
+        />
       )}
     </div>
   )

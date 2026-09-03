@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState, useEffect, useLayoutEffect, useRef, useCallback, type ReactNode, type MouseEvent, type PointerEvent as ReactPointerEvent } from "react"
 import { Handle, Position, NodeToolbar, useUpdateNodeInternals, NodeResizeControl } from "@xyflow/react"
 import { cn } from "@/lib/utils"
@@ -10,6 +11,7 @@ import { useShallow } from "zustand/react/shallow"
 import { useAltKeyStore } from "@/hooks/use-alt-key"
 import { useMobileCanvas } from "@/components/editor/mobile-canvas-context"
 import { CustomHandle } from "./custom-handle"
+import { useNodeTextDir } from "./node-text-dir"
 import { NodeRunStripShell } from "./node-run-strip-shell"
 import { NodeSettingsButton } from "./node-settings-button"
 import { InlineGluedStripContext } from "./inline-glued-strip-context"
@@ -170,8 +172,12 @@ function BaseNodeComponent({
   onChromeHeightChange,
   enableZoomHandle,
 }: BaseNodeProps) {
+  const t = useT()
   const localizeHandleLabel = useLocalizeHandleLabel()
   const localizeNode = useLocalizeNodeLabel()
+  // Direction for the card's TEXT only. The card's geometry stays LTR with the
+  // canvas (see node-text-dir.ts) — this lands on text leaves, never on a row.
+  const textDir = useNodeTextDir()
   // Auto-compute minHeight from handle count: handles need 30px each + 20px padding
   const leftCount = handles.filter((h) => h.position === Position.Left).length
   const rightCount = handles.filter((h) => h.position === Position.Right).length
@@ -741,7 +747,13 @@ function BaseNodeComponent({
           {/* Localize the header title: a default label matching an English
               node name flips to the active locale; a user's custom rename
               passes through untouched (see i18n/labels.ts). */}
-          <span className="flex-1 truncate">{localizeNode(label)}</span>
+          {/* `dir` on the TITLE, not on the header row: the row is the
+              [icon][title][chips] flex line and must keep its LTR order with
+              the canvas, while the title itself is user-language text (a
+              Hebrew name laid out LTR reorders its punctuation and hugs the
+              icon side). Under an RTL locale the blockified flex item aligns
+              to its own start — the right edge — and truncates on the left. */}
+          <span dir={textDir} className="flex-1 truncate">{localizeNode(label)}</span>
           {listProgress && (
             <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30 animate-pulse">
               {listProgress}
@@ -767,7 +779,7 @@ function BaseNodeComponent({
           )}
           {isSkipped && (
             <span className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-300 border border-orange-500/30">
-              SKIP
+              {t("node.skipBadge")}
             </span>
           )}
         </div>
@@ -776,8 +788,10 @@ function BaseNodeComponent({
       {!hideHeader && listProgressPercent !== undefined && listProgressPercent > 0 && (
         <div className="w-full px-3 py-1.5">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] font-mono text-cyan-300">
-              {listProgressPercent < 100 ? "Processing list..." : "Complete"}
+            {/* Status text follows the user's language; the percentage next
+                to it is digits, which read the same either way. */}
+            <span dir={textDir} className="text-[10px] font-mono text-cyan-300">
+              {listProgressPercent < 100 ? t("node.processingList") : t("node.listComplete")}
             </span>
             <span className="text-[10px] font-mono text-cyan-300">
               {listProgressPercent}%
@@ -910,6 +924,10 @@ function BaseNodeComponent({
           />}
           {h.label && h.top && (
             <span
+              // Content-sized and absolutely anchored to a physical side, so
+              // `dir` moves nothing here — it only orders the label's own
+              // bidi runs (a localized port name mixing Hebrew and Latin).
+              dir={textDir}
               className={cn(
                 "absolute text-[9px] font-medium pointer-events-none select-none leading-none px-1 py-0.5 rounded",
                 "text-muted-foreground bg-background/80 dark:bg-muted/60",

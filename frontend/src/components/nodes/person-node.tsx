@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo } from "react"
 import { type NodeProps } from "@xyflow/react"
 import { UserRound } from "lucide-react"
@@ -31,6 +32,7 @@ function collectEnabled(data: PersonData): EnabledEntry[] {
 }
 
 function PersonNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as PersonData
   const enabled = collectEnabled(nodeData)
   const maxItemsPerRow = Math.max(1, Math.min(4, nodeData.maxItemsPerRow ?? 2))
@@ -112,7 +114,7 @@ function PersonNodeComponent({ id, data, selected }: NodeProps) {
                 {entryIds.length === 1 && (
                   isAgeCustom && customAgeNum !== undefined ? (
                     <p className="text-muted-foreground text-[10.5px] leading-snug">
-                      Custom age
+                      {t("node.customAge")}
                     </p>
                   ) : entry?.description ? (
                     <p className="text-muted-foreground text-[10.5px] leading-snug">
@@ -126,7 +128,7 @@ function PersonNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       ) : (
         <p className="text-muted-foreground text-sm italic">
-          Pick a Type to begin
+          {t("node.pickATypeToBegin")}
         </p>
       )}
     </ParameterNodeShell>

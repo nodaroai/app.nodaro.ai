@@ -23,7 +23,7 @@ describe("prompt-fields / quick-config registries stay in sync with node types",
   })
 
   it("every NODE_QUICK_CONFIGS key is a registered node type", () => {
-    const unregistered = Object.keys(NODE_QUICK_CONFIGS).filter((t) => !NODE_DEF_MAP.has(t))
+    const unregistered = Object.keys(NODE_QUICK_CONFIGS()).filter((t) => !NODE_DEF_MAP.has(t))
     expect(unregistered, `NODE_QUICK_CONFIGS has keys not in NODE_DEFINITIONS: ${unregistered.join(", ")}`).toEqual([])
   })
 
@@ -60,7 +60,7 @@ describe("prompt-fields / quick-config registries stay in sync with node types",
   })
 
   it("every quick-config control names a field and at least one option", () => {
-    for (const [type, controls] of Object.entries(NODE_QUICK_CONFIGS)) {
+    for (const [type, controls] of Object.entries(NODE_QUICK_CONFIGS())) {
       expect(controls.length, `${type} has no quick-config controls`).toBeGreaterThan(0)
       for (const control of controls) {
         expect(control.field, `${type} control missing field`).toBeTruthy()

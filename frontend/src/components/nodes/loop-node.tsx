@@ -25,6 +25,7 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { RunNodeButton } from "./run-node-button"
+import { useT } from "@/lib/i18n"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { LOOP_COLUMN_TYPE_META, LOOP_COL_ADD_HANDLE, TEXT_CELL_CONTROLS_MIN_LINES, TEXT_CELL_DEFAULT_MAX_LINES, TEXT_FONT_SIZE_CLASS, TEXT_FONT_SIZE_DEFAULT, loopColBaseHandle, loopColInputHandle, resolveViewMode, type LoopNodeData, type LoopColumn, type WorkflowNode } from "@/types/nodes"
 import { isValidLoopColumnConnection, DATA_HANDLE_COLORS, type LoopColumnType } from "@/lib/data-handles"
@@ -235,6 +236,7 @@ function SortableNodeRow({
 }
 
 function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
+  const t = useT()
   const nodeData = data as LoopNodeData
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
@@ -593,15 +595,15 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
           <CachedImage src={cell} alt="" className={`${imgSizing} rounded-lg`} />
           <button
             type="button"
-            aria-label="Expand image"
+            aria-label={t("node.expandImage")}
             className="nodrag nopan absolute top-1 right-1 w-[18px] h-[18px] flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 text-white opacity-0 group-hover/img:opacity-100 transition-opacity shadow-sm"
             onClick={(e) => { e.stopPropagation(); setPreviewIndex(cellIdx) }}
           >
             <Expand className="w-3 h-3" />
           </button>
           <div className={actionRowClass}>
-            <button type="button" className={actionBtnClass} onClick={(e) => { e.stopPropagation(); const a = document.createElement("a"); a.href = `/v1/image-proxy?url=${encodeURIComponent(cell)}&download=1`; a.download = "image.png"; a.click() }} title="Download"><Download className={actionIconClass} /></button>
-            <button type="button" className={actionBtnClass} onClick={(e) => { e.stopPropagation(); copyToClipboard(cell, "URL copied") }} title="Copy URL"><Link className={actionIconClass} /></button>
+            <button type="button" className={actionBtnClass} onClick={(e) => { e.stopPropagation(); const a = document.createElement("a"); a.href = `/v1/image-proxy?url=${encodeURIComponent(cell)}&download=1`; a.download = "image.png"; a.click() }} title={t("cfgshared.download")}><Download className={actionIconClass} /></button>
+            <button type="button" className={actionBtnClass} onClick={(e) => { e.stopPropagation(); copyToClipboard(cell, t("node.urlCopied")) }} title={t("cfgshared.copyUrl")}><Link className={actionIconClass} /></button>
           </div>
         </div>
         <span className="absolute -top-1.5 -left-1.5 z-10 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-neutral-100 dark:bg-neutral-900 text-black dark:text-white text-[9px] font-medium tabular-nums shadow-sm">{idx + 1}</span>
@@ -637,15 +639,15 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
           <video src={cell} crossOrigin="anonymous" className={`${videoSizing} rounded-lg`} autoPlay loop muted playsInline />
           <button
             type="button"
-            aria-label="Expand video"
+            aria-label={t("node.expandVideo")}
             className="nodrag nopan absolute top-1 right-1 w-[18px] h-[18px] flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 text-white opacity-0 group-hover/vid:opacity-100 transition-opacity shadow-sm"
             onClick={(e) => { e.stopPropagation(); setPreviewIndex(cellIdx) }}
           >
             <Expand className="w-3 h-3" />
           </button>
           <div className={actionRowClass}>
-            <button type="button" className={actionBtnClass} onClick={(e) => { e.stopPropagation(); const a = document.createElement("a"); a.href = cell; a.download = "video.mp4"; a.click() }} title="Download"><Download className={actionIconClass} /></button>
-            <button type="button" className={actionBtnClass} onClick={(e) => { e.stopPropagation(); copyToClipboard(cell, "URL copied") }} title="Copy URL"><Link className={actionIconClass} /></button>
+            <button type="button" className={actionBtnClass} onClick={(e) => { e.stopPropagation(); const a = document.createElement("a"); a.href = cell; a.download = "video.mp4"; a.click() }} title={t("cfgshared.download")}><Download className={actionIconClass} /></button>
+            <button type="button" className={actionBtnClass} onClick={(e) => { e.stopPropagation(); copyToClipboard(cell, t("node.urlCopied")) }} title={t("cfgshared.copyUrl")}><Link className={actionIconClass} /></button>
           </div>
         </div>
         <span className="absolute -top-1.5 -left-1.5 z-10 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-neutral-100 dark:bg-neutral-900 text-black dark:text-white text-[9px] font-medium tabular-nums shadow-sm">{rowIdx + 1}</span>
@@ -675,7 +677,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
         <div className={innerClass}>
           <button
             type="button"
-            aria-label="Expand audio"
+            aria-label={t("node.expandAudio")}
             className="nodrag nopan absolute top-1 right-1 w-[18px] h-[18px] flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 text-white opacity-0 group-hover/cell:opacity-100 transition-opacity shadow-sm"
             onClick={(e) => { e.stopPropagation(); setPreviewIndex(cellIdx) }}
           >
@@ -737,7 +739,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
               <div className="nodrag nopan absolute inset-x-0 bottom-0 flex justify-center gap-1 py-1 opacity-0 group-hover/cell:opacity-100 transition-opacity bg-gradient-to-t from-black/50 to-transparent">
                 <button
                   type="button"
-                  aria-label="Expand text"
+                  aria-label={t("node.expandText")}
                   className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full"
                   onClick={(e) => { e.stopPropagation(); setPreviewIndex(cellIdx) }}
                 >
@@ -745,9 +747,9 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
                 </button>
                 <button
                   type="button"
-                  aria-label="Copy text"
+                  aria-label={t("node.copyText")}
                   className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full"
-                  onClick={(e) => { e.stopPropagation(); copyToClipboard(cell, "Copied") }}
+                  onClick={(e) => { e.stopPropagation(); copyToClipboard(cell, t("node.copied")) }}
                 >
                   <Copy className="w-3 h-3" />
                 </button>
@@ -756,7 +758,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
               <>
                 <button
                   type="button"
-                  aria-label="Expand text"
+                  aria-label={t("node.expandText")}
                   className="nodrag nopan absolute top-1 right-1 w-[18px] h-[18px] flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 text-white opacity-0 group-hover/cell:opacity-100 transition-opacity shadow-sm"
                   onClick={(e) => { e.stopPropagation(); setPreviewIndex(cellIdx) }}
                 >
@@ -764,9 +766,9 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
                 </button>
                 <button
                   type="button"
-                  aria-label="Copy text"
+                  aria-label={t("node.copyText")}
                   className="nodrag nopan absolute top-6 right-1 w-[18px] h-[18px] flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 text-white opacity-0 group-hover/cell:opacity-100 transition-opacity shadow-sm"
-                  onClick={(e) => { e.stopPropagation(); copyToClipboard(cell, "Copied") }}
+                  onClick={(e) => { e.stopPropagation(); copyToClipboard(cell, t("node.copied")) }}
                 >
                   <Copy className="w-3 h-3" />
                 </button>
@@ -808,7 +810,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
           )
         })}
         {allEntries && allEntries.length > 4 && (
-          <span className="text-muted-foreground/40">+{allEntries.length - 4} more</span>
+          <span className="text-muted-foreground/40">{t("node.plusNMore", { n: allEntries.length - 4 })}</span>
         )}
       </div>
     ) : (
@@ -829,13 +831,13 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
           {showCellControls && (
             tile ? (
               <div className="nodrag nopan absolute inset-x-0 bottom-0 flex justify-center gap-1 py-1 opacity-0 group-hover/cell:opacity-100 transition-opacity bg-gradient-to-t from-black/50 to-transparent">
-                <button type="button" aria-label="Expand" className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full" onClick={(e) => { e.stopPropagation(); setPreviewIndex(cellIdx) }}><Expand className="w-3 h-3" /></button>
-                <button type="button" aria-label="Copy" className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full" onClick={(e) => { e.stopPropagation(); copyToClipboard(cell, "Copied") }}><Copy className="w-3 h-3" /></button>
+                <button type="button" aria-label={t("node.expand")} className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full" onClick={(e) => { e.stopPropagation(); setPreviewIndex(cellIdx) }}><Expand className="w-3 h-3" /></button>
+                <button type="button" aria-label={t("node.copy")} className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full" onClick={(e) => { e.stopPropagation(); copyToClipboard(cell, t("node.copied")) }}><Copy className="w-3 h-3" /></button>
               </div>
             ) : (
               <>
-                <button type="button" aria-label="Expand" className="nodrag nopan absolute top-1 right-1 w-[18px] h-[18px] flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 text-white opacity-0 group-hover/cell:opacity-100 transition-opacity shadow-sm" onClick={(e) => { e.stopPropagation(); setPreviewIndex(cellIdx) }}><Expand className="w-3 h-3" /></button>
-                <button type="button" aria-label="Copy" className="nodrag nopan absolute top-6 right-1 w-[18px] h-[18px] flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 text-white opacity-0 group-hover/cell:opacity-100 transition-opacity shadow-sm" onClick={(e) => { e.stopPropagation(); copyToClipboard(cell, "Copied") }}><Copy className="w-3 h-3" /></button>
+                <button type="button" aria-label={t("node.expand")} className="nodrag nopan absolute top-1 right-1 w-[18px] h-[18px] flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 text-white opacity-0 group-hover/cell:opacity-100 transition-opacity shadow-sm" onClick={(e) => { e.stopPropagation(); setPreviewIndex(cellIdx) }}><Expand className="w-3 h-3" /></button>
+                <button type="button" aria-label={t("node.copy")} className="nodrag nopan absolute top-6 right-1 w-[18px] h-[18px] flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 text-white opacity-0 group-hover/cell:opacity-100 transition-opacity shadow-sm" onClick={(e) => { e.stopPropagation(); copyToClipboard(cell, t("node.copied")) }}><Copy className="w-3 h-3" /></button>
               </>
             )
           )}
@@ -856,11 +858,17 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
 
   let statusText: string
   if (hasUpstreamInput && !connectedRows) {
-    statusText = "Connected: waiting for input..."
+    statusText = t("node.connectedWaitingForInput")
   } else if (colCount > 0) {
-    statusText = `${displayRowCount} row${displayRowCount !== 1 ? "s" : ""} \u00D7 ${colCount} col${colCount !== 1 ? "s" : ""}`
+    const rowsLabel = displayRowCount === 1
+      ? t("node.rowCountOne", { n: displayRowCount })
+      : t("node.rowCountMany", { n: displayRowCount })
+    const colsLabel = colCount === 1
+      ? t("node.colCountOne", { n: colCount })
+      : t("node.colCountMany", { n: colCount })
+    statusText = `${rowsLabel} \u00D7 ${colsLabel}`
   } else {
-    statusText = "Click to configure..."
+    statusText = t("node.clickToConfigure")
   }
 
   const sourceHandles = handles.filter(h => h.type === "source")
@@ -909,7 +917,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setShowData(!showData) }}
                 className="flex items-center justify-center w-6 h-6 rounded-md text-muted-foreground/60 hover:text-foreground hover:bg-muted/50 transition-colors"
-                title={showData ? "Show info" : "Show data"}
+                title={showData ? t("node.showInfo") : t("node.showData")}
               >
                 {showData ? <Info className="w-3.5 h-3.5" /> : <Table2 className="w-3.5 h-3.5" />}
               </button>
@@ -917,14 +925,14 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
             {showingPresentation && !isConnectedData && (
               <>
                 <span className="text-[9px] text-muted-foreground/60">
-                  {rowCount} of {maxItems} max
+                  {t("handle.ofMax", { n: rowCount, max: maxItems })}
                 </span>
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); handleAddRow() }}
                   disabled={rows.length >= maxItems}
                   className="flex items-center justify-center w-5 h-5 rounded-md bg-[#ff0073] text-white transition-opacity duration-150 disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90"
-                  title="Add row"
+                  title={t("node.addRow")}
                 >
                   <Plus className="w-3 h-3" />
                 </button>
@@ -1077,7 +1085,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
                       >
                         <div className="flex items-center gap-1.5">
                           <Upload className="w-3.5 h-3.5 text-muted-foreground/40" />
-                          <span className="text-[10px] text-muted-foreground/60">Drop files to add rows, or click to browse</span>
+                          <span className="text-[10px] text-muted-foreground/60">{t("node.dropFilesToAddRows")}</span>
                         </div>
                       </div>
                     )}
@@ -1088,7 +1096,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
                 <div className="absolute inset-0 bg-[#ff0073]/5 border-2 border-dashed border-[#ff0073]/60 rounded-lg flex items-center justify-center z-10">
                   <div className="flex items-center gap-1.5 text-[#ff0073] text-xs font-medium">
                     <Upload className="w-3.5 h-3.5" />
-                    Drop to add rows
+                    {t("node.dropToAddRows")}
                   </div>
                 </div>
               )}

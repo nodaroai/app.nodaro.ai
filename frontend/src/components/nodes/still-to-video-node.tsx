@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState, useEffect, useMemo, useRef } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { ImagePlay, Loader2, AlertCircle, X, Image as ImageIcon, Volume2, Film, RotateCcw } from "lucide-react"
@@ -64,6 +65,7 @@ function pseudoWaveformHeights(seed: string, count = 240): number[] {
 }
 
 function StillToVideoNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as StillToVideoData
   // Zero credits by design (local FFmpeg, no provider) — a static 0, not the
   // ee pricing hook: keeps this core file free of ee/ imports (check-ee-imports)
@@ -197,7 +199,7 @@ function StillToVideoNodeComponent({ id, data, selected }: NodeProps) {
                     <span className="w-1.5 h-1.5 rounded-full bg-foreground/70 animate-pulse [animation-delay:200ms]" />
                     <span className="w-1.5 h-1.5 rounded-full bg-foreground/70 animate-pulse [animation-delay:400ms]" />
                   </div>
-                  <span className="text-xs text-foreground/90">Queued</span>
+                  <span className="text-xs text-foreground/90">{t("node.queued")}</span>
                 </div>
               </div>
             )}
@@ -235,7 +237,7 @@ function StillToVideoNodeComponent({ id, data, selected }: NodeProps) {
                   )}
                   <div className="relative flex flex-col items-center justify-center gap-1.5 h-full p-3 text-center">
                     <div className="w-7 h-7 rounded-md bg-red-500/15 border border-red-500/50 flex items-center justify-center"><AlertCircle className="w-4 h-4 text-red-500" /></div>
-                    <span className="text-[11px] text-red-400 font-medium">Failed</span>
+                    <span className="text-[11px] text-red-400 font-medium">{t("node.failed")}</span>
                     {nodeData.errorMessage && (
                       <p className="text-[9px] font-mono text-muted-foreground line-clamp-2" title={nodeData.errorMessage}>
                         {nodeData.errorMessage}
@@ -248,7 +250,7 @@ function StillToVideoNodeComponent({ id, data, selected }: NodeProps) {
                   className="nodrag w-full h-8 rounded-lg border border-red-500/50 bg-red-500/10 text-red-400 text-xs hover:bg-red-500/20 transition-colors flex items-center justify-center gap-1.5"
                   onClick={(e) => { e.stopPropagation(); runSingleNode?.(id) }}
                 >
-                  <RotateCcw className="w-3 h-3" /> Retry
+                  <RotateCcw className="w-3 h-3" /> {t("editor.retry")}
                 </button>
               </div>
             )}
@@ -257,11 +259,11 @@ function StillToVideoNodeComponent({ id, data, selected }: NodeProps) {
               <div className="relative group">
                 <div className="w-full h-28 rounded-md bg-amber-500/10 border border-amber-500/30 flex flex-col items-center justify-center gap-1">
                   <AlertCircle className="w-5 h-5 text-amber-500" />
-                  <span className="text-[10px] text-amber-500">Video load failed</span>
-                  <a href={activeUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] text-blue-500 underline" onClick={(e) => e.stopPropagation()}>Open URL</a>
+                  <span className="text-[10px] text-amber-500">{t("node.videoLoadFailed")}</span>
+                  <a href={activeUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] text-blue-500 underline" onClick={(e) => e.stopPropagation()}>{t("node.openUrl")}</a>
                 </div>
                 {results.length > 0 && (
-                  <button type="button" aria-label="Remove result" className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}><X className="w-3 h-3" /></button>
+                  <button type="button" aria-label={t("node.removeResult")} className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}><X className="w-3 h-3" /></button>
                 )}
               </div>
             )}
@@ -305,7 +307,7 @@ function StillToVideoNodeComponent({ id, data, selected }: NodeProps) {
                       <span className="text-[8px] text-muted-foreground/60">audio</span>
                     </div>
                   </div>
-                  <span className="text-[10px] text-muted-foreground/70">Wire an image and an audio track</span>
+                  <span className="text-[10px] text-muted-foreground/70">{t("node.wireAnImageAndAn")}</span>
                   <span className="text-[9px] font-mono text-muted-foreground/40">audio sets the length</span>
                 </div>
               )
@@ -320,7 +322,7 @@ function StillToVideoNodeComponent({ id, data, selected }: NodeProps) {
                     ) : (
                       <video src={r.url} crossOrigin="anonymous" className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${i === activeIndex ? "opacity-100 ring-2 ring-primary" : "opacity-50 hover:opacity-80"}`} onClick={(e) => { e.stopPropagation(); updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url }) }} muted playsInline />
                     )}
-                    <button type="button" aria-label="Remove result" className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(i) }}><X className="w-2.5 h-2.5" /></button>
+                    <button type="button" aria-label={t("node.removeResult")} className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(i) }}><X className="w-2.5 h-2.5" /></button>
                   </div>
                 ))}
               </div>
@@ -343,7 +345,7 @@ function StillToVideoNodeComponent({ id, data, selected }: NodeProps) {
           onVideoLoad={() => setVideoError(false)}
         />
       )}
-      <HandleWithPopover nodeId={id} nodeType="still-to-video" handleId="image" type="target" position={Position.Left}  label="Still image" color={HANDLE_COLORS.image} icon={<ImageIcon />} side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_IMAGE} />
+      <HandleWithPopover nodeId={id} nodeType="still-to-video" handleId="image" type="target" position={Position.Left}  label={t("node.stillImage")} color={HANDLE_COLORS.image} icon={<ImageIcon />} side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_IMAGE} />
       <HandleWithPopover nodeId={id} nodeType="still-to-video" handleId="audio" type="target" position={Position.Left}  label="Audio"       color={HANDLE_COLORS.audio} icon={<Volume2 />}   side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} />
       <HandleWithPopover nodeId={id} nodeType="still-to-video" handleId="video" type="source" position={Position.Right} label="Video"       color={HANDLE_COLORS.video} icon={<Film />}      side="right" top="24px" />
       {activeUrl && <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type="video" url={activeUrl} results={results} initialIndex={activeIndex} />}

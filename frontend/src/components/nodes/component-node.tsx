@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useMemo, useEffect, useState } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Puzzle, ImageIcon, Video, AudioLines, FileText, Expand, Download, Link, Scissors, Copy, Loader2 } from "lucide-react"
@@ -79,6 +80,7 @@ function buildHandles(
 }
 
 function ComponentNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as ComponentNodeData
   const metadata = nodeData.componentMetadata ?? { inputs: [], outputs: [], exposedSettings: [] }
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
@@ -187,7 +189,7 @@ function ComponentNodeComponent({ id, data, selected }: NodeProps) {
                   {isImage ? (
                     <CachedImage
                       src={previewValue}
-                      alt="Result"
+                      alt={t("audiocfg.result")}
                       className="w-full h-full object-cover rounded-xl"
                       thumbnail={!useFull}
                       thumbnailWidth={320}
@@ -226,7 +228,7 @@ function ComponentNodeComponent({ id, data, selected }: NodeProps) {
                     <button type="button" className={BTN_CLASS} onClick={(e) => { e.stopPropagation(); handleDownload() }}>
                       <Download className="w-3.5 h-3.5" />
                     </button>
-                    <button type="button" className={BTN_CLASS} onClick={(e) => { e.stopPropagation(); copyToClipboard(previewValue as string, "URL copied") }}>
+                    <button type="button" className={BTN_CLASS} onClick={(e) => { e.stopPropagation(); copyToClipboard(previewValue as string, t("apps.urlCopied")) }}>
                       <Link className="w-3.5 h-3.5" />
                     </button>
                     {isVideo && (
@@ -235,7 +237,7 @@ function ComponentNodeComponent({ id, data, selected }: NodeProps) {
                       </button>
                     )}
                     {!isImage && !isVideo && !isAudio && (
-                      <button type="button" className={BTN_CLASS} onClick={(e) => { e.stopPropagation(); copyToClipboard(previewValue as string, "Text copied") }}>
+                      <button type="button" className={BTN_CLASS} onClick={(e) => { e.stopPropagation(); copyToClipboard(previewValue as string, t("node.textCopied")) }}>
                         <Copy className="w-3.5 h-3.5" />
                       </button>
                     )}
@@ -246,7 +248,7 @@ function ComponentNodeComponent({ id, data, selected }: NodeProps) {
               {/* Failed state */}
               {status === "failed" && !previewValue && (
                 <div className="flex flex-col items-center justify-center gap-1 rounded-xl bg-red-500/5 text-red-500 p-2 h-[160px]">
-                  <span className="font-medium text-sm">Failed</span>
+                  <span className="font-medium text-sm">{t("node.failed")}</span>
                   {nodeData.errorMessage && (
                     <p className="text-[10px] text-red-400 text-center line-clamp-2" title={nodeData.errorMessage}>
                       {nodeData.errorMessage}

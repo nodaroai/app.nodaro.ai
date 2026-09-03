@@ -11,6 +11,8 @@ import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { isValidCharacterConnection } from "@/lib/identity-handles"
 import { IDENTITY_TYPES } from "@/lib/generate-image-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
+import { useT } from "@/lib/i18n"
+import { useLocalizeOptionLabel } from "@/lib/i18n/labels"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useFullResolution } from "@/hooks/use-full-resolution"
@@ -44,6 +46,8 @@ const CHARACTER_NODE_ROLES = REFERENCE_ROLE_PRESETS["wired-character"]
 const CUSTOM_ROLE_SENTINEL = "__custom__"
 
 function CharacterNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
+  const localizeOption = useLocalizeOptionLabel()
   const nodeData = data as CharacterNodeData
   const credits = useModelCredits((nodeData.provider as string | undefined) ?? "nano-banana", 2)
   const useFull = useFullResolution(id)
@@ -141,7 +145,7 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
   // reference the same DB character can show different thumbnails because
   // `defaultAssetUrl` lives on node data, not the DB row.
   const thumbnailUrl = nodeData.defaultAssetUrl || nodeData.sourceImageUrl
-  const thumbnailLabel = nodeData.defaultAssetName || nodeData.characterName || "Character"
+  const thumbnailLabel = nodeData.defaultAssetName || nodeData.characterName || t("field.character")
   // Whether to render the thumbnail as a <video> rather than a <CachedImage>.
   // Heuristic: if the default-asset URL is in the node's motions array, OR
   // its file extension looks like a video, render as video. Otherwise the
@@ -251,8 +255,8 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
       {/* Header */}
       <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#1a2744] border-b border-[#1e3a6e]">
         <span className="text-[11px]">👤</span>
-        <span className="text-[11px] font-semibold text-[#93c5fd]">Character Asset</span>
-        <span className="ml-auto text-[9px] text-[#3b82f6] bg-[#0f1e40] px-1.5 py-0.5 rounded">entity</span>
+        <span className="text-[11px] font-semibold text-[#93c5fd]">{t("node.characterAsset")}</span>
+        <span className="ml-auto text-[9px] text-[#3b82f6] bg-[#0f1e40] px-1.5 py-0.5 rounded">{t("node.entityBadge")}</span>
       </div>
 
       {nodeData.loraTrainingStatus === "succeeded" && (
@@ -264,7 +268,7 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
         nodeData.loraTrainingStatus === "training") && (
         <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-black/60 text-[9px] text-slate-300 border border-slate-600">
           <Loader2 className="h-2.5 w-2.5 animate-spin" />
-          Training…
+          {t("node.trainingEllipsis")}
         </div>
       )}
 
@@ -301,7 +305,7 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
               // a chosen default (not the portrait fallback).
               <span
                 aria-hidden
-                title={`Default: ${nodeData.defaultAssetName ?? ""}`}
+                title={t("node.defaultAssetTitle", { name: nodeData.defaultAssetName ?? "" })}
                 className="absolute top-1 left-1 px-1 rounded-full bg-black/50 text-[8px] text-yellow-400 leading-tight border border-yellow-400/40"
               >
                 ★
@@ -323,7 +327,7 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
                   <button
                     key={ar}
                     type="button"
-                    aria-label={`Set character aspect ratio to ${ar}`}
+                    aria-label={t("node.setAspectRatioTo", { ratio: ar })}
                     aria-pressed={isActive}
                     onClick={(e) => {
                       e.stopPropagation()
@@ -352,7 +356,7 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
             className="w-full rounded-md border border-dashed border-[#334155] flex items-center justify-center text-[10px] text-[#3b4155]"
             style={{ aspectRatio: aspectRatioCss }}
           >
-            {status === "running" ? <Loader2 className="w-5 h-5 animate-spin" /> : "portrait preview"}
+            {status === "running" ? <Loader2 className="w-5 h-5 animate-spin" /> : t("node.portraitPreview")}
           </div>
         )}
       </div>
@@ -373,7 +377,7 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
           node or open the config panel. */}
       <div className="px-2.5 pt-1.5 flex items-center gap-1.5 min-w-0">
         <div className="flex-1 min-w-0 text-[12px] font-semibold text-slate-200 truncate">
-          {nodeData.characterName || "Unnamed"}
+          {nodeData.characterName || t("cfgext.entUnnamed")}
           {showVariantSuffix && (
             <span className="text-[#ff0073] font-normal ml-1">{`• ${variantName}`}</span>
           )}
@@ -394,8 +398,8 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
               ref={customRoleInputRef}
               value={customRoleText}
               onChange={(e) => setCustomRoleText(e.target.value)}
-              placeholder="earrings  or  freckles"
-              aria-label="Custom default role"
+              placeholder={t("node.phCustomRoleExample")}
+              aria-label={t("node.customDefaultRole")}
               className="shrink-0 h-6 w-[110px] text-[10px] px-2 rounded-md bg-[#13161f] border border-[#ff0073] text-slate-200 outline-none placeholder:text-slate-600"
               onClick={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}
@@ -421,8 +425,8 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
           ) : (
             <Select value={effectiveRole} onValueChange={handleRolePick}>
               <SelectTrigger
-                aria-label="Default role for character references"
-                title="Which part of this character's reference image downstream generators take by default — override per-mention on the @-pill"
+                aria-label={t("node.defaultRoleForCharacterReferences")}
+                title={t("node.defaultRoleTitle")}
                 className="shrink-0 h-6 w-[110px] text-[10px] bg-[#13161f] border-[#334155] text-slate-300 hover:border-[#475569] focus:border-[#ff0073] px-2 py-0"
                 onClick={(e) => e.stopPropagation()}
                 onPointerDown={(e) => e.stopPropagation()}
@@ -433,7 +437,7 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
               <SelectContent>
                 {CHARACTER_NODE_ROLES.map((r) => (
                   <SelectItem key={r} value={r} className="text-[11px]">
-                    {r}
+                    {localizeOption(r)}
                   </SelectItem>
                 ))}
                 {/* A stored Custom role needs a matching item so Radix can
@@ -444,7 +448,7 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
                   </SelectItem>
                 )}
                 <SelectItem value={CUSTOM_ROLE_SENTINEL} className="text-[11px] italic">
-                  Custom…
+                  {t("node.customEllipsis")}
                 </SelectItem>
               </SelectContent>
             </Select>
@@ -457,8 +461,8 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
             }
           >
             <SelectTrigger
-              aria-label="Default usage mode for character mentions"
-              title="How the AI consumes this character's image when @-mentioned"
+              aria-label={t("node.defaultUsageModeForCharacter")}
+              title={t("node.howTheAiConsumesThis")}
               className="shrink-0 h-6 w-[110px] text-[10px] bg-[#13161f] border-[#334155] text-slate-300 hover:border-[#475569] focus:border-[#ff0073] px-2 py-0"
               onClick={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}
@@ -469,7 +473,7 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
             <SelectContent>
               {USAGE_MODES.map((m) => (
                 <SelectItem key={m} value={m} className="text-[11px]">
-                  {usageModeLabel(m)}
+                  {localizeOption(usageModeLabel(m))}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -482,7 +486,7 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
           row so the truncating name row stays uncramped. */}
       {hybridRoles && (
         <div className="px-2.5 pt-1 flex items-center gap-1.5 min-w-0">
-          <span className="flex-1 min-w-0 text-[9px] text-slate-500 truncate">Identity lock</span>
+          <span className="flex-1 min-w-0 text-[9px] text-slate-500 truncate">{t("node.identityLock")}</span>
           <Select
             value={nodeData.identityLock ?? DEFAULT_IDENTITY_LOCK}
             onValueChange={(v) =>
@@ -490,8 +494,8 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
             }
           >
             <SelectTrigger
-              aria-label="Identity lock strength"
-              title="How strongly downstream generators preserve this character's facial identity — Off (free reinterpretation) / Soft (preserve likeness) / Strict (match exactly)"
+              aria-label={t("node.identityLockStrength")}
+              title={t("node.identityLockTitle")}
               className="shrink-0 h-6 w-[110px] text-[10px] bg-[#13161f] border-[#334155] text-slate-300 hover:border-[#475569] focus:border-[#ff0073] px-2 py-0"
               onClick={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}
@@ -500,9 +504,9 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="off" className="text-[11px]">Off</SelectItem>
-              <SelectItem value="soft" className="text-[11px]">Soft</SelectItem>
-              <SelectItem value="strict" className="text-[11px]">Strict</SelectItem>
+              <SelectItem value="off" className="text-[11px]">{t("node.off")}</SelectItem>
+              <SelectItem value="soft" className="text-[11px]">{t("node.soft")}</SelectItem>
+              <SelectItem value="strict" className="text-[11px]">{t("node.strict")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -511,9 +515,9 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
 
       {/* Asset badge row */}
       <div className="px-2.5 pb-2 grid grid-cols-3 gap-1 text-[9px] text-muted-foreground">
-        <AssetBadge label="Expr" count={expressionCount} status={nodeData.expressionStatus ?? "idle"} />
-        <AssetBadge label="Poses" count={poseCount} status={nodeData.poseStatus ?? "idle"} />
-        <AssetBadge label="Motions" count={motionCount} status={nodeData.motionStatus ?? "idle"} />
+        <AssetBadge label={t("node.assetBadgeExpr")} count={expressionCount} status={nodeData.expressionStatus ?? "idle"} />
+        <AssetBadge label={t("node.assetBadgePoses")} count={poseCount} status={nodeData.poseStatus ?? "idle"} />
+        <AssetBadge label={t("node.assetBadgeMotions")} count={motionCount} status={nodeData.motionStatus ?? "idle"} />
       </div>
 
       {/* Voice / personality / studio row */}
@@ -521,16 +525,16 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
         <div className="bg-[#1a1d27] rounded px-1 py-1">
           <div className="text-[11px]">🎤</div>
           <div className={`text-[8px] font-semibold ${nodeData.voice ? "text-[#22c55e]" : "text-slate-600"}`}>{nodeData.voice ? "✓" : "—"}</div>
-          <div className="text-[7px] text-slate-600">voice</div>
+          <div className="text-[7px] text-slate-600">{t("node.tileVoice")}</div>
         </div>
         <div className="bg-[#1a1d27] rounded px-1 py-1">
           <div className="text-[11px]">🧠</div>
           <div className={`text-[8px] font-semibold ${nodeData.personality ? "text-[#22c55e]" : "text-slate-600"}`}>{nodeData.personality ? "✓" : "—"}</div>
-          <div className="text-[7px] text-slate-600">person.</div>
+          <div className="text-[7px] text-slate-600">{t("node.tilePersonality")}</div>
         </div>
         <button
           type="button"
-          aria-label="Open Character Studio"
+          aria-label={t("cfgext.entOpenCharacterStudio")}
           className="bg-[#1e3a5f] border border-[#3b82f633] rounded px-1 py-1 cursor-pointer hover:bg-[#234670] transition-colors"
           onClick={(e) => {
             e.stopPropagation()
@@ -538,7 +542,7 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
           }}
         >
           <div className="text-[11px]">⬡</div>
-          <div className="text-[7px] text-[#93c5fd] font-medium">studio</div>
+          <div className="text-[7px] text-[#93c5fd] font-medium">{t("node.tileStudio")}</div>
         </button>
       </div>
 
@@ -557,7 +561,7 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
       {facetSources.length > 0 && (
         <div className="px-2.5 pb-2.5 space-y-1">
           <div className="flex items-center gap-1 text-[8px] uppercase tracking-wide text-slate-500">
-            <Blend className="w-2.5 h-2.5" /> Inject into portrait
+            <Blend className="w-2.5 h-2.5" /> {t("node.injectIntoPortrait")}
           </div>
           {facetSources.map((src) => (
             <div key={src.id} className="flex items-center gap-1.5 min-w-0">
@@ -566,8 +570,8 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
               </span>
               <Select value={facetFor(src.id)} onValueChange={(v) => setFacet(src.id, v)}>
                 <SelectTrigger
-                  aria-label={`Facet to inject from ${src.name}`}
-                  title="Which facet of this source to inject into the portrait"
+                  aria-label={t("node.facetToInjectFrom", { name: src.name })}
+                  title={t("node.whichFacetOfThisSource")}
                   className="shrink-0 h-6 w-[104px] text-[10px] bg-[#13161f] border-[#334155] text-slate-300 hover:border-[#475569] focus:border-[#ff0073] px-2 py-0"
                   onClick={(e) => e.stopPropagation()}
                   onPointerDown={(e) => e.stopPropagation()}
@@ -578,7 +582,7 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
                 <SelectContent>
                   {CHARACTER_FACETS.map((f) => (
                     <SelectItem key={f.id} value={f.id} className="text-[11px]">
-                      {f.label}
+                      {localizeOption(f.label)}
                     </SelectItem>
                   ))}
                 </SelectContent>

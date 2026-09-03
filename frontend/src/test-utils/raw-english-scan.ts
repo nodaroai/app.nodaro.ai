@@ -86,6 +86,13 @@ export const PROP = new RegExp(
 export const OBJECT_PROP =
   /\b(?:label|title|desc|description|tooltip|placeholder|hint):\s*"([^"\n]*)"/g
 
+/**
+ * `>{m}</` where `m` is the arrow parameter of a `.map((m) => …)` over a
+ * literal string tuple (`(["edit", "final"] as const).map((m) => …`) — the
+ * id itself becomes visible text.
+ */
+export const ID_AS_TEXT = /\(\[\s*"[a-z][\w-]*"(?:\s*,\s*"[a-z][\w-]*")*\s*\]\s+as\s+const\)\.map\(\((\w+)\)\s*=>[\s\S]{0,1200}?>\s*\{\s*\1\s*\}\s*<\//g
+
 /** The English-phrase shape a prop / object value must have to count. */
 const ENGLISH_PHRASE = new RegExp(`^[A-Z][A-Za-z]+[?!.:;,]?(?:\\s+${WORD})+$`)
 
@@ -129,9 +136,17 @@ export function scanRawEnglish(source: string, opts: ScanOptions = {}): Hit[] {
     for (const g of m.slice(1)) {
       if (!g) continue
       const s = g.trim()
-      if (ENGLISH_PHRASE.test(s) && !BRAND_ALLOW.test(s)) push("prop", m.index ?? 0, s)
+      if (!ENGLISH_PHRASE.test(s) || BRAND_ALLOW.test(s)) continue
+      // A `label=` on a handle pip is a LOOKUP key: HandleWithPopover
+      // localizes it through the handle-label table at render.
+      if (m[0].startsWith("label=") && isHandleLabelProp(src, m.index ?? 0) && opts.isLocalizedData?.(s)) continue
+      push("prop", m.index ?? 0, s)
     }
   }
+  // A state ID rendered as the visible text of a segment/button — `{m}` inside
+  // a `.map((m) => <button>{m}</button>)` over string ids. Copy never comes
+  // from an id; the mode maps to a key at the render site.
+  for (const m of src.matchAll(ID_AS_TEXT)) push("id-as-text", m.index ?? 0, m[1])
   for (const m of src.matchAll(OBJECT_PROP)) {
     const s = m[1].trim()
     if (!ENGLISH_PHRASE.test(s) || BRAND_ALLOW.test(s)) continue
@@ -139,6 +154,14 @@ export function scanRawEnglish(source: string, opts: ScanOptions = {}): Hit[] {
     push("object-prop", m.index ?? 0, s)
   }
   return hits
+}
+
+/** Is the prop at `index` inside a `<HandleWithPopover …>` (or a handle-def row) tag? */
+function isHandleLabelProp(src: string, index: number): boolean {
+  const open = src.lastIndexOf("<", index)
+  if (open < 0) return false
+  const tag = src.slice(open, index)
+  return /^<HandleWithPopover\b/.test(tag) && !tag.includes(">")
 }
 
 /**

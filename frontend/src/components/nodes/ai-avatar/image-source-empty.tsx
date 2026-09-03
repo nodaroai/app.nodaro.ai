@@ -4,6 +4,7 @@
 // IMAGE" — upload a portrait right on the card, wire one into the Image input,
 // or paste a URL in the settings panel; plus the way back to a catalog avatar.
 
+import { useT } from "@/lib/i18n"
 import { useCallback, type ChangeEvent, type MouseEvent } from "react"
 import { Loader2, Upload, User } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -23,6 +24,7 @@ function stop(e: MouseEvent) {
 }
 
 export function ImageSourceEmpty({ onUploaded, onOpenSettings, onUseCatalog }: ImageSourceEmptyProps) {
+  const t = useT()
   const { upload, isUploading, uploadError } = useFileUpload()
 
   const handleFile = useCallback(
@@ -43,7 +45,7 @@ export function ImageSourceEmpty({ onUploaded, onOpenSettings, onUseCatalog }: I
   return (
     <div className="flex flex-col gap-3 h-full min-h-0 px-3.5 pt-3.5 pb-3" data-testid="ai-avatar-image-empty">
       <div className="flex items-center gap-2.5 shrink-0">
-        <span className={KICKER}>Start with an image</span>
+        <span className={KICKER}>{t("node.startWithAnImage")}</span>
         <span className="flex-1 h-px bg-border/60" />
         <button type="button" className={PINK_LINK} onClick={(e) => { stop(e); onOpenSettings() }}>
           Paste a URL ›
@@ -78,16 +80,16 @@ export function ImageSourceEmpty({ onUploaded, onOpenSettings, onUseCatalog }: I
           accept="image/*"
           className="hidden"
           disabled={isUploading}
-          aria-label="Upload a portrait"
+          aria-label={t("node.uploadAPortrait")}
           onChange={handleFile}
         />
       </label>
 
       <div className="flex items-center gap-2.5 shrink-0">
-        <span className="text-[11px] text-muted-foreground">Prefer a ready-made avatar?</span>
+        <span className="text-[11px] text-muted-foreground">{t("node.preferAReadyMadeAvatar")}</span>
         <button type="button" className={GHOST_BUTTON} onClick={(e) => { stop(e); onUseCatalog() }}>
           <User className="size-3 opacity-70" />
-          Choose an avatar
+          {t("node.chooseAnAvatar")}
         </button>
       </div>
     </div>

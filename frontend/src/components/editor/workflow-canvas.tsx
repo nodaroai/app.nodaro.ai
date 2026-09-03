@@ -77,7 +77,8 @@ import { useWorkflowStore, migrateImageNodes, buildDuplicatedNodeData } from "@/
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { useUndoRedoActions } from "@/hooks/use-undo-redo"
 import { useIsMobile } from "@/hooks/use-is-mobile"
-import { useAppDir } from "@/lib/locale-store"
+import { useAppDir, useLocaleStore } from "@/lib/locale-store"
+import { canvasAriaLabelConfig } from "./canvas-aria-labels"
 import { minimapPosition } from "./canvas-corner-layout"
 import { MobileCanvasContext } from "./mobile-canvas-context"
 import { CanvasZoomContext } from "./canvas-zoom-context"
@@ -577,6 +578,9 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   // Chrome inside the LTR-pinned canvas (the MiniMap) mirrors by prop, chrome
   // outside it by logical class — both read the live direction, never `rtl:`.
   const isRtl = useAppDir() === "rtl"
+  // React Flow's own a11y strings, keyed to the live locale (see canvas-aria-labels).
+  const locale = useLocaleStore((s) => s.locale)
+  const ariaLabelConfig = useMemo(() => canvasAriaLabelConfig(locale), [locale])
   const copilotTurnActive = useCopilotUiStore((s) => s.turnActive)
   const zoom = useStore((s) => s.transform[2])
   const lastMousePositionRef = useRef({ x: 0, y: 0 })
@@ -2896,6 +2900,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           </div>
         )}
         <ReactFlow
+          ariaLabelConfig={ariaLabelConfig}
           nodes={orderedNodes}
           edges={visibleEdges}
           onNodesChange={onNodesChange}

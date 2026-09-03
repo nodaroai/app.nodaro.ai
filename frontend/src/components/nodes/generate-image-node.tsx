@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Position, type NodeProps } from "@xyflow/react"
@@ -44,6 +45,7 @@ import { EditableNodeLabel } from "./editable-node-label"
 import type { GenerateImageData, ExtractedReference } from "@/types/nodes"
 
 function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as GenerateImageData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   // When a dropdown inside the bottom quick-toolbar is open, pin the
@@ -170,7 +172,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
                     : "bg-black/40 hover:bg-black/60 border-white/10 text-white opacity-0 group-hover:opacity-100"
                 }`}
                 onClick={(e) => { e.stopPropagation(); setShowThumbnails(v => !v) }}
-                title={showThumbnails ? "Hide versions" : "Show versions"}
+                title={showThumbnails ? t("node.hideVersions") : t("node.showVersions")}
                 aria-pressed={showThumbnails}
               >
                 <LayoutGrid className="w-3 h-3" />
@@ -179,7 +181,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
             )}
             <CachedImage
               src={activeUrl}
-              alt="Generated"
+              alt={t("node.generatedAlt")}
               className={`w-full h-full object-cover ${previewRounding}`}
               thumbnail={!useFull}
               thumbnailWidth={320}
@@ -188,63 +190,63 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
             <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
                 type="button"
-                aria-label="Extract references"
+                aria-label={t("node.extractReferences")}
                 className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                 onClick={(e) => {
                   e.stopPropagation()
                   setExtractOpen(true)
                 }}
-                title="Extract references"
+                title={t("node.extractReferences")}
               >
                 <Scissors className="w-3.5 h-3.5" />
               </button>
               {results.length > 0 && (
                 <button
                   type="button"
-                  aria-label="Remove result"
+                  aria-label={t("node.removeResult")}
                   className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                   onClick={(e) => {
                     e.stopPropagation()
                     setDeleteConfirm(activeIndex)
                   }}
-                  title="Delete this result"
+                  title={t("node.deleteThisResult")}
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
             <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button type="button" aria-label="Edit image" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-                onClick={(e) => { e.stopPropagation(); openImageEdit(id, activeUrl!, activeResult?.filerobotDesignStateUrl) }} title="Edit image">
+              <button type="button" aria-label={t("node.editImage")} className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                onClick={(e) => { e.stopPropagation(); openImageEdit(id, activeUrl!, activeResult?.filerobotDesignStateUrl) }} title={t("node.editImage")}>
                 <Pencil className="w-3.5 h-3.5" />
               </button>
-              <button type="button" aria-label="Refine from this result" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+              <button type="button" aria-label={t("node.refineFromThisResult")} className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                 onClick={(e) => {
                   e.stopPropagation()
                   // Refine from this result: full-image i2i on the current result (no mask).
                   updateNodeData(id, { baseImageUrl: activeUrl, maskUrl: undefined })
-                }} title="Refine from this result">
+                }} title={t("node.refineFromThisResult")}>
                 <RotateCcw className="w-3.5 h-3.5" />
               </button>
-              <button type="button" aria-label="Expand preview" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-                onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }} title="Fullscreen">
+              <button type="button" aria-label={t("node.expandPreview")} className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }} title={t("node.fullscreen")}>
                 <Expand className="w-3.5 h-3.5" />
               </button>
-              <button type="button" aria-label="Download" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+              <button type="button" aria-label={t("cfgshared.download")} className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                 onClick={(e) => {
                   e.stopPropagation()
                   const a = document.createElement('a')
                   a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`
                   a.download = `${nodeData.label || 'image'}.png`
                   a.click()
-                }} title="Download">
+                }} title={t("cfgshared.download")}>
                 <Download className="w-3.5 h-3.5" />
               </button>
-              <button type="button" aria-label="Copy URL" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+              <button type="button" aria-label={t("cfgshared.copyUrl")} className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                 onClick={(e) => {
                   e.stopPropagation()
-                  copyToClipboard(activeUrl!, "URL copied")
-                }} title="Copy URL">
+                  copyToClipboard(activeUrl!, t("node.urlCopied"))
+                }} title={t("cfgshared.copyUrl")}>
                 <Link className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -262,11 +264,11 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
           <div className={`flex flex-col items-center justify-center gap-1 ${previewRounding} p-2 h-[180px] ${isContentPolicy ? "bg-amber-500/10 text-amber-500" : "bg-red-500/5 text-red-500"}`}>
             <div className="flex items-center gap-1.5">
               {isContentPolicy ? <ShieldAlert className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
-              <span className="font-medium">{isContentPolicy ? "Prohibited" : "Failed"}</span>
+              <span className="font-medium">{isContentPolicy ? t("node.prohibited") : t("node.failed")}</span>
             </div>
             {(isContentPolicy || nodeData.errorMessage) && (
               <p className={`text-[10px] text-center line-clamp-2 ${isContentPolicy ? "text-amber-400" : "text-red-400"}`} title={nodeData.errorMessage}>
-                {isContentPolicy ? "Blocked by provider safety filter. Try a different prompt or image." : nodeData.errorMessage}
+                {isContentPolicy ? t("node.blockedBySafetyFilter") : nodeData.errorMessage}
               </p>
             )}
           </div>

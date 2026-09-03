@@ -1,5 +1,6 @@
 "use client"
 
+import { useT, tx } from "@/lib/i18n"
 import { memo, useState, lazy, Suspense } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import {
@@ -38,6 +39,7 @@ const GLOBAL_EDIT_PROVIDER = "kontext-multi"   // cross-image edit, no mask
 const MASKED_EDIT_PROVIDER = "ideogram-edit"   // mask_url + reference_image_urls
 
 function ReferenceBoardNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as ReferenceBoardData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
@@ -149,7 +151,7 @@ function ReferenceBoardNodeComponent({ id, data, selected }: NodeProps) {
 
   // ── + Ref: attach a reference image for the edit (pasted/typed URL). ──
   function handleAddRef() {
-    const url = window.prompt("Reference image URL for this edit:")?.trim()
+    const url = window.prompt(tx("node.referenceImageUrlForEdit"))?.trim()
     if (url) setExtraRefs((prev) => [...prev, url])
   }
 
@@ -219,7 +221,7 @@ function ReferenceBoardNodeComponent({ id, data, selected }: NodeProps) {
                         : "bg-black/40 hover:bg-black/60 border-white/10 text-white opacity-0 group-hover:opacity-100"
                     }`}
                     onClick={(e) => { e.stopPropagation(); setShowThumbnails(v => !v) }}
-                    title={showThumbnails ? "Hide versions" : "Show versions"}
+                    title={showThumbnails ? t("node.hideVersions") : t("node.showVersions")}
                     aria-pressed={showThumbnails}
                   >
                     <LayoutGrid className="w-3 h-3" />
@@ -228,7 +230,7 @@ function ReferenceBoardNodeComponent({ id, data, selected }: NodeProps) {
                 )}
                 <CachedImage
                   src={activeUrl}
-                  alt="Reference board"
+                  alt={t("node.referenceBoard")}
                   className="w-full h-full object-cover rounded-xl"
                   thumbnail
                   thumbnailWidth={400}
@@ -238,13 +240,13 @@ function ReferenceBoardNodeComponent({ id, data, selected }: NodeProps) {
                   {results.length > 0 && (
                     <button
                       type="button"
-                      aria-label="Remove result"
+                      aria-label={t("node.removeResult")}
                       className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                       onClick={(e) => {
                         e.stopPropagation()
                         setDeleteConfirm(activeIndex)
                       }}
-                      title="Delete this result"
+                      title={t("node.deleteThisResult")}
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -253,16 +255,16 @@ function ReferenceBoardNodeComponent({ id, data, selected }: NodeProps) {
                 <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
                     type="button"
-                    aria-label="Expand preview"
+                    aria-label={t("node.expandPreview")}
                     className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                     onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}
-                    title="Fullscreen"
+                    title={t("node.fullscreen")}
                   >
                     <Expand className="w-3.5 h-3.5" />
                   </button>
                   <button
                     type="button"
-                    aria-label="Download"
+                    aria-label={t("cfgshared.download")}
                     className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                     onClick={(e) => {
                       e.stopPropagation()
@@ -271,19 +273,19 @@ function ReferenceBoardNodeComponent({ id, data, selected }: NodeProps) {
                       a.download = `${nodeData.label || 'reference-board'}.png`
                       a.click()
                     }}
-                    title="Download"
+                    title={t("cfgshared.download")}
                   >
                     <Download className="w-3.5 h-3.5" />
                   </button>
                   <button
                     type="button"
-                    aria-label="Copy URL"
+                    aria-label={t("cfgshared.copyUrl")}
                     className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                     onClick={(e) => {
                       e.stopPropagation()
-                      copyToClipboard(activeUrl, "URL copied")
+                      copyToClipboard(activeUrl, tx("apps.urlCopied"))
                     }}
-                    title="Copy URL"
+                    title={t("cfgshared.copyUrl")}
                   >
                     <Link className="w-3.5 h-3.5" />
                   </button>
@@ -296,7 +298,7 @@ function ReferenceBoardNodeComponent({ id, data, selected }: NodeProps) {
               <div className="flex flex-col items-center justify-center gap-1 rounded-xl bg-red-500/5 text-red-500 h-[180px] p-2">
                 <div className="flex items-center gap-1.5">
                   <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span className="font-medium">Failed</span>
+                  <span className="font-medium">{t("node.failed")}</span>
                 </div>
                 {nodeData.errorMessage && (
                   <p className="text-[10px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
@@ -311,7 +313,7 @@ function ReferenceBoardNodeComponent({ id, data, selected }: NodeProps) {
               <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10 text-muted-foreground/40 h-[160px] px-3 text-center">
                 <LayoutGrid className="w-10 h-10" />
                 <span className="text-[10px] leading-tight">
-                  Connect reference images or entities to generate a board
+                  {t("node.connectReferenceImagesOrEntities")}
                 </span>
               </div>
             )}
@@ -332,7 +334,7 @@ function ReferenceBoardNodeComponent({ id, data, selected }: NodeProps) {
                   onKeyDown={(e) => {
                     if (e.key === "Enter") { e.preventDefault(); handleApplyRefine() }
                   }}
-                  placeholder={maskMode ? "Edit inside the mask…" : "Edit the whole board…"}
+                  placeholder={maskMode ? t("node.editInsideTheMask") : t("node.editTheWholeBoard")}
                   disabled={!canRefine}
                   className="flex-1 min-w-0 bg-transparent text-[11px] text-white placeholder:text-white/30 outline-none disabled:opacity-50"
                 />
@@ -340,7 +342,7 @@ function ReferenceBoardNodeComponent({ id, data, selected }: NodeProps) {
                   type="button"
                   onClick={handleApplyRefine}
                   disabled={!canRefine || !refineInstruction.trim()}
-                  title={maskMode ? "Brush a mask, then edit" : "Apply edit to whole board"}
+                  title={maskMode ? t("node.brushAMaskThenEdit") : t("node.applyEditToWholeBoard")}
                   className="w-6 h-6 flex items-center justify-center rounded-md bg-[#ff0073] text-white hover:bg-[#ff0073]/90 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
                 >
                   {maskMode ? <Brush className="w-3 h-3" /> : <Send className="w-3 h-3" />}
@@ -352,20 +354,20 @@ function ReferenceBoardNodeComponent({ id, data, selected }: NodeProps) {
                   onClick={() => setMaskMode((v) => !v)}
                   disabled={!canRefine}
                   aria-pressed={maskMode}
-                  title={maskMode ? "Mask on — edit only the brushed area" : "Mask off — edit the whole board"}
+                  title={maskMode ? t("node.maskOnEditBrushedArea") : t("node.maskOffEditWholeBoard")}
                   className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] border transition-colors disabled:opacity-40 ${
                     maskMode
                       ? "bg-[#ff0073] border-[#ff0073] text-white"
                       : "bg-white/5 border-white/10 text-white/70 hover:text-white"
                   }`}
                 >
-                  <Brush className="w-3 h-3" /> Mask
+                  <Brush className="w-3 h-3" /> {t("imgcfg.maskAlt")}
                 </button>
                 <button
                   type="button"
                   onClick={handleAddRef}
                   disabled={!canRefine}
-                  title="Attach a reference image for the edit"
+                  title={t("node.attachAReferenceImageFor")}
                   className="flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] border bg-white/5 border-white/10 text-white/70 hover:text-white transition-colors disabled:opacity-40"
                 >
                   <Plus className="w-3 h-3" />
@@ -376,10 +378,10 @@ function ReferenceBoardNodeComponent({ id, data, selected }: NodeProps) {
                   type="button"
                   onClick={handleReroll}
                   disabled={isRunning}
-                  title="Re-roll — generate a fresh board (new seed)"
+                  title={t("node.rerollFreshBoard")}
                   className="ml-auto flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] border bg-white/5 border-white/10 text-white/70 hover:text-white transition-colors disabled:opacity-40"
                 >
-                  <RefreshCw className="w-3 h-3" /> Re-roll
+                  <RefreshCw className="w-3 h-3" /> {t("node.reroll")}
                 </button>
               </div>
             </div>

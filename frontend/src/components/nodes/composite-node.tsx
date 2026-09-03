@@ -1,3 +1,4 @@
+import { useT } from "@/lib/i18n"
 import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Layers, Film, Loader2, AlertCircle } from "lucide-react"
@@ -10,6 +11,7 @@ import { NodeJobProgress } from "./node-job-progress"
 import type { CompositeData } from "@/types/nodes"
 
 function CompositeNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as CompositeData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
@@ -71,7 +73,7 @@ function CompositeNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex flex-col items-center justify-center gap-1 h-16 rounded-md bg-red-500/5 text-red-500 p-2">
             <div className="flex items-center gap-1.5">
               <AlertCircle className="w-4 h-4 shrink-0" />
-              <span className="font-medium">Failed</span>
+              <span className="font-medium">{t("node.failed")}</span>
             </div>
             {nodeData.errorMessage && (
               <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
@@ -94,10 +96,10 @@ function CompositeNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <HandleWithPopover nodeId={id} nodeType="composite" handleId="video1"      type="target" position={Position.Left}  label="Video 1"     color={HANDLE_COLORS.video} icon={<Film />}   side="left"  top="calc(100% - 120px)" />
-    <HandleWithPopover nodeId={id} nodeType="composite" handleId="video2"      type="target" position={Position.Left}  label="Video 2"     color={HANDLE_COLORS.video} icon={<Film />}   side="left"  top="calc(100% - 88px)" />
-    <HandleWithPopover nodeId={id} nodeType="composite" handleId="video3"      type="target" position={Position.Left}  label="Video 3"     color={HANDLE_COLORS.video} icon={<Film />}   side="left"  top="calc(100% - 56px)" />
-    <HandleWithPopover nodeId={id} nodeType="composite" handleId="video4"      type="target" position={Position.Left}  label="Video 4"     color={HANDLE_COLORS.video} icon={<Film />}   side="left"  top="calc(100% - 24px)" />
+    <HandleWithPopover nodeId={id} nodeType="composite" handleId="video1"      type="target" position={Position.Left}  label={t("node.video1")}     color={HANDLE_COLORS.video} icon={<Film />}   side="left"  top="calc(100% - 120px)" />
+    <HandleWithPopover nodeId={id} nodeType="composite" handleId="video2"      type="target" position={Position.Left}  label={t("node.video2")}     color={HANDLE_COLORS.video} icon={<Film />}   side="left"  top="calc(100% - 88px)" />
+    <HandleWithPopover nodeId={id} nodeType="composite" handleId="video3"      type="target" position={Position.Left}  label={t("node.video3")}     color={HANDLE_COLORS.video} icon={<Film />}   side="left"  top="calc(100% - 56px)" />
+    <HandleWithPopover nodeId={id} nodeType="composite" handleId="video4"      type="target" position={Position.Left}  label={t("node.video4")}     color={HANDLE_COLORS.video} icon={<Film />}   side="left"  top="calc(100% - 24px)" />
     <HandleWithPopover nodeId={id} nodeType="composite" handleId="composition" type="source" position={Position.Right} label="Composition" color={HANDLE_COLORS.control} icon={<Layers />} side="right" top="24px" />
     </div>
   )

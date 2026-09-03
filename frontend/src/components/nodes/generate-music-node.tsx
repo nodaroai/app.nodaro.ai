@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Music, Loader2, AlertCircle, Volume2, Type, LayoutGrid, Sparkles } from "lucide-react"
@@ -24,6 +25,7 @@ const ACCEPTS_REF_AUDIO   = (t: string) => isValidGenerateMusicConnection("ref-a
 const ACCEPTS_AUDIO_STYLE = (t: string) => isValidGenerateMusicConnection("audio-style", t, isVisualPicker)
 
 function GenerateMusicNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as GenerateMusicData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
@@ -130,7 +132,7 @@ function GenerateMusicNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex-1 flex flex-col items-center justify-center gap-1 min-h-[96px] rounded-md bg-red-500/5 text-red-500 p-2">
             <div className="flex items-center gap-1.5">
               <AlertCircle className="w-4 h-4 shrink-0" />
-              <span className="font-medium">Failed</span>
+              <span className="font-medium">{t("node.failed")}</span>
             </div>
             {nodeData.errorMessage && (
               <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
@@ -153,8 +155,8 @@ function GenerateMusicNodeComponent({ id, data, selected }: NodeProps) {
       </div>
     </BaseNode>
     <HandleWithPopover nodeId={id} nodeType="generate-music" handleId="prompt"      type="target" position={Position.Left}  label="Prompt"      color={TEXT_HANDLE_COLOR} icon={<Type />}      side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
-    <HandleWithPopover nodeId={id} nodeType="generate-music" handleId="ref-audio"   type="target" position={Position.Left}  label="Ref audio"   color={HANDLE_COLORS.audio} icon={<Music />}     side="left"  top="calc(100% - 56px)" orderMatters accepts={ACCEPTS_REF_AUDIO} />
-    <HandleWithPopover nodeId={id} nodeType="generate-music" handleId="audio-style" type="target" position={Position.Left}  label="Audio style" color={HANDLE_COLORS.audio} icon={<Sparkles />}  side="left"  top="calc(100% - 88px)" accepts={ACCEPTS_AUDIO_STYLE} />
+    <HandleWithPopover nodeId={id} nodeType="generate-music" handleId="ref-audio"   type="target" position={Position.Left}  label={t("node.refAudio")}   color={HANDLE_COLORS.audio} icon={<Music />}     side="left"  top="calc(100% - 56px)" orderMatters accepts={ACCEPTS_REF_AUDIO} />
+    <HandleWithPopover nodeId={id} nodeType="generate-music" handleId="audio-style" type="target" position={Position.Left}  label={t("node.audioStyle")} color={HANDLE_COLORS.audio} icon={<Sparkles />}  side="left"  top="calc(100% - 88px)" accepts={ACCEPTS_AUDIO_STYLE} />
     <HandleWithPopover nodeId={id} nodeType="generate-music" handleId="audio"       type="source" position={Position.Right} label="Audio"       color={HANDLE_COLORS.audio} icon={<Music />}     side="right" top="24px" />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}

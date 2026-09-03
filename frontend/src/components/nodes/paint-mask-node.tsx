@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState, useEffect, lazy, Suspense } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Paintbrush, Layers, Image as ImageIcon, Link2, RotateCcw, Download } from "lucide-react"
@@ -120,6 +121,7 @@ const ACCEPTS_IMAGE = (t: string) => isValidPaintMaskConnection("image", t)
 const ACCEPTS_MASK = (t: string) => isValidPaintMaskConnection("mask", t)
 
 function PaintMaskNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as PaintMaskData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
 
@@ -183,7 +185,7 @@ function PaintMaskNodeComponent({ id, data, selected }: NodeProps) {
                 <div className="w-[34px] h-[34px] rounded-[9px] border border-border dark:border-[#2e2e34] flex items-center justify-center text-muted-foreground/60 dark:text-[#4f4f57]">
                   <Link2 className="w-4 h-4" />
                 </div>
-                <div className="text-muted-foreground dark:text-[#75757c] text-xs">Connect an image to paint on</div>
+                <div className="text-muted-foreground dark:text-[#75757c] text-xs">{t("node.connectAnImageToPaint")}</div>
                 <div className="text-muted-foreground/60 dark:text-[#4f4f57] text-[10.5px] font-mono">wire the image input</div>
               </div>
             )}
@@ -197,7 +199,7 @@ function PaintMaskNodeComponent({ id, data, selected }: NodeProps) {
                 className="nodrag relative w-full h-full min-h-[200px] block text-left cursor-pointer"
                 onClick={(e) => { e.stopPropagation(); openPainter() }}
                 onDoubleClick={openPainter}
-                title="Paint mask"
+                title={t("node.paintMask")}
               >
                 <img
                   src={optimizedImageUrl(substrateUrl)}
@@ -207,12 +209,12 @@ function PaintMaskNodeComponent({ id, data, selected }: NodeProps) {
                 />
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-3"
                   style={{ background: "linear-gradient(180deg, rgba(10,10,12,.35), rgba(10,10,12,.8))" }}>
-                  <div className="text-[#e6e6ea] text-xs">No mask painted yet</div>
+                  <div className="text-[#e6e6ea] text-xs">{t("node.noMaskPaintedYet")}</div>
                   <span
                     className="flex items-center gap-2 h-9 px-4 rounded-[10px] text-white text-[12.5px] font-medium"
                     style={{ background: PINK, boxShadow: "0 6px 20px rgba(255,0,115,.35)" }}
                   >
-                    <Paintbrush className="w-3.5 h-3.5" /> Paint mask
+                    <Paintbrush className="w-3.5 h-3.5" /> {t("node.paintMask")}
                   </span>
                 </div>
               </button>
@@ -267,27 +269,27 @@ function PaintMaskNodeComponent({ id, data, selected }: NodeProps) {
                       style={{ background: PINK }}
                       onClick={(e) => { e.stopPropagation(); openPainter() }}
                       disabled={!substrateUrl}
-                      title={substrateUrl ? "Edit mask" : "Connect an image first"}
+                      title={substrateUrl ? t("node.editMask") : t("imgcfg.connectImageFirst")}
                     >
-                      Edit mask
+                      {t("node.editMask")}
                     </button>
                     <button
                       type="button"
-                      aria-label="Clear mask"
+                      aria-label={t("node.clearMask")}
                       className="w-[34px] h-[34px] rounded-[9px] border border-[#34343b] text-[#c9c9d0] hover:bg-[#26262b] flex items-center justify-center"
                       style={{ background: "rgba(20,20,24,.9)" }}
                       onClick={(e) => { e.stopPropagation(); updateNodeData(id, { maskUrl: undefined, maskUpdatedAt: undefined }) }}
-                      title="Clear mask"
+                      title={t("node.clearMask")}
                     >
                       <RotateCcw className="w-3.5 h-3.5" />
                     </button>
                     <button
                       type="button"
-                      aria-label="Download mask"
+                      aria-label={t("node.downloadMask")}
                       className="w-[34px] h-[34px] rounded-[9px] border border-[#34343b] text-[#c9c9d0] hover:bg-[#26262b] flex items-center justify-center"
                       style={{ background: "rgba(20,20,24,.9)" }}
                       onClick={handleDownload}
-                      title="Download mask"
+                      title={t("node.downloadMask")}
                     >
                       <Download className="w-3.5 h-3.5" />
                     </button>
@@ -301,7 +303,7 @@ function PaintMaskNodeComponent({ id, data, selected }: NodeProps) {
           <div className="shrink-0 flex items-center justify-between gap-2 px-3 py-2.5 border-t border-border dark:border-[#1d1d21]">
             {state === 1 && (
               <>
-                <span className="text-muted-foreground/60 dark:text-[#4f4f57] text-[11px]">Waiting for input</span>
+                <span className="text-muted-foreground/60 dark:text-[#4f4f57] text-[11px]">{t("node.waitingForInput")}</span>
                 <span className="px-2 py-0.5 rounded-full bg-muted dark:bg-[#1a1a1e] text-muted-foreground/70 dark:text-[#5c5c64] text-[10px] font-mono">idle</span>
               </>
             )}
@@ -315,7 +317,7 @@ function PaintMaskNodeComponent({ id, data, selected }: NodeProps) {
               <>
                 <span className="flex items-center gap-1.5 text-foreground/70 dark:text-[#a1a1a8] text-[11px]">
                   <span className="w-1.5 h-1.5 rounded-full" style={{ background: PINK }} />
-                  Mask ready
+                  {t("node.maskReady")}
                 </span>
                 <span className="text-muted-foreground/60 dark:text-[#4f4f57] text-[10.5px] font-mono">{edited ?? dims ?? ""}</span>
               </>
@@ -324,7 +326,7 @@ function PaintMaskNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </BaseNode>
       <HandleWithPopover nodeId={id} nodeType="paint-mask" handleId="image" type="target" position={Position.Left}  label="Image" color={HANDLE_COLORS.image} icon={<ImageIcon />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_IMAGE} />
-      <HandleWithPopover nodeId={id} nodeType="paint-mask" handleId="mask"  type="target" position={Position.Left}  label="Mask seed" color={HANDLE_COLORS.mask} icon={<Layers />} side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_MASK} />
+      <HandleWithPopover nodeId={id} nodeType="paint-mask" handleId="mask"  type="target" position={Position.Left}  label={t("node.maskSeed")} color={HANDLE_COLORS.mask} icon={<Layers />} side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_MASK} />
       <HandleWithPopover nodeId={id} nodeType="paint-mask" handleId="mask"  type="source" position={Position.Right} label="Mask"  color={HANDLE_COLORS.mask} icon={<Layers />}    side="right" top="24px" />
 
       {painterOpen && substrateUrl && (

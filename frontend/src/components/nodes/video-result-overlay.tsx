@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useRef } from "react"
 import { X, Expand, Download, Link, Settings, Scissors } from "lucide-react"
 import { copyToClipboard } from "@/lib/utils"
@@ -42,6 +43,7 @@ function VideoResultOverlayComponent({
   isSettingsOpen,
   onEdit,
 }: VideoResultOverlayProps) {
+  const t = useT()
   const videoElRef = useRef<HTMLVideoElement | null>(null)
   // Manual loop driver — avoids the native `<video loop>` EOS pause that
   // shows as a visible jitter at the seam on tight loops. Native `loop`
@@ -80,7 +82,7 @@ function VideoResultOverlayComponent({
         <div className="absolute top-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
           <button
             type="button"
-            aria-label="Remove result"
+            aria-label={t("node.removeResult")}
             className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
             onClick={(e) => { e.stopPropagation(); onDelete() }}
           >
@@ -91,7 +93,7 @@ function VideoResultOverlayComponent({
       <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover/video:opacity-100 transition-opacity">
         <button
           type="button"
-          aria-label="Expand preview"
+          aria-label={t("node.expandPreview")}
           className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
           onClick={(e) => { e.stopPropagation(); onExpand() }}
         >
@@ -113,7 +115,7 @@ function VideoResultOverlayComponent({
         </button>
         <button
           type="button"
-          aria-label="Copy URL"
+          aria-label={t("cfgshared.copyUrl")}
           className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
           onClick={(e) => {
             e.stopPropagation()
@@ -125,10 +127,10 @@ function VideoResultOverlayComponent({
         {onEdit && (
           <button
             type="button"
-            aria-label="Edit in NodarCut"
+            aria-label={t("node.editInNodarcut")}
             className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
             onClick={(e) => { e.stopPropagation(); onEdit() }}
-            title="Edit in NodarCut"
+            title={t("node.editInNodarcut")}
           >
             <Scissors className="w-3.5 h-3.5" />
           </button>

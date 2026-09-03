@@ -1,3 +1,4 @@
+import { useT } from "@/lib/i18n"
 import { type MouseEvent as ReactMouseEvent, type ReactNode } from "react"
 import { useStore } from "@xyflow/react"
 import { MoreHorizontal } from "lucide-react"
@@ -36,6 +37,7 @@ export function NodeTopToolbar({
   readonly onLeave: () => void
   readonly onPresetOpenChange: (open: boolean) => void
 }) {
+  const t = useT()
   const canvasZoom = useStore((s) => s.transform[2])
   const scale = flooredCanvasScale(canvasZoom)
   return (
@@ -46,7 +48,7 @@ export function NodeTopToolbar({
           <button
             className="node-more-menu-btn text-muted-foreground transition-colors"
             onClick={onMoreMenu}
-            aria-label="More options"
+            aria-label={t("editor.moreOptions")}
           >
             <MoreHorizontal size={Math.round(scale * 13)} />
           </button>

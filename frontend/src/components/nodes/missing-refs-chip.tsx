@@ -1,3 +1,4 @@
+import { useT } from "@/lib/i18n"
 import { useState } from "react"
 import { useStore } from "@xyflow/react"
 import { AlertTriangle } from "lucide-react"
@@ -23,6 +24,7 @@ interface MissingRefsChipProps {
  * prompt-bearing node inherits it. Renders null when there's nothing to add.
  */
 export function MissingRefsChip({ nodeId, nodeType, handleId }: MissingRefsChipProps) {
+  const t = useT()
   const missing = useMissingPromptRefs(nodeId)
   const isReadOnly = useWorkflowStore((s) => s.isReadOnly)
   const openPopup = useWorkflowStore((s) => s.openAddNodePopupForHandle)
@@ -66,7 +68,7 @@ export function MissingRefsChip({ nodeId, nodeType, handleId }: MissingRefsChipP
         </PopoverTrigger>
         <PopoverContent align="start" side="bottom" className="w-52 p-1">
           <div className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
-            Add missing input
+            {t("node.addMissingInput")}
           </div>
           {missing.map((ref) => (
             <button

@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { AlignLeft, Loader2, AlertCircle, AudioWaveform, FileText, Copy, X } from "lucide-react"
@@ -19,6 +20,7 @@ const ACCEPTS_AUDIO      = (t: string) => isValidForcedAlignmentConnection("audi
 const ACCEPTS_TRANSCRIPT = (t: string) => isValidForcedAlignmentConnection("transcript", t)
 
 function ForcedAlignmentNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as ForcedAlignmentData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
@@ -79,7 +81,7 @@ function ForcedAlignmentNodeComponent({ id, data, selected }: NodeProps) {
             <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
                 type="button"
-                aria-label="Copy data"
+                aria-label={t("node.copyData")}
                 className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                 onClick={(e) => {
                   e.stopPropagation()
@@ -90,7 +92,7 @@ function ForcedAlignmentNodeComponent({ id, data, selected }: NodeProps) {
               </button>
               <button
                 type="button"
-                aria-label="Delete result"
+                aria-label={t("node.deleteResult")}
                 className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                 onClick={(e) => {
                   e.stopPropagation()
@@ -107,7 +109,7 @@ function ForcedAlignmentNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex flex-col items-center justify-center gap-1 h-12 rounded-md bg-red-500/5 text-red-500 p-2">
             <div className="flex items-center gap-1.5">
               <AlertCircle className="w-4 h-4 shrink-0" />
-              <span className="font-medium">Failed</span>
+              <span className="font-medium">{t("node.failed")}</span>
             </div>
             {nodeData.errorMessage && (
               <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
@@ -124,7 +126,7 @@ function ForcedAlignmentNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         <div className="flex justify-between text-muted-foreground">
-          <span>Forced Alignment</span>
+          <span>{t("node.forcedAlignment")}</span>
         </div>
       </div>
     </BaseNode>

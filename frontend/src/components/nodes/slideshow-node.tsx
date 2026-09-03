@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState, useEffect, useMemo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { GalleryHorizontalEnd, Loader2, AlertCircle, X, Images as ImagesIcon, Volume2, Film, ArrowLeftRight, RotateCcw } from "lucide-react"
@@ -37,6 +38,7 @@ const ACCEPTS_TRANSITION = (t: string) => isValidSlideshowConnection("transition
 const MAX_IMAGES = 100
 
 function SlideshowNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as SlideshowData
   // Zero credits by design (local FFmpeg, no provider) — static 0, no ee
   // pricing hook (check-ee-imports; matches still-to-video).
@@ -153,15 +155,15 @@ function SlideshowNodeComponent({ id, data, selected }: NodeProps) {
             {tooFew && !isEncoding && !isQueued && (
               <div className="flex-1 min-h-24 flex flex-col items-center justify-center gap-1.5 rounded-md border border-red-500/40 bg-red-500/5 p-3 text-center">
                 <div className="w-7 h-7 rounded-md bg-red-500/15 border border-red-500/50 flex items-center justify-center text-red-500 text-sm">!</div>
-                <span className="text-[11px] text-red-400 font-medium">Only 1 image</span>
-                <span className="text-[10px] text-muted-foreground leading-snug">Slideshow needs at least 2. For a single still, use <span className="text-foreground">Still to Video</span> — same output, no list needed.</span>
+                <span className="text-[11px] text-red-400 font-medium">{t("node.only1Image")}</span>
+                <span className="text-[10px] text-muted-foreground leading-snug">{t("node.slideshowNeedsAtLeast2")} <span className="text-foreground">{t("node.stillToVideo")}</span> — same output, no list needed.</span>
               </div>
             )}
             {tooMany && !isEncoding && !isQueued && (
               <div className="flex-1 min-h-24 flex flex-col items-center justify-center gap-1.5 rounded-md border border-red-500/40 bg-red-500/5 p-3 text-center">
                 <div className="w-7 h-7 rounded-md bg-red-500/15 border border-red-500/50 flex items-center justify-center text-red-500 text-sm">!</div>
                 <span className="text-[11px] text-red-400 font-medium">{n} images</span>
-                <span className="text-[10px] text-muted-foreground leading-snug">Cap is {MAX_IMAGES}. Trim the set upstream — rendering this would take hours rather than fail fast.</span>
+                <span className="text-[10px] text-muted-foreground leading-snug">{t("node.capIs")} {MAX_IMAGES}. Trim the set upstream — rendering this would take hours rather than fail fast.</span>
               </div>
             )}
 
@@ -173,7 +175,7 @@ function SlideshowNodeComponent({ id, data, selected }: NodeProps) {
                   <span className="w-1.5 h-1.5 rounded-full bg-foreground/70 animate-pulse [animation-delay:200ms]" />
                   <span className="w-1.5 h-1.5 rounded-full bg-foreground/70 animate-pulse [animation-delay:400ms]" />
                 </div>
-                <span className="text-xs text-foreground/90">Queued</span>
+                <span className="text-xs text-foreground/90">{t("node.queued")}</span>
               </div>
             )}
 
@@ -207,14 +209,14 @@ function SlideshowNodeComponent({ id, data, selected }: NodeProps) {
                   )}
                   <div className="relative flex flex-col items-center justify-center gap-1.5 h-full p-3 text-center">
                     <div className="w-7 h-7 rounded-md bg-red-500/15 border border-red-500/50 flex items-center justify-center"><AlertCircle className="w-4 h-4 text-red-500" /></div>
-                    <span className="text-[11px] text-red-400 font-medium">Failed</span>
+                    <span className="text-[11px] text-red-400 font-medium">{t("node.failed")}</span>
                     {nodeData.errorMessage && (
                       <p className="text-[9px] font-mono text-muted-foreground line-clamp-2" title={nodeData.errorMessage}>{nodeData.errorMessage}</p>
                     )}
                   </div>
                 </div>
                 <button type="button" className="nodrag w-full h-8 rounded-lg border border-red-500/50 bg-red-500/10 text-red-400 text-xs hover:bg-red-500/20 transition-colors flex items-center justify-center gap-1.5" onClick={(e) => { e.stopPropagation(); runSingleNode?.(id) }}>
-                  <RotateCcw className="w-3 h-3" /> Retry
+                  <RotateCcw className="w-3 h-3" /> {t("editor.retry")}
                 </button>
               </div>
             )}
@@ -288,7 +290,7 @@ function SlideshowNodeComponent({ id, data, selected }: NodeProps) {
                     ) : (
                       <video src={r.url} crossOrigin="anonymous" className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${i === activeIndex ? "opacity-100 ring-2 ring-primary" : "opacity-50 hover:opacity-80"}`} onClick={(e) => { e.stopPropagation(); updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url }) }} muted playsInline />
                     )}
-                    <button type="button" aria-label="Remove result" className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(i) }}><X className="w-2.5 h-2.5" /></button>
+                    <button type="button" aria-label={t("node.removeResult")} className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(i) }}><X className="w-2.5 h-2.5" /></button>
                   </div>
                 ))}
               </div>

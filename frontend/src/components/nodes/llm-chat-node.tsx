@@ -70,6 +70,7 @@ const SHOW_OUTPUTS_BTN_ACTIVE =
   "shrink-0 h-6 px-1.5 inline-flex items-center gap-1 rounded-md bg-[#ff0073] text-white hover:bg-[#ff0073]/90 transition-colors"
 
 function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   // Locale subscription, called for the re-render only (no binding: the
   // template lookups below already use `t` as their `.find()` parameter).
   // The template labels come from GENERATE_TEXT_TEMPLATES(), which resolves
@@ -217,17 +218,17 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
                     type="button"
                     aria-label={
                       outputView === "rendered"
-                        ? "Show raw text"
+                        ? t("node.showRawText")
                         : isJsonOutput
-                          ? "View as JSON"
-                          : "View as Markdown"
+                          ? t("node.viewAsJson")
+                          : t("node.viewAsMarkdown")
                     }
                     title={
                       outputView === "rendered"
-                        ? "Show raw text"
+                        ? t("node.showRawText")
                         : isJsonOutput
-                          ? "View as JSON"
-                          : "View as Markdown"
+                          ? t("node.viewAsJson")
+                          : t("node.viewAsMarkdown")
                     }
                     aria-pressed={outputView === "rendered"}
                     className={outputView === "rendered" ? SHOW_OUTPUTS_BTN_ACTIVE : STRIP_BTN}
@@ -240,20 +241,20 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
                   </button>
                   <button
                     type="button"
-                    aria-label="Copy text"
-                    title="Copy text"
+                    aria-label={t("node.copyText")}
+                    title={t("node.copyText")}
                     className={STRIP_BTN}
                     onClick={(e) => {
                       e.stopPropagation()
-                      copyToClipboard(activeText ?? "", "Text copied")
+                      copyToClipboard(activeText ?? "", t("node.textCopied"))
                     }}
                   >
                     <Copy className="w-3.5 h-3.5" />
                   </button>
                   <button
                     type="button"
-                    aria-label="Download"
-                    title="Download"
+                    aria-label={t("cfgshared.download")}
+                    title={t("cfgshared.download")}
                     className={STRIP_BTN}
                     onClick={(e) => {
                       e.stopPropagation()
@@ -265,8 +266,8 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
                   {results.length > 0 && (
                     <button
                       type="button"
-                      aria-label="Open log"
-                      title="Execution log"
+                      aria-label={t("node.openLog")}
+                      title={t("node.executionLog2")}
                       className={STRIP_BTN}
                       onClick={(e) => {
                         e.stopPropagation()
@@ -280,8 +281,8 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
                   {results.length > 1 && (
                     <button
                       type="button"
-                      aria-label={showThumbnails ? "Hide outputs" : "Show outputs"}
-                      title={showThumbnails ? "Hide outputs" : "Show outputs"}
+                      aria-label={showThumbnails ? t("node.hideOutputs") : t("node.showOutputs")}
+                      title={showThumbnails ? t("node.hideOutputs") : t("node.showOutputs")}
                       aria-pressed={showThumbnails}
                       className={showThumbnails ? SHOW_OUTPUTS_BTN_ACTIVE : SHOW_OUTPUTS_BTN}
                       onClick={(e) => {
@@ -296,8 +297,8 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
                   {results.length > 0 && (
                     <button
                       type="button"
-                      aria-label="Remove"
-                      title="Delete this result"
+                      aria-label={t("imgcfg.remove")}
+                      title={t("node.deleteThisResult")}
                       className={STRIP_DELETE_BTN}
                       onClick={(e) => {
                         e.stopPropagation()
@@ -370,7 +371,7 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
             <div className="flex flex-col items-center justify-center gap-1 h-12 rounded-md bg-red-500/5 text-red-500 p-2">
               <div className="flex items-center gap-1.5">
                 <AlertCircle className="w-4 h-4 shrink-0" />
-                <span className="font-medium">Failed</span>
+                <span className="font-medium">{t("node.failed")}</span>
               </div>
               {nodeData.errorMessage && (
                 <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
@@ -382,7 +383,7 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
 
           {status !== "running" && !activeText && status !== "failed" && (
             <div className="flex items-center justify-center py-6 text-muted-foreground/40">
-              <span className="text-xs">No output yet</span>
+              <span className="text-xs">{t("node.noOutputYet")}</span>
             </div>
           )}
         </div>
@@ -409,8 +410,8 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
                   <FileText className="w-4 h-4 text-primary" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-foreground">Execution Log</p>
-                  <p className="text-[11px] text-muted-foreground">{nodeData.label} · {results.length} result{results.length !== 1 ? 's' : ''}</p>
+                  <p className="text-sm font-semibold text-foreground">{t("node.executionLog")}</p>
+                  <p className="text-[11px] text-muted-foreground">{nodeData.label} · {results.length === 1 ? t("node.resultCountOne", { n: results.length }) : t("node.resultCountMany", { n: results.length })}</p>
                 </div>
               </div>
               <button
@@ -447,10 +448,10 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
                     {/* Run header */}
                     <div className="flex items-center gap-2 px-4 py-2.5 bg-white/5">
                       <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                        Run {groupEntries.length - groupIdx}
+                        {t("node.runN", { n: groupEntries.length - groupIdx })}
                       </span>
                       <span className="text-[10px] text-muted-foreground/50">·</span>
-                      <span className="text-[10px] text-muted-foreground/50">{groupResults.length} iteration{groupResults.length !== 1 ? 's' : ''}</span>
+                      <span className="text-[10px] text-muted-foreground/50">{groupResults.length === 1 ? t("node.iterationCountOne", { n: groupResults.length }) : t("node.iterationCountMany", { n: groupResults.length })}</span>
                       {runModelLabel && (
                         <span className="ml-auto inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-muted-foreground font-medium">
                           <Sparkles className="w-2.5 h-2.5" />
@@ -494,22 +495,22 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
                               <div className="px-4 pb-4 grid grid-cols-3 gap-4">
                                 <div className="rounded-lg p-3 overflow-y-auto" style={{ background: '#818cf810', maxHeight: '300px' }}>
                                   <div className="flex items-center justify-between mb-2">
-                                    <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: '#818cf8' }}>Instructions</p>
-                                    {sys && <button type="button" onClick={() => copyToClipboard(sys, "Copied")} className="text-[9px] text-muted-foreground/50 hover:text-muted-foreground transition-colors flex items-center gap-0.5"><Copy className="w-2.5 h-2.5" />Copy</button>}
+                                    <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: '#818cf8' }}>{t("node.instructions")}</p>
+                                    {sys && <button type="button" onClick={() => copyToClipboard(sys, t("node.copied"))} className="text-[9px] text-muted-foreground/50 hover:text-muted-foreground transition-colors flex items-center gap-0.5"><Copy className="w-2.5 h-2.5" />{t("node.copy")}</button>}
                                   </div>
                                   <p className="text-[11px] whitespace-pre-wrap leading-relaxed" style={{ color: '#a5b4fc' }}>{sys || '—'}</p>
                                 </div>
                                 <div className="rounded-lg p-3 overflow-y-auto" style={{ background: '#34d39910', maxHeight: '300px' }}>
                                   <div className="flex items-center justify-between mb-2">
-                                    <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: '#34d399' }}>User Prompt</p>
-                                    {usr && <button type="button" onClick={() => copyToClipboard(usr, "Copied")} className="text-[9px] text-muted-foreground/50 hover:text-muted-foreground transition-colors flex items-center gap-0.5"><Copy className="w-2.5 h-2.5" />Copy</button>}
+                                    <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: '#34d399' }}>{t("txtcfg.userPromptLabel")}</p>
+                                    {usr && <button type="button" onClick={() => copyToClipboard(usr, t("node.copied"))} className="text-[9px] text-muted-foreground/50 hover:text-muted-foreground transition-colors flex items-center gap-0.5"><Copy className="w-2.5 h-2.5" />{t("node.copy")}</button>}
                                   </div>
                                   <p className="text-[11px] whitespace-pre-wrap leading-relaxed" style={{ color: '#6ee7b7' }}>{usr || '—'}</p>
                                 </div>
                                 <div className="rounded-lg p-3 bg-white/5 overflow-y-auto" style={{ maxHeight: '300px' }}>
                                   <div className="flex items-center justify-between mb-2">
-                                    <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Output</p>
-                                    {r.text && <button type="button" onClick={() => copyToClipboard(r.text, "Copied")} className="text-[9px] text-muted-foreground/50 hover:text-muted-foreground transition-colors flex items-center gap-0.5"><Copy className="w-2.5 h-2.5" />Copy</button>}
+                                    <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">{t("node.output")}</p>
+                                    {r.text && <button type="button" onClick={() => copyToClipboard(r.text, t("node.copied"))} className="text-[9px] text-muted-foreground/50 hover:text-muted-foreground transition-colors flex items-center gap-0.5"><Copy className="w-2.5 h-2.5" />{t("node.copy")}</button>}
                                   </div>
                                   <p className="text-[11px] whitespace-pre-wrap leading-relaxed text-foreground/80">{r.text}</p>
                                 </div>

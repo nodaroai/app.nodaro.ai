@@ -1,5 +1,6 @@
 "use client"
 
+import { useT, tx, type MessageKey } from "@/lib/i18n"
 import { useEffect, useMemo, useRef, useState } from "react"
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -27,13 +28,14 @@ interface Props {
   onClose: () => void
 }
 
-const LANGUAGE_LABELS: Record<SunoVoiceLanguage, string> = {
-  en: "English", zh: "Chinese", es: "Spanish", fr: "French", pt: "Portuguese",
-  de: "German",  ja: "Japanese", ko: "Korean", hi: "Hindi", ru: "Russian",
+const LANGUAGE_LABEL_KEYS: Record<SunoVoiceLanguage, MessageKey> = {
+  en: "langname.en", zh: "langname.zh", es: "langname.es", fr: "langname.fr", pt: "langname.pt",
+  de: "langname.de", ja: "langname.ja", ko: "langname.ko", hi: "langname.hi", ru: "langname.ru",
 }
 
-const SKILL_LABELS: Record<SunoVoiceSkillLevel, string> = {
-  beginner: "Beginner", intermediate: "Intermediate", advanced: "Advanced", professional: "Professional",
+const SKILL_LABEL_KEYS: Record<SunoVoiceSkillLevel, MessageKey> = {
+  beginner: "node.skillBeginner", intermediate: "node.skillIntermediate",
+  advanced: "node.skillAdvanced", professional: "node.skillProfessional",
 }
 
 type Step = 1 | 2 | 3
@@ -44,6 +46,7 @@ const RECORD_POLL_MS = 3_000
 const RECORD_MAX_ATTEMPTS = 80            // 4 min
 
 export function SunoVoiceSetupModal({ nodeId, data, open, onClose }: Props) {
+  const t = useT()
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
 
   // Step state — initialized from saved node data so a partially-completed
@@ -97,7 +100,7 @@ export function SunoVoiceSetupModal({ nodeId, data, open, onClose }: Props) {
   // ── Step 1: validate ─────────────────────────────────────────────────────
   async function handleValidate(): Promise<void> {
     if (!segmentValid) {
-      toast.error("Provide an audio URL and a valid vocal segment.")
+      toast.error(tx("node.provideAudioUrlAndSegment"))
       return
     }
     setValidating(true)
@@ -134,7 +137,7 @@ export function SunoVoiceSetupModal({ nodeId, data, open, onClose }: Props) {
       const msg = (err as Error).message
       setError(msg)
       persist({ status: "fail", errorMessage: msg })
-      toast.error(`Validation failed: ${msg}`)
+      toast.error(tx("node.validationFailedWith", { message: msg }))
     } finally {
       setValidating(false)
     }
@@ -149,7 +152,7 @@ export function SunoVoiceSetupModal({ nodeId, data, open, onClose }: Props) {
           return info.validateInfo
         }
         if (info.status === "fail" || info.status === "processing_validate_fail") {
-          throw new Error(info.errorMessage || "Validation failed")
+          throw new Error(info.errorMessage || tx("node.validationFailed"))
         }
       } catch (err) {
         // transient network errors are tolerable for first ~3 attempts; thereafter bubble up
@@ -157,7 +160,7 @@ export function SunoVoiceSetupModal({ nodeId, data, open, onClose }: Props) {
       }
       await sleep(VALIDATE_POLL_MS, signal)
     }
-    throw new Error("Validation timed out — try again or pick a different vocal segment")
+    throw new Error(tx("node.validationTimedOut"))
   }
 
   async function handleRegenerate(): Promise<void> {
@@ -180,7 +183,7 @@ export function SunoVoiceSetupModal({ nodeId, data, open, onClose }: Props) {
     } catch (err) {
       const msg = (err as Error).message
       setError(msg)
-      toast.error(`Regenerate failed: ${msg}`)
+      toast.error(tx("node.regenerateFailedWith", { message: msg }))
     } finally {
       setRegenerating(false)
     }
@@ -194,7 +197,7 @@ export function SunoVoiceSetupModal({ nodeId, data, open, onClose }: Props) {
       setVerifyUrl(url)
       persist({ verifyAudioUrl: url })
     } catch (err) {
-      toast.error(`Upload failed: ${(err as Error).message}`)
+      toast.error(tx("node.uploadFailedWith", { message: (err as Error).message }))
     } finally {
       setUploadingVerify(false)
     }
@@ -207,7 +210,7 @@ export function SunoVoiceSetupModal({ nodeId, data, open, onClose }: Props) {
       setSourceUrl(url)
       persist({ sourceAudioUrl: url })
     } catch (err) {
-      toast.error(`Upload failed: ${(err as Error).message}`)
+      toast.error(tx("node.uploadFailedWith", { message: (err as Error).message }))
     } finally {
       setUploadingSource(false)
     }
@@ -216,7 +219,7 @@ export function SunoVoiceSetupModal({ nodeId, data, open, onClose }: Props) {
   // ── Step 3: generate ─────────────────────────────────────────────────────
   async function handleGenerate(): Promise<void> {
     if (!validateTaskId || !verifyUrl.trim()) {
-      toast.error("Missing validation task or verify recording.")
+      toast.error(tx("node.missingValidationTask"))
       return
     }
     setGenerating(true)
@@ -251,13 +254,13 @@ export function SunoVoiceSetupModal({ nodeId, data, open, onClose }: Props) {
         status: "success",
         errorMessage: undefined,
       })
-      toast.success(`Voice "${voiceName.trim() || "Untitled"}" is ready`)
+      toast.success(tx("node.voiceIsReady", { name: voiceName.trim() || tx("exec.untitled") }))
       onClose()
     } catch (err) {
       const msg = (err as Error).message
       setError(msg)
       persist({ status: "fail", errorMessage: msg })
-      toast.error(`Generation failed: ${msg}`)
+      toast.error(tx("node.generationFailedWith", { message: msg }))
     } finally {
       setGenerating(false)
     }
@@ -272,14 +275,14 @@ export function SunoVoiceSetupModal({ nodeId, data, open, onClose }: Props) {
           return info.voiceId
         }
         if (info.status === "fail" || info.status === "processing_validate_fail") {
-          throw new Error(info.errorMessage || "Voice generation failed")
+          throw new Error(info.errorMessage || tx("node.voiceGenerationFailed"))
         }
       } catch (err) {
         if (i > 2) throw err
       }
       await sleep(RECORD_POLL_MS, signal)
     }
-    throw new Error("Voice generation timed out — check status later or try again")
+    throw new Error(tx("node.voiceGenerationTimedOut"))
   }
 
   // ── Render ───────────────────────────────────────────────────────────────
@@ -289,19 +292,22 @@ export function SunoVoiceSetupModal({ nodeId, data, open, onClose }: Props) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Mic className="w-4 h-4 text-indigo-500" />
-            Suno Voice Persona — Setup
+            {t("node.sunoVoicePersonaSetup")}
           </DialogTitle>
           <DialogDescription>
-            Create a custom voice from a short recording. Step {step} of 3
-            {step === 3 && data.voiceId ? " — already generated" : ""}.
-            Cost: <span className="font-medium">20 credits</span> charged once on Step 3.
+            {t("node.sunoSetupStepOf3", { step })}
+            {step === 3 && data.voiceId ? <>{" "}{t("node.sunoSetupAlreadyGenerated")}</> : null}
+            {". "}
+            {t("node.sunoSetupCostPre")}{" "}
+            <span className="font-medium">{t("node.sunoSetupCostCredits")}</span>{" "}
+            {t("node.sunoSetupCostPost")}
           </DialogDescription>
         </DialogHeader>
 
         {step === 1 && (
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="srcUrl">Source recording URL</Label>
+              <Label htmlFor="srcUrl">{t("node.sourceRecordingUrl")}</Label>
               <div className="flex gap-2">
                 <Input
                   id="srcUrl"
@@ -329,14 +335,13 @@ export function SunoVoiceSetupModal({ nodeId, data, open, onClose }: Props) {
                 </label>
               </div>
               <p className="text-[11px] text-muted-foreground">
-                Paste a hosted clip or upload an audio file. The selected vocal
-                segment will be analyzed to build a validation phrase.
+                {t("node.pasteAHostedClipOr")}
               </p>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="vocalStart">Vocal segment start (s)</Label>
+                <Label htmlFor="vocalStart">{t("node.vocalSegmentStartS")}</Label>
                 <Input
                   id="vocalStart"
                   type="number"
@@ -347,7 +352,7 @@ export function SunoVoiceSetupModal({ nodeId, data, open, onClose }: Props) {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="vocalEnd">Vocal segment end (s)</Label>
+                <Label htmlFor="vocalEnd">{t("node.vocalSegmentEndS")}</Label>
                 <Input
                   id="vocalEnd"
                   type="number"
@@ -360,14 +365,14 @@ export function SunoVoiceSetupModal({ nodeId, data, open, onClose }: Props) {
             </div>
 
             <div className="space-y-1.5">
-              <Label>Phrase language</Label>
+              <Label>{t("node.phraseLanguage")}</Label>
               <Select value={language} onValueChange={(v) => setLanguage(v as SunoVoiceLanguage)}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(LANGUAGE_LABELS).map(([key, label]) => (
-                    <SelectItem key={key} value={key}>{label}</SelectItem>
+                  {Object.entries(LANGUAGE_LABEL_KEYS).map(([key, messageKey]) => (
+                    <SelectItem key={key} value={key}>{t(messageKey)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -385,10 +390,10 @@ export function SunoVoiceSetupModal({ nodeId, data, open, onClose }: Props) {
         {step === 2 && (
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <Label>Read this phrase aloud and upload the recording</Label>
+              <Label>{t("node.readThisPhraseAloudAnd")}</Label>
               <div className="p-3 rounded-md border bg-muted/30 text-sm font-medium">
                 {validateInfo || (
-                  <span className="text-muted-foreground italic">Waiting for phrase…</span>
+                  <span className="text-muted-foreground italic">{t("node.waitingForPhrase")}</span>
                 )}
               </div>
               <Button
@@ -399,12 +404,12 @@ export function SunoVoiceSetupModal({ nodeId, data, open, onClose }: Props) {
                 onClick={() => void handleRegenerate()}
               >
                 <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${regenerating ? "animate-spin" : ""}`} />
-                Regenerate phrase
+                {t("node.regeneratePhrase")}
               </Button>
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="verifyUrl">Your recording</Label>
+              <Label htmlFor="verifyUrl">{t("node.yourRecording")}</Label>
               <div className="flex gap-2">
                 <Input
                   id="verifyUrl"
@@ -432,8 +437,7 @@ export function SunoVoiceSetupModal({ nodeId, data, open, onClose }: Props) {
                 </label>
               </div>
               <p className="text-[11px] text-muted-foreground">
-                Record yourself singing or speaking the phrase above, then
-                upload. Singing produces a richer voice persona.
+                {t("node.recordYourselfSingingOrSpeaking")}
               </p>
             </div>
 
@@ -450,10 +454,10 @@ export function SunoVoiceSetupModal({ nodeId, data, open, onClose }: Props) {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="voiceName">Voice name</Label>
+                <Label htmlFor="voiceName">{t("node.voiceName")}</Label>
                 <Input
                   id="voiceName"
-                  placeholder="My Voice"
+                  placeholder={t("node.myVoice")}
                   value={voiceName}
                   onChange={(e) => setVoiceName(e.target.value)}
                   maxLength={200}
@@ -461,7 +465,7 @@ export function SunoVoiceSetupModal({ nodeId, data, open, onClose }: Props) {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Singer skill level</Label>
+                <Label>{t("node.singerSkillLevel")}</Label>
                 <Select
                   value={skillLevel}
                   onValueChange={(v) => setSkillLevel(v as SunoVoiceSkillLevel)}
@@ -471,18 +475,18 @@ export function SunoVoiceSetupModal({ nodeId, data, open, onClose }: Props) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.entries(SKILL_LABELS).map(([key, label]) => (
-                      <SelectItem key={key} value={key}>{label}</SelectItem>
+                    {Object.entries(SKILL_LABEL_KEYS).map(([key, messageKey]) => (
+                      <SelectItem key={key} value={key}>{t(messageKey)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="style">Style (optional)</Label>
+              <Label htmlFor="style">{t("audiocfg.styleOptional")}</Label>
               <Input
                 id="style"
-                placeholder="Pop, female vocal"
+                placeholder={t("node.popFemaleVocal")}
                 value={style}
                 onChange={(e) => setStyle(e.target.value)}
                 maxLength={500}
@@ -490,7 +494,7 @@ export function SunoVoiceSetupModal({ nodeId, data, open, onClose }: Props) {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="description">Description (optional)</Label>
+              <Label htmlFor="description">{t("node.descriptionOptional")}</Label>
               <Textarea
                 id="description"
                 rows={2}
@@ -505,7 +509,7 @@ export function SunoVoiceSetupModal({ nodeId, data, open, onClose }: Props) {
               <div className="flex items-start gap-2 p-2 rounded bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 text-sm">
                 <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
                 <div>
-                  <div className="font-medium">Voice persona ready</div>
+                  <div className="font-medium">{t("node.voicePersonaReady")}</div>
                   <div className="font-mono text-[11px] mt-0.5 break-all">{data.voiceId}</div>
                 </div>
               </div>
@@ -530,13 +534,13 @@ export function SunoVoiceSetupModal({ nodeId, data, open, onClose }: Props) {
                 disabled={validating || regenerating || generating}
                 onClick={() => setStep((step - 1) as Step)}
               >
-                Back
+                {t("common.back")}
               </Button>
             )}
           </div>
           <div className="flex gap-2">
             <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-              {data.voiceId ? "Close" : "Cancel"}
+              {data.voiceId ? t("common.close") : t("common.cancel")}
             </Button>
             {step === 1 && (
               <Button
@@ -546,7 +550,7 @@ export function SunoVoiceSetupModal({ nodeId, data, open, onClose }: Props) {
                 onClick={() => void handleValidate()}
               >
                 {validating ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : null}
-                {validating ? "Getting phrase…" : "Get validation phrase"}
+                {validating ? t("node.gettingPhrase") : t("node.getValidationPhrase")}
               </Button>
             )}
             {step === 2 && (
@@ -556,7 +560,7 @@ export function SunoVoiceSetupModal({ nodeId, data, open, onClose }: Props) {
                 disabled={!verifyUrl.trim()}
                 onClick={() => setStep(3)}
               >
-                Continue
+                {t("node.continue")}
               </Button>
             )}
             {step === 3 && !data.voiceId && (
@@ -567,7 +571,7 @@ export function SunoVoiceSetupModal({ nodeId, data, open, onClose }: Props) {
                 onClick={() => void handleGenerate()}
               >
                 {generating ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : null}
-                {generating ? "Creating voice…" : "Create voice (20 credits)"}
+                {generating ? t("node.creatingVoice") : t("node.createVoiceCredits")}
               </Button>
             )}
           </div>

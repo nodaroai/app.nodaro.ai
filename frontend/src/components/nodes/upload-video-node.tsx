@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useEffect, useRef, useState, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Video, Upload, Link, Loader2, AlertCircle, X, Play, Expand, Download, Scissors, LayoutGrid } from "lucide-react"
@@ -27,6 +28,7 @@ const HANDLES = [
 
 
 function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as UploadVideoData
   const [mode, setMode] = useState<"upload" | "url">(nodeData.externalUrl ? "url" : "upload")
   const [previewOpen, setPreviewOpen] = useState(false)
@@ -231,7 +233,7 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
                 type="button"
                 className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-md z-10 opacity-0 group-hover:opacity-100 transition-opacity"
                 onClick={(e) => { e.stopPropagation(); setShowThumbnails(v => !v) }}
-                title="Show versions"
+                title={t("node.showVersions")}
               >
                 <LayoutGrid className="w-3 h-3" />
                 <span className="text-[11px] font-medium">{results.length}</span>
@@ -261,7 +263,7 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
             )}
             {/* Top-right: delete */}
             <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button type="button" aria-label="Remove video"
+              <button type="button" aria-label={t("node.removeVideo")}
                 className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-red-600/80 border border-white/10 text-white rounded-full shadow-sm"
                 onClick={(e) => { e.stopPropagation(); handleClear() }}
                 title="Remove">
@@ -270,11 +272,11 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
             </div>
             {/* Bottom-left: action buttons */}
             <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button type="button" aria-label="Upload another video" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-                onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click() }} title="Upload another">
+              <button type="button" aria-label={t("node.uploadAnotherVideo")} className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click() }} title={t("node.uploadAnother")}>
                 <Upload className="w-3.5 h-3.5" />
               </button>
-              <button type="button" aria-label="Expand video" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+              <button type="button" aria-label={t("node.expandVideo")} className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                 onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }} title="Expand">
                 <Expand className="w-3.5 h-3.5" />
               </button>
@@ -288,15 +290,15 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
                 }} title="Download">
                 <Download className="w-3.5 h-3.5" />
               </button>
-              <button type="button" aria-label="Copy URL" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+              <button type="button" aria-label={t("cfgshared.copyUrl")} className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                 onClick={(e) => {
                   e.stopPropagation()
                   copyToClipboard(videoUrl, "URL copied")
-                }} title="Copy URL">
+                }} title={t("cfgshared.copyUrl")}>
                 <Link className="w-3.5 h-3.5" />
               </button>
-              <button type="button" aria-label="Edit in NodarCut" className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-                onClick={(e) => { e.stopPropagation(); openFreeCut(id, videoUrl, undefined) }} title="Edit in NodarCut">
+              <button type="button" aria-label={t("node.editInNodarcut")} className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                onClick={(e) => { e.stopPropagation(); openFreeCut(id, videoUrl, undefined) }} title={t("node.editInNodarcut")}>
                 <Scissors className="w-3.5 h-3.5" />
               </button>
               <SaveToLibraryButton url={videoUrl} type="video" />

@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Instagram, Video, Youtube, Linkedin, Twitter, Facebook, CheckCircle, AlertCircle, Send, Loader2 } from "lucide-react"
@@ -24,6 +25,7 @@ const PLATFORM_ICONS: Record<SocialPlatformType, React.ReactNode> = {
 }
 
 function SocialNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as SocialPostData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
@@ -70,7 +72,7 @@ function SocialNodeComponent({ id, data, selected }: NodeProps) {
           {status === "completed" && (
             <div className="flex flex-col items-center gap-2">
               <CheckCircle className="w-6 h-6 text-green-500" />
-              <span className="text-[11px] font-medium text-green-600 dark:text-green-400">Published</span>
+              <span className="text-[11px] font-medium text-green-600 dark:text-green-400">{t("node.published")}</span>
               {nodeData.platformPostUrl && (
                 <a
                   href={nodeData.platformPostUrl}
@@ -79,7 +81,7 @@ function SocialNodeComponent({ id, data, selected }: NodeProps) {
                   className="text-[10px] text-[#ff0073] hover:underline truncate max-w-[180px]"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  View post
+                  {t("cfgext.socialViewPost")}
                 </a>
               )}
             </div>
@@ -88,7 +90,7 @@ function SocialNodeComponent({ id, data, selected }: NodeProps) {
           {status === "failed" && (
             <div className="flex flex-col items-center gap-1.5">
               <AlertCircle className="w-6 h-6 text-red-500" />
-              <span className="text-[11px] font-medium text-red-500">Failed</span>
+              <span className="text-[11px] font-medium text-red-500">{t("node.failed")}</span>
               {nodeData.errorMessage && (
                 <p className="text-[10px] text-center text-red-400 line-clamp-2 max-w-[180px]" title={nodeData.errorMessage}>
                   {nodeData.errorMessage}

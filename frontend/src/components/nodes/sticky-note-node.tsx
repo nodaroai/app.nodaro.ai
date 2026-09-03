@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useCallback, useEffect, useRef, useState } from "react"
 import { Position, type NodeProps, NodeResizer, NodeToolbar } from "@xyflow/react"
 import { StickyNote, Bold, Italic, AlignLeft, AlignCenter, AlignRight, List, ChevronDown, MoreHorizontal } from "lucide-react"
@@ -40,6 +41,7 @@ function nextFontSize(current: StickyFontSize): StickyFontSize {
 }
 
 function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as StickyNoteData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const updateNode = useWorkflowStore((s) => s.updateNode)
@@ -239,7 +241,7 @@ function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
           <button
             type="button"
             className="w-6 h-6 flex items-center justify-center rounded text-foreground/50 hover:text-foreground/80 hover:bg-black/5 dark:text-white/50 dark:hover:text-white/80 dark:hover:bg-white/10 transition-colors"
-            aria-label="More options"
+            aria-label={t("editor.moreOptions")}
             onClick={(e) => {
               e.stopPropagation()
               window.dispatchEvent(new CustomEvent("open-node-context-menu", {
@@ -275,7 +277,7 @@ function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
             // Placeholder colour cannot be set inline; globals.css reads it.
             ["--sticky-placeholder" as string]: ink.placeholder,
           }}
-          placeholder="Write a note..."
+          placeholder={t("node.writeANote")}
           value={nodeData.text ?? ""}
           onChange={(e) => {
             e.stopPropagation()

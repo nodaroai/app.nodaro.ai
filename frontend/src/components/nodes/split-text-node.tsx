@@ -8,6 +8,7 @@ import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { isValidSplitTextConnection } from "@/lib/audio-text-handles"
+import { useT } from "@/lib/i18n"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAutoExecute } from "@/hooks/use-auto-execute"
 import type { SplitTextData } from "@/types/nodes"
@@ -22,6 +23,7 @@ function resolveSeparatorLabel(separator: string | undefined, customSeparator: s
 }
 
 function SplitTextNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as SplitTextData
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
@@ -61,10 +63,10 @@ function SplitTextNodeComponent({ id, data, selected }: NodeProps) {
           {partCount > 0 ? (
             <div className="w-full rounded-md bg-muted/30 p-2">
               <p className="text-xs text-foreground/80">
-                {partCount} item{partCount !== 1 ? "s" : ""}
+                {partCount === 1 ? t("inputcfg.itemOne", { n: partCount }) : t("inputcfg.items2", { n: partCount })}
               </p>
               <span className="text-[10px] text-muted-foreground mt-0.5 block">
-                Split by &quot;{separatorLabel}&quot;
+                {t("node.splitBySeparator", { separator: separatorLabel })}
               </span>
             </div>
           ) : (
@@ -74,7 +76,7 @@ function SplitTextNodeComponent({ id, data, selected }: NodeProps) {
           )}
 
           <div className="flex justify-between text-muted-foreground">
-            <span>Separator: &quot;{separatorLabel}&quot;</span>
+            <span>{t("node.separatorValue", { separator: separatorLabel })}</span>
           </div>
         </div>
       </BaseNode>

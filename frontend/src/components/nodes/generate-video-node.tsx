@@ -1,5 +1,6 @@
 "use client"
 
+import { useT, tx } from "@/lib/i18n"
 import { memo, useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import {
@@ -89,6 +90,7 @@ const HANDLE_OFFSET = {
 } as const
 
 function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as GenerateVideoNodeData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
@@ -274,13 +276,13 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
               <div className="absolute top-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
                 <button
                   type="button"
-                  aria-label="Remove result"
+                  aria-label={t("node.removeResult")}
                   className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                   onClick={(e) => {
                     e.stopPropagation()
                     setDeleteConfirm(activeIndex)
                   }}
-                  title="Delete this result"
+                  title={t("node.deleteThisResult")}
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -290,19 +292,19 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
             <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover/video:opacity-100 transition-opacity">
               <button
                 type="button"
-                aria-label="Expand preview"
+                aria-label={t("node.expandPreview")}
                 className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                 onClick={(e) => {
                   e.stopPropagation()
                   setPreviewOpen(true)
                 }}
-                title="Fullscreen"
+                title={t("node.fullscreen")}
               >
                 <Expand className="w-3.5 h-3.5" />
               </button>
               <button
                 type="button"
-                aria-label="Download"
+                aria-label={t("cfgshared.download")}
                 className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                 onClick={(e) => {
                   e.stopPropagation()
@@ -311,31 +313,31 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
                   a.download = `${(nodeData.label as string) || "video"}.mp4`
                   a.click()
                 }}
-                title="Download"
+                title={t("cfgshared.download")}
               >
                 <Download className="w-3.5 h-3.5" />
               </button>
               <button
                 type="button"
-                aria-label="Copy URL"
+                aria-label={t("cfgshared.copyUrl")}
                 className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                 onClick={(e) => {
                   e.stopPropagation()
-                  copyToClipboard(activeUrl, "URL copied")
+                  copyToClipboard(activeUrl, tx("apps.urlCopied"))
                 }}
-                title="Copy URL"
+                title={t("cfgshared.copyUrl")}
               >
                 <Link className="w-3.5 h-3.5" />
               </button>
               <button
                 type="button"
-                aria-label="Edit in NodarCut"
+                aria-label={t("node.editInNodarcut")}
                 className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                 onClick={(e) => {
                   e.stopPropagation()
                   openFreeCut(id, activeUrl, activeResult?.freecutProjectUrl)
                 }}
-                title="Edit in NodarCut"
+                title={t("node.editInNodarcut")}
               >
                 <Scissors className="w-3.5 h-3.5" />
               </button>
@@ -361,7 +363,7 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
           <div className={`flex flex-col items-center justify-center gap-1 ${previewRounding} p-2 h-[180px] bg-red-500/5 text-red-500`}>
             <div className="flex items-center gap-1.5">
               <AlertCircle className="w-4 h-4 shrink-0" />
-              <span className="font-medium">Failed</span>
+              <span className="font-medium">{t("node.failed")}</span>
             </div>
             {nodeData.errorMessage ? (
               <p
@@ -431,7 +433,7 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
                   {r.thumbnailUrl ? (
                     <CachedImage
                       src={r.thumbnailUrl}
-                      alt={`Result ${i + 1}`}
+                      alt={t("node.resultN", { n: i + 1 })}
                       className={`w-16 h-16 object-cover rounded-lg cursor-pointer transition-all ${
                         i === activeIndex ? "ring-2 ring-[#ff0073]" : "opacity-60 hover:opacity-100"
                       }`}

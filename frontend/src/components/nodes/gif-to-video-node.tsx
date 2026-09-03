@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState, useEffect, useMemo, useRef } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Film, Loader2, AlertCircle, X, RotateCcw, Upload, Image as ImageIcon } from "lucide-react"
@@ -23,6 +24,7 @@ import type { GifToVideoData } from "@/types/nodes"
 const ACCEPTS_IMAGE = (t: string) => isValidGifToVideoConnection("image", t)
 
 function GifToVideoNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as GifToVideoData
   // Zero credits by design (local FFmpeg, no provider) — a static 0, not the
   // ee pricing hook: keeps this core file free of ee/ imports.
@@ -132,7 +134,7 @@ function GifToVideoNodeComponent({ id, data, selected }: NodeProps) {
                     <span className="w-1.5 h-1.5 rounded-full bg-foreground/70 animate-pulse [animation-delay:200ms]" />
                     <span className="w-1.5 h-1.5 rounded-full bg-foreground/70 animate-pulse [animation-delay:400ms]" />
                   </div>
-                  <span className="text-xs text-foreground/90">Queued</span>
+                  <span className="text-xs text-foreground/90">{t("node.queued")}</span>
                 </div>
               </div>
             )}
@@ -147,7 +149,7 @@ function GifToVideoNodeComponent({ id, data, selected }: NodeProps) {
                 )}
                 <div className="absolute inset-x-0 bottom-0 px-2.5 py-2 flex flex-col gap-1 bg-gradient-to-t from-black/90 via-black/60 to-transparent">
                   <div className="flex items-baseline justify-between">
-                    <span className="text-[11px] text-white">Converting</span>
+                    <span className="text-[11px] text-white">{t("node.converting")}</span>
                     <span className="text-[10px] font-mono" style={{ color: HANDLE_COLORS.video }}>{progressPct ?? 0}%</span>
                   </div>
                   <div className="h-1 rounded-full bg-white/20 overflow-hidden">
@@ -164,7 +166,7 @@ function GifToVideoNodeComponent({ id, data, selected }: NodeProps) {
                   {sourceGifUrl && <img src={sourceGifUrl} alt="" className="absolute inset-0 w-full h-full object-cover opacity-25 grayscale" />}
                   <div className="relative flex flex-col items-center justify-center gap-1.5 h-full p-3 text-center">
                     <div className="w-7 h-7 rounded-md bg-red-500/15 border border-red-500/50 flex items-center justify-center"><AlertCircle className="w-4 h-4 text-red-500" /></div>
-                    <span className="text-[11px] text-red-400 font-medium">Failed</span>
+                    <span className="text-[11px] text-red-400 font-medium">{t("node.failed")}</span>
                     {nodeData.errorMessage && (
                       <p className="text-[9px] font-mono text-muted-foreground line-clamp-2" title={nodeData.errorMessage}>{nodeData.errorMessage}</p>
                     )}
@@ -172,7 +174,7 @@ function GifToVideoNodeComponent({ id, data, selected }: NodeProps) {
                 </div>
                 <button type="button" className="nodrag w-full h-8 rounded-lg border border-red-500/50 bg-red-500/10 text-red-400 text-xs hover:bg-red-500/20 transition-colors flex items-center justify-center gap-1.5"
                   onClick={(e) => { e.stopPropagation(); runSingleNode?.(id) }}>
-                  <RotateCcw className="w-3 h-3" /> Retry
+                  <RotateCcw className="w-3 h-3" /> {t("editor.retry")}
                 </button>
               </div>
             )}
@@ -181,8 +183,8 @@ function GifToVideoNodeComponent({ id, data, selected }: NodeProps) {
               <div className="relative group">
                 <div className="w-full h-28 rounded-md bg-amber-500/10 border border-amber-500/30 flex flex-col items-center justify-center gap-1">
                   <AlertCircle className="w-5 h-5 text-amber-500" />
-                  <span className="text-[10px] text-amber-500">Video load failed</span>
-                  <a href={activeUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] text-blue-500 underline" onClick={(e) => e.stopPropagation()}>Open URL</a>
+                  <span className="text-[10px] text-amber-500">{t("node.videoLoadFailed")}</span>
+                  <a href={activeUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] text-blue-500 underline" onClick={(e) => e.stopPropagation()}>{t("node.openUrl")}</a>
                 </div>
               </div>
             )}
@@ -195,7 +197,7 @@ function GifToVideoNodeComponent({ id, data, selected }: NodeProps) {
                     <img src={sourceGifUrl} alt="" className="absolute inset-0 w-full h-full object-contain" />
                     <div className="absolute left-1.5 top-1.5 px-1.5 py-0.5 rounded bg-black/70 text-white text-[9px] font-mono">GIF → MP4</div>
                     {!upstreamGifUrl && (
-                      <button type="button" aria-label="Replace GIF"
+                      <button type="button" aria-label={t("node.replaceGif")}
                         className="absolute right-1.5 top-1.5 w-6 h-6 flex items-center justify-center bg-black/60 hover:bg-black/80 text-white rounded-full opacity-0 group-hover/node:opacity-100 transition-opacity"
                         onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click() }}>
                         <Upload className="w-3 h-3" />
@@ -232,7 +234,7 @@ function GifToVideoNodeComponent({ id, data, selected }: NodeProps) {
                     ) : (
                       <video src={r.url} crossOrigin="anonymous" className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${i === activeIndex ? "opacity-100 ring-2 ring-primary" : "opacity-50 hover:opacity-80"}`} onClick={(e) => { e.stopPropagation(); updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url }) }} muted playsInline />
                     )}
-                    <button type="button" aria-label="Remove result" className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(i) }}><X className="w-2.5 h-2.5" /></button>
+                    <button type="button" aria-label={t("node.removeResult")} className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(i) }}><X className="w-2.5 h-2.5" /></button>
                   </div>
                 ))}
               </div>

@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState, useEffect, useMemo } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Music, Loader2, AlertCircle, Volume2, Type, LayoutGrid, Sparkles, Mic, Copy, Check } from "lucide-react"
@@ -55,6 +56,7 @@ const ACCEPTS_VOICE       = (t: string) => isValidSunoGenerateConnection("voice"
 const ACCEPTS_FIELD       = (t: string) => isValidSunoGenerateConnection("field-style", t, isVisualPicker)
 
 function SunoGenerateNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as SunoGenerateData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
@@ -164,7 +166,7 @@ function SunoGenerateNodeComponent({ id, data, selected }: NodeProps) {
               <button
                 key={`${r.jobId}-${i}`}
                 type="button"
-                aria-label={`Result ${i + 1}`}
+                aria-label={t("cfgshared.resultN", { n: i + 1 })}
                 className={`w-10 h-10 flex items-center justify-center rounded-lg cursor-pointer transition-all ${
                   i === activeIndex
                     ? "ring-2 ring-[#ff0073] bg-[#ff0073]/20"
@@ -234,7 +236,7 @@ function SunoGenerateNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex-1 flex flex-col items-center justify-center gap-1 min-h-[96px] rounded-md bg-red-500/5 text-red-500 p-2">
             <div className="flex items-center gap-1.5">
               <AlertCircle className="w-4 h-4 shrink-0" />
-              <span className="font-medium">Failed</span>
+              <span className="font-medium">{t("node.failed")}</span>
             </div>
             {nodeData.errorMessage && (
               <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
@@ -266,7 +268,7 @@ function SunoGenerateNodeComponent({ id, data, selected }: NodeProps) {
           <button type="button"
             className="text-[11px] text-muted-foreground hover:text-foreground"
             onClick={(e) => { e.stopPropagation(); updateNodeData(id, { advancedOpen: !advancedOpen }) }}>
-            {advancedOpen ? "Advanced ▴" : "Advanced ▾"}
+            {t("utilcfg.modeAdvanced")} {advancedOpen ? "▴" : "▾"}
           </button>
           {/* Edit menu — opens the focused field-edit modal for a chosen
               secondary field. Shown only with Advanced open (the fields it edits
@@ -275,13 +277,13 @@ function SunoGenerateNodeComponent({ id, data, selected }: NodeProps) {
           {advancedOpen && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button type="button" className="text-[11px] text-muted-foreground hover:text-foreground" onClick={(e) => e.stopPropagation()}>Edit ▾</button>
+                <button type="button" className="text-[11px] text-muted-foreground hover:text-foreground" onClick={(e) => e.stopPropagation()}>{t("common.edit")} ▾</button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="node-menu-surface" onClick={(e) => e.stopPropagation()}>
                 {/* Prompt is the primary field — it opens the node's prompt-edit
                     surface (openPromptEditor), NOT the secondary field-edit modal.
                     Prepended so it's the first item; the 4 secondary items stay. */}
-                <DropdownMenuItem onSelect={() => openPromptEditor(id)}>Prompt</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => openPromptEditor(id)}>{t("node.prompt")}</DropdownMenuItem>
                 {(["title", "lyrics", "style", "negativeStyle"] as const).map((f) => (
                   <DropdownMenuItem key={f} onSelect={() => setEditField(f)}>{SUNO_FIELD_EDIT_META()[f].shortLabel}</DropdownMenuItem>
                 ))}

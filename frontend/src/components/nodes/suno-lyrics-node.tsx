@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { FileText, Loader2, AlertCircle, Type, Copy, X } from "lucide-react"
@@ -20,6 +21,7 @@ const isVisualPicker = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
 const ACCEPTS_PROMPT = (t: string) => isValidSunoLyricsConnection("prompt", t, isVisualPicker)
 
 function SunoLyricsNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as SunoLyricsData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
@@ -70,7 +72,7 @@ function SunoLyricsNodeComponent({ id, data, selected }: NodeProps) {
             <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
                 type="button"
-                aria-label="Copy text"
+                aria-label={t("node.copyText")}
                 className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                 onClick={(e) => {
                   e.stopPropagation()
@@ -81,7 +83,7 @@ function SunoLyricsNodeComponent({ id, data, selected }: NodeProps) {
               </button>
               <button
                 type="button"
-                aria-label="Delete result"
+                aria-label={t("node.deleteResult")}
                 className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                 onClick={(e) => {
                   e.stopPropagation()
@@ -98,7 +100,7 @@ function SunoLyricsNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex flex-col items-center justify-center gap-1 h-12 rounded-md bg-red-500/5 text-red-500 p-2">
             <div className="flex items-center gap-1.5">
               <AlertCircle className="w-4 h-4 shrink-0" />
-              <span className="font-medium">Failed</span>
+              <span className="font-medium">{t("node.failed")}</span>
             </div>
             {nodeData.errorMessage && (
               <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
@@ -114,7 +116,7 @@ function SunoLyricsNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
 
-        <span className="text-xs text-muted-foreground">Lyrics</span>
+        <span className="text-xs text-muted-foreground">{t("audiocfg.fieldLyrics")}</span>
       </div>
     </BaseNode>
     <HandleWithPopover nodeId={id} nodeType="suno-lyrics" handleId="prompt" type="target" position={Position.Left}  label="Prompt" color={TEXT_HANDLE_COLOR} icon={<Type />}      side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />

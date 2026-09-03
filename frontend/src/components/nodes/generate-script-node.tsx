@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Position, type NodeProps } from "@xyflow/react"
@@ -27,6 +28,7 @@ const isVisualPicker = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
 const ACCEPTS_PROMPT = (t: string) => isValidGenerateScriptConnection("prompt", t, isVisualPicker)
 
 function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as GenerateScriptData
   const credits = useModelCredits(buildLlmCreditIdentifier("generate-script", nodeData.llmModel || LLM_FEATURE_DEFAULTS["generate-script"], nodeData.reasoningEffort, nodeData.advancedMode === true), 10)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
@@ -156,13 +158,13 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
                 }}
               >
                 <Maximize2 className="w-3 h-3" />
-                Expand Storyboard
+                {t("node.expandStoryboard")}
               </button>
             </div>
             <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
                 type="button"
-                aria-label="Copy text"
+                aria-label={t("node.copyText")}
                 className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
                 onClick={(e) => {
                   e.stopPropagation()
@@ -189,7 +191,7 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
                     e.stopPropagation()
                     setDeleteConfirm(activeIndex)
                   }}
-                  title="Delete this result"
+                  title={t("node.deleteThisResult")}
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -202,7 +204,7 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex flex-col items-center justify-center gap-1 h-16 rounded-md bg-red-500/5 text-red-500 p-2">
             <div className="flex items-center gap-1.5">
               <AlertCircle className="w-4 h-4 shrink-0" />
-              <span className="font-medium">Failed</span>
+              <span className="font-medium">{t("node.failed")}</span>
             </div>
             {nodeData.errorMessage && (
               <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>

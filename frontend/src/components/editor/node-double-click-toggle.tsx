@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { useT } from "@/lib/i18n"
 import { Maximize, SlidersHorizontal } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
@@ -32,6 +33,7 @@ const OPTIONS: ReadonlyArray<{ action: NodeDoubleClickAction; Icon: typeof Maxim
  * rather than naming the modes, because the binding is the thing being set.
  */
 export function NodeDoubleClickToggle() {
+  const t = useT()
   const { user } = useAuth()
   const action = useWorkflowStore((s) => s.nodeDoubleClickAction)
   const setAction = useWorkflowStore((s) => s.setNodeDoubleClickAction)
@@ -59,7 +61,7 @@ export function NodeDoubleClickToggle() {
     <div className="relative group/dct">
       <div
         role="radiogroup"
-        aria-label="What double-clicking a node does"
+        aria-label={t("editor.dblClickGroup")}
         className="flex items-center gap-0.5 rounded-lg border border-border bg-muted/40 p-0.5"
       >
         {OPTIONS.map(({ action: value, Icon }) => {
@@ -70,7 +72,7 @@ export function NodeDoubleClickToggle() {
               type="button"
               role="radio"
               aria-checked={active}
-              aria-label={`Double-click a node to ${NODE_DOUBLE_CLICK_LABEL[value].toLowerCase()}`}
+              aria-label={t("editor.dblClickTo", { what: value === "zoom" ? t("editor.dblClickZoom") : t("editor.dblClickSettings") })}
               onClick={() => choose(value)}
               className={cn(
                 "flex h-7 w-8 items-center justify-center rounded-md transition-colors",
@@ -88,20 +90,20 @@ export function NodeDoubleClickToggle() {
       {/* Hover: what it does now, and what a click would change it to. */}
       <div
         className={cn(
-          "pointer-events-none absolute right-0 top-full z-50 mt-2 w-max max-w-[19rem] rounded-lg border border-border",
+          "pointer-events-none absolute end-0 top-full z-50 mt-2 w-max max-w-[19rem] rounded-lg border border-border",
           "bg-popover px-3 py-2 text-popover-foreground shadow-lg",
           "opacity-0 transition-opacity group-hover/dct:opacity-100",
           confirming && "hidden",
         )}
       >
         <div className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-          Double-click on a node
+          {t("editor.dblClickOnANode")}
         </div>
         <div className="mt-0.5 text-sm">
-          <span className="font-medium">{NODE_DOUBLE_CLICK_LABEL[action]}</span>
+          <span className="font-medium">{NODE_DOUBLE_CLICK_LABEL()[action]}</span>
           <span className="text-muted-foreground">
-            {" · switch to "}
-            {other === "zoom" ? "enlarge" : "settings"} instead
+            {" "}
+            {t("editor.dblClickSwitchTo", { what: other === "zoom" ? t("editor.dblClickSwitchZoom") : t("editor.dblClickSwitchSettings") })}
           </span>
         </div>
       </div>
@@ -112,12 +114,12 @@ export function NodeDoubleClickToggle() {
         <div
           role="status"
           className={cn(
-            "pointer-events-none absolute right-0 top-full z-50 mt-2 w-max rounded-lg border border-border",
+            "pointer-events-none absolute end-0 top-full z-50 mt-2 w-max rounded-lg border border-border",
             "bg-popover px-3 py-2 font-mono text-sm text-popover-foreground shadow-lg",
           )}
         >
-          Double-click <span className="text-muted-foreground">→</span>{" "}
-          {NODE_DOUBLE_CLICK_LABEL[action]}
+          {t("editor.dblClickArrow")} <span className="text-muted-foreground">→</span>{" "}
+          {NODE_DOUBLE_CLICK_LABEL()[action]}
         </div>
       )}
     </div>

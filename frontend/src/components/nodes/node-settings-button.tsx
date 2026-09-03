@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { SlidersHorizontal } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -18,6 +19,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
  * remember. Guarded by `node-settings-button.test.tsx`.
  */
 export function NodeSettingsButton({ nodeId }: { readonly nodeId: string }) {
+  const t = useT()
   const isEditing = useWorkflowStore((s) => s.selectedNodeId === nodeId)
   const selectNode = useWorkflowStore((s) => s.selectNode)
 
@@ -28,9 +30,9 @@ export function NodeSettingsButton({ nodeId }: { readonly nodeId: string }) {
       <button
         type="button"
         data-testid="node-settings-button"
-        aria-label={isEditing ? "Close settings" : "Open settings"}
+        aria-label={isEditing ? t("node.closeSettings") : t("node.openSettings")}
         aria-pressed={isEditing}
-        title={isEditing ? "Close settings" : "Open settings"}
+        title={isEditing ? t("node.closeSettings") : t("node.openSettings")}
         // Without this the mousedown starts a canvas drag before the click lands.
         onMouseDown={(e) => e.stopPropagation()}
         onClick={(e) => {

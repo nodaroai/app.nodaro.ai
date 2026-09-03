@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useEffect, useMemo } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Workflow, Expand } from "lucide-react"
@@ -68,6 +69,7 @@ function buildHandles(
 }
 
 function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as SubWorkflowData
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
@@ -145,8 +147,8 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
       {nodeData.referencedWorkflowId && status !== "running" && (
         <button
           type="button"
-          aria-label="Edit referenced workflow"
-          title="Edit referenced workflow"
+          aria-label={t("node.editReferencedWorkflow")}
+          title={t("node.editReferencedWorkflow")}
           className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 p-1 rounded bg-card/80 hover:bg-muted text-foreground/70 hover:text-foreground dark:bg-[#1E1E1E]/80 dark:hover:bg-[#2D2D2D] dark:text-white/70 dark:hover:text-white"
           onClick={handleExpand}
         >

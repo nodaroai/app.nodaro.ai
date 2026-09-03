@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react"
 import { Position, type NodeProps, NodeResizeControl, NodeToolbar, useUpdateNodeInternals } from "@xyflow/react"
 import { isDataProducer } from "@/lib/data-handles"
@@ -36,6 +37,7 @@ import type { TextPromptData } from "@/types/nodes"
 const ACCEPTS_IN = (t: string) => isDataProducer(t, isVisualPickerType)
 
 function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as TextPromptData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
@@ -437,8 +439,8 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
             type="button"
             onClick={(e) => { e.stopPropagation(); setPromptExpanded(true) }}
             className="inline-flex items-center justify-center w-4 h-4 rounded-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-            aria-label="Expand prompt"
-            title="Expand prompt"
+            aria-label={t("node.expandPrompt")}
+            title={t("node.expandPrompt")}
           >
             <Maximize2 className="w-3 h-3" />
           </button>
@@ -478,7 +480,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
                 detail: { nodeId: id, x: e.clientX, y: e.clientY },
               }))
             }}
-            aria-label="More options"
+            aria-label={t("editor.moreOptions")}
           >
             <MoreHorizontal className="h-4 w-4" />
           </button>
@@ -524,7 +526,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
             {/* Framed in the shared run-strip shell so the pill + zoom-scaling
                 match every other node. The button stays bespoke because, unlike
                 the shared RunNodeButton, it surfaces the DOWNSTREAM chain cost
-                (what "Run from here" actually triggers), not this node's own. */}
+                (what t("node.runFromHere") actually triggers), not this node's own. */}
             <NodeRunStripShell>
               <button
                 type="button"
@@ -535,7 +537,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
                 }}
               >
                 <FastForward className="w-3 h-3" />
-                Run from here
+                {t("node.runFromHere")}
                 {hasCredits() && downstreamCredits > 0 && (
                   <span className="ml-1 opacity-80">({formatCreditUnits(downstreamCredits)})</span>
                 )}
@@ -627,7 +629,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
               <TagTextarea
                 value={localText}
                 onChange={handleTextChange}
-                placeholder="Write your lyrics..."
+                placeholder={t("node.writeYourLyrics")}
                 className="!bg-transparent !border-none !shadow-none !ring-0 !outline-none !resize-none"
                 tagMode="suno"
                 customTags={SUNO_LYRICS_SUGGESTION_ITEMS}
@@ -637,7 +639,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
               <TagTextarea
                 value={localText}
                 onChange={handleTextChange}
-                placeholder="Write the spoken text..."
+                placeholder={t("node.writeTheSpokenText")}
                 className="!bg-transparent !border-none !shadow-none !ring-0 !outline-none !resize-none"
                 tagMode="audio"
                 nodeRefs={nodeRefs}
@@ -646,7 +648,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
               <TagTextarea
                 value={localText}
                 onChange={handleTextChange}
-                placeholder="Enter your prompt..."
+                placeholder={t("node.enterYourPrompt")}
                 className="!bg-transparent !border-none !shadow-none !ring-0 !outline-none !resize-none"
                 tagMode="none"
                 nodeRefs={nodeRefs}
@@ -738,7 +740,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
               <span
                 className="truncate cursor-text hover:text-foreground dark:hover:text-white/90 transition-colors"
                 onClick={() => setTitleEditing(true)}
-                title="Click to rename"
+                title={t("node.clickToRename")}
               >
                 {nodeData.label ?? "Text"}
               </span>
@@ -750,8 +752,8 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
               type="button"
               onClick={() => setFontSize((s) => Math.max(12, s - 2))}
               className="inline-flex items-center justify-center w-7 h-7 rounded-md hover:text-foreground hover:bg-accent transition-colors"
-              aria-label="Decrease font size"
-              title="Decrease font size"
+              aria-label={t("node.decreaseFontSize")}
+              title={t("node.decreaseFontSize")}
             >
               <AArrowDown className="w-4 h-4" />
             </button>
@@ -759,8 +761,8 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
               type="button"
               onClick={() => setFontSize((s) => Math.min(40, s + 2))}
               className="inline-flex items-center justify-center w-7 h-7 rounded-md hover:text-foreground hover:bg-accent transition-colors"
-              aria-label="Increase font size"
-              title="Increase font size"
+              aria-label={t("node.increaseFontSize")}
+              title={t("node.increaseFontSize")}
             >
               <AArrowUp className="w-4 h-4" />
             </button>
@@ -770,7 +772,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
             type="button"
             onClick={() => setPromptExpanded(false)}
             className="absolute top-1 right-1 inline-flex items-center justify-center w-7 h-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-            aria-label="Close"
+            aria-label={t("common.close")}
           >
             <X className="w-4 h-4" />
           </button>
@@ -788,7 +790,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
                   <TagTextarea
                     value={localText}
                     onChange={handleTextChange}
-                    placeholder="Write your lyrics..."
+                    placeholder={t("node.writeYourLyrics")}
                     className="!bg-transparent !border-none !shadow-none !ring-0 !outline-none !resize-none"
                     tagMode="suno"
                     customTags={SUNO_LYRICS_SUGGESTION_ITEMS}
@@ -798,7 +800,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
                   <TagTextarea
                     value={localText}
                     onChange={handleTextChange}
-                    placeholder="Write the spoken text..."
+                    placeholder={t("node.writeTheSpokenText")}
                     className="!bg-transparent !border-none !shadow-none !ring-0 !outline-none !resize-none"
                     tagMode="audio"
                     nodeRefs={nodeRefs}
@@ -807,7 +809,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
                   <TagTextarea
                     value={localText}
                     onChange={handleTextChange}
-                    placeholder="Enter your prompt..."
+                    placeholder={t("node.enterYourPrompt")}
                     className="!bg-transparent !border-none !shadow-none !ring-0 !outline-none !resize-none"
                     tagMode="none"
                     nodeRefs={nodeRefs}

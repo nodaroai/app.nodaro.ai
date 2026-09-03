@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { Zap } from "lucide-react"
@@ -9,6 +10,7 @@ import { ParameterNodeShell } from "./parameter-node-shell"
 import type { ActionFxData } from "@/types/nodes"
 
 function ActionFxNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as ActionFxData
   const ids = pickIds(nodeData.actionFx)
   const primaryId = ids[0]
@@ -23,7 +25,7 @@ function ActionFxNodeComponent({ id, data, selected }: NodeProps) {
         </p>
       ) : (
         <p className="text-muted-foreground text-sm">
-          Click to choose
+          {t("node.clickToChoose")}
         </p>
       )}
       {extraIds.map((extraId) => (

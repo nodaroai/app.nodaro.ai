@@ -1,5 +1,6 @@
 "use client"
 
+import { useT } from "@/lib/i18n"
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Combine, Loader2, AlertCircle, Volume2, LayoutGrid, Music, Merge } from "lucide-react"
@@ -21,6 +22,7 @@ const ACCEPTS_AUDIO1 = (t: string) => isValidSunoMashupConnection("audio1", t)
 const ACCEPTS_AUDIO2 = (t: string) => isValidSunoMashupConnection("audio2", t)
 
 function SunoMashupNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as SunoMashupData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
@@ -123,7 +125,7 @@ function SunoMashupNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex flex-col items-center justify-center gap-1 h-12 rounded-md bg-red-500/5 text-red-500 p-2">
             <div className="flex items-center gap-1.5">
               <AlertCircle className="w-4 h-4 shrink-0" />
-              <span className="font-medium">Failed</span>
+              <span className="font-medium">{t("node.failed")}</span>
             </div>
             {nodeData.errorMessage && (
               <p className="text-[10px] text-center text-red-400 line-clamp-1" title={nodeData.errorMessage}>
@@ -140,12 +142,12 @@ function SunoMashupNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         <span className="text-xs text-muted-foreground">
-          Mashup
+          {t("node.mashup")}
         </span>
       </div>
     </BaseNode>
-    <HandleWithPopover nodeId={id} nodeType="suno-mashup" handleId="audio1" type="target" position={Position.Left}  label="Audio 1" color={HANDLE_COLORS.audio} icon={<Music />} side="left"  top="calc(100% - 24px)" orderMatters accepts={ACCEPTS_AUDIO1} />
-    <HandleWithPopover nodeId={id} nodeType="suno-mashup" handleId="audio2" type="target" position={Position.Left}  label="Audio 2" color={HANDLE_COLORS.audio} icon={<Music />} side="left"  top="calc(100% - 56px)" orderMatters accepts={ACCEPTS_AUDIO2} />
+    <HandleWithPopover nodeId={id} nodeType="suno-mashup" handleId="audio1" type="target" position={Position.Left}  label={t("node.audio1")} color={HANDLE_COLORS.audio} icon={<Music />} side="left"  top="calc(100% - 24px)" orderMatters accepts={ACCEPTS_AUDIO1} />
+    <HandleWithPopover nodeId={id} nodeType="suno-mashup" handleId="audio2" type="target" position={Position.Left}  label={t("node.audio2")} color={HANDLE_COLORS.audio} icon={<Music />} side="left"  top="calc(100% - 56px)" orderMatters accepts={ACCEPTS_AUDIO2} />
     <HandleWithPopover nodeId={id} nodeType="suno-mashup" handleId="audio"  type="source" position={Position.Right} label="Audio"   color={HANDLE_COLORS.audio} icon={<Merge />} side="right" top="24px" />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}

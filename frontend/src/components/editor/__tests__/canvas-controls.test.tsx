@@ -1,3 +1,4 @@
+import { translate } from "@/lib/i18n"
 import { describe, it, expect, vi, afterEach } from "vitest"
 import { render, screen, fireEvent, act } from "@testing-library/react"
 
@@ -135,10 +136,10 @@ describe("CanvasControls", () => {
 
   it("+ / − snap to the ladder (100% → 125% / 75%)", () => {
     renderControls(1)
-    fireEvent.click(screen.getByRole("button", { name: "Zoom In" }))
+    fireEvent.click(screen.getByRole("button", { name: translate("en", "canvas.zoomIn") }))
     expect(zoomTo).toHaveBeenCalledWith(1.25, expect.anything())
     zoomTo.mockClear()
-    fireEvent.click(screen.getByRole("button", { name: "Zoom Out" }))
+    fireEvent.click(screen.getByRole("button", { name: translate("en", "canvas.zoomOut") }))
     expect(zoomTo).toHaveBeenCalledWith(0.75, expect.anything())
   })
 
@@ -151,7 +152,7 @@ describe("CanvasControls", () => {
       { id: "near", position: { x: 450, y: 350 }, measured: { width: 100, height: 100 } },
     ]
     renderControls()
-    fireEvent.click(screen.getByRole("button", { name: "Focus nearest node" }))
+    fireEvent.click(screen.getByRole("button", { name: translate("en", "canvas.focusNearestNode") }))
     expect(setCenter).toHaveBeenCalledWith(500, 400, expect.objectContaining({ zoom: 1 }))
     expect(selectNode).toHaveBeenCalledWith("near")
   })
@@ -159,7 +160,7 @@ describe("CanvasControls", () => {
   it("auto-focus is a no-op when there are no eligible nodes", () => {
     flowNodes = []
     renderControls()
-    fireEvent.click(screen.getByRole("button", { name: "Focus nearest node" }))
+    fireEvent.click(screen.getByRole("button", { name: translate("en", "canvas.focusNearestNode") }))
     expect(setCenter).not.toHaveBeenCalled()
     expect(selectNode).not.toHaveBeenCalled()
   })

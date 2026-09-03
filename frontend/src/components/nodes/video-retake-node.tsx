@@ -27,6 +27,7 @@ import { NodeJobProgress } from "./node-job-progress"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
+import { useT } from "@/lib/i18n"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
@@ -61,6 +62,7 @@ const HANDLE_TOP = {
 } as const
 
 function VideoRetakeNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
   const nodeData = data as VideoRetakeData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const selectNode = useWorkflowStore((s) => s.selectNode)
@@ -361,7 +363,7 @@ function VideoRetakeNodeComponent({ id, data, selected }: NodeProps) {
               <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover/video:opacity-100 transition-opacity">
                 <button
                   type="button"
-                  aria-label="Extract frame"
+                  aria-label={t("node.extractFrame")}
                   className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                   onClick={(e) => {
                     e.stopPropagation()
@@ -387,19 +389,19 @@ function VideoRetakeNodeComponent({ id, data, selected }: NodeProps) {
                       })
                     }
                   }}
-                  title="Extract frame"
+                  title={t("node.extractFrame")}
                 >
                   <Frame className="w-3.5 h-3.5" />
                 </button>
                 <button
                   type="button"
-                  aria-label="Remove result"
+                  aria-label={t("node.removeResult")}
                   className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                   onClick={(e) => {
                     e.stopPropagation()
                     setDeleteConfirm(activeIndex)
                   }}
-                  title="Delete this result"
+                  title={t("node.deleteThisResult")}
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -408,19 +410,19 @@ function VideoRetakeNodeComponent({ id, data, selected }: NodeProps) {
               <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover/video:opacity-100 transition-opacity">
                 <button
                   type="button"
-                  aria-label="Expand preview"
+                  aria-label={t("node.expandPreview")}
                   className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                   onClick={(e) => {
                     e.stopPropagation()
                     setPreviewOpen(true)
                   }}
-                  title="Fullscreen"
+                  title={t("node.fullscreen")}
                 >
                   <Expand className="w-3.5 h-3.5" />
                 </button>
                 <button
                   type="button"
-                  aria-label="Download"
+                  aria-label={t("cfgshared.download")}
                   className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                   onClick={(e) => {
                     e.stopPropagation()
@@ -429,19 +431,19 @@ function VideoRetakeNodeComponent({ id, data, selected }: NodeProps) {
                     a.download = `${(nodeData.label as string) || "retake"}.mp4`
                     a.click()
                   }}
-                  title="Download"
+                  title={t("cfgshared.download")}
                 >
                   <Download className="w-3.5 h-3.5" />
                 </button>
                 <button
                   type="button"
-                  aria-label="Copy URL"
+                  aria-label={t("cfgshared.copyUrl")}
                   className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
                   onClick={(e) => {
                     e.stopPropagation()
-                    copyToClipboard(activeUrl, "URL copied")
+                    copyToClipboard(activeUrl, t("node.urlCopied"))
                   }}
-                  title="Copy URL"
+                  title={t("cfgshared.copyUrl")}
                 >
                   <Link className="w-3.5 h-3.5" />
                 </button>
@@ -450,7 +452,7 @@ function VideoRetakeNodeComponent({ id, data, selected }: NodeProps) {
               <div className="absolute bottom-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
                 <button
                   type="button"
-                  aria-label="Settings"
+                  aria-label={t("node.settings")}
                   className={`w-7 h-7 flex items-center justify-center bg-black/50 hover:bg-black/70 border border-white/10 text-white rounded-full shadow-sm${
                     isSettingsOpen ? " ring-1 ring-white/30" : ""
                   }`}
@@ -458,7 +460,7 @@ function VideoRetakeNodeComponent({ id, data, selected }: NodeProps) {
                     e.stopPropagation()
                     selectNode(isSettingsOpen ? null : id)
                   }}
-                  title="Settings"
+                  title={t("node.settings")}
                 >
                   <Settings className="w-3.5 h-3.5" />
                 </button>
@@ -471,7 +473,7 @@ function VideoRetakeNodeComponent({ id, data, selected }: NodeProps) {
             <div className="flex flex-col items-center justify-center gap-1 rounded-xl p-2 h-[180px] bg-amber-500/5 text-amber-500">
               <div className="flex items-center gap-1.5">
                 <ShieldAlert className="w-4 h-4 shrink-0" />
-                <span className="font-medium">Prohibited</span>
+                <span className="font-medium">{t("node.prohibited")}</span>
               </div>
               {errorMessage ? (
                 <p
@@ -489,7 +491,7 @@ function VideoRetakeNodeComponent({ id, data, selected }: NodeProps) {
             <div className="flex flex-col items-center justify-center gap-1 rounded-xl p-2 h-[180px] bg-red-500/5 text-red-500">
               <div className="flex items-center gap-1.5">
                 <AlertCircle className="w-4 h-4 shrink-0" />
-                <span className="font-medium">Failed</span>
+                <span className="font-medium">{t("node.failed")}</span>
               </div>
               {errorMessage ? (
                 <p
