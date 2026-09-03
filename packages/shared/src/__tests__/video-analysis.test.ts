@@ -9,6 +9,7 @@ import {
   VIDEO_ANALYSIS_SPEED_EFFECTS, VIDEO_ANALYSIS_SHOT_ANGLES, VIDEO_ANALYSIS_FACELESS_ANGLES,
   VIDEO_ANALYSIS_VISUAL_EFFECTS, VIDEO_ANALYSIS_TRANSITIONS,
   VIDEO_ANALYSIS_MAX_VARIATIONS, VIDEO_ANALYSIS_VARIATION_SLUGS, VIDEO_ANALYSIS_DEFAULT_VARIATION,
+  VIDEO_ANALYSIS_AUDIO_MODES,
   type EntitySlot, type AudioLayer,
 } from "../video-analysis.js"
 
@@ -218,6 +219,58 @@ describe("speech attribution (speakerSlot)", () => {
   })
 })
 
+describe("the audio grammar (mode vocabulary + who is speaking)", () => {
+  it("distinguishes AMBIENCE from SFX — room tone is not a door slam", () => {
+    // They are different layers of a real mix and they are recreated by
+    // different means: ambience is a continuous bed, an sfx is a discrete hit.
+    // Collapsing them onto `sfx` made a scene's continuous bed indistinguishable
+    // from its one-off noises, so a recreation had to guess which it was told.
+    expect([...VIDEO_ANALYSIS_AUDIO_MODES]).toEqual(["speech", "music", "sfx", "ambience"])
+    const parsed = windowAnalysisSchema.parse({
+      slots: [slot],
+      scenes: [{ ...baseScene, audio: [{ mode: "ambience", content: "distant traffic, room tone" }] }],
+    })
+    expect(parsed.scenes[0]!.audio[0]!.mode).toBe("ambience")
+  })
+
+  it("names the speaker BOTH ways — by slot id and by cast name", () => {
+    // `speakerSlot` addresses a slot in THIS analysis; `speaker` is the plain
+    // name a document that has no slots (a studio production's cast) keys by.
+    // One layer may legitimately carry both.
+    const parsed = windowAnalysisSchema.parse({
+      slots: [slot],
+      scenes: [{ ...baseScene, audio: [{ mode: "speech", content: "As a kid…", speakerSlot: "hero", speaker: "Jack Mercer" }] }],
+    })
+    expect(parsed.scenes[0]!.audio[0]).toMatchObject({ speakerSlot: "hero", speaker: "Jack Mercer" })
+  })
+
+  it("dropUnknownSpeakers strips slot attribution from an AMBIENCE layer too — nobody is speaking", () => {
+    // The new mode must land on the non-speech side of the sanitizer, not slip
+    // through it as an unrecognised value.
+    const r = dropUnknownSpeakers([{ mode: "ambience", content: "room tone", speakerSlot: "hero" }], new Set(["hero"]))
+    expect(r.audio[0]).not.toHaveProperty("speakerSlot")
+    expect(r.dropped).toEqual(["hero"])
+  })
+
+  it("the name-keyed speaker survives the SLOT sanitizer — it names no slot to check", () => {
+    // `dropUnknownSpeakers` is the slot channel's sweep: it can only judge an
+    // id against the surviving slot list, and a cast NAME has no id space to be
+    // unknown in. Pinned so a later reader does not "fix" the asymmetry into a
+    // sweep that silently eats the field studio imports this type for.
+    const audio: AudioLayer[] = [{ mode: "speech", content: "hi", speaker: "Jack Mercer" }]
+    const r = dropUnknownSpeakers(audio, new Set())
+    expect(r.audio).toBe(audio)
+    expect(r.audio[0]!.speaker).toBe("Jack Mercer")
+    expect(r.dropped).toEqual([])
+  })
+
+  it("both attributions are OPTIONAL — an older producer emits neither", () => {
+    const parsed = windowAnalysisSchema.parse({ slots: [slot], scenes: [baseScene] })
+    expect(parsed.scenes[0]!.audio[0]).not.toHaveProperty("speakerSlot")
+    expect(parsed.scenes[0]!.audio[0]).not.toHaveProperty("speaker")
+  })
+})
+
 describe("cinematography fields (angle / speed / onScreenText / look)", () => {
   it("carries angle and speed as closed enums through a window round-trip", () => {
     const parsed = windowAnalysisSchema.parse({
@@ -347,6 +400,34 @@ describe("cinematography fields (angle / speed / onScreenText / look)", () => {
     })
     expect(r.look?.format).toBe("anamorphic digital")
     expect(r.meta).not.toHaveProperty("look")
+  })
+
+  it("look carries the Style picker's own ID beside the prose — the PICK must not be stripped", () => {
+    // The analyzer emits the id it PICKED from the Style catalog alongside the
+    // prose it corresponds to: { styleId: "pixar-3d", style: "3D stylized
+    // animation", influence: "Pixar style" }. A z.object drops what it does not
+    // declare, so an undeclared `styleId` silently loses the pick on every
+    // consumer that reads an analysis back THROUGH this schema — and a pick is
+    // worth strictly more than the prose, because it addresses the catalog.
+    const look = { styleId: "pixar-3d", style: "3D stylized animation", influence: "Pixar style" }
+    // The window layer, where the pick enters…
+    expect(windowAnalysisSchema.parse({ look, slots: [], scenes: [] }).look).toMatchObject(look)
+    // …and the merged result, where every consumer reads it.
+    const r = videoAnalysisResultSchema.parse({
+      meta: { durationSec: 10, width: 1920, height: 1080, aspectRatio: "16:9" },
+      look,
+      slots: [],
+      scenes: [{ ...baseScene, sceneNumber: 1, visualResolved: "x", slotRefs: [] }],
+    })
+    expect(r.look).toMatchObject(look)
+  })
+
+  it("mergeClipLook folds the pick like any other field — first window to read it wins", () => {
+    // The fold is generic (Object.entries), so this only breaks if someone
+    // narrows it to a hand-written field list — the hop that has eaten a field
+    // before.
+    expect(mergeClipLook([{ style: "3D stylized animation" }, { styleId: "pixar-3d" }]))
+      .toEqual({ style: "3D stylized animation", styleId: "pixar-3d" })
   })
 })
 
