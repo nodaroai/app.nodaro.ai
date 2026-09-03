@@ -13,7 +13,6 @@ import { isReconcileRecoverable } from "../lib/reconcile/types.js"
 import { DrainAbortError } from "../lib/worker-drain.js"
 import {
   safetyBlockOf,
-  isFinalAttemptFor,
   errorHintFor,
   safetyBlockMessage,
   fallbackLabelOf,
@@ -191,6 +190,14 @@ export function createVideoWorker() {
       }
 
       const ctx: JobContext = { jobId, jobUserId, usageLogId, shouldWatermark }
+      // The model this job runs under (the i2i variant id for referenced image
+      // requests). Read once: both the inline safety retry and the final failure
+      // path key their policy off it.
+      const modelId =
+        (job.data as { provider?: string; model?: string }).model ??
+        (job.data as { provider?: string }).provider ??
+        null
+      let safetyRetried = false
 
       try {
         // `provider_kind="pre-task"` + `provider_call_started_at=now` make
@@ -235,7 +242,23 @@ export function createVideoWorker() {
 
         // Bind a cancellation context so provider poll loops abort the moment
         // the user cancels — instead of polling the upstream job to completion.
-        await runWithJobCancellation(jobId, jobUserId, () => handler(job, ctx))
+        try {
+          await runWithJobCancellation(jobId, jobUserId, () => handler(job, ctx))
+        } catch (firstErr) {
+          const firstBlock = safetyBlockOf(firstErr, modelId)
+          if (!firstBlock || firstBlock.maxAttempts < 2) throw firstErr
+          // ONE inline re-run of the same request: the provider's safety filter
+          // is stochastic on this model (catalog `safetyFilter`). Inline, never
+          // via a BullMQ retry — a re-pick of a job that already carries a
+          // provider_task_id is routed to the stall-recovery reconcile above,
+          // which re-reads the SAME failed task and never calls the provider
+          // again (that is how the first live replay produced no retry).
+          safetyRetried = true
+          console.warn(
+            `[worker] Job ${jobId} safety-blocked on ${modelId ?? "unknown model"} — retrying the same request once inline`,
+          )
+          await runWithJobCancellation(jobId, jobUserId, () => handler(job, ctx))
+        }
 
         // Record execution duration for progress bar estimation
         // (started_at was set on the job record at the start of processing above)
@@ -326,12 +349,10 @@ export function createVideoWorker() {
         // or an unflagged model's safety block) gets exactly one attempt. The
         // model id rides in `job.data` as `provider` (route enqueue shape);
         // `model` wins when set (the LoRA path only).
-        const modelId =
-          (job.data as { provider?: string; model?: string }).model ??
-          (job.data as { provider?: string }).provider ??
-          null
+        // A content-policy block reaching this catch is always final: the one
+        // permitted retry (if the policy allows one) already ran inline above.
         const block = safetyBlockOf(err, modelId)
-        const finalAttempt = block ? isFinalAttemptFor(job, block) : isFinalJobAttempt(job)
+        const finalAttempt = block ? true : isFinalJobAttempt(job)
 
         // Post-provider self-heal (audit spec, worker branch). On the FINAL
         // attempt, a PostProcessingError means the provider already delivered
@@ -384,7 +405,7 @@ export function createVideoWorker() {
           // CONTENT_POLICY_MESSAGES text unchanged.
           const errorMessage =
             block && block.class === "safety"
-              ? safetyBlockMessage(block.fallback ? fallbackLabelOf(block.fallback) : undefined, job.attemptsMade > 0)
+              ? safetyBlockMessage(block.fallback ? fallbackLabelOf(block.fallback) : undefined, safetyRetried)
               : message
           // CAS on status so a job a concurrent writer already moved to a terminal
           // state (inflight-reconcile cron completing it, or a stall re-pick) is NOT
@@ -402,7 +423,7 @@ export function createVideoWorker() {
               // Migration 376: a user-safe, machine-readable hint the editor/MCP
               // can act on (offer the fallback model) without parsing prose.
               // NULL for anything that isn't a classified content-policy block.
-              ...(block ? { error_hint: errorHintFor(block, job.attemptsMade > 0) } : {}),
+              ...(block ? { error_hint: errorHintFor(block, safetyRetried) } : {}),
               completed_at: new Date().toISOString(),
             })
             .eq("id", jobId)
