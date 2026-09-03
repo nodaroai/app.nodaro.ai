@@ -37,6 +37,7 @@ import { COMPLEXITY_CONFIG, getNodeTypeLabel, formatCount } from "@/lib/template
 import { OUTPUT_TYPE_COLORS, CATEGORY_COLORS, getCategoryLabelKey, outputTypeLabel } from "@/lib/app-categories"
 import "@xyflow/react/dist/style.css"
 import { useT } from "@/lib/i18n"
+import { useProjectDisplayName } from "@/lib/project-display-name"
 
 interface TemplatePreviewModalProps {
   template: TemplateBrowseCard | null
@@ -80,6 +81,7 @@ export function TemplatePreviewModal({
   projects,
 }: TemplatePreviewModalProps) {
   const t = useT()
+  const projectDisplayName = useProjectDisplayName()
   const navigate = useNavigate()
   const [selectedProjectId, setSelectedProjectId] = useState(projects[0]?.id ?? "")
   const [isCloning, setIsCloning] = useState(false)
@@ -396,7 +398,7 @@ export function TemplatePreviewModal({
               <SelectContent>
                 {projects.map((p) => (
                   <SelectItem key={p.id} value={p.id}>
-                    {p.name}
+                    {projectDisplayName(p)}
                   </SelectItem>
                 ))}
               </SelectContent>

@@ -1,3 +1,4 @@
+import { useProjectDisplayName } from "@/lib/project-display-name"
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Search, Folder, GitBranch, X, ExternalLink } from "lucide-react"
@@ -19,6 +20,7 @@ interface Project {
   name: string
   description: string | null
   created_at: string
+  is_default?: boolean
 }
 
 interface Workflow {
@@ -35,6 +37,7 @@ interface SearchModalProps {
 }
 
 export function SearchModal({ open, onClose }: SearchModalProps) {
+  const projectDisplayName = useProjectDisplayName()
   const [query, setQuery] = useState("")
   const [debouncedQuery, setDebouncedQuery] = useState("")
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -77,7 +80,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
       const buildProjects = (applyFilter: boolean) => {
         let q = supabase
           .from("projects")
-          .select("id, name, description, created_at")
+          .select("id, name, description, created_at, is_default")
           .order("updated_at", { ascending: false })
           .limit(10)
         if (debouncedQuery) q = q.ilike("name", `%${debouncedQuery}%`)
@@ -110,7 +113,9 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
       const { data: workflowsData } = await workflowsQuery
 
       return {
-        projects: (projectsData || []) as Project[],
+        // `is_default` (migration 119) is not in the generated DB types yet — same
+        // untyped read the projects store does via `select("*")`.
+        projects: ((projectsData || []) as unknown) as Project[],
         workflows: (workflowsData || []).map((w: any) => ({
           ...w,
           project_name: w.projects?.name,
@@ -281,7 +286,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
                         <Folder className="w-4 h-4 text-[#3B82F6]" />
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-medium text-[#1E293B] dark:text-white truncate">
-                            {project.name}
+                            {projectDisplayName({ name: project.name, isDefault: project.is_default })}
                           </div>
                           {project.description && (
                             <div className="text-xs text-[#94A3B8] truncate">

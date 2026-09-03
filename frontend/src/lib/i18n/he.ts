@@ -3441,6 +3441,14 @@ export const he: ChromeDict = {
   "project.namePlaceholder": "שם הפרויקט",
   "project.renaming": "משנה שם…",
   "project.viewOnly": "לצפייה בלבד",
+  "project.optionsFor": "אפשרויות הפרויקט {name}",
+  "project.studioBadge": "Studio",
+  "project.remixTitle": "שכפול ורמיקס",
+  "project.remixDesc": "בחרו פרויקט לעותק הניתן לעריכה.",
+  "project.remixSelect": "בחרו פרויקט",
+  "project.defaultSuffix": "(ברירת מחדל)",
+  "project.unknown": "פרויקט לא ידוע",
+  "project.remixCloning": "משכפל…",
 
   // ── Pipeline / film page ──
   "pipe.autonomyAiDirector": "במאי AI",

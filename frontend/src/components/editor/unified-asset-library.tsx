@@ -1,4 +1,5 @@
 import { useT } from "@/lib/i18n"
+import { useProjectDisplayName } from "@/lib/project-display-name"
 import { useState, useCallback, useMemo, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { createPortal } from "react-dom"
@@ -172,6 +173,7 @@ function useAssetData() {
 // Standalone modal that can be controlled externally
 export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryModalProps) {
   const t = useT()
+  const projectDisplayName = useProjectDisplayName()
   const { assets, projects, loading, error, invalidateAssets } = useAssetData()
 
   // Filters
@@ -536,7 +538,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
                   <SelectItem value="all">{t("assetlib.allProjects")}</SelectItem>
                   {projects.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
-                      {p.name}
+                      {projectDisplayName(p)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -818,6 +820,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
 
 export function UnifiedAssetLibraryButton() {
   const t = useT()
+  const projectDisplayName = useProjectDisplayName()
   const [open, setOpen] = useState(false)
   const { assets, projects, loading, error, invalidateAssets } = useAssetData()
 
@@ -1176,7 +1179,7 @@ export function UnifiedAssetLibraryButton() {
                     <SelectItem value="all">{t("assetlib.allProjects")}</SelectItem>
                     {projects.map((p) => (
                       <SelectItem key={p.id} value={p.id}>
-                        {p.name}
+                        {projectDisplayName(p)}
                       </SelectItem>
                     ))}
                   </SelectContent>

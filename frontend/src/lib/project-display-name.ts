@@ -17,6 +17,11 @@ export function projectDisplayName(project: { readonly name: string; readonly is
   return project.name
 }
 
+/** id → display name, for joins that render a project name by id (workflow search). */
+export function projectNameMap(projects: ReadonlyArray<{ readonly id: string; readonly name: string; readonly isDefault?: boolean }>, locale: LocaleId): Map<string, string> {
+  return new Map(projects.map((p) => [p.id, projectDisplayName(p, locale)]))
+}
+
 /** Hook: the display-name helper bound to the live locale. */
 export function useProjectDisplayName(): (project: { readonly name: string; readonly isDefault?: boolean }) => string {
   const locale = useLocaleStore((s) => s.locale)

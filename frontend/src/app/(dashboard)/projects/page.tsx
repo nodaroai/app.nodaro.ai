@@ -44,6 +44,8 @@ import { queryKeys } from "@/lib/query-keys"
 import { getActiveWorkspaceId } from "@/lib/workspace-context"
 import { toast } from "sonner"
 import { useT } from "@/lib/i18n"
+import { useLocaleStore } from "@/lib/locale-store"
+import { projectNameMap } from "@/lib/project-display-name"
 import { useAppDir } from "@/lib/locale-store"
 import { surfaceTabs } from "@/lib/surface-selectors"
 import { UPPER_DASHBOARD_TABS, resolveActiveUpperTab, type UpperDashboardTab } from "../dashboard-upper-tabs"
@@ -384,7 +386,8 @@ export default function ProjectsPage() {
     return liteUsers.filter((u) => ownerIds.has(u.id))
   }, [projects, showAll, liteUsers])
 
-  const projectMap = useMemo(() => new Map(projects.map((p) => [p.id, p.name])), [projects])
+  const locale = useLocaleStore((s) => s.locale)
+  const projectMap = useMemo(() => projectNameMap(projects, locale), [projects, locale])
   const { results: workflowResults, loading: workflowSearchLoading } = useWorkflowSearch(search, projectMap)
 
   const isSearching = search.length >= 2

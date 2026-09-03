@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { useT } from "@/lib/i18n"
+import { useProjectDisplayName } from "@/lib/project-display-name"
 import { Star, Loader2, FolderOpen } from "lucide-react"
 import {
   Dialog,
@@ -33,6 +34,7 @@ export function MoveWorkflowDialog({
   currentProjectId,
 }: MoveWorkflowDialogProps) {
   const t = useT()
+  const projectDisplayName = useProjectDisplayName()
   const { data: projects = [], isLoading } = useProjects()
   const moveWorkflowToProject = useProjectsStore((s) => s.moveWorkflowToProject)
   const [moving, setMoving] = useState<string | null>(null)
@@ -85,7 +87,7 @@ export function MoveWorkflowDialog({
                 ) : (
                   <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
                 )}
-                <span className="truncate flex-1 text-left">{p.name}</span>
+                <span className="truncate flex-1 text-start">{projectDisplayName(p)}</span>
                 {moving === p.id && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               </Button>
             ))}

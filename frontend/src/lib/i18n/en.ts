@@ -3462,6 +3462,14 @@ export const en = {
   "project.namePlaceholder": "Project name",
   "project.renaming": "Renaming...",
   "project.viewOnly": "View only",
+  "project.optionsFor": "Project options for {name}",
+  "project.studioBadge": "Studio",
+  "project.remixTitle": "Clone & Remix",
+  "project.remixDesc": "Choose a project for your editable copy.",
+  "project.remixSelect": "Select a project",
+  "project.defaultSuffix": "(default)",
+  "project.unknown": "Unknown Project",
+  "project.remixCloning": "Cloning…",
 
   // ── Pipeline / film page ──
   "pipe.autonomyAiDirector": "AI Director",
