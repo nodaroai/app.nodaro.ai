@@ -1,5 +1,27 @@
 # @nodaro/sdk
 
+## 1.27.0
+
+### Minor Changes
+
+- 14f930d: `Job` and `JobStatusResult` gain `error_hint?: JobErrorHint | null` — the worker's structured content-policy verdict (`{ kind: "safety-block", class: "copyright" | "likeness" | "safety", retried, suggestedProvider? }`), present on a job the worker classified as a final safety/content-policy block — and `credit_status?: "reserved" | "committed" | "refunded" | null`, the job's credit-reservation lifecycle derived server-side from `usage_logs.status`. Both are `null`/absent when not applicable; `credits` (the reserved amount) is unchanged.
+
+### Patch Changes
+
+- Updated dependencies [94d22ab]
+- Updated dependencies [7ba3b9e]
+- Updated dependencies [bb58724]
+- Updated dependencies [14f930d]
+- Updated dependencies [14f930d]
+- Updated dependencies [5955108]
+- Updated dependencies [bb58724]
+- Updated dependencies [7810119]
+- Updated dependencies [bb58724]
+- Updated dependencies [bb58724]
+- Updated dependencies [b47bd25]
+  - @nodaro/shared@2.21.0
+  - @nodaro/prompts@1.16.0
+
 ## 1.26.0
 
 ### Minor Changes
