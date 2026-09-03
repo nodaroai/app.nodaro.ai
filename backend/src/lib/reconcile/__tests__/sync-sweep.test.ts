@@ -39,10 +39,15 @@ describe("sweepStaleSyncJob", () => {
     expect(updateArg.reconcile_last_error).toBe("reconcile_no_recovery")
   })
 
-  it("uses CAS guard: .eq(\"id\", jobId).in(\"status\", [\"pending\", \"processing\"]) — preserves ANY terminal state, not just cancelled", async () => {
+  it("uses the shared CAS guard: .eq(\"id\", jobId).in(\"status\", FAILABLE_STATUSES) — preserves ANY terminal state, and can never take a pending_review row", async () => {
     await sweepStaleSyncJob({ id: "j-cas", provider_kind: "kie-llm", reconcile_attempts: 2 })
     expect(eqMock).toHaveBeenCalledWith("id", "j-cas")
-    expect(inMock).toHaveBeenCalledWith("status", ["pending", "processing"])
+    // Widened by the markJobFailed consolidation (spec D11): "queued" rows (the
+    // MCP pipeline/app creation paths write it) could not be failed by this
+    // sweep at all before. "pending_review" is absent BY CONSTRUCTION — a job a
+    // human is reviewing is exempt from every liveness sweep.
+    expect(inMock).toHaveBeenCalledWith("status", ["pending", "queued", "processing"])
+    expect(inMock.mock.calls.every((c) => !(c[1] as string[]).includes("pending_review"))).toBe(true)
   })
 
   it("calls refundReservedCreditsForJob with the job id when CAS UPDATE found the row", async () => {

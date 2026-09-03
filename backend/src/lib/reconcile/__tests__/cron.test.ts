@@ -113,12 +113,20 @@ vi.mock("../fal.js", () => ({
   reconcileFalJob: vi.fn().mockResolvedValue(undefined),
 }))
 
+// The ONE sweep permitted to write a `pending_review` row (spec D31). It is
+// gated on JOB_HOLD_TTL_HOURS INSIDE itself, so the cron calls it
+// unconditionally and an unset variable costs nothing — not even a query.
+vi.mock("../hold-expiry.js", () => ({
+  sweepExpiredHolds: vi.fn().mockResolvedValue({ expired: 0, errors: 0 }),
+}))
+
 import { reconcileInflightJobs, STUCK_ORCHESTRATOR_JOB_TYPES, CHECKPOINT_RESUMABLE_JOB_TYPES } from "../cron.js"
 import { sweepStaleSyncJob } from "../sync-sweep.js"
 import { reconcileKieJob } from "../kie.js"
 import { reconcileReplicateJob } from "../replicate.js"
 import { reconcileElevenLabsJob } from "../elevenlabs.js"
 import { reconcileFalJob } from "../fal.js"
+import { sweepExpiredHolds } from "../hold-expiry.js"
 
 describe("reconcileInflightJobs", () => {
   beforeEach(() => {
@@ -610,6 +618,30 @@ describe("reconcileInflightJobs", () => {
       expect(mocks.queueAddCalls).toHaveLength(0)
       expect(sweepStaleSyncJob).toHaveBeenCalledTimes(2)
       expect(result.swept).toBe(2)
+    })
+  })
+
+  // Spec D31. A `pending_review` row is exempt from every OTHER sweep in this
+  // file by construction (they all filter positively on pending|processing),
+  // which is exactly why an abandoned review needs its own clock: without one
+  // it holds the user's reservation — on a deployment with a single payer
+  // account, the payer's balance — forever, and nothing anywhere reports it.
+  describe("expired holds", () => {
+    it("runs the hold-expiry sweep once per tick and folds its counts into the result", async () => {
+      // This file's beforeEach resets fixtures, not mocks — clear this one so
+      // "once per tick" is measured on THIS tick.
+      ;(sweepExpiredHolds as ReturnType<typeof vi.fn>).mockClear()
+      ;(sweepExpiredHolds as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ expired: 2, errors: 1 })
+      const result = await reconcileInflightJobs()
+      expect(sweepExpiredHolds).toHaveBeenCalledTimes(1)
+      expect(result.swept).toBe(2)
+      expect(result.errors).toBe(1)
+    })
+
+    it("a throwing hold sweep never takes the rest of the tick down with it", async () => {
+      ;(sweepExpiredHolds as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("boom"))
+      const result = await reconcileInflightJobs()
+      expect(result.errors).toBe(1)
     })
   })
 })

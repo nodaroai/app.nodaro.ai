@@ -78,6 +78,16 @@ vi.mock("../types", () => ({
 }))
 
 vi.mock("../poll-job", () => ({
+  // The run-start reset every executor spreads — mirrors ./poll-job's constant
+  // (whose key set is pinned by run-start-reset.test.ts).
+  RUN_START_RESET: {
+    executionStatus: "running",
+    errorMessage: undefined,
+    errorHint: undefined,
+    currentJobId: undefined,
+    currentJobProgress: 0,
+    jobAwaitingReview: undefined,
+  },
   pollJobToCompletion: (...args: unknown[]) => mockPollJobToCompletion(...args),
   setSuppressToasts: () => {},
   guardedToast: {

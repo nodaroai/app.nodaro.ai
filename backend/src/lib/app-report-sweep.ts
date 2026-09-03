@@ -14,9 +14,19 @@ import { isContentRejection, rejectionClassOf } from "./mcp/tools/_job-error.js"
  * Anthropic/Gemini/OpenAI, ffmpeg, Remotion), because they all end as a
  * failed `jobs` row.
  *
- * Two classifications per failed job:
+ * Three classifications per failed job, in this order:
+ *   - OUR OWN job-policy block  → kind 'policy-block'    (info)
  *   - content-policy rejections → kind 'model-rejection' (warning)
  *   - everything else           → kind 'job-failure'     (error)
+ *
+ * The policy-block branch must come FIRST and must key on the structured
+ * `error_hint` (spec 2026-09-03-job-policy-hook-design §6.3, D12), never on the
+ * message text: a registered policy's user-safe reason routinely contains the
+ * words "content policy", which is exactly the substring `isContentRejection`
+ * matches — so without the branch, day one of enforcement files a
+ * `model-rejection` report titled "rejected by the PROVIDER's content filter"
+ * for a decision THIS deployment made, at `severity: 'error'`-adjacent volume.
+ * A gate that is working is not an incident, hence `severity: 'info'`.
  *
  * Plus a second sweep over `workflow_executions`: runs that failed WITHOUT
  * any failed job — orchestrator-level errors (payload builder throws, credit
@@ -46,6 +56,9 @@ interface FailedJobRow {
   source_detail: string | null
   completed_at: string | null
   input_data: Record<string, unknown> | null
+  /** migration 376's structured verdict. `{kind:"policy-block"}` means the
+   *  failure is OURS, not the provider's — see the classifier below. */
+  error_hint?: { kind?: string; policyId?: string; hookPoint?: string } | null
 }
 
 interface FailedExecutionRow {
@@ -140,6 +153,37 @@ export function rejectionReportFor(job: FailedJobRow): Parameters<typeof insertA
   }
 }
 
+/**
+ * A block this deployment's own registered job policy decided — the request
+ * gate refusing a generation, or the result gate withholding an output.
+ *
+ * Deliberately `severity: 'info'`: the other two kinds mean "something went
+ * wrong", this one means "the gate did its job". On a moderated instance this
+ * is the highest-volume kind by far, and filing it as a warning would drown
+ * `/admin/app-reports` in successful enforcement. The title never says
+ * "provider" — attributing our decision to the model vendor is the specific
+ * mis-report this branch exists to prevent.
+ */
+export function policyBlockReportFor(job: FailedJobRow): Parameters<typeof insertAppReport>[0] {
+  const { model, jobType, origin } = jobReportBasics(job)
+  const hint = job.error_hint ?? {}
+  const where = hint.hookPoint === "request" ? "before it ran" : "its result was withheld"
+  return {
+    appSlug: origin,
+    node: "policy-sweep",
+    kind: "policy-block",
+    severity: "info",
+    title: `${model ?? jobType ?? "A generation"} was blocked by this deployment's content policy (${where})`,
+    payload: {
+      ...commonPayload(job, model, jobType),
+      policyId: typeof hint.policyId === "string" ? hint.policyId : null,
+      hookPoint: typeof hint.hookPoint === "string" ? hint.hookPoint : null,
+    },
+    userId: job.user_id,
+    jobId: job.id,
+  }
+}
+
 export function failureReportFor(job: FailedJobRow): Parameters<typeof insertAppReport>[0] {
   const { model, jobType, origin } = jobReportBasics(job)
   const error = job.error_message ?? "no error message recorded"
@@ -162,7 +206,10 @@ export async function sweepFailedJobs(): Promise<{ scanned: number; reported: nu
     // reject the whole query and this sweep silently scanned nothing from the
     // day it shipped (prod: "column jobs.model_identifier does not exist").
     // The model id lives inside input_data (see modelOf).
-    .select("id, error_message, error_detail, user_id, provider, provider_kind, source, source_detail, completed_at, input_data")
+    // error_hint (migration 376) is what separates OUR policy block from the
+    // provider's content filter — see the classifier below. Without it in the
+    // projection the policy-block branch can never fire.
+    .select("id, error_message, error_detail, user_id, provider, provider_kind, source, source_detail, completed_at, input_data, error_hint")
     .eq("status", "failed")
     .gte("completed_at", since)
     .order("completed_at", { ascending: false })
@@ -175,18 +222,26 @@ export async function sweepFailedJobs(): Promise<{ scanned: number; reported: nu
   const rows = (data ?? []) as unknown as FailedJobRow[]
   if (rows.length === 0) return { scanned: 0, reported: 0 }
 
-  // One dedup query across both job-derived kinds — the classifier is
-  // deterministic per error, so a job only ever maps to one of them.
+  // One dedup query across ALL THREE job-derived kinds — the classifier is
+  // deterministic per error, so a job only ever maps to one of them. A kind
+  // missing from this list means its rows are never seen as "already reported"
+  // and the sweep re-files the same job on every tick for 48 hours.
   const { data: existing } = await (supabase.from("app_reports" as "assets") as any)
     .select("job_id")
-    .in("kind", ["model-rejection", "job-failure"])
+    .in("kind", ["model-rejection", "job-failure", "policy-block"])
     .in("job_id", rows.map((j) => j.id))
   const seen = new Set(((existing ?? []) as Array<{ job_id: string }>).map((r) => r.job_id))
 
   let reported = 0
   for (const job of rows) {
     if (seen.has(job.id)) continue
-    const report = isContentRejection(job.error_message) ? rejectionReportFor(job) : failureReportFor(job)
+    // ORDER IS THE POINT: the structured hint wins over the message sniff.
+    const report =
+      job.error_hint?.kind === "policy-block"
+        ? policyBlockReportFor(job)
+        : isContentRejection(job.error_message)
+          ? rejectionReportFor(job)
+          : failureReportFor(job)
     if (await insertAppReport(report)) reported++
   }
   return { scanned: rows.length, reported }

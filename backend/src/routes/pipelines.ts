@@ -4,6 +4,7 @@ import { CHAT_ENABLED_STAGES, CHAT_TURN_CAPS, CHAT_WIRED_STAGES, ENTITY_TYPES, E
 import { getIdentityLockClause } from "@nodaro/prompts"
 import { hasCredits } from "../lib/config.js"
 import { insertJob } from "../lib/insert-job.js"
+import { jobBlockedBody } from "../lib/job-policy.js"
 import { requireScope, type Scope } from "../lib/scopes.js"
 import { createSSEStream } from "../lib/sse.js"
 import { supabase } from "../lib/supabase.js"
@@ -731,6 +732,15 @@ export async function pipelinesRoutes(app: FastifyInstance) {
           },
         })
       if (jobErr || !job) {
+        // A request-gate BLOCK is a client outcome: 422 `job_blocked` with the
+        // policy's user message (F10). Deliberately an explicit branch rather
+        // than `sendInternalError` — that would flip a genuine insert failure
+        // from `db_error` to `internal_error` for existing clients. It also
+        // stops the policy's message being handed out under `detail` on a code
+        // that claims our database failed.
+        if (jobErr?.blocked) {
+          return reply.status(422).send(jobBlockedBody({ userMessage: jobErr.blocked.message }))
+        }
         return reply
           .status(500)
           .send({ error: { code: "db_error", detail: jobErr?.message } })

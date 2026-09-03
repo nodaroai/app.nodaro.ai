@@ -7,7 +7,7 @@ import {
   uploadImageVariantsMaybeWatermark,
   uploadVideoMaybeWatermark,
   buildImageOutputData,
-  markJobCompleted,
+  markJobCompletedDetailed,
   commitJobCredits,
   refundLoopTrimAddon,
   createAssetFromJob,
@@ -116,6 +116,17 @@ export type FinalizeJobType =
  * `jobs.node_id` column on the schema today, so the reopen path looks up the
  * owning node from `node_states` instead of joining back via job columns.
  */
+/**
+ * `{ ok: false }` gained a REASON. Additive, so all 37 callers compile
+ * unchanged — and not one of them throws on `{ ok: false }`, which is the
+ * property that makes a hold safe on this funnel: the handler returns, the
+ * BullMQ job completes normally, no retry, no failure write, no refund. A
+ * caller that added a `throw` would turn every hold into a retry loop against a
+ * `pending_review` row the pickup CAS refuses — which is exactly what
+ * `workers/__tests__/job-policy-result-totality.test.ts` mechanises.
+ */
+export type FinalizeOutcome = { ok: true } | { ok: false; reason?: "lost_race" | "blocked" | "held" }
+
 interface JobRow {
   id: string
   user_id: string | null
@@ -431,12 +442,15 @@ export interface FinalizeInput {
    *  "worker"); the reconcile cron passes "cron"; the stall re-pick's inline
    *  reconcile passes "worker" so it can re-claim its predecessor's claim. */
   claimant?: FinalizeClaimant
-  /** Loop-trim add-on credits to take OFF the commit (audit P0.3): reconcile
-   *  recovery delivers the RAW i2v clip without the smart-loop-cut, so the
-   *  single-node addon must not be charged. Applied AFTER markJobCompleted
-   *  wins (committing reserved − addon via refundLoopTrimAddon) — never
-   *  before, so a failed finalize leaves the log `reserved` and the
-   *  exhaustion refund stays effective. Ignored for orchestrated jobs
+  /** Loop-trim add-on credits to take OFF the commit (audit P0.3, review F7).
+   *  TWO callers: reconcile recovery, which delivers the RAW i2v clip without
+   *  the smart-loop-cut, and the i2v worker itself when the post-process threw.
+   *  Applied AFTER markJobCompleted wins (committing reserved − addon via
+   *  refundLoopTrimAddon) — never before, so a failed finalize leaves the log
+   *  `reserved`: the exhaustion refund stays effective, and so does every
+   *  result-gate refund (block / reject / hold expiry / cancel), all of which
+   *  only touch `reserved` logs. Also parked in `held_completion_fields` so
+   *  `approveHeldJob` can replay the same settlement. Ignored for orchestrated jobs
    *  (base-only reservation — the addon was never charged). */
   loopTrimAddonRefundCredits?: number
 }
@@ -463,7 +477,7 @@ export interface FinalizeInput {
  */
 export async function finalizeJobWithMedia(
   input: FinalizeInput,
-): Promise<{ ok: boolean }> {
+): Promise<FinalizeOutcome> {
   const { jobId, jobType, result } = input
 
   // 1. Load job row (the shape we need for upload / asset / reopen).
@@ -561,14 +575,41 @@ export async function finalizeJobWithMedia(
   //    and writing those NULLs clobbered whatever the worker/route had
   //    already recorded — every cron-completed job lost its provider
   //    metadata (admin data-quality residual from the 2026-06-10 audit).
-  const ok = await markJobCompleted(jobId, {
-    output_data: outputData,
-    ...(result.providerUsed != null && { provider: result.providerUsed }),
-    ...(result.cost != null && { provider_cost: result.cost }),
-    ...(result.displayCost != null && { display_cost: result.displayCost }),
-    ...(result.kieTaskId && { provider_task_id: result.kieTaskId }),
-  })
-  if (!ok) return { ok: false }
+  const outcome = await markJobCompletedDetailed(
+    jobId,
+    {
+      output_data: outputData,
+      ...(result.providerUsed != null && { provider: result.providerUsed }),
+      ...(result.cost != null && { provider_cost: result.cost }),
+      ...(result.displayCost != null && { display_cost: result.displayCost }),
+      ...(result.kieTaskId && { provider_task_id: result.kieTaskId }),
+    },
+    // THE hold-eligible funnel: this is the only completion whose tail
+    // (runCompletionTail) a review APPROVE can replay, which is what makes a
+    // hold honest here and a downgrade-to-block honest everywhere else.
+    "finalize",
+    // The settlement inputs that are not jobs columns, so approve can replay
+    // the metered true-up instead of committing a ceiling (Q2) — and, when the
+    // smart-loop-cut failed, the add-on that must come OFF that commit (F7).
+    // The worker deliberately no longer settles the add-on itself, so this is
+    // the only carrier: without it the held row has no record of the add-on at
+    // all and approve can only replay a FULL commit, overcharging the user for
+    // a trim that never happened.
+    {
+      metered: result.meteredCost,
+      extraNonProviderCredits: input.extraNonProviderCredits,
+      meteredCost: result.cost,
+      loopTrimAddonRefundCredits: input.loopTrimAddonRefundCredits,
+    },
+  )
+  if (outcome !== "completed") {
+    // A HELD row is not terminal: release OUR finalize claim so the approve
+    // path (and any later re-pick) sees a clean row instead of waiting out
+    // FINALIZE_CLAIM_TTL_MS. A blocked row is terminal and keeps its claim
+    // (harmless — claim_job_finalize's own status gate refuses it anyway).
+    if (outcome === "held" && claim.ts) await releaseJobFinalizeClaim(jobId, claim.ts)
+    return { ok: false, reason: outcome }
+  }
 
   // 5. Commit credits (idempotent: CAS on usage_logs.status='reserved' inside
   //    both branches; null usageLogId is a graceful no-op). When a loop-trim
@@ -583,6 +624,31 @@ export async function finalizeJobWithMedia(
   } else {
     await commitJobCredits(usageLogId, jobId, result.cost, input.extraNonProviderCredits, result.meteredCost)
   }
+
+  // 6-8. The shared completion tail.
+  await runCompletionTail(job, videoR2Url)
+
+  return { ok: true }
+}
+
+/**
+ * Finalize steps 6-8, verbatim — gallery asset → reopen a sole-cause-failed
+ * execution → best-effort reference-video auto-attach.
+ *
+ * EXTRACTED so the policy-review APPROVE path replays the REAL tail instead of
+ * a copy that drifts. Approve cannot re-enter `finalizeJobWithMedia` itself:
+ * its status guard admits only `pending`/`processing` and `claim_job_finalize`'s
+ * SQL predicate says the same (migration 211:57), so approve does its own CAS
+ * and calls this. The one step it does NOT share is the credit commit, which is
+ * caller-parameterised — approve replays it from `held_completion_fields`.
+ *
+ * Never throws: a failed attach must not undo a committed completion.
+ */
+export async function runCompletionTail(
+  job: Pick<JobRow, "id" | "user_id" | "workflow_execution_id" | "input_data">,
+  videoR2Url: string | undefined,
+): Promise<void> {
+  const jobId = job.id
 
   // 6. Create asset record so the output appears in /library.
   await createAssetFromJob(jobId, job.user_id ?? undefined)
@@ -626,6 +692,4 @@ export async function finalizeJobWithMedia(
       }
     }
   }
-
-  return { ok: true }
 }

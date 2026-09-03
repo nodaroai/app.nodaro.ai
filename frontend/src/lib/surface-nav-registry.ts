@@ -111,4 +111,8 @@ export const ENTRY_BY_LINK: readonly string[] = [
   "organizations",
   "client-apps",
   "app-reports",
+  // Content Review. Its nav entry is unconditional and admin-only — there is no
+  // surface NavKey for it (nav.hide's vocabulary is the END-USER nav), so it is
+  // classified here like every other /admin child.
+  "review",
 ]

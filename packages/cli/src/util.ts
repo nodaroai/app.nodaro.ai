@@ -55,10 +55,22 @@ interface WatchOpts<T extends PollableResult> extends OutputOpts {
  * tick rather than crashing the loop. A user watching a long job through a
  * flaky network sees one warning per blip and keeps going.
  *
+ * One NON-terminal status also ends the loop: `pending_review`, a job a policy
+ * registered by the deployment held for a human reviewer. It is in-flight, so
+ * it must never join TERMINAL above (that set is also the execution
+ * vocabulary) — but nothing about it moves until a person acts, so "keep
+ * polling" would mean polling until the CLI is killed. It gets its own exit
+ * code so a script can tell "a human is deciding" apart from a failure.
+ *
  * Exit codes:
  *   - 0  on completed
  *   - 2  on failed (exits via `process.exit`)
+ *   - 3  on pending_review (exits via `process.exit`)
  *   - 130 on cancelled (exits via `process.exit`)
+ *
+ * `--json` reports the payload and returns instead of setting an exit code —
+ * pre-existing behaviour of the failed/cancelled arms, matched here so one
+ * status does not behave unlike the other three.
  *
  * Returns the terminal fetch result, so a caller can render op-specific
  * output (e.g. `voice analyze` prints the detected-speaker table) after the
@@ -84,6 +96,15 @@ export async function watchUntilTerminal<T extends PollableResult>(opts: WatchOp
     if (status !== lastStatus) {
       info(`[${elapsed(start)}s] ${opts.label} → ${status}`)
       lastStatus = status
+    }
+    if (status === "pending_review") {
+      if (opts.json) emit(result.data, opts)
+      else {
+        info("awaiting review (a human decision is pending; not a failure)")
+        dim(`check later: nodaro jobs get ${opts.label}`)
+        process.exit(3)
+      }
+      return result
     }
     if (TERMINAL.has(status)) {
       if (opts.json) emit(result.data, opts)

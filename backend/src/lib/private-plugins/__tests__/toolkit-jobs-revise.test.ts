@@ -2,9 +2,11 @@
  * The three revise-lane jobs members (2026-08-03, recast creative direction):
  *
  *  - `markJobFailed` — route-side CAS fail for the first SYNCHRONOUS priced
- *    route (`/v1/recast/revise` has no worker to own its failure path). Flips
- *    only LIVE rows (pending/processing) so a concurrent completion/cancel is
- *    never clobbered; returns whether WE flipped it.
+ *    route (`/v1/recast/revise` has no worker to own its failure path). Its
+ *    BODY now delegates to `lib/job-failure.ts` (the one failure writer), so
+ *    it flips FAILABLE_STATUSES — every live status except the parked one — and
+ *    a concurrent completion/cancel, or a job under review, is never clobbered.
+ *    The surface (and the refund-only-on-true contract) is unchanged.
  *  - `refundJobCredits` — exposes the worker-layer refund to routes. Falsy
  *    usageLogId is a no-op (reserve never happened / already aborted).
  *  - `hasWaivingRecastRun` — the direction gate's re-take waiver predicate,
@@ -79,8 +81,10 @@ describe("tk.jobs revise-lane members", () => {
       expect(update.error_message).toBe("revision_unusable")
       expect(typeof update.completed_at).toBe("string")
       expect(chain.eq).toHaveBeenCalledWith("id", "job-1")
-      // Live-status CAS — a completed/cancelled/failed row is never clobbered.
-      expect(chain.in).toHaveBeenCalledWith("status", ["pending", "processing"])
+      // Live-status CAS — a completed/cancelled/failed row is never clobbered,
+      // and neither is a `pending_review` one. "queued" is newly failable: the
+      // old hand-rolled copy could not fail a queued row at all (spec D11).
+      expect(chain.in).toHaveBeenCalledWith("status", ["pending", "queued", "processing"])
     })
 
     it("returns false when the row was already terminal (no rows flipped)", async () => {

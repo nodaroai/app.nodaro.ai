@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
+import { jobBlockOf, jobBlockedBody } from "./job-policy.js"
 
 /** The single generic string every unmarked `internal_error` 500 collapses to. */
 const GENERIC_INTERNAL_MESSAGE = "Internal server error"
@@ -201,6 +202,20 @@ export function sendInternalError(
   err: unknown,
   clientMessage = GENERIC_INTERNAL_MESSAGE,
 ): FastifyReply {
+  // A job-policy BLOCK is a CLIENT outcome, not a server error: 422 with the
+  // policy's own user-safe reason, the same shape and status the upload lanes
+  // use. It is caught HERE rather than at the ~103 insert call sites so every
+  // existing `if (error) return sendInternalError(...)` and every
+  // `catch (err) { return sendInternalError(...) }` gets it for free — and so a
+  // route added tomorrow cannot forget it. Deliberately the FIRST branch: the
+  // error must not be reported as a server failure or logged at error level.
+  // (The 500-sanitizer net only rewrites `internal_error` 500 bodies, so this
+  // 422 passes through it untouched.)
+  const blocked = jobBlockOf(err)
+  if (blocked) {
+    req.log.info({ policyId: blocked.policyId }, "job blocked by policy")
+    return reply.status(422).send(jobBlockedBody({ userMessage: blocked.message }))
+  }
   req.log.error({ err }, clientMessage)
   reportServerError(req, err instanceof Error ? err.message : clientMessage, "route-catch", err)
   sanitizedReplies.add(reply)

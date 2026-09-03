@@ -677,6 +677,21 @@ export function updateRecoveringIfChanged(
   }
 }
 
+/** Twin of `updateRecoveringIfChanged` for the `pending_review` hold flag —
+ *  writes ONLY on a real transition, so a 2s poll tick neither re-renders nor
+ *  re-dirties every node it touches. Read by BaseNode's `<NodePolicyOverlay>`;
+ *  written by `getJobStatusLeanForNode` on behalf of the ~19 poll loops. */
+export function updateAwaitingReviewIfChanged(
+  nodeId: string,
+  awaiting: boolean,
+  updateNodeData: (id: string, data: Record<string, unknown>) => void,
+): void {
+  const prev = (useWorkflowStore.getState().nodes.find(n => n.id === nodeId)?.data as Record<string, unknown>)?.jobAwaitingReview;
+  if (awaiting !== Boolean(prev)) {
+    updateNodeData(nodeId, { jobAwaitingReview: awaiting });
+  }
+}
+
 export function isExecutableNode(node: WorkflowNode): boolean {
   return EXECUTABLE_TYPES.has(node.type ?? "");
 }

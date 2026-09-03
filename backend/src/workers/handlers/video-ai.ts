@@ -92,7 +92,6 @@ import {
   setJobProgress,
   startProgressRamp,
   withProgressRamp,
-  refundLoopTrimAddon,
   type HandlerFn,
 } from "../shared.js"
 import { finalizeJobWithMedia } from "../../lib/job-finalize.js"
@@ -348,13 +347,28 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
 
   // Generic smart-loop-cut post-process. Runs for any provider when
   // loopTrim.enabled. Failures are non-fatal: keep the un-trimmed output
-  // and refund only the addon credits (the i2v base credits stay charged).
+  // and take only the addon credits off the commit (the i2v base credits
+  // stay charged).
   //
   // On SUCCESS the addon must be CHARGED (we spent the compute). The success
   // commit goes through finalizeJobWithMedia -> commitJobCredits with the
   // provider USD cost, which reconciles actual ≈ base and would otherwise
   // refund the addon — so we forward it as extraNonProviderCredits below.
+  //
+  // On FAILURE the addon is NOT settled here (review finding F7). Committing
+  // at (reserved − addon) before finalize flips `usage_logs.status` out of
+  // `reserved`, and EVERY result-gate rejection — a block, a reviewer reject,
+  // the hold-TTL expiry, the owner's cancel — refunds through
+  // `refundReservedCreditsForJob`, which only iterates `reserved` logs. The
+  // early commit turned all four into silent no-ops (while the expiry message
+  // still told the user their credits had been refunded), so the user paid the
+  // FULL base video price for an output that was never delivered. It is
+  // forwarded as `loopTrimAddonRefundCredits` instead: finalize applies it
+  // only after the completion CAS wins, and parks it in
+  // `held_completion_fields` so approve CAN replay the same settlement (the
+  // replay itself lives in `lib/job-policy-review.ts`).
   let loopTrimAddonToCharge = 0
+  let loopTrimAddonToRefund = 0
   if (loopTrim?.enabled) {
     const addonCredits = estimateLoopTrimAddonCredits(loopTrim, duration ?? 8)
     try {
@@ -373,8 +387,8 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
         `[worker] smart-loop-cut failed for job ${ctx.jobId}; keeping un-trimmed output:`,
         err,
       )
-      // Failure path already commits at (reserved - addon); leave addon at 0.
-      await refundLoopTrimAddon(ctx.jobId, ctx.usageLogId, addonCredits)
+      // Charge nothing for the trim; finalize settles at (reserved − addon).
+      loopTrimAddonToRefund = addonCredits
     }
   }
 
@@ -430,8 +444,10 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     result,
     mediaUrl: finalVideoUrl,
     // Charge the loop-trim addon on top of provider cost when smart-loop-cut
-    // succeeded (0 otherwise — failure already refunded it).
+    // succeeded; take it OFF the commit when it failed. Exactly one of these
+    // is ever non-zero.
     extraNonProviderCredits: loopTrimAddonToCharge,
+    loopTrimAddonRefundCredits: loopTrimAddonToRefund,
     extraOutputData: {
       thumbnailUrl: thumbUrl,
       ...buildProviderMeta(result),

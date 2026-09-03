@@ -1,4 +1,4 @@
-import { supabase } from "../supabase.js"
+import { markJobFailed } from "../job-failure.js"
 import { finalizeJobWithMedia, isFinalizeJobType, NOT_GENERIC_RECOVERABLE } from "../job-finalize.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
 import { redactProviderDetail, logProviderFailure } from "../provider-error-detail.js"
@@ -60,19 +60,15 @@ async function markFailed(jobId: string, reason: string, detail: string | null =
   // Log BEFORE the write: this module had no per-job output at all, so a
   // cron-failed job was invisible in Railway (spec §11.3).
   logProviderFailure("reconcile/fal", jobId, reason, detail)
-  // CAS on the live (non-terminal) states only — never trample a job the worker
-  // concurrently flipped to `completed`. Matches kie.ts / replicate.ts.
-  await supabase
-    .from("jobs")
-    .update({
-      status: "failed",
-      error_message: reason.slice(0, 500),
-      error_detail: detail,
-      completed_at: new Date().toISOString(),
-      reconcile_last_error: "upstream_failed",
-    })
-    .eq("id", jobId)
-    .in("status", ["pending", "processing"])
+  // The CAS lives in markJobFailed now (FAILABLE_STATUSES): never trample a job
+  // a concurrent writer flipped to completed/cancelled, and never take a
+  // `pending_review` row — a held job is out of every reconcile sweep's reach
+  // by construction (spec D11).
+  await markJobFailed(jobId, {
+    error_message: reason,
+    error_detail: detail,
+    reconcile_last_error: "upstream_failed",
+  })
 }
 
 /**

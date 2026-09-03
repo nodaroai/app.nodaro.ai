@@ -101,6 +101,14 @@ vi.mock("@/ee/routes/credits.js", () => ({
   invalidateBalanceCache: mockInvalidateBalanceCache,
 }))
 
+// The shared single-job cancel. This route delegates a HELD job to it, because
+// it is the only path that refunds the reservation, deletes the withheld object
+// and records the withdrawal — none of which a bulk CAS can do.
+const mockCancelOwnedJob = vi.hoisted(() =>
+  vi.fn().mockResolvedValue({ kind: "cancelled", analysisJobId: null }),
+)
+vi.mock("@/lib/cancel-job.js", () => ({ cancelOwnedJob: mockCancelOwnedJob }))
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -1295,6 +1303,29 @@ describe("POST /v1/workflow-executions/:id/cancel", () => {
     expect(res.statusCode).toBe(409)
     expect(res.json().error.code).toBe("not_cancellable")
   })
+
+  // D17 — found by WS0's status-literals guard, named in no blueprint. This
+  // fallback gated on a hand-rolled `["pending","queued","processing","running"]`
+  // set, so a job parked in review answered 409 "already pending_review" here
+  // while `POST /v1/jobs/:id/cancel` cancelled the very same row. Two cancel
+  // buttons on the same product must not disagree about the same job.
+  it("cancels a standalone job that is parked in review, instead of 409ing", async () => {
+    const mockFrom = vi.mocked(supabase.from)
+    let callNum = 0
+    mockFrom.mockImplementation(() => {
+      callNum++
+      if (callNum === 1) {
+        return { select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ single: vi.fn().mockResolvedValue({ data: null, error: { code: "PGRST116" } }) }) }) }) } as never
+      }
+      return { select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ single: vi.fn().mockResolvedValue({ data: { id: TEST_JOB_ID, status: "pending_review" }, error: null }) }) }) }) } as never
+    })
+
+    const res = await authedPost(`/v1/workflow-executions/${TEST_JOB_ID}/cancel`)
+
+    expect(res.statusCode).toBe(200)
+    expect(mockCancelOwnedJob).toHaveBeenCalledWith(TEST_JOB_ID, TEST_USER_ID)
+    expect(mockInvalidateBalanceCache).toHaveBeenCalledWith(TEST_USER_ID)
+  })
 })
 
 // ==========================================================================
@@ -1915,5 +1946,83 @@ describe("GET /v1/workflows/:id/executions — editor-source jobs exclusion", ()
 
     expect(isCalls(jobsRec)).toContainEqual({ method: "is", args: ["workflow_execution_id", null] })
     expect(isCalls(jobsRec)).not.toContainEqual({ method: "is", args: ["mcp_client", null] })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Held (pending_review) single-node jobs survive a page reload
+//
+// The editor's load path asks for `status=pending,running,stopping` and
+// re-hydrates the canvas from what comes back (Gap 3). A job parked in
+// `pending_review` by the result gate is IN FLIGHT — credits are reserved and a
+// reviewer decision is pending — so it has to come back from that query and
+// carry the awaiting-review sidecar, or the node paints idle, nothing polls it,
+// and the user re-runs into a SECOND reservation.
+// ---------------------------------------------------------------------------
+
+describe("held jobs are restorable — pending_review in the active-status query", () => {
+  it("maps the editor's `running` filter onto pending_review as well as processing", async () => {
+    const jobsRec = makeRecorder({ data: [], error: null })
+    const execRec = makeRecorder({ data: [], error: null })
+    vi.mocked(supabase.from).mockImplementation(
+      ((table: string) => (table === "jobs" ? jobsRec.proxy : execRec.proxy)) as never,
+    )
+
+    const res = await authedGet(
+      `/v1/workflows/${TEST_WORKFLOW_ID}/executions?status=pending,running,stopping&source=editor`,
+    )
+    expect(res.statusCode).toBe(200)
+
+    const inCall = jobsRec.calls.find((c) => c.method === "in" && c.args[0] === "status")
+    expect(inCall, "the standalone-jobs half must filter on mapped job statuses").toBeDefined()
+    // pending_review is in flight: without it the held job is invisible to the
+    // reload and the canvas offers the user a second run.
+    expect(inCall!.args[1]).toContain("pending_review")
+    // The pre-existing mapping is untouched.
+    expect(inCall!.args[1]).toEqual(expect.arrayContaining(["processing", "pending", "queued"]))
+  })
+
+  it("jobToExecutionSummary reports a held job AS pending_review, with the awaitingReview sidecar", () => {
+    const summary = jobToExecutionSummary({
+      id: "job-uuid-held",
+      node_id: "canvas-node-7",
+      status: "pending_review",
+      provider: "kie",
+      input_data: { type: "generate-image" },
+      progress: 90,
+      credits: 4,
+      error_message: null,
+      started_at: "t0",
+      completed_at: null,
+      created_at: "t-1",
+    }) as { status: string; nodeStates: Record<string, Record<string, unknown>> }
+
+    // NOT "running": this same branch exposes `pending_review` through the SDK
+    // and the CLI, so the list must not contradict them (D15 — no new status
+    // member, a sidecar instead).
+    expect(summary.status).toBe("pending_review")
+    const state = summary.nodeStates["canvas-node-7"]
+    expect(state.status).toBe("pending_review")
+    expect(state.awaitingReview).toBe(true)
+    expect(state.jobId).toBe("job-uuid-held")
+  })
+
+  it("a normal running job carries no awaitingReview sidecar", () => {
+    const summary = jobToExecutionSummary({
+      id: "job-uuid-1",
+      node_id: "n1",
+      status: "processing",
+      provider: "kie",
+      input_data: { type: "generate-image" },
+      progress: 42,
+      credits: 4,
+      error_message: null,
+      started_at: "t0",
+      completed_at: null,
+      created_at: "t-1",
+    }) as { status: string; nodeStates: Record<string, Record<string, unknown>> }
+
+    expect(summary.status).toBe("running")
+    expect(summary.nodeStates["n1"].awaitingReview).toBeUndefined()
   })
 })

@@ -11,6 +11,11 @@ const mocks = vi.hoisted(() => {
   const jobsSelectEqMock = vi.fn(() => ({ single: jobsSingleMock }))
   const jobsSelectMock = vi.fn(() => ({ eq: jobsSelectEqMock }))
   const jobsUpdateNeqMock = vi.fn().mockResolvedValue({ data: null, error: null })
+  // markJobFailed (lib/job-failure.ts) ends its CAS with `.select("id")` and
+  // reads the returned rows to answer "did WE flip it?" — the mock must model
+  // that or every migrated writer sees a lost race.
+  const jobsUpdateCasSelectMock = vi.fn().mockResolvedValue({ data: [{ id: "j-1" }], error: null })
+  const jobsUpdateInMock = vi.fn(() => ({ select: jobsUpdateCasSelectMock }))
   // G-7: capture every jobs.update(payload) so tests can assert on the exact
   // recorded update (lastJobsUpdate below), not just individual fields.
   const jobsUpdates: Array<Record<string, unknown>> = []
@@ -18,8 +23,15 @@ const mocks = vi.hoisted(() => {
   // .eq() before .not() (`.eq("id",jobId).eq("user_id",...).not(...)`) —
   // distinct from markFailed's `.eq("id",jobId).in("status",[...])`. The
   // object returned for col==="id" supports both chain shapes.
+  // The TRAINING branch scopes its writes `.eq("id").eq("user_id")` and then
+  // filters on status. It used a NEGATIVE filter (`.not("status","in",
+  // "(completed,failed,cancelled)")`) which matches `pending_review` — spec
+  // §17.1 tightens exactly these two writes to a positive `.in`.
+  const jobsTrainingNotMock = vi.fn().mockResolvedValue({ data: null, error: null })
+  const jobsTrainingInMock = vi.fn().mockResolvedValue({ data: null, error: null })
   const jobsUpdateSecondEqMock = vi.fn(() => ({
-    not: vi.fn().mockResolvedValue({ data: null, error: null }),
+    not: jobsTrainingNotMock,
+    in: jobsTrainingInMock,
   }))
   const jobsUpdateMock = vi.fn((arg: Record<string, unknown>) => {
     jobsUpdates.push(arg)
@@ -30,10 +42,10 @@ const mocks = vi.hoisted(() => {
           // older sites used .neq("status","cancelled") — support both terminals.
           return Object.assign(
             Promise.resolve({ data: null, error: null }),
-            { neq: jobsUpdateNeqMock, in: jobsUpdateNeqMock, eq: jobsUpdateSecondEqMock },
+            { neq: jobsUpdateNeqMock, in: jobsUpdateInMock, eq: jobsUpdateSecondEqMock },
           )
         }
-        return { neq: jobsUpdateNeqMock, in: jobsUpdateNeqMock, eq: jobsUpdateSecondEqMock }
+        return { neq: jobsUpdateNeqMock, in: jobsUpdateInMock, eq: jobsUpdateSecondEqMock }
       }),
     }
   })
@@ -88,6 +100,10 @@ const mocks = vi.hoisted(() => {
     fromMock,
     jobsSingleMock,
     jobsUpdateMock,
+    jobsUpdateNeqMock,
+    jobsUpdateInMock,
+    jobsTrainingNotMock,
+    jobsTrainingInMock,
     jobsUpdates,
     charactersUpdates,
     character,
@@ -235,6 +251,10 @@ describe("reconcileReplicateJob", () => {
     await reconcileReplicateJob(row)
     expect(mocks.refundMock).toHaveBeenCalledWith("j-fail")
     expect(mocks.finalizeMock).not.toHaveBeenCalled()
+    // Spec D11: the shared markJobFailed CAS. "queued" is newly failable (these
+    // sweeps could not take a queued row at all before); "pending_review" is
+    // absent BY CONSTRUCTION, so no reconcile tick can fail a job under review.
+    expect(mocks.jobsUpdateInMock).toHaveBeenCalledWith("status", ["pending", "queued", "processing"])
   })
 
   it("canceled status → markFailed + refund", async () => {
@@ -361,6 +381,12 @@ describe("reconcileReplicateJob", () => {
     expect(charUpdate.lora_training_error).not.toContain("token=")
 
     expect(mocks.refundMock).toHaveBeenCalledWith("job-train-fail")
+
+    // Spec §17.1: the negative `.not("status","in","(completed,failed,cancelled)")`
+    // filter MATCHES a pending_review row. The failed arm goes through
+    // markJobFailed, whose CAS is positive and cannot.
+    expect(mocks.jobsUpdateInMock).toHaveBeenCalledWith("status", ["pending", "queued", "processing"])
+    expect(mocks.jobsTrainingNotMock).not.toHaveBeenCalled()
   })
 
   it("replicate-training canceled → sanitizes error_message (cancel wording, no refund claim)", async () => {
@@ -377,6 +403,28 @@ describe("reconcileReplicateJob", () => {
     const jobUpdate = lastJobsUpdate()
     expect(jobUpdate.status).toBe("cancelled")
     expect(jobUpdate.error_message).toBe("Character training was cancelled.")
+    // A cancel is not a failure, so it stays a direct write — but its filter is
+    // positive now, so it cannot cancel a job parked in review either (§17.1).
+    expect(mocks.jobsTrainingInMock).toHaveBeenCalledWith("status", ["pending", "queued", "processing"])
+    expect(mocks.jobsTrainingNotMock).not.toHaveBeenCalled()
+  })
+
+  // §17.1 + WS2's COMPLETED_ALLOWLIST: a LoRA training completion is a MODEL,
+  // not a media publication — it stays a direct write (routing it through
+  // markJobCompleted would run the result gate over an empty output). What it
+  // must NOT keep is the negative status filter.
+  it("replicate-training succeeded → completes with a positive status filter, never .not(TERMINAL)", async () => {
+    setPrediction({ status: "succeeded", output: null, version: "nodaroai/char-1:abc" })
+    await reconcileReplicateJob({
+      id: "job-train-ok",
+      provider_kind: "replicate-training",
+      provider_task_id: "tr-fail-1",
+      reconcile_attempts: 0,
+      job_type: "character-lora-training",
+    })
+    expect(lastJobsUpdate().status).toBe("completed")
+    expect(mocks.jobsTrainingInMock).toHaveBeenCalledWith("status", ["pending", "queued", "processing"])
+    expect(mocks.jobsTrainingNotMock).not.toHaveBeenCalled()
   })
 
   it("succeeded with no output → markFailed + refund", async () => {

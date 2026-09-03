@@ -141,6 +141,16 @@ vi.mock("../execution-graph", () => ({
 }))
 
 vi.mock("../poll-job", () => ({
+  // The run-start reset every executor spreads — mirrors ./poll-job's constant
+  // (whose key set is pinned by run-start-reset.test.ts).
+  RUN_START_RESET: {
+    executionStatus: "running",
+    errorMessage: undefined,
+    errorHint: undefined,
+    currentJobId: undefined,
+    currentJobProgress: 0,
+    jobAwaitingReview: undefined,
+  },
   // The audio handlers route their final prompt through
   // runProcessingNode → pollJobWithNodeUpdate(nodeId, apiCall, …). Invoke the
   // factory so the mocked generateMusicApi / voiceDesignApi record the prompt

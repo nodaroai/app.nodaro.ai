@@ -238,7 +238,7 @@ import { resolveNodeInputs, extractNodeOutputAsList, resolveSourceThroughConnect
 import { collectPreviewItems } from "./preview-items";
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
 import { resolveFieldMappings, NODE_MAPPABLE_FIELDS } from "./resolve-field-mappings";
-import { pollJobWithNodeUpdate, guardedToast } from "./poll-job";
+import { pollJobWithNodeUpdate, guardedToast, getJobStatusLeanForNode, RUN_START_RESET } from "./poll-job";
 import type { OutputKeySpec } from "./poll-job";
 import { ensureNodeSheetPanels, SHEET_STAGE_A_CANCELLED } from "../reference-sheet/node-sheet-stage-a";
 import { shouldAbandonNode } from "./abandon-guard";
@@ -2348,10 +2348,8 @@ function executeNodeCore(
     if (gvpRequest.planOnly === true) {
       const { updateNodeData } = useWorkflowStore.getState();
       updateNodeData(node.id, {
-        executionStatus: "running",
+        ...RUN_START_RESET,
         generatedPlan: undefined,
-        errorMessage: undefined,
-        currentJobId: undefined,
         currentJobProgress: undefined,
       });
       return new Promise<string>((resolve, reject) => {
@@ -2369,7 +2367,7 @@ function executeNodeCore(
                   return;
                 }
                 try {
-                  const job = await getJobStatusLean(jobId);
+                  const job = await getJobStatusLeanForNode(jobId, node.id);
                   pollFailures = 0;
                   if (job.status === "processing" && job.progress != null) {
                     updateProgressIfChanged(node.id, job.progress, updateNodeData);
@@ -3666,10 +3664,8 @@ function executeNodeCore(
     }
     const { updateNodeData } = useWorkflowStore.getState();
     updateNodeData(node.id, {
-      executionStatus: "running",
+      ...RUN_START_RESET,
       alignmentResults: undefined,
-      errorMessage: undefined,
-      currentJobId: undefined,
     });
 
     setUserPromptTemplate(d.transcript?.trim() || undefined);
@@ -3688,7 +3684,7 @@ function executeNodeCore(
                 return;
               }
               try {
-                const job = await getJobStatusLean(jobId);
+                const job = await getJobStatusLeanForNode(jobId, node.id);
                 pollFailures = 0;
                 if (job.status === "processing" && job.progress != null) {
                   updateProgressIfChanged(node.id, job.progress, updateNodeData);
@@ -3778,10 +3774,8 @@ function executeNodeCore(
     // Clear any stale result on run start so a prior scene table can't co-render
     // with a fresh running/failed state.
     updateNodeData(node.id, {
-      executionStatus: "running",
+      ...RUN_START_RESET,
       generatedJson: undefined,
-      errorMessage: undefined,
-      currentJobId: undefined,
       currentJobProgress: undefined,
     });
 
@@ -3816,7 +3810,7 @@ function executeNodeCore(
                 return;
               }
               try {
-                const job = await getJobStatusLean(jobId);
+                const job = await getJobStatusLeanForNode(jobId, node.id);
                 pollFailures = 0;
                 if (job.status === "processing" && job.progress != null) {
                   updateProgressIfChanged(node.id, job.progress, updateNodeData);
@@ -3922,11 +3916,9 @@ function executeNodeCore(
     // corrected payload or disclosure strip must not co-render with a fresh
     // running/failed state.
     updateNodeData(node.id, {
-      executionStatus: "running",
+      ...RUN_START_RESET,
       generatedJson: undefined,
       lastAuditReport: undefined,
-      errorMessage: undefined,
-      currentJobId: undefined,
       currentJobProgress: undefined,
     });
 
@@ -3946,7 +3938,7 @@ function executeNodeCore(
                 return;
               }
               try {
-                const job = await getJobStatusLean(jobId);
+                const job = await getJobStatusLeanForNode(jobId, node.id);
                 pollFailures = 0;
                 if (job.status === "processing" && job.progress != null) {
                   updateProgressIfChanged(node.id, job.progress, updateNodeData);
@@ -4149,10 +4141,9 @@ function executeNodeCore(
     }
     const { updateNodeData } = useWorkflowStore.getState();
     updateNodeData(node.id, {
-      executionStatus: "running",
+      ...RUN_START_RESET,
       generatedText: undefined,
       generatedTitle: undefined,
-      currentJobId: undefined,
     });
 
     setUserPromptTemplate(d.prompt?.trim() || undefined);
@@ -4173,7 +4164,7 @@ function executeNodeCore(
                 return;
               }
               try {
-                const job = await getJobStatusLean(jobId);
+                const job = await getJobStatusLeanForNode(jobId, node.id);
                 pollFailures = 0;
                 if (job.progress) {
                   updateProgressIfChanged(node.id, job.progress, updateNodeData);
@@ -4409,7 +4400,7 @@ function executeNodeCore(
     }
     const { updateNodeData } = useWorkflowStore.getState();
     updateNodeData(node.id, {
-      executionStatus: "running",
+      ...RUN_START_RESET,
       generatedText: undefined,
     });
     setUserPromptTemplate(d.content?.trim() || undefined);
@@ -4553,10 +4544,8 @@ function executeNodeCore(
     const d = node.data as TranscribeData;
     const { updateNodeData } = useWorkflowStore.getState();
     updateNodeData(node.id, {
-      executionStatus: "running",
+      ...RUN_START_RESET,
       generatedText: undefined,
-      currentJobId: undefined,
-      currentJobProgress: 0,
     });
 
     const isVideoUrl =
@@ -4623,7 +4612,7 @@ function executeNodeCore(
                 return;
               }
               try {
-                const job = await getJobStatusLean(jobId);
+                const job = await getJobStatusLeanForNode(jobId, node.id);
                 pollFailures = 0;
                 if (job.status === "processing" && job.progress != null) {
                   updateProgressIfChanged(node.id, job.progress, updateNodeData);
@@ -4751,9 +4740,8 @@ function executeNodeCore(
     const itData = node.data as ImageToTextData;
     const { updateNodeData } = useWorkflowStore.getState();
     updateNodeData(node.id, {
-      executionStatus: "running",
+      ...RUN_START_RESET,
       generatedText: undefined,
-      errorMessage: undefined,
     });
 
     setUserPromptTemplate(itData.customPrompt?.trim() || undefined);
@@ -4813,7 +4801,7 @@ function executeNodeCore(
     }
     const dpData = node.data as DescribeToPickerData;
     const { updateNodeData } = useWorkflowStore.getState();
-    updateNodeData(node.id, { executionStatus: "running", errorMessage: undefined });
+    updateNodeData(node.id, { ...RUN_START_RESET });
     return describeToPickerApi(imageUrl, targetPickers, ctx.userId, dpData.llmModel, dpData.instructions, dpData.reasoningEffort)
       .then((result) => {
         updateNodeData(node.id, {
@@ -4894,8 +4882,7 @@ function executeNodeCore(
     }
 
     updateNodeData(node.id, {
-      executionStatus: "running",
-      errorMessage: undefined,
+      ...RUN_START_RESET,
       generatedText: "",
       activeResultIndex: -1,
     });
@@ -4987,7 +4974,7 @@ function executeNodeCore(
       guardedToast.error(msg);
       return Promise.reject(new Error(msg));
     }
-    updateNodeData(node.id, { executionStatus: "running", errorMessage: undefined });
+    updateNodeData(node.id, { ...RUN_START_RESET });
     return import("@/lib/api").then(({ telegramChannelFetchApi }) =>
       telegramChannelFetchApi({ channel, sinceId: d.lastSeenId, limit: d.limit })
         .then((res) => {
@@ -5787,10 +5774,8 @@ function executeNodeCore(
 
     const { updateNodeData } = useWorkflowStore.getState();
     updateNodeData(node.id, {
-      executionStatus: "running",
+      ...RUN_START_RESET,
       generatedVideoUrl: undefined,
-      currentJobId: undefined,
-      currentJobProgress: 0,
     });
 
     return new Promise<string>((resolve, reject) => {
@@ -5858,7 +5843,7 @@ function executeNodeCore(
                     return;
                   }
                   try {
-                    const job = await getJobStatusLean(jobId);
+                    const job = await getJobStatusLeanForNode(jobId, node.id);
                     pollFailures = 0;
                     if (job.status === "processing" && job.progress != null) {
                       // Surface the first job's progress only — multi-version
@@ -6010,9 +5995,7 @@ function executeNodeCore(
     }
     const { updateNodeData } = useWorkflowStore.getState();
     updateNodeData(node.id, {
-      executionStatus: "running",
-      currentJobProgress: 0,
-      currentJobId: undefined,
+      ...RUN_START_RESET,
     });
     setUserPromptTemplate(undefined);
     // Custom poll loop: this node's `generatedResults` use a bespoke
@@ -6034,7 +6017,7 @@ function executeNodeCore(
                 return;
               }
               try {
-                const job = await getJobStatusLean(jobId);
+                const job = await getJobStatusLeanForNode(jobId, node.id);
                 pollFailures = 0;
                 if (job.status === "processing" && job.progress != null) {
                   updateProgressIfChanged(node.id, job.progress, updateNodeData);
@@ -6450,7 +6433,7 @@ function executeNodeCore(
       return Promise.reject(new Error("No input"));
     }
     const { updateNodeData } = useWorkflowStore.getState();
-    updateNodeData(node.id, { executionStatus: "running", currentJobProgress: 0 });
+    updateNodeData(node.id, { ...RUN_START_RESET });
     setUserPromptTemplate(undefined);
     return new Promise<string>((resolve, reject) => {
       splitMediaApi({
@@ -6464,7 +6447,7 @@ function executeNodeCore(
         updateNodeData(node.id, { currentJobId: jobId });
         const poll = setInterval(async () => {
           try {
-            const job = await getJobStatusLean(jobId);
+            const job = await getJobStatusLeanForNode(jobId, node.id);
             if (job.progress != null) updateProgressIfChanged(node.id, job.progress, updateNodeData);
             if (job.status === "completed" || job.status === "failed") {
               if (shouldAbandonNode(node.id, jobId)) {
@@ -7111,9 +7094,8 @@ function executeNodeCore(
     }
     const { updateNodeData } = useWorkflowStore.getState();
     updateNodeData(node.id, {
-      executionStatus: "running",
+      ...RUN_START_RESET,
       sceneGraph: undefined,
-      errorMessage: undefined,
     });
     return generateSceneGraph({
       prompt: composerPrompt,
@@ -7162,9 +7144,8 @@ function executeNodeCore(
     }
     const { updateNodeData } = useWorkflowStore.getState();
     updateNodeData(node.id, {
-      executionStatus: "running",
+      ...RUN_START_RESET,
       effectPlan: undefined,
-      errorMessage: undefined,
       inputVideoUrl,
     });
     const aeWidth = d.width ?? 1920;
@@ -7239,9 +7220,8 @@ function executeNodeCore(
     }
     const { updateNodeData } = useWorkflowStore.getState();
     updateNodeData(node.id, {
-      executionStatus: "running",
+      ...RUN_START_RESET,
       overlayPlan: undefined,
-      errorMessage: undefined,
       inputVideoUrl,
     });
     return generateLottieOverlay({
@@ -7301,9 +7281,8 @@ function executeNodeCore(
     }
     const { updateNodeData } = useWorkflowStore.getState();
     updateNodeData(node.id, {
-      executionStatus: "running",
+      ...RUN_START_RESET,
       titlePlan: undefined,
-      errorMessage: undefined,
       backgroundMediaUrl,
     });
     const dims = ASPECT_RATIO_DIMENSIONS[d.aspectRatio] ?? { width: 1920, height: 1080 };
@@ -7367,9 +7346,8 @@ function executeNodeCore(
     }
     const { updateNodeData } = useWorkflowStore.getState();
     updateNodeData(node.id, {
-      executionStatus: "running",
+      ...RUN_START_RESET,
       motionPlan: undefined,
-      errorMessage: undefined,
     });
     return generateMotionGraphics({
       prompt: applyPromptAffixes(inputs.prompt || d.motionPrompt, readPromptAffixes(d), refMap),
@@ -7405,9 +7383,8 @@ function executeNodeCore(
     const d = node.data as CompositeData;
     const { updateNodeData } = useWorkflowStore.getState();
     updateNodeData(node.id, {
-      executionStatus: "running",
+      ...RUN_START_RESET,
       compositePlan: undefined,
-      errorMessage: undefined,
     });
     try {
       const dims = ASPECT_RATIO_DIMENSIONS[d.aspectRatio] ?? { width: 1920, height: 1080 };
@@ -8149,8 +8126,7 @@ function executeNodeCore(
     const reduceInputs = inputs.inputs ?? [];
 
     updateNodeData(node.id, {
-      executionStatus: "running",
-      errorMessage: undefined,
+      ...RUN_START_RESET,
       __upstreamCount: reduceInputs.length,
     });
 
@@ -8202,7 +8178,7 @@ function executeNodeCore(
     } = useWorkflowStore.getState();
 
     const prevData = node.data as PreviewNodeData;
-    updateNodeData(node.id, { executionStatus: "running", errorMessage: undefined });
+    updateNodeData(node.id, { ...RUN_START_RESET });
 
     const { ordered, itemOrder } = collectPreviewItems(node.id, currentNodes, currentEdges, prevData);
 
@@ -8252,7 +8228,7 @@ function executeNodeCore(
       }
     }
 
-    updateNodeData(node.id, { executionStatus: "running" });
+    updateNodeData(node.id, { ...RUN_START_RESET });
     return import("@/lib/api").then(({ sendWebhookOutput }) =>
       sendWebhookOutput({ url, payload }).then(
         (result) => {
@@ -8344,7 +8320,7 @@ function executeNodeCore(
       mediaItems = inputs.mediaItems;
     }
 
-    updateNodeData(node.id, { executionStatus: "running", errorMessage: undefined });
+    updateNodeData(node.id, { ...RUN_START_RESET });
 
     return import("@/lib/api").then(({ socialPublishApi }) =>
       socialPublishApi({
@@ -8405,7 +8381,7 @@ function executeNodeCore(
       return Promise.resolve("");
     }
 
-    updateNodeData(node.id, { executionStatus: "running", errorMessage: undefined });
+    updateNodeData(node.id, { ...RUN_START_RESET });
 
     return saveToStorageApi({
       mediaUrl,
@@ -8447,7 +8423,7 @@ function executeNodeCore(
       return Promise.resolve("");
     }
 
-    updateNodeData(node.id, { executionStatus: "running", errorMessage: undefined });
+    updateNodeData(node.id, { ...RUN_START_RESET });
 
     return qaCheckApi({
       content,
@@ -8497,7 +8473,7 @@ function executeNodeCore(
       setUserPromptTemplate(undefined);
     }
 
-    updateNodeData(node.id, { executionStatus: "running", errorMessage: undefined });
+    updateNodeData(node.id, { ...RUN_START_RESET });
 
     return imageCriticApi({
       imageUrl,
@@ -8519,7 +8495,7 @@ function executeNodeCore(
           details: ImageCriticData["details"];
         };
         if ((result as { deduped?: true }).deduped === true) {
-          const job = await getJobStatusLean(result.jobId);
+          const job = await getJobStatusLeanForNode(result.jobId, node.id);
           const od = (job?.output_data ?? {}) as Record<string, unknown>;
           payload = {
             jobId: result.jobId,

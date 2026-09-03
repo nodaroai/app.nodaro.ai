@@ -1,6 +1,8 @@
 import type { FastifyReply, FastifyRequest } from "fastify"
 import { supabase } from "./supabase.js"
 import { insertJob } from "./insert-job.js"
+import { markJobFailed } from "./job-failure.js"
+import { sendInternalError } from "./http-errors.js"
 import { reserveCreditsForJob } from "../middleware/credit-guard.js"
 
 export interface SyncLlmMeter {
@@ -46,7 +48,12 @@ export async function meterSyncLlm(
     job_type: jobType,
   })
   if (jobError || !job) {
-    reply.status(500).send({ error: { code: "internal_error", message: jobError?.message ?? "Failed to create job" } })
+    // sendInternalError leads with `jobBlockOf`, so a request-gate BLOCK
+    // answers the documented 422 `job_blocked` with the policy's own message
+    // rather than a 500 every SDK consumer retries with backoff (F10). It also
+    // stops the raw DB message reaching the client on a genuine failure. The
+    // `return null` stays load-bearing: every caller bails on null.
+    sendInternalError(reply, req, jobError, "Failed to create job")
     return null
   }
 
@@ -64,7 +71,11 @@ export async function meterSyncLlm(
       if (credits && usageLogId) await credits.commitCredits(usageLogId)
     },
     refund: async () => {
-      await supabase.from("jobs").update({ status: "failed" }).eq("id", job.id)
+      // Was `update({status:"failed"})` and nothing else: no CAS, and no
+      // `error_message` at all — which is precisely the row the app-report
+      // sweep files as "no error message recorded". The message is generic
+      // because this wrapper never sees the caller's error.
+      await markJobFailed(job.id, { error_message: "The request could not be completed." })
       if (credits && usageLogId) await credits.refundCredits(usageLogId)
     },
   }

@@ -124,29 +124,51 @@ export async function cancelTask(taskId: string, userId: string): Promise<boolea
   if (!t || t.userId !== userId) return false
   t.abortController.abort()
   REGISTRY.delete(taskId)
-  await markJobCancelled(taskId)
+  await markJobCancelled(taskId, userId)
   return true
 }
 
-async function markJobCancelled(jobId: string): Promise<void> {
+async function markJobCancelled(jobId: string, userId: string): Promise<void> {
   const { supabase } = await import("../supabase.js")
-  // Guard: only cancel a job that is still in flight. Without the status
-  // filter, cancelling a taskId whose job already completed would clobber a
-  // `completed` row with `cancelled`, losing the finished result.
-  await supabase
+  // Fast path, unchanged: a job still on a worker is cancelled by flipping the
+  // row — the worker's own pickup / completion CAS then no-ops and refunds.
+  // The status filter is the guard: without it, cancelling a taskId whose job
+  // already completed would clobber a `completed` row with `cancelled` and lose
+  // the finished result.
+  const { data: flipped } = await supabase
     .from("jobs")
     .update({ status: "cancelled" })
     .eq("id", jobId)
     .in("status", ["pending", "processing"])
+    .select("id")
+  if (flipped && flipped.length > 0) return
+
+  // Nothing flipped: the row is either already terminal (nothing to do) or
+  // parked in `pending_review`. A HELD job must be cancellable (spec
+  // 2026-09-03-job-policy-hook-design D17 — a reservation must not be stranded
+  // behind a reviewer's SLA), but NOT by a bare status flip: there is no worker
+  // left to refund it, so the row would go `cancelled` with its credits held
+  // `reserved` forever, its withheld media orphaned in the bucket, and the
+  // review queue holding an entry no resolution can settle. D17's cancel is
+  // flip + refund + owned-object delete + a `withdrawn` decision row, and all
+  // four live in `cancelOwnedJob`. Delegate rather than re-implement.
+  //
+  // Lazily imported so `lib/queue.js` (BullMQ + a live Redis handle) is not
+  // pulled into every importer of this module, and only reached on the slow
+  // path. On an already-terminal row this costs one SELECT and answers
+  // `invalid_status` — a no-op, exactly as before.
+  const { cancelOwnedJob } = await import("../cancel-job.js")
+  await cancelOwnedJob(jobId, userId)
 }
 
 /**
  * Maps Nodaro `jobs.status` strings onto the MCP task-status enum
  * (`working | input_required | completed | failed | cancelled`).
  *
- * Nodaro statuses include `pending`, `processing`, `completed`, `failed`,
- * `cancelled`. We collapse pending/processing → working and pass the
- * terminal three through unchanged.
+ * Nodaro statuses include `pending`, `processing`, `pending_review`,
+ * `completed`, `failed`, `cancelled`. We collapse pending/processing →
+ * working, map `pending_review` → `input_required`, and pass the terminal
+ * three through unchanged.
  */
 type McpTaskStatus = "working" | "input_required" | "completed" | "failed" | "cancelled"
 
@@ -158,6 +180,14 @@ function mapJobStatus(jobStatus: string | null | undefined): McpTaskStatus {
       return "failed"
     case "cancelled":
       return "cancelled"
+    case "pending_review":
+      // `input_required` = "this task cannot advance without a decision". The
+      // decision belongs to a REVIEWER, not to the MCP caller — an agent must
+      // not read this as "ask the user for more parameters", which is why
+      // get_job's guidance text says so in words. The `default: working` arm
+      // below would leave an agent polling a job that will never move on its
+      // own (spec 2026-09-03-job-policy-hook-design §6.4).
+      return "input_required"
     case "pending":
     case "processing":
     default:
@@ -317,6 +347,23 @@ async function waitForTerminal(jobId: string, signal: AbortSignal): Promise<{
       // eviction here — the TTL sweep in registerTask bounds the registry, and
       // keeping the entry lets a follow-up tasks/get/result still resolve.)
       return { taskId: jobId, status: "failed", error: "Job no longer exists" }
+    }
+    // Parked on a human, for an unbounded time: neither terminal nor
+    // "keep waiting". Answer with the same non-working status tasks/get maps
+    // to, rather than long-polling the full 90 s to say "working" — and NEVER
+    // evict the task, because the review resolves later and the client's
+    // follow-up tasks/result must still find it.
+    if (data.status === "pending_review") {
+      return {
+        taskId: jobId,
+        status: "input_required",
+        // NULL by contract on a held row (D6) — nothing to hand back yet.
+        output: null,
+        error: null,
+        message:
+          "The output is held for human review. Call tasks/result again later — " +
+          "the task completes on approval, or fails with a policy reason if it is rejected.",
+      }
     }
     if (
       data.status === "completed" ||

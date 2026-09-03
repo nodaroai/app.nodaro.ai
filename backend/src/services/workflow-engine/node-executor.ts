@@ -10,7 +10,7 @@
  */
 
 import { supabase } from "../../lib/supabase.js"
-import { insertInternalJob } from "../../lib/insert-job.js"
+import { insertInternalJob, JobBlockedError } from "../../lib/insert-job.js"
 import { videoQueue } from "../../lib/queue.js"
 import { renderQueue } from "../../lib/render-queue.js"
 import { hasCredits, config } from "../../lib/config.js"
@@ -39,6 +39,7 @@ import type {
   OrchestratorContext,
 } from "./types.js"
 import { JOB_POLL_INTERVAL_MS, NODE_TIMEOUT_MS, POLL_ABSOLUTE_TIMEOUT_MS } from "./types.js"
+import { isParkedJobStatus } from "../../lib/job-status.js"
 import { isSourceNode, isSkipNode } from "./execution-graph.js"
 import { cancelInFlightChildJobs } from "../../lib/reconcile/cancel-inflight-jobs.js"
 import { refundReservedCreditsForJob } from "../../lib/credits-job-lifecycle.js"
@@ -1322,6 +1323,17 @@ async function executeWorkerNode(
     ...(isUploadDescendant && { force_private: true }),
   }, { billingContext: ctx.billingContext })
 
+  // A registered job policy refused this generation at the REQUEST gate (spec
+  // 2026-09-03-job-policy-hook-design §5.3, D4): no row, no reservation, no
+  // provider call. Rethrow the coded error instead of collapsing it into the
+  // generic "Failed to create job" below — that is what carries the policy's
+  // own user-safe message onto `nodeStates[nodeId].error` and lets
+  // `sendInternalError` answer 422 (not 500) on any route that surfaces this
+  // run's failure.
+  if (jobError?.blocked) {
+    throw new JobBlockedError(jobError.blocked)
+  }
+
   if (jobError || !job) {
     throw new Error(`Failed to create job for node ${node.id}: ${jobError?.message ?? "unknown"}`)
   }
@@ -1704,6 +1716,20 @@ async function pollJobToCompletion(
   let processingStartTime: number | null = null
   let pollCycle = 0
   const pollStartTime = Date.now()
+  // A `pending_review` row is parked on a HUMAN, not on a worker (spec
+  // 2026-09-03-job-policy-hook-design §6.3). Both clocks below must stop while
+  // it is: without this, 90 minutes of review reaches `cancelJobAndThrow`,
+  // whose CAS is `.not("status","in","(completed,failed,cancelled)")` — a
+  // predicate that MATCHES `pending_review` — so the DAG cancels and refunds a
+  // job a reviewer is actively looking at.
+  let heldSinceMs: number | null = null
+  let heldTotalMs = 0
+  /** Held time already banked when the worker picked the job up, so the NODE
+   *  timeout (which starts there) never gets credited for a hold that predates
+   *  it. Zero in every real lane — the result gate can only hold a job that has
+   *  already been processing — but it keeps the two clocks independent. */
+  let heldBeforeProcessingMs = 0
+  const heldSoFar = (): number => heldTotalMs + (heldSinceMs === null ? 0 : Date.now() - heldSinceMs)
 
   while (true) {
     // Check cancellation (fast path — already flagged by orchestrator or sibling node)
@@ -1714,7 +1740,7 @@ async function pollJobToCompletion(
     // Absolute timeout — prevents infinite polling when job never leaves "pending"
     // (e.g. worker down, queue full). Safety net beyond NODE_TIMEOUT_MS which only
     // starts counting after the worker picks up the job.
-    if (Date.now() - pollStartTime > POLL_ABSOLUTE_TIMEOUT_MS) {
+    if (Date.now() - pollStartTime - heldSoFar() > POLL_ABSOLUTE_TIMEOUT_MS) {
       return await cancelJobAndThrow(jobId, usageLogId, `Poll timeout: job did not complete within ${POLL_ABSOLUTE_TIMEOUT_MS / 1000}s (may still be pending in queue)`, nodeType, creditsUsed)
     }
 
@@ -1758,12 +1784,32 @@ async function pollJobToCompletion(
     // Surface progress to the orchestrator so the UI can render a progress bar
     // during backend runs (Run-from-here, triggers). Without this, node-level
     // currentJobProgress stayed undefined and the bar never appeared.
-    const progressValue = jobRecord.progress as number | null | undefined
-    if (typeof progressValue === "number" && ctx.onJobProgress) {
-      ctx.onJobProgress(jobId, progressValue)
-    }
-
     const status = jobRecord.status as string
+
+    // Accumulate the parked time BEFORE either timeout is evaluated, so the
+    // tick that discovers the hold already counts. `heldSinceMs` stays set for
+    // as long as the row is parked; it closes into `heldTotalMs` the moment the
+    // review resolves (approve → completed, reject → failed, or a cancel).
+    const awaitingReview = isParkedJobStatus(status)
+    if (awaitingReview) {
+      if (heldSinceMs === null) heldSinceMs = Date.now()
+    } else if (heldSinceMs !== null) {
+      heldTotalMs += Date.now() - heldSinceMs
+      heldSinceMs = null
+    }
+    // Carried up so the orchestrator can take the same time off the
+    // execution-level WORKFLOW_TIMEOUT_MS (types.ts :: maxChildHeldMs).
+    const heldMs = heldSoFar()
+    if (heldMs > (ctx.maxChildHeldMs ?? 0)) ctx.maxChildHeldMs = heldMs
+
+    const progressValue = jobRecord.progress as number | null | undefined
+    // A held job's progress never moves again, so the `typeof progress ===
+    // "number"` guard alone would leave the canvas on a frozen bar with no
+    // explanation. Emit on a parked tick regardless of the progress column,
+    // and keep emitting once more when the hold clears so the flag is reset.
+    if (ctx.onJobProgress && (typeof progressValue === "number" || awaitingReview)) {
+      ctx.onJobProgress(jobId, typeof progressValue === "number" ? progressValue : 0, awaitingReview)
+    }
 
     // Check terminal statuses BEFORE timeout — avoids cancelling a just-completed job
     if (status === "completed") {
@@ -1782,14 +1828,22 @@ async function pollJobToCompletion(
       throw err
     }
 
-    // Detect when worker picks up the job (status transitions from "pending")
-    if (processingStartTime === null && status !== "pending") {
+    // Detect when the worker picks up the job. `status === "processing"` (not
+    // `!== "pending"`) is what the line above has always claimed: `queued` is
+    // still queue wait, which POLL_ABSOLUTE_TIMEOUT_MS above already bounds,
+    // and `pending_review` is a HOLD — starting the processing clock on it
+    // would hand the node's whole 90-minute budget to the review queue.
+    if (processingStartTime === null && status === "processing") {
       processingStartTime = Date.now()
+      heldBeforeProcessingMs = heldMs
     }
 
     // Check processing timeout — only starts once the worker picks up the job.
     // Queue wait time is bounded by the workflow-level timeout (WORKFLOW_TIMEOUT_MS).
-    if (processingStartTime !== null && Date.now() - processingStartTime > NODE_TIMEOUT_MS) {
+    if (
+      processingStartTime !== null &&
+      Date.now() - processingStartTime - (heldMs - heldBeforeProcessingMs) > NODE_TIMEOUT_MS
+    ) {
       return await cancelJobAndThrow(jobId, usageLogId, `Node timeout after ${NODE_TIMEOUT_MS / 1000}s of processing`, nodeType, creditsUsed)
     }
 

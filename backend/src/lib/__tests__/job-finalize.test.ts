@@ -105,9 +105,16 @@ const sharedMocks = vi.hoisted(() => ({
     imageUrl: urls[0],
     ...(urls.length > 1 ? { imageUrls: urls } : {}),
   })),
-  markJobCompleted: vi
-    .fn<(jobId: string, fields: Record<string, unknown>) => Promise<boolean>>()
-    .mockResolvedValue(true),
+  markJobCompletedDetailed: vi
+    .fn<
+      (
+        jobId: string,
+        fields: Record<string, unknown>,
+        funnel?: "finalize" | "direct",
+        commitReplay?: Record<string, unknown>,
+      ) => Promise<"completed" | "lost_race" | "blocked" | "held">
+    >()
+    .mockResolvedValue("completed"),
   commitJobCredits: vi.fn().mockResolvedValue(undefined),
   refundLoopTrimAddon: vi.fn().mockResolvedValue(undefined),
   createAssetFromJob: vi.fn().mockResolvedValue(undefined),
@@ -140,7 +147,7 @@ const autoAttachMocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/character-auto-attach.js", () => autoAttachMocks)
 
-import { finalizeJobWithMedia } from "@/lib/job-finalize.js"
+import { finalizeJobWithMedia, runCompletionTail } from "@/lib/job-finalize.js"
 
 // ---------------------------------------------------------------------------
 // Default factory — resets every mock back to a successful happy-path state
@@ -173,7 +180,7 @@ function resetMocksToHappyPath() {
     imageUrl: urls[0],
     ...(urls.length > 1 ? { imageUrls: urls } : {}),
   }))
-  sharedMocks.markJobCompleted.mockResolvedValue(true)
+  sharedMocks.markJobCompletedDetailed.mockResolvedValue("completed")
   sharedMocks.commitJobCredits.mockResolvedValue(undefined)
   sharedMocks.refundLoopTrimAddon.mockResolvedValue(undefined)
   sharedMocks.createAssetFromJob.mockResolvedValue(undefined)
@@ -208,7 +215,7 @@ describe("finalizeJobWithMedia", () => {
       "u1",
       false,
     )
-    expect(sharedMocks.markJobCompleted).toHaveBeenCalledTimes(1)
+    expect(sharedMocks.markJobCompletedDetailed).toHaveBeenCalledTimes(1)
     // 4th arg = extraNonProviderCredits (undefined here); 5th = meteredCost
     // (undefined → commit-reserved per pricing convention A).
     expect(sharedMocks.commitJobCredits).toHaveBeenCalledWith("u-log-1", "j1", 0.02, undefined, undefined)
@@ -219,7 +226,7 @@ describe("finalizeJobWithMedia", () => {
   // 1b. Regression: result.kieTaskId writes to `provider_task_id` (the actual
   // schema column from migration 135), NOT the legacy `kie_task_id` name.
   // -------------------------------------------------------------------------
-  it("kieTaskId persists as provider_task_id (not kie_task_id) in markJobCompleted payload", async () => {
+  it("kieTaskId persists as provider_task_id (not kie_task_id) in markJobCompletedDetailed payload", async () => {
     await finalizeJobWithMedia({
       jobId: "j1",
       jobType: "generate-image",
@@ -231,8 +238,8 @@ describe("finalizeJobWithMedia", () => {
       },
     })
 
-    expect(sharedMocks.markJobCompleted).toHaveBeenCalledTimes(1)
-    const payload = sharedMocks.markJobCompleted.mock.calls[0]![1]
+    expect(sharedMocks.markJobCompletedDetailed).toHaveBeenCalledTimes(1)
+    const payload = sharedMocks.markJobCompletedDetailed.mock.calls[0]![1]
     expect(payload).toMatchObject({ provider_task_id: "kie-task-abc123" })
     expect(payload).not.toHaveProperty("kie_task_id")
   })
@@ -244,16 +251,16 @@ describe("finalizeJobWithMedia", () => {
       result: { url: "https://kie.example/x.png", cost: 0.02, providerUsed: "nano-banana" },
     })
 
-    const payload = sharedMocks.markJobCompleted.mock.calls[0]![1]
+    const payload = sharedMocks.markJobCompletedDetailed.mock.calls[0]![1]
     expect(payload).not.toHaveProperty("provider_task_id")
     expect(payload).not.toHaveProperty("kie_task_id")
   })
 
   // -------------------------------------------------------------------------
-  // 2. CAS race: markJobCompleted returns false → no commit, no asset
+  // 2. CAS race: markJobCompletedDetailed misses the CAS → no commit, no asset
   // -------------------------------------------------------------------------
-  it("CAS race: markJobCompleted returns false → returns { ok: false } and does NOT commit credits or create asset", async () => {
-    sharedMocks.markJobCompleted.mockResolvedValueOnce(false)
+  it("CAS race: markJobCompletedDetailed misses the CAS → returns { ok: false } and does NOT commit credits or create asset", async () => {
+    sharedMocks.markJobCompletedDetailed.mockResolvedValueOnce("lost_race")
 
     const result = await finalizeJobWithMedia({
       jobId: "j-cancelled",
@@ -262,9 +269,72 @@ describe("finalizeJobWithMedia", () => {
     })
 
     expect(result.ok).toBe(false)
-    expect(sharedMocks.markJobCompleted).toHaveBeenCalledTimes(1)
+    expect(sharedMocks.markJobCompletedDetailed).toHaveBeenCalledTimes(1)
     expect(sharedMocks.commitJobCredits).not.toHaveBeenCalled()
     expect(sharedMocks.createAssetFromJob).not.toHaveBeenCalled()
+  })
+
+  // -------------------------------------------------------------------------
+  // 2b. The RESULT gate's two non-terminal outcomes
+  // -------------------------------------------------------------------------
+
+  it("asks the gate as the FINALIZE funnel and hands it the settlement inputs approve must replay", async () => {
+    await finalizeJobWithMedia({
+      jobId: "j1",
+      jobType: "generate-image",
+      result: { url: "https://x.png", cost: 0.02, providerUsed: "p", meteredCost: true },
+      extraNonProviderCredits: 3,
+    })
+    const call = sharedMocks.markJobCompletedDetailed.mock.calls[0]!
+    // "finalize" is the ONLY thing a direct caller cannot supply, and the sole
+    // input to holdEligible (D8).
+    expect(call[2]).toBe("finalize")
+    // Q2: metered + the provider cost ride the hold so approve's commit is the
+    // metered true-up, not the reserved ceiling.
+    expect(call[3]).toEqual({ metered: true, extraNonProviderCredits: 3, meteredCost: 0.02 })
+  })
+
+  it("HELD: returns { ok:false, reason:'held' }, releases the finalize claim, commits nothing", async () => {
+    sharedMocks.markJobCompletedDetailed.mockResolvedValueOnce("held")
+
+    const result = await finalizeJobWithMedia({
+      jobId: "j-held",
+      jobType: "generate-image",
+      result: { url: "https://x.png", cost: 0.02, providerUsed: "p" },
+    })
+
+    expect(result).toEqual({ ok: false, reason: "held" })
+    expect(sharedMocks.commitJobCredits).not.toHaveBeenCalled()
+    expect(sharedMocks.createAssetFromJob).not.toHaveBeenCalled()
+    // The claim must go back: a held row is NOT terminal, and approve would
+    // otherwise wait out FINALIZE_CLAIM_TTL_MS behind a claimant that is gone.
+    const released = mocks.jobsUpdateMock.mock.calls.map((c) => (c as unknown[])[0] as Record<string, unknown>)
+    expect(released).toContainEqual({ finalize_claimed_at: null, finalize_claimed_by: null })
+  })
+
+  it("BLOCKED: returns { ok:false, reason:'blocked' } and keeps its claim (the row is terminal)", async () => {
+    sharedMocks.markJobCompletedDetailed.mockResolvedValueOnce("blocked")
+
+    const result = await finalizeJobWithMedia({
+      jobId: "j-blocked",
+      jobType: "generate-image",
+      result: { url: "https://x.png", cost: 0.02, providerUsed: "p" },
+    })
+
+    expect(result).toEqual({ ok: false, reason: "blocked" })
+    expect(sharedMocks.commitJobCredits).not.toHaveBeenCalled()
+    const released = mocks.jobsUpdateMock.mock.calls.map((c) => (c as unknown[])[0] as Record<string, unknown>)
+    expect(released).not.toContainEqual({ finalize_claimed_at: null, finalize_claimed_by: null })
+  })
+
+  it("a lost race is still distinguishable from a policy outcome", async () => {
+    sharedMocks.markJobCompletedDetailed.mockResolvedValueOnce("lost_race")
+    const result = await finalizeJobWithMedia({
+      jobId: "j1",
+      jobType: "generate-image",
+      result: { url: "https://x.png", cost: 0.02, providerUsed: "p" },
+    })
+    expect(result).toEqual({ ok: false, reason: "lost_race" })
   })
 
   // -------------------------------------------------------------------------
@@ -292,7 +362,7 @@ describe("finalizeJobWithMedia", () => {
 
     expect(result.ok).toBe(false)
     expect(sharedMocks.uploadImageVariantsMaybeWatermark).not.toHaveBeenCalled()
-    expect(sharedMocks.markJobCompleted).not.toHaveBeenCalled()
+    expect(sharedMocks.markJobCompletedDetailed).not.toHaveBeenCalled()
     expect(sharedMocks.commitJobCredits).not.toHaveBeenCalled()
   })
 
@@ -393,8 +463,8 @@ describe("finalizeJobWithMedia", () => {
     )
     // The output_data passed to markJobCompleted carries the R2 URL, NOT the
     // provider's transient URL.
-    expect(sharedMocks.markJobCompleted).toHaveBeenCalledTimes(1)
-    const markArg = sharedMocks.markJobCompleted.mock.calls[0]![1] as Record<string, unknown>
+    expect(sharedMocks.markJobCompletedDetailed).toHaveBeenCalledTimes(1)
+    const markArg = sharedMocks.markJobCompletedDetailed.mock.calls[0]![1] as Record<string, unknown>
     expect(markArg.output_data).toEqual({ audioUrl: "https://r2.example/audio-j-aud.mp3" })
   })
 
@@ -577,7 +647,7 @@ describe("finalizeJobWithMedia", () => {
 
     expect(sharedMocks.uploadVideoMaybeWatermark).not.toHaveBeenCalled()
 
-    const updateArg = sharedMocks.markJobCompleted.mock.calls[0]![1] as { output_data: { videoUrl: string } }
+    const updateArg = sharedMocks.markJobCompletedDetailed.mock.calls[0]![1] as { output_data: { videoUrl: string } }
     expect(updateArg.output_data.videoUrl).toBe("https://r2.example/already-uploaded.mp4")
   })
 
@@ -606,7 +676,7 @@ describe("finalizeJobWithMedia", () => {
       },
     })
 
-    const updateArg = sharedMocks.markJobCompleted.mock.calls[0]![1] as { output_data: Record<string, unknown> }
+    const updateArg = sharedMocks.markJobCompletedDetailed.mock.calls[0]![1] as { output_data: Record<string, unknown> }
     expect(updateArg.output_data.videoUrl).toBe("https://r2.example/v.mp4")
     expect(updateArg.output_data.thumbnailUrl).toBe("https://r2.example/thumb.png")
     expect(updateArg.output_data.seed).toBe(12345)
@@ -664,7 +734,7 @@ describe("finalizeJobWithMedia", () => {
 
     expect(storageMocks.uploadToR2).not.toHaveBeenCalled()
 
-    const updateArg = sharedMocks.markJobCompleted.mock.calls[0]![1] as { output_data: { audioUrl: string } }
+    const updateArg = sharedMocks.markJobCompletedDetailed.mock.calls[0]![1] as { output_data: { audioUrl: string } }
     expect(updateArg.output_data.audioUrl).toBe("https://r2.example/pre-uploaded.mp3")
   })
 
@@ -831,8 +901,8 @@ describe("finalizeJobWithMedia", () => {
     warnSpy.mockRestore()
   })
 
-  it("auto-attach: NOT attempted when the job did not complete (markJobCompleted CAS miss)", async () => {
-    sharedMocks.markJobCompleted.mockResolvedValueOnce(false)
+  it("auto-attach: NOT attempted when the job did not complete (markJobCompletedDetailed CAS miss)", async () => {
+    sharedMocks.markJobCompletedDetailed.mockResolvedValueOnce("lost_race")
     mocks.jobsSingleMock.mockResolvedValueOnce({
       data: {
         id: "j-casmiss",
@@ -915,7 +985,7 @@ describe("finalizeJobWithMedia", () => {
 
       expect(result.ok).toBe(false)
       expect(sharedMocks.uploadImageVariantsMaybeWatermark).not.toHaveBeenCalled()
-      expect(sharedMocks.markJobCompleted).not.toHaveBeenCalled()
+      expect(sharedMocks.markJobCompletedDetailed).not.toHaveBeenCalled()
       expect(sharedMocks.commitJobCredits).not.toHaveBeenCalled()
     })
 
@@ -930,7 +1000,7 @@ describe("finalizeJobWithMedia", () => {
 
       expect(result.ok).toBe(true)
       expect(sharedMocks.uploadImageVariantsMaybeWatermark).toHaveBeenCalledTimes(1)
-      expect(sharedMocks.markJobCompleted).toHaveBeenCalledTimes(1)
+      expect(sharedMocks.markJobCompletedDetailed).toHaveBeenCalledTimes(1)
     })
 
     it("releases the claim (scoped to its own timestamp) when the upload throws, then rethrows", async () => {
@@ -959,7 +1029,7 @@ describe("finalizeJobWithMedia", () => {
         "finalize_claimed_at",
         "2026-06-10T11:22:33+00:00",
       )
-      expect(sharedMocks.markJobCompleted).not.toHaveBeenCalled()
+      expect(sharedMocks.markJobCompletedDetailed).not.toHaveBeenCalled()
     })
 
     it("does NOT release the claim on success (terminal row keeps its claim history)", async () => {
@@ -994,7 +1064,7 @@ describe("finalizeJobWithMedia", () => {
       expect(sharedMocks.refundLoopTrimAddon).toHaveBeenCalledWith("j1", "u-log-1", 3)
       expect(sharedMocks.commitJobCredits).not.toHaveBeenCalled()
       // Applied AFTER completion — never on a row that lost the CAS.
-      const completedOrder = sharedMocks.markJobCompleted.mock.invocationCallOrder[0]!
+      const completedOrder = sharedMocks.markJobCompletedDetailed.mock.invocationCallOrder[0]!
       const refundOrder = sharedMocks.refundLoopTrimAddon.mock.invocationCallOrder[0]!
       expect(completedOrder).toBeLessThan(refundOrder)
     })
@@ -1036,10 +1106,34 @@ describe("finalizeJobWithMedia", () => {
         claimant: "cron",
       })
 
-      const payload = sharedMocks.markJobCompleted.mock.calls[0]![1]
+      const payload = sharedMocks.markJobCompletedDetailed.mock.calls[0]![1]
       expect(payload).not.toHaveProperty("provider")
       expect(payload).not.toHaveProperty("provider_cost")
       expect(payload).not.toHaveProperty("display_cost")
+    })
+
+    it("the addon rides the commitReplay so a HELD row can replay the same settlement (F7)", async () => {
+      // The worker no longer commits (reserved − addon) itself: doing so before
+      // the result gate spoke left the usage log out of `reserved`, and every
+      // block/reject/expiry/cancel refund only touches `reserved` logs. The
+      // addon therefore has to reach `held_completion_fields`, which is built
+      // from THIS argument — without it the HELD_COMMIT_REPLAY_KEYS entry is
+      // inert because nothing ever writes the key.
+      await finalizeJobWithMedia({
+        jobId: "j1",
+        jobType: "image-to-video",
+        result: { url: "https://kie.example/x.mp4", cost: 0.5, providerUsed: "minimax" },
+        extraNonProviderCredits: 0,
+        loopTrimAddonRefundCredits: 3,
+      })
+
+      const commitReplay = sharedMocks.markJobCompletedDetailed.mock.calls[0]![3]
+      expect(commitReplay).toEqual({
+        metered: undefined,
+        extraNonProviderCredits: 0,
+        meteredCost: 0.5,
+        loopTrimAddonRefundCredits: 3,
+      })
     })
 
     it("no addon: plain commit (unchanged path)", async () => {
@@ -1052,5 +1146,54 @@ describe("finalizeJobWithMedia", () => {
       expect(sharedMocks.refundLoopTrimAddon).not.toHaveBeenCalled()
       expect(sharedMocks.commitJobCredits).toHaveBeenCalledTimes(1)
     })
+  })
+})
+
+/**
+ * The extracted tail (spec §9.1).
+ *
+ * Approve cannot re-enter `finalizeJobWithMedia` — its status guard and
+ * `claim_job_finalize`'s SQL predicate both admit only `pending`/`processing` —
+ * so it calls THIS. Exported and tested on its own so the "approve replays the
+ * real tail" claim is a fact about one function rather than a copy that drifts.
+ */
+describe("runCompletionTail", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetMocksToHappyPath()
+  })
+
+  it("does steps 6-8: gallery asset, sole-cause reopen, reference-video attach", async () => {
+    mocks.wfSingleMock.mockResolvedValueOnce({
+      data: { status: "failed", node_states: { n1: { status: "failed", jobId: "job-1" } }, completed_nodes: 0 },
+      error: null,
+    })
+
+    await runCompletionTail(
+      {
+        id: "job-1",
+        user_id: "u1",
+        workflow_execution_id: "wf-1",
+        input_data: { attachToCharacterId: "char-1", attachReferenceVideoVariant: "hero" },
+      },
+      "https://r2.example/vid-j1.mp4",
+    )
+
+    expect(sharedMocks.createAssetFromJob).toHaveBeenCalledWith("job-1", "u1")
+    expect(mocks.wfUpdateMock).toHaveBeenCalled()
+    expect(autoAttachMocks.appendCharacterReferenceVideo).toHaveBeenCalledWith({
+      characterId: "char-1",
+      userId: "u1",
+      variant: "hero",
+      url: "https://r2.example/vid-j1.mp4",
+    })
+  })
+
+  it("no-ops the attach for a non-video completion and never throws", async () => {
+    await expect(
+      runCompletionTail({ id: "job-2", user_id: "u1", workflow_execution_id: null, input_data: null }, undefined),
+    ).resolves.toBeUndefined()
+    expect(sharedMocks.createAssetFromJob).toHaveBeenCalledWith("job-2", "u1")
+    expect(autoAttachMocks.appendCharacterReferenceVideo).not.toHaveBeenCalled()
   })
 })

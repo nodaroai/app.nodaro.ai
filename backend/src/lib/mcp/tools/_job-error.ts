@@ -121,6 +121,15 @@ export function isRetryableFailure(errorMessage: string | null | undefined): boo
  * override. `error_hint` only changes `guidance` (and adds `suggestedProvider`
  * when the hint offers one) — it is additive, not a second source of truth
  * for `retryable`.
+ *
+ * THE ONE DELIBERATE EXCEPTION — `kind: "policy-block"` (spec
+ * 2026-09-03-job-policy-hook-design §6.5). The reasoning above depends on the
+ * message being OURS or KIE's. A policy block's message is written by an
+ * arbitrary registered policy in whatever language its deployment speaks, so it
+ * matches none of NON_RETRYABLE_PATTERNS and `isRetryableFailure` answers
+ * `true` — and an MCP agent then re-runs a permanently blocked request in a
+ * loop against a gate that will block it identically every time. For that arm,
+ * and only that arm, the hint IS the source of truth.
  */
 export function failureGuidance(job: {
   error_message?: string | null
@@ -128,9 +137,25 @@ export function failureGuidance(job: {
 }): { retryable: boolean; suggestedProvider?: string; guidance: string } {
   const retryable = isRetryableFailure(job.error_message)
   const hint = job.error_hint as
-    | { kind?: unknown; suggestedProvider?: unknown }
+    | { kind?: unknown; suggestedProvider?: unknown; reason?: unknown }
     | null
     | undefined
+
+  // FIRST — before the safety-block arm and before the message classifier: a
+  // policy reason routinely contains the same words a provider refusal does,
+  // and only the structured `kind` can tell whose decision it was.
+  if (hint && hint.kind === "policy-block") {
+    const reason = typeof hint.reason === "string" && hint.reason.trim() ? hint.reason.trim() : null
+    return {
+      // See the exception documented above: NOT isRetryableFailure(message).
+      retryable: false,
+      guidance:
+        "This was blocked by THIS DEPLOYMENT's content policy — not by the model provider. " +
+        "Retrying the identical request will be blocked again, and switching providers will not help. " +
+        (reason ? `Reason given: ${reason}. ` : "") +
+        "Change the prompt or inputs, or report the reason to the user.",
+    }
+  }
 
   if (hint && hint.kind === "safety-block") {
     const suggestedProvider =

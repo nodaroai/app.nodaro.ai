@@ -13,6 +13,7 @@ import { getNodeOutput } from "./input-resolver.js"
 import { isSourceNode, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES } from "./execution-graph.js"
 import { supabase } from "../../lib/supabase.js"
 import { insertInternalJob } from "../../lib/insert-job.js"
+import { JobBlockedError } from "../../lib/job-policy.js"
 import { safeFetch } from "../../lib/safe-fetch.js"
 import { safeUrlSchema } from "../../lib/url-validator.js"
 
@@ -910,7 +911,7 @@ export async function executeWebhookOutput(
   // unit-test callers may omit ctx and skip the DB round-trip.
   let jobId: string | undefined
   if (ctx?.userId) {
-    const { data: job } = await insertInternalJob("orchestrator", {
+    const { data: job, error } = await insertInternalJob("orchestrator", {
       workflow_id: null,
       workflow_execution_id: ctx.executionId,
       user_id: ctx.userId,
@@ -921,6 +922,14 @@ export async function executeWebhookOutput(
       // when the orchestrator dies before persisting node_states[X].jobId.
       input_data: { url, payload, type: "webhook-output", node_id: node.id },
     }, { billingContext: ctx.billingContext })
+    // A request-gate BLOCK is not a failed audit row — it is the platform
+    // refusing this delivery. Dropping it (as this line did) would POST the
+    // payload anyway, with nothing to show for it. The throw becomes the node's
+    // failure, and `stage-utils.ts` codes the reason from it.
+    //
+    // Any OTHER insert error stays non-fatal on purpose: the row is an audit
+    // trail here, not a gate, and a webhook delivery has never depended on it.
+    if (error?.blocked) throw new JobBlockedError(error.blocked)
     jobId = job?.id
     if (jobId) ctx.onJobCreated?.(node.id, jobId)
   }

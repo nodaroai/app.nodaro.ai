@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from "fastify"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { supabase } from "../../lib/supabase.js"
 import { characterTrainingRoutes } from "../character-training.js"
+import { clearJobPolicies, registerJobPolicy } from "../../lib/job-policy.js"
 
 vi.mock("../../lib/supabase.js", () => ({ supabase: { from: vi.fn(), rpc: vi.fn() } }))
 
@@ -270,5 +271,64 @@ describe("POST /v1/characters/:id/train — atomic CAS slot claim", () => {
     } finally {
       publicUrlValue = "https://app.test.local"
     }
+  })
+})
+
+/**
+ * F10 — the training lane turned a request-gate block into `502
+ * training_dispatch_failed`, because the insert error arm threw a plain
+ * `Error("job_create_failed")` and the catch replies 502 unconditionally. The
+ * catch's cleanup (CAS rollback of `lora_training_status`, orphan-zip delete)
+ * is exactly what a block should run — only the reply is wrong, so the throw
+ * stays and the catch's TAIL learns about blocks.
+ */
+describe("POST /v1/characters/:id/train — request-gate block (F10)", () => {
+  afterEach(() => clearJobPolicies())
+
+  it("answers 422 job_blocked (not 502), still rolls the slot back and deletes the orphan zip", async () => {
+    const characterFullRow = {
+      id: TEST_CHARACTER_ID,
+      name: "Kira",
+      source_image_url: "https://r2/source.jpg",
+      reference_photos: [], expressions: [], poses: [], angles: [],
+      body_angles: [], lighting_variations: [],
+    }
+    const characterUpdates: Array<Record<string, unknown>> = []
+    vi.mocked(supabase.rpc).mockResolvedValue({ data: TEST_CHARACTER_ID, error: null } as never)
+    vi.mocked(supabase.from).mockImplementation(((table: string) => {
+      if (table === "characters") {
+        return {
+          select: () => ({ eq: () => ({ eq: () => ({ single: async () => ({ data: characterFullRow, error: null }) }) }) }),
+          update: (patch: Record<string, unknown>) => {
+            characterUpdates.push(patch)
+            return { eq: () => ({ eq: async () => ({ data: null, error: null }) }) }
+          },
+        }
+      }
+      return { insert: () => ({ select: () => ({ single: async () => ({ data: null, error: null }) }) }) }
+    }) as never)
+
+    registerJobPolicy({
+      id: "test-deny-all",
+      checkRequest: () => ({ verdict: "block", reason: "test:denied", userMessage: "Not allowed here" }),
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/characters/${TEST_CHARACTER_ID}/train`,
+      headers: { "x-user-id": TEST_USER_ID, "content-type": "application/json" },
+      payload: {},
+    })
+
+    expect(res.statusCode).toBe(422)
+    expect(res.json()).toEqual({ error: { code: "job_blocked", message: "Not allowed here" } })
+
+    const replicateTraining = await import("../../providers/replicate/training.js")
+    expect(replicateTraining.createCharacterTraining).not.toHaveBeenCalled()
+    // The catch's cleanup still runs: the CAS-claimed slot is released…
+    expect(characterUpdates).toContainEqual({ lora_training_status: null })
+    // …and the zip that was uploaded before the gate refused is deleted.
+    const storage = await import("../../lib/storage.js")
+    expect(storage.deleteFromR2).toHaveBeenCalledWith("character-training/test/123.zip")
   })
 })

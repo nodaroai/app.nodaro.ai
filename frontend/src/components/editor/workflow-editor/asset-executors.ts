@@ -16,7 +16,6 @@ import {
   generateLocation,
   generateLocationAsset,
   saveLocation,
-  getJobStatusLean,
   cancelJob,
 } from "@/lib/api";
 import type {
@@ -33,7 +32,7 @@ import {
   checkStorageError,
   type ExecutionContext,
 } from "./types";
-import { pollJobToCompletion, guardedToast } from "./poll-job";
+import { pollJobToCompletion, guardedToast, getJobStatusLeanForNode, RUN_START_RESET } from "./poll-job";
 import { shouldAbandonNode } from "./abandon-guard";
 import { resolveCharacterAssets } from "./node-input-resolver";
 
@@ -45,7 +44,7 @@ export function runCharacterGeneration(
   ctx: ExecutionContext,
 ): Promise<string> {
   const { updateNodeData, nodes, edges } = useWorkflowStore.getState();
-  updateNodeData(nodeId, { executionStatus: "running" });
+  updateNodeData(nodeId, { ...RUN_START_RESET });
   // Element/asset injection. The Assets/Prompt-wired ELEMENTS (held-prop, text,
   // pickers) now flow ONLY into downstream consumers of this character (folded
   // into their prompt via collectCinematographyHints) — NOT the character's own
@@ -94,7 +93,7 @@ export function runCharacterGeneration(
               return;
             }
             try {
-              const job = await getJobStatusLean(jobId);
+              const job = await getJobStatusLeanForNode(jobId, nodeId);
               pollFailures = 0;
               if (job.status === "completed" || job.status === "failed") {
                 if (shouldAbandonNode(nodeId, jobId)) {
@@ -221,7 +220,7 @@ export function runFaceGeneration(
   ctx: ExecutionContext,
 ): Promise<string> {
   const { updateNodeData } = useWorkflowStore.getState();
-  updateNodeData(nodeId, { executionStatus: "running" });
+  updateNodeData(nodeId, { ...RUN_START_RESET });
 
   const faceUserTemplates = useWorkflowStore.getState().userPromptTemplates;
   const faceFlowTemplates = useWorkflowStore.getState().flowPromptTemplates;
@@ -274,7 +273,7 @@ export function runFaceGeneration(
               return;
             }
             try {
-              const job = await getJobStatusLean(jobId);
+              const job = await getJobStatusLeanForNode(jobId, nodeId);
               pollFailures = 0;
               if (job.status === "completed" || job.status === "failed") {
                 if (shouldAbandonNode(nodeId, jobId)) {
@@ -407,7 +406,7 @@ export function runObjectGeneration(
   extras: ObjectGenerationExtras = {},
 ): Promise<string> {
   const { updateNodeData } = useWorkflowStore.getState();
-  updateNodeData(nodeId, { executionStatus: "running" });
+  updateNodeData(nodeId, { ...RUN_START_RESET });
 
   return new Promise<string>((resolve, reject) => {
     generateObject({
@@ -465,7 +464,7 @@ export function runObjectGeneration(
               return;
             }
             try {
-              const job = await getJobStatusLean(jobId);
+              const job = await getJobStatusLeanForNode(jobId, nodeId);
               pollFailures = 0;
               if (job.status === "completed" || job.status === "failed") {
                 if (shouldAbandonNode(nodeId, jobId)) {
@@ -605,7 +604,7 @@ export function runCreatureGeneration(
   extras: CreatureGenerationExtras = {},
 ): Promise<string> {
   const { updateNodeData } = useWorkflowStore.getState();
-  updateNodeData(nodeId, { executionStatus: "running" });
+  updateNodeData(nodeId, { ...RUN_START_RESET });
 
   return new Promise<string>((resolve, reject) => {
     generateCreature({
@@ -660,7 +659,7 @@ export function runCreatureGeneration(
               return;
             }
             try {
-              const job = await getJobStatusLean(jobId);
+              const job = await getJobStatusLeanForNode(jobId, nodeId);
               pollFailures = 0;
               if (job.status === "completed" || job.status === "failed") {
                 if (shouldAbandonNode(nodeId, jobId)) {
@@ -783,7 +782,7 @@ export function runLocationGeneration(
   ctx: ExecutionContext,
 ): Promise<string> {
   const { updateNodeData } = useWorkflowStore.getState();
-  updateNodeData(nodeId, { executionStatus: "running" });
+  updateNodeData(nodeId, { ...RUN_START_RESET });
 
   return new Promise<string>((resolve, reject) => {
     generateLocation({
@@ -830,7 +829,7 @@ export function runLocationGeneration(
               return;
             }
             try {
-              const job = await getJobStatusLean(jobId);
+              const job = await getJobStatusLeanForNode(jobId, nodeId);
               pollFailures = 0;
               if (job.status === "completed" || job.status === "failed") {
                 if (shouldAbandonNode(nodeId, jobId)) {

@@ -241,6 +241,37 @@ describe("GenerateImageNode — safety-block hint", () => {
     expect(store.state.runSingleNode).not.toHaveBeenCalled()
   })
 
+  it("NODARO policy block whose reason says 'content policy' is NOT attributed to the provider", () => {
+    // The legacy string sniff (`errorMessage.includes("content policy")`) used
+    // to swallow our own verdict: the card rendered "The provider's safety
+    // filter blocked this output" plus a "Try on <model>" button that would be
+    // blocked identically. `isPolicyBlock` must be computed FIRST and excluded
+    // from `isContentPolicy`. BaseNode's <NodePolicyOverlay> owns this case.
+    renderNode({
+      data: {
+        label: "Generate Image",
+        provider: "gpt-image-2",
+        executionStatus: "failed",
+        errorMessage: "Blocked by content policy: no public figures",
+        errorHint: {
+          kind: "policy-block",
+          policyId: "sai-moderation",
+          reason: "Blocked by content policy: no public figures",
+          hookPoint: "result",
+        },
+      },
+    })
+
+    expect(screen.queryByText("Prohibited")).not.toBeInTheDocument()
+    expect(
+      screen.queryByText("Blocked by provider safety filter. Try a different prompt or image."),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText(/^Try on /)).not.toBeInTheDocument()
+    // ...and the failed block does not fall through to the red generic error
+    // either — the overlay is the whole story for a policy block.
+    expect(screen.queryByText("Failed")).not.toBeInTheDocument()
+  })
+
   it("failed with only the legacy content-policy message: shows the old amber text, no button", () => {
     renderNode({
       data: {

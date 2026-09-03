@@ -13,7 +13,10 @@ beforeEach(() => {
   mockLoadOverlay.mockResolvedValue({ loaded: null })
 })
 
-describe("buildApp overlay wiring", () => {
+// buildApp boots the whole Fastify app (~3 s alone, longer under a full-suite
+// load); the default 5 s budget made this file the suite's one load-dependent
+// flake, so it carries its own.
+describe("buildApp overlay wiring", { timeout: 30_000 }, () => {
   it("calls loadOverlay exactly once during boot", async () => {
     const { buildApp } = await import("@/app.js")
     const app = await buildApp()

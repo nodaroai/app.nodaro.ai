@@ -16,6 +16,7 @@ import { NodeRunStripShell } from "./node-run-strip-shell"
 import { NodeSettingsButton } from "./node-settings-button"
 import { InlineGluedStripContext } from "./inline-glued-strip-context"
 import { NodeTopToolbar } from "./node-top-toolbar"
+import { NodePolicyOverlay } from "./node-policy-overlay"
 import { computeFittedNodeBox } from "./video-node-defaults"
 import { InlineNodePrompt } from "./inline-node-prompt/inline-node-prompt"
 import { useInlinePromptActive } from "./inline-node-prompt/use-inline-prompt-active"
@@ -712,6 +713,13 @@ function BaseNodeComponent({
         style={{ minHeight: effectiveMinHeight }}
         /* Selection handled by onNodeClick in workflow-canvas (has drag guard) */
       >
+      {/* The job-policy chrome ("awaiting review" / "blocked by content
+          policy"), mounted HERE and nowhere else. The card root above is
+          already `relative overflow-hidden`, so the overlay's `absolute
+          inset-0` lands exactly on the card. Deliberately NOT a prop on the 97
+          node cards: `jobRecovering` was added that way and is passed by 1 of
+          98 call sites, so its chrome has never reached a user. */}
+      <NodePolicyOverlay nodeId={id} />
       {(!hideHeader || isSkipped) && (
         <div
           className={cn(

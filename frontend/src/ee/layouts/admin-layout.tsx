@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react"
 import { Link, useLocation, useNavigate, Outlet } from "react-router-dom"
 import { useGalleryReportCount } from "@/hooks/queries/use-gallery-queries"
+import { useQuery } from "@tanstack/react-query"
+import { listHeldJobs } from "@/ee/lib/review-api"
+import { useT } from "@/lib/i18n"
+import type { MessageKey } from "@/lib/i18n/en"
 import {
   BarChart3,
   Users,
@@ -33,6 +37,7 @@ import {
   Building2,
   Inbox,
   ToggleRight,
+  ShieldAlert,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -62,6 +67,11 @@ const ADMIN_NAV = [
   { href: "/admin/miniapps", label: "MiniApps", icon: AppWindow },
   { href: "/admin/client-apps", label: "Client Apps", icon: Blocks },
   { href: "/admin/reports", label: "Reports", icon: Flag },
+  // The one translated entry: the page behind it is the first `useT()` admin
+  // surface, so its nav label follows the same dictionary. Unconditional —
+  // there is no admin `NavKey` and `nav.hide`'s vocabulary is the END-USER
+  // nav; the whole /admin block is already edition-gated by hasAdmin().
+  { href: "/admin/review", label: "Content Review", labelKey: "adminReview.navLabel" as MessageKey, icon: ShieldAlert },
   { href: "/admin/pricing", label: "Pricing", icon: DollarSign },
   { href: "/admin/credit-audit", label: "Credit Audit", icon: Scale },
   { href: "/admin/credit-anomalies", label: "Credit Anomalies", icon: AlertTriangle },
@@ -77,6 +87,29 @@ const ADMIN_NAV = [
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ] as const
 
+/**
+ * The held-review queue depth, for the nav badge.
+ *
+ * Not decoration: a review queue nobody looks at holds the requester's credits
+ * (on a hosted instance, the payer's balance) for as long as it is ignored, and
+ * this number is the only notification the product has — there is no push
+ * channel in the repo. The key sits under the page's own `["admin","review"]`
+ * prefix so resolving a job refreshes the badge with no extra wiring.
+ */
+function useHeldJobCount(enabled: boolean): number {
+  const { data } = useQuery({
+    queryKey: ["admin", "review", "count"],
+    queryFn: () => listHeldJobs({ pageSize: 1 }).then((page) => page.total),
+    enabled,
+    // A deployment with no policy registered answers 0 forever; a failure must
+    // not retry-storm the admin chrome on every page.
+    retry: false,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  })
+  return data ?? 0
+}
+
 export default function AdminLayout() {
   const location = useLocation()
   const pathname = location.pathname
@@ -87,6 +120,8 @@ export default function AdminLayout() {
   const [mounted, setMounted] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const { data: pendingReportsCount = 0 } = useGalleryReportCount()
+  const t = useT()
+  const pendingReviewCount = useHeldJobCount(Boolean(user?.id) && isAdmin)
 
   // Load collapsed state from localStorage on mount
   useEffect(() => {
@@ -211,7 +246,17 @@ export default function AdminLayout() {
                   : pathname.startsWith(item.href)
 
               const isReportsItem = item.href === "/admin/reports"
-              const showBadge = isReportsItem && pendingReportsCount > 0
+              const isReviewItem = item.href === "/admin/review"
+              const badgeCount = isReportsItem
+                ? pendingReportsCount
+                : isReviewItem
+                  ? pendingReviewCount
+                  : 0
+              const showBadge = badgeCount > 0
+              // The rest of this nav is hardcoded English; the review entry is
+              // translated because the page behind it is.
+              const labelKey = (item as { labelKey?: MessageKey }).labelKey
+              const label = labelKey ? t(labelKey) : item.label
 
               const linkContent = (
                 <Link
@@ -234,10 +279,10 @@ export default function AdminLayout() {
                   </span>
                   {!collapsed && (
                     <>
-                      <span>{item.label}</span>
+                      <span>{label}</span>
                       {showBadge && (
                         <span className="ml-auto px-1.5 py-0.5 text-xs font-medium bg-[#ff0073] text-white rounded-full">
-                          {pendingReportsCount}
+                          {badgeCount}
                         </span>
                       )}
                     </>
@@ -250,7 +295,7 @@ export default function AdminLayout() {
                   <Tooltip key={item.href}>
                     <TooltipTrigger asChild>{linkContent}</TooltipTrigger>
                     <TooltipContent side="right" className="bg-white text-zinc-900 border-zinc-200 dark:bg-zinc-800 dark:text-white dark:border-zinc-700">
-                      {item.label}
+                      {label}
                     </TooltipContent>
                   </Tooltip>
                 )

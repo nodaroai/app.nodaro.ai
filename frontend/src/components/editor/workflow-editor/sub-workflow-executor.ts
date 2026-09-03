@@ -7,6 +7,7 @@ import { isExecutableNode, type ExecutionContext } from "./types"
 import { executeNode } from "./execute-node"
 import { getListInputForNode } from "./node-input-resolver"
 import { executeNodeForList } from "./list-execution"
+import { RUN_START_RESET } from "./poll-job"
 import { expandItemsWithRepeat } from "@nodaro/shared"
 
 const MAX_DEPTH = 5
@@ -92,8 +93,7 @@ export async function executeSubWorkflow(
   try {
     // Mark as running
     updateNodeData(node.id, {
-      executionStatus: "running",
-      errorMessage: undefined,
+      ...RUN_START_RESET,
       outputResults: undefined,
       generatedResults: [],
       subWorkflowProgress: { currentNode: "", completed: 0, total: 0 },

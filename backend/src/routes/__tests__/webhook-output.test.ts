@@ -26,6 +26,7 @@ vi.mock("@/lib/safe-fetch.js", () => ({
 }))
 
 import { webhookOutputRoutes } from "../webhook-output.js"
+import { clearJobPolicies, registerJobPolicy } from "../../lib/job-policy.js"
 import { supabase } from "../../lib/supabase.js"
 import { safeFetch } from "../../lib/safe-fetch.js"
 
@@ -80,5 +81,38 @@ describe("POST /v1/webhook-output/send", () => {
       responseBody: "",
       error: "Webhook URL resolves to a blocked address",
     })
+  })
+})
+
+/**
+ * F10 — a request-gate BLOCK is a client outcome, not a server failure.
+ *
+ * `docs/api-integration.md` promises 422 `job_blocked` with the policy's own
+ * message and tells clients a 500 means "server bug — retry with backoff". This
+ * lane answered 500 with a bare string body, so an SDK consumer retried a
+ * PERMANENT block with backoff (each retry re-gating, re-blocking and writing
+ * another `job_policy_decisions` row) and `JobBlockedError` never fired —
+ * `throwFromResponse` maps only `status === 422 && code === "job_blocked"`.
+ */
+describe("POST /v1/webhook-output/send — request-gate block (F10)", () => {
+  afterEach(() => clearJobPolicies())
+
+  it("answers 422 job_blocked with the policy's user message, not 500", async () => {
+    setupJobMocks()
+    registerJobPolicy({
+      id: "test-deny-all",
+      checkRequest: () => ({ verdict: "block", reason: "test:denied", userMessage: "Not allowed here" }),
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/webhook-output/send",
+      payload: { url: "https://example.com/hook", payload: { a: 1 } },
+    })
+
+    expect(res.statusCode).toBe(422)
+    expect(res.json()).toEqual({ error: { code: "job_blocked", message: "Not allowed here" } })
+    // The gate refused BEFORE the insert, so the webhook must not have fired.
+    expect(vi.mocked(safeFetch)).not.toHaveBeenCalled()
   })
 })

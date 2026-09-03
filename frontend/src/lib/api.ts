@@ -4844,8 +4844,9 @@ export interface Job {
     [key: string]: unknown
   }
   error_message?: string
-  /** Structured detail when `error_message` is a provider safety-filter block
-   *  (after the backend's automatic retry). See `JobErrorHint`. */
+  /** Structured detail for a blocked job — a PROVIDER safety-filter block
+   *  (after the backend's automatic retry) or a NODARO job-policy block.
+   *  Discriminated on `kind`; see `JobErrorHint`. */
   error_hint?: JobErrorHint | null
   created_at: string
   started_at?: string
@@ -4870,6 +4871,9 @@ export interface Job {
  */
 export type JobStatusLean = {
   id: string
+  /** `Job["status"]` is `string`, so `pending_review` needs no widening here.
+   *  Treat it as IN-FLIGHT: a poll loop must keep polling (the job completes
+   *  normally once a reviewer approves it) and must NOT read it as terminal. */
   status: Job["status"]
   progress?: number
   /** True while the reconcile system is self-healing this job (worker

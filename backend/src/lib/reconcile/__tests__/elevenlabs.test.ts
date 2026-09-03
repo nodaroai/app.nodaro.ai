@@ -13,7 +13,11 @@ const mocks = vi.hoisted(() => {
   })
   const jobsSelectEqMock = vi.fn(() => ({ single: jobsSingleMock }))
   const jobsSelectMock = vi.fn(() => ({ eq: jobsSelectEqMock }))
-  const jobsUpdateInMock = vi.fn().mockResolvedValue({ data: null, error: null })
+  // markJobFailed (lib/job-failure.ts) ends its CAS with `.select("id")` and
+  // reads the returned rows to answer "did WE flip it?" — the mock must model
+  // that or every migrated writer sees a lost race.
+  const jobsUpdateCasSelectMock = vi.fn().mockResolvedValue({ data: [{ id: "j-1" }], error: null })
+  const jobsUpdateInMock = vi.fn(() => ({ select: jobsUpdateCasSelectMock }))
   // G-7: capture every jobs.update(payload) so tests can assert on the exact
   // recorded update (lastJobsUpdate below), not just individual fields.
   const jobsUpdates: Array<Record<string, unknown>> = []
@@ -50,7 +54,7 @@ const mocks = vi.hoisted(() => {
   const thumbnailMock = vi.fn().mockResolvedValue("https://r2.example/thumb.png")
   const extractAudioMock = vi.fn().mockResolvedValue({ audioPath: "/tmp/x/audio.mp3", workDir: "/tmp/x" })
   return {
-    fetchMock, finalizeMock, refundMock, uploadBufferMock, jobsSingleMock, jobsUpdateMock, fromMock,
+    fetchMock, finalizeMock, refundMock, uploadBufferMock, jobsSingleMock, jobsUpdateMock, jobsUpdateInMock, fromMock,
     markCompletedMock, shouldSaveMock, watermarkUploadMock, commitMock, createAssetMock, thumbnailMock, extractAudioMock,
     jobsUpdates,
   }
@@ -217,5 +221,9 @@ describe("reconcileElevenLabsJob", () => {
     expect(update.error_detail).toContain("source rejected")
     expect(update.error_detail).not.toContain("key=zz")
     expect(mocks.refundMock).toHaveBeenCalledWith("j-el-fail")
+    // Spec D11: the shared markJobFailed CAS. "queued" is newly failable (these
+    // sweeps could not take a queued row at all before); "pending_review" is
+    // absent BY CONSTRUCTION, so no reconcile tick can fail a job under review.
+    expect(mocks.jobsUpdateInMock).toHaveBeenCalledWith("status", ["pending", "queued", "processing"])
   })
 })

@@ -82,6 +82,13 @@ vi.mock("@/lib/supabase.js", () => ({
   supabase: { from: mocks.mockFrom },
 }))
 
+// The result gate is reached through a dynamic import and only when a policy is
+// registered, so the mainline cases below never touch it. Mocked so the "a
+// policy is registered" cases can drive its outcome without a live applier.
+vi.mock("@/lib/job-policy-gate.js", () => ({
+  applyResultGate: vi.fn(async () => "allow" as const),
+}))
+
 vi.mock("@/ee/services/credits.js", () => ({
   CreditsService: {
     commitCredits: mocks.mockCommitCredits,
@@ -174,6 +181,7 @@ import {
   isSocialUrl,
   shouldSaveJobResult,
   markJobCompleted,
+  markJobCompletedDetailed,
   commitJobCredits,
   refundJobCredits,
   uploadImageMaybeWatermark,
@@ -321,6 +329,91 @@ describe("markJobCompleted", () => {
     expect(typeof payload.completed_at).toBe("string")
     expect(payload.output_data).toEqual({ videoUrl: "x" })
     expect(payload.provider).toBe("kie")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// markJobCompletedDetailed — the RESULT gate's seam
+// ---------------------------------------------------------------------------
+
+describe("markJobCompletedDetailed", () => {
+  function installUpdateMock(updateResult: { data: unknown; error: unknown }) {
+    const select = vi.fn().mockResolvedValue(updateResult)
+    const inFn = vi.fn().mockReturnValue({ select })
+    const eq = vi.fn().mockReturnValue({ in: inFn })
+    const update = vi.fn().mockReturnValue({ eq })
+    mocks.mockFrom.mockReturnValueOnce({ update } as never)
+    return { update, eq, in: inFn, select }
+  }
+
+  it("names the outcome the boolean flattens — completed / lost_race", async () => {
+    installUpdateMock({ data: [{ id: "job-1" }], error: null })
+    expect(await markJobCompletedDetailed("job-1", { output_data: {} })).toBe("completed")
+    installUpdateMock({ data: [], error: null })
+    expect(await markJobCompletedDetailed("job-1", { output_data: {} })).toBe("lost_race")
+    installUpdateMock({ data: null, error: { message: "DB down" } })
+    expect(await markJobCompletedDetailed("job-1", { output_data: {} })).toBe("lost_race")
+  })
+
+  it("markJobCompleted stays the boolean 45 of 48 callers already handle", async () => {
+    installUpdateMock({ data: [{ id: "job-1" }], error: null })
+    expect(await markJobCompleted("job-1", { output_data: {} })).toBe(true)
+  })
+
+  /**
+   * THE byte-identity assertion for the completion funnel: with no result
+   * policy registered the gate must cost nothing — no extra row read, no audit
+   * insert, no allocation. `from` is called exactly ONCE, for the CAS itself.
+   */
+  it("performs NO extra row read when nothing is registered", async () => {
+    mocks.mockFrom.mockClear()
+    installUpdateMock({ data: [{ id: "job-1" }], error: null })
+    await markJobCompletedDetailed("job-1", { output_data: { videoUrl: "x" } }, "finalize")
+    expect(mocks.mockFrom).toHaveBeenCalledTimes(1)
+    expect(mocks.mockFrom).toHaveBeenCalledWith("jobs")
+  })
+
+  it("returns the gate's outcome without touching the CAS when a policy blocks or holds", async () => {
+    const { applyResultGate } = await import("@/lib/job-policy-gate.js")
+    const gate = vi.mocked(applyResultGate)
+    const { registerJobPolicy, clearJobPolicies } = await import("@/lib/job-policy.js")
+    registerJobPolicy({ id: "test", checkResult: () => ({ verdict: "allow" }) })
+    try {
+      gate.mockResolvedValueOnce("blocked")
+      mocks.mockFrom.mockClear()
+      expect(await markJobCompletedDetailed("job-1", { output_data: {} }, "finalize")).toBe("blocked")
+      expect(mocks.mockFrom).not.toHaveBeenCalled()
+
+      gate.mockResolvedValueOnce("held")
+      expect(await markJobCompletedDetailed("job-1", { output_data: {} }, "finalize")).toBe("held")
+      expect(mocks.mockFrom).not.toHaveBeenCalled()
+
+      gate.mockResolvedValueOnce("allow")
+      installUpdateMock({ data: [{ id: "job-1" }], error: null })
+      expect(await markJobCompletedDetailed("job-1", { output_data: {} }, "finalize")).toBe("completed")
+    } finally {
+      clearJobPolicies()
+    }
+  })
+
+  it("tells the gate which funnel is asking — the only input holdEligible needs", async () => {
+    const { applyResultGate } = await import("@/lib/job-policy-gate.js")
+    const gate = vi.mocked(applyResultGate)
+    const { registerJobPolicy, clearJobPolicies } = await import("@/lib/job-policy.js")
+    registerJobPolicy({ id: "test", checkResult: () => ({ verdict: "allow" }) })
+    try {
+      gate.mockResolvedValue("allow")
+      installUpdateMock({ data: [{ id: "job-1" }], error: null })
+      await markJobCompletedDetailed("job-1", { output_data: {} }, "finalize", { metered: true })
+      expect(gate).toHaveBeenCalledWith("job-1", { output_data: {} }, "finalize", { metered: true })
+
+      installUpdateMock({ data: [{ id: "job-1" }], error: null })
+      await markJobCompletedDetailed("job-1", { output_data: {} })
+      expect(gate).toHaveBeenLastCalledWith("job-1", { output_data: {} }, "direct", undefined)
+    } finally {
+      clearJobPolicies()
+      gate.mockReset()
+    }
   })
 })
 

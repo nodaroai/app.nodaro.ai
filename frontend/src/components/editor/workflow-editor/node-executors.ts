@@ -15,7 +15,6 @@ import {
   generateScriptApi,
   generateMotionGraphics,
   combineVideos,
-  getJobStatusLean,
   cancelJob,
 } from "@/lib/api";
 import type {
@@ -31,7 +30,7 @@ import {
   checkStorageError,
   type ExecutionContext,
 } from "./types";
-import { pollJobWithNodeUpdate, guardedToast } from "./poll-job";
+import { pollJobWithNodeUpdate, guardedToast, getJobStatusLeanForNode, RUN_START_RESET } from "./poll-job";
 import { shouldAbandonNode } from "./abandon-guard";
 
 /** Extract kieTaskId from output data for downstream video chaining. */
@@ -498,7 +497,7 @@ export function runScriptGeneration(
   reasoningEffort?: string,
 ): Promise<string> {
   const { updateNodeData, nodes } = useWorkflowStore.getState();
-  updateNodeData(nodeId, { executionStatus: "running" });
+  updateNodeData(nodeId, { ...RUN_START_RESET });
   // This executor takes positional params rather than the node, so the Advanced
   // trio is read from the store. Without it the config panel's toggle is dead on
   // single-node Run: the badge shows the bumped price while the request omits
@@ -536,7 +535,7 @@ export function runScriptGeneration(
               return;
             }
             try {
-              const job = await getJobStatusLean(jobId);
+              const job = await getJobStatusLeanForNode(jobId, nodeId);
               pollFailures = 0;
               if (job.status === "completed" || job.status === "failed") {
                 if (shouldAbandonNode(nodeId, jobId)) {
@@ -648,9 +647,8 @@ export function runLottiePlanGeneration(
 ): Promise<string> {
   const { updateNodeData } = useWorkflowStore.getState();
   updateNodeData(nodeId, {
-    executionStatus: "running",
+    ...RUN_START_RESET,
     motionPlan: undefined,
-    errorMessage: undefined,
   });
 
   return new Promise<string>((resolve, reject) => {
@@ -681,7 +679,7 @@ export function runLottiePlanGeneration(
               return;
             }
             try {
-              const job = await getJobStatusLean(jobId);
+              const job = await getJobStatusLeanForNode(jobId, nodeId);
               pollFailures = 0;
               if (job.status === "completed" || job.status === "failed") {
                 if (shouldAbandonNode(nodeId, jobId)) {

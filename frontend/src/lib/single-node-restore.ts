@@ -57,6 +57,10 @@ export interface RestorableSingleNodeJob {
   readonly nodeType: string
   readonly progress: number
   readonly status: "running" | "pending"
+  /** The job is parked in `pending_review` by the result gate — in flight, with
+   *  credits reserved, waiting on a human. Drives the node's "Awaiting review"
+   *  overlay and exempts the job from the stuck-job age bound. */
+  readonly awaitingReview: boolean
 }
 
 interface SingleNodeState {
@@ -65,11 +69,21 @@ interface SingleNodeState {
   progress?: number
   status?: string
   nodeType?: string
+  /** Backend sidecar (`NodeExecutionState.awaitingReview`) — never a status
+   *  member, so nothing that switches on status has to learn a new case. */
+  awaitingReview?: boolean
 }
 
 /** The (single) nodeState of a single-node job summary, or undefined. */
 function soleNodeState(item: ActiveExecItem): SingleNodeState | undefined {
   return Object.values(item.nodeStates ?? {})[0] as SingleNodeState | undefined
+}
+
+/** Is this job parked by the result gate? Reads the sidecar first and falls
+ *  back to the raw status, so a caller that forwards one without the other
+ *  still gets the hold treatment. */
+function isHeld(state: SingleNodeState | undefined): boolean {
+  return state?.awaitingReview === true || state?.status === "pending_review"
 }
 
 /**
@@ -118,8 +132,17 @@ export function collectRestorableSingleNodeJobs(
 
     // Stuck-job age bound — let the backend reconcile cron terminalize it.
     // Long multi-segment plugin jobs get a wider horizon (see restoreMaxAgeMs).
+    //
+    // A HELD job is exempt: it is not stuck, it is waiting on a person, and
+    // `JOB_HOLD_TTL_HOURS` is measured in HOURS — so a hold routinely outlives
+    // even the wide horizon. Ageing it out is the bug this exemption exists to
+    // stop: the node paints idle with no overlay and no poll, so the user runs
+    // it again and pays for a second reservation while the first is still
+    // parked. The backend's own hold-expiry sweep terminalizes it at the TTL,
+    // and the restored poll ends on that write like any other terminal one.
+    const held = isHeld(state)
     const ageMs = nowMs - new Date(item.createdAt).getTime()
-    if (Number.isFinite(ageMs) && ageMs > restoreMaxAgeMs(node.type)) continue
+    if (!held && Number.isFinite(ageMs) && ageMs > restoreMaxAgeMs(node.type)) continue
 
     seen.add(nodeId)
     out.push({
@@ -127,7 +150,10 @@ export function collectRestorableSingleNodeJobs(
       jobId: state?.jobId ?? item.id,
       nodeType: node.type ?? state?.nodeType ?? "unknown",
       progress: typeof state?.progress === "number" ? state.progress : 0,
+      // `pending_review` is LIVE, not a third status: the overlay (and the
+      // restored poll) are gated on `executionStatus === "running"`.
       status: state?.status === "pending" ? "pending" : "running",
+      awaitingReview: held,
     })
   }
   return out
@@ -135,10 +161,15 @@ export function collectRestorableSingleNodeJobs(
 
 /**
  * Re-hydrate the canvas run-state for restored single-node jobs. Writes ONLY
- * transient keys (`executionStatus`, `currentJobId`, `currentJobProgress`) so it
- * never enters the persisted graph (every save path strips them) — multi-tab
- * safe. `currentJobId` is the load-bearing one: the restored poll's abandon
- * guard (`shouldAbandonNode`) detaches unless `data.currentJobId === jobId`.
+ * transient keys (`executionStatus`, `currentJobId`, `currentJobProgress`,
+ * `jobAwaitingReview`) so it never enters the persisted graph (every save path
+ * strips them) — multi-tab safe. `currentJobId` is the load-bearing one: the
+ * restored poll's abandon guard (`shouldAbandonNode`) detaches unless
+ * `data.currentJobId === jobId`.
+ *
+ * `jobAwaitingReview` is written HERE rather than left to the restored poll's
+ * first tick: a hold can sit for hours, and the first tick is 2s away at best —
+ * long enough for the user to read a bare, unexplained spinner and re-run.
  */
 export function applySingleNodeJobRestore<
   T extends { id: string; data?: Record<string, unknown> | undefined },
@@ -155,6 +186,7 @@ export function applySingleNodeJobRestore<
         executionStatus: job.status,
         currentJobId: job.jobId,
         currentJobProgress: job.progress,
+        jobAwaitingReview: job.awaitingReview ? true : undefined,
       },
     }
   })

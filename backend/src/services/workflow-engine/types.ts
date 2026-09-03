@@ -160,6 +160,18 @@ export interface NodeExecutionState {
   /** Current job progress (0-100) — surfaced by pollJobToCompletion so the
    *  UI can render a progress bar during backend runs. */
   progress?: number
+  /** True while this node's job sits in `jobs.status = 'pending_review'`:
+   *  generated, but the output is withheld pending a human decision.
+   *
+   *  Deliberately a SIDECAR and NOT a new `NodeExecutionStatus` member
+   *  (spec 2026-09-03-job-policy-hook-design D15): `status` stays `"running"`
+   *  so every hand-rolled partition of that union keeps counting the node as
+   *  active — most importantly `lib/reconcile/workflow-executions-cron.ts`'s
+   *  `anyActive`, where a fourth status member would go false and
+   *  `anyFailed && !anyActive` would flip the whole execution to `failed`
+   *  while a child is legitimately under review. Cleared when the job leaves
+   *  review. */
+  awaitingReview?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -373,8 +385,24 @@ export interface OrchestratorContext {
    *  to surface the jobId on nodeStates before execution completes. */
   onJobCreated?: (nodeId: string, jobId: string) => void
   /** Called as a worker-queued job's progress changes (0-100). Used to drive
-   *  per-node progress bars in the UI during backend orchestrator runs. */
-  onJobProgress?: (jobId: string, progress: number) => void
+   *  per-node progress bars in the UI during backend orchestrator runs.
+   *
+   *  `awaitingReview` (spec 2026-09-03-job-policy-hook-design §17.10) is the
+   *  job-policy sidecar: true while the row sits in `pending_review`, so the
+   *  canvas can paint "awaiting review" chrome instead of a bar that will
+   *  never move again. It is passed on EVERY tick, including the false one
+   *  that clears it when the review resolves. */
+  onJobProgress?: (jobId: string, progress: number, awaitingReview?: boolean) => void
+  /** The largest `pending_review` dwell time (ms) any child job of this
+   *  execution has accumulated so far, written by `pollJobToCompletion`.
+   *
+   *  The orchestrator subtracts it from the 120-minute WORKFLOW_TIMEOUT_MS
+   *  (spec §6.3): a review queue's clock is not a worker's, and without this
+   *  a run whose only laggard is a human review gets failed at the execution
+   *  level even though every node-level clock was correctly frozen. MAX, not
+   *  sum: sibling holds overlap in wall-clock time, so summing would
+   *  over-credit a fan-out. */
+  maxChildHeldMs?: number
   /** Node IDs that have upload-* ancestors — their jobs should be force_private */
   uploadDescendantIds?: Set<string>
   /** In-flight child jobs from a prior (crashed) orchestrator attempt whose

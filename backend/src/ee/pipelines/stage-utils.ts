@@ -220,6 +220,19 @@ export type CriticFailureReason =
   | "locations_image_critic_unresolvable"
   | "video_critic_unresolvable"
   | "script_critic_unresolvable"
+  /**
+   * A child job's output was withheld pending human review, so the stage could
+   * not continue (spec 2026-09-03-job-policy-hook-design §6.4). Thrown as
+   * `JobHeldError` by `services/_poll.ts`, which carries this exact string on
+   * `.failureReason` so a catch block can pass it straight through instead of
+   * writing `err.message` — the difference between a pipeline that reads
+   * "awaiting review" and one that reads "the critic failed".
+   *
+   * Unreachable in v1: `holdEligible` (D8) excludes every job with a
+   * `pipeline_id`. Listed here so the vocabulary is right before eligibility
+   * widens, not after a support ticket.
+   */
+  | "policy_hold"
   // Catch-block escape hatch — Stage 1 emits `err.message` from runShowrunner /
   // runScriptCritic failures, and the column accepts any string.
   | (string & {})

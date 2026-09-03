@@ -325,6 +325,33 @@ retry with its fresh token instead of clobbering the other writer.
   the server includes it), so no follow-up GET is needed to merge
 - **Constructor:** `new WorkflowConflictError(message?: string, currentUpdatedAt?: string, currentVersion?: number, currentRecord?: Record<string, unknown>)`
 
+### `class JobBlockedError extends NodaroError`
+
+HTTP 422 `job_blocked`. A job policy registered by this deployment refused the
+generation **before it ran** — no job was created and nothing was charged.
+`message` is user-safe text written by the deployment's policy; show it as-is.
+Do not retry the identical request: the platform does not retry a refused
+request, and whether it would be judged differently is the deployment's
+policy's business. Only occurs on deployments that register a job policy (see
+[deployment.md](./deployment.md#surface-profile-nodaro_surface_profile)).
+
+- **Constructor:** `new JobBlockedError(message?: string)`
+- `code = "job_blocked"`, `status = 422`
+
+### `class JobHeldError extends NodaroError`
+
+Not an HTTP error — thrown by `nodes.runAndWait()` / `runMany()` on the first
+poll tick that observes `pending_review`, so a held job never burns `maxMs`
+and never masquerades as a `JobTimeoutError`. The job is **not** cancelled:
+the output exists, a human is reviewing it, and the reservation stays
+`reserved` until they decide. Re-fetch with `jobs.get(jobId)` later, or poll
+`jobs.getStatus()` yourself. Only occurs on deployments that register a job
+policy.
+
+- **Constructor:** `new JobHeldError(message: string, jobId: string)` — same
+  argument order as the other poll-loop errors.
+- `code = "job_held"`, `status = 0`, `jobId`
+
 ### `throwFromResponse(status, body)`
 
 Internal helper that maps `(status, JSON body)` to the right error class and
@@ -696,10 +723,13 @@ callers receive an explicit allowlist of job fields — `id`, `status`,
 recovered and `credit_status` (the job's credit-reservation lifecycle —
 `"reserved"` | `"committed"` | `"refunded"` | `null`, derived server-side
 from the usage log). `error_hint` is a structured, user-safe failure verdict
-(`JobErrorHint`) present only on a job the worker classified as a final
-provider content-policy block — see [Generate
+(`JobErrorHint`) present on a job the worker classified as a final provider
+content-policy block (`kind: "safety-block"` — see [Generate
 Image](./nodes/ai-image/generate-image.md#when-the-providers-safety-filter-blocks-a-request)
-for what it means and when a fallback model is offered. Admin callers
+for what it means and when a fallback model is offered) or that a job policy
+registered by the deployment rejected (`kind: "policy-block"`, carrying
+`policyId`, `hookPoint: "request" | "result"` and `reason` — user-safe text
+written by the deployment's policy; show it as-is). Admin callers
 additionally receive `provider`, `provider_cost`, `display_cost`,
 `credits_actual`, `error_detail` (the provider's redacted raw error) and
 `reconcile_attempts`. Any other column never reaches any caller. Server-only
@@ -1269,7 +1299,10 @@ runAndWait(
 
 Runs a single async node to completion: calls `run()`, extracts the `jobId`,
 then client-polls `jobs.getStatus(jobId)` every `opts.pollMs` (default 2000 ms)
-until a terminal status, up to `opts.maxMs` (default ~15 min).
+until a terminal status, up to `opts.maxMs` (default ~15 min). A `pending_review`
+status ends the poll on the first tick it is observed — with `JobHeldError`,
+not by waiting out `maxMs` — because that status is a human's decision pending,
+not the job's own progress.
 
 Resolves the job's typed `output_data` (`NodeJobOutput`) on `completed`.
 
@@ -1287,6 +1320,20 @@ Throws (all typed, catchable by `instanceof`):
 - `JobFailedError` — terminal `failed`/`cancelled` (carries `error_message` + `jobId`).
 - `JobTimeoutError` — `maxMs` deadline exceeded.
 - `JobAbortedError` — `signal` fired.
+- `JobHeldError` — the job entered `pending_review` (`code = "job_held"`, carries `jobId`; see
+  [Errors](#class-jobhelderror-extends-nodaroerror)). Only on
+  deployments that register a job policy. It does NOT cancel the job: the
+  output exists and a human is reviewing it, and the reservation stays
+  `reserved` for the whole hold. Do not re-run the request — a duplicate would
+  be held too. Re-fetch with `jobs.get(jobId)` later: it resolves to
+  `completed` (approved), `failed` (rejected, with
+  `error_hint.kind === "policy-block"` and a user-safe `reason`) or
+  `cancelled` (you cancelled it — a held job is cancellable like any in-flight
+  job), or surface "awaiting review" to your user and poll `jobs.getStatus()`
+  yourself.
+- `JobBlockedError` — surfaced by `run()` before any poll: the deployment's
+  job policy refused the generation (HTTP 422 `job_blocked`, see
+  [Errors](#class-jobblockederror-extends-nodaroerror)).
 
 > **Slow recoveries can outlive the default `maxMs`.** If the platform's worker
 > abandons a job after the provider already delivered, the job stays
@@ -4219,7 +4266,7 @@ not two.
 ### Jobs
 
 - `Job` — snake_case wire shape; includes provenance: `source` (`"internal" | "mcp" | "app" | "cli" | "sdk" | "extension" | "web" | "api"`) + `source_detail` (origin host / `extension/<name>` label / `sdk/<version>` / MCP client / app id) so a library view can label or filter media by origin
-- `JobStatus` — `"pending" | "queued" | "processing" | "completed" | "failed" | "cancelled"`
+- `JobStatus` — `"pending" | "queued" | "processing" | "pending_review" | "completed" | "failed" | "cancelled"`. `pending_review` is **in-flight, not terminal**: a job policy registered by the deployment held the output for human review. Keep waiting — it resolves to `completed` (approved), `failed` (rejected, with `error_hint.kind === "policy-block"`) or `cancelled` (the owner cancelled it; a held job is cancellable like any in-flight job), and `credit_status` reads `"reserved"` for the whole hold. `runAndWait` throws `JobHeldError` on the first held tick rather than waiting it out. Only appears on deployments that register a job policy.
 - `JobStatusResult` — lean poll shape: `{ id, status, progress?, output_data?, error_message? }`
 - `CancelJobResult` — `{ success: true, cancelled: number }`
 - `ListJobsParams` / `ListJobsPage` — `jobs.list` filters and page

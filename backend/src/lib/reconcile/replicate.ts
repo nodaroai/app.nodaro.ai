@@ -1,5 +1,6 @@
 import { config } from "../config.js"
 import { supabase } from "../supabase.js"
+import { markJobFailed, FAILABLE_STATUSES } from "../job-failure.js"
 import { finalizeJobWithMedia, isFinalizeJobType, NOT_GENERIC_RECOVERABLE, loadUsageLogId } from "../job-finalize.js"
 import { redactProviderDetail, logProviderFailure } from "../provider-error-detail.js"
 import type { ReconcileOpts } from "./kie.js"
@@ -131,6 +132,13 @@ async function applyTrainingTerminalStatus(
       .eq("user_id", character.user_id)
       .not("lora_training_status", "in", "(succeeded,cancelled)")
 
+    // A LoRA training completion is a MODEL, not a media publication — it has
+    // no output_data to moderate and no worker to route through, so it stays a
+    // direct write (WS2's COMPLETED_ALLOWLIST records exactly that reason).
+    // What it may NOT keep is the NEGATIVE status filter: `.not("status","in",
+    // "(completed,failed,cancelled)")` matches `pending_review`, so a widened
+    // vocabulary turns it into a writer that can complete a held row. Positive
+    // filter, same set, no hazard (spec §17.1).
     await supabase
       .from("jobs")
       .update({
@@ -139,7 +147,7 @@ async function applyTrainingTerminalStatus(
       })
       .eq("id", jobId)
       .eq("user_id", character.user_id)
-      .not("status", "in", "(completed,failed,cancelled)")
+      .in("status", [...FAILABLE_STATUSES])
 
     if (character.deleted_at) {
       // Soft-deleted between dispatch and reconciliation — clean up the
@@ -164,19 +172,28 @@ async function applyTrainingTerminalStatus(
       .eq("user_id", character.user_id)
       .not("lora_training_status", "in", "(succeeded,cancelled)")
 
-    await supabase
-      .from("jobs")
-      .update({
-        status: finalStatus,
-        error_message: finalStatus === "cancelled"
-          ? "Character training was cancelled."
-          : "Character training failed. Please try again.",
+    // The FAILED arm joins the one failure writer (markJobFailed); the
+    // CANCELLED arm is not a failure, so it stays a direct write — both with a
+    // positive status filter for the reason above.
+    if (finalStatus === "failed") {
+      await markJobFailed(jobId, {
+        error_message: "Character training failed. Please try again.",
         error_detail: detail,
-        completed_at: new Date().toISOString(),
+        from: FAILABLE_STATUSES,
       })
-      .eq("id", jobId)
-      .eq("user_id", character.user_id)
-      .not("status", "in", "(completed,failed,cancelled)")
+    } else {
+      await supabase
+        .from("jobs")
+        .update({
+          status: "cancelled",
+          error_message: "Character training was cancelled.",
+          error_detail: detail,
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", jobId)
+        .eq("user_id", character.user_id)
+        .in("status", [...FAILABLE_STATUSES])
+    }
     await refundReservedCreditsForJob(jobId).catch(() => {})
   }
   // starting/processing → still in flight, caller bumps attempts
@@ -198,20 +215,15 @@ async function markFailed(jobId: string, reason: string, detail: string | null =
   // Log BEFORE the write: this module had no per-job output at all, so a
   // cron-failed job was invisible in Railway (spec §11.3).
   logProviderFailure("reconcile/replicate", jobId, reason, detail)
-  await supabase
-    .from("jobs")
-    .update({
-      status: "failed",
-      error_message: reason.slice(0, 500),
-      error_detail: detail,
-      completed_at: new Date().toISOString(),
-      reconcile_last_error: "upstream_failed",
-    })
-    .eq("id", jobId)
-    // CAS on the live (non-terminal) states only — a bare .neq("status","cancelled")
-    // would still trample a job the worker concurrently flipped to "completed".
-    // Matches kie.ts / sync-sweep.ts (the M6 fix); these two files were missed.
-    .in("status", ["pending", "processing"])
+  // The CAS lives in markJobFailed now (FAILABLE_STATUSES): never trample a job
+  // a concurrent writer flipped to completed/cancelled, and never take a
+  // `pending_review` row — a held job is out of every reconcile sweep's reach
+  // by construction (spec D11).
+  await markJobFailed(jobId, {
+    error_message: reason,
+    error_detail: detail,
+    reconcile_last_error: "upstream_failed",
+  })
 }
 
 /**

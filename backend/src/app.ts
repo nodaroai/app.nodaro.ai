@@ -172,6 +172,7 @@ import { adminAppReportsRoutes } from "./ee/routes/admin-app-reports.js"
 import { adminKieCreditsRoutes } from "./ee/routes/admin-kie-credits.js"
 import { adminStuckPipelinesRoutes } from "./ee/routes/admin-stuck-pipelines.js"
 import { adminMessagesRoutes } from "./ee/routes/admin-messages.js"
+import { adminReviewRoutes } from "./ee/routes/admin-review.js"
 import { adminSubscriptionHealthRoutes } from "./ee/routes/admin-subscription-health.js"
 import { communityRoutes } from "./ee/routes/community.js"
 import { adminCommunityRoutes } from "./ee/routes/admin-community.js"
@@ -590,6 +591,7 @@ export async function buildApp() {
   if (hasAdmin()) await app.register(adminKieCreditsRoutes)
   if (hasAdmin()) await app.register(adminStuckPipelinesRoutes)
   if (hasAdmin()) await app.register(adminMessagesRoutes)
+  if (hasAdmin()) await app.register(adminReviewRoutes)
   if (hasCredits()) await app.register(adminSubscriptionHealthRoutes)  // getStripe + TIER_CREDITS
   if (isMultiUser()) await app.register(communityRoutes)
   if (isMultiUser()) await app.register(adminCommunityRoutes)

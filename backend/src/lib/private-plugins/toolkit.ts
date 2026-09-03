@@ -43,7 +43,7 @@ import { markProviderCallStart } from "../reconcile/persistence.js"
 import { sendInternalError } from "../http-errors.js"
 import { runPostProcessing } from "../post-processing-error.js"
 import {
-  markJobCompleted,
+  markJobCompletedDetailed,
   setJobProgress,
   withProgressRamp,
   commitJobCredits,
@@ -52,6 +52,8 @@ import {
   requestJobStop,
 } from "../../workers/shared.js"
 import { supabase } from "../supabase.js"
+import { markJobFailed } from "../job-failure.js"
+import { IN_FLIGHT_JOB_STATUSES } from "../job-status.js"
 import { redactProviderDetail } from "../provider-error-detail.js"
 import { config } from "../config.js"
 import { redis } from "../queue.js"
@@ -681,17 +683,25 @@ async function pluginMarkJobCompleted(
   // `output` merges into output_data; `extraColumns` (optional) spread as real
   // jobs-table COLUMNS (video-analysis writes provider_cost this way). markJobCompleted
   // spreads its `fields` as UPDATE columns, so output_data + extraColumns land together.
-  const updated = await markJobCompleted(jobId, {
+  const outcome = await markJobCompletedDetailed(jobId, {
     output_data: nextOutput,
     ...(extraColumns ?? {}),
   })
-  if (updated) return true
+  if (outcome === "completed") return true
 
-  // `markJobCompleted` intentionally returns false both for a terminal CAS
-  // loss and for a PostgREST error. Resolve that ambiguity before a plugin
-  // deletes staged media or skips settlement. An exact completed payload means
-  // the UPDATE committed and only its response was lost; a still-live row is
-  // retryable infrastructure failure, never a cancellation.
+  // A POLICY outcome is unambiguous and already written: `blocked` failed the
+  // row and refunded (D19), `held` parked it at `pending_review` with the
+  // credits still reserved. Return the plugin's "skip the commit" answer
+  // straight away — the ambiguity probe below would read a `pending_review` row
+  // and throw "still live" into the worker catch, which is exactly how a hold
+  // would turn itself into a retry loop.
+  if (outcome === "blocked" || outcome === "held") return false
+
+  // `lost_race` intentionally covers both a terminal CAS loss and a PostgREST
+  // error. Resolve that ambiguity before a plugin deletes staged media or skips
+  // settlement. An exact completed payload means the UPDATE committed and only
+  // its response was lost; a still-live row is retryable infrastructure
+  // failure, never a cancellation.
   const { data: terminal, error: terminalError } = await supabase
     .from("jobs")
     .select("status,output_data")
@@ -707,7 +717,11 @@ async function pluginMarkJobCompleted(
   if (terminalRow?.status === "completed" && jsonContains(terminalRow.output_data, nextOutput)) {
     return true
   }
-  if (["pending", "queued", "processing"].includes(String(terminalRow?.status))) {
+  // IN_FLIGHT, not a hand-rolled list: `pending_review` is in-flight (D14), and
+  // a job parked on a reviewer is emphatically still live. Reading it as
+  // terminal would answer a silent `false`, which a plugin takes as
+  // "cancelled — delete the staged media".
+  if ((IN_FLIGHT_JOB_STATUSES as readonly string[]).includes(String(terminalRow?.status))) {
     throw new Error(`Job ${jobId} is still live after its completion CAS failed`)
   }
   return false
@@ -782,18 +796,15 @@ async function readJob(jobId: string): Promise<{
  * refund discipline).
  */
 async function pluginMarkJobFailed(jobId: string, errorMessage: string, detail?: string | null): Promise<boolean> {
-  const { data } = await supabase
-    .from("jobs")
-    .update({
-      status: "failed",
-      error_message: errorMessage,
-      error_detail: redactProviderDetail(detail),
-      completed_at: new Date().toISOString(),
-    })
-    .eq("id", jobId)
-    .in("status", ["pending", "processing"])
-    .select("id")
-  return Array.isArray(data) && data.length > 0
+  // The BODY moves to the one failure writer; `tk.jobs.markJobFailed`'s surface
+  // (and its refund-only-on-true contract above) is unchanged, so no plugin
+  // contract bump. `redactProviderDetail(undefined)` is coalesced to null on
+  // purpose: this writer has always written the column unconditionally, and
+  // omitting the key would mean "leave whatever is there" instead.
+  return markJobFailed(jobId, {
+    error_message: errorMessage,
+    error_detail: redactProviderDetail(detail) ?? null,
+  })
 }
 
 /**

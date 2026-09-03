@@ -18,6 +18,7 @@
  */
 import { supabase } from "../../supabase.js"
 import { redactPrivateJobData } from "../../public-job-data.js"
+import { isParkedJobStatus, TERMINAL_JOB_STATUSES } from "../../job-status.js"
 
 const POLL_INTERVAL_MS = 1500
 
@@ -28,7 +29,9 @@ interface WaitForJobOpts {
 }
 
 interface WaitForJobResult {
-  status: "completed" | "failed" | "cancelled" | "timeout"
+  /** `pending_review` is NOT a failure and NOT a timeout — the job generated a
+   *  result whose release is waiting on a human. See the early return below. */
+  status: "completed" | "failed" | "cancelled" | "pending_review" | "timeout"
   outputUrl: string | null
   /** Full output_data payload — useful when callers need video/audio URLs alongside thumbnail. */
   outputData: Record<string, unknown> | null
@@ -36,7 +39,9 @@ interface WaitForJobResult {
   jobType: string | null
 }
 
-const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled"])
+/** Correctly terminal-ONLY: `pending_review` is handled by its own early
+ *  return below, and must never be swept in here (it has no output to read). */
+const TERMINAL_STATUSES: ReadonlySet<string> = new Set<string>(TERMINAL_JOB_STATUSES)
 
 export async function waitForJob(opts: WaitForJobOpts): Promise<WaitForJobResult> {
   const timeoutMs = opts.timeoutMs ?? 120_000
@@ -70,6 +75,25 @@ export async function waitForJob(opts: WaitForJobOpts): Promise<WaitForJobResult
 
     const status = (data.status as string) ?? "pending"
     const jobType = (data.job_type as string | null) ?? null
+
+    // A held job is parked on a HUMAN for an unbounded time (spec
+    // 2026-09-03-job-policy-hook-design §6.4). Burning the caller's whole
+    // 120s/300s wall clock only to answer `"timeout"` would be a lie AND would
+    // make every MCP client re-run a request that is already sitting in a
+    // review queue — where the duplicate would be held too. Hand control back
+    // now, with the truthful status.
+    if (isParkedJobStatus(status)) {
+      return {
+        status: "pending_review",
+        // `output_data` is NULL on a held row by contract (D6): the withheld
+        // media lives in the non-public `held_*` columns until a reviewer
+        // releases it. Returning nulls is the honest read, not a precaution.
+        outputUrl: null,
+        outputData: null,
+        error: null,
+        jobType,
+      }
+    }
 
     if (TERMINAL_STATUSES.has(status)) {
       const out = redactPrivateJobData(

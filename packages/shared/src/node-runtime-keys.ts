@@ -21,6 +21,13 @@ export const EXECUTION_DATA_KEYS: ReadonlySet<string> = new Set([
   // lifecycle as errorMessage: a RESULT the user expects to survive reload,
   // never user-edited config.
   "errorHint",
+  // A job policy registered by the deployment held this node's result for a
+  // human reviewer (`jobs.status = "pending_review"`). Pure run state, like
+  // executionStatus: the node is still "running" and the flag disappears the
+  // moment the review resolves — so it is ALSO in TRANSIENT_RUNTIME_KEYS
+  // below. Without the transient half, a flip into review marks a passive tab
+  // dirty and a preset captures "awaiting review".
+  "jobAwaitingReview",
   "isStreaming",
   "generatedImageUrl",
   "generatedVideoUrl",
@@ -85,6 +92,7 @@ export const TRANSIENT_RUNTIME_KEYS: ReadonlySet<string> = new Set([
   "executionStatus",
   "currentJobId",
   "currentJobProgress",
+  "jobAwaitingReview",
   "isStreaming",
   "subWorkflowProgress",
   "__listTotal",

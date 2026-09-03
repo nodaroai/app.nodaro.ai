@@ -18,6 +18,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { hasCredits, config } from "../lib/config.js"
 import { insertJob } from "../lib/insert-job.js"
+import { JobBlockedError, jobBlockOf, jobBlockedBody } from "../lib/job-policy.js"
 import { supabase } from "../lib/supabase.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -158,6 +159,12 @@ export async function characterTrainingRoutes(app: FastifyInstance): Promise<voi
             input_data: { characterId, imageCount },
             metadata: { credit_identifier: TRAINING_CREDIT_ID },
           })
+        // A request-gate BLOCK still THROWS: the catch's cleanup is exactly
+        // what a block should run (CAS rollback of the claimed training slot,
+        // orphan-zip delete, and `jobId` is still unset so the failed-job /
+        // refund branch is correctly skipped). Only the reply differs — the
+        // catch's tail recognises the block and answers 422 (F10).
+        if (jobErr?.blocked) throw new JobBlockedError(jobErr.blocked)
         if (jobErr || !job) throw new Error("job_create_failed")
         jobId = job.id
 
@@ -270,6 +277,18 @@ export async function characterTrainingRoutes(app: FastifyInstance): Promise<voi
           reply
             .code(400)
             .send({ error: err.code, count: err.count, message })
+          return
+        }
+        // A request-gate block is a CLIENT outcome, not a dispatch failure:
+        // 422 `job_blocked` with the policy's own message, and not logged at
+        // error level (F10). Checked before the log so a block never reads as
+        // a server incident. Everything else keeps its 502 — swapping the tail
+        // for sendInternalError would turn every genuine dispatch failure into
+        // a 500.
+        const blocked = jobBlockOf(err)
+        if (blocked) {
+          req.log.info({ policyId: blocked.policyId, characterId }, "job blocked by policy")
+          reply.code(422).send(jobBlockedBody({ userMessage: blocked.message }))
           return
         }
         // Surface the real failure — this catch previously put the reason only

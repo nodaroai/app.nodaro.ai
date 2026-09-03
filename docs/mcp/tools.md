@@ -1124,7 +1124,11 @@ filter blocked the output and the catalog offers a fallback model —
 `suggestedProvider`. `retryable: false` (e.g. a content-policy block) means
 the same request will fail again unchanged; when `suggestedProvider` is
 present, retry the SAME prompt and references with that model id instead of
-guessing at a new one.
+guessing at a new one. For a job in **`pending_review`** (a deployment's job
+policy held the output for human review) it returns `status: "pending_review"`,
+`outputUrl: null`, `retryable: false` and a `guidance` sentence: the status is
+in-flight, so keep polling and do **not** re-run the request — a duplicate
+would be held too.
 
 **Input:** `{ job_id: string }`
 
@@ -1189,6 +1193,15 @@ Fetch full metadata for a single job by id, including `output_url`,
 sentence, and — when available — `suggestedProvider`: see
 [`get_asset`](#get_asset) for what these mean and when the fallback model
 appears.
+
+A job may also report `status: "pending_review"` on a deployment that registers
+a job policy: the output exists but a human is reviewing it. That is an
+**in-flight** status, not a terminal one — keep polling rather than treating it
+as a failure. The payload then carries `retryable: false` and a `guidance`
+sentence saying so: do **not** re-run the request, since a duplicate would be
+held too. The job later resolves to `completed` (approved), `failed`
+(rejected, with `error_hint.kind === "policy-block"` and a user-safe
+`reason`) or `cancelled`.
 
 **Input:** `{ job_id: uuid }`
 

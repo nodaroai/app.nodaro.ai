@@ -11,7 +11,7 @@ interface JobRow {
 interface ExecutionRow {
   id: string
   started_at: string | null
-  node_states: Record<string, { status: string; jobId?: string; iterationTotal?: number }>
+  node_states: Record<string, { status: string; jobId?: string; iterationTotal?: number; awaitingReview?: boolean }>
   /** Which environment claimed the row (migration 374). Absent = legacy NULL. */
   runtime_env?: string | null
 }
@@ -304,6 +304,62 @@ describe("reconcileWorkflowExecutionsTick", () => {
     expect(mocks.updates).toHaveLength(1)
     expect(mocks.updates[0].updates.status).toBe("failed")
     expect(mocks.updates[0].updates.error_message).toMatch(/reconciled by cron/)
+  })
+
+  /**
+   * D15 (spec 2026-09-03-job-policy-hook-design): a job held in
+   * `pending_review` is surfaced by a SIDECAR `awaitingReview` boolean, and its
+   * node keeps `status: "running"`. The pair of cases below is the whole
+   * argument for that choice — the first pins the shipped behaviour, the second
+   * demonstrates what a fourth `NodeExecutionStatus` member would have done.
+   */
+  it("does NOT fail an execution whose only non-failed node is held for review (D15 sidecar)", async () => {
+    mocks.executions.push({
+      id: "exec-held",
+      started_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      node_states: {
+        n1: { status: "failed", jobId: "jh1" },
+        // Parked on a human. `status` stays "running" ON PURPOSE so the cron's
+        // `anyActive` still counts it.
+        n2: { status: "running", jobId: "jh2", awaitingReview: true },
+      },
+    })
+    mocks.jobs.push(
+      { id: "jh1", status: "failed", error_message: "Provider 500" },
+      // `pending_review` is non-terminal, so reconcileNodeStatesFromJobs
+      // deliberately records nothing for this node (node-states.ts recordJob).
+      { id: "jh2", status: "pending_review", error_message: null },
+    )
+    mocks.orchJob.set("exec-held", { state: "active" })
+
+    await reconcileWorkflowExecutionsTick()
+
+    expect(mocks.updates).toHaveLength(0)
+  })
+
+  it("PROOF of D15: a held node carrying a NEW status literal instead would be failed by the cron", async () => {
+    mocks.executions.push({
+      id: "exec-held-status",
+      started_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      node_states: {
+        n1: { status: "failed", jobId: "jh3" },
+        // The rejected design: `awaiting_review` as a NodeExecutionStatus
+        // member. `anyActive` (`s === "pending" || s === "running"`) goes
+        // false, `anyFailed && !anyActive` fires, and a run with a job under
+        // active human review is flipped to `failed`.
+        n2: { status: "awaiting_review", jobId: "jh4" },
+      },
+    })
+    mocks.jobs.push(
+      { id: "jh3", status: "failed", error_message: "Provider 500" },
+      { id: "jh4", status: "pending_review", error_message: null },
+    )
+    mocks.orchJob.set("exec-held-status", { state: "active" })
+
+    await reconcileWorkflowExecutionsTick()
+
+    expect(mocks.updates).toHaveLength(1)
+    expect(mocks.updates[0].updates.status).toBe("failed")
   })
 
   it("marks an execution failed when older than the abandon threshold", async () => {

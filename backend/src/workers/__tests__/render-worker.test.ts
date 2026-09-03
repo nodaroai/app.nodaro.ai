@@ -6,6 +6,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const mocks = vi.hoisted(() => {
   const mockCommitJobCredits = vi.fn().mockResolvedValue(undefined)
+  const mockMarkJobCompletedDetailed = vi.fn().mockResolvedValue("completed")
+  const mockIsFinalJobAttempt = vi.fn().mockReturnValue(true)
   const mockRefundJobCredits = vi.fn().mockResolvedValue(undefined)
   const mockShouldSaveJobResult = vi.fn().mockResolvedValue(true)
   const mockGenerateAndUploadThumbnail = vi.fn().mockResolvedValue("https://r2.example.com/thumbnails/test.png")
@@ -32,6 +34,8 @@ const mocks = vi.hoisted(() => {
 
   return {
     mockCommitJobCredits,
+    mockMarkJobCompletedDetailed,
+    mockIsFinalJobAttempt,
     mockRefundJobCredits,
     mockShouldSaveJobResult,
     mockGenerateAndUploadThumbnail,
@@ -89,6 +93,10 @@ vi.mock("../shared.js", () => ({
   shouldSaveJobResult: mocks.mockShouldSaveJobResult,
   generateAndUploadThumbnail: mocks.mockGenerateAndUploadThumbnail,
   createAssetFromJob: mocks.mockCreateAssetFromJob,
+  // The completion funnel — the result gate lives inside it now, and this
+  // worker needs the DETAILED outcome to tell a lost race from a block/hold.
+  markJobCompletedDetailed: mocks.mockMarkJobCompletedDetailed,
+  isFinalJobAttempt: mocks.mockIsFinalJobAttempt,
 }))
 
 vi.mock("@/lib/plan-schemas.js", () => ({
@@ -109,6 +117,7 @@ vi.mock("@remotion/renderer", () => ({
 // ---------------------------------------------------------------------------
 
 import {
+  releasesReservationOnIncompleteRender,
   isPlanJob,
   isSceneGraphJob,
   buildPlanRender,
@@ -585,3 +594,44 @@ describe("replaceVideoUrls", () => {
     expect(seg.src).toBe("https://cdn.example.com/other.mp4")
   })
 })
+
+// ---------------------------------------------------------------------------
+// releasesReservationOnIncompleteRender — the one caller of the result gate
+// that REFUNDS on a non-completion (spec §9, D19, D8).
+//
+// Before the gate there was exactly one non-completed outcome (the user
+// cancelled mid-render) and refunding on it was right. There are now three, and
+// two of them must NOT refund:
+//
+//   • `blocked` — the gate already failed the row AND refunded in full (D19).
+//     Refunding again here would fire a second release against the same
+//     usage_log. It is idempotent, so this is not a live bug — it is the
+//     invariant that keeps it from becoming one.
+//   • `held` — the media exists but is withheld pending a human decision, and
+//     the credits stay RESERVED precisely so approve can commit them. Releasing
+//     them here would let an approved job deliver its output for free.
+//
+// `held` is UNREACHABLE from this worker today (`holdEligible` is false for
+// every direct caller — D8), which is exactly why it is written as a contract
+// test: the day eligibility widens, this is the assertion that has to be
+// deliberately changed rather than silently violated.
+// ---------------------------------------------------------------------------
+
+describe("releasesReservationOnIncompleteRender", () => {
+  it("lost_race (the user cancelled mid-render) → release the hold", () => {
+    expect(releasesReservationOnIncompleteRender("lost_race")).toBe(true)
+  })
+
+  it("blocked → NO refund here: the result gate already refunded in full (D19)", () => {
+    expect(releasesReservationOnIncompleteRender("blocked")).toBe(false)
+  })
+
+  it("held → NO refund: the credits stay reserved for the reviewer's decision (D8)", () => {
+    expect(releasesReservationOnIncompleteRender("held")).toBe(false)
+  })
+
+  it("completed is not an incomplete outcome at all", () => {
+    expect(releasesReservationOnIncompleteRender("completed")).toBe(false)
+  })
+})
+

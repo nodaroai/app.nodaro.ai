@@ -5,6 +5,7 @@ import type { FastifyReply, FastifyRequest } from "fastify"
 vi.mock("../app-reports.js", () => ({ insertAppReport: vi.fn(async () => true) }))
 
 import { insertAppReport } from "../app-reports.js"
+import { JobBlockedError } from "../job-policy.js"
 import {
   sendInternalError,
   registerInternalErrorSanitizer,
@@ -38,7 +39,7 @@ function makeReply() {
 function makeReq() {
   const error = vi.fn()
   const req = {
-    log: { error },
+    log: { error, info: vi.fn() },
     method: "POST",
     url: "/v1/things?secret=1",
     routeOptions: { url: "/v1/things" },
@@ -101,6 +102,41 @@ describe("sendInternalError", () => {
     expect(error).toHaveBeenCalledWith({ err: raw }, "Failed to create job")
   })
 })
+
+describe("sendInternalError and a job-policy block", () => {
+  // A block is a CLIENT outcome. Without the leading branch every job-creating
+  // route answers 500 internal_error to a request its own deployment refused,
+  // the policy's reason is swallowed, and app_reports fills with server-error
+  // telemetry for a working system.
+  const block = { code: "job_blocked", policyId: "sai-moderation", message: "Not allowed here" } as const
+
+  it("answers 422 job_blocked for the { error: { blocked } } arm the insert helpers return", () => {
+    const reply = makeReply()
+    const { req, error } = makeReq()
+    sendInternalError(reply as unknown as FastifyReply, req, { message: "Not allowed here", blocked: block })
+    expect(reply.statusCode).toBe(422)
+    expect(reply.body).toEqual({ error: { code: "job_blocked", message: "Not allowed here" } })
+    expect(error).not.toHaveBeenCalled()
+    expect(insertAppReport).not.toHaveBeenCalled()
+  })
+
+  it("answers 422 for a thrown JobBlockedError (the insertJobIdempotent lane)", () => {
+    const reply = makeReply()
+    const { req } = makeReq()
+    sendInternalError(reply as unknown as FastifyReply, req, new JobBlockedError(block))
+    expect(reply.statusCode).toBe(422)
+    expect((reply.body as { error: { message: string } }).error.message).toBe("Not allowed here")
+  })
+
+  it("leaves every other error a sanitized 500", () => {
+    const reply = makeReply()
+    const { req } = makeReq()
+    sendInternalError(reply as unknown as FastifyReply, req, { message: "db down" })
+    expect(reply.statusCode).toBe(500)
+    expect((reply.body as { error: { code: string } }).error.code).toBe("internal_error")
+  })
+})
+
 
 describe("registerInternalErrorSanitizer (onSend net)", () => {
   async function buildTestApp() {

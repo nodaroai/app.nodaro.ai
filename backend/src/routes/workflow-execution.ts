@@ -18,6 +18,8 @@ import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 import { resolveBillingContext, shouldRefuseDegradedRun } from "../lib/billing-context.js"
 import { billingPairColumns } from "../lib/insert-job.js"
 import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
+import { IN_FLIGHT_JOB_STATUSES, isParkedJobStatus } from "../lib/job-status.js"
+import { cancelOwnedJob } from "../lib/cancel-job.js"
 import { getRuntimeEnv } from "../lib/runtime-env.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
@@ -661,7 +663,12 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
         })
       }
 
-      const activeJobStatuses = new Set(["pending", "queued", "processing", "running"])
+      // Derived, not hand-rolled: the omitted `pending_review` made this
+      // fallback answer 409 for a job POST /v1/jobs/:id/cancel would cancel
+      // (D17 — user cancel wins over a held job). "running" is pre-existing
+      // dead vocabulary for the jobs table (it belongs to workflow_executions);
+      // left in place so this hunk changes exactly one thing.
+      const activeJobStatuses = new Set<string>([...IN_FLIGHT_JOB_STATUSES, "running"])
       if (!activeJobStatuses.has(job.status as string)) {
         return reply.status(409).send({
           error: {
@@ -669,6 +676,16 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
             message: `Job is already ${job.status}`,
           },
         })
+      }
+
+      // A held job is withdrawn by the shared single-job helper — the only path
+      // that refunds the reservation, deletes the withheld object and records
+      // the `withdrawn` decision. The CAS below can do none of those, and its
+      // own status filter would flip zero rows and report success anyway.
+      if (isParkedJobStatus(job.status as string)) {
+        const withdrawal = await cancelOwnedJob(parsed.data.id, req.userId)
+        if (withdrawal.kind === "cancelled") invalidateBalanceCache(req.userId)
+        return { success: true }
       }
 
       // Try to remove from BullMQ queue before marking cancelled
@@ -1177,7 +1194,20 @@ const JOB_STATUS_MAP: Record<string, string> = {
   completed: "completed",
   failed: "failed",
   cancelled: "cancelled",
+  // A job parked by the result gate keeps its OWN name — deliberately NOT
+  // mapped onto "running". This map also backs the public
+  // `GET /v1/workflows/:id/executions` and `jobToExecutionResponse`, and this
+  // same branch exposes `pending_review` through the SDK and the CLI; calling a
+  // held job "running" here would put the two halves of one API at odds.
+  // The canvas branches on the `awaitingReview` sidecar below instead (D15: no
+  // new execution-status member). Spelled out rather than left to the
+  // `?? row.status` passthrough so the mapping is a stated fact with a test.
+  pending_review: "pending_review",
 }
+
+/** Job statuses the canvas treats as IN FLIGHT — a hold is a pending human
+ *  decision with credits still reserved, not a terminal state. */
+const HELD_JOB_STATUS = "pending_review"
 
 export function jobToExecutionSummary(row: Record<string, unknown>) {
   const inputData = (row.input_data ?? {}) as Record<string, unknown>
@@ -1213,6 +1243,12 @@ export function jobToExecutionSummary(row: Record<string, unknown>) {
         error: row.error_message,
         startedAt: row.started_at,
         completedAt: row.completed_at,
+        // Sidecar, exactly as the orchestrator writes it on `node_states`
+        // (workflow-engine/types.ts `NodeExecutionState.awaitingReview`), so
+        // the editor's restore can branch on a boolean instead of sniffing a
+        // raw status string. Present only when true — mirrors the
+        // orchestrator worker, which DELETES the key on the false edge.
+        ...(row.status === HELD_JOB_STATUS ? { awaitingReview: true } : {}),
       },
     },
     totalNodes: 1,
@@ -1242,7 +1278,19 @@ function mapExecStatusesToJobStatuses(execStatuses: string[]): string[] {
   for (const s of execStatuses) {
     switch (s) {
       case "running":
-        jobStatuses.push("processing")
+        // A HELD job (result gate → `pending_review`) is in flight: credits are
+        // reserved and a reviewer decision is pending. The editor's load path
+        // asks for `pending,running,stopping` and re-hydrates whatever comes
+        // back; without `pending_review` here the held job is invisible to the
+        // reload, so the node paints idle with no overlay and no poll — and the
+        // user re-runs it into a SECOND reservation.
+        jobStatuses.push("processing", HELD_JOB_STATUS)
+        break
+      case HELD_JOB_STATUS:
+        // Asking for held jobs explicitly (admin/review surfaces) answers with
+        // exactly those, rather than falling through to "no matching status"
+        // and silently returning the whole unfiltered page.
+        jobStatuses.push(HELD_JOB_STATUS)
         break
       case "pending":
         jobStatuses.push("pending", "queued")

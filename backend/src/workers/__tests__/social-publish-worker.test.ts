@@ -65,6 +65,18 @@ vi.mock("../../lib/config.js", () => ({
   config: {},
 }))
 
+// The job-creation funnel. Explicit here (rather than left to the supabase
+// mock) because the REQUEST GATE lives inside it: a registered policy answers
+// `{ data: null, error: { blocked } }`, and this worker used to drop that error
+// on the floor and publish anyway.
+const insertInternalJobMock = vi.fn(async () => ({ data: { id: "job-1" }, error: null }) as {
+  data: { id: string } | null
+  error: { message: string; blocked?: { code: "job_blocked"; policyId: string; message: string } } | null
+})
+vi.mock("../../lib/insert-job.js", () => ({
+  insertInternalJob: (...args: unknown[]) => insertInternalJobMock(...(args as [])),
+}))
+
 import { processScheduledPost } from "../social-publish-worker.js"
 import { UnknownOutcomeError } from "../../services/social/execute-publish.js"
 import { BadBodyError, NotPublishedError } from "../../services/social/providers/types.js"
@@ -103,6 +115,8 @@ beforeEach(() => {
   executeMock.mockReset()
   commitMock.mockClear()
   refundMock.mockClear()
+  insertInternalJobMock.mockClear()
+  insertInternalJobMock.mockResolvedValue({ data: { id: "job-1" }, error: null })
 })
 
 describe("processScheduledPost", () => {
@@ -193,3 +207,53 @@ describe("processScheduledPost", () => {
     expect(rowUpdates.some((u) => u.status === "queued")).toBe(false)
   })
 })
+// ---------------------------------------------------------------------------
+// The job row is not optional bookkeeping — it is the billing record AND the
+// request gate's only seat in this lane.
+//
+// `ensureJobRow` used to be `const { data } = await insertInternalJob(...)`,
+// returning null on any failure, and `processScheduledPost` published anyway
+// under `if (jobId)`. That is an UNBILLED publish today (a pre-existing hole)
+// and a bypassed content block tomorrow: the platform would refuse to create
+// the job and then post the content to the user's connected account regardless.
+// ---------------------------------------------------------------------------
+describe("processScheduledPost — the job row gates the publish", () => {
+  it("a request-gate block never reaches the provider: no publish, row errored, no BullMQ retry", async () => {
+    scheduledRow = baseRow()
+    insertInternalJobMock.mockResolvedValue({
+      data: null,
+      error: {
+        message: "This request is not allowed on this deployment",
+        blocked: { code: "job_blocked", policyId: "sai-moderation", message: "Blocked by content policy" },
+      },
+    })
+
+    await expect(processScheduledPost(fakeJob())).rejects.toBeInstanceOf(UnrecoverableError)
+
+    expect(executeMock).not.toHaveBeenCalled()
+    // A block is definitive — re-running would be blocked identically, so the
+    // row goes to `error` on the FIRST attempt rather than back to `queued`.
+    expect(rowUpdates.at(-1)).toMatchObject({ status: "error" })
+    expect(String(rowUpdates.at(-1)!.last_error)).toContain("Blocked by content policy")
+  })
+
+  it("a plain insert failure also stops the publish (unbilled publishes are not a fallback)", async () => {
+    scheduledRow = baseRow()
+    insertInternalJobMock.mockResolvedValue({ data: null, error: { message: "jobs insert failed" } })
+
+    await expect(processScheduledPost(fakeJob())).rejects.toThrow(/jobs insert failed/)
+
+    expect(executeMock).not.toHaveBeenCalled()
+  })
+
+  it("an existing job_id short-circuits: no second row, publish proceeds", async () => {
+    scheduledRow = baseRow({ job_id: "job-existing" })
+    executeMock.mockResolvedValue({ platformPostId: "p1", platformPostUrl: "https://x/p1" })
+
+    await processScheduledPost(fakeJob())
+
+    expect(insertInternalJobMock).not.toHaveBeenCalled()
+    expect(executeMock).toHaveBeenCalled()
+  })
+})
+

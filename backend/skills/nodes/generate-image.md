@@ -1,7 +1,7 @@
 ---
 node_type: generate-image
-generated_at: 2026-09-03T14:25:04.037Z
-generated_from: c403db2c5
+generated_at: 2026-09-03T19:32:26.292Z
+generated_from: 619cd04df
 ---
 
 # generate-image
@@ -56,6 +56,7 @@ generated_from: c403db2c5
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `errorHint?: JobErrorHint`
+- `jobAwaitingReview?: boolean`
 - `generatedImageUrl?: string`
 - `generatedResults?: GeneratedResult[]`
 - `activeResultIndex?: number`

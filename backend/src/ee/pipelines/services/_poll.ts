@@ -29,6 +29,32 @@ export interface JobPollRow {
   credits_actual: number | null
 }
 
+/**
+ * A pipeline child job was parked in `pending_review` — generated, but its
+ * output is withheld pending a human decision (spec
+ * 2026-09-03-job-policy-hook-design §6.4).
+ *
+ * Distinct from a timeout ON PURPOSE. Waiting out the 30-minute stage budget
+ * would (a) report "timed out" for a job that is perfectly healthy, and (b)
+ * leave the pipeline to fail with a cause that names the wrong stage — a
+ * critic, usually. Failing fast with `failureReason` lets the pipeline row
+ * record `policy_hold` (see stage-utils.ts :: CriticFailureReason).
+ *
+ * UNREACHABLE IN V1: `holdEligible` excludes every job carrying a
+ * `pipeline_id` (D8), so no pipeline child can be held. This is the contract
+ * guard that keeps the failure honest if eligibility ever widens — and the
+ * reason the orphan-approve problem (a review approving a job whose pipeline
+ * already moved on) is listed as a prerequisite for that widening, not solved
+ * here.
+ */
+export class JobHeldError extends Error {
+  readonly failureReason = "policy_hold" as const
+  constructor(readonly jobId: string) {
+    super(`Job ${jobId} is awaiting human review — its output is withheld, so this stage cannot continue`)
+    this.name = "JobHeldError"
+  }
+}
+
 export interface PollJobOptions {
   /** Override the canonical 30-min per-stage timeout (rare). */
   timeoutMs?: number
@@ -40,7 +66,8 @@ export interface PollJobOptions {
 
 /**
  * Polls a `jobs` row until it reaches a terminal status. Resolves with the
- * completed row on `completed`; throws on `failed` / `cancelled` / timeout.
+ * completed row on `completed`; throws on `failed` / `cancelled` / timeout,
+ * and throws {@link JobHeldError} at once on `pending_review`.
  *
  * Uses exponential backoff (1s → 1.5s → 2.25s → … capped at 5s) so fast jobs
  * settle quickly while long-running ones don't hammer the DB. Override via
@@ -76,6 +103,12 @@ export async function pollJobUntilComplete(
       .maybeSingle()
     if (!row) continue
     const r = row as JobPollRow
+    // BEFORE the terminal checks and before the deadline can expire: a held
+    // job is neither failed nor completed, and it will not become either
+    // without a human. See JobHeldError above.
+    if (r.status === "pending_review") {
+      throw new JobHeldError(jobId)
+    }
     if (r.status === "failed" || r.status === "cancelled") {
       throw new Error(`Job ${r.status}: ${r.error_message ?? "unknown"}`)
     }

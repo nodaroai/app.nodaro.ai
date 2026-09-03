@@ -72,6 +72,9 @@ interface NodeExecutionState {
   errorCode?: string
   /** Structured safety-block detail mirrored from the failed job (see `JobErrorHint`). */
   errorHint?: JobErrorHint
+  /** Mirrors the backend sidecar: this node's job is parked in `pending_review`.
+   *  `status` stays "running" on purpose (see run-handlers.ts's NodeExecutionState). */
+  awaitingReview?: boolean
 }
 
 interface SaveResult {
@@ -310,22 +313,31 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
           errorHint: job.error_hint ?? undefined,
           currentJobId: undefined,
           currentJobProgress: undefined,
+          jobAwaitingReview: undefined,
         }
       }
     } else if (job.status === "cancelled") {
       // Job was cancelled - reset to idle
       return {
         ...node,
-        data: { ...data, executionStatus: "idle", currentJobId: undefined, currentJobProgress: undefined }
+        data: { ...data, executionStatus: "idle", currentJobId: undefined, currentJobProgress: undefined, jobAwaitingReview: undefined }
       }
     }
 
-    // Job is still pending/processing - collect for polling restoration
+    // Job is still pending/processing/pending_review - collect for polling restoration
     stillRunningJobs.push({
       nodeId: node.id,
       jobId: jobIdToCheck,
       nodeType: node.type ?? "",
     })
+
+    // A HELD job is still in flight (polling is restored above), but its overlay
+    // would be lost across the reload: nothing re-derives the flag until the
+    // next poll tick, and a held job can sit for hours. Restore it here so the
+    // card explains itself the moment the canvas paints.
+    if (job.status === "pending_review") {
+      return { ...node, data: { ...data, jobAwaitingReview: true } }
+    }
     return node
   })
 
@@ -404,12 +416,17 @@ function applyBackendExecutionState(
       }
     } else if (state.status === "running") {
       data.executionStatus = "running"
+      // The backend keeps `status: "running"` while a child job is held and
+      // says so in the sidecar; restore the overlay across a reload rather
+      // than leaving a bare spinner on a node that may sit for hours.
+      data.jobAwaitingReview = state.awaitingReview === true ? true : undefined
     } else if (state.status === "pending") {
       data.executionStatus = "pending"
     } else if (state.status === "failed") {
       data.executionStatus = "failed"
       if (state.error) data.errorMessage = state.error
       if (state.errorHint) data.errorHint = state.errorHint
+      data.jobAwaitingReview = undefined
     }
     // "skipped" → leave as-is (idle)
 

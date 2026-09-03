@@ -37,6 +37,30 @@ vi.mock("../pipeline-payer.js", () => ({
 // P14: the reader's answer must ride BOTH the job row and the reservation —
 // asserted in test 1 below via the reserveCredits options.
 
+// The completion funnel and the one failure writer. Mocked (rather than run
+// against the fake client below) because they are module-level: they write
+// through `lib/supabase.js`, not through the client this service is handed.
+const markJobCompletedDetailedMock = vi.fn(async () => "completed" as
+  "completed" | "lost_race" | "blocked" | "held")
+const markJobFailedMock = vi.fn(async () => true)
+vi.mock("../../../workers/shared.js", () => ({
+  markJobCompletedDetailed: (...args: unknown[]) => markJobCompletedDetailedMock(...(args as [])),
+}))
+vi.mock("../../../lib/job-failure.js", () => ({
+  markJobFailed: (...args: unknown[]) => markJobFailedMock(...(args as [])),
+}))
+
+// The creation funnel — where the REQUEST gate lives. Mocked so a block can be
+// simulated without registering a policy; the default answer is the same row
+// the fake client below would have returned.
+const insertInternalJobMock = vi.fn(async () => ({ data: { id: "job-1" }, error: null }) as {
+  data: { id: string } | null
+  error: { message: string; blocked?: { code: "job_blocked"; policyId: string; message: string } } | null
+})
+vi.mock("../../../lib/insert-job.js", () => ({
+  insertInternalJob: (...args: unknown[]) => insertInternalJobMock(...(args as [])),
+}))
+
 vi.mock("../../billing/credits.js", () => ({
   CreditsService: {
     reserveCredits: vi.fn().mockResolvedValue({
@@ -67,6 +91,9 @@ import { pipelineFinalMerge } from "../services/pipeline-final-merge.js"
 
 beforeEach(() => {
   vi.clearAllMocks()
+  markJobCompletedDetailedMock.mockResolvedValue("completed")
+  markJobFailedMock.mockResolvedValue(true)
+  insertInternalJobMock.mockResolvedValue({ data: { id: "job-1" }, error: null })
 })
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -75,6 +102,7 @@ interface MakeSupabaseOpts {
   jobId?: string
   assetId?: string | null
   creditsActual?: number
+  errorHint?: Record<string, unknown> | null
 }
 
 function makeSupabase(opts: MakeSupabaseOpts = {}) {
@@ -101,7 +129,10 @@ function makeSupabase(opts: MakeSupabaseOpts = {}) {
           select: () => ({
             eq: () => ({
               single: async () => ({
-                data: { credits_actual: opts.creditsActual ?? 3 },
+                // `error_hint` is what the result gate wrote when it blocked
+                // this job — the service reads it back so the pipeline stage
+                // records the POLICY's reason, not a generic merge failure.
+                data: { credits_actual: opts.creditsActual ?? 3, error_hint: opts.errorHint ?? null },
                 error: null,
               }),
             }),
@@ -326,11 +357,34 @@ describe("pipelineFinalMerge", () => {
     expect(refundReservedCreditsForJob).toHaveBeenCalledWith("job-1")
     expect(commitReservedCreditsForJob).not.toHaveBeenCalled()
 
-    // Job should be marked failed.
+    // Marked failed through the ONE failure writer. It was a bare
+    // `update({status:"failed"}).eq("id")` with no status predicate at all —
+    // able to trample a row the user had just cancelled.
+    expect(markJobFailedMock).toHaveBeenCalledWith("job-1", expect.objectContaining({
+      error_message: expect.stringContaining("ffmpeg"),
+    }))
     const jobUpdates = (supabase as never as {
       _jobUpdates: Array<Record<string, unknown>>
     })._jobUpdates
-    expect(jobUpdates.some((u) => u.status === "failed")).toBe(true)
+    expect(jobUpdates.some((u) => u.status === "failed")).toBe(false)
+  })
+
+  it("5b. the refund rides markJobFailed's boolean — a row we did not flip is not ours to refund", async () => {
+    ;(runFfmpeg as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("ffmpeg: boom"))
+    markJobFailedMock.mockResolvedValue(false)
+    const supabase = makeSupabase()
+
+    await expect(
+      pipelineFinalMerge({
+        supabase,
+        pipelineId: "p1",
+        userId: "u1",
+        scenes: [{ sceneEntityId: "s1", compositeUrl: "https://r2/s1.mp4", shots: [{ shot_id: "shot_01", duration_seconds: 5 }] }],
+        musicAssetUrl: "",
+      }),
+    ).rejects.toThrow(/ffmpeg/)
+
+    expect(refundReservedCreditsForJob).not.toHaveBeenCalled()
   })
 
   // ─── Phase 1C.2.1 §G5 — narration audio overlay ──────────────────────────
@@ -569,3 +623,95 @@ describe("pipelineFinalMerge", () => {
     expect(hasTrim).toBe(true)
   })
 })
+
+// ---------------------------------------------------------------------------
+// The final merge is a MEDIA PUBLICATION that used to bypass the completion
+// funnel entirely: `update({status:"completed", output_data:{videoUrl}})` with
+// no CAS and no gate. Its output is the pipeline's finished film — the single
+// most consequential object the platform publishes — and nothing could see it.
+//
+// A pipeline child is hold-INELIGIBLE (`pipeline_id` is non-null — D8), so
+// `held` is unreachable here; it is asserted anyway, because the failure mode
+// if eligibility ever widened is the expensive one: a released reservation on
+// a job whose output a human is still holding.
+// ---------------------------------------------------------------------------
+describe("pipelineFinalMerge — the completion funnel", () => {
+  const run = (supabase: never) =>
+    pipelineFinalMerge({
+      supabase,
+      pipelineId: "p1",
+      userId: "u1",
+      scenes: [{ sceneEntityId: "s1", compositeUrl: "https://r2/s1.mp4", shots: [{ shot_id: "shot_01", duration_seconds: 5 }] }],
+      musicAssetUrl: "",
+    })
+
+  it("completes through markJobCompletedDetailed, never a direct status write", async () => {
+    const supabase = makeSupabase()
+    const result = await run(supabase)
+
+    expect(result.finalAssetId).toBe("asset-1")
+    expect(markJobCompletedDetailedMock).toHaveBeenCalledWith("job-1", {
+      output_data: { videoUrl: "https://r2/final.mp4", durationSec: expect.any(Number) },
+    })
+    const jobUpdates = (supabase as never as { _jobUpdates: Array<Record<string, unknown>> })._jobUpdates
+    expect(jobUpdates.some((u) => u.status === "completed")).toBe(false)
+    expect(commitReservedCreditsForJob).toHaveBeenCalledWith("job-1")
+  })
+
+  it("a result-gate BLOCK throws JobBlockedError carrying the policy's own reason — no commit", async () => {
+    markJobCompletedDetailedMock.mockResolvedValue("blocked")
+    markJobFailedMock.mockResolvedValue(false) // the gate already failed the row
+    const supabase = makeSupabase({
+      errorHint: { kind: "policy-block", policyId: "sai-moderation", reason: "Withheld by content policy", hookPoint: "result" },
+    })
+
+    const err = await run(supabase).catch((e: unknown) => e)
+
+    expect((err as { code?: string }).code).toBe("job_blocked")
+    expect((err as Error).message).toBe("Withheld by content policy")
+    expect(commitReservedCreditsForJob).not.toHaveBeenCalled()
+    // The gate already refunded in full (D19) — this catch must not fire a
+    // second release, which is exactly what gating on the boolean buys.
+    expect(refundReservedCreditsForJob).not.toHaveBeenCalled()
+  })
+
+  it("a HOLD throws and leaves the reservation alone (contract guard — unreachable while pipeline children are hold-ineligible)", async () => {
+    markJobCompletedDetailedMock.mockResolvedValue("held")
+    markJobFailedMock.mockResolvedValue(false) // FAILABLE_STATUSES excludes pending_review
+    const supabase = makeSupabase()
+
+    const err = await run(supabase).catch((e: unknown) => e)
+
+    // A hold is NOT a block — nobody judged this output, a human just has not
+    // looked at it. `policy_hold` is the reason the stage must record.
+    expect((err as { failureReason?: string }).failureReason).toBe("policy_hold")
+    expect((err as { code?: string }).code).toBeUndefined()
+    expect(commitReservedCreditsForJob).not.toHaveBeenCalled()
+    expect(refundReservedCreditsForJob).not.toHaveBeenCalled()
+  })
+
+  it("a lost race (cancelled mid-merge) throws rather than returning a stale asset id", async () => {
+    markJobCompletedDetailedMock.mockResolvedValue("lost_race")
+    const supabase = makeSupabase()
+
+    await expect(run(supabase)).rejects.toThrow(/already terminal|not published/i)
+    expect(commitReservedCreditsForJob).not.toHaveBeenCalled()
+  })
+
+  it("a request-gate block at insert time throws JobBlockedError before any ffmpeg work", async () => {
+    insertInternalJobMock.mockResolvedValue({
+      data: null,
+      error: {
+        message: "blocked",
+        blocked: { code: "job_blocked", policyId: "sai-moderation", message: "Not allowed here" },
+      },
+    })
+    const supabase = makeSupabase()
+
+    const err = await run(supabase).catch((e: unknown) => e)
+
+    expect((err as { code?: string }).code).toBe("job_blocked")
+    expect(downloadFile).not.toHaveBeenCalled()
+  })
+})
+

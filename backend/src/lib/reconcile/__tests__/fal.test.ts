@@ -15,7 +15,11 @@ const mocks = vi.hoisted(() => {
 
   // markFailed() lives inside fal.ts and writes via supabase.from("jobs").update(...).eq("id",...).in("status",...).
   // Track which terminal update fired by capturing the update() arg objects.
-  const jobsUpdateInMock = vi.fn().mockResolvedValue({ data: null, error: null })
+  // markJobFailed (lib/job-failure.ts) ends its CAS with `.select("id")` and
+  // reads the returned rows to answer "did WE flip it?" — the mock must model
+  // that or every migrated writer sees a lost race.
+  const jobsUpdateCasSelectMock = vi.fn().mockResolvedValue({ data: [{ id: "j-1" }], error: null })
+  const jobsUpdateInMock = vi.fn(() => ({ select: jobsUpdateCasSelectMock }))
   // G-7: capture every jobs.update(payload) so tests can assert on the exact
   // recorded update (lastJobsUpdate below), not just individual fields.
   const jobsUpdates: Array<Record<string, unknown>> = []
@@ -34,7 +38,7 @@ const mocks = vi.hoisted(() => {
   })
   const fromMock = vi.fn((_table: string) => ({ update: jobsUpdateMock }))
 
-  return { fetchStatusMock, extractUrlMock, finalizeMock, refundMock, bumpMock, fromMock, jobsUpdateMock, jobsUpdates }
+  return { fetchStatusMock, extractUrlMock, finalizeMock, refundMock, bumpMock, fromMock, jobsUpdateMock, jobsUpdateInMock, jobsUpdates }
 })
 
 vi.mock("../../supabase.js", () => ({ supabase: { from: mocks.fromMock } }))
@@ -123,6 +127,10 @@ describe("reconcileFalJob", () => {
       (c) => (c[0] as Record<string, unknown>).status === "failed",
     )
     expect(failCall).toBeTruthy()
+    // Spec D11: the shared markJobFailed CAS. "queued" is newly failable (these
+    // sweeps could not take a queued row at all before); "pending_review" is
+    // absent BY CONSTRUCTION, so no reconcile tick can fail a job under review.
+    expect(mocks.jobsUpdateInMock).toHaveBeenCalledWith("status", ["pending", "queued", "processing"])
   })
 
   it("pending → bumpAttempts, no finalize, no refund", async () => {

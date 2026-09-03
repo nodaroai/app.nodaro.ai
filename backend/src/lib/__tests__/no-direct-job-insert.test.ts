@@ -80,6 +80,35 @@ describe("all job inserts go through insert-job.ts", () => {
     ).toEqual([])
   })
 
+  /**
+   * The funnel's second job (spec §11.1): every exported helper asks the
+   * REQUEST gate. Checked as a per-function source slice, not as a
+   * file-contains, so removing the call from ONE helper fails — which is
+   * exactly how a gate quietly stops covering the lane nobody re-read.
+   */
+  it("every exported insert helper runs the request gate", () => {
+    const src = readFileSync(join(SRC_DIR, "lib", "insert-job.ts"), "utf8")
+    const helpers = ["insertJob", "insertInternalJob", "insertJobs", "insertJobIdempotent"]
+    const missing = helpers.filter((name) => {
+      const start = src.indexOf(`export async function ${name}<`)
+      if (start < 0) return true
+      // Up to the next top-level `export`, i.e. this function's own body.
+      const next = src.indexOf("\nexport ", start + 1)
+      const body = src.slice(start, next < 0 ? src.length : next)
+      return !body.includes("gateJobInsert(")
+    })
+    expect(
+      missing,
+      `These insert helpers no longer call gateJobInsert(), so a registered job policy ` +
+        `cannot see the jobs they create: ${missing.join(", ")}. The gate must run AFTER ` +
+        `provenance stamping and BEFORE the insert in every one of them.`,
+    ).toEqual([])
+    expect(
+      src.includes("applyJobRequestPolicies("),
+      "gateJobInsert() must actually ask the registry — otherwise the guard above is vacuous.",
+    ).toBe(true)
+  })
+
   it("insertJob is actually used by routes (the rule isn't vacuous)", () => {
     // A regex-only guard passes trivially if every route stopped creating jobs.
     const routeFiles = tsFiles(ROUTES_DIR)

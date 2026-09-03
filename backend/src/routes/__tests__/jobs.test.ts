@@ -813,6 +813,51 @@ describe("GET /v1/jobs/:id — job_type", () => {
   })
 })
 
+/**
+ * A held job over the wire (spec D6, D14).
+ *
+ * Two things are being proved at once, and both would be silent failures:
+ *  - `pending_review` passes the response schema, because routes/jobs.ts
+ *    derives its z.enum from JOB_STATUSES. A hand-rolled enum here would 500 on
+ *    every GET of a held job — the owner's canvas would see an API error
+ *    instead of "awaiting review".
+ *  - not one `held_*` key reaches the caller, admin or not. The columns are on
+ *    neither key list and in none of the five explicit selects, so this is a
+ *    property of the schema, not of eleven readers remembering.
+ */
+describe("GET /v1/jobs/:id — a job held for review", () => {
+  const heldRow = {
+    ...sampleJob,
+    status: "pending_review",
+    output_data: null,
+    held_output_data: { imageUrl: "https://cdn.example.com/images/job-1.png" },
+    held_completion_fields: { provider: "kie", provider_cost: 0.4, metered: true },
+    held_objects: [{ key: "images/job-1.png", kind: "image", index: 0 }],
+    held_at: "2026-09-03T10:00:00Z",
+  }
+
+  it("returns 200 with status pending_review and no withheld payload", async () => {
+    let selected = ""
+    vi.mocked(supabase.from).mockImplementation(() => {
+      const chain = {
+        select: vi.fn((cols: string) => { selected = cols; return chain }),
+        eq: vi.fn(() => chain),
+        single: vi.fn().mockResolvedValue({ data: { ...heldRow, user_id: TEST_USER_ID }, error: null }),
+      }
+      return chain as never
+    })
+
+    const res = await app.inject({ method: "GET", url: `/v1/jobs/job-1?__userId=${TEST_USER_ID}` })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.status).toBe("pending_review")
+    // the select never asks for them in the first place
+    expect(selected).not.toContain("held_")
+    expect(res.payload).not.toContain("held_")
+    expect(res.payload).not.toContain("cdn.example.com")
+  })
+})
+
 describe("GET /v1/jobs/:id — credit_status (PR9)", () => {
   it("returns credit_status: \"refunded\" when the job's usage log was refunded", async () => {
     const row = { ...sampleJob, user_id: TEST_USER_ID, usage_log_id: "ul-refunded" }

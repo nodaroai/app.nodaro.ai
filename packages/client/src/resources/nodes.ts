@@ -1,6 +1,6 @@
 import type { NodaroClient } from "../client.js"
 import type { JobStatusResult } from "./jobs.js"
-import { JobAbortedError, JobFailedError, JobTimeoutError } from "../errors.js"
+import { JobAbortedError, JobFailedError, JobHeldError, JobTimeoutError } from "../errors.js"
 import type { ConnectedReference, ModelInputAdjustment } from "@nodaro/shared"
 
 export type NodeCategory =
@@ -294,6 +294,11 @@ export class NodesResource {
    * - {@link JobTimeoutError} — `maxMs` deadline exceeded before terminal.
    * - {@link JobAbortedError} — `signal` fired (or was already aborted);
    *   polling stops immediately.
+   * - {@link JobHeldError} — the job entered `pending_review` on a deployment
+   *   that registers a job policy. Ends the poll on the FIRST held tick (that
+   *   status waits on a human, not on the job) and does NOT cancel it.
+   * - {@link JobBlockedError} — a 422 from {@link run} before any poll: the
+   *   deployment's job policy refused the request outright.
    *
    * Polling is fully client-side (no server function blocks) — the same model
    * thin clients use, lifted out of their hand-rolled run→poll loops.
@@ -322,8 +327,9 @@ export class NodesResource {
    * the candidate-grid path (generate N stills/clips in parallel). Each runs
    * via {@link runAndWait}; resolves once ALL settle, to an array of
    * `{ jobId, output }` in input order. Rejects (and the rejection wins) if any
-   * single run rejects — same typed errors as {@link runAndWait}. A shared
-   * `signal` aborts the whole batch.
+   * single run rejects — same typed errors as {@link runAndWait}, including
+   * {@link JobHeldError} when one candidate is held for review while the
+   * others complete. A shared `signal` aborts the whole batch.
    *
    * @param type        Node type slug, applied to every entry.
    * @param paramsList  One request body per candidate.
@@ -346,7 +352,10 @@ export class NodesResource {
     )
   }
 
-  /** Poll an already-kicked job id until terminal; resolve output_data or throw. */
+  /** Poll an already-kicked job id until it stops moving; resolve output_data
+   *  or throw. Two non-terminal statuses end the loop: an abort, and
+   *  `pending_review` (a job policy held the output for a human — see
+   *  {@link JobHeldError}). */
   private async pollJob(
     jobId: string,
     label: string,
@@ -368,6 +377,14 @@ export class NodesResource {
           jobId,
           data.status,
         )
+      }
+      // `pending_review` is in-flight but PARKED ON A HUMAN — it does not
+      // progress on its own, so continuing the loop would burn `maxMs` (15 min
+      // by default) and then report a `JobTimeoutError` that misdescribes what
+      // happened. End here instead, without cancelling: the output exists, the
+      // reservation stays reserved, and a reviewer resolves it.
+      if (data.status === "pending_review") {
+        throw new JobHeldError(`${label} is awaiting review`, jobId)
       }
       if (Date.now() > deadline) {
         throw new JobTimeoutError(`${label} timed out`, jobId, maxMs)

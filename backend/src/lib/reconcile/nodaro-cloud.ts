@@ -12,28 +12,30 @@
  */
 
 import { supabase } from "../supabase.js"
+import { markJobFailed } from "../job-failure.js"
 import { redactProviderDetail } from "../provider-error-detail.js"
 import { finalizeExclusiveCloudOutput } from "../../workers/handlers/nodaro-exclusive-relay.js"
 import { bumpAttemptsOrExhaust } from "./bump-attempts.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
 
 /** Terminal failure, per the local-file convention of the sibling handlers
- *  (kie.ts/fal.ts/elevenlabs.ts each keep their own): CAS on non-terminal
- *  statuses so a concurrently-completed row is never trampled, then release
- *  the reservation (a no-op on community; correct on cloud). */
+ *  (kie.ts/fal.ts/elevenlabs.ts each keep their own): the shared `markJobFailed`
+ *  CAS on FAILABLE_STATUSES so a concurrently-completed row is never trampled
+ *  and a `pending_review` row is never taken (spec D11), then release the
+ *  reservation (a no-op on community; correct on cloud).
+ *
+ *  The refund now sits BEHIND the returned boolean — the discipline every other
+ *  migrated writer already followed by hand. It was harmless before (the refund
+ *  CASes on `usage_logs.status='reserved'` itself) but "refund only when WE
+ *  flipped the row" has to be uniform, or the one writer that is not uniform is
+ *  the one a future hold/block lands on. */
 async function markFailed(jobId: string, reason: string): Promise<void> {
-  await supabase
-    .from("jobs")
-    .update({
-      status: "failed",
-      error_message: reason.slice(0, 500),
-      error_detail: redactProviderDetail(reason),
-      completed_at: new Date().toISOString(),
-      reconcile_last_error: "upstream_failed",
-    })
-    .eq("id", jobId)
-    .in("status", ["pending", "processing"])
-  await refundReservedCreditsForJob(jobId).catch(() => undefined)
+  const flipped = await markJobFailed(jobId, {
+    error_message: reason,
+    error_detail: redactProviderDetail(reason),
+    reconcile_last_error: "upstream_failed",
+  })
+  if (flipped) await refundReservedCreditsForJob(jobId).catch(() => undefined)
 }
 
 interface NodaroCloudJobRow {

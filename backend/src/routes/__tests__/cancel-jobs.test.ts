@@ -60,6 +60,12 @@ vi.mock("@/ee/routes/credits.js", () => ({
   invalidateBalanceCache: mockInvalidateBalanceCache,
 }))
 
+// The held-job withdrawal (refund + delete the withheld object + record the
+// decision). `lib/cancel-job.ts` reaches it through a dynamic import; mocking
+// it keeps this route suite off storage and the credit lifecycle.
+const mockWithdrawHeldJob = vi.hoisted(() => vi.fn().mockResolvedValue({ ok: true }))
+vi.mock("@/lib/job-policy-gate.js", () => ({ withdrawHeldJob: mockWithdrawHeldJob }))
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -487,3 +493,79 @@ describe("POST /v1/jobs/:jobId/cancel — a parent takes its analysis child with
     expect(mockRefundCredits).toHaveBeenCalledTimes(1)
   })
 })
+
+// ---------------------------------------------------------------------------
+// D18 — "Cancel all" must not be silently a lie.
+//
+// The SELECT filtered `pending|queued|processing` AND
+// `provider_task_id IS NULL OR reconcile_attempts > 0`. A held job fails BOTH
+// halves — it is `pending_review`, and it has a provider task — so cancel-all
+// skipped it in silence and left the reservation standing. A bulk CAS cannot
+// fix that on its own either: each held row needs its own refund, its own
+// object deletion and its own audit row. So held ids are delegated, one at a
+// time, to the single-job helper inside the same handler (held rows per user
+// are 0-2, so the delegation is bounded).
+// ---------------------------------------------------------------------------
+describe("POST /v1/jobs/cancel-all — held jobs", () => {
+  const HELD = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+  const LIVE = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+
+  it("withdraws a held job and counts it, alongside the bulk-cancelled rows", async () => {
+    setupTableMocks({
+      jobs: jobsHandler({
+        jobsList: { data: [{ id: LIVE, status: "pending" }, { id: HELD, status: "pending_review" }], error: null },
+        // the delegated single-job lookup for the held id
+        jobLookup: {
+          data: {
+            id: HELD, status: "pending_review", user_id: TEST_USER_ID,
+            input_data: {}, provider_task_id: "task-1", reconcile_attempts: 0,
+          },
+          error: null,
+        },
+        cancelledRows: [{ id: LIVE }],
+      }),
+      usage_logs: usageLogsHandler([{ id: "usage-log-1" }]),
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/jobs/cancel-all",
+      payload: { userId: TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ success: true, cancelled: 2 })
+    expect(mockWithdrawHeldJob).toHaveBeenCalledWith(HELD)
+    // The held row is NOT part of the bulk queue-removal pass: there is no
+    // BullMQ entry left for a job that already finished running.
+    expect(tryRemoveFromQueue).not.toHaveBeenCalledWith(HELD)
+    expect(tryRemoveFromQueue).toHaveBeenCalledWith(LIVE)
+  })
+
+  it("a held job a reviewer resolved first is not counted", async () => {
+    mockWithdrawHeldJob.mockResolvedValueOnce({ ok: false, reason: "lost_race" })
+    setupTableMocks({
+      jobs: jobsHandler({
+        jobsList: { data: [{ id: HELD, status: "pending_review" }], error: null },
+        jobLookup: {
+          data: {
+            id: HELD, status: "pending_review", user_id: TEST_USER_ID,
+            input_data: {}, provider_task_id: "task-1", reconcile_attempts: 0,
+          },
+          error: null,
+        },
+        cancelledRows: [],
+      }),
+      usage_logs: usageLogsHandler([]),
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/jobs/cancel-all",
+      payload: { userId: TEST_USER_ID },
+    })
+
+    expect(res.json()).toEqual({ success: true, cancelled: 0 })
+  })
+})
+

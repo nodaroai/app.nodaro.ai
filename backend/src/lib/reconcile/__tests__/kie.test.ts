@@ -36,7 +36,11 @@ const mocks = vi.hoisted(() => {
   const jobsSelectEqMock = vi.fn(() => ({ single: jobsSingleMock }))
   const jobsSelectMock = vi.fn(() => ({ eq: jobsSelectEqMock }))
 
-  const jobsUpdateInMock = vi.fn().mockResolvedValue({ data: null, error: null })
+  // markJobFailed (lib/job-failure.ts) ends its CAS with `.select("id")` and
+  // reads the returned rows to answer "did WE flip it?" — the mock must model
+  // that or every migrated writer sees a lost race.
+  const jobsUpdateCasSelectMock = vi.fn().mockResolvedValue({ data: [{ id: "j-1" }], error: null })
+  const jobsUpdateInMock = vi.fn(() => ({ select: jobsUpdateCasSelectMock }))
   const jobsUpdateEqMock = vi.fn(() => ({
     in: jobsUpdateInMock,
     // For bumpAttempts, the chain ends at .eq() — no .in()
@@ -301,6 +305,10 @@ describe("reconcileKieJob", () => {
     expect(mocks.jobsUpdateMock).toHaveBeenCalledWith(
       expect.objectContaining({ status: "failed", error_detail: expect.any(String) }),
     )
+    // Spec D11: the shared markJobFailed CAS. "queued" is newly failable (these
+    // sweeps could not take a queued row at all before); "pending_review" is
+    // absent BY CONSTRUCTION, so no reconcile tick can fail a job under review.
+    expect(mocks.jobsUpdateInMock).toHaveBeenCalledWith("status", ["pending", "queued", "processing"])
   })
 
   it("kie-veo upstream failure → markFailed + refund (fail-fast for non-kie-standard kinds)", async () => {

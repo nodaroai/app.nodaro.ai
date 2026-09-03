@@ -27,6 +27,9 @@ import { executeNode, rejectAllManualEdits } from "./execute-node";
 import { executeNodeForList } from "./list-execution";
 import { cascadeAutoExecute } from "./auto-execute";
 import { buildVariantResults } from "./variant-results";
+// The restore poller shares the canvas loops' one flag writer. No cycle:
+// poll-job.ts imports nothing from this file.
+import { getJobStatusLeanForNode } from "./poll-job";
 import { sunoVariantFields } from "@/lib/suno-ids";
 import { tx } from "@/lib/i18n";
 
@@ -748,7 +751,7 @@ export function restorePollingForRunningJobs(
         }
 
         try {
-          const job = await getJobStatusLean(jobId);
+          const job = await getJobStatusLeanForNode(jobId, nodeId);
           pollFailures = 0;
 
           if (job.progress != null && job.progress > 0) {
@@ -779,6 +782,7 @@ export function restorePollingForRunningJobs(
               errorMessage: errMsg,
               currentJobId: undefined,
               currentJobProgress: undefined,
+              jobAwaitingReview: undefined,
             });
             toast.error(tx("run.jobFailed"), { description: errMsg });
           } else if (job.status === "cancelled") {
@@ -787,6 +791,7 @@ export function restorePollingForRunningJobs(
               executionStatus: "idle",
               currentJobId: undefined,
               currentJobProgress: undefined,
+              jobAwaitingReview: undefined,
             });
           }
         } catch {
@@ -816,6 +821,7 @@ export function restorePollingForRunningJobs(
                   errorMessage: finalJob.error_message ?? "Unknown error",
                   currentJobId: undefined,
                   currentJobProgress: undefined,
+                  jobAwaitingReview: undefined,
                 });
                 return;
               }
@@ -824,6 +830,7 @@ export function restorePollingForRunningJobs(
               executionStatus: "failed",
               currentJobId: undefined,
               currentJobProgress: undefined,
+              jobAwaitingReview: undefined,
             });
           }
         }
@@ -867,6 +874,7 @@ function applyRestoredJobCompletion(
       ...(report && typeof report === "object" ? { lastAuditReport: report } : {}),
       currentJobId: undefined,
       currentJobProgress: undefined,
+      jobAwaitingReview: undefined,
     });
     toast.success(tx("run.backgroundJobCompleted"));
     return;
@@ -892,6 +900,9 @@ function applyRestoredJobCompletion(
     activeResultIndex: 0,
     currentJobId: undefined,
     currentJobProgress: undefined,
+    // An approve goes pending_review -> completed with no intervening tick, so
+    // the terminal write is the only place the hold flag can be cleared.
+    jobAwaitingReview: undefined,
   };
 
   if (job.output_data?.imageUrl) {
@@ -1233,6 +1244,13 @@ interface NodeExecutionState {
   errorCode?: string;
   /** Structured safety-block detail mirrored from the failed job (see `JobErrorHint`). */
   errorHint?: JobErrorHint;
+  /** Mirrors `NodeExecutionState.awaitingReview` on the backend: this node's job
+   *  is parked in `pending_review`. A SIDECAR beside `status`, which stays
+   *  "running" on purpose — a new `NodeExecutionStatus` member would be
+   *  mis-partitioned by the hand-rolled `anyActive` checks (most dangerously
+   *  `lib/reconcile/workflow-executions-cron.ts`, which would flip the whole
+   *  execution to failed while a child is legitimately held). */
+  awaitingReview?: boolean;
   jobId?: string;
   /** Per-iteration job IDs for fan-out runs (list / loop iterations). */
   jobIds?: string[];
@@ -1276,6 +1294,11 @@ function syncNodeStatesToStore(
     ) {
       const updates: Record<string, unknown> = {
         executionStatus: "completed",
+        // Terminal — clear the hold flag. Required even though the overlay is
+        // ALSO gated on `executionStatus === "running"`: both guards ship,
+        // because approve goes pending_review -> completed with no tick in
+        // between and nothing else would ever clear it.
+        jobAwaitingReview: undefined,
       };
       if (state.output) {
         const nodeType = node.type ?? "";
@@ -1452,11 +1475,27 @@ function syncNodeStatesToStore(
       // propagated for ALL running nodes, not just components — the backend
       // orchestrator now surfaces per-job progress via onJobProgress so
       // Run-from-here runs can show the progress bar too.
-      const runPatch: Record<string, unknown> = { executionStatus: "running" }
+      // A backend-driven TICK, not a run start: the run began in handleRun and
+      // this patch only mirrors the orchestrator's state onto the node — a run
+      // reset here would wipe the very keys the branches below are setting.
+      const runPatch: Record<string, unknown> = { executionStatus: "running" } // run-start-reset-ok: mid-run status tick
       if (typeof state.progress === "number") {
         runPatch.currentJobProgress = state.progress
       }
-      if (currentStatus !== "running" || runPatch.currentJobProgress !== undefined) {
+      // The single source of the hold flag for backend-driven runs; the poll
+      // loops write the same key for canvas-driven runs and BaseNode renders
+      // both identically. Written ONLY on a transition — putting the key in
+      // every patch would re-dirty a passive tab on every 3s progress tick
+      // (the exact bug the TRANSIENT_RUNTIME_KEYS comment below describes).
+      const awaiting = state.awaitingReview === true
+      if (awaiting !== Boolean(data.jobAwaitingReview)) {
+        runPatch.jobAwaitingReview = awaiting
+      }
+      if (
+        currentStatus !== "running" ||
+        runPatch.currentJobProgress !== undefined ||
+        runPatch.jobAwaitingReview !== undefined
+      ) {
         patchMap.set(node.id, runPatch)
       }
     } else if (
@@ -1471,10 +1510,11 @@ function syncNodeStatesToStore(
         executionStatus: "failed",
         errorMessage: state.error ?? "Node failed",
         errorHint: state.errorHint,
+        jobAwaitingReview: undefined,
       });
     } else if (state.status === "skipped" && currentStatus !== "completed") {
       // Router-gated node: mark as idle (not stuck in "pending")
-      patchMap.set(node.id, { executionStatus: "idle" });
+      patchMap.set(node.id, { executionStatus: "idle", jobAwaitingReview: undefined });
     }
   }
 

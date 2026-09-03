@@ -174,6 +174,7 @@ added to `config.ts` without a row here.
 | `MCP_ENABLED` | off | Serve the MCP endpoint (§10) |
 | `COPILOT_ENABLED` | off | Cloud only — the in-app [Workflow Copilot](./features/workflow-copilot.md). Needs `ANTHROPIC_API_KEY`; admins can also pause it at runtime from Settings |
 | `CHARACTER_LORA_ROUTING_ENABLED` | on | Route generations that mention a trained character through its LoRA; off = plain reference-image injection |
+| `JOB_HOLD_TTL_HOURS` | `""` (holds never expire) | Only matters on a deployment that registers a **job policy** (see "Job policy" under Surface profile). Hours a job may wait in `pending_review` before the platform **auto-rejects** it: the reservation is refunded, the withheld output is deleted, and the decision is recorded with `policy_id = "platform"`, `reason = "hold-expired"`. Unset = a held job waits for a human indefinitely, with its credits reserved the whole time. This is the one sweep allowed to touch a `pending_review` row. Auto-approve is deliberately not an option — it would publish exactly the output a human declined to look at |
 | `META_APP_ID` … `DISCORD_CLIENT_SECRET` | `""` | Social network OAuth apps — see 2b-2 |
 
 ### 2b. Generate internal secrets
@@ -602,6 +603,37 @@ deployment's own registered `PromptPolicy` module, applied by the backend
 registry in `backend/src/lib/prompt-policy.ts`; the published `@nodaro/prompts`
 package stays content-free, enforced by its `content-free-contract` guard test
 (the package source may not read `process.env`).
+
+**Job policy (generation gates).** A deployment that must judge generations —
+before they run, or before their output is published — registers a backend
+`JobPolicy` at the composition root (`backend/src/lib/job-policy.ts`). Like the
+prompt policy it is **code the deployment owns, not an environment variable**, and
+with none registered the platform is byte-identical: the funnels short-circuit
+before any check and before any audit write. One policy object carries two
+optional checks. The **request** gate (`checkRequest`) sits at the single
+job-insert funnel and is asked before a row or a credit reservation exists; its
+verdict is `{ verdict: "allow" }` or `{ verdict: "block", reason, userMessage? }`,
+and a block answers HTTP 422 `{ error: { code: "job_blocked", message } }` with
+nothing to refund. The **result** gate (`checkResult`) sits at the completion
+funnels, asked after the output is written to storage and before the completion
+write, the asset row and the credit commit; its verdicts are `allow`, `flag`,
+`block` and `hold`. A `block` fails the job with a full refund, deletes the
+produced object and writes a structured `error_hint` (`kind: "policy-block"`); a
+`hold` parks the job in the `pending_review` status — an in-flight status,
+exempt from the reconcile and timeout sweeps, output withheld, credits still
+reserved — until an admin approves it onto the normal completion path or rejects
+it, from **Admin → Review** (`/v1/admin/review/jobs…`). Both gates are
+**fail-closed** once a policy is registered: a check that throws never publishes —
+the request gate blocks, the result gate holds when the job is hold-eligible and
+blocks otherwise, recorded with `reason: "policy-unavailable"` and a
+platform-owned user message, never the policy's own wording. Every decision,
+`allow` included, is recorded in `job_policy_decisions` keyed by
+`(job_id, hook_point, payload_hash)`, which is also the idempotency key: queue
+retries and the reconcile cron reuse a recorded result-gate verdict instead of
+re-asking the deployment's gate. (`job_id` is NULL for a request-gate block — no
+row exists to point at — so the reuse guarantee is a result-gate one; a repeated
+request is a repeated decision.) `JOB_HOLD_TTL_HOURS` bounds how long a hold may
+wait. Design note: [`docs/design/job-policy-seam.md`](design/job-policy-seam.md).
 
 Brand **assets** (favicon, logos) are overridden by a Docker static-asset layer,
 not this JSON.

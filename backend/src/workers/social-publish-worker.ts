@@ -3,6 +3,7 @@ import { redis } from "../lib/queue.js"
 import type { SocialPublishJobData } from "../lib/social-queue.js"
 import { supabase } from "../lib/supabase.js"
 import { insertInternalJob } from "../lib/insert-job.js"
+import { JobBlockedError } from "../lib/job-policy.js"
 import { hasCredits } from "../lib/config.js"
 import { payloadBillingContext, type BillingContext } from "../lib/billing-context.js"
 import { acquireConnectionLock, releaseConnectionLock } from "../services/social/connection-lock.js"
@@ -55,9 +56,19 @@ async function updateRow(id: string, patch: Record<string, unknown>): Promise<vo
     .eq("id", id)
 }
 
-async function ensureJobRow(row: ScheduledPostRow, billingContext: BillingContext): Promise<string | null> {
+/**
+ * The job row is this lane's billing record AND the request gate's only seat in
+ * it, so a failure to create one is a failure to publish — it THROWS.
+ *
+ * It used to drop the insert error and return null, and the caller published
+ * anyway under `if (jobId)`: an unbilled publish on any insert failure, and —
+ * once a policy is registered — a blocked request posted to the user's account
+ * regardless. `JobBlockedError` is definitive (see the `definitive` set in the
+ * catch): re-running would be blocked identically, so BullMQ must not retry.
+ */
+async function ensureJobRow(row: ScheduledPostRow, billingContext: BillingContext): Promise<string> {
   if (row.job_id) return row.job_id
-  const { data } = await insertInternalJob("social-publish-worker", {
+  const { data, error } = await insertInternalJob("social-publish-worker", {
     user_id: row.user_id,
     status: "processing",
     provider: "social-publish",
@@ -73,8 +84,14 @@ async function ensureJobRow(row: ScheduledPostRow, billingContext: BillingContex
       action: row.action,
     },
   }, { billingContext })
+  if (error?.blocked) throw new JobBlockedError(error.blocked)
   const jobId = data?.id ?? null
-  if (jobId) await updateRow(row.id, { job_id: jobId })
+  if (!jobId) {
+    throw new Error(
+      `[social-publish] could not create the job row for scheduled post ${row.id}: ${error?.message ?? "no id returned"}`,
+    )
+  }
+  await updateRow(row.id, { job_id: jobId })
   return jobId
 }
 
@@ -117,7 +134,7 @@ export async function processScheduledPost(job: Job<SocialPublishJobData>, token
     // P14: one coalesce for both the job row and the reservation.
     const scheduledCtx = payloadBillingContext({ userId: row.user_id, billingContext: job.data.billingContext })
     jobId = await ensureJobRow(row, scheduledCtx)
-    if (jobId) usageLogId = await reserveScheduledCredits(row.user_id, jobId, scheduledCtx)
+    usageLogId = await reserveScheduledCredits(row.user_id, jobId, scheduledCtx)
 
     const payload = row.payload ?? {}
     const request: PublishRequest = {
@@ -172,7 +189,10 @@ export async function processScheduledPost(job: Job<SocialPublishJobData>, token
       err instanceof NotConnectedError ||
       err instanceof RefreshTokenError ||
       err instanceof BadBodyError ||
-      err instanceof UnknownOutcomeError
+      err instanceof UnknownOutcomeError ||
+      // A policy block is deterministic on the same content: retrying spends
+      // attempts to be refused identically three times.
+      err instanceof JobBlockedError
 
     if (definitive || isFinalJobAttempt(job)) {
       await updateRow(row.id, { status: "error", last_error: message })

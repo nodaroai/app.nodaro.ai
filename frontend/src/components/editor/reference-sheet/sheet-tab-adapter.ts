@@ -1,4 +1,5 @@
 import type { EntityKind } from "@nodaro/shared"
+import { tx } from "@/lib/i18n"
 import {
   generateCharacterAsset,
   generateObjectAsset,
@@ -151,6 +152,13 @@ function awaitViaPoll(jobs: any, jobId: string, name: string): Promise<string> {
           const url = out?.imageUrl ?? out?.videoUrl
           if (url) { resolve(url); return }
           reject(new Error("Panel completed without a usable URL"))
+          return
+        }
+        // A held panel job will outlive the ~5 min ceiling; reject with the
+        // truth rather than letting the chain report "panel generation timed
+        // out" ten minutes from now.
+        if (job.status === "pending_review") {
+          reject(new Error(tx("sheet.panelAwaitingReview")))
           return
         }
         if (job.status === "failed" || job.status === "cancelled") {

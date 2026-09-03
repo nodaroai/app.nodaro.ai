@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { tryRemoveFromQueue } from "../lib/queue.js"
 import { cancelOwnedJob, refundReservedHolds } from "../lib/cancel-job.js"
+import { IN_FLIGHT_JOB_STATUSES, isParkedJobStatus } from "../lib/job-status.js"
 import { invalidateBalanceCache } from "../ee/routes/credits.js"
 
 export async function cancelJobsRoutes(app: FastifyInstance) {
@@ -85,14 +86,19 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
       // Get all cancellable jobs for this user: not yet at the external
       // provider (provider_task_id IS NULL), OR abandoned to the reconcile
       // system (reconcile_attempts > 0 — audit D2, same rule as single
-      // cancel). Live in-flight jobs can't be killed — they run to
-      // completion — so we leave them alone.
+      // cancel), OR parked in review. Live in-flight jobs can't be killed —
+      // they run to completion — so we leave them alone.
+      //
+      // A held job fails BOTH halves of the old predicate (it is
+      // `pending_review`, and it has a provider task because the provider
+      // already delivered), so "Cancel all" used to skip it in silence and
+      // strand its reservation (spec D18).
       const { data: jobs, error: fetchError } = await supabase
         .from("jobs")
-        .select("id")
+        .select("id, status")
         .eq("user_id", userId)
-        .in("status", ["pending", "queued", "processing"])
-        .or("provider_task_id.is.null,reconcile_attempts.gt.0")
+        .in("status", [...IN_FLIGHT_JOB_STATUSES])
+        .or("provider_task_id.is.null,reconcile_attempts.gt.0,status.eq.pending_review")
 
       if (fetchError) {
         return sendInternalError(reply, req, fetchError, "Failed to fetch jobs")
@@ -102,9 +108,28 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
         return { success: true, cancelled: 0 }
       }
 
-      const jobIds = jobs.map((j) => j.id)
+      // Held rows cannot go through the bulk path: each needs its own refund,
+      // its own withheld-object deletion and its own audit row. Delegate them
+      // to the single-job helper — bounded, because a user has 0-2 held rows.
+      const heldIds = jobs.filter((j) => isParkedJobStatus(j.status as string)).map((j) => j.id as string)
+      const jobIds = jobs.filter((j) => !isParkedJobStatus(j.status as string)).map((j) => j.id as string)
 
-      // Try to remove each job from BullMQ queue
+      let heldCancelled = 0
+      for (const heldId of heldIds) {
+        const result = await cancelOwnedJob(heldId, userId).catch((err) => {
+          console.error(`[cancel-all] held job ${heldId}:`, err)
+          return { kind: "lost_race" as const }
+        })
+        if (result.kind === "cancelled") heldCancelled++
+      }
+
+      if (jobIds.length === 0) {
+        if (heldCancelled > 0) invalidateBalanceCache(userId)
+        return { success: true, cancelled: heldCancelled }
+      }
+
+      // Try to remove each job from BullMQ queue. Held jobs are deliberately
+      // absent: their BullMQ entry is long gone by the time a result is held.
       for (const jobId of jobIds) {
         await tryRemoveFromQueue(jobId)
       }
@@ -127,10 +152,10 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
       if (cancelledIds.length > 0) {
         // Refund reserved credits for every cancelled job in one pass.
         await refundReservedHolds(cancelledIds)
-        invalidateBalanceCache(userId)
       }
+      if (cancelledIds.length > 0 || heldCancelled > 0) invalidateBalanceCache(userId)
 
-      return { success: true, cancelled: cancelledIds.length }
+      return { success: true, cancelled: cancelledIds.length + heldCancelled }
     } catch (err) {
       console.error("[cancel-all] Error:", err)
       return sendInternalError(reply, req, err, "Failed to cancel jobs")

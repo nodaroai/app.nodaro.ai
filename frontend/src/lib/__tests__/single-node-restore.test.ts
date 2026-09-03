@@ -24,15 +24,19 @@ function singleNodeJob(opts: {
   progress?: number
   nodeType?: string
   ageMs?: number
+  awaitingReview?: boolean
 }): ActiveExecItem {
-  const { jobId, nodeId, status = "running", progress = 0, nodeType = "generate-image", ageMs = 0 } = opts
+  const { jobId, nodeId, status = "running", progress = 0, nodeType = "generate-image", ageMs = 0, awaitingReview } = opts
   return {
     id: jobId,
     triggerType: "single-node",
     status,
     createdAt: new Date(NOW - ageMs).toISOString(),
     nodeStates: {
-      [nodeId ?? jobId]: { nodeId, jobId, status, progress, nodeType },
+      [nodeId ?? jobId]: {
+        nodeId, jobId, status, progress, nodeType,
+        ...(awaitingReview ? { awaitingReview: true } : {}),
+      },
     },
   }
 }
@@ -51,7 +55,7 @@ describe("collectRestorableSingleNodeJobs", () => {
     const items = [singleNodeJob({ jobId: "j1", nodeId: "n1", progress: 33 })]
     const out = collectRestorableSingleNodeJobs(items, canvas(["n1", "generate-image"]), NOW)
     expect(out).toEqual([
-      { nodeId: "n1", jobId: "j1", nodeType: "generate-image", progress: 33, status: "running" },
+      { nodeId: "n1", jobId: "j1", nodeType: "generate-image", progress: 33, status: "running", awaitingReview: false },
     ])
   })
 
@@ -134,6 +138,55 @@ describe("collectRestorableSingleNodeJobs", () => {
     expect(restoreMaxAgeMs(undefined)).toBe(SINGLE_NODE_RESTORE_MAX_AGE_MS)
   })
 
+  // -------------------------------------------------------------------------
+  // HELD jobs (result gate → `pending_review`)
+  //
+  // A hold is a pending HUMAN decision with credits still reserved, and
+  // JOB_HOLD_TTL_HOURS is measured in hours — routinely past the 30-min
+  // stuck-job horizon. Dropping it there is the difference between "the node
+  // explains itself after a reload" and "the node looks idle, so the user runs
+  // it again and pays twice".
+  // -------------------------------------------------------------------------
+
+  it("restores a HELD job PAST the 30-min horizon (a hold is a decision, not a hang)", () => {
+    const items = [singleNodeJob({
+      jobId: "j1",
+      nodeId: "n1",
+      status: "pending_review",
+      awaitingReview: true,
+      ageMs: SINGLE_NODE_RESTORE_MAX_AGE_MS + 60_000,
+    })]
+    const out = collectRestorableSingleNodeJobs(items, canvas(["n1", "generate-image"]), NOW)
+    expect(out).toEqual([
+      { nodeId: "n1", jobId: "j1", nodeType: "generate-image", progress: 0, status: "running", awaitingReview: true },
+    ])
+  })
+
+  it("recognises a held job from the raw status alone (no sidecar)", () => {
+    // Belt and braces: an older backend, or any caller that forwards the row's
+    // status without the sidecar, must still get the hold treatment.
+    const items = [singleNodeJob({
+      jobId: "j1",
+      nodeId: "n1",
+      status: "pending_review",
+      ageMs: SINGLE_NODE_RESTORE_MAX_AGE_MS + 60_000,
+    })]
+    const out = collectRestorableSingleNodeJobs(items, canvas(["n1", "generate-image"]), NOW)
+    expect(out).toHaveLength(1)
+    expect(out[0].awaitingReview).toBe(true)
+  })
+
+  it("a held job restores as `running` — the overlay's liveness gate needs it", () => {
+    const items = [singleNodeJob({ jobId: "j1", nodeId: "n1", status: "pending_review", awaitingReview: true })]
+    const out = collectRestorableSingleNodeJobs(items, canvas(["n1", "generate-image"]), NOW)
+    expect(out[0].status).toBe("running")
+  })
+
+  it("the age bound still drops a NON-held job past the horizon (exemption is hold-only)", () => {
+    const items = [singleNodeJob({ jobId: "j1", nodeId: "n1", ageMs: SINGLE_NODE_RESTORE_MAX_AGE_MS + 60_000 })]
+    expect(collectRestorableSingleNodeJobs(items, canvas(["n1", "generate-image"]), NOW)).toEqual([])
+  })
+
   it("restores multiple distinct running nodes at once", () => {
     const items = [
       singleNodeJob({ jobId: "j1", nodeId: "n1" }),
@@ -149,7 +202,7 @@ describe("collectRestorableSingleNodeJobs", () => {
 // ===========================================================================
 
 describe("applySingleNodeJobRestore", () => {
-  const job = { nodeId: "n1", jobId: "j1", nodeType: "generate-image", progress: 40, status: "running" as const }
+  const job = { nodeId: "n1", jobId: "j1", nodeType: "generate-image", progress: 40, status: "running" as const, awaitingReview: false }
 
   it("sets executionStatus + currentJobId + currentJobProgress on the matched node", () => {
     const nodes = [{ id: "n1", data: { prompt: "hi" } }]
@@ -167,6 +220,21 @@ describe("applySingleNodeJobRestore", () => {
     const [n1] = applySingleNodeJobRestore(nodes, [job])
     // The restored poll's abandon guard bails unless data.currentJobId === jobId.
     expect((n1.data as Record<string, unknown>).currentJobId).toBe(job.jobId)
+  })
+
+  it("writes jobAwaitingReview on a HELD job so the overlay paints on first render", () => {
+    const nodes = [{ id: "n1", data: { prompt: "hi" } }]
+    const [n1] = applySingleNodeJobRestore(nodes, [{ ...job, awaitingReview: true }])
+    expect((n1.data as Record<string, unknown>).jobAwaitingReview).toBe(true)
+    // Still "running": the overlay is gated on liveness, not on a new status.
+    expect((n1.data as Record<string, unknown>).executionStatus).toBe("running")
+  })
+
+  it("MULTI-TAB: the held flag is transient too — the sanitizer reverts it", () => {
+    const original = { id: "n1", data: { prompt: "hi" } }
+    const restored = applySingleNodeJobRestore([original], [{ ...job, awaitingReview: true }])
+    const [stripped] = stripTransientRuntimeData(restored)
+    expect(stripped.data).toEqual(original.data)
   })
 
   it("leaves unmatched nodes untouched (by reference)", () => {

@@ -7,14 +7,41 @@ import { buildVariantResults } from "./variant-results";
 import { sunoVariantFields } from "@/lib/suno-ids";
 import { shouldAbandonNode } from "./abandon-guard";
 import { isInputWarningCode } from "@/lib/input-warning-codes";
+import { tx } from "@/lib/i18n";
 import {
   WorkflowStaleError,
   MAX_CONSECUTIVE_POLL_FAILURES,
   checkStorageError,
   updateProgressIfChanged,
   updateRecoveringIfChanged,
+  updateAwaitingReviewIfChanged,
   type ExecutionContext,
 } from "./types";
+
+/**
+ * `getJobStatusLean` plus the ONE side effect every node-owning poll loop
+ * needs: keep `data.jobAwaitingReview` in sync with the row, so a job parked in
+ * `pending_review` paints BaseNode's "Awaiting review" overlay instead of a
+ * bare, unexplained spinner.
+ *
+ * It exists because the flag is READ centrally (one `<NodePolicyOverlay>`
+ * mounted by BaseNode) but must be WRITTEN by ~21 independent poll loops in six
+ * files — and `jobRecovering` proved that "each loop remembers to do it" does
+ * not survive contact with this codebase (1 of 98 call sites remembered).
+ * `__tests__/poll-job-wrapper.test.ts` fails the build on loop #22 — and on any
+ * raw read whose call site does not carry a `raw-status-ok` marker comment
+ * naming the reason it owns no node.
+ *
+ * Clearing on a non-held tick is also half of the stale-overlay fix; the other
+ * half is `jobAwaitingReview: undefined` on every terminal patch, plus the
+ * overlay's own `executionStatus === "running"` gate.
+ */
+export async function getJobStatusLeanForNode(jobId: string, nodeId: string) {
+  const job = await getJobStatusLean(jobId); // raw-status-ok: this IS the wrapper
+  const { updateNodeData } = useWorkflowStore.getState();
+  updateAwaitingReviewIfChanged(nodeId, job.status === "pending_review", updateNodeData);
+  return job;
+}
 
 /** When true, toast notifications are suppressed (used during list fan-out). */
 let _suppressToasts = false;
@@ -65,6 +92,33 @@ const OUTPUT_URLS_KEY: Record<OutputKey, string | undefined> = {
   generatedAudioUrl: "audioUrls",
 };
 
+/**
+ * The keys EVERY run-start patch must write, so nothing from the previous run
+ * is painted over this one. `updateNodeData` is a shallow merge, so an omitted
+ * key SURVIVES — and with the policy overlay in play that is not cosmetic: a
+ * stale `errorHint.kind === "policy-block"` makes <NodePolicyOverlay> paint an
+ * opaque "Blocked by content policy: <the OLD reason>" panel over this run's
+ * real, unrelated failure, while the node cards suppress their own failed block
+ * in favour of an empty amber spacer. The user then sees run 1's block text and
+ * no trace of run 2's actual error.
+ *
+ * Exported so the other run-start patches spread ONE object instead of each
+ * remembering the list. All 37 of them now do — execute-node.ts's 27 (20 of
+ * which used to clear `errorMessage` and nothing else, 7 of which cleared
+ * nothing at all), plus asset-executors, node-executors, component-executor,
+ * list-execution and sub-workflow-executor. `__tests__/run-start-reset.test.ts`
+ * fails the build on the 38th, and on any key dropped from this object.
+ */
+export const RUN_START_RESET = {
+  executionStatus: "running",
+  errorMessage: undefined,
+  errorHint: undefined,
+  currentJobId: undefined,
+  currentJobProgress: 0,
+  // Re-running after a hold must not flash the previous run's overlay.
+  jobAwaitingReview: undefined,
+} as const;
+
 export function pollJobToCompletion(
   jobId: string,
   ctx: ExecutionContext,
@@ -79,7 +133,10 @@ export function pollJobToCompletion(
           return;
         }
         try {
-          const job = await getJobStatusLean(jobId);
+          // Owns no node: it RESOLVES a URL to a caller that paints
+          // (asset-executors' sheet/reference loops), so there is no nodeId
+          // here to write the hold flag onto.
+          const job = await getJobStatusLean(jobId); // raw-status-ok: resolves a URL, owns no node
           pollFailures = 0;
           if (job.status === "completed") {
             ctx.untrackInterval(poll);
@@ -94,13 +151,13 @@ export function pollJobToCompletion(
             ctx.untrackInterval(poll);
             // Final verification: the job may have completed while polling was failing
             try {
-              const job = await getJobStatusLean(jobId);
-              if (job.status === "completed") {
-                resolve(job.output_data?.imageUrl ?? "");
+              const finalJob = await getJobStatusLean(jobId);
+              if (finalJob.status === "completed") {
+                resolve(finalJob.output_data?.imageUrl ?? "");
                 return;
               }
-              if (job.status === "failed") {
-                reject(new Error(job.error_message ?? "Failed"));
+              if (finalJob.status === "failed") {
+                reject(new Error(finalJob.error_message ?? "Failed"));
                 return;
               }
             } catch { /* final check also failed */ }
@@ -196,6 +253,10 @@ function handleJobCompleted(
     activeResultIndex: 0,
     currentJobId: undefined,
     currentJobProgress: undefined,
+    // An APPROVE goes pending_review -> completed with no intervening poll
+    // tick, so this is the only place the hold flag gets cleared on the happy
+    // path. Without it the overlay would paint over the delivered result.
+    jobAwaitingReview: undefined,
     ...extraFields,
   });
   guardedToast.success(`${label} complete`);
@@ -220,12 +281,10 @@ export function pollJobWithNodeUpdate(
 ): Promise<string> {
   const { updateNodeData } = useWorkflowStore.getState();
   updateNodeData(nodeId, {
-    executionStatus: "running",
+    ...RUN_START_RESET,
     // Every listed key is reset — a stale video result must not survive into
     // a run that ends up delivering audio (or vice versa).
     ...Object.fromEntries(outputKeyList(outputKey).map((k) => [k, undefined])),
-    currentJobId: undefined,
-    currentJobProgress: 0,
   });
 
   return new Promise<string>((resolve, reject) => {
@@ -277,7 +336,11 @@ export function pollJobWithNodeUpdate(
               return;
             }
             try {
-              const job = await getJobStatusLean(jobId);
+              // The wrapper keeps `jobAwaitingReview` in sync on every tick —
+              // one mechanism for this loop and the other 18. `pending_review`
+              // is IN-FLIGHT, so the loop keeps polling and the job completes
+              // normally the moment a reviewer approves it.
+              const job = await getJobStatusLeanForNode(jobId, nodeId);
               pollFailures = 0;
 
               if (job.status === "processing") {
@@ -319,6 +382,7 @@ export function pollJobWithNodeUpdate(
                     errorHint: undefined,
                     currentJobId: undefined,
                     currentJobProgress: undefined,
+                    jobAwaitingReview: undefined,
                   });
                   guardedToast.error(`${label} failed`, { description: errMsg });
                   reject(new Error(errMsg));
@@ -336,6 +400,10 @@ export function pollJobWithNodeUpdate(
                   errorHint: job.error_hint ?? undefined,
                   currentJobId: undefined,
                   currentJobProgress: undefined,
+                  // A REJECTED hold arrives here: pending_review -> failed. The
+                  // hold flag must go with it, or the amber "awaiting review"
+                  // chrome would sit on top of the block explanation.
+                  jobAwaitingReview: undefined,
                 });
                 guardedToast.error(`${label} failed`, { description: errMsg });
                 reject(new Error(errMsg));
@@ -352,7 +420,7 @@ export function pollJobWithNodeUpdate(
                 }
                 // Final verification: the job may have completed while polling was failing
                 try {
-                  const job = await getJobStatusLean(jobId);
+                  const finalJob = await getJobStatusLean(jobId);
                   // Re-check after the await: a discard/replace may have landed
                   // while this final status request was in flight. Never write a
                   // terminal result for a job the node no longer points at.
@@ -360,16 +428,20 @@ export function pollJobWithNodeUpdate(
                     resolve("");
                     return;
                   }
-                  if (job.status === "completed") {
-                    if (handleJobCompleted(job, nodeId, jobId, outputKey, label, extraOutputFields, updateNodeData, resolve)) {
+                  if (finalJob.status === "completed") {
+                    if (handleJobCompleted(finalJob, nodeId, jobId, outputKey, label, extraOutputFields, updateNodeData, resolve)) {
                       return;
                     }
                   }
                 } catch { /* final check also failed */ }
                 updateNodeData(nodeId, {
                   executionStatus: "failed",
+                  // Defence in depth beside the run-start reset: giving up is a
+                  // different failure than any earlier policy block.
+                  errorHint: undefined,
                   currentJobId: undefined,
                   currentJobProgress: undefined,
+                  jobAwaitingReview: undefined,
                 });
                 guardedToast.error(`Failed to check ${label} status`);
                 reject(err);
@@ -384,15 +456,39 @@ export function pollJobWithNodeUpdate(
         // so "trim your clip and retry" reads as guidance rather than a crash.
         const code = (err as { code?: unknown })?.code;
         const isWarning = isInputWarningCode(code);
+        // A REQUEST-gate policy block never creates a job, so there is no row
+        // and no `jobs.error_hint` — the API rejects with 422 `job_blocked`.
+        // Synthesize the SAME hint shape the result gate writes, so ONE overlay
+        // renders both hook points. `err.code` is verified to survive on both
+        // transports (packages/client/src/errors.ts, lib/api.ts's
+        // `Object.assign(new Error(msg), { code })`), so no plumbing is needed.
+        //
+        // Deliberately NOT added to INPUT_WARNING_CODES: that set means "the
+        // user can fix their input", it drives a SwitchX preflight, and it is
+        // pinned by its route's own test. A policy block is a different thing.
+        const isPolicyBlock = code === "job_blocked";
         const msg = err instanceof Error ? err.message : "Unknown error";
         updateNodeData(nodeId, {
           executionStatus: "failed",
           currentJobId: undefined,
           currentJobProgress: undefined,
-          ...(isWarning ? { errorMessage: msg, errorCode: code } : {}),
+          jobAwaitingReview: undefined,
+          // Written on EVERY arm, not just the policy one: a start failure that
+          // carries no hint of its own must CLEAR the last run's, or the
+          // overlay paints that block over this unrelated error.
+          errorHint: isPolicyBlock
+            ? { kind: "policy-block", policyId: "", reason: msg, hookPoint: "request" }
+            : undefined,
+          ...(isPolicyBlock
+            ? { errorMessage: msg }
+            : isWarning
+              ? { errorMessage: msg, errorCode: code }
+              : {}),
         });
         if (!checkStorageError(err, ctx)) {
-          if (isWarning) {
+          if (isPolicyBlock) {
+            guardedToast.warning(tx("run.jobBlocked", { label }));
+          } else if (isWarning) {
             guardedToast.warning(msg);
           } else {
             guardedToast.error(`Failed to start ${label}`, { description: msg });
@@ -424,12 +520,7 @@ export function pollImageRefineToNode(
   label: string,
 ): Promise<string> {
   const { updateNodeData } = useWorkflowStore.getState();
-  updateNodeData(nodeId, {
-    executionStatus: "running",
-    errorMessage: undefined,
-    currentJobId: undefined,
-    currentJobProgress: 0,
-  });
+  updateNodeData(nodeId, { ...RUN_START_RESET });
 
   return new Promise<string>((resolve, reject) => {
     apiCall()
@@ -441,7 +532,11 @@ export function pollImageRefineToNode(
 
         const poll = setInterval(async () => {
           try {
-            const job = await getJobStatusLean(jobId);
+            // Through the wrapper like every other node-owning loop: a refine
+            // job is single-node + finalize-funnel, so it IS hold-eligible, and
+            // without this a held refine spins with no explanation for hours
+            // (`pending_review` matches none of the branches below).
+            const job = await getJobStatusLeanForNode(jobId, nodeId);
             pollFailures = 0;
 
             if (job.status === "processing" && job.progress != null) {
@@ -457,8 +552,10 @@ export function pollImageRefineToNode(
                 updateNodeData(nodeId, {
                   executionStatus: "failed",
                   errorMessage: errMsg,
+                  errorHint: undefined,
                   currentJobId: undefined,
                   currentJobProgress: undefined,
+                  jobAwaitingReview: undefined,
                 });
                 guardedToast.error(`${label} failed`, { description: errMsg });
                 reject(new Error(errMsg));
@@ -484,6 +581,10 @@ export function pollImageRefineToNode(
                 activeResultIndex: 0,
                 currentJobId: undefined,
                 currentJobProgress: undefined,
+                // An APPROVE goes pending_review -> completed with no
+                // intervening tick, so this is the only place the hold flag
+                // gets cleared on the happy path.
+                jobAwaitingReview: undefined,
                 ...(kieTaskId ? { kieTaskId } : {}),
               });
               guardedToast.success(`${label} complete`);
@@ -497,8 +598,15 @@ export function pollImageRefineToNode(
               updateNodeData(nodeId, {
                 executionStatus: "failed",
                 errorMessage: errMsg,
+                // A result-gate BLOCK or a reviewer REJECT arrives here with the
+                // row's own hint; carrying it renders the policy overlay instead
+                // of a generic red failure. `?? undefined` clears a stale one.
+                errorHint: job.error_hint ?? undefined,
                 currentJobId: undefined,
                 currentJobProgress: undefined,
+                // A REJECTED hold is pending_review -> failed: the amber chrome
+                // must not sit on top of the block explanation.
+                jobAwaitingReview: undefined,
               });
               guardedToast.error(`${label} failed`, { description: errMsg });
               reject(new Error(errMsg));
@@ -509,8 +617,10 @@ export function pollImageRefineToNode(
               clearInterval(poll);
               updateNodeData(nodeId, {
                 executionStatus: "failed",
+                errorHint: undefined,
                 currentJobId: undefined,
                 currentJobProgress: undefined,
+                jobAwaitingReview: undefined,
               });
               guardedToast.error(`Failed to check ${label} status`);
               reject(err);
@@ -519,14 +629,29 @@ export function pollImageRefineToNode(
         }, 2000);
       })
       .catch((err) => {
+        // Same branch as pollJobWithNodeUpdate: a REQUEST-gate block answers 422
+        // `job_blocked` and creates no job row, so there is no `jobs.error_hint`
+        // to read — synthesize the same shape, and warn rather than shouting a
+        // red "Failed to start" at the user for OUR policy decision.
+        const isPolicyBlock = (err as { code?: unknown })?.code === "job_blocked";
+        const msg = err instanceof Error ? err.message : "Unknown error";
         updateNodeData(nodeId, {
           executionStatus: "failed",
+          // The message is written on BOTH arms: without it an ordinary start
+          // failure leaves the card blank (or, worse, carrying the last run's).
+          errorMessage: msg,
+          errorHint: isPolicyBlock
+            ? { kind: "policy-block", policyId: "", reason: msg, hookPoint: "request" }
+            : undefined,
           currentJobId: undefined,
           currentJobProgress: undefined,
+          jobAwaitingReview: undefined,
         });
-        guardedToast.error(`Failed to start ${label}`, {
-          description: err instanceof Error ? err.message : "Unknown error",
-        });
+        if (isPolicyBlock) {
+          guardedToast.warning(tx("run.jobBlocked", { label }));
+        } else {
+          guardedToast.error(`Failed to start ${label}`, { description: msg });
+        }
         reject(err);
       });
   });

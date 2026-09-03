@@ -228,6 +228,25 @@ export const envSchema = z.object({
    * everyone (fail-closed). INERT on a deployment with no payer configured.
    */
   PLATFORM_OPERATOR_EMAILS: z.string().default(""),
+  /**
+   * Hours a job may sit in `pending_review` (held by a registered job policy
+   * for human review) before the platform AUTO-REJECTS it: the reservation is
+   * refunded, the withheld output is deleted, and the decision is recorded
+   * with `policy_id = "platform"`, `reason = "hold-expired"`.
+   *
+   * Empty (the default) DISABLES the sweep entirely — `sweepExpiredHolds` does
+   * nothing at all, so a deployment with no job policy is byte-identical. A
+   * held row is exempt from every other liveness sweep by construction (its
+   * status is outside `pending|processing`), so without a TTL an abandoned
+   * review strands the user's credits forever. This is the ONE sweep permitted
+   * to write a `pending_review` row.
+   *
+   * Auto-APPROVE is deliberately not an option: it would publish exactly the
+   * output a human declined to look at. Recommended value on a moderated
+   * deployment: 72. Kept as a string (not z.coerce.number) so "unset" and
+   * "0 hours" stay distinguishable — see lib/reconcile/hold-expiry.ts.
+   */
+  JOB_HOLD_TTL_HOURS: z.string().default(""),
   /** Max nodes a single workflow execution can run concurrently (default 3). Prevents one large workflow from starving other users. */
   MAX_CONCURRENT_NODES_PER_EXECUTION: z.coerce.number().int().min(1).max(20).default(6),
   /** BullMQ concurrency for the video worker (default 50). Safe to set high — work is I/O-bound (external API calls). */

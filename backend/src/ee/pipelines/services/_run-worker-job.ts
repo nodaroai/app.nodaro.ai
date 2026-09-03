@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { insertInternalJob } from "../../../lib/insert-job.js"
+import { JobBlockedError } from "../../../lib/job-policy.js"
 import { pollForAssetId, pollJobUntilComplete } from "./_poll.js"
 
 /**
@@ -109,6 +110,12 @@ export async function runPipelineWorkerJob(
     },
     { client: supabase, billingContext },
   )
+  // A request-gate BLOCK is a policy decision, not an insert failure. Flattened
+  // into the generic error below it would reach the pipeline stage — and from
+  // there the user — as "Failed to create generate-image job", hiding both the
+  // reason and the fact that nothing is retryable. WS4's stage-utils codes
+  // `policy_blocked` off this class.
+  if (insertErr?.blocked) throw new JobBlockedError(insertErr.blocked)
   if (insertErr || !job?.id) {
     throw new Error(
       `Failed to create ${jobName} job: ${insertErr?.message ?? "no id returned"}`,

@@ -75,6 +75,24 @@ export class WorkflowConflictError extends NodaroError {
 }
 
 /**
+ * HTTP 422 `job_blocked`. A job policy registered by this deployment refused
+ * the generation **before it ran** — no job was created, nothing was reserved
+ * and nothing was charged. `message` is the policy's user-safe text: show it
+ * as-is. Do not retry the identical request; whether the same input would be
+ * judged differently is the deployment's policy's business.
+ *
+ * Only occurs on deployments that register a job policy. Selected by `code`,
+ * not by status, the same way `workflow_conflict` narrows a 409 above — any
+ * other 422 stays a plain `NodaroError`.
+ */
+export class JobBlockedError extends NodaroError {
+  constructor(message = "Blocked by this deployment's content policy") {
+    super(message, "job_blocked", 422)
+    this.name = "JobBlockedError"
+  }
+}
+
+/**
  * A job reached a terminal `failed`/`cancelled` status while being awaited by
  * `nodes.runAndWait` / `nodes.runMany`. Not an HTTP-level error (the polls
  * themselves succeeded), so `status` is 0 — distinguish it by type/`code`.
@@ -120,6 +138,32 @@ export class JobAbortedError extends NodaroError {
   }
 }
 
+/**
+ * The awaited job entered `pending_review`: a job policy registered by this
+ * deployment held its output for a human reviewer. `pending_review` is
+ * IN-FLIGHT, not terminal, so `nodes.runAndWait` / `nodes.runMany` end the
+ * poll on the first tick they observe it rather than burning `maxMs` on a
+ * status that no longer moves on its own.
+ *
+ * This does NOT cancel the job — the output exists, a human is reviewing it,
+ * and the credit reservation stays `reserved` for the whole hold. Do not
+ * re-run the request (a duplicate would be held too): re-fetch with
+ * `jobs.get(jobId)` later, or surface "awaiting review" to your user and poll
+ * `jobs.getStatus()` yourself. It resolves to `completed` (approved), `failed`
+ * (rejected, with `error_hint.kind === "policy-block"`) or `cancelled`.
+ *
+ * Not an HTTP error — `status` is 0; catch by type/`code`.
+ */
+export class JobHeldError extends NodaroError {
+  constructor(
+    message: string,
+    public readonly jobId: string,
+  ) {
+    super(message, "job_held", 0)
+    this.name = "JobHeldError"
+  }
+}
+
 interface ApiErrorBody {
   error?: { code?: string; message?: string; missingScope?: string; required?: number; available?: number; limitBytes?: number; [key: string]: unknown }
 }
@@ -136,6 +180,7 @@ export function throwFromResponse(status: number, body: ApiErrorBody): never {
       body.error?.currentRecord as Record<string, unknown> | undefined,
     )
   }
+  if (status === 422 && code === "job_blocked") throw new JobBlockedError(message)
   if (status === 403 && code === "insufficient_scope") {
     throw new ForbiddenError(message, body.error?.missingScope)
   }

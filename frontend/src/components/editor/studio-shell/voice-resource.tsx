@@ -4,6 +4,7 @@ import { textToSpeech, lipSyncApi, voiceDesignApi, getJobStatusLean } from "@/li
 import { useCreateVoiceClone } from "@/hooks/use-voice-clones"
 import type { VoiceClone } from "@/lib/api"
 import type { CharacterVoice } from "@/types/nodes"
+import { tx } from "@/lib/i18n"
 
 type Mode = "browse" | "clone" | "design"
 
@@ -53,10 +54,29 @@ async function pollJobUrl(
     if (!isMounted()) return null
     const job = await getJobStatusLean(jobId)
     if (job.status === "completed") return (job.output_data?.[field] as string | undefined) ?? null
+    // A held job is neither done nor failed, and it will outlive this ~3 min
+    // budget by hours. Returning `null` would land in the caller's
+    // "Timed out or failed." branch — the wrong story about a working gate.
+    if (job.status === "pending_review") throw new JobAwaitingReviewError()
     if (job.status === "failed" || job.status === "cancelled") return null
     await new Promise((r) => setTimeout(r, 1500))
   }
   return null
+}
+
+/** A job parked in `pending_review` is not a failure and not a timeout. Thrown
+ *  so the preview says so instead of reporting the generic failure text. */
+class JobAwaitingReviewError extends Error {
+  constructor() {
+    super(tx("node.review.awaiting"))
+    this.name = "JobAwaitingReviewError"
+  }
+}
+
+/** The caught error's own text when the job is merely held; the caller's
+ *  generic sentence otherwise. */
+function previewErrorText(e: unknown, fallback: string): string {
+  return e instanceof JobAwaitingReviewError ? e.message : fallback
 }
 
 export function VoiceResource({ voice: v, onVoiceChange, sourceImageUrl }: VoiceResourceProps) {
@@ -89,8 +109,8 @@ export function VoiceResource({ voice: v, onVoiceChange, sourceImageUrl }: Voice
       if (!mounted.current) return
       if (url) setAudioUrl(url)
       else setError("Timed out or failed.")
-    } catch {
-      if (mounted.current) setError("Speech failed — try again.")
+    } catch (e) {
+      if (mounted.current) setError(previewErrorText(e, "Speech failed — try again."))
     } finally {
       if (mounted.current) setBusy(null)
     }
@@ -110,8 +130,8 @@ export function VoiceResource({ voice: v, onVoiceChange, sourceImageUrl }: Voice
       if (!mounted.current) return
       if (url) setVideoUrl(url)
       else setError("Timed out or failed.")
-    } catch {
-      if (mounted.current) setError("Lip-sync failed — try again.")
+    } catch (e) {
+      if (mounted.current) setError(previewErrorText(e, "Lip-sync failed — try again."))
     } finally {
       if (mounted.current) setBusy(null)
     }
@@ -278,8 +298,8 @@ function DesignAuditionPanel() {
       if (!mounted.current) return
       if (url) setAudioUrl(url)
       else setError("Timed out or failed.")
-    } catch {
-      if (mounted.current) setError("Audition failed — try again.")
+    } catch (e) {
+      if (mounted.current) setError(previewErrorText(e, "Audition failed — try again."))
     } finally {
       if (mounted.current) setBusy(false)
     }

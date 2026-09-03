@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
 import { requireAdmin } from "../middleware/require-admin.js"
+import { JOB_STATUSES } from "../../lib/job-status.js"
 
 /**
  * GET /v1/admin/jobs -- the admin Jobs table's data source.
@@ -43,9 +44,11 @@ const ADMIN_JOB_COLUMNS = [
 const listQuery = z.object({
   page: z.coerce.number().int().min(0).default(0),
   pageSize: z.coerce.number().int().min(1).max(200).default(50),
-  status: z
-    .enum(["pending", "queued", "processing", "completed", "failed", "cancelled"])
-    .optional(),
+  // Derived from the canonical vocabulary, not re-typed: this hand-rolled copy
+  // made `/admin/jobs?status=pending_review` a 400 the day the job-policy hook
+  // shipped — i.e. the admin could not filter for exactly the jobs waiting on
+  // them (spec 2026-09-03-job-policy-hook-design §6.3).
+  status: z.enum(JOB_STATUSES).optional(),
   userId: z.string().uuid().optional(),
   /**
    * Comma-separated UUIDs -- the admin "hide internal accounts" filter. Parsed
