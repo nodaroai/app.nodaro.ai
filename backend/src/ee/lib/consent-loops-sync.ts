@@ -1,5 +1,6 @@
 import { supabase } from "../../lib/supabase.js"
 import { updateContact, isLoopsConfigured } from "./loops-client.js"
+import { firstNameFrom } from "./recipient-first-name.js"
 
 const CONSENT_KIND = "marketing_email"
 
@@ -51,7 +52,7 @@ export async function syncConsentRow(userId: string, kind: string = CONSENT_KIND
     await clearDirty(userId, kind, "error")
     return
   }
-  const firstName = (((profile?.full_name as string | null) ?? "").trim().split(/\s+/)[0]) || undefined
+  const firstName = firstNameFrom(profile?.full_name as string | null | undefined)
 
   const result = await updateContact(email, {
     firstName,

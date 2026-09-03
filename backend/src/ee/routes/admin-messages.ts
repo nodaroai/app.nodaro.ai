@@ -278,17 +278,6 @@ export async function adminMessagesRoutes(app: FastifyInstance) {
       })
     }
 
-    // Validation, template capability and rendering all happen inside
-    // `parseAdminMessage` — the SAME call the preview makes, so the two
-    // surfaces cannot answer differently for the same input.
-    const parsed = parseAdminMessage(body.data.templateId, body.data.variables)
-    if (!parsed.ok) {
-      return reply.status(400).send({ error: { code: "validation_error", message: parsed.message } })
-    }
-    const { template, subject, bodyHtml, dataVariables, input } = parsed.value
-
-    const imageUrl = typeof input.imageUrl === "string" && input.imageUrl.length > 0 ? input.imageUrl : null
-
     // Refuse BEFORE writing a row: an install with no Loops key would otherwise
     // accumulate rows for mail that never had anywhere to go.
     if (!isLoopsConfigured()) {
@@ -301,21 +290,14 @@ export async function adminMessagesRoutes(app: FastifyInstance) {
     }
 
     try {
-      // Inside the try. `validateImageUrl` cannot throw today — both helpers it
-      // calls swallow their own errors — but that is a fact about their
-      // internals, not a contract, and an uncaught reject here would surface as
-      // an unhandled 500 instead of a message the admin can act on.
-      if (imageUrl) {
-        const problem = await validateImageUrl(imageUrl)
-        if (problem) {
-          return reply.status(400).send({ error: { code: "validation_error", message: problem } })
-        }
-      }
-
       // --- Recipient -------------------------------------------------------
+      // FIRST, and before the render, because the render NEEDS it: all three
+      // Loops templates open with the recipient's name, and Loops refuses a
+      // send whose `firstName` is missing or empty. Looking the user up after
+      // rendering is what produced a payload that could never be delivered.
       const { data: profile, error: profileErr } = await supabase
         .from("profiles")
-        .select("id, email")
+        .select("id, email, full_name")
         .eq("id", params.data.id)
         .maybeSingle()
       if (profileErr) {
@@ -326,6 +308,33 @@ export async function adminMessagesRoutes(app: FastifyInstance) {
         return reply.status(404).send({
           error: { code: "not_found", message: "That user has no email address on file" },
         })
+      }
+
+      // Validation, template capability and rendering all happen inside
+      // `parseAdminMessage` — the SAME call the preview makes, so the two
+      // surfaces cannot answer differently for the same input. It also refuses
+      // a payload Loops would reject, so a template that has drifted from its
+      // Loops counterpart fails here, naming the variable, instead of coming
+      // back as an unexplained 502 after a row has already been written.
+      const parsed = parseAdminMessage(body.data.templateId, body.data.variables, {
+        fullName: (profile as { full_name?: string | null } | null)?.full_name ?? null,
+      })
+      if (!parsed.ok) {
+        return reply.status(400).send({ error: { code: "validation_error", message: parsed.message } })
+      }
+      const { template, subject, bodyHtml, dataVariables, input } = parsed.value
+
+      // `validateImageUrl` cannot throw today — both helpers it calls swallow
+      // their own errors — but that is a fact about their internals, not a
+      // contract, and an uncaught reject here would surface as an unhandled
+      // 500 instead of a message the admin can act on. Hence: inside the try.
+      const imageUrl =
+        typeof input.imageUrl === "string" && input.imageUrl.length > 0 ? input.imageUrl : null
+      if (imageUrl) {
+        const problem = await validateImageUrl(imageUrl)
+        if (problem) {
+          return reply.status(400).send({ error: { code: "validation_error", message: problem } })
+        }
       }
 
       // --- Daily limit -----------------------------------------------------
