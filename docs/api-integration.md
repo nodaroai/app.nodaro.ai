@@ -1756,7 +1756,7 @@ The listing, plus two endpoints that poll multiple job statuses in a single roun
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/v1/jobs?limit=&cursor=&type=&origin=&attachToCharacterId=` | Your jobs, newest first, cursor-paginated: `{ data: Job[], next }` (`limit` ≤ 100; pass `next` back as `cursor`). `type` matches `input_data.type` — the route that created the job (`llm-structured`, `video-analysis`, …); `origin` matches `input_data.origin` — the client app that sent it (`studio`, …). Both are exact-match and combine. `attachToCharacterId` is the per-character archive described under characters. |
+| `GET` | `/v1/jobs?limit=&cursor=&type=&origin=&attachToCharacterId=` | Your jobs, newest first, cursor-paginated: `{ data: Job[], next }` (`limit` ≤ 100; pass `next` back as `cursor`). `type` matches `input_data.type` — the route that created the job (`llm-structured`, `video-analysis`, …); `origin` matches `input_data.origin` — the client app that sent it (`studio`, …). Both are exact-match and combine. A page may hold fewer than `limit` rows — even none — and still carry a `next`; page on `next`, never on `data.length`. `attachToCharacterId` is the per-character archive described under characters. |
 | `GET` | `/v1/jobs/status?ids=a,b,c` | Comma-separated IDs, max 100. Returns `{ jobs: { id, status, output_data, error_message, error_hint, credit_status }[] }`. Cross-user / non-existent IDs are silently omitted — reconcile locally. |
 | `POST` | `/v1/jobs/batch-status` | Body `{ jobIds: string[] }`, max 100. Returns `{ data: { id, status, output_data, error_message, error_hint }[] }` (no `credit_status` on this route). |
 
