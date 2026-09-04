@@ -459,10 +459,27 @@ export async function jobRoutes(app: FastifyInstance) {
     // Non-admins always see only their own jobs; admins can optionally filter by userId
     const filterUserId = isAdmin && queryUserId ? queryUserId : currentUserId
 
+    // The component-execution exclusion is applied IN CODE, below — not here.
+    // It used to ride a top-level
+    //   .or("workflow_execution_id.is.null,workflow_executions.is_component_execution.neq.true")
+    // which PostgREST cannot parse: inside `or()` a field is a bare column
+    // (plus an optional `->`/`->>` path) and the dot is the SEPARATOR, so the
+    // embedded path tokenized as field `workflow_executions` + operator
+    // `is_component_execution` and the whole request came back PGRST100/400.
+    // The route then swallowed that error, so from #1174 until the commit
+    // before this one it answered an empty list to every caller.
+    //
+    // It is not fixable in the query either. PostgREST computes an embed as a
+    // lateral subquery in the SELECT list, so the top-level WHERE that `or()`
+    // lands in has nothing to reference; filtering a PARENT row by an embedded
+    // column needs `!inner`, which would drop exactly the
+    // `workflow_execution_id IS NULL` rows the first disjunct exists to keep.
+    //
+    // `workflow_execution_id` is selected only to decide the null case. It is
+    // in neither key allowlist, so `sanitizeJobForPublic` still strips it.
     let query = supabase
       .from("jobs")
-      .select("id, status, progress, input_data, output_data, error_message, error_hint, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, job_type, source, source_detail, workflow_executions!left(is_component_execution)")
-      .or("workflow_execution_id.is.null,workflow_executions.is_component_execution.neq.true")
+      .select("id, status, progress, input_data, output_data, error_message, error_hint, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, job_type, source, source_detail, workflow_execution_id, workflow_executions!left(is_component_execution)")
       .order("created_at", { ascending: false })
       .limit(limitNum)
 
@@ -510,8 +527,24 @@ export async function jobRoutes(app: FastifyInstance) {
       return sendInternalError(reply, req, listError, "Failed to list jobs")
     }
 
+    // The component-execution exclusion (see the query above): keep a job that
+    // belongs to no execution at all, or whose execution is not a component
+    // execution. A to-one embed arrives as an object — that is how every other
+    // reader in this repo takes it (app-analytics.ts, app-runner.ts) — but an
+    // unverified assumption about PostgREST's response shape is what produced
+    // this bug, so accept a one-element array rather than bet the list again.
+    const visibleJobs = (jobs ?? []).filter((job) => {
+      if (job.workflow_execution_id == null) return true
+      const embed = (job as { workflow_executions?: unknown }).workflow_executions
+      const execution = (Array.isArray(embed) ? embed[0] : embed) as
+        | { is_component_execution?: boolean | null }
+        | null
+        | undefined
+      return execution?.is_component_execution !== true
+    })
+
     // Strip the joined workflow_executions data (only used for filtering)
-    const cleanedJobs = (jobs ?? []).map(({ workflow_executions: _we, ...job }) => job)
+    const cleanedJobs = visibleJobs.map(({ workflow_executions: _we, ...job }) => job)
     const sanitizedJobs = cleanedJobs.map((job) => {
       const sanitized = sanitizeJobForPublic(job as JobRecord, isAdmin)
       if (!attachToCharacterId) return sanitized
@@ -526,7 +559,11 @@ export async function jobRoutes(app: FastifyInstance) {
       return { ...sanitized, isSceneRender: skip }
     })
 
-    // Determine next cursor
+    // Determine next cursor — from the RAW page the DB returned, never the
+    // filtered one. The cursor is a `created_at` keyset, so paging off the last
+    // VISIBLE row would re-read every excluded row after it on the next call;
+    // a page shortened by the exclusion above is still a full page as far as
+    // pagination is concerned, and must advance past the rows it dropped.
     const nextCursor = jobs && jobs.length === limitNum ? jobs[jobs.length - 1]?.created_at : null
 
     return {

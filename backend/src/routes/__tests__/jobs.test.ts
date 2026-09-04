@@ -767,6 +767,95 @@ describe("GET /v1/jobs — attachToCharacterId (durable per-character listing)",
   })
 })
 
+/**
+ * A jobs row as the LIST query returns it, with the `workflow_executions!left`
+ * embed PostgREST attaches for a to-one FK (an object, or null when the job
+ * belongs to no execution).
+ */
+function executionJob(
+  id: string,
+  workflowExecutionId: string | null,
+  isComponentExecution?: boolean,
+) {
+  return {
+    id,
+    status: "completed",
+    progress: 100,
+    input_data: { type: "generate-image" },
+    output_data: { imageUrl: `https://r2/${id}.png` },
+    error_message: null,
+    created_at: `2026-09-04T00:00:0${id.slice(-1)}Z`,
+    started_at: null,
+    completed_at: null,
+    user_id: TEST_USER_ID,
+    credits: 1,
+    job_type: "generate-image",
+    workflow_execution_id: workflowExecutionId,
+    workflow_executions:
+      workflowExecutionId === null ? null : { is_component_execution: isComponentExecution ?? false },
+  }
+}
+
+describe("GET /v1/jobs — component-execution exclusion", () => {
+  it("is applied in code, never as a PostgREST or() over the embedded column", async () => {
+    // The `.or(...)` this replaces named the embedded column as
+    // `workflow_executions.is_component_execution` and could not parse
+    // (PGRST100): inside or() the dot is the SEPARATOR, so an embedded path is
+    // not a field at all. A reintroduced or() here is the bug coming back.
+    const calls = seedJobsList([])
+
+    const res = await app.inject({ method: "GET", url: `/v1/jobs?__userId=${TEST_USER_ID}` })
+
+    expect(res.statusCode).toBe(200)
+    expect(calls.filter((c) => c.method === "or")).toEqual([])
+  })
+
+  it("keeps jobs with no execution and non-component executions, drops the component ones", async () => {
+    seedJobsList([
+      executionJob("job-1", null),
+      executionJob("job-2", "exec-a", false),
+      executionJob("job-3", "exec-b", true),
+    ])
+
+    const res = await app.inject({ method: "GET", url: `/v1/jobs?__userId=${TEST_USER_ID}` })
+
+    expect(res.statusCode).toBe(200)
+    const data = res.json().data as Array<Record<string, unknown>>
+    expect(data.map((j) => j.id)).toEqual(["job-1", "job-2"])
+    // The embed is a filtering detail — it never reaches the wire, and neither
+    // does the id it was joined on (outside both key allowlists).
+    expect(data[0]).not.toHaveProperty("workflow_executions")
+    expect(data[0]).not.toHaveProperty("workflow_execution_id")
+  })
+
+  it("reads a one-element array embed the same as an object", async () => {
+    const asArray = (job: ReturnType<typeof executionJob>) => ({
+      ...job,
+      workflow_executions: job.workflow_executions ? [job.workflow_executions] : [],
+    })
+    seedJobsList([asArray(executionJob("job-1", "exec-a", false)), asArray(executionJob("job-2", "exec-b", true))])
+
+    const res = await app.inject({ method: "GET", url: `/v1/jobs?__userId=${TEST_USER_ID}` })
+
+    expect(res.statusCode).toBe(200)
+    expect((res.json().data as Array<{ id: string }>).map((j) => j.id)).toEqual(["job-1"])
+  })
+
+  it("pages off the RAW last row, so a page shortened by the exclusion still advances", async () => {
+    // Two rows came back for limit=2 — a FULL page — but one is excluded. The
+    // cursor must still be the raw last row's created_at, or the next call
+    // re-reads the excluded tail forever.
+    seedJobsList([executionJob("job-1", null), executionJob("job-2", "exec-b", true)])
+
+    const res = await app.inject({ method: "GET", url: `/v1/jobs?__userId=${TEST_USER_ID}&limit=2` })
+
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.data.map((j: { id: string }) => j.id)).toEqual(["job-1"])
+    expect(body.next).toBe("2026-09-04T00:00:02Z")
+  })
+})
+
 describe("GET /v1/jobs — a failed query", () => {
   it("answers 500 instead of an empty list", async () => {
     // The list route read only `data`, so a failing query became `[]` and the
