@@ -48,17 +48,53 @@ export type AvailabilityKind = "nodes" | "models"
 const gateableNodeTypes = new Set<string>()
 export const GATEABLE_NODE_TYPES: ReadonlySet<string> = gateableNodeTypes
 
-const nodeUniverseReady: Promise<void> = import("./node-registry.js")
-  .then((m) => {
-    for (const n of m.NODE_REGISTRY) if (n.category !== "utility") gateableNodeTypes.add(n.type)
-  })
-  .catch((err) => {
-    console.error("[availability-override] node universe load failed — allow-inversion stays inert:", (err as Error).message)
-  })
+/**
+ * The fill, MEMOISED and started on demand rather than at module scope.
+ *
+ * WHY NOT A BARE `const x = import(...)` AT MODULE SCOPE (what this was): that
+ * promise is created by the mere ACT OF IMPORTING this module and nothing
+ * awaits it, so under Vitest every test file that reaches surface-deny (→
+ * credit-guard → most route suites) starts loading
+ * `node-registry → ee/billing/credits → auto-recharge → stripe-client → stripe`
+ * in the background. A file whose tests finish before that chain settles tears
+ * its environment down mid-import, and vitest reports an
+ * `EnvironmentTeardownError` unhandled rejection — "0 tests failed, N unhandled
+ * errors", non-zero exit, intermittent, and naming whichever leaf of the
+ * credits graph was in flight (`stripe`, `lib/pricing/ai-avatar-cost.ts`, …).
+ * It was a coin-flip on CPU contention, which is why it read as a flake.
+ *
+ * Every caller shares one promise, so the import still runs at most once per
+ * process and `GATEABLE_NODE_TYPES` is still filled in place.
+ */
+let nodeUniverseReady: Promise<void> | null = null
 
-/** Test hook: await the lazy universe fill before asserting on GATEABLE sets. */
-export function __availabilityUniverseReadyForTests(): Promise<void> {
+function fillNodeUniverse(): Promise<void> {
+  nodeUniverseReady ??= import("./node-registry.js")
+    .then((m) => {
+      for (const n of m.NODE_REGISTRY) if (n.category !== "utility") gateableNodeTypes.add(n.type)
+    })
+    .catch((err) => {
+      console.error("[availability-override] node universe load failed — allow-inversion stays inert:", (err as Error).message)
+    })
   return nodeUniverseReady
+}
+
+// EAGER IN EVERY REAL PROCESS — deliberately kept, and this is the load-bearing
+// half. `loadAvailabilityOverrides()` is only called by app.ts, but
+// `isNodeDenied` also runs in the STANDALONE orchestrator process
+// (orchestrator.ts → orchestrator-worker → payload-builder), which never boots
+// the app. With an empty universe, `allow`-list inversion answers "not gateable
+// ⇒ not denied" for everything (surface-deny.ts:39,41) — the deployment's
+// node whitelist would silently go INERT on the DAG lane. So the kick stays;
+// it is skipped only under the Vitest runner, where nothing boots, nothing runs
+// a DAG, and the one suite that asserts on the set
+// (lib/__tests__/surface-deny.test.ts) awaits the hook below instead.
+if (!process.env.VITEST) void fillNodeUniverse()
+
+/** Test hook: await the lazy universe fill before asserting on GATEABLE sets.
+ *  Starts it if nothing has yet — under Vitest nothing has. */
+export function __availabilityUniverseReadyForTests(): Promise<void> {
+  return fillNodeUniverse()
 }
 
 /** supabase.js pulls the full config at module scope — deferred for the same
@@ -115,7 +151,7 @@ async function refresh(): Promise<void> {
  * deployment's safe baseline. The background TTL refresh keeps retrying.
  */
 export async function loadAvailabilityOverrides(): Promise<void> {
-  await nodeUniverseReady
+  await fillNodeUniverse()
   if (inflight) return
   inflight = refresh().finally(() => {
     inflight = null
@@ -159,6 +195,11 @@ export async function saveAvailabilityOverride(kind: AvailabilityKind, enabled: 
     cache = { ...cache, [kind]: null }
     return
   }
+  // The node universe is filtered against below, so make sure it exists: boot
+  // already filled it in the server process (this await is then a no-op on a
+  // settled promise), but a caller that reached here without booting would
+  // otherwise clean every id away and store an empty enabled-set.
+  await fillNodeUniverse()
   const universe = kind === "nodes" ? GATEABLE_NODE_TYPES : GATEABLE_MODEL_IDS
   const cleaned = [...new Set(enabled.filter((id) => universe.has(id)))]
   const { error } = await (await db())

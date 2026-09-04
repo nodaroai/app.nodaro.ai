@@ -26,6 +26,48 @@ export { MIN_IDEMPOTENCY_KEY_LENGTH } from "../lib/dedup-fingerprint.js"
 // Node caches the module after first import, so per-request overhead is a
 // trivial promise await.
 
+/**
+ * The two cloud impls, MEMOISED per process rather than per guard factory.
+ *
+ * `creditGuard()` / `paygSurfaceGuard()` run once per ROUTE at registration
+ * time, and each used to create its own `import(...)` promise that is awaited
+ * only if a request actually reaches that guard. Under Vitest that is a
+ * fire-and-forget import per registered route: a suite that builds the app and
+ * then finishes (or only exercises routes the guard never fires on) tears its
+ * environment down while
+ * `credit-guard-impl → ee/billing/credits → auto-recharge → stripe-client → stripe`
+ * is still loading, and vitest reports `EnvironmentTeardownError` unhandled
+ * rejections — "0 tests failed, N unhandled errors", non-zero exit, intermittent,
+ * naming whichever leaf of the credits graph was in flight. Same hazard, same
+ * shape and same fix as `lib/availability-override.ts`'s node-universe fill.
+ *
+ * One promise per process now, created on first demand; the per-request await
+ * is still just promise-resolution after the first call.
+ */
+let creditGuardImplPromise: Promise<typeof import("../ee/lib/credit-guard-impl.js")> | null = null
+function loadCreditGuardImpl(): Promise<typeof import("../ee/lib/credit-guard-impl.js")> {
+  return (creditGuardImplPromise ??= import("../ee/lib/credit-guard-impl.js"))
+}
+
+let paygSurfaceGuardImplPromise: Promise<typeof import("../ee/lib/payg-surface-guard.js")> | null = null
+function loadPaygSurfaceGuardImpl(): Promise<typeof import("../ee/lib/payg-surface-guard.js")> {
+  return (paygSurfaceGuardImplPromise ??= import("../ee/lib/payg-surface-guard.js"))
+}
+
+/**
+ * The registration-time warm-up. Kept for every REAL process (it is what makes
+ * the first request's await free) and skipped under the Vitest runner, where
+ * nothing serves traffic and the only thing an un-awaited warm-up can do is
+ * outlive the environment. Deliberately NOT `.catch`-ed: a cloud impl that
+ * cannot load is a fail-loud boot problem, and swallowing it here would turn
+ * one crash into per-request 500s forever off a memoised rejected promise.
+ * That is the pre-existing exposure, kept byte-identical.
+ */
+function warmCloudImpl(load: () => Promise<unknown>): void {
+  if (process.env.VITEST) return
+  void load()
+}
+
 export interface CreditReservation {
   usageLogId: string
   creditsReserved: number
@@ -94,7 +136,8 @@ export function creditGuard(
 ) {
   // Kick off the cloud impl import eagerly at route-registration time so
   // per-request await is just promise-resolution after the first call.
-  const implPromise = hasCredits() ? import("../ee/lib/credit-guard-impl.js") : null
+  const cloud = hasCredits()
+  if (cloud) warmCloudImpl(loadCreditGuardImpl)
   const dedupEnabled = opts?.dedup !== false
 
   return async (req: FastifyRequest, reply: FastifyReply): Promise<void> => {
@@ -221,8 +264,8 @@ export function creditGuard(
       // sees `undefined` and does a plain INSERT — no dedup whatsoever.
     }
 
-    if (!implPromise) return
-    const impl = await implPromise
+    if (!cloud) return
+    const impl = await loadCreditGuardImpl()
     return impl.creditGuardImpl(modelResolver, opts)(req, reply)
   }
 }
@@ -440,11 +483,12 @@ export async function resolveWebSurfaceFlag(req: FastifyRequest): Promise<boolea
 }
 
 export function paygSurfaceGuard() {
-  const implPromise = hasCredits() ? import("../ee/lib/payg-surface-guard.js") : null
+  const cloud = hasCredits()
+  if (cloud) warmCloudImpl(loadPaygSurfaceGuardImpl)
 
   return async (req: FastifyRequest, reply: FastifyReply): Promise<void> => {
-    if (!implPromise) return
-    const impl = await implPromise
+    if (!cloud) return
+    const impl = await loadPaygSurfaceGuardImpl()
     await impl.blockPaygOnConsumerSurface(req, reply)
   }
 }
