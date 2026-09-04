@@ -126,6 +126,10 @@ export interface CancelJobResult {
   cancelled: number
 }
 
+export interface DeleteJobResult {
+  success: true
+}
+
 export interface ListJobsParams {
   /** Exact match on `input_data.type` — the route that created the job
    *  (`"llm-structured"`, `"video-analysis"`, …). */
@@ -204,6 +208,19 @@ export class JobsResource {
     return this.client.request(
       "POST",
       `/v1/jobs/${encodeURIComponent(id)}/cancel`,
+    )
+  }
+
+  /**
+   * Delete a job and the private media it produced. Server route is
+   * `DELETE /v1/jobs/:jobId`. Only the job's owner (or an admin) may delete it;
+   * a job that is still running is deleted as-is — cancel it first when its
+   * worker should stop ({@link cancel}).
+   */
+  delete(id: string): Promise<DeleteJobResult> {
+    return this.client.request(
+      "DELETE",
+      `/v1/jobs/${encodeURIComponent(id)}`,
     )
   }
 }

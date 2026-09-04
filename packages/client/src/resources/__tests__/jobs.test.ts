@@ -22,6 +22,19 @@ describe("jobs resource", () => {
     expect(fetchMock.mock.calls[0][1].method).toBe("POST")
   })
 
+  it("delete DELETEs /v1/jobs/:id and resolves the body", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ success: true }))
+    const c = createClient({
+      baseUrl: "https://api.example.com",
+      auth: new StaticTokenAuth("t"),
+      fetch: fetchMock,
+    })
+    const res = await c.jobs.delete("abc")
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/jobs/abc")
+    expect(fetchMock.mock.calls[0][1].method).toBe("DELETE")
+    expect(res).toEqual({ success: true })
+  })
+
   it("get throws NotFoundError on 404", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(
       mockErr(404, { error: { code: "not_found", message: "Job not found" } }),
