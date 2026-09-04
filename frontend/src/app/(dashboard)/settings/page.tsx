@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
 import { ConsentSettingsSlot } from "@/components/layout/consent-settings-slot"
 import { hasAdmin, hasCredits, isCloud } from "@/lib/edition"
+import { useBillingSurface } from "@/hooks/use-billing-surface"
 import { toast } from "sonner"
 import { Link } from "react-router-dom"
 import {
@@ -50,6 +51,12 @@ import { useT } from "@/lib/i18n"
 export default function SettingsPage() {
   const t = useT()
   const { user, loading: authLoading } = useAuth()
+  // "One designated account pays for this instance" — the only thing the
+  // browser is told about the deployment payer (its identity is redacted from
+  // /config.js by contract). Absent/false on every other deployment, so the
+  // gates below read exactly as they did before.
+  const { surface: billingSurface } = useBillingSurface()
+  const deploymentPayerInstance = billingSurface.deploymentPayer === true
   const [localTemplates, setLocalTemplates] = useState<Record<string, string>>({})
   const [savedTemplates, setSavedTemplates] = useState<Record<string, string>>({})
   const [editingKey, setEditingKey] = useState<string | null>(null)
@@ -364,8 +371,14 @@ export default function SettingsPage() {
       {/* Email preferences (Cloud-only; self-hiding) */}
       <ConsentSettingsSlot />
 
-      {/* API Tokens */}
-      {hasAdmin() && (
+      {/* API Tokens — hidden on a deployment-payer instance, where a personal
+          token would be an unscoped, uncapped, never-expiring draw on the
+          BILLING ACCOUNT's pool rather than on the holder's own (the backend
+          refuses the same case with `api_tokens_payer_only`). Hidden for
+          everyone including the payer: the payer's identity never reaches the
+          browser, so the card cannot distinguish them — the billing account
+          reaches /settings/api by URL, which stays registered. */}
+      {hasAdmin() && !deploymentPayerInstance && (
         <Link
           to="/settings/api"
           className="mt-6 flex items-center justify-between rounded-lg border border-zinc-200 dark:border-zinc-800 bg-card p-6 hover:bg-muted/50 transition-colors"

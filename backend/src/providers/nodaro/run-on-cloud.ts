@@ -25,6 +25,7 @@ import {
   NodaroCloudError,
   ensureCloudReachableMediaUrl,
 } from "./client.js"
+import { recordRelayCost } from "./relay-cost.js"
 import type { ProgressCallback } from "../provider.interface.js"
 
 /**
@@ -227,6 +228,18 @@ export async function runJobOnCloud(
   )
   const jobId = await createCloudJob(route, body)
   const job = await waitForCloudJob(jobId, onProgress)
+  // Relay provenance, lane 2 (spec §8.2, migration 383). This lane is the one
+  // that already holds the LOCAL job id — `payload.jobId`, one of the
+  // INSTANCE_ONLY_FIELDS stripped from the wire body above — so it writes the
+  // two columns itself rather than routing them back through a result. Stamped
+  // BEFORE the output check on purpose: a far end that produced bytes and then
+  // answered a shape we reject still created an object this instance must
+  // never delete, and `relay_job_id` is the marker that says so. Best-effort
+  // inside `recordRelayCost`; it never throws into a paid generation.
+  const localJobId = payload.jobId
+  if (typeof localJobId === "string" && localJobId) {
+    await recordRelayCost(localJobId, job)
+  }
   const output = job.output_data
   if (!output || typeof output !== "object") {
     throw new NodaroCloudError(`nodaro.ai: ${jobType} job ${jobId} finished with no output`)

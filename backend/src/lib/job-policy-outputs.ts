@@ -128,10 +128,84 @@ export function mediaKindOf(outputData: Record<string, unknown> | null | undefin
  */
 export function isOwnedObjectKey(jobId: string, key: string): boolean {
   if (!jobId) return false
+  const stem = keyStem(key)
+  return stem === jobId || stem.startsWith(`${jobId}-`)
+}
+
+/** An object key's STEM: basename, extension removed. The half of the family
+ *  rule that both `isOwnedObjectKey` ("does this key belong to job X?") and
+ *  `objectKeyJobIdCandidates` ("which job could have written this key?") are
+ *  built from — one implementation, so the fence and the family rule cannot
+ *  drift apart. */
+export function keyStem(key: string): string {
   const base = key.slice(key.lastIndexOf("/") + 1)
   const dot = base.lastIndexOf(".")
-  const stem = dot > 0 ? base.slice(0, dot) : base
-  return stem === jobId || stem.startsWith(`${jobId}-`)
+  return dot > 0 ? base.slice(0, dot) : base
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * `isOwnedObjectKey` READ BACKWARDS: which job ids could have written this key?
+ *
+ * The family rule says a job's objects are `<jobId>` or `<jobId>-<suffix>`, so
+ * inverting it means "the whole stem, or the job-id-shaped head of it". Job ids
+ * are UUIDs (`jobs.id UUID`, 001_initial_schema.sql) and a UUID carries four
+ * internal `-`, so enumerating every `-`-boundary prefix would emit six
+ * candidates per key for nothing; the shape test picks the one prefix that can
+ * actually BE an id. Two values per key at most, usually one.
+ *
+ * This is what lets `lib/asset-delete.ts` ask `jobs.relay_job_id = <candidate>`:
+ * the far end's key stem IS the far end's job id (migration 384's comment), so
+ * a hit means our relay target created these bytes. That probe is keyed on the
+ * OBJECT, which is why it still answers after the near end's asset row AND the
+ * referring job row are both gone — the two row markers cannot.
+ */
+export function objectKeyJobIdCandidates(key: string): string[] {
+  const stem = keyStem(key)
+  if (!stem) return []
+  const head = stem.slice(0, 36)
+  // `<uuid>-<suffix>`: the head is an id only when the boundary is a real `-`,
+  // otherwise any 36 leading characters would be probed as if they were one.
+  if (head.length === 36 && stem.length > 36 && stem[36] === "-" && UUID_RE.test(head)) {
+    return [stem, head]
+  }
+  return [stem]
+}
+
+/**
+ * The same family test, widened by ONE extra stem: the far end's job id on a
+ * relayed row (`jobs.relay_job_id`, migration 383).
+ *
+ * WHY, and why only here. Under the shared-bucket passthrough (lib/storage.ts)
+ * a relayed output is never copied — `output_data` carries the FAR end's URL,
+ * whose key stem is the far job id. `isOwnedObjectKey(nearJobId, …)` therefore
+ * refuses every output of every relayed job, and the result gate wrote
+ * `held_objects: []` for a held one: the review queue showed a job with
+ * nothing to look at and the preview 404'd on every index, so a human had to
+ * approve or reject media they could not see.
+ *
+ * WITHHOLDING and REVIEW use this; DELETION deliberately does not. `held_objects`
+ * is a review list — what a human may look at — and the far end's object is
+ * exactly what needs looking at. `deleteOwnedObjects` keeps asking
+ * `isOwnedObjectKey` with the NEAR job id alone, so a far-stem entry in that
+ * same array is dropped at delete time and invariant 9 ("a row with a non-null
+ * relay_job_id never causes this instance to delete an R2 object") holds with
+ * no second guard and no relay-rule exception.
+ *
+ * The stem comes from a SERVER-WRITTEN column — migration 383 adds no UPDATE
+ * grant on `relay_job_id` — never from caller input, so the "planted array ⇒
+ * authenticated read-anything proxy" property the fence protects survives:
+ * widening by one row-derived id admits exactly the objects the far end made
+ * for this row.
+ */
+export function isOwnedOrRelayedObjectKey(
+  jobId: string,
+  relayJobId: string | null | undefined,
+  key: string,
+): boolean {
+  if (isOwnedObjectKey(jobId, key)) return true
+  return !!relayJobId && isOwnedObjectKey(relayJobId, key)
 }
 
 /**
@@ -145,11 +219,16 @@ export function ownedHeldObjects(
   jobId: string,
   outputs: readonly JobOutputRef[],
   limit: number = MAX_HELD_OBJECTS,
+  /** The far end's job id when this row was relayed (`jobs.relay_job_id`).
+   *  Passed by the two WITHHOLDING call sites only — `allOwnedObjects` below,
+   *  which feeds deletion, deliberately never passes it. See
+   *  `isOwnedOrRelayedObjectKey`. */
+  relayJobId?: string | null,
 ): HeldObject[] {
   const held: HeldObject[] = []
   for (const o of outputs) {
     if (!o.key) continue
-    if (!isOwnedObjectKey(jobId, o.key)) {
+    if (!isOwnedOrRelayedObjectKey(jobId, relayJobId, o.key)) {
       console.warn(`[job-policy] job ${jobId}: output key "${o.key}" is not in this job's key family — not withheld`)
       continue
     }

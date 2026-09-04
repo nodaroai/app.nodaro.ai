@@ -392,6 +392,78 @@ describe("GET /v1/admin/review/jobs/:jobId/output/:index", () => {
     expect(streamR2Object).not.toHaveBeenCalled()
   })
 
+  /**
+   * THE RELAYED HOLD (F6). Under the shared-bucket passthrough the held object
+   * is the FAR end's — key stem `relay_job_id`, streamable from the SAME
+   * bucket. Refusing it left the reviewer with a 404 on every index and no way
+   * to see what they were being asked to approve or reject.
+   */
+  it("streams a held object whose stem is the row's relay_job_id", async () => {
+    setTable("jobs", {
+      data: {
+        ...HELD_JOB_ROW,
+        relay_job_id: "cloud-9",
+        held_objects: [{ key: "generated/videos/cloud-9.mp4", kind: "video", index: 0 }],
+      },
+    })
+    const res = await inject("GET", `/v1/admin/review/jobs/${JOB_ID}/output/0`)
+    expect(res.statusCode).toBe(200)
+    expect(streamR2Object.mock.calls[0][0]).toBe("generated/videos/cloud-9.mp4")
+  })
+
+  /**
+   * And the case that actually happens on the router lane: a HELD row's
+   * completion fields are PARKED in `held_completion_fields`, not written to
+   * the row — `markJobHeld` never runs the completion UPDATE. So while a job
+   * is in review its `relay_job_id` COLUMN is still NULL for every job the
+   * capability router relayed (the self-host's principal traffic), and reading
+   * the stem off the column alone leaves the preview 404ing exactly where the
+   * bug was reported. `approveHeldJob` spreads those columns back onto the row
+   * afterwards, which is where the column starts answering.
+   */
+  it("takes the stem from the parked completion fields while the job is held", async () => {
+    setTable("jobs", {
+      data: {
+        ...HELD_JOB_ROW,
+        relay_job_id: null,
+        held_completion_fields: { relay_job_id: "cloud-9", provider: "nodaro" },
+        held_objects: [{ key: "generated/videos/cloud-9.mp4", kind: "video", index: 0 }],
+      },
+    })
+    const res = await inject("GET", `/v1/admin/review/jobs/${JOB_ID}/output/0`)
+    expect(res.statusCode).toBe(200)
+    expect(streamR2Object.mock.calls[0][0]).toBe("generated/videos/cloud-9.mp4")
+  })
+
+  it("ignores a non-string relay stem in the parked fields", async () => {
+    setTable("jobs", {
+      data: {
+        ...HELD_JOB_ROW,
+        relay_job_id: null,
+        held_completion_fields: { relay_job_id: { evil: true } },
+        held_objects: [{ key: "generated/videos/cloud-9.mp4", kind: "video", index: 0 }],
+      },
+    })
+    const res = await inject("GET", `/v1/admin/review/jobs/${JOB_ID}/output/0`)
+    expect(res.statusCode).toBe(404)
+    expect(streamR2Object).not.toHaveBeenCalled()
+  })
+
+  it("still 404s a far-shaped key when the row carries NO relay_job_id", async () => {
+    // The widened stem comes from the ROW, never from the request — a planted
+    // held_objects array on an ordinary row buys nothing.
+    setTable("jobs", {
+      data: {
+        ...HELD_JOB_ROW,
+        relay_job_id: null,
+        held_objects: [{ key: "generated/videos/cloud-9.mp4", kind: "video", index: 0 }],
+      },
+    })
+    const res = await inject("GET", `/v1/admin/review/jobs/${JOB_ID}/output/0`)
+    expect(res.statusCode).toBe(404)
+    expect(streamR2Object).not.toHaveBeenCalled()
+  })
+
   it("re-reads the status inside the handler and 404s a job no longer held", async () => {
     setTable("jobs", { data: { ...HELD_JOB_ROW, status: "completed" } })
     const res = await inject("GET", `/v1/admin/review/jobs/${JOB_ID}/output/0`)

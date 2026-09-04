@@ -66,6 +66,14 @@ the [Workflow Copilot](./features/workflow-copilot.md) (`/v1/copilot/*`).
 They exist for the Nodaro web app's own session, not as an integration
 surface. To build workflows programmatically, use MCP or the SDK.
 
+One surface is app-only *conditionally*: on a deployment-payer instance —
+where a single billing account funds every user — the credit-balance reads
+(`GET /v1/credits/balance`, `GET /v1/user/credits`, `GET /v1/credits/check`)
+answer `403 payer_balance_jwt_only` when the caller authenticates **as the
+billing account itself** with an API token or an OAuth app token. That pool is
+the operator's, readable only from that account's own browser session. Every
+other identity, and every instance without a deployment payer, is unaffected.
+
 The five legacy endpoints below are scoped specifically to running
 workflows by ID with input overrides — they live under `/v1/api/` and
 predate the published-app system. Most new integrations should prefer
@@ -527,6 +535,8 @@ All errors share the same shape:
 | 403 | `not_a_member` | — | (Cloud edition, organizations) The request names a workspace you are not an active member of. Rollout-gated. |
 | 403 | `insufficient_scope` | `missingScope` (+ `message`) | (OAuth tokens only) The token is missing a scope the route requires. Re-run the OAuth consent with the broader scope. See [OAuth Flow §4](./oauth-flow.md#4-scope-vocabulary). |
 | 403 | `edition_required` | `required_edition: "<edition>"` (+ `message`) | Endpoint needs a higher edition than the caller has. `required_edition` is the minimum: `"cloud"` for pipeline (`POST /v1/pipelines/:id/branch`) + scene-helper routes; `"business"` for API-token management (`POST /v1/api-tokens`, `DELETE /v1/api-tokens/:id`). |
+| 403 | `api_tokens_payer_only` | — | On a deployment-payer instance only the billing account may create a personal API token; every other user is refused. Existing tokens stay listable and revocable by their owner. |
+| 403 | `payer_balance_jwt_only` | — | (Deployment-payer instances only) A credit-balance read (`GET /v1/credits/balance`, `GET /v1/user/credits`, `GET /v1/credits/check`) authenticated **as the billing account** with an API token or an OAuth app token. The deployment's pool is the operator's number and is answered only to that account's own browser session — see [§3](#3-public-api-endpoints). No other identity is affected. |
 | 403 | `subscription_required` | — | (Cloud edition only) A pay-as-you-go account tried to spend from a first-party consumer surface (browser session in the studio or another Nodaro app). Payg credits are redeemable via the API/SDK/CLI/MCP — this never fires for token-authenticated calls. Rollout-gated: availability may lag this document. |
 | 404 | `not_found` | — | Workflow, execution, or token not found. |
 | 404 | `workspace_not_found` | — | (Cloud edition, organizations) The workspace named by workspace-paid work does not exist (or was deleted mid-flight). Rollout-gated. |

@@ -3,6 +3,7 @@ import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { batchDeleteFromR2 } from "../../lib/storage.js"
+import { deletableKeys } from "../../lib/asset-delete.js"
 import { config } from "../../lib/config.js"
 import { formatZodError } from "../../lib/zod-error.js"
 
@@ -289,7 +290,16 @@ export async function adminLocationRoutes(app: FastifyInstance) {
         })
       }
 
-      const keys = collectLocationR2Keys(row as Record<string, unknown>)
+      // THE RELAY DELETE RULE (spec 2026-09-04-sai-local-development §9.3,
+      // D18, invariant 9). Under the shared-bucket passthrough a url written
+      // into this row can name an object our RELAY TARGET created, whose own
+      // job row still points at it and which cannot see ours — so the near end
+      // drops its row and leaves the bytes. `deletableKeys` reads the durable
+      // per-object marker (`assets.relay_job_id`, migration 384): one query,
+      // and it matches nothing at all on a deployment that never relays, so
+      // this is behaviourally identical to the previous line off a relay.
+      // Skipped entirely when nothing was collected.
+      const keys = await deletableKeys(collectLocationR2Keys(row as Record<string, unknown>))
       if (keys.length > 0) {
         try {
           await batchDeleteFromR2(keys)

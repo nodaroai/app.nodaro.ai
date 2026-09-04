@@ -52,6 +52,23 @@ import { makeOnTaskCreated, markProviderCallStart } from "../../lib/reconcile/pe
 // `provider_call_started_at`, which this path never sets.
 
 /**
+ * What a cloud audio helper hands back: the bytes, plus the relay provenance
+ * of the job that produced them (spec §8.2 lane 1, migration 383).
+ *
+ * The bytes alone are not enough. Both helpers below run a job on ANOTHER
+ * instance, and the pair identifying that job — its id and the credits it
+ * reserved there — is what a self-host settles its users on and what the
+ * delete paths read to know the object is not theirs to destroy. Returning a
+ * bare Buffer threw both away inside the helper, so the finalize literal under
+ * it could not have carried what it was never handed.
+ */
+interface CloudAudioResult {
+  audio: Buffer
+  relayJobId?: string
+  relayCredits?: number | null
+}
+
+/**
  * Speech through the connected cloud, returned as bytes so the caller's
  * storage path is untouched.
  *
@@ -65,14 +82,18 @@ async function generateSpeechViaCloud(
   voice: string | undefined,
   provider: string,
   options: TextToSpeechOptions,
-): Promise<Buffer> {
+): Promise<CloudAudioResult> {
   const { NodaroCloudAudioProvider } = await import("../../providers/nodaro/audio.js")
   const result = await new NodaroCloudAudioProvider().textToSpeech(text, voice, provider, options)
   const res = await safeFetch(result.url)
   if (!res.ok) {
     throw new Error(`nodaro.ai: could not download the generated audio (${res.status})`)
   }
-  return Buffer.from(await res.arrayBuffer())
+  return {
+    audio: Buffer.from(await res.arrayBuffer()),
+    relayJobId: result.relayJobId,
+    relayCredits: result.relayCredits,
+  }
 }
 
 const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx) {
@@ -115,18 +136,22 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
   // family this whole effort exists to remove, so the keyless-unconnected
   // install must reach `requireProviderKey` and no further.
   let audioBuffer: Buffer
+  // Set only on the cloud branch — the relay provenance the finalize literal
+  // below carries onto the row.
+  let cloudAudio: CloudAudioResult | undefined
   if (config.ELEVENLABS_API_KEY) {
     audioBuffer = await directElevenLabsTTS(processedText, voice ?? defaultAllowedVoiceId(FALLBACK_VOICES, "Rachel"), provider, {
       ...(hasOptions ? ttsOptions : {}),
       allowDefaultVoiceFallback: Boolean(allowDefaultVoiceFallback),
     })
   } else if (await isNodaroConnected().catch(() => false)) {
-    audioBuffer = await generateSpeechViaCloud(
+    cloudAudio = await generateSpeechViaCloud(
       processedText,
       voice,
       provider,
       hasOptions ? ttsOptions : {},
     )
+    audioBuffer = cloudAudio.audio
   } else {
     // Throws MissingProviderKeyError — the one phrasing every provider uses.
     requireProviderKey(config.ELEVENLABS_API_KEY, "ELEVENLABS_API_KEY")
@@ -142,7 +167,15 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
   const { ok } = await finalizeJobWithMedia({
     jobId: ctx.jobId,
     jobType: "text-to-speech",
-    result: { url: r2Url, cost: null, providerUsed: "elevenlabs-direct" },
+    result: {
+      url: r2Url,
+      cost: null,
+      providerUsed: "elevenlabs-direct",
+      // Relay provenance (spec §8.2 lane 1, migration 383): this literal is
+      // rebuilt from locals, so the pair only reaches finalize if carried by
+      // hand. Absent on the local-key branch ⇒ no key, no column written.
+      ...(cloudAudio?.relayJobId && { relayJobId: cloudAudio.relayJobId, relayCredits: cloudAudio.relayCredits ?? null }),
+    },
     mediaUrl: r2Url,
   })
   if (!ok) return
@@ -338,8 +371,9 @@ const handleAudioIsolation: HandlerFn = async function handleAudioIsolation(job,
  * The old cloud route strips `seed`/`applyTextNormalization` until the new
  * route deploys there — harmless degradation, the dialogue still renders.
  */
-async function generateDialogueViaCloud(body: Record<string, unknown>): Promise<Buffer> {
+async function generateDialogueViaCloud(body: Record<string, unknown>): Promise<CloudAudioResult> {
   const { createCloudJob, waitForCloudJob, NodaroCloudError } = await import("../../providers/nodaro/client.js")
+  const { relayResultFields } = await import("../../providers/nodaro/relay-cost.js")
   const jobId = await createCloudJob("/v1/text-to-dialogue", body)
   const cloudJob = await waitForCloudJob(jobId)
   const output = (cloudJob.output_data ?? {}) as { audioUrl?: unknown }
@@ -351,7 +385,10 @@ async function generateDialogueViaCloud(body: Record<string, unknown>): Promise<
   if (!res.ok) {
     throw new Error(`nodaro.ai: could not download the generated audio (${res.status})`)
   }
-  return Buffer.from(await res.arrayBuffer())
+  return {
+    audio: Buffer.from(await res.arrayBuffer()),
+    ...relayResultFields(cloudJob),
+  }
 }
 
 const handleTextToDialogue: HandlerFn = async function handleTextToDialogue(job, ctx) {
@@ -375,6 +412,9 @@ const handleTextToDialogue: HandlerFn = async function handleTextToDialogue(job,
   // its 5-minute stale threshold would race a legitimate near-300s dialogue
   // + R2 upload into a false fail+refund.
   let audioBuffer: Buffer
+  // Set only on the cloud branch — the relay provenance the finalize literal
+  // below carries onto the row.
+  let cloudAudio: CloudAudioResult | undefined
   const dialogueOptions = { stability, languageCode, seed, applyTextNormalization }
   if (config.ELEVENLABS_API_KEY) {
     audioBuffer = await withProgressRamp(
@@ -384,12 +424,13 @@ const handleTextToDialogue: HandlerFn = async function handleTextToDialogue(job,
       () => directElevenLabsDialogue(dialogue, dialogueOptions),
     )
   } else if (await isNodaroConnected().catch(() => false)) {
-    audioBuffer = await withProgressRamp(
+    cloudAudio = await withProgressRamp(
       job,
       ctx.jobId,
       { start: 5, cap: 45 },
       () => generateDialogueViaCloud({ dialogue, ...dialogueOptions }),
     )
+    audioBuffer = cloudAudio.audio
   } else {
     // Throws MissingProviderKeyError — the one phrasing every provider uses.
     requireProviderKey(config.ELEVENLABS_API_KEY, "ELEVENLABS_API_KEY")
@@ -403,7 +444,13 @@ const handleTextToDialogue: HandlerFn = async function handleTextToDialogue(job,
   const { ok } = await finalizeJobWithMedia({
     jobId: ctx.jobId,
     jobType: "generate-dialogue",
-    result: { url: r2Url, cost: null, providerUsed: "elevenlabs-direct" },
+    result: {
+      url: r2Url,
+      cost: null,
+      providerUsed: "elevenlabs-direct",
+      // Same rebuilt-literal carry as text-to-speech above, same reason.
+      ...(cloudAudio?.relayJobId && { relayJobId: cloudAudio.relayJobId, relayCredits: cloudAudio.relayCredits ?? null }),
+    },
     mediaUrl: r2Url,
   })
   if (!ok) return

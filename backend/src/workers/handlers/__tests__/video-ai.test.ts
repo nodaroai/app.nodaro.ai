@@ -803,3 +803,65 @@ describe("speech-to-video handler", () => {
   })
 })
 
+
+// ---------------------------------------------------------------------------
+// Relay provenance (spec §8.2 lane 1, migration 383)
+//
+// Both video sites below REBUILD the finalize input as a literal from
+// flattened locals, so the two ProviderResult fields the NodaroCloud video
+// provider sets are dropped on the floor unless the literal carries them —
+// finalize can only stamp `relay_job_id`/`relay_credits` from what it is
+// handed. Every other video site passes `result` verbatim and needs nothing.
+// ---------------------------------------------------------------------------
+
+describe("relay provenance rides the rebuilt finalize literals", () => {
+  it("lip-sync: carries relayJobId/relayCredits from the provider result", async () => {
+    mocks.mockLipSync.mockResolvedValueOnce({ ...VIDEO_RESULT, relayJobId: "cloud-9", relayCredits: 24 })
+    const job = makeJob("lip-sync", { imageUrl: "https://face.png", audioUrl: "https://speech.mp3" })
+
+    await videoAIHandlers["lip-sync"]!(job as never, makeCtx())
+
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobType: "lip-sync",
+        result: expect.objectContaining({ relayJobId: "cloud-9", relayCredits: 24 }),
+      }),
+    )
+  })
+
+  it("lip-sync: a vendor-direct (KIE) result carries NO relay key at all", async () => {
+    const job = makeJob("lip-sync", { imageUrl: "https://face.png", audioUrl: "https://speech.mp3" })
+
+    await videoAIHandlers["lip-sync"]!(job as never, makeCtx())
+
+    const { result } = mocks.mockFinalizeJobWithMedia.mock.calls[0][0]
+    expect(result).not.toHaveProperty("relayJobId")
+    expect(result).not.toHaveProperty("relayCredits")
+  })
+
+  it("video-upscale: carries relayJobId/relayCredits from the provider result", async () => {
+    mocks.mockVideoUpscale.mockResolvedValueOnce({ ...VIDEO_RESULT, relayJobId: "cloud-7", relayCredits: null })
+    const job = makeJob("video-upscale", { videoUrl: "https://vid.mp4" })
+
+    await videoAIHandlers["video-upscale"]!(job as never, makeCtx())
+
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobType: "video-upscale",
+        // credits withheld by the far end ⇒ NULL, never 0 (a 0 would read as a
+        // FREE generation on the self-host's bill).
+        result: expect.objectContaining({ relayJobId: "cloud-7", relayCredits: null }),
+      }),
+    )
+  })
+
+  it("video-upscale: a vendor-direct (KIE topaz) result carries NO relay key at all", async () => {
+    const job = makeJob("video-upscale", { videoUrl: "https://vid.mp4" })
+
+    await videoAIHandlers["video-upscale"]!(job as never, makeCtx())
+
+    const { result } = mocks.mockFinalizeJobWithMedia.mock.calls[0][0]
+    expect(result).not.toHaveProperty("relayJobId")
+    expect(result).not.toHaveProperty("relayCredits")
+  })
+})

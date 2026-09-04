@@ -143,6 +143,22 @@ describe("approveHeldJob", () => {
     expect(cas.held_objects).toBeNull()
   })
 
+  it("replays a relayed job's relay_job_id / relay_credits onto the row (hold -> approve)", async () => {
+    // finalize puts the two migration-383 columns in the completion `fields`;
+    // a hold parks them in `held_completion_fields`, and THIS is where they
+    // come back. Without the replay a held relayed job is approved with both
+    // columns NULL — the self-host bills it as free and WS5's delete rule stops
+    // protecting the far end's object for that row.
+    db.heldRow.value!.held_completion_fields = {
+      provider: "nodaro-cloud", metered: false,
+      relay_job_id: "cloud-9", relay_credits: 24,
+    }
+    expect(await approveHeldJob("job-1", REVIEWER)).toEqual({ ok: true })
+    const cas = db.updateArgs[0]!
+    expect(cas.relay_job_id).toBe("cloud-9")
+    expect(cas.relay_credits).toBe(24)
+  })
+
   it("does NOT write the non-column settlement keys onto the row (they would 400)", async () => {
     await approveHeldJob("job-1", REVIEWER)
     const cas = db.updateArgs[0]!

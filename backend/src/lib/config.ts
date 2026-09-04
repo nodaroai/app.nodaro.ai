@@ -53,6 +53,32 @@ export const envSchema = z.object({
     .optional()
     .transform((v) => v === "true" || v === "1"),
   /**
+   * SHARED-BUCKET PASSTHROUGH (spec 2026-09-04-sai-local-development §9.2,
+   * D16/D17). Asserts a deployment FACT, not a preference: this instance's
+   * R2_PUBLIC_URL names the SAME bucket that its relay target (NODARO_CLOUD_URL)
+   * writes to. When it does, a finished relayed output is already an object in
+   * our own bucket, so `uploadToR2` returns the source URL unchanged instead of
+   * downloading it and re-uploading it under a second key.
+   *
+   * Default false, and deliberately NOT byte-inert when on: today a handler
+   * that hands `uploadToR2` an already-ours URL gets an independent copy under
+   * the new job's key, and two jobs never share an object. Flipping that
+   * silently would change object-ownership semantics for every deployment —
+   * hence a flag the near end sets precisely because it knows it shares a
+   * bucket, rather than an unconditional optimisation.
+   *
+   * Strict parsing, same rationale as R2_FORCE_PATH_STYLE and MCP_ENABLED
+   * above: only "true" or "1" enable it. A compose file writes the literal
+   * string "false" for a laptop (which has its own MinIO and shares nothing),
+   * and `z.coerce.boolean()` would read that as TRUE — every laptop would turn
+   * the passthrough on and point its job rows at objects its MinIO does not
+   * contain. Pinned by lib/__tests__/config.test.ts.
+   */
+  R2_SHARED_WITH_RELAY_TARGET: z
+    .string()
+    .optional()
+    .transform((v) => v === "true" || v === "1"),
+  /**
    * S3 region. "auto" is Cloudflare R2's own value and MinIO ignores the
    * field entirely, which is why it was hardcoded — but a Supabase-local
    * stack wants "local" and DO Spaces / AWS want a real region ("nyc3",

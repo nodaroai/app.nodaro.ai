@@ -93,7 +93,16 @@ beforeEach(async () => {
   app = Fastify({ logger: false })
   app.addHook("preHandler", async (req) => {
     const header = req.headers["x-test-user-id"]
-    if (header && typeof header === "string") req.userId = header
+    if (header && typeof header === "string") {
+      req.userId = header
+      // Every case here models a BROWSER balance poll, and a real one always
+      // carries `authKind: "jwt"` — both JWT branches of middleware/auth.ts
+      // stamp it. It is load-bearing for the payer's OWN read (D13 below):
+      // `refusePayerBalanceToProgrammaticCaller` (ee/lib/payer-balance-guard.ts)
+      // runs ahead of this rider and 403s the payer's own request when the kind
+      // is anything but "jwt", which an unstamped fixture would be.
+      req.authKind = "jwt"
+    }
   })
   await app.register(async (instance) => { await creditsRoutes(instance) })
   await app.ready()

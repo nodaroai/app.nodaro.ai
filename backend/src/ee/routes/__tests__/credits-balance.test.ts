@@ -15,31 +15,52 @@ vi.mock("@/lib/supabase.js", () => ({
   },
 }))
 
+// The real module statically imports surface-profile.js + config.js, and the
+// config mock above exports only `hasCredits` -- pulling that graph in would
+// die on a missing export before a single test ran. The route consults exactly
+// these two predicates, so mocking them is the whole seam.
+vi.mock("@/lib/deployment-payer.js", () => ({
+  deploymentPayerActive: vi.fn(),
+  deploymentPayerId: vi.fn(),
+}))
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
 import { registerCreditsBalanceRoutes } from "../credits-balance.js"
 import { supabase } from "../../../lib/supabase.js"
+import { deploymentPayerActive, deploymentPayerId } from "../../../lib/deployment-payer.js"
 
 // ---------------------------------------------------------------------------
 // Test app setup
 // ---------------------------------------------------------------------------
 
 const TEST_USER_ID = "00000000-0000-4000-8000-000000000001"
+const PAYER_ID = "00000000-0000-4000-8000-0000000009e1"
 
 let app: FastifyInstance
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  // clearAllMocks resets CALLS, not implementations -- without these two lines
+  // a `mockReturnValue(true)` from one test leaks into every later one.
+  vi.mocked(deploymentPayerActive).mockReturnValue(false)
+  vi.mocked(deploymentPayerId).mockReturnValue(null)
 
   app = Fastify({ logger: false })
 
-  // Bypass auth -- set userId from header for protected routes
+  // Bypass auth -- set userId from header for protected routes.
+  // `authKind` is set ONLY when the header is present: mainline requests in
+  // this suite leave it undefined, which is what the byte-identity case needs.
   app.addHook("preHandler", async (req) => {
     const header = req.headers["x-test-user-id"]
     if (header && typeof header === "string") {
       req.userId = header
+    }
+    const kind = req.headers["x-test-auth-kind"]
+    if (kind && typeof kind === "string") {
+      req.authKind = kind as typeof req.authKind
     }
   })
 
@@ -57,6 +78,28 @@ function authedGet(url: string) {
     url,
     headers: { "x-test-user-id": TEST_USER_ID },
   })
+}
+
+function getAs(url: string, userId: string, authKind?: string) {
+  const headers: Record<string, string> = { "x-test-user-id": userId }
+  if (authKind) headers["x-test-auth-kind"] = authKind
+  return app.inject({ method: "GET", url, headers })
+}
+
+/** A profile row the balance route would happily answer with. */
+function mockProfileRow(row: Record<string, unknown>) {
+  vi.mocked(supabase.from).mockReturnValue({
+    select: vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        maybeSingle: vi.fn().mockResolvedValue({ data: row, error: null }),
+      }),
+    }),
+  } as never)
+}
+
+function activePayer(id = PAYER_ID) {
+  vi.mocked(deploymentPayerActive).mockReturnValue(true)
+  vi.mocked(deploymentPayerId).mockReturnValue(id)
 }
 
 // ---------------------------------------------------------------------------
@@ -142,6 +185,77 @@ describe("GET /v1/credits/balance", () => {
     expect(res.statusCode).toBe(200)
     const body = res.json()
     expect(body).toEqual({ total: 0, subscription: 0, topup: 0, tier: "free", effectiveTier: "free" })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// GET /v1/credits/balance -- the payer-balance leak (spec D10 / §13.1)
+// ---------------------------------------------------------------------------
+
+describe("GET /v1/credits/balance under a deployment payer", () => {
+  const PAYER_POOL = { subscription_credits: 4_000_000, topup_credits: 250_000, tier: "business" }
+
+  it("403s payer_balance_jwt_only for the payer via an api_token", async () => {
+    activePayer()
+    mockProfileRow(PAYER_POOL)
+
+    const res = await getAs("/v1/credits/balance", PAYER_ID, "api_token")
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("payer_balance_jwt_only")
+    // The pool never appears, in any spelling.
+    expect(res.payload).not.toContain("4000000")
+    // Closed BEFORE the read -- catches a future "check after lookup" refactor.
+    expect(supabase.from).not.toHaveBeenCalled()
+  })
+
+  it("403s payer_balance_jwt_only for the payer via an app_token (the relay credential)", async () => {
+    activePayer()
+    mockProfileRow(PAYER_POOL)
+
+    const res = await getAs("/v1/credits/balance", PAYER_ID, "app_token")
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("payer_balance_jwt_only")
+    expect(supabase.from).not.toHaveBeenCalled()
+  })
+
+  it("403s when authKind is unset (no credential kind is not a browser session)", async () => {
+    activePayer()
+    mockProfileRow(PAYER_POOL)
+
+    const res = await getAs("/v1/credits/balance", PAYER_ID)
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("payer_balance_jwt_only")
+  })
+
+  it("still answers the payer's OWN browser session (jwt) unchanged", async () => {
+    activePayer()
+    mockProfileRow(PAYER_POOL)
+
+    const res = await getAs("/v1/credits/balance", PAYER_ID, "jwt")
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.total).toBe(4_250_000)
+    expect(body.subscription).toBe(4_000_000)
+    expect(body.topup).toBe(250_000)
+  })
+
+  it("is identity-specific: an ordinary user's api_token on a payer instance still gets 200", async () => {
+    activePayer()
+    mockProfileRow({ subscription_credits: 10, topup_credits: 0, tier: "free" })
+
+    const res = await getAs("/v1/credits/balance", TEST_USER_ID, "api_token")
+    expect(res.statusCode).toBe(200)
+    expect(res.json().total).toBe(10)
+  })
+
+  it("byte-identical with no deployment payer configured: api_token still gets 200", async () => {
+    // deploymentPayerActive() is false (beforeEach default) -- mainline.
+    mockProfileRow(PAYER_POOL)
+
+    const res = await getAs("/v1/credits/balance", PAYER_ID, "api_token")
+    expect(res.statusCode).toBe(200)
+    expect(res.json().total).toBe(4_250_000)
+    expect(supabase.from).toHaveBeenCalledWith("profiles")
   })
 })
 

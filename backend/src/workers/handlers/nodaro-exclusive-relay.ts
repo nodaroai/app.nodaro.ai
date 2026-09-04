@@ -13,7 +13,10 @@
  * vcp is audio-or-video, video-analysis/audit are JSON).
  *
  * Billing happens on the CLOUD account (the credential's owner); locally
- * `cost` stays null and `providerUsed` is "nodaro".
+ * `cost` stays null and `providerUsed` is "nodaro" — so the far end's job id
+ * and its RESERVED credits are what the near row keeps instead (`relay_job_id`
+ * / `relay_credits`, migration 383): the only record a self-host can bill its
+ * own user from, and the marker that stops it deleting far-end bytes.
  */
 
 import type { Job } from "bullmq"
@@ -37,6 +40,7 @@ import {
 } from "../../providers/nodaro/client.js"
 import { nodaroCloudFetch } from "../../lib/nodaro-connect.js"
 import { INSTANCE_ONLY_FIELDS, rehostIfUrlField } from "../../providers/nodaro/run-on-cloud.js"
+import { relayFieldsFrom, relayResultFields } from "../../providers/nodaro/relay-cost.js"
 
 /** Wire path per exclusive job type — mirrors the cloud plugin's routes. */
 const EXCLUSIVE_ROUTE_BY_JOB_TYPE: Readonly<Record<string, string>> = {
@@ -118,12 +122,27 @@ export async function finalizeExclusiveCloudOutput(args: {
   const { jobId, jobType, cloudJob, jobUserId, shouldWatermark } = args
   const output = (cloudJob.output_data ?? {}) as Record<string, unknown>
 
+  // Relay provenance, lane 4 (spec §8.2, migration 383). These five types are
+  // the most expensive generations a self-host can run and EVERY one of them is
+  // billed at the far end, so the pair has to reach the row here: the near end
+  // settles its own user on `relay_credits`, and the delete paths read
+  // `relay_job_id` to know the object was created THERE and must never be
+  // deleted here. Computed once and carried by all four completion sites below
+  // — in the shape each site's completion function consumes. `{}` when the far
+  // end answered without an id, which keeps a non-relay completion byte-
+  // identical (same guard the `provider_task_id` write already uses).
+  const relayResult: { relayJobId?: string; relayCredits?: number | null } = cloudJob.id
+    ? relayResultFields(cloudJob)
+    : {}
+  const relayColumns = relayFieldsFrom(relayResult)
+
   // JSON producers: the analysis IS the result — no media to re-host.
   if (jobType === "video-analysis" || jobType === "video-audit") {
     return markJobCompleted(jobId, {
       output_data: { ...output, viaNodaroCloud: true },
       provider: "nodaro",
       ...(cloudJob.id ? { provider_task_id: cloudJob.id } : {}),
+      ...relayColumns,
     })
   }
 
@@ -141,7 +160,11 @@ export async function finalizeExclusiveCloudOutput(args: {
       const { ok } = await finalizeJobWithMedia({
         jobId,
         jobType: "text-to-video", // storage classification only: a video deliverable
-        result: { url: videoUrl, cost: null, providerUsed: "nodaro" },
+        // The pair rides the ProviderResult here rather than being written
+        // inline: `finalizeJobWithMedia` turns it into the same two columns
+        // (`relayFieldsFrom`), and that is the ONE completion a result-gate
+        // HOLD can park in `held_completion_fields` and approve can replay.
+        result: { url: videoUrl, cost: null, providerUsed: "nodaro", ...relayResult },
         mediaUrl: r2Url,
         extraOutputData: { thumbnailUrl: thumbUrl, ...rest, viaNodaroCloud: true },
       })
@@ -150,6 +173,7 @@ export async function finalizeExclusiveCloudOutput(args: {
     return markJobCompleted(jobId, {
       output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl, ...rest, viaNodaroCloud: true },
       provider: "nodaro",
+      ...relayColumns,
     })
   }
 
@@ -161,6 +185,7 @@ export async function finalizeExclusiveCloudOutput(args: {
     return markJobCompleted(jobId, {
       output_data: { audioUrl: r2Url, ...rest, viaNodaroCloud: true },
       provider: "nodaro",
+      ...relayColumns,
     })
   }
 

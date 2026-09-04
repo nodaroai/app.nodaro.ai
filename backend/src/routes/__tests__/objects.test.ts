@@ -44,6 +44,16 @@ vi.mock("@/lib/storage.js", () => ({
   batchDeleteFromR2: vi.fn().mockResolvedValue({ deleted: 0, errors: 0 }),
 }))
 
+/**
+ * THE ARMING GATE for the relay delete rule (lib/relay-possible.ts). Default
+ * OFF, which is the mainline shape and therefore a byte-identity pin: with no
+ * relay target this route must issue the exact `from()` sequence it issued
+ * before the rule existed — the ownership read, then the hard delete, and
+ * nothing in between.
+ */
+const relayGate = vi.hoisted(() => ({ on: false }))
+vi.mock("@/lib/relay-possible.js", () => ({ relayPossible: () => relayGate.on }))
+
 vi.mock("@/lib/admin-check.js", () => ({
   warmAdminCache: vi.fn(),
   checkIsAdmin: vi.fn().mockResolvedValue(false),
@@ -139,6 +149,7 @@ let app: FastifyInstance
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  relayGate.on = false
   app = Fastify({ logger: false })
   // Simulate auth middleware: set req.userId from X-User-Id header or userId in body
   app.addHook("preHandler", async (req) => {
@@ -938,6 +949,21 @@ describe("DELETE /v1/objects/:id?permanent=true", () => {
     const mockSelect = vi.fn().mockReturnValue(chain)
     return { mockSelect, chain }
   }
+  /**
+   * The relay-provenance probe the permanent-delete path runs between key
+   * collection and `batchDeleteFromR2` (lib/asset-delete.ts `deletableKeys`).
+   * Empty on every deployment that never relays.
+   */
+  function relayChain(rows: Array<{ r2_key: string; relay_job_id: string }>) {
+    const chain: Record<string, unknown> = {
+      in: vi.fn().mockReturnThis(),
+      not: vi.fn().mockReturnThis(),
+      then: (resolve: (value: unknown) => unknown) =>
+        Promise.resolve({ data: rows, error: null }).then(resolve),
+    }
+    return { select: vi.fn().mockReturnValue(chain) }
+  }
+
   function hardDeleteChain(result: { error: unknown }) {
     const chain: Record<string, unknown> = {
       eq: vi.fn().mockReturnThis(),

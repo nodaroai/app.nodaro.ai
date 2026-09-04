@@ -344,6 +344,33 @@ export async function uploadToR2(
   trackUserId?: string,
   opts: { remainingQuotaBytes?: number; reserveQuota?: boolean; ext?: VideoContainerExt } = {},
 ): Promise<string> {
+  // SHARED-BUCKET PASSTHROUGH (spec 2026-09-04-sai-local-development §9, D16).
+  // When this instance's R2_PUBLIC_URL names the SAME bucket its relay target
+  // writes to, a finished relayed output is ALREADY an object in our bucket:
+  // r2KeyFromOurUrl resolves it, and every downstream consumer works on the
+  // far end's key unchanged — createAssetFromJob's `url.replace(R2_PUBLIC_URL
+  // + "/", "")` key derivation, the gallery, thumbnails, ffmpeg-utils' R2 fast
+  // path, media-delete's bucket gate. Copying it would double the bytes and
+  // split ownership of one object across two databases.
+  //
+  // FLAGGED, not unconditional, and deliberately NOT byte-inert when on: off a
+  // shared bucket this branch would change long-standing semantics — a handler
+  // that today hands an already-ours URL to uploadToR2 gets an independent
+  // copy under the NEW job's key, and two jobs never share an object. Default
+  // false ⇒ identical to before, including for the literal string "false" a
+  // compose file writes (config.ts parses it strictly; see its comment).
+  //
+  // QUOTA, and why the return sits ABOVE trackStorage rather than below it:
+  // this instance stored nothing, so nothing may be charged. That is one half
+  // of a rule the delete paths keep the other half of — a relay-owned object
+  // is never counted against this instance's quota IN EITHER DIRECTION, so
+  // asset-delete/media-delete/workflow-delete skip both the object delete and
+  // the decrement (see isRelayOwnedObject in lib/asset-delete.ts). Decrement
+  // without this increment would walk storage_used_bytes negative.
+  if (config.R2_SHARED_WITH_RELAY_TARGET && r2KeyFromOurUrl(sourceUrl)) {
+    return sourceUrl
+  }
+
   // safeFetch: validate DNS resolution against private/reserved IP ranges at
   // connection time. Without this, a user-supplied sourceUrl resolving to an
   // internal IP (cloud metadata, admin service, 127.0.0.1) would stream that

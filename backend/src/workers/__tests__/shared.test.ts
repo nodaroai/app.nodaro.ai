@@ -725,6 +725,62 @@ describe("createAssetFromJob", () => {
     mocks.mockSingle.mockRejectedValueOnce(new Error("DB down"))
     await expect(createAssetFromJob("job-1", "user-1")).resolves.toBeUndefined()
   })
+
+  // THE DURABLE RELAY MARKER (migration 384). `assets.job_id` is ON DELETE SET
+  // NULL, so the job row's own `relay_job_id` stops being reachable the moment
+  // the user deletes the job from history — while the library row, and the
+  // permanent delete that would destroy the far end's object, both survive.
+  // This is the one place the marker can be written from.
+  it("stamps the far job id onto the asset when the job was relayed and the key is foreign", async () => {
+    mocks.mockSingle.mockResolvedValueOnce({
+      data: {
+        status: "completed",
+        output_data: { imageUrl: "https://r2.example.com/images/test.png" },
+        relay_job_id: "cloud-9",
+      },
+      error: null,
+    })
+    mocks.mockMaybeSingle.mockResolvedValueOnce({ data: null, error: null })
+
+    await createAssetFromJob("job-1", "user-1")
+
+    expect(mocks.mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ r2_key: "images/test.png", relay_job_id: "cloud-9" }),
+    )
+  })
+
+  // The laptop: a relaying instance WITHOUT a shared bucket downloaded the far
+  // end's output and re-uploaded it under its own `<jobId>` key. It owns those
+  // bytes and must keep deleting them, so no marker is written.
+  it("writes no marker when the key is in this job's own family", async () => {
+    mocks.mockSingle.mockResolvedValueOnce({
+      data: {
+        status: "completed",
+        output_data: { imageUrl: "https://r2.example.com/images/job-1.png" },
+        relay_job_id: "cloud-9",
+      },
+      error: null,
+    })
+    mocks.mockMaybeSingle.mockResolvedValueOnce({ data: null, error: null })
+
+    await createAssetFromJob("job-1", "user-1")
+
+    expect(mocks.mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ r2_key: "images/job-1.png", relay_job_id: null }),
+    )
+  })
+
+  it("writes a null marker on a non-relayed job (mainline)", async () => {
+    mocks.mockSingle.mockResolvedValueOnce({
+      data: { status: "completed", output_data: { imageUrl: "https://r2.example.com/images/test.png" } },
+      error: null,
+    })
+    mocks.mockMaybeSingle.mockResolvedValueOnce({ data: null, error: null })
+
+    await createAssetFromJob("job-1", "user-1")
+
+    expect(mocks.mockInsert).toHaveBeenCalledWith(expect.objectContaining({ relay_job_id: null }))
+  })
 })
 
 // ---------------------------------------------------------------------------

@@ -44,6 +44,16 @@ vi.mock("@/lib/storage.js", () => ({
   batchDeleteFromR2: vi.fn().mockResolvedValue({ deleted: 0, errors: 0 }),
 }))
 
+/**
+ * THE ARMING GATE for the relay delete rule (lib/relay-possible.ts). Default
+ * OFF, which is the mainline shape and therefore a byte-identity pin: with no
+ * relay target this route must issue the exact `from()` sequence it issued
+ * before the rule existed — the ownership read, then the hard delete, and
+ * nothing in between.
+ */
+const relayGate = vi.hoisted(() => ({ on: false }))
+vi.mock("@/lib/relay-possible.js", () => ({ relayPossible: () => relayGate.on }))
+
 vi.mock("@/lib/admin-check.js", () => ({
   warmAdminCache: vi.fn(),
   checkIsAdmin: vi.fn().mockResolvedValue(false),
@@ -143,6 +153,7 @@ let app: FastifyInstance
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  relayGate.on = false
   app = Fastify({ logger: false })
   // Simulate auth middleware: set req.userId from X-User-Id header or userId in body
   app.addHook("preHandler", async (req) => {
@@ -804,6 +815,22 @@ describe("DELETE /v1/locations/:id?permanent=true", () => {
     const mockSelect = vi.fn().mockReturnValue(chain)
     return { mockSelect, chain }
   }
+  /**
+   * The relay-provenance probe the permanent-delete path now runs between key
+   * collection and `batchDeleteFromR2` (lib/asset-delete.ts `deletableKeys`):
+   * `assets.select("r2_key, relay_job_id").in("r2_key", keys).not(...)`, a
+   * terminal await. Empty on every deployment that never relays.
+   */
+  function relayChain(rows: Array<{ r2_key: string; relay_job_id: string }>) {
+    const chain: Record<string, unknown> = {
+      in: vi.fn().mockReturnThis(),
+      not: vi.fn().mockReturnThis(),
+      then: (resolve: (value: unknown) => unknown) =>
+        Promise.resolve({ data: rows, error: null }).then(resolve),
+    }
+    return { select: vi.fn().mockReturnValue(chain) }
+  }
+
   function hardDeleteChain(result: { error: unknown }) {
     const chain: Record<string, unknown> = {
       eq: vi.fn().mockReturnThis(),
@@ -915,6 +942,57 @@ describe("DELETE /v1/locations/:id?permanent=true", () => {
     expect(mockDelete).toHaveBeenCalled()
     expect(deleteChain.eq).toHaveBeenCalledWith("id", TEST_LOCATION_ID)
     expect(deleteChain.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+  })
+
+  /**
+   * THE RELAY RULE ON THE BATCH PATH (F4). On a self-host sharing a bucket with
+   * its relay target, essentially every generation is relayed, so an angle or
+   * variation image written into a location row IS an object the FAR end
+   * created and its own job row still points at. This path had no relay check
+   * and no referrer check of any kind, so it destroyed those bytes.
+   *
+   * The near end's own uploads under `locations/<id>/…` are untouched — the
+   * marker is per-object, not per-prefix, which is why the naive "skip
+   * job-shaped keys" rule was rejected.
+   */
+  it("keeps the R2 objects our relay target created, and deletes the rest", async () => {
+    relayGate.on = true
+    const FAR_KEY = "images/99999999-far-end-job.png"
+    const ASSET_ROW = {
+      source_image_url: "https://r2.example.com/locations/forest/main.png",
+      time_of_day: [{ name: "noon", url: `https://r2.example.com/${FAR_KEY}` }],
+      weather: [],
+      seasons: [],
+      angles: [],
+      lighting: [],
+      atmosphere_motions: [],
+      reference_photos: [],
+    }
+
+    const { mockSelect: ownerSelect } = ownershipChain({
+      data: { id: TEST_LOCATION_ID, deleted_at: "2026-05-01T00:00:00Z", ...ASSET_ROW },
+      error: null,
+    })
+    const { mockDelete } = hardDeleteChain({ error: null })
+
+    vi.mocked(supabase.from)
+      .mockReturnValueOnce({ select: ownerSelect } as never)
+      .mockReturnValueOnce(relayChain([{ r2_key: FAR_KEY, relay_job_id: "cloud-9" }]) as never)
+      // The key-stem probe behind the marker, asked only about what the marker
+      // did not settle (`locations/forest/main.png` — one of ours).
+      .mockReturnValueOnce(relayChain([]) as never)
+      .mockReturnValueOnce({ delete: mockDelete } as never)
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/locations/${TEST_LOCATION_ID}?permanent=true`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(batchDeleteFromR2).toHaveBeenCalledExactlyOnceWith(["locations/forest/main.png"])
+    // The row still goes — the near end drops its reference, never the bytes.
+    expect(mockDelete).toHaveBeenCalled()
   })
 
   it("skips batch-delete when the row has no R2-hosted assets", async () => {

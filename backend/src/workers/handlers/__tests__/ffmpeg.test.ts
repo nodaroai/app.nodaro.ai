@@ -34,6 +34,11 @@ const mocks = vi.hoisted(() => {
   // render queue (kinetic captions hand the job off here)
   const mockRenderQueueAdd = vi.fn().mockResolvedValue(undefined)
 
+  // Transcription — the local provider and the cloud replay ladder (#761).
+  const mockTranscribe = vi.fn().mockResolvedValue({ text: "hi", words: [{ text: "hi", startMs: 0, endMs: 900 }] })
+  const mockShouldRunOnCloud = vi.fn().mockResolvedValue(false)
+  const mockRunJobOnCloud = vi.fn().mockResolvedValue({ text: "hi", words: [{ text: "hi", startMs: 0, endMs: 900 }] })
+
   // Shared helpers
   const mockCommitJobCredits = vi.fn().mockResolvedValue(undefined)
   const mockShouldSaveJobResult = vi.fn().mockResolvedValue(true)
@@ -52,6 +57,9 @@ const mocks = vi.hoisted(() => {
 
   return {
     mockUploadFileToR2,
+    mockTranscribe,
+    mockShouldRunOnCloud,
+    mockRunJobOnCloud,
     mockCombineVideos,
     mockMergeVideoAudio,
     mockTrimAudio,
@@ -104,6 +112,15 @@ vi.mock("@/providers/video/ffmpeg-utils.js", () => ({
   cleanupWorkDir: mocks.mockCleanupWorkDir,
   probeVideoSource: mocks.mockProbeVideoSource,
   BROWSER_SAFE_VIDEO_ARGS: mocks.BROWSER_SAFE_VIDEO_ARGS,
+}))
+
+vi.mock("@/providers/audio/transcribe.js", () => ({
+  transcribe: mocks.mockTranscribe,
+}))
+
+vi.mock("@/providers/nodaro/run-on-cloud.js", () => ({
+  shouldRunOnCloud: mocks.mockShouldRunOnCloud,
+  runJobOnCloud: mocks.mockRunJobOnCloud,
 }))
 
 vi.mock("@/lib/render-queue.js", () => ({
@@ -249,6 +266,78 @@ describe("add-captions handler — kinetic render handoff", () => {
     expect(mocks.mockUpdate.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.mockRenderQueueAdd.mock.invocationCallOrder[0],
     )
+  })
+})
+
+/**
+ * THE KEYLESS SELF-HOST (F8). `add-captions` is on SAI's node allowlist, and
+ * its kinetic styles auto-transcribe by default — but the kinetic path called
+ * the transcribe PROVIDER directly, so on a deployment with no
+ * REPLICATE_API_TOKEN / ELEVENLABS_API_KEY (the target configuration) a
+ * whitelisted node could not run at all. `transcribe` IS in
+ * CLOUD_ROUTE_BY_JOB_TYPE, and handleTranscribe already uses the ladder.
+ */
+describe("add-captions handler — the kinetic transcribe ladder", () => {
+  const handler = ffmpegHandlers["add-captions"]
+
+  const kineticJob = () =>
+    makeJob("add-captions", { videoUrl: "https://v.mp4", style: "karaoke" })
+
+  it("replays transcription on the cloud when this install holds no key", async () => {
+    mocks.mockShouldRunOnCloud.mockResolvedValue(true)
+
+    await handler(kineticJob() as never, makeCtx())
+
+    expect(mocks.mockRunJobOnCloud).toHaveBeenCalledTimes(1)
+    const [jobType, payload] = mocks.mockRunJobOnCloud.mock.calls[0]
+    expect(jobType).toBe("transcribe")
+    // `audioUrl` matches URL_FIELD so run-on-cloud re-hosts a local-MinIO
+    // videoUrl before the POST; `jobId` is in INSTANCE_ONLY_FIELDS, stripped
+    // from the wire body but used to stamp relay_job_id/relay_credits.
+    expect(payload).toMatchObject({
+      jobId: "job-1",
+      audioUrl: "https://v.mp4",
+      provider: "incredibly-fast-whisper",
+      wordTimestamps: true,
+    })
+    expect(mocks.mockTranscribe).not.toHaveBeenCalled()
+    expect(mocks.mockRenderQueueAdd).toHaveBeenCalledTimes(1)
+  })
+
+  it("is byte-identical on a keyed install — the local provider, no cloud call", async () => {
+    mocks.mockShouldRunOnCloud.mockResolvedValue(false)
+
+    await handler(kineticJob() as never, makeCtx())
+
+    expect(mocks.mockTranscribe).toHaveBeenCalledTimes(1)
+    expect(mocks.mockRunJobOnCloud).not.toHaveBeenCalled()
+  })
+
+  it("fails loudly on a version-skewed cloud that returns no words array", async () => {
+    // The suno-lyrics rule: validate rather than trust. Without this the empty
+    // payload falls through to the synthetic-text branch and the job completes
+    // with captions nobody asked for, or dies with a misleading message.
+    mocks.mockShouldRunOnCloud.mockResolvedValue(true)
+    mocks.mockRunJobOnCloud.mockResolvedValue({ text: "hi" })
+
+    await expect(handler(kineticJob() as never, makeCtx())).rejects.toThrow(
+      /nodaro\.ai returned no transcription/,
+    )
+  })
+
+  it("asks the cloud nothing when captions are supplied", async () => {
+    mocks.mockShouldRunOnCloud.mockResolvedValue(true)
+    const job = makeJob("add-captions", {
+      videoUrl: "https://v.mp4",
+      style: "karaoke",
+      captions: [{ text: "hi", startMs: 0, endMs: 1000 }],
+    })
+
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockShouldRunOnCloud).not.toHaveBeenCalled()
+    expect(mocks.mockRunJobOnCloud).not.toHaveBeenCalled()
+    expect(mocks.mockTranscribe).not.toHaveBeenCalled()
   })
 })
 

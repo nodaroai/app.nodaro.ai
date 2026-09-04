@@ -127,7 +127,7 @@ import {
   DEFAULT_RESULT_BLOCK_MESSAGE,
   type JobResultContext,
 } from "../job-policy.js"
-import { extractJobOutputs, ownedHeldObjects, isOwnedObjectKey, mediaKindOf, MAX_HELD_OBJECTS } from "../job-policy-outputs.js"
+import { extractJobOutputs, ownedHeldObjects, isOwnedObjectKey, mediaKindOf, MAX_HELD_OBJECTS, deleteOwnedObjects } from "../job-policy-outputs.js"
 
 const OUT = { imageUrl: "https://cdn.example.com/images/job-1.png" }
 
@@ -762,6 +762,59 @@ describe("extractJobOutputs — two extractions, and why they differ (§5.4)", (
     const outs = extractJobOutputs(many)
     expect(ownedHeldObjects("job-1", outs)).toHaveLength(MAX_HELD_OBJECTS)
     expect(ownedHeldObjects("job-1", outs, Number.POSITIVE_INFINITY)).toHaveLength(40)
+  })
+
+  /**
+   * THE RELAYED HOLD (F6). Under the shared-bucket passthrough the output key
+   * of a relayed job is the FAR end's — its stem is `relay_job_id`, not the
+   * near job id — so the key-family fence dropped every one of them and
+   * `held_objects` was written EMPTY. The review queue then 404s on every
+   * index and the human has to approve or reject media they cannot see.
+   *
+   * The fix widens the accepted STEM, bounded by a server-written column, and
+   * does NOT exempt relayed rows from the fence: deletion still asks the near
+   * job only, so invariant 9 holds with no second guard.
+   */
+  it("a relayed job's far-end output IS withheld, keyed on the far stem", () => {
+    const relayed = { imageUrl: "https://cdn.example.com/images/cloud-9.png" }
+    const outs = extractJobOutputs(relayed)
+
+    // Without the relay stem the fence drops it — the bug.
+    expect(ownedHeldObjects("job-1", outs)).toEqual([])
+
+    const held = ownedHeldObjects("job-1", outs, MAX_HELD_OBJECTS, "cloud-9")
+    expect(held.map((h) => h.key)).toEqual(["images/cloud-9.png"])
+    // Variants of the far job ride along on the same `${stem}-` rule.
+    expect(
+      ownedHeldObjects(
+        "job-1",
+        extractJobOutputs({ a: "https://cdn.example.com/images/cloud-9-v1.png" }),
+        MAX_HELD_OBJECTS,
+        "cloud-9",
+      ).map((h) => h.key),
+    ).toEqual(["images/cloud-9-v1.png"])
+    // And a third party's key is still refused.
+    expect(
+      ownedHeldObjects(
+        "job-1",
+        extractJobOutputs({ a: "https://cdn.example.com/images/someone-else.png" }),
+        MAX_HELD_OBJECTS,
+        "cloud-9",
+      ),
+    ).toEqual([])
+  })
+
+  it("DELETION of that same held_objects array still deletes nothing (invariant 9)", async () => {
+    const held = ownedHeldObjects(
+      "job-1",
+      extractJobOutputs({ imageUrl: "https://cdn.example.com/images/cloud-9.png" }),
+      MAX_HELD_OBJECTS,
+      "cloud-9",
+    )
+    expect(held).toHaveLength(1)
+    // deleteOwnedObjects re-filters by the NEAR job id, so a far-stem entry is
+    // dropped there — no import of the S3 client is even reached.
+    await expect(deleteOwnedObjects("job-1", held)).resolves.toBe(0)
   })
 
   it("mediaKind travels with the outputs so a policy can fail closed on an empty list", () => {

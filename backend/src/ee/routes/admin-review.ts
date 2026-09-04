@@ -4,7 +4,7 @@ import { supabase } from "../../lib/supabase.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { streamR2Object } from "../../lib/storage.js"
 import { resolveHeldJob } from "../../lib/job-policy-review.js"
-import { isOwnedObjectKey } from "../../lib/job-policy-outputs.js"
+import { isOwnedOrRelayedObjectKey } from "../../lib/job-policy-outputs.js"
 import { IMAGE_JOB_TYPES, VIDEO_JOB_TYPES, AUDIO_JOB_TYPES } from "../../lib/job-finalize.js"
 
 /**
@@ -208,6 +208,32 @@ function decisionsTable() {
   return supabase.from("job_policy_decisions" as "assets") as unknown as ReturnType<typeof supabase.from>
 }
 
+/**
+ * The far end's job id for a job in review, from wherever it currently lives.
+ *
+ * TWO PLACES, and the order matters. A held row's completion columns are PARKED
+ * (`markJobHeld` writes `held_completion_fields` and never runs the completion
+ * UPDATE), so for everything the capability router relayed — a self-host's
+ * principal traffic — the `relay_job_id` COLUMN is still NULL for exactly as
+ * long as the job is reviewable. It starts answering only after
+ * `approveHeldJob` spreads those columns back. The replay lanes
+ * (providers/nodaro/run-on-cloud.ts) stamp the column directly and are covered
+ * by the first branch.
+ *
+ * Both sources are SERVER-WRITTEN: migration 383 adds no UPDATE grant on
+ * `relay_job_id`, and `held_completion_fields` is outside migration 347's
+ * authenticated column grant. The `typeof` narrowing is not decoration — it is
+ * what stops a non-string sneaking into the key-family test.
+ */
+function relayStemOf(job: {
+  relay_job_id: string | null
+  held_completion_fields: Record<string, unknown> | null
+}): string | null {
+  if (typeof job.relay_job_id === "string" && job.relay_job_id) return job.relay_job_id
+  const parked = job.held_completion_fields?.relay_job_id
+  return typeof parked === "string" && parked ? parked : null
+}
+
 /** A safety belt on the `?policyId=` narrowing, NOT its correctness boundary
  *  (see the query for why that changed). Every id it returns becomes ~40 bytes
  *  of `in.(…)` in the jobs request line, so an unbounded list would eventually
@@ -386,12 +412,20 @@ export async function adminReviewRoutes(app: FastifyInstance): Promise<void> {
 
     // Re-read the status INSIDE the handler: the queue page may be minutes
     // stale, and an approved or rejected job's bytes are no longer reviewable.
+    // `held_completion_fields` is selected for ONE field and never reaches the
+    // wire (this handler streams bytes; the manifest route does not select it).
+    // It is where a held row's `relay_job_id` actually lives — see relayStemOf.
     const { data } = await supabase
       .from("jobs")
-      .select("id, status, held_objects")
+      .select("id, status, held_objects, relay_job_id, held_completion_fields")
       .eq("id", jobId)
       .single()
-    const job = (data ?? null) as unknown as { status: string; held_objects: HeldObjectRow[] | null } | null
+    const job = (data ?? null) as unknown as {
+      status: string
+      held_objects: HeldObjectRow[] | null
+      relay_job_id: string | null
+      held_completion_fields: Record<string, unknown> | null
+    } | null
     if (!job || job.status !== "pending_review") return reply.status(404).send(NOT_FOUND)
 
     const objects = Array.isArray(job.held_objects) ? job.held_objects : []
@@ -404,7 +438,13 @@ export async function adminReviewRoutes(app: FastifyInstance): Promise<void> {
     // CHECK made that status reachable from PostgREST until the same migration
     // narrowed the INSERT policy). Without it, one planted array turns this
     // route into an authenticated read-anything proxy over the bucket.
-    if (!object?.key || !isOwnedObjectKey(jobId, object.key)) return reply.status(404).send(NOT_FOUND)
+    // Two stems, both from the ROW: this job's id, and — on a relayed row — the
+    // far end's, which under the shared-bucket passthrough is the stem its
+    // outputs actually carry. Neither comes from the request, so the "planted
+    // array ⇒ read-anything proxy" property this check exists for is preserved.
+    if (!object?.key || !isOwnedOrRelayedObjectKey(jobId, relayStemOf(job), object.key)) {
+      return reply.status(404).send(NOT_FOUND)
+    }
 
     const range = typeof req.headers.range === "string" ? req.headers.range : undefined
     const obj = await streamR2Object(object.key, range ? { range } : {})

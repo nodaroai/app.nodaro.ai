@@ -52,6 +52,7 @@ import {
   requestJobStop,
 } from "../../workers/shared.js"
 import { supabase } from "../supabase.js"
+import { isRelayOwnedObject } from "../asset-delete.js"
 import { markJobFailed } from "../job-failure.js"
 import { IN_FLIGHT_JOB_STATUSES } from "../job-status.js"
 import { redactProviderDetail } from "../provider-error-detail.js"
@@ -1046,7 +1047,23 @@ export function buildToolkit(): PluginToolkit {
       getR2ObjectSize,
       downloadR2ObjectToFile,
       readR2ObjectBuffer,
-      deleteFromR2,
+      // THE RELAY DELETE RULE (spec §9.3, D18, invariant 9). A plugin is handed
+      // a key and asked to delete it; under the shared-bucket passthrough that
+      // key can name an object our RELAY TARGET created, whose own job row
+      // still points at it. The raw `deleteFromR2` gave every plugin a way
+      // around the fence the four first-party delete paths honour, so the
+      // toolkit hands out the FENCED one. Inert without a relay target: the
+      // predicate returns false before issuing any query.
+      deleteFromR2: async (key: string) => {
+        if (await isRelayOwnedObject(null, key)) {
+          console.warn(
+            `[plugin-toolkit] keeping R2 object ${key}: created by our relay target — ` +
+              "the bytes are the far end's to delete",
+          )
+          return
+        }
+        await deleteFromR2(key)
+      },
       r2KeyFromOurUrl,
       storeImportedImageBuffer,
       mediaObjectKey,

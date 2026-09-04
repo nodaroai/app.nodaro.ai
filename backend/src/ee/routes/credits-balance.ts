@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { resolveEffectiveTier, resolveStoredTier } from "@nodaro/shared"
 import { z } from "zod"
 import { hasCredits } from "../../lib/config.js"
+import { refusePayerBalanceToProgrammaticCaller } from "../lib/payer-balance-guard.js"
 import { supabase } from "../../lib/supabase.js"
 
 /**
@@ -87,6 +88,21 @@ export async function registerCreditsBalanceRoutes(app: FastifyInstance): Promis
         error: { code: "unauthorized", message: "Authentication required" },
       })
     }
+    // A deployment payer's pool is the OPERATOR's number. The payer-aware 402
+    // already refuses to echo it (credit-guard-impl.ts:238-255) because that
+    // response reaches anyone who can press Generate; this route is the other
+    // door to the same figure, and a relay credential authenticates AS the
+    // payer. `/v1/nodaro-connect/status` proxies this route straight onto a
+    // connected instance's Integrations card (routes/nodaro-connect.ts:231-238),
+    // so without this the operator's real balance prints on every relaying
+    // near end. Identity-scoped, not credential-scoped: an ordinary requester's
+    // token is unaffected, and the payer's own browser session still answers.
+    // Refused BEFORE the profile read -- the leak closes without a query.
+    // INERT with no payer configured: deploymentPayerActive() is false, so this
+    // whole condition short-circuits and the route behaves as it always has.
+    // Shared with the two sibling doors onto the same figure —
+    // `GET /v1/user/credits` and `GET /v1/credits/check` (ee/routes/credits.ts).
+    if (refusePayerBalanceToProgrammaticCaller(req, reply)) return reply
     const { data, error } = await supabase
       .from("profiles")
       .select("subscription_credits, topup_credits, tier, subscription_tier, lifetime_topup_credits")

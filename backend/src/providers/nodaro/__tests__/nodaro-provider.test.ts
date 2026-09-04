@@ -119,10 +119,15 @@ describe("NodaroCloudImageProvider", () => {
       },
     )
 
+    // relayJobId/relayCredits ride along on every nodaro result now (spec
+    // §8.2 lane 1); `completedJob` sends no `credits`, so the cost is NULL —
+    // "the far end did not say", never 0.
     expect(result).toEqual({
       url: "https://r2.example/img-a.png",
       extraUrls: ["https://r2.example/img-b.png"],
       cost: null,
+      relayJobId: "cloud-job-1",
+      relayCredits: null,
     })
 
     const [createPath, createInit] = mockFetch.mock.calls[0]!
@@ -226,7 +231,12 @@ describe("NodaroCloudVideoProvider", () => {
       },
     )
 
-    expect(result).toEqual({ url: "https://r2.example/clip.mp4", cost: null })
+    expect(result).toEqual({
+      url: "https://r2.example/clip.mp4",
+      cost: null,
+      relayJobId: "cloud-job-1",
+      relayCredits: null,
+    })
 
     const [createPath, createInit] = mockFetch.mock.calls[0]!
     expect(createPath).toBe("/v1/generate-video")
@@ -265,7 +275,12 @@ describe("NodaroCloudVideoProvider", () => {
       { sound: true, grokMode: "fun", motionPrompt: "never-sent-on-t2v" },
     )
 
-    expect(result).toEqual({ url: "https://r2.example/t2v.mp4", cost: null })
+    expect(result).toEqual({
+      url: "https://r2.example/t2v.mp4",
+      cost: null,
+      relayJobId: "cloud-job-1",
+      relayCredits: null,
+    })
 
     const [createPath, createInit] = mockFetch.mock.calls[0]!
     expect(createPath).toBe("/v1/text-to-video")
@@ -289,6 +304,93 @@ describe("NodaroCloudVideoProvider", () => {
     await expect(
       new NodaroCloudVideoProvider().textToVideo("a city", "kling", 5),
     ).rejects.toThrow(/completed but returned no videoUrl/)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 2b. Relay provenance on the ProviderResult (spec §8.2 lane 1, migration 383)
+//
+// The nodaro providers never learn the LOCAL job id, so the far end's job id
+// and cost ride back on the result and the handler persists them — the same
+// shape `kieTaskId` has used since KIE chaining. A provider that stopped
+// setting them would leave every router-lane relayed row with no provenance
+// and no cost, and the delete rule (D18) would then happily destroy an object
+// the far end's own job row still references.
+// ---------------------------------------------------------------------------
+
+describe("relay provenance rides back on ProviderResult", () => {
+  function completedJobWithCredits(
+    outputData: Record<string, unknown>,
+    credits: number | null | undefined,
+    id = "cloud-job-1",
+  ): Response {
+    return jsonResponse(200, {
+      data: {
+        id,
+        status: "completed",
+        progress: 100,
+        output_data: outputData,
+        ...(credits === undefined ? {} : { credits }),
+        credit_status: "committed",
+      },
+    })
+  }
+
+  it("image: carries the far end's job id and credits", async () => {
+    queueResponses(
+      jsonResponse(200, { jobId: "cloud-img-9" }),
+      completedJobWithCredits({ imageUrl: "https://c/x.png" }, 24, "cloud-img-9"),
+    )
+    const result = await new NodaroCloudImageProvider().generateImage("a cat", undefined, "nano-banana")
+    expect(result.relayJobId).toBe("cloud-img-9")
+    expect(result.relayCredits).toBe(24)
+  })
+
+  it("image (edit): carries them too — editImage shares the same extractor", async () => {
+    queueResponses(
+      jsonResponse(200, { jobId: "cloud-img-e" }),
+      completedJobWithCredits({ imageUrl: "https://c/e.png" }, 7, "cloud-img-e"),
+    )
+    const result = await new NodaroCloudImageProvider().editImage("https://pub.example/a.png", "brighten")
+    expect(result).toMatchObject({ relayJobId: "cloud-img-e", relayCredits: 7 })
+  })
+
+  it("video: carries the far end's job id and credits", async () => {
+    queueResponses(
+      jsonResponse(200, { jobId: "cloud-vid-9" }),
+      completedJobWithCredits({ videoUrl: "https://c/x.mp4" }, 120, "cloud-vid-9"),
+    )
+    const result = await new NodaroCloudVideoProvider().textToVideo("a city", "kling", 5)
+    expect(result).toMatchObject({ relayJobId: "cloud-vid-9", relayCredits: 120 })
+  })
+
+  it("audio: carries the far end's job id and credits", async () => {
+    const { NodaroCloudAudioProvider } = await import("../audio.js")
+    queueResponses(
+      jsonResponse(200, { jobId: "cloud-aud-9" }),
+      completedJobWithCredits({ audioUrl: "https://c/x.mp3" }, 3, "cloud-aud-9"),
+    )
+    const result = await new NodaroCloudAudioProvider().textToSpeech("hello")
+    expect(result).toMatchObject({ relayJobId: "cloud-aud-9", relayCredits: 3 })
+  })
+
+  it("a far end that withheld `credits` yields NULL, never 0 — 'free' would be a lie", async () => {
+    queueResponses(
+      jsonResponse(200, { jobId: "cloud-img-0" }),
+      completedJobWithCredits({ imageUrl: "https://c/x.png" }, undefined, "cloud-img-0"),
+    )
+    const result = await new NodaroCloudImageProvider().generateImage("a cat", undefined, "nano-banana")
+    expect(result.relayCredits).toBeNull()
+    expect(result.relayCredits).not.toBe(0)
+  })
+
+  it("`cost` stays null — the near end never sees the far end's USD", async () => {
+    queueResponses(
+      jsonResponse(200, { jobId: "cloud-img-1" }),
+      completedJobWithCredits({ imageUrl: "https://c/x.png" }, 24, "cloud-img-1"),
+    )
+    const result = await new NodaroCloudImageProvider().generateImage("a cat", undefined, "nano-banana")
+    expect(result.cost).toBeNull()
   })
 })
 

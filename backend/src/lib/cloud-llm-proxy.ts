@@ -182,6 +182,17 @@ async function mirrorCloudJob(
         // themselves keep e.g. reduce's 1000 inputs out of input_data).
         input_data: { type: jobType, viaNodaroCloud: true, cloudJobId },
         output_data: { ...answer, viaNodaroCloud: true, cloudJobId },
+        // Relay provenance, lane 3 (spec §8.2, migration 383). `relay_job_id`
+        // costs nothing here — the far id is already in scope — and it is the
+        // marker the delete paths read before touching bytes another instance
+        // created. `relay_credits` is deliberately LEFT UNSET: this lane
+        // mirrors the far end's ROUTE response body, which is
+        // { jobId, generatedText } (routes/llm-chat.ts) and carries no
+        // `credits`. Settlement covers it — a near end billing its own users
+        // re-reads GET /v1/jobs/:relay_job_id for `credit_status` anyway, and
+        // that read answers `credits` at the same time. An in-path GET would
+        // tax the fastest lane for a number nobody reads at that moment.
+        relay_job_id: cloudJobId,
       })
     : { data: null, error: { message: "no local user on the request" } }
 

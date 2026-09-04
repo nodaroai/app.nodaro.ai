@@ -28,6 +28,15 @@ vi.mock("@/utils/file-validation.js", () => ({
   updateStorageUsage: vi.fn().mockResolvedValue(undefined),
 }))
 
+/**
+ * THE ARMING GATE for the relay delete rule (lib/relay-possible.ts). Default
+ * OFF — the mainline shape, and therefore the byte-identity pin for this path:
+ * with no relay target `deleteSourceAfterProcess` must issue exactly the reads
+ * it issued before the rule existed.
+ */
+const relayGate = vi.hoisted(() => ({ on: false }))
+vi.mock("@/lib/relay-possible.js", () => ({ relayPossible: () => relayGate.on }))
+
 vi.mock("@/lib/url-validator.js", async () => {
   const { z } = await import("zod")
   return { safeUrlSchema: z.string().url() }
@@ -94,11 +103,14 @@ describe("safeMediaExt (path-traversal guard for /v1/media/process)", () => {
 const TEST_USER_ID = "00000000-0000-4000-8000-000000000001"
 const SOURCE_KEY = "uploads/audio/source-original.mp3"
 const OUR_SOURCE_URL = `${R2_PREFIX}${SOURCE_KEY}`
+const SOURCE_JOB = "11111111-1111-4000-8000-000000000001"
 const OWNED_SOURCE_ASSET = {
   id: "src-asset-1",
   user_id: TEST_USER_ID,
   r2_key: SOURCE_KEY,
   size_bytes: 4242,
+  job_id: SOURCE_JOB,
+  relay_job_id: null,
 }
 
 type ChainResult = { data?: unknown; error?: unknown; count?: number | null }
@@ -148,6 +160,7 @@ let warnSpy: ReturnType<typeof vi.spyOn>
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  relayGate.on = false
   warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
 
   workDir = await fs.mkdtemp(join(tmpdir(), "media-process-test-"))
@@ -223,7 +236,8 @@ describe("POST /v1/media/process — deleteSource", () => {
     expect(vi.mocked(deleteFromR2).mock.invocationCallOrder[0]).toBeGreaterThan(
       vi.mocked(uploadBufferToR2).mock.invocationCallOrder[0],
     )
-    // insert, ownership, asset-refs, jobs×3, row delete — in that table order.
+    // insert, ownership, asset-refs, jobs×3, row delete — the origin/dev
+    // sequence exactly: with no relay target the rule issues nothing.
     expect(vi.mocked(supabase.from).mock.calls.map((c) => c[0])).toEqual([
       "assets", "assets", "assets", "jobs", "jobs", "jobs", "assets",
     ])
@@ -270,6 +284,52 @@ describe("POST /v1/media/process — deleteSource", () => {
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("kept R2 object"))
     // The row (and its quota charge) still goes — same as library.ts.
     expect(updateStorageUsage).toHaveBeenCalledWith(TEST_USER_ID, -OWNED_SOURCE_ASSET.size_bytes)
+  })
+
+  /**
+   * THE FOURTH DELETE PATH (F5). `deleteSourceAfterProcess` is a hand-rolled
+   * copy of the canonical permanent delete that the relay rule never reached:
+   * the R2 delete happened to be skipped when the relayed job's own
+   * `output_data` still matched, but the quota decrement fired unconditionally
+   * — for bytes the shared-bucket passthrough never charged. Invariant 10a:
+   * a relay-owned object is never counted against this instance's quota, in
+   * EITHER direction.
+   */
+  it("relay-owned source → no R2 delete, NO quota decrement, row still removed", async () => {
+    relayGate.on = true
+    queueSupabaseResults(
+      { data: { id: "new-output-asset" }, error: null },
+      { data: OWNED_SOURCE_ASSET, error: null },
+      { data: { relay_job_id: "cloud-9" }, error: null }, // the source's job was relayed
+      { error: null },                                    // delete of the source asset row
+    )
+
+    const res = await post({ sourceUrl: OUR_SOURCE_URL, deleteSource: true })
+    expect(res.statusCode).toBe(200)
+    expect(deleteFromR2).not.toHaveBeenCalled()
+    expect(updateStorageUsage).not.toHaveBeenCalled()
+    // insert, ownership, relay provenance, row delete — the referrer probes are
+    // skipped entirely, exactly as permanentlyDeleteAsset skips them.
+    expect(vi.mocked(supabase.from).mock.calls.map((c) => c[0])).toEqual([
+      "assets", "assets", "jobs", "assets",
+    ])
+  })
+
+  it("the asset's OWN durable marker settles it without reading the job row", async () => {
+    relayGate.on = true
+    queueSupabaseResults(
+      { data: { id: "new-output-asset" }, error: null },
+      { data: { ...OWNED_SOURCE_ASSET, job_id: null, relay_job_id: "cloud-9" }, error: null },
+      { error: null }, // delete of the source asset row
+    )
+
+    const res = await post({ sourceUrl: OUR_SOURCE_URL, deleteSource: true })
+    expect(res.statusCode).toBe(200)
+    expect(deleteFromR2).not.toHaveBeenCalled()
+    expect(updateStorageUsage).not.toHaveBeenCalled()
+    expect(vi.mocked(supabase.from).mock.calls.map((c) => c[0])).toEqual([
+      "assets", "assets", "assets",
+    ])
   })
 
   it("deleteFromR2 throwing never fails the request", async () => {
