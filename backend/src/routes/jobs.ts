@@ -501,7 +501,14 @@ export async function jobRoutes(app: FastifyInstance) {
       query = query.lt("created_at", cursor)
     }
 
-    const { data: jobs } = await query
+    const { data: jobs, error: listError } = await query
+
+    // A swallowed error here reads as "no jobs": the query fails, `jobs` is
+    // undefined, and the caller gets a 200 with an empty list instead of a
+    // failure it can see. Surface it, like every other query in this file.
+    if (listError) {
+      return sendInternalError(reply, req, listError, "Failed to list jobs")
+    }
 
     // Strip the joined workflow_executions data (only used for filtering)
     const cleanedJobs = (jobs ?? []).map(({ workflow_executions: _we, ...job }) => job)

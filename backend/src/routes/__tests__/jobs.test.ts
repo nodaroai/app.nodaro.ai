@@ -664,15 +664,19 @@ describe("GET /v1/jobs/:id/status", () => {
 /**
  * Chainable mock for the LIST route. Records every filter call so a test can
  * assert which predicates were applied, and resolves with the seeded rows.
+ *
+ * Pass `error` to resolve the PostgREST failure shape instead (`data: null`) —
+ * that is the case the route used to swallow into an empty 200.
  */
-function seedJobsList(rows: Array<Record<string, unknown>>) {
+function seedJobsList(rows: Array<Record<string, unknown>>, error: unknown = null) {
   const calls: Array<{ method: string; args: unknown[] }> = []
   vi.mocked(supabase.from).mockImplementation((table: string) => {
     if (table !== "jobs") throw new Error(`Unexpected table "${table}"`)
     const handler: ProxyHandler<Record<string, unknown>> = {
       get(_t, prop) {
         if (prop === "then") {
-          return (resolve: (v: unknown) => void) => resolve({ data: rows, error: null })
+          return (resolve: (v: unknown) => void) =>
+            resolve(error ? { data: null, error } : { data: rows, error: null })
         }
         return (...args: unknown[]) => {
           calls.push({ method: String(prop), args })
@@ -760,6 +764,22 @@ describe("GET /v1/jobs — attachToCharacterId (durable per-character listing)",
 
     expect(res.statusCode).toBe(200)
     expect(res.json().data[0]).not.toHaveProperty("isSceneRender")
+  })
+})
+
+describe("GET /v1/jobs — a failed query", () => {
+  it("answers 500 instead of an empty list", async () => {
+    // The list route read only `data`, so a failing query became `[]` and the
+    // caller saw a healthy 200 with no rows — a user with jobs looked like a
+    // user with none. Staging smoke: GET /v1/jobs?limit=3 -> 200, zero rows.
+    seedJobsList([], { message: "boom" })
+
+    const res = await app.inject({ method: "GET", url: `/v1/jobs?__userId=${TEST_USER_ID}` })
+
+    expect(res.statusCode).toBe(500)
+    expect(res.json()).toEqual({
+      error: { code: "internal_error", message: "Failed to list jobs" },
+    })
   })
 })
 
