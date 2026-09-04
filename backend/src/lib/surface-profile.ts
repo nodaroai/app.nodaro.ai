@@ -83,6 +83,27 @@ export interface SurfaceBilling {
    * rule unchanged (requester pays), byte-identical to pre-payer behavior.
    */
   payerAccount?: string
+  /**
+   * Track A (per-user SAI allowances) — the SEED for a payer deployment's
+   * `deployment_payer_settings.default_allowance_credits` row, in DISPLAY
+   * UNITS. A member of the unit family: it means nothing without unitLabel +
+   * unitRate, and it must divide by `unitRate` into a WHOLE NUMBER OF CREDITS
+   * because the ledger is stored in Nodaro credits (R3 — no unit ever reaches
+   * the ledger). Seed only: the LIVE default is the settings row, which only
+   * the billing account may change (decision 3), so this value is written on
+   * first insert and never again. BACKEND-ONLY (stripped from /config.js).
+   */
+  defaultAllowanceUnits?: number
+  /**
+   * Track A — the rollout gate that drives `p_enforce_allowance`. "enforce"
+   * turns the allowance block inside reserve_credits on; anything else (absent
+   * included) leaves it off, which is the fail-safe direction: nothing can be
+   * refused. Also a member of the unit family — a deployment that cannot
+   * display an allowance must not enforce one. BACKEND-ONLY (stripped from
+   * /config.js): the browser learns enforcement from the `allowance` field on
+   * its own balance, never from a flag.
+   */
+  allowances?: "off" | "enforce"
 }
 
 export interface SurfaceProfile {
@@ -204,7 +225,7 @@ const BILLING_DEFAULT: SurfaceBilling = { costTab: "inherit", sidebarCard: "inhe
  * requires the unit (the hosted overlay's register() asserts it and the loader
  * turns that into exit(1)); parseSurfaceProfile never throws, by contract.
  */
-function coherentBilling(raw: { costTab: "inherit" | "hidden"; sidebarCard: "inherit" | "hidden"; selfServe: boolean; unitLabel?: unknown; unitRate?: unknown; unitDecimals?: unknown; payerAccount?: unknown }): SurfaceBilling {
+function coherentBilling(raw: { costTab: "inherit" | "hidden"; sidebarCard: "inherit" | "hidden"; selfServe: boolean; unitLabel?: unknown; unitRate?: unknown; unitDecimals?: unknown; payerAccount?: unknown; defaultAllowanceUnits?: unknown; allowances?: unknown }): SurfaceBilling {
   const out: SurfaceBilling = { costTab: raw.costTab, sidebarCard: raw.sidebarCard, selfServe: raw.selfServe }
   // Independent of the unit trio: a malformed payerAccount drops ALONE (the
   // unit keeps working), and vice versa. The fail-LOUD half — "configured but
@@ -217,12 +238,26 @@ function coherentBilling(raw: { costTab: "inherit" | "hidden"; sidebarCard: "inh
       console.warn("[surface-profile] billing.payerAccount dropped — must be a non-empty string (uuid or email)")
     }
   }
+  // The allowance pair rides WITH the trio (§11): they are members of the unit
+  // family, so a deployment whose unit did not survive validation cannot
+  // display an allowance and must not enforce one either. Dropping them is the
+  // fail-safe direction — enforcement off refuses nobody.
+  const dropAllowanceFamily = (): void => {
+    if (raw.defaultAllowanceUnits === undefined && raw.allowances === undefined) return
+    console.warn(
+      "[surface-profile] billing.defaultAllowanceUnits/allowances dropped — they are members of the unit family and need a coherent unitLabel + unitRate",
+    )
+  }
   const hasLabel = raw.unitLabel !== undefined
   const hasRate = raw.unitRate !== undefined
-  if (!hasLabel && !hasRate && raw.unitDecimals === undefined) return out
+  if (!hasLabel && !hasRate && raw.unitDecimals === undefined) {
+    dropAllowanceFamily()
+    return out
+  }
 
   const drop = (why: string): SurfaceBilling => {
     console.warn(`[surface-profile] billing.unitLabel/unitRate/unitDecimals dropped — ${why}`)
+    dropAllowanceFamily()
     return out
   }
   if (hasLabel !== hasRate) return drop("unitLabel and unitRate must be set together (both or neither)")
@@ -244,6 +279,36 @@ function coherentBilling(raw: { costTab: "inherit" | "hidden"; sidebarCard: "inh
   out.unitLabel = raw.unitLabel.trim()
   out.unitRate = rate
   if (raw.unitDecimals !== undefined) out.unitDecimals = decimals
+
+  // The allowance pair — validated only now (the trio is coherent), and each
+  // key drops ALONE: a bogus rollout gate must not take the seed down with it,
+  // and vice versa. Both are absent on mainline, which is what keeps a
+  // deployment with no payer byte-identical.
+  if (raw.allowances !== undefined) {
+    if (raw.allowances === "off" || raw.allowances === "enforce") {
+      out.allowances = raw.allowances
+    } else {
+      console.warn('[surface-profile] billing.allowances dropped — must be "off" or "enforce" (dropped ⇒ off)')
+    }
+  }
+  if (raw.defaultAllowanceUnits !== undefined) {
+    const units = raw.defaultAllowanceUnits
+    if (typeof units !== "number" || !Number.isFinite(units) || units <= 0) {
+      console.warn("[surface-profile] billing.defaultAllowanceUnits dropped — must be a finite number > 0")
+    } else {
+      // WHOLE CREDITS (R3): the ledger is in Nodaro credits, so a seed that
+      // does not divide by unitRate would be stored rounded and every figure
+      // the payer sees afterwards would disagree with the profile.
+      const credits = units / rate
+      if (Math.abs(credits - Math.round(credits)) > 1e-9) {
+        console.warn(
+          `[surface-profile] billing.defaultAllowanceUnits dropped — ${units} at unitRate ${rate} is not a whole number of credits`,
+        )
+      } else {
+        out.defaultAllowanceUnits = units
+      }
+    }
+  }
   return out
 }
 
@@ -280,6 +345,8 @@ export const SurfaceProfileSchema: z.ZodType<SurfaceProfile> = z.object({
       unitRate: z.unknown().optional(),
       unitDecimals: z.unknown().optional(),
       payerAccount: z.unknown().optional(),
+      defaultAllowanceUnits: z.unknown().optional(),
+      allowances: z.unknown().optional(),
     })
     .transform(coherentBilling)
     .catch(BILLING_DEFAULT),

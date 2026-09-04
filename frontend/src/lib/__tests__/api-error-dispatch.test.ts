@@ -25,7 +25,11 @@ import {
   TutorialCategoryInUseError,
   ConcurrentModificationError,
   DedupRaceRetryableError,
+  UserAllowanceExceededError,
 } from "../api"
+import { useLocaleStore } from "@/lib/locale-store"
+import { en } from "@/lib/i18n/en"
+import { he } from "@/lib/i18n/he"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -172,6 +176,122 @@ describe("throwApiError dispatch (via editImage)", () => {
       expect(e.code).toBe("insufficient_app_credits")
       // appCreditsAllowance defaults to 0 when absent
       expect(e.appCreditsAllowance).toBe(0)
+    }
+  })
+
+  // -- user_allowance_exceeded -> UserAllowanceExceededError (Track A, D10) --
+
+  // The deployment-payer 402. It is NOT the deployment pool running dry (that
+  // stays `insufficient_credits`, with the payer's figures redacted): it is
+  // THIS user's per-user allowance, and the only person who can refill it is
+  // the deployment's billing account. The stock "contact your administrator"
+  // copy sends them to someone who genuinely cannot help, so the message the
+  // user sees is ours, localized, and never the server's English string.
+
+  it("user_allowance_exceeded throws UserAllowanceExceededError, an InsufficientCreditsError", async () => {
+    // Every existing `instanceof InsufficientCreditsError` call site (the app
+    // runner's 402 handling among them) must keep working unchanged.
+    vi.stubGlobal(
+      "fetch",
+      mockFetchError(402, {
+        error: { code: "user_allowance_exceeded", message: "Your allowance cannot cover this run" },
+        required: 12000,
+        remaining: 4000,
+      }),
+    )
+
+    try {
+      await editImage("http://img.png")
+      throw new Error("did not throw")
+    } catch (err) {
+      expect(err).toBeInstanceOf(UserAllowanceExceededError)
+      expect(err).toBeInstanceOf(InsufficientCreditsError)
+      const e = err as UserAllowanceExceededError
+      expect(e.name).toBe("UserAllowanceExceededError")
+      expect(e.code).toBe("user_allowance_exceeded")
+    }
+  })
+
+  it("carries D10's RAW required/remaining, which sit BESIDE `error`, not inside it", async () => {
+    // The one shape mistake that costs nothing at compile time and shows the
+    // user "you need 0, you have 0".
+    vi.stubGlobal(
+      "fetch",
+      mockFetchError(402, {
+        error: { code: "user_allowance_exceeded", message: "no" },
+        required: 12000,
+        remaining: 4000,
+      }),
+    )
+
+    try {
+      await editImage("http://img.png")
+      throw new Error("did not throw")
+    } catch (err) {
+      const e = err as UserAllowanceExceededError
+      expect(e.required).toBe(12000)   // raw credits, not display units
+      expect(e.remaining).toBe(4000)
+    }
+  })
+
+  it("renders OUR copy, not the server's English message", async () => {
+    useLocaleStore.setState({ locale: "en" })
+    vi.stubGlobal(
+      "fetch",
+      mockFetchError(402, {
+        error: { code: "user_allowance_exceeded", message: "Your allowance cannot cover this run" },
+      }),
+    )
+
+    try {
+      await editImage("http://img.png")
+      throw new Error("did not throw")
+    } catch (err) {
+      const e = err as UserAllowanceExceededError
+      expect(e.message).toBe(en["credits.allowanceExceeded"])
+      expect(e.message).not.toContain("Your allowance cannot cover this run")
+      // It names the fixer and never offers a purchase the user cannot make.
+      expect(e.message.toLowerCase()).not.toContain("buy")
+      expect(e.message.toLowerCase()).not.toContain("upgrade")
+    }
+  })
+
+  it("localizes it — the instance this ships to is Hebrew-default", async () => {
+    useLocaleStore.setState({ locale: "he" })
+    vi.stubGlobal(
+      "fetch",
+      mockFetchError(402, {
+        error: { code: "user_allowance_exceeded", message: "Your allowance cannot cover this run" },
+      }),
+    )
+
+    try {
+      await editImage("http://img.png")
+      throw new Error("did not throw")
+    } catch (err) {
+      const e = err as UserAllowanceExceededError
+      expect(e.message).toBe(he["credits.allowanceExceeded"])
+      expect(e.message).not.toBe(en["credits.allowanceExceeded"])
+    }
+    useLocaleStore.setState({ locale: "en" })
+  })
+
+  it("leaves the deployment-pool 402 exactly as it was", async () => {
+    // `insufficient_credits` still means the PAYER's pool, still redacts the
+    // payer's balance, and still carries the server's own message.
+    vi.stubGlobal(
+      "fetch",
+      mockFetchError(402, {
+        error: { code: "insufficient_credits", message: "This deployment is out of credits." },
+      }),
+    )
+
+    try {
+      await editImage("http://img.png")
+      throw new Error("did not throw")
+    } catch (err) {
+      expect(err).not.toBeInstanceOf(UserAllowanceExceededError)
+      expect((err as InsufficientCreditsError).message).toBe("This deployment is out of credits.")
     }
   })
 

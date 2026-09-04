@@ -158,7 +158,13 @@ import { connectedInstancesRoutes } from "./ee/routes/connected-instances.js"
 import { galleryRoutes } from "./routes/gallery.js"
 import { runtimeSurfaceProfile, surfaceProfileFailedToLoad } from "./lib/surface-profile.js"
 import { loadAvailabilityOverrides } from "./lib/availability-override.js"
-import { configureDeploymentPayer, payerSsoLinkConflict } from "./lib/deployment-payer.js"
+import {
+  configureDeploymentPayer,
+  deploymentPayerActive,
+  payerSsoLinkConflict,
+  payerWebFreeConflict,
+} from "./lib/deployment-payer.js"
+import { deploymentBillingRoutes } from "./ee/routes/deployment-billing.js"
 import { ssoLinkExistingEnabled } from "./lib/sso-providers.js"
 import { surfaceAvailabilityRoutes } from "./routes/surface-availability.js"
 import { userSettingsRoutes } from "./routes/user-settings.js"
@@ -172,6 +178,7 @@ import { adminAppReportsRoutes } from "./ee/routes/admin-app-reports.js"
 import { adminKieCreditsRoutes } from "./ee/routes/admin-kie-credits.js"
 import { adminStuckPipelinesRoutes } from "./ee/routes/admin-stuck-pipelines.js"
 import { adminMessagesRoutes } from "./ee/routes/admin-messages.js"
+import { adminReviewRoutes } from "./ee/routes/admin-review.js"
 import { adminSubscriptionHealthRoutes } from "./ee/routes/admin-subscription-health.js"
 import { communityRoutes } from "./ee/routes/community.js"
 import { adminCommunityRoutes } from "./ee/routes/admin-community.js"
@@ -345,7 +352,10 @@ export async function buildApp() {
   const payerBoot = await configureDeploymentPayer()
   if (!payerBoot.ok) {
     console.error(
-      `[deployment-payer] FATAL: billing.payerAccount is configured but did not resolve — ${payerBoot.reason}. ` +
+      // The fixed half no longer says "did not resolve": this branch now also
+      // carries a resolved-but-refused payer (federated, or an unwritable
+      // settings row). `reason` names which.
+      `[deployment-payer] FATAL: billing.payerAccount is configured but could not be brought up — ${payerBoot.reason}. ` +
         "Refusing to boot a deployment-payer instance requester-billed. Fix the profile (or the payer account) and redeploy.",
     )
     process.exit(1)
@@ -360,6 +370,21 @@ export async function buildApp() {
   const payerSsoConflict = payerSsoLinkConflict(ssoLinkExistingEnabled())
   if (payerSsoConflict) {
     console.error(`[deployment-payer] FATAL: ${payerSsoConflict}`)
+    process.exit(1)
+  }
+
+  // B5 — under a payer the spend pool resolves at the PAYER's tier, and a card
+  // top-up turns a free payer into `payg`. With PAYG_WEB_BLOCK_ENABLED on, that
+  // combination refuses EVERY browser-session run on the instance against a
+  // free pool of zero — credits bought, nothing runnable, and no error naming
+  // the cause. Latent while the flag is off; refuse rather than let the day
+  // someone sets it be the day the instance dies. (The third boot refusal, the
+  // federated-payer one, lives INSIDE configureDeploymentPayer above: it must
+  // land before the settings row names the payer to migration 381's RLS
+  // helper.)
+  const payerWebFree = payerWebFreeConflict(config.PAYG_WEB_BLOCK_ENABLED)
+  if (payerWebFree) {
+    console.error(`[deployment-payer] FATAL: ${payerWebFree}`)
     process.exit(1)
   }
 
@@ -572,6 +597,14 @@ export async function buildApp() {
   await app.register(sunoRoutes)
   if (hasCredits()) await app.register(stripeWebhookRoutes)
   if (hasCredits()) await app.register(billingRoutes)
+  // Track A — the billing account's own routes. REGISTRATION IS THE REAL GATE:
+  // on any deployment without a `billing.payerAccount` these paths do not
+  // exist, so the whole surface (the only place in the product that renders
+  // Nodaro's real balance or spends a card) is absent rather than forbidden.
+  // `requireDeploymentPayer` guards each route as well — a guard that can be
+  // mounted anywhere must be safe anywhere — but this line is what makes the
+  // feature inert on mainline (R2).
+  if (hasCredits() && deploymentPayerActive()) await app.register(deploymentBillingRoutes)
   // Community cloud-connect containment surface (Phase 4a) — flag-gated with
   // the DCR branch so the whole feature appears/disappears together.
   if (hasCredits() && config.COMMUNITY_CONNECT_ENABLED) await app.register(connectedInstancesRoutes)
@@ -590,6 +623,7 @@ export async function buildApp() {
   if (hasAdmin()) await app.register(adminKieCreditsRoutes)
   if (hasAdmin()) await app.register(adminStuckPipelinesRoutes)
   if (hasAdmin()) await app.register(adminMessagesRoutes)
+  if (hasAdmin()) await app.register(adminReviewRoutes)
   if (hasCredits()) await app.register(adminSubscriptionHealthRoutes)  // getStripe + TIER_CREDITS
   if (isMultiUser()) await app.register(communityRoutes)
   if (isMultiUser()) await app.register(adminCommunityRoutes)

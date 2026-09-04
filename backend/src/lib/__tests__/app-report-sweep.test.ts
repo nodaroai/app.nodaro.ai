@@ -15,6 +15,7 @@ import {
   excerptPrompt,
   rejectionReportFor,
   failureReportFor,
+  policyBlockReportFor,
   executionFailureReportFor,
   sweepFailedJobs,
   sweepFailedExecutions,
@@ -43,6 +44,20 @@ const REJECTED = {
   },
 }
 const TIMEOUT = { ...REJECTED, id: "job-2", error_message: "Provider timeout after 30s" }
+/**
+ * A NODARO-side policy block (spec 2026-09-03-job-policy-hook-design §6.3).
+ * Its `error_message` deliberately contains "content policy" — the exact
+ * substring `isContentRejection` matches — because that collision is the bug:
+ * without the hint branch this files a `model-rejection` report titled
+ * "…rejected by the PROVIDER's content filter" for OUR OWN decision, and
+ * pollutes rejectionClass analytics with it.
+ */
+const POLICY_BLOCKED = {
+  ...REJECTED,
+  id: "job-3",
+  error_message: "Blocked by content policy: the result was withheld.",
+  error_hint: { kind: "policy-block", policyId: "sai-moderation", reason: "Blocked by content policy", hookPoint: "result" },
+}
 
 const FAILED_EXECUTION = {
   id: "exec-1",
@@ -95,6 +110,61 @@ describe("sweepFailedJobs", () => {
         user_id: "u1",
       }),
     )
+  })
+
+  it("files a policy-block report — NOT a provider rejection — for a job blocked by our own job policy", async () => {
+    const jobsChain = chain({ data: [POLICY_BLOCKED] })
+    const reportsChain = chain({ data: [] })
+    vi.mocked(supabase.from).mockImplementation(
+      (table: string) => (table === "jobs" ? jobsChain : reportsChain) as never,
+    )
+
+    const { reported } = await sweepFailedJobs()
+    expect(reported).toBe(1)
+    expect(reportsChain.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "policy-block",
+        node: "policy-sweep",
+        // A working gate is not an incident: `warning`/`error` would page an
+        // operator on every enforced block from day one of enforcement.
+        severity: "info",
+        job_id: "job-3",
+      }),
+    )
+    const arg = reportsChain.insert.mock.calls[0][0] as Record<string, any>
+    expect(arg.title).not.toMatch(/provider/i)
+    expect(arg.payload.policyId).toBe("sai-moderation")
+    expect(arg.payload.hookPoint).toBe("result")
+    // The provider-rejection classifier must not have claimed it, even though
+    // the message contains the substring it matches.
+    expect(arg.payload.rejectionClass).toBeUndefined()
+  })
+
+  it("selects error_hint and dedupes policy-block reports so the sweep does not re-file every tick", async () => {
+    const jobsChain = chain({ data: [POLICY_BLOCKED] })
+    const reportsChain = chain({ data: [{ job_id: "job-3" }] })
+    vi.mocked(supabase.from).mockImplementation(
+      (table: string) => (table === "jobs" ? jobsChain : reportsChain) as never,
+    )
+
+    const { reported } = await sweepFailedJobs()
+    expect(reported).toBe(0)
+    expect(reportsChain.insert).not.toHaveBeenCalled()
+    // Without error_hint in the SELECT the branch above can never fire.
+    expect(jobsChain.select.mock.calls[0][0]).toContain("error_hint")
+    // Without "policy-block" in the dedup kinds the SELECT above returns
+    // nothing and every tick re-files the same job.
+    expect(reportsChain.in).toHaveBeenCalledWith(
+      "kind",
+      expect.arrayContaining(["model-rejection", "job-failure", "policy-block"]),
+    )
+  })
+
+  it("policyBlockReportFor tolerates a hint with no policyId", () => {
+    const r = policyBlockReportFor({ ...POLICY_BLOCKED, error_hint: { kind: "policy-block" } } as never)
+    expect(r.kind).toBe("policy-block")
+    expect(r.severity).toBe("info")
+    expect((r.payload as Record<string, unknown>).policyId).toBeNull()
   })
 
   it("skips jobs that already have a report of either job-derived kind", async () => {

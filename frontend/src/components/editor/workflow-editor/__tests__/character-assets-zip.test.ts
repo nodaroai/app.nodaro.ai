@@ -58,6 +58,16 @@ vi.mock("@/lib/api", async (importOriginal) => {
 })
 
 vi.mock("../poll-job", () => ({
+  // The run-start reset every executor spreads — mirrors ./poll-job's constant
+  // (whose key set is pinned by run-start-reset.test.ts).
+  RUN_START_RESET: {
+    executionStatus: "running",
+    errorMessage: undefined,
+    errorHint: undefined,
+    currentJobId: undefined,
+    currentJobProgress: 0,
+    jobAwaitingReview: undefined,
+  },
   pollJobWithNodeUpdate: vi.fn(),
   setSuppressToasts: () => {},
   guardedToast: { info: vi.fn(), success: vi.fn(), error: vi.fn() },

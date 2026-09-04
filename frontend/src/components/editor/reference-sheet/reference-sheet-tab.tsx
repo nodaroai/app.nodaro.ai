@@ -2,6 +2,7 @@ import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import { DEFAULT_SECTIONS, SHEET_SKINS, SHEET_TYPES, SHEET_ASPECTS, planSheetGeneration, type ReferenceSheet, type SheetAspect, type SheetFlavour, type SheetSection, type SheetSkin, type SheetType } from "@nodaro/shared"
 import { generateReferenceSheet, getJobStatusLean } from "@/lib/api"
+import { tx } from "@/lib/i18n"
 import type { SheetTabAdapter } from "./sheet-tab-adapter"
 import { CharacterSheetPanel } from "./character-sheet-panel"
 import { SheetGallery } from "./sheet-gallery"
@@ -82,6 +83,10 @@ function ClassicSheetPanel({ adapter, studio, jobs, accent = "#22d3ee" }: Refere
         if (out?.imageUrl) return { imageUrl: out.imageUrl, panelUrls: out.panelUrls ?? [] }
         throw new Error("Sheet completed without an image URL")
       }
+      // A held job is parked on a human reviewer and will outlive this bound by
+      // hours. Break out NOW with the truth instead of falling through to
+      // "timed out" (a lie) or an empty panel that never fills.
+      if (job.status === "pending_review") throw new Error(tx("sheet.panelAwaitingReview"))
       if (job.status === "failed" || job.status === "cancelled") {
         throw new Error(job.error_message ?? `sheet ${job.status}`)
       }

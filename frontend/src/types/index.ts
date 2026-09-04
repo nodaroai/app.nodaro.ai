@@ -55,7 +55,11 @@ export interface Job {
   readonly workflow_id: string
   readonly user_id: string
   readonly parent_job_id: string | null
-  readonly status: 'pending' | 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled'
+  /** `pending_review` is IN-FLIGHT, not terminal: the job produced an output a
+   *  human must release before it is delivered. Waiters keep waiting; only
+   *  completed/failed/cancelled end a job. Mirrors `JOB_STATUSES` in
+   *  `backend/src/lib/job-status.ts`. */
+  readonly status: 'pending' | 'queued' | 'processing' | 'pending_review' | 'completed' | 'failed' | 'cancelled'
   readonly priority: number
   readonly progress: number
   readonly credits: number | null

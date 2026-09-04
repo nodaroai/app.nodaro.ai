@@ -185,9 +185,24 @@ describe("image-to-video handler — smart-loop-cut", () => {
       false,
     )
     expect(mocks.mockRefundLoopTrimAddon).not.toHaveBeenCalled()
+    const arg = mocks.mockFinalizeJobWithMedia.mock.calls[0]![0] as Record<string, unknown>
+    expect(arg.extraNonProviderCredits).toBe(3)
+    expect(arg.loopTrimAddonRefundCredits).toBe(0)
   })
 
-  it("on smart-loop-cut failure: keeps un-trimmed clip and refunds addon", async () => {
+  /**
+   * F7 — the failure path must NOT settle the usage log before the result gate
+   * speaks. `refundLoopTrimAddon` commits at (reserved − addon), flipping
+   * `usage_logs.status` out of `reserved`; every result-gate rejection (block,
+   * reviewer reject, hold-TTL expiry, owner cancel) refunds through
+   * `refundReservedCreditsForJob`, which only iterates `reserved` logs. Doing
+   * it here made all four silent no-ops — while the expiry message still told
+   * the user "Your credits have been refunded" — so the user paid the FULL base
+   * video price for an output that was never delivered. The addon now rides
+   * finalize, which applies it only after the completion CAS wins and stores it
+   * in `held_completion_fields` so an approve replays the same settlement.
+   */
+  it("on smart-loop-cut failure: keeps the un-trimmed clip and defers the addon to finalize", async () => {
     mocks.mockApplySmartLoopCut.mockRejectedValueOnce(new Error("ffmpeg crashed"))
 
     const job = makeJob("image-to-video", {
@@ -199,8 +214,13 @@ describe("image-to-video handler — smart-loop-cut", () => {
 
     await handler(job as never, makeCtx())
 
-    // ceil(8/5) + ceil(16/24) = 2 + 1 = 3
-    expect(mocks.mockRefundLoopTrimAddon).toHaveBeenCalledWith("job-1", "log-1", 3)
+    // The log stays `reserved` through the gate — nothing is settled here.
+    expect(mocks.mockRefundLoopTrimAddon).not.toHaveBeenCalled()
+
+    // ceil(8/5) + ceil(16/24) = 2 + 1 = 3, carried to finalize instead.
+    const arg = mocks.mockFinalizeJobWithMedia.mock.calls[0]![0] as Record<string, unknown>
+    expect(arg.loopTrimAddonRefundCredits).toBe(3)
+    expect(arg.extraNonProviderCredits).toBe(0)
 
     // Falls back to the un-trimmed raw URL
     expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalledWith(
@@ -227,6 +247,9 @@ describe("image-to-video handler — smart-loop-cut", () => {
     expect(mocks.mockApplySmartLoopCut).not.toHaveBeenCalled()
     expect(mocks.mockRefundLoopTrimAddon).not.toHaveBeenCalled()
     expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalled()
+    const arg = mocks.mockFinalizeJobWithMedia.mock.calls[0]![0] as Record<string, unknown>
+    expect(arg.extraNonProviderCredits).toBe(0)
+    expect(arg.loopTrimAddonRefundCredits).toBe(0)
   })
 
   it("skips smart-loop-cut when loopTrim.enabled is false", async () => {
@@ -242,6 +265,9 @@ describe("image-to-video handler — smart-loop-cut", () => {
     expect(mocks.mockApplySmartLoopCut).not.toHaveBeenCalled()
     expect(mocks.mockRefundLoopTrimAddon).not.toHaveBeenCalled()
     expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalled()
+    const arg = mocks.mockFinalizeJobWithMedia.mock.calls[0]![0] as Record<string, unknown>
+    expect(arg.extraNonProviderCredits).toBe(0)
+    expect(arg.loopTrimAddonRefundCredits).toBe(0)
   })
 
   it("forwards outputSilent=true when sound=false", async () => {

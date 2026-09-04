@@ -331,6 +331,38 @@ describe("get_asset tool", () => {
     expect(sc?.outputUrl).toBe("https://r2/pub.png")
   })
 
+  /**
+   * The widget polls `get_asset` every 2 s and renders from
+   * `structuredContent`. A held job (spec §6.4) fell into the plain read
+   * branch: status `pending_review`, `outputUrl: null`, no explanation — an
+   * empty preview forever, and a model that re-runs the request.
+   */
+  it("explains a held asset instead of returning an empty preview forever", async () => {
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      makeChainableSingle({
+        id: "held1",
+        user_id: "u1",
+        status: "pending_review",
+        job_type: "generate-image",
+        // NULL by contract on a held row (D6).
+        output_data: null,
+        error_message: null,
+        progress: 100,
+      }),
+    )
+    const server = buildServer()
+    registerGallery({ server, session: readSession(), fastify: Fastify() })
+
+    const result = await callTool(server, "get_asset", { job_id: JOB_UUID })
+    expect(result.isError).toBeUndefined()
+    const sc = (result as { structuredContent?: Record<string, unknown> }).structuredContent
+    expect(sc?.status).toBe("pending_review")
+    expect(sc?.outputUrl).toBeNull()
+    expect(sc?.retryable).toBe(false)
+    expect(result.content[0]?.text).toMatch(/review/i)
+    expect(result.content[0]?.text).toMatch(/do NOT re-run/i)
+  })
+
   it("redacts private remux bases from text and structured output", async () => {
     ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
       makeChainableSingle({

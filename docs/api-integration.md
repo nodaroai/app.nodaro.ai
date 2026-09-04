@@ -521,6 +521,7 @@ All errors share the same shape:
 | 402 | `insufficient_credits` | — | (Cloud edition only) Account out of credits. |
 | 402 | `budget_exceeded` | — | (Cloud edition, organizations) Workspace-paid work: the workspace's allocated budget can't cover the reservation. Ask a workspace admin for headroom. Rollout-gated: availability may lag this document. |
 | 402 | `member_cap_exceeded` | — | (Cloud edition, organizations) Workspace-paid work: your per-member spending cap in this workspace is reached. Rollout-gated. |
+| 402 | `user_allowance_exceeded` | — | (Cloud edition, deployment-payer instances) Your per-user allowance on this deployment can't cover this run — distinct from `insufficient_credits`, which means the deployment's own pool is empty. Only the deployment's billing account can raise an allowance. Rollout-gated: availability may lag this document. |
 | 403 | `forbidden` | — | Token isn't authorized for this workflow (workflow scoping). |
 | 403 | `member_suspended` | — | (Cloud edition, organizations) Workspace-paid work: your membership in the paying workspace is suspended. Rollout-gated. |
 | 403 | `not_a_member` | — | (Cloud edition, organizations) The request names a workspace you are not an active member of. Rollout-gated. |
@@ -530,6 +531,8 @@ All errors share the same shape:
 | 404 | `not_found` | — | Workflow, execution, or token not found. |
 | 404 | `workspace_not_found` | — | (Cloud edition, organizations) The workspace named by workspace-paid work does not exist (or was deleted mid-flight). Rollout-gated. |
 | 409 | `workspace_archived` | — | (Cloud edition, organizations) Workspace-paid work into an archived workspace. Unarchive it or move the work. Rollout-gated. |
+| 422 | `job_blocked` | — | A job policy registered by this deployment refused the generation before it ran. `message` is user-facing text written by the deployment's policy (or by the platform, when the policy supplies none) — show it as-is. No job was created and nothing was charged. The platform does not retry a refused request; whether the same request would be judged differently is the deployment's policy's business. Only occurs on deployments that register a job policy — see [deployment.md](./deployment.md#surface-profile-nodaro_surface_profile). Two bookkeeping inserts are the honest exception: the Suno voice-persona ownership rows and the connected-cloud LLM mirror row treat a block as best-effort — the operation proceeds and its row is simply not recorded — so a policy blocking one of those neither stops the call nor reaches you as a 422. |
+| 422 | `upload_blocked` | — | An upload policy registered by this deployment refused the upload before it was stored (every byte-carrying ingestion lane: `POST /v1/upload*`, the proxy PUT and the handoff POST). `message` is the deployment's own reason — show it as-is. Nothing was written. Only occurs on deployments that register an upload policy. |
 | 429 | `rate_limited` | — | You've exceeded the per-minute bucket. Back off. |
 | 500 | `internal_error` | — | Server bug or downstream dependency failure. Retry with backoff. |
 | 503 | `price_not_configured` | — | (Cloud edition only) No pricing row exists for the requested model — the server hard-fails rather than silently mis-billing. Operator must seed the price; the call is not retryable as-is. |
@@ -541,13 +544,32 @@ backoff. Treat 4xx as terminal — don't retry without fixing the request.
 
 The table above covers request-level errors — a call that never produced a
 job. A **job** that later fails carries its own detail in `error_message`
-plus, for a provider content-policy block, a structured `error_hint`:
+plus, for two classes of failure, a structured `error_hint`.
+
+A provider content-policy block:
 
 ```json
 { "kind": "safety-block", "class": "copyright" | "likeness" | "safety", "retried": boolean, "suggestedProvider"?: string }
 ```
 
-`error_hint` is `null`/absent on every other failure. `class` distinguishes a
+Or, on a deployment that registers a job policy, a rejection by that policy:
+
+```json
+{ "kind": "policy-block", "policyId": string, "reason": string, "hookPoint": "request" | "result" }
+```
+
+`reason` is user-safe text written by the deployment's policy (or by the platform, when the policy supplies none) — show it as-is.
+`hookPoint` says whether the request was refused before the job ran or the
+output was rejected after it was produced (including a reviewer rejecting a
+job that had been held in `pending_review`). The reservation is refunded. (The
+rare exception is a job whose credits were already settled before the gate
+spoke — there is then nothing left to return, and no platform message claims
+otherwise.) Unlike `safety-block`, the platform does not retry a policy rejection
+and offers no fallback model: whether the same request would be judged
+differently is the deployment's policy's business, not the platform's.
+
+`error_hint` is `null`/absent on every other failure. For `safety-block`,
+`class` distinguishes a
 deterministic block (`copyright`, `likeness` — retrying the identical request
 never helps) from `safety`, whose filter is known to be non-deterministic for
 some models: `retried` reports whether the platform already spent its one
@@ -563,8 +585,13 @@ carry `credit_status: "reserved" | "committed" | "refunded" | null` — the
 job's credit reservation lifecycle, derived server-side from the usage log.
 `null` when the job has no usage log to report; never present on the plain
 `GET /v1/jobs` list or `POST /v1/jobs/batch-status`. A generation that ends in
-a safety-filter block is always refunded — see
-[§12 Credits](#12-credits-cloud-edition).
+a safety-filter block or a policy block is always refunded — see
+[§12 Credits](#12-credits-cloud-edition). A job a deployment's policy has
+**held** for human review reports `status: "pending_review"` — an in-flight
+status, not a terminal one; keep polling rather than treating it as a failure
+— with `credit_status: "reserved"` for the whole hold; it then resolves to
+`completed`, `failed` (with the `policy-block` hint above) or `cancelled`
+(a held job is cancellable like any in-flight job).
 
 ## 8b. Pay-as-you-go accounts
 
@@ -1730,7 +1757,7 @@ The listing, plus two endpoints that poll multiple job statuses in a single roun
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/v1/jobs?limit=&cursor=&type=&origin=&attachToCharacterId=` | Your jobs, newest first, cursor-paginated: `{ data: Job[], next }` (`limit` ≤ 100; pass `next` back as `cursor`). `type` matches `input_data.type` — the route that created the job (`llm-structured`, `video-analysis`, …); `origin` matches `input_data.origin` — the client app that sent it (`studio`, …). Both are exact-match and combine. `attachToCharacterId` is the per-character archive described under characters. |
+| `GET` | `/v1/jobs?limit=&cursor=&type=&origin=&attachToCharacterId=` | Your jobs, newest first, cursor-paginated: `{ data: Job[], next }` (`limit` ≤ 100; pass `next` back as `cursor`). `type` matches `input_data.type` — the route that created the job (`llm-structured`, `video-analysis`, …); `origin` matches `input_data.origin` — the client app that sent it (`studio`, …). Both are exact-match and combine. A page may hold fewer than `limit` rows — even none — and still carry a `next`; page on `next`, never on `data.length`. `attachToCharacterId` is the per-character archive described under characters. |
 | `GET` | `/v1/jobs/status?ids=a,b,c` | Comma-separated IDs, max 100. Returns `{ jobs: { id, status, output_data, error_message, error_hint, credit_status }[] }`. Cross-user / non-existent IDs are silently omitted — reconcile locally. |
 | `POST` | `/v1/jobs/batch-status` | Body `{ jobIds: string[] }`, max 100. Returns `{ data: { id, status, output_data, error_message, error_hint }[] }` (no `credit_status` on this route). |
 

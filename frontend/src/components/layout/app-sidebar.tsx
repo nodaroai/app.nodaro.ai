@@ -18,6 +18,7 @@ import {
   Rocket,
   LayoutTemplate,
   Coins,
+  Wallet,
   Sparkles,
   Compass,
   Flag,
@@ -40,6 +41,7 @@ import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
 import { isFeatureEnabled, hasCredits, isCloud, isMultiUser } from "@/lib/edition"
 import { useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
+import { useDeploymentPayerViewer } from "@/ee/hooks/queries/use-deployment-billing"
 import { PRICING_TIERS } from "@/lib/pricing-data"
 import { APP_VERSION } from "@/lib/version"
 import { useUpdateCheck } from "@/hooks/use-update-check"
@@ -60,6 +62,8 @@ const OrgSwitcherSection = hasOrganizations()
 import { otherNodaroApps } from "@/lib/nodaro-apps"
 import { surfaceNavHidden, surfaceBillingSelfServe, surfaceSidebarCreditCardHidden } from "@/lib/surface-selectors"
 import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
+import { spendableCredits, type BalanceWithAllowance, type CreditAllowance } from "@/lib/spendable-credits"
+import { useBillingSurface } from "@/hooks/use-billing-surface"
 import type { NavKey } from "@/lib/surface-profile"
 import {
   DropdownMenu,
@@ -93,6 +97,10 @@ interface NavItem {
    *  never renders it, so the stock sidebar is byte-identical. */
   readonly prepaidOnly?: boolean
   readonly multiUserOnly?: boolean
+  /** Rendered only for the deployment's BILLING ACCOUNT — the one identity that
+   *  may reach /billing-admin. Absent on mainline, where the billing surface
+   *  answers `deploymentPayer: false` and the probe never fires. */
+  readonly payerOnly?: boolean
   /** Query string for destinations that are a tab rather than a route, e.g.
    *  Tutorials lives at /projects?tab=tutorials. Also disambiguates the active
    *  state from the plain item on the same path. */
@@ -135,6 +143,7 @@ const NAV_SECTIONS: readonly NavSection[] = [
       { href: "/pricing", label: "nav.pricing", icon: Sparkles, billingOnly: true },
       { href: "/billing", label: "nav.billing", icon: CreditCard, billingOnly: true },
       { href: "/usage", label: "nav.usage", icon: Coins, prepaidOnly: true },
+      { href: "/billing-admin", label: "billingAdmin.navLabel", icon: Wallet, payerOnly: true },
       { href: "/settings", label: "nav.settings", icon: Settings },
       { href: "/admin", label: "nav.admin", icon: Shield, adminOnly: true },
       { href: "/admin/community-reports", label: "nav.communityReports", icon: Flag, adminOnly: true },
@@ -191,6 +200,57 @@ interface AppSidebarProps {
  * the full card width for the note underneath, which is what was being clipped
  * when the two pools were side-by-side columns.
  */
+/**
+ * Track A (D12, ruling R-A) — which figures the sidebar credit card renders.
+ *
+ * Extracted and exported so the decision is testable on its own: rendering
+ * the whole sidebar needs a router, an auth session and four query hooks, and
+ * a money figure should not be guarded only by a test that heavy.
+ *
+ * Under a deployment payer the requester's `total` is a FROZEN signup grant —
+ * nothing debits it and nothing tops it up — so un-hiding the card as-is would
+ * put a lie on screen permanently. The allowance is the number that WILL fall
+ * as they generate once enforcement is on, and the one the billing account's
+ * top-up lever actually moves, so it wins whenever the server sent one.
+ *
+ * THIS IS A DISPLAY, NOT A GATE, and that is why it takes `displayFigure`
+ * rather than the `figure` the canvas precheck compares against. Under R-A the
+ * allowance is VISIBLE from the moment a payer exists and only BINDS after the
+ * `billing.allowances` flip; the card shows it through both windows, because
+ * showing the frozen grant instead would be the lie this card was un-hidden to
+ * stop telling. Only a refusal needs the enforcement bit — and in the window
+ * where it is off, no client refuses at all (`gateApplies`), which is why every
+ * other screen quotes this same figure.
+ *
+ * `null` and absent behave identically and mean "no allowance applies": the
+ * caller IS the payer (D13 — it holds the real credits, not an allocation), or
+ * the figure was unavailable. Both fall back to `total`, which for the payer is
+ * a live wallet — reading null as "remaining 0" would render a zero balance for
+ * the account that owns the pool.
+ *
+ * Everything here is RAW credits; `creditUnits` converts at render.
+ */
+export interface SidebarCreditFigures {
+  /** The headline figure, raw credits. */
+  readonly headline: number
+  /** Non-null only when a per-user allowance applies. */
+  readonly allowance: CreditAllowance | null
+}
+
+export function sidebarCreditFigures(
+  balance: BalanceWithAllowance,
+  deploymentPayer: boolean,
+): SidebarCreditFigures {
+  // `deploymentPayer` reaches `spendableCredits` because that helper requires
+  // every caller to have ASKED whether this is a payer instance — it is the
+  // fact that separates the two meanings of `allowance: null`. It moves
+  // `gateApplies` alone, which this card does not read: a display never
+  // refuses, and passing the flag is what keeps that a decision rather than an
+  // omission.
+  const { displayFigure, allowance } = spendableCredits(balance, deploymentPayer)
+  return { headline: displayFigure, allowance }
+}
+
 function CreditRow({
   label,
   value,
@@ -250,11 +310,24 @@ export function AppSidebar({
     return !NAV_ITEMS.some((i) => i.search && i.href === item.href && search === i.search)
   }
   const { user, isAdmin, signOut } = useAuth()
+  // Track A — is THIS viewer the deployment's billing account? Fail-closed:
+  // false while the probe is pending, and false on every deployment without a
+  // payer, so the stock sidebar is byte-identical. Shares its query key with
+  // the page, so this costs no extra request.
+  const { isPayer } = useDeploymentPayerViewer()
   const { isCollapsed, setCollapsed } = useSidebar()
   // RTL: the sidebar sits on the RIGHT — the drawer slides from the right,
   // the border faces the content, and every chevron points the other way.
   const isRtl = useAppDir() === "rtl"
   const { data: creditBalance } = useUserCredits(user?.id)
+  // Track A — resolved once for both card layouts (see sidebarCreditFigures).
+  // Deployment grain ("does this instance have a payer"), not "is that me" —
+  // `useDeploymentPayerViewer` above answers the second. Same query key as the
+  // probe's own surface read, so this costs no extra request.
+  const { surface: billingSurface } = useBillingSurface()
+  const creditFigures = creditBalance
+    ? sidebarCreditFigures(creditBalance, billingSurface.deploymentPayer === true)
+    : null
   // Self-serve purchase off (a prepaid instance): the credit card is a plain
   // readout — no hop to /billing — and the Pricing/Billing entries are withheld.
   const selfServe = surfaceBillingSelfServe()
@@ -441,7 +514,7 @@ export function AppSidebar({
         {/* Credit card. A deployment surface can suppress it wholesale
             (billing.sidebarCard "hidden") — a prepaid instance whose users
             read their balance on /usage instead. */}
-        {hasCredits() && creditBalance && !surfaceSidebarCreditCardHidden() && (
+        {hasCredits() && creditBalance && creditFigures && !surfaceSidebarCreditCardHidden() && (
           isCollapsed ? (
             <div className="px-2 pt-2">
               <Tooltip>
@@ -462,29 +535,46 @@ export function AppSidebar({
                     }}
                   >
                     <span className="font-mono" style={{ fontSize: 12, fontWeight: 700, color: "var(--blg-t1)" }}>
-                      {creditUnits(creditBalance.total) >= 1000
-                        ? `${(creditUnits(creditBalance.total) / 1000).toFixed(1).replace(/\.0$/, "")}K`
-                        : creditUnits(creditBalance.total)}
+                      {creditUnits(creditFigures.headline) >= 1000
+                        ? `${(creditUnits(creditFigures.headline) / 1000).toFixed(1).replace(/\.0$/, "")}K`
+                        : creditUnits(creditFigures.headline)}
                     </span>
                     <span className="flex flex-col gap-[3px] w-full px-1">
-                      <span
-                        style={{
-                          display: "block",
-                          height: 4,
-                          borderRadius: 99,
-                          background: "var(--blg-pink)",
-                          width: `${creditBalance.total > 0 ? Math.max(12, (creditBalance.subscription / creditBalance.total) * 100) : 12}%`,
-                        }}
-                      />
-                      <span
-                        style={{
-                          display: "block",
-                          height: 4,
-                          borderRadius: 99,
-                          background: "var(--blg-cyan)",
-                          width: `${creditBalance.total > 0 ? Math.max(12, (creditBalance.topup / creditBalance.total) * 100) : 12}%`,
-                        }}
-                      />
+                      {creditFigures.allowance ? (
+                        // One pot, one bar: the subscription/top-up split is a
+                        // personal-wallet shape and has no meaning against an
+                        // allocation the operator granted.
+                        <span
+                          style={{
+                            display: "block",
+                            height: 4,
+                            borderRadius: 99,
+                            background: "var(--blg-pink)",
+                            width: `${creditFigures.allowance.granted > 0 ? Math.max(12, (creditFigures.allowance.remaining / creditFigures.allowance.granted) * 100) : 12}%`,
+                          }}
+                        />
+                      ) : (
+                        <>
+                          <span
+                            style={{
+                              display: "block",
+                              height: 4,
+                              borderRadius: 99,
+                              background: "var(--blg-pink)",
+                              width: `${creditBalance.total > 0 ? Math.max(12, (creditBalance.subscription / creditBalance.total) * 100) : 12}%`,
+                            }}
+                          />
+                          <span
+                            style={{
+                              display: "block",
+                              height: 4,
+                              borderRadius: 99,
+                              background: "var(--blg-cyan)",
+                              width: `${creditBalance.total > 0 ? Math.max(12, (creditBalance.topup / creditBalance.total) * 100) : 12}%`,
+                            }}
+                          />
+                        </>
+                      )}
                     </span>
                   </button>
                 </TooltipTrigger>
@@ -492,8 +582,14 @@ export function AppSidebar({
                   side={isRtl ? "left" : "right"}
                   className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white border-zinc-200 dark:border-zinc-700"
                 >
-                  <p>{t("nav.creditsLeft", { n: creditUnits(creditBalance.total) })}</p>
-                  {creditBalance.effectiveTier === "free" ? (
+                  <p>{t("nav.creditsLeft", { n: creditUnits(creditFigures.headline) })}</p>
+                  {creditFigures.allowance ? (
+                    // The pair is one interpolated key, never a bare "X / Y":
+                    // the operands invert under RTL and the line then lies.
+                    <p className="text-zinc-500 dark:text-zinc-400">
+                      {t("credits.allowanceOfGranted", { granted: creditUnits(creditFigures.allowance.granted).toLocaleString() })}
+                    </p>
+                  ) : creditBalance.effectiveTier === "free" ? (
                     creditBalance.dailyLimit != null && (
                       <p className="text-zinc-500 dark:text-zinc-400">{t("nav.dailyLimitCreditsLeft", { n: creditUnits(Math.max(0, creditBalance.dailyLimit - creditBalance.dailySpent)) })}</p>
                     )
@@ -548,7 +644,7 @@ export function AppSidebar({
                 <div style={{ padding: "14px 16px 14px" }}>
                   <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
                     <span style={{ fontSize: 10, letterSpacing: "0.14em", color: "var(--blg-t2-dim)", fontWeight: 600 }}>
-                      {t("nav.totalCredits")}
+                      {creditFigures.allowance ? t("credits.allowanceTitle") : t("nav.totalCredits")}
                     </span>
                     <span style={{ fontSize: 10, color: "var(--blg-t3-dim)", fontFamily: MONO_FONT }}>
                       {planLabel}
@@ -564,7 +660,7 @@ export function AppSidebar({
                         color: "var(--blg-t1)",
                       }}
                     >
-                      {creditUnits(creditBalance.total).toLocaleString()}
+                      {creditUnits(creditFigures.headline).toLocaleString()}
                     </span>
                     <span style={{ fontSize: 13, color: "var(--blg-t2-dim)" }}>{creditUnitLabel(t("nav.credits"))}</span>
                   </div>
@@ -575,20 +671,36 @@ export function AppSidebar({
                       card. Colours stay on the --blg-* tokens rather than the
                       mock's literals so both themes follow. */}
                   <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 16 }}>
-                    <CreditRow
-                      label={t("nav.subscription")}
-                      value={creditBalance.subscription}
-                      pct={subPct}
-                      fill="var(--blg-pink)"
-                      subline={subscriptionSubline}
-                    />
-                    <CreditRow
-                      label={t("nav.topup")}
-                      value={creditBalance.topup}
-                      pct={topupPct}
-                      fill="var(--blg-cyan)"
-                      subline={t("nav.validTwelveMonths")}
-                    />
+                    {creditFigures.allowance ? (
+                      // One row, because there is one pot. The bar tracks what
+                      // is LEFT of the grant; the headline above already shows
+                      // the remaining figure, so this row names the total it
+                      // came out of and nothing repeats.
+                      <CreditRow
+                        label={t("credits.allowanceGranted")}
+                        value={creditFigures.allowance.granted}
+                        pct={creditFigures.allowance.granted > 0 ? (creditFigures.allowance.remaining / creditFigures.allowance.granted) * 100 : 0}
+                        fill="var(--blg-pink)"
+                        subline={null}
+                      />
+                    ) : (
+                      <>
+                        <CreditRow
+                          label={t("nav.subscription")}
+                          value={creditBalance.subscription}
+                          pct={subPct}
+                          fill="var(--blg-pink)"
+                          subline={subscriptionSubline}
+                        />
+                        <CreditRow
+                          label={t("nav.topup")}
+                          value={creditBalance.topup}
+                          pct={topupPct}
+                          fill="var(--blg-cyan)"
+                          subline={t("nav.validTwelveMonths")}
+                        />
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -611,6 +723,7 @@ export function AppSidebar({
               if (item.billingOnly && (!isFeatureEnabled("billing") || !selfServe)) return null
               if (item.prepaidOnly && (!isFeatureEnabled("billing") || selfServe)) return null
               if (item.multiUserOnly && !isMultiUser()) return null
+              if (item.payerOnly && !isPayer) return null
 
               const isActive = isNavItemActive(item)
 
@@ -654,6 +767,7 @@ export function AppSidebar({
                 if (item.billingOnly && (!isFeatureEnabled("billing") || !selfServe)) return false
                 if (item.prepaidOnly && (!isFeatureEnabled("billing") || selfServe)) return false
                 if (item.multiUserOnly && !isMultiUser()) return false
+                if (item.payerOnly && !isPayer) return false
                 return true
               })
 

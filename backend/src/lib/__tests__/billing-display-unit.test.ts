@@ -207,6 +207,30 @@ describe("applyDisplayUnit — configured (label קרדיטים, rate 2000)", ()
     const a = (await wrapped({ async account() { return blocked } }).account("u"))!
     expect(a.daily).toEqual({ limit: 0, used: 0, remaining: 0, resetsAt: "x" })
   })
+
+  // Track A — `allocated` (the per-user allowance TOTAL, beside `balance`
+  // which becomes what is LEFT). `convertAccount` rebuilds every key by hand
+  // precisely so a new field cannot ride along unconverted; a field added to
+  // the type and forgotten here would arrive on screen as a raw credit figure
+  // next to a converted one, or as an em dash forever.
+  it("account(): `allocated` is converted exactly like `balance`", async () => {
+    const withAllocated: AccountSummary = { ...RICH, allocated: 100 }
+    const a = (await wrapped({ async account() { return withAllocated } }).account("u"))!
+    expect(a.balance).toBe(24000)
+    expect(a.allocated).toBe(200000)
+  })
+
+  it("account(): a null `allocated` stays null — never 0", async () => {
+    const unavailable: AccountSummary = { ...RICH, allocated: null }
+    const a = (await wrapped({ async account() { return unavailable } }).account("u"))!
+    expect(a.allocated).toBeNull()
+    expect(Object.hasOwn(a, "allocated")).toBe(true)
+  })
+
+  it("account(): an ABSENT `allocated` stays absent (mainline wire shape)", async () => {
+    const a = (await wrapped().account("u"))!
+    expect(Object.hasOwn(a, "allocated")).toBe(false)
+  })
 })
 
 describe("decimals + the costTab lever", () => {

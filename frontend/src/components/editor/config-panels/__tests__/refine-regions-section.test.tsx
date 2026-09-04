@@ -41,6 +41,9 @@ vi.mock("@/lib/api", () => ({
 
 vi.mock("../../workflow-editor/poll-job", () => ({
   pollImageRefineToNode: pollImageRefineToNodeMock,
+  // The node-owning wrapper delegates to the same lean read, so the cases
+  // above are unaffected by the section moving onto it.
+  getJobStatusLeanForNode: (jobId: string, _nodeId: string) => getJobStatusLeanMock(jobId),
 }))
 
 function baseData(overrides: Partial<GenerateImageData> = {}): GenerateImageData {
@@ -89,6 +92,26 @@ afterEach(() => {
 })
 
 describe("RefineRegionsSection", () => {
+  it("a HELD detection job says so — it does not run out the budget and report a timeout", async () => {
+    // `pending_review` matches none of the loop's branches, so before this the
+    // detect sat through all 90 ticks and then blamed a timeout that never
+    // happened. A review outlives a 3-minute budget by design.
+    vi.useFakeTimers()
+    grokSegmentMapMock.mockResolvedValue({ jobId: "seg-job-1" })
+    getJobStatusLeanMock.mockResolvedValue({ status: "pending_review" })
+    render(<RefineRegionsSection nodeId="n1" data={baseData()} onUpdate={vi.fn()} />)
+
+    fireEvent.click(screen.getByText(translate("en", "cfgext.refineDetectRegions")))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6000)
+    })
+
+    expect(screen.getByText(translate("en", "cfgext.refineDetectionAwaitingReview"))).toBeTruthy()
+    expect(screen.queryByText(translate("en", "cfgext.refineDetectionTimedOut"))).toBeNull()
+    // Bailed on the first held tick rather than polling on.
+    expect(getJobStatusLeanMock).toHaveBeenCalledTimes(1)
+  })
+
   it("shows the re-run hint (no Detect) when neither the active result nor the node has a kieTaskId", () => {
     const data = baseData({
       generatedResults: [

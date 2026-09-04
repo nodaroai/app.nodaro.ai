@@ -10,7 +10,7 @@ import { hasCredits } from "@/lib/edition";
 import { executeNode } from "./execute-node";
 import type { ExecutionContext } from "./types";
 import { REPEAT_PLACEHOLDER, decodeProviderItem, settledWithLimit } from "@nodaro/shared"
-import { setSuppressToasts } from "./poll-job";
+import { setSuppressToasts, RUN_START_RESET } from "./poll-job";
 
 /**
  * Execute a node once for each item in the list. Results are accumulated
@@ -36,8 +36,7 @@ export async function executeNodeForList(
     (priorData?.generatedResults as GeneratedResult[] | undefined) ?? [];
 
   updateNodeData(node.id, {
-    executionStatus: "running",
-    errorMessage: undefined,
+    ...RUN_START_RESET,
     generatedResults: [],
     __listTotal: items.length,
     __listCompleted: 0,

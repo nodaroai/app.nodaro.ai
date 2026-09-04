@@ -43,6 +43,22 @@ export interface CloudJob {
   error_message?: string | null
 }
 
+/**
+ * Terminal-ONLY, deliberately. The cloud can now answer `pending_review` — a
+ * relayed job whose output the CLOUD's job policy is holding for review (spec
+ * 2026-09-03-job-policy-hook-design Q7: relayed jobs ARE holdable; there is no
+ * relay-specific `source` to exclude on, and the cloud's admin — not this
+ * instance's — is the reviewer). Leaving it out of this set is the correct
+ * behaviour: `!TERMINAL_STATUSES.has(status) → continue` means the relay keeps
+ * polling, and mirrors whatever the review resolves the job to.
+ *
+ * KNOWN LIMIT, stated rather than hidden: the loop is bounded by
+ * POLL_BUDGET_MS (~15 min), so a review longer than that surfaces on the
+ * self-host as the generic "did not finish within N minutes" at the bottom of
+ * this file, not as "awaiting review". Naming the hold there needs a distinct
+ * `NodaroCloudError` arm and a self-host-side surface for a decision nobody on
+ * that instance can make; deferred with the rest of the eligibility widening.
+ */
 const TERMINAL_STATUSES: ReadonlySet<string> = new Set([
   "completed",
   "failed",

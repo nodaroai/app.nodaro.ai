@@ -9,7 +9,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const mocks = vi.hoisted(() => {
-  const updateIn = vi.fn().mockResolvedValue({ data: null, error: null })
+  // markJobFailed (lib/job-failure.ts) ends its CAS with `.select("id")` and
+  // reads the returned rows to answer "did WE flip it?" — the mock must model
+  // that or every migrated writer sees a lost race.
+  const updateCasSelect = vi.fn().mockResolvedValue({ data: [{ id: "j-1" }], error: null })
+  const updateIn = vi.fn(() => ({ select: updateCasSelect }))
   const updateEq = vi.fn(() => ({ in: updateIn }))
   const update = vi.fn((_arg: Record<string, unknown>) => ({ eq: updateEq }))
   const maybeSingle = vi.fn().mockResolvedValue({ data: { user_id: "user-1", should_watermark: true } })
@@ -18,6 +22,7 @@ const mocks = vi.hoisted(() => {
   return {
     update,
     updateIn,
+    updateCasSelect,
     maybeSingle,
     from: vi.fn(() => ({ update, select })),
     finalize: vi.fn().mockResolvedValue(true),
@@ -52,7 +57,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.finalize.mockResolvedValue(true)
   mocks.maybeSingle.mockResolvedValue({ data: { user_id: "user-1", should_watermark: true } })
-  mocks.updateIn.mockResolvedValue({ data: null, error: null })
+  mocks.updateCasSelect.mockResolvedValue({ data: [{ id: "j-1" }], error: null })
 })
 
 describe("reconcileNodaroCloudJob", () => {
@@ -103,6 +108,10 @@ describe("reconcileNodaroCloudJob", () => {
     )
     expect(mocks.refund).toHaveBeenCalledWith("j-1")
     expect(mocks.finalize).not.toHaveBeenCalled()
+    // Spec D11: the shared markJobFailed CAS. "queued" is newly failable (these
+    // sweeps could not take a queued row at all before); "pending_review" is
+    // absent BY CONSTRUCTION, so no reconcile tick can fail a job under review.
+    expect(mocks.updateIn).toHaveBeenCalledWith("status", ["pending", "queued", "processing"])
   })
 
   it("cloud 401/403/404 → nothing recoverable: local row fails", async () => {

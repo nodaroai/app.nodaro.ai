@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { registerTask, _resetRegistry } from "../tasks.js"
+import { registerTask, getTask, _resetRegistry } from "../tasks.js"
 import {
   startProgressEmitter,
   stopProgressEmitter,
@@ -105,6 +105,53 @@ describe("progress emitter", () => {
     mockJobsRow.rows = []
     await vi.advanceTimersByTimeAsync(1100)
     expect(calls.length).toBe(1)
+  })
+
+  /**
+   * A job parked in `pending_review` (spec 2026-09-03-job-policy-hook-design
+   * §6.4) is not terminal, so `runPollCycle` used to fall into the progress
+   * branch and re-send the SAME percentage forever — the widget spins with no
+   * explanation. One message on the transition, then silence.
+   */
+  it("sends exactly one 'Awaiting review' message on the hold, then stops emitting", async () => {
+    registerTask({ taskId: "j-held", userId: "u-1", kind: "image" })
+    mockJobsRow.rows = [{ id: "j-held", status: "pending_review", progress: 100 }]
+
+    const { server, calls } = makeServer()
+    startProgressEmitter(server as never)
+
+    await vi.advanceTimersByTimeAsync(1100)
+    expect(calls).toHaveLength(1)
+    expect(calls[0]).toMatchObject({
+      method: "notifications/progress",
+      params: { progressToken: "j-held", progress: 100, total: 100, message: "Awaiting review" },
+    })
+
+    // Five more ticks: the row has not moved, and neither should the emitter.
+    await vi.advanceTimersByTimeAsync(5500)
+    expect(calls).toHaveLength(1)
+
+    // CRITICAL: the task must NOT have been completed/evicted. completeTask
+    // deletes it from REGISTRY, and tasks/result would then throw
+    // "Unknown taskId" the moment the review resolves.
+    expect(getTask("j-held")).not.toBeNull()
+  })
+
+  it("resumes emitting when the review resolves the job", async () => {
+    registerTask({ taskId: "j-held-2", userId: "u-1", kind: "image" })
+    mockJobsRow.rows = [{ id: "j-held-2", status: "pending_review", progress: 100 }]
+
+    const { server, calls } = makeServer()
+    startProgressEmitter(server as never)
+    await vi.advanceTimersByTimeAsync(1100)
+    expect(calls).toHaveLength(1)
+
+    mockJobsRow.rows = [{ id: "j-held-2", status: "completed", progress: 100 }]
+    await vi.advanceTimersByTimeAsync(1100)
+
+    expect(calls).toHaveLength(2)
+    expect((calls[1] as { params: { message?: string } }).params.message).toContain("completed")
+    expect(getTask("j-held-2")).toBeNull()
   })
 
   it("is a no-op when there are no tracked tasks (no DB query)", async () => {

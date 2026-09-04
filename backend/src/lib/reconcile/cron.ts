@@ -14,6 +14,8 @@ import {
   type ProviderKind,
 } from "./types.js"
 import { sweepStaleSyncJob } from "./sync-sweep.js"
+import { sweepExpiredHolds } from "./hold-expiry.js"
+import { markJobFailed } from "../job-failure.js"
 
 export interface ReconcileResult {
   scanned: number
@@ -239,6 +241,7 @@ export async function reconcileInflightJobs(): Promise<ReconcileResult> {
   await sweepNeverStartedJobs(result)
   await sweepStuckComponentWrappers(result)
   await sweepStuckOrchestratorJobs(result)
+  await sweepHeldJobsPastTtl(result)
 
   return result
 }
@@ -551,22 +554,45 @@ async function sweepStuckComponentWrappers(result: ReconcileResult): Promise<voi
         ["completed", "failed", "cancelled", "abandoned"].includes(nestedStatus)
       if (!nestedTerminal) continue
 
-      await supabase
-        .from("jobs")
-        .update({
-          status: "failed",
-          error_message:
-            nestedStatus === "completed"
-              ? "Component wrapper orphaned (server crash mid-poll); inner run finished — re-run to collect output"
-              : `Component inner execution ${nestedStatus ?? "missing"}`,
-          completed_at: new Date().toISOString(),
-        })
-        .eq("id", row.id as string)
-        .eq("status", "processing") // CAS — don't trample a wrapper that just finished
+      // `from: ["processing"]` is NARROWER than FAILABLE_STATUSES on purpose:
+      // this sweep only ever looks at rows it selected as `processing` (see the
+      // query above and the reason at the top of this function), and a wrapper
+      // that moved on in the meantime is not ours to fail.
+      await markJobFailed(row.id as string, {
+        error_message:
+          nestedStatus === "completed"
+            ? "Component wrapper orphaned (server crash mid-poll); inner run finished — re-run to collect output"
+            : `Component inner execution ${nestedStatus ?? "missing"}`,
+        from: ["processing"],
+      })
       result.swept++
     } catch (err) {
       console.error(`[reconcile/cron] component-wrapper sweep failed for job ${row.id}:`, err)
       result.errors++
     }
+  }
+}
+
+/**
+ * Spec D31 — the ONE sweep permitted to write a `pending_review` row.
+ *
+ * Every other sweep in this file filters positively on `pending|processing`, so
+ * a held job is exempt from all of them BY CONSTRUCTION. That is what makes a
+ * hold safe, and exactly why it needs a clock of its own: an abandoned review
+ * otherwise holds the user's reservation forever with nothing to report it.
+ *
+ * The TTL gate lives inside `sweepExpiredHolds` (JOB_HOLD_TTL_HOURS), so a
+ * deployment that registers no job policy pays nothing for the possibility —
+ * not even one query per tick.
+ */
+async function sweepHeldJobsPastTtl(result: ReconcileResult): Promise<void> {
+  try {
+    const { expired, errors } = await sweepExpiredHolds()
+    result.swept += expired
+    result.errors += errors
+  } catch (err) {
+    // A sweep that throws must not abort the tick it is the last step of.
+    console.error(`[reconcile/cron] hold-expiry sweep failed:`, err)
+    result.errors++
   }
 }

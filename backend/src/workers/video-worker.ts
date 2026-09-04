@@ -9,6 +9,7 @@ import { runWithJobCancellation, JobCancelledError } from "../lib/job-cancellati
 // the test harness mocks shared.js wholesale and would undefine them.
 import { isPostProcessingError } from "../lib/post-processing-error.js"
 import { providerDetailOf } from "../lib/provider-error-detail.js"
+import { markJobFailed } from "../lib/job-failure.js"
 import { isReconcileRecoverable } from "../lib/reconcile/types.js"
 import { DrainAbortError } from "../lib/worker-drain.js"
 import {
@@ -407,34 +408,28 @@ export function createVideoWorker() {
             block && block.class === "safety"
               ? safetyBlockMessage(block.fallback ? fallbackLabelOf(block.fallback) : undefined, safetyRetried)
               : message
-          // CAS on status so a job a concurrent writer already moved to a terminal
-          // state (inflight-reconcile cron completing it, or a stall re-pick) is NOT
-          // trampled from "completed"/"cancelled" → "failed" (which would orphan its
-          // committed credits + delivered asset and fail the workflow despite delivery).
-          // Mirrors sync-sweep.ts / reconcile markFailed / forceFailExhausted.
-          const { data: failedRows } = await supabase
-            .from("jobs")
-            .update({
-              status: "failed",
-              error_message: errorMessage,
-              // W0: the provider's own error, redacted — the sanitized message
-              // above is what the user sees; this is what the operator needs.
-              error_detail: providerDetailOf(err),
-              // Migration 376: a user-safe, machine-readable hint the editor/MCP
-              // can act on (offer the fallback model) without parsing prose.
-              // NULL for anything that isn't a classified content-policy block.
-              ...(block ? { error_hint: errorHintFor(block, safetyRetried) } : {}),
-              completed_at: new Date().toISOString(),
-            })
-            .eq("id", jobId)
-            .in("status", ["pending", "processing"])
-            .select("id")
+          // THE failure writer (lib/job-failure.ts). Its CAS is what keeps a job
+          // a concurrent writer already moved to a terminal state (inflight-
+          // reconcile cron completing it, or a stall re-pick) from being trampled
+          // "completed"/"cancelled" → "failed" — which would orphan its committed
+          // credits + delivered asset and fail the workflow despite delivery — and
+          // what keeps this worker off a `pending_review` row (spec D11).
+          const flipped = await markJobFailed(jobId, {
+            error_message: errorMessage,
+            // W0: the provider's own error, redacted — the sanitized message
+            // above is what the user sees; this is what the operator needs.
+            error_detail: providerDetailOf(err),
+            // Migration 376: a user-safe, machine-readable hint the editor/MCP
+            // can act on (offer the fallback model) without parsing prose.
+            // NULL for anything that isn't a classified content-policy block.
+            ...(block ? { error_hint: errorHintFor(block, safetyRetried) } : {}),
+          })
 
           // Only refund if WE flipped the row. If a concurrent writer already
           // completed it, skip (the asset was delivered + credits committed); if
           // it was cancelled, the cancel route already refunded. refundJobCredits
           // is idempotent regardless, but this avoids a needless roundtrip.
-          if (failedRows && failedRows.length > 0) {
+          if (flipped) {
             // Pass the ERROR OBJECT (not just the string) so refundJobCredits
             // can read the PostProcessingError type signal. A post-provider
             // failure (R2 upload, watermark, transcode, merge) skips the refund

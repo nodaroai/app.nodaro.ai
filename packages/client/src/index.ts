@@ -17,9 +17,11 @@ export {
   InsufficientCreditsError,
   StorageExceededError,
   WorkflowConflictError,
+  JobBlockedError,
   JobFailedError,
   JobTimeoutError,
   JobAbortedError,
+  JobHeldError,
   throwFromResponse,
 } from "./errors.js"
 
@@ -120,7 +122,22 @@ export type {
   UpdateProjectInput,
 } from "./resources/projects.js"
 
-export type { Job, JobStatus, JobStatusResult, CancelJobResult, ListJobsParams, ListJobsPage } from "./resources/jobs.js"
+export type {
+  Job,
+  JobStatus,
+  JobStatusResult,
+  CancelJobResult,
+  DeleteJobResult,
+  ListJobsParams,
+  ListJobsPage,
+  // `error_hint`'s discriminated union and its two arms, plus the credit
+  // lifecycle — all reachable from `Job`/`JobStatusResult` but, until now, not
+  // nameable, so a consumer could not narrow or annotate against them.
+  JobErrorHint,
+  SafetyBlockHint,
+  PolicyBlockHint,
+  CreditStatus,
+} from "./resources/jobs.js"
 export type {
   LlmStructuredInput,
   LlmStructuredResult,

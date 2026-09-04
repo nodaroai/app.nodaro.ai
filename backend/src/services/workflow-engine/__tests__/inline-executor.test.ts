@@ -1,9 +1,43 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi, beforeEach } from "vitest"
+
+// The webhook-output node is the one inline executor that creates a `jobs` row,
+// which makes it the one that can be told "no" by the request gate. Everything
+// else in this file is pure and unaffected by these mocks.
+const insertInternalJobMock = vi.fn(async () => ({ data: { id: "job-1" }, error: null }) as {
+  data: { id: string } | null
+  error: { message: string; blocked?: { code: "job_blocked"; policyId: string; message: string } } | null
+})
+vi.mock("../../../lib/insert-job.js", () => ({
+  insertInternalJob: (...args: unknown[]) => insertInternalJobMock(...(args as [])),
+}))
+const safeFetchMock = vi.fn(async () => ({ status: 200, ok: true, text: async () => "ok" }))
+// Keep the REAL isPrivateOrReservedIP: lib/url-validator.ts imports it, and a
+// stubbed-away copy makes safeUrlSchema reject every URL (its refine catches
+// the TypeError and answers false) — which would make these tests pass for the
+// wrong reason.
+vi.mock("../../../lib/safe-fetch.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../lib/safe-fetch.js")>()),
+  safeFetch: (...args: unknown[]) => safeFetchMock(...(args as [])),
+}))
+vi.mock("../../../lib/supabase.js", () => ({
+  supabase: {
+    from() {
+      const b: Record<string, unknown> = {}
+      Object.assign(b, {
+        update: () => b,
+        eq: () => Promise.resolve({ data: null, error: null }),
+      })
+      return b
+    },
+  },
+}))
+
 import {
   executeCombineText,
   executeSplitText,
   executeComposite,
   executePreview,
+  executeWebhookOutput,
 } from "../inline-executor.js"
 import type { SimpleNode, SimpleEdge, NodeExecutionState } from "../types.js"
 
@@ -514,3 +548,48 @@ describe("executePreview", () => {
     expect(result.previewItems![0].value).toBe("https://aud.mp3")
   })
 })
+
+// ---------------------------------------------------------------------------
+// executeWebhookOutput — the audit row is not optional.
+//
+// It used to be `const { data: job } = await insertInternalJob(...)`: the error
+// was discarded, `jobId` stayed undefined, and the POST fired anyway. With a
+// request policy registered that is a blocked delivery going out over the wire
+// with no row to show for it. The block has to reach the node's own failure
+// path (`JobBlockedError` → the stage records the reason), not the floor.
+// ---------------------------------------------------------------------------
+describe("executeWebhookOutput", () => {
+  const ctx = { userId: "u1", executionId: "exec-1" } as unknown as Parameters<typeof executeWebhookOutput>[4]
+  const webhookNode = () => node("w1", "webhook-output", { url: "https://example.com/hook" })
+
+  beforeEach(() => {
+    insertInternalJobMock.mockClear()
+    safeFetchMock.mockClear()
+    insertInternalJobMock.mockResolvedValue({ data: { id: "job-1" }, error: null })
+  })
+
+  it("a request-gate block throws instead of POSTing", async () => {
+    insertInternalJobMock.mockResolvedValue({
+      data: null,
+      error: {
+        message: "blocked",
+        blocked: { code: "job_blocked", policyId: "sai-moderation", message: "Not allowed here" },
+      },
+    })
+
+    await expect(executeWebhookOutput(webhookNode(), [], [], {}, ctx)).rejects.toThrow("Not allowed here")
+    expect(safeFetchMock).not.toHaveBeenCalled()
+  })
+
+  it("still POSTs when the row is created", async () => {
+    await executeWebhookOutput(webhookNode(), [], [], {}, ctx)
+    expect(safeFetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("a plain insert failure does not stop the delivery (unchanged: the row is an audit trail, not a gate)", async () => {
+    insertInternalJobMock.mockResolvedValue({ data: null, error: { message: "db down" } })
+    await executeWebhookOutput(webhookNode(), [], [], {}, ctx)
+    expect(safeFetchMock).toHaveBeenCalledTimes(1)
+  })
+})
+

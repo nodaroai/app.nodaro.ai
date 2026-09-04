@@ -19,6 +19,7 @@ import { getSizeLimit } from "../utils/file-validation.js"
 import { generateThumbnailFromUrl } from "../utils/thumbnail.js"
 import { createWorkDir, cleanupWorkDir, downloadFile, transcodeToBrowserSafe } from "../providers/video/ffmpeg-utils.js"
 import { isPostProcessingError, runPostProcessing } from "../lib/post-processing-error.js"
+import { hasJobPolicyFor, type HeldCommitReplay } from "../lib/job-policy.js"
 
 export interface JobContext {
   jobId: string
@@ -215,6 +216,51 @@ export async function markJobCompleted(
   jobId: string,
   fields: Record<string, unknown>,
 ): Promise<boolean> {
+  return (await markJobCompletedDetailed(jobId, fields)) === "completed"
+}
+
+/**
+ * What actually happened, for the three callers that must tell the outcomes
+ * apart. `markJobCompleted` keeps its boolean because 45 of its 48 callers are
+ * uniformly `const ok = await markJobCompleted(...); if (!ok) return` — which
+ * is exactly right for a block or a hold (skip the commit, return) and would
+ * have been 45 pointless edits.
+ *
+ * The three that need the distinction:
+ *  - `render-worker` REFUNDS on `!ok`, which on a `held` outcome would release
+ *    credits that must stay reserved;
+ *  - the plugin toolkit re-reads the row on `false` and treats a non-terminal
+ *    one as a retryable infrastructure failure — and `pending_review` IS
+ *    non-terminal, so a hold would throw into the worker catch and defeat itself;
+ *  - `finalizeJobWithMedia` must release its finalize claim on `held` and tell
+ *    its own callers a policy outcome from a lost race.
+ *
+ * THE RESULT GATE RUNS HERE — after the caller's media is already at its
+ * deterministic R2 key and BEFORE the completion CAS, so nothing is published:
+ * no `output_data`, no asset row, no committed credit. The applier is reached
+ * through a DYNAMIC import so that with no policy registered this file's module
+ * graph (and every worker suite that mocks it) is unchanged, and so the
+ * dependency direction stays one-way: shared.ts → the seam, never the reverse.
+ */
+export type MarkJobCompletedOutcome = "completed" | "lost_race" | "blocked" | "held"
+
+export async function markJobCompletedDetailed(
+  jobId: string,
+  fields: Record<string, unknown>,
+  /** Only `finalizeJobWithMedia` passes "finalize"; it is the sole input to
+   *  `holdEligible` that a direct caller cannot supply. */
+  funnel: "finalize" | "direct" = "direct",
+  /** The caller's credit-settlement inputs, which are NOT jobs columns — the
+   *  hold path stores them so approve can replay the metered true-up instead of
+   *  committing a ceiling (Q2). */
+  commitReplay?: HeldCommitReplay,
+): Promise<MarkJobCompletedOutcome> {
+  if (hasJobPolicyFor("result")) {
+    const { applyResultGate } = await import("../lib/job-policy-gate.js")
+    const applied = await applyResultGate(jobId, fields, funnel, commitReplay)
+    if (applied !== "allow") return applied
+  }
+
   const completion = {
     status: "completed",
     progress: 100,
@@ -234,13 +280,13 @@ export async function markJobCompleted(
 
   if (error) {
     console.error(`[worker] Failed to mark job ${jobId} completed:`, error.message)
-    return false
+    return "lost_race"
   }
   if (!data || data.length === 0) {
     console.log(`[worker] Job ${jobId} already terminal (cancelled/failed/completed) — not flipping to completed`)
-    return false
+    return "lost_race"
   }
-  return true
+  return "completed"
 }
 
 /**

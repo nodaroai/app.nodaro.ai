@@ -7,14 +7,19 @@
  * Ownership is verified here, not assumed. The decision table is the route's:
  *   - unknown row → not_found; another owner → forbidden;
  *   - terminal row → invalid_status;
+ *   - row parked in review → withdrawn (refund + delete the withheld object +
+ *     record the decision), never in_flight;
  *   - provider task already out and not in recovery → in_flight (cannot be
  *     killed; the user keeps what they paid for);
  *   - otherwise: best-effort queue removal, CAS flip to `cancelled` on live
- *     statuses only, refund ONLY when we flipped the row (a concurrent
- *     terminal writer owns the credits), and the analysis child id if any.
+ *     statuses only (never the parked one — a row parked while we emptied the
+ *     queue re-enters the withdrawal instead of being flipped), refund ONLY
+ *     when we flipped the row (a concurrent terminal writer owns the credits),
+ *     and the analysis child id if any.
  */
 import { supabase } from "./supabase.js"
 import { tryRemoveFromQueue } from "./queue.js"
+import { IN_FLIGHT_JOB_STATUSES, isParkedJobStatus } from "./job-status.js"
 
 export type CancelOwnedJobResult =
   | { kind: "not_found" }
@@ -24,7 +29,30 @@ export type CancelOwnedJobResult =
   | { kind: "lost_race" }
   | { kind: "cancelled"; analysisJobId: string | null }
 
-const CANCELLABLE_STATUSES = ["pending", "queued", "processing"] as const
+/**
+ * Every in-flight status, `pending_review` included (spec D17).
+ *
+ * Derived, never hand-rolled: a re-declared list silently omits `pending_review`
+ * and the omission is invisible — the API answers 400 "cannot be cancelled"
+ * while `node-executor.ts`'s DAG cancel flips the same row anyway. A
+ * reservation must not be strandable behind a reviewer's SLA.
+ */
+const CANCELLABLE_STATUSES = IN_FLIGHT_JOB_STATUSES
+
+/**
+ * The statuses the GENERIC CAS below may flip straight to `cancelled` — every
+ * in-flight status EXCEPT the parked one. A different question from
+ * `CANCELLABLE_STATUSES` above, and the two must not share an answer.
+ *
+ * A parked row is cancellable, but only through `withdrawHeldJob`, which also
+ * deletes the withheld objects, clears the `held_*` columns and records the
+ * `withdrawn` decision. The read at :81 decides which path to take, and the
+ * work in between — two BullMQ `getJobs` sweeps plus a dynamic import — is long
+ * enough for the result gate to park the row underneath us. Admitting
+ * `pending_review` here would let the generic UPDATE win that race and cancel
+ * the row with none of the three.
+ */
+const FLIPPABLE_STATUSES: readonly string[] = IN_FLIGHT_JOB_STATUSES.filter((s) => !isParkedJobStatus(s))
 
 /**
  * Refund every reserved credit hold for the given job IDs — the ONE refund
@@ -77,6 +105,31 @@ export async function cancelOwnedJob(jobId: string, userId: string): Promise<Can
   if (!(CANCELLABLE_STATUSES as readonly string[]).includes(job.status)) {
     return { kind: "invalid_status", status: job.status as string }
   }
+  const input = (job.input_data ?? null) as Record<string, unknown> | null
+  const analysisJobId = typeof input?.analysisJobId === "string" ? input.analysisJobId : null
+
+  // A HELD job is cancelled by a different mechanism, and this branch must come
+  // BEFORE the `provider_task_id` check below: a held job normally HAS a
+  // provider task (the provider already delivered — it is the PLATFORM holding
+  // the result), so `in_flight` would refuse it forever. There is also no queue
+  // entry left to remove, and the withdrawal has three things the generic path
+  // cannot do: refund the reservation, delete the withheld object, and record
+  // the `withdrawn` decision against the review audit.
+  //
+  // Reached through a dynamic import so this module's static graph stays
+  // supabase + queue (job-policy-gate pulls storage and the credit lifecycle
+  // behind it) — the same reason `refundReservedHolds` loads `ee/` lazily.
+  if (isParkedJobStatus(job.status as string)) {
+    const { withdrawHeldJob } = await import("./job-policy-gate.js")
+    const withdrawal = await withdrawHeldJob(jobId)
+    if (!withdrawal.ok) {
+      // `not_held` means a reviewer, the TTL sweep or another tab resolved it
+      // between our read and the CAS — the same shape as any lost race.
+      return withdrawal.reason === "not_found" ? { kind: "not_found" } : { kind: "lost_race" }
+    }
+    return { kind: "cancelled", analysisJobId }
+  }
+
   const inRecovery = ((job.reconcile_attempts as number | null) ?? 0) > 0
   if (job.provider_task_id && !inRecovery) return { kind: "in_flight" }
 
@@ -87,14 +140,31 @@ export async function cancelOwnedJob(jobId: string, userId: string): Promise<Can
     .update({ status: "cancelled" })
     .eq("id", jobId)
     .eq("user_id", userId)
-    .in("status", [...CANCELLABLE_STATUSES])
+    .in("status", [...FLIPPABLE_STATUSES])
     .select("id")
   if (updateError) throw updateError
-  if (!flipped || flipped.length === 0) return { kind: "lost_race" }
+  if (!flipped || flipped.length === 0) {
+    // Zero rows is now two different facts. Re-read once: a row that got PARKED
+    // while we were emptying the queue is still perfectly cancellable — it just
+    // has to go through the withdrawal. Answering `lost_race` for it would fail
+    // a cancel the user is entitled to and leave the reservation sitting behind
+    // the reviewer's SLA, which is the stranding D17 exists to prevent.
+    const { data: after } = await supabase
+      .from("jobs") // tenant-scope-ignore: same row, ownership verified above
+      .select("status")
+      .eq("id", jobId)
+      .single()
+    const status = (after as { status?: string } | null)?.status
+    if (status && isParkedJobStatus(status)) {
+      const { withdrawHeldJob } = await import("./job-policy-gate.js")
+      const withdrawal = await withdrawHeldJob(jobId)
+      if (withdrawal.ok) return { kind: "cancelled", analysisJobId }
+      return withdrawal.reason === "not_found" ? { kind: "not_found" } : { kind: "lost_race" }
+    }
+    return { kind: "lost_race" }
+  }
 
   await refundReservedHolds([jobId])
 
-  const input = (job.input_data ?? null) as Record<string, unknown> | null
-  const analysisJobId = typeof input?.analysisJobId === "string" ? input.analysisJobId : null
   return { kind: "cancelled", analysisJobId }
 }

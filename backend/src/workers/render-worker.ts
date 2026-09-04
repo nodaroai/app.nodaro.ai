@@ -7,7 +7,33 @@ import { uploadFileToR2 } from "../lib/storage.js"
 import { resolveIsPublicOutput, mcpClientForcesPrivate } from "./output-visibility.js"
 import { createWorkDir, cleanupWorkDir, downloadFile, runFfmpeg, needsTranscode, transcodeToBrowserSafe, BROWSER_SAFE_VIDEO_ARGS, REMOTION_INPUT_VIDEO_ARGS } from "../providers/video/ffmpeg-utils.js"
 import { applyVideoWatermark } from "../utils/watermark.js"
-import { commitJobCredits, refundJobCredits, shouldSaveJobResult, markJobCompleted, generateAndUploadThumbnail, createAssetFromJob, isFinalJobAttempt } from "./shared.js"
+import { commitJobCredits, refundJobCredits, shouldSaveJobResult, markJobCompletedDetailed, generateAndUploadThumbnail, createAssetFromJob, isFinalJobAttempt, type MarkJobCompletedOutcome } from "./shared.js"
+import { markJobFailed } from "../lib/job-failure.js"
+
+/**
+ * Which non-completed completion outcome releases the reservation.
+ *
+ * This worker is one of the three callers that must tell the outcomes apart
+ * (workers/shared.ts documents the other two). Before the result gate there was
+ * exactly ONE way to not complete — the user cancelled mid-render — and
+ * refunding on it was right. There are three now:
+ *
+ *   • `lost_race`  — a terminal writer won (cancel, or the reconcile cron).
+ *                    Release the hold, as this worker always has.
+ *   • `blocked`    — the gate already failed the row and refunded IN FULL
+ *                    (spec D19). A second release here is idempotent but
+ *                    dishonest; the gate owns that money.
+ *   • `held`       — the media is withheld pending a human decision and the
+ *                    credits must STAY reserved so approve can commit them.
+ *                    Releasing here would deliver an approved render for free.
+ *
+ * `held` is unreachable from this worker today (`holdEligible` is false for
+ * every direct caller — D8). It is spelled out anyway so that widening
+ * eligibility is a deliberate edit here rather than a silent regression.
+ */
+export function releasesReservationOnIncompleteRender(outcome: MarkJobCompletedOutcome): boolean {
+  return outcome === "lost_race"
+}
 import { createServer } from "node:http"
 import { createReadStream, statSync } from "node:fs"
 import { randomUUID } from "node:crypto"
@@ -945,13 +971,17 @@ export function createRenderWorker() {
         // Generate thumbnail
         const thumbnailUrl = await generateAndUploadThumbnail(videoUrl, jobId, jobUserId)
 
-        // Mark job completed atomically (skips if user cancelled mid-update)
-        const ok = await markJobCompleted(jobId, {
+        // Mark job completed atomically (skips if the user cancelled mid-update,
+        // and — since the result gate moved inside this call — if a policy
+        // blocked or held the output).
+        const outcome = await markJobCompletedDetailed(jobId, {
           output_data: { videoUrl, thumbnailUrl },
           is_public: isPublic,
         })
-        if (!ok) {
-          await refundJobCredits(effectiveUsageLogId, jobId, "cancelled")
+        if (outcome !== "completed") {
+          if (releasesReservationOnIncompleteRender(outcome)) {
+            await refundJobCredits(effectiveUsageLogId, jobId, "cancelled")
+          }
           return
         }
 
@@ -975,23 +1005,14 @@ export function createRenderWorker() {
         // retry deliver the render for free (commit_credits no-ops against an
         // already-refunded usage_log).
         if (isTerminal || isFinalJobAttempt(bullJob)) {
-          // CAS on status so a concurrently-completed/cancelled job (inflight
-          // reconcile cron, stall re-pick) is NOT trampled "completed" → "failed"
-          // (orphaning its committed credits + delivered render). Mirrors
-          // sync-sweep.ts / reconcile markFailed.
-          const { data: failedRows } = await supabase
-            .from("jobs")
-            .update({
-              status: "failed",
-              error_message: errMsg,
-              completed_at: new Date().toISOString(),
-            })
-            .eq("id", jobId)
-            .in("status", ["pending", "processing"])
-            .select("id")
+          // THE failure writer. Its CAS is what stops a concurrently-completed/
+          // cancelled job (inflight reconcile cron, stall re-pick) being trampled
+          // "completed" → "failed" (orphaning its committed credits + delivered
+          // render), and what keeps this worker off a `pending_review` row.
+          const flipped = await markJobFailed(jobId, { error_message: errMsg })
 
           // Only refund if WE flipped the row (refundJobCredits is idempotent anyway).
-          if (failedRows && failedRows.length > 0) {
+          if (flipped) {
             await refundJobCredits(effectiveUsageLogId, jobId, errMsg)
           }
         }

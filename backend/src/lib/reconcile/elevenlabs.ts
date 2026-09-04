@@ -1,5 +1,6 @@
 import { config } from "../config.js"
 import { supabase } from "../supabase.js"
+import { markJobFailed } from "../job-failure.js"
 import { deliverDubbedMedia } from "../dubbing-delivery.js"
 import { redactProviderDetail, logProviderFailure } from "../provider-error-detail.js"
 import type { ReconcileOpts } from "./kie.js"
@@ -103,20 +104,15 @@ async function markFailed(jobId: string, reason: string, detail: string | null =
   // Log BEFORE the write: this module had no per-job output at all, so a
   // cron-failed job was invisible in Railway (spec §11.3).
   logProviderFailure("reconcile/elevenlabs", jobId, reason, detail)
-  await supabase
-    .from("jobs")
-    .update({
-      status: "failed",
-      error_message: reason.slice(0, 500),
-      error_detail: detail,
-      completed_at: new Date().toISOString(),
-      reconcile_last_error: "upstream_failed",
-    })
-    .eq("id", jobId)
-    // CAS on the live (non-terminal) states only — a bare .neq("status","cancelled")
-    // would still trample a job the worker concurrently flipped to "completed".
-    // Matches kie.ts / sync-sweep.ts (the M6 fix); these two files were missed.
-    .in("status", ["pending", "processing"])
+  // The CAS lives in markJobFailed now (FAILABLE_STATUSES): never trample a job
+  // a concurrent writer flipped to completed/cancelled, and never take a
+  // `pending_review` row — a held job is out of every reconcile sweep's reach
+  // by construction (spec D11).
+  await markJobFailed(jobId, {
+    error_message: reason,
+    error_detail: detail,
+    reconcile_last_error: "upstream_failed",
+  })
 }
 
 /**

@@ -1,17 +1,30 @@
 import type { NodaroClient } from "../client.js"
 
+/**
+ * A job's lifecycle status. Hand-copied mirror of `JOB_STATUSES` in the
+ * platform's `backend/src/lib/job-status.ts` — nothing links the two at build
+ * time, so a new member has to be added here in the same change.
+ *
+ * `pending_review` is IN-FLIGHT, NOT TERMINAL: a job policy registered by the
+ * deployment held the output for a human reviewer. Treat it like `processing`
+ * in a `switch` — keep waiting, do not re-run — and it resolves to `completed`
+ * (approved), `failed` (rejected, carrying an `error_hint` with
+ * `kind: "policy-block"`) or `cancelled` (a held job is cancellable like any
+ * in-flight job). `credit_status` reads `"reserved"` for the whole hold. Only
+ * appears on deployments that register a job policy; `runAndWait` throws
+ * {@link JobHeldError} on the first held tick rather than waiting it out.
+ */
 export type JobStatus =
   | "pending"
   | "queued"
   | "processing"
+  | "pending_review"
   | "completed"
   | "failed"
   | "cancelled"
 
 /**
- * A job's `jobs.error_hint` (migration 376) — a user-safe, machine-readable
- * failure verdict the worker writes on a FINAL provider content-policy
- * block, so a caller can act on it without parsing `error_message` prose.
+ * A PROVIDER's verdict: the model's own safety filter refused the output.
  * `class` distinguishes a deterministic block (copyright/likeness — retrying
  * the same request never helps) from `safety`, whose filter is known to be
  * non-deterministic for some models: `retried` says whether the worker
@@ -19,12 +32,44 @@ export type JobStatus =
  * only when the catalog declares a fallback for the model that failed — is a
  * real model id the SAME prompt/references can be retried on.
  */
-export interface JobErrorHint {
+export type SafetyBlockHint = {
   kind: "safety-block"
   class: "copyright" | "likeness" | "safety"
   retried: boolean
   suggestedProvider?: string
 }
+
+/**
+ * A NODARO-side verdict, not a provider's: a job policy registered by the
+ * deployment rejected the request (`hookPoint: "request"` — nothing ran, and
+ * the call itself failed with {@link JobBlockedError}) or the finished output
+ * (`hookPoint: "result"` — the result was blocked and never published).
+ *
+ * `reason` is USER-SAFE BY CONTRACT — the platform guarantees the policy's
+ * machine text (scores, labels) never reaches it — so show it to the person
+ * who made the request as-is. `policyId` identifies the deployment's policy,
+ * not a Nodaro product feature. Only occurs on deployments that register a
+ * job policy.
+ */
+export type PolicyBlockHint = {
+  kind: "policy-block"
+  policyId: string
+  reason: string
+  hookPoint: "request" | "result"
+}
+
+/**
+ * A job's `jobs.error_hint` (migration 376) — a user-safe, machine-readable
+ * failure verdict, so a caller can act on it without parsing `error_message`
+ * prose. One column, two verdict sources; `kind` is the discriminant.
+ *
+ * HAND-COPIED MIRROR of `ErrorHint` in the platform's
+ * `backend/src/lib/safety-block.ts` (which names this file in its own
+ * comment). Nothing links the two at build time: a new arm there has to be
+ * pasted here verbatim in the same change, with a changeset.
+ * `packages/client/dist/index.d.ts` is REBUILT, never hand-edited.
+ */
+export type JobErrorHint = SafetyBlockHint | PolicyBlockHint
 
 /**
  * The billing lifecycle of a job's credit reservation — `usage_logs.status`
@@ -51,8 +96,10 @@ export interface Job {
   input_data: unknown
   output_data: unknown
   error_message: string | null
-  /** PR9: present on a failed job the worker classified as a content-policy
-   *  block; absent/null otherwise. User-safe by construction. */
+  /** Present on a failed job the worker classified as a provider
+   *  content-policy block (`kind: "safety-block"`) or that a deployment's job
+   *  policy rejected (`kind: "policy-block"`); absent/null otherwise.
+   *  User-safe by construction — narrow on `kind` before reading the rest. */
   error_hint?: JobErrorHint | null
   /** PR9: the job's credit reservation lifecycle, derived server-side from
    *  `usage_logs.status`. `null` when there is no usage log to report. Never
@@ -79,6 +126,10 @@ export interface CancelJobResult {
   cancelled: number
 }
 
+export interface DeleteJobResult {
+  success: true
+}
+
 export interface ListJobsParams {
   /** Exact match on `input_data.type` — the route that created the job
    *  (`"llm-structured"`, `"video-analysis"`, …). */
@@ -92,6 +143,10 @@ export interface ListJobsParams {
 }
 
 export interface ListJobsPage {
+  /**
+   * A page may hold fewer than `limit` rows — even none — and still carry a
+   * `next`. Page on `next`, never on `data.length`.
+   */
   data: Job[]
   /** Pass back as `cursor` for the next page; `null` on the last one. */
   next: string | null
@@ -153,6 +208,19 @@ export class JobsResource {
     return this.client.request(
       "POST",
       `/v1/jobs/${encodeURIComponent(id)}/cancel`,
+    )
+  }
+
+  /**
+   * Delete a job and the private media it produced. Server route is
+   * `DELETE /v1/jobs/:jobId`. Only the job's owner (or an admin) may delete it;
+   * a job that is still running is deleted as-is — cancel it first when its
+   * worker should stop ({@link cancel}).
+   */
+  delete(id: string): Promise<DeleteJobResult> {
+    return this.client.request(
+      "DELETE",
+      `/v1/jobs/${encodeURIComponent(id)}`,
     )
   }
 }

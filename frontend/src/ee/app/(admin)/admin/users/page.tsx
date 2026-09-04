@@ -38,6 +38,7 @@ import {
 } from "@/ee/hooks/queries/use-admin-queries"
 import { getScheduledCancelDate } from "@/ee/lib/subscription"
 import { useAuth } from "@/hooks/use-auth"
+import { useBillingSurface } from "@/hooks/use-billing-surface"
 import { UserMessagesSection } from "@/ee/components/admin/user-messages/user-messages-section"
 
 // ---------------------------------------------------------------------------
@@ -89,6 +90,34 @@ const ROLE_COLORS: Record<string, string> = {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Track A: is this a deployment where one account pays for everyone?
+ *
+ * On such a deployment an admin is NOT a billing role (spec §9.2): the Nodaro
+ * credit columns are the deployment's own money, the server withholds them, and
+ * the top-up controls have no meaning because no admin can grant anything —
+ * only the billing account can, on its own page. What an admin sees instead is
+ * each user's deployment allowance, read-only.
+ *
+ * False on mainline (and while the surface loads), so every branch below is the
+ * page exactly as it is today.
+ */
+function useDeploymentPayerMode(): { readonly payerMode: boolean; readonly ready: boolean } {
+  const { surface, isLoading } = useBillingSurface()
+  return { payerMode: surface.deploymentPayer === true, ready: !isLoading }
+}
+
+/**
+ * A figure the server sent in display units, or an em dash.
+ *
+ * `null`/`undefined` mean "not available" — enforcement is not on yet, or the
+ * read failed — and must NOT collapse to 0, which on an allowance means
+ * "exhausted, this person cannot generate".
+ */
+function unitsOrDash(v: number | null | undefined): string {
+  return v == null ? "—" : v.toLocaleString()
+}
+
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return bytes + " B"
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB"
@@ -136,6 +165,8 @@ function UserExpandedRow({
     return match ? "" : String(Math.round(user.storage_limit_bytes / (1024 * 1024 * 1024)))
   })
   const [savingStorage, setSavingStorage] = useState(false)
+
+  const { payerMode } = useDeploymentPayerMode()
 
   const adjustCreditsMut = useAdminAdjustCreditsMutation()
   const changeTierMut = useAdminChangeTierMutation()
@@ -207,21 +238,42 @@ function UserExpandedRow({
     }
   }
 
-  const total = user.subscription_credits + user.topup_credits
-  const subPercent = total > 0 ? (user.subscription_credits / total) * 100 : 0
+  const total = (user.subscription_credits ?? 0) + (user.topup_credits ?? 0)
+  const subPercent = total > 0 ? ((user.subscription_credits ?? 0) / total) * 100 : 0
 
   return (
     <tr>
-      <td colSpan={11} className="px-4 py-4 bg-muted/30">
+      <td colSpan={payerMode ? 10 : 11} className="px-4 py-4 bg-muted/30">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Left: Credit Management */}
           <div className="space-y-4">
             <div className="flex items-center gap-2 text-sm font-medium">
               <Coins className="h-4 w-4" />
-              Credit Management
+              {payerMode ? "Allowance" : "Credit Management"}
             </div>
 
-            {/* Balance breakdown */}
+            {/* Balance breakdown. Under a payer the deployment's credits are
+                not this admin's business and the server does not send them;
+                the user's deployment allowance takes their place, read-only. */}
+            {payerMode ? (
+              <div className="border rounded-lg p-3 bg-card space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Granted</span>
+                  <span className="font-mono font-medium">{unitsOrDash(user.sai_granted)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Remaining</span>
+                  <span className="font-mono font-medium">{unitsOrDash(user.sai_remaining)}</span>
+                </div>
+                <div className="flex justify-between text-sm border-t pt-2">
+                  <span className="text-muted-foreground">Spent</span>
+                  <span className="font-mono font-medium">{unitsOrDash(user.sai_spent)}</span>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  Read-only. Allowances are granted by the deployment&apos;s billing account.
+                </p>
+              </div>
+            ) : (
             <div className="border rounded-lg p-3 bg-card space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Subscription</span>
@@ -247,6 +299,7 @@ function UserExpandedRow({
                 <span>Top-up ({Math.round(100 - subPercent)}%)</span>
               </div>
             </div>
+            )}
 
             {/* Subscription status (incl. scheduled cancellation) */}
             {subInfo && (
@@ -302,7 +355,12 @@ function UserExpandedRow({
               )}
             </div>
 
-            {/* Adjust form */}
+            {/* Adjust form. Absent under a payer: an admin cannot move the
+                deployment's credits, and cannot grant an allowance either —
+                `grant_deployment_allowance` refuses any actor that is not the
+                billing account. A control that always fails is worse than
+                none. */}
+            {!payerMode && (
             <div className="border rounded-lg p-3 bg-card space-y-3">
               <div className="text-sm font-medium">Adjust Credits</div>
               <div className="flex gap-2">
@@ -344,6 +402,7 @@ function UserExpandedRow({
                 {submitting ? "Adjusting..." : "Apply"}
               </Button>
             </div>
+            )}
 
             {/* Storage Management */}
             <div className="border rounded-lg p-3 bg-card space-y-3">
@@ -502,16 +561,23 @@ function UserExpandedRow({
 
 export default function AdminUsersPage() {
   const { user: currentUser, role: currentUserRole } = useAuth()
+  const { payerMode, ready: surfaceReady } = useDeploymentPayerMode()
   const [page, setPage] = useState(0)
   const [searchQuery, setSearchQuery] = useState("")
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<UserSortBy>("created_at")
   const [sortDir, setSortDir] = useState<SortDir>("desc")
+  // The source is decided here, not inside the hook: under a payer the rows
+  // come from the service-role route (payer row omitted, credit columns
+  // withheld), and until the surface has answered we fetch from neither —
+  // `deploymentPayer` reads false while it loads, and acting on that default
+  // would flash the wrong source at a deployment admin.
   const { data: users = [], isLoading: loading, refetch: loadUsers } = useAdminUsers(
     page,
     50,
     sortBy,
     sortDir,
+    { viaRoute: payerMode, ready: surfaceReady },
   )
 
   const handleSort = (field: UserSortBy) => {
@@ -536,7 +602,10 @@ export default function AdminUsersPage() {
     setExpandedUserId((prev) => (prev === userId ? null : userId))
   }
 
-  if (loading && users.length === 0) {
+  // `!surfaceReady` too: with the query disabled until the surface answers,
+  // react-query reports isLoading false, and the table would flash "No users
+  // found." at an admin who has users.
+  if ((loading || !surfaceReady) && users.length === 0) {
     return (
       <div className="flex justify-center py-16">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -565,6 +634,24 @@ export default function AdminUsersPage() {
       <div className="border rounded-lg overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-muted/50">
+            {payerMode ? (
+              /* Under a payer the rows come from GET /v1/admin/users, which
+                 orders by join date and takes no sort parameter — so these are
+                 plain headers, not arrows that would do nothing when clicked.
+                 The three allowance columns replace the four credit columns. */
+              <tr>
+                <th className="w-8 px-2 py-2" />
+                <th className="text-left px-4 py-2 font-medium">Email</th>
+                <th className="text-left px-4 py-2 font-medium">Name</th>
+                <th className="text-left px-4 py-2 font-medium">Tier</th>
+                <th className="text-right px-4 py-2 font-medium">Granted</th>
+                <th className="text-right px-4 py-2 font-medium">Remaining</th>
+                <th className="text-right px-4 py-2 font-medium">Spent</th>
+                <th className="text-right px-4 py-2 font-medium">Storage</th>
+                <th className="text-left px-4 py-2 font-medium">Role</th>
+                <th className="text-left px-4 py-2 font-medium">Joined</th>
+              </tr>
+            ) : (
             <tr>
               <th className="w-8 px-2 py-2" />
               <SortHeader
@@ -630,6 +717,7 @@ export default function AdminUsersPage() {
                 onSort={handleSort}
               />
             </tr>
+            )}
           </thead>
           <tbody>
             {filteredUsers.map((user) => {
@@ -648,7 +736,7 @@ export default function AdminUsersPage() {
             })}
             {filteredUsers.length === 0 && (
               <tr>
-                <td colSpan={11} className="px-4 py-8 text-center text-muted-foreground">
+                <td colSpan={payerMode ? 10 : 11} className="px-4 py-8 text-center text-muted-foreground">
                   {searchQuery.trim() ? "No users match your search." : "No users found."}
                 </td>
               </tr>
@@ -699,7 +787,8 @@ function UserRow({
   readonly currentUserId: string
 }) {
   const [changingRole, setChangingRole] = useState(false)
-  const total = user.subscription_credits + user.topup_credits
+  const { payerMode } = useDeploymentPayerMode()
+  const total = (user.subscription_credits ?? 0) + (user.topup_credits ?? 0)
   const tierClass = TIER_COLORS[user.subscription_tier] ?? TIER_COLORS.free
   const roleClass = ROLE_COLORS[user.role] ?? ROLE_COLORS.user
 
@@ -745,10 +834,20 @@ function UserRow({
             {user.subscription_tier}
           </span>
         </td>
-        <td className="px-4 py-2 text-right font-mono">{user.subscription_credits}</td>
-        <td className="px-4 py-2 text-right font-mono">{user.topup_credits}</td>
-        <td className="px-4 py-2 text-right font-mono font-bold">{total}</td>
-        <td className="px-4 py-2 text-right font-mono text-muted-foreground">{user.daily_spent_credits}</td>
+        {payerMode ? (
+          <>
+            <td className="px-4 py-2 text-right font-mono">{unitsOrDash(user.sai_granted)}</td>
+            <td className="px-4 py-2 text-right font-mono font-bold">{unitsOrDash(user.sai_remaining)}</td>
+            <td className="px-4 py-2 text-right font-mono text-muted-foreground">{unitsOrDash(user.sai_spent)}</td>
+          </>
+        ) : (
+          <>
+            <td className="px-4 py-2 text-right font-mono">{user.subscription_credits}</td>
+            <td className="px-4 py-2 text-right font-mono">{user.topup_credits}</td>
+            <td className="px-4 py-2 text-right font-mono font-bold">{total}</td>
+            <td className="px-4 py-2 text-right font-mono text-muted-foreground">{user.daily_spent_credits}</td>
+          </>
+        )}
         <td className="px-4 py-2 text-right font-mono text-muted-foreground text-xs whitespace-nowrap">
           {formatBytes(user.storage_used_bytes)} / {formatBytes(user.storage_limit_bytes)}
         </td>

@@ -14,6 +14,8 @@ import { isWebFreeModeCandidate, sendSubscriptionRequired } from "./payg-surface
 import { effectiveMarkupPercent } from "../billing/service-margin.js"
 import { refundReservedCreditsForJob } from "../../lib/credits-job-lifecycle.js"
 import { ReserveRpcError, mapReserveError } from "../../lib/reserve-errors.js"
+import { allowanceEnforcementActive } from "../../lib/deployment-payer.js"
+import { allowanceFor } from "../billing/deployment-allowance-service.js"
 
 // Per-instance monthly spend rollup for the community-connect cap. Reads the
 // jobs ledger (source_detail carries the appId — stamped by insertJob) with a
@@ -262,6 +264,53 @@ export function creditGuardImpl(
           balance: creditCheck.balance,
         })
         return
+      }
+
+      // Track A — the per-user allowance pre-flight, AFTER the payer wealth
+      // check has passed (the pool must be able to pay before the quota is
+      // even a question) and BEFORE a job row exists.
+      //
+      // NON-AUTHORITATIVE, on purpose (D8). This is a read-then-reserve: two
+      // parallel Generates can both read "enough" and both reserve. The
+      // authority is the block inside `reserve_credits`, holding `FOR UPDATE`
+      // on the allowance row in the same transaction that debits the payer;
+      // the overshoot a race here can produce is bounded by that, never by
+      // this. What this buys is a truthful 402 for the ordinary case, before
+      // a job row is created and refunded.
+      //
+      // TWO gates, both load-bearing. `dep` keeps mainline out entirely.
+      // `allowanceEnforcementActive()` keeps the whole rollout window before
+      // the flip out: `billing.allowances` is "off" until rollout step 8, and
+      // until then this guard must refuse NOTHING even though balances are
+      // already on screen. `required` can be absent (credits disabled) — with
+      // no cost to compare there is nothing to refuse.
+      //
+      // The figures are RAW credits and are the requester's OWN (D10): the
+      // payer's pool never appears here, in any key, for the same reason the
+      // `insufficient_credits` branch above withholds `balance`. Both are
+      // reachable by anyone who can press Generate.
+      //
+      // The D7 no-row rule (a user who has never generated has no row and
+      // must answer the DEFAULT, never 0) lives in `allowanceFor`. Reading
+      // the table here instead would put a second copy of that rule in the
+      // one place where getting it wrong refuses every user's first ever
+      // Generate.
+      if (dep && allowanceEnforcementActive() && creditCheck.required != null) {
+        const allowance = await allowanceFor(userId)
+        if (allowance && creditCheck.required > allowance.remaining) {
+          reply.status(402).send({
+            error: {
+              // Same code and same fixed message the reserve RPC's own
+              // refusal maps to (reserve-errors.ts, USER_ALLOWANCE_EXCEEDED):
+              // one refusal seen from two places must not read as two.
+              code: "user_allowance_exceeded",
+              message: "Your allowance cannot cover this run",
+            },
+            required: creditCheck.required,
+            remaining: allowance.remaining,
+          })
+          return
+        }
       }
 
       const reservation: CreditReservation = {

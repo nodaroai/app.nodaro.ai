@@ -38,7 +38,7 @@ import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types
 import { getHandleConnectionLimit } from "@/lib/handle-limits"
 import { extractNodeOutput } from "@/components/editor/workflow-editor/execution-graph"
 import { copyToClipboard, computeDeleteResultUpdates } from "@/lib/utils"
-import type { VideoRetakeData, GeneratedResult, WorkflowNode } from "@/types/nodes"
+import type { VideoRetakeData, GeneratedResult, WorkflowNode, JobErrorHint } from "@/types/nodes"
 
 // Stable, module-level `accepts` predicates per typed handle — hoisting
 // keeps the predicate ref stable across renders. Inline arrows bust
@@ -216,8 +216,15 @@ function VideoRetakeNodeComponent({ id, data, selected }: NodeProps) {
   // Failure routing — content-policy gets the amber ShieldAlert visual.
   // Detection mirrors generate-image-node's keyword check on errorMessage.
   const errorMessage = nodeData.errorMessage as string | undefined
+  // NODARO's own verdict, decided FIRST — BaseNode's <NodePolicyOverlay> renders
+  // it. The keyword sniff below would otherwise match ("blocked", "content
+  // policy"…) and attribute our decision to the provider's safety filter.
+  const isPolicyBlock =
+    status === "failed" &&
+    (nodeData.errorHint as JobErrorHint | undefined)?.kind === "policy-block"
   const isContentPolicyFail =
     status === "failed" &&
+    !isPolicyBlock &&
     !!errorMessage &&
     /content policy|prohibited|safety|blocked/i.test(errorMessage)
 
@@ -468,6 +475,13 @@ function VideoRetakeNodeComponent({ id, data, selected }: NodeProps) {
             </>
           )}
 
+          {/* Failed by OUR policy: the overlay is the whole story. The empty box
+              holds the card's height (both blocks below are gated off, and the
+              idle block is gated on `status !== "failed"`). */}
+          {status === "failed" && !activeUrl && isPolicyBlock && (
+            <div className="rounded-xl h-[180px] bg-amber-500/5" />
+          )}
+
           {/* Failed (content policy) state — amber ShieldAlert */}
           {status === "failed" && !activeUrl && isContentPolicyFail && (
             <div className="flex flex-col items-center justify-center gap-1 rounded-xl p-2 h-[180px] bg-amber-500/5 text-amber-500">
@@ -487,7 +501,7 @@ function VideoRetakeNodeComponent({ id, data, selected }: NodeProps) {
           )}
 
           {/* Failed (other) state — red AlertCircle */}
-          {status === "failed" && !activeUrl && !isContentPolicyFail && (
+          {status === "failed" && !activeUrl && !isContentPolicyFail && !isPolicyBlock && (
             <div className="flex flex-col items-center justify-center gap-1 rounded-xl p-2 h-[180px] bg-red-500/5 text-red-500">
               <div className="flex items-center gap-1.5">
                 <AlertCircle className="w-4 h-4 shrink-0" />

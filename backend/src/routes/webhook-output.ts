@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { insertJob } from "../lib/insert-job.js"
+import { sendInternalError } from "../lib/http-errors.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { safeFetch } from "../lib/safe-fetch.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
@@ -43,7 +44,11 @@ export async function webhookOutputRoutes(app: FastifyInstance) {
       })
 
     if (jobError || !job) {
-      return reply.status(500).send({ error: "Failed to create job record" })
+      // Through sendInternalError, so a request-gate BLOCK answers the
+      // documented 422 `job_blocked` with the policy's own message instead of
+      // a 500 the SDK retries with backoff (F10). A genuine insert failure
+      // still 500s, now in the documented `{error:{code,message}}` shape.
+      return sendInternalError(reply, req, jobError, "Failed to create job")
     }
 
     try {

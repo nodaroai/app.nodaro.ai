@@ -158,6 +158,50 @@ describe("failureGuidance (PR9 — offers the safety-block fallback)", () => {
     expect(result.retryable).toBe(false)
   })
 
+  /**
+   * The ONE place the hint is authoritative over `isRetryableFailure`
+   * (spec 2026-09-03-job-policy-hook-design §6.5). Every safety-block message
+   * is written by us or KIE and already trips NON_RETRYABLE_PATTERNS, so the
+   * "hint is additive" doctrine holds there. A POLICY block's reason is
+   * written by an arbitrary registered policy — "לא ניתן ליצור תוכן כזה", say —
+   * matches no pattern, and `isRetryableFailure` would answer `true`, so an
+   * MCP agent re-runs a permanently blocked request in a loop.
+   */
+  it("forces retryable:false for a policy-block hint even when the message reads as retryable", () => {
+    const message = "Blocked: this request is not allowed here."
+    // Proof the deviation is load-bearing, not defensive: the classifier alone
+    // says "retry this".
+    expect(isRetryableFailure(message)).toBe(true)
+
+    const result = failureGuidance({
+      error_message: message,
+      error_hint: { kind: "policy-block", policyId: "sai-moderation", reason: "Nudity", hookPoint: "result" },
+    })
+    expect(result.retryable).toBe(false)
+    expect(result.suggestedProvider).toBeUndefined()
+    // It must NOT blame the provider — there is no other model to try.
+    expect(result.guidance).toMatch(/not by the model provider/i)
+    expect(result.guidance).toContain("Nudity")
+  })
+
+  it("policy-block guidance survives a hint with no reason string", () => {
+    const result = failureGuidance({
+      error_message: "Blocked.",
+      error_hint: { kind: "policy-block", policyId: "p", hookPoint: "request" },
+    })
+    expect(result.retryable).toBe(false)
+    expect(result.guidance).toMatch(/content policy/i)
+  })
+
+  it("a policy-block hint wins over the safety-block arm when both words appear in the message", () => {
+    const result = failureGuidance({
+      error_message: "The provider's safety filter blocked this output.",
+      error_hint: { kind: "policy-block", policyId: "p", reason: "Blocked by content policy", hookPoint: "result" },
+    })
+    expect(result.guidance).not.toMatch(/change the prompt or the input image/)
+    expect(result.retryable).toBe(false)
+  })
+
   it("ignores a malformed/unknown error_hint shape and falls back to the plain sentences", () => {
     const result = failureGuidance({
       error_message: "Provider timeout after 30s",

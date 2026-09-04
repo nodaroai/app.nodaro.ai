@@ -263,9 +263,11 @@ describe("bumpAttemptsOrExhaust", () => {
         error_detail: expect.stringContaining("reconcile_exhausted: upstream URL expired"),
       }),
     )
+    // Widened by the markJobFailed consolidation (spec D11): "queued" is now
+    // failable, "pending_review" never is.
     expect(mocks.jobsUpdateInMock).toHaveBeenCalledWith(
       "status",
-      ["pending", "processing"],
+      ["pending", "queued", "processing"],
     )
     expect(mocks.jobsUpdateSelectMock).toHaveBeenCalledWith("id")
 

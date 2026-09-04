@@ -754,13 +754,24 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     // Surface job progress to nodeStates so the UI can render a progress bar
     // during backend runs. For fan-out, iteration counts (iterationCompleted/
     // iterationTotal) drive the UI instead of a single progress %.
-    ctx.onJobProgress = (jobId, progress) => {
+    ctx.onJobProgress = (jobId, progress, awaitingReview) => {
       const nodeId = jobToNodeId.get(jobId)
       if (!nodeId || !nodeStates[nodeId]) return
       if ((nodeStates[nodeId].iterationTotal ?? 0) > 1) return
       const prev = nodeStates[nodeId].progress
-      if (prev === progress) return
+      // The job-policy sidecar (spec 2026-09-03-job-policy-hook-design D15):
+      // `status` deliberately stays "running" while the job is parked in
+      // `pending_review`, so the flag rides beside `progress` instead of
+      // becoming a fourth NodeExecutionStatus. It is part of the change test,
+      // not only `progress` — a hold that arrives with an unchanged progress
+      // value (the usual case: the row parks at 100) would otherwise never
+      // reach the canvas.
+      const held = awaitingReview === true
+      const prevHeld = nodeStates[nodeId].awaitingReview === true
+      if (prev === progress && held === prevHeld) return
       nodeStates[nodeId].progress = progress
+      if (held) nodeStates[nodeId].awaitingReview = true
+      else delete nodeStates[nodeId].awaitingReview
       emitExecutionEvent({
         type: "node:updated",
         executionId,
@@ -948,8 +959,13 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     const startTime = Date.now()
 
     for (const level of levels) {
-      // Check workflow timeout
-      if (Date.now() - startTime > WORKFLOW_TIMEOUT_MS) {
+      // Check workflow timeout. The time any child job spent parked in
+      // `pending_review` is subtracted (spec §6.3): a review queue's clock is
+      // not a worker's, and without this a run whose only laggard was a human
+      // review is failed at the execution level even though every node-level
+      // clock was correctly frozen. MAX across children, not sum — sibling
+      // holds overlap in wall-clock time.
+      if (Date.now() - startTime - (ctx.maxChildHeldMs ?? 0) > WORKFLOW_TIMEOUT_MS) {
         await failExecution(executionId, "Workflow execution timed out", nodeStates)
         return
       }

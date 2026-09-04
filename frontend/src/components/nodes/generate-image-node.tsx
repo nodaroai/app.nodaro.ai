@@ -76,14 +76,28 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   const rawUrl = activeResult?.url ?? nodeData.generatedImageUrl ?? (nodeData as Record<string, unknown>).url as string | undefined
   // Treat empty strings as undefined (falsy check)
   const activeUrl = rawUrl && rawUrl.trim() ? rawUrl : undefined
-  const isContentPolicy = status === "failed" && nodeData.errorMessage?.toLowerCase().includes("content policy")
+  const hint = nodeData.errorHint
+  // NODARO's own verdict, decided FIRST. BaseNode's <NodePolicyOverlay> renders
+  // it; this card must stay out of the way (and must not claim a provider did it).
+  const isPolicyBlock = status === "failed" && hint?.kind === "policy-block"
+  // The legacy string sniff survives ONLY for untagged PROVIDER blocks. It must
+  // not swallow a policy block, whose reason text may also say "content policy"
+  // but is our decision — no other provider would accept it, so "Try on X" is a
+  // dead end and "the provider's safety filter blocked this" is a lie.
+  const isContentPolicy =
+    status === "failed" && !isPolicyBlock &&
+    nodeData.errorMessage?.toLowerCase().includes("content policy")
   // Structured safety-block detail (backend-attached after its automatic
   // retry) supersedes the legacy string-sniff above when present, but the
   // sniff stays as a fallback for jobs the backend hasn't tagged yet.
-  const hint = nodeData.errorHint
   const isSafetyBlock = status === "failed" && (hint?.kind === "safety-block" || isContentPolicy)
-  const suggestedProviderLabel = hint?.suggestedProvider
-    ? (getModel(hint.suggestedProvider)?.label ?? hint.suggestedProvider)
+  // Narrowed once, here: only the safety-block arm of the union carries a
+  // fallback model. Captured as a plain string so the click handler below needs
+  // no non-null assertions (a policy block has no other provider to try).
+  const suggestedProvider =
+    hint?.kind === "safety-block" ? hint.suggestedProvider : undefined
+  const suggestedProviderLabel = suggestedProvider
+    ? (getModel(suggestedProvider)?.label ?? suggestedProvider)
     : undefined
   const openImageEdit = useWorkflowStore((s) => s.openImageEdit)
   const addCharacterDefinition = useWorkflowStore((s) => s.addCharacterDefinition)
@@ -269,8 +283,16 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
           </>
         )}
 
+        {/* Failed by OUR policy: BaseNode's overlay is the whole story. Keep an
+            empty preview box so the card holds its height — the idle block below
+            is gated on `status !== "failed"`, so without this the card collapses
+            to its header and the overlay has no room to render. */}
+        {status === "failed" && !activeUrl && isPolicyBlock && (
+          <div className={`${previewRounding} h-[180px] bg-amber-500/5`} />
+        )}
+
         {/* Failed state */}
-        {status === "failed" && !activeUrl && (
+        {status === "failed" && !activeUrl && !isPolicyBlock && (
           <div className={`flex flex-col items-center justify-center gap-1 ${previewRounding} p-2 h-[180px] ${isSafetyBlock ? "bg-amber-500/10 text-amber-500" : "bg-red-500/5 text-red-500"}`}>
             <div className="flex items-center gap-1.5">
               {isSafetyBlock ? <ShieldAlert className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
@@ -290,7 +312,9 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation()
-                  const provider = hint!.suggestedProvider!
+                  // Narrowed at `suggestedProvider` above; the button only
+                  // renders when it is a non-empty string.
+                  const provider = suggestedProvider!
                   updateNodeData(id, {
                     provider,
                     errorMessage: undefined,

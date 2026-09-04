@@ -6,7 +6,7 @@ import { NodaroLogo } from "@/components/nodaro-logo"
 import { useAuth } from "@/hooks/use-auth"
 import { isCloud } from "@/lib/edition"
 import { surfaceAuthMethods, surfaceAuthSsoLabel } from "@/lib/surface-selectors"
-import type { AuthMethod } from "@/lib/surface-profile"
+import { runtimeSurfaceProfile, type AuthMethod } from "@/lib/surface-profile"
 import { createClient } from "@/lib/supabase"
 import { AUTH_REDIRECT_KEY } from "@/lib/storage-keys"
 import { FREE_TIER_CREDITS } from "@/lib/pricing-data"
@@ -106,7 +106,40 @@ export default function LoginPage() {
     ...(ssoProviders.length ? (["sso"] as const) : []),
   ]
   const authMethods = surfaceAuthMethods(codeDefaultAuthMethods)
-  const showEmailAuth = authMethods.includes("email")
+
+  // B2 — the billing account's sign-in lane. On a deployment-payer instance the
+  // account that holds the credits is a local password account, and this page
+  // has no way to render a form for it: `codeDefaultAuthMethods` omits "email"
+  // on cloud, and `surfaceAuthMethods` INTERSECTS the profile with that default
+  // (surface-selectors.ts:81), so a profile can only ever narrow. Adding
+  // "email" to the code default before the narrowing — the shape the spec
+  // sketches — is therefore a no-op on an SSO-only deployment: intersecting ["email","sso"] with
+  // the profile's ["sso"] still drops it. The escape hatch has to survive the
+  // narrowing, so it is applied after it, on an explicit unlinked URL
+  // (/login?billing=1) that nothing on the SSO page points at.
+  //
+  // Revealing a form grants NOTHING: the server-side H6 gate
+  // (middleware/auth.ts) is the control, and it admits exactly one uuid — the
+  // resolved payer. Anyone else who signs in through this form is refused on
+  // their first API call.
+  //
+  // The hatch opens on EXACTLY the condition that makes it necessary: the
+  // profile is sso-only, which is the predicate `surfaceSsoOnly()`
+  // (surface-profile.ts:428-431) computes server-side to decide whether H6
+  // refuses the payer at all. Same expression, both ends. On Nodaro Cloud and
+  // self-host, where `auth.methods` is empty, and on any deployment that
+  // narrows to something else, `?billing=1` renders exactly what it renders
+  // today (R2).
+  const profileAuthMethods = runtimeSurfaceProfile().auth.methods
+  const ssoOnlyDeployment = profileAuthMethods.length > 0 && profileAuthMethods.every((m) => m === "sso")
+  const billingSignIn = searchParams.get("billing") === "1" && ssoOnlyDeployment
+  const showEmailAuth = authMethods.includes("email") || billingSignIn
+  // The "New here? Create an account" footer stays keyed on the NARROWED
+  // method, never on the escape hatch: an SSO-only deployment must not invite
+  // self-registration against its reachable GoTrue just because the billing
+  // account asked for a password box. (H6 would refuse such an account on its
+  // first request anyway — this is about not offering the dead end.)
+  const showSelfRegistration = authMethods.includes("email")
   const showGoogle = authMethods.includes("google")
   const showSso = authMethods.includes("sso")
   const ssoLabel = surfaceAuthSsoLabel()
@@ -296,7 +329,7 @@ export default function LoginPage() {
             <p className="text-sm text-destructive">{error}</p>
           )}
 
-          {showEmailAuth ? (
+          {showSelfRegistration ? (
             <p className="text-xs text-muted-foreground/60 pt-1">
               {t("auth.newHere")}{" "}
               <Link to="/signup" className="underline underline-offset-2 hover:text-muted-foreground">

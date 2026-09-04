@@ -20,9 +20,15 @@ const mocks = vi.hoisted(() => {
   const mockRunVideoDirector = vi.fn()
   const mockDefaultDirectorDeps = vi.fn()
 
-  // Supabase chain: from("jobs").update({...}).eq("id", jobId)
-  // The update chain terminates at .eq() which returns a Promise.
-  const mockEqAfterUpdate = vi.fn().mockResolvedValue({ data: null, error: null })
+  // Supabase chain: from("jobs").update({...}).eq("id", jobId) for the progress
+  // writes, and .eq("id").in("status",[...]).select("id") for markJobFailed's
+  // CAS — the terminal write is no longer unguarded (it could trample a
+  // cancelled row) and no longer local to this file.
+  const mockCasSelect = vi.fn().mockResolvedValue({ data: [{ id: "job-abc-123" }], error: null })
+  const mockCasIn = vi.fn().mockReturnValue({ select: mockCasSelect })
+  const mockEqAfterUpdate = vi.fn().mockReturnValue(
+    Object.assign(Promise.resolve({ data: null, error: null }), { in: mockCasIn }),
+  )
   const mockUpdate = vi.fn().mockReturnValue({ eq: mockEqAfterUpdate })
   const mockFrom = vi.fn().mockReturnValue({ update: mockUpdate })
 
@@ -36,6 +42,9 @@ const mocks = vi.hoisted(() => {
     mockFrom,
     mockUpdate,
     mockEqAfterUpdate,
+    mockCasIn,
+    mockCasSelect,
+    mockMarkJobCompleted: vi.fn().mockResolvedValue(true),
     mockCommit,
     mockRefund,
   }
@@ -60,6 +69,15 @@ vi.mock("@/lib/config.js", () => ({
 vi.mock("@/lib/credits-job-lifecycle.js", () => ({
   commitReservedCreditsForJob: mocks.mockCommit,
   refundReservedCreditsForJob: mocks.mockRefund,
+}))
+
+// The completion funnel. Mocked (not exercised) for the same reason every other
+// worker suite mocks it: workers/shared.ts pulls sharp + youtube-dl-exec +
+// @remotion at its top. lib/job-failure.js is deliberately NOT mocked — it is
+// dependency-light on purpose (spec D10) and its CAS write is what these tests
+// assert, through the mocked supabase.
+vi.mock("../shared.js", () => ({
+  markJobCompleted: mocks.mockMarkJobCompleted,
 }))
 
 // Import AFTER mocks are registered
@@ -120,16 +138,30 @@ describe("processVideoDirectorJob", () => {
     expect(opts.userId).toBe(BASE_PAYLOAD.userId)
     expect(opts.tier).toBe(BASE_PAYLOAD.tier)
 
-    // The final DB update should set status = "completed" with videoUrl
-    const allUpdateCalls = mocks.mockUpdate.mock.calls as Record<string, unknown>[][]
-    const completedCall = allUpdateCalls.find(
-      ([data]: Record<string, unknown>[]) => data.status === "completed",
+    // The completion goes through the ONE completion funnel now (spec §5.3):
+    // it was a bare, CAS-less `update({status:"completed"})` that could trample
+    // a cancelled row, and — more to the point — it published a video the
+    // result gate never saw.
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith(
+      BASE_PAYLOAD.jobId,
+      { output_data: { videoUrl: VIDEO_URL } },
     )
-    expect(completedCall).toBeDefined()
-    const [completedData] = completedCall!
-    expect(completedData.progress).toBe(100)
-    expect((completedData.output_data as Record<string, unknown>).videoUrl).toBe(VIDEO_URL)
-    expect(completedData.completed_at).toBeDefined()
+    // status/progress/completed_at are the funnel's own columns — this worker
+    // must not re-declare them, and must not write "completed" itself.
+    const allUpdateCalls = mocks.mockUpdate.mock.calls as Record<string, unknown>[][]
+    expect(allUpdateCalls.find(([d]: Record<string, unknown>[]) => d.status === "completed")).toBeUndefined()
+  })
+
+  it("does NOT commit the authoring credit when the completion CAS did not flip the row", async () => {
+    // false = the user cancelled mid-run, a terminal writer won, or (once a
+    // policy is registered) the result gate blocked or held the video. In every
+    // one of those the credits are somebody else's to settle.
+    mocks.mockMarkJobCompleted.mockResolvedValueOnce(false)
+
+    await processVideoDirectorJob(BASE_PAYLOAD, FAKE_APP)
+
+    expect(mocks.mockCommit).not.toHaveBeenCalled()
+    expect(mocks.mockRefund).not.toHaveBeenCalled()
   })
 
   it("marks the job failed with error_message when runVideoDirector throws", async () => {
@@ -147,6 +179,11 @@ describe("processVideoDirectorJob", () => {
     const [failedData] = failedCall!
     expect(failedData.error_message).toBe(errorMessage)
     expect(failedData.completed_at).toBeDefined()
+    // The CAS this write NEVER had (spec §9, a bug fix riding along): before the
+    // consolidation it was `.update({status:"failed"}).eq("id", jobId)` with no
+    // status predicate at all, so it could trample a `cancelled` row — and, once
+    // the vocabulary widened, a `pending_review` one.
+    expect(mocks.mockCasIn).toHaveBeenCalledWith("status", ["pending", "queued", "processing"])
 
     // Must NOT have set completed
     const completedCall = allUpdateCalls.find(
@@ -204,6 +241,27 @@ describe("processVideoDirectorJob", () => {
 
     expect(mocks.mockRefund).toHaveBeenCalledWith(BASE_PAYLOAD.jobId)
     expect(mocks.mockCommit).not.toHaveBeenCalled()
+  })
+
+  // The ordering is load-bearing and invisible in the code's shape: a refactor
+  // that "tidied" the refund to after the status write would strand the
+  // authoring credit, because sweepStuckOrchestratorJobs only re-scans
+  // 'processing' rows. Assert it explicitly so it cannot be inverted silently.
+  it("on failure, refunds BEFORE the terminal status write — never after", async () => {
+    const order: string[] = []
+    mocks.mockRefund.mockImplementation(async () => {
+      order.push("refund")
+      return 0
+    })
+    mocks.mockUpdate.mockImplementation((data: Record<string, unknown>) => {
+      if (data.status === "failed") order.push("failed-write")
+      return { eq: mocks.mockEqAfterUpdate }
+    })
+    mocks.mockRunVideoDirector.mockRejectedValue(new Error("render: endpoint 503"))
+
+    await processVideoDirectorJob(BASE_PAYLOAD, FAKE_APP)
+
+    expect(order).toEqual(["refund", "failed-write"])
   })
 
   it("on failure, if the refund throws, leaves the job 'processing' for the reconcile sweep (no 'failed' write, no rethrow)", async () => {

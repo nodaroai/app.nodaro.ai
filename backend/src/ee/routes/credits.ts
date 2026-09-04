@@ -13,6 +13,8 @@ import { callerKeyHash } from "../../routes/oauth-register.js"
 import { config } from "../../lib/config.js"
 import { firstHeaderValue } from "../../lib/request-helpers.js"
 import { fallbackClaimDue, isForeignOrigin, readFreeGrant, runSignupGrantClaim } from "../billing/signup-grant.js"
+import { allowanceEnforcementActive, deploymentPayerActive, deploymentPayerId } from "../../lib/deployment-payer.js"
+import { allowanceFor } from "../billing/deployment-allowance-service.js"
 
 /**
  * Resolve the account's free-grant state for the balance read, claiming on
@@ -196,6 +198,15 @@ export async function creditsRoutes(app: FastifyInstance) {
     try {
       let balance = await CreditsService.getBalance(userId)
 
+      // Track A: on a deployment-payer instance the requester's own profile
+      // row is not what pays for anything, so the whole free-grant machinery
+      // — claim, grace, withhold, activation banner — has nothing to act on.
+      // Skipping it is not an optimisation: running it would spend a read and
+      // a write per balance poll moving a number no surface shows, and could
+      // park an account in 'withheld' over a grant that was never going to
+      // matter. Mainline is untouched (`deploymentPayerActive()` is false).
+      const dep = deploymentPayerActive()
+
       // Free-grant fallback. The boot-time claim lives in the app.nodaro.ai
       // browser bundle, so two kinds of caller never send it: a tab running a
       // build from before the gate, and every cross-origin thin client. Once
@@ -205,12 +216,65 @@ export async function creditsRoutes(app: FastifyInstance) {
       // immediately for any other origin (settleFreeGrant).
       // Arrives with no fingerprints; the policy scores what it has.
       // Best-effort end to end: nothing here may break a balance read.
-      const grant = await settleFreeGrant(userId, req)
+      const grant = dep ? undefined : await settleFreeGrant(userId, req)
       if (grant?.moved) balance = await CreditsService.getBalance(userId)
       const data: UserBalance = grant ? { ...balance, freeGrantState: grant.state } : balance
 
-      setCachedBalance(userId, data)
-      return { data }
+      // D12 — the per-user allowance rides ALONGSIDE the balance; `total` is
+      // never overloaded to mean it (getBalance has five non-test callers and
+      // three of them mean something else by that field).
+      //
+      // The key is ABSENT on mainline and PRESENT under a payer, where `null`
+      // is a real answer: the payer reading its own balance (D13 — it holds
+      // the real credits, not an allocation), or the figure was unavailable.
+      // It is NOT null merely because enforcement is off — under the ruling
+      // the allowance is visible from the moment a payer exists, which is what
+      // lets the sidebar stop rendering the frozen signup grant at rollout
+      // step 5. The client renders null as an em dash and falls back to
+      // `total`; it must never render it as 0.
+      //
+      // The fields are named explicitly rather than spread: `UserAllowance`
+      // also carries `spent` for the admin list, and this body is fixed at the
+      // three the sidebar, /usage and the canvas gate consume.
+      //
+      // `enforced` IS THE SWITCH, and the figures alone are not it. Under the
+      // ruling above, an allowance is VISIBLE from the moment a payer exists,
+      // while `reserve_credits` only refuses over it once `billing.allowances`
+      // is "enforce" — so a browser gating a run on `remaining` would refuse
+      // runs the payer's pool would happily have paid for, and the canvas Run
+      // would roll back on a limit the server does not apply. `billing
+      // .allowances` is stripped from /config.js by design, so this field is
+      // the browser's ONLY way to tell a displayed allowance from an enforced
+      // one; display surfaces ignore it and keep rendering the figures.
+      const allowance = dep ? await allowanceFor(userId) : null
+      // ONE null, TWO causes — and only the route can tell them apart, because
+      // only here is the payer's identity beside the requester's. The payer's
+      // own null is CORRECT (D13) and silent; anybody else's means the figure
+      // could not be read (a settings row that would not load, a PostgREST
+      // blip), and that fault is otherwise invisible: the client is forbidden
+      // to refuse on it (it gates on nothing but a PRESENT, ENFORCED
+      // allowance), so a deployment whose allowance reads are failing looks
+      // exactly like one running normally, for the 15 s of every cached
+      // balance. The wire shape does not grow a field to say so — the browser
+      // has no use for one — so the log is where it is said.
+      if (dep && allowance === null && userId !== deploymentPayerId()) {
+        console.error("[credits] allowance unavailable under a deployment payer — sending null for user", userId)
+      }
+      const payload = dep
+        ? {
+            ...data,
+            allowance: allowance
+              ? {
+                  granted: allowance.granted,
+                  remaining: allowance.remaining,
+                  enforced: allowanceEnforcementActive(),
+                }
+              : null,
+          }
+        : data
+
+      setCachedBalance(userId, payload)
+      return { data: payload }
     } catch (error) {
       console.error("[credits] Failed to get balance:", error)
       return reply.status(500).send({

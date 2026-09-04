@@ -6,8 +6,8 @@ import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { optimizedImageUrl } from "@/lib/image"
-import { getJobStatusLean, grokRegionEdit, grokSegmentMap } from "@/lib/api"
-import { pollImageRefineToNode } from "../workflow-editor/poll-job"
+import { grokRegionEdit, grokSegmentMap } from "@/lib/api"
+import { getJobStatusLeanForNode, pollImageRefineToNode } from "../workflow-editor/poll-job"
 import { useT, tx } from "@/lib/i18n"
 import type { GenerateImageData, GeneratedResult, GrokSegmentInfo } from "@/types/nodes"
 
@@ -201,7 +201,19 @@ export function RefineRegionsSection({ nodeId, data, onUpdate }: RefineRegionsSe
       for (let tick = 0; tick < SEGMENT_POLL_MAX_TICKS; tick++) {
         await new Promise((r) => setTimeout(r, SEGMENT_POLL_INTERVAL_MS))
         if (!aliveRef.current) return
-        const job = await getJobStatusLean(jobId)
+        // Through the node-owning wrapper like every other loop that has a
+        // nodeId: a detect job is single-node + finalize-funnel, so it IS
+        // hold-eligible. (The flag it writes is not painted here — the node is
+        // not `running` during a detect, and the overlay needs that — but the
+        // node stays the one place the hold is recorded, and the next run's
+        // RUN_START_RESET clears it.)
+        const job = await getJobStatusLeanForNode(jobId, nodeId)
+        // A held job is waiting on a HUMAN, and a review routinely outlives
+        // this 3-minute budget. Say so now instead of burning the remaining
+        // ticks and then reporting a timeout that never happened.
+        if (job.status === "pending_review") {
+          throw new Error(tx("cfgext.refineDetectionAwaitingReview"))
+        }
         if (job.status === "completed") {
           const found = segmentsFromOutput((job.output_data ?? {}) as Record<string, unknown>)
           if (!found.length) throw new Error(tx("cfgext.refineNoRegionsDetected"))

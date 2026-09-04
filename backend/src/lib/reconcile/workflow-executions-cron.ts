@@ -167,6 +167,20 @@ export async function reconcileWorkflowExecutionsTick(): Promise<void> {
     const statuses = Object.values(states).map((s) => s?.status)
     const allCompleted = statuses.length > 0 && statuses.every((s) => s === "completed" || s === "skipped")
     const anyFailed = statuses.some((s) => s === "failed")
+    // LOAD-BEARING PARTITION. A job held in `pending_review` (the job-policy
+    // hook, spec 2026-09-03-job-policy-hook-design D15) keeps its node at
+    // `status: "running"` and carries the hold on the SIDECAR
+    // `NodeExecutionState.awaitingReview` — precisely so this hand-rolled
+    // partition keeps counting it. A fourth `NodeExecutionStatus` member would
+    // make `anyActive` false and the `anyFailed && !anyActive` branch below
+    // would flip a whole execution to `failed` while a child is legitimately
+    // under human review. Both halves are pinned in
+    // __tests__/workflow-executions-cron.test.ts ("D15 sidecar" / "PROOF of D15").
+    //
+    // The >4h abandon branch further down is a KNOWN gap for a very long
+    // review (spec §18): orchestrated jobs are hold-ineligible in v1 (D8), so
+    // it is unreachable until eligibility widens, and the fix belongs with
+    // that widening (an execution-level roll-up), not here.
     const anyActive = statuses.some((s) => s === "pending" || s === "running")
 
     if (allCompleted) {

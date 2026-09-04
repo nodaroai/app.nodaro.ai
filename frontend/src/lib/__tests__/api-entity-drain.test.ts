@@ -12,6 +12,10 @@ vi.mock("@/lib/runtime-config", () => ({
   runtimeApiUrl: () => "",
   runtimeSupabaseUrl: () => "https://test.supabase.co",
   runtimeSupabaseAnonKey: () => "anon",
+  // api.ts localizes the deployment-payer 402 at the throw point, which pulls
+  // the (tiny) i18n module in behind it; the locale store resolves its initial
+  // locale at import time and reads this. A whole-module mock has to answer it.
+  runtimeDefaultLocale: () => null,
 }))
 vi.mock("@/lib/supabase", () => ({
   supabase: { auth: { getSession: async () => ({ data: { session: null } }) } },

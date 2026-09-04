@@ -52,6 +52,9 @@ vi.mock("@/lib/api", () => ({
 }))
 
 vi.mock("../types", () => ({
+  // Twin of updateRecoveringIfChanged: the poll wrapper writes the hold flag
+  // through it, so a stubbed ../types must provide it or every tick throws.
+  updateAwaitingReviewIfChanged: () => {},
   WorkflowStaleError: class WorkflowStaleError extends Error {
     constructor() { super("Workflow changed during execution") }
   },

@@ -32,8 +32,14 @@ import { completeTask, _activeTaskIds, getTask } from "./tasks.js"
 import { executionEvents, type ExecutionEvent } from "../execution-events.js"
 import type { NodeExecutionStatus } from "../../services/workflow-engine/types.js"
 import { supabase } from "../supabase.js"
+import { isParkedJobStatus } from "../job-status.js"
 
 const POLL_INTERVAL_MS = 1000
+/** Sentinel stored in `lastProgressByTask` for "the AWAITING-REVIEW message has
+ *  already gone out for this job". Sits beside the existing `-1` ("nothing sent
+ *  yet") and, being outside 0-100, can never collide with a real percentage —
+ *  which is what makes the transition fire exactly once. */
+const AWAITING_REVIEW_SENTINEL = -2
 
 let pollHandle: ReturnType<typeof setInterval> | null = null
 const lastProgressByTask = new Map<string, number>()
@@ -214,6 +220,27 @@ async function runPollCycle(server: McpServer): Promise<void> {
       })
       lastProgressByTask.delete(row.id)
       completeTask(row.id)
+      continue
+    }
+
+    // A job parked in `pending_review` (spec §6.4) will never move again on its
+    // own, so the progress branch below would re-send the same percentage every
+    // second and the widget would spin with no explanation. Send ONE message on
+    // the transition into review, then go quiet until the review resolves —
+    // at which point the terminal branch above fires normally.
+    if (isParkedJobStatus(row.status)) {
+      if (lastProgressByTask.get(row.id) !== AWAITING_REVIEW_SENTINEL) {
+        await sendProgress(server, {
+          progressToken: row.id,
+          progress: row.progress ?? 0,
+          total: 100,
+          message: "Awaiting review",
+        })
+        lastProgressByTask.set(row.id, AWAITING_REVIEW_SENTINEL)
+      }
+      // NEVER completeTask() here: that evicts the task from REGISTRY, and
+      // `tasks/result` would then throw "Unknown taskId" the moment a reviewer
+      // releases the job. The task is still live — it is waiting on a human.
       continue
     }
 

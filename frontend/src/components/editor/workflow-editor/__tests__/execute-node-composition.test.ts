@@ -173,8 +173,21 @@ vi.mock("../execution-graph", () => ({
 }))
 
 vi.mock("../poll-job", () => ({
+  // The run-start reset every executor spreads — mirrors ./poll-job's constant
+  // (whose key set is pinned by run-start-reset.test.ts).
+  RUN_START_RESET: {
+    executionStatus: "running",
+    errorMessage: undefined,
+    errorHint: undefined,
+    currentJobId: undefined,
+    currentJobProgress: 0,
+    jobAwaitingReview: undefined,
+  },
   pollJobWithNodeUpdate: (...args: unknown[]) =>
     mockPollJobWithNodeUpdate(...args),
+  // The in-file poll loops read status through this wrapper now (it also keeps
+  // `jobAwaitingReview` in sync); pass straight through to the api mock.
+  getJobStatusLeanForNode: (jobId: string) => mockGetJobStatus(jobId),
   setSuppressToasts: () => {},
   guardedToast: {
     info: (...args: unknown[]) => mockToastInfo(...args),
@@ -221,6 +234,9 @@ vi.mock("../types", () => ({
     }
   },
   MAX_CONSECUTIVE_POLL_FAILURES: 3,
+  // Twin of updateRecoveringIfChanged: the poll wrapper writes the hold flag
+  // through it, so a stubbed ../types must provide it or every tick throws.
+  updateAwaitingReviewIfChanged: () => {},
   checkStorageError: () => false,
 }))
 

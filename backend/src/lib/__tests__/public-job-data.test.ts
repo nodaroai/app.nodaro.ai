@@ -44,3 +44,31 @@ describe("redactPrivateJobData", () => {
     expect(source).toHaveProperty("unscoredUrl")
   })
 })
+
+/**
+ * `redactPrivateJobData` runs over the WHOLE job row before the allowlist pick
+ * (routes/jobs.ts's sanitizeJobForPublic), so it is the last place a withheld
+ * payload could be copied out of. It must not resurrect one: the held columns
+ * are dropped by the allowlist, and this asserts the redactor leaves them
+ * exactly where they were rather than promoting anything out of them.
+ */
+describe("a held job's quarantined payload passes through untouched (D6)", () => {
+  it("does not merge, rename or promote held_* into output_data", () => {
+    const source = {
+      status: "pending_review",
+      output_data: null,
+      held_output_data: { videoUrl: "https://cdn.example.com/videos/j1.mp4", unscoredUrl: "https://private.example/base.mp4" },
+      held_completion_fields: { provider: "kie", metered: true },
+      held_objects: [{ key: "videos/j1.mp4", kind: "video", index: 0 }],
+    }
+    const out = redactPrivateJobData(source) as Record<string, unknown>
+    expect(out.output_data).toBeNull()
+    // The recursive unscoredUrl redaction still applies wherever it appears —
+    // it is about the Recast remux base, not about the hold.
+    expect(out.held_output_data).toEqual({ videoUrl: "https://cdn.example.com/videos/j1.mp4" })
+    // and nothing was hoisted:
+    expect(Object.keys(out).sort()).toEqual(
+      ["held_completion_fields", "held_objects", "held_output_data", "output_data", "status"],
+    )
+  })
+})

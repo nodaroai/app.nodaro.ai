@@ -123,6 +123,10 @@ function convertAccount(a: AccountSummary, u: UnitConfig): AccountSummary {
   if ("daily" in a) out.daily = a.daily ? convertDaily(a.daily, u) : a.daily
   if ("reserveValue" in a) out.reserveValue = null
   if ("byCategory" in a) out.byCategory = a.byCategory ? a.byCategory.map((c) => convertCategory(c, u)) : a.byCategory
+  // `allocated` is a credit figure like `balance` and converts identically.
+  // Presence is preserved rather than defaulted: a provider that has no
+  // allocation concept must keep answering the wire shape its clients handle.
+  if ("allocated" in a) out.allocated = toUnits(a.allocated, u.rate, u.decimals)
   return out
 }
 

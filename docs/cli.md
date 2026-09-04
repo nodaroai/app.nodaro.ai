@@ -438,7 +438,30 @@ Without `--json` the output is a small ASCII table for `list` commands and a pre
 | 0 | success |
 | 1 | unauthorized / not found / argument error / network error |
 | 2 | `--watch` finished and the execution ended in `failed` |
+| 3 | `--watch` stopped because the job entered `pending_review` — a human decision is pending, not a failure |
 | 130 | `--watch` finished and the execution ended in `cancelled` |
+
+`--json` prints the payload and returns instead of setting 2 / 3 / 130 —
+branch on `.status` in that mode.
+
+**Exit 3 — a job held for review.** On a deployment that registers a job
+policy, a job can enter `pending_review`: the work is done, the credits stay
+reserved, and a human is deciding whether the result is released. That status
+is in-flight but does not move on its own, so `--watch` stops on it, prints
+`awaiting review (a human decision is pending; not a failure)`, and exits 3
+rather than polling until you kill the process. **Do not re-run the request** —
+a duplicate would be held too. Check back with `nodaro jobs get <id>`: it
+resolves to `completed` (approved), `failed` (rejected — `error_hint.kind` is
+`policy-block` and `error_hint.reason` is the text to show) or `cancelled`.
+
+```bash
+nodaro nodes run generate-image --param prompt="…" --watch
+case $? in
+  0) echo "released" ;;
+  3) echo "awaiting review — check back later" ;;
+  *) echo "failed" ;;
+esac
+```
 
 ## Examples
 

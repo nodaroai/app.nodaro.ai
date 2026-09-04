@@ -14,6 +14,10 @@ import {
 import { pickTargetResolution } from "../../../providers/video/combine-videos.js"
 import { uploadFileToR2 } from "../../../lib/storage.js"
 import { insertInternalJob } from "../../../lib/insert-job.js"
+import { markJobCompletedDetailed, type MarkJobCompletedOutcome } from "../../../workers/shared.js"
+import { markJobFailed } from "../../../lib/job-failure.js"
+import { JobHeldError } from "./_poll.js"
+import { JobBlockedError, PLATFORM_POLICY_ID } from "../../../lib/job-policy.js"
 import { settledOrThrow } from "../../../lib/settled-or-throw.js"
 import {
   commitReservedCreditsForJob,
@@ -121,6 +125,40 @@ export interface PipelineFinalMergeResult {
 const DEFAULT_FADE_OUT_SEC = 0.8
 const TRANSITION_DEFAULT_DURATION_SEC = 0.5
 
+/**
+ * The error a non-"completed" completion becomes.
+ *
+ * `markJobCompletedDetailed` answers with a word, not a payload, so the policy
+ * outcomes read the hint the gate itself wrote onto the row: the pipeline stage
+ * then records the POLICY's reason ("withheld by content policy") instead of a
+ * generic merge failure, and `JobBlockedError` is the class WS4's stage-utils
+ * keys `policy_blocked` / `policy_hold` on.
+ */
+async function finalMergeOutcomeError(
+  client: SupabaseClient,
+  jobId: string,
+  outcome: MarkJobCompletedOutcome,
+): Promise<Error> {
+  if (outcome === "lost_race") {
+    return new Error(
+      `pipeline-final-merge job ${jobId} was already terminal (cancelled or failed) — the merged video was not published`,
+    )
+  }
+  // A HOLD is not a block: nobody has judged this output, a human simply has
+  // not looked at it yet. `JobHeldError` carries `failureReason: "policy_hold"`,
+  // so the stage records the difference instead of reporting a refusal that
+  // never happened. (Unreachable while pipeline children are hold-ineligible —
+  // `pipeline_id` is non-null, D8 — and asserted anyway.)
+  if (outcome === "held") return new JobHeldError(jobId)
+  const { data } = await client.from("jobs").select("error_hint").eq("id", jobId).single()
+  const hint = (data?.error_hint ?? null) as { policyId?: string; reason?: string } | null
+  return new JobBlockedError({
+    code: "job_blocked",
+    policyId: hint?.policyId ?? PLATFORM_POLICY_ID,
+    message: hint?.reason ?? "This result was withheld pending review of the deployment's content policy",
+  })
+}
+
 export async function pipelineFinalMerge(
   args: PipelineFinalMergeArgs,
 ): Promise<PipelineFinalMergeResult> {
@@ -160,6 +198,11 @@ export async function pipelineFinalMerge(
     },
     { client: supabase, billingContext },
   )
+  // A request-gate BLOCK is not an infrastructure failure — it is the platform
+  // refusing this generation, and the stage must record WHY (WS4 codes
+  // `policy_blocked` from this error class in stage-utils.ts) rather than
+  // reporting a generic "failed to create job".
+  if (insertErr?.blocked) throw new JobBlockedError(insertErr.blocked)
   if (insertErr || !job?.id) {
     throw new Error(
       `Failed to create pipeline-final-merge job: ${insertErr?.message ?? "no id returned"}`,
@@ -198,15 +241,21 @@ export async function pipelineFinalMerge(
       pipelineId,
     })
 
-    // 5. Mark job completed + commit credits.
-    await supabase
-      .from("jobs")
-      .update({
-        status: "completed",
-        output_data: { videoUrl: r2Url, durationSec: totalDurationSec },
-        completed_at: new Date().toISOString(),
-      })
-      .eq("id", jobId)
+    // 5. Mark job completed + commit credits — through the ONE completion
+    //    funnel (spec §5.3). This was a bare, CAS-less status write: it could
+    //    trample a cancelled row, and it published the pipeline's finished film
+    //    where the result gate could not see it.
+    //
+    //    It THROWS on anything but "completed" (unlike the ~45 callers whose
+    //    `if (!ok) return` is exactly right): this function's caller consumes
+    //    `finalAssetId`, so returning normally would hand the pipeline a stale
+    //    asset id for a video that was never published.
+    const outcome = await markJobCompletedDetailed(jobId, {
+      output_data: { videoUrl: r2Url, durationSec: totalDurationSec },
+    })
+    if (outcome !== "completed") {
+      throw await finalMergeOutcomeError(supabase, jobId, outcome)
+    }
 
     await commitReservedCreditsForJob(jobId)
 
@@ -218,16 +267,16 @@ export async function pipelineFinalMerge(
   } catch (err) {
     // Refund the reservation on dispatch failure. Mirrors the catch path in
     // character-lora training + every other pipeline service wrapper.
+    //
+    // Two changes ride here. The status write gains the CAS it never had (it
+    // could trample a `cancelled` row), and the refund now rides the returned
+    // boolean — which is what keeps this catch from double-releasing after a
+    // result-gate BLOCK (the gate already refunded in full, D19) or, if
+    // eligibility ever widens, from releasing a HELD job's reservation out from
+    // under the reviewer.
     const message = err instanceof Error ? err.message : String(err)
-    await supabase
-      .from("jobs")
-      .update({
-        status: "failed",
-        error_message: message,
-        completed_at: new Date().toISOString(),
-      })
-      .eq("id", jobId)
-    await refundReservedCreditsForJob(jobId)
+    const flipped = await markJobFailed(jobId, { error_message: message })
+    if (flipped) await refundReservedCreditsForJob(jobId)
     throw err
   } finally {
     if (workDir) await cleanupWorkDir(workDir).catch(() => {})

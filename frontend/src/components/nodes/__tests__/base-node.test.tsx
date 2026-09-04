@@ -32,6 +32,14 @@ vi.mock("@/components/editor/workflow-editor/use-node-insert-animation", () => (
   useNodeInsertAnimation: () => undefined,
 }))
 
+// The job-policy overlay is stubbed so this file asserts the MOUNT, not the
+// overlay's own rendering (that is node-policy-overlay.test.tsx's job).
+vi.mock("../node-policy-overlay", () => ({
+  NodePolicyOverlay: ({ nodeId }: any) => (
+    <div data-testid="policy-overlay" data-node-id={nodeId} />
+  ),
+}))
+
 vi.mock("lucide-react", () => new Proxy({ MoreHorizontal: (p: Record<string, unknown>) => <span data-testid="more" {...p} /> }, {
   get: (t, prop) => (prop in t ? (t as Record<PropertyKey, unknown>)[prop] : typeof prop === "string" && prop !== "then" ? () => null : undefined),
   has: () => true,
@@ -100,5 +108,23 @@ describe("BaseNode run strip", () => {
     renderBase()
     expect(screen.getByTestId("node-run-strip")).toBeInTheDocument()
     expect(screen.getByTestId("node-settings-button")).toBeInTheDocument()
+  })
+})
+
+describe("BaseNode job-policy overlay", () => {
+  // D15 — the ONE mount point. `jobRecovering` was added as a per-card prop and
+  // is passed by 1 of 98 call sites, so "Recovering…" has never reached a user.
+  // BaseNode mounting the overlay itself is what makes "awaiting review" and
+  // "blocked by content policy" reach ALL 98 cards, including card #99.
+  it("mounts <NodePolicyOverlay> for its own node id, with no per-card prop", () => {
+    renderBase()
+    const overlay = screen.getByTestId("policy-overlay")
+    expect(overlay).toBeInTheDocument()
+    expect(overlay).toHaveAttribute("data-node-id", "n1")
+  })
+
+  it("mounts exactly one overlay per card", () => {
+    renderBase({ topToolbarContent: <button>RUNME</button> })
+    expect(screen.getAllByTestId("policy-overlay")).toHaveLength(1)
   })
 })

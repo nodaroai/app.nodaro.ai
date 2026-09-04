@@ -10,8 +10,10 @@ import type { WardrobeValue, PersonValue } from "@nodaro/prompts"
 export type { CommunityCard } from "@nodaro/shared"
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 import type { BillingSurface, BillingAccount } from "./billing-surface"
+import type { CreditAllowance } from "./spendable-credits"
 import { withIdempotencyHeader } from "@/lib/idempotency-key"
 import { runtimeApiUrl } from "@/lib/runtime-config"
+import { tx } from "@/lib/i18n"
 
 export const API_BASE_URL = ''
 
@@ -77,6 +79,42 @@ export class InsufficientCreditsError extends Error {
     this.name = "InsufficientCreditsError"
     this.code = code
     this.appCreditsAllowance = appCreditsAllowance
+  }
+}
+
+/**
+ * Track A (spec D10) — the requester's own per-user allowance is exhausted on
+ * a deployment-payer instance.
+ *
+ * A SUBCLASS of InsufficientCreditsError on purpose: every existing 402 call
+ * site branches on `instanceof InsufficientCreditsError` (the app runner's
+ * store among them), and all of them still want to do exactly what they do
+ * today — stop the run and say so. Only the copy and the remedy differ, so
+ * only the sites that render a remedy need to know the difference.
+ *
+ * It is NOT the deployment pool running dry. That stays `insufficient_credits`
+ * with the payer's balance redacted; this one is the user's slice of it, and
+ * the numbers it carries are the requester's alone.
+ *
+ * `message` is OUR localized copy, never the server's English string: the
+ * only person who can refill this allowance is the deployment's billing
+ * account, and the stock "contact your administrator" line points at someone
+ * who genuinely cannot (an admin has no top-up control anywhere in this
+ * product).
+ *
+ * `required` and `remaining` are RAW credits, matching the body — the same
+ * both-or-neither rule the rest of the billing surface follows. Convert with
+ * `creditUnits` at render, never before a comparison.
+ */
+export class UserAllowanceExceededError extends InsufficientCreditsError {
+  readonly required: number
+  readonly remaining: number
+
+  constructor(required: number, remaining: number) {
+    super(tx("credits.allowanceExceeded"), "user_allowance_exceeded", 0)
+    this.name = "UserAllowanceExceededError"
+    this.required = required
+    this.remaining = remaining
   }
 }
 
@@ -159,6 +197,14 @@ function throwApiError(errJson: Record<string, unknown> | null, fallback: string
   }
   if (errObj?.code === "subscription_required") {
     throw new SubscriptionRequiredError((errObj.message as string) ?? fallback)
+  }
+  // Track A (D10). `required` and `remaining` sit BESIDE `error` in the body,
+  // not inside it — the same place the existing `required` has always been.
+  if (errObj?.code === "user_allowance_exceeded") {
+    throw new UserAllowanceExceededError(
+      (errJson?.required as number) ?? 0,
+      (errJson?.remaining as number) ?? 0,
+    )
   }
   if (errObj?.code === "insufficient_app_credits" || errObj?.code === "insufficient_credits") {
     throw new InsufficientCreditsError(
@@ -4844,8 +4890,9 @@ export interface Job {
     [key: string]: unknown
   }
   error_message?: string
-  /** Structured detail when `error_message` is a provider safety-filter block
-   *  (after the backend's automatic retry). See `JobErrorHint`. */
+  /** Structured detail for a blocked job — a PROVIDER safety-filter block
+   *  (after the backend's automatic retry) or a NODARO job-policy block.
+   *  Discriminated on `kind`; see `JobErrorHint`. */
   error_hint?: JobErrorHint | null
   created_at: string
   started_at?: string
@@ -4870,6 +4917,9 @@ export interface Job {
  */
 export type JobStatusLean = {
   id: string
+  /** `Job["status"]` is `string`, so `pending_review` needs no widening here.
+   *  Treat it as IN-FLIGHT: a poll loop must keep polling (the job completes
+   *  normally once a reviewer approves it) and must NOT read it as terminal. */
   status: Job["status"]
   progress?: number
   /** True while the reconcile system is self-healing this job (worker
@@ -5720,6 +5770,27 @@ export interface UserBalance {
    * predate the gate.
    */
   freeGrantState?: "unclaimed" | "granted" | "withheld"
+  /**
+   * Track A — the requester's per-user allowance on a deployment-payer
+   * instance, in RAW Nodaro credits. `total` is deliberately NOT overloaded
+   * to carry it: three unrelated surfaces read that field and mean the
+   * personal wallet by it.
+   *
+   * ABSENT on mainline (the key never travels). PRESENT and `null` under a
+   * payer when no allowance applies — the caller IS the payer (D13: it holds
+   * the real credits, not an allocation), or the figure was unavailable. It is
+   * NOT null merely because enforcement is off: under ruling R-A the allowance
+   * is VISIBLE from the moment a payer exists and only BINDS once the
+   * deployment flips `billing.allowances`, which `allowance.enforced` reports.
+   * On null a gate uses `total` — for the payer that IS a live wallet, and
+   * reading null as "remaining 0" would refuse the runs of the account that
+   * owns the pool. On a PRESENT but unenforced allowance no client gate runs at
+   * all: `total` there is the frozen grant, so the server is the only refuser.
+   *
+   * Never branch on this field by hand — `spendableCredits()` is the one place
+   * that turns it into a gate figure or a displayed one.
+   */
+  allowance?: CreditAllowance | null
 }
 
 /** Starts the $0 payment-method step that activates a withheld free grant. */

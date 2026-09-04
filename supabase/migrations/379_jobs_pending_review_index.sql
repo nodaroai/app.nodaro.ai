@@ -1,0 +1,34 @@
+-- 379 — the review queue's index, alone in its own file. Split from 377 for
+-- the same reason 378 was.
+--
+-- `admin-review.ts` pages the queue with
+--   WHERE status = 'pending_review' ORDER BY held_at ASC
+-- and `lib/reconcile/hold-expiry.ts` sweeps
+--   WHERE status = 'pending_review' AND held_at < cutoff
+-- so a partial index on `held_at` under that predicate serves both.
+--
+-- WHY ITS OWN FILE. A plain (non-CONCURRENT) CREATE INDEX must READ THE WHOLE
+-- HEAP once — 303_recast_driver_index.sql:39-41 says it outright: "a partial
+-- predicate shrinks the resulting index … not the one-time build scan". Both
+-- runners are per-FILE transactional, so inside 377 that scan would run while
+-- the transaction already held ACCESS EXCLUSIVE on `jobs` from the ADD COLUMN,
+-- and every SELECT on jobs — GET /v1/jobs/:id, the poll loops, Realtime — would
+-- block for the whole build. Probed: with a transaction holding
+-- `ALTER TABLE public.jobs ADD COLUMN`, a plain `SELECT count(*) FROM jobs` in
+-- another session dies on a 2s lock_timeout.
+--
+-- Alone here the build takes SHARE on `jobs` only: concurrent INSERT/UPDATE/
+-- DELETE wait for it, reads do not. That is the profile 271:104-112 and
+-- 303:31-44 document and accept for a jobs index. Apply off-peak regardless.
+--
+-- NOT moved into 378 either: probed, a CREATE INDEX followed by
+-- `VALIDATE CONSTRAINT` in one transaction holds BOTH ShareLock and
+-- ShareUpdateExclusiveLock on `jobs`, so every jobs write would be blocked
+-- across VALIDATE's full-table scan too — worse than either file alone.
+--
+-- NOT `CONCURRENTLY`: backend/scripts/run-migrations.mjs would run it unwrapped
+-- (it skips its BEGIN/COMMIT for that spelling), but `supabase db push` — the
+-- cloud + CI path — wraps every file, and CREATE INDEX CONCURRENTLY cannot run
+-- inside a transaction block. One runner would fail outright.
+CREATE INDEX IF NOT EXISTS idx_jobs_pending_review
+  ON public.jobs (held_at DESC) WHERE status = 'pending_review';

@@ -463,8 +463,15 @@ describe("video worker processor", () => {
     const job = makeBullJob("generate-image")
     await expect(processor(job)).rejects.toThrow("post-provider upload 500")
 
-    // The CAS guard was applied (only flips pending/processing rows)...
+    // The CAS guard was applied. Two DIFFERENT guards run in this path: the
+    // worker's own pickup CAS (["pending","processing"] — unchanged, D9 keeps
+    // completion single-shot) and the failure CAS, which is markJobFailed's
+    // FAILABLE_STATUSES: "queued" is newly failable, "pending_review" never is.
     expect(mocks.mockIn).toHaveBeenCalledWith("status", ["pending", "processing"])
+    expect(mocks.mockIn).toHaveBeenCalledWith("status", ["pending", "queued", "processing"])
+    expect(
+      mocks.mockIn.mock.calls.every((c) => !(c[1] as string[]).includes("pending_review")),
+    ).toBe(true)
     // ...and because 0 rows were flipped, no refund fired.
     expect(mocks.mockRefundJobCredits).not.toHaveBeenCalled()
   })

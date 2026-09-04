@@ -601,6 +601,92 @@ describe("useWorkflowPersistence — syncNodeResultsFromDB (via load)", () => {
     })
   })
 
+  it("a job HELD in pending_review keeps polling AND re-paints its overlay flag (persisted-run-state branch)", async () => {
+    // `pending_review` is in-flight, so polling must be restored like any other
+    // in-flight status. But a hold can last hours: nothing would re-derive the
+    // overlay until the next tick, so the flag must be written immediately.
+    //
+    // NOTE ON SCOPE — this pins syncNodeResultsFromDB, which fires only when a
+    // node ALREADY carries `executionStatus: "running"` + `currentJobId` (an
+    // in-memory re-load, or a legacy row saved before those keys became
+    // transient). It is NOT the reload path: every save strips both keys, so
+    // after a real refresh this branch sees nothing. The reload is covered by
+    // "RELOAD: a HELD job older than the 30-min horizon is re-adopted from the
+    // executions list" in the Gap-3 describe below — this test used to claim
+    // that coverage and did not have it.
+    const nodes = [
+      makeNode({
+        id: "n1",
+        type: "generate-image",
+        data: {
+          label: "Img",
+          executionStatus: "running",
+          currentJobId: VALID_UUID,
+          generatedResults: [],
+        },
+      }),
+    ]
+    mockGetBatchJobStatus.mockResolvedValue([
+      { id: VALID_UUID, status: "pending_review", output_data: null, error_message: null },
+    ])
+    setupSupabaseLoad({ id: "w1", name: "Test", nodes, edges: [], settings: {} })
+
+    const { result } = renderHook(() => useWorkflowPersistence("p1"))
+    let loadResult: { success: boolean; stillRunningJobs?: { nodeId: string; jobId: string; nodeType: string }[] } | undefined
+    await act(async () => {
+      loadResult = await result.current.load("w1")
+    })
+
+    expect(loadResult!.stillRunningJobs).toEqual([
+      { nodeId: "n1", jobId: VALID_UUID, nodeType: "generate-image" },
+    ])
+    const data = getSyncedNodes()[0].data as Record<string, unknown>
+    expect(data.jobAwaitingReview).toBe(true)
+    // Still running — the overlay's liveness gate depends on this.
+    expect(data.executionStatus).toBe("running")
+  })
+
+  it("a REJECTED hold (pending_review -> failed) clears the flag on reload", async () => {
+    const nodes = [
+      makeNode({
+        id: "n1",
+        type: "generate-image",
+        data: {
+          label: "Img",
+          executionStatus: "running",
+          currentJobId: VALID_UUID,
+          jobAwaitingReview: true,
+          generatedResults: [],
+        },
+      }),
+    ]
+    mockGetBatchJobStatus.mockResolvedValue([
+      {
+        id: VALID_UUID,
+        status: "failed",
+        output_data: null,
+        error_message: "Blocked by content policy",
+        error_hint: { kind: "policy-block", policyId: "sai", reason: "Blocked by content policy", hookPoint: "result" },
+      },
+    ])
+    setupSupabaseLoad({ id: "w1", name: "Test", nodes, edges: [], settings: {} })
+
+    const { result } = renderHook(() => useWorkflowPersistence("p1"))
+    await act(async () => {
+      await result.current.load("w1")
+    })
+
+    const data = getSyncedNodes()[0].data as Record<string, unknown>
+    expect(data.executionStatus).toBe("failed")
+    expect(data.jobAwaitingReview).toBeUndefined()
+    expect(data.errorHint).toEqual({
+      kind: "policy-block",
+      policyId: "sai",
+      reason: "Blocked by content policy",
+      hookPoint: "result",
+    })
+  })
+
   it("returns still-running jobs for pending status", async () => {
     const nodes = [
       makeNode({
@@ -1107,6 +1193,88 @@ describe("useWorkflowPersistence — single-node restore via load (Gap 3)", () =
     expect(n1.data.executionStatus).toBe("running")
     expect(n1.data.currentJobId).toBe(VALID_UUID)
     expect(n1.data.currentJobProgress).toBe(55)
+  })
+
+  it("RELOAD: a HELD job older than the 30-min horizon is re-adopted from the executions list", async () => {
+    // The real post-reload shape: the persisted node carries NO transient
+    // run-state (executionStatus / currentJobId are stripped on every save), so
+    // syncNodeResultsFromDB has nothing to look at and the ONLY path back to a
+    // held job is the merged executions list. Before this fix the backend never
+    // returned the row (its `running` filter mapped to `processing` alone) and
+    // the age bound would have dropped it anyway — so the node painted idle
+    // with no overlay and no poll, and re-running it opened a SECOND
+    // reservation while the first sat parked with credits held.
+    setupSupabaseLoad({
+      id: "w1",
+      name: "WF",
+      nodes: [makeNode({ id: "n1", data: { label: "Img" } })],
+      edges: [],
+    })
+    mockActive([
+      {
+        id: VALID_UUID,
+        triggerType: "single-node",
+        status: "pending_review",
+        createdAt: new Date(Date.now() - 31 * 60 * 1000).toISOString(),
+        nodeStates: {
+          n1: {
+            nodeId: "n1",
+            jobId: VALID_UUID,
+            status: "pending_review",
+            awaitingReview: true,
+            progress: 90,
+            nodeType: "generate-image",
+          },
+        },
+      },
+    ])
+
+    let loadResult: Awaited<ReturnType<ReturnType<typeof useWorkflowPersistence>["load"]>> | undefined
+    const { result } = renderHook(() => useWorkflowPersistence("p1"))
+    await act(async () => {
+      loadResult = await result.current.load("w1")
+    })
+
+    // Proof it came through the RESTORE path, not the (dead-after-a-reload)
+    // persisted-run-state sync branch: with no transient keys there is nothing
+    // for syncNodeResultsFromDB to batch-check.
+    expect(mockGetBatchJobStatus).not.toHaveBeenCalled()
+
+    // Polling is restored, so an approve/reject lands on the canvas.
+    expect(loadResult!.stillRunningJobs).toEqual([
+      { nodeId: "n1", jobId: VALID_UUID, nodeType: "generate-image" },
+    ])
+    const n1 = getSyncedNodes().find((n) => (n as { id: string }).id === "n1") as { data: Record<string, unknown> }
+    expect(n1.data.currentJobId).toBe(VALID_UUID)
+    // Live, so the overlay's `executionStatus === "running"` gate passes...
+    expect(n1.data.executionStatus).toBe("running")
+    // ...and the card explains itself on the FIRST paint, not 2s later.
+    expect(n1.data.jobAwaitingReview).toBe(true)
+  })
+
+  it("RELOAD: a non-held job older than the horizon is still left to the reconcile cron", async () => {
+    setupSupabaseLoad({
+      id: "w1",
+      name: "WF",
+      nodes: [makeNode({ id: "n1", data: { label: "Img" } })],
+      edges: [],
+    })
+    mockActive([
+      {
+        ...singleNodeJob({ jobId: VALID_UUID, nodeId: "n1" }),
+        createdAt: new Date(Date.now() - 31 * 60 * 1000).toISOString(),
+      },
+    ])
+
+    let loadResult: Awaited<ReturnType<ReturnType<typeof useWorkflowPersistence>["load"]>> | undefined
+    const { result } = renderHook(() => useWorkflowPersistence("p1"))
+    await act(async () => {
+      loadResult = await result.current.load("w1")
+    })
+
+    expect(loadResult!.stillRunningJobs).toEqual([])
+    const n1 = getSyncedNodes().find((n) => (n as { id: string }).id === "n1") as { data: Record<string, unknown> }
+    expect(n1.data.currentJobId).toBeUndefined()
   })
 
   it("does NOT restore a fan-out (list) node — stays idle, no poll", async () => {

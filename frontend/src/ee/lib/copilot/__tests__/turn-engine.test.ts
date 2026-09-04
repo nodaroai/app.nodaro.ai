@@ -684,7 +684,40 @@ describe("failures", () => {
 
     await sendCopilotMessage("build it")
 
-    expect(useCopilotStore.getState().insufficient).toEqual({ required: 20, balance: 4 })
+    expect(useCopilotStore.getState().insufficient).toEqual({
+      required: 20,
+      balance: 4,
+      // Same status as the Track A allowance 402, opposite remedy: the pool is
+      // the operator's problem. The banner picks its copy off this field.
+      code: "insufficient_credits",
+    })
+  })
+
+  it("reads the deployment-payer 402's figures, which sit BESIDE `error` (D10)", async () => {
+    // Track A. The allowance 402 is shaped
+    // `{ error: { code, message }, required, remaining }` — the two numbers are
+    // at the TOP of the body, and `remaining` is what the older `balance` meant.
+    // Digging only into `error` (what this parser used to do) leaves both at
+    // their fallback and the banner reads "this turn needs 0, you have 0".
+    streamRequest.mockImplementation(async function* () {
+      yield* []
+      throw new SseHttpError(
+        402,
+        JSON.stringify({
+          error: { code: "user_allowance_exceeded", message: "Your allowance cannot cover this run" },
+          required: 12000,
+          remaining: 4000,
+        }),
+      )
+    })
+
+    await sendCopilotMessage("build it")
+
+    expect(useCopilotStore.getState().insufficient).toEqual({
+      required: 12000,
+      balance: 4000,
+      code: "user_allowance_exceeded",
+    })
   })
 
   it("reports a dropped connection instead of locking the composer forever", async () => {

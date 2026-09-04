@@ -257,6 +257,67 @@ describe("POST /v1/pipelines/:id/branch", () => {
     expect(res.json().error.code).toBe("forbidden")
   })
 
+  // ── Reserve refusals keep their identity (F6) ──────────────────────────
+  //
+  // This route has NO `creditGuard` preHandler, so the reservation inside
+  // branchPipeline is the only refusal point. The route used to collapse every
+  // non-`insufficient_credits` reason to `reservation_failed` → HTTP 500, which
+  // meant a user who had simply exhausted their per-user allowance got a
+  // server-error toast: `frontend/src/lib/api.ts` keys `UserAllowanceExceeded
+  // Error` on the CODE, and the code never travelled.
+  it("returns 402 user_allowance_exceeded — the per-user quota refusal, not a 500", async () => {
+    branchPipelineMock.mockRejectedValueOnce(
+      new _BranchPipelineError("user_allowance_exceeded", "Credit reservation failed: user_allowance_exceeded"),
+    )
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/pipelines/${PIPELINE_ID}/branch`,
+      payload: { fromStage: "scene_images" },
+    })
+
+    expect(res.statusCode).toBe(402)
+    expect(res.json().error.code).toBe("user_allowance_exceeded")
+  })
+
+  it("returns 500 allowance_unconfigured — an operator fault is NOT a 402", async () => {
+    // The one member of the reserve vocabulary that is deliberately a 5xx:
+    // telling a user to buy credits would send them after something that
+    // cannot help them (reserve-errors.ts, ALLOWANCE_UNCONFIGURED). The CODE
+    // still travels, so the log line is greppable.
+    branchPipelineMock.mockRejectedValueOnce(
+      new _BranchPipelineError("allowance_unconfigured", "Credit reservation failed: allowance_unconfigured"),
+    )
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/pipelines/${PIPELINE_ID}/branch`,
+      payload: { fromStage: "scene_images" },
+    })
+
+    expect(res.statusCode).toBe(500)
+    expect(res.json().error.code).toBe("allowance_unconfigured")
+  })
+
+  it("returns 409 for a workspace refusal, and 500 reservation_failed for a genuine fault", async () => {
+    branchPipelineMock.mockRejectedValueOnce(new _BranchPipelineError("workspace_archived", "archived"))
+    const archived = await app.inject({
+      method: "POST",
+      url: `/v1/pipelines/${PIPELINE_ID}/branch`,
+      payload: { fromStage: "scene_images" },
+    })
+    expect(archived.statusCode).toBe(409)
+
+    branchPipelineMock.mockRejectedValueOnce(new _BranchPipelineError("reservation_failed", "deadlock detected"))
+    const fault = await app.inject({
+      method: "POST",
+      url: `/v1/pipelines/${PIPELINE_ID}/branch`,
+      payload: { fromStage: "scene_images" },
+    })
+    expect(fault.statusCode).toBe(500)
+    expect(fault.json().error.code).toBe("reservation_failed")
+  })
+
   it("returns 400 for invalid fromStage (Zod rejection — service never called)", async () => {
     const res = await app.inject({
       method: "POST",

@@ -33,6 +33,22 @@ import { insertWithIdempotencyKey, type IdempotentInsertResult } from "./idempot
 import { jobSourceColumns } from "./job-source.js"
 import { extractMcpClient } from "./extract-mcp-client.js"
 import type { BillingContext } from "./billing-context.js"
+import {
+  ALL_POLICIES_ALLOWED_ID,
+  applyJobRequestPolicies,
+  DEFAULT_REQUEST_BLOCK_MESSAGE,
+  hasJobPolicyFor,
+  JobBlockedError,
+  type InsertJobBlock,
+  type JobRequestContext,
+} from "./job-policy.js"
+import { hashGateSubject, recordJobPolicyDecision } from "./job-policy-audit.js"
+
+/** Re-exported so a caller that handles a block never has to know the registry
+ *  exists — and so `job-policy.ts` can own the type without an import cycle
+ *  back into these helpers. */
+export type { InsertJobBlock }
+export { JobBlockedError }
 
 /**
  * The P14 payer pair for a job/execution row, from a resolved context.
@@ -83,7 +99,125 @@ export function withJobProvenance(
  */
 export type InsertJobResult<T> =
   | { data: T; error: null }
-  | { data: null; error: { message: string } }
+  | { data: null; error: { message: string; blocked?: InsertJobBlock } }
+
+
+/* -------------------------------------------------------------------------
+ * The REQUEST gate (spec §5.3, D4).
+ *
+ * One pre-flight, four call sites. It runs AFTER provenance stamping — so
+ * `source` / `source_detail` / `mcp_client` in the context are the values that
+ * will actually land on the row — and BEFORE the `supabase.insert`. At that
+ * point no row exists and no reservation exists (every creator is
+ * insert → reserve → enqueue), so a block leaves nothing to refund and nothing
+ * to clean up. That is the whole reason this hook point is at the insert and
+ * not at pickup.
+ *
+ * With no policy implementing `checkRequest` this is one boolean and a return:
+ * no context object, no hash, no audit row (D23).
+ * ---------------------------------------------------------------------- */
+
+/** `null` = the fast path (nothing registered for this hook). */
+type InsertGate =
+  | { readonly block: InsertJobBlock }
+  | { readonly allow: { readonly userId: string | null; readonly jobType: string | null; readonly hash: string } }
+  | null
+
+function requestContextOf(rows: ReadonlyArray<Record<string, unknown>>): JobRequestContext {
+  const first = rows[0] ?? {}
+  const input = (first.input_data as Record<string, unknown> | undefined) ?? {}
+  return {
+    jobType: (first.job_type as string | null) ?? (typeof input.type === "string" ? input.type : null),
+    userId: (first.user_id as string | null) ?? null,
+    source: (first.source as string | null) ?? null,
+    sourceDetail: (first.source_detail as string | null) ?? null,
+    provider: (first.provider as string | null) ?? null,
+    // On entity/character rows `input_data.provider` is the MODEL id, not the
+    // vendor — pass both and let the policy decide which it meant.
+    modelIdentifier: typeof input.provider === "string" ? input.provider : null,
+    inputData: input,
+    workflowExecutionId: (first.workflow_execution_id as string | null) ?? null,
+    parentJobId: (first.parent_job_id as string | null) ?? null,
+    pipelineId: (first.pipeline_id as string | null) ?? null,
+    mcpClient: (first.mcp_client as string | null) ?? null,
+    rowCount: rows.length,
+  }
+}
+
+/**
+ * Judge an insert. A BATCH is judged ALL-OR-NOTHING ON THE FIRST ROW: a batch
+ * is one user action (variants, per-segment children) and a partial insert
+ * would be worse than a whole denial. Stated here so the first `insertJobs`
+ * caller inherits the rule rather than discovering it.
+ */
+async function gateJobInsert(rows: ReadonlyArray<Record<string, unknown>>): Promise<InsertGate> {
+  if (!hasJobPolicyFor("request")) return null
+  const ctx = requestContextOf(rows)
+  const hash = hashGateSubject({ jobType: ctx.jobType, userId: ctx.userId, inputData: ctx.inputData })
+  const d = await applyJobRequestPolicies(ctx)
+  if (d.verdict === "allow") return { allow: { userId: ctx.userId, jobType: ctx.jobType, hash } }
+
+  // A BLOCK keeps job_id NULL — no row was ever created, which is the point of
+  // gating pre-insert (D25). It is joined by user_id + created_at + hash.
+  // `d.reason` is NOT a candidate (D13): it is the policy's machine text and
+  // this string is the 422 body. `applyJobRequestPolicies` has already resolved
+  // the sentence — the policy's own or the platform's — so the fallback here is
+  // only for a decision shape that carries neither.
+  const message = d.userMessage ?? DEFAULT_REQUEST_BLOCK_MESSAGE
+  await recordJobPolicyDecision({
+    jobId: null,
+    hookPoint: "request",
+    policyId: d.policyId ?? "unknown",
+    verdict: "block",
+    reason: d.reason ?? null,
+    // The 422 body's sentence, recorded alongside the machine reason so the
+    // column means the same thing at BOTH hook points: "what the user was
+    // told". Nothing re-applies a request-gate verdict (there is no row to
+    // re-apply it to), so this one is for the audit alone.
+    userMessage: message,
+    payloadHash: hash,
+    userId: ctx.userId,
+    jobType: ctx.jobType,
+  })
+  return {
+    block: {
+      code: "job_blocked",
+      policyId: d.policyId ?? "unknown",
+      message,
+    },
+  }
+}
+
+/** The error arm every non-throwing helper returns on a block. `message` is the
+ *  policy's USER-SAFE text, so a route that only logs `error.message` still
+ *  says something true. */
+function blockedResult<T>(block: InsertJobBlock): InsertJobResult<T> {
+  return { data: null, error: { message: block.message, blocked: block } }
+}
+
+/** The `allow` row is written AFTER the insert, because the gate runs
+ *  pre-insert and a decision row with a NULL `job_id` for an ALLOWED job would
+ *  be unjoinable. `policy_id: "*"` = "every registered policy allowed" — an
+ *  allow has no single deciding policy. */
+async function recordAllowedInsert(
+  gate: Extract<InsertGate, { allow: unknown }>,
+  data: unknown,
+): Promise<void> {
+  const ids = (Array.isArray(data) ? data : [data])
+    .map((d) => (d && typeof d === "object" ? (d as { id?: unknown }).id : undefined))
+    .filter((id): id is string => typeof id === "string")
+  for (const id of ids) {
+    await recordJobPolicyDecision({
+      jobId: id,
+      hookPoint: "request",
+      policyId: ALL_POLICIES_ALLOWED_ID,
+      verdict: "allow",
+      payloadHash: gate.allow.hash,
+      userId: gate.allow.userId,
+      jobType: gate.allow.jobType,
+    })
+  }
+}
 
 /**
  * Insert one job row, stamped with request provenance.
@@ -95,11 +229,15 @@ export async function insertJob<T = { id: string }>(
   row: Record<string, unknown>,
   opts: { selectColumns?: string } = {},
 ): Promise<InsertJobResult<T>> {
+  const stamped = withJobProvenance(req, row)
+  const gate = await gateJobInsert([stamped])
+  if (gate && "block" in gate) return blockedResult<T>(gate.block)
   const { data, error } = await supabase
     .from("jobs")
-    .insert(withJobProvenance(req, row))
+    .insert(stamped)
     .select(opts.selectColumns ?? "id")
     .single()
+  if (!error && gate) await recordAllowedInsert(gate, data)
   return (error ? { data: null, error } : { data: data as T, error: null }) as InsertJobResult<T>
 }
 
@@ -121,14 +259,23 @@ export async function insertInternalJob<T = { id: string }>(
   row: Record<string, unknown>,
   opts: { selectColumns?: string; client?: typeof supabase; billingContext?: BillingContext } = {},
 ): Promise<InsertJobResult<T>> {
+  // Same one-exception rule as withJobProvenance: the carried payer pair
+  // (P14) is spread AFTER the caller's row — the execution's resolved payer,
+  // never a per-site claim.
+  const stamped = {
+    source: "internal",
+    source_detail: sourceDetail,
+    ...row,
+    ...billingPairColumns(opts.billingContext),
+  }
+  const gate = await gateJobInsert([stamped])
+  if (gate && "block" in gate) return blockedResult<T>(gate.block)
   const { data, error } = await (opts.client ?? supabase)
     .from("jobs")
-    // Same one-exception rule as withJobProvenance: the carried payer pair
-    // (P14) is spread AFTER the caller's row — the execution's resolved
-    // payer, never a per-site claim.
-    .insert({ source: "internal", source_detail: sourceDetail, ...row, ...billingPairColumns(opts.billingContext) })
+    .insert(stamped)
     .select(opts.selectColumns ?? "id")
     .single()
+  if (!error && gate) await recordAllowedInsert(gate, data)
   return (error ? { data: null, error } : { data: data as T, error: null }) as InsertJobResult<T>
 }
 
@@ -141,10 +288,14 @@ export async function insertJobs<T = { id: string }>(
   rows: ReadonlyArray<Record<string, unknown>>,
   opts: { selectColumns?: string } = {},
 ): Promise<InsertJobResult<T[]>> {
+  const stamped = rows.map((r) => withJobProvenance(req, r))
+  const gate = await gateJobInsert(stamped)
+  if (gate && "block" in gate) return blockedResult<T[]>(gate.block)
   const { data, error } = await supabase
     .from("jobs")
-    .insert(rows.map((r) => withJobProvenance(req, r)))
+    .insert(stamped)
     .select(opts.selectColumns ?? "id")
+  if (!error && gate) await recordAllowedInsert(gate, data)
   return (error ? { data: null, error } : { data: data as T[], error: null }) as InsertJobResult<T[]>
 }
 
@@ -162,10 +313,13 @@ export async function insertJobIdempotent<T = { id: string }>(
   idempotencyKey: string | null | undefined,
   selectColumns = "id",
 ): Promise<IdempotentInsertResult<T>> {
-  return insertWithIdempotencyKey<T>(
-    "jobs",
-    withJobProvenance(req, row) as Record<string, unknown> & { user_id: string },
-    idempotencyKey,
-    selectColumns,
-  )
+  const stamped = withJobProvenance(req, row) as Record<string, unknown> & { user_id: string }
+  // This helper THROWS on DB error, so it throws on a block too — its four
+  // callers already wrap it in `try { … } catch (err) { sendInternalError(…) }`,
+  // which now answers 422 job_blocked for free.
+  const gate = await gateJobInsert([stamped])
+  if (gate && "block" in gate) throw new JobBlockedError(gate.block)
+  const result = await insertWithIdempotencyKey<T>("jobs", stamped, idempotencyKey, selectColumns)
+  if (gate) await recordAllowedInsert(gate, result.row)
+  return result
 }

@@ -21,6 +21,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { hasCredits, config } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
+import { markJobFailed, FAILABLE_STATUSES } from "../lib/job-failure.js"
 import { validateWebhook } from "../providers/replicate/client.js"
 import { refundReservedCreditsForJob } from "../lib/character-lora.js"
 import { deleteCharacterLora } from "../providers/replicate/training.js"
@@ -158,6 +159,12 @@ export async function replicateTrainingWebhookRoutes(
           .not("lora_training_status", "in", "(succeeded,cancelled)")
 
         if (job) {
+          // A LoRA training completion is a MODEL, not a media publication —
+          // no output_data to moderate, no worker to route through — so it
+          // stays a direct write. The NEGATIVE status filter does not stay:
+          // `.not("status","in","(completed,failed,cancelled)")` matches
+          // `pending_review`, which makes this webhook a writer that can
+          // complete a held row (spec §17.1). Positive filter, same set.
           await supabase
             .from("jobs")
             .update({
@@ -166,7 +173,7 @@ export async function replicateTrainingWebhookRoutes(
             })
             .eq("id", job.id)
             .eq("user_id", character.user_id)
-            .not("status", "in", "(completed,failed,cancelled)")
+            .in("status", [...FAILABLE_STATUSES])
         }
 
         // If the row was soft-deleted between dispatch and webhook delivery,
@@ -189,18 +196,30 @@ export async function replicateTrainingWebhookRoutes(
           .not("lora_training_status", "in", "(succeeded,cancelled)")
 
         if (job) {
-          await supabase
-            .from("jobs")
-            .update({
-              status: finalStatus,
-              // Column is `error_message` — `error` does not exist, so the old
-              // key made PostgREST reject the whole UPDATE (PGRST204) and the
-              // job stayed stuck in 'processing'.
-              error_message: body.error ?? null,
+          // The FAILED arm joins the one failure writer; the CANCELLED arm is
+          // not a failure and stays a direct write. Both filter positively, for
+          // the reason above. (`job.id` came from a `.eq("user_id")`-scoped
+          // read, so markJobFailed's id-only CAS is still user-scoped in fact.)
+          if (finalStatus === "failed") {
+            await markJobFailed(job.id, {
+              // The column is `error_message` — `error` does not exist, and the
+              // old key made PostgREST reject the whole UPDATE (PGRST204),
+              // leaving the job stuck in 'processing'. A null message would be
+              // the app-report sweep's "no error message recorded" case.
+              error_message: body.error ?? "Character training failed. Please try again.",
+              from: FAILABLE_STATUSES,
             })
-            .eq("id", job.id)
-            .eq("user_id", character.user_id)
-            .not("status", "in", "(completed,failed,cancelled)")
+          } else {
+            await supabase
+              .from("jobs")
+              .update({
+                status: "cancelled",
+                error_message: body.error ?? "Character training was cancelled.",
+              })
+              .eq("id", job.id)
+              .eq("user_id", character.user_id)
+              .in("status", [...FAILABLE_STATUSES])
+          }
           // refundCredits is itself idempotent (CAS on status='reserved').
           await refundReservedCreditsForJob(job.id).catch(() => {})
         }

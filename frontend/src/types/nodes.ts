@@ -66,21 +66,49 @@ export interface GeneratedResult {
 }
 
 /**
- * Structured hint attached to a job's failure when the provider's safety
- * filter blocked the generation (after the backend's automatic retry).
- * Carried on `Job.error_hint` / `JobStatusLean.error_hint` / `BatchJobStatus.error_hint`
- * (`frontend/src/lib/api.ts`) and on the DAG orchestrator's per-node
- * execution state (`NodeExecutionState.errorHint`) — mirrored verbatim from
- * the backend shape. `suggestedProvider` is a `@nodaro/shared` model-catalog
- * id (e.g. "nano-banana-pro") the editor can offer as a one-click fallback;
- * the editor must never switch the model without the user clicking through.
+ * A PROVIDER's verdict: its safety filter blocked the generation (after the
+ * backend's automatic retry). `suggestedProvider` is a `@nodaro/shared`
+ * model-catalog id (e.g. "nano-banana-pro") the editor can offer as a
+ * one-click fallback; the editor must never switch the model without the user
+ * clicking through.
  */
-export interface JobErrorHint {
+export interface SafetyBlockHint {
   readonly kind: "safety-block"
   readonly class: "copyright" | "likeness" | "safety"
   readonly retried: boolean
   readonly suggestedProvider?: string
 }
+
+/**
+ * NODARO's own verdict, from a registered job policy at either hook point
+ * (spec 2026-09-03-job-policy-hook-design §9). NOT a provider decision — so
+ * "try another model" never applies and must never be offered.
+ *
+ * `reason` is user-safe by contract (the backend puts `userMessage ?? reason`
+ * here and keeps the machine text in `job_policy_decisions.reason`), so it is
+ * rendered verbatim. `hookPoint` lets ONE surface render both gates:
+ * "blocked before it ran" (request) vs "the result was blocked and wasn't
+ * saved" (result).
+ */
+export interface PolicyBlockHint {
+  readonly kind: "policy-block"
+  readonly policyId: string
+  readonly reason: string
+  readonly hookPoint: "request" | "result"
+}
+
+/**
+ * Structured hint attached to a job's failure. One jsonb column, two verdict
+ * sources — a DISCRIMINATED UNION on `kind`, which was already the
+ * discriminant every reader tested, so widening it breaks none of them.
+ *
+ * Carried on `Job.error_hint` / `JobStatusLean.error_hint` / `BatchJobStatus.error_hint`
+ * (`frontend/src/lib/api.ts`) and on the DAG orchestrator's per-node
+ * execution state (`NodeExecutionState.errorHint`) — mirrored VERBATIM from
+ * `backend/src/lib/safety-block.ts`'s `ErrorHint`; update both in the same
+ * change (that file's comment says the same thing).
+ */
+export type JobErrorHint = SafetyBlockHint | PolicyBlockHint
 
 /** Named region from a grok-2 segment map (RefineRegionsSection). */
 export interface GrokSegmentInfo {
@@ -1592,6 +1620,13 @@ export type GenerateImageData = PromptAffixFields & {
    *  alongside `errorMessage` on failure, cleared alongside it on the next
    *  run/success. */
   errorHint?: JobErrorHint
+  /** True while this node's job is parked in `pending_review` — generated, but
+   *  its output is withheld pending a human review. Written ONLY by the poll
+   *  loops (`getJobStatusLeanForNode`) and the orchestrator stream; the
+   *  "awaiting review" chrome is rendered ONCE by BaseNode's
+   *  `<NodePolicyOverlay>`, never by the 97 individual node cards — mirroring
+   *  `jobRecovering`'s shape and, unlike it, actually wired. */
+  jobAwaitingReview?: boolean
   generatedImageUrl?: string
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number

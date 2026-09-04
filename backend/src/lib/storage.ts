@@ -574,6 +574,50 @@ export async function readR2Object(
 }
 
 /**
+ * Stream one of OUR objects out of the store, optionally a byte range — the
+ * held-media preview's reader (D28).
+ *
+ * `readR2Object` above buffers the whole object into a Buffer, which is right
+ * for the callers that need to hash or re-upload it and wrong for this one: a
+ * 200 MB held video would be 200 MB of API-process heap for every reviewer who
+ * opened it. This hands the S3 body straight to Fastify, which pipes it.
+ *
+ * `contentRange` comes back only when the store honoured `opts.range`; the
+ * caller answers 206 with it and 200 without, rather than guessing.
+ */
+export async function streamR2Object(
+  key: string,
+  opts: { range?: string } = {},
+): Promise<
+  | {
+      body: Readable
+      contentType: string | null
+      contentLength: number | null
+      contentRange: string | null
+    }
+  | null
+> {
+  try {
+    const res = await s3.send(
+      new GetObjectCommand({
+        Bucket: config.R2_BUCKET_NAME,
+        Key: key,
+        ...(opts.range ? { Range: opts.range } : {}),
+      }),
+    )
+    if (!res.Body) return null
+    return {
+      body: res.Body as Readable,
+      contentType: res.ContentType ?? null,
+      contentLength: typeof res.ContentLength === "number" ? res.ContentLength : null,
+      contentRange: res.ContentRange ?? null,
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
  * HEAD an R2 object and return its byte size (0 on any error). Used to backfill
  * `assets.size_bytes` for generated media — `trackStorage` already adds the real
  * bytes to the user's quota at upload, so the asset row MUST record the real

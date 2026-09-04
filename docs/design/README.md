@@ -12,6 +12,7 @@ They read like lightweight RFDs (cf. [Oxide's RFDs](https://rfd.shared.oxide.com
 |-----|----------------|
 | [array-input-fan-out](./array-input-fan-out.md) | Fan-out semantics (`each`/`all`/`last`/`item:N`), zip-by-index, cancellation, partial-failure refunds |
 | [external-call-reconciliation](./external-call-reconciliation.md) | Recovering jobs stuck at an external provider — idempotent compare-and-set finalize, per-provider staleness thresholds, stall-retry idempotency |
+| [job-policy-seam](./job-policy-seam.md) | Gating generations by registration — a request gate at the job-insert funnel and a result gate before publication, fail-closed, verdict-idempotent by payload hash, with the money and storage consequences applied by the platform |
 | [smart-progress-bars](./smart-progress-bars.md) | EMA-based progress estimation, outlier guards, a non-linear progress curve, weighted multi-node aggregation |
 | [router-node](./router-node.md) | Conditional control-flow routing between branches of a workflow |
 | [sub-workflow-node](./sub-workflow-node.md) | Nested workflows as a reusable structural primitive |

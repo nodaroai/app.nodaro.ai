@@ -76,6 +76,9 @@ vi.mock("../types", () => ({
     }
   },
   MAX_CONSECUTIVE_POLL_FAILURES: 5,
+  // Twin of updateRecoveringIfChanged: the poll wrapper writes the hold flag
+  // through it, so a stubbed ../types must provide it or every tick throws.
+  updateAwaitingReviewIfChanged: () => {},
   NODE_CREDIT_COSTS: { "generate-image": 1 } as Record<string, number>,
   isExecutableNode: (n: any) => {
     const EXECUTABLE = new Set([

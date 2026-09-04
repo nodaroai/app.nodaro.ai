@@ -19,6 +19,8 @@ import { executionStatusRefetchInterval } from "@/components/editor/execution-st
 import { isNotFound } from "@/lib/api-errors"
 import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
 import { useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
+import { spendableCredits } from "@/lib/spendable-credits"
+import { useBillingSurface } from "@/hooks/use-billing-surface"
 import {
   abandonRunFollow,
   askForFix,
@@ -55,6 +57,29 @@ export function CopilotRunSection({ userId, nodeCount, onStopRun }: CopilotRunSe
   const executionId = useCopilotStore((s) => s.executionId)
   const streaming = useCopilotStore((s) => s.streaming)
   const { data: balance } = useUserCredits(userId)
+  // Track A (D12, ruling R-A) — what this user may actually spend, decided by
+  // the same helper as the canvas precheck (`run-handlers.ts`). On a
+  // deployment-payer instance `total` is the requester's FROZEN signup grant:
+  // nothing debits it and nothing tops it up, so quoting it on the card the
+  // user approves a run from is a number the server will not honour.
+  //
+  // This card DISPLAYS, it does not refuse — so it takes `displayFigure`, the
+  // same number the sidebar shows. That is also the number the canvas gate
+  // compares against whenever a client gate may run at all: the two differ only
+  // in the pre-flip payer window, and there the gate stands down while this
+  // card must still say something true. Quoting `total` there told a user with
+  // 10,000 of allowance they had 1,500, and a withheld user that they had 0.
+  //
+  // `null` is a REAL answer and is NOT "remaining 0": it means no allowance
+  // applies to this caller (they ARE the payer, whose `total` is a live
+  // wallet, or the figure was unavailable). Absent behaves identically, which
+  // is what keeps mainline byte-identical.
+  // The surface flag only moves `gateApplies`, which this card does not read —
+  // it is passed because the helper requires the caller to have ASKED the
+  // question, so a card that later grows a refusal cannot inherit mainline's
+  // answer by accident. Deployment-grain and long-cached: no extra request.
+  const { surface } = useBillingSurface()
+  const spendable = balance ? spendableCredits(balance, surface.deploymentPayer === true).displayFigure : null
 
   // Adopt whichever execution the editor started for us.
   useEffect(() => {
@@ -106,7 +131,7 @@ export function CopilotRunSection({ userId, nodeCount, onStopRun }: CopilotRunSe
         estimateStale={estimateStale}
         nodeCount={node ? 1 : nodeCount}
         nodeLabel={node?.label}
-        balance={balance?.total ?? null}
+        balance={spendable}
         overLimit={runMode === "auto" && !estimateStale && estimate > autoRunLimit}
         ceiling={autoRunLimit}
         wiredAssets={proposal.wiredAssets ?? []}

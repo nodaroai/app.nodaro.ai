@@ -7,6 +7,7 @@ import { supabase } from "../../supabase.js"
 import { isUuid } from "./_id-guard.js"
 import { failureGuidance } from "./_job-error.js"
 import { redactPrivateJobData } from "../../public-job-data.js"
+import { JOB_STATUSES } from "../../job-status.js"
 
 const jobsReadGate: ToolGate = { required: ["jobs:read"] }
 
@@ -71,9 +72,10 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
           .string()
           .optional()
           .describe("ISO `created_at` timestamp from a prior result's `next_cursor`"),
-        status: z
-          .enum(["pending", "queued", "processing", "completed", "failed", "cancelled"])
-          .optional(),
+        // Derived from the canonical vocabulary, never re-typed: a hand-rolled
+        // copy silently rejects the next status the platform adds (it rejected
+        // `pending_review` on day one of the job-policy hook).
+        status: z.enum(JOB_STATUSES).optional(),
         kinds: z
           .array(z.enum(["image", "video", "audio"]))
           .min(1)
@@ -241,7 +243,23 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
               error_hint: (publicData as { error_hint?: unknown }).error_hint,
             }),
           }
-        : { data: publicData }
+        : publicData.status === "pending_review"
+          ? {
+              // A third branch, not a failure and not a plain read (spec
+              // 2026-09-03-job-policy-hook-design §6.4): the job finished
+              // generating and its output is deliberately withheld. Without
+              // this the agent sees a status it has no vocabulary for, with a
+              // null output_data, and re-runs the request — whose duplicate is
+              // held too, at full provider cost.
+              data: publicData,
+              retryable: false,
+              guidance:
+                "This job finished generating but its output is held for human review and is " +
+                "deliberately withheld. Do NOT re-run it — a duplicate would be held too, and " +
+                "charged again. Poll `get_job` later: the output appears when the review approves " +
+                "it, or the job becomes `failed` with a policy reason if it is rejected.",
+            }
+          : { data: publicData }
       return {
         content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
       }

@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { BillingContext } from "../../lib/billing-context.js"
 import { mapReserveError, type MappedReserveError } from "../../lib/reserve-errors.js"
+// Track A: the step-8 enforcement flip (see pipelines/credits.ts).
+import { allowanceEnforcementActive } from "../../lib/deployment-payer.js"
 import { attemptAutoRecharge } from "../billing/auto-recharge.js"
 import { creditsToUsd } from "@nodaro/shared"
 import type { SceneHelperName } from "@nodaro/shared"
@@ -86,8 +88,17 @@ export async function reserveHelperCredits(
     p_provider_cost_usd: 0, // helpers aggregate to provider cost on the parent pipeline
     p_display_cost_usd: creditsToUsd(credits),
     p_is_app_run: false,
+    // Track A / D3, identical to the pipeline lane: attribution and
+    // enforcement, conditional so the personal wire shape is untouched, and
+    // neither for the payer's own run (D13).
+    ...(dep && args.userId !== dep.payerId
+      ? { p_on_behalf_of: args.userId, p_enforce_allowance: allowanceEnforcementActive() }
+      : {}),
   })
   if (error) {
+    // This substring test runs BEFORE mapReserveError — a refusal prefix
+    // containing "insufficient" or "not enough" would be downgraded here to
+    // the generic wallet-empty answer (D9).
     const msg = error.message ?? ""
     if (msg.toLowerCase().includes("insufficient") || msg.toLowerCase().includes("not enough")) {
       return { ok: false, reason: "insufficient_credits" }
@@ -108,20 +119,8 @@ export async function reserveHelperCredits(
   // payer — class work must not pump a member's saved card. NEVER for a
   // deployment payer — prepaid-only, no card to pump.
   if (!ws && !dep) void attemptAutoRecharge(args.userId)
-  // Deployment payer: requester attribution (migration 362) — never
-  // settlement; loud-but-tolerated pre-column (the 361 degrade class).
-  if (dep) {
-    const { error: attributionError } = await args.supabase
-      .from("usage_logs")
-      .update({ on_behalf_of: args.userId } as Record<string, unknown>)
-      .eq("id", usageLogId)
-    if (attributionError) {
-      console.error(
-        `[scene-helper-credits] on_behalf_of attribution failed for usage log ${usageLogId}:`,
-        attributionError.message,
-      )
-    }
-  }
+  // The post-hoc `on_behalf_of` UPDATE that used to live here is GONE (D5) —
+  // migration 382's reserve writes the column in its own INSERT.
   return { ok: true, usageLogId: usageLogId as string }
 }
 

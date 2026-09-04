@@ -114,7 +114,12 @@ export interface CopilotStoreState {
 
   /** Transient one-liner above the composer ("Saving…", "another tab", …). */
   notice: string | null
-  insufficient: { required: number; balance: number } | null
+  /** Track A — `code` distinguishes the DEPLOYMENT pool running dry
+   *  (`insufficient_credits`, the operator's problem) from THIS user's
+   *  allowance running out (`user_allowance_exceeded`, the billing account's).
+   *  Same status, same numbers, opposite remedy. Optional: absent on any body
+   *  that carried no code. */
+  insufficient: { required: number; balance: number; code?: string } | null
 
   bridge: CopilotEditorBridge
 
@@ -125,7 +130,7 @@ export interface CopilotStoreState {
   setActivityCollapsed: (collapsed: boolean) => void
   dismissProposal: () => void
   setNotice: (notice: string | null) => void
-  setInsufficient: (value: { required: number; balance: number } | null) => void
+  setInsufficient: (value: { required: number; balance: number; code?: string } | null) => void
   setBridge: (patch: Partial<CopilotEditorBridge>) => void
   setRunSettings: (mode: CopilotRunMode, limit: number, allowPublishing?: boolean, modelTier?: CopilotModelTier) => void
   /** This thread may author publishing nodes. Off until the user says so. */

@@ -7,6 +7,9 @@ import {
   JobFailedError,
   JobTimeoutError,
   JobAbortedError,
+  JobHeldError,
+  JobBlockedError,
+  NodaroError,
 } from "../../index.js"
 import type { JobStatus, JobStatusResult } from "../jobs.js"
 import type { GenerateVideoParams, GenerateImageParams } from "../../index.js"
@@ -346,5 +349,108 @@ describe("nodes structured references (typed params)", () => {
     expect(body).toMatchObject({
       connectedReferences: [{ id: "r1", characterSlug: "hero" }],
     })
+  })
+})
+
+/**
+ * The job-policy release (spec 2026-09-03-job-policy-hook-design §6.4).
+ * `pending_review` is IN-FLIGHT but parked on a human, so the poll loop must
+ * stop on the first tick it sees one instead of burning `maxMs` (15 min by
+ * default) and then lying with `JobTimeoutError`. And the request gate's HTTP
+ * 422 gets a typed class so a caller can branch on it without string-matching
+ * `err.code`.
+ */
+describe("nodes.runAndWait — a job held for review", () => {
+  it("throws JobHeldError on the FIRST pending_review tick, without waiting out maxMs", async () => {
+    vi.useFakeTimers()
+    const fetchMock = runThenStatuses({ jobId: "job-9" }, [
+      { status: "processing" as JobStatus },
+      { id: "job-9", status: "pending_review", progress: 100 },
+    ])
+    const c = client(fetchMock)
+    const promise = c.nodes.runAndWait("generate-image", {}, { pollMs: 1000 }).catch((e) => e)
+    await vi.advanceTimersByTimeAsync(1500)
+    const err = await promise
+
+    expect(err).toBeInstanceOf(JobHeldError)
+    expect(err).toMatchObject({ name: "JobHeldError", code: "job_held", jobId: "job-9", status: 0 })
+    // 1 POST + exactly 2 GETs. The default deadline is ~15 min; had the loop
+    // treated `pending_review` as "keep going", 1500ms of fake time would have
+    // left the promise pending instead of rejecting here.
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
+  it("reports the held tick through onProgress before throwing (the caller can show 'awaiting review')", async () => {
+    const onProgress = vi.fn()
+    const fetchMock = runThenStatuses({ jobId: "job-9" }, [
+      { id: "job-9", status: "pending_review", progress: 100 },
+    ])
+    const c = client(fetchMock)
+    await expect(
+      c.nodes.runAndWait("generate-image", {}, { onProgress }),
+    ).rejects.toBeInstanceOf(JobHeldError)
+    expect(onProgress).toHaveBeenCalledTimes(1)
+    expect((onProgress.mock.calls[0][0] as JobStatusResult).status).toBe("pending_review")
+  })
+
+  it("does NOT cancel the held job (the output exists and a human is reviewing it)", async () => {
+    const fetchMock = runThenStatuses({ jobId: "job-9" }, [
+      { id: "job-9", status: "pending_review" },
+    ])
+    const c = client(fetchMock)
+    await expect(c.nodes.runAndWait("generate-image", {})).rejects.toBeInstanceOf(JobHeldError)
+    // POST /v1/generate-image + GET status. No POST /v1/jobs/job-9/cancel.
+    const urls = fetchMock.mock.calls.map((c) => c[0] as string)
+    expect(urls.some((u) => u.endsWith("/cancel"))).toBe(false)
+  })
+
+  it("runMany rejects with JobHeldError when any candidate is held", async () => {
+    vi.useFakeTimers()
+    let n = 0
+    const fetchMock = makeFetch((url, init) => {
+      if (init.method === "POST") {
+        n += 1
+        return mockOk({ jobId: `job-${n}` })
+      }
+      if (/job-2/.test(url)) return mockOk({ data: { id: "job-2", status: "pending_review" } })
+      return mockOk({ data: { id: "j", status: "completed", output_data: {} } })
+    })
+    const c = client(fetchMock)
+    const promise = c.nodes.runMany("generate-image", [{}, {}, {}])
+    const assertion = expect(promise).rejects.toBeInstanceOf(JobHeldError)
+    await vi.advanceTimersByTimeAsync(2500)
+    await assertion
+  })
+})
+
+describe("nodes.run — the request gate's 422", () => {
+  it("throws a typed JobBlockedError on 422 job_blocked, before any poll", async () => {
+    const fetchMock = makeFetch(() =>
+      mockErr(422, {
+        error: { code: "job_blocked", message: "This request can't be generated here." },
+      }),
+    )
+    const c = client(fetchMock)
+    const err = await c.nodes.runAndWait("generate-image", { prompt: "x" }).catch((e) => e)
+    expect(err).toBeInstanceOf(JobBlockedError)
+    expect(err).toMatchObject({
+      name: "JobBlockedError",
+      code: "job_blocked",
+      status: 422,
+      // The policy's user-safe text, shown as-is.
+      message: "This request can't be generated here.",
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(1) // never polled — no job was created
+  })
+
+  it("leaves any OTHER 422 as a plain NodaroError (the code, not the status, selects the class)", async () => {
+    const fetchMock = makeFetch(() =>
+      mockErr(422, { error: { code: "unprocessable", message: "nope" } }),
+    )
+    const c = client(fetchMock)
+    const err = await c.nodes.run("generate-image", {}).catch((e) => e)
+    expect(err).toBeInstanceOf(NodaroError)
+    expect(err).not.toBeInstanceOf(JobBlockedError)
+    expect(err).toMatchObject({ code: "unprocessable", status: 422 })
   })
 })

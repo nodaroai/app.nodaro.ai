@@ -2,6 +2,7 @@ import { resolveEffectiveTier } from "@nodaro/shared"
 import type { BillingProvider, Charge, AccountSummary, UsageCategory } from "../../lib/billing-provider.js"
 import { supabase } from "../../lib/supabase.js"
 import { deploymentPayerActive } from "../../lib/deployment-payer.js"
+import { allowanceFor } from "./deployment-allowance-service.js"
 
 /** Display-only bucketing of a usage_logs `action` (a model identifier) into
  *  the /usage breakdown's categories. ORDER MATTERS: "image-to-video" is
@@ -18,10 +19,13 @@ function usageCategoryOf(action: string): string {
 /**
  * D3(a) — the per-user answer on a deployment-payer instance: the requester's
  * CONSUMPTION this calendar month (attributed via usage_logs.on_behalf_of,
- * migration 362) and nothing about balances. The payer pool is the instance
- * owner's number — surfacing it here would leak it to every user; the
- * requester's own balance is a frozen signup grant nothing debits — showing
- * it would lie. When the deployment wires its own billing provider's
+ * migration 362), plus — since Track A — the one balance that is honestly
+ * theirs. The payer pool is still the instance owner's number and is still
+ * never surfaced here; the requester's own profile row is still a frozen
+ * signup grant nothing debits and is still not what is shown. What changed is
+ * that a per-user allowance exists: `balance` is what they have LEFT of it and
+ * `allocated` is what they were GRANTED, both raw credits, converted once at
+ * the display-unit seam. When the deployment wires its own billing provider's
  * `account()` (D3(c)), that registration replaces this whole answer.
  */
 async function deploymentConsumptionAccount(userId: string): Promise<AccountSummary | null> {
@@ -62,9 +66,23 @@ async function deploymentConsumptionAccount(userId: string): Promise<AccountSumm
     amount: agg.amount,
     spent: null,
   }))
+  // Read AFTER the consumption aggregate and never allowed to sink it: the
+  // two are different reads with different failure modes. An unreadable
+  // allowance is "unavailable" for the two balance fields alone (null, which
+  // renders as an em dash) — it must not blank the period's spend and its
+  // breakdown, which came back fine. `allowanceFor` is also the only place the
+  // D7 no-row rule lives, so a user who has never generated gets the default
+  // here rather than a manufactured 0.
+  const allowance = await allowanceFor(userId)
   return {
     plan: "",
-    balance: null, // deliberate: no balance exists at user grain here
+    // Before a payer, this function is never reached at all, and these stay
+    // null — the pre-Track-A answer, verbatim. Under a payer they are real
+    // from rollout step 2: the allowance is VISIBLE whether or not enforcement
+    // has been flipped on (the ruling in deployment-allowance-service.ts), so
+    // /usage stops showing two em dashes at step 5 rather than step 8.
+    balance: allowance ? allowance.remaining : null,
+    allocated: allowance ? allowance.granted : null,
     dailyAllowance: null,
     unit: "credits",
     periodStart: periodStart.toISOString(),

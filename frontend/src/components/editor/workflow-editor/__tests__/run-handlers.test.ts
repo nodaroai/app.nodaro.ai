@@ -108,6 +108,17 @@ vi.mock("../types", () => ({
       super("Workflow changed during execution")
     }
   },
+  MAX_CONSECUTIVE_POLL_FAILURES: 5,
+  // The real transition rule, written through so the hold cases below can
+  // assert on the patch `getJobStatusLeanForNode` produces.
+  updateAwaitingReviewIfChanged: (
+    nodeId: string,
+    awaiting: boolean,
+    updateFn: (id: string, data: Record<string, unknown>) => void,
+  ) => {
+    const prev = mockNodes.find((n: any) => n.id === nodeId)?.data?.jobAwaitingReview
+    if (awaiting !== Boolean(prev)) updateFn(nodeId, { jobAwaitingReview: awaiting })
+  },
   NODE_CREDIT_COSTS: { "generate-image": 1 } as Record<string, number>,
   isExecutableNode: (n: any) => {
     const EXECUTABLE = new Set([
@@ -159,6 +170,7 @@ import {
   handleRunSelected,
   clearConnectedListRows,
   resetNodeAccumulation,
+  restorePollingForRunningJobs,
   RUN_CONFIRM_CREDITS,
 } from "../run-handlers"
 import { getCachedCredits } from "@/ee/hooks/use-model-credits"
@@ -1221,5 +1233,76 @@ describe("run confirmation gate", () => {
     const confirmRun = vi.fn().mockResolvedValue(false)
     await handleRunSingleNode("n1", makeCtx({ confirmRun }), "p1", vi.fn().mockResolvedValue(undefined), vi.fn(), { current: new Set() } as any)
     expect(confirmRun).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The job-policy hold, on the restore poller (the 19th wrapped loop)
+// ---------------------------------------------------------------------------
+
+describe("restorePollingForRunningJobs — a held job", () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  function restoreOne() {
+    restorePollingForRunningJobs(
+      [{ nodeId: "n1", jobId: "j1", nodeType: "generate-image" }],
+      makeCtx(),
+      vi.fn(),
+    )
+  }
+
+  it("paints the overlay flag for a job parked in pending_review and keeps polling", async () => {
+    mockNodes = [makeNode("n1", "generate-image", { data: { label: "generate-image", currentJobId: "j1" } })]
+    mockGetJobStatusLean.mockResolvedValue({ status: "pending_review" })
+
+    restoreOne()
+    await vi.advanceTimersByTimeAsync(3000)
+
+    expect(mockUpdateNodeData).toHaveBeenCalledWith("n1", { jobAwaitingReview: true })
+    // Not terminal: no executionStatus write, so the loop is still alive.
+    const terminal = mockUpdateNodeData.mock.calls.find(
+      (c: any) => c[1] && "executionStatus" in c[1],
+    )
+    expect(terminal).toBeUndefined()
+  })
+
+  it("clears the flag on the terminal patch when the review REJECTS the job", async () => {
+    mockNodes = [makeNode("n1", "generate-image", { data: { label: "generate-image", currentJobId: "j1" } })]
+    mockGetJobStatusLean.mockResolvedValue({ status: "failed", error_message: "Blocked by content policy" })
+
+    restoreOne()
+    await vi.advanceTimersByTimeAsync(3000)
+
+    const failed = mockUpdateNodeData.mock.calls
+      .map((c: any) => c[1])
+      .find((patch: any) => patch?.executionStatus === "failed")
+    expect(failed).toBeDefined()
+    expect("jobAwaitingReview" in failed).toBe(true)
+    expect(failed.jobAwaitingReview).toBeUndefined()
+  })
+
+  it("clears the flag on the terminal patch when the review APPROVES the job", async () => {
+    // pending_review -> completed with NO intervening tick is the whole reason
+    // the terminal patches must clear the flag rather than relying on a branch.
+    mockNodes = [makeNode("n1", "generate-image", { data: { label: "generate-image", currentJobId: "j1", generatedResults: [] } })]
+    mockGetJobStatusLean.mockResolvedValue({
+      status: "completed",
+      output_data: { imageUrl: "https://cdn.example.com/img.png" },
+    })
+
+    restoreOne()
+    await vi.advanceTimersByTimeAsync(3000)
+
+    const completed = mockUpdateNodeData.mock.calls
+      .map((c: any) => c[1])
+      .find((patch: any) => patch?.executionStatus === "completed")
+    expect(completed).toBeDefined()
+    expect("jobAwaitingReview" in completed).toBe(true)
+    expect(completed.jobAwaitingReview).toBeUndefined()
   })
 })

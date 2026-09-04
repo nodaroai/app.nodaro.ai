@@ -6,6 +6,8 @@ import type { WorkflowNode, ComponentNodeData, GeneratedResult } from "@/types/n
 import type { ExecutionContext } from "./types"
 import type { FrontendResolvedInputs } from "./node-input-resolver"
 import { shouldAbandonNode } from "./abandon-guard"
+import { RUN_START_RESET } from "./poll-job"
+import { tx } from "@/lib/i18n"
 
 const POLL_INTERVAL_MS = 2_500
 const TIMEOUT_MS = 30 * 60 * 1000
@@ -70,10 +72,7 @@ export async function executeComponent(
 
   // Mark running — keep previous results for history
   updateNodeData(node.id, {
-    executionStatus: "running",
-    errorMessage: undefined,
-    currentJobId: undefined,
-    currentJobProgress: 0,
+    ...RUN_START_RESET,
   })
 
   // Hoisted so the catch block can honor the abandon guard (the job id isn't
@@ -157,6 +156,16 @@ export async function executeComponent(
 
       if (job.status === "failed") {
         throw new Error(job.error_message ?? "Component execution failed")
+      }
+
+      // A wrapper job parked in `pending_review` is waiting on a HUMAN, and a
+      // review routinely outlives this 30-minute budget. Break out now and say
+      // so, instead of burning the budget and then reporting a timeout that
+      // never happened. (Freezing the budget for the held interval — so the
+      // component simply resumes on approve — is deferred with the rest of the
+      // orchestrator clock work; spec §17.10.)
+      if (job.status === "pending_review") {
+        throw new Error(tx("run.jobAwaitingReview", { label: data.appSlug ?? "Component" }))
       }
 
       // Update progress from job progress field

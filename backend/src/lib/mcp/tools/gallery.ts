@@ -767,6 +767,41 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         // whether re-running could help. Without this the model only sees
         // status="failed", assumes it is transient, and re-runs a permanently
         // blocked request. The widget reads the same signal off structuredContent.
+        // A HELD job (spec 2026-09-03-job-policy-hook-design §6.4): generated,
+        // but its output is withheld pending a human decision. It is neither a
+        // failure nor a completed asset, so without this branch the widget
+        // renders an empty preview indefinitely and the model, seeing a status
+        // it has no vocabulary for, re-runs the request — whose duplicate is
+        // held too, at full provider cost. The `.or()` visibility filter above
+        // already hides a held job from every OTHER user (its `status` is not
+        // `completed`), which is why nothing here needs to redact.
+        if (data.status === "pending_review") {
+          return {
+            content: [
+              {
+                type: "text",
+                text:
+                  `Job ${data.id} finished generating, but its output is held for human review and is ` +
+                  `deliberately withheld. Do NOT re-run it — a duplicate would be held too. Poll ` +
+                  `get_asset again later: the output appears if the review approves it, or the job ` +
+                  `fails with a policy reason if it is rejected.`,
+              },
+            ],
+            structuredContent: {
+              jobId: data.id,
+              status: data.status,
+              progress: data.progress ?? 0,
+              outputUrl: null,
+              assetKind,
+              jobType: data.job_type,
+              completedAt: data.completed_at,
+              errorMessage: null,
+              retryable: false,
+              outputData: out,
+            },
+          }
+        }
+
         if (data.status === "failed" || data.status === "cancelled") {
           // PR9: `guidance` now folds in the worker's own safety-block verdict
           // (error_hint, migration 376) — a real `suggestedProvider` model id

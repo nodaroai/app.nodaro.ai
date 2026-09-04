@@ -136,6 +136,10 @@ export async function computeReconciledNodeResults(
     } catch {
       continue
     }
+    // Positive check, on purpose: only a COMPLETED job has a result to
+    // reconcile. A job held in `pending_review` has produced nothing the
+    // caller may see (its output is withheld), so it is skipped here — a
+    // `!== "failed"` form would write an empty result over the node.
     if (job.status !== "completed") continue
 
     const output = (job.output_data ?? null) as Record<string, unknown> | null

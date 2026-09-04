@@ -118,3 +118,150 @@ describe("node.moderation.* keys (G3)", () => {
     for (const k of KEYS) expect(typeof he[k as keyof typeof he]).toBe("string")
   })
 })
+
+// ─── Job policy hook (spec 2026-09-03 rev 3.0) ────────────────────────────
+// Two namespaces land together: the owner-facing copy a held or blocked job
+// renders on the canvas, and the operator-facing `adminReview.*` surface.
+// Both are asserted here because the global "Hebrew value is actually Hebrew"
+// guard above scopes to an NS regex that covers `node.` but NOT `run.`,
+// `sheet.` or `adminReview.` — a copy-pasted English value in those three
+// would otherwise ship green.
+
+describe("node.review.* / node.policyBlock.* keys (job policy hook)", () => {
+  const KEYS = [
+    "node.review.awaiting",
+    "node.review.desc",
+    "node.review.creditsHeld",
+    // Ships deliberately unused: D17 makes a held job cancellable, so nothing
+    // renders it today. Kept because Q20 may flip the product decision.
+    "node.review.cannotStop",
+    "node.policyBlock.title",
+    "node.policyBlock.desc",
+    "node.policyBlock.outputWithheld",
+    "run.jobAwaitingReview",
+    "run.jobBlocked",
+    "sheet.panelAwaitingReview",
+  ] as const
+
+  it("ships all ten owner-facing keys in the canonical English dict", () => {
+    expect(KEYS.length).toBe(10)
+    for (const k of KEYS) expect(typeof en[k as keyof typeof en], k).toBe("string")
+  })
+
+  it("all ten are translated in Hebrew", () => {
+    for (const k of KEYS) expect(typeof he[k as keyof typeof he], k).toBe("string")
+  })
+
+  it("every Hebrew value actually contains Hebrew letters", () => {
+    const HEBREW = /[\u0590-\u05FF]/
+    for (const k of KEYS) expect(HEBREW.test(he[k as keyof typeof he] as string), k).toBe(true)
+  })
+
+  it("the two run.* toasts keep their {label} placeholder in both locales", () => {
+    for (const k of ["run.jobAwaitingReview", "run.jobBlocked"] as const) {
+      expect(en[k as keyof typeof en] as string, k).toContain("{label}")
+      expect(he[k as keyof typeof he] as string, k).toContain("{label}")
+    }
+  })
+})
+
+describe("adminReview.* keys (the operator review surface)", () => {
+  const KEYS = [
+    "adminReview.title",
+    "adminReview.subtitle",
+    "adminReview.tabQueue",
+    "adminReview.tabDecisions",
+    "adminReview.emptyQueue",
+    "adminReview.emptyDecisions",
+    "adminReview.loadError",
+    "adminReview.heldFor",
+    "adminReview.policyLabel",
+    "adminReview.reasonLabel",
+    "adminReview.creditsHeld",
+    "adminReview.jobType",
+    "adminReview.owner",
+    "adminReview.showInput",
+    "adminReview.previewFailed",
+    "adminReview.previewLoading",
+    "adminReview.approve",
+    "adminReview.reject",
+    "adminReview.approveConfirmTitle",
+    "adminReview.approveConfirmBody",
+    "adminReview.rejectTitle",
+    "adminReview.rejectBody",
+    "adminReview.reasonPlaceholder",
+    "adminReview.reasonShownToUser",
+    "adminReview.reasonRequired",
+    "adminReview.approved",
+    "adminReview.rejected",
+    "adminReview.alreadyResolved",
+    "adminReview.actionFailed",
+    "adminReview.filterPolicy",
+    "adminReview.filterUser",
+    "adminReview.filterVerdict",
+    "adminReview.filterHookPoint",
+    "adminReview.hookRequest",
+    "adminReview.hookResult",
+    "adminReview.hookReview",
+    "adminReview.verdictAllow",
+    "adminReview.verdictFlag",
+    "adminReview.verdictBlock",
+    "adminReview.verdictHold",
+    "adminReview.verdictApprove",
+    "adminReview.verdictReject",
+    "adminReview.resolver",
+    "adminReview.navLabel",
+  ] as const
+
+  it("ships the whole namespace in the canonical English dict", () => {
+    // The blueprint prose rounds this to "39 keys"; its table has 44 rows and
+    // the table is what the page renders. The count is the guard against a
+    // dropped row.
+    expect(KEYS.length).toBe(44)
+    for (const k of KEYS) expect(typeof en[k as keyof typeof en], k).toBe("string")
+  })
+
+  it("every key is translated in Hebrew", () => {
+    for (const k of KEYS) expect(typeof he[k as keyof typeof he], k).toBe("string")
+  })
+
+  it("every Hebrew value actually contains Hebrew letters", () => {
+    const HEBREW = /[\u0590-\u05FF]/
+    for (const k of KEYS) expect(HEBREW.test(he[k as keyof typeof he] as string), k).toBe(true)
+  })
+
+  it("the two counted strings keep their {n} placeholder in both locales", () => {
+    for (const k of ["adminReview.heldFor", "adminReview.creditsHeld"] as const) {
+      expect(en[k as keyof typeof en] as string, k).toContain("{n}")
+      expect(he[k as keyof typeof he] as string, k).toContain("{n}")
+    }
+  })
+
+  it("keeps the honesty label verbatim — the reject reason reaches the requester", () => {
+    expect(en["adminReview.reasonShownToUser" as keyof typeof en]).toBe(
+      "This text is shown to the person who made the request.",
+    )
+    expect(en["adminReview.subtitle" as keyof typeof en]).toContain(
+      "Credits stay reserved until you approve or reject.",
+    )
+    expect(en["adminReview.rejectBody" as keyof typeof en]).toBe(
+      "The job fails, the reserved credits are refunded, and the file is deleted.",
+    )
+    expect(en["adminReview.actionFailed" as keyof typeof en]).toBe(
+      "The action did not complete. Nothing changed.",
+    )
+  })
+
+  it("uses one Hebrew word for review across both namespaces — בדיקה, never סקירה", () => {
+    // Glossary: review = בדיקה. Two words for one concept reads as two
+    // different features to a Hebrew operator who also sees the canvas node.
+    const scoped = Object.entries(he).filter(
+      ([k]) => k.startsWith("adminReview.") ||
+        k.startsWith("node.review.") ||
+        k.startsWith("run.job") ||
+        k === "sheet.panelAwaitingReview",
+    )
+    const bad = scoped.filter(([, v]) => /סקיר/.test(v as string)).map(([k, v]) => `${k} = ${v}`)
+    expect(bad, `he values using סקירה instead of בדיקה:\n${bad.join("\n")}`).toEqual([])
+  })
+})

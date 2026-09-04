@@ -58,15 +58,58 @@ export function isFinalAttemptFor(job: { attemptsMade: number }, block: SafetyBl
  *  machine-readable verdict the editor/MCP can act on without parsing the
  *  free-text `error_message`. Named (not just `errorHintFor`'s inline return
  *  type) so callers two layers away (node-executor.ts's node-state carry, the
- *  MCP failure-guidance helper) can reference it without re-deriving it. */
-export type ErrorHint = {
+ *  MCP failure-guidance helper) can reference it without re-deriving it.
+ *
+ *  A PROVIDER's verdict. Contrast PolicyBlockHint, which is Nodaro's own. */
+export type SafetyBlockHint = {
   kind: "safety-block"
   class: SafetyBlock["class"]
   retried: boolean
   suggestedProvider?: string
 }
 
-export function errorHintFor(block: SafetyBlock, retried: boolean): ErrorHint {
+/** A NODARO-side policy decision, not a provider's — written by the job-policy
+ *  registry on a `block` verdict at either hook point (spec
+ *  2026-09-03-job-policy-hook-design §9, D12/D13).
+ *
+ *  `reason` is USER-SAFE BY CONTRACT: `error_hint` is on `PUBLIC_JOB_KEYS`, so
+ *  `sanitizeJobForPublic` passes it through to non-admins unchanged and it
+ *  lands verbatim on the owner's canvas — exactly like `upload_blocked`. It is
+ *  the verdict's `userMessage ?? reason`; the MACHINE text (scores, labels)
+ *  stays in `job_policy_decisions.reason` and must never be copied here. A
+ *  policy that would leak its internals has to return a generic reason.
+ *
+ *  `hookPoint` lets one surface render both gates: "blocked before it ran"
+ *  (request) vs "the result was blocked and wasn't saved" (result). */
+export type PolicyBlockHint = {
+  kind: "policy-block"
+  policyId: string
+  reason: string
+  hookPoint: "request" | "result"
+}
+
+/** One jsonb column, two verdict sources. A DISCRIMINATED UNION on `kind` —
+ *  which was already the discriminant every reader tested
+ *  (`hint.kind === "safety-block"`), so widening it breaks none of them.
+ *
+ *  Hand-copied mirrors that must be updated in the same change (each says so in
+ *  its own comment): `frontend/src/types/nodes.ts` `JobErrorHint`,
+ *  `packages/client/src/resources/jobs.ts` `JobErrorHint` (minor + changeset).
+ *  `packages/client/dist/index.d.ts` is REBUILT, never hand-edited. */
+export type ErrorHint = SafetyBlockHint | PolicyBlockHint
+
+/** Constructor for the policy arm, so no call site hand-writes the literal
+ *  `kind` (the way a mistyped discriminant silently falls through every
+ *  reader's `switch` to "unknown failure"). */
+export function policyBlockHint(
+  policyId: string,
+  reason: string,
+  hookPoint: "request" | "result",
+): PolicyBlockHint {
+  return { kind: "policy-block", policyId, reason, hookPoint }
+}
+
+export function errorHintFor(block: SafetyBlock, retried: boolean): SafetyBlockHint {
   return block.fallback
     ? { kind: "safety-block", class: block.class, retried, suggestedProvider: block.fallback }
     : { kind: "safety-block", class: block.class, retried }

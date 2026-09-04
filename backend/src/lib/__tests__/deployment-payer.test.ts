@@ -30,9 +30,25 @@ vi.mock("../supabase.js", () => ({
       h.fromCalls++
       return {
         select: () => ({ eq: () => ({ maybeSingle: async () => h.profileRow }) }),
+        // Track A step 1: configureDeploymentPayer() also writes the
+        // `deployment_payer_settings` singleton (migration 381's RLS input).
+        // Stubbed as a success here; the payload and the refuse-boot semantics
+        // are proved in deployment-payer-settings-upsert.test.ts.
+        upsert: async () => ({ error: null }),
+        update: () => ({ eq: async () => ({ error: null }) }),
       }
     },
-    auth: { admin: { listUsers: h.listUsers } },
+    auth: {
+      admin: {
+        listUsers: h.listUsers,
+        // Track A D15.1: configureDeploymentPayer() now reads the resolved
+        // payer's app_metadata to refuse an SSO-FEDERATED payer at boot, and
+        // an unreadable account fails CLOSED — so with no stub here every
+        // activation is refused. Non-federated by default; the refusal itself
+        // is proved in deployment-payer-boot.test.ts.
+        getUserById: async (id: string) => ({ data: { user: { id, app_metadata: {} } }, error: null }),
+      },
+    },
   },
 }))
 

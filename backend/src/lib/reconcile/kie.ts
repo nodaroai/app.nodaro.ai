@@ -1,5 +1,6 @@
 import { variantJobId } from "@nodaro/shared"
 import { supabase } from "../supabase.js"
+import { markJobFailed } from "../job-failure.js"
 import { uploadToR2 } from "../storage.js"
 import { providerDetailOf, logProviderFailure } from "../provider-error-detail.js"
 import {
@@ -241,20 +242,15 @@ async function markFailed(jobId: string, reason: string, detail: string | null =
   // Log BEFORE the write: this module had no per-job output at all, so a
   // cron-failed job was invisible in Railway (spec §11.3).
   logProviderFailure("reconcile/kie", jobId, reason, detail)
-  // CAS on the non-terminal precondition (not just `.neq("cancelled")`) so a job
-  // the worker concurrently flipped to `completed` (or `cancelled`/`failed`) is
-  // never trampled to `failed`. Matches sweepStaleSyncJob / forceFailExhausted.
-  await supabase
-    .from("jobs")
-    .update({
-      status: "failed",
-      error_message: reason.slice(0, 500),
-      error_detail: detail,
-      completed_at: new Date().toISOString(),
-      reconcile_last_error: "upstream_failed",
-    })
-    .eq("id", jobId)
-    .in("status", ["pending", "processing"])
+  // The CAS lives in markJobFailed now (FAILABLE_STATUSES): never trample a job
+  // a concurrent writer flipped to completed/cancelled, and never take a
+  // `pending_review` row — a held job is out of every reconcile sweep's reach
+  // by construction (spec D11).
+  await markJobFailed(jobId, {
+    error_message: reason,
+    error_detail: detail,
+    reconcile_last_error: "upstream_failed",
+  })
 }
 
 /**

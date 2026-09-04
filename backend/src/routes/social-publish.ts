@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { insertJob } from "../lib/insert-job.js"
+import { sendInternalError } from "../lib/http-errors.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { MEDIA_REQUIRED_ACTIONS as SHARED_MEDIA_REQUIRED, VALID_ACTIONS as SHARED_ACTIONS } from "../services/social/actions.js"
 import {
@@ -114,7 +115,10 @@ export async function socialPublishRoutes(app: FastifyInstance) {
       })
 
     if (jobErr || !job) {
-      return reply.status(500).send({ error: { code: "internal_error" } })
+      // sendInternalError leads with `jobBlockOf`, so a request-gate BLOCK
+      // answers 422 `job_blocked` with the policy's message (F10); a real
+      // insert failure keeps its 500 internal_error.
+      return sendInternalError(reply, req, jobErr, "Failed to create job")
     }
 
     // Reserve credits

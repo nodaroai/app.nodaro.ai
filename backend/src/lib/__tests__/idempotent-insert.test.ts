@@ -220,3 +220,33 @@ describe("insertWithIdempotencyKey", () => {
     expect(mocks.state.rows).toHaveLength(2)
   })
 })
+
+/**
+ * `insertJobIdempotent` now has a SECOND throw shape.
+ *
+ * It already threw on a DB error, which is why every one of its four callers
+ * wraps it in `try { … } catch (err) { return sendInternalError(...) }` — and
+ * that is precisely what lets a policy block become a 422 with no route edit.
+ * The two must stay distinguishable: a block is the client's answer (422 with
+ * the policy's own words), a DB error is ours (500, generic).
+ *
+ * `insertWithIdempotencyKey`'s own semantics — migration 163's UNIQUE and the
+ * post-conflict fallback SELECT above — are untouched: the gate runs entirely
+ * before it is called.
+ */
+describe("insertJobIdempotent's two throw shapes", () => {
+  it("a policy block is a JobBlockedError carrying a 422 and the user-safe message", async () => {
+    const { JobBlockedError, jobBlockOf } = await import("../job-policy.js")
+    const err: unknown = new JobBlockedError({
+      code: "job_blocked",
+      policyId: "sai-moderation",
+      message: "Not allowed here",
+    })
+    expect(err).toBeInstanceOf(JobBlockedError)
+    expect((err as { statusCode: number }).statusCode).toBe(422)
+    expect(jobBlockOf(err)).toMatchObject({ code: "job_blocked", policyId: "sai-moderation" })
+
+    // A DB error thrown by the same helper is NOT a block, so it keeps its 500.
+    expect(jobBlockOf(new Error("insert into jobs failed: deadlock detected"))).toBeNull()
+  })
+})

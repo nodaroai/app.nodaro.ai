@@ -6,6 +6,7 @@ import { warmAdminCache } from "../lib/admin-check.js"
 import { firstHeaderValue } from "../lib/request-helpers.js"
 import { resolveApiToken } from "../lib/api-token-resolver.js"
 import { surfaceSsoOnly } from "../lib/surface-profile.js"
+import { deploymentPayerId } from "../lib/deployment-payer.js"
 import { SSO_APP_METADATA_KEY } from "../lib/sso-linking.js"
 
 /**
@@ -455,7 +456,20 @@ export function registerAuthHook(app: FastifyInstance): void {
       // setCache, so a rejected account is never cached (every request re-hits
       // this) and only passing accounts populate the fast path. Inert on mainline
       // (auth.methods default [] → surfaceSsoOnly() false).
-      if (surfaceSsoOnly()) {
+      // B1 — the ONE exemption, exactly one uuid wide. A deployment payer
+      // (`billing.payerAccount`) is a local password account with no SSO
+      // marker, so on an SSO-only instance H6 refuses its very first request
+      // and the account that holds the deployment's credits cannot reach a
+      // single route. WIDENING `auth.methods` IS NOT THE ALTERNATIVE: adding
+      // "email" flips surfaceSsoOnly() to false and disables this gate for the
+      // WHOLE instance, re-opening self-registration against the publicly
+      // reachable GoTrue for every account. This exemption instead keys on a
+      // uuid resolved at boot from operator-owned profile config, redacted
+      // from /config.js, and unwritable from inside the product — so it cannot
+      // be widened by any route, role or IdP assertion. Inert on mainline:
+      // deploymentPayerId() is null and `userId !== null` holds for every
+      // account, so the condition reduces to today's `if (surfaceSsoOnly())`.
+      if (surfaceSsoOnly() && userId !== deploymentPayerId()) {
         const marker = (data.user.app_metadata as Record<string, unknown> | undefined)?.[
           SSO_APP_METADATA_KEY
         ]

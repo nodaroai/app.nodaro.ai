@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
 import { createClient, StaticTokenAuth, NotFoundError } from "../../index.js"
+import type { JobErrorHint, JobStatus } from "../../index.js"
 
 function mockOk<T>(body: T) {
   return Promise.resolve({ ok: true, status: 200, json: async () => body } as unknown as Response)
@@ -19,6 +20,19 @@ describe("jobs resource", () => {
     await c.jobs.cancel("job-1")
     expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/jobs/job-1/cancel")
     expect(fetchMock.mock.calls[0][1].method).toBe("POST")
+  })
+
+  it("delete DELETEs /v1/jobs/:id and resolves the body", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ success: true }))
+    const c = createClient({
+      baseUrl: "https://api.example.com",
+      auth: new StaticTokenAuth("t"),
+      fetch: fetchMock,
+    })
+    const res = await c.jobs.delete("abc")
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/jobs/abc")
+    expect(fetchMock.mock.calls[0][1].method).toBe("DELETE")
+    expect(res).toEqual({ success: true })
   })
 
   it("get throws NotFoundError on 404", async () => {
@@ -146,5 +160,103 @@ describe("jobs resource", () => {
     const { data } = await c.jobs.getStatus("job-1")
     expect(data.error_hint).toEqual({ kind: "safety-block", class: "copyright", retried: false })
     expect(data.credit_status).toBeNull()
+  })
+})
+
+/**
+ * The job-policy release (spec 2026-09-03-job-policy-hook-design §6.1, §9).
+ * `pending_review` and the `policy-block` arm of `error_hint` are HAND-COPIED
+ * mirrors of `backend/src/lib/{job-status,safety-block}.ts` — nothing at build
+ * time links the two repos' copies, so these assertions are the link. Most of
+ * what breaks without the change is a TYPE error (caught by
+ * `npx tsc --noEmit` in this package, not by the runtime assertions below).
+ */
+describe("jobs resource — pending_review and the policy-block hint", () => {
+  it("`pending_review` is a JobStatus (in-flight, not terminal)", () => {
+    // Type-level: this line does not compile until `JobStatus` gains the member.
+    const held: JobStatus = "pending_review"
+    expect(held).toBe("pending_review")
+  })
+
+  it("JobErrorHint is a discriminated union that narrows on `kind`", () => {
+    // Type-level: neither literal compiles against the old single-arm interface.
+    const safety: JobErrorHint = { kind: "safety-block", class: "copyright", retried: false }
+    const policy: JobErrorHint = {
+      kind: "policy-block",
+      policyId: "sai-moderation",
+      reason: "This image can't be published here.",
+      hookPoint: "result",
+    }
+    const hints: JobErrorHint[] = [safety, policy]
+    const seen: string[] = []
+    for (const hint of hints) {
+      // `kind` is the discriminant in every reader; narrowing must reach the
+      // arm-specific fields without a cast.
+      if (hint.kind === "safety-block") seen.push(hint.class)
+      else seen.push(`${hint.policyId}:${hint.hookPoint}`)
+    }
+    expect(seen).toEqual(["copyright", "sai-moderation:result"])
+  })
+
+  it("getStatus() carries a held job's status and a policy-block error_hint untouched", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockOk({
+        data: {
+          id: "job-1",
+          status: "pending_review",
+          progress: 100,
+          output_data: null,
+          error_message: null,
+          error_hint: null,
+          credit_status: "reserved",
+        },
+      }),
+    )
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const { data } = await c.jobs.getStatus("job-1")
+    expect(data.status).toBe("pending_review")
+    // The reservation stays reserved for the whole hold — nothing is committed
+    // or refunded until a human resolves it.
+    expect(data.credit_status).toBe("reserved")
+  })
+
+  it("get() carries a policy-block error_hint verbatim (reason is user-safe by contract)", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockOk({
+        data: {
+          id: "job-2",
+          status: "failed",
+          progress: 0,
+          user_id: "u1",
+          input_data: {},
+          output_data: null,
+          error_message: "This image can't be published here.",
+          error_hint: {
+            kind: "policy-block",
+            policyId: "sai-moderation",
+            reason: "This image can't be published here.",
+            hookPoint: "result",
+          },
+          credit_status: "refunded",
+          credits: 5,
+          job_type: "generate-image",
+          created_at: "2026-09-03T00:00:00Z",
+          started_at: null,
+          completed_at: null,
+        },
+      }),
+    )
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const { data } = await c.jobs.get("job-2")
+    expect(data.error_hint).toEqual({
+      kind: "policy-block",
+      policyId: "sai-moderation",
+      reason: "This image can't be published here.",
+      hookPoint: "result",
+    })
+    const hint = data.error_hint
+    if (!hint || hint.kind !== "policy-block") throw new Error("expected a policy-block hint")
+    expect(hint.policyId).toBe("sai-moderation")
+    expect(hint.hookPoint).toBe("result")
   })
 })

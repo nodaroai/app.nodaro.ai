@@ -14,6 +14,8 @@ import { Worker, type ConnectionOptions } from "bullmq"
 import IORedis from "ioredis"
 import { config } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
+import { markJobCompleted } from "./shared.js"
+import { markJobFailed } from "../lib/job-failure.js"
 import {
   commitReservedCreditsForJob,
   refundReservedCreditsForJob,
@@ -123,15 +125,25 @@ export async function processVideoDirectorJob(
       { ...deps, onProgress },
     )
 
-    await supabase
-      .from("jobs")
-      .update({
-        status: "completed",
-        progress: 100,
-        output_data: { videoUrl: result.videoUrl },
-        completed_at: new Date().toISOString(),
-      })
-      .eq("id", jobId)
+    // Through the ONE completion funnel (spec §5.3). This was a bare
+    // `update({status:"completed"})` with no status predicate: it could trample
+    // a row the user had just cancelled, and it published a video the result
+    // gate never saw. `markJobCompleted` supplies status/progress/completed_at
+    // and CASes on live statuses.
+    //
+    // Deliberately NO `createAssetFromJob`: the URL is the child RENDER job's
+    // object and that job already created its library row — a second one would
+    // duplicate the entry.
+    const completed = await markJobCompleted(jobId, {
+      output_data: { videoUrl: result.videoUrl },
+    })
+    if (!completed) {
+      // The user cancelled, a terminal writer won, or a registered policy
+      // blocked/held the output. In each case the credits belong to whoever
+      // wrote that outcome — commit nothing here.
+      console.log(`[video-director] Job ${jobId} not completed by us (cancelled, or a policy outcome) — no commit`)
+      return
+    }
 
     // Commit the reserved authoring credit now that the chain delivered a
     // video. jobId-keyed CAS-on-reserved (idempotent); dynamic-loads ee/ so
@@ -158,18 +170,16 @@ export async function processVideoDirectorJob(
     // NOTE: refundReservedCreditsForJob swallows its own business-logic failures
     // (bad RPC result / lost CAS race / no reserved log) and returns 0 — so the
     // inner catch below only fires on a raw transport exception (a network blip
-    // on the usage_logs read or the refund RPC call), or a throw from the
-    // 'failed' update itself. Both are correctly left for the sweep to retry.
+    // on the usage_logs read or the refund RPC call). `markJobFailed` never
+    // throws by contract, so the status write can no longer be the thing that
+    // lands here; the try still wraps it because the ORDER is what matters.
     try {
       await refundReservedCreditsForJob(jobId)
-      await supabase
-        .from("jobs")
-        .update({
-          status: "failed",
-          error_message: errMsg,
-          completed_at: new Date().toISOString(),
-        })
-        .eq("id", jobId)
+      // Gains a CAS it never had (spec §9): the bare update could trample a
+      // `cancelled` row, and — with the widened vocabulary — a `pending_review`
+      // one. The returned boolean is not read: this worker refunds FIRST, on
+      // purpose, so there is no post-write decision left to gate.
+      await markJobFailed(jobId, { error_message: errMsg })
     } catch (settleErr) {
       // Do NOT rethrow — leave the row 'processing' for the reconcile sweep.
       // Rethrowing would surface as the bullJob result and (if attempts were

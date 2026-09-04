@@ -1,4 +1,5 @@
 import { supabase } from "../supabase.js"
+import { markJobFailed } from "../job-failure.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
 import { providerDetailOf, redactProviderDetail } from "../provider-error-detail.js"
 import { MAX_ATTEMPTS } from "./types.js"
@@ -14,10 +15,11 @@ import { MAX_ATTEMPTS } from "./types.js"
  * path is shared. Spec refs: §5.5, §7 edge case "reconcile_attempts ≥ 18".
  *
  * Race-safe: `bumpAttemptsOrExhaust` reads then writes, so two concurrent
- * ticks could both land here. CAS-guard on `.in("status", ["pending",
- * "processing"])` in `forceFailExhausted` ensures only one tick wins the
- * terminal write — the other's UPDATE returns 0 rows and exits without
- * double-refund or double-anomaly.
+ * ticks could both land here. The `markJobFailed` CAS in `forceFailExhausted`
+ * (on `FAILABLE_STATUSES`) ensures only one tick wins the terminal write — the
+ * other's UPDATE returns 0 rows and exits without double-refund or
+ * double-anomaly. That same guard is what keeps an exhausted-attempt count from
+ * failing a job parked in review (spec D11).
  */
 /**
  * Errors that are DETERMINISTIC for a given provider result — retrying them
@@ -90,25 +92,18 @@ async function forceFailExhausted(
   finalAttempts: number,
   detail: string | null,
 ): Promise<void> {
-  const { data: marked } = await supabase
-    .from("jobs")
-    .update({
-      status: "failed",
-      error_message: EXHAUSTED_USER_MESSAGE,
-      // W0's `detail` (providerDetailOf(err) = KieError.internalDetails,
-      // already redacted) stays authoritative. Fall back to the redacted
-      // machine string only when the thrown error carried no provider text,
-      // so an exhausted job is never left with NO diagnostic at all.
-      error_detail: detail ?? redactProviderDetail(`reconcile_exhausted: ${lastError}`),
-      completed_at: new Date().toISOString(),
-      reconcile_attempts: finalAttempts,
-      reconcile_last_error: "exhausted",
-    })
-    .eq("id", jobId)
-    .in("status", ["pending", "processing"])
-    .select("id")
+  const marked = await markJobFailed(jobId, {
+    error_message: EXHAUSTED_USER_MESSAGE,
+    // W0's `detail` (providerDetailOf(err) = KieError.internalDetails,
+    // already redacted) stays authoritative. Fall back to the redacted
+    // machine string only when the thrown error carried no provider text,
+    // so an exhausted job is never left with NO diagnostic at all.
+    error_detail: detail ?? redactProviderDetail(`reconcile_exhausted: ${lastError}`),
+    reconcile_attempts: finalAttempts,
+    reconcile_last_error: "exhausted",
+  })
 
-  if (!marked || marked.length === 0) {
+  if (!marked) {
     return
   }
 

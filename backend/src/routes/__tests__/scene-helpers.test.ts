@@ -319,6 +319,43 @@ describe("POST /v1/pipelines/:id/entities/:sceneId/helpers/audit_prompt", () => 
     expect(refundHelperCredits).not.toHaveBeenCalled()
     await app.close()
   })
+
+  it("returns 500, not 402, when the reservation reports allowance_unconfigured", async () => {
+    // Track A D9 / spec §7.5. `allowance_unconfigured` means enforcement was
+    // asked for on a deployment whose settings row names no payer — an
+    // OPERATOR fault, not a business refusal. This lane maps every reason but
+    // `price_not_configured` to 402, so without the branch the user is sent to
+    // buy credits that cannot possibly help them, and the misconfiguration is
+    // logged nowhere as a fault. Every other surface (the reserve error map,
+    // the deployment-billing routes) already answers 500 for this code.
+    ;(reserveHelperCredits as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: false,
+      reason: "allowance_unconfigured",
+    })
+    const app = await makeApp()
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/pipelines/p1/entities/scene-1/helpers/audit_prompt",
+    })
+    expect(res.statusCode).toBe(500)
+    expect(res.json().error.code).toBe("allowance_unconfigured")
+    expect(runAuditPrompt).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it("still answers 503 for price_not_configured", async () => {
+    ;(reserveHelperCredits as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: false,
+      reason: "price_not_configured",
+    })
+    const app = await makeApp()
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/pipelines/p1/entities/scene-1/helpers/audit_prompt",
+    })
+    expect(res.statusCode).toBe(503)
+    await app.close()
+  })
 })
 
 describe("POST /v1/pipelines/:id/entities/:sceneId/helpers/improve_prompt", () => {

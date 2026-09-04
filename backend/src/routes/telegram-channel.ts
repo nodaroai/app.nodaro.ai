@@ -66,7 +66,10 @@ export async function telegramChannelRoutes(app: FastifyInstance): Promise<void>
       })
 
     if (jobErr || !job) {
-      return reply.status(500).send({ error: { code: "internal_error" } })
+      // sendInternalError (already this file's helper 60 lines below) leads
+      // with `jobBlockOf`, so a request-gate BLOCK answers 422 `job_blocked`
+      // instead of a 500 the SDK retries with backoff (F10).
+      return sendInternalError(reply, req, jobErr, "Failed to create job")
     }
 
     const reservation = await reserveCreditsForJob(req, reply, job.id, "telegram-channel-feed")

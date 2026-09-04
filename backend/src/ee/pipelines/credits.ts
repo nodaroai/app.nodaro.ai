@@ -1,5 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { mapReserveError, type MappedReserveError } from "../../lib/reserve-errors.js"
+// Track A: the step-8 enforcement flip. False on any deployment with no
+// `billing.payerAccount`, and false until the overlay sets
+// `billing.allowances = "enforce"`.
+import { allowanceEnforcementActive, deploymentPayerActive } from "../../lib/deployment-payer.js"
 import type { BillingContext } from "../../lib/billing-context.js"
 import { attemptAutoRecharge } from "../billing/auto-recharge.js"
 import { CHAT_STAGES, CHAT_TURN_CAPS, TIER_MAX_PIPELINE_COST_CREDITS, ShowrunnerPlanSchema, buildVideoCreditModelIdentifier, creditsToUsd, usdToCredits, type PipelineFormat, type PipelineMode, type VideoCriticFrameMode } from "@nodaro/shared"
@@ -239,9 +243,20 @@ export async function reservePipelineCredits(
     p_provider_cost_usd: 0, // pipelines aggregate many provider calls; tracked separately
     p_display_cost_usd: creditsToUsd(args.credits),
     p_is_app_run: false,
+    // Track A / D3: attribution and enforcement, spread conditionally so a
+    // personal pipeline's wire shape stays byte-identical. Both parameters
+    // are trailing and DEFAULTED in migration 382. The payer's own pipeline
+    // passes neither — it owns the pool, it has no allowance (D13).
+    ...(dep && args.userId !== dep.payerId
+      ? { p_on_behalf_of: args.userId, p_enforce_allowance: allowanceEnforcementActive() }
+      : {}),
   })
   if (error) {
     // Distinguish "insufficient credits" (RPC raises) from other DB errors.
+    // NOTE for anyone adding a refusal prefix: this substring test runs
+    // BEFORE mapReserveError, so a prefix containing "insufficient" or
+    // "not enough" is silently downgraded to the generic wallet-empty answer.
+    // `USER_ALLOWANCE_EXCEEDED` was named around exactly this (D9).
     const msg = error.message ?? ""
     if (msg.toLowerCase().includes("insufficient") || msg.toLowerCase().includes("not enough")) {
       return { ok: false, reason: "insufficient_credits" }
@@ -264,21 +279,10 @@ export async function reservePipelineCredits(
   // a member's saved card (the family-0 invariant, mirrored). NEVER for a
   // deployment payer — prepaid-only, the payer account has no card to pump.
   if (!ws && !dep) void attemptAutoRecharge(args.userId)
-  // Deployment payer: stamp the requester into on_behalf_of (migration 362)
-  // — attribution only, never settlement; loud-but-tolerated on a DB that
-  // predates the column (the 361 degrade class).
-  if (dep) {
-    const { error: attributionError } = await args.supabase
-      .from("usage_logs")
-      .update({ on_behalf_of: args.userId } as Record<string, unknown>)
-      .eq("id", usageLogId)
-    if (attributionError) {
-      console.error(
-        `[pipelines/credits] on_behalf_of attribution failed for usage log ${usageLogId}:`,
-        attributionError.message,
-      )
-    }
-  }
+  // The post-hoc `on_behalf_of` UPDATE that used to live here is GONE (D5):
+  // migration 382's `reserve_credits` names the column in its own INSERT, so
+  // attribution is written in the same transaction as the debit instead of by
+  // a second statement that could fail alone.
   // Persist for later refund.
   const { error: updateError } = await args.supabase
     .from("pipelines")
@@ -320,6 +324,17 @@ export async function refundPipelineCredits(args: RefundPipelineCreditsArgs): Pr
   if (error) {
     console.error(`[pipelines/credits] refund_credits failed (${args.reason}):`, error.message)
     return
+  }
+  // Track A (D12 rider). This lane calls the RPC directly, so it does not
+  // inherit CreditsService.refundCredits's invalidation. Under a payer the
+  // refund just handed the requester's ALLOWANCE back, and a 15-second stale
+  // sidebar shows them less than they have — which can talk them out of the
+  // retry the refund exists to make possible. The requester is already in
+  // hand, so this costs no read; `deploymentPayerActive()` is false on every
+  // deployment with no `billing.payerAccount`, so mainline imports nothing.
+  if (deploymentPayerActive()) {
+    const { invalidateBalanceCache } = await import("../routes/credits.js")
+    invalidateBalanceCache(args.userId)
   }
   // Clear the link so a future refund call is a fast no-op.
   const { error: clearError } = await args.supabase

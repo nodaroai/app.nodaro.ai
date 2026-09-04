@@ -488,6 +488,14 @@ export const en = {
   "usage.catAudio": "Audio",
   "usage.catOther": "Other",
 
+  // ── Track A — the per-user allowance card (WS5 owns usage.* + credits.*
+  //    allowance keys; billingAdmin.* belongs to the billing-account page).
+  //    The remaining/granted pair is ONE interpolated key on purpose: a bare
+  //    "X / Y" inverts under RTL and the sentence then lies. ────────────────
+  "usage.allowanceRemaining": "Remaining allowance",
+  "usage.allowanceOfGranted": "of {granted} {unit} granted",
+  "usage.allowanceGrantedUnavailable": "Granted total unavailable",
+
   // ── Node run strip (cross-cutting — appears under every node) ────────────
   "node.runFromHere": "Run from here",
   "node.stop": "Stop",
@@ -2911,6 +2919,7 @@ export const en = {
   "cfgext.refineNoRegionsDetected": "No regions detected in this image",
   "cfgext.refineDetectionFailed": "Region detection failed",
   "cfgext.refineDetectionTimedOut": "Region detection timed out",
+  "cfgext.refineDetectionAwaitingReview": "This detection is awaiting review — it will finish once a reviewer releases it",
   "cfgext.refineTitle": "Refine Regions",
   "cfgext.refineNoTaskId": "Run this node again to enable region editing — older results don't carry the Grok task reference the editor needs.",
   "cfgext.refineActiveResultAlt": "Active result",
@@ -4093,6 +4102,31 @@ export const en = {
   // replaces it when one is configured (Phase B). "cr" (lowercase) is what
   // credits.perCreditSuffix used; every other site said "CR".
   "credits.unitShort": "CR",
+  // Track A — the sidebar's allowance card. Same rule as usage.*: the pair
+  // never renders as a bare "X / Y".
+  "credits.allowanceTitle": "YOUR ALLOWANCE",
+  "credits.allowanceGranted": "GRANTED",
+  "credits.allowanceOfGranted": "of {granted} granted",
+  // D10 — the copy for a `user_allowance_exceeded` 402. NOT "contact your
+  // administrator": under a deployment payer an admin genuinely cannot top
+  // anyone up, so the stock line sends the user to someone powerless. The
+  // wiring (error code -> this key) is still a handoff; the copy is pinned
+  // here so it cannot drift into two versions.
+  "credits.allowanceExceeded": "You have run out of credits. Contact your deployment's billing account.",
+  // The insufficient-credits modal. It was hardcoded English until Track A
+  // put it in front of a Hebrew-default deployment's users; the English values
+  // here are the strings it rendered before, verbatim, so mainline is
+  // byte-identical. The two CTAs are withheld under a deployment payer (its
+  // users cannot buy anything) — the keys stay because mainline still uses them.
+  "credits.insufficientTitle": "Insufficient Credits",
+  "credits.insufficientDescription": "You need {required} credits but only have {available} available.",
+  "credits.currentBalanceLabel": "Current balance",
+  "credits.requiredLabel": "Required",
+  "credits.shortByLabel": "Short by",
+  "credits.shortByAmount": "{n} credits",
+  "credits.currentPlanLabel": "Current plan",
+  "credits.upgradePlanCta": "Upgrade Plan",
+  "credits.buyCreditsCta": "Buy Credits",
   "credits.unitShortLower": "cr",
   "credits.amount": "({n} {unit})",
   "credits.insufficientTooltip": "Insufficient credits (need {need}, have {have})",
@@ -4125,6 +4159,8 @@ export const en = {
   "run.noNodesSelected": "No nodes selected.",
   "run.noExecutableInSelection": "No executable nodes in selection.",
   "run.jobFailed": "Job failed",
+  "run.jobAwaitingReview": "{label} is awaiting review",
+  "run.jobBlocked": "{label} was blocked by content policy",
   "run.backgroundJobCompleted": "Background job completed",
   "run.runDiscarded": "Run discarded — in-flight results will be saved to My Library",
   "run.backendCompleted": "Backend execution completed",
@@ -4573,6 +4609,17 @@ export const en = {
   "node.listComplete": "Complete",
   "node.skipBadge": "SKIP",
   "node.recovering": "Recovering…",
+
+  // ── Job policy hook — a held or blocked result on the canvas ────────────
+  "node.review.awaiting": "Awaiting review",
+  "node.review.desc": "The result is being reviewed before it's released.",
+  "node.review.creditsHeld": "Your credits stay held until the review finishes.",
+  // Ships unused: D17 makes a held job cancellable, so nothing renders this
+  // today. Kept because Q20 may flip the product decision.
+  "node.review.cannotStop": "This run can't be stopped while it's under review.",
+  "node.policyBlock.title": "Blocked by content policy",
+  "node.policyBlock.desc": "This request was blocked before it ran.",
+  "node.policyBlock.outputWithheld": "The result was blocked and wasn't saved.",
   "node.editPromptMode": "Edit prompt",
   "node.showFinalPromptMode": "Show the assembled final prompt",
   "node.showEditAndFinalMode": "Show edit + final",
@@ -4580,6 +4627,167 @@ export const en = {
   "node.promptViewFinal": "Final",
   "node.promptViewBoth": "Both",
   "node.phFinalPromptPreviewEmpty": "Final prompt preview — nothing to assemble yet",
+
+  // ── Reference-sheet panel — a held result ───────────────────────────────
+  "sheet.panelAwaitingReview": "Awaiting review",
+
+  // ── Content review (operator surface, /admin/review) ────────────────────
+  "adminReview.title": "Content Review",
+  "adminReview.subtitle": "Generations held by a policy check, waiting for a decision. Credits stay reserved until you approve or reject.",
+  "adminReview.tabQueue": "Awaiting review",
+  "adminReview.tabDecisions": "Decisions log",
+  "adminReview.emptyQueue": "Nothing is waiting for review.",
+  "adminReview.emptyDecisions": "No decisions recorded yet.",
+  "adminReview.loadError": "Could not load the review queue.",
+  "adminReview.heldFor": "Held {n}m",
+  "adminReview.policyLabel": "Policy",
+  "adminReview.reasonLabel": "Reason",
+  "adminReview.creditsHeld": "{n} credits held",
+  "adminReview.jobType": "Type",
+  "adminReview.owner": "Owner",
+  "adminReview.showInput": "Show request details",
+  "adminReview.previewFailed": "Preview unavailable",
+  "adminReview.previewLoading": "Loading preview…",
+  "adminReview.approve": "Approve",
+  "adminReview.reject": "Reject",
+  "adminReview.approveConfirmTitle": "Publish this output?",
+  "adminReview.approveConfirmBody": "The job completes normally and the reserved credits are charged.",
+  "adminReview.rejectTitle": "Reject this output",
+  "adminReview.rejectBody": "The job fails, the reserved credits are refunded, and the file is deleted.",
+  "adminReview.reasonPlaceholder": "Why is this being rejected?",
+  // The honesty label: `reason` becomes error_hint.reason, which is on
+  // PUBLIC_JOB_KEYS and lands on the requester's canvas.
+  "adminReview.reasonShownToUser": "This text is shown to the person who made the request.",
+  "adminReview.reasonRequired": "A reason is required.",
+  "adminReview.approved": "Approved — the job is completing.",
+  "adminReview.rejected": "Rejected — credits refunded.",
+  "adminReview.alreadyResolved": "Another admin already resolved this one.",
+  "adminReview.actionFailed": "The action did not complete. Nothing changed.",
+  "adminReview.filterPolicy": "Filter by policy",
+  "adminReview.filterUser": "Filter by user",
+  "adminReview.filterVerdict": "Verdict",
+  "adminReview.filterHookPoint": "Stage",
+  "adminReview.hookRequest": "Request",
+  "adminReview.hookResult": "Result",
+  "adminReview.hookReview": "Review",
+  "adminReview.verdictAllow": "Allowed",
+  "adminReview.verdictFlag": "Flagged",
+  "adminReview.verdictBlock": "Blocked",
+  "adminReview.verdictHold": "Held",
+  "adminReview.verdictApprove": "Approved",
+  "adminReview.verdictReject": "Rejected",
+  "adminReview.resolver": "Resolved by",
+  "adminReview.navLabel": "Content Review",
+
+  // ── Track A — the BILLING ACCOUNT's own page (/billing-admin, spec §9.3) ──
+  //    WS6 owns this namespace; WS5 owns the credits.* / usage.* allowance
+  //    keys. The page renders TWO currencies and must never blur them: the
+  //    POOL is raw Nodaro credits (the deployment's real money, the only place
+  //    in the product it appears) and every PER-USER figure is the
+  //    deployment's display unit, already converted by the server.
+  "billingAdmin.navLabel": "Billing account",
+  "billingAdmin.title": "Billing account",
+  "billingAdmin.subtitle": "The account that pays for every run on this deployment, and the allowance each user draws from it.",
+  "billingAdmin.notPayer": "This page belongs to the deployment's billing account.",
+  "billingAdmin.loadError": "Could not load the billing account. Nothing was changed.",
+  // A LIST read that failed, as distinct from the page-level fault above. Its
+  // own sentence on purpose: `loadError` says "Nothing was changed", which is
+  // the wrong promise for a read, and rendering a failed list as its empty
+  // state ("No users match this search.") states as fact something nobody
+  // knows.
+  "billingAdmin.listError": "Could not load this list.",
+  "billingAdmin.listRetry": "Try again",
+  "billingAdmin.loading": "Loading…",
+
+  "billingAdmin.poolTitle": "Nodaro credit pool",
+  "billingAdmin.poolNote": "These are Nodaro credits — the deployment's real balance, not the units your users see.",
+  "billingAdmin.poolBalance": "Balance",
+  "billingAdmin.poolSubscription": "From the plan",
+  "billingAdmin.poolTopup": "Purchased",
+  "billingAdmin.poolTier": "Plan",
+  "billingAdmin.poolPeriodEnd": "Renews {date}",
+  "billingAdmin.burnTitle": "This month",
+  "billingAdmin.burnCredits": "Used this month",
+  "billingAdmin.burnGenerations": "Runs",
+  "billingAdmin.burnSince": "Since {date}",
+  "billingAdmin.burnCapped": "Counted over the first {n} runs of this period — the real figure is higher.",
+  "billingAdmin.usersTotal": "Users",
+  "billingAdmin.usersProvisioned": "With an allowance",
+  "billingAdmin.usersUnprovisioned": "{n} more will be given the default on their first run.",
+  "billingAdmin.enforcementOff": "Allowances are shown but not enforced yet — no run is refused because of one.",
+  "billingAdmin.enforcementOn": "Allowances are enforced: a user with nothing left cannot start a run.",
+
+  "billingAdmin.txTitle": "Purchases",
+  "billingAdmin.txEmpty": "No purchases yet.",
+  "billingAdmin.txDate": "Date",
+  "billingAdmin.txAmount": "Amount",
+  "billingAdmin.txCredits": "Credits",
+  "billingAdmin.txReceipt": "Receipt",
+  "billingAdmin.ledgerTitle": "Credit movements",
+  "billingAdmin.ledgerEmpty": "No credit movements yet.",
+  "billingAdmin.ledgerDescription": "Description",
+  "billingAdmin.ledgerAmount": "Change",
+  "billingAdmin.ledgerBalanceAfter": "Balance after",
+
+  "billingAdmin.defaultTitle": "Default allocation",
+  "billingAdmin.defaultNote": "Changing this affects users who have not generated yet; existing users are topped up individually.",
+  "billingAdmin.defaultLabel": "Allocation per user ({unit})",
+  "billingAdmin.defaultSave": "Save",
+  "billingAdmin.defaultSaved": "The default allocation was updated.",
+
+  "billingAdmin.usersTitle": "Users and allowances",
+  "billingAdmin.searchPlaceholder": "Search by name or email",
+  "billingAdmin.colUser": "User",
+  "billingAdmin.colGranted": "Granted",
+  "billingAdmin.colRemaining": "Remaining",
+  "billingAdmin.colSpent": "Used",
+  "billingAdmin.colActions": "Actions",
+  "billingAdmin.notProvisioned": "Default — has not generated yet",
+  "billingAdmin.provisioned": "Active",
+  "billingAdmin.usersEmpty": "No users match this search.",
+  "billingAdmin.topupOpen": "Top up",
+  "billingAdmin.topupUnits": "Amount ({unit})",
+  "billingAdmin.topupNote": "Note (optional)",
+  "billingAdmin.topupSubmit": "Add",
+  "billingAdmin.topupHint": "A negative amount lowers the allowance as a correction. It is refused — never trimmed — if it would fall below what this user has already reserved or used.",
+  "billingAdmin.topupDone": "Added. This user's granted total is now {granted} {unit}.",
+  "billingAdmin.grantsOpen": "History",
+  "billingAdmin.grantsTitle": "Grant history",
+  "billingAdmin.grantsEmpty": "No grants yet.",
+  "billingAdmin.kindDefault": "Default",
+  "billingAdmin.kindTopup": "Top-up",
+  "billingAdmin.kindCorrection": "Correction",
+  "billingAdmin.kindOverrun": "Overrun",
+  "billingAdmin.overrunNote": "Overrun rows record a run that cost more than it reserved. They are audit-only and are not counted in the granted total.",
+  "billingAdmin.pagePrev": "Previous",
+  "billingAdmin.pageNext": "Next",
+  "billingAdmin.pageShowing": "{from}–{to} of {total}",
+
+  "billingAdmin.cardTitle": "Add credits with a card",
+  "billingAdmin.cardNote": "Buys Nodaro credits for the pool every user draws from.",
+  "billingAdmin.cardAmount": "Amount in US dollars",
+  "billingAdmin.cardQuote": "≈ {credits} Nodaro credits",
+  "billingAdmin.cardRange": "Whole dollars, ${min}–${max}.",
+  "billingAdmin.cardSubmit": "Continue to payment",
+  "billingAdmin.cardDisabled": "Card payment is not configured on this server.",
+  "billingAdmin.topupSuccess": "Payment received. The credits will appear here shortly.",
+
+  "billingAdmin.errNotWholeCredits": "Enter a whole number of Nodaro credits: a multiple of {rate} {unit}.",
+  "billingAdmin.errInvalidUnits": "Enter a whole number.",
+  "billingAdmin.errZero": "Enter an amount other than zero.",
+  "billingAdmin.errNegative": "Enter a positive amount.",
+  "billingAdmin.errUnitNotConfigured": "This deployment has no display unit configured, so allowances cannot be edited here.",
+  "billingAdmin.errBelowCommitted": "That correction would push the allowance below what this user has already reserved or used.",
+  "billingAdmin.errActorNotPayer": "Only the billing account may change an allowance.",
+  "billingAdmin.errUnconfigured": "This deployment's billing settings are not initialised. Nothing was changed.",
+  "billingAdmin.errWriteFailed": "The allowance could not be updated. Nothing was changed.",
+  "billingAdmin.errStripeNotConfigured": "Card payment is not configured on this server.",
+  "billingAdmin.errPayerHasNoAllowance": "The billing account holds the deployment's credits and has no allowance of its own.",
+  "billingAdmin.errInvalidAmount": "Enter a whole dollar amount inside the allowed range.",
+  "billingAdmin.errGeneric": "The action did not complete. Nothing was changed.",
+  "billingAdmin.errNoteTooLong": "That note is too long — keep it to 500 characters or fewer.",
+  "billingAdmin.errInvalidNote": "The note must be text.",
+  "billingAdmin.noteCharsLeft": "{n} characters left",
 } as const
 
 export type MessageKey = keyof typeof en

@@ -49,6 +49,7 @@ vi.mock("../../services/social/telegram-channel.js", () => ({
 }))
 
 import { telegramChannelRoutes } from "../telegram-channel.js"
+import { clearJobPolicies, registerJobPolicy } from "../../lib/job-policy.js"
 
 let app: FastifyInstance
 
@@ -110,5 +111,32 @@ describe("POST /v1/telegram-channel/fetch", () => {
 
     expect(r.statusCode).toBe(400)
     expect(jobUpdates).toHaveLength(0)
+  })
+})
+
+/** F10 — the documented 422 `job_blocked`, not a 500 the SDK retries with
+ *  backoff. This file already imports `sendInternalError` for its other error
+ *  paths; the insert error arm just never used it. */
+describe("POST /v1/telegram-channel/fetch — request-gate block (F10)", () => {
+  afterEach(() => clearJobPolicies())
+
+  it("answers 422 job_blocked and never fetches the channel", async () => {
+    registerJobPolicy({
+      id: "test-deny-all",
+      checkRequest: () => ({ verdict: "block", reason: "test:denied", userMessage: "Not allowed here" }),
+    })
+
+    // This suite's mocks are module-level and not reset between cases.
+    fetchChannelPosts.mockClear()
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/telegram-channel/fetch",
+      payload: { channel: "@somechannel" },
+    })
+
+    expect(res.statusCode).toBe(422)
+    expect(res.json()).toEqual({ error: { code: "job_blocked", message: "Not allowed here" } })
+    expect(fetchChannelPosts).not.toHaveBeenCalled()
   })
 })

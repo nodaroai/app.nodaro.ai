@@ -3,6 +3,7 @@ import Fastify from "fastify"
 import { newSession } from "../../session.js"
 import type { Scope } from "../../../scopes.js"
 import { buildServer, callTool, listTools } from "./_helpers.js"
+import { JOB_STATUSES } from "../../../job-status.js"
 
 vi.mock("../../../supabase.js", () => ({
   supabase: { from: vi.fn() },
@@ -193,6 +194,57 @@ describe("get_job tool", () => {
     expect(parsed.suggestedProvider).toBe("nano-banana-pro")
     expect(parsed.guidance).toMatch(/retry the SAME/)
     expect(parsed.guidance).toContain("nano-banana-pro")
+  })
+
+  /**
+   * A held job (spec 2026-09-03-job-policy-hook-design §6.4) takes neither the
+   * failed branch nor a completed one: `status: "pending_review"` with
+   * `output_data: null`. Technically correct and completely unactionable — the
+   * agent polls forever or, worse, re-runs the request, and the duplicate is
+   * held too.
+   */
+  it("explains a held job and tells the agent NOT to re-run it", async () => {
+    mockGetJob({
+      id: "55555555-5555-4555-8555-555555555555",
+      user_id: "u1",
+      status: "pending_review",
+      output_data: null,
+      error_message: null,
+      progress: 100,
+    })
+    const server = buildServer()
+    registerJobs({
+      server,
+      session: newSession({ userId: "u1", scopes: ["jobs:read"] as Scope[], clientName: "Claude" }),
+      fastify: Fastify(),
+    })
+    const result = await callTool(server, "get_job", {
+      job_id: "55555555-5555-4555-8555-555555555555",
+    })
+    expect(result.isError).toBeUndefined()
+    const parsed = JSON.parse(result.content[0]?.text as string)
+    expect(parsed.data.status).toBe("pending_review")
+    expect(parsed.retryable).toBe(false)
+    expect(parsed.guidance).toMatch(/do NOT re-run/i)
+    expect(parsed.guidance).toMatch(/review/i)
+    // It is NOT a failure — the failed-branch fields must not appear.
+    expect(parsed.suggestedProvider).toBeUndefined()
+  })
+
+  it("list_jobs' status filter derives from JOB_STATUSES, so it admits pending_review", async () => {
+    const server = buildServer()
+    registerJobs({
+      server,
+      session: newSession({ userId: "u1", scopes: ["jobs:read"] as Scope[], clientName: "Claude" }),
+      fastify: Fastify(),
+    })
+    const tools = await listTools(server)
+    const status = (tools.find((t) => t.name === "list_jobs")?.inputSchema as
+      | { properties?: { status?: { enum?: string[] } } }
+      | undefined)?.properties?.status
+    // A hand-rolled copy of the vocabulary silently omits every status added
+    // after it was typed — this one omitted `pending_review` on day one.
+    expect(status?.enum).toEqual([...JOB_STATUSES])
   })
 
   it("redacts private remux bases from input and output data", async () => {

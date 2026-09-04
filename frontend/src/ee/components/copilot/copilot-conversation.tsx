@@ -11,6 +11,7 @@
 import { useEffect, useRef, useState } from "react"
 import { COPILOT_STRINGS as S } from "@/ee/lib/copilot/strings"
 import { creditUnits } from "@/lib/credit-units"
+import { useT } from "@/lib/i18n"
 import { mentionDisplayName, splitWireMessage } from "@/ee/lib/copilot/mentions"
 import { useCopilotStore } from "@/ee/lib/copilot/turn-store"
 import { CopilotActivityRows } from "./copilot-activity"
@@ -38,6 +39,7 @@ export function CopilotConversation({
   onStopRun,
   onRetry,
 }: CopilotConversationProps) {
+  const t = useT()
   const turn = useCopilotStore((s) => s.turn)
   const streaming = useCopilotStore((s) => s.streaming)
   const activityCollapsed = useCopilotStore((s) => s.activityCollapsed)
@@ -133,7 +135,14 @@ export function CopilotConversation({
       )}
       {insufficient && (
         <div className="text-[11.5px] text-[var(--copilot-fail)] px-0.5">
-          Not enough credits — this turn needs {creditUnits(insufficient.required)}, you have {creditUnits(insufficient.balance)}.
+          {/* Track A (D10) — the per-user allowance running out is a different
+              refusal from the deployment pool running dry, and the remedy is
+              the only part the user can act on: on a payer instance nobody can
+              buy credits and no admin can top anyone up, so the line names the
+              billing account instead of quoting a shortfall they cannot fix. */}
+          {insufficient.code === "user_allowance_exceeded"
+            ? t("credits.allowanceExceeded")
+            : `Not enough credits — this turn needs ${creditUnits(insufficient.required)}, you have ${creditUnits(insufficient.balance)}.`}
         </div>
       )}
       {turn.creditsCharged !== null && turn.creditsCharged > 0 && (

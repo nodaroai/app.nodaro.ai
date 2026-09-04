@@ -473,6 +473,58 @@ describe("branchPipeline", () => {
     expect(enqueuePipelineRun).toHaveBeenCalledOnce()
   })
 
+  // ── The reserve refusal keeps its stable code (F6) ─────────────────────
+  //
+  // `reservePipelineCredits` classifies the RPC's `USER_ALLOWANCE_EXCEEDED:`
+  // raise through `mapReserveError` and answers reason "user_allowance_
+  // exceeded". This service used to rewrite every reason except
+  // "insufficient_credits" to "reservation_failed", which routes/pipelines.ts
+  // maps to HTTP 500 — so the 402 the client keys its allowance copy on never
+  // existed. Only a genuine `rpc_error` may become `reservation_failed`.
+  it("forwards user_allowance_exceeded as the error CODE, and still rolls the row back", async () => {
+    const { client, fixture } = makeSupabaseMock(makePipeline(), makeStagesUpTo(5))
+    ;(client as unknown as { rpc: unknown }).rpc = async (fn: string, args: Record<string, unknown>) => {
+      fixture.rpcCalls.push({ fn, args })
+      if (fn === "reserve_credits") {
+        return { data: null, error: { message: "USER_ALLOWANCE_EXCEEDED: granted 100, remaining 40, need 60" } }
+      }
+      return { data: null, error: null }
+    }
+
+    await expect(
+      branchPipeline({
+        supabase: client as never,
+        originalPipelineId: "orig-pipeline-id",
+        fromStage: "scene_images",
+        userId: "user-1",
+      }),
+    ).rejects.toMatchObject({ name: "BranchPipelineError", code: "user_allowance_exceeded" })
+
+    // Nothing downstream of the failed reservation — the row is rolled back and
+    // no stage, entity or queue job survives the refusal.
+    expect(fixture.stagesInserted).toHaveLength(0)
+    expect(fixture.entitiesInserted).toHaveLength(0)
+    expect(enqueuePipelineRun).not.toHaveBeenCalled()
+  })
+
+  it("keeps `reservation_failed` for a genuine fault, which is NOT a business refusal", async () => {
+    const { client, fixture } = makeSupabaseMock(makePipeline(), makeStagesUpTo(5))
+    ;(client as unknown as { rpc: unknown }).rpc = async (fn: string, args: Record<string, unknown>) => {
+      fixture.rpcCalls.push({ fn, args })
+      if (fn === "reserve_credits") return { data: null, error: { message: "deadlock detected" } }
+      return { data: null, error: null }
+    }
+
+    await expect(
+      branchPipeline({
+        supabase: client as never,
+        originalPipelineId: "orig-pipeline-id",
+        fromStage: "scene_images",
+        userId: "user-1",
+      }),
+    ).rejects.toMatchObject({ name: "BranchPipelineError", code: "reservation_failed" })
+  })
+
   it("refunds the reservation + fails the pipeline when post-reservation setup throws", async () => {
     const { client, fixture } = makeSupabaseMock(makePipeline(), makeStagesUpTo(5))
     // Step 9 (enqueue) throws — e.g. Redis down — AFTER credits were reserved.

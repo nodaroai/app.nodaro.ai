@@ -271,6 +271,22 @@ export function defaultDirectorDeps(fastify: FastifyInstance): DirectorDeps {
 
     waitForJob: async (jobId) => {
       const result = await _waitForJob({ jobId, timeoutMs: 600_000 })
+      // A child parked in `pending_review` (spec §6.4) is NOT a failure and NOT
+      // a timeout — but the director composes speech → alignment → render, and
+      // a withheld output cannot be composed, so the stage must stop. It gets
+      // its own arm because `result.error` is null by design on a held row, and
+      // the generic message below would read "…ended with status
+      // \"pending_review\": (no detail)".
+      //
+      // Unreachable in v1: `holdEligible` excludes `job_type ===
+      // "video-director"` and every job carrying a `parent_job_id` (D8). This
+      // is the contract guard that keeps it honest if eligibility widens.
+      if (result.status === "pending_review") {
+        throw new Error(
+          `Job ${jobId} is awaiting human review: its output is withheld, so this director stage cannot continue. ` +
+            `The review resolves the job to completed or failed — re-run the director afterwards.`,
+        )
+      }
       if (result.status !== "completed") {
         throw new Error(
           `Job ${jobId} ended with status "${result.status}": ${result.error ?? "(no detail)"}`,
