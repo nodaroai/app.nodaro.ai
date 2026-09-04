@@ -139,6 +139,10 @@ export interface ListJobsParams {
 }
 
 export interface ListJobsPage {
+  /**
+   * A page may hold fewer than `limit` rows — even none — and still carry a
+   * `next`. Page on `next`, never on `data.length`.
+   */
   data: Job[]
   /** Pass back as `cursor` for the next page; `null` on the last one. */
   next: string | null

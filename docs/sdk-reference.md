@@ -746,7 +746,8 @@ Your jobs, newest first (`GET /v1/jobs`), cursor-paginated (`limit` ≤ 100;
 pass `next` back as `cursor`). `type` matches the job's `input_data.type`
 (the route that created it — `"llm-structured"`, `"video-analysis"`, …) and
 `origin` matches `input_data.origin` (the client app that sent it). Both are
-exact-match and combine.
+exact-match and combine. A page may hold fewer than `limit` rows — even none —
+and still carry a `next`; page on `next`, never on `data.length`.
 
 ```ts
 const { data: runs, next } = await client.jobs.list({ type: "llm-structured", origin: "studio" })

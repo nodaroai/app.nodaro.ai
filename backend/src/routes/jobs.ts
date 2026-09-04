@@ -469,11 +469,13 @@ export async function jobRoutes(app: FastifyInstance) {
     // The route then swallowed that error, so from #1174 until the commit
     // before this one it answered an empty list to every caller.
     //
-    // It is not fixable in the query either. PostgREST computes an embed as a
-    // lateral subquery in the SELECT list, so the top-level WHERE that `or()`
-    // lands in has nothing to reference; filtering a PARENT row by an embedded
-    // column needs `!inner`, which would drop exactly the
+    // Nor is it expressible as a PostgREST FILTER. PostgREST computes an embed
+    // as a lateral subquery in the SELECT list, so the top-level WHERE that
+    // `or()` lands in has nothing to reference; filtering a PARENT row by an
+    // embedded column needs `!inner`, which would drop exactly the
     // `workflow_execution_id IS NULL` rows the first disjunct exists to keep.
+    // (A computed column or a view could do it query-side — not worth a
+    // migration for a page of at most 100 rows.)
     //
     // `workflow_execution_id` is selected only to decide the null case. It is
     // in neither key allowlist, so `sanitizeJobForPublic` still strips it.

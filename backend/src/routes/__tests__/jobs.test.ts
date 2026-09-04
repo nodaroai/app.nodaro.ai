@@ -807,7 +807,12 @@ describe("GET /v1/jobs — component-execution exclusion", () => {
     const res = await app.inject({ method: "GET", url: `/v1/jobs?__userId=${TEST_USER_ID}` })
 
     expect(res.statusCode).toBe(200)
-    expect(calls.filter((c) => c.method === "or")).toEqual([])
+    // Narrow on purpose: a future bare-column `.or(...)` is legitimate. What
+    // must never come back is an `or()` that names the embedded table.
+    const embeddedOrCalls = calls.filter(
+      (c) => c.method === "or" && typeof c.args[0] === "string" && c.args[0].includes("workflow_executions."),
+    )
+    expect(embeddedOrCalls).toEqual([])
   })
 
   it("keeps jobs with no execution and non-component executions, drops the component ones", async () => {
