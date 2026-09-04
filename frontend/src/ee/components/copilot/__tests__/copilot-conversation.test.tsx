@@ -10,6 +10,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { render, screen } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { useLocaleStore } from "@/lib/locale-store"
+import { en } from "@/lib/i18n/en"
+import { he } from "@/lib/i18n/he"
 
 vi.mock("@/ee/hooks/queries/use-credits-queries", () => ({
   useUserCredits: () => ({ data: { total: 6515 } }),
@@ -24,6 +27,13 @@ vi.mock("@/ee/lib/copilot/turn-engine", () => ({
   askForFix: vi.fn(),
 }))
 vi.mock("@/lib/api", () => ({ getWorkflowExecution: vi.fn(async () => ({ status: "running" })) }))
+// The run card reads the billing surface (Track A — whether a `null` allowance
+// may be gated on). It is a display here, so the answer does not matter; what
+// matters is that this file's `@/lib/api` mock carries no `getBillingSurface`,
+// and the hook's real query would reach for it.
+vi.mock("@/hooks/use-billing-surface", () => ({
+  useBillingSurface: () => ({ surface: { deploymentPayer: false }, isLoading: false }),
+}))
 
 const { CopilotConversation } = await import("../copilot-conversation")
 const { useCopilotStore } = await import("@/ee/lib/copilot/turn-store")
@@ -198,5 +208,51 @@ describe("the gap between send and the first token", () => {
     renderConversation(persistedHistory)
     expect(screen.queryByText("Reading the workflow")).toBeNull()
     expect(screen.queryByTestId("copilot-answer-skeleton")).toBeNull()
+  })
+})
+
+/**
+ * Track A (D10) — the copilot's 402 banner.
+ *
+ * The copilot route runs the same `creditGuard` as the canvas, so a user whose
+ * per-user allowance is exhausted hits this banner. The deployment pool running
+ * dry and one user's allowance running out are the same status and the same
+ * numbers with opposite remedies, and only one of them is anything the reader
+ * can act on.
+ */
+describe("the 402 banner", () => {
+  it("names the billing account when the refusal was the user's own allowance", () => {
+    useCopilotStore.setState({
+      insufficient: { required: 12000, balance: 4000, code: "user_allowance_exceeded" },
+      runPhase: "idle",
+      proposalDismissed: true,
+    })
+    renderConversation(persistedHistory)
+    expect(screen.getByText(en["credits.allowanceExceeded"])).toBeInTheDocument()
+    // Not the shortfall line: quoting a number they cannot change is the part
+    // that reads as "go buy some more", which they cannot do.
+    expect(screen.queryByText(/Not enough credits/)).toBeNull()
+  })
+
+  it("speaks Hebrew on the Hebrew-default instance this ships to", () => {
+    useLocaleStore.setState({ locale: "he" })
+    useCopilotStore.setState({
+      insufficient: { required: 12000, balance: 4000, code: "user_allowance_exceeded" },
+      runPhase: "idle",
+      proposalDismissed: true,
+    })
+    renderConversation(persistedHistory)
+    expect(screen.getByText(he["credits.allowanceExceeded"] as string)).toBeInTheDocument()
+    useLocaleStore.setState({ locale: "en" })
+  })
+
+  it("keeps the deployment-pool shortfall line, with the figures the body carried", () => {
+    useCopilotStore.setState({
+      insufficient: { required: 20, balance: 4, code: "insufficient_credits" },
+      runPhase: "idle",
+      proposalDismissed: true,
+    })
+    renderConversation(persistedHistory)
+    expect(screen.getByText(/this turn needs 20, you have 4/)).toBeInTheDocument()
   })
 })

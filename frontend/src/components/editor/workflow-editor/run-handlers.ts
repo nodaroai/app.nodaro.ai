@@ -11,6 +11,8 @@ import { setSkipUndoCapture } from "@/hooks/undo-flags";
 import { queryClient } from "@/lib/query-client";
 import { queryKeys } from "@/lib/query-keys";
 import { getCachedCredits } from "@/ee/hooks/use-model-credits";
+import { spendableCredits, type CreditAllowance } from "@/lib/spendable-credits";
+import { BILLING_SURFACE_QUERY_KEY, type BillingSurface } from "@/lib/billing-surface";
 import type { GeneratedResult, WorkflowNode, WorkflowEdge, JobErrorHint } from "@/types/nodes";
 import {
   MAX_CONSECUTIVE_POLL_FAILURES,
@@ -41,6 +43,37 @@ let activeWorkflowStreamCleanup: (() => void) | null = null;
 export function teardownActiveWorkflowStream(): void {
   activeWorkflowStreamCleanup?.();
   activeWorkflowStreamCleanup = null;
+}
+
+/**
+ * Track A — does THIS DEPLOYMENT have a billing payer (not "am I the payer")?
+ *
+ * `spendableCredits` needs it to read `allowance: null`, which means two things
+ * at once: the caller IS the payer (D13), or the figure was UNAVAILABLE. On a
+ * payer instance neither licenses refusing on `total` — that is the requester's
+ * FROZEN signup grant — so the flag is what stops a blipped allowance read from
+ * re-arming the pre-flip refusal here, with the server's 15 s balance cache
+ * holding it in place.
+ *
+ * CACHE-ONLY, and deliberately so. This is imperative code on the click path;
+ * the editor mounts `useBillingSurface()` (workflow-editor-main) long before a
+ * Run is possible, so the entry is there, and a fetch here would put a network
+ * round-trip in front of every Run to answer a deployment-grain question. The
+ * key is IMPORTED, never re-typed: a second literal reads an empty cache and
+ * answers "mainline" for ever.
+ *
+ * FALSE on anything unreadable, and the whole read is guarded: this runs inside
+ * the balance gate's try, where a throw would skip the credit check entirely.
+ * Mainline is the safe default because a PRESENT allowance never consults this
+ * flag at all — only the null case does, and mainline is where null means "the
+ * wallet is live".
+ */
+function deploymentPayerInstance(): boolean {
+  try {
+    return queryClient.getQueryData<BillingSurface>(BILLING_SURFACE_QUERY_KEY)?.deploymentPayer === true;
+  } catch {
+    return false;
+  }
 }
 
 function warnUnderMinRows(nodes: WorkflowNode[]): void {
@@ -341,20 +374,54 @@ export async function handleRun(
             const result = await getUserCredits(userId);
             return (
               result.data ??
-              (result as unknown as { total: number; tier: string })
+              (result as unknown as {
+                total: number;
+                tier: string;
+                allowance?: CreditAllowance | null;
+              })
             );
           },
           staleTime: 10_000,
         });
         const { edges: allEdges } = useWorkflowStore.getState();
         const estimatedCost = estimateRunCredits(executableNodes, nodes, allEdges, getCachedCredits);
-        if (balance.total < estimatedCost) {
+        // Track A (D12, ruling R-A) — what this user may actually spend, and
+        // whether this client is entitled to refuse on it at all.
+        //
+        // On a deployment-payer instance `total` is their FROZEN signup grant:
+        // nothing debits it and nothing tops it up, so it neither blocks nor
+        // permits truthfully. The allowance is the number the server reports,
+        // and it is ENFORCED only after the `billing.allowances` flip.
+        //
+        // Between those two the precheck STANDS DOWN (`gateApplies` false).
+        // Falling back to `total` there was the earlier rule and it refused
+        // runs the payer's pool would have paid for — a 4,000-credit run
+        // against a 1,500-credit grant the payer cannot even top up. In that
+        // window the server is the only lawful refuser: the pool now, the
+        // RPC's allowance check after the flip.
+        //
+        // `null` is a REAL answer and is NOT "remaining 0": it means no
+        // allowance applies to this caller — they ARE the payer (D13), or the
+        // figure was UNAVAILABLE. Those two are indistinguishable in the body,
+        // so on a payer instance BOTH stand down; reading null as "gate on
+        // `total`" refused runs on the frozen grant the first time a read
+        // blipped. On mainline the key never travels at all and `total` is the
+        // wallet, which is what keeps mainline byte-identical.
+        //
+        // RAW credits on both sides. `creditUnits` is a render conversion;
+        // putting a display unit on either side of this comparison is how a
+        // relabelled instance turns into a money bug.
+        const { figure: spendable, gateApplies } = spendableCredits(balance, deploymentPayerInstance());
+        if (gateApplies && spendable < estimatedCost) {
           // Roll back the optimistic flip before surfacing the modal.
           markNodesStatus(executableIds, undefined);
           setIsRunning(false);
           ctx.setInsufficientCreditsData({
             required: estimatedCost,
-            available: balance.total,
+            // The modal is fed the SAME number the gate used — a modal that
+            // quotes a different balance than the one that refused the run is
+            // how a user learns not to trust either.
+            available: spendable,
             tier: balance.tier,
           });
           ctx.setShowInsufficientCredits(true);

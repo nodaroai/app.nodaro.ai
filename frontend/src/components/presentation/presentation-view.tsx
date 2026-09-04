@@ -33,6 +33,8 @@ import { useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
 import { useAppRunnerStore } from "@/hooks/use-app-runner-store"
 import { hasCredits } from "@/lib/edition"
 import { formatCreditUnits } from "@/lib/credit-units"
+import { spendableCredits } from "@/lib/spendable-credits"
+import { useBillingSurface } from "@/hooks/use-billing-surface"
 import { useAuth, refreshAuth, setAuthFromTokens } from "@/hooks/use-auth"
 import { useWorkflowStore, type PresentationViewMode, type PresentationSettings } from "@/hooks/use-workflow-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
@@ -299,6 +301,13 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   const monetizationFlatFee = useAppRunnerStore((s) => s.app?.monetizationFlatFee ?? 0)
   const monetizationPercent = useAppRunnerStore((s) => s.app?.monetizationPercent ?? 0)
   const { data: userCredits } = useUserCredits(user?.id)
+  // Track A — does this DEPLOYMENT have a payer (not "am I the payer")? It is
+  // what tells a `null` allowance apart from mainline's absent one: under a
+  // payer, null is either the payer's own exemption (D13) or a figure the
+  // server could not read, and `total` is the runner's FROZEN signup grant in
+  // both — never a number this view may refuse a run on.
+  const { surface: billingSurface } = useBillingSurface()
+  const deploymentPayer = billingSurface.deploymentPayer === true
 
   const handleViewModeChange = useCallback((newMode: PresentationViewMode) => {
     // Update URL param
@@ -422,10 +431,19 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   }, [rawEstimatedCost, isAppRunner, monetizationEnabled, monetizationFlatFee, monetizationPercent])
 
   // Pre-check: does the user need more credits to run this app?
+  // Track A (D12, ruling R-A) — the gate figure, not `total`: under a
+  // deployment payer that field is the runner's FROZEN signup grant. The
+  // allowance binds only once the server says `enforced`, and until then this
+  // precheck STANDS DOWN (`gateApplies`) rather than falling back to a grant
+  // nothing debits — the payer's pool is what pays, and the server is what
+  // refuses. So does a null allowance on a payer instance, which is the payer
+  // itself or a read that failed. Mainline and the post-flip instance gate
+  // exactly as before.
   const needsMoreCredits = useMemo(() => {
     if (!user || !isAppRunner || !hasCredits() || !userCredits || estimatedCost <= 0) return false
-    return userCredits.total < estimatedCost
-  }, [user, isAppRunner, userCredits, estimatedCost])
+    const { figure, gateApplies } = spendableCredits(userCredits, deploymentPayer)
+    return gateApplies && figure < estimatedCost
+  }, [user, isAppRunner, userCredits, estimatedCost, deploymentPayer])
 
   // Auto-open modal when a 402 insufficient credits error occurs
   useEffect(() => {
@@ -2011,7 +2029,10 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           open={showGetCreditsModal}
           onClose={() => setShowGetCreditsModal(false)}
           tier={userCredits.effectiveTier}
-          balance={userCredits.total}
+          /* `displayFigure`, which IS the gate's own number whenever the gate
+             can fire — and stays honest when this modal is opened by the
+             server's 402 instead, in the window where no client gate runs. */
+          balance={spendableCredits(userCredits, deploymentPayer).displayFigure}
           required={estimatedCost}
         />
       )}

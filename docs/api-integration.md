@@ -521,6 +521,7 @@ All errors share the same shape:
 | 402 | `insufficient_credits` | — | (Cloud edition only) Account out of credits. |
 | 402 | `budget_exceeded` | — | (Cloud edition, organizations) Workspace-paid work: the workspace's allocated budget can't cover the reservation. Ask a workspace admin for headroom. Rollout-gated: availability may lag this document. |
 | 402 | `member_cap_exceeded` | — | (Cloud edition, organizations) Workspace-paid work: your per-member spending cap in this workspace is reached. Rollout-gated. |
+| 402 | `user_allowance_exceeded` | — | (Cloud edition, deployment-payer instances) Your per-user allowance on this deployment can't cover this run — distinct from `insufficient_credits`, which means the deployment's own pool is empty. Only the deployment's billing account can raise an allowance. Rollout-gated: availability may lag this document. |
 | 403 | `forbidden` | — | Token isn't authorized for this workflow (workflow scoping). |
 | 403 | `member_suspended` | — | (Cloud edition, organizations) Workspace-paid work: your membership in the paying workspace is suspended. Rollout-gated. |
 | 403 | `not_a_member` | — | (Cloud edition, organizations) The request names a workspace you are not an active member of. Rollout-gated. |

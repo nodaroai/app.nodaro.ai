@@ -11,6 +11,11 @@ import { invalidateAdminCache } from "../../lib/admin-check.js"
 import { TIER_CREDITS } from "../billing/stripe-config.js"
 import { tierColumns, resolveTierFrom } from "../billing/tier-columns.js"
 import { resolveEffectiveTier } from "@nodaro/shared"
+import { deploymentPayerActive, deploymentPayerId } from "../../lib/deployment-payer.js"
+import { allowanceFor, allowancesFor } from "../billing/deployment-allowance-service.js"
+import { runtimeSurfaceProfile } from "../../lib/surface-profile.js"
+import { toUnits } from "../../lib/billing-display-unit.js"
+import type { UserAllowance } from "../../types/deployment-allowance.js"
 
 // ---- Zod Schemas ----
 
@@ -21,6 +26,103 @@ const adjustCreditsBody = z.object({
   adminUserId: z.string().uuid(),
 })
 
+// ---------------------------------------------------------------------------
+// Deployment-payer redaction (spec D11 / §8.3)
+// ---------------------------------------------------------------------------
+//
+// On a deployment where one account pays for everyone, an admin is NOT a
+// billing role: the credits on every `profiles` row are the deployment's own
+// money, and the payer's row IS Nodaro's balance. Migration 381 hides that row
+// from the browser through RLS; these routes are the other way in, because they
+// run as the service role, which no policy constrains.
+//
+// Everything below is inert on mainline: `deploymentPayerActive()` is false and
+// `deploymentPayerId()` is null with no `billing.payerAccount`, so the query,
+// the column string and the response body are byte-for-byte today's.
+
+/** Today's column string, unchanged — mainline must ask for exactly this. */
+const USER_COLUMNS =
+  "id, display_name, avatar_url, tier, subscription_tier, lifetime_topup_credits, subscription_credits, topup_credits, daily_spent_credits, storage_used_bytes, storage_limit_bytes, created_at"
+
+/**
+ * Under a payer the admin page can no longer read `profiles` from the browser
+ * (381 narrows the policy, and the credit columns are withheld anyway), so this
+ * route becomes its data source and must carry the three identity columns the
+ * page renders. Added ONLY on the payer branch: mainline still uses the
+ * browser-direct read and must receive the same body it does today.
+ *
+ * `display_name` IS REMOVED HERE, and that is not tidying: `profiles` HAS NO
+ * SUCH COLUMN (see frontend/src/types/database.types.ts, and routes/me.ts:33 —
+ * "the human-readable name lives in `full_name`"). PostgREST refuses the whole
+ * request with `column "display_name" does not exist`, this route maps any
+ * query error to a 500, and under a payer that is the ONLY source the admin
+ * users page has — so the list would be dead on exactly the deployments this
+ * branch exists for. Nothing downstream loses anything: the route passes rows
+ * through and neither the page nor `AdminUser` reads `display_name`.
+ *
+ * MAINLINE'S `USER_COLUMNS` STILL NAMES IT, deliberately untouched: that string
+ * is pinned byte-for-byte by admin-users-payer-redaction.test.ts, mainline
+ * reaches this route through no shipped caller (the admin page reads `profiles`
+ * browser-direct, use-admin-queries.ts:248), and widening the blast radius of
+ * a payer fix to Nodaro Cloud's own route is not this change's business. It is
+ * a latent defect on that lane and wants its own triage.
+ */
+const USER_COLUMNS_PAYER = `${USER_COLUMNS.replace("display_name, ", "")}, email, full_name, role`
+
+/**
+ * Raw Nodaro credits → the deployment's display unit (SAI קרדיטים), the ONE
+ * conversion (`toUnits`, R3). `null` stays null all the way to the screen's em
+ * dash: 0 is a real value meaning "exhausted", and manufacturing it for "not
+ * known yet" is the lie this whole track is careful about. Answers null when no
+ * unit is configured, which cannot co-occur with an allowance in practice —
+ * `coherentBilling` drops `allowances` when the unit trio is incoherent — but
+ * is guarded rather than assumed.
+ */
+function saiUnits(credits: number | null | undefined): number | null {
+  const b = runtimeSurfaceProfile().billing
+  const rate = b.unitRate
+  if (typeof rate !== "number" || !Number.isFinite(rate) || rate <= 0) return null
+  return toUnits(credits, rate, b.unitDecimals ?? 0)
+}
+
+/**
+ * The three SAI figures for one user, in units.
+ *
+ * `sai_spent` is the SETTLED figure (`spent_credits`) and is deliberately NOT
+ * `granted − remaining`: that difference also contains `reserved` — credits
+ * held by a job still running — and rendering an in-flight reservation as money
+ * already spent would be wrong in the one direction an admin would act on.
+ */
+function saiFigures(a: UserAllowance | null): {
+  sai_granted: number | null
+  sai_remaining: number | null
+  sai_spent: number | null
+} {
+  return {
+    sai_granted: saiUnits(a?.granted ?? null),
+    sai_remaining: saiUnits(a?.remaining ?? null),
+    sai_spent: saiUnits(a?.spent ?? null),
+  }
+}
+
+/**
+ * True when this caller may not look at this id. The payer's ledger belongs to
+ * the payer alone (the billing account's own page, `/billing-admin`); an admin
+ * asking for it by id is the service-role half of the same leak 381 closes in
+ * RLS. Null payer id ⇒ never true ⇒ mainline untouched.
+ */
+function refusesPayerRow(id: string, callerId: string | undefined): boolean {
+  const payerId = deploymentPayerId()
+  return payerId !== null && id === payerId && callerId !== payerId
+}
+
+const PAYER_ROW_FORBIDDEN = {
+  error: {
+    code: "forbidden",
+    message: "This account's balance is visible only to the deployment's billing account.",
+  },
+}
+
 export async function adminCreditsRoutes(app: FastifyInstance) {
   // GET /v1/admin/users - List all users with credit info (paginated)
   app.get("/v1/admin/users", { preHandler: requireAdmin }, async (request, reply) => {
@@ -29,20 +131,39 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
     const offset = Math.max(0, parseInt(query.offset ?? "0", 10) || 0)
     const search = query.search?.trim() ?? null
 
+    const payerActive = deploymentPayerActive()
+    const payerId = deploymentPayerId()
+
     let dbQuery = supabase
       .from("profiles")
       // `tier` as well as `subscription_tier`: the Stripe paths historically
       // wrote only `tier`, so a paying customer could show here as "free".
       // resolveTierFrom() picks the same column credit enforcement does.
-      .select("id, display_name, avatar_url, tier, subscription_tier, lifetime_topup_credits, subscription_credits, topup_credits, daily_spent_credits, storage_used_bytes, storage_limit_bytes, created_at", { count: "exact" })
+      .select(payerActive ? USER_COLUMNS_PAYER : USER_COLUMNS, { count: "exact" })
       .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1)
 
+    // The payer's row is dropped at the QUERY, not in the map: it must not be
+    // in the count, on the page, or in a log line of this response.
+    if (payerActive && payerId) dbQuery = dbQuery.neq("id", payerId)
+
     if (search) {
-      // Strict allowlist: only alphanumeric, spaces, and email characters
-      const sanitized = search.replace(/[^a-zA-Z0-9\s@.\-]/g, "")
+      // Strict allowlist: letters and digits in ANY script (this instance's
+      // display names are Hebrew — an ASCII-only allowlist reduced "דנה כהן" to
+      // a bare space, which matched nearly everyone), combining marks so
+      // niqqud stays attached, spaces, and email characters. PostgREST filter
+      // syntax (parentheses, commas, colons) still cannot get through.
+      const sanitized = search.replace(/[^\p{L}\p{N}\p{M}\s@.\-]/gu, "").trim()
       if (sanitized.length > 0) {
-        dbQuery = dbQuery.or(`display_name.ilike.%${sanitized}%,email.ilike.%${sanitized}%`)
+        // Same split as the projection, for the same reason: on the payer
+        // branch the searchable name column is `full_name` (the one that
+        // exists, and the one the page renders); mainline's filter is left
+        // byte-identical.
+        dbQuery = dbQuery.or(
+          payerActive
+            ? `full_name.ilike.%${sanitized}%,email.ilike.%${sanitized}%`
+            : `display_name.ilike.%${sanitized}%,email.ilike.%${sanitized}%`,
+        )
       }
     }
 
@@ -50,20 +171,57 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
 
     if (error) return reply.code(500).send({ error: error.message })
 
-    const users = (data ?? []).map((u) => ({
-      ...u,
-      // Report the tier that is actually enforced, not the raw column — see
-      // tier-columns.ts for why the two can disagree.
-      subscription_tier: resolveTierFrom(u),
-      // Derived entitlement tier ("payg" when stored-free with net lifetime
-      // top-ups). Read-only display — the admin tier enum never gains payg.
-      effective_tier: resolveEffectiveTier({
-        tier: u.tier ?? null,
-        subscription_tier: u.subscription_tier ?? null,
-        lifetime_topup_credits: (u.lifetime_topup_credits as number) ?? 0,
-      }),
-      total_credits: (u.subscription_credits ?? 0) + (u.topup_credits ?? 0),
-    }))
+    // The select string is a ternary, so PostgREST's literal-type inference
+    // cannot name the row shape; the fields read below are exactly the ones
+    // both column strings contain.
+    const rows = (data ?? []) as unknown as Array<Record<string, unknown> & { id: string }>
+
+    // One batch read for the page — never a per-row query, and never a direct
+    // read of the allowance table itself: the D7 no-row rule lives in the
+    // service and must not be re-derived here. Null (no payer, or the read
+    // failed) renders as an em dash, not as zero; the figures are visible
+    // whether or not enforcement has been flipped on.
+    const allowances = payerActive ? await allowancesFor(rows.map((u) => u.id)) : null
+
+    const users = rows.map((u) => {
+      const common = {
+        // Report the tier that is actually enforced, not the raw column — see
+        // tier-columns.ts for why the two can disagree.
+        subscription_tier: resolveTierFrom(u as { tier?: string | null; subscription_tier?: string | null }),
+        // Derived entitlement tier ("payg" when stored-free with net lifetime
+        // top-ups). Read-only display — the admin tier enum never gains payg.
+        effective_tier: resolveEffectiveTier({
+          tier: (u.tier as string | null) ?? null,
+          subscription_tier: (u.subscription_tier as string | null) ?? null,
+          lifetime_topup_credits: (u.lifetime_topup_credits as number) ?? 0,
+        }),
+      }
+      if (!payerActive) {
+        return {
+          ...u,
+          ...common,
+          total_credits: ((u.subscription_credits as number) ?? 0) + ((u.topup_credits as number) ?? 0),
+        }
+      }
+      // Under a payer EVERY Nodaro credit figure is dropped (§9.2, which the
+      // orchestrator ruled over D11's narrower three-column list): these are
+      // the deployment's money sitting in columns the user never spends, and
+      // an SAI admin is not a billing role for a wallet they cannot touch.
+      // `total_credits` is not recomputed — it is dropped; the only spend
+      // figure that survives is `sai_spent`, in SAI units, below.
+      //
+      // `lifetime_topup_credits` is READ FIRST, by `common.effective_tier`
+      // above: the derived tier depends on it, so the order of these two
+      // statements is load-bearing.
+      const {
+        subscription_credits: _sub,
+        topup_credits: _top,
+        daily_spent_credits: _daily,
+        lifetime_topup_credits: _lifetime,
+        ...rest
+      } = u
+      return { ...rest, ...common, ...saiFigures(allowances?.get(u.id) ?? null) }
+    })
 
     return { data: users, total: count ?? 0, limit, offset }
   })
@@ -71,6 +229,13 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
   // GET /v1/admin/users/:id/balance - Get detailed balance for a user
   app.get("/v1/admin/users/:id/balance", { preHandler: requireAdmin }, async (request, reply) => {
     const { id } = request.params as { id: string }
+    if (refusesPayerRow(id, request.userId)) return reply.code(403).send(PAYER_ROW_FORBIDDEN)
+    if (deploymentPayerActive()) {
+      // Under a payer a user's own credit columns are a frozen signup grant
+      // nothing debits — an honest zero would still be a number an admin can
+      // act on. The allowance is the only figure that means anything here.
+      return saiFigures(await allowanceFor(id))
+    }
     try {
       const balance = await CreditsService.getBalance(id)
       return balance
@@ -108,6 +273,7 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
   // GET /v1/admin/users/:id/transactions - Credit transaction history
   app.get("/v1/admin/users/:id/transactions", { preHandler: requireAdmin }, async (request, reply) => {
     const { id } = request.params as { id: string }
+    if (refusesPayerRow(id, request.userId)) return reply.code(403).send(PAYER_ROW_FORBIDDEN)
     const query = request.query as Record<string, string | undefined>
     const limit = Math.min(200, Math.max(1, parseInt(query.limit ?? "50", 10) || 50))
     const offset = Math.max(0, parseInt(query.offset ?? "0", 10) || 0)
@@ -366,6 +532,32 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
 
   // GET /v1/admin/credits/summary - Platform-wide credit stats
   app.get("/v1/admin/credits/summary", { preHandler: requireAdmin }, async (request, reply) => {
+    // Under a payer this aggregate IS the payer's balance, in four different
+    // ways, so the whole route is refused to anyone but the payer (D11/§8.3).
+    //
+    // `totalCreditsOutstanding` is SUM(subscription_credits + topup_credits)
+    // over ALL profiles — the payer's row included. Under a payer every other
+    // profile holds the same frozen signup grant G that nothing debits, and G
+    // is on the caller's own GET /v1/user/credits, so
+    // `payer_balance = totalCreditsOutstanding − (totalUsers−1)·G` exactly; two
+    // polls give the burn rate. `tierBreakdown` isolates the payer by
+    // inspection (it is the only paid-tier account), and `totalTransactions` is
+    // the payer's own activity volume. Redacting one field would leave three.
+    //
+    // Refusing rather than subtracting also keeps this route from disagreeing
+    // with `/v1/admin/users`, which drops the payer AT THE QUERY (:137): a
+    // server-side subtraction here would still publish a `totalUsers` and a
+    // `tierBreakdown` that count a row the other route says does not exist.
+    // Nothing consumes this route on a payer deployment — no frontend caller,
+    // no test — so nothing is lost by closing it.
+    //
+    // MAINLINE IS BYTE-IDENTICAL: `deploymentPayerActive()` is false with no
+    // `billing.payerAccount`, so this guard never fires and the body below is
+    // untouched.
+    if (deploymentPayerActive() && request.userId !== deploymentPayerId()) {
+      return reply.code(403).send(PAYER_ROW_FORBIDDEN)
+    }
+
     // Use SQL aggregate RPC instead of fetching ALL profiles
     const { data, error } = await supabase.rpc("get_credit_summary")
 

@@ -3,6 +3,7 @@
  *
  * Migration 351's `reserve_credits` refuses with stable RAISE prefixes —
  * that is the wire contract between the database and every reserve site.
+ * Migration 382 adds two more for Track A's per-user allowance.
  * This file is the ONE translator: prefix → HTTP status + stable code +
  * FIXED message. Core placement on purpose: the orchestrator (core) needs
  * the same translation as the ee guard, and this is pure vocabulary — no
@@ -21,7 +22,13 @@
  */
 
 export interface MappedReserveError {
-  status: 402 | 403 | 404 | 409
+  // 500 is here for exactly one member (ALLOWANCE_UNCONFIGURED) and it is not
+  // a category error: this vocabulary is "what the reserve RPC raised", and
+  // 382 raises one of them for a MISCONFIGURED DEPLOYMENT rather than for a
+  // rejected request. Translating it to a 402 would tell a user to go buy
+  // something that cannot help them; it is the operator's fault, so it gets a
+  // fault status — with a stable code, so the log line is still greppable.
+  status: 402 | 403 | 404 | 409 | 500
   // ONE platform vocabulary (P14.3 review): "not a member" is not_a_member
   // everywhere (orgs-context rung 1, api-tokens, MCP — and the frontend's
   // stale-workspace self-heal keys on exactly that code), and
@@ -34,6 +41,8 @@ export interface MappedReserveError {
     | "member_suspended"
     | "not_a_member"
     | "workspace_not_found"
+    | "user_allowance_exceeded"
+    | "allowance_unconfigured"
   message: string
 }
 
@@ -68,7 +77,51 @@ const RESERVE_PREFIX_MAP: Readonly<Record<string, MappedReserveError>> = {
     code: "workspace_not_found",
     message: "Workspace not found",
   },
+  // Track A (migration 382): the per-user SAI allowance. Raised as
+  // `USER_ALLOWANCE_EXCEEDED: granted %, remaining %, need %` — the three
+  // figures stay in `.raw`, per this file's second rule.
+  //
+  // The NAME was chosen against three constraints and none of them is
+  // cosmetic (D9): it must not contain "insufficient" or "not enough",
+  // because `pipelines/credits.ts` and `scene-helper-credits.ts` substring-
+  // match those two words BEFORE consulting this map and would downgrade a
+  // quota refusal into the wallet-empty one; it must not collide with the
+  // workspace `budget_exceeded`; and it must read as THIS USER's quota. The
+  // deployment-pool refusal keeps its own separate code
+  // (`insufficient_credits`, "contact your administrator") — under a
+  // deployment payer the two have different fixers, and an admin genuinely
+  // cannot top anyone up.
+  USER_ALLOWANCE_EXCEEDED: {
+    status: 402,
+    code: "user_allowance_exceeded",
+    message: "Your allowance cannot cover this run",
+  },
+  // Enforcement was requested with no settings row, or with a settings row
+  // naming no payer. That is impossible on a healthy deployment — the boot
+  // upsert writes the row before route registration — so it is a FAULT, not
+  // a business refusal. 500 keeps it out of the "buy more credits" funnel and
+  // puts it where an operator will look.
+  ALLOWANCE_UNCONFIGURED: {
+    status: 500,
+    code: "allowance_unconfigured",
+    message: "Per-user allowances are not configured on this deployment",
+  },
 }
+
+/**
+ * Stable CODE -> canonical HTTP status, derived from the one map above.
+ *
+ * `mapReserveError` answers a whole `MappedReserveError`, which is what a lane
+ * that catches the RPC failure itself wants. A lane that carries the refusal
+ * across a service boundary keeps only the CODE (branch-pipeline throws a
+ * `BranchPipelineError`, and its route maps codes to statuses) — and a
+ * hand-written second copy of these statuses is exactly the second dialect the
+ * header of this file forbids. Derive, never retype.
+ */
+export const RESERVE_STATUS_BY_CODE: Readonly<Record<MappedReserveError["code"], MappedReserveError["status"]>> =
+  Object.fromEntries(Object.values(RESERVE_PREFIX_MAP).map((m) => [m.code, m.status])) as Readonly<
+    Record<MappedReserveError["code"], MappedReserveError["status"]>
+  >
 
 const RAISE_PREFIX = /^([A-Z][A-Z_]*):/
 

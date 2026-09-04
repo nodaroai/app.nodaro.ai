@@ -556,7 +556,13 @@ function handleStreamError(err: unknown, bornIn: number): void {
     const body = parseErrorBody(err.message)
     if (err.status === 402) {
       setCopilotState({
-        insufficient: { required: numberOr(body.required, 0), balance: numberOr(body.balance, 0) },
+        insufficient: {
+          required: numberOr(body.required, 0),
+          // Track A (D10) names it `remaining`; the older pool 402 names the
+          // same figure `balance`. One banner, either word.
+          balance: numberOr(body.balance ?? body.remaining, 0),
+          code: String(body.code ?? ""),
+        },
       })
       apply((turn) => ({ ...turn, status: "failed", error: null }), bornIn)
       return
@@ -589,8 +595,15 @@ function parseErrorBody(message: string): Record<string, unknown> {
   const start = message.indexOf("{")
   if (start === -1) return {}
   try {
-    const parsed = JSON.parse(message.slice(start)) as { error?: Record<string, unknown> }
-    return parsed.error ?? (parsed as Record<string, unknown>)
+    const parsed = JSON.parse(message.slice(start)) as Record<string, unknown> & {
+      error?: Record<string, unknown>
+    }
+    // Both shapes at once. The pool 402 puts its figures INSIDE `error`; the
+    // Track A allowance 402 (D10) puts `required`/`remaining` BESIDE it, and
+    // reading only the inner object dropped them silently — the banner then
+    // told the user the turn needed 0 and they had 0. Inner keys win, so
+    // `code` and `message` are exactly what they were.
+    return { ...parsed, ...(parsed.error ?? {}) }
   } catch {
     return {}
   }

@@ -312,7 +312,16 @@ function registerHelperRoute(app: FastifyInstance, cfg: HelperConfig<unknown>) {
         helperName: cfg.name,
       })
       if (!reservation.ok) {
-        const status = reservation.reason === "price_not_configured" ? 503 : 402
+        // `allowance_unconfigured` is an operator fault, not a business
+        // refusal (D9): enforcement was requested on a deployment whose
+        // settings row names no payer. A 402 would send the user to buy
+        // credits that cannot help them.
+        const status =
+          reservation.reason === "price_not_configured"
+            ? 503
+            : reservation.reason === "allowance_unconfigured"
+              ? 500
+              : 402
         return reply.status(status).send({ error: { code: reservation.reason } })
       }
 

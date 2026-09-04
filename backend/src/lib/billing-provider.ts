@@ -112,6 +112,18 @@ export interface AccountSummary {
   reserveValue?: MoneyAmount | null
   /** Per-category usage breakdown; omitted/null = no breakdown. */
   byCategory?: readonly UsageCategory[] | null
+  /**
+   * Track A — the TOTAL the balance was drawn from, when the provider has a
+   * per-user allocation concept. On a deployment-payer instance `balance` is
+   * what the requester has LEFT of their allowance and this is what they were
+   * granted, so the two render as one sentence ("X left of Y").
+   *
+   * Separate from `dailyAllowance` on purpose: that is a per-day cap that
+   * resets, this is a lifetime pot that does not. Optional and nullable —
+   * `null` is "unavailable" and must reach the screen as an em dash, never as
+   * 0 (a granted total of 0 would read as "you were given nothing").
+   */
+  allocated?: number | null
 }
 
 export interface BillingProvider {

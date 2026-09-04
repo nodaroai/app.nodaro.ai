@@ -34,6 +34,35 @@ export function BillingAccountSummary({ account, className = "", consumptionOnly
       {/* Deployment-payer instances (consumptionOnly): no balance exists at
           user grain — one card with the period's spend replaces the pair. */}
       {consumptionOnly ? (
+      <>
+        {/* Track A — the requester's own allowance, the one balance that IS
+            theirs on a payer instance. `allocated` ABSENT means the provider
+            has no allowance concept (mainline, or a backend from before the
+            track): no card at all. `allocated`/`balance` NULL means the figure
+            was unavailable, which is an em dash — never a manufactured 0,
+            because 0 is a real value here and it means "exhausted".
+
+            Both figures arrive ALREADY in the display unit (the seam converted
+            them and `unit` is its label), so they render verbatim: passing
+            them through creditUnits() would convert a second time.
+
+            The remaining/granted pair is deliberately NOT a `X / Y` string —
+            under RTL the operands swap sides and the sentence lies. One
+            interpolated key, whose word order the translator owns. */}
+        {"allocated" in account && (
+          <div data-testid="allowance-card" className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-card p-5">
+            <div className="text-sm text-muted-foreground">{t("usage.allowanceRemaining")}</div>
+            <div className="mt-1 text-3xl font-bold" style={{ color: ACCENT }}>
+              {amountOrDash(account.balance)}
+              <span className="ms-2 text-base font-medium text-muted-foreground">{unit}</span>
+            </div>
+            <div className="mt-1 text-xs text-muted-foreground">
+              {account.allocated == null
+                ? t("usage.allowanceGrantedUnavailable")
+                : t("usage.allowanceOfGranted", { granted: account.allocated.toLocaleString(), unit })}
+            </div>
+          </div>
+        )}
         <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-card p-5">
           <div className="text-sm text-muted-foreground">{t("usage.spent")}</div>
           <div className="mt-1 text-3xl font-bold" style={{ color: ACCENT }}>
@@ -51,6 +80,7 @@ export function BillingAccountSummary({ account, className = "", consumptionOnly
             </div>
           )}
         </div>
+      </>
       ) : (
       /* Plan + balance + optional spend/reserve cards */
       <div className="grid grid-cols-2 gap-4">

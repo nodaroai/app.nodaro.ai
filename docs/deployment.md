@@ -573,22 +573,52 @@ array empty = "keep the default"):
   - `billing.payerAccount`: the **deployment payer** — one designated account
     (a user uuid, or the account's email) that pays for *every* action on the
     instance instead of the requester. For reseller-style deployments: the
-    operator tops up this one prepaid account; end users never hold balances.
+    operator tops up this one prepaid account; end users hold no credit
+    balance of their own — only, optionally, a per-user *allowance* drawn
+    from the payer's account (see `billing.defaultAllowanceUnits` below).
     Consequences when set: every reservation debits the payer account
     (ownership and galleries stay the requester's); requester tier gates run
     at the payer account's grade, with watermarking and daily caps off;
     per-user storage quotas stop enforcing (usage is still tracked); the
     payer is never auto-recharged; and `/usage` shows each user their own
-    consumption for the period — never any balance. The value is
+    consumption for the period, plus their own allowance when the allowance
+    keys are configured — never the payer's balance. The value is
     backend-only: it is stripped from `/config.js`, and the browser learns
     only a boolean `deploymentPayer` flag from `GET /v1/billing/surface`.
+    The payer account gets a **billing page** (`/billing-admin`) that no
+    other account can reach: it shows the pool, the per-user allowances and
+    the grant history, and — when `STRIPE_SECRET_KEY` and
+    `STRIPE_WEBHOOK_SECRET` are set (see the variable table above) — lets the
+    payer load credits with its own card. Without those two the page still
+    works and simply reports that card payment is not configured.
     **Fail-loud:** if set but the account does not resolve at boot, the
     instance refuses to start. Unset = requesters pay, exactly as before.
+  - `billing.defaultAllowanceUnits`: the starting allowance every user gets,
+    in display units — the per-user ceiling on how much of the payer's pool
+    one person may spend. **Seed only:** it is written to the deployment's
+    billing settings on the FIRST boot that creates them, and never again;
+    afterwards only the billing account changes it, from `/billing-admin`.
+    A member of the unit family — it needs a coherent `unitLabel` +
+    `unitRate`, drops with them, and `defaultAllowanceUnits / unitRate` must
+    be a whole number of credits (the ledger stores platform credits) or the
+    key drops with a warning. Payer-only and backend-only: meaningless
+    without `billing.payerAccount`, and stripped from `/config.js`.
+  - `billing.allowances`: `"off"` (the default, and what an absent or
+    malformed value means) or `"enforce"`. **This is the enforcement flag —
+    the gate-check for this feature.** Allowances are *visible* on `/usage`,
+    the sidebar, the admin user list and `/billing-admin` as soon as a payer
+    is set; `"enforce"` is what additionally lets a reservation refuse a run
+    that is over allowance (HTTP 402 `user_allowance_exceeded` — see
+    [api-integration.md](./api-integration.md#8-error-envelope)). Roll it out
+    in that order: set the payer and the default, let the figures appear and
+    be checked, then flip. Also a member of the unit family — a deployment
+    that cannot display an allowance will not enforce one. Payer-only,
+    backend-only, stripped from `/config.js`.
 
 Example:
 
 ```bash
-NODARO_SURFACE_PROFILE={"nav":{"hide":["gallery"]},"brand":{"productName":"Studio"},"outputs":{"allowPublic":false},"voice":{"allowedGenders":["male"]},"billing":{"unitLabel":"credits","unitRate":2000,"selfServe":false}}
+NODARO_SURFACE_PROFILE={"nav":{"hide":["gallery"]},"brand":{"productName":"Studio"},"outputs":{"allowPublic":false},"voice":{"allowedGenders":["male"]},"billing":{"unitLabel":"credits","unitRate":2000,"selfServe":false,"defaultAllowanceUnits":100000,"allowances":"off"}}
 ```
 
 **Prompt policy (modesty / content clauses).** A deployment that needs to fold a

@@ -1,5 +1,11 @@
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
+// Track A. `allowanceEnforcementActive()` is the step-8 flip (an active payer
+// AND `billing.allowances === "enforce"`); `deploymentPayerActive()` gates the
+// settlement-lane cache invalidation so mainline issues no extra read. Both
+// answer FALSE on a deployment with no `billing.payerAccount`, which is what
+// keeps every branch below inert there.
+import { allowanceEnforcementActive, deploymentPayerActive } from "../../lib/deployment-payer.js"
 import { attemptAutoRecharge } from "./auto-recharge.js"
 import { applyOrgEntitlements } from "./org-entitlements.js"
 import type { BillingContext } from "../../lib/billing-context.js"
@@ -203,6 +209,21 @@ export interface UserBalance {
    * gate's column exists (a dev deploy can run ahead of the migration).
    */
   freeGrantState?: "unclaimed" | "granted" | "withheld"
+  /** Per-user SAI allowance in RAW credits; null when no allowance applies
+   *  (no payer, or the caller IS the payer — which holds the real credits, not
+   *  an allocation — or the figure was unavailable). NOT null merely because
+   *  enforcement is off: the allowance is visible from the moment a payer
+   *  exists (the ruling in `deployment-allowance-service.ts`), and refusing a
+   *  run is a separate switch. Absent on mainline — `total` is never
+   *  overloaded to mean this (D12).
+   *
+   *  `enforced` IS that separate switch (`allowanceEnforcementActive()`, i.e.
+   *  `billing.allowances === "enforce"`). It travels because the browser has no
+   *  other way to ask: `billing.allowances` is stripped from /config.js. A
+   *  client that GATES a run must consult it — `remaining` is a display figure
+   *  until it is true — while a client that only DISPLAYS the allowance ignores
+   *  it. */
+  allowance?: { granted: number; remaining: number; enforced: boolean } | null
 }
 
 export interface ReserveResult {
@@ -1814,6 +1835,79 @@ async function getTierConfig(tier: string): Promise<TierConfig> {
 }
 
 // ============================================================
+// Track A — settlement-time balance invalidation (D12 rider)
+// ============================================================
+
+/**
+ * The requester a settlement should invalidate, or null.
+ *
+ * `commitCredits` / `refundCredits` are handed a usage-log id and nothing
+ * else, so the person whose allowance is moving has to be read back off the
+ * row. Two properties matter:
+ *
+ *  - MAINLINE ISSUES NO QUERY. `deploymentPayerActive()` is false on every
+ *    deployment with no `billing.payerAccount`, and this returns null before
+ *    touching the database — settlement stays exactly the shape it has today.
+ *  - IT NEVER THROWS. A cache invalidation must not be able to stop money
+ *    from settling, so a failed read degrades to "invalidate nothing" (the
+ *    balance is then up to 15 s stale, a display lag) rather than to an
+ *    unsettled reservation.
+ *
+ * `on_behalf_of` is NULL on the payer's own runs, which need no invalidation
+ * here: the payer's balance is the real pool and is invalidated by the routes
+ * that move it.
+ */
+async function settlementRequester(usageLogId: string): Promise<string | null> {
+  if (!deploymentPayerActive()) return null
+  try {
+    const { data } = await supabase
+      .from("usage_logs")
+      .select("on_behalf_of")
+      .eq("id", usageLogId)
+      .maybeSingle()
+    return ((data as { on_behalf_of?: string | null } | null)?.on_behalf_of) ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * True when this `usage_logs` row's reservation is ALSO held in the deployment
+ * allowance ledger, so only the SQL functions can settle it.
+ *
+ * The pair is exactly what migration 382 branches on (382:689 for commit,
+ * 382:855 for refund): `metadata.payer.allowance_enforced` STAMPED AT RESERVE
+ * TIME, and a non-null `on_behalf_of`. Both halves are load-bearing:
+ *
+ *  - The flag, not `on_behalf_of` alone (D4). A row reserved BEFORE the
+ *    `billing.allowances` flip carries attribution but never bumped a ledger;
+ *    refusing to settle it would strand an ordinary row for no reason.
+ *  - `on_behalf_of`, not the flag alone: the ledger is keyed on it, and the
+ *    payer's own runs carry neither.
+ */
+function holdsEnforcedAllowance(row: { metadata?: unknown; on_behalf_of?: string | null } | null): boolean {
+  if (!row) return false
+  const payer = (row.metadata as { payer?: { allowance_enforced?: unknown } } | null)?.payer
+  return payer?.allowance_enforced === true && row.on_behalf_of != null
+}
+
+/**
+ * Drop a requester's cached balance. Reached through `await import` because a
+ * static `ee/billing -> ee/routes` edge closes a cycle (`routes/credits.ts`
+ * imports this module); `signup-grant.ts:51` is the precedent. A null
+ * requester — every mainline call — does nothing and imports nothing.
+ */
+async function invalidateRequesterBalance(requester: string | null): Promise<void> {
+  if (!requester) return
+  try {
+    const { invalidateBalanceCache } = await import("../routes/credits.js")
+    invalidateBalanceCache(requester)
+  } catch (err) {
+    console.warn(`[credits] balance-cache invalidation failed for ${requester}:`, (err as Error).message)
+  }
+}
+
+// ============================================================
 // Credits Service
 // ============================================================
 
@@ -2301,13 +2395,25 @@ export class CreditsService {
           provider: "reserved",
           credits_used: 0,
           cost_usd: providerCostUsd,
+          // The RPC's own INSERT names `on_behalf_of` (migration 382, D5);
+          // this bypass never reaches the RPC, so it must write the same
+          // column itself or the row is money-less but also attribution-less.
+          ...(dep ? { on_behalf_of: userId } : {}),
           metadata: {
             status: "reserved",
             display_cost_usd: displayCostUsd,
             // Mirrors the RPC's payer shape (migration 351) minus
             // `member_spend` — no spend row was touched, nothing to reverse.
             ...(ws ? { payer: { kind: "workspace", workspace_id: ws.workspaceId, org_id: ws.orgId } } : {}),
-            ...(dep ? { payer: { kind: "deployment", account: dep.payerId } } : {}),
+            // `allowance_enforced: false` is load-bearing, not decoration.
+            // `commit_credits` and `refund_credits` branch on
+            // `COALESCE((metadata->'payer'->>'allowance_enforced')::BOOLEAN, FALSE)`
+            // (D4), so a missing key already reads as false — but writing it
+            // explicitly is what makes the shape identical to the RPC's, and a
+            // bypass row that ever said `true` would settle against a
+            // reservation that never happened. Zero credits were reserved
+            // here; nothing can ever be reversed.
+            ...(dep ? { payer: { kind: "deployment", account: dep.payerId, allowance_enforced: false } } : {}),
           },
         })
         .select("id")
@@ -2342,6 +2448,24 @@ export class CreditsService {
       p_daily_limit: dailyLimit,
       p_web_free_mode: webFree,
       ...(ws ? { p_workspace_id: ws.workspaceId } : {}),
+      // Track A / D3 — TWO switches, spread conditionally so the personal
+      // call's wire shape stays byte-identical (both parameters are trailing
+      // and DEFAULTED in 382, so even a database that has the new function
+      // behaves exactly as before when they are absent).
+      //
+      // `p_on_behalf_of` is ATTRIBUTION: the RPC writes the requester into
+      // `usage_logs.on_behalf_of` in its own INSERT. `p_enforce_allowance` is
+      // ENFORCEMENT and is the ONLY thing in this track that can refuse a
+      // generation; it stays false until the overlay flips
+      // `billing.allowances` to "enforce".
+      //
+      // The payer's own run passes NEITHER (D13). 382 exempts it too
+      // (`p_on_behalf_of <> p_user_id`), but leaning on that would make the
+      // payer's runs depend on a SQL condition rather than on the fact that
+      // the payer simply has no allowance — it owns the pool.
+      ...(dep && userId !== dep.payerId
+        ? { p_on_behalf_of: userId, p_enforce_allowance: allowanceEnforcementActive() }
+        : {}),
     })
 
     if (reserveError) {
@@ -2360,25 +2484,21 @@ export class CreditsService {
       return { usageLogId: "log-failed", creditsReserved: pricing.creditCost, watermark }
     }
 
-    // Deployment payer: the RPC wrote the row under the PAYER's user_id (it
-    // is the debit user) — stamp the requester into `on_behalf_of` (migration
-    // 362) so per-user consumption stays attributable (the /usage page keys
-    // on it). Best-effort ATTRIBUTION, never settlement: settlement keys off
-    // the row id alone. Loud on failure — on a DB that predates 362 this is
-    // a 42703 until the migration lands, and attribution for the window is
-    // accepted as lost (the 361 degrade class).
-    if (dep) {
-      const { error: attributionError } = await supabase
-        .from("usage_logs")
-        .update({ on_behalf_of: userId } as Record<string, unknown>)
-        .eq("id", usageLogId)
-      if (attributionError) {
-        console.error(
-          `[credits] on_behalf_of attribution failed for usage log ${usageLogId} (requester ${userId}):`,
-          attributionError.message,
-        )
-      }
-    }
+    // The post-hoc `on_behalf_of` UPDATE that used to live here is GONE (D5).
+    // Migration 382's `reserve_credits` names the column in its OWN insert, so
+    // attribution is now written in the same transaction as the debit instead
+    // of by a second statement that could fail on its own — which it did,
+    // loudly, on any database that predated migration 362, leaving rows whose
+    // money moved but whose attribution did not. Re-adding a write here would
+    // be a redundant UPDATE on a row the RPC already stamped.
+    //
+    // The requester's cached balance must be dropped, though: under a payer
+    // that read carries the requester's ALLOWANCE, and a 15-second stale
+    // sidebar shows credits they no longer have. Reached through `await
+    // import` because a static ee/billing -> ee/routes edge closes a cycle
+    // (routes/credits.ts imports this module); `signup-grant.ts:51` is the
+    // precedent.
+    if (dep) await invalidateRequesterBalance(userId)
 
     // Fetch usage_log metadata (from_sub/from_topup) for accurate creditType,
     // and current user balance for accurate balanceAfter (C3 + H6 fix).
@@ -2460,12 +2580,34 @@ export class CreditsService {
   /**
    * Commit reserved credits after job success
    * Updates usage_log status to 'committed'
+   *
+   * Track A wrapper (D12 rider). Settlement moves the requester's ALLOWANCE —
+   * `reserved -> spent`, and a commit for less than was reserved hands the
+   * surplus back — but the only argument here is a usage-log id, so the
+   * requester has to be read off the row. The read and the invalidation are
+   * both inside `deploymentPayerActive()`, which is false on every deployment
+   * with no `billing.payerAccount`: mainline settles through the identical
+   * code path below, with no extra statement. The settlement itself is in
+   * `settleCommit`, unchanged, and runs whether or not the read succeeded —
+   * a cache invalidation may never be able to stop money from settling.
    */
   static async commitCredits(
     usageLogId: string,
     actualCredits?: number
   ): Promise<void> {
     if (creditsDisabled() || usageLogId === "self-hosted-skip") return
+    const requester = await settlementRequester(usageLogId)
+    try {
+      await CreditsService.settleCommit(usageLogId, actualCredits)
+    } finally {
+      await invalidateRequesterBalance(requester)
+    }
+  }
+
+  private static async settleCommit(
+    usageLogId: string,
+    actualCredits?: number
+  ): Promise<void> {
 
     // Try RPC first
     // billing-payer-ok: the RPC reads the payer from the usage_logs row (mig 351) — this wrapper relays the log id; the TS fallback below REFUSES workspace-payer rows (billing-04/H22)
@@ -2488,12 +2630,31 @@ export class CreditsService {
     // and loud; a later retry of the RPC is the only correct settlement.
     const { data: payerRow } = await supabase
       .from("usage_logs")
-      .select("workspace_id")
+      .select("workspace_id, metadata, on_behalf_of")
       .eq("id", usageLogId)
       .maybeSingle()
     if (payerRow?.workspace_id) {
       console.error(
         `[credits] commit fallback REFUSED for workspace-paid usage log ${usageLogId} — row left reserved for RPC retry`,
+      )
+      return
+    }
+
+    // ALLOWANCE-AWARE (Track A): the deployment analogue of the case above, and
+    // it strands quota the same way. An enforced reservation lives in TWO
+    // places — the payer's pools and `deployment_user_allowances.reserved_
+    // credits` — and only `commit_credits` moves the second (382:689). Flipping
+    // the status here would settle the money and leave the requester's reserved
+    // credits held forever: both SQL settlers key on `status = 'reserved'`, and
+    // `commitReservedCreditsForJob`/`refundReservedCreditsForJob` only ever
+    // fetch reserved rows, so nothing in the codebase could release it
+    // afterwards — the sole repair being a manual correction grant from the
+    // billing account. Left `reserved`, ONE later `commit_credits(id)` still
+    // heals money and allowance together: a recoverable strand, which is the
+    // trade billing-04/H22 already made above.
+    if (holdsEnforcedAllowance(payerRow)) {
+      console.error(
+        `[credits] commit fallback REFUSED for allowance-enforced usage log ${usageLogId} — row left reserved for RPC retry`,
       )
       return
     }
@@ -2512,9 +2673,23 @@ export class CreditsService {
   /**
    * Refund reserved credits after job failure
    * Updates usage_log status to 'refunded' and restores credits
+   *
+   * Same Track A wrapper as {@link commitCredits}, and the case that matters
+   * most: a refund gives the requester's allowance back for free (the ledger
+   * is reserved/spent, not derived from log status), so a stale sidebar here
+   * shows a user less than they have and can talk them out of a retry.
    */
   static async refundCredits(usageLogId: string): Promise<void> {
     if (creditsDisabled() || usageLogId === "self-hosted-skip") return
+    const requester = await settlementRequester(usageLogId)
+    try {
+      await CreditsService.settleRefund(usageLogId)
+    } finally {
+      await invalidateRequesterBalance(requester)
+    }
+  }
+
+  private static async settleRefund(usageLogId: string): Promise<void> {
 
     // Try RPC first
     // billing-payer-ok: the RPC reads the payer from the usage_logs row (mig 351) — this wrapper relays the log id; the TS fallback below REFUSES workspace-payer rows (billing-04/H22)
@@ -2530,7 +2705,7 @@ export class CreditsService {
     // Get the usage log to find credits to refund
     const { data: usageLog, error: logError } = await supabase
       .from("usage_logs")
-      .select("user_id, job_id, credits_used, status, metadata, workspace_id")
+      .select("user_id, job_id, credits_used, status, metadata, workspace_id, on_behalf_of")
       .eq("id", usageLogId)
       .single()
 
@@ -2548,6 +2723,23 @@ export class CreditsService {
     if ((usageLog as { workspace_id?: string | null }).workspace_id) {
       console.error(
         `[credits] refund fallback REFUSED for workspace-paid usage log ${usageLogId} — row left reserved for RPC retry`,
+      )
+      return
+    }
+
+    // ALLOWANCE-AWARE (Track A): the worst case of the whole fallback. The
+    // requester's `reserved_credits` was bumped by `reserve_credits` and only
+    // `refund_credits` releases it (382:855). This fallback restores the
+    // PAYER's pools correctly and never touches the ledger — so a job that
+    // failed and was fully refunded would still have consumed the requester's
+    // quota, permanently: the status is now 'refunded', both SQL settlers
+    // require 'reserved', and nothing anywhere recomputes
+    // `deployment_user_allowances.reserved_credits`. Every recurrence subtracts
+    // again. Leave it reserved and loud instead; `refund_credits(id)` on a
+    // later retry releases money and quota in one transaction.
+    if (holdsEnforcedAllowance(usageLog as { metadata?: unknown; on_behalf_of?: string | null })) {
+      console.error(
+        `[credits] refund fallback REFUSED for allowance-enforced usage log ${usageLogId} — row left reserved for RPC retry`,
       )
       return
     }

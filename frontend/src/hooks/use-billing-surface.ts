@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { getBillingSurface } from "@/lib/api"
-import { BILLING_SURFACE_DEFAULT, type BillingSurface } from "@/lib/billing-surface"
+import { BILLING_SURFACE_DEFAULT, BILLING_SURFACE_QUERY_KEY, type BillingSurface } from "@/lib/billing-surface"
 
 /**
  * The deployment billing surface (B2). Replaces scattered hasCredits()/isCloud()
@@ -11,7 +11,7 @@ import { BILLING_SURFACE_DEFAULT, type BillingSurface } from "@/lib/billing-surf
  */
 export function useBillingSurface(): { surface: BillingSurface; isLoading: boolean } {
   const { data, isLoading } = useQuery({
-    queryKey: ["billing", "surface"],
+    queryKey: BILLING_SURFACE_QUERY_KEY,
     queryFn: getBillingSurface,
     staleTime: 5 * 60_000,
     gcTime: 30 * 60_000,

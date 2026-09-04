@@ -157,3 +157,42 @@ export function surfaceCostTabHidden(): boolean {
 export function surfaceSidebarCreditCardHidden(): boolean {
   return runtimeSurfaceProfile().billing.sidebarCard === "hidden"
 }
+
+// ── Track A — the deployment's BILLING ACCOUNT (spec §9.3) ───────────────────
+
+/**
+ * How far the "is this viewer the billing account?" question has got.
+ *
+ * `"pending"` while the billing surface (or the probe request) is in flight;
+ * `"payer"` only when the server answered 200 to a route that exists solely
+ * behind `requireDeploymentPayer`; `"not-payer"` for every settled negative —
+ * 401, 403, 404, or a network failure alike.
+ */
+export type DeploymentPayerProbe = "pending" | "payer" | "not-payer"
+
+/**
+ * Is the CURRENT VIEWER the account that pays for this whole deployment?
+ *
+ * Two independent facts, and both are load-bearing:
+ *
+ *  - `deploymentPayer` — does this deployment HAVE a payer at all. Deployment
+ *    grain, cacheable, and false on mainline, where the `/v1/deployment-billing`
+ *    routes are not even registered.
+ *  - `probe` — did the SERVER let this viewer through one of those routes. The
+ *    payer's uuid is redacted from `/config.js` on purpose (it is
+ *    operator-owned config the customer must not read or write), so there is no
+ *    client-side identity to compare against: the only honest source is the
+ *    guard's own answer.
+ *
+ * Fail-closed by construction — the flag is true for exactly one combination,
+ * so a pending probe, a refused one, or a deployment with no payer all render
+ * the nav entry and the page's contents absent. It gates VISIBILITY only; the
+ * authority is `requireDeploymentPayer` on every one of those routes, and a
+ * viewer who forced this true client-side would still be refused by the server.
+ */
+export function isDeploymentPayer(
+  deploymentPayer: boolean | undefined,
+  probe: DeploymentPayerProbe,
+): boolean {
+  return deploymentPayer === true && probe === "payer"
+}

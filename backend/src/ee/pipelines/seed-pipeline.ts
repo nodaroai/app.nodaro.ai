@@ -60,6 +60,27 @@ export class SeedConsistencyError extends Error {
   }
 }
 
+/**
+ * A credit reservation this lane could not make, WITH the refusal's stable
+ * code intact.
+ *
+ * The bare `Error` this used to throw dropped the code into a string, so a
+ * caller could not tell "this user is over their per-user allowance" (which
+ * only the deployment's billing account can fix) from "the pool is empty" or
+ * from a database fault — the same collapse branch-pipeline made, and the one
+ * that turned a quota refusal into a server-error toast. `code` is
+ * `insufficient_credits`, `rpc_error`, or a `MappedReserveError["code"]`;
+ * `RESERVE_STATUS_BY_CODE` (lib/reserve-errors.ts) carries the canonical
+ * status for the last group. The message is unchanged, so an existing catch
+ * that only reads `.message` is unaffected.
+ */
+export class SeedReservationError extends Error {
+  constructor(public readonly code: string, message: string) {
+    super(message)
+    this.name = "SeedReservationError"
+  }
+}
+
 export interface SeededPipelineInput {
   userId: string
   workflowId: string
@@ -162,7 +183,7 @@ export async function createSeededPipeline(
   })
   if (!reservation.ok) {
     await supabase.from("pipelines").delete().eq("id", pipelineId)
-    throw new Error(`Credit reservation failed: ${reservation.reason}`)
+    throw new SeedReservationError(reservation.reason, `Credit reservation failed: ${reservation.reason}`)
   }
 
   // 3. Seed the pre-approved / pre-inserted stage rows.

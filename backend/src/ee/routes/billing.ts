@@ -18,6 +18,8 @@ import { creditsForLoadUsd, MIN_LOAD_USD, MAX_LOAD_USD } from "../billing/load-r
 import { ensureStripeCustomer } from "../billing/provision-credits.js"
 import { rejectProgrammaticAuth } from "../../lib/api-auth-mode.js"
 import { tierColumns } from "../billing/tier-columns.js"
+import { runtimeSurfaceProfile } from "../../lib/surface-profile.js"
+import { deploymentPayerId } from "../../lib/deployment-payer.js"
 
 /** Extract origin from request headers for redirect URLs. */
 function getOrigin(req: { headers: Record<string, string | string[] | undefined> }): string {
@@ -47,6 +49,39 @@ const changePlanSchema = z.object({
 // Billing is a first-party UI action — block OAuth apps + personal tokens
 // (no scope authorizes changing the owner's Stripe subscription / charges).
 const BILLING_JWT_ONLY_MSG = "Billing management is only available from a logged-in session."
+
+/**
+ * B4 — `billing.selfServe` had NO backend reader.
+ *
+ * The flag removes the pricing page, the buy-packs UI and the billing nav from
+ * the browser, and it was assumed to be the control. It is not: the two
+ * Checkout routes never consulted it, so any signed-in user of a
+ * `selfServe:false` deployment could open Stripe Checkout by calling the route
+ * directly and buy Nodaro credits into a personal balance that — on a
+ * deployment-payer instance — nothing will ever spend. That is a real charge
+ * for credits the customer's user cannot use.
+ *
+ * The payer keeps its own access: it buys through its own guarded route
+ * (`/v1/deployment-billing/checkout`, whose success_url lands on a page this
+ * deployment actually serves), and leaving the stock routes open to that one
+ * account means a future page or a support flow is not broken by this same
+ * class of surprise a second time.
+ *
+ * MAINLINE (R2): `selfServe` defaults TRUE in the code default, so this
+ * short-circuits before it reads the payer at all and both routes take exactly
+ * today's path.
+ */
+function selfServePurchaseAllowed(userId: string): boolean {
+  return runtimeSurfaceProfile().billing.selfServe || userId === deploymentPayerId()
+}
+
+const SELF_SERVE_DISABLED = {
+  error: {
+    code: "self_serve_disabled",
+    message:
+      "This deployment does not sell credits to its users. Credits are purchased by the deployment's billing account.",
+  },
+} as const
 
 export async function billingRoutes(app: FastifyInstance) {
   // Get current subscription for a user
@@ -141,6 +176,8 @@ export async function billingRoutes(app: FastifyInstance) {
     // Billing is a first-party UI action — block OAuth apps + personal tokens
     // (no scope authorizes changing the owner's Stripe subscription / charges).
     if (rejectProgrammaticAuth(req, reply, BILLING_JWT_ONLY_MSG)) return
+    // B4 — see selfServePurchaseAllowed. Refused BEFORE Stripe is touched.
+    if (!selfServePurchaseAllowed(userId)) return reply.status(403).send(SELF_SERVE_DISABLED)
 
     const parsed = checkoutSessionSchema.safeParse(req.body)
     if (!parsed.success) {
@@ -232,6 +269,8 @@ export async function billingRoutes(app: FastifyInstance) {
       return reply.status(401).send({ error: "Authentication required" })
     }
     if (rejectProgrammaticAuth(req, reply, BILLING_JWT_ONLY_MSG)) return
+    // B4 — see selfServePurchaseAllowed. Refused BEFORE Stripe is touched.
+    if (!selfServePurchaseAllowed(userId)) return reply.status(403).send(SELF_SERVE_DISABLED)
 
     const parsed = z
       .object({

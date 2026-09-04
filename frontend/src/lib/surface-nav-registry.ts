@@ -61,6 +61,14 @@ export const ENTRY_BY_LINK: readonly string[] = [
   "/my-files",
   "/library/locations",
   "/billing",
+  // Track A — the deployment BILLING ACCOUNT's own page (spec §9.3).
+  // Deliberately not under /admin, whose layout gates on `profiles.role`: on a
+  // deployment-payer instance the CUSTOMER mints the roles, so a role check
+  // could never guard the account that holds Nodaro's money. Its sidebar entry
+  // is rendered for the payer alone and there is no surface NavKey for it (the
+  // nav.hide vocabulary is the END-USER nav), so it is classified link-only
+  // here, like every other identity-gated destination.
+  "/billing-admin",
   "/usage",
   "/settings",
   "/settings/api",

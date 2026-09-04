@@ -44,13 +44,27 @@ export interface AdminUser {
   readonly email: string
   readonly full_name: string | null
   readonly subscription_tier: string
-  readonly subscription_credits: number
-  readonly topup_credits: number
-  readonly daily_spent_credits: number
+  /** OPTIONAL on purpose (Track A, spec §9.2). On a deployment where one
+   *  account pays for everyone, an admin is not a billing role: the server
+   *  withholds the Nodaro credit columns entirely rather than sending a 0 an
+   *  admin could act on. Undefined means "not yours to see", not "none" — a
+   *  `?? 0` here would put a fabricated balance on the screen. */
+  readonly subscription_credits?: number
+  readonly topup_credits?: number
+  readonly daily_spent_credits?: number
   readonly storage_used_bytes: number
   readonly storage_limit_bytes: number
   readonly role: string
   readonly created_at: string
+  /** The per-user deployment allowance, in DISPLAY UNITS, sent only under a payer.
+   *  `null` is "unavailable" (the read failed, or the row has no figure yet) and
+   *  renders as an em dash; 0 would read as "exhausted". It is NOT null merely
+   *  because enforcement is off — under ruling R-A the allowance is visible from
+   *  the moment a payer exists and only BINDS after the `billing.allowances`
+   *  flip. */
+  readonly sai_granted?: number | null
+  readonly sai_remaining?: number | null
+  readonly sai_spent?: number | null
 }
 
 export interface AdminJob {
@@ -184,15 +198,53 @@ export const USER_SORT_DEFAULT_DIR: Record<UserSortBy, SortDir> = {
   created_at: "desc",
 }
 
+/**
+ * Two data sources, one hook (Track A, WS7).
+ *
+ * MAINLINE keeps the browser-direct `profiles` read, unchanged — Nodaro Cloud's
+ * own admin page depends on its columns, its sort and its stable id tiebreak.
+ *
+ * UNDER A DEPLOYMENT PAYER the browser-direct read is no longer the right
+ * source and soon is no longer a possible one: migration 381 narrows the
+ * `profiles` SELECT policy so the payer's row — where the deployment's real
+ * money sits — is invisible to admins, and the credit columns mean nothing for
+ * anyone else because nothing debits them. `GET /v1/admin/users` answers
+ * instead: service-role, payer row omitted, credit columns withheld, per-user
+ * deployment allowance figures substituted.
+ *
+ * The caller supplies the source rather than this hook reading the surface
+ * itself, for two reasons. The page already holds the surface (it decides which
+ * columns to render from the same flag), and — more importantly — OMITTING the
+ * argument must leave this hook exactly as it was: same query key, same
+ * `enabled`, same request. `ready` exists because the surface answers
+ * `deploymentPayer: false` while it is still loading, and firing the
+ * browser-direct query on that default would show a deployment admin a flash of the
+ * wrong source. Under a payer the key gains a discriminator so the two sources
+ * never share a cache entry; on mainline the key is untouched.
+ */
 export function useAdminUsers(
   page: number,
   pageSize = 50,
   sortBy: UserSortBy = "created_at",
   sortDir: SortDir = "desc",
+  source?: { readonly viaRoute: boolean; readonly ready: boolean },
 ) {
+  const viaRoute = source?.viaRoute === true
+  const baseKey = queryKeys.admin.users(page, pageSize, sortBy, sortDir)
   return useQuery({
-    queryKey: queryKeys.admin.users(page, pageSize, sortBy, sortDir),
+    queryKey: viaRoute ? [...baseKey, "route"] : baseKey,
     queryFn: async (): Promise<AdminUser[]> => {
+      if (viaRoute) {
+        // Sort is the route's (`created_at` desc); the page renders plain
+        // headers under a payer rather than arrows that do nothing.
+        const res = await fetch(
+          `/v1/admin/users?limit=${pageSize}&offset=${page * pageSize}`,
+          { headers: await getAuthHeaders() },
+        )
+        if (!res.ok) throw await adminError(res, "Failed to fetch users")
+        const json = (await res.json()) as { data?: readonly AdminUser[] }
+        return [...(json.data ?? [])]
+      }
       const supabase = createClient()
       const sortColumn = USER_SORT_COLUMN[sortBy] ?? "created_at"
       const ascending = sortDir === "asc"
@@ -221,7 +273,7 @@ export function useAdminUsers(
         storage_limit_bytes: row.storage_limit_bytes ?? 524288000,
       }))
     },
-    enabled: hasAdmin(),
+    enabled: hasAdmin() && (source ? source.ready : true),
     staleTime: 30_000,
   })
 }

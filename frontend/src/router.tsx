@@ -27,6 +27,7 @@ const WorkflowEditorPage = lazy(() => import("@/routes/workflow-editor-page"))
 const PipelinePage = lazy(() => import("@/routes/pipeline-page"))
 const VideoDirectorPage = lazy(() => import("@/routes/video-director-page"))
 const BillingPage = lazy(() => import("@/ee/app/(dashboard)/billing/page"))
+const BillingAdminPage = lazy(() => import("@/ee/app/billing-admin/page"))
 const SettingsPage = lazy(() => import("@/app/(dashboard)/settings/page"))
 const LibraryPage = lazy(() => import("@/app/(dashboard)/library/page"))
 const LocationGalleryPage = lazy(() => import("@/components/library/location-gallery"))
@@ -316,6 +317,20 @@ export const router = createBrowserRouter([
         ? [{
             path: "/billing",
             element: <SuspenseWrapper><BillingPage /></SuspenseWrapper>,
+          }]
+        : []),
+      // Track A — the deployment BILLING ACCOUNT's page (spec §9.3).
+      // Registered on any credit-bearing edition, NOT gated on the payer: the
+      // billing surface that says whether this deployment has one is async, so
+      // gating the route on it would race the first render. The page is its own
+      // gate — it renders "this page belongs to the billing account" for
+      // everyone else, and every route it reads sits behind
+      // requireDeploymentPayer server-side. Classified link-only in
+      // surface-nav-registry.ts: no surface NavKey gates it.
+      ...(hasCredits()
+        ? [{
+            path: "/billing-admin",
+            element: <SuspenseWrapper><BillingAdminPage /></SuspenseWrapper>,
           }]
         : []),
       {

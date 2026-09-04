@@ -38,7 +38,17 @@ vi.mock("../supabase.js", () => ({
         update: () => ({ eq: async () => ({ error: null }) }),
       }
     },
-    auth: { admin: { listUsers: h.listUsers } },
+    auth: {
+      admin: {
+        listUsers: h.listUsers,
+        // Track A D15.1: configureDeploymentPayer() now reads the resolved
+        // payer's app_metadata to refuse an SSO-FEDERATED payer at boot, and
+        // an unreadable account fails CLOSED — so with no stub here every
+        // activation is refused. Non-federated by default; the refusal itself
+        // is proved in deployment-payer-boot.test.ts.
+        getUserById: async (id: string) => ({ data: { user: { id, app_metadata: {} } }, error: null }),
+      },
+    },
   },
 }))
 

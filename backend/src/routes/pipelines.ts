@@ -6,6 +6,7 @@ import { hasCredits } from "../lib/config.js"
 import { insertJob } from "../lib/insert-job.js"
 import { jobBlockedBody } from "../lib/job-policy.js"
 import { requireScope, type Scope } from "../lib/scopes.js"
+import { RESERVE_STATUS_BY_CODE } from "../lib/reserve-errors.js"
 import { createSSEStream } from "../lib/sse.js"
 import { supabase } from "../lib/supabase.js"
 import { creditGuard, paygSurfaceSpendHook, reserveCreditsForJob } from "../middleware/credit-guard.js"
@@ -3069,6 +3070,13 @@ export async function pipelinesRoutes(app: FastifyInstance) {
             model_pin_forbidden: 403,
             insufficient_credits: 402,
             reservation_failed: 500,
+            // Every reserve refusal branchPipeline now forwards by code, at the
+            // status reserve-errors.ts assigns it — SPREAD from that file's one
+            // map rather than retyped, so this route cannot fork the
+            // vocabulary. `user_allowance_exceeded` is the 402 the allowance
+            // copy keys on; `allowance_unconfigured` is deliberately a 500
+            // (operator fault, not a purchase).
+            ...RESERVE_STATUS_BY_CODE,
           }
           const httpStatus = statusMap[err.code] ?? 500
           return reply.status(httpStatus).send({ error: { code: err.code } })

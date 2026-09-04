@@ -216,8 +216,23 @@ export async function branchPipeline(
   })
   if (!reservation.ok) {
     await supabase.from("pipelines").delete().eq("id", newPipelineId)
+    // Forward the reservation's STABLE CODE. Collapsing every non-insufficient
+    // reason to `reservation_failed` — which routes/pipelines.ts maps to 500 —
+    // turned a per-user allowance refusal into a server-error toast: the 402
+    // never reached the browser, so `frontend/src/lib/api.ts` never built a
+    // `UserAllowanceExceededError` and neither the allowance copy nor the
+    // payer-aware insufficient-credits modal could fire. This route has no
+    // `creditGuard` preHandler (routes/pipelines.ts:3028), so the reservation
+    // IS the only refusal point.
+    //
+    // `rpc_error` — a real fault — is the only reason that keeps
+    // `reservation_failed`; every other member of `MappedReserveError["code"]`
+    // carries its own canonical status, taken from `RESERVE_STATUS_BY_CODE`.
+    // Deliberately NOT create-pipeline's shape, which answers 402 for every
+    // reason: that would sell credits for `allowance_unconfigured`, an
+    // operator misconfiguration no purchase can fix.
     throw new BranchPipelineError(
-      reservation.reason === "insufficient_credits" ? "insufficient_credits" : "reservation_failed",
+      reservation.reason === "rpc_error" ? "reservation_failed" : reservation.reason,
       reservation.reason === "insufficient_credits"
         ? "Not enough credits to branch this pipeline"
         : `Credit reservation failed: ${reservation.reason}`,
