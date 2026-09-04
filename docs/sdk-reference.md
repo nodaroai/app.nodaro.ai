@@ -784,6 +784,21 @@ Cancels a job and refunds any reserved credit holds. Returns
 const { cancelled } = await client.jobs.cancel(jobId)
 ```
 
+#### `delete(id)`
+
+```ts
+delete(id: string): Promise<DeleteJobResult>
+```
+
+Deletes a job and the private media it produced (`DELETE /v1/jobs/:id`). Only
+the job's owner (or an admin) may delete it; a job that is still running is
+deleted as-is — `cancel(id)` it first when its worker should stop. Returns
+`{ success: true }`.
+
+```ts
+await client.jobs.delete(jobId)
+```
+
 ---
 
 ### `client.llm`
@@ -4270,6 +4285,7 @@ not two.
 - `JobStatus` — `"pending" | "queued" | "processing" | "pending_review" | "completed" | "failed" | "cancelled"`. `pending_review` is **in-flight, not terminal**: a job policy registered by the deployment held the output for human review. Keep waiting — it resolves to `completed` (approved), `failed` (rejected, with `error_hint.kind === "policy-block"`) or `cancelled` (the owner cancelled it; a held job is cancellable like any in-flight job), and `credit_status` reads `"reserved"` for the whole hold. `runAndWait` throws `JobHeldError` on the first held tick rather than waiting it out. Only appears on deployments that register a job policy.
 - `JobStatusResult` — lean poll shape: `{ id, status, progress?, output_data?, error_message? }`
 - `CancelJobResult` — `{ success: true, cancelled: number }`
+- `DeleteJobResult` — `{ success: true }`
 - `ListJobsParams` / `ListJobsPage` — `jobs.list` filters and page
 
 ### LLM
