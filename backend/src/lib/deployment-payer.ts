@@ -119,6 +119,70 @@ async function resolveAccount(account: string): Promise<{ ok: true; id: string }
 }
 
 /**
+ * The SEED for `deployment_payer_settings.default_allowance_credits`, in RAW
+ * Nodaro credits, or null when the profile does not carry one.
+ *
+ * `billing.defaultAllowanceUnits` is a DISPLAY figure (SAI קרדיטים); the ledger
+ * is credits. `coherentBilling` has already refused any value that is not a
+ * whole number of credits at this `unitRate`, so the division is exact and the
+ * round only defends against float dust. This is the ONE conversion on this
+ * path — never a literal rate anywhere else.
+ */
+function seedDefaultAllowanceCredits(): number | null {
+  const { defaultAllowanceUnits: units, unitRate: rate } = runtimeSurfaceProfile().billing
+  if (units === undefined || rate === undefined || !(rate > 0)) return null
+  return Math.round(units / rate)
+}
+
+/**
+ * Write the payer identity into `deployment_payer_settings` (migration 381).
+ *
+ * WHY THIS IS PART OF BOOT AND NOT A ROUTE: 381's narrowed `profiles` SELECT
+ * policy hides the payer's row from admins by asking the database who the payer
+ * is, and this is the only writer of that answer. Until it runs, the policy is
+ * a no-op and the payer's real balance is readable by every customer-minted
+ * admin — which is the leak the migration exists to close. That is why the
+ * migration and these lines ship in the same PR (spec §6.1).
+ *
+ * TWO STATEMENTS, ONE UPSERT. The spec writes it as a single
+ * `INSERT … ON CONFLICT (id) DO UPDATE SET payer_user_id = …`; supabase-js
+ * cannot express a partial DO UPDATE (it updates every column it is given), so
+ * the faithful translation is `DO NOTHING` (`ignoreDuplicates`) followed by an
+ * UPDATE that names only the operator-owned columns. Same semantics, and the
+ * split makes the load-bearing half legible: `default_allowance_credits` is
+ * carried by the INSERT and by nothing else. It is the BILLING ACCOUNT's value
+ * after first boot (D6); an UPDATE that touched it would revert the customer's
+ * choice on every deploy.
+ *
+ * A FAILURE REFUSES BOOT. Returning ok:false here makes app.ts exit(1). The
+ * alternative — logging and continuing — leaves `payer_user_id` NULL, and the
+ * fail-closed RLS helper then answers NULL and re-opens the leak silently.
+ * (Corollary for the deploy: 381 must be applied BEFORE an image carrying this
+ * code boots, or the API crash-loops on a missing relation until it is.)
+ */
+async function writePayerSettings(id: string): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const supabase = await db()
+  const seed = seedDefaultAllowanceCredits()
+  const row: Record<string, unknown> = { id: true, payer_user_id: id }
+  if (seed !== null) row.default_allowance_credits = seed
+
+  const inserted = await supabase
+    .from("deployment_payer_settings")
+    .upsert(row, { onConflict: "id", ignoreDuplicates: true })
+  if (inserted.error) {
+    return { ok: false, reason: `deployment_payer_settings insert failed: ${inserted.error.message}` }
+  }
+  const refreshed = await supabase
+    .from("deployment_payer_settings")
+    .update({ payer_user_id: id, updated_at: new Date().toISOString() })
+    .eq("id", true)
+  if (refreshed.error) {
+    return { ok: false, reason: `deployment_payer_settings refresh failed: ${refreshed.error.message}` }
+  }
+  return { ok: true }
+}
+
+/**
  * Boot entry (app.ts, after the surface fail-closed check). Inert fast-path:
  * no `payerAccount` on the profile ⇒ zero queries, nothing configured.
  * Returns the refusal instead of throwing so the loader owns the exit(1) —
@@ -132,6 +196,10 @@ export async function configureDeploymentPayer(): Promise<{ ok: true } | { ok: f
   }
   const resolved = await resolveAccount(account)
   if (!resolved.ok) return resolved
+  // BEFORE activating: a failed write leaves this module in its pristine
+  // inactive state, so the refusal needs no unwind branch.
+  const settings = await writePayerSettings(resolved.id)
+  if (!settings.ok) return settings
   payerId = resolved.id
   await refreshEntitlements(payerId)
   if (!entitlements) {
@@ -147,6 +215,27 @@ export async function configureDeploymentPayer(): Promise<{ ok: true } | { ok: f
 
 export function deploymentPayerActive(): boolean {
   return payerId !== null
+}
+
+/**
+ * Track A — is per-user allowance ENFORCEMENT on for this deployment?
+ *
+ * TWO switches, not one (D3). `p_on_behalf_of` (attribution) is passed
+ * whenever the billing context is `payer: "deployment"`; this predicate drives
+ * `p_enforce_allowance` alone, so rollout step 3 can carry attribution while
+ * nothing yet touches the allowance tables — and behaviour case 6 proves that
+ * window creates no row and refuses nothing.
+ *
+ * Both halves are load-bearing. Without an active payer there is no pool to
+ * hold a quota against; without `billing.allowances === "enforce"` the
+ * deployment has not flipped (the flip is rollout step 8, the ONLY change in
+ * the track that can refuse a generation). Absent or malformed ⇒ false, which
+ * is the fail-safe direction. `coherentBilling` also drops the key when the
+ * display-unit trio is incoherent — a deployment that cannot show an allowance
+ * must not enforce one.
+ */
+export function allowanceEnforcementActive(): boolean {
+  return deploymentPayerActive() && runtimeSurfaceProfile().billing.allowances === "enforce"
 }
 
 /**

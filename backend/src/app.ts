@@ -346,7 +346,11 @@ export async function buildApp() {
   const payerBoot = await configureDeploymentPayer()
   if (!payerBoot.ok) {
     console.error(
-      `[deployment-payer] FATAL: billing.payerAccount is configured but did not resolve — ${payerBoot.reason}. ` +
+      // The fixed half no longer says "did not resolve": this branch now also
+      // carries a payer that resolved but could not be brought up — an
+      // unwritable `deployment_payer_settings` row (migration 381). `reason`
+      // names which.
+      `[deployment-payer] FATAL: billing.payerAccount is configured but could not be brought up — ${payerBoot.reason}. ` +
         "Refusing to boot a deployment-payer instance requester-billed. Fix the profile (or the payer account) and redeploy.",
     )
     process.exit(1)

@@ -29,13 +29,33 @@ export function renderSurfaceProfileForRuntimeConfig(): string {
   if (!surfaceGateOpen()) return ""
   const profile = runtimeSurfaceProfile()
   if (profile === SURFACE_PROFILE_DEFAULT) return ""
-  // REDACTION: `billing.payerAccount` is the deployment payer's identity (a
-  // uuid or email) — backend-only by contract. /config.js is world-readable,
-  // so the key is stripped here, at the ONE render point, rather than trusted
-  // to a frontend that must never receive it. The browser learns "one account
-  // pays" through GET /v1/billing/surface's `deploymentPayer` flag instead.
-  if (profile.billing.payerAccount !== undefined) {
-    const { payerAccount: _redacted, ...billing } = profile.billing
+  // REDACTION: three `billing` keys are backend-only by contract, and
+  // /config.js is world-readable — so they are stripped here, at the ONE
+  // render point, rather than trusted to a frontend that must never receive
+  // them.
+  //
+  //  - `payerAccount` — the deployment payer's identity (a uuid or email).
+  //    The browser learns "one account pays" through GET /v1/billing/surface's
+  //    `deploymentPayer` flag instead.
+  //  - `defaultAllowanceUnits` — a business figure (the seed for the payer's
+  //    per-user allocation). Nobody's browser needs the number, and every user
+  //    would otherwise read the deployment's allocation policy off a static
+  //    script.
+  //  - `allowances` — the enforcement gate. The browser learns whether an
+  //    allowance applies from the `allowance` field on ITS OWN balance
+  //    (D12), which is the requester's own figure; a global flag would tell it
+  //    something it must never act on.
+  //
+  // Whole-object identity on mainline: with none of the three set, this is the
+  // same single JSON.stringify(profile) it has always been.
+  const { payerAccount, defaultAllowanceUnits, allowances } = profile.billing
+  if (payerAccount !== undefined || defaultAllowanceUnits !== undefined || allowances !== undefined) {
+    const {
+      payerAccount: _payer,
+      defaultAllowanceUnits: _defaultAllowance,
+      allowances: _allowances,
+      ...billing
+    } = profile.billing
     return JSON.stringify({ ...profile, billing })
   }
   return JSON.stringify(profile)

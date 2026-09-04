@@ -337,3 +337,123 @@ describe("sidebar surface additions — integrations nav key, studio tab key, br
     expect(parseSurfaceProfile(JSON.stringify({ brand: { productName: "Acme Studio" } })).brand.wordmark).toBeUndefined()
   })
 })
+
+describe("billing — the allowance keys (Track A / WS0): defaultAllowanceUnits + allowances", () => {
+  const warn = () => {
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {})
+    return { spy, calls: () => spy.mock.calls.map((c) => String(c[0])) }
+  }
+  const REAL_EDITION = config.EDITION
+  const REAL_ENV = process.env.NODARO_SURFACE_PROFILE
+  afterEach(() => {
+    vi.restoreAllMocks()
+    config.EDITION = REAL_EDITION
+    if (REAL_ENV === undefined) delete process.env.NODARO_SURFACE_PROFILE
+    else process.env.NODARO_SURFACE_PROFILE = REAL_ENV
+    __resetSurfaceProfileCacheForTests()
+  })
+
+  const withTrio = (extra: Record<string, unknown>) =>
+    parseSurfaceProfile(JSON.stringify({ billing: { unitLabel: "קרדיטים", unitRate: 2000, ...extra } })).billing
+
+  it("BOTH keys are absent from the stock default — mainline carries no allowance surface at all", () => {
+    expect(SURFACE_PROFILE_DEFAULT.billing.defaultAllowanceUnits).toBeUndefined()
+    expect(SURFACE_PROFILE_DEFAULT.billing.allowances).toBeUndefined()
+    const b = parseSurfaceProfile(JSON.stringify({})).billing
+    expect(b).toEqual({ costTab: "inherit", sidebarCard: "inherit", selfServe: true })
+    expect("allowances" in b).toBe(false)
+    expect("defaultAllowanceUnits" in b).toBe(false)
+  })
+
+  it("keeps a coherent pair beside a coherent trio (the hosted SAI shape)", () => {
+    expect(withTrio({ defaultAllowanceUnits: 400000, allowances: "enforce" })).toEqual({
+      costTab: "inherit",
+      sidebarCard: "inherit",
+      selfServe: true,
+      unitLabel: "קרדיטים",
+      unitRate: 2000,
+      defaultAllowanceUnits: 400000,
+      allowances: "enforce",
+    })
+    expect(withTrio({ allowances: "off" }).allowances).toBe("off")
+  })
+
+  it("defaultAllowanceUnits must be a whole number of CREDITS at unitRate — a remainder drops it, loudly", () => {
+    const { calls } = warn()
+    // 400000 / 2000 = 200 credits — kept.
+    expect(withTrio({ defaultAllowanceUnits: 400000 }).defaultAllowanceUnits).toBe(400000)
+    // 400001 / 2000 = 200.0005 credits — the ledger is in credits (D1/R3), so drop.
+    expect(withTrio({ defaultAllowanceUnits: 400001 }).defaultAllowanceUnits).toBeUndefined()
+    expect(calls().some((m) => m.includes("defaultAllowanceUnits"))).toBe(true)
+  })
+
+  it("defaultAllowanceUnits must be finite and > 0; a string, zero, negative, NaN and Infinity all drop", () => {
+    warn()
+    for (const v of ["400000", 0, -2000, Number.NaN, Number.POSITIVE_INFINITY, null, {}]) {
+      expect(withTrio({ defaultAllowanceUnits: v }).defaultAllowanceUnits, String(v)).toBeUndefined()
+    }
+  })
+
+  it("allowances accepts ONLY \"off\" | \"enforce\"; anything else drops (⇒ enforcement off, fail-safe)", () => {
+    warn()
+    for (const v of ["ENFORCE", "on", true, 1, null, {}]) {
+      expect(withTrio({ allowances: v }).allowances, String(v)).toBeUndefined()
+    }
+  })
+
+  it("the two drop INDEPENDENTLY — a bogus one never takes the other down", () => {
+    warn()
+    const a = withTrio({ defaultAllowanceUnits: 400001, allowances: "enforce" })
+    expect(a.defaultAllowanceUnits).toBeUndefined()
+    expect(a.allowances).toBe("enforce")
+    const b = withTrio({ defaultAllowanceUnits: 400000, allowances: "bogus" })
+    expect(b.defaultAllowanceUnits).toBe(400000)
+    expect(b.allowances).toBeUndefined()
+  })
+
+  it("both are members of the UNIT FAMILY (§11): no coherent trio ⇒ both drop with a warning", () => {
+    const { calls } = warn()
+    // No trio at all.
+    const none = parseSurfaceProfile(JSON.stringify({ billing: { defaultAllowanceUnits: 400000, allowances: "enforce" } })).billing
+    expect(none).toEqual({ costTab: "inherit", sidebarCard: "inherit", selfServe: true })
+    // A trio that fails its own coherence (rate without a label) takes them too.
+    const incoherent = parseSurfaceProfile(
+      JSON.stringify({ billing: { unitRate: 2000, defaultAllowanceUnits: 400000, allowances: "enforce" } }),
+    ).billing
+    expect(incoherent.defaultAllowanceUnits).toBeUndefined()
+    expect(incoherent.allowances).toBeUndefined()
+    expect(calls().filter((m) => m.includes("defaultAllowanceUnits/allowances")).length).toBe(2)
+  })
+
+  it("neither key EVER reaches /config.js — the browser learns enforcement from its own balance", async () => {
+    const { renderSurfaceProfileForRuntimeConfig } = await import("../surface-profile-runtime-config.js")
+    config.EDITION = "business"
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({
+      billing: {
+        unitLabel: "קרדיטים",
+        unitRate: 2000,
+        selfServe: false,
+        defaultAllowanceUnits: 400000,
+        allowances: "enforce",
+        payerAccount: "billing@sai-app.com",
+      },
+    })
+    __resetSurfaceProfileCacheForTests()
+
+    const backend = runtimeSurfaceProfile()
+    // The backend KEEPS both (the boot seed and allowanceEnforcementActive read them)…
+    expect(backend.billing.defaultAllowanceUnits).toBe(400000)
+    expect(backend.billing.allowances).toBe("enforce")
+
+    const out = renderSurfaceProfileForRuntimeConfig()
+    // …and the render strips them, by key AND by value.
+    expect(out).not.toContain("defaultAllowanceUnits")
+    expect(out).not.toContain("400000")
+    expect(out).not.toContain("allowances")
+    expect(out).not.toContain("enforce")
+    expect(out).not.toContain("payerAccount")
+    const parsed = JSON.parse(out)
+    // Everything else survives, resolved.
+    expect(parsed.billing).toEqual({ costTab: "inherit", sidebarCard: "inherit", selfServe: false, unitLabel: "קרדיטים", unitRate: 2000 })
+  })
+})

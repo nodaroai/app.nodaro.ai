@@ -30,6 +30,12 @@ vi.mock("../supabase.js", () => ({
       h.fromCalls++
       return {
         select: () => ({ eq: () => ({ maybeSingle: async () => h.profileRow }) }),
+        // Track A step 1: configureDeploymentPayer() also writes the
+        // `deployment_payer_settings` singleton (migration 381's RLS input).
+        // Stubbed as a success here; the payload and the refuse-boot semantics
+        // are proved in deployment-payer-settings-upsert.test.ts.
+        upsert: async () => ({ error: null }),
+        update: () => ({ eq: async () => ({ error: null }) }),
       }
     },
     auth: { admin: { listUsers: h.listUsers } },
