@@ -1,4 +1,9 @@
-import { VIDEO_REF_LIMITS_BY_PROVIDER } from "@nodaro/shared"
+import {
+  VIDEO_REF_LIMITS_BY_PROVIDER,
+  isMinimaxH3Provider,
+  isSeedance2Provider,
+  isWan3Provider,
+} from "@nodaro/shared"
 
 /**
  * Which endpoint is answering. The two lanes accept DIFFERENT things, so the
@@ -49,6 +54,29 @@ export function imageRequiredMessage(
     return `${base}. Reference images alone reach this model only on the image-to-video endpoint (POST /v1/generate-video).`
   }
   return `${base} (this model cannot use reference images — it needs a start frame).`
+}
+
+/**
+ * True when the provider's image-to-video path FOLDS a lone closing frame into
+ * its reference images — i.e. an end frame with no start frame is a reference
+ * the model actually receives, not a half-formed frame pair.
+ *
+ * The Seedance 2.x, MiniMax Hailuo 3 and Wan 3 families all assemble their KIE
+ * input through the shared `resolveSeedance2Inputs` (`@nodaro/prompts`), whose
+ * reference mode takes a lone last frame as the sole reference image plus a
+ * closing-frame prompt hint. NOTHING else does: VEO ships `[imageUrl,
+ * endFrameUrl]` verbatim (a lone end frame would reach KIE as `[null, url]`),
+ * the Gemini Omni branch drops the frame when there is no start frame, and the
+ * generic KIE path sends `end_frame` with no image param at all. So the
+ * exemption is keyed to the FOLD, not to "carries image references" — the
+ * catalog has no capability for it, and these three family predicates are the
+ * same membership the provider layer itself branches on
+ * (`kie/video.ts::applySeedance2Params` / `applyMinimaxH3Params` / `runWan3`).
+ * A ref-capable provider that grows the fold gets the exemption by joining a
+ * family here; one that does not keeps the honest `image_required` 400.
+ */
+export function videoProviderFoldsLoneEndFrame(provider: string): boolean {
+  return isSeedance2Provider(provider) || isMinimaxH3Provider(provider) || isWan3Provider(provider)
 }
 
 export function imageRequiredError(

@@ -18,7 +18,7 @@ import { insertJobIdempotent } from "../lib/insert-job.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, isMinimaxH3Provider, isVeoProvider, estimateLoopTrimAddonCredits, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, buildVideoCreditModelIdentifier, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, type ConnectedReference } from "@nodaro/shared"
-import { imageRequiredError } from "../lib/video-image-required.js"
+import { imageRequiredError, videoProviderFoldsLoneEndFrame } from "../lib/video-image-required.js"
 import { resolveVideoReferenceCore, resolveReferenceTokens, resolveRefIdTokens, composeVideoPromptText, type VideoExtraRef, type CharacterMeta } from "@nodaro/prompts"
 import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
 import { directionSchema } from "../lib/direction-schema.js"
@@ -900,9 +900,17 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     // cap") keeps the guard meaningful: refs the provider would silently drop
     // (e.g. audio-only refs on an images-only model) still 400 rather than
     // degrade into an unanchored generation the user didn't ask for.
+    //
+    // A lone END frame is read as one of those image references — ONE reading,
+    // inside the image-kind clause — for the providers whose i2v path folds it
+    // into reference_image_urls (videoProviderFoldsLoneEndFrame). Without that,
+    // a closing-frame-only run 400'd here even though the worker would have
+    // taken the frame happily, so callers duplicated the same picture into
+    // referenceImageUrls just to pass the gate (studio.nodaro.ai#475).
     const refCaps = VIDEO_REF_LIMITS_BY_PROVIDER[provider]
+    const foldsLoneEndFrame = endFrameUrl !== undefined && videoProviderFoldsLoneEndFrame(provider)
     const hasMultimodalRef =
-      ((refCaps?.images ?? 0) > 0 && (referenceImageUrls?.length ?? 0) > 0) ||
+      ((refCaps?.images ?? 0) > 0 && ((referenceImageUrls?.length ?? 0) > 0 || foldsLoneEndFrame)) ||
       ((refCaps?.videos ?? 0) > 0 && (referenceVideoUrls?.length ?? 0) > 0) ||
       ((refCaps?.audio ?? 0) > 0 && (referenceAudioUrls?.length ?? 0) > 0)
 

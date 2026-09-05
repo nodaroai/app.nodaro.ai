@@ -1188,6 +1188,78 @@ describe("POST /v1/generate-video — references-only (catalog-driven imageUrl e
   })
 })
 
+describe("POST /v1/generate-video — end-frame-only (folded into the provider's references)", () => {
+  const USER = "00000000-0000-4000-8000-000000000001"
+  const END_FRAME = "https://cdn.example/closing.png"
+
+  // Seedance 2.x / MiniMax H3 / Wan 3 all assemble their KIE input through the
+  // shared resolveSeedance2Inputs, which takes a lone last frame as the sole
+  // reference image with a closing-frame hint — so the caller sends the picture
+  // ONCE (studio used to duplicate it into referenceImageUrls to pass the gate).
+  for (const provider of ["seedance-2-5", "minimax-h3", "wan-3-prime"]) {
+    it(`accepts an end-frame-only ${provider} run with no duplicate reference image`, async () => {
+      mockJobInsert({ data: { id: `job-end-${provider}` }, error: null })
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-video",
+        payload: {
+          userId: USER,
+          provider,
+          prompt: "the camera settles on the final beat",
+          endFrameUrl: END_FRAME,
+        },
+      })
+      expect(res.statusCode).toBe(200)
+      const [jobName, payload] = vi.mocked(videoQueue.add).mock.calls[0] as [string, Record<string, unknown>]
+      expect(jobName).toBe("image-to-video")
+      expect(payload.endFrameUrl).toBe(END_FRAME)
+      expect(payload.imageUrl).toBeUndefined()
+      expect(payload.referenceImageUrls).toBeUndefined()
+    })
+  }
+
+  it("still returns image_required for an i2v-only model that carries no references", async () => {
+    // kling-master: catalog modes ["i2v"] and no VIDEO_REF_LIMITS_BY_PROVIDER
+    // entry — an end frame is not a reference it could fold, so it still needs
+    // a start frame.
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-video",
+      payload: {
+        userId: USER,
+        provider: "kling-master",
+        prompt: "a cat",
+        endFrameUrl: END_FRAME,
+      },
+    })
+    expect(res.statusCode).toBe(400)
+    const body = res.json() as { error: { code: string; message: string } }
+    expect(body.error.code).toBe("image_required")
+    expect(body.error.message).toContain("kling-master")
+  })
+
+  it("still refuses an end-frame-only run on a ref-capable provider whose i2v path does not fold it", async () => {
+    // VEO carries image references, but its i2v branch ships
+    // `[imageUrl, endFrameUrl]` verbatim — a lone end frame would reach KIE as
+    // `[null, url]`. The Gemini Omni branch drops the frame outright. The
+    // exemption is therefore keyed to the providers that actually FOLD a lone
+    // last frame, not to "carries image refs".
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-video",
+      payload: {
+        userId: USER,
+        provider: "veo3",
+        prompt: "a cat",
+        endFrameUrl: END_FRAME,
+      },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+    expect(res.json().error.message).toContain("/v1/text-to-video")
+  })
+})
+
 // ---------------------------------------------------------------------------
 // `{ref:<id>}` — id-addressed reference tokens (the Studio contract).
 //
