@@ -1158,7 +1158,11 @@ orchestrator already use):
   400 rather than silently dropped. An **end frame alone** is accepted the same
   way on the models that fold it into their references (Seedance 2.x, MiniMax
   Hailuo 3, Wan 3) — send `endFrameUrl` once, without repeating the same
-  picture in `referenceImageUrls`.
+  picture in `referenceImageUrls`. That membership is the exported predicate
+  `videoProviderFoldsLoneEndFrame(provider)` in
+  [`@nodaro/shared`](https://www.npmjs.com/package/@nodaro/shared) — the same
+  one this route reads, so a client can gate its own UI on it instead of
+  hand-mirroring the family list.
 - **`image_required` vs `validation_error` on a missing start frame.** When
   `POST /v1/generate-video` gets no `imageUrl`, no `REFERENCE_2_VIDEO`
   `generationType` and no reference kind the provider can carry, the response

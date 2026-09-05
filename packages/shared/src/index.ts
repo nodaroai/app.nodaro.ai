@@ -112,6 +112,7 @@ export {
   checkRefVideoDurations,
   VIDEO_PROVIDERS_REQUIRING_IMAGE,
   videoProviderRequiresImage,
+  videoProviderFoldsLoneEndFrame,
   VIDEO_MODE_ALIASES,
   VIDEO_GEN_COLLAPSED_T2V_IDS,
   resolveVideoProviderForMode,
