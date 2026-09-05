@@ -85,7 +85,8 @@ vi.mock("@/lib/video-schemas.js", async () => {
 // ---------------------------------------------------------------------------
 
 import { generateVideoRoutes, assembleVideoConnectedReferences } from "../generate-video.js"
-import { VIDEO_REF_LIMITS_BY_PROVIDER, type ConnectedReference } from "@nodaro/shared"
+import { VIDEO_GEN_PROVIDERS, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, type ConnectedReference } from "@nodaro/shared"
+import { videoProviderFoldsLoneEndFrame } from "../../lib/video-image-required.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { probeMediaDuration } from "../../providers/video/ffmpeg-utils.js"
@@ -1238,26 +1239,48 @@ describe("POST /v1/generate-video — end-frame-only (folded into the provider's
     expect(body.error.message).toContain("kling-master")
   })
 
-  it("still refuses an end-frame-only run on a ref-capable provider whose i2v path does not fold it", async () => {
-    // VEO carries image references, but its i2v branch ships
-    // `[imageUrl, endFrameUrl]` verbatim — a lone end frame would reach KIE as
-    // `[null, url]`. The Gemini Omni branch drops the frame outright. The
-    // exemption is therefore keyed to the providers that actually FOLD a lone
-    // last frame, not to "carries image refs".
-    const res = await app.inject({
-      method: "POST",
-      url: "/v1/generate-video",
-      payload: {
-        userId: USER,
-        provider: "veo3",
-        prompt: "a cat",
-        endFrameUrl: END_FRAME,
-      },
-    })
-    expect(res.statusCode).toBe(400)
-    expect(res.json().error.code).toBe("validation_error")
-    expect(res.json().error.message).toContain("/v1/text-to-video")
+  // The negative half of videoProviderFoldsLoneEndFrame's promise ("NOTHING
+  // else does"), as a totality loop rather than a hand list: EVERY provider
+  // that carries image references but does not fold a lone last frame is still
+  // refused here. VEO carries image references, but its i2v branch ships
+  // `[imageUrl, endFrameUrl]` verbatim — a lone end frame would reach KIE as
+  // `[null, url]`. The Gemini Omni branch drops the frame outright. The
+  // exemption is therefore keyed to the providers that actually FOLD a lone
+  // last frame, not to "carries image refs" — widen it to the cap and this
+  // loop goes red. (The refusal CODE differs by lane, as it always has: an
+  // i2v-only model has nowhere else to go and gets `image_required`; a model
+  // with a text-to-video mode is simply on the wrong endpoint.)
+  const refCapableNonFolders = VIDEO_GEN_PROVIDERS.filter(
+    (p) => !videoProviderFoldsLoneEndFrame(p) && (VIDEO_REF_LIMITS_BY_PROVIDER[p]?.images ?? 0) > 0,
+  )
+
+  it("there is at least one ref-capable non-folder to refuse (an empty set would guard nothing)", () => {
+    expect(refCapableNonFolders.length).toBeGreaterThan(0)
   })
+
+  for (const provider of refCapableNonFolders) {
+    it(`still refuses an end-frame-only ${provider} run — it carries image refs but does not fold the frame`, async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-video",
+        payload: {
+          userId: USER,
+          provider,
+          prompt: "a cat",
+          endFrameUrl: END_FRAME,
+        },
+      })
+      expect(res.statusCode).toBe(400)
+      const body = res.json() as { error: { code: string; message: string } }
+      if (videoProviderRequiresImage(provider)) {
+        expect(body.error.code).toBe("image_required")
+        expect(body.error.message).toContain(provider)
+      } else {
+        expect(body.error.code).toBe("validation_error")
+        expect(body.error.message).toContain("/v1/text-to-video")
+      }
+    })
+  }
 })
 
 // ---------------------------------------------------------------------------
