@@ -1182,9 +1182,14 @@ if ("jobId" in result) {
 > always respected regardless of text length (its own cap still clamps the
 > stored record, unchanged).
 
-> **Typed structured references.** `run("generate-image" | "generate-video", …)`
-> have typed overloads — `GenerateImageParams` / `GenerateVideoParams` (both extend
-> `StructuredReferenceParams`). Pass `connectedReferences: ConnectedReference[]` (the
+> **Typed structured references.**
+> `run("generate-image" | "generate-video" | "text-to-video", …)` (and the same
+> three on `runAndWait`) have typed overloads — `GenerateImageParams` /
+> `GenerateVideoParams` / `TextToVideoParams` (all extend
+> `StructuredReferenceParams`). `text-to-video` is the prompt-only video lane, so
+> its `prompt` is REQUIRED and the frame fields (`imageUrl` / `endFrameUrl`)
+> belong to `generate-video`, the image-to-video lane.
+> Pass `connectedReferences: ConnectedReference[]` (the
 > editor's wired-reference shape, re-exported from the SDK) + `referenceOrder` for
 > labeled, ordered references the route assembles into `@image_N` directives —
 > instead of hand-building a prose "Image N is …" guide. Each `ConnectedReference`
@@ -1300,8 +1305,9 @@ if ("jobId" in result) {
 > ```
 
 > Every other node type keeps the generic `Record<string, unknown>` body —
-> `generate-image`, `generate-video`, and `assemble-narrated-video` are
-> currently the only three with dedicated typed params.
+> `generate-image`, `generate-video`, `text-to-video`, and
+> `assemble-narrated-video` are currently the only four with dedicated typed
+> params.
 
 #### `runAndWait(type, params?, opts?)`
 

@@ -1098,7 +1098,10 @@ orchestrator already use):
   required. Reference kinds the provider can't carry don't lift the
   requirement: a provider with no reference support still needs `imageUrl`,
   and e.g. audio-only references on an images-only model are rejected with a
-  400 rather than silently dropped.
+  400 rather than silently dropped. An **end frame alone** is accepted the same
+  way on the models that fold it into their references (Seedance 2.x, MiniMax
+  Hailuo 3, Wan 3) — send `endFrameUrl` once, without repeating the same
+  picture in `referenceImageUrls`.
 - **`image_required` vs `validation_error` on a missing start frame.** When
   `POST /v1/generate-video` gets no `imageUrl`, no `REFERENCE_2_VIDEO`
   `generationType` and no reference kind the provider can carry, the response

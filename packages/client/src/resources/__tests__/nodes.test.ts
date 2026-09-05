@@ -12,7 +12,7 @@ import {
   NodaroError,
 } from "../../index.js"
 import type { JobStatus, JobStatusResult } from "../jobs.js"
-import type { GenerateVideoParams, GenerateImageParams } from "../../index.js"
+import type { GenerateVideoParams, GenerateImageParams, TextToVideoParams } from "../../index.js"
 
 function mockOk<T>(body: T) {
   return Promise.resolve({ ok: true, status: 200, json: async () => body } as unknown as Response)
@@ -349,6 +349,51 @@ describe("nodes structured references (typed params)", () => {
     expect(body).toMatchObject({
       connectedReferences: [{ id: "r1", characterSlug: "hero" }],
     })
+  })
+
+  it("run('text-to-video', TextToVideoParams) POSTs the prompt-only lane", async () => {
+    let url: string | undefined
+    let body: Record<string, unknown> | undefined
+    const fetchMock = makeFetch((u, init) => {
+      url = u
+      body = init.body ? (JSON.parse(init.body) as Record<string, unknown>) : undefined
+      return mockOk({ jobId: "job-3" })
+    })
+    const c = client(fetchMock)
+    // Typed at compile time: `prompt` is REQUIRED on this lane, and the frame
+    // fields (imageUrl / endFrameUrl) are generate-video's alone.
+    const params: TextToVideoParams = {
+      prompt: "a drone shot over the harbour at dawn",
+      provider: "seedance-2",
+      duration: 5,
+      sound: true,
+      referenceImageUrls: ["https://cdn.nodaro.ai/uploads/harbour.png"],
+      connectedReferences: [
+        { id: "r1", defaultName: "Harbour", source: "wired-image", url: "https://cdn.nodaro.ai/uploads/harbour.png" },
+      ],
+      referenceOrder: ["r1"],
+      direction: { cameraMotion: "push-in" },
+    }
+    await c.nodes.run("text-to-video", params)
+    expect(url).toBe("https://api.example.com/v1/text-to-video")
+    expect(body).toMatchObject({
+      prompt: "a drone shot over the harbour at dawn",
+      duration: 5,
+      referenceOrder: ["r1"],
+      direction: { cameraMotion: "push-in" },
+    })
+  })
+
+  it("runAndWait('text-to-video', TextToVideoParams) runs then polls to the typed output", async () => {
+    const fetchMock = runThenStatuses(
+      { jobId: "job-4" },
+      [{ status: "completed" as JobStatus, output_data: { videoUrl: "https://cdn.nodaro.ai/out.mp4" } }],
+    )
+    const c = client(fetchMock)
+    const params: TextToVideoParams = { prompt: "a city waking up" }
+    const output = await c.nodes.runAndWait("text-to-video", params, { pollMs: 1 })
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/text-to-video")
+    expect(output.videoUrl).toBe("https://cdn.nodaro.ai/out.mp4")
   })
 })
 
