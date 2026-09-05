@@ -16,6 +16,10 @@ vi.mock("../client.js", () => ({
   ensureCloudReachableMediaUrl: (u: string) => ensureCloudReachableMediaUrl(u),
   NodaroCloudError: class NodaroCloudError extends Error {},
 }))
+const recordRelayCost = vi.fn(async () => {})
+vi.mock("../relay-cost.js", () => ({
+  recordRelayCost: (...a: unknown[]) => recordRelayCost(...(a as [])),
+}))
 const isNodaroConnected = vi.fn(async () => false)
 const mockPrefs = vi.fn(async () => ({ scope: "all", precedence: "local" }) as { scope: "all" | "exclusives"; precedence: "nodaro" | "local" })
 vi.mock("../../../lib/nodaro-connect.js", () => ({
@@ -28,7 +32,7 @@ const { runJobOnCloud, canRunOnCloud, cloudRouteForJobType, shouldRunOnCloud, IN
 describe("runJobOnCloud", () => {
   beforeEach(() => {
     createCloudJob.mockReset().mockResolvedValue("cloud-job-1")
-    waitForCloudJob.mockReset().mockResolvedValue({ output_data: { audioUrl: "https://c/a.mp3" } })
+    waitForCloudJob.mockReset().mockResolvedValue({ id: "cloud-job-1", status: "completed", output_data: { audioUrl: "https://c/a.mp3" } })
   })
 
   it("posts the payload to the job type's own cloud route", async () => {
@@ -53,6 +57,29 @@ describe("runJobOnCloud", () => {
   it("drops undefined values rather than sending nulls the cloud's Zod would reject", async () => {
     await runJobOnCloud("suno-extend", { prompt: "x", style: undefined })
     expect(createCloudJob).toHaveBeenCalledWith("/v1/suno/extend", { prompt: "x" })
+  })
+
+  it("stamps the near-end row with the far end's job id and credits (spec §8.2 lane 2)", async () => {
+    recordRelayCost.mockClear()
+    waitForCloudJob.mockResolvedValue({
+      id: "cloud-job-1",
+      status: "completed",
+      credits: 24,
+      output_data: { audioUrl: "https://c/a.mp3" },
+    })
+    await runJobOnCloud("suno-generate", { prompt: "x", jobId: "local-uuid" })
+    expect(recordRelayCost).toHaveBeenCalledWith(
+      "local-uuid",
+      expect.objectContaining({ id: "cloud-job-1", credits: 24 }),
+    )
+    // The local id is still stripped from the wire body — it means nothing there.
+    expect(createCloudJob).toHaveBeenCalledWith("/v1/suno/generate", { prompt: "x" })
+  })
+
+  it("skips the stamp when the payload carries no local job id — there is no row to write", async () => {
+    recordRelayCost.mockClear()
+    await runJobOnCloud("suno-generate", { prompt: "x" })
+    expect(recordRelayCost).not.toHaveBeenCalled()
   })
 
   it("returns the finished job's output verbatim — finalizing stays with the caller", async () => {
@@ -201,7 +228,7 @@ describe("shouldRunOnCloud — the one rule for the connection fallthrough", () 
 describe("nothing about OUR billing state travels to the cloud", () => {
   beforeEach(() => {
     createCloudJob.mockReset().mockResolvedValue("cloud-job-1")
-    waitForCloudJob.mockReset().mockResolvedValue({ output_data: { audioUrl: "https://c/a.mp3" } })
+    waitForCloudJob.mockReset().mockResolvedValue({ id: "cloud-job-1", status: "completed", output_data: { audioUrl: "https://c/a.mp3" } })
   })
 
   it("strips watermark/tier/credit hints — those are the cloud account's own decisions", async () => {
@@ -249,7 +276,7 @@ describe("the map and the handlers stay in step", () => {
 describe("media in a replayed payload gets re-hosted", () => {
   beforeEach(() => {
     createCloudJob.mockReset().mockResolvedValue("cloud-job-1")
-    waitForCloudJob.mockReset().mockResolvedValue({ output_data: { audioUrl: "https://c/a.mp3" } })
+    waitForCloudJob.mockReset().mockResolvedValue({ id: "cloud-job-1", status: "completed", output_data: { audioUrl: "https://c/a.mp3" } })
     ensureCloudReachableMediaUrl.mockReset().mockImplementation(async (u: string) =>
       u.includes("localhost") ? u.replace("http://localhost:3000/storage", "https://cloud/up") : u,
     )
@@ -316,7 +343,7 @@ describe("media in a replayed payload gets re-hosted", () => {
 describe("payload adapters — for job types whose enqueued shape isn't the route body", () => {
   beforeEach(() => {
     createCloudJob.mockReset().mockResolvedValue("cloud-job-1")
-    waitForCloudJob.mockReset().mockResolvedValue({ output_data: { script: { title: "t", scenes: [] } } })
+    waitForCloudJob.mockReset().mockResolvedValue({ id: "cloud-job-1", status: "completed", output_data: { script: { title: "t", scenes: [] } } })
     ensureCloudReachableMediaUrl.mockReset().mockImplementation(async (u: string) => u)
   })
 

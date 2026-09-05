@@ -1,6 +1,6 @@
 /**
- * SAI item 9 — what the credit guard does for a requester on a
- * deployment-payer instance.
+ * Deployment payer (item 9) — what the credit guard does for a requester
+ * on a deployment-payer instance.
  *
  * Two properties, both about a wallet the requester does not own:
  *   1. The PAYER's profile is what gates the request (its tier, its balance),

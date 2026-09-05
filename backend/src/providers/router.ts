@@ -73,6 +73,14 @@ export interface RouteResult {
   fallbackFlag?: boolean
   /** Provider-side generation duration in milliseconds. */
   providerMs?: number
+  /** Relay provenance — see ProviderResult.relayJobId/relayCredits. Only a
+   *  NodaroCloud* provider sets these; the router carries them across so the
+   *  handlers can persist them onto their own job row (`relayFieldsFrom`).
+   *  Absent on every vendor-direct route, which is what keeps the completion
+   *  UPDATE byte-identical off a relay — `relayFieldsFrom` keys on PRESENCE,
+   *  so the copy below is conditional rather than an `undefined` value. */
+  relayJobId?: string
+  relayCredits?: number | null
 }
 
 // ─── Core routing engine ──────────────────────────────────────────
@@ -269,6 +277,12 @@ async function walkChainAndExecute(
       seed: result.seed,
       fallbackFlag: result.fallbackFlag,
       providerMs: result.providerMs,
+      // Relay provenance (spec §8.2 lane 1). Conditional: a vendor result must
+      // yield an object with NO such key, because `relayFieldsFrom` decides
+      // whether to write the two columns by asking whether relayJobId is set.
+      ...(result.relayJobId
+        ? { relayJobId: result.relayJobId, relayCredits: result.relayCredits ?? null }
+        : {}),
     }
   }
 

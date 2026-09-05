@@ -201,6 +201,7 @@ export type {
   StructuredReferenceParams,
   GenerateImageParams,
   GenerateVideoParams,
+  TextToVideoParams,
 } from "./resources/nodes.js"
 
 export type {

@@ -20,7 +20,9 @@ import {
   NodaroCloudError,
   ensureCloudReachableMediaUrl,
   ensureCloudReachableMediaUrls,
+  type CloudJob,
 } from "./client.js"
+import { relayResultFields } from "./relay-cost.js"
 
 /**
  * The worker handler (workers/handlers/image-ai.ts) hands providers KIE-style
@@ -59,7 +61,7 @@ function mapExtraParams(
 /** Read the finalized image URL(s) out of a completed cloud job. Shared by
  *  generateImage and editImage — both cloud routes answer the same shape. */
 function extractImageResult(
-  job: { output_data?: Record<string, unknown> | null },
+  job: CloudJob,
   jobId: string,
 ): ProviderResult {
   const output = (job.output_data ?? {}) as { imageUrl?: unknown; imageUrls?: unknown }
@@ -75,7 +77,16 @@ function extractImageResult(
     ? output.imageUrls.filter((u): u is string => typeof u === "string")
     : []
   const extraUrls = allUrls.slice(1)
-  return { url, ...(extraUrls.length ? { extraUrls } : {}), cost: null }
+  // `cost` stays null — the instance sees no USD. What it DOES get is the far
+  // end's job id and reserved credits (spec §8.2 lane 1): the handler persists
+  // them onto its own job row, which is what a self-host settles its users on
+  // and what stops the delete paths destroying an object the far end owns.
+  return {
+    url,
+    ...(extraUrls.length ? { extraUrls } : {}),
+    cost: null,
+    ...relayResultFields(job),
+  }
 }
 
 export class NodaroCloudImageProvider

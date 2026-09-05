@@ -24,7 +24,7 @@ const REAL_ENV = process.env.NODARO_SURFACE_PROFILE
 // copy of this object would fail every assertion below — that is the point.
 const AUTHORED = {
   nav: { hide: ["gallery", "bogus"] },
-  brand: { productName: "SAI Studio" },
+  brand: { productName: "Acme Studio" },
   auth: { methods: ["sso"] },
 }
 
@@ -52,7 +52,7 @@ describe("renderSurfaceProfileForRuntimeConfig — the browser gets the RESOLVED
     expect(parsed.nav.hide).toEqual(["gallery"]) // the unknown key never reaches the browser
     expect(parsed.auth.methods).toEqual([]) // refineSurfaceEdition applied (sso without a label)
     expect(parsed.outputs).toEqual({ allowPublic: true }) // full shape: defaults merged in
-    expect(parsed.brand.productName).toBe("SAI Studio")
+    expect(parsed.brand.productName).toBe("Acme Studio")
   })
 
   it('is "" when nothing is configured (the browser inherits its code default)', () => {
@@ -108,7 +108,7 @@ describe("print-surface-profile CLI — stdout is exactly the payload", () => {
     const parsed = JSON.parse(res.stdout)
     expect(parsed.nav.hide).toEqual(["gallery"])
     expect(parsed.auth.methods).toEqual([])
-    expect(parsed.brand.productName).toBe("SAI Studio")
+    expect(parsed.brand.productName).toBe("Acme Studio")
   })
 
   it("prints nothing at all when nothing is configured", () => {
@@ -124,25 +124,25 @@ describe("print-surface-profile CLI — stdout is exactly the payload", () => {
   })
 })
 
-describe("renderSurfaceProfileForRuntimeConfig — payerAccount redaction (SAI item 9)", () => {
+describe("renderSurfaceProfileForRuntimeConfig — payerAccount redaction (deployment-payer item 9)", () => {
   it("billing.payerAccount NEVER reaches the browser; everything else renders resolved", () => {
     config.EDITION = "business"
     setEnv(
       JSON.stringify({
         ...AUTHORED,
-        billing: { sidebarCard: "hidden", payerAccount: "billing@sai-app.com" },
+        billing: { sidebarCard: "hidden", payerAccount: "billing@acme.example" },
       }),
     )
 
     const backendProfile = runtimeSurfaceProfile()
     // The backend KEEPS the key (deployment-payer boot reads it)…
-    expect(backendProfile.billing.payerAccount).toBe("billing@sai-app.com")
+    expect(backendProfile.billing.payerAccount).toBe("billing@acme.example")
 
     const out = renderSurfaceProfileForRuntimeConfig()
     // …and the render strips it — by key AND by value (an email in
     // /config.js is the leak this pin exists to prevent).
     expect(out).not.toContain("payerAccount")
-    expect(out).not.toContain("billing@sai-app.com")
+    expect(out).not.toContain("billing@acme.example")
     const parsed = JSON.parse(out)
     expect(parsed.billing.sidebarCard).toBe("hidden") // the rest of billing survives
     const { payerAccount: _stripped, ...restBilling } = backendProfile.billing

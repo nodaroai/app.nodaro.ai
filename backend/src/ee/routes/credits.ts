@@ -15,6 +15,7 @@ import { firstHeaderValue } from "../../lib/request-helpers.js"
 import { fallbackClaimDue, isForeignOrigin, readFreeGrant, runSignupGrantClaim } from "../billing/signup-grant.js"
 import { allowanceEnforcementActive, deploymentPayerActive, deploymentPayerId } from "../../lib/deployment-payer.js"
 import { allowanceFor } from "../billing/deployment-allowance-service.js"
+import { refusePayerBalanceToProgrammaticCaller } from "../lib/payer-balance-guard.js"
 
 /**
  * Resolve the account's free-grant state for the balance read, claiming on
@@ -190,6 +191,11 @@ export async function creditsRoutes(app: FastifyInstance) {
       })
     }
 
+    // The payer's pool is the operator's, and this route is one of the three
+    // doors onto it. BEFORE the cache read: the cache is keyed by userId alone,
+    // so the payer's own session warms an entry an app_token would be handed.
+    if (refusePayerBalanceToProgrammaticCaller(req, reply)) return reply
+
     const cached = getCachedBalance(userId)
     if (cached) {
       return { data: cached }
@@ -304,6 +310,10 @@ export async function creditsRoutes(app: FastifyInstance) {
         error: { code: "bad_request", message: "model is required" },
       })
     }
+
+    // Same figure, phrased as a sufficiency verdict — the response carries
+    // `balance: totalBalance`, so this door leaks exactly what the other two do.
+    if (refusePayerBalanceToProgrammaticCaller(req, reply)) return reply
 
     try {
       const result = await CreditsService.checkCredits(userId, model)

@@ -86,6 +86,23 @@ describe("reconcileNodaroCloudJob", () => {
     expect(mocks.refund).not.toHaveBeenCalled()
   })
 
+  it("hands the finalize the far end's `credits` verbatim — recovery writes the same relay provenance as the live path", async () => {
+    // The polled body IS what finalizeExclusiveCloudOutput reads `relay_credits`
+    // from. Narrow this local shape (or re-build it from the row) and every
+    // job recovered after a worker death completes with relay_credits NULL
+    // while the live path writes the real number — a silent billing hole on
+    // exactly the path that only ever runs when something already went wrong.
+    const cloudJob = {
+      id: "cloud-9",
+      status: "completed",
+      credits: 24,
+      output_data: { videoUrl: "https://c/v.mp4" },
+    }
+    mocks.cloudFetch.mockResolvedValue(okPoll(cloudJob))
+    await reconcileNodaroCloudJob(row())
+    expect(mocks.finalize.mock.calls[0]![0].cloudJob).toEqual(cloudJob)
+  })
+
   it("a finalize failure is transient (bump), not terminal — the cloud result still exists to retry against", async () => {
     mocks.cloudFetch.mockResolvedValue(okPoll({ id: "cloud-9", status: "completed", output_data: {} }))
     mocks.finalize.mockRejectedValue(new Error("R2 hiccup"))

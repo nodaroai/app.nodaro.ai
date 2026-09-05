@@ -6,6 +6,8 @@ import { join } from "node:path"
 import { supabase } from "../lib/supabase.js"
 import { uploadBufferToR2, deleteFromR2, r2KeyFromOurUrl } from "../lib/storage.js"
 import { updateStorageUsage } from "../utils/file-validation.js"
+import { isRelayOwnedObject } from "../lib/asset-delete.js"
+import { jobOutputReferrerPaths } from "../lib/job-output-urls.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import {
   downloadFile,
@@ -98,7 +100,11 @@ export async function deleteSourceAfterProcess(sourceUrl: string, userId: string
 
     const { data: owned, error: ownedError } = await supabase
       .from("assets")
-      .select("id, user_id, r2_key, size_bytes")
+      // `job_id` + `relay_job_id` are the relay delete rule's inputs
+      // (lib/asset-delete.ts). Selected here so this path applies the same rule
+      // the canonical delete does — it is the FOURTH copy of that logic, and
+      // the one the rule had not reached.
+      .select("id, user_id, r2_key, size_bytes, job_id, relay_job_id")
       .eq("r2_key", sourceKey)
       .eq("user_id", userId)
       .limit(1)
@@ -114,45 +120,65 @@ export async function deleteSourceAfterProcess(sourceUrl: string, userId: string
       return
     }
 
-    // Content-addressed safety (same checks as library.ts): another assets row
-    // (e.g. saved from the gallery by another user) or one of the user's job
-    // outputs may point at the SAME object — deleting it would permanently
-    // break them. Any lookup error counts as "a referrer may exist".
-    const { count: otherAssetRefs, error: assetRefError } = await supabase
-      .from("assets")
-      .select("id", { count: "exact", head: true })
-      .eq("r2_key", sourceKey)
-      .neq("id", owned.id)
-    const assetRefsExist = !!assetRefError || (!!otherAssetRefs && otherAssetRefs > 0)
+    // THE RELAY RULE, first — the same step 0 permanentlyDeleteAsset takes
+    // (lib/asset-delete.ts). When our relay target created these bytes we drop
+    // our row and nothing else: not the object, and NOT the quota, which the
+    // shared-bucket passthrough never charged (invariant 10a). The asset's own
+    // `relay_job_id` answers without a query; the job-row read behind it is the
+    // fallback for rows written before this asset column, and comes back NULL
+    // on every deployment that never relays.
+    const relayOwned = await isRelayOwnedObject(owned.job_id, sourceKey, owned.relay_job_id)
 
-    let jobRefsExist = false
-    if (!assetRefsExist) {
-      // One .eq() per output_data key — never a hand-built .or() string; the
-      // URL's reserved chars corrupt an unquoted PostgREST filter (library.ts).
-      for (const key of ["imageUrl", "videoUrl", "audioUrl"] as const) {
-        const { count, error } = await supabase
-          .from("jobs")
-          .select("id", { count: "exact", head: true })
-          .eq("user_id", userId)
-          .eq(`output_data->>${key}`, sourceUrl)
-        if (error || (count ?? 0) > 0) {
-          jobRefsExist = true
-          break
+    if (relayOwned) {
+      console.warn(
+        `[media-process] deleteSource kept R2 object ${sourceKey}: created by our relay target ` +
+          "— row removed, bytes and quota left alone",
+      )
+    } else {
+      // Content-addressed safety (same checks as library.ts): another assets row
+      // (e.g. saved from the gallery by another user) or one of the user's job
+      // outputs may point at the SAME object — deleting it would permanently
+      // break them. Any lookup error counts as "a referrer may exist".
+      const { count: otherAssetRefs, error: assetRefError } = await supabase
+        .from("assets")
+        .select("id", { count: "exact", head: true })
+        .eq("r2_key", sourceKey)
+        .neq("id", owned.id)
+      const assetRefsExist = !!assetRefError || (!!otherAssetRefs && otherAssetRefs > 0)
+
+      let jobRefsExist = false
+      if (!assetRefsExist) {
+        // One .eq() per output_data path — never a hand-built .or() string; the
+        // URL's reserved chars corrupt an unquoted PostgREST filter (library.ts).
+        // The list is shared with the other three delete paths and flag-gated:
+        // the same three paths off the shared-bucket flag, the full list on it,
+        // where a second near-end job can alias this object with no assets row
+        // (`save-to-storage` writes `output_data.url`).
+        for (const path of jobOutputReferrerPaths()) {
+          const { count, error } = await supabase
+            .from("jobs")
+            .select("id", { count: "exact", head: true })
+            .eq("user_id", userId)
+            .eq(path, sourceUrl)
+          if (error || (count ?? 0) > 0) {
+            jobRefsExist = true
+            break
+          }
         }
       }
-    }
 
-    if (!assetRefsExist && !jobRefsExist) {
-      try {
-        await deleteFromR2(sourceKey)
-      } catch (err) {
-        // Object survives; continue to the record cleanup like library.ts does.
-        console.warn(`[media-process] deleteSource R2 delete failed for ${sourceKey} (continuing):`, err)
+      if (!assetRefsExist && !jobRefsExist) {
+        try {
+          await deleteFromR2(sourceKey)
+        } catch (err) {
+          // Object survives; continue to the record cleanup like library.ts does.
+          console.warn(`[media-process] deleteSource R2 delete failed for ${sourceKey} (continuing):`, err)
+        }
+      } else {
+        console.warn(
+          `[media-process] deleteSource kept R2 object ${sourceKey}: other asset/job referrers exist`,
+        )
       }
-    } else {
-      console.warn(
-        `[media-process] deleteSource kept R2 object ${sourceKey}: other asset/job referrers exist`,
-      )
     }
 
     const { error: rowError } = await supabase.from("assets").delete().eq("id", owned.id).eq("user_id", userId)
@@ -162,7 +188,11 @@ export async function deleteSourceAfterProcess(sourceUrl: string, userId: string
       return
     }
 
-    const sizeBytes = owned.size_bytes ?? 0
+    // A relay-owned object is never counted against this instance's quota in
+    // EITHER direction: `uploadToR2`'s passthrough returns above trackStorage,
+    // so no increment ever happened and a decrement here walks
+    // storage_used_bytes down toward migration 022's GREATEST(0,…) floor.
+    const sizeBytes = relayOwned ? 0 : owned.size_bytes ?? 0
     if (sizeBytes > 0) {
       await updateStorageUsage(userId, -sizeBytes).catch((err) => {
         console.warn("[media-process] deleteSource storage decrement failed:", err)

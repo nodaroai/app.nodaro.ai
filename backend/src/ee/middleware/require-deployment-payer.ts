@@ -27,7 +27,7 @@ import { deploymentPayerId } from "../../lib/deployment-payer.js"
  * pass here cannot be widened by any route, role or IdP assertion.
  *
  * WHY THE `authKind` CHECK IS NOT REDUNDANT. Decision (6) puts a payer-owned
- * credential on SAI developers' laptops, and `middleware/auth.ts:409-421`
+ * credential on customer developers' laptops, and `middleware/auth.ts:409-421`
  * resolves an `ndr_<hex>` personal API token to `req.userId = <owner>`. An
  * identity-only guard would therefore let a leaked relay key mint allowances
  * and buy credits on Nodaro's Stripe. Requiring a first-party browser session

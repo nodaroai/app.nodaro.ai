@@ -368,6 +368,68 @@ describe("routeAndExecute (via generateImage)", () => {
     expect(result.providerMs).toBe(4321)
   })
 
+  // Lane 1 of the relay cost passthrough (spec §8.2). The NodaroCloud*
+  // providers set relayJobId/relayCredits on their ProviderResult, and every
+  // router-lane handler reads them off the RouteResult the router hands back —
+  // image-ai forwards `result` whole, video-ai spreads `resultMeta`/
+  // `upscaleMeta`. A router that rebuilds the result without them makes every
+  // relayed generation settle on nothing.
+  it("propagates relay provenance: relayJobId and relayCredits", async () => {
+    const generate = vi.fn().mockResolvedValue({
+      url: "u",
+      cost: null,
+      relayJobId: "cloud-9",
+      relayCredits: 24,
+    })
+    configMocks.buildRoutingDecision.mockResolvedValue(decision({ chain: ["kie"] }))
+    registryMocks.supportsModel.mockReturnValue(true)
+    registryMocks.getProvider.mockReturnValue(
+      makeProviderInstance({ image: { generateImage: generate } }),
+    )
+
+    const result = await generateImage("p", "m")
+
+    expect(result.relayJobId).toBe("cloud-9")
+    expect(result.relayCredits).toBe(24)
+  })
+
+  it("carries relayCredits null when the far end withheld the figure", async () => {
+    const generate = vi.fn().mockResolvedValue({
+      url: "u",
+      cost: null,
+      relayJobId: "cloud-9",
+      relayCredits: null,
+    })
+    configMocks.buildRoutingDecision.mockResolvedValue(decision({ chain: ["kie"] }))
+    registryMocks.supportsModel.mockReturnValue(true)
+    registryMocks.getProvider.mockReturnValue(
+      makeProviderInstance({ image: { generateImage: generate } }),
+    )
+
+    const result = await generateImage("p", "m")
+
+    expect(result.relayJobId).toBe("cloud-9")
+    expect(result.relayCredits).toBeNull()
+  })
+
+  // The other direction, and the byte-identity claim this branch rests on:
+  // `relayFieldsFrom` keys on the PRESENCE of relayJobId, so a vendor result
+  // must not produce the key at all — an `undefined` value would be indistin-
+  // guishable here but would start appearing in object spreads downstream.
+  it("a vendor result yields no relay keys at all", async () => {
+    const generate = vi.fn().mockResolvedValue({ url: "u", cost: 1 })
+    configMocks.buildRoutingDecision.mockResolvedValue(decision({ chain: ["kie"] }))
+    registryMocks.supportsModel.mockReturnValue(true)
+    registryMocks.getProvider.mockReturnValue(
+      makeProviderInstance({ image: { generateImage: generate } }),
+    )
+
+    const result = await generateImage("p", "m")
+
+    expect("relayJobId" in result).toBe(false)
+    expect("relayCredits" in result).toBe(false)
+  })
+
   it("throws when the resolved provider instance is missing the requested submodule", async () => {
     configMocks.buildRoutingDecision.mockResolvedValue(decision({ chain: ["kie"] }))
     registryMocks.supportsModel.mockReturnValue(true)

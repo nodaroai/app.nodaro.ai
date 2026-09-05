@@ -37,6 +37,16 @@ vi.mock("@/utils/file-validation.js", () => ({
   updateStorageUsage: vi.fn().mockResolvedValue(undefined),
 }))
 
+/**
+ * THE ARMING GATE (lib/relay-possible.ts) — every relay-rule query in the
+ * delete paths sits behind it, so a deployment with no relay target issues
+ * exactly the query sequence it always did. Driven directly here rather than
+ * through `R2_SHARED_WITH_RELAY_TARGET`, which would also swap the referrer
+ * probe's path list and rewrite the sequences these tests pin.
+ */
+const relayGate = vi.hoisted(() => ({ on: true }))
+vi.mock("@/lib/relay-possible.js", () => ({ relayPossible: () => relayGate.on }))
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -111,6 +121,7 @@ let app: FastifyInstance
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  relayGate.on = true
   vi.mocked(deleteFromR2).mockResolvedValue(undefined)
 
   app = Fastify({ logger: false })
@@ -239,7 +250,7 @@ describe("POST /v1/media/delete — assets path", () => {
       if (table === "assets" && terminal === "maybeSingle") {
         expect(eqVal(calls, "r2_key")).toBe(OWNED_KEY)
         expect(eqVal(calls, "user_id")).toBe(TEST_USER_ID)
-        return { data: { id: "asset-1", r2_key: OWNED_KEY, size_bytes: 4096 }, error: null }
+        return { data: { id: "asset-1", r2_key: OWNED_KEY, size_bytes: 4096, job_id: null, relay_job_id: null }, error: null }
       }
       if (table === "assets" && has(calls, "delete")) {
         rowDeletes++
@@ -253,7 +264,12 @@ describe("POST /v1/media/delete — assets path", () => {
         return { count: 0, error: null }
       }
       if (table === "jobs") {
-        jobsQueried++
+        // Only REFERRER probes count here — a jobs read carrying an
+        // `output_data` filter. The relay rule's stem probe (`relay_job_id in
+        // (…)`, armed in this file) is a different question about a different
+        // column and must not be mistaken for the referrer check this test
+        // exists to assert is absent.
+        if (eqOutputKey(calls)) jobsQueried++
         return { count: 5, error: null } // even 5 referencing jobs must NOT block
       }
       throw new Error(`unexpected query on ${table}`)
@@ -277,7 +293,7 @@ describe("POST /v1/media/delete — assets path", () => {
 
     useScenario((table, calls, terminal) => {
       if (table === "assets" && terminal === "maybeSingle") {
-        return { data: { id: "asset-1", r2_key: OWNED_KEY, size_bytes: 100 }, error: null }
+        return { data: { id: "asset-1", r2_key: OWNED_KEY, size_bytes: 100, job_id: null, relay_job_id: null }, error: null }
       }
       if (table === "assets" && has(calls, "delete")) {
         rowDeletes++
@@ -301,7 +317,7 @@ describe("POST /v1/media/delete — assets path", () => {
   it("skips with reason error when the row delete fails (quota charge must survive with the row)", async () => {
     useScenario((table, calls, terminal) => {
       if (table === "assets" && terminal === "maybeSingle") {
-        return { data: { id: "asset-1", r2_key: OWNED_KEY, size_bytes: 100 }, error: null }
+        return { data: { id: "asset-1", r2_key: OWNED_KEY, size_bytes: 100, job_id: null, relay_job_id: null }, error: null }
       }
       if (table === "assets" && has(calls, "delete")) {
         return { data: null, error: { message: "db down" } }
@@ -479,7 +495,7 @@ describe("POST /v1/media/delete — batches", () => {
     return (table, calls, terminal) => {
       if (table === "assets" && terminal === "maybeSingle") {
         return eqVal(calls, "r2_key") === OWNED_KEY
-          ? { data: { id: "asset-1", r2_key: OWNED_KEY, size_bytes: 64 }, error: null }
+          ? { data: { id: "asset-1", r2_key: OWNED_KEY, size_bytes: 64, job_id: null, relay_job_id: null }, error: null }
           : { data: null, error: null }
       }
       if (table === "assets" && has(calls, "delete")) {
@@ -527,7 +543,7 @@ describe("POST /v1/media/delete — batches", () => {
     useScenario((table, calls, terminal) => {
       if (table === "assets" && terminal === "maybeSingle") {
         ownershipLookups++
-        return { data: { id: "asset-1", r2_key: OWNED_KEY, size_bytes: 64 }, error: null }
+        return { data: { id: "asset-1", r2_key: OWNED_KEY, size_bytes: 64, job_id: null, relay_job_id: null }, error: null }
       }
       if (table === "assets" && has(calls, "delete")) {
         return { data: [{ id: "asset-1" }], error: null }
@@ -543,5 +559,227 @@ describe("POST /v1/media/delete — batches", () => {
     expect(res.json()).toEqual({ deleted: [OWNED_URL], skipped: [] })
     expect(ownershipLookups).toBe(1)
     expect(vi.mocked(deleteFromR2)).toHaveBeenCalledTimes(1)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The relay delete rule (spec 2026-09-04-sai-local-development §9.3, D18)
+//
+// Under the shared-bucket passthrough the object behind a relayed job was
+// created by the FAR end, which still has its own job row pointing at it and
+// cannot see ours. We may drop our row; we may never drop the bytes.
+// ---------------------------------------------------------------------------
+
+const RELAY_JOB = "22222222-2222-4000-8000-000000000002"
+const FAR_URL = `${R2_PUBLIC_URL}/images/33333333-far-end-job.png`
+const FAR_KEY = "images/33333333-far-end-job.png"
+const NEAR_COPY_URL = `${R2_PUBLIC_URL}/images/${RELAY_JOB}.png`
+const NEAR_COPY_KEY = `images/${RELAY_JOB}.png`
+
+describe("POST /v1/media/delete — relay-owned objects", () => {
+  it("path (b): reports deleted for a relayed job's output but never deletes the object", async () => {
+    let relayQueries = 0
+    useScenario((table, calls, terminal) => {
+      if (table === "assets" && terminal === "maybeSingle") return { data: null, error: null }
+      if (table === "assets") return { count: 0, error: null }
+      if (table === "jobs" && has(calls, "not")) {
+        // The relay probe: same matcher as the proof, narrowed to relayed rows.
+        relayQueries++
+        return { data: [{ id: RELAY_JOB, relay_job_id: "cloud-9" }], error: null }
+      }
+      if (table === "jobs") {
+        const keyEq = eqOutputKey(calls)
+        return { count: keyEq?.args[1] === FAR_URL ? 1 : 0, error: null }
+      }
+      throw new Error(`unexpected query on ${table}`)
+    })
+
+    const res = await inject({ urls: [FAR_URL] })
+
+    expect(res.statusCode).toBe(200)
+    // `deleted` from the caller's perspective, exactly as the existing
+    // "kept for another referrer" branch reports: their view of it is gone.
+    expect(res.json()).toEqual({ deleted: [FAR_URL], skipped: [] })
+    expect(relayQueries).toBe(1)
+    expect(vi.mocked(deleteFromR2)).not.toHaveBeenCalled()
+  })
+
+  // The laptop: a relaying instance with its OWN bucket copied the bytes under
+  // its own key family and owns them. Skipping here would leak an object per
+  // generation.
+  it("path (b): still deletes a relayed job's object when the key is that job's own", async () => {
+    useScenario((table, calls, terminal) => {
+      if (table === "assets" && terminal === "maybeSingle") return { data: null, error: null }
+      if (table === "assets") return { count: 0, error: null }
+      if (table === "jobs" && has(calls, "not")) {
+        return { data: [{ id: RELAY_JOB, relay_job_id: "cloud-9" }], error: null }
+      }
+      if (table === "jobs") {
+        const keyEq = eqOutputKey(calls)
+        return { count: keyEq?.args[1] === NEAR_COPY_URL ? 1 : 0, error: null }
+      }
+      throw new Error(`unexpected query on ${table}`)
+    })
+
+    const res = await inject({ urls: [NEAR_COPY_URL] })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ deleted: [NEAR_COPY_URL], skipped: [] })
+    expect(vi.mocked(deleteFromR2)).toHaveBeenCalledWith(NEAR_COPY_KEY)
+  })
+
+  it("path (a): a relayed job's assets row is deleted, its object and quota untouched", async () => {
+    let rowDeletes = 0
+    useScenario((table, calls, terminal) => {
+      if (table === "assets" && terminal === "maybeSingle") {
+        return {
+          data: { id: "asset-9", r2_key: FAR_KEY, size_bytes: 4096, job_id: RELAY_JOB },
+          error: null,
+        }
+      }
+      if (table === "jobs" && terminal === "maybeSingle") {
+        expect(eqVal(calls, "id")).toBe(RELAY_JOB)
+        return { data: { relay_job_id: "cloud-9" }, error: null }
+      }
+      if (table === "assets" && has(calls, "delete")) {
+        rowDeletes++
+        return { data: [{ id: "asset-9" }], error: null }
+      }
+      if (table === "assets") return { count: 0, error: null }
+      if (table === "jobs") return { count: 0, error: null }
+      throw new Error(`unexpected query on ${table}`)
+    })
+
+    const res = await inject({ urls: [FAR_URL] })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ deleted: [FAR_URL], skipped: [] })
+    expect(rowDeletes).toBe(1)
+    expect(vi.mocked(deleteFromR2)).not.toHaveBeenCalled()
+    // Invariant 10a — the passthrough never charged this instance's quota.
+    expect(vi.mocked(updateStorageUsage)).not.toHaveBeenCalled()
+  })
+
+  it("makes no relay probe at all when the job-output proof fails (mainline shape)", async () => {
+    let relayQueries = 0
+    useScenario((table, calls) => {
+      if (table === "assets") return { data: null, error: null, count: 0 }
+      if (table === "jobs" && has(calls, "not")) {
+        relayQueries++
+        return { data: [], error: null }
+      }
+      if (table === "jobs") return { count: 0, error: null }
+      throw new Error(`unexpected query on ${table}`)
+    })
+
+    const res = await inject({ urls: [UNOWNED_URL] })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().skipped).toEqual([{ url: UNOWNED_URL, reason: "not-owned" }])
+    expect(relayQueries).toBe(0)
+  })
+})
+
+// ===========================================================================
+// THE ALIASING PROOF — a NON-relayed near-end job winning the ownership race
+// for a FAR end's object. Under the passthrough `save-to-storage` stores a
+// REFERENCE, so its `output_data.url` names the far key; that path sorts ahead
+// of the row-less paths a relayed VCP / recast output lands under, so the
+// alias wins `jobOutputOwnershipProof` and the old relay probe — which replayed
+// only the winning matcher — answered "not relayed" and deleted the far end's
+// bytes.
+// ===========================================================================
+
+const FAR_STEM_JOB = "44444444-4444-4000-8000-000000000004"
+const FAR_STEM_URL = `${R2_PUBLIC_URL}/videos/${FAR_STEM_JOB}.mp4`
+const FAR_STEM_KEY = `videos/${FAR_STEM_JOB}.mp4`
+
+const isStemProbe = (calls: Recorded[]) =>
+  calls.some((c) => c.method === "in" && c.args[0] === "relay_job_id")
+
+describe("POST /v1/media/delete — the save-to-storage alias cannot win the proof", () => {
+  it("keeps the far end's object when only a NON-relayed alias proves ownership", async () => {
+    useScenario((table, calls, terminal) => {
+      if (table === "assets" && terminal === "maybeSingle") return { data: null, error: null }
+      if (table === "assets") return { count: 0, error: null }
+      // The stem probe: keyed on the OBJECT, so it still names the far job even
+      // though the relayed near-end row was deleted from history.
+      if (table === "jobs" && isStemProbe(calls)) {
+        expect(calls.find((c) => c.method === "in")?.args[1]).toContain(FAR_STEM_JOB)
+        return { data: [{ relay_job_id: FAR_STEM_JOB }], error: null }
+      }
+      // No relayed row of this user references the url any more.
+      if (table === "jobs" && has(calls, "not")) return { data: [], error: null }
+      if (table === "jobs") {
+        // ONLY the save-to-storage alias proves ownership.
+        const keyEq = eqOutputKey(calls)
+        const isAlias = keyEq?.args[0] === "output_data->>url" && keyEq?.args[1] === FAR_STEM_URL
+        return { count: isAlias ? 1 : 0, error: null }
+      }
+      throw new Error(`unexpected query on ${table}`)
+    })
+
+    const res = await inject({ urls: [FAR_STEM_URL] })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ deleted: [FAR_STEM_URL], skipped: [] })
+    expect(vi.mocked(deleteFromR2)).not.toHaveBeenCalled()
+  })
+
+  it("consults EVERY url path against relayed rows, not just the one that proved ownership", async () => {
+    const relayPathsProbed: string[] = []
+    useScenario((table, calls, terminal) => {
+      if (table === "assets" && terminal === "maybeSingle") return { data: null, error: null }
+      if (table === "assets") return { count: 0, error: null }
+      // The object's stem is unknown to us (a far key shape we did not foresee).
+      if (table === "jobs" && isStemProbe(calls)) return { data: [], error: null }
+      if (table === "jobs" && has(calls, "not")) {
+        const keyEq = eqOutputKey(calls)
+        relayPathsProbed.push(String(keyEq?.args[0] ?? "stems"))
+        // The RELAYED job references it under vocalsUrl — a path the alias's
+        // matcher would never have replayed.
+        return keyEq?.args[0] === "output_data->>vocalsUrl"
+          ? { data: [{ id: RELAY_JOB, relay_job_id: "cloud-9" }], error: null }
+          : { data: [], error: null }
+      }
+      if (table === "jobs") {
+        const keyEq = eqOutputKey(calls)
+        return { count: keyEq?.args[0] === "output_data->>url" ? 1 : 0, error: null }
+      }
+      throw new Error(`unexpected query on ${table}`)
+    })
+
+    const res = await inject({ urls: [UNOWNED_URL] })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ deleted: [UNOWNED_URL], skipped: [] })
+    expect(vi.mocked(deleteFromR2)).not.toHaveBeenCalled()
+    // The winning matcher was `url`; the answer came from `vocalsUrl`.
+    expect(relayPathsProbed).toContain("output_data->>vocalsUrl")
+  })
+
+  it("issues no relay query at all with the gate closed (mainline)", async () => {
+    relayGate.on = false
+    let relayQueries = 0
+    useScenario((table, calls, terminal) => {
+      if (table === "assets" && terminal === "maybeSingle") return { data: null, error: null }
+      if (table === "assets") return { count: 0, error: null }
+      if (table === "jobs" && (isStemProbe(calls) || has(calls, "not"))) {
+        relayQueries++
+        return { data: [], error: null }
+      }
+      if (table === "jobs") {
+        const keyEq = eqOutputKey(calls)
+        return { count: keyEq?.args[0] === "output_data->>imageUrl" ? 1 : 0, error: null }
+      }
+      throw new Error(`unexpected query on ${table}`)
+    })
+
+    const res = await inject({ urls: [UNOWNED_URL] })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ deleted: [UNOWNED_URL], skipped: [] })
+    expect(relayQueries).toBe(0)
+    expect(vi.mocked(deleteFromR2)).toHaveBeenCalledWith("images/someone-elses.png")
   })
 })

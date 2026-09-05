@@ -9,6 +9,7 @@ import { supabase } from "../lib/supabase.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
 import { batchDeleteFromR2 } from "../lib/storage.js"
+import { deletableKeys } from "../lib/asset-delete.js"
 import { config } from "../lib/config.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { decodeKeysetCursor, keysetFilter, sliceKeysetPage } from "../lib/keyset-cursor.js"
@@ -652,7 +653,16 @@ export async function creatureRoutes(app: FastifyInstance) {
 
       // Step 2: Collect R2 keys from JSONB asset columns + reference photos.
       // External URLs (non-R2 CDN) are filtered out by r2KeyFromPublicUrl.
-      const keys = collectCreatureR2Keys(row as Record<string, unknown>)
+      // THE RELAY DELETE RULE (spec 2026-09-04-sai-local-development §9.3,
+      // D18, invariant 9). Under the shared-bucket passthrough a url written
+      // into this row can name an object our RELAY TARGET created, whose own
+      // job row still points at it and which cannot see ours — so the near end
+      // drops its row and leaves the bytes. `deletableKeys` reads the durable
+      // per-object marker (`assets.relay_job_id`, migration 384): one query,
+      // and it matches nothing at all on a deployment that never relays, so
+      // this is behaviourally identical to the previous line off a relay.
+      // Skipped entirely when nothing was collected.
+      const keys = await deletableKeys(collectCreatureR2Keys(row as Record<string, unknown>))
 
       // Step 3: Best-effort batch-delete from R2. `batchDeleteFromR2` already
       // swallows per-key errors and returns counts; we never block DB delete

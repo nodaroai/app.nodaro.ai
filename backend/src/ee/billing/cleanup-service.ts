@@ -18,6 +18,7 @@ import { isPaygRetentionActive, PAYG_RETENTION_DAYS } from "@nodaro/shared"
  */
 export const VIDEO_ANALYSIS_TMP_PREFIX = "video-analysis-tmp"
 import { updateStorageUsage } from "../../utils/file-validation.js"
+import { relayOwnedKeys, deletableKeys } from "../../lib/asset-delete.js"
 import { TIER_STORAGE_LIMITS, TIER_CREDITS } from "./stripe-config.js"
 import { invalidateBalanceCache } from "../routes/credits.js"
 import { CreditsService } from "./credits.js"
@@ -175,6 +176,31 @@ async function safeDeleteR2(r2Key: string): Promise<boolean> {
   }
 }
 
+/**
+ * THE RELAY DELETE RULE, for the reapers (spec 2026-09-04-sai-local-development
+ * §9.3, D18, invariants 9 and 10a).
+ *
+ * These crons are the ONLY delete paths in the codebase that were not
+ * conventionally reachable on a relaying instance — and "conventionally" is not
+ * a guarantee: relaying is gated on `isNodaroConnected()` alone
+ * (providers/nodaro/run-on-cloud.ts) with no edition test, and
+ * `R2_SHARED_WITH_RELAY_TARGET` is an independent env var, so
+ * `EDITION=cloud` + a connection + a shared bucket is a configurable state and
+ * `startCleanupCron()` runs behind `hasCredits()` in exactly that state. In it,
+ * a free-tier user's relayed asset older than 60 days had its FAR-END object
+ * batch-deleted and `storage_used_bytes` walked DOWN by bytes the passthrough
+ * never charged (uploadToR2 returns above trackStorage) — the mirror image of
+ * the ratchet workers/shared.ts guards against, landing on migration 022's
+ * GREATEST(0,…) floor.
+ *
+ * So every harvested key set here goes through the shared predicate, which is
+ * inert without a relay target (it issues no query at all) and answers from
+ * `assets.relay_job_id` plus the key stem otherwise. The near end's ROW cleanup
+ * still runs on a kept object — the `r2_key` null-out in particular, without
+ * which the `WHERE r2_key IS NOT NULL` loops re-select the same page forever —
+ * but the BYTES and the QUOTA do not move.
+ */
+
 // ============================================================
 // A) Clean up media for Free-tier users (>60 days old)
 // ============================================================
@@ -270,9 +296,11 @@ export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
       break
     }
 
-    // Collect R2 keys and batch delete
+    // Collect R2 keys and batch delete — minus anything our relay target
+    // created (see the relay-delete note above).
     const r2Keys = assets.map(a => a.r2_key).filter((k): k is string => !!k)
-    const batchResult = await batchDeleteFromR2(r2Keys)
+    const relayKept = await relayOwnedKeys(r2Keys)
+    const batchResult = await batchDeleteFromR2(r2Keys.filter(k => !relayKept.has(k)))
     filesDeleted += batchResult.deleted
     errors += batchResult.errors
 
@@ -297,6 +325,11 @@ export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
     const deltasByUser = new Map<string, number>()
     for (const asset of assets) {
       if (!asset.r2_key) continue
+      // Invariant 10a: the passthrough never incremented for a relay-owned
+      // object, so decrementing here drives storage_used_bytes toward zero one
+      // reaped row at a time. Its bytes are not freed either — they are still
+      // in the bucket, owned by the far end.
+      if (relayKept.has(asset.r2_key)) continue
       const size = asset.size_bytes ?? 0
       bytesFreed += size
       if (size > 0 && asset.user_id) {
@@ -362,9 +395,12 @@ export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
       }
     }
 
-    // Batch delete all R2 files
-    if (allR2Keys.length > 0) {
-      const batchResult = await batchDeleteFromR2(allR2Keys)
+    // Batch delete all R2 files, minus anything our relay target created:
+    // a relayed job's `output_data` holds the FAR end's url, and under a shared
+    // bucket `r2KeyFromUrl` resolves it (see the relay-delete note above).
+    const deletableJobKeys = await deletableKeys(allR2Keys)
+    if (deletableJobKeys.length > 0) {
+      const batchResult = await batchDeleteFromR2(deletableJobKeys)
       filesDeleted += batchResult.deleted
       errors += batchResult.errors
     }
@@ -401,7 +437,8 @@ export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
   // Pass `cutoff` so ONLY locations past the 60-day retention grace are reaped —
   // matching Phase A1/A2 and protecting active free users' in-use media.
   for (const userId of freeUserIds) {
-    const locationKeys = await collectLocationR2Keys(userId, cutoff)
+    // Same relay fence the interactive twin (routes/locations.ts) already runs.
+    const locationKeys = await deletableKeys(await collectLocationR2Keys(userId, cutoff))
     if (locationKeys.length === 0) continue
     const batchResult = await batchDeleteFromR2(locationKeys)
     filesDeleted += batchResult.deleted
@@ -504,7 +541,8 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
       }
 
       const r2Keys = assets.map(a => a.r2_key).filter((k): k is string => !!k)
-      const batchResult = await batchDeleteFromR2(r2Keys)
+      const relayKept = await relayOwnedKeys(r2Keys)
+      const batchResult = await batchDeleteFromR2(r2Keys.filter(k => !relayKept.has(k)))
       userFilesDeleted += batchResult.deleted
       errors += batchResult.errors
 
@@ -523,6 +561,11 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
         }
       }
       for (const asset of assets) {
+        // A kept object's bytes were never freed and were never charged here
+        // (invariant 10a); this user's storage_used_bytes is reset to 0 below
+        // either way, so only the reported figure is at stake — and it must not
+        // claim bytes that are still in the bucket.
+        if (asset.r2_key && relayKept.has(asset.r2_key)) continue
         userBytesFreed += asset.size_bytes ?? 0
       }
 
@@ -572,8 +615,9 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
         }
       }
 
-      if (allR2Keys.length > 0) {
-        const batchResult = await batchDeleteFromR2(allR2Keys)
+      const deletableJobKeys = await deletableKeys(allR2Keys)
+      if (deletableJobKeys.length > 0) {
+        const batchResult = await batchDeleteFromR2(deletableJobKeys)
         userFilesDeleted += batchResult.deleted
         errors += batchResult.errors
       }
@@ -593,7 +637,7 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
 
     // Locations sweep — same rationale as Phase A3 in cleanupFreeUserMedia.
     // Soft-deleted rows are skipped by collectLocationR2Keys.
-    const locationKeys = await collectLocationR2Keys(user.id)
+    const locationKeys = await deletableKeys(await collectLocationR2Keys(user.id))
     if (locationKeys.length > 0) {
       const batchResult = await batchDeleteFromR2(locationKeys)
       userFilesDeleted += batchResult.deleted
@@ -980,10 +1024,14 @@ export async function sweepSoftDeletedLocationAssets(): Promise<LocationR2SweepR
       }
     }
 
-    if (keys.length > 0) {
+    // The interactive twin (routes/locations.ts) already runs this fence; this
+    // sweep harvests the identical columns and must not be the one path that
+    // reaches a far-end object.
+    const deletable = await deletableKeys(keys)
+    if (deletable.length > 0) {
       try {
-        await batchDeleteFromR2(keys)
-        result.r2KeysDeleted += keys.length
+        await batchDeleteFromR2(deletable)
+        result.r2KeysDeleted += deletable.length
       } catch (err) {
         console.error(`[cleanup] R2 batch-delete failed for location ${row.id}:`, err)
         result.errors++

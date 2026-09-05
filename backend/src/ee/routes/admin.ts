@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabase.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { requirePlatformOperator } from "../middleware/require-platform-operator.js"
 import { collectAppR2Keys } from "../../lib/collect-app-r2-keys.js"
+import { deletableKeys } from "../../lib/asset-delete.js"
 import { batchDeleteFromR2 } from "../../lib/storage.js"
 import { formatZodError } from "../../lib/zod-error.js"
 
@@ -559,7 +560,17 @@ export async function adminRoutes(app: FastifyInstance) {
       })
     }
 
-    const r2Keys = await collectAppR2Keys(appId)
+    // THE RELAY DELETE RULE (spec 2026-09-04-sai-local-development §9.3, D18,
+    // invariant 9), the same line ee/routes/admin-locations.ts already runs.
+    // `collectAppR2Keys` harvests urls straight out of `jobs.output_data`, and
+    // under the shared-bucket passthrough a relayed job's output_data holds the
+    // FAR end's url — whose key resolves here because both instances share
+    // R2_PUBLIC_URL. Expunging an app would otherwise destroy every object the
+    // relay target created for it, in one batch, with the far end's job rows
+    // still pointing at them. `deletableKeys` is inert without a relay target
+    // (it issues no query at all) and this route registers under hasAdmin(),
+    // i.e. business self-hosts too — exactly where a relay lives.
+    const r2Keys = await deletableKeys(await collectAppR2Keys(appId))
 
     const { error: snapshotError } = await supabase.rpc("expunge_app_snapshots", { p_app_id: appId })
     if (snapshotError) {

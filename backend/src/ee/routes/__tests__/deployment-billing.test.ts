@@ -16,7 +16,7 @@ import Fastify, { type FastifyInstance } from "fastify"
  *     handler works and says nothing about whether the gate is attached.
  *
  *  2. **Units never reach the ledger (R3).** `units` arrives from the browser
- *     in SAI קרדיטים and is refused unless it divides by `billing.unitRate`
+ *     in display units and is refused unless it divides by `billing.unitRate`
  *     into a WHOLE number of Nodaro credits. Every per-user figure that goes
  *     back out is converted at render, through the one conversion (`toUnits`).
  *     A route that passed a unit to `grant_deployment_allowance` would inflate
@@ -152,9 +152,10 @@ import { __resetDeploymentAllowanceCacheForTests } from "../../billing/deploymen
 
 const REAL_ENV = process.env.NODARO_SURFACE_PROFILE
 
-/** The hosted shape: SAI's unit trio, a payer, enforcement still OFF — which
- *  is the state at rollout step 6, when this page ships and the payer sets the
- *  default and tops people up. The page must show real figures there. */
+/** The hosted shape: the deployment's unit trio, a payer, enforcement still
+ *  OFF — which is the state at rollout step 6, when this page ships and the
+ *  payer sets the default and tops people up. The page must show real figures
+ *  there. */
 function payerDeployment(extra: Record<string, unknown> = {}): void {
   process.env.NODARO_SURFACE_PROFILE = JSON.stringify({
     billing: {
@@ -325,7 +326,7 @@ describe("GET /v1/deployment-billing/overview", () => {
     expect(res.statusCode).toBe(200)
     const d = res.json().data
     expect(d.payer.balanceCredits).toBe(12_345)
-    // The default is 200 raw credits; at rate 2000 that is 400 000 SAI units.
+    // The default is 200 raw credits; at rate 2000 that is 400 000 display units.
     expect(d.defaultAllowance).toEqual({ credits: 200, units: 400_000 })
     expect(d.unit).toEqual({ label: "קרדיטים", rate: 2000, decimals: 0 })
     expect(mockGetBalance).toHaveBeenCalledWith(PAYER)
@@ -377,8 +378,8 @@ describe("GET /v1/deployment-billing/users", () => {
     payerDeployment()
     tableResults.set("profiles", {
       data: [
-        { id: U1, email: "u1@sai.example", full_name: "One", created_at: "2026-01-01T00:00:00Z" },
-        { id: U2, email: "u2@sai.example", full_name: "Two", created_at: "2026-01-02T00:00:00Z" },
+        { id: U1, email: "u1@acme.example", full_name: "One", created_at: "2026-01-01T00:00:00Z" },
+        { id: U2, email: "u2@acme.example", full_name: "Two", created_at: "2026-01-02T00:00:00Z" },
       ],
       error: null,
       count: 2,
@@ -386,7 +387,7 @@ describe("GET /v1/deployment-billing/users", () => {
     tableResults.set("deployment_payer_settings", { data: { default_allowance_credits: 200 }, error: null })
   })
 
-  it("renders granted/remaining/spent in SAI units, and a user with NO ROW gets the default", async () => {
+  it("renders granted/remaining/spent in display units, and a user with NO ROW gets the default", async () => {
     // U1 has generated (a real row); U2 has never generated (no row at all).
     tableResults.set("deployment_user_allowances", {
       data: [{ user_id: U1, granted_credits: 200, reserved_credits: 20, spent_credits: 30 }],
@@ -853,21 +854,21 @@ describe("POST /v1/deployment-billing/checkout", () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/deployment-billing/checkout",
-      headers: { ...AS_PAYER, origin: "https://sai.example" },
+      headers: { ...AS_PAYER, origin: "https://acme.example" },
       payload: { amountUsd: 10 },
     })
 
     expect(res.statusCode).toBe(200)
     const arg = sessionsCreate.mock.calls[0][0]
-    expect(arg.success_url).toBe("https://sai.example/billing-admin?topup=true")
-    expect(arg.cancel_url).toBe("https://sai.example/billing-admin")
+    expect(arg.success_url).toBe("https://acme.example/billing-admin?topup=true")
+    expect(arg.cancel_url).toBe("https://acme.example/billing-admin")
   })
 
   it("keeps the load webhook's metadata shape byte-for-byte — no webhook change (D14)", async () => {
     await app.inject({
       method: "POST",
       url: "/v1/deployment-billing/checkout",
-      headers: { ...AS_PAYER, origin: "https://sai.example" },
+      headers: { ...AS_PAYER, origin: "https://acme.example" },
       payload: { amountUsd: 25 },
     })
 
@@ -881,7 +882,7 @@ describe("POST /v1/deployment-billing/checkout", () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/deployment-billing/checkout",
-      headers: { ...AS_PAYER, origin: "https://sai.example" },
+      headers: { ...AS_PAYER, origin: "https://acme.example" },
       payload: { amountUsd: 10 },
     })
     expect(res.json().data.credits).toBe(3300)

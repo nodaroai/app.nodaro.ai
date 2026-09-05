@@ -13,6 +13,7 @@ const {
   mockCommitCredits,
   mockRefundCredits,
   mockEstimateWorkflowCredits,
+  mockAllowanceFor,
 } = vi.hoisted(() => ({
   mockGetBalance: vi.fn(),
   mockCheckCredits: vi.fn(),
@@ -21,6 +22,7 @@ const {
   mockCommitCredits: vi.fn(),
   mockRefundCredits: vi.fn(),
   mockEstimateWorkflowCredits: vi.fn(),
+  mockAllowanceFor: vi.fn(),
 }))
 
 vi.mock("@/ee/services/credits.js", () => ({
@@ -69,6 +71,29 @@ vi.mock("@/lib/admin-check.js", () => ({
   checkIsAdmin: vi.fn().mockResolvedValue(false),
 }))
 
+// Same seam as ee/routes/__tests__/credits-balance.test.ts: the real module
+// statically imports surface-profile.js + config.js, and the config mock below
+// exports only the predicates this suite needs.
+vi.mock("@/lib/deployment-payer.js", () => ({
+  deploymentPayerActive: vi.fn(),
+  deploymentPayerId: vi.fn(),
+  // Track A's allowance rider reads this one on every non-null allowance; a
+  // factory mock that omits it makes the named import throw inside the handler.
+  allowanceEnforcementActive: vi.fn(() => false),
+}))
+
+// Track A rides the per-user allowance alongside the balance on
+// GET /v1/user/credits under a payer, so registering the route now pulls in
+// the allowance service. Left real it reaches the bare `supabase.from` stub
+// above and throws ("Cannot read properties of undefined (reading 'select')")
+// straight into the handler's catch → a 500 that would read as the payer guard
+// refusing an ordinary requester. Mocked D13-aware (see the beforeEach): the
+// payer itself has no allocation — it holds the real credits — and everyone
+// else does, which is exactly the distinction the guard cases below turn on.
+vi.mock("@/ee/billing/deployment-allowance-service.js", () => ({
+  allowanceFor: mockAllowanceFor,
+}))
+
 vi.mock("@/lib/config.js", () => ({
   config: {
     EDITION: "cloud",
@@ -89,12 +114,14 @@ vi.mock("@/lib/config.js", () => ({
 
 import { creditsRoutes, invalidateBalanceCache } from "../credits.js"
 import { supabase } from "../../../lib/supabase.js"
+import { deploymentPayerActive, deploymentPayerId } from "../../../lib/deployment-payer.js"
 
 // ---------------------------------------------------------------------------
 // Test app setup
 // ---------------------------------------------------------------------------
 
 const TEST_USER_ID = "00000000-0000-4000-8000-000000000001"
+const PAYER_ID = "00000000-0000-4000-8000-0000000009e1"
 
 let app: FastifyInstance
 /** When set, the auth-bypass hook stamps it as `req.billingContext` (P14). */
@@ -102,6 +129,15 @@ let stampBillingContext: FastifyRequest["billingContext"] | undefined
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  // clearAllMocks resets CALLS, not implementations.
+  vi.mocked(deploymentPayerActive).mockReturnValue(false)
+  vi.mocked(deploymentPayerId).mockReturnValue(null)
+  // D13: the payer holds the real credits rather than an allocation, so its own
+  // allowance is null; every other user has one. Only reached under a payer —
+  // the handler skips the rider entirely when `deploymentPayerActive()` is false.
+  mockAllowanceFor.mockImplementation(async (id: string) =>
+    id === PAYER_ID ? null : { granted: 400_000, remaining: 399_900, spent: 0 },
+  )
 
   app = Fastify({ logger: false })
 
@@ -111,6 +147,12 @@ beforeEach(async () => {
     if (header && typeof header === "string") {
       req.userId = header
       req.userRole = undefined
+    }
+    // `authKind` is set ONLY when the header is present: mainline requests in
+    // this suite leave it undefined, which is what byte-identity needs.
+    const kind = req.headers["x-test-auth-kind"]
+    if (kind && typeof kind === "string") {
+      req.authKind = kind as typeof req.authKind
     }
     // Simulate the internal-orchestrator-secret auth mode (auth.ts sets this).
     if (req.headers["x-test-internal"] === "true") {
@@ -593,5 +635,86 @@ describe("POST /v1/credits/estimate-workflow", () => {
     const body = res.json()
     expect(body.data).toEqual({ totalCredits: 14, nodeCount: 3, payer: "user" })
     expect(mockEstimateWorkflowCredits).toHaveBeenCalledWith(nodes)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The payer-balance leak, on the two doors credits-balance.ts's guard did not
+// cover (spec invariant 7 / D10).
+//
+// A relay credential authenticates AS the payer (middleware/auth.ts sets
+// authKind "app_token" and req.userId = the payer), and `GET /v1/user/credits`
+// answered CreditsService.getBalance(payer) — the operator's real wallet — with
+// no scope, authKind or payer check. `/v1/credits/check` answers the same pool
+// as a sufficiency verdict.
+// ---------------------------------------------------------------------------
+
+describe("payer balance is JWT-only (GET /v1/user/credits, GET /v1/credits/check)", () => {
+  function payerGet(url: string, authKind?: string) {
+    return app.inject({
+      method: "GET",
+      url,
+      headers: {
+        "x-test-user-id": PAYER_ID,
+        ...(authKind ? { "x-test-auth-kind": authKind } : {}),
+      },
+    })
+  }
+
+  beforeEach(() => {
+    vi.mocked(deploymentPayerActive).mockReturnValue(true)
+    vi.mocked(deploymentPayerId).mockReturnValue(PAYER_ID)
+    mockGetBalance.mockResolvedValue({ credits: 50_000, subscriptionCredits: 50_000, topupCredits: 0, tier: "pro" })
+    mockCheckCredits.mockResolvedValue({ hasEnough: true, balance: 50_000, required: 1 })
+    mockGetModelCreditCost.mockResolvedValue(1)
+  })
+
+  afterEach(() => invalidateBalanceCache(PAYER_ID))
+
+  for (const route of ["/v1/user/credits", "/v1/credits/check?model=nano-banana"]) {
+    it(`403s an api_token authenticating as the payer on ${route}`, async () => {
+      const res = await payerGet(route, "api_token")
+      expect(res.statusCode).toBe(403)
+      expect(res.json().error.code).toBe("payer_balance_jwt_only")
+      expect(mockGetBalance).not.toHaveBeenCalled()
+      expect(mockCheckCredits).not.toHaveBeenCalled()
+    })
+
+    it(`403s an OAuth app_token (the relay credential) on ${route}`, async () => {
+      const res = await payerGet(route, "app_token")
+      expect(res.statusCode).toBe(403)
+      expect(res.json().error.code).toBe("payer_balance_jwt_only")
+    })
+
+    it(`still answers the payer's own browser session (jwt) on ${route}`, async () => {
+      const res = await payerGet(route, "jwt")
+      expect(res.statusCode).toBe(200)
+    })
+
+    it(`leaves an ordinary requester's programmatic read alone on ${route}`, async () => {
+      const res = await app.inject({
+        method: "GET",
+        url: route,
+        headers: { "x-test-user-id": TEST_USER_ID, "x-test-auth-kind": "api_token" },
+      })
+      expect(res.statusCode).toBe(200)
+    })
+
+    it(`is byte-identical with no deployment payer configured on ${route}`, async () => {
+      vi.mocked(deploymentPayerActive).mockReturnValue(false)
+      vi.mocked(deploymentPayerId).mockReturnValue(null)
+      const res = await payerGet(route, "app_token")
+      expect(res.statusCode).toBe(200)
+    })
+  }
+
+  // The cache is keyed by userId ALONE, so the payer's own browser session
+  // warms it — a guard placed after the read would hand that entry to the
+  // app_token. This is the ordering assertion.
+  it("refuses even when the payer's own session has already warmed the cache", async () => {
+    expect((await payerGet("/v1/user/credits", "jwt")).statusCode).toBe(200)
+    const res = await payerGet("/v1/user/credits", "app_token")
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("payer_balance_jwt_only")
   })
 })

@@ -638,3 +638,30 @@ describe("topaz-image-upscale — the sent factor matches the billed tier", () =
     }
   })
 })
+
+// ---------------------------------------------------------------------------
+// Relay provenance (spec §8.2 lane 1, migration 383)
+//
+// The image lane needs no handler edit: all three sites pass the ProviderResult
+// VERBATIM, so the two fields the NodaroCloud image provider sets ride into
+// finalize on their own. This pins that property — the day someone flattens one
+// of these call sites into a literal, the relay pair silently stops arriving
+// and every relayed image bills at zero on a self-host.
+// ---------------------------------------------------------------------------
+
+describe("relay provenance rides the verbatim image finalize input", () => {
+  it("generate-image: the provider result reaches finalize with its relay pair", async () => {
+    mocks.mockGenerateImage.mockResolvedValueOnce({
+      ...PROVIDER_RESULT, relayJobId: "cloud-9", relayCredits: 24,
+    })
+
+    await imageAIHandlers["generate-image"]!(makeJob("generate-image", { prompt: "a cat" }) as never, makeCtx())
+
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobType: "generate-image",
+        result: expect.objectContaining({ relayJobId: "cloud-9", relayCredits: 24 }),
+      }),
+    )
+  })
+})

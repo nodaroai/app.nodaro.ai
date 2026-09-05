@@ -25,6 +25,7 @@ import { getPluginServices } from "../lib/private-plugins/load.js"
 import { rejectProgrammaticAuth } from "../lib/api-auth-mode.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import { personalPayer } from "../lib/billing-context.js"
+import { deploymentPayerActive, deploymentPayerId } from "../lib/deployment-payer.js"
 import { billingPairColumns } from "../lib/insert-job.js"
 import { estimateWorkflowCredits } from "../ee/billing/credits.js"
 import type { WorkflowExecutionJob, NodeExecutionState } from "../services/workflow-engine/types.js"
@@ -201,6 +202,33 @@ export async function apiTokenRoutes(app: FastifyInstance) {
     if (!hasAdmin()) {
       return reply.status(403).send({
         error: { code: "edition_required", required_edition: "business", message: "API tokens require Business or Cloud edition" },
+      })
+    }
+
+    // DEPLOYMENT PAYER: the money on this instance is the OPERATOR's, not the
+    // requester's — every reservation debits one designated account. A personal
+    // API token is the only credential class here with NO scope, NO spend cap,
+    // NO expiry and no re-validation against the identity provider (neither
+    // token branch of the auth hook consults surfaceSsoOnly(), so it keeps
+    // working after the customer's IdP disowns its holder). Minted by an
+    // ordinary federated user it is an unbounded, permanent draw on the payer's
+    // pool. So on a payer instance only the billing account may create one.
+    //
+    // Hardening, not a hard gate: a token still spends the payer whoever holds
+    // it, and per-user enforcement is the payer seam's own job. What this
+    // removes is the credential CLASS. Creation only — listing, renaming and
+    // deleting an already-issued token stay open, so a token minted before the
+    // payer was configured can still be revoked by its owner.
+    //
+    // INERT without a payer: deploymentPayerActive() is `payerId !== null`, one
+    // boolean read, zero queries — mainline behaves exactly as before.
+    if (deploymentPayerActive() && req.userId !== deploymentPayerId()) {
+      return reply.status(403).send({
+        error: {
+          code: "api_tokens_payer_only",
+          message:
+            "This deployment's usage is paid by one billing account. Only that account can create API tokens.",
+        },
       })
     }
 

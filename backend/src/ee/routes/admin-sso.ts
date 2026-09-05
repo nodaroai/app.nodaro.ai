@@ -12,8 +12,8 @@ import { SSO_APP_METADATA_KEY } from "../../lib/sso-linking.js"
  * Supabase account whose lifetime is decoupled from the assertion. Before this
  * route there was NO mechanism anywhere to revoke that account's Nodaro access
  * (grep: zero auth.admin.deleteUser / ban_duration), so removing a user from
- * SAI's IdP did nothing on Nodaro — the ex-user kept spending the tenant's
- * prepaid credits.
+ * the deployment's IdP did nothing on Nodaro — the ex-user kept spending
+ * the tenant's prepaid credits.
  *
  * `DELETE /v1/admin/sso/:provider/users/:subject` (admin-only):
  *   - default (mode=ban): bans re-login (GoTrue ban_duration) AND clears the
@@ -26,7 +26,7 @@ import { SSO_APP_METADATA_KEY } from "../../lib/sso-linking.js"
  * takes effect now, not up to 5 minutes later.
  *
  * Resolution is by the trusted app_metadata marker (provider + sso_subject that
- * sso-linking stamps). A single-tenant SAI instance has a bounded user count, so
+ * sso-linking stamps). A single-tenant deployment has a bounded user count, so
  * a paged listUsers scan is fine; the page cap stops a misconfig from looping.
  */
 

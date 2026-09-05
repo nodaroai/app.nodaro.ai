@@ -30,7 +30,9 @@ import {
   NodaroCloudError,
   ensureCloudReachableMediaUrl,
   ensureCloudReachableMediaUrls,
+  type CloudJob,
 } from "./client.js"
+import { relayResultFields } from "./relay-cost.js"
 
 /**
  * Invert the worker's ProviderOptions.klingElements (KIE wire shape with
@@ -93,7 +95,7 @@ function i2vOnlyBody(options?: ProviderOptions): Record<string, unknown> {
 
 /** Read the finalized video URL out of a completed cloud job. */
 function extractVideoResult(
-  job: { output_data?: Record<string, unknown> | null },
+  job: CloudJob,
   jobId: string,
 ): ProviderResult {
   const output = (job.output_data ?? {}) as { videoUrl?: unknown }
@@ -105,7 +107,12 @@ function extractVideoResult(
   }
   // The cloud's thumbnailUrl is ignored — the instance worker regenerates its
   // own thumbnail from the downloaded clip during finalize.
-  return { url, cost: null }
+  //
+  // `cost` stays null — the instance sees no USD. What it DOES get is the far
+  // end's job id and reserved credits (spec §8.2 lane 1): the handler persists
+  // them onto its own job row, which is what a self-host settles its users on
+  // and what stops the delete paths destroying an object the far end owns.
+  return { url, cost: null, ...relayResultFields(job) }
 }
 
 export class NodaroCloudVideoProvider

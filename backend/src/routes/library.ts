@@ -307,8 +307,13 @@ export async function libraryRoutes(app: FastifyInstance) {
     if (permanent) {
       // Permanent delete: remove R2 file + DB record + update storage
       const { data: asset, error: fetchError } = await supabase
-        .from("assets")
-        .select("id, user_id, r2_key, size_bytes")
+        .from("assets") // tenant-scope-ignore: ownership verified post-fetch below (404 vs 403 are distinct answers)
+        // `job_id` and `relay_job_id` are the relay delete rule's inputs
+        // (lib/asset-delete.ts): supplying both here answers
+        // `resolveAssetProvenance` from this row instead of paying a second
+        // `assets` lookup per permanent delete. Behaviour is identical either
+        // way — this is the round trip, not the rule.
+        .select("id, user_id, r2_key, size_bytes, job_id, relay_job_id")
         .eq("id", id)
         .single()
 

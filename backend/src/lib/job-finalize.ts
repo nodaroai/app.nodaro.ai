@@ -12,6 +12,7 @@ import {
   refundLoopTrimAddon,
   createAssetFromJob,
 } from "../workers/shared.js"
+import { relayFieldsFrom } from "../providers/nodaro/relay-cost.js"
 
 /**
  * Provider-side input to `finalizeJobWithMedia`. Mirrors the relevant fields
@@ -35,6 +36,14 @@ export interface ProviderFinalizeResult {
   seed?: number
   fallbackFlag?: boolean
   providerMs?: number
+  /** See ProviderResult.relayJobId/relayCredits (provider.interface.ts) — set
+   *  ONLY by the NodaroCloud* providers, which relay the work to another
+   *  instance. Mirrored here because this is where a router-lane result becomes
+   *  a row: `relayFieldsFrom` turns the pair into migration 383's two columns
+   *  in the completion UPDATE below. Absent on every vendor-direct result, so
+   *  the mainline write is byte-identical to before. */
+  relayJobId?: string
+  relayCredits?: number | null
 }
 
 /**
@@ -583,6 +592,14 @@ export async function finalizeJobWithMedia(
       ...(result.cost != null && { provider_cost: result.cost }),
       ...(result.displayCost != null && { display_cost: result.displayCost }),
       ...(result.kieTaskId && { provider_task_id: result.kieTaskId }),
+      // Relay provenance (spec §8.2 lane 1, migration 383). `{}` for every
+      // result no NodaroCloud* provider produced, so a vendor-direct
+      // completion writes exactly the columns it wrote before. On a HOLD the
+      // gate parks these two in `held_completion_fields` with the other
+      // caller columns and `approveHeldJob` spreads them back onto the row —
+      // they are ordinary `jobs` columns, NOT settlement inputs, so they must
+      // never appear in HELD_COMMIT_REPLAY_KEYS or the commitReplay below.
+      ...relayFieldsFrom(result),
     },
     // THE hold-eligible funnel: this is the only completion whose tail
     // (runCompletionTail) a review APPROVE can replay, which is what makes a

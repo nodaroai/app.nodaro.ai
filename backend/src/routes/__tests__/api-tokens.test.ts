@@ -67,6 +67,10 @@ vi.mock("@/ee/billing/credits.js", () => ({
 
 import { apiTokenRoutes } from "../api-tokens.js"
 import { supabase } from "../../lib/supabase.js"
+import {
+  __setDeploymentPayerForTests,
+  __resetDeploymentPayerForTests,
+} from "../../lib/deployment-payer.js"
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -79,6 +83,9 @@ let app: FastifyInstance
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  // Module-level state, not a mock: vi.clearAllMocks() does not reset it,
+  // so every test starts on a pristine (inert) payer seam.
+  __resetDeploymentPayerForTests()
 
   app = Fastify({ logger: false })
 
@@ -99,6 +106,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  __resetDeploymentPayerForTests()
   await app.close()
 })
 
@@ -277,6 +285,68 @@ describe("POST /v1/api-tokens", () => {
     })
     expect(res.statusCode).toBe(400)
     expect(res.json().error.code).toBe("invalid_workflow")
+  })
+})
+
+// ==========================================================================
+// POST /v1/api-tokens on a DEPLOYMENT-PAYER instance (WS6, spec §13.7)
+// ==========================================================================
+
+const PAYER_USER_ID = "00000000-0000-4000-8000-0000000000aa"
+
+/** The happy-path supabase chain of the "201 on success" case above. */
+function mockSuccessfulCreate() {
+  const tokenRow = {
+    id: TEST_TOKEN_ID,
+    name: "My Token",
+    token_prefix: "ndr_abcd...",
+    workflow_ids: [],
+    rate_limit: 30,
+    is_active: true,
+    created_at: "2026-01-01T00:00:00Z",
+  }
+  const mockFrom = vi.mocked(supabase.from)
+  let callNum = 0
+  mockFrom.mockImplementation(() => {
+    callNum++
+    if (callNum === 1) return chainMock({ data: null, error: null, count: 2 }) as never
+    return chainMock({ data: tokenRow, error: null }) as never
+  })
+  return mockFrom
+}
+
+describe("POST /v1/api-tokens — deployment payer", () => {
+  it("403s any JWT that is not the payer's, and never reaches the database", async () => {
+    __setDeploymentPayerForTests(PAYER_USER_ID)
+    const mockFrom = mockSuccessfulCreate()
+
+    const res = await authedPost("/v1/api-tokens", { name: "My Token" })
+
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("api_tokens_payer_only")
+    // Refused before the token-count read: no row, no hash, no plaintext.
+    expect(mockFrom).not.toHaveBeenCalled()
+  })
+
+  it("still mints for the payer's own session", async () => {
+    __setDeploymentPayerForTests(TEST_USER_ID)
+    mockSuccessfulCreate()
+
+    const res = await authedPost("/v1/api-tokens", { name: "My Token" })
+
+    expect(res.statusCode).toBe(201)
+    expect(res.json().data.token).toMatch(/^ndr_/)
+  })
+
+  it("is byte-identical with no payer configured — every user still mints", async () => {
+    // No __setDeploymentPayerForTests call: the seam is inert, exactly as on
+    // mainline. This is the invariant that makes WS6 mergeable.
+    mockSuccessfulCreate()
+
+    const res = await authedPost("/v1/api-tokens", { name: "My Token" })
+
+    expect(res.statusCode).toBe(201)
+    expect(res.json().data.token).toMatch(/^ndr_/)
   })
 })
 

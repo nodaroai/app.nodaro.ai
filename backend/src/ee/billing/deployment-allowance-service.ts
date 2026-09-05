@@ -14,7 +14,8 @@
  * must name the table only in this file.
  *
  * Everything answers RAW NODARO CREDITS (see types/deployment-allowance.ts).
- * Conversion to SAI units happens at render, through toUnits, and nowhere else.
+ * Conversion to the deployment's display units happens at render, through
+ * toUnits, and nowhere else.
  *
  * THE DISPLAY / ENFORCEMENT RULING (orchestrator, 2026-09-04 — it resolves a
  * contradiction WS0, WS4, WS5 and WS7 each flagged independently). The spec

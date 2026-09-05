@@ -23,8 +23,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { render, screen, waitFor } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 
-// SAI is EDITION=cloud — the edition on which `codeDefaultAuthMethods` omits
-// "email" entirely. Using anything else would test the easy case.
+// The target deployment is EDITION=cloud — the edition on which
+// `codeDefaultAuthMethods` omits "email" entirely. Using anything else would
+// test the easy case.
 vi.mock("@/lib/edition", () => ({ isCloud: () => true }))
 vi.mock("@/hooks/use-auth", () => ({
   useAuth: () => ({ signInWithGoogle: vi.fn(), signInWithEmail: vi.fn() }),
@@ -41,7 +42,7 @@ type RuntimeWindow = Window & {
 function setProfileAuthMethods(methods: AuthMethod[] | null): void {
   const w = window as RuntimeWindow
   if (methods === null) delete w.__NODARO_RUNTIME__
-  else w.__NODARO_RUNTIME__ = { surface: { auth: { methods, ssoLabel: "SAI" } } }
+  else w.__NODARO_RUNTIME__ = { surface: { auth: { methods, ssoLabel: "Acme" } } }
 }
 
 beforeEach(() => {
@@ -51,7 +52,7 @@ beforeEach(() => {
       if (url.includes("/v1/sso/providers"))
         return {
           ok: true,
-          json: async () => ({ providers: [{ id: "librechat", label: "SAI", kind: "assertion" }] }),
+          json: async () => ({ providers: [{ id: "librechat", label: "Acme", kind: "assertion" }] }),
         } as Response
       return { ok: false, json: async () => ({}) } as Response
     }),
@@ -84,7 +85,7 @@ describe("/login on an sso-only deployment", () => {
   it("renders NO password field without the flag", async () => {
     setProfileAuthMethods(["sso"])
     const { container } = renderAt("/login")
-    await waitFor(() => expect(screen.getByText(/SAI/)).toBeTruthy())
+    await waitFor(() => expect(screen.getByText(/Acme/)).toBeTruthy())
     expect(passwordField(container)).toBeNull()
   })
 
@@ -121,7 +122,7 @@ describe("mainline is untouched (R2)", () => {
   it("with no auth narrowing at all, ?billing=1 renders exactly today's page", async () => {
     setProfileAuthMethods(null)
     const { container } = renderAt("/login?billing=1")
-    await waitFor(() => expect(screen.getByText(/SAI|Single sign-on/)).toBeTruthy())
+    await waitFor(() => expect(screen.getByText(/Acme|Single sign-on/)).toBeTruthy())
     // Cloud's code default carries no "email", the profile narrows nothing, and
     // the hatch is gated on the profile narrowing — so no form appears.
     expect(passwordField(container)).toBeNull()

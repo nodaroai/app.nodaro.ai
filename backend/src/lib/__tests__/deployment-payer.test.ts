@@ -1,5 +1,5 @@
 /**
- * Deployment payer (SAI item 9) — the boot resolution + the inert invariant.
+ * Deployment payer (item 9) — the boot resolution + the inert invariant.
  * What these pin: absent config touches NOTHING (zero queries, inactive —
  * the property that makes this mergeable to a mainline that never configures
  * a payer); a configured payer resolves by uuid or email and FAILS the boot
@@ -117,14 +117,14 @@ describe("configureDeploymentPayer — uuid and email resolution", () => {
   })
 
   it("an email resolves through the paged listUsers scan (case-insensitive)", async () => {
-    h.payerAccount = "Billing@sai-app.com"
-    h.listUsersPages = [{ users: [{ id: "other", email: "x@y.z" }, { id: PAYER_UUID, email: "billing@sai-app.com" }] }]
+    h.payerAccount = "Billing@acme.example"
+    h.listUsersPages = [{ users: [{ id: "other", email: "x@y.z" }, { id: PAYER_UUID, email: "billing@acme.example" }] }]
     expect(await configureDeploymentPayer()).toEqual({ ok: true })
     expect(deploymentPayerId()).toBe(PAYER_UUID)
   })
 
   it("an email with no matching auth user refuses", async () => {
-    h.payerAccount = "nobody@sai-app.com"
+    h.payerAccount = "nobody@acme.example"
     h.listUsersPages = [{ users: [{ id: "other", email: "x@y.z" }] }]
     const r = await configureDeploymentPayer()
     expect(r.ok).toBe(false)

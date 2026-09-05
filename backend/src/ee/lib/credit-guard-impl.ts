@@ -111,7 +111,7 @@ export function creditGuardImpl(
       }
     }
 
-    // Deployment payer (SAI item 9): the account whose pools gate this
+    // Deployment payer (item 9): the account whose pools gate this
     // request is the PAYER's, so the profile below is fetched for it — the
     // requester's balance is a frozen signup grant nothing ever debits, and
     // evaluating it would 402 the whole instance the day those grants run

@@ -139,7 +139,7 @@ describe("the settings upsert — what each statement carries", () => {
     expect(h.upsertCalls[0].values).toEqual({
       id: true,
       payer_user_id: PAYER_UUID,
-      default_allowance_credits: 400, // 800000 SAI units at 2000 units/credit
+      default_allowance_credits: 400, // 800000 display units at 2000 units/credit
     })
     // ignoreDuplicates is `ON CONFLICT DO NOTHING`: a re-boot must not rewrite
     // the seed. Without it, supabase-js sends DO UPDATE on every column passed.
@@ -217,7 +217,7 @@ describe("the seed backfill — a write-once insert cannot bake a permanent zero
     expect(await configureDeploymentPayer()).toEqual({ ok: true })
     const backfill = h.updateCalls.filter((v) => Object.hasOwn(v, "default_allowance_credits"))
     expect(backfill).toHaveLength(1)
-    expect(backfill[0].default_allowance_credits).toBe(400) // 800000 SAI units at 2000 units/credit
+    expect(backfill[0].default_allowance_credits).toBe(400) // 800000 display units at 2000 units/credit
     // ...and it carries NOTHING else that is the operator's to set: the
     // identity travels in its own statement.
     expect(backfill[0]).not.toHaveProperty("payer_user_id")

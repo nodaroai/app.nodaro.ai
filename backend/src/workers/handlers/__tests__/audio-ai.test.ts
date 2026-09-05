@@ -975,3 +975,82 @@ describe("voice-changer: the media decides the mode, never the input slot", () =
     expect(mocks.mockMergeVideoAudio).not.toHaveBeenCalled()
   })
 })
+
+// ---------------------------------------------------------------------------
+// Relay provenance (spec §8.2 lane 1, migration 383)
+//
+// Both cloud audio helpers used to return a bare Buffer, which threw the far
+// end's job id and credits away INSIDE the helper — the finalize literal below
+// them could not have carried what it was never handed. TTS is the self-host's
+// third principal lane (with image and video); dialogue is the same helper
+// shape and the same hazard.
+// ---------------------------------------------------------------------------
+
+describe("relay provenance on the cloud audio lanes", () => {
+  it("text-to-speech via the cloud: the relay pair reaches finalize", async () => {
+    config.ELEVENLABS_API_KEY = ""
+    mocks.mockIsNodaroConnected.mockResolvedValue(true)
+    mocks.mockCloudTextToSpeech.mockResolvedValueOnce({
+      url: "https://cloud.nodaro.ai/a.mp3", cost: null, relayJobId: "cloud-9", relayCredits: 24,
+    })
+
+    await audioAIHandlers["text-to-speech"]!(
+      makeJob("text-to-speech", { text: "Hi", provider: "elevenlabs-v3" }) as never,
+      makeCtx(),
+    )
+
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobType: "text-to-speech",
+        result: expect.objectContaining({ relayJobId: "cloud-9", relayCredits: 24 }),
+      }),
+    )
+  })
+
+  it("text-to-speech on a LOCAL key: no relay key at all (byte-identical to today)", async () => {
+    config.ELEVENLABS_API_KEY = "el_test"
+
+    await audioAIHandlers["text-to-speech"]!(
+      makeJob("text-to-speech", { text: "Hi", provider: "elevenlabs-v3" }) as never,
+      makeCtx(),
+    )
+
+    const { result } = mocks.mockFinalizeJobWithMedia.mock.calls[0][0]
+    expect(result).not.toHaveProperty("relayJobId")
+    expect(result).not.toHaveProperty("relayCredits")
+  })
+
+  it("text-to-dialogue via the cloud: the relay pair reaches finalize", async () => {
+    config.ELEVENLABS_API_KEY = ""
+    mocks.mockIsNodaroConnected.mockResolvedValue(true)
+    mocks.mockWaitForCloudJob.mockResolvedValueOnce({
+      id: "cloud-7", status: "completed", credits: 12,
+      output_data: { audioUrl: "https://cloud.nodaro.ai/dlg.mp3" },
+    })
+
+    await audioAIHandlers["text-to-dialogue"]!(
+      makeJob("text-to-dialogue", { dialogue: [{ text: "Hi", voice: "Rachel" }] }) as never,
+      makeCtx(),
+    )
+
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobType: "generate-dialogue",
+        result: expect.objectContaining({ relayJobId: "cloud-7", relayCredits: 12 }),
+      }),
+    )
+  })
+
+  it("text-to-dialogue on a LOCAL key: no relay key at all (byte-identical to today)", async () => {
+    config.ELEVENLABS_API_KEY = "el_test"
+
+    await audioAIHandlers["text-to-dialogue"]!(
+      makeJob("text-to-dialogue", { dialogue: [{ text: "Hi", voice: "Rachel" }] }) as never,
+      makeCtx(),
+    )
+
+    const { result } = mocks.mockFinalizeJobWithMedia.mock.calls[0][0]
+    expect(result).not.toHaveProperty("relayJobId")
+    expect(result).not.toHaveProperty("relayCredits")
+  })
+})

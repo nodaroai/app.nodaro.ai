@@ -43,6 +43,18 @@ vi.mock("@/lib/storage.js", () => ({
   batchDeleteFromR2: vi.fn().mockResolvedValue({ deleted: 3, errors: 0 }),
 }))
 
+/**
+ * THE RELAY DELETE RULE's shared predicate (lib/asset-delete.ts). Expunge
+ * harvests urls straight out of `jobs.output_data`, and a relayed job's
+ * output_data holds the FAR end's url — resolvable here because a shared bucket
+ * means one R2_PUBLIC_URL. Default passthrough: with no relay target the real
+ * predicate returns the input array unchanged and issues no query at all.
+ */
+const mockDeletableKeys = vi.hoisted(() =>
+  vi.fn(async (keys: string[]) => [...keys]),
+)
+vi.mock("@/lib/asset-delete.js", () => ({ deletableKeys: mockDeletableKeys }))
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -260,5 +272,51 @@ describe("DELETE /v1/admin/apps/:appId/expunge", () => {
         payload: expect.objectContaining({ slug: fakeApp.slug }),
       }),
     )
+  })
+})
+
+describe("DELETE /v1/admin/apps/:appId/expunge — the relay fence", () => {
+  it("passes every harvested key through deletableKeys and never batches a kept one", async () => {
+    // A published app whose runs relayed their generations: `collectAppR2Keys`
+    // harvests the FAR end's urls out of jobs.output_data, and before this
+    // fence they were batch-deleted with no marker consultation of any kind.
+    vi.mocked(collectAppR2Keys).mockResolvedValueOnce(["images/far.png", "images/ours.png"])
+    mockDeletableKeys.mockResolvedValueOnce(["images/ours.png"])
+
+    let sawSelect = false
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "published_apps") {
+        if (!sawSelect) {
+          sawSelect = true
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: fakeApp, error: null }),
+              }),
+            }),
+          } as never
+        }
+        return { delete: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }) } as never
+      }
+      if (table === "app_runs") {
+        return { update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }) } as never
+      }
+      if (table === "admin_actions") {
+        return { insert: vi.fn().mockResolvedValue({ error: null }) } as never
+      }
+      return {} as never
+    })
+    vi.mocked(supabase.rpc).mockResolvedValue({ data: null, error: null } as never)
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/admin/apps/${TEST_APP_ID}/expunge`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { reason: TEST_REASON },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(mockDeletableKeys).toHaveBeenCalledWith(["images/far.png", "images/ours.png"])
+    expect(batchDeleteFromR2).toHaveBeenCalledWith(["images/ours.png"])
   })
 })

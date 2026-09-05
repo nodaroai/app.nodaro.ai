@@ -41,6 +41,15 @@ export interface CloudJob {
   progress?: number
   output_data?: Record<string, unknown> | null
   error_message?: string | null
+  /** Relay cost passthrough (spec 2026-09-04-sai-local-development §8). The
+   *  far end's PUBLIC_JOB_KEYS carry `credits` (routes/jobs.ts:148-152) — the
+   *  amount RESERVED there — and a derived `credit_status`. Never
+   *  `display_cost` / `credits_actual`: those are ADMIN_ONLY_JOB_KEYS and a
+   *  relaying instance must not read the far end's USD. Display units are the
+   *  NEAR end's own transform (lib/billing-display-unit.ts), never a wire
+   *  field. Absent ⇒ NULL on the near row, never 0. */
+  credits?: number | null
+  credit_status?: "reserved" | "committed" | "refunded" | null
 }
 
 /**
@@ -93,7 +102,13 @@ function cloudError(
 ): NodaroCloudError {
   const fallback =
     status === 402
-      ? "Insufficient nodaro.ai credits — top up or upgrade your connected account."
+      // Reached ONLY when the far end's own error body is malformed (its
+      // message wins below). It must not tell the caller to top up "your
+      // connected account": on a deployment-payer instance — a self-host or a
+      // developer laptop relaying on the operator's wallet — the person who
+      // pressed Generate holds no account there and can do nothing about it.
+      // Name the party who can (spec §13.3).
+      ? "The nodaro.ai account behind this deployment is out of credits — the operator of this deployment must top it up."
       : status === 401 || status === 403
         ? "The nodaro.ai connection was rejected — it may have been revoked. Reconnect from Integrations."
         : `${operation} failed (${status})`

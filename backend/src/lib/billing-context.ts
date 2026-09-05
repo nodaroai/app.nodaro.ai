@@ -37,9 +37,9 @@ import { extractWorkflowId } from "./request-helpers.js"
 import { deploymentPayerActive, deploymentBillingContext } from "./deployment-payer.js"
 
 /**
- * The entitlement grade a DEPLOYMENT payer's work runs under (SAI item 9,
- * decision D2). Watermark-off and cap-off are literal-typed like the org
- * grade (a deployment context that watermarks cannot be constructed);
+ * The entitlement grade a DEPLOYMENT payer's work runs under (deployment-payer
+ * item 9, decision D2). Watermark-off and cap-off are literal-typed like the
+ * org grade (a deployment context that watermarks cannot be constructed);
  * `tierForGates`/`parallelism` are the PAYER account's grade, read at resolve
  * time — parallelism applies PER REQUESTER (each user gets their own
  * concurrency budget at the payer's tier), never as one shared instance pool.
@@ -52,13 +52,13 @@ export interface DeploymentEntitlements {
 }
 
 /**
- * The third payer (SAI item 9): one designated account pays for everything on
- * this instance. Constructed ONLY in core (lib/deployment-payer.ts, from the
- * surface profile) — it never crosses the plugin boundary, so
- * `isBillingContext` below deliberately does not admit it. `userId` stays the
- * REQUESTER (the workspace precedent: every existing `ctx.userId` read means
- * "the human doing the work"); the debit target lives in `payerId`, and only
- * deployment-aware spend sites read it.
+ * The third payer (deployment-payer item 9): one designated account pays for
+ * everything on this instance. Constructed ONLY in core
+ * (lib/deployment-payer.ts, from the surface profile) — it never crosses the
+ * plugin boundary, so `isBillingContext` below deliberately does not admit it.
+ * `userId` stays the REQUESTER (the workspace precedent: every existing
+ * `ctx.userId` read means "the human doing the work"); the debit target lives
+ * in `payerId`, and only deployment-aware spend sites read it.
  */
 export interface DeploymentBillingContext {
   payer: "deployment"
@@ -236,7 +236,7 @@ export function payloadBillingContext(payload: { userId: string; billingContext?
  * never anything that already received a context.
  */
 export async function resolveBillingContext(input: BillingResolveInput): Promise<BillingContext> {
-  // Deployment payer (SAI item 9) — the TOP rung, before the plugin gate: on
+  // Deployment payer (item 9) — the TOP rung, before the plugin gate: on
   // the instance this exists for there IS no orgs plugin, so any placement
   // after `if (!svc)` would be dead code exactly where it matters. When one
   // account pays for the whole instance there is nothing left to resolve —
@@ -298,7 +298,7 @@ export function registerBillingContextHook(app: FastifyInstance): void {
     // Hoisted above the plugin gate so the deployment rung below shares it.
     if (req.method === "GET" || req.method === "HEAD") return
 
-    // Deployment payer (SAI item 9): stamped BEFORE the plugin gate — the
+    // Deployment payer (item 9): stamped BEFORE the plugin gate — the
     // target instance has no orgs plugin, and `if (!svc) return` would
     // otherwise leave every request personal exactly where the payer is
     // configured. Sync + zero queries (cached grade, background-refreshed).

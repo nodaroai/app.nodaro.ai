@@ -222,6 +222,8 @@ describe("finalizeExclusiveCloudOutput — per-type output adaptation", () => {
       output_data: { report: { score: 9 }, viaNodaroCloud: true },
       provider: "nodaro",
       provider_task_id: "cloud-job-1",
+      relay_job_id: "cloud-job-1",
+      relay_credits: null,
     })
     expect(mocks.uploadVideoMaybeWatermark).not.toHaveBeenCalled()
   })
@@ -249,7 +251,13 @@ describe("finalizeExclusiveCloudOutput — per-type output adaptation", () => {
         jobId: "job-1",
         jobType: "text-to-video", // storage classification: a video deliverable
         mediaUrl: "https://local.r2/videos/job-1.mp4",
-        result: { url: "https://cloud.r2/v.mp4", cost: null, providerUsed: "nodaro" },
+        result: {
+          url: "https://cloud.r2/v.mp4",
+          cost: null,
+          providerUsed: "nodaro",
+          relayJobId: "cloud-job-1",
+          relayCredits: null,
+        },
         extraOutputData: expect.objectContaining({
           pro: { segments: [1, 2] }, // stop/continue read this checkpoint
           viaNodaroCloud: true,
@@ -275,6 +283,8 @@ describe("finalizeExclusiveCloudOutput — per-type output adaptation", () => {
     expect(mocks.markJobCompleted).toHaveBeenCalledWith("job-1", {
       output_data: { audioUrl: "https://local.r2/audio/job-1.mp3", analysis: { voice: "x" }, viaNodaroCloud: true },
       provider: "nodaro",
+      relay_job_id: "cloud-job-1",
+      relay_credits: null,
     })
     expect(mocks.finalizeJobWithMedia).not.toHaveBeenCalled()
   })
@@ -298,6 +308,8 @@ describe("finalizeExclusiveCloudOutput — per-type output adaptation", () => {
         viaNodaroCloud: true,
       },
       provider: "nodaro",
+      relay_job_id: "cloud-job-1",
+      relay_credits: null,
     })
     expect(mocks.finalizeJobWithMedia).not.toHaveBeenCalled()
   })
@@ -314,5 +326,117 @@ describe("finalizeExclusiveCloudOutput — per-type output adaptation", () => {
     ).rejects.toThrow(/no media or analysis/)
     expect(mocks.markJobCompleted).not.toHaveBeenCalled()
     expect(mocks.finalizeJobWithMedia).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * Relay provenance on the EXCLUSIVE-NODE lane (spec §8.2, migration 383).
+ *
+ * The fourth relay lane, and the one carrying the most money: these five types
+ * are the most expensive generations a self-host can run, and every one of them
+ * is billed at the FAR end. `finalizeExclusiveCloudOutput` is the only place
+ * that holds both halves — this instance's job id and the finished cloud job —
+ * so each of its four completion sites must land `relay_job_id` /
+ * `relay_credits` on the row. Without them a self-host has nothing to bill its
+ * user from (it settles on `relay_credits`), and the delete rule — which
+ * refuses to touch an object whose row carries `relay_job_id` — is inert for
+ * exactly the media it most needs to protect: bytes the FAR end created.
+ *
+ * Two spellings of one fact, because the two completion functions consume
+ * different shapes: the three `markJobCompleted` sites carry the two COLUMNS,
+ * while the `finalizeJobWithMedia` site carries the ProviderResult pair and
+ * lets job-finalize write them — the only path a HOLD can park and replay.
+ */
+describe("finalizeExclusiveCloudOutput — relay provenance (lane 4)", () => {
+  const finalize = (jobType: string, cloudJob: Record<string, unknown>) =>
+    finalizeExclusiveCloudOutput({
+      jobId: "job-1",
+      jobType,
+      cloudJob: cloudJob as never,
+      jobUserId: "user-1",
+      shouldWatermark: false,
+    })
+
+  const completionFields = () => mocks.markJobCompleted.mock.calls[0]![1] as Record<string, unknown>
+  const finalizeResult = () =>
+    (mocks.finalizeJobWithMedia.mock.calls[0]![0] as { result: Record<string, unknown> }).result
+
+  it("JSON producers: the completion carries the far id and the far end's RESERVED credits", async () => {
+    await finalize("video-analysis", {
+      id: "cloud-9",
+      status: "completed",
+      credits: 24,
+      output_data: { report: { score: 9 } },
+    })
+    expect(completionFields()).toMatchObject({ relay_job_id: "cloud-9", relay_credits: 24 })
+  })
+
+  it("gvp/evp video: the pair rides the ProviderResult, so job-finalize writes it (and a HOLD parks it)", async () => {
+    await finalize("generate-video-pro", {
+      id: "cloud-9",
+      status: "completed",
+      credits: 24,
+      output_data: { videoUrl: "https://cloud.r2/v.mp4" },
+    })
+    expect(finalizeResult()).toEqual({
+      url: "https://cloud.r2/v.mp4",
+      cost: null,
+      providerUsed: "nodaro",
+      relayJobId: "cloud-9",
+      relayCredits: 24,
+    })
+  })
+
+  it("vcp video mode: the completion carries the pair", async () => {
+    await finalize("voice-changer-pro", {
+      id: "cloud-9",
+      status: "completed",
+      credits: 24,
+      output_data: { videoUrl: "https://cloud.r2/v.mp4" },
+    })
+    expect(completionFields()).toMatchObject({ relay_job_id: "cloud-9", relay_credits: 24 })
+    expect(mocks.finalizeJobWithMedia).not.toHaveBeenCalled()
+  })
+
+  it("vcp audio mode: the completion carries the pair", async () => {
+    await finalize("voice-changer-pro", {
+      id: "cloud-9",
+      status: "completed",
+      credits: 24,
+      output_data: { audioUrl: "https://cloud.r2/a.mp3" },
+    })
+    expect(completionFields()).toMatchObject({ relay_job_id: "cloud-9", relay_credits: 24 })
+  })
+
+  it("writes relay_credits NULL — never 0 — when the far end withheld its cost", async () => {
+    // "The authority could not say" is not "free": a 0 here would bill the
+    // self-host's user nothing for the priciest job the product sells.
+    await finalize("video-audit", { id: "cloud-9", status: "completed", output_data: { report: {} } })
+    expect(completionFields().relay_credits).toBeNull()
+    expect(completionFields().relay_job_id).toBe("cloud-9")
+  })
+
+  it("is BYTE-IDENTICAL to today for a completion that is not a relay — no relay_* key at all", async () => {
+    // The exact key set, not merely "no relay_job_id": a `{ relay_job_id:
+    // undefined, relay_credits: null }` reaching the UPDATE is what NULLs the
+    // columns the day someone drops the presence check — and a NULLed
+    // `relay_job_id` re-arms the delete path against far-end bytes.
+    await finalize("video-audit", { id: "", status: "completed", output_data: { report: {} } })
+    expect(Object.keys(completionFields()).sort()).toEqual(["output_data", "provider"])
+
+    mocks.markJobCompleted.mockClear()
+    await finalize("voice-changer-pro", {
+      id: "",
+      status: "completed",
+      output_data: { audioUrl: "https://cloud.r2/a.mp3" },
+    })
+    expect(Object.keys(completionFields()).sort()).toEqual(["output_data", "provider"])
+
+    await finalize("edit-video-pro", {
+      id: "",
+      status: "completed",
+      output_data: { videoUrl: "https://cloud.r2/v.mp4" },
+    })
+    expect(Object.keys(finalizeResult()).sort()).toEqual(["cost", "providerUsed", "url"])
   })
 })

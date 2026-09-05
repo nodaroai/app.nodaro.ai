@@ -26,7 +26,7 @@
  * is none.
  *
  * UNITS (R3). Everything the browser sends and every PER-USER figure rendered
- * back is SAI קרדיטים; everything the database sees is raw Nodaro credits. The
+ * back is display units; everything the database sees is raw Nodaro credits. The
  * conversion happens at this boundary and nowhere else: `creditsFromUnits` on
  * the way in — which REFUSES anything that is not a whole number of credits at
  * `billing.unitRate` — and `toUnits` on the way out. A unit that reached

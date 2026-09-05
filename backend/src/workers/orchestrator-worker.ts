@@ -599,7 +599,7 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       .single()
 
     // Effective tier — payg users run at basic-equivalent parallelism (4).
-    // Deployment payer (SAI item 9, D2): the limit is the PAYER's grade,
+    // Deployment payer (item 9, D2): the limit is the PAYER's grade,
     // stamped into the context at resolve — per EXECUTION, so every requester
     // gets their own budget at that grade rather than the instance sharing
     // one; the requester's own tier (a signup default no one ever upgrades on

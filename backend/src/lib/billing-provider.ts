@@ -183,9 +183,10 @@ export interface BillingSurface {
   canAccount: boolean
   /** The Cost tab mounts iff a provider other than `none` is registered. */
   mountCostTab: boolean
-  /** One designated account pays for every action on this instance (SAI item
-   *  9). The flag is all the browser may learn — the payer's IDENTITY is
-   *  backend-only (redacted from /config.js). Drives consumption-only /usage. */
+  /** One designated account pays for every action on this instance
+   *  (deployment-payer item 9). The flag is all the browser may learn — the
+   *  payer's IDENTITY is backend-only (redacted from /config.js). Drives
+   *  consumption-only /usage. */
   deploymentPayer: boolean
 }
 
@@ -211,8 +212,8 @@ export function billingSurface(): BillingSurface {
  * Boot registration for the credit-bearing provider. Dynamic import keeps the
  * ee module out of community/business bundles AND passes check-ee-imports.mjs.
  * No-op unless the edition has credits — same shim contract as creditGuard.
- * External providers (SAI WBF) register through the overlay loader (§7.2),
- * NOT here.
+ * External providers (a customer's own provider) register through the overlay
+ * loader (§7.2), NOT here.
  */
 export async function registerNodaroCloudBillingProvider(): Promise<void> {
   if (!hasCredits()) return

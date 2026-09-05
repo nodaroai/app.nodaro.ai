@@ -32,6 +32,7 @@ import { stillToVideo } from "../../providers/video/still-to-video.js"
 import { gifToVideo } from "../../providers/video/gif-to-video.js"
 import { slideshow } from "../../providers/video/slideshow.js"
 import { transcribe, type TranscribeProvider } from "../../providers/audio/transcribe.js"
+import { config } from "../../lib/config.js"
 import { syntheticCaptionsFromText } from "../../providers/audio/captions-mappers.js"
 import {
   commitJobCredits,
@@ -531,16 +532,54 @@ async function dispatchKineticCaptions(
 
   // Probe + transcribe in parallel — both depend only on data.videoUrl
   const needTranscribe = !data.captions?.length && data.auto_transcribe !== false
+
+  // THE SAME THREE-WAY LADDER handleTranscribe uses (workers/handlers/audio-ai.ts),
+  // for the same reason (#761): transcription calls a vendor client straight
+  // from the worker and never reaches the capability router, so a
+  // keyless-but-connected install could not be rescued by any capability
+  // declaration. Without it `add-captions` — a WHITELISTED node on the
+  // self-host — hard-failed on every kinetic style, because auto-transcribe is
+  // the default when no captions[] are supplied. Key resolution is
+  // per-PROVIDER: elevenlabs-stt needs ELEVENLABS_API_KEY, the two whisper
+  // lanes need REPLICATE_API_TOKEN.
+  //   1. local key -> local transcribe(), byte-identical
+  //   2. no key, connected -> replay on the cloud (which holds both), verbatim
+  //   3. no key, not connected -> the local path's own missing-key error
+  //
+  // `audioUrl` matches run-on-cloud's URL_FIELD, so a local-MinIO videoUrl is
+  // re-hosted before the POST; `jobId` is in INSTANCE_ONLY_FIELDS — stripped
+  // from the wire body, but used by runJobOnCloud to stamp relay_job_id /
+  // relay_credits on THIS row. Note what that figure then means: the relayed
+  // TRANSCRIPTION only, never the locally-rendered Remotion pass, so it is not
+  // the job's full cost and settlement must not read it as one.
+  const transcribeProvider = data.transcribe_provider ?? "incredibly-fast-whisper"
+  const localTranscribeKey =
+    transcribeProvider === "elevenlabs-stt" ? config.ELEVENLABS_API_KEY : config.REPLICATE_API_TOKEN
+  const { shouldRunOnCloud, runJobOnCloud } = await import("../../providers/nodaro/run-on-cloud.js")
+  const runTranscription = async (): Promise<{ words?: Caption[] } | null> => {
+    if (!needTranscribe) return null
+    if (!(await shouldRunOnCloud(localTranscribeKey))) {
+      return transcribe(data.videoUrl, transcribeProvider, undefined, { wordTimestamps: true })
+    }
+    const cloud = await runJobOnCloud("transcribe", {
+      jobId: ctx.jobId,
+      audioUrl: data.videoUrl,
+      provider: transcribeProvider,
+      wordTimestamps: true,
+    })
+    // Validate rather than trust — a version-skewed far end returning no words
+    // would otherwise fall through to the synthetic-text branch or die with a
+    // misleading "no words" message (the suno-lyrics rule, and the same check
+    // handleTranscribe makes on its own cloud result).
+    if (!Array.isArray((cloud as { words?: unknown }).words)) {
+      throw new Error("nodaro.ai returned no transcription")
+    }
+    return cloud as { words?: Caption[] }
+  }
+
   const [probeResult, transcribeResult] = await Promise.allSettled([
     probeVideoSource(data.videoUrl),
-    needTranscribe
-      ? transcribe(
-          data.videoUrl,
-          data.transcribe_provider ?? "incredibly-fast-whisper",
-          undefined,
-          { wordTimestamps: true },
-        )
-      : Promise.resolve(null),
+    runTranscription(),
   ])
 
   if (probeResult.status === "fulfilled") {

@@ -13,8 +13,8 @@
  * WITH NOTHING REGISTERED BOTH FUNNELS ARE BYTE-IDENTICAL: no gate call, no
  * extra row read, no audit row, no allocation. `hasJobPolicyFor(hook)` is the
  * fast path and it is per HOOK POINT, not per registry (D23) — a policy that
- * implements only `checkResult` (which is what the SAI overlay ships) must not
- * cost one dead `allow` row per job creation.
+ * implements only `checkResult` (which is what a customer overlay ships) must
+ * not cost one dead `allow` row per job creation.
  *
  * FAIL-CLOSED BY CONTRACT ON BOTH HOOK POINTS. Once a policy IS registered, a
  * check that throws — or hangs past the backstop — DENIES. A request gate that

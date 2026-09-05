@@ -1,5 +1,5 @@
 /**
- * Deployment payer (SAI item 9) — ONE designated account pays for every
+ * Deployment payer (item 9) — ONE designated account pays for every
  * action on this instance instead of the requester. The deployment is a
  * reseller: its users never buy Nodaro credits; the instance owner tops up
  * one prepaid account and every reservation debits it, while `jobs.user_id`
@@ -122,11 +122,11 @@ async function resolveAccount(account: string): Promise<{ ok: true; id: string }
  * The SEED for `deployment_payer_settings.default_allowance_credits`, in RAW
  * Nodaro credits, or null when the profile does not carry one.
  *
- * `billing.defaultAllowanceUnits` is a DISPLAY figure (SAI קרדיטים); the ledger
- * is credits. `coherentBilling` has already refused any value that is not a
- * whole number of credits at this `unitRate`, so the division is exact and the
- * round only defends against float dust. This is the ONE conversion on this
- * path — never a literal rate anywhere else.
+ * `billing.defaultAllowanceUnits` is a DISPLAY figure (the deployment's unit
+ * label); the ledger is credits. `coherentBilling` has already refused any
+ * value that is not a whole number of credits at this `unitRate`, so the
+ * division is exact and the round only defends against float dust. This is the
+ * ONE conversion on this path — never a literal rate anywhere else.
  */
 function seedDefaultAllowanceCredits(): number | null {
   const { defaultAllowanceUnits: units, unitRate: rate } = runtimeSurfaceProfile().billing

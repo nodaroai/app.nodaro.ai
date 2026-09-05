@@ -1197,3 +1197,97 @@ describe("runCompletionTail", () => {
     expect(autoAttachMocks.appendCharacterReferenceVideo).not.toHaveBeenCalled()
   })
 })
+
+/**
+ * Relay provenance on the ROUTER lane (spec §8.2 lane 1, migration 383).
+ *
+ * The three NodaroCloud* providers hand `relayJobId`/`relayCredits` back on the
+ * ProviderResult; every router-lane completion in
+ * `workers/handlers/{image,video,audio}-ai.ts` goes through THIS function, so
+ * this is the one place those two facts become `jobs.relay_job_id` /
+ * `jobs.relay_credits`. Without them a self-host cannot bill its users (it
+ * settles on `relay_credits`) and WS5's delete rule — which keys on
+ * `relay_job_id` — is inert for every image, video and TTS row.
+ */
+describe("finalizeJobWithMedia — relay provenance (router lane)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetMocksToHappyPath()
+  })
+
+  it("stamps relay_job_id + relay_credits on the completion UPDATE for a relayed image", async () => {
+    await finalizeJobWithMedia({
+      jobId: "j1",
+      jobType: "generate-image",
+      result: {
+        url: "https://cloud.nodaro.ai/x.png",
+        cost: null,
+        relayJobId: "cloud-9",
+        relayCredits: 24,
+      },
+    })
+
+    const payload = sharedMocks.markJobCompletedDetailed.mock.calls[0]![1]
+    expect(payload).toMatchObject({ relay_job_id: "cloud-9", relay_credits: 24 })
+  })
+
+  it("writes relay_credits NULL — never 0 — when the far end withheld its cost", async () => {
+    await finalizeJobWithMedia({
+      jobId: "j1",
+      jobType: "generate-image",
+      result: {
+        url: "https://cloud.nodaro.ai/x.png",
+        cost: null,
+        relayJobId: "cloud-9",
+        relayCredits: null,
+      },
+    })
+
+    const payload = sharedMocks.markJobCompletedDetailed.mock.calls[0]![1]
+    expect(payload.relay_credits).toBeNull()
+    expect(payload.relay_job_id).toBe("cloud-9")
+  })
+
+  it("is BYTE-IDENTICAL to today for a non-relayed result — no relay_* key at all", async () => {
+    // The exact key set, not merely "no relay_job_id": a `{ relay_job_id:
+    // undefined }` reaching the UPDATE is what would null the column on every
+    // KIE/Replicate completion the day someone drops the presence check.
+    await finalizeJobWithMedia({
+      jobId: "j1",
+      jobType: "generate-image",
+      result: { url: "https://kie.example/x.png", cost: 0.004, providerUsed: "p", kieTaskId: "t1" },
+    })
+
+    const payload = sharedMocks.markJobCompletedDetailed.mock.calls[0]![1]
+    expect(Object.keys(payload).sort()).toEqual(
+      ["output_data", "provider", "provider_cost", "provider_task_id"],
+    )
+  })
+
+  it("carries the relay columns into a HELD row's completion fields (they park, approve replays them)", async () => {
+    // The gate parks `fields` minus output_data in `held_completion_fields`;
+    // approveHeldJob spreads those columns back onto the row. If the relay pair
+    // were not in `fields`, a held relayed job would come out of review with
+    // both columns NULL — the row the delete rule and the bill both read.
+    sharedMocks.markJobCompletedDetailed.mockResolvedValue("held")
+
+    const outcome = await finalizeJobWithMedia({
+      jobId: "j1",
+      jobType: "generate-image",
+      result: {
+        url: "https://cloud.nodaro.ai/x.png",
+        cost: null,
+        relayJobId: "cloud-9",
+        relayCredits: 24,
+      },
+    })
+
+    expect(outcome).toEqual({ ok: false, reason: "held" })
+    const payload = sharedMocks.markJobCompletedDetailed.mock.calls[0]![1]
+    expect(payload).toMatchObject({ relay_job_id: "cloud-9", relay_credits: 24 })
+    // …and they are ordinary columns, never settlement inputs: nothing relay-
+    // shaped may reach the commitReplay argument (HELD_COMMIT_REPLAY_KEYS).
+    const commitReplay = sharedMocks.markJobCompletedDetailed.mock.calls[0]![3] as Record<string, unknown>
+    expect(Object.keys(commitReplay).some((k) => k.startsWith("relay"))).toBe(false)
+  })
+})

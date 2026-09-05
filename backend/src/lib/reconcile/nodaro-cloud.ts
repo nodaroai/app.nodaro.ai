@@ -15,6 +15,7 @@ import { supabase } from "../supabase.js"
 import { markJobFailed } from "../job-failure.js"
 import { redactProviderDetail } from "../provider-error-detail.js"
 import { finalizeExclusiveCloudOutput } from "../../workers/handlers/nodaro-exclusive-relay.js"
+import type { CloudJob } from "../../providers/nodaro/client.js"
 import { bumpAttemptsOrExhaust } from "./bump-attempts.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
 
@@ -52,7 +53,11 @@ export async function reconcileNodaroCloudJob(row: NodaroCloudJobRow): Promise<v
   }
 
   const { nodaroCloudFetch } = await import("../nodaro-connect.js")
-  let cloudJob: { id?: string; status?: string; output_data?: Record<string, unknown> | null; error_message?: string | null } | undefined
+  // The FULL CloudJob, not a hand-picked subset: `credits` is what
+  // finalizeExclusiveCloudOutput turns into `relay_credits`, so a narrowed
+  // shape here would recover every post-crash job with its cost unknown while
+  // the live relay records it. Type-only import; the poll body is unchanged.
+  let cloudJob: CloudJob | undefined
   try {
     const res = await nodaroCloudFetch(`/v1/jobs/${row.provider_task_id}`)
     if (!res.ok) {
@@ -87,7 +92,7 @@ export async function reconcileNodaroCloudJob(row: NodaroCloudJobRow): Promise<v
       await finalizeExclusiveCloudOutput({
         jobId: row.id,
         jobType: row.job_type,
-        cloudJob: cloudJob as never,
+        cloudJob,
         jobUserId: rowMeta?.user_id,
         shouldWatermark: rowMeta?.should_watermark === true,
       })

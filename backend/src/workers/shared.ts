@@ -20,6 +20,9 @@ import { generateThumbnailFromUrl } from "../utils/thumbnail.js"
 import { createWorkDir, cleanupWorkDir, downloadFile, transcodeToBrowserSafe } from "../providers/video/ffmpeg-utils.js"
 import { isPostProcessingError, runPostProcessing } from "../lib/post-processing-error.js"
 import { hasJobPolicyFor, type HeldCommitReplay } from "../lib/job-policy.js"
+// Pure key-family predicate (no S3 client, no supabase) — the one half of the
+// relay delete rule that is decidable at asset-creation time.
+import { isOwnedObjectKey } from "../lib/job-policy-outputs.js"
 
 export interface JobContext {
   jobId: string
@@ -743,7 +746,9 @@ export async function createAssetFromJob(
   try {
     const { data: job } = await supabase
       .from("jobs")
-      .select("output_data, status, source, source_detail")
+      // `relay_job_id` (migration 383) rides along so the asset can carry the
+      // DURABLE half of the relay delete rule — see the insert below.
+      .select("output_data, status, source, source_detail, relay_job_id")
       .eq("id", jobId)
       .single()
 
@@ -786,6 +791,26 @@ export async function createAssetFromJob(
       // storage_used_bytes ratchet up forever). HEAD failure → 0 (prior behavior).
       const sizeBytes = await getR2ObjectSize(r2Key)
 
+      // THE DURABLE RELAY MARKER (`assets.relay_job_id`, migration 384).
+      //
+      // `jobs.relay_job_id` says the JOB was relayed; the key family says
+      // whether the BYTES came from the far end. Under the shared-bucket
+      // passthrough (lib/storage.ts) uploadToR2 returns the far end's URL
+      // unchanged, so `r2Key` above IS the far end's key — outside this job's
+      // `<jobId>-` family — and the object belongs to the instance that made
+      // it. A relaying instance with its OWN bucket copied the bytes under its
+      // own key instead: same relayed job, but ours to delete, so no marker.
+      //
+      // Written HERE rather than read from the job at delete time because
+      // `assets.job_id` is `ON DELETE SET NULL` (001_initial_schema.sql): a
+      // job-history delete NULLs it on the surviving library row and the
+      // job-row marker becomes unreachable exactly when the permanent delete
+      // needs it. NULL on every non-relayed row, in every edition.
+      const relayJobId =
+        typeof job.relay_job_id === "string" && job.relay_job_id && !isOwnedObjectKey(jobId, r2Key)
+          ? job.relay_job_id
+          : null
+
       await supabase.from("assets").insert({
         user_id: userId,
         job_id: jobId,
@@ -796,6 +821,7 @@ export async function createAssetFromJob(
         mime_type: mime,
         size_bytes: sizeBytes,
         upload_source: "generated",
+        relay_job_id: relayJobId,
         // Provenance copied from the originating job (migration 285) so the
         // library can filter by origin without hydrating each item's job.
         // Immutable once written — a job's calling surface never changes.

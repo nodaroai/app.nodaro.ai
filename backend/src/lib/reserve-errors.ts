@@ -77,9 +77,9 @@ const RESERVE_PREFIX_MAP: Readonly<Record<string, MappedReserveError>> = {
     code: "workspace_not_found",
     message: "Workspace not found",
   },
-  // Track A (migration 382): the per-user SAI allowance. Raised as
-  // `USER_ALLOWANCE_EXCEEDED: granted %, remaining %, need %` — the three
-  // figures stay in `.raw`, per this file's second rule.
+  // Track A (migration 382): the per-user allowance under a deployment payer.
+  // Raised as `USER_ALLOWANCE_EXCEEDED: granted %, remaining %, need %` — the
+  // three figures stay in `.raw`, per this file's second rule.
   //
   // The NAME was chosen against three constraints and none of them is
   // cosmetic (D9): it must not contain "insufficient" or "not enough",

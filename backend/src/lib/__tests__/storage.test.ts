@@ -2,6 +2,19 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import type { Readable } from "node:stream"
 
 const mocks = vi.hoisted(() => {
+  // MUTABLE on purpose: the shared-bucket passthrough (spec §9.2) is read as
+  // `config.R2_SHARED_WITH_RELAY_TARGET` at call time inside uploadToR2, so a
+  // test flips this field and resets it in beforeEach. A frozen literal would
+  // make the flag untestable without a second test file.
+  const config = {
+    R2_ACCOUNT_ID: "test-account",
+    R2_ACCESS_KEY_ID: "test-key",
+    R2_SECRET_ACCESS_KEY: "test-secret",
+    R2_BUCKET_NAME: "test-bucket",
+    R2_PUBLIC_URL: "https://r2.test.com",
+    R2_SHARED_WITH_RELAY_TARGET: false,
+    EDITION: "cloud",
+  }
   const mockSend = vi.fn().mockResolvedValue({})
   const putCalls: unknown[] = []
   const deleteCalls: unknown[] = []
@@ -10,7 +23,7 @@ const mocks = vi.hoisted(() => {
   const copyCalls: unknown[] = []
   const headCalls: unknown[] = []
   const safeFetchMock = vi.fn()
-  return { mockSend, putCalls, deleteCalls, deleteObjectsCalls, uploadBodies, copyCalls, headCalls, safeFetchMock }
+  return { config, mockSend, putCalls, deleteCalls, deleteObjectsCalls, uploadBodies, copyCalls, headCalls, safeFetchMock }
 })
 
 vi.mock("@aws-sdk/client-s3", () => {
@@ -81,14 +94,7 @@ vi.mock("@aws-sdk/lib-storage", () => {
 })
 
 vi.mock("@/lib/config.js", () => ({
-  config: {
-    R2_ACCOUNT_ID: "test-account",
-    R2_ACCESS_KEY_ID: "test-key",
-    R2_SECRET_ACCESS_KEY: "test-secret",
-    R2_BUCKET_NAME: "test-bucket",
-    R2_PUBLIC_URL: "https://r2.test.com",
-    EDITION: "cloud",
-  },
+  config: mocks.config,
 }))
 
 vi.mock("@/utils/file-validation.js", () => ({
@@ -203,6 +209,9 @@ beforeEach(() => {
   mocks.deleteObjectsCalls.length = 0
   mocks.uploadBodies.length = 0
   mocks.safeFetchMock.mockReset()
+  // Default OFF — every pre-existing test in this file asserts the copy
+  // behaviour, which is what the flag must leave untouched.
+  mocks.config.R2_SHARED_WITH_RELAY_TARGET = false
 })
 
 // ---------- uploadBufferToR2 ----------
@@ -616,5 +625,120 @@ describe("uploadToR2 — atomic quota reservation", () => {
     expect(reserveMock).not.toHaveBeenCalled()
     expect(refundMock).not.toHaveBeenCalled()
     expect(trackMock).not.toHaveBeenCalled()
+  })
+})
+
+// ---------- uploadToR2 — the shared-bucket passthrough ----------
+//
+// Spec 2026-09-04-sai-local-development §9.2 (D16/D17), invariants 10 and 10a.
+//
+// A near end relaying generation to a hosted instance that writes to the SAME
+// bucket receives a finished output that is ALREADY an object in its own
+// bucket. Copying it doubles the bytes and splits ownership of one object
+// across two databases. The flag says "I share a bucket with my relay target";
+// off, this code must not exist as far as any deployment can tell.
+
+describe("uploadToR2 — shared-bucket passthrough (R2_SHARED_WITH_RELAY_TARGET)", () => {
+  const trackMock = vi.mocked(updateStorageUsage)
+
+  // INVARIANT 10, and the most important test in this workstream: the flag is
+  // NOT a no-op, so the flag-off behaviour has to be pinned explicitly.
+  // Today (and on every mainline deployment) an already-ours URL is still
+  // downloaded and re-uploaded under the new job's key, and two jobs never
+  // share an object.
+  it("flag OFF: still downloads and re-uploads a URL already in our own bucket", async () => {
+    const payload = new Uint8Array(500)
+    mocks.safeFetchMock.mockResolvedValueOnce(
+      makeResponse({ chunks: [payload], headerLength: null }),
+    )
+
+    const url = await uploadToR2(
+      "https://r2.test.com/images/far-end-job.png",
+      "near-job-1",
+      "image",
+      "user-1",
+    )
+
+    expect(mocks.safeFetchMock).toHaveBeenCalledTimes(1)
+    expect(url).toBe("https://r2.test.com/images/near-job-1.png")
+    expect(trackMock).toHaveBeenCalledWith("user-1", 500)
+  })
+
+  // The same assertion for the string form the compose files actually write.
+  // config.ts parses "false" to boolean false (config.test.ts pins that); this
+  // asserts the consequence at the only place that reads the flag.
+  it("flag parsed from the REAL schema out of the string 'false': byte-identical to flag OFF", async () => {
+    // Closes the loop end to end rather than trusting a hand-picked literal:
+    // run the real env schema over the exact string a compose file writes and
+    // feed ITS result to the only code that reads the flag. Under
+    // z.coerce.boolean() this test is the one that would go red.
+    // `importActual` deliberately bypasses this file's config mock; the
+    // resetModules is what makes the schema re-read process.env.
+    const previous = process.env.R2_SHARED_WITH_RELAY_TARGET
+    process.env.R2_SHARED_WITH_RELAY_TARGET = "false"
+    vi.resetModules()
+    const actual = await vi.importActual<typeof import("@/lib/config.js")>("@/lib/config.js")
+    mocks.config.R2_SHARED_WITH_RELAY_TARGET = actual.config.R2_SHARED_WITH_RELAY_TARGET
+    if (previous === undefined) delete process.env.R2_SHARED_WITH_RELAY_TARGET
+    else process.env.R2_SHARED_WITH_RELAY_TARGET = previous
+
+    expect(mocks.config.R2_SHARED_WITH_RELAY_TARGET).toBe(false)
+
+    const payload = new Uint8Array(320)
+    mocks.safeFetchMock.mockResolvedValueOnce(
+      makeResponse({ chunks: [payload], headerLength: null }),
+    )
+
+    const url = await uploadToR2(
+      "https://r2.test.com/images/far-end-job.png",
+      "near-job-1b",
+      "image",
+      "user-1b",
+    )
+
+    expect(mocks.safeFetchMock).toHaveBeenCalledTimes(1)
+    expect(url).toBe("https://r2.test.com/images/near-job-1b.png")
+    expect(trackMock).toHaveBeenCalledWith("user-1b", 320)
+  })
+
+  it("flag ON: returns an already-ours URL unchanged, fetching and uploading nothing", async () => {
+    mocks.config.R2_SHARED_WITH_RELAY_TARGET = true
+
+    const url = await uploadToR2(
+      "https://r2.test.com/images/far-end-job.png",
+      "near-job-2",
+      "image",
+      "user-2",
+    )
+
+    expect(url).toBe("https://r2.test.com/images/far-end-job.png")
+    expect(mocks.safeFetchMock).not.toHaveBeenCalled()
+    expect(mocks.uploadBodies).toHaveLength(0)
+  })
+
+  // INVARIANT 10a: no increment here is exactly why the delete paths must not
+  // decrement either. A relay-owned object is never counted against this
+  // instance's quota, in either direction.
+  it("flag ON: counts nothing against the caller's storage quota", async () => {
+    mocks.config.R2_SHARED_WITH_RELAY_TARGET = true
+
+    await uploadToR2("https://r2.test.com/videos/far-end.mp4", "near-job-3", "video", "user-3")
+
+    expect(trackMock).not.toHaveBeenCalled()
+    expect(vi.mocked(reserveStorageIfWithinLimit)).not.toHaveBeenCalled()
+  })
+
+  it("flag ON: a FOREIGN url is still downloaded and re-uploaded", async () => {
+    mocks.config.R2_SHARED_WITH_RELAY_TARGET = true
+    const payload = new Uint8Array(400)
+    mocks.safeFetchMock.mockResolvedValueOnce(
+      makeResponse({ chunks: [payload], headerLength: null }),
+    )
+
+    const url = await uploadToR2("https://vendor.example/out.png", "near-job-4", "image", "user-4")
+
+    expect(mocks.safeFetchMock).toHaveBeenCalledTimes(1)
+    expect(url).toBe("https://r2.test.com/images/near-job-4.png")
+    expect(trackMock).toHaveBeenCalledWith("user-4", 400)
   })
 })

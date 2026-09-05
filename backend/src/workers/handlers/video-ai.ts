@@ -11,7 +11,7 @@ import {
   speechToVideo,
 } from "../../providers/index.js"
 import { KIE_LIP_SYNC_MODELS } from "../../providers/kie/models.js"
-import type { ProgressCallback } from "../../providers/provider.interface.js"
+import type { ProgressCallback, ProviderResult } from "../../providers/provider.interface.js"
 import { runVeoExtendTask, runVeo1080pTask, runVeo4kTask, KieError } from "../../providers/kie/client.js"
 
 import { runRunwayExtendTask } from "../../providers/kie/runway-client.js"
@@ -714,7 +714,11 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
   let resultCost: number | null = null
   let resultDisplayCost: number | null = null
   let resultProviderUsed: string = resolvedProvider
-  let resultMeta: Parameters<typeof buildProviderMeta>[0] = undefined
+  // The full ProviderResult (was `Parameters<typeof buildProviderMeta>[0]`,
+  // which is a Pick that drops the relay pair): `buildProviderMeta` accepts it
+  // unchanged, and the rebuilt finalize literal below can read the two
+  // migration-383 fields off it. Left undefined by the fal branch.
+  let resultMeta: ProviderResult | undefined = undefined
 
   try {
 
@@ -856,6 +860,12 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
       cost: resultCost,
       displayCost: resultDisplayCost,
       providerUsed: resultProviderUsed,
+      // Relay provenance (spec §8.2 lane 1, migration 383): this literal is
+      // rebuilt from flattened locals, so the pair the NodaroCloud video
+      // provider set on the ProviderResult only reaches finalize if it is
+      // carried by hand. Absent on every vendor-direct branch (and on fal,
+      // which leaves `resultMeta` undefined) ⇒ no key, no column written.
+      ...(resultMeta?.relayJobId && { relayJobId: resultMeta.relayJobId, relayCredits: resultMeta.relayCredits ?? null }),
     },
     mediaUrl: r2Url,
     extraOutputData: { thumbnailUrl: thumbUrl, ...buildProviderMeta(resultMeta) },
@@ -991,6 +1001,12 @@ const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx
   // Wrap each branch in a progress ramp — none of these (VEO upscale,
   // Topaz, etc.) reliably surface live progress; without the ramp the
   // bar pins for the whole upscale duration.
+  // The relay half of the topaz branch's ProviderResult, captured out of the
+  // ramp closure the way lip-sync captures `resultMeta`: the lambda returns a
+  // URL (three branches, three different providers), so without this the pair
+  // is discarded with the rest of the result. NodaroCloud serves the topaz
+  // branch only — the two VEO branches are KIE-direct and leave it undefined.
+  let upscaleMeta: ProviderResult | undefined
   const outputUrl: string = await withProgressRamp(
     job,
     ctx.jobId,
@@ -1021,6 +1037,7 @@ const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx
           await setJobProgress(job, ctx.jobId, progress)
         }
         const result = await videoUpscale(videoUrl, "topaz", upscaleFactor ?? "2", { onProgress }, { onTaskCreated: topazOnTaskCreated })
+        upscaleMeta = result
         return result.url
       }
     },
@@ -1035,7 +1052,13 @@ const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx
   const { ok } = await finalizeJobWithMedia({
     jobId: ctx.jobId,
     jobType: "video-upscale",
-    result: { url: outputUrl, cost: null, providerUsed: upscaleProvider },
+    result: {
+      url: outputUrl,
+      cost: null,
+      providerUsed: upscaleProvider,
+      // Same rebuilt-literal carry as lip-sync above, same reason.
+      ...(upscaleMeta?.relayJobId && { relayJobId: upscaleMeta.relayJobId, relayCredits: upscaleMeta.relayCredits ?? null }),
+    },
     mediaUrl: r2Url,
     extraOutputData: { thumbnailUrl: thumbUrl },
   })
@@ -1265,7 +1288,20 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
     const { ok: seedanceOk } = await finalizeJobWithMedia({
       jobId: ctx.jobId,
       jobType: "extend-video",
-      result: { url: stitchedR2Url, cost: gen.cost ?? null, providerUsed: "seedance-2-extend" },
+      result: {
+        url: stitchedR2Url,
+        cost: gen.cost ?? null,
+        providerUsed: "seedance-2-extend",
+        // Same rebuilt-literal carry as lip-sync (:868) and video-upscale
+        // (:1060), same reason: `gen` IS the RouteResult from the capability
+        // router above, and on a keyless connected install the chain is
+        // [nodaro] — both seedance-2 models are in the cloud provider's
+        // image-to-video list. Dropping the pair here left jobs.relay_job_id /
+        // relay_credits NULL for a generation the far end really reserved
+        // credits for: a self-host settling on relay_credits billed it at zero,
+        // and the row carried no provenance for support to follow.
+        ...(gen.relayJobId && { relayJobId: gen.relayJobId, relayCredits: gen.relayCredits ?? null }),
+      },
       mediaUrl: stitchedR2Url,
       extraOutputData: {
         thumbnailUrl: stitchedThumbUrl,

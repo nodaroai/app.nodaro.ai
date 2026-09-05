@@ -32,6 +32,18 @@ export interface ProviderResult {
    *  (which is in seconds, converted to ms). Useful for telemetry and
    *  separating provider time from our orchestration overhead. */
   providerMs?: number
+  /** Relay provenance (spec 2026-09-04-sai-local-development §8.2, migration
+   *  383). Set ONLY by the NodaroCloud* providers, which relay the work to a
+   *  connected Nodaro cloud: the far end's job id and the credits IT reserved.
+   *  The providers never receive the local job id, so — exactly as `kieTaskId`
+   *  above, a provider-reported id the HANDLER writes — the pair rides back on
+   *  the result and the completion path persists it onto this instance's job
+   *  row (`relayFieldsFrom`, providers/nodaro/relay-cost.ts). `relayCredits`
+   *  is null, never 0, when the far end withheld the figure. Undefined for
+   *  every other provider, which is what keeps the router lane byte-identical
+   *  off a relay. */
+  relayJobId?: string
+  relayCredits?: number | null
 }
 
 // Capabilities a provider can support

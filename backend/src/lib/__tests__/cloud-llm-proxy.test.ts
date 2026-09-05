@@ -336,6 +336,17 @@ describe("orchestrated calls: instance-local keys and the mirrored job", () => {
     })
     expect(row.output_data).not.toHaveProperty("jobId")
 
+    // Relay provenance (spec §8.2 lane 3, migration 383). `relay_job_id` is
+    // free here — the far id is already in scope — and it is the marker the
+    // delete paths read before touching an object this instance did not
+    // create. `relay_credits` stays NULL by design: this lane mirrors the
+    // ROUTE's response body, which is { jobId, generatedText } and carries no
+    // `credits`. A self-host settles it by re-reading GET /v1/jobs/:relay_job_id,
+    // which it must do anyway for credit_status; adding an in-path GET here
+    // would tax the fastest lane for a number nobody reads at that moment.
+    expect(row.relay_job_id).toBe("cloud-job-9")
+    expect(row.relay_credits).toBeUndefined()
+
     // The answer: same payload, jobId rewritten to the local row.
     expect(reply.state.status).toBe(200)
     const body = JSON.parse(String(reply.state.body))

@@ -394,6 +394,20 @@ function storedBlockMessage(reused: ReusedDecision): string {
 }
 
 /**
+ * The far end's job id for the row being gated, off the completion `fields`.
+ *
+ * `lib/job-finalize.ts` merges `relayFieldsFrom(result)` into `fields` BEFORE
+ * the gate runs, so a relayed completion carries `relay_job_id` here. It is a
+ * server-written column (migration 383 grants no UPDATE on it), never caller
+ * input — which is what lets `ownedHeldObjects` widen the accepted key stem
+ * without turning the review preview into a read-anything proxy.
+ */
+function relayStemOf(fields: Record<string, unknown>): string | null {
+  const value = fields.relay_job_id
+  return typeof value === "string" && value ? value : null
+}
+
+/**
  * A stored `block`/`hold` was found for this exact payload. Whether it was ever
  * APPLIED is a question about the JOB ROW, not about the audit table.
  *
@@ -428,7 +442,10 @@ async function reapplyStoredVerdict(
 
   if (reused.verdict === "hold") {
     const outputData = (fields.output_data as Record<string, unknown> | undefined) ?? {}
-    const owned = ownedHeldObjects(jobId, extractJobOutputs(outputData))
+    // The relay stem too — under the shared-bucket passthrough the output key
+    // is the FAR job's, and without it this re-apply re-writes the same empty
+    // held_objects the fresh verdict would have.
+    const owned = ownedHeldObjects(jobId, extractJobOutputs(outputData), undefined, relayStemOf(fields))
     return await applyHold(jobId, fields, owned, commitReplay, reused.id, reused.policyId, read.row.job_type, read.row.user_id)
   }
   return await applyBlock(jobId, fields, reused.id, reused.policyId, storedBlockMessage(reused), read.row.output_data)
@@ -577,7 +594,10 @@ export async function applyResultGate(
   if (decision.verdict === "allow" || decision.verdict === "flag") return "allow"
 
   if (decision.verdict === "hold") {
-    const owned = ownedHeldObjects(jobId, outputs)
+    // A relayed output's key stem is the FAR job's id, so without this the
+    // fence drops every one of them and the reviewer gets an empty preview
+    // for media they must decide on (spec §9.2 + the result gate's D7).
+    const owned = ownedHeldObjects(jobId, outputs, undefined, relayStemOf(fields))
     return await applyHold(jobId, fields, owned, commitReplay, decisionId, decision.policyId ?? null, row.job_type, row.user_id)
   }
 

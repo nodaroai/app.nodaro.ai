@@ -58,7 +58,7 @@ export function applyOrgEntitlements(
   derived: ProfileDerivedGates,
   ctx?: BillingContext,
 ): EffectiveBillingGates {
-  // Deployment payer (SAI item 9): the payer ACCOUNT's grade replaces the
+  // Deployment payer (item 9): the payer ACCOUNT's grade replaces the
   // requester's, read from the context the resolver stamped — same
   // no-second-copy rule as the workspace branch below. `personalBalance`
   // stays TRUE on purpose: the balance that gates the run is a real personal

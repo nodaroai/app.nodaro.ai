@@ -2,6 +2,7 @@ import type { NodaroClient } from "../client.js"
 import type { JobStatusResult } from "./jobs.js"
 import { JobAbortedError, JobFailedError, JobHeldError, JobTimeoutError } from "../errors.js"
 import type { ConnectedReference, ModelInputAdjustment } from "@nodaro/shared"
+import type { DirectionFields, SubjectFields } from "@nodaro/prompts"
 
 export type NodeCategory =
   | "input"
@@ -140,6 +141,38 @@ export interface GenerateVideoParams extends StructuredReferenceParams {
 }
 
 /**
+ * Typed request body for `nodes.run("text-to-video", …)` / `runAndWait` — the
+ * PROMPT-ONLY video lane (`POST /v1/text-to-video`).
+ *
+ * Which lane takes what: `text-to-video` renders from text (plus optional
+ * references) and `prompt` is REQUIRED; frames belong to `generate-video`
+ * alone, which is the image-to-video lane (`imageUrl` start frame, `endFrameUrl`
+ * closing frame) and where a prompt is optional. A model with no text-to-video
+ * mode answers this lane with a `400 image_required` naming itself.
+ *
+ * Common fields are typed; any other route field passes through.
+ */
+export interface TextToVideoParams extends StructuredReferenceParams {
+  prompt: string
+  provider?: string
+  duration?: number
+  /** Native audio toggle, on the models that render sound. */
+  sound?: boolean
+  negativePrompt?: string
+  aspectRatio?: string
+  resolution?: string
+  seed?: number
+  referenceImageUrls?: string[]
+  referenceVideoUrls?: string[]
+  referenceAudioUrls?: string[]
+  /** Cinematic direction as catalog IDS — the route renders the wording. */
+  direction?: DirectionFields
+  /** SUBJECT ids (who is in the shot), folded ahead of the direction clauses. */
+  subject?: SubjectFields
+  [k: string]: unknown
+}
+
+/**
  * Typed request body for `nodes.run("assemble-narrated-video", …)` / `runAndWait`.
  * Assembles blocks of video with audio narration into a single composed video.
  */
@@ -274,6 +307,7 @@ export class NodesResource {
    */
   run(type: "generate-image", params?: GenerateImageParams): Promise<RunNodeResult>
   run(type: "generate-video", params?: GenerateVideoParams): Promise<RunNodeResult>
+  run(type: "text-to-video", params: TextToVideoParams): Promise<RunNodeResult>
   run(type: "assemble-narrated-video", params?: AssembleNarratedVideoParams): Promise<RunNodeResult>
   run(type: string, params?: Record<string, unknown>): Promise<RunNodeResult>
   run(type: string, params: Record<string, unknown> = {}): Promise<RunNodeResult> {
@@ -309,6 +343,7 @@ export class NodesResource {
    */
   runAndWait(type: "generate-image", params?: GenerateImageParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "generate-video", params?: GenerateVideoParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
+  runAndWait(type: "text-to-video", params: TextToVideoParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "assemble-narrated-video", params?: AssembleNarratedVideoParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: string, params?: Record<string, unknown>, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   async runAndWait(

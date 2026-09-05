@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 describe("edition helpers", () => {
   describe("cloud edition (default from setup.ts)", () => {
@@ -72,5 +72,67 @@ describe("edition helpers", () => {
       expect(mod.hasAdmin()).toBe(true)
       expect(mod.hasCredits()).toBe(false)
     })
+  })
+})
+
+/**
+ * R2_SHARED_WITH_RELAY_TARGET — the shared-bucket passthrough flag
+ * (spec 2026-09-04-sai-local-development §9.2, D17).
+ *
+ * The flag asserts a DEPLOYMENT FACT: this instance's R2_PUBLIC_URL names the
+ * same bucket its relay target writes to, so a finished relayed output is
+ * already an object in our own bucket and `uploadToR2` must return it rather
+ * than copy it.
+ *
+ * The parse is the reason this block exists. `docker-compose.local.yml` writes
+ * the literal string "false" for a laptop, which has its own MinIO and shares
+ * nothing. Under `z.coerce.boolean()` that string is truthy, so EVERY laptop
+ * would silently turn the passthrough on and point its job rows at objects its
+ * MinIO does not contain — a broken gallery with no error anywhere. The repo
+ * already documents this trap on R2_FORCE_PATH_STYLE and MCP_ENABLED; these
+ * four cases pin it for this key too.
+ */
+describe("R2_SHARED_WITH_RELAY_TARGET strict parsing", () => {
+  const ORIGINAL = process.env.R2_SHARED_WITH_RELAY_TARGET
+
+  beforeEach(() => {
+    // Clear vitest's module cache so the next import re-evaluates the schema
+    // against the current process.env (same shape as config-mcp.test.ts).
+    vi.resetModules()
+    // The edition blocks above register `vi.doMock("../config.js", …)` inside
+    // their `it`s, and a doMock registration outlives resetModules — without
+    // this, `import("../config.js")` here would resolve to their hand-written
+    // `{ config: { EDITION: "business" } }` stub and every assertion below
+    // would read `undefined` no matter what the real schema does.
+    vi.doUnmock("../config.js")
+  })
+
+  afterEach(() => {
+    if (ORIGINAL === undefined) delete process.env.R2_SHARED_WITH_RELAY_TARGET
+    else process.env.R2_SHARED_WITH_RELAY_TARGET = ORIGINAL
+  })
+
+  it("parses 'true' as true", async () => {
+    process.env.R2_SHARED_WITH_RELAY_TARGET = "true"
+    const { config } = await import("../config.js")
+    expect(config.R2_SHARED_WITH_RELAY_TARGET).toBe(true)
+  })
+
+  it("parses '1' as true", async () => {
+    process.env.R2_SHARED_WITH_RELAY_TARGET = "1"
+    const { config } = await import("../config.js")
+    expect(config.R2_SHARED_WITH_RELAY_TARGET).toBe(true)
+  })
+
+  it("parses 'false' as FALSE — z.coerce.boolean() would make it true", async () => {
+    process.env.R2_SHARED_WITH_RELAY_TARGET = "false"
+    const { config } = await import("../config.js")
+    expect(config.R2_SHARED_WITH_RELAY_TARGET).toBe(false)
+  })
+
+  it("treats an unset env var as false (the default: no passthrough)", async () => {
+    delete process.env.R2_SHARED_WITH_RELAY_TARGET
+    const { config } = await import("../config.js")
+    expect(config.R2_SHARED_WITH_RELAY_TARGET).toBe(false)
   })
 })

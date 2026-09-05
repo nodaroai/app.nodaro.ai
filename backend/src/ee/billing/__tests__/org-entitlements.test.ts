@@ -462,7 +462,7 @@ describe("reserveCredits — workspace payer threading", () => {
   })
 })
 
-describe("applyOrgEntitlements — deployment payer (SAI item 9)", () => {
+describe("applyOrgEntitlements — deployment payer (item 9)", () => {
   const DEP_CTX: BillingContext = {
     payer: "deployment",
     userId: "req-1",

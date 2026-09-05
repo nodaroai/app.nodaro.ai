@@ -110,7 +110,7 @@ describe("stampPipelineConfig — the ONE strip-then-stamp rule (create/seed/bra
   })
 })
 
-describe("getPipelineBillingContext — deployment payer stamps (SAI item 9)", () => {
+describe("getPipelineBillingContext — deployment payer stamps (item 9)", () => {
   const DEP_CTX: BillingContext = {
     payer: "deployment",
     userId: "creator-1",

@@ -1,6 +1,9 @@
 import { supabase } from "./supabase.js"
 import { deleteFromR2, r2KeyFromOurUrl } from "./storage.js"
-import { permanentlyDeleteAsset } from "./asset-delete.js"
+import { permanentlyDeleteAsset, isRelayOwnedObject } from "./asset-delete.js"
+import { isOwnedObjectKey } from "./job-policy-outputs.js"
+import { JOB_OUTPUT_URL_PATHS } from "./job-output-urls.js"
+import { relayPossible } from "./relay-possible.js"
 
 /**
  * Best-effort, strictly-owned bulk media deletion for `POST /v1/media/delete`
@@ -46,6 +49,15 @@ import { permanentlyDeleteAsset } from "./asset-delete.js"
  *       from destroying an object other tenants still own.
  *
  *   not-owned — neither proof.
+ *
+ * RELAY RULE, applying to both proofs (spec 2026-09-04-sai-local-development
+ * §9.3, D18): when the proving job was relayed to a connected Nodaro cloud and
+ * the object is not in that job's own key family, the bytes were created by the
+ * FAR end, whose job row still points at them and which cannot see ours. The
+ * object survives; the url is still reported `deleted`, exactly as the existing
+ * "kept for another referrer" branch reports — from the caller's perspective
+ * their reference is gone either way, and a new skip reason would widen this
+ * endpoint's contract for a distinction its callers cannot act on.
  */
 
 export type MediaDeleteSkipReason = "foreign" | "not-owned" | "in-use" | "error"
@@ -56,33 +68,12 @@ export interface MediaDeleteResult {
 }
 
 /**
- * `output_data` paths that hold a single output URL, across every job type that
- * writes them: imageUrl/videoUrl/audioUrl are the standard worker outputs
- * (workers/shared.ts — the same three keys the gallery/job-history extractors
- * and the library referrer check read); vocalsUrl/backgroundUrl/unmappedUrl are
- * the voice-changer-pro analyze/recast stem outputs (cloud-plugins
- * voice-changer-pro/handler.ts) — row-less, so path (b) is their only owner
- * proof. Recast adds its nested initial/current audio-layer paths. One `.eq()`
- * per path, NEVER a hand-built `.or()` string: PostgREST does
- * not quote values inside an `.or()` filter and URLs contain reserved chars
- * (`:` `.` `,`) that corrupt it; `.eq()` arguments are encoded safely.
+ * The ownership-proof path list now lives in lib/job-output-urls.ts, shared
+ * with lib/asset-delete.ts and routes/media-process.ts so the three cannot
+ * drift again. This path walks the FULL list, always: proving "this url is
+ * mine" from `output_data` is correct however the object got there, and the
+ * shared-bucket flag is about round trips on the referrer probes, not here.
  */
-const JOB_OUTPUT_URL_PATHS = [
-  "output_data->>imageUrl",
-  "output_data->>videoUrl",
-  "output_data->>audioUrl",
-  "output_data->>vocalsUrl",
-  "output_data->>backgroundUrl",
-  "output_data->>unmappedUrl",
-  // Recast's initial derivatives live on the GVP checkpoint; a published
-  // rescore copies its current derivatives onto the Recast/child output.
-  // Both are row-less generated files, so this nested proof is what makes the
-  // conversion deletion manifest actionable instead of reporting not-owned.
-  "output_data->pro->audio->layers->music->>url",
-  "output_data->pro->audio->layers->video->>url",
-  "output_data->audio->layers->music->>url",
-  "output_data->audio->layers->video->>url",
-] as const
 
 /**
  * True when a job owned by `userId` references `url` in its `output_data`,
@@ -94,10 +85,23 @@ const JOB_OUTPUT_URL_PATHS = [
  * Returns "error" when a lookup fails — the caller cannot distinguish
  * "no proof" from "could not check", and must not delete on a failed check.
  */
-async function jobOutputOwnershipProof(
-  userId: string,
-  url: string,
-): Promise<"proven" | "no-proof" | "error"> {
+type OwnershipProof = { status: "proven" | "no-proof" | "error" }
+
+/**
+ * FIRST MATCH WINS, and that is correct HERE and nowhere else. This function
+ * answers one question — "is this url the caller's?" — and any single matching
+ * row settles it, so it stops at the first hit and mainline pays the same
+ * queries it always did.
+ *
+ * What it must NOT be used for is deciding WHO MADE THE BYTES. Under the
+ * shared-bucket passthrough a second near-end job aliases the same object
+ * (`save-to-storage` stores a reference, writing `output_data.url`), and
+ * `output_data->>url` sorts before the row-less paths a relayed VCP/recast
+ * output lands under — so the alias routinely wins this race. The relay probe
+ * below therefore asks about the OBJECT and about EVERY relayed referrer,
+ * never about whichever row happened to answer first.
+ */
+async function jobOutputOwnershipProof(userId: string, url: string): Promise<OwnershipProof> {
   let sawError = false
 
   for (const path of JOB_OUTPUT_URL_PATHS) {
@@ -110,7 +114,7 @@ async function jobOutputOwnershipProof(
       sawError = true
       continue
     }
-    if ((count ?? 0) > 0) return "proven"
+    if ((count ?? 0) > 0) return { status: "proven" }
   }
 
   const { count: stemCount, error: stemError } = await supabase
@@ -121,10 +125,70 @@ async function jobOutputOwnershipProof(
   if (stemError) {
     sawError = true
   } else if ((stemCount ?? 0) > 0) {
-    return "proven"
+    return { status: "proven" }
   }
 
-  return sawError ? "error" : "no-proof"
+  return { status: sawError ? "error" : "no-proof" }
+}
+
+/**
+ * Were these bytes created by our relay target? Asked AFTER a proof succeeded
+ * and only when `relayPossible()`, so a deployment with no relay target issues
+ * none of it.
+ *
+ * TWO questions, cheapest and most durable first:
+ *
+ *   (1) THE OBJECT. `isRelayOwnedObject(null, r2Key)` runs the shared
+ *       predicate's key-stem probe — `jobs.relay_job_id = <stem>` — which asks
+ *       who MADE the bytes rather than which of our rows happens to name them.
+ *       One indexed query, and it is the only line that still answers when the
+ *       relayed job has been deleted from history and no assets row survives.
+ *
+ *   (2) EVERY RELAYED REFERRER, not the one that won the proof. The old shape
+ *       replayed the proof's winning matcher, and the proof stops at the first
+ *       hit: under the passthrough `output_data->>url` (save-to-storage, which
+ *       stores a REFERENCE) sorts ahead of `vocalsUrl` / `backgroundUrl` /
+ *       `unmappedUrl` and the recast layer paths, so a NON-relayed alias
+ *       routinely won and answered "not relayed" for a far-end object. Walking
+ *       the full list against relayed rows only removes that race, and it costs
+ *       nothing on mainline because the gate above never lets it run. Stops at
+ *       the first relayed referrer whose own key family excludes the key.
+ *
+ * A lookup error answers false — see isRelayOwnedObject's error policy; the
+ * referrer check immediately after fails safe toward keeping the object on the
+ * same outage.
+ */
+async function relayOwnedForProvenUrl(userId: string, url: string, r2Key: string): Promise<boolean> {
+  if (await isRelayOwnedObject(null, r2Key)) return true
+
+  // A NEW builder per filter: supabase-js filter builders are mutable and
+  // return `this`, so reusing one would AND all twelve predicates together and
+  // the walk would silently match nothing.
+  const relayedRows = () =>
+    supabase
+      .from("jobs")
+      .select("id, relay_job_id")
+      .eq("user_id", userId)
+      .not("relay_job_id", "is", null)
+      .limit(5)
+
+  const filters = [
+    ...JOB_OUTPUT_URL_PATHS.map((path) => () => relayedRows().eq(path, url)),
+    () => relayedRows().contains("output_data", { voiceStems: [{ url }] }),
+  ]
+
+  for (const build of filters) {
+    const { data, error } = await build()
+    if (error) {
+      console.warn(`[media-delete] relay provenance lookup failed for ${r2Key}: ${error.message}`)
+      return false
+    }
+    const hit = ((data ?? []) as Array<{ id: string; relay_job_id: string | null }>).some(
+      (row) => !!row.relay_job_id && !isOwnedObjectKey(row.id, r2Key),
+    )
+    if (hit) return true
+  }
+  return false
 }
 
 async function deleteOwnedMediaByUrl(
@@ -142,7 +206,11 @@ async function deleteOwnedMediaByUrl(
   //    referrer check inside permanentlyDeleteAsset, which is the safe outcome.
   const { data: ownedAsset, error: ownedError } = await supabase
     .from("assets")
-    .select("id, r2_key, size_bytes")
+    // `job_id` and `relay_job_id` ride along so the shared delete core can
+    // apply the relay rule without a second lookup (lib/asset-delete.ts
+    // resolveAssetProvenance). `relay_job_id` is the half that still answers
+    // after a job-history delete NULLed `job_id` through its FK.
+    .select("id, r2_key, size_bytes, job_id, relay_job_id")
     .eq("r2_key", r2Key)
     .eq("user_id", userId)
     .limit(1)
@@ -171,8 +239,22 @@ async function deleteOwnedMediaByUrl(
 
   // 3. Ownership proof (b): a caller-owned job's output_data references it.
   const proof = await jobOutputOwnershipProof(userId, url)
-  if (proof === "error") return { status: "skipped", reason: "error" }
-  if (proof === "no-proof") return { status: "skipped", reason: "not-owned" }
+  if (proof.status !== "proven") {
+    return { status: "skipped", reason: proof.status === "error" ? "error" : "not-owned" }
+  }
+
+  // 3a. The relay rule: these bytes are the far end's. Report deleted, delete
+  //     nothing. No decrement is involved on this path either way — its unit of
+  //     account is the assets row, and there is none here. Behind the arming
+  //     gate, so a deployment with no relay target issues nothing here at all.
+  if (relayPossible() && (await relayOwnedForProvenUrl(userId, url, r2Key))) {
+    console.log(
+      `[media-delete] keeping R2 object ${r2Key}: created by our relay target ` +
+        "(its key stem, or a relayed referrer, names the far job) — reported deleted, " +
+        "bytes left to the far end",
+    )
+    return { status: "deleted" }
+  }
 
   // Referrer safety before the object delete: ANY assets row (the caller has
   // none — that's how we got here, so every hit is another user's) still needs
