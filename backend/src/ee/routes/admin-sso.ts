@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabase.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { invalidateAuthCache } from "../../middleware/auth.js"
 import { SSO_APP_METADATA_KEY } from "../../lib/sso-linking.js"
+import { deploymentPayerId } from "../../lib/deployment-payer.js"
 
 /**
  * SAI-6 / H7 — admin de-provisioning for federated (SSO) accounts.
@@ -28,6 +29,23 @@ import { SSO_APP_METADATA_KEY } from "../../lib/sso-linking.js"
  * Resolution is by the trusted app_metadata marker (provider + sso_subject that
  * sso-linking stamps). A single-tenant deployment has a bounded user count, so
  * a paged listUsers scan is fine; the page cap stops a misconfig from looping.
+ *
+ * ONE ACCOUNT IS OUT OF REACH (D15.2). Since the deployment's BILLING ACCOUNT
+ * became an identity of the customer's own provider, it carries the same marker
+ * every other federated user does — so without the guard below this route would
+ * de-provision the account that holds the deployment's credits, on an admin
+ * role the customer's own IdP hands out. `mode=ban` locks the payer out through
+ * GoTrue itself — once the auth cache is invalidated, EVERY token for a banned
+ * user fails `supabase.auth.getUser`, including the break-glass password
+ * session that exists for exactly this kind of outage. (The marker clear that
+ * rides along is irrelevant for this one uuid: `middleware/auth.ts:477` exempts
+ * the payer from H6, so that gate never reads its marker.) `mode=delete` would
+ * destroy the account the pool, the allowances and the card on file hang off —
+ * and it is this repo's only `auth.admin.deleteUser` call site, so the next
+ * boot would fail on an unresolvable `billing.payerAccount`. The refusal is exactly one uuid
+ * wide — `deploymentPayerId()`, resolved at boot from operator-owned surface
+ * config and null on mainline — so every other federated account stays
+ * de-provisionable, which is what this route exists for.
  */
 
 const BAN_DURATION = "876000h" // ~100 years — GoTrue's "permanent ban" idiom (undo: "none")
@@ -70,6 +88,20 @@ export async function adminSsoRoutes(app: FastifyInstance): Promise<void> {
     if (!userId) {
       return reply.status(404).send({
         error: { code: "not_found", message: "No SSO-provisioned account for that provider/subject." },
+      })
+    }
+
+    // D15.2 — the money account, whichever mode. Distinct code: "not this
+    // account" is a different fact from "not an admin", and the operator
+    // reading the audit line needs to tell them apart. Inert on mainline
+    // (`deploymentPayerId()` is null, and `userId` here is never null).
+    if (userId === deploymentPayerId()) {
+      req.log.warn({ userId }, "admin/sso de-provision REFUSED — target is the deployment's billing account")
+      return reply.status(403).send({
+        error: {
+          code: "payer_account_protected",
+          message: "This deployment's billing account cannot be de-provisioned from here.",
+        },
       })
     }
 

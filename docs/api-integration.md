@@ -30,7 +30,10 @@ can call the same `/v1/*` endpoints using your Supabase user JWT
 ## 2. Creating an API token
 
 1. Sign in to your Nodaro instance.
-2. Go to **Settings → API**.
+2. Go to **Settings → API**. On a deployment-payer instance (one where a
+   single billing account funds every user) that card is not shown in
+   Settings — open `/settings/api` directly by URL, signed in as the
+   billing account.
 3. Click **Create token**.
 4. Fill in:
    - **Name** — a label for your records (e.g. `prod-scheduler`).
@@ -46,12 +49,38 @@ can call the same `/v1/*` endpoints using your Supabase user JWT
    Copy it into your secret store immediately. Nodaro only stores a
    SHA-256 hash, so if you lose it you must mint a new one.
 
-You can have up to **10 active tokens** per account. Edit name, workflow
-scope, rate limit, or active flag at any time. Deleting a token revokes
-it instantly.
+You can have up to **10 tokens** per account, active or not — a
+deactivated token still counts; delete it to free the slot. The eleventh
+create is refused with `400 limit_reached`. Edit name, workflow scope,
+rate limit, or active flag at any time. Deleting a token revokes it
+instantly.
+
+A personal token never expires and carries no spend cap: it lives until
+you deactivate or delete it, and it is not re-checked against your
+sign-in provider — a token minted before an account was removed from the
+identity provider keeps working until it is revoked. Treat it as a
+permanent credential and store it accordingly.
+
+**On a deployment-payer instance** — where one billing account funds
+every user — only the billing account can create a token
+(`403 api_tokens_payer_only` for anyone else), every call the token makes
+debits the deployment's pool, and the token can never administer that
+pool: balance reads made as the billing account answer
+`403 payer_balance_jwt_only` ([§3](#3-public-api-endpoints)) and the
+billing account's own routes (`/v1/deployment-billing/*`) answer
+`403 payer_required` — those need the billing account's browser session.
 
 Backend reference: `POST /v1/api-tokens` (JWT-authenticated, body
 `{ name, workflowIds[], rateLimit }`). See `backend/src/routes/api-tokens.ts`.
+
+**Using a token to run a self-hosted or local instance on a hosted one.**
+A personal token is also the simplest relay credential: on the
+self-hosted instance set `NODARO_CLOUD_URL` to the hosted instance and
+`NODARO_API_KEY` to the token, and every generation runs on the hosted
+engine and is billed to the token's account. No OAuth connection is
+needed for this path. On a deployment-payer instance the billing account
+is the one that creates that token. Details in
+[Connect your instance to Nodaro Cloud](./community-cloud-connect.md#or-an-api-key-like-any-other-provider).
 
 ## 3. Public API endpoints
 
@@ -61,10 +90,11 @@ under `/v1/app/:slug/*` (see the [Embed App Guide](./embed-app-guide.md))
 and the per-feature routes (jobs, workflows, projects, etc.).
 
 A few surfaces are deliberately app-only and reject API tokens and OAuth
-app tokens with `403 in_app_only` — currently the archived-runs routes and
-the [Workflow Copilot](./features/workflow-copilot.md) (`/v1/copilot/*`).
-They exist for the Nodaro web app's own session, not as an integration
-surface. To build workflows programmatically, use MCP or the SDK.
+app tokens with `403 in_app_only` — currently the
+[Workflow Copilot](./features/workflow-copilot.md) (`/v1/copilot/*`) and
+the admin panel's message-a-user send. They exist for the Nodaro web
+app's own session, not as an integration surface. To build workflows
+programmatically, use MCP or the SDK.
 
 One surface is app-only *conditionally*: on a deployment-payer instance —
 where a single billing account funds every user — the credit-balance reads
@@ -173,9 +203,15 @@ account-linking rules — is in [External SSO](./sso.md); it is **off** unless
   anything else falls back to `/projects` (open-redirect guard).
 
 Status codes: `401` (bad or replayed assertion), `403` (`account_exists` /
-`email_unverified` / `account_linked_other_provider` — linking refused; the last
+`email_unverified` / `account_linked_other_provider` /
+`account_linked_other_subject` — linking refused; `account_linked_other_provider`
 when the email already belongs to an account linked to a **different** identity
-provider, which is never re-stamped), `404` (unknown provider), `400`
+provider, which is never re-stamped; `account_linked_other_subject` — *next
+release* — when a same-provider assertion for the deployment's billing account
+does not carry the subject that first linked it: that account links on its first
+verified assertion regardless of `EXTERNAL_SSO_LINK_EXISTING`, an unverified one
+is `email_unverified`, and every later assertion must be verified and from the
+same subject), `404` (unknown provider), `400`
 (`not_assertion_provider` when a native OIDC/SAML provider is hit with an
 assertion), `429` (per-IP rate limit). The assertion and the minted token are
 redacted from request logs.
@@ -213,7 +249,9 @@ while true; do
   STATUS=$(curl -s -H "Authorization: Bearer $TOKEN" \
     "$BASE/v1/api/status/$EXEC" | jq -r .status)
   echo "Status: $STATUS"
-  [[ "$STATUS" == "completed" || "$STATUS" == "failed" ]] && break
+  case "$STATUS" in completed|failed|cancelled|timed_out|discarded) break;; esac
+  # Only completed/failed executions have a /result payload; for the other
+  # three read errorMessage from the /status response instead.
   sleep 5
 done
 
@@ -255,11 +293,12 @@ job the request creates, which is what the admin jobs view groups by:
 X-Nodaro-Client: sdk/1.10.0
 ```
 
-Only `sdk/<version>` and `cli/<version>` are recognised; any other value is
-ignored rather than trusted, since the header is unauthenticated. `@nodaro/sdk`
-and `@nodaro/cli` send it automatically — you only need this when calling the
-REST API directly. Omitting it is fine; those jobs are simply recorded as
-generic API calls.
+Only `sdk/<version>`, `cli/<version>` and `extension/<name>` are recognised
+(`extension/<name>` is the label a browser extension sends for itself); any
+other value is ignored rather than trusted, since the header is
+unauthenticated. `@nodaro/sdk` and `@nodaro/cli` send it automatically — you
+only need this when calling the REST API directly. Omitting it is fine; those
+jobs are simply recorded as generic API calls.
 
 Browser callers need do nothing — and should NOT send this header. The `Origin`
 header already identifies the site, and Nodaro prefers it: it names the product
@@ -299,16 +338,21 @@ An API token may be bound to one workspace; it then behaves as if it sent this
 header on every request, and an explicit header naming a different workspace
 is refused with `400 token_workspace_mismatch`.
 
-Bind or unbind with `PATCH /v1/api-tokens/:id`:
+Bind or unbind with `PATCH /v1/api-tokens/:id`. Token management is
+JWT-only: send your signed-in session's Supabase JWT, not an API token — a
+personal token or OAuth app token is refused with `403 forbidden` ("API
+token management is only available from a logged-in session.").
 
 ```bash
 # bind
 curl -X PATCH https://app.nodaro.ai/v1/api-tokens/$TOKEN_ID \
+  -H "Authorization: Bearer $SESSION_JWT" \
   -H "Content-Type: application/json" \
   -d '{"workspaceId":"6f1e6b4c-6a4e-4b7b-9d2a-2f0f0a1d9c34"}'
 
 # unbind
 curl -X PATCH https://app.nodaro.ai/v1/api-tokens/$TOKEN_ID \
+  -H "Authorization: Bearer $SESSION_JWT" \
   -H "Content-Type: application/json" \
   -d '{"workspaceId":null}'
 ```
@@ -450,8 +494,8 @@ POST /v1/api/run?wait=true&timeout=120
 - The server polls the execution every 5 seconds for up to `timeout`
   seconds (default 120, max 600).
 - If the workflow finishes in time: returns the same payload as
-  `/v1/api/result/:execId` — `status` is `completed`, `failed`, or
-  `cancelled` and `outputs[]` is filled in.
+  `/v1/api/result/:execId` — `status` is `completed`, `failed`,
+  `cancelled`, `timed_out` or `discarded`, and `outputs[]` is filled in.
 - If it doesn't: returns `202` with `{ executionId, status: "pending" }`
   and you fall back to polling.
 
@@ -507,12 +551,16 @@ Webhook triggers (`POST /v1/webhooks/:token`) are rate-limited
 **separately** — 10 requests/minute per webhook trigger.
 
 **Two distinct 429 codes.** The per-token bucket above (the `/v1/api/*`
-routes) returns `rate_limited`. A separate **global** limiter
-(`@fastify/rate-limit`) protects a handful of unauthenticated endpoints —
+routes) returns `rate_limited`. Every other limiter returns
+`rate_limit_exceeded`: a per-IP limiter on a few unauthenticated endpoints —
 e.g. OAuth Dynamic Client Registration (`POST /v1/oauth/register`,
-10/min/IP) — and returns the code `rate_limit_exceeded` instead. Match on
-the HTTP 429 status for retry logic; use the `code` only to tell the two
-limiters apart.
+10/min/IP) and the SSO exchange — a per-caller limiter on specific
+authenticated routes (the route's own section on this page states its
+limit, e.g. `POST /v1/freecut-export` 10/min; these send a `Retry-After`
+header and, on spend routes, answer `503 rate_limit_unavailable` if the
+limiter's store is down), and a published app's daily run cap. Match on
+the HTTP 429 status for retry logic; use the `code` only to tell the
+per-token bucket from the rest.
 
 ## 8. Error envelope
 
@@ -525,16 +573,20 @@ All errors share the same shape:
 | HTTP | code | Extra field | When / route family |
 |---|---|---|---|
 | 400 | `validation_error` | — | Malformed body, bad UUID, invalid field. |
+| 400 | `limit_reached` | — | `POST /v1/api-tokens`: you already have 10 tokens (active or not). Delete one first. |
+| 400 | `invalid_workflow` | — | `POST /v1/api-tokens` / `PATCH /v1/api-tokens/:id`: a `workflowIds` entry is not a workflow in your personal space (workspace workflows cannot be scoped to a token). |
 | 401 | `unauthorized` | — | Missing/invalid/expired/revoked token. |
-| 402 | `insufficient_credits` | — | (Cloud edition only) Account out of credits. |
+| 402 | `insufficient_credits` | `required` (plus `balance`, except on a deployment-payer instance) | (Cloud edition only) Account out of credits. On a deployment-payer instance it means the **deployment's** pool is empty ("This deployment is out of credits. Contact your administrator."): the response names `required` and never `balance`, and only the billing account can top the deployment up. |
 | 402 | `budget_exceeded` | — | (Cloud edition, organizations) Workspace-paid work: the workspace's allocated budget can't cover the reservation. Ask a workspace admin for headroom. Rollout-gated: availability may lag this document. |
 | 402 | `member_cap_exceeded` | — | (Cloud edition, organizations) Workspace-paid work: your per-member spending cap in this workspace is reached. Rollout-gated. |
-| 402 | `user_allowance_exceeded` | — | (Cloud edition, deployment-payer instances) Your per-user allowance on this deployment can't cover this run — distinct from `insufficient_credits`, which means the deployment's own pool is empty. Only the deployment's billing account can raise an allowance. Rollout-gated: availability may lag this document. |
-| 403 | `forbidden` | — | Token isn't authorized for this workflow (workflow scoping). |
+| 402 | `user_allowance_exceeded` | `required`, `remaining` (top-level, on the pre-run check) | (Cloud edition, deployment-payer instances) Your per-user allowance on this deployment can't cover this run — distinct from `insufficient_credits`, which means the deployment's own pool is empty. Only the deployment's billing account can raise an allowance. Fires only on a deployment that has switched allowance **enforcement** on; until then your allowance is shown (`GET /v1/user/credits` → `allowance.enforced: false`) but never refuses a run. |
+| 402 | `instance_cap_reached` | — | (OAuth tokens of a connected self-hosted instance only) The instance has spent its monthly cap on the account that connected it. Raise or remove the cap under the account's **Connected Instances**; a personal API key used as the relay credential has no such cap. |
+| 403 | `forbidden` | — | Token isn't authorized for this workflow (workflow scoping) — or the route is session-only and refuses API/OAuth tokens: `/v1/api-tokens` management ("API token management is only available from a logged-in session."), node-preset writes, the `/v1/billing/*` purchase routes (checkout, load sessions, auto-recharge, purchase history, Stripe portal). Repeat the call with your browser session's JWT. |
 | 403 | `member_suspended` | — | (Cloud edition, organizations) Workspace-paid work: your membership in the paying workspace is suspended. Rollout-gated. |
 | 403 | `not_a_member` | — | (Cloud edition, organizations) The request names a workspace you are not an active member of. Rollout-gated. |
 | 403 | `insufficient_scope` | `missingScope` (+ `message`) | (OAuth tokens only) The token is missing a scope the route requires. Re-run the OAuth consent with the broader scope. See [OAuth Flow §4](./oauth-flow.md#4-scope-vocabulary). |
-| 403 | `edition_required` | `required_edition: "<edition>"` (+ `message`) | Endpoint needs a higher edition than the caller has. `required_edition` is the minimum: `"cloud"` for pipeline (`POST /v1/pipelines/:id/branch`) + scene-helper routes; `"business"` for API-token management (`POST /v1/api-tokens`, `DELETE /v1/api-tokens/:id`). |
+| 403 | `sso_required` | — | (Deployments that restrict sign-in to their identity provider) A session JWT for an account that was not provisioned through that provider. Sign in through the provider; API tokens and OAuth app tokens are not affected. |
+| 403 | `edition_required` | `required_edition: "<edition>"` (+ `message`) | Endpoint needs a higher edition than the caller has. `required_edition` is the minimum: `"cloud"` for pipeline (`POST /v1/pipelines/:id/branch`) + scene-helper routes; `"business"` for API-token management (`POST /v1/api-tokens`, `GET /v1/api-tokens`). |
 | 403 | `api_tokens_payer_only` | — | On a deployment-payer instance only the billing account may create a personal API token; every other user is refused. Existing tokens stay listable and revocable by their owner. |
 | 403 | `payer_balance_jwt_only` | — | (Deployment-payer instances only) A credit-balance read (`GET /v1/credits/balance`, `GET /v1/user/credits`, `GET /v1/credits/check`) authenticated **as the billing account** with an API token or an OAuth app token. The deployment's pool is the operator's number and is answered only to that account's own browser session — see [§3](#3-public-api-endpoints). No other identity is affected. |
 | 403 | `subscription_required` | — | (Cloud edition only) A pay-as-you-go account tried to spend from a first-party consumer surface (browser session in the studio or another Nodaro app). Payg credits are redeemable via the API/SDK/CLI/MCP — this never fires for token-authenticated calls. Rollout-gated: availability may lag this document. |
@@ -601,7 +653,12 @@ a safety-filter block or a policy block is always refunded — see
 status, not a terminal one; keep polling rather than treating it as a failure
 — with `credit_status: "reserved"` for the whole hold; it then resolves to
 `completed`, `failed` (with the `policy-block` hint above) or `cancelled`
-(a held job is cancellable like any in-flight job).
+(a held job is cancellable like any in-flight job). A hold can also time
+out: on a deployment that sets a review deadline (`JOB_HOLD_TTL_HOURS`), a
+job nobody reviews in time is auto-rejected — `failed` with the
+`policy-block` hint (`hookPoint: "result"`), the reservation refunded and
+the withheld output deleted; it is never auto-approved. Without that
+setting a hold waits for a reviewer indefinitely.
 
 ## 8b. Pay-as-you-go accounts
 
@@ -1669,13 +1726,14 @@ sibling of the priced `trim-video` node. SDK: `client.media.process(input)`.
 
 ## 12. Credits (Cloud edition)
 
-Two endpoints surface the caller's credit balance and transaction
-history. Both are **Cloud-edition only** — on Community/Business they are
-not registered and return 404.
+Three endpoints surface the caller's credit balance and transaction
+history. All three are **Cloud-edition only** — on Community/Business they
+are not registered and return 404.
 
 | Method | Path | Query | Purpose |
 |---|---|---|---|
-| `GET` | `/v1/credits/balance` | — | Return `{ total, subscription, topup, tier, effectiveTier }`. `total = subscription + topup`. `effectiveTier` is the entitlement tier actually enforced — `"payg"` = no subscription but purchased credits (all models unlocked, no watermark, no daily cap). |
+| `GET` | `/v1/credits/balance` | — | Return `{ total, subscription, topup, tier, effectiveTier }`. `total = subscription + topup`. `effectiveTier` is the entitlement tier actually enforced — `"payg"` = no subscription but purchased credits (all models unlocked, no watermark, no daily cap). On a deployment-payer instance this is the caller's own pool, which does not fund their runs — read the allowance below instead. |
+| `GET` | `/v1/user/credits` | — | The fuller balance payload. On a deployment-payer instance it adds `allowance: { granted, remaining, enforced } \| null` — the caller's per-user allowance in credits, `enforced` telling you whether the deployment refuses runs beyond it (`false` = shown, not enforced). `null` for the billing account itself (it holds the real pool) or when the figure could not be read; never treat `null` as zero. |
 | `GET` | `/v1/credits/transactions` | `limit` (1–50, default 20), `cursor` (ISO timestamp for page-forward) | Return `{ data: Transaction[], nextCursor }`. Cursor is the `created_at` of the last row; pass it as `?cursor=` on the next request. `nextCursor` is `null` when there are no more rows. |
 
 `Transaction` fields: `id`, `created_at`, `credits_used`, `action`,
@@ -1699,7 +1757,7 @@ and `from_topup` (which of your credit pools funded the run), `is_app_run`,
 an object — `{}` when nothing applies — so it is safe to read without a null
 check. Credits, not currency, are the billing unit the API exposes.
 
-Both routes use the same bearer-token auth as every other endpoint
+All three routes use the same bearer-token auth as every other endpoint
 (`ndr_…` / `ndr_app_…` / Supabase JWT).
 
 Top-up credits are **valid for 12 months** from purchase (subscription
@@ -1708,6 +1766,16 @@ first. The `/v1/billing/*` routes (checkout, load sessions, auto-recharge,
 purchase history with receipt links, Stripe portal) are **first-party-only**:
 they reject API and OAuth-app tokens and are used from a logged-in Nodaro
 session — manage billing at [app.nodaro.ai/billing](https://app.nodaro.ai/billing).
+
+On a deployment-payer instance the billing account manages the
+deployment's pool and per-user allowances through
+`/v1/deployment-billing/*` (its `/billing-admin` page). Those routes exist
+only where a payer is configured (`404` elsewhere) and answer
+`403 payer_required` to anything but the billing account's own browser
+session — a personal token or OAuth token gets that code even when the
+billing account owns it. `POST /v1/deployment-billing/checkout` answers
+`503 stripe_not_configured` on a deployment that takes no card; the
+account is then topped up by the platform operator instead.
 
 ## 12b. Billing surface
 
@@ -1718,7 +1786,7 @@ through it.
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| `GET` | `/v1/billing/surface` | **Public** (no token) | Deployment-level projection — no per-user data, cacheable. Returns `{ data: { contract, providerId, displayUnit, canReport, canQuote, canAccount, mountCostTab } }`. On a keyless / community install `providerId` is `"none"` and `mountCostTab` is `false` (no cost view). |
+| `GET` | `/v1/billing/surface` | **Public** (no token) | Deployment-level projection — no per-user data, cacheable. Returns `{ data: { contract, providerId, displayUnit, canReport, canQuote, canAccount, mountCostTab, deploymentPayer } }`. On a keyless / community install `providerId` is `"none"` and `mountCostTab` is `false` (no cost view). `deploymentPayer` is `true` when one billing account funds every user on the instance (see `payer_balance_jwt_only`, `api_tokens_payer_only` and `user_allowance_exceeded` in [§8](#8-error-envelope)); which account that is is never exposed. |
 | `GET` | `/v1/billing/account` | Bearer token | Per-user account summary (`AccountSummary`) from the registered provider: `{ data: AccountSummary \| null }`. `data: null` means the metering authority could not answer — clients MUST render that distinctly and never as a zero balance. |
 
 `contract` is the billing-surface contract version (an integer, currently `2`).

@@ -28,7 +28,7 @@ matter for different reasons.
 
 | | **Request** | **Result** |
 |---|---|---|
-| Chokepoint | `lib/insert-job.ts` — the single funnel every job-creating route, orchestrator node, pipeline stage and plugin passes through | the completion funnels: `workers/shared.ts :: markJobCompleted` and `lib/job-finalize.ts :: finalizeJobWithMedia` |
+| Chokepoint | `lib/insert-job.ts` — the funnel every job-creating route, orchestrator node and pipeline stage passes through. **Plugin-created jobs are the one exception**: the plugin toolkit's `insertJobWithIdempotencyKey` inserts through `lib/idempotent-insert.ts` directly and is never asked at the request gate, so for a plugin job (generate-video-pro, video-analysis import) the result gate is the only enforcement point | the completion funnels: `workers/shared.ts :: markJobCompleted` and `lib/job-finalize.ts :: finalizeJobWithMedia` |
 | Asked | before the row exists and before credits are reserved | after the output is written to storage, before the completion write, the asset row and the credit commit |
 | Verdicts | `allow`, `block` | `allow`, `flag`, `block`, `hold` |
 | Why here | a block leaves **nothing** to unwind: no row, no reservation, no queue entry, no refund | the last moment at which nothing is published — the asset row, the gallery, `output_data` and every downstream node read what happens after this point |
@@ -42,8 +42,12 @@ answer is a 422 and an absence.
 **What the request gate can see is stated, not hidden.** Jobs created by a
 route, the MCP server, the SDK, the CLI or the browser extension — and the
 children a pipeline stage creates — arrive at the funnel with their full input,
-so the request gate can judge content. Jobs a workflow run or an app run creates
-for its nodes do not: the orchestrator inserts a provenance-only row (`{ type,
+so the request gate can judge content. Jobs a plugin creates through the
+toolkit's `insertJobWithIdempotencyKey` (generate-video-pro, the video-analysis
+import) do not arrive at all: that lane inserts outside `lib/insert-job.ts`,
+the request gate is never asked, and the result gate is their only enforcement
+point. Jobs a workflow run or an app run creates for its nodes arrive without
+their content: the orchestrator inserts a provenance-only row (`{ type,
 node_id }` plus the provenance columns) and attaches the real payload in a
 separate update after the insert. For those the request gate can gate by user,
 source, node type or rate, but it **cannot judge content** — `inputData` in the
@@ -51,9 +55,15 @@ request context is documented as "may be a placeholder for orchestrated
 children; check `workflowExecutionId`". The result gate is the enforcement
 point for orchestrated jobs, which is exactly why it is fail-closed too.
 
-Both funnels are covered by totality tests that fail the build if a new job
-insert, completion or failure write is added outside them — the same discipline
-the prompt-policy and upload-policy totality tests apply to their own coverage.
+Both funnels are covered by totality tests
+(`lib/__tests__/no-direct-job-insert.test.ts` and
+`lib/__tests__/job-policy-request-totality.test.ts` on the request side,
+`workers/__tests__/job-policy-result-totality.test.ts` on the result side) that
+fail the build if a new job insert, completion or failure write is added
+outside them — with one named exception on the request side: the plugin
+toolkit's `insertJobWithIdempotencyKey` lane is allowlisted by the insert guard
+and is not gated. It is the same discipline the prompt-policy and upload-policy
+totality tests apply to their own coverage.
 
 ## The policy object
 
@@ -95,7 +105,9 @@ arrives with zero outputs is visible as such, so a policy can fail closed on
 
 Three policy ids are reserved and `registerJobPolicy` throws on them: `*` (an
 `allow` every registered policy agreed to), `platform` (a fail-closed
-resolution or a hold expiry) and `review` (an admin's decision).
+resolution or a hold expiry) and `review` (a human decision on a held job — an
+admin's approve or reject, or the owner's own cancel, recorded as
+`withdrawn`).
 
 **Ordering.** With several policies registered the request gate is asked in
 registration order and the first `block` wins. The result gate asks **every**
@@ -199,12 +211,13 @@ and unknown eligibility is not eligibility.
 
 Every decision — `allow` included — is written to `job_policy_decisions`
 (`job_id`, `hook_point`, `policy_id`, `verdict`, `reason`, `user_message`,
-`labels`, `payload_hash`, `applied`, `hold_downgraded`, `created_at`, plus the
-resolver on review rows), and a verdict already recorded for
-`(job_id, hook_point, payload_hash)` is **never re-asked**. That is
-what makes the seam safe under the two things that legitimately re-run a job:
-the queue's own stall retries and the reconcile cron, both of which re-derive
-the same `output_data` from the same provider result.
+`labels`, `payload_hash`, `applied`, `hold_downgraded`, `user_id`, `job_type`,
+`latency_ms`, `created_at`, plus the resolver on review rows), and a verdict
+already recorded for `(job_id, hook_point, payload_hash)` is **never
+re-asked**. That is what makes the seam safe under the two things that
+legitimately re-run a job: the queue's own stall retries and the reconcile
+cron, both of which re-derive the same `output_data` from the same provider
+result.
 
 Re-asking and re-applying are different things. An `allow` or `flag` hit is
 simply returned, and costs not even a row read. A `block` or `hold` hit reads
@@ -245,14 +258,15 @@ business, not the job owner's; the admin surface reads it through the backend.
 
 ## Review
 
-Held jobs are resolved from **Admin → Review**, backed by
-`GET /v1/admin/review/jobs` (the queue, oldest first — the job's `status` is
-the authority, so a job cancelled out from under a hold never appears),
-`GET /v1/admin/review/jobs/:jobId`, `GET /v1/admin/review/jobs/:jobId/output/:index`
-(the held bytes, streamed through the admin route with `Cache-Control:
-private, no-store`; the key is read server-side from the job row, never from
-the client), `POST …/:jobId/approve`, `POST …/:jobId/reject` (a `reason` is
-required — it becomes `error_hint.reason`, which the owner sees), and
+Held jobs are resolved from **Admin → Content Review** (`/admin/review`),
+backed by `GET /v1/admin/review/jobs` (the queue, oldest first — the job's
+`status` is the authority, so a job cancelled out from under a hold never
+appears), `GET /v1/admin/review/jobs/:jobId`,
+`GET /v1/admin/review/jobs/:jobId/output/:index` (the held bytes, streamed
+through the admin route with `Cache-Control: private, no-store`; the key is
+read server-side from the job row, never from the client),
+`POST …/:jobId/approve`, `POST …/:jobId/reject` (a `reason` is required — it
+becomes `error_hint.reason`, which the owner sees), and
 `GET /v1/admin/review/decisions` (the audit trail; never a URL). The routes
 are admin-gated and there is no bulk verb: one job per decision, and every
 resolution records who made it.

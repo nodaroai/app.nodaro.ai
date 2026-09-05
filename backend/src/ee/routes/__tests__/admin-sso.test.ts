@@ -35,6 +35,10 @@ vi.mock("@/ee/middleware/require-admin.js", () => ({
 }))
 
 import { adminSsoRoutes } from "../admin-sso.js"
+import {
+  __setDeploymentPayerForTests,
+  __resetDeploymentPayerForTests,
+} from "../../../lib/deployment-payer.js"
 
 /** One listUsers page; length < perPage(200) marks it the last page. */
 function page(users: Array<{ id: string; app_metadata: Record<string, unknown> }>) {
@@ -55,6 +59,7 @@ beforeEach(async () => {
   await app.ready()
 })
 afterEach(async () => {
+  __resetDeploymentPayerForTests()
   await app.close()
 })
 
@@ -117,5 +122,51 @@ describe("DELETE /v1/admin/sso/:provider/users/:subject", () => {
     const res = await del("/v1/admin/sso/librechat/users/idp-7")
     expect(res.statusCode).toBe(500)
     expect(invalidateAuthCache).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * D15.2 — the billing account is now an identity of the customer's own IdP, so
+ * it is REACHABLE by this route for the first time: it carries the (provider,
+ * subject) pair the scan matches on. A customer-minted admin could otherwise
+ * ban or delete the account that holds the deployment's credits — locking the
+ * payer out of `/billing-admin` (mode=ban) or destroying it outright
+ * (mode=delete), with the pool and the card on file attached to it.
+ *
+ * Refused with a DISTINCT code, not the generic admin 403: "you may not touch
+ * THIS account" is a different fact from "you are not an admin", and the
+ * operator reading the log needs to tell them apart. Exactly one uuid wide —
+ * every other federated account stays de-provisionable, which is the whole
+ * point of the route (SAI-6 / H7).
+ */
+describe("the deployment payer is not de-provisionable (D15.2)", () => {
+  const PAYER = "payer-uuid"
+
+  beforeEach(() => {
+    __setDeploymentPayerForTests(PAYER)
+    listUsers.mockResolvedValue(page([{ id: PAYER, app_metadata: { sso: "librechat", sso_subject: "idp-7" } }]))
+  })
+
+  it("mode=ban is refused 403 payer_account_protected and touches NOTHING", async () => {
+    const res = await del("/v1/admin/sso/librechat/users/idp-7")
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("payer_account_protected")
+    expect(updateUserById).not.toHaveBeenCalled()
+    expect(deleteUser).not.toHaveBeenCalled()
+    expect(invalidateAuthCache).not.toHaveBeenCalled()
+  })
+
+  it("mode=delete is refused too — the harder half of the same door", async () => {
+    const res = await del("/v1/admin/sso/librechat/users/idp-7?mode=delete")
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("payer_account_protected")
+    expect(deleteUser).not.toHaveBeenCalled()
+  })
+
+  it("every OTHER federated account is still de-provisionable on a payer instance", async () => {
+    listUsers.mockResolvedValue(page([{ id: "u-1", app_metadata: { sso: "librechat", sso_subject: "idp-7" } }]))
+    const res = await del("/v1/admin/sso/librechat/users/idp-7")
+    expect(res.statusCode).toBe(200)
+    expect(updateUserById).toHaveBeenCalled()
   })
 })

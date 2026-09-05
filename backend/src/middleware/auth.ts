@@ -456,11 +456,23 @@ export function registerAuthHook(app: FastifyInstance): void {
       // setCache, so a rejected account is never cached (every request re-hits
       // this) and only passing accounts populate the fast path. Inert on mainline
       // (auth.methods default [] → surfaceSsoOnly() false).
-      // B1 — the ONE exemption, exactly one uuid wide. A deployment payer
-      // (`billing.payerAccount`) is a local password account with no SSO
-      // marker, so on an SSO-only instance H6 refuses its very first request
-      // and the account that holds the deployment's credits cannot reach a
-      // single route. WIDENING `auth.methods` IS NOT THE ALTERNATIVE: adding
+      // B1 — the ONE exemption, exactly one uuid wide: the door that keeps the
+      // deployment payer (`billing.payerAccount`) reachable while it is
+      // UNLINKED. Since D15.2 that account is normally an identity of the
+      // deployment's own provider — it links on its first verified sign-in
+      // (lib/sso-linking.ts) and is stamped in `app_metadata`, which is a
+      // property of the USER RECORD this gate reads back from
+      // `supabase.auth.getUser`, not of the session. So once linked the payer
+      // passes on the ordinary marker path from EVERY session, its
+      // platform-issued password session included, and this branch is inert
+      // for it. What the branch is load-bearing for is the window before that
+      // first assertion — an IdP entry not yet created, or a provider that has
+      // never asserted the address — where the password is the only way in and
+      // carries no marker to show. Without it, the account holding the
+      // deployment's credits cannot reach a single route, including the pages
+      // used to fix the outage; the break-glass door is the password itself,
+      // and this is what stops the gate slamming it.
+      // WIDENING `auth.methods` IS NOT THE ALTERNATIVE: adding
       // "email" flips surfaceSsoOnly() to false and disables this gate for the
       // WHOLE instance, re-opening self-registration against the publicly
       // reachable GoTrue for every account. This exemption instead keys on a
