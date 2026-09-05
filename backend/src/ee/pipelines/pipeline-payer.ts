@@ -54,7 +54,7 @@ export async function getPipelineBillingContext(
   // who an unstamped pre-P14 pipeline has always billed) over the caller's
   // id; the two can differ on worker lanes.
   // Two guards on purpose: isBillingContext admits the PLUGIN shapes only
-  // (user/workspace), and a DEPLOYMENT stamp (SAI item 9) written at
+  // (user/workspace), and a DEPLOYMENT stamp (item 9) written at
   // creation would degrade to the owner's personal payer here — billing the
   // pocket the deployment promised to cover, on every req-less pipeline
   // lane. isDeploymentBillingContext admits that third shape with the same

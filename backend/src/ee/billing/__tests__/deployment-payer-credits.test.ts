@@ -1,5 +1,5 @@
 /**
- * Deployment payer (SAI item 9) at the RESERVATION — what these pin:
+ * Deployment payer (item 9) at the RESERVATION — what these pin:
  * the debit user becomes the PAYER account (`p_user_id`) while the
  * positional requester keeps the job; the requester is stamped into
  * `usage_logs.on_behalf_of` — and, since Track A, by the RPC's OWN insert

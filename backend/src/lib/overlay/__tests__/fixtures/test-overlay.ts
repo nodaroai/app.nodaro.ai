@@ -1,6 +1,6 @@
-// Generic in-repo overlay fixture. NOT SAI content — proves the loader runs a
-// real register() that exercises all five registry setters. Paths are relative
-// from backend/src/lib/overlay/__tests__/fixtures/.
+// Generic in-repo overlay fixture. NOT customer content — proves the loader
+// runs a real register() that exercises all five registry setters. Paths are
+// relative from backend/src/lib/overlay/__tests__/fixtures/.
 import { setEgressDecorator } from "../../../../providers/egress.js"
 import { setBillingProvider } from "../../../billing-provider.js"
 import { registerPromptPolicy } from "../../../prompt-policy.js"
@@ -41,7 +41,7 @@ export function register(): void {
         id: "test-person-1",
         dimension: "test_dim",
         label: "Test Person 1",
-        description: "A generic fixture person — not SAI content",
+        description: "A generic fixture person — not customer content",
         promptHint: "test person one",
       },
     ],

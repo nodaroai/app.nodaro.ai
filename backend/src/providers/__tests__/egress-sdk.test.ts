@@ -20,12 +20,12 @@ describe("egressSdkFetch — a fetch-shaped adapter that flows through the seam"
       res.end(JSON.stringify({ ok: true }))
     })
     const seen: EgressCall[] = []
-    setEgressDecorator({ decorate: (c: EgressCall) => { seen.push(c); return { headers: { "X-SAI-User": "sdk-user" } } } })
+    setEgressDecorator({ decorate: (c: EgressCall) => { seen.push(c); return { headers: { "X-Acme-User": "sdk-user" } } } })
     try {
       const f = egressSdkFetch("replicate")
       const res = await f(`${srv.base}/v1/predictions`, { method: "POST", body: "{}" })
       expect(res.status).toBe(200)
-      expect(received["x-sai-user"]).toBe("sdk-user")
+      expect(received["x-acme-user"]).toBe("sdk-user")
       expect(seen).toHaveLength(1)
       expect(seen[0].provider).toBe("replicate")
       expect(seen[0].operation).toContain("/v1/predictions")

@@ -270,11 +270,11 @@ describe("add-captions handler — kinetic render handoff", () => {
 })
 
 /**
- * THE KEYLESS SELF-HOST (F8). `add-captions` is on SAI's node allowlist, and
- * its kinetic styles auto-transcribe by default — but the kinetic path called
- * the transcribe PROVIDER directly, so on a deployment with no
- * REPLICATE_API_TOKEN / ELEVENLABS_API_KEY (the target configuration) a
- * whitelisted node could not run at all. `transcribe` IS in
+ * THE KEYLESS SELF-HOST (F8). `add-captions` is on a customer deployment's
+ * node allowlist, and its kinetic styles auto-transcribe by default — but the
+ * kinetic path called the transcribe PROVIDER directly, so on a deployment
+ * with no REPLICATE_API_TOKEN / ELEVENLABS_API_KEY (the target configuration)
+ * a whitelisted node could not run at all. `transcribe` IS in
  * CLOUD_ROUTE_BY_JOB_TYPE, and handleTranscribe already uses the ladder.
  */
 describe("add-captions handler — the kinetic transcribe ladder", () => {

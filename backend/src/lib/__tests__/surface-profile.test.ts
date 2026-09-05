@@ -33,9 +33,9 @@ describe("parseSurfaceProfile — env string → profile", () => {
   })
 
   it("merges a partial override over the default, one level deep", () => {
-    const p = parseSurfaceProfile(JSON.stringify({ nav: { hide: ["gallery"] }, brand: { productName: "Studio SAI" } }))
+    const p = parseSurfaceProfile(JSON.stringify({ nav: { hide: ["gallery"] }, brand: { productName: "Studio Acme" } }))
     expect(p.nav.hide).toEqual(["gallery"])
-    expect(p.brand.productName).toBe("Studio SAI")
+    expect(p.brand.productName).toBe("Studio Acme")
     // untouched keys keep the default
     expect(p.outputs.allowPublic).toBe(true)
     expect(p.locale.picker).toBe(true)
@@ -365,7 +365,7 @@ describe("billing — the allowance keys (Track A / WS0): defaultAllowanceUnits 
     expect("defaultAllowanceUnits" in b).toBe(false)
   })
 
-  it("keeps a coherent pair beside a coherent trio (the hosted SAI shape)", () => {
+  it("keeps a coherent pair beside a coherent trio (the hosted deployment shape)", () => {
     expect(withTrio({ defaultAllowanceUnits: 400000, allowances: "enforce" })).toEqual({
       costTab: "inherit",
       sidebarCard: "inherit",
@@ -435,7 +435,7 @@ describe("billing — the allowance keys (Track A / WS0): defaultAllowanceUnits 
         selfServe: false,
         defaultAllowanceUnits: 400000,
         allowances: "enforce",
-        payerAccount: "billing@sai-app.com",
+        payerAccount: "billing@acme.example",
       },
     })
     __resetSurfaceProfileCacheForTests()

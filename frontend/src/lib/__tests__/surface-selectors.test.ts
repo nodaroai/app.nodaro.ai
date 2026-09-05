@@ -30,8 +30,8 @@ describe("surface selectors — empty means inherit, non-empty means narrow", ()
   it("siblings: empty → code default; non-empty → replacement", () => {
     const dflt = [{ label: "Studio", url: "https://studio.nodaro.ai" }]
     expect(surfaceSiblings(dflt)).toEqual(dflt)
-    window.__NODARO_RUNTIME__ = { surface: { siblings: { apps: [{ label: "SAI", url: "https://sai.example" }] } } }
-    expect(surfaceSiblings(dflt)).toEqual([{ label: "SAI", url: "https://sai.example" }])
+    window.__NODARO_RUNTIME__ = { surface: { siblings: { apps: [{ label: "Acme", url: "https://acme.example" }] } } }
+    expect(surfaceSiblings(dflt)).toEqual([{ label: "Acme", url: "https://acme.example" }])
   })
 
   it("brand / outputs / auth / picker read through", () => {
@@ -41,7 +41,7 @@ describe("surface selectors — empty means inherit, non-empty means narrow", ()
     expect(surfaceAuthMethods(["email", "google"])).toEqual(["email", "google"])
     window.__NODARO_RUNTIME__ = {
       surface: {
-        brand: { productName: "SAI" },
+        brand: { productName: "Acme" },
         outputs: { allowPublic: false },
         // N3: "sso" is NOT in the code default and no longer widens through; the
         // login page renders no SSO button, so an empty intersection falls back
@@ -49,7 +49,7 @@ describe("surface selectors — empty means inherit, non-empty means narrow", ()
         auth: { methods: ["sso"], ssoLabel: "IdP" },
       },
     }
-    expect(surfaceBrandName()).toBe("SAI")
+    expect(surfaceBrandName()).toBe("Acme")
     expect(surfaceOutputsAllowPublic()).toBe(false)
     expect(surfaceAuthMethods(["email", "google"])).toEqual(["email", "google"])
   })

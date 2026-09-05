@@ -115,7 +115,7 @@ afterEach(async () => {
   __resetSurfaceProfileCacheForTests()
 })
 
-/** `selfServe:false` and a payer — the hosted SAI shape. */
+/** `selfServe:false` and a payer — the hosted deployment shape. */
 function withheldDeployment(): void {
   process.env.NODARO_SURFACE_PROFILE = JSON.stringify({
     billing: { selfServe: false, payerAccount: PAYER, unitLabel: "קרדיטים", unitRate: 2000 },
@@ -165,7 +165,7 @@ describe("selfServe:false — the users may not buy", () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/billing/create-load-session",
-      headers: { "x-user-id": USER, origin: "https://sai.example" },
+      headers: { "x-user-id": USER, origin: "https://acme.example" },
       payload: { amountUsd: 10 },
     })
 
@@ -180,7 +180,7 @@ describe("selfServe:false — the users may not buy", () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/billing/create-checkout-session",
-      headers: { "x-user-id": USER, origin: "https://sai.example" },
+      headers: { "x-user-id": USER, origin: "https://acme.example" },
       payload: { priceId: "pri_topup", mode: "payment" },
     })
 
@@ -194,7 +194,7 @@ describe("selfServe:false — the users may not buy", () => {
     const load = await app.inject({
       method: "POST",
       url: "/v1/billing/create-load-session",
-      headers: { "x-user-id": PAYER, origin: "https://sai.example" },
+      headers: { "x-user-id": PAYER, origin: "https://acme.example" },
       payload: { amountUsd: 10 },
     })
     expect(load.statusCode).toBe(200)
@@ -202,7 +202,7 @@ describe("selfServe:false — the users may not buy", () => {
     const checkout = await app.inject({
       method: "POST",
       url: "/v1/billing/create-checkout-session",
-      headers: { "x-user-id": PAYER, origin: "https://sai.example" },
+      headers: { "x-user-id": PAYER, origin: "https://acme.example" },
       payload: { priceId: "pri_topup", mode: "payment" },
     })
     expect(checkout.statusCode).toBe(200)

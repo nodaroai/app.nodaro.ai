@@ -344,7 +344,7 @@ export async function buildApp() {
   // same guarantee class as the 60s TTL drift between sibling instances).
   await loadAvailabilityOverrides()
 
-  // SAI item 9 — deployment payer. BLOCKING and fail-loud, the opposite
+  // Deployment payer (item 9) — BLOCKING and fail-loud, the opposite
   // posture from the availability warm above: a payer that is configured but
   // does not resolve means every job this boot accepted would silently bill
   // requesters the deployment promised to cover — refuse to boot instead.

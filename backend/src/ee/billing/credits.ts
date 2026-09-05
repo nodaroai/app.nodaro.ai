@@ -209,7 +209,7 @@ export interface UserBalance {
    * gate's column exists (a dev deploy can run ahead of the migration).
    */
   freeGrantState?: "unclaimed" | "granted" | "withheld"
-  /** Per-user SAI allowance in RAW credits; null when no allowance applies
+  /** Per-user deployment allowance in RAW credits; null when no allowance applies
    *  (no payer, or the caller IS the payer — which holds the real credits, not
    *  an allocation — or the figure was unavailable). NOT null merely because
    *  enforcement is off: the allowance is visible from the moment a payer
@@ -2314,7 +2314,7 @@ export class CreditsService {
     // Workspace ⇒ the RPC's workspace branch pays (p_workspace_id below) and
     // the org entitlement grade replaces every profile-derived gate.
     const ws = options?.billingContext?.payer === "workspace" ? options.billingContext : undefined
-    // Deployment payer (SAI item 9): the DEBIT user becomes the payer account
+    // Deployment payer (item 9): the DEBIT user becomes the payer account
     // — the RPC's ordinary personal branch runs against the payer's pools —
     // while the positional `userId` (the requester) keeps owning the job.
     const dep = options?.billingContext?.payer === "deployment" ? options.billingContext : undefined

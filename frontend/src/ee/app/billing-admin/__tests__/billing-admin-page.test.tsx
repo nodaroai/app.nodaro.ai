@@ -325,8 +325,8 @@ describe("block 1 — the pool, in RAW Nodaro credits and labelled as Nodaro's",
     const pool = container.querySelector("[data-testid='pool-block']")!
     expect(pool.textContent).toContain("12,345")
     // The unit label must NOT ride along with a raw figure: 12,345 credits is
-    // not 12,345 SAI units, and putting the customer's label beside it is the
-    // exact confusion §9.3 block 1 exists to prevent.
+    // not 12,345 display units, and putting the customer's label beside it is
+    // the exact confusion §9.3 block 1 exists to prevent.
     expect(pool.textContent).toContain(he["billingAdmin.poolNote"] as string)
   })
 

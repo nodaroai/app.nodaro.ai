@@ -4,7 +4,7 @@
  *
  * `auth.methods: ["sso"]` makes `surfaceSsoOnly()` true, and H6 then 403s
  * `sso_required` for every JWT whose service-role `app_metadata.sso` marker is
- * unset. `support@sai-app.com` is a password account with no marker: GoTrue
+ * unset. `support@acme.example` is a password account with no marker: GoTrue
  * authenticates it happily and its very first API request is refused. The
  * account that holds Nodaro's money cannot reach a single route.
  *
@@ -61,7 +61,7 @@ import { SSO_APP_METADATA_KEY } from "../../lib/sso-linking.js"
 import { __resetSurfaceProfileCacheForTests } from "../../lib/surface-profile.js"
 import { __setDeploymentPayerForTests, __resetDeploymentPayerForTests } from "../../lib/deployment-payer.js"
 
-const SSO_ONLY = JSON.stringify({ auth: { methods: ["sso"], ssoLabel: "SAI" } })
+const SSO_ONLY = JSON.stringify({ auth: { methods: ["sso"], ssoLabel: "Acme" } })
 
 function setProfile(json: string | null): void {
   if (json === null) delete process.env.NODARO_SURFACE_PROFILE

@@ -73,7 +73,7 @@ export interface SurfaceBilling {
   /** false removes self-serve purchase (pricing page, buy-packs, billing routes). */
   selfServe: boolean
   /**
-   * Deployment payer (SAI item 9): the ONE account that pays for every action
+   * Deployment payer (item 9): the ONE account that pays for every action
    * on this instance — a uuid or the account's email. When set, the billing
    * context resolves every request to `payer: "deployment"` and the debit
    * lands on this account instead of the requester (lib/deployment-payer.ts).
@@ -84,7 +84,7 @@ export interface SurfaceBilling {
    */
   payerAccount?: string
   /**
-   * Track A (per-user SAI allowances) — the SEED for a payer deployment's
+   * Track A (per-user allowances) — the SEED for a payer deployment's
    * `deployment_payer_settings.default_allowance_credits` row, in DISPLAY
    * UNITS. A member of the unit family: it means nothing without unitLabel +
    * unitRate, and it must divide by `unitRate` into a WHOLE NUMBER OF CREDITS
@@ -198,9 +198,9 @@ const lenientFlag = (name: string, fallback: boolean, fallbackWord: string, opts
       return fallback
     })
 const lenientPublicFlag = lenientFlag("outputs.allowPublic", true, "public", { warnOnAbsent: true })
-/** Same posture for the purchase surface: a present `false` (SAI: prepaid
- *  users must not buy Nodaro credits with a card) is never flipped open.
- *  Absent is the mainline default and stays quiet. */
+/** Same posture for the purchase surface: a present `false` (a prepaid
+ *  deployment: its users must not buy Nodaro credits with a card) is never
+ *  flipped open. Absent is the mainline default and stays quiet. */
 const lenientSelfServeFlag = lenientFlag("billing.selfServe", true, "self-serve on", { warnOnAbsent: false })
 
 const BILLING_DEFAULT: SurfaceBilling = { costTab: "inherit", sidebarCard: "inherit", selfServe: true }

@@ -253,7 +253,7 @@ describe("registerBillingContextHook — real Fastify, real stage, real ordering
 })
 
 // ---------------------------------------------------------------------------
-// Deployment payer (SAI item 9) — the rung ABOVE the plugin gate
+// Deployment payer (item 9) — the rung ABOVE the plugin gate
 // ---------------------------------------------------------------------------
 
 const { __setDeploymentPayerForTests, __resetDeploymentPayerForTests } = await import("../deployment-payer.js")
@@ -268,7 +268,7 @@ const DEP_ENT = {
 describe("deployment payer rung — resolveBillingContext", () => {
   afterEach(() => __resetDeploymentPayerForTests())
 
-  it("THE SAI SHAPE, exactly: no orgs plugin at all + payer active ⇒ deployment context", async () => {
+  it("THE SINGLE-TENANT SHAPE, exactly: no orgs plugin at all + payer active ⇒ deployment context", async () => {
     // This placement is load-bearing: with the rung BELOW the `if (!svc)`
     // gate the whole feature silently no-ops on the one instance it exists
     // for (no orgs plugin ⇒ the gate returns personal first).
@@ -302,7 +302,7 @@ describe("deployment payer rung — the per-request hook (real Fastify)", () => 
 
   beforeEach(async () => {
     resolve = vi.fn(async () => WS_CTX)
-    // No orgs plugin — the SAI shape. The deployment rung must fire anyway.
+    // No orgs plugin — the single-tenant shape. The deployment rung must fire anyway.
     h.hasOrganizations.mockReturnValue(false)
     h.services.billing = undefined
     __setDeploymentPayerForTests("payer-acct")

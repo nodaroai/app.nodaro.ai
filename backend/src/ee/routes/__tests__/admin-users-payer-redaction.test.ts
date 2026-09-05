@@ -204,7 +204,7 @@ afterEach(async () => {
 // ---------------------------------------------------------------------------
 
 describe("GET /v1/admin/users — mainline (no deployment payer)", () => {
-  it("returns today's exact key set: the credit columns, no SAI figures, no identity columns", async () => {
+  it("returns today's exact key set: the credit columns, no `sai_*` figures, no identity columns", async () => {
     mockFrom.mockReturnValue(chainReturning({ data: [MAINLINE_ROW], error: null, count: 1 }))
 
     const res = await app.inject({ method: "GET", url: "/v1/admin/users", headers: { "x-user-id": ADMIN } })
@@ -322,7 +322,7 @@ describe("GET /v1/admin/users/:id/balance and /transactions — mainline", () =>
 describe("GET /v1/admin/users — under a deployment payer", () => {
   beforeEach(() => payerDeployment())
 
-  it("drops every Nodaro credit column and answers SAI figures in units", async () => {
+  it("drops every Nodaro credit column and answers `sai_*` figures in units", async () => {
     mockFrom.mockReturnValue(chainReturning({ data: [PAYER_ROW], error: null, count: 1 }))
     mockAllowancesFor.mockResolvedValue(new Map([[U1, { granted: 200, remaining: 150, spent: 40 }]]))
 
@@ -333,12 +333,12 @@ describe("GET /v1/admin/users — under a deployment payer", () => {
     expect(row.subscription_credits).toBeUndefined()
     expect(row.topup_credits).toBeUndefined()
     expect(row.total_credits).toBeUndefined()
-    // unitRate 2000: 200 credits is 400 000 SAI units.
+    // unitRate 2000: 200 credits is 400 000 display units.
     expect(row.sai_granted).toBe(400_000)
     expect(row.sai_remaining).toBe(300_000)
     // `spent` is the SETTLED figure and deliberately NOT `granted − remaining`
     // (here 50 credits), which also counts an in-flight RESERVATION as money
-    // already gone. 40 credits at rate 2000 is 80 000 SAI units.
+    // already gone. 40 credits at rate 2000 is 80 000 display units.
     expect(row.sai_spent).toBe(80_000)
     // The page needs these three, and the browser-direct read is no longer
     // allowed to supply them.
@@ -351,10 +351,11 @@ describe("GET /v1/admin/users — under a deployment payer", () => {
     // RULING: spec §9.2 ("no credit columns anywhere") wins over D11's
     // narrower three-column list. `daily_spent_credits` and
     // `lifetime_topup_credits` are Nodaro figures about the DEPLOYMENT's money
-    // — an SAI admin who sees either can reason about a wallet they do not
-    // hold and cannot touch. The only spend figure they get is `sai_spent`,
-    // in SAI units. Asserted as a whole key set, not as more `toBeUndefined`s:
-    // a new credit column added to `USER_COLUMNS` later must fail HERE.
+    // — a deployment admin who sees either can reason about a wallet they do
+    // not hold and cannot touch. The only spend figure they get is `sai_spent`,
+    // in display units. Asserted as a whole key set, not as more
+    // `toBeUndefined`s: a new credit column added to `USER_COLUMNS` later must
+    // fail HERE.
     mockFrom.mockReturnValue(chainReturning({ data: [PAYER_ROW], error: null, count: 1 }))
     mockAllowancesFor.mockResolvedValue(new Map([[U1, { granted: 200, remaining: 150, spent: 40 }]]))
 
@@ -503,7 +504,7 @@ describe("GET /v1/admin/users/:id/* — under a deployment payer", () => {
     expect(res.statusCode).toBe(200)
   })
 
-  it("answers another user's balance in SAI units, with no credit columns", async () => {
+  it("answers another user's balance in display units, with no credit columns", async () => {
     mockAllowanceFor.mockResolvedValue({ granted: 200, remaining: 150, spent: 40 })
 
     const res = await app.inject({

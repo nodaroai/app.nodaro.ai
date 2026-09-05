@@ -1,5 +1,5 @@
 /**
- * Deployment payer (SAI item 9) at the storage seam — what these pin: with
+ * Deployment payer (item 9) at the storage seam — what these pin: with
  * the payer active, quota ENFORCEMENT is off (the deployment's bucket, their
  * space) while TRACKING stays on (the per-user counter keeps meaning
  * something for the deployment's own limits); inactive, both functions are

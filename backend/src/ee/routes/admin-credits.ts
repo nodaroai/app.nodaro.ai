@@ -70,7 +70,7 @@ const USER_COLUMNS =
 const USER_COLUMNS_PAYER = `${USER_COLUMNS.replace("display_name, ", "")}, email, full_name, role`
 
 /**
- * Raw Nodaro credits → the deployment's display unit (SAI קרדיטים), the ONE
+ * Raw Nodaro credits → the deployment's display unit (`unitLabel`), the ONE
  * conversion (`toUnits`, R3). `null` stays null all the way to the screen's em
  * dash: 0 is a real value meaning "exhausted", and manufacturing it for "not
  * known yet" is the lie this whole track is careful about. Answers null when no
@@ -86,7 +86,7 @@ function saiUnits(credits: number | null | undefined): number | null {
 }
 
 /**
- * The three SAI figures for one user, in units.
+ * The three `sai_*` figures for one user, in units.
  *
  * `sai_spent` is the SETTLED figure (`spent_credits`) and is deliberately NOT
  * `granted − remaining`: that difference also contains `reserved` — credits
@@ -206,9 +206,9 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
       // Under a payer EVERY Nodaro credit figure is dropped (§9.2, which the
       // orchestrator ruled over D11's narrower three-column list): these are
       // the deployment's money sitting in columns the user never spends, and
-      // an SAI admin is not a billing role for a wallet they cannot touch.
+      // a deployment admin is not a billing role for a wallet they cannot touch.
       // `total_credits` is not recomputed — it is dropped; the only spend
-      // figure that survives is `sai_spent`, in SAI units, below.
+      // figure that survives is `sai_spent`, in display units, below.
       //
       // `lifetime_topup_credits` is READ FIRST, by `common.effective_tier`
       // above: the derived tier depends on it, so the order of these two

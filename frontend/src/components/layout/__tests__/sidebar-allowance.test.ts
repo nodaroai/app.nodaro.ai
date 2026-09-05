@@ -4,12 +4,12 @@ import { sidebarCreditFigures } from "../app-sidebar"
 /**
  * Track A — the sidebar credit card under a deployment payer (spec §9.1).
  *
- * The card is hidden on SAI today (`billing.sidebarCard: "hidden"`) precisely
- * because un-hiding it would render `total`: the requester's frozen signup
- * grant, a number nothing debits. Teaching the card to prefer the allowance
- * comes FIRST; the overlay flips the card visible afterwards (rollout step 5).
- * Doing it the other way round puts a lie on screen for the length of a
- * deploy.
+ * The card is hidden on the payer deployment today
+ * (`billing.sidebarCard: "hidden"`) precisely because un-hiding it would
+ * render `total`: the requester's frozen signup grant, a number nothing
+ * debits. Teaching the card to prefer the allowance comes FIRST; the overlay
+ * flips the card visible afterwards (rollout step 5). Doing it the other way
+ * round puts a lie on screen for the length of a deploy.
  */
 /** `billingSurface().deploymentPayer` — the second argument, named. */
 const MAINLINE = false

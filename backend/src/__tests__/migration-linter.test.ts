@@ -113,8 +113,8 @@ describe("migration walk sanity", () => {
 // near ﻿" (SQLSTATE 42601) at statement 0. It never surfaces on an
 // incrementally-migrated project (the file was recorded applied before a BOM
 // ever crept in) — only on a FRESH apply of the whole chain: a new hosted
-// tenant's first bootstrap (caught 214_entity_boards.sql on SAI's), a
-// self-host install, community-e2e. The self-host runner
+// tenant's first bootstrap (caught 214_entity_boards.sql on a customer
+// deployment's), a self-host install, community-e2e. The self-host runner
 // (backend/scripts/run-migrations.mjs) strips it defensively, but
 // `supabase db push` — the cloud + CI migrate path — does not, so the file
 // itself must be clean. Read raw bytes: a utf8 read would decode the BOM to a

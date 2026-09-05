@@ -194,7 +194,7 @@ export async function checkStorageQuota(
     return { allowed: true }
   }
 
-  // Deployment payer (SAI item 9): media lives in the deployment's own
+  // Deployment payer (item 9): media lives in the deployment's own
   // bucket — their space, their business. No per-user ceiling; per-user
   // LIMITS, if the deployment wants them, belong in their overlay hooks.
   if (deploymentPayerActive()) {
@@ -284,7 +284,7 @@ export async function reserveStorageIfWithinLimit(
   if (!hasCredits()) return true
   if (bytes <= 0) return true
 
-  // Deployment payer (SAI item 9): TRACK without ENFORCING — the per-user
+  // Deployment payer (item 9): TRACK without ENFORCING — the per-user
   // counter keeps meaning something (the deployment can read it for its own
   // limits), but no requester is ever refused for space in a bucket the
   // deployment owns. refundStorage stays the exact inverse.

@@ -230,7 +230,7 @@ export async function reservePipelineCredits(
   // RPC's workspace branch. Conditional spread — a personal pipeline's wire
   // shape stays byte-identical to pre-P14.
   const ws = args.billingContext?.payer === "workspace" ? args.billingContext : undefined
-  // Deployment payer (SAI item 9): the debit user becomes the payer account —
+  // Deployment payer (item 9): the debit user becomes the payer account —
   // the RPC's personal branch runs against its pools (the
   // CreditsService.reserveCredits mirror for this direct-RPC lane).
   const dep = args.billingContext?.payer === "deployment" ? args.billingContext : undefined

@@ -78,7 +78,7 @@ vi.mock("../supabase.js", () => ({
       admin: {
         listUsers: async () => {
           h.listUsersCalls++
-          return { data: { users: [{ id: PAYER_UUID, email: "support@sai-app.com" }] }, error: null }
+          return { data: { users: [{ id: PAYER_UUID, email: "support@acme.example" }] }, error: null }
         },
         getUserById: async (id: string) => {
           h.getUserByIdCalls.push(id)

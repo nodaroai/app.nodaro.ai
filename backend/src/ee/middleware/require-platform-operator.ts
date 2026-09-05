@@ -7,7 +7,7 @@ import { requireAdmin } from "./require-admin.js"
 
 /**
  * The money gate for a deployment whose IDENTITY PROVIDER BELONGS TO THE
- * CUSTOMER (SAI item 9 follow-up).
+ * CUSTOMER (the deployment-payer item (9) follow-up).
  *
  * WHY A ROLE IS NOT ENOUGH. `requireAdmin` authorizes on `profiles.role`. On
  * a white-label instance the customer runs the SSO IdP, so the customer mints

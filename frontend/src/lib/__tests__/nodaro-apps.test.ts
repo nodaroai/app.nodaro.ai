@@ -48,7 +48,7 @@ describe("otherNodaroApps — surface siblings override", () => {
   })
 
   it("replaces the family with the profile's siblings when set", () => {
-    window.__NODARO_RUNTIME__ = { surface: { siblings: { apps: [{ label: "SAI Chat", url: "https://chat.example" }] } } }
-    expect(otherNodaroApps("flow")).toEqual([{ label: "SAI Chat", url: "https://chat.example" }])
+    window.__NODARO_RUNTIME__ = { surface: { siblings: { apps: [{ label: "Acme Chat", url: "https://chat.example" }] } } }
+    expect(otherNodaroApps("flow")).toEqual([{ label: "Acme Chat", url: "https://chat.example" }])
   })
 })

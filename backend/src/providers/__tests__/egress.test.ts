@@ -51,7 +51,7 @@ describe("providerFetch — inert default (no decorator)", () => {
       const res = await providerFetch(call(), srv.base, { method: "POST" })
       expect(res.status).toBe(200)
       // No decorator ⇒ no injected identity/enrichment headers.
-      expect(receivedHeaders["x-sai-user"]).toBeUndefined()
+      expect(receivedHeaders["x-acme-user"]).toBeUndefined()
       // Body must still be readable exactly once (proves no clone consumed it).
       await expect(res.json()).resolves.toEqual({ ok: true })
       // No observe ran ⇒ no user-safe mark recorded.
@@ -74,7 +74,7 @@ describe("providerFetch — with a decorator", () => {
     const dec: EgressDecorator = {
       decorate(c: EgressCall) {
         seen.push(c)
-        return { headers: { "X-SAI-User": "u-123", "X-Studio-Model": c.modelKey ?? "" } }
+        return { headers: { "X-Acme-User": "u-123", "X-Studio-Model": c.modelKey ?? "" } }
       },
     }
     setEgressDecorator(dec)
@@ -83,7 +83,7 @@ describe("providerFetch — with a decorator", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
       })
-      expect(received["x-sai-user"]).toBe("u-123")
+      expect(received["x-acme-user"]).toBe("u-123")
       expect(received["x-studio-model"]).toBe("nano-banana")
       // Pre-existing headers survive the merge.
       expect(received["content-type"]).toBe("application/json")

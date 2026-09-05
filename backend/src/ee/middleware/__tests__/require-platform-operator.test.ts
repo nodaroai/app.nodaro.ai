@@ -101,7 +101,7 @@ describe("with a deployment payer active", () => {
 
   it("AN ADMIN THE CUSTOMER MINTED is refused — role is not authority here", async () => {
     h.getUserById.mockResolvedValue({
-      data: { user: { id: "u-1", email: "their-admin@sai-app.com", app_metadata: {} } },
+      data: { user: { id: "u-1", email: "their-admin@acme.example", app_metadata: {} } },
       error: null,
     })
     const reply = makeReply()
@@ -165,7 +165,7 @@ describe("with a deployment payer active", () => {
 
   it("the refusal body never discloses who IS allowed", async () => {
     h.getUserById.mockResolvedValue({
-      data: { user: { id: "u-1", email: "their-admin@sai-app.com", app_metadata: {} } },
+      data: { user: { id: "u-1", email: "their-admin@acme.example", app_metadata: {} } },
       error: null,
     })
     const reply = makeReply()

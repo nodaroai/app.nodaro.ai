@@ -48,7 +48,7 @@ vi.mock("@/lib/config.js", () => ({
 import { registerAuthHook } from "../auth.js"
 import { __resetSurfaceProfileCacheForTests } from "../../lib/surface-profile.js"
 
-const SSO_ONLY = JSON.stringify({ auth: { methods: ["sso"], ssoLabel: "SAI" } })
+const SSO_ONLY = JSON.stringify({ auth: { methods: ["sso"], ssoLabel: "Acme" } })
 
 function setProfile(json: string | null): void {
   if (json === null) delete process.env.NODARO_SURFACE_PROFILE
@@ -95,7 +95,7 @@ describe("SSO-only deployment", () => {
 
   it("does NOT accept a forged user_metadata.sso — only app_metadata is trusted", async () => {
     setProfile(SSO_ONLY)
-    getUser.mockResolvedValue(userResult({}, { sso: "SAI" }))
+    getUser.mockResolvedValue(userResult({}, { sso: "Acme" }))
     const res = await inject(app, "tok-forged")
     expect(res.statusCode).toBe(403)
     expect(res.json().error.code).toBe("sso_required")
@@ -103,7 +103,7 @@ describe("SSO-only deployment", () => {
 
   it("accepts a JWT account with app_metadata.sso", async () => {
     setProfile(SSO_ONLY)
-    getUser.mockResolvedValue(userResult({ sso: "SAI", sso_subject: "abc" }))
+    getUser.mockResolvedValue(userResult({ sso: "Acme", sso_subject: "abc" }))
     const res = await inject(app, "tok-sso")
     expect(res.statusCode).toBe(200)
     expect(res.json().userId).toBe("u-1")
@@ -127,7 +127,7 @@ describe("gate is off (inert) unless SSO is the exclusive method", () => {
   })
 
   it("mixed auth (email + sso) → a password account is legitimate → gate off", async () => {
-    setProfile(JSON.stringify({ auth: { methods: ["email", "sso"], ssoLabel: "SAI" } }))
+    setProfile(JSON.stringify({ auth: { methods: ["email", "sso"], ssoLabel: "Acme" } }))
     getUser.mockResolvedValue(userResult({}))
     const res = await inject(app, "tok-mixed")
     expect(res.statusCode).toBe(200)

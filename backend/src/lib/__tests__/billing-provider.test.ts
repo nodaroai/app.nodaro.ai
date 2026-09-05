@@ -95,7 +95,7 @@ describe("billing-provider core seam", () => {
   })
 })
 
-describe("billingSurface — deploymentPayer flag (SAI item 9)", () => {
+describe("billingSurface — deploymentPayer flag (deployment-payer item 9)", () => {
   it("mirrors deploymentPayerActive(), and is ALL the browser learns (no identity)", async () => {
     const { __setDeploymentPayerForTests, __resetDeploymentPayerForTests } = await import("../deployment-payer.js")
     try {

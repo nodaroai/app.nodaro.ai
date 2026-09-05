@@ -13,8 +13,8 @@ describe("NodaroLogo wordmark", () => {
   })
 
   it("renders the surface brand name when set", () => {
-    window.__NODARO_RUNTIME__ = { surface: { brand: { productName: "Studio SAI" } } }
+    window.__NODARO_RUNTIME__ = { surface: { brand: { productName: "Studio Acme" } } }
     render(<NodaroLogo />)
-    expect(screen.getByText(/Studio SAI/)).toBeTruthy()
+    expect(screen.getByText(/Studio Acme/)).toBeTruthy()
   })
 })

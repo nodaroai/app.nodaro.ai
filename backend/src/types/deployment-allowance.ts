@@ -1,13 +1,14 @@
 /**
- * Track A — the per-user SAI allowance, as the rest of the backend sees it.
+ * Track A — the per-user deployment allowance, as the rest of the backend
+ * sees it.
  *
- * EVERY number in this file is RAW NODARO CREDITS. SAI units (×`unitRate`)
- * exist at exactly two boundaries — route input, where they are validated as a
- * whole number of credits, and render, through `lib/billing-display-unit.ts`'s
- * `toUnits`. Nothing in between converts, because the ledger, the RPC's
- * enforcement block and `pricing.creditCost` are all in credits: a unit that
- * reached the ledger would make every stored balance wrong the day `unitRate`
- * moves.
+ * EVERY number in this file is RAW NODARO CREDITS. Display units — the
+ * deployment's own unit label, ×`unitRate` — exist at exactly two boundaries:
+ * route input, where they are validated as a whole number of credits, and
+ * render, through `lib/billing-display-unit.ts`'s `toUnits`. Nothing in
+ * between converts, because the ledger, the RPC's enforcement block and
+ * `pricing.creditCost` are all in credits: a unit that reached the ledger
+ * would make every stored balance wrong the day `unitRate` moves.
  *
  * The allowance itself is a QUOTA AGAINST SOMEONE ELSE'S POOL, never money.
  * Nodaro's real exposure is bounded by the deployment payer's credits, which

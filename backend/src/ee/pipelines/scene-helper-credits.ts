@@ -76,7 +76,7 @@ export async function reserveHelperCredits(
   // P14/W4e: the resolved payer rides p_workspace_id — conditional spread, a
   // personal call's wire shape stays byte-identical to pre-P14.
   const ws = args.billingContext?.payer === "workspace" ? args.billingContext : undefined
-  // Deployment payer (SAI item 9): debit the payer account through the RPC's
+  // Deployment payer (item 9): debit the payer account through the RPC's
   // personal branch (the CreditsService.reserveCredits mirror).
   const dep = args.billingContext?.payer === "deployment" ? args.billingContext : undefined
   const { data: usageLogId, error } = await args.supabase.rpc("reserve_credits", {

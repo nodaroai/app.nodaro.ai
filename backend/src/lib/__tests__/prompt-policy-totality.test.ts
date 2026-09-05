@@ -53,7 +53,7 @@ const HOOKED_ROUTES: readonly string[] = [
   "video-retake.ts",
   "video-to-video.ts",
   "lip-sync.ts",
-  // audio (generative descriptions — the SAI-style policy no-ops on audio
+  // audio (generative descriptions — the deployment's policy no-ops on audio
   // prompts by design; the hook is the totality guarantee for future policies)
   "text-to-audio.ts",
   "video-sfx.ts",
