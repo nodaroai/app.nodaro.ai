@@ -6,6 +6,7 @@ import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { hasCredits } from "../../config.js"
 import { supabase } from "../../supabase.js"
 import { CreditsService } from "../../../ee/billing/credits.js"
+import { deploymentPayerActive, deploymentPayerId } from "../../deployment-payer.js"
 import { MODEL_CATALOG, MODEL_RECOMMENDATIONS, listModels, groupByFamily, type ModelCatalogEntry, type ModelKind, type ModelMode } from "@nodaro/shared"
 import { isModelDenied } from "../../surface-deny.js"
 import { getPromptTips, getPromptDoctrine } from "@nodaro/prompts"
@@ -147,6 +148,39 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
   if (!hasCredits()) return
   if (!passesGate(session, creditsReadGate)) return
 
+  /**
+   * WS-A — the deployment payer's own pool balance is not readable through MCP.
+   *
+   * `refusePayerBalanceToProgrammaticCaller` (ee/lib/payer-balance-guard.ts)
+   * holds the REST doors by refusing every `authKind !== "jwt"` caller. Every
+   * MCP session is a token session (`routes/mcp.ts:73`), so there is no
+   * first-party case to allow here and the identity check is the whole rule.
+   * Without it the self-host Connect token — minted with `credits:read` and,
+   * per the runbook, consented AS the billing account — reads the exact figure
+   * the REST guard exists to withhold (spec 3.4).
+   *
+   * INERT on mainline: with no `billing.payerAccount` configured
+   * `deploymentPayerActive()` is false and this short-circuits, so a
+   * deployment with no payer behaves byte-identically to today.
+   *
+   * Returns the result to hand back, or null to continue. CALL IT BEFORE ANY
+   * READ — the refusal must not depend on what a query found, and the payer's
+   * id is neither echoed nor logged.
+   */
+  const payerBalanceRefusal = () => {
+    if (!deploymentPayerActive() || session.userId !== deploymentPayerId()) return null
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text:
+            "Error: payer_balance_jwt_only — the deployment balance is available to the billing account's own session only.",
+        },
+      ],
+      isError: true,
+    }
+  }
+
   server.registerTool(
     "check_balance",
     {
@@ -157,6 +191,8 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
       annotations: { readOnlyHint: true },
     },
     async () => {
+      const refused = payerBalanceRefusal()
+      if (refused) return refused
       try {
         const balance = await CreditsService.getBalance(session.userId)
         return {
@@ -189,6 +225,8 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
       annotations: { readOnlyHint: true },
     },
     async (args) => {
+      const refused = payerBalanceRefusal()
+      if (refused) return refused
       const limit = args.limit ?? 50
       // Org pack claims ride the owner's user_id (351) — not personal history.
       // 42703 = pre-351 schema (column lands on the next promotion): no org
