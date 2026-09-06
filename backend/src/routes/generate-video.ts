@@ -17,9 +17,9 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { insertJobIdempotent } from "../lib/insert-job.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
-import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, isMinimaxH3Provider, isVeoProvider, estimateLoopTrimAddonCredits, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, buildVideoCreditModelIdentifier, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame, type ConnectedReference } from "@nodaro/shared"
+import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, isMinimaxH3Provider, isVeoProvider, estimateLoopTrimAddonCredits, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, buildVideoCreditModelIdentifier, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame, type ConnectedReference, type DescribedReference } from "@nodaro/shared"
 import { imageRequiredError } from "../lib/video-image-required.js"
-import { resolveVideoReferenceCore, resolveReferenceTokens, resolveRefIdTokens, composeVideoPromptText, type VideoExtraRef, type CharacterMeta } from "@nodaro/prompts"
+import { resolveVideoReferenceCore, resolveReferenceTokens, resolveRefIdTokens, composeVideoPromptText, appendReferenceLines, renderDescribedReferenceLines, renderReferenceCaptionLines, type VideoExtraRef, type CharacterMeta } from "@nodaro/prompts"
 import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
 import { directionSchema } from "../lib/direction-schema.js"
 import { subjectSchema } from "../lib/subject-schema.js"
@@ -187,10 +187,19 @@ export function assembleVideoConnectedReferences(args: {
   prompt: string | undefined
   provider: string | undefined
   connectedReferences: ConnectedReference[]
+  /**
+   * References the caller named + described but has no media for. They attach no
+   * URL and claim no `@image_N` seat, so they survive every branch below —
+   * including the cap-0 one, where there is nothing else left to say.
+   */
+  describedReferences?: readonly DescribedReference[]
   baseReferenceImageUrls?: string[]
   referenceOrder?: string[]
   referenceVideoCount: number
   referenceAudioCount: number
+  /** Captions INDEX-ALIGNED with `referenceVideoUrls` / `referenceAudioUrls`. */
+  referenceVideoCaptions?: readonly string[]
+  referenceAudioCaptions?: readonly string[]
   /**
    * Lower the provider's image cap for this call (never raises it, and a
    * provider with no image-ref support stays at 0). The extend flow passes
@@ -207,10 +216,13 @@ export function assembleVideoConnectedReferences(args: {
     prompt,
     provider,
     connectedReferences,
+    describedReferences,
     baseReferenceImageUrls,
     referenceOrder,
     referenceVideoCount,
     referenceAudioCount,
+    referenceVideoCaptions,
+    referenceAudioCaptions,
   } = args
   const providerCap = provider ? (VIDEO_REF_LIMITS_BY_PROVIDER[provider]?.images ?? 0) : 0
   const imageCap =
@@ -239,8 +251,21 @@ export function assembleVideoConnectedReferences(args: {
         audio: referenceAudioCount,
       },
     )
+    // Described references and rail captions need no image seat, so they survive
+    // a provider that can carry no image references at all — this branch never
+    // reaches the shared core, which is why the join is repeated here.
+    const lines = [
+      ...renderDescribedReferenceLines(describedReferences),
+      ...renderReferenceCaptionLines(referenceVideoCaptions, referenceAudioCaptions, {
+        video: referenceVideoCount,
+        audio: referenceAudioCount,
+      }),
+    ]
+    const base = resolved ?? (prompt === undefined ? undefined : "")
     return {
-      prompt: resolved ?? (prompt === undefined ? undefined : ""),
+      prompt: lines.length > 0
+        ? appendReferenceLines(base ?? "", lines, backendHybridRoles() ? "hybrid" : "legacy")
+        : base,
       referenceImageUrls: baseReferenceImageUrls,
     }
   }
@@ -292,6 +317,9 @@ export function assembleVideoConnectedReferences(args: {
         // controls on the extras leg (canvas + orchestrator honor them).
         defaultRole: r.defaultRole,
         identityLock: r.identityLock,
+        // Per-use description for THIS run — fills the row's description slot
+        // ahead of the label above.
+        descriptionOverride: r.descriptionOverride,
       })
     }
   }
@@ -307,7 +335,9 @@ export function assembleVideoConnectedReferences(args: {
     return {
       characterName: m.defaultName,
       defaultUsageMode: m.defaultUsageMode,
-      canonicalDescription: m.characterCanonicalDescription ?? undefined,
+      // A per-use override IS this run's identity description, so it stands in
+      // for the character's stored canonical text on the extras leg too.
+      canonicalDescription: m.descriptionOverride?.trim() || m.characterCanonicalDescription || undefined,
       // Keep this third CharacterMeta producer in lockstep with the FE
       // (video-prompt-assembly.ts) and orchestrator (payload-builder.ts) ones.
       defaultRole: m.defaultRole,
@@ -333,6 +363,10 @@ export function assembleVideoConnectedReferences(args: {
     hybridRoles: backendHybridRoles(),
     // `{ref:<id>}` degrade names for the refs the cap kept OUT of the walk.
     refNamesById,
+    // Seat-less channels — rendered by the core in one place per lane.
+    ...(describedReferences !== undefined ? { describedReferences } : {}),
+    ...(referenceVideoCaptions !== undefined ? { videoCaptions: referenceVideoCaptions } : {}),
+    ...(referenceAudioCaptions !== undefined ? { audioCaptions: referenceAudioCaptions } : {}),
   })
 
   // `core.additionalUrls` is already `[leading flat refs, …asset URLs]` (D5), so

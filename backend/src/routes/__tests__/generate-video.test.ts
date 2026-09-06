@@ -809,6 +809,91 @@ describe("assembleVideoConnectedReferences (server-side video reference assembly
     expect(out.prompt).toContain("Kira")
   })
 
+  it("renders described references with no connected references at all", () => {
+    const out = assembleVideoConnectedReferences({
+      prompt: "Natalie walks down the pier.",
+      provider: "seedance-2",
+      connectedReferences: [],
+      describedReferences: [{ name: "Natalie", description: "a tall woman in a red coat" }],
+      referenceVideoCount: 0,
+      referenceAudioCount: 0,
+    })
+    expect(out.prompt).toBe(
+      "Use these characters:\n- Natalie — a tall woman in a red coat.\n\nNatalie walks down the pier.",
+    )
+    expect(out.referenceImageUrls).toBeUndefined()
+  })
+
+  it("renders described references for a provider without image-ref support (the cap-0 branch)", () => {
+    const out = assembleVideoConnectedReferences({
+      prompt: "drive {image:1:car} fast",
+      provider: "kling", // not in VIDEO_REF_LIMITS_BY_PROVIDER → image cap 0
+      connectedReferences: [cref({ source: "wired-image", url: "https://r2/car.png", description: "car" })],
+      describedReferences: [{ name: "Natalie", description: "a tall woman in a red coat" }],
+      referenceVideoCount: 0,
+      referenceAudioCount: 0,
+    })
+    expect(out.prompt).toBe(
+      "Use these characters:\n- Natalie — a tall woman in a red coat.\n\ndrive car fast",
+    )
+    expect(out.referenceImageUrls).toBeUndefined()
+  })
+
+  it("renders rail captions index-aligned with the video/audio reference counts", () => {
+    const out = assembleVideoConnectedReferences({
+      prompt: "A cut between two shots.",
+      provider: "seedance-2",
+      connectedReferences: [],
+      referenceVideoCount: 2,
+      referenceAudioCount: 1,
+      referenceVideoCaptions: ["the establishing drone shot", "the close-up"],
+      referenceAudioCaptions: ["the score"],
+    })
+    expect(out.prompt).toContain("- @video_1: the establishing drone shot.")
+    expect(out.prompt).toContain("- @video_2: the close-up.")
+    expect(out.prompt).toContain("- @audio_1: the score.")
+  })
+
+  it("honors a per-use descriptionOverride on a wired character's canonical fallback", () => {
+    const out = assembleVideoConnectedReferences({
+      prompt: "she walks",
+      provider: "seedance-2",
+      connectedReferences: [
+        cref({
+          source: "wired-character",
+          url: "https://r2/kira.png",
+          defaultName: "Kira",
+          characterSlug: "kira",
+          characterCanonicalDescription: "auburn hair, hazel eyes",
+          descriptionOverride: "a shaved head and a scar",
+        }),
+      ],
+      referenceVideoCount: 0,
+      referenceAudioCount: 0,
+    })
+    expect(out.prompt).toContain("- Kira — a shaved head and a scar.")
+    expect(out.prompt).not.toContain("auburn hair")
+  })
+
+  it("honors a per-use descriptionOverride on a non-character reference", () => {
+    const out = assembleVideoConnectedReferences({
+      prompt: "a person dancing",
+      provider: "seedance-2",
+      connectedReferences: [
+        cref({
+          source: "wired-image",
+          url: "https://r2/car.png",
+          description: "a red car",
+          descriptionOverride: "a rusted pickup truck",
+        }),
+      ],
+      referenceVideoCount: 0,
+      referenceAudioCount: 0,
+    })
+    expect(out.prompt).toContain("a rusted pickup truck")
+    expect(out.prompt).not.toContain("a red car")
+  })
+
   it("strips {image:N} to bare labels + attaches nothing for a provider without image-ref support", () => {
     const out = assembleVideoConnectedReferences({
       prompt: "drive {image:1:car} fast",
