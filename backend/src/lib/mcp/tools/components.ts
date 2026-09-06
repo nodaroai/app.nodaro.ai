@@ -10,7 +10,7 @@ import {
   extractComponentInputSchema,
   flatInputsToOverrides,
 } from "../extract-app-inputs.js"
-import { cardResultText, uiMeta, clientRequestIdSchema, idempotencyHeaders } from "./_verb-helpers.js"
+import { cardResultText, uiMeta, clientRequestIdSchema, idempotencyHeaders, GET_JOB_POLL_HINT } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
 
 const readGate: ToolGate = { required: ["workflows:read"] }
@@ -286,7 +286,7 @@ export function registerComponents({
               text: cardResultText({
                 started: `Started component '${args.component_id}' (job ${jobId}).`,
                 noun: "outputs",
-                pollHint: "poll get_job with this id",
+                pollHint: GET_JOB_POLL_HINT,
               }),
             },
           ],

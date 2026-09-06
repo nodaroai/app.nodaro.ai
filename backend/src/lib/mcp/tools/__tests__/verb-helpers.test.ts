@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest"
-import { idempotencyHeaders, clientRequestIdSchema } from "../_verb-helpers.js"
+import { idempotencyHeaders, clientRequestIdSchema, GET_JOB_POLL_HINT } from "../_verb-helpers.js"
 
 vi.mock("../../asset-resolver.js", () => ({
   resolveAssetId: vi.fn(async ({ assetId }: { assetId: string }) => {
@@ -103,5 +103,15 @@ describe("idempotencyHeaders / clientRequestIdSchema", () => {
     expect(clientRequestIdSchema.safeParse("short").success).toBe(false)
     expect(clientRequestIdSchema.safeParse("a".repeat(129)).success).toBe(false)
     expect(clientRequestIdSchema.safeParse("has space here").success).toBe(false)
+  })
+})
+
+// Audit 2026-09-06 fix #2 (A-9): "poll get_job with this id" named no cadence
+// and no expected duration, and never mentioned the blocking wait.
+describe("GET_JOB_POLL_HINT — one cadence sentence", () => {
+  it("names the cadence, the expected durations and the blocking alternative", () => {
+    expect(GET_JOB_POLL_HINT).toContain("poll get_job with this id")
+    expect(GET_JOB_POLL_HINT).toContain("every 5")
+    expect(GET_JOB_POLL_HINT).toContain("wait_for_job")
   })
 })
