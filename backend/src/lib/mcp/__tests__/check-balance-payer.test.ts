@@ -186,7 +186,7 @@ describe("MCP credits tools under a deployment payer", () => {
     expect(session.firstParty).toBe(false)
   })
 
-  it("R2 — mainline (no payer configured) answers the same user unchanged", async () => {
+  it("mainline (no payer configured): answers the same user unchanged", async () => {
     // No __setDeploymentPayerForTests: `deploymentPayerActive()` is false, so
     // the guard short-circuits and this id is just another user.
     const server = await serverFor(PAYER_ID)

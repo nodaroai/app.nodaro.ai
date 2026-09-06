@@ -116,7 +116,7 @@ describe("/mcp under a deployment payer", () => {
     await app.close()
   })
 
-  it("R2 — with no payer configured the same session answers unchanged", async () => {
+  it("mainline (no payer configured): the same session answers unchanged", async () => {
     const app = await appWithPayerToken()
     await app.inject({ method: "POST", url: "/mcp", payload: { jsonrpc: "2.0", method: "initialize", id: 1 } })
 

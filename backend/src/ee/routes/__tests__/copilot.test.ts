@@ -403,6 +403,9 @@ describe("the turn's first-party flag follows the CREDENTIAL", () => {
     await app.inject({
       method: "POST",
       url: "/v1/copilot/threads/th1/messages",
+      // Stated, not inherited from the stub's default: the credential IS the
+      // precondition of this test.
+      headers: { "x-test-auth": "jwt" },
       payload: { message: "hi" },
     })
 
