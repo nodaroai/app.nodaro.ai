@@ -1199,6 +1199,54 @@ page for the token syntax and worked examples.
 > optional `referenceOrder` (parity with video) to reorder its assembled
 > reference list and renumber the `@image_N` bindings.
 
+### Described references (`describedReferences`) — a name you have no picture for
+
+`POST /v1/generate-image`, `POST /v1/generate-video`, `POST /v1/text-to-video`
+and `POST /v1/extend-video` also accept an optional `describedReferences` array
+— up to **10** entries of `{ name, description }` (name ≤ 80 chars, description
+≤ 2000). It is the channel for a subject you can NAME and DESCRIBE but have no
+media for: a cast role no entity is bound to yet, a character that exists only
+in the script, a slot a video analysis identified.
+
+- **No url, so nothing is attached.** A described reference consumes no
+  image-reference budget and claims no `@image_N` seat; the numbering of your
+  `connectedReferences` is untouched.
+- **It reaches the model as prose** — one `<Name> — <description>.` line per
+  entry, alongside the reference directives the route assembles. Correlation is
+  BY NAME: leave the name in your prompt text (`Natalie walks down the pier.`)
+  and the line tells the model who Natalie is. Do NOT write an `@name:1` mention
+  for a described reference — that grammar addresses an attached image.
+- **It is a reference channel on its own.** Send `describedReferences` with no
+  `connectedReferences` at all and the route still assembles — that is the
+  normal case for a story that has been written before any entity exists.
+- **Entries missing a name or a description are dropped**, and a repeated name
+  renders once. An empty list behaves exactly like omitting the field.
+- On `POST /v1/extend-video` described references are NOT gated on the
+  reference-capable transport the way `connectedReferences` are: they carry no
+  url, so every extend provider accepts them.
+
+### Per-use descriptions (`descriptionOverride`) and rail captions
+
+Two smaller channels for the same problem — telling the model what a reference
+IS, for this run only:
+
+- **`descriptionOverride` (per `connectedReferences[]` entry, ≤ 2000 chars).**
+  The reference's identity description for THIS run. It fills the description
+  slot the assembled directive already has, winning over the entity's stored
+  canonical description and over the entry's own `description` (which stays the
+  reference's label). Where the hybrid reference format renders no description
+  at all, it adds one `reference image A — <text>.` / `@image_1 — <text>.` line —
+  so the model is told once, never twice. Omit it and the entity's own wording
+  is used, exactly as before.
+- **`referenceVideoCaptions` / `referenceAudioCaptions` (`POST /v1/generate-video`
+  and `POST /v1/text-to-video`, each entry ≤ 500 chars).** Captions for the
+  video / audio rail references, **index-aligned** with `referenceVideoUrls` /
+  `referenceAudioUrls` — `referenceVideoCaptions[0]` describes
+  `referenceVideoUrls[0]`. Each renders as `@video_N: <caption>.` /
+  `@audio_N: <caption>.`, and the list is bounded by the number of rail
+  references that actually ship, so a caption can never bind a slot the payload
+  dropped. Leave an entry blank to skip it without breaking the alignment.
+
 ### Naming an image reference in the prompt (`@<name-slug>:<index>[:<role>]`)
 
 On `POST /v1/generate-image` a **media** reference (`source: "wired-image"` or
