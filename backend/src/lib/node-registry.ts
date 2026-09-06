@@ -268,7 +268,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     description:
       "Re-watches a clip against a wired analysis (or auto-runs a fast analysis first when none is wired), applies video-verified corrections under guards, and returns a disclosed report of what was checked, fixed, and left open.",
     outputType: "data",
-    creditCost: "215-1921",
+    creditCost: "215-1924",
     inputSchema: {
       fields: [
         { key: "videoUrl", type: "video-url", required: true },

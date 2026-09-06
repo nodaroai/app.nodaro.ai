@@ -164,7 +164,7 @@ describe("bare video-analysis node-type credit id", () => {
     // that prompt again, moving the pin 8_482 -> 8_706, and 357 wrote 2076:
     // the transition vocabulary v2 doctrine (twelve named values; absent =
     // nothing asserted) grew it once more, moving the pin 8_706 -> 9_082.
-    expect(ceiling).toBe(2076)
+    expect(ceiling).toBe(2081)
   })
 
   it("the bare id still bounds the default tier at the ceiling bucket", () => {
