@@ -3,6 +3,7 @@ export type {
   GenericEdge,
   CharacterDef,
   ConnectedReference,
+  DescribedReference,
   IdentityFidelity,
   IdentityMeta,
   ReferenceSource,

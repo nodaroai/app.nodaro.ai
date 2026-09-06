@@ -74,4 +74,10 @@ export const connectedReferenceSchema = z.object({
   identityLock: z
     .object({ enabled: z.boolean(), text: z.string().optional() })
     .optional(),
+  // PER-USE identity description (Described References). Wins over the entity's
+  // stored canonical description wherever one renders; `description` keeps its
+  // own label semantics. Same trust class as `description` — prompt-affecting
+  // free text from an authenticated caller — so the same `.max(2000)` ceiling
+  // the described-reference schema uses.
+  descriptionOverride: z.string().max(2000).optional(),
 })
