@@ -206,6 +206,29 @@ describe("buildImagePrompt — described references alongside connected referenc
     )
   })
 
+  it("makes ONE block when the references produce the 'Use these references' wrap", () => {
+    // A non-character ref with no wired character takes the legacy PREPEND
+    // branch ("Use these references for the output image:… Compose them
+    // naturally…"). The described block must be the block that wrap folds
+    // into — never a second header stacked above it.
+    const { prompt } = buildImagePrompt({
+      provider: PROVIDER,
+      prompt: "A still life with {image:1:vase}.",
+      connectedReferences: [
+        { id: "o1", defaultName: "Vase", source: "wired-object", url: "https://r2/vase.png", description: "a blue vase" },
+      ],
+      describedReferences: described,
+    })
+    expect(prompt.match(/Use these characters:/g)).toHaveLength(1)
+    expect(prompt).not.toContain("Use these references for the output image:")
+    expect(prompt).toBe(
+      "Use these characters:\n"
+        + "- Natalie — a tall woman in a red coat.\n"
+        + "- Image 1 (vase — a blue vase) — match exactly. Maintain perfect likeness.\n\n"
+        + "A still life with Image 1 (vase).",
+    )
+  })
+
   it("lands after the hybrid role phrases", () => {
     const { prompt } = buildImagePrompt({
       provider: PROVIDER,
@@ -294,7 +317,27 @@ describe("descriptionOverride — legacy", () => {
     expect(prompt).not.toContain("blue vase")
   })
 
-  it("wins over a wired location's canonical description", () => {
+  it("wins over a MENTIONED location's canonical description", () => {
+    const { prompt } = buildImagePrompt({
+      provider: PROVIDER,
+      prompt: "A wide shot of @old-library:1.",
+      connectedReferences: [
+        {
+          id: "l1",
+          defaultName: "Old Library",
+          source: "wired-location",
+          locationSlug: "old-library",
+          url: "https://r2/library.png",
+          locationCanonicalDescription: "a dusty reading room",
+          descriptionOverride: "a flooded reading room at night",
+        },
+      ],
+    })
+    expect(prompt).toContain("- Image 1 (Old Library) — a flooded reading room at night.")
+    expect(prompt).not.toContain("dusty reading room")
+  })
+
+  it("wins over an UNMENTIONED wired location's canonical description", () => {
     const { prompt } = buildImagePrompt({
       provider: PROVIDER,
       prompt: "A wide shot.",

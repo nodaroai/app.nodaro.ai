@@ -702,9 +702,13 @@ export function resolveLocationMentions(
     // description noise.
     const includeCanonicalDesc = effectiveMode === "identical"
     const canonicalDesc = match.locationCanonicalDescription?.trim()
-    const descPart = includeCanonicalDesc && canonicalDesc
-      ? `${subject} — ${canonicalDesc}`
-      : subject
+    // A per-use `descriptionOverride` IS the caller describing this place for
+    // this run, so it fills the identity slot ahead of the location's stored
+    // canonical description — and rides every mode that emits a bullet at all,
+    // the same rule the character resolvers apply.
+    const shownDesc = match.descriptionOverride?.trim()
+      || (includeCanonicalDesc ? canonicalDesc : undefined)
+    const descPart = shownDesc ? `${subject} — ${shownDesc}` : subject
     directiveLines.push(`- ${descPart}.${directive ? ` ${directive}` : ""}`)
 
     // Variant display-name sub-line: only when the user pinned a specific
@@ -2719,6 +2723,18 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
     const structuredRefs = connectedReferences ?? []
     let prompt = config.prompt
 
+    // Described references, LEGACY half — joined BEFORE the directive assembly
+    // below, because the block it creates is the block that assembly consolidates
+    // into. Joined AFTER instead, a request whose references produce the
+    // "Use these references for the output image:" wrap (any non-character ref,
+    // no wired character) would get a SECOND "Use these characters:" header
+    // prepended above it. Prepending here also keeps `marks.directivesPrefix`
+    // honest: the prepend branch that records it is only reachable when the
+    // prompt does NOT already open with the character block.
+    if (!isHybrid && describedLines.length > 0) {
+      prompt = appendReferenceLines(prompt, describedLines, "legacy")
+    }
+
     // Non-character refs are still emitted as per-identity directives + URLs.
     // Character refs are filtered out here — Phase 0 has already added their
     // URLs to `referenceImageUrls` (via mention resolution) and prepended the
@@ -2881,18 +2897,12 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
       }
     }
 
-    // Described references — the ONE join site for the image lane. Runs AFTER
-    // the directive assembly so a legacy block it created is consolidated into
-    // (never duplicated), and BEFORE the provider cap so the lines are body text
-    // like any other. In hybrid they land as trailing scene directives ahead of
-    // the `[style]` section, after the reference role phrases.
-    if (describedLines.length > 0) {
-      prompt = appendReferenceLines(prompt, describedLines, isHybrid ? "hybrid" : "legacy")
-      // The legacy join can PREPEND a block ahead of a captured directive
-      // prefix, which would make `marks.directivesPrefix` no longer a prefix of
-      // `prompt`. Clear it — the same documented degradation the hybrid branch
-      // takes, collapsing the segment decomposition to a single body span.
-      if (marks) marks.directivesPrefix = ""
+    // Described references, HYBRID half: trailing scene directives, so they land
+    // behind the reference role phrases the branch above appended (the legacy
+    // half ran before it — see the comment at that call). Still ahead of the
+    // provider cap below, so the lines are body text like any other.
+    if (isHybrid && describedLines.length > 0) {
+      prompt = appendReferenceLines(prompt, describedLines, "hybrid")
     }
 
     const styleText = style?.trim()
