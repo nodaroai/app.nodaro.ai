@@ -647,13 +647,40 @@ export async function writePendingAllowance(params: {
       message: "a pending allowance target must be zero or a positive whole number of credits",
     }
   }
+  // `created_by` is documented as "always the payer, asserted at write" — this
+  // is that assertion. The two RPCs make the same one in SQL against the
+  // settings singleton; a pending row has no RPC behind it, so without this
+  // the column's claim would be a comment rather than a rule.
+  const payerId = deploymentPayerId()
+  if (!payerId) {
+    return { ok: false, code: "allowance_unconfigured", message: "no deployment payer is configured" }
+  }
+  if (params.createdBy !== payerId) {
+    return { ok: false, code: "allowance_actor_not_payer", message: "actor is not the billing account" }
+  }
   const expiresAt = new Date(Date.now() + (params.ttlDays ?? PENDING_TTL_DAYS) * 86_400_000).toISOString()
 
-  const clear = supabase.from("deployment_allowance_pending").delete().is("applied_at", null)
-  const { error: clearError } = subject ? await clear.eq("sso_subject", subject) : await clear.eq("email", email)
-  if (clearError) {
-    console.error("[deployment-allowance] pending replace failed:", clearError.message)
-    return { ok: false, code: "allowance_write_failed", message: clearError.message }
+  // CLEAR BOTH KEYS, not the "best" one. The unique indexes are partial and
+  // there are TWO of them — `(sso_subject)` and `(lower(email))`, each WHERE
+  // `applied_at IS NULL` — so clearing only by subject leaves an EARLIER
+  // email-only intent for the same person standing, and the insert below then
+  // violates the email index and answers 500 to an integrator that did nothing
+  // wrong. "A replay replaces" has to mean every row this one would collide
+  // with, and the two deletes are the only shape that says that.
+  for (const [column, value] of [
+    ["sso_subject", subject],
+    ["email", email],
+  ] as const) {
+    if (!value) continue
+    const { error: clearError } = await supabase
+      .from("deployment_allowance_pending")
+      .delete()
+      .is("applied_at", null)
+      .eq(column, value)
+    if (clearError) {
+      console.error("[deployment-allowance] pending replace failed:", clearError.message)
+      return { ok: false, code: "allowance_write_failed", message: clearError.message }
+    }
   }
 
   const { data, error } = await supabase
@@ -782,6 +809,15 @@ export async function resolveUserRef(ref: UserRef): Promise<ResolvedUserRef> {
   }
 
   if (email) {
+    // `*` is refused OUTRIGHT rather than escaped: PostgREST rewrites `*` to
+    // `%` inside an `ilike` value and there is no escape that survives that
+    // rewrite. The TypeScript re-check below would still keep the ANSWER
+    // exact, but `limit(5)` could truncate the true match out of a widened
+    // result set and turn a real account into `absent`. No address needs one.
+    if (email.includes("*")) {
+      console.warn("[deployment-allowance] refusing an email lookup containing a wildcard character")
+      return { kind: "ambiguous" }
+    }
     const escaped = email.replace(/[\\%_]/g, (c) => `\\${c}`)
     const { data, error } = await supabase.from("profiles").select("id, email").ilike("email", escaped).limit(5)
     if (error) {

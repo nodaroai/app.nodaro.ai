@@ -42,14 +42,15 @@ export interface UserAllowance {
    * When the current PERIOD began — the instant a `renew` last zeroed `spent`
    * — or absent when this allowance has never been renewed.
    *
-   * OPTIONAL, and omitted rather than null when there is no period. Unlike
+   * OPTIONAL, and OMITTED rather than null when there is no period — the key
+   * is either an ISO timestamp or absent, never present-and-null. Unlike
    * `spent`, "no value" is the truthful answer for an allowance that has never
    * turned over: `spent` is then a lifetime figure and a surface that printed
    * "this period" beside it would be wrong. Every renderer therefore asks
    * `resetAt ? "this period" : "total"`, and `resetAt ?? null` is the shape a
    * response body wants.
    */
-  resetAt?: string | null
+  resetAt?: string
 }
 
 /**

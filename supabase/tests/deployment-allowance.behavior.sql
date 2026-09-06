@@ -819,6 +819,25 @@ SELECT pg_temp.assert_eq('15d2 it is still unapplied, and provisioned nobody',
   || '/' || pg_temp.a_col('00000000-0000-4000-8000-000000000999', 'granted_credits'),
   'true/<no row>');
 
+-- A REFUSABLE intent (994 has a job running against 60 of its 100, and the
+-- intent would set the plan to 50). The call is ALL-OR-NOTHING by decision:
+-- the refusal propagates, nothing is applied, and the message names the row so
+-- the log line says which intent is stuck rather than only that one is.
+INSERT INTO deployment_allowance_pending (sso_subject, email, target_credits, mode, note, created_by, expires_at)
+VALUES ('subject-994', NULL, 50, 'set', 'below what is committed',
+        '00000000-0000-4000-8000-000000000981', now() + interval '90 days');
+SELECT pg_temp.assert_raises('15g a refused intent aborts the apply and names the pending row',
+  $q$SELECT apply_pending_deployment_allowance('00000000-0000-4000-8000-000000000994',
+       'subject-994', 'da-u10@da.test')$q$,
+  'ALLOWANCE_PENDING_REFUSED:');
+SELECT pg_temp.assert_eq('15g2 the refusal applied nothing and left the intent standing',
+  (SELECT (applied_at IS NULL)::text FROM deployment_allowance_pending WHERE sso_subject = 'subject-994')
+  || '/' || pg_temp.a_col('00000000-0000-4000-8000-000000000994', 'granted_credits'),
+  'true/100');
+-- Cleared, so it cannot block the sweep in case 17 or a later sign-in in this
+-- file (which is exactly the cost the function's header marks as accepted).
+DELETE FROM deployment_allowance_pending WHERE sso_subject = 'subject-994';
+
 -- The subject lookups the routes resolve an identity with. The TRUSTED copy is
 -- `auth.users.raw_app_meta_data`, which only the service-role admin API writes.
 SELECT pg_temp.assert_eq('15e find_user_by_sso_subject reads the trusted app_metadata copy',

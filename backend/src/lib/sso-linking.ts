@@ -94,7 +94,7 @@ function refusedOperatorAddress(providerId: string): string {
  * into its sign-in path at all — which the payer check above the import makes
  * true.
  */
-function applyPendingAllowanceInBackground(userId: string, subject: string, email: string): void {
+function applyPendingAllowanceInBackground(userId: string, subject: string | null, email: string): void {
   if (deploymentPayerId() === null) return
   void (async () => {
     const { applyPendingAllowance } = await import("../ee/billing/deployment-allowance-service.js")
@@ -177,11 +177,21 @@ export async function resolveSsoUser(
   const metadata = { sso: provider.id, sso_subject: assertion.subject }
   const payerId = deploymentPayerId()
 
-  /** The ONE success shape, so that the best-effort pending-allowance apply
-   *  cannot be forgotten on a branch: every `ok: true` in this function goes
-   *  through here, after the identity is settled and before the return. */
-  const signedIn = (userId: string, action: "linked" | "provisioned"): SsoLinkResult => {
-    applyPendingAllowanceInBackground(userId, assertion.subject, email)
+  /**
+   * The ONE success shape, so that the best-effort pending-allowance apply
+   * cannot be forgotten on a branch: every `ok: true` in this function goes
+   * through here, after the identity is settled and before the return.
+   *
+   * `subject` is the identity the ACCOUNT carries, which is not always the one
+   * the assertion claims. On every branch that stamps metadata it is
+   * `assertion.subject` by construction; on the same-provider short-circuit
+   * the account already has a TRUSTED `app_metadata.sso_subject` that the
+   * marker alone does not check for a non-payer, so that copy is passed
+   * instead — an intent bought for subject X must reach the account that
+   * actually carries X, never one that merely asserts it.
+   */
+  const signedIn = (userId: string, action: "linked" | "provisioned", subject?: string | null): SsoLinkResult => {
+    applyPendingAllowanceInBackground(userId, subject === undefined ? assertion.subject : subject, email)
     return { ok: true, email, userId, action }
   }
 
@@ -232,6 +242,14 @@ export async function resolveSsoUser(
     const appMetadata = user.app_metadata as Record<string, unknown> | undefined
     const existingSso = (user.user_metadata as Record<string, unknown> | undefined)?.sso
     const isPayer = profile.id === payerId
+    /** The service-role-only copy — the one the auth gate trusts. On the
+     *  short-circuit below it is the account's real identity at this provider,
+     *  and `null` when the account carries none (an intent can then only be
+     *  matched by address, which is the honest answer rather than a guess). */
+    const trustedAccountSubject =
+      typeof appMetadata?.sso_subject === "string" && appMetadata.sso_subject.length > 0
+        ? (appMetadata.sso_subject as string)
+        : null
     if (existingSso === provider.id) {
       // For the payer the marker alone is NOT a licence — see the header. Both
       // re-checks run on every assertion, not only the linking one.
@@ -250,7 +268,10 @@ export async function resolveSsoUser(
           }
         }
       }
-      return signedIn(profile.id, "linked")
+      // The account's OWN subject, not the assertion's: for the payer the two
+      // were just proved equal, and for everybody else the marker check above
+      // never compared them.
+      return signedIn(profile.id, "linked", trustedAccountSubject)
     }
     // Already federated to a DIFFERENT IdP — never silently re-stamp to this one.
     // A verified provider-B assertion must not seize a provider-A-linked account
