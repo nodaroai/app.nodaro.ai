@@ -48,6 +48,15 @@ import { getStripe } from "../billing/stripe-client.js"
 import { ensureStripeCustomer } from "../billing/provision-credits.js"
 import { creditsForLoadUsd, MIN_LOAD_USD, MAX_LOAD_USD } from "../billing/load-rate.js"
 import { rejectProgrammaticAuth } from "../../lib/api-auth-mode.js"
+import {
+  countLiveBillingKeys,
+  listBillingKeys,
+  MAX_LIVE_BILLING_KEYS,
+  mintBillingKey,
+  normalizeCidr,
+  revokeBillingKey,
+  type BillingKeyRow,
+} from "../../lib/billing-key-resolver.js"
 import { requireDeploymentPayer, PAYER_JWT_ONLY_MSG } from "../middleware/require-deployment-payer.js"
 import { allowanceEnforcementActive, deploymentPayerId } from "../../lib/deployment-payer.js"
 import { runtimeSurfaceProfile } from "../../lib/surface-profile.js"
@@ -245,6 +254,36 @@ function periodStart(): Date {
   d.setUTCDate(1)
   d.setUTCHours(0, 0, 0, 0)
   return d
+}
+
+/** The refusal for the verbs that stay BROWSER-SESSION-ONLY even though the
+ *  guard above them now accepts a billing integration key too. Its own code, so
+ *  a support ticket that quotes it names the gate in one line — and so the log
+ *  line the guard writes is not the only trace. */
+const PAYER_SESSION_ONLY_MSG =
+  "This operation is available only from the billing account's signed-in browser session, " +
+  "not from a billing integration key."
+
+/**
+ * Two verbs are excluded from the widened guard, in the route rather than in
+ * the guard, so the exception is visible at the thing it protects:
+ *
+ *   * `POST /checkout` — the one verb that turns a leaked credential into a
+ *     charge on a real card. It stays browser-only forever.
+ *   * `POST /integration-keys` — a key must not be able to mint a key, exactly
+ *     as a personal token cannot mint a personal token (`api-tokens.ts`).
+ *     Otherwise one leaked credential silently becomes a permanent supply of
+ *     them, and revoking the leaked one changes nothing.
+ *
+ * Returns true (and sends a 403) when the caller is anything but a browser
+ * session — the handler must `return` immediately.
+ */
+function refuseWithoutPayerSession(req: FastifyRequest, reply: { status: (n: number) => { send: (b: unknown) => unknown } }): boolean {
+  if (req.authKind !== "jwt") {
+    reply.status(403).send(err("payer_session_required", PAYER_SESSION_ONLY_MSG))
+    return true
+  }
+  return false
 }
 
 // ---------------------------------------------------------------------------
@@ -563,6 +602,10 @@ export async function deploymentBillingRoutes(app: FastifyInstance): Promise<voi
   // POST /checkout — the payer buys Nodaro credits with its own card
   // -------------------------------------------------------------------------
   app.post("/v1/deployment-billing/checkout", { preHandler: requireDeploymentPayer }, async (req, reply) => {
+    // BEFORE `rejectProgrammaticAuth`, so a billing integration key is refused
+    // with the code that says WHY (`payer_session_required`) rather than the
+    // generic `forbidden` the bare call would send.
+    if (refuseWithoutPayerSession(req, reply)) return
     if (rejectProgrammaticAuth(req, reply, PAYER_JWT_ONLY_MSG)) return
     const payerId = req.userId
     if (!payerId) return reply.status(401).send(err("unauthorized", "Authentication required"))
@@ -655,4 +698,189 @@ export async function deploymentBillingRoutes(app: FastifyInstance): Promise<voi
       return reply.status(500).send(err("checkout_failed", "Could not start the payment session."))
     }
   })
+
+  // =========================================================================
+  // THE BILLING INTEGRATION KEYS — mint, list, revoke
+  // =========================================================================
+  //
+  // The credential class the integration in the customer's back office holds
+  // (spec §6.1): `ndr_bill_<64 hex>`, resolved in the auth hook, refused there
+  // on every path outside `/v1/deployment-billing/`. These three routes issue
+  // and withdraw it, and all three are BROWSER-SESSION-ONLY — a key must not be
+  // able to enumerate or mint or revoke keys, its own included.
+  //
+  // Three gates, deliberately redundant and deliberately in different files:
+  // `requireDeploymentPayer` (identity), `refuseWithoutPayerSession` (the
+  // credential kind, with the code that says why) and a bare
+  // `rejectProgrammaticAuth` (no `allowBillingKey`, so it refuses the key a
+  // second time along with every other programmatic caller). Any one of the
+  // three going missing must not open this surface.
+  //
+  // R9 — KEY MATERIAL. The bearer exists in exactly one response body, once:
+  // the mint route's. It is never logged, never stored unhashed, and never
+  // echoed by a read — `GET` returns the 12-character prefix, and not even the
+  // hash, which against a known 9-character prefix would be a verifier worth
+  // cracking.
+
+  /** What the page sees. Neither the bearer nor its hash is in this shape, and
+   *  the resolver never selects the hash column in the first place. */
+  const renderKey = (row: BillingKeyRow) => ({
+    id: row.id,
+    name: row.name,
+    tokenPrefix: row.token_prefix,
+    createdAt: row.created_at,
+    expiresAt: row.expires_at ?? null,
+    lastUsedAt: row.last_used_at ?? null,
+    revokedAt: row.revoked_at ?? null,
+    allowedCidrs: row.allowed_cidrs ?? null,
+  })
+
+  /** The column is bare `text`, and this route is the only enforcement point —
+   *  the same reasoning as the grant note's cap above. */
+  const KEY_NAME_MAX = 80
+  /** A source allow-list is a handful of egress addresses, not a routing table. */
+  const MAX_ALLOWED_CIDRS = 20
+
+  // -------------------------------------------------------------------------
+  // GET /integration-keys — every key, live and dead
+  // -------------------------------------------------------------------------
+  app.get("/v1/deployment-billing/integration-keys", { preHandler: requireDeploymentPayer }, async (req, reply) => {
+    if (refuseWithoutPayerSession(req, reply)) return
+    if (rejectProgrammaticAuth(req, reply, PAYER_JWT_ONLY_MSG)) return
+
+    const rows = await listBillingKeys()
+    if (!rows) return reply.status(500).send(err("read_failed", "Could not read this deployment's integration keys."))
+    // Revoked and expired rows are included on purpose: the payer has to be
+    // able to see WHY a key stopped working, not merely that it is gone.
+    return reply.send({ data: rows.map(renderKey) })
+  })
+
+  // -------------------------------------------------------------------------
+  // POST /integration-keys — mint one, and show the bearer exactly once
+  // -------------------------------------------------------------------------
+  app.post("/v1/deployment-billing/integration-keys", { preHandler: requireDeploymentPayer }, async (req, reply) => {
+    if (refuseWithoutPayerSession(req, reply)) return
+    if (rejectProgrammaticAuth(req, reply, PAYER_JWT_ONLY_MSG)) return
+    const payerId = req.userId
+    if (!payerId) return reply.status(401).send(err("unauthorized", "Authentication required"))
+
+    const body = (req.body ?? {}) as Record<string, unknown>
+
+    const name = typeof body.name === "string" ? body.name.trim() : ""
+    if (name.length === 0 || name.length > KEY_NAME_MAX) {
+      return reply
+        .status(400)
+        .send(err("invalid_name", `name must be between 1 and ${KEY_NAME_MAX} characters.`))
+    }
+
+    let expiresAt: string | null = null
+    if (body.expiresAt !== undefined && body.expiresAt !== null) {
+      const raw = body.expiresAt
+      const at = typeof raw === "string" ? Date.parse(raw) : Number.NaN
+      // A key minted already expired is a key that never worked and whose
+      // failure looks exactly like a revocation — refuse it at the door.
+      if (!Number.isFinite(at) || at <= Date.now()) {
+        return reply
+          .status(400)
+          .send(err("invalid_expiry", "expiresAt must be an ISO 8601 timestamp in the future."))
+      }
+      expiresAt = new Date(at).toISOString()
+    }
+
+    let allowedCidrs: string[] | null = null
+    if (body.allowedCidrs !== undefined && body.allowedCidrs !== null) {
+      const raw = body.allowedCidrs
+      if (!Array.isArray(raw) || raw.length > MAX_ALLOWED_CIDRS) {
+        return reply
+          .status(400)
+          .send(err("invalid_cidr", `allowedCidrs must be a list of at most ${MAX_ALLOWED_CIDRS} network blocks.`))
+      }
+      const normalized: string[] = []
+      for (const entry of raw) {
+        // Refused, never silently masked: `10.0.0.1/24` is a typo, and widening
+        // it to `10.0.0.0/24` would grant a range the payer did not ask for —
+        // while passing it through would be a 500 from the `cidr` column.
+        const one = normalizeCidr(entry)
+        if (one === null) {
+          return reply
+            .status(400)
+            .send(
+              err(
+                "invalid_cidr",
+                "Each entry of allowedCidrs must be an IP address or a network block with no host bits set " +
+                  "(for example 203.0.113.9 or 10.0.0.0/8).",
+              ),
+            )
+        }
+        normalized.push(one)
+      }
+      allowedCidrs = normalized.length > 0 ? normalized : null
+    }
+
+    const existing = await listBillingKeys()
+    if (!existing) {
+      return reply.status(500).send(err("read_failed", "Could not read this deployment's integration keys."))
+    }
+    if (countLiveBillingKeys(existing) >= MAX_LIVE_BILLING_KEYS) {
+      return reply
+        .status(409)
+        .send(
+          err(
+            "key_limit_reached",
+            `This deployment already has ${MAX_LIVE_BILLING_KEYS} live integration keys. ` +
+              "Revoke one before creating another.",
+          ),
+        )
+    }
+
+    const minted = await mintBillingKey({ name, expiresAt, allowedCidrs, createdBy: payerId })
+    if (!minted.ok) {
+      return reply.status(500).send(err("key_write_failed", "The integration key could not be created."))
+    }
+
+    // THE ONLY PLACE `token` EVER APPEARS. Nothing above logged it, nothing
+    // below stores it, and no read route can produce it again.
+    return reply.status(201).send({
+      data: {
+        id: minted.row.id,
+        name: minted.row.name,
+        token: minted.token,
+        tokenPrefix: minted.row.token_prefix,
+        expiresAt: minted.row.expires_at ?? null,
+      },
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // DELETE /integration-keys/:id — revoke, and stop it working now
+  // -------------------------------------------------------------------------
+  app.delete(
+    "/v1/deployment-billing/integration-keys/:id",
+    { preHandler: requireDeploymentPayer },
+    async (req, reply) => {
+      if (refuseWithoutPayerSession(req, reply)) return
+      if (rejectProgrammaticAuth(req, reply, PAYER_JWT_ONLY_MSG)) return
+
+      const parsed = z.object({ id: z.string().uuid() }).safeParse(req.params)
+      if (!parsed.success) {
+        return reply.status(400).send(err("invalid_key_id", "That is not an integration key id."))
+      }
+
+      const result = await revokeBillingKey(parsed.data.id)
+      if (result === "write_failed") {
+        return reply.status(500).send(err("key_write_failed", "The integration key could not be revoked."))
+      }
+      // An unknown id and an already-revoked one answer the same, because they
+      // mean the same thing: there is no LIVE key with that id. Keeping the
+      // original `revoked_at` matters more than distinguishing them — it is the
+      // audit fact, and a replayed DELETE must not move it.
+      if (result === "not_found") {
+        return reply.status(404).send(err("key_not_found", "No live integration key with that id."))
+      }
+      // The resolver's cache was dropped inside `revokeBillingKey`, in the same
+      // call as the write: a revocation that waited out the 60-second TTL would
+      // leave the key working for a minute after the payer was told otherwise.
+      return reply.send({ data: { id: parsed.data.id, revoked: true } })
+    },
+  )
 }
