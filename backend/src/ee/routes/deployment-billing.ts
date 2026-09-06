@@ -182,6 +182,12 @@ const WRITE_STATUS: Record<AllowanceWriteErrorCode, number> = {
   allowance_kind_invalid: 400,
   allowance_zero_grant: 400,
   allowance_below_committed: 409,
+  // 387's two verbs. No route in THIS file can raise either yet — the page
+  // grants and sets a default, and neither RPC takes a mode or a target — but
+  // the map is total over the union on purpose, so the code that adds those
+  // routes cannot ship a refusal that falls through to an unmapped 500.
+  allowance_mode_invalid: 400,
+  allowance_target_invalid: 400,
   allowance_write_failed: 500,
 }
 
@@ -196,6 +202,8 @@ const WRITE_MESSAGE: Record<AllowanceWriteErrorCode, string> = {
   allowance_below_committed:
     "That correction would push the allowance below what this user has already reserved or spent. " +
     "Lower it by less, or wait for the running jobs to finish.",
+  allowance_mode_invalid: "Unsupported allowance mode.",
+  allowance_target_invalid: "An allowance target must be zero or a positive whole number.",
   allowance_write_failed: "The allowance could not be updated. Nothing was changed.",
 }
 
