@@ -3,6 +3,17 @@
 	# /.well-known/oauth-* handle blocks were added.
 	auto_https off
 	admin off
+	servers {
+		# The platform edge terminates TLS and reaches this container over the
+		# private network, speaking plain HTTP. Without trusting it, Caddy
+		# replaces the edge's X-Forwarded-For with the edge's own address (so
+		# every user shares one rate-limit key on unauthenticated routes such as
+		# the SSO exchange) and X-Forwarded-Proto with "http". Trusting the
+		# private ranges lets the real client address and scheme through; a
+		# public-address proxy in front of a self-host is still untrusted, so
+		# its headers are still replaced — today's behaviour.
+		trusted_proxies static private_ranges
+	}
 }
 
 :3000 {
