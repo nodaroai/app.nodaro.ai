@@ -370,7 +370,9 @@ ranges (`127.0.0.1/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`,
 address it derives — the rightmost entry that is not itself a trusted proxy,
 so an address a client put in the header is skipped — while a proxy reaching
 it from a public address has those headers replaced with the values Caddy
-itself observed.
+itself observed; one consequence worth knowing if you serve an intranet is
+that the same rule skips your users' own addresses when those are private
+too, so a client on the LAN can choose the address the backend records.
 
 **Option A — Front Caddy with another reverse proxy.** Recommended if
 you already run nginx or another proxy.
