@@ -57,6 +57,11 @@ const LLM_MODEL_RATES_USD_PER_M: Record<string, LlmModelRateUsd> = {
   // KIE list price unpublished at add time (2026-08-18) — pinned to Google's
   // own INTRO rate as the margin-safe ceiling; revisit when KIE lists it.
   "gemini-3.7-flash":  { inputPricePerM: 0.75,  outputPricePerM: 3.75 },
+  // KIE list price 45/225 KIE-credits per M ($0.005/credit) — ~15% of Google's
+  // STANDARD list (the convention the 3.6 row's "~30%" also uses); it reads as
+  // 30% against the intro rate the direct row below carries through 2026-12-31,
+  // so compare the two rows with that in mind (confirmed 2026-09-06).
+  "gemini-3.8-flash":  { inputPricePerM: 0.225, outputPricePerM: 1.125 },
   "claude-haiku-4.5":  { inputPricePerM: 0.80,  outputPricePerM: 4.00 },
   "claude-sonnet-4.6": { inputPricePerM: 3.00,  outputPricePerM: 15.00 },
   "gpt-5.2":           { inputPricePerM: 2.50,  outputPricePerM: 10.00 },
@@ -70,6 +75,15 @@ const LLM_MODEL_RATES_USD_PER_M: Record<string, LlmModelRateUsd> = {
   "gpt-5.6-luna":      { inputPricePerM: 0.28,  outputPricePerM: 1.68 },
   "gpt-5.6-terra":     { inputPricePerM: 0.70,  outputPricePerM: 4.20 },
   "gpt-5.6-sol":       { inputPricePerM: 1.40,  outputPricePerM: 8.40 },
+  // KIE list price 560/2800 KIE-credits per M ($0.005/credit), confirmed
+  // 2026-09-06. KIE additionally bills cached input at 56 and cache WRITES at
+  // 700 credits/M — the flat uncached band is what this table models, per the
+  // `LlmCostUsage` warning below: this is an OpenAI-shape lane, which reports
+  // cached tokens INSIDE the prompt total, so feeding the cache fields here
+  // would double-count them. (KIE's 0.1x read / 1.25x write multipliers happen
+  // to equal the Anthropic ones the formula applies.) `credits_consumed`
+  // capture keeps provider_cost honest.
+  "gpt-6-astra":       { inputPricePerM: 2.80,  outputPricePerM: 14.00 },
   // KIE list price 160/480 KIE-credits per M ($0.005/credit) — 40% of xAI's
   // official $2/$6 (confirmed 2026-08-18, docs.kie.ai/market/grok/grok-4-6).
   // Cached input reprices to $0.20/M on KIE's side; the table models the flat
@@ -113,6 +127,10 @@ const LLM_DIRECT_RATES_USD_PER_M: Record<string, LlmModelRateUsd> = {
   // applies 2027-01-01 — bump this row then (Google launch pricing,
   // verified 2026-08-18).
   "gemini-3.7-flash": { inputPricePerM: 0.75, outputPricePerM: 3.75 },
+  // Same launch schedule as 3.7: INTRO pricing through 2026-12-31
+  // ($0.75/$3.75), standard $1.50/$7.50 from 2027-01-01 — bump this row then
+  // (Google launch pricing, verified 2026-09-06).
+  "gemini-3.8-flash": { inputPricePerM: 0.75, outputPricePerM: 3.75 },
   "gemini-3.1-pro": {
     inputPricePerM: 2.00,
     outputPricePerM: 12.00,

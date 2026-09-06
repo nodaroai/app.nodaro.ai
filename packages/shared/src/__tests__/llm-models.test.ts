@@ -35,6 +35,7 @@ const EXPECTED_MODEL_IDS = [
   "gemini-3-flash",
   "gemini-3.6-flash",
   "gemini-3.7-flash",
+  "gemini-3.8-flash",
   "claude-haiku-4.5",
   "claude-sonnet-4.6",
   "gpt-5.2",
@@ -45,6 +46,7 @@ const EXPECTED_MODEL_IDS = [
   "gpt-5.6-luna",
   "gpt-5.6-terra",
   "gpt-5.6-sol",
+  "gpt-6-astra",
   "grok-4.6",
   "claude-sonnet-5",
   "claude-opus-4.8",
@@ -94,14 +96,14 @@ describe("LLM_MODELS data integrity", () => {
     expect(new Set(ids).size).toBe(ids.length)
   })
 
-  it("has 5 economy, 5 standard, 8 premium models", () => {
+  it("has 6 economy, 5 standard, 9 premium models", () => {
     const tierCounts: Record<LlmTier, number> = { economy: 0, standard: 0, premium: 0 }
     for (const model of LLM_MODELS) {
       tierCounts[model.tier]++
     }
-    expect(tierCounts.economy).toBe(5)
+    expect(tierCounts.economy).toBe(6)
     expect(tierCounts.standard).toBe(5)
-    expect(tierCounts.premium).toBe(8)
+    expect(tierCounts.premium).toBe(9)
   })
 
   it("all three kieFormats are represented", () => {
@@ -483,6 +485,7 @@ describe("STRUCTURED_VISION_MODELS", () => {
         "gemini-3-flash",
         "gemini-3.6-flash",
         "gemini-3.7-flash",
+        "gemini-3.8-flash",
         "gemini-3.1-pro",
         "claude-sonnet-5",
         "claude-opus-4.8",
@@ -495,6 +498,9 @@ describe("STRUCTURED_VISION_MODELS", () => {
         "gpt-5.6-luna",
         "gpt-5.6-terra",
         "gpt-5.6-sol",
+        // responses-format GPT-6 — text.format json_schema enforced (server
+        // echoed strict:true), live-verified 2026-09-06.
+        "gpt-6-astra",
         // responses-format Grok — vision + text.format live-verified 2026-08-18.
         "grok-4.6",
       ].sort(),
@@ -540,6 +546,8 @@ describe("reasoning effort registry", () => {
     expect(getLlmTier("gpt-5.6-luna")).toBe("economy")
     expect(getLlmTier("gpt-5.6-terra")).toBe("standard")
     expect(getLlmTier("gpt-5.6-sol")).toBe("premium")
+    expect(getLlmTier("gpt-6-astra")).toBe("premium")
+    expect(getLlmTier("gemini-3.8-flash")).toBe("economy")
     expect(getLlmTier("grok-4.6")).toBe("standard")
     expect(getLlmTier("claude-sonnet-5")).toBe("standard")
     expect(getLlmTier("claude-opus-4.8")).toBe("premium")
@@ -627,6 +635,117 @@ describe("gemini-3.7-flash exposure", () => {
     // valid TOGETHER with the VA-side tier/pricing decision.
     expect(getLlmModalityCaps("gemini-3.7-flash")).toEqual({ image: true, video: false, audio: false })
     expect(VIDEO_ANALYSIS_LLM_MODELS).not.toContain("gemini-3.7-flash")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// gemini-3.8-flash exposure (KIE lane live-verified 2026-09-06: enforced
+// response_format json_schema, reasoning_tokens in usage, and a 20k max_tokens
+// request honored for 14,892 completion tokens with finish_reason "stop")
+// ---------------------------------------------------------------------------
+describe("gemini-3.8-flash exposure", () => {
+  it("KIE-first chat-completions with a direct lane — 3.7-flash's proven shape", () => {
+    const m = getLlmModel("gemini-3.8-flash")
+    expect(m?.tier).toBe("economy")
+    expect(m?.vendor).toBe("google")
+    expect(m?.kieFormat).toBe("chat-completions")
+    expect(m?.kieSlugOrModel).toBe("gemini-3-8-flash-openai")
+    // KIE-first on purpose (no preferDirect): the cheap lane serves the A/B,
+    // the direct lane is Advanced mode + the reliability fallback.
+    expect(m?.preferDirect).toBeUndefined()
+    expect(m?.directGeminiModel).toBe("gemini-3.8-flash")
+    expect(m?.reasoningEfforts).toEqual(["low", "high"])
+    expect(m?.structuredOutputMode).toBe("kie-response-format")
+    expect(supportsAdvancedMode("gemini-3.8-flash")).toBe(true)
+    expect(availableReasoningEfforts("gemini-3.8-flash")).toEqual(["low", "high"])
+    expect(availableReasoningEfforts("gemini-3.8-flash", true)).toEqual(["none", "low", "medium", "high"])
+  })
+
+  it("carries a 16384 output cap — measured, not inherited from its 8192 siblings", () => {
+    // 3.6 / 3.7 sit at 8192 as the KIE-safe intersection because nobody
+    // measured their endpoints past it. 3.8's WAS measured (2026-09-06:
+    // max_tokens 20000 honored, 14,892 completion tokens, finish_reason
+    // "stop"), so it is not pinned to its siblings' unmeasured floor.
+    expect(getLlmModel("gemini-3.8-flash")?.maxOutputTokens).toBe(16384)
+  })
+
+  it("resolves by canonical id and by its KIE slug (cost reconciliation reads whatever the wire used)", () => {
+    expect(getLlmModel("gemini-3.8-flash")?.id).toBe("gemini-3.8-flash")
+    expect(getLlmModel("gemini-3-8-flash-openai")?.id).toBe("gemini-3.8-flash")
+  })
+
+  it("stays OUT of video-analysis — image-only modality caps by decision, not omission", () => {
+    // Google's own 3.8 lane understands video (agentic video via the
+    // Interactions API), so full caps here would auto-enroll it in
+    // VIDEO_ANALYSIS_LLM_MODELS and force a VA tier + pricing decision that is
+    // deliberately deferred until the 3.8-vs-3.7 analysis A/B concludes.
+    // If this goes red, someone flipped the caps — only valid TOGETHER with
+    // that VA-side decision.
+    expect(getLlmModalityCaps("gemini-3.8-flash")).toEqual({ image: true, video: false, audio: false })
+    expect(VIDEO_ANALYSIS_LLM_MODELS).not.toContain("gemini-3.8-flash")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// gpt-6-astra exposure (KIE responses lane live-verified 2026-09-06 on the
+// streaming path: enforced text.format json_schema with strict:true, the
+// documented effort enum, temperature silently ignored, reasoning on by default)
+// ---------------------------------------------------------------------------
+describe("gpt-6-astra exposure", () => {
+  it("responses-format OpenAI premium — the GPT-5.6 family's proven shape", () => {
+    const m = getLlmModel("gpt-6-astra")
+    expect(m?.tier).toBe("premium")
+    expect(m?.vendor).toBe("openai")
+    expect(m?.kieFormat).toBe("responses")
+    expect(m?.structuredOutputMode).toBe("responses-json-schema")
+    expect(m?.maxOutputTokens).toBe(16384)
+    expect(m?.reasoningEfforts).toEqual(["low", "medium", "high", "xhigh"])
+    // Temperature is accepted-and-ignored by this endpoint (echo stayed at 1.0
+    // for a sent 0.2), so the registry must say "don't send it".
+    expect(m?.supportsTemperature).toBe(false)
+    // Reasons with NO reasoning param sent (server echoed effort "medium") —
+    // consumers floor max_tokens off this flag or the answer truncates.
+    expect(m?.thinkingDefaultOn).toBe(true)
+    // No direct lane: OpenAI models route through KIE only, so Advanced mode
+    // (a Gemini-lane capability) must stay off.
+    expect(supportsAdvancedMode("gpt-6-astra")).toBe(false)
+  })
+
+  it("resolves from its own slug — the slug is the body `model`, the path comes from vendor", () => {
+    // llm-client derives codex/v1/responses from vendor "openai" (the same
+    // derivation that keeps Grok on grok/v1/responses), so kieSlugOrModel is
+    // sent as the request body's `model` and doubles as a lookup alias.
+    const m = getLlmModel("gpt-6-astra")
+    expect(m?.kieSlugOrModel).toBe("gpt-6-astra")
+    expect(getLlmModel(m!.kieSlugOrModel)?.id).toBe("gpt-6-astra")
+  })
+
+  it("is an accepted structured-vision analyzer", () => {
+    expect(STRUCTURED_VISION_MODELS.map((m) => m.id)).toContain("gpt-6-astra")
+    expect(STRUCTURED_VISION_MODELS.map((m) => m.id)).toContain("gemini-3.8-flash")
+  })
+
+  it("is image-only — KIE's GPT-6 doc lists text + image + file inputs, no video/audio", () => {
+    expect(getLlmModalityCaps("gpt-6-astra")).toEqual({ image: true, video: false, audio: false })
+    expect(VIDEO_ANALYSIS_LLM_MODELS).not.toContain("gpt-6-astra")
+  })
+
+  it("bills premium, and xhigh cannot bump past it", () => {
+    expect(buildLlmCreditIdentifier("llm-chat", "gpt-6-astra")).toBe("llm-chat:premium")
+    expect(buildLlmCreditIdentifier("llm-chat", "gpt-6-astra", "xhigh")).toBe("llm-chat:premium")
+  })
+
+  it("is the ONLY model declaring kieCollapseStream — the condition is per model, not per lane", () => {
+    // KIE's non-stream responses endpoint 500s ~2 calls in 3 for astra
+    // (measured 2026-09-06: 2/6 non-stream vs 5/6 streaming) while serving
+    // gpt-5.4/5.5/5.6 fine, so llm-client collapses the streaming wire for
+    // THIS model only. If a second model ever legitimately needs it, add it
+    // here deliberately — a flag that spreads by copy-paste would quietly move
+    // every affected model's provider cost onto the rate-table estimate,
+    // because SSE does not reliably carry `credits_consumed`.
+    expect(getLlmModel("gpt-6-astra")?.kieCollapseStream).toBe(true)
+    const others = LLM_MODELS.filter((m) => m.id !== "gpt-6-astra")
+    expect(others.filter((m) => m.kieCollapseStream !== undefined).map((m) => m.id)).toEqual([])
   })
 })
 

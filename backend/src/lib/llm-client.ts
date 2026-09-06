@@ -154,7 +154,10 @@ export interface LlmRequest {
    * guessed here.
    *
    * Enforced on all three KIE formats — that is the lane with the hazard, and
-   * where `buildResponse` sees both the request and the reported usage. It is
+   * where `buildResponse` sees both the request and the reported usage. The
+   * collapsed responses lane (`kieCollapseStream`) returns the stream parser's
+   * own object instead of calling `buildResponse`, so it re-applies the guard
+   * itself once the retry has resolved. It is
    * deliberately NOT wired into the direct lanes: `lib/gemini/media.ts` already
    * THROWS when media cannot be fetched, so an ungrounded answer is not
    * reachable there, and the direct-Anthropic paths carry no video at all.
@@ -895,7 +898,14 @@ async function callKie(model: LlmModelDef, req: LlmRequest): Promise<LlmResponse
         ? callKieMessages(model, req)
         : callKieMessagesCollapsed(model, req)
     case "responses":
-      return callKieResponses(model, req)
+      // Per MODEL, not per lane — the opposite of the Claude switch above.
+      // KIE's non-streaming responses endpoint serves gpt-5.4/5.5/5.6 fine and
+      // 500s ~2 calls in 3 for gpt-6-astra, so the registry names the affected
+      // model (`kieCollapseStream`) and this reads the flag. No name matching:
+      // a future model with the same condition declares it and is served here.
+      return model.kieCollapseStream
+        ? callKieResponsesCollapsed(model, req)
+        : callKieResponses(model, req)
   }
 }
 
@@ -1200,6 +1210,86 @@ async function streamKieResponses(
   }
 
   return parseSseStream(response, model.id, onToken, "responses")
+}
+
+/**
+ * Serve a NON-streaming `responses` request over KIE's STREAMING wire,
+ * collapsing the SSE into one response — the same shape as
+ * `callKieMessagesCollapsed`, applied to a per-MODEL condition instead of a
+ * lane-wide one.
+ *
+ * Measured 2026-09-06 on gpt-6-astra, 12 identical requests: `stream: false`
+ * succeeded 2/6 (4–5 s) and 500'd 4/6 with `{"error":{"type":"server_error"}}`
+ * after 34, 34, 35 and 64 s; the identical body with `stream: true` succeeded
+ * 5/6 in the same 4–5 s. A schema-less non-stream call 500'd too, so the
+ * json_schema is not the trigger — the non-stream lane is. The same endpoint
+ * serves gpt-5.4/5.5/5.6 non-stream reliably, which is why the switch is a
+ * registry flag on one model rather than a change to this whole format.
+ *
+ * Without it, `llmComplete` / `llmCompleteStructured` — every non-streaming
+ * caller, including the llm-structured route the studio Director drafts on —
+ * fail ~2 attempts in 3, and the structured route's 3 attempts turn that into
+ * roughly a third of drafts dying after ~100 s of 500s.
+ *
+ * Cost note: KIE's SSE does not reliably carry `credits_consumed`, so
+ * `parseSseStream` falls back to the rate-table estimate for `providerCost`.
+ * That is the deliberate trade — an estimated cost on a call that succeeds
+ * beats an exact cost on one that mostly doesn't.
+ */
+async function callKieResponsesCollapsed(model: LlmModelDef, req: LlmRequest): Promise<LlmResponse> {
+  // No caller wants the tokens — this is the non-streaming entry point.
+  // ONE deadline for both attempts: the caller's `timeoutMs` stays a bound on
+  // the whole call. Without a shared signal each attempt gets its own full
+  // budget and a timed-out first attempt buys the second another 120 s (240 s
+  // on the structured route) — the retry exists to clear a FAST silent close,
+  // not to double every slow failure.
+  const signal = AbortSignal.timeout(effectiveTimeout(req))
+  const once = async () => {
+    const res = await streamKieResponses(model, req, () => {}, signal)
+    // A stream that ENDS without ever emitting text is a failure, and must be
+    // thrown rather than returned as an empty success. Only an `event: error`
+    // frame makes parseSseStream throw; a stream that dies after
+    // `response.created` — which is what the probe's one silent failure looked
+    // like from here — just runs out of chunks and returns `text: ""` with the
+    // reader closed and nothing raised. That empty string is indistinguishable
+    // from a real answer to every caller: llm-chat hands it to the user as a
+    // successful reply, and llmCompleteStructured turns `JSON.parse("")` into a
+    // fake `assistant: "{}"` correction turn. The non-streaming lane this
+    // replaces 500'd in that situation, so returning "" would be a REGRESSION in
+    // failure honesty. Throwing inside `once()` puts it on the retry below,
+    // which is what the probe showed clears it. `!res.text` is the honest test:
+    // the responses dialect carries structured output as `output_text` too, so
+    // no legitimate reply of any shape is empty here.
+    if (!res.text) {
+      throw new Error(`KIE.ai responses stream ${model.id} closed without output (no text before end of stream)`)
+    }
+    return res
+  }
+
+  let res: LlmResponse
+  try {
+    res = await once()
+  } catch (err) {
+    // 1 of the 6 streaming probes produced no `response.completed` (a silent
+    // failure / error frame) after 35 s, which a retry clears — both shapes now
+    // arrive here as a throw (the error frame from parseSseStream, the silent
+    // close from the guard above). Bounded at one attempt: for a
+    // responses-format model there is no direct-vendor lane behind this, so a
+    // genuinely down endpoint must still surface fast rather than multiply the
+    // caller's wait.
+    console.warn(`[llm-kie-stream-retry] ${model.id}: ${String(err).slice(0, 160)}`)
+    res = await once()
+  }
+
+  // This lane bypasses `buildResponse`, so the media fail-open guard has to be
+  // re-applied by hand — otherwise a `kieCollapseStream` model would be the one
+  // KIE format that silently ignores `minPromptTokens`, which the field's
+  // docstring promises on all three. Deliberately OUTSIDE the retry: an
+  // un-ingested media answer is the provider answering, not the stream failing,
+  // and re-asking costs a second billed call for no better odds — the same
+  // no-retry treatment `callKieResponses` gives it through `buildResponse`.
+  assertMediaIngested(model, req, res.usage)
+  return res
 }
 
 // ---------------------------------------------------------------------------

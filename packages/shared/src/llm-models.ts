@@ -95,6 +95,22 @@ export interface LlmModelDef {
   /** Claude-only: KIE is the preferred routing, direct Anthropic the fallback. */
   preferKie?: true
   /**
+   * KIE's NON-streaming endpoint for this model is unreliable (measured);
+   * `llmComplete` serves it by opening the streaming wire and collapsing it to
+   * one response. Streaming responses do not reliably carry
+   * `credits_consumed`, so provider cost on this path comes from the rate
+   * table (`backend/src/lib/pricing/llm-cost.ts`) rather than the real charge.
+   *
+   * Declared per model — a per-model condition on KIE's side, like the
+   * Claude-lane one behind `callKieMessagesCollapsed`. The flag says WHICH
+   * model is affected, and `llm-client` reads it instead of matching model
+   * names. Today only the `responses` dispatcher in `callKie` honours it (the
+   * one format where the condition has been measured); a chat-completions or
+   * messages model that needs the same treatment must also teach its `callKie`
+   * case to read the flag — declaring it alone changes nothing there.
+   */
+  kieCollapseStream?: true
+  /**
    * true = the model reasons even when NO thinking parameter is sent, so its
    * reasoning tokens share the `max_tokens` budget on EVERY call — not just
    * effort-bearing ones. Claude Opus 5 flipped this default (on Opus 4.8/4.7
@@ -133,7 +149,9 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "gemini-3.6-flash",
     displayName: "Gemini 3.6 Flash",
-    desc: "Latest fast Gemini, sharper reasoning",
+    // Demoted 2026-09-06 alongside 3.7: superlatives belong to the CURRENT top
+    // model of a family only, and 3.8 now holds that slot.
+    desc: "Fast Gemini, sharper reasoning",
     tier: "economy",
     kieFormat: "chat-completions",
     // KIE serves Gemini 3.6 Flash on the OpenAI-compatible dialect under this
@@ -163,7 +181,11 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "gemini-3.7-flash",
     displayName: "Gemini 3.7 Flash",
-    desc: "Newest fast Gemini, agentic-tuned",
+    // Demoted 2026-09-06 when 3.8 registered below: superlatives belong to the
+    // CURRENT top model of a family only (same rule the Opus entries follow) —
+    // `desc` renders in every picker, so leaving "Newest" on the older flash
+    // steers the A/B's traffic backwards.
+    desc: "Fast Gemini, agentic-tuned",
     tier: "economy",
     kieFormat: "chat-completions",
     // KIE serves it on the OpenAI-compatible dialect under this slug
@@ -183,6 +205,46 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     // Assumed parity with 3.6 pending a live probe on the direct lane.
     directReasoningEfforts: ["none", "low", "medium", "high"],
     directGeminiModel: "gemini-3.7-flash",
+  },
+  {
+    id: "gemini-3.8-flash",
+    displayName: "Gemini 3.8 Flash",
+    // Inherits "Newest" from 3.7 (demoted above). Deliberately does NOT name
+    // agentic video: that capability exists only on the direct Google lane
+    // (Interactions API, not wired here) and the modality caps below withhold
+    // video — a picker desc must not promise a lever this entry cannot expose.
+    desc: "Newest fast Gemini, agentic-tuned",
+    tier: "economy",
+    kieFormat: "chat-completions",
+    // KIE serves it on the OpenAI-compatible dialect under this slug
+    // (docs.kie.ai/market/gemini/gemini-3-8-flash-openai.md) — identical
+    // chat-completions path shape to gemini-3.7-flash / gemini-3.6-flash,
+    // different slug prefix.
+    kieSlugOrModel: "gemini-3-8-flash-openai",
+    vendor: "google",
+    // Live-verified 2026-09-06 on the KIE lane: `response_format: json_schema`
+    // is ENFORCED (the reply came back exact-schema valid, credits_consumed
+    // present) — not merely accepted-and-ignored.
+    structuredOutputMode: "kie-response-format",
+    supportsImages: true,
+    // 16384 here, NOT the 8192 its 3.6 / 3.7 siblings sit at. Those two stay at
+    // the KIE-safe intersection because nobody measured their endpoints past
+    // it; 3.8's WAS measured — live-verified 2026-09-06, `max_tokens: 20000`
+    // was honored for 14,892 completion tokens with finish_reason "stop" (no
+    // truncation), so the KIE lane is not the binding constraint. 16384 keeps
+    // it level with the rest of the registry's ceiling rather than at the cap.
+    maxOutputTokens: 16384,
+    // KIE's 3.8 endpoint enumerates reasoning_effort low | high (its doc enum),
+    // and usage carries completion_tokens_details.reasoning_tokens — same
+    // KIE-safe intersection as 3.6 / 3.7, because ONE field feeds both lanes
+    // and this model is KIE-first.
+    reasoningEfforts: ["low", "high"],
+    // Google's own API accepts the full minimal→high ladder here (`none` maps
+    // to `minimal`), same as 3.7. Advanced mode is what unlocks it.
+    directReasoningEfforts: ["none", "low", "medium", "high"],
+    // KIE-first (no `preferDirect`) — 3.7's posture exactly: the cheap lane
+    // serves the A/B, direct is Advanced mode + the reliability fallback.
+    directGeminiModel: "gemini-3.8-flash",
   },
   {
     id: "claude-haiku-4.5",
@@ -280,7 +342,9 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "gpt-5.4",
     displayName: "GPT-5.4",
-    desc: "Latest GPT, premium quality",
+    // Demoted 2026-09-06: two GPT generations have shipped above it, so
+    // "Latest" steered the picker at the oldest premium GPT in the registry.
+    desc: "Older GPT, premium quality",
     tier: "premium",
     kieFormat: "responses",
     kieSlugOrModel: "gpt-5-4",
@@ -335,7 +399,11 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "gpt-5.6-sol",
     displayName: "GPT-5.6 Sol",
-    desc: "Flagship GPT-5.6, deepest reasoning",
+    // Demoted 2026-09-06 when gpt-6-astra registered below — "Flagship /
+    // deepest" is the current top GPT's copy only. Worded to stay distinct
+    // from gpt-5.5's "Previous flagship GPT, deep reasoning": all three read
+    // premium on the invoice, so a stale superlative mis-steers silently.
+    desc: "Previous flagship GPT-5.6, deep reasoning",
     tier: "premium",
     kieFormat: "responses",
     kieSlugOrModel: "gpt-5-6-sol",
@@ -345,6 +413,61 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     maxOutputTokens: 16384,
     reasoningEfforts: ["none", "low", "medium", "high", "xhigh", "max"],
     supportsTemperature: false,
+  },
+  {
+    id: "gpt-6-astra",
+    displayName: "GPT-6 Astra",
+    desc: "Flagship GPT-6, deepest reasoning",
+    tier: "premium",
+    kieFormat: "responses",
+    // KIE serves GPT-6 on the responses dialect under the OpenAI family path —
+    // codex/v1/responses, which llm-client DERIVES from `vendor` (the same
+    // derivation that keeps Grok on grok/v1/responses). So this field is the
+    // body `model` only, not a path segment. Live-verified 2026-09-06 on the
+    // streaming path (array `input`, SSE deltas), which is the ONLY path we
+    // serve it on — see `kieCollapseStream` below. The non-stream reply does
+    // carry `credits_consumed` (and cached_tokens/cache_write_tokens in usage)
+    // on the ~1 call in 3 that returns one, but we no longer take that reply,
+    // so provider cost here is the rate-table estimate.
+    // KIE's codex/v1/responses injects its own Codex-agent `instructions`
+    // prompt ABOVE the caller's `developer` message — observed in the
+    // 2026-07-14 live probe of that endpoint, and unchanged for GPT-6. Budget
+    // for it when a developer message has to dominate.
+    kieSlugOrModel: "gpt-6-astra",
+    vendor: "openai",
+    // Live-verified 2026-09-06: `text.format: json_schema` is passed through
+    // and ENFORCED — the server echoed `strict: true` and returned
+    // schema-valid JSON.
+    structuredOutputMode: "responses-json-schema",
+    // text + image + file inputs per KIE's doc. No video/audio — see the
+    // image-only LLM_MODALITY_CAPS row below.
+    supportsImages: true,
+    maxOutputTokens: 16384,
+    // KIE's documented enum for this endpoint. No `none` on purpose: the
+    // endpoint reasons unconditionally (see thinkingDefaultOn below), so a
+    // "none" level would be a lie the wire silently overrides.
+    reasoningEfforts: ["low", "medium", "high", "xhigh"],
+    // Live-probed 2026-09-06: `temperature: 0.2` was sent and the request echo
+    // stayed at 1.0 — silently IGNORED, so never send it. Same treatment as the
+    // GPT-5.6 family and grok-4.6.
+    supportsTemperature: false,
+    // With NO reasoning param sent, the server echoed effort "medium" — it
+    // reasons by default (2026-09-06), so reasoning tokens share `max_tokens`
+    // on EVERY call, not just effort-bearing ones. Consumers must floor output
+    // headroom off this flag or a premium answer truncates into a paid-for
+    // empty reply.
+    thinkingDefaultOn: true,
+    // Measured 2026-09-06, 12 identical requests (developer + user message,
+    // reasoning.effort low, text.format json_schema): `stream: false`
+    // succeeded 2/6 in 4–5 s and 500'd 4/6 with
+    // {"error":{"type":"server_error"}} after 34, 34, 35 and 64 s, while the
+    // same body with `stream: true` succeeded 5/6 in the same 4–5 s. An
+    // earlier non-stream probe timed out at 90 s with 0 bytes, and a
+    // non-stream call WITHOUT a schema 500'd after 65 s — the schema is not
+    // the trigger, the non-stream lane is. The very same endpoint serves
+    // gpt-5.4/5.5/5.6 non-stream reliably (live-verified 2026-07-14), which is
+    // why this is per-model and not a lane-wide flag.
+    kieCollapseStream: true,
   },
   {
     id: "grok-4.6",
@@ -577,6 +700,15 @@ export const LLM_MODALITY_CAPS: Record<string, { image: boolean; video: boolean;
   // deferred while the smart-family A/B routes this model internally (#747).
   // Flip these two flags ONLY together with that VA-side decision.
   "gemini-3.7-flash":  { image: true,  video: false, audio: false },
+  // gemini-3.8-flash is IMAGE-ONLY by DECISION, not omission — 3.7's rationale
+  // exactly: full video+audio caps would auto-enroll it in
+  // VIDEO_ANALYSIS_LLM_MODELS (derived below) and force a video-analysis tier +
+  // pricing decision that stays deferred until the 3.8-vs-3.7 analysis A/B
+  // concludes. Google's own 3.8 lane DOES understand video (agentic video, via
+  // the Interactions API we don't wire) — which is precisely why withholding it
+  // has to be a decision rather than a gap. Flip these two flags ONLY together
+  // with that VA-side decision.
+  "gemini-3.8-flash":  { image: true,  video: false, audio: false },
   "gemini-3.1-pro":    { image: true,  video: true,  audio: true  },
   "claude-haiku-4.5":  { image: true,  video: false, audio: false },
   "claude-sonnet-4.6": { image: true,  video: false, audio: false },
@@ -587,6 +719,8 @@ export const LLM_MODALITY_CAPS: Record<string, { image: boolean; video: boolean;
   "gpt-5.6-luna":      { image: true,  video: false, audio: false },
   "gpt-5.6-terra":     { image: true,  video: false, audio: false },
   "gpt-5.6-sol":       { image: true,  video: false, audio: false },
+  // KIE's GPT-6 doc lists text + image + file inputs only — no video, no audio.
+  "gpt-6-astra":       { image: true,  video: false, audio: false },
   "grok-4.6":          { image: true,  video: false, audio: false },
   "claude-sonnet-5":   { image: true,  video: false, audio: false },
   "claude-opus-4.8":   { image: true,  video: false, audio: false },
