@@ -14,7 +14,7 @@ test("carries the A3 trio + locale, omitting absent keys", () => {
   assert.ok(!("supabaseUrl" in cfg))
 })
 
-// WS-D — "/" is the same-origin SENTINEL start.sh emits for
+// "/" is the same-origin SENTINEL start.sh emits for
 // PUBLIC_URL_SAME_ORIGIN=true. It must survive `pick` verbatim: it is a real
 // value, not a blank, and the frontend reads exactly "/" as "same origin"
 // (runtime-config.ts) while an EMPTY apiUrl means "no override" and would fall

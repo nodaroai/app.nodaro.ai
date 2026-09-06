@@ -86,7 +86,7 @@ describe("getPublicAppUrl", () => {
 })
 
 /**
- * WS-D — the header-derived request host. Pure over headers, so these are
+ * The header-derived request host. Pure over headers, so these are
  * unit-tested with hand-built requests (no Fastify).
  *
  * `x-forwarded-proto` is deliberately NOT read: the edge proxy owns the scheme

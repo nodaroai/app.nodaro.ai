@@ -33,7 +33,7 @@ describe("runtime-config getters", () => {
 })
 
 /**
- * WS-D — the same-origin sentinel. A hosted studio reachable on more than one
+ * The same-origin sentinel. A hosted studio reachable on more than one
  * hostname cannot name its API host in `apiUrl`: PUBLIC_URL is single-valued and
  * whichever host it names would be the one every SSE call goes to, from every
  * other host. `PUBLIC_URL_SAME_ORIGIN=true` makes the /config.js writer emit

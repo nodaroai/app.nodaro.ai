@@ -52,7 +52,7 @@ vi.mock("../../lib/config.js", async (orig) => {
     ...actual,
     config: {
       ...actual.config,
-      CORS_ORIGIN: "https://studio.sai-kehila.com",
+      CORS_ORIGIN: "https://studio.example.com",
       get PUBLIC_URL() {
         return publicUrl.value
       },
@@ -181,23 +181,23 @@ describe("GET /v1/sso/:provider", () => {
 })
 
 /**
- * WS-D — the origin-agnostic hosted lane. The same studio is reachable on more
+ * The origin-agnostic hosted lane. The same studio is reachable on more
  * than one hostname, and PUBLIC_URL can only name one, so the landing redirect
  * is relative for any host the operator already allow-lists (same-origin by
  * construction behind Caddy) and absolute only for a host that is not.
  *
- * CORS_ORIGIN is pinned to https://studio.sai-kehila.com in the config mock
+ * CORS_ORIGIN is pinned to https://studio.example.com in the config mock
  * above, so that host is allow-listed and any other is foreign.
  */
-describe("the landing redirect is host-aware (WS-D)", () => {
-  const kehila = { "x-forwarded-proto": "https", "x-forwarded-host": "studio.sai-kehila.com" }
+describe("the landing redirect is host-aware", () => {
+  const allowed = { "x-forwarded-proto": "https", "x-forwarded-host": "studio.example.com" }
   const foreign = { "x-forwarded-proto": "https", "x-forwarded-host": "split-origin.example.dev" }
 
   it("is RELATIVE from an allow-listed host even when PUBLIC_URL names another one", async () => {
     publicUrl.value = "https://app.example.com"
     const app = await build()
     const token = await mintAssertion()
-    const res = await app.inject({ method: "GET", url: `/v1/sso/librechat?assertion=${token}`, headers: kehila })
+    const res = await app.inject({ method: "GET", url: `/v1/sso/librechat?assertion=${token}`, headers: allowed })
     expect(res.statusCode).toBe(302)
     expect(res.headers.location).toBe("/sso?sso_token=HASHED_TOKEN_123&next=%2Fprojects")
   })
@@ -212,7 +212,7 @@ describe("the landing redirect is host-aware (WS-D)", () => {
     const res = await app.inject({
       method: "GET",
       url: `/v1/sso/librechat?assertion=${token}`,
-      headers: { "x-forwarded-proto": "http", "x-forwarded-host": "studio.sai-kehila.com" },
+      headers: { "x-forwarded-proto": "http", "x-forwarded-host": "studio.example.com" },
     })
     expect(res.statusCode).toBe(302)
     expect(res.headers.location).toBe("/sso?sso_token=HASHED_TOKEN_123&next=%2Fprojects")
@@ -229,7 +229,7 @@ describe("the landing redirect is host-aware (WS-D)", () => {
 
   it("is relative from EITHER host when PUBLIC_URL is unset — today's behaviour", async () => {
     const app = await build()
-    for (const headers of [kehila, foreign]) {
+    for (const headers of [allowed, foreign]) {
       const token = await mintAssertion()
       const res = await app.inject({ method: "GET", url: `/v1/sso/librechat?assertion=${token}`, headers })
       expect(res.headers.location).toBe("/sso?sso_token=HASHED_TOKEN_123&next=%2Fprojects")
@@ -239,15 +239,15 @@ describe("the landing redirect is host-aware (WS-D)", () => {
   it("keeps the next param through the relative form", async () => {
     const app = await build()
     const token = await mintAssertion()
-    const res = await app.inject({ method: "GET", url: `/v1/sso/librechat?assertion=${token}&next=/library`, headers: kehila })
+    const res = await app.inject({ method: "GET", url: `/v1/sso/librechat?assertion=${token}&next=/library`, headers: allowed })
     expect(res.headers.location).toBe("/sso?sso_token=HASHED_TOKEN_123&next=%2Flibrary")
   })
 })
 
-describe("initiateUrlByHost — the IdP bounce follows the request host (WS-D)", () => {
+describe("initiateUrlByHost — the IdP bounce follows the request host", () => {
   const mapped = {
     ...assertionProvider,
-    initiateUrlByHost: { "studio.sai-kehila.com": "https://chat.sai-kehila.com/login" },
+    initiateUrlByHost: { "studio.example.com": "https://chat.example.com/login" },
   }
 
   it("bounces to the mapped IdP for the host the browser arrived on", async () => {
@@ -256,10 +256,10 @@ describe("initiateUrlByHost — the IdP bounce follows the request host (WS-D)",
     const res = await app.inject({
       method: "GET",
       url: "/v1/sso/librechat",
-      headers: { "x-forwarded-host": "studio.sai-kehila.com" },
+      headers: { "x-forwarded-host": "studio.example.com" },
     })
     expect(res.statusCode).toBe(302)
-    expect(res.headers.location).toBe("https://chat.sai-kehila.com/login")
+    expect(res.headers.location).toBe("https://chat.example.com/login")
   })
 
   it("matches the mapped host case-insensitively and ignores the port", async () => {
@@ -268,9 +268,9 @@ describe("initiateUrlByHost — the IdP bounce follows the request host (WS-D)",
     const res = await app.inject({
       method: "GET",
       url: "/v1/sso/librechat",
-      headers: { "x-forwarded-host": "Studio.SAI-Kehila.com:443" },
+      headers: { "x-forwarded-host": "Studio.Example.com:443" },
     })
-    expect(res.headers.location).toBe("https://chat.sai-kehila.com/login")
+    expect(res.headers.location).toBe("https://chat.example.com/login")
   })
 
   it("falls back to initiateUrl for a host that is not in the map", async () => {
@@ -313,6 +313,6 @@ describe("initiateUrlByHost — the IdP bounce follows the request host (WS-D)",
     const app = await build()
     const res = await app.inject({ method: "GET", url: "/v1/sso/providers" })
     expect(res.json().providers).toEqual([{ id: "librechat", label: "LibreChat", kind: "assertion" }])
-    expect(res.body).not.toContain("chat.sai-kehila.com")
+    expect(res.body).not.toContain("chat.example.com")
   })
 })

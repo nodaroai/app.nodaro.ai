@@ -25,7 +25,7 @@ describe("ssoRoutes boot (fail-loud config)", () => {
 })
 
 /**
- * WS-D — `initiateUrlByHost` is validated at boot like every other provider
+ * `initiateUrlByHost` is validated at boot like every other provider
  * field: a typo'd entry must abort startup, not vanish and leave the IdP bounce
  * silently pointing at the wrong host.
  *
@@ -47,14 +47,14 @@ describe("EXTERNAL_SSO_PROVIDERS schema — initiateUrlByHost", () => {
 
   it("accepts a valid host → URL map", () => {
     const [p] = parseSsoProviders(
-      JSON.stringify([{ ...base, initiateUrlByHost: { "studio.sai-kehila.com": "https://chat.sai-kehila.com/login" } }]),
+      JSON.stringify([{ ...base, initiateUrlByHost: { "studio.example.com": "https://chat.example.com/login" } }]),
     )
-    expect(p.initiateUrlByHost).toEqual({ "studio.sai-kehila.com": "https://chat.sai-kehila.com/login" })
+    expect(p.initiateUrlByHost).toEqual({ "studio.example.com": "https://chat.example.com/login" })
   })
 
   it("REFUSES a non-URL value at boot", () => {
     expect(() =>
-      parseSsoProviders(JSON.stringify([{ ...base, initiateUrlByHost: { "studio.sai-kehila.com": "chat.sai-kehila.com" } }])),
+      parseSsoProviders(JSON.stringify([{ ...base, initiateUrlByHost: { "studio.example.com": "chat.example.com" } }])),
     ).toThrow(/EXTERNAL_SSO_PROVIDERS invalid/)
   })
 
