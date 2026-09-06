@@ -3,17 +3,37 @@
 	# /.well-known/oauth-* handle blocks were added.
 	auto_https off
 	admin off
+	# Forwarded-header trust. The platform edge terminates TLS and reaches this
+	# container over the private network, speaking plain HTTP. Untrusted, Caddy
+	# replaces the edge's X-Forwarded-For with the edge's own address (so every
+	# user shares one rate-limit key on unauthenticated routes such as the SSO
+	# exchange) and X-Forwarded-Proto with "http". Trusting the private ranges
+	# lets the real client address and scheme through; a public-address proxy in
+	# front of a self-host stays untrusted, so its headers are still replaced.
+	#
+	# Why `_strict` AND the `backend_client_ip` rewrite below, together: the
+	# backend keys unauthenticated rate limits on the LEFTMOST X-Forwarded-For
+	# entry, and a forwarding hop may either REPLACE that header or APPEND to a
+	# value the client chose (nginx's $proxy_add_x_forwarded_for appends, and
+	# the hosted edge is documented both ways). Strict mode derives {client_ip}
+	# by walking X-Forwarded-For from the RIGHT and skipping trusted proxies, so
+	# a client-supplied leftmost value is passed over either way; the rewrite
+	# then hands the backend that one address as the only entry, which its
+	# existing leftmost keying reads. When the peer is NOT trusted, {client_ip}
+	# is simply the peer's own address — exactly what the backend sees today, so
+	# this is never worse than the current behaviour.
 	servers {
-		# The platform edge terminates TLS and reaches this container over the
-		# private network, speaking plain HTTP. Without trusting it, Caddy
-		# replaces the edge's X-Forwarded-For with the edge's own address (so
-		# every user shares one rate-limit key on unauthenticated routes such as
-		# the SSO exchange) and X-Forwarded-Proto with "http". Trusting the
-		# private ranges lets the real client address and scheme through; a
-		# public-address proxy in front of a self-host is still untrusted, so
-		# its headers are still replaced — today's behaviour.
 		trusted_proxies static private_ranges
+		trusted_proxies_strict
 	}
+}
+
+# The one trustworthy client address, written as the only X-Forwarded-For entry
+# the backend sees. Imported into every reverse_proxy that fronts the Fastify
+# backend on 127.0.0.1:9000 — and deliberately NOT into the MinIO or Supabase
+# upstreams, which are self-host-only sidecars that do no rate limiting.
+(backend_client_ip) {
+	header_up X-Forwarded-For {client_ip}
 }
 
 :3000 {
@@ -32,6 +52,7 @@
 		request_header -X-Internal-Orchestrator
 		request_header -X-Internal-Orchestrator-Secret
 		reverse_proxy 127.0.0.1:9000 {
+			import backend_client_ip
 			# Disable response buffering for SSE streams
 			flush_interval -1
 		}
@@ -44,12 +65,16 @@
 	handle /.well-known/oauth-authorization-server {
 		request_header -X-Internal-Orchestrator
 		request_header -X-Internal-Orchestrator-Secret
-		reverse_proxy 127.0.0.1:9000
+		reverse_proxy 127.0.0.1:9000 {
+			import backend_client_ip
+		}
 	}
 	handle /.well-known/oauth-protected-resource {
 		request_header -X-Internal-Orchestrator
 		request_header -X-Internal-Orchestrator-Secret
-		reverse_proxy 127.0.0.1:9000
+		reverse_proxy 127.0.0.1:9000 {
+			import backend_client_ip
+		}
 	}
 	# RFC 9728 §3.1 — resource-specific variants. Cursor probes these FIRST
 	# for path-suffixed resources (mcp.nodaro.ai/mcp). Without these handles
@@ -58,12 +83,16 @@
 	handle /.well-known/oauth-protected-resource/* {
 		request_header -X-Internal-Orchestrator
 		request_header -X-Internal-Orchestrator-Secret
-		reverse_proxy 127.0.0.1:9000
+		reverse_proxy 127.0.0.1:9000 {
+			import backend_client_ip
+		}
 	}
 	handle /.well-known/oauth-authorization-server/* {
 		request_header -X-Internal-Orchestrator
 		request_header -X-Internal-Orchestrator-Secret
-		reverse_proxy 127.0.0.1:9000
+		reverse_proxy 127.0.0.1:9000 {
+			import backend_client_ip
+		}
 	}
 
 	# The MCP endpoint lives on the mcp.* host (Railway routes that domain
@@ -90,7 +119,9 @@
 	}
 	handle @social_bot {
 		rewrite * /og{uri}
-		reverse_proxy 127.0.0.1:9000
+		reverse_proxy 127.0.0.1:9000 {
+			import backend_client_ip
+		}
 	}
 
 	# Self-host media path: proxies the bundled MinIO so ONE origin serves both

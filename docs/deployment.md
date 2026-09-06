@@ -366,8 +366,11 @@ frontend statics and proxies `/v1/*` to the Fastify backend on port
 
 Caddy accepts the `X-Forwarded-*` headers only from peers in the private
 ranges (`127.0.0.1/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`,
-`fd00::/8`, `::1`); a proxy that reaches it from a public address has those
-headers replaced with the values Caddy itself observed.
+`fd00::/8`, `::1`), and rewrites `X-Forwarded-For` to the single client
+address it derives — the rightmost entry that is not itself a trusted proxy,
+so an address a client put in the header is skipped — while a proxy reaching
+it from a public address has those headers replaced with the values Caddy
+itself observed.
 
 **Option A — Front Caddy with another reverse proxy.** Recommended if
 you already run nginx or another proxy.
