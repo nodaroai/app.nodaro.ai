@@ -707,7 +707,7 @@ describe("the top-up form cannot grant the same allowance twice (F13)", () => {
 })
 
 /**
- * The PERIOD wording (C-D6).
+ * The PERIOD wording.
  *
  * `renew` zeroes `spent` and stamps `reset_at`; until it has, `spent` is a
  * LIFETIME figure. The backend says so by OMITTING `resetAt` rather than
@@ -743,10 +743,11 @@ describe("block 4 — 'this period' follows resetAt, and only resetAt", () => {
 })
 
 /**
- * "via <key name>" (§6.3).
+ * "via <key name>".
  *
- * `granted_by` is the billing account on EVERY row, key or no key — that is
- * invariant C-B, and it is why the credential has to be named separately.
+ * The ACTOR recorded on every row is the billing account, key or no key — a
+ * key acts *as* it — and that is exactly why the credential has to be named
+ * separately.
  * Without this line the payer cannot tell a move their back office made from
  * one they made themselves on this page, which is the whole point of stamping
  * `credential_id`.
@@ -788,7 +789,7 @@ describe("block 4 — the grant history names the credential", () => {
 })
 
 /**
- * The low-balance threshold, beside the pool figure (C-D7).
+ * The low-balance threshold, beside the pool figure.
  *
  * RAW Nodaro credits, like everything else in block 1 — the pool is the one
  * place the product renders the deployment's real money, and a threshold in

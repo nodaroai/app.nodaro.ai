@@ -98,7 +98,7 @@ const KEYS_BODY = {
   data: [
     {
       id: "k1", name: "back office", tokenPrefix: "ndr_bill_9f3",
-      createdAt: "2026-09-01T00:00:00.000Z", expiresAt: "2027-09-01T00:00:00.000Z",
+      createdAt: "2026-09-01T00:00:00.000Z", expiresAt: "2099-09-01T00:00:00.000Z",
       lastUsedAt: "2026-09-05T00:00:00.000Z", revokedAt: null, allowedCidrs: ["203.0.113.0/24"],
     },
   ],
@@ -300,7 +300,7 @@ describe("errorMessageKey — the note's refusals reach the payer as the note's"
 /**
  * The billing-integration credential, on the wire.
  *
- * R9's product half. The bearer exists in ONE response body, once — so the
+ * The bearer exists in exactly ONE response body, once — so the
  * hooks must not put it anywhere that outlives the panel showing it, and above
  * all the mint call must not be something a re-render can repeat. A component
  * that re-issued the POST on every render would mint a key per paint, blow

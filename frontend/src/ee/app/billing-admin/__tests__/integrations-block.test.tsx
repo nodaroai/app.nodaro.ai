@@ -31,7 +31,10 @@ const KEYS: IntegrationKey[] = [
     name: "back office",
     tokenPrefix: "ndr_bill_9f3",
     createdAt: "2026-09-01T00:00:00.000Z",
-    expiresAt: "2027-09-01T00:00:00.000Z",
+    // FAR future, deliberately: `isIntegrationKeyLive` reads the real clock, so
+    // a plausible-looking expiry turns the live-count assertion below into a
+    // test that goes red on a calendar date with no code change.
+    expiresAt: "2099-09-01T00:00:00.000Z",
     lastUsedAt: "2026-09-05T00:00:00.000Z",
     revokedAt: null,
     allowedCidrs: ["203.0.113.0/24"],
