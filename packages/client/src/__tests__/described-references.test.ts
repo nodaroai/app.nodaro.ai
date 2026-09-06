@@ -1,13 +1,55 @@
 import { describe, it, expect, vi } from "vitest"
 import { createClient, StaticTokenAuth } from "../index.js"
-import type { DescribedReference } from "../index.js"
+// WIRE-01: every type in a public method signature is re-exported from @nodaro/sdk.
+import type {
+  DescribedReference,
+  GenerateImageParams,
+  GenerateVideoParams,
+} from "../index.js"
 
 /**
  * `describedReferences` + the rail captions on the typed node params. A
  * described reference has no url, so it attaches nothing and claims no
  * `@image_N` seat — the route renders it as a `<Name> — <description>.` line so
  * a name left in the prompt prose reaches the model as a described subject.
+ *
+ * WHAT EACH HALF PINS. The type-level test below is the one that pins the SDK
+ * SURFACE — the params types and the `DescribedReference` re-export — because it
+ * compiles only if they exist. The runtime cases that follow pin SERIALIZATION:
+ * `nodes.run` passes these params through to the JSON body under their own
+ * names (vitest does not typecheck, so they would pass against a client that
+ * had never heard of the fields). Both matter — the wire names are what the
+ * route reads — but neither stands in for the other.
  */
+
+it("types the described / caption channels and re-exports the wire type", () => {
+  // Type-level: these compile only if the params carry the fields and the
+  // `DescribedReference` shape is re-exported from the SDK index.
+  const _image: GenerateImageParams = {
+    prompt: "Natalie walks.",
+    describedReferences: [
+      { name: "Natalie", description: "a tall woman in a red coat" } satisfies DescribedReference,
+    ],
+    connectedReferences: [
+      {
+        id: "c1",
+        defaultName: "Kira",
+        source: "wired-character",
+        url: "https://cdn.example/kira.png",
+        descriptionOverride: "a woman with a shaved head and a scar",
+      },
+    ],
+  }
+  const _video: GenerateVideoParams = {
+    prompt: "Natalie reacts.",
+    describedReferences: [{ name: "Natalie", description: "a tall woman in a red coat" }],
+    referenceVideoCaptions: ["the establishing drone shot"],
+    referenceAudioCaptions: ["the room tone"],
+  }
+  void _image
+  void _video
+  expect(_video.referenceVideoCaptions).toHaveLength(1)
+})
 
 function mockOk<T>(body: T) {
   return Promise.resolve({ ok: true, status: 200, json: async () => body } as unknown as Response)

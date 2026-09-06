@@ -337,6 +337,28 @@ describe("descriptionOverride — legacy", () => {
     expect(prompt).not.toContain("dusty reading room")
   })
 
+  it("fills the descriptor of a `{image:N:label}` identity directive", () => {
+    // The token path reads its description through `collectIdentities`, which is
+    // what feeds the `{image:N:label}` directive — so the override lands in the
+    // subject's parenthetical, ahead of the ref's own `description`.
+    const { prompt } = buildImagePrompt({
+      provider: PROVIDER,
+      prompt: "A still life with {image:1:vase}.",
+      connectedReferences: [
+        {
+          id: "o1",
+          defaultName: "Vase",
+          source: "wired-object",
+          url: "https://r2/vase.png",
+          description: "a blue vase",
+          descriptionOverride: "a cracked urn",
+        },
+      ],
+    })
+    expect(prompt).toContain("- Image 1 (vase — a cracked urn) — match exactly.")
+    expect(prompt).not.toContain("blue vase")
+  })
+
   it("wins over an UNMENTIONED wired location's canonical description", () => {
     const { prompt } = buildImagePrompt({
       provider: PROVIDER,

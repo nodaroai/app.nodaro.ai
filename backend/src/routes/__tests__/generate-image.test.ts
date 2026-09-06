@@ -1354,6 +1354,29 @@ describe("POST /v1/generate-image", () => {
       expect(queued.prompt).toContain("a woman with a shaved head and a scar")
       expect(queued.prompt).not.toContain("short black hair")
     })
+
+    it("rejects a descriptionOverride over the 2000-char ceiling", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "Kira walks.",
+          userId: VALID_UUID,
+          provider: "nano-banana",
+          connectedReferences: [
+            {
+              id: "c1",
+              defaultName: "Kira",
+              source: "wired-character",
+              url: "https://r2.nodaro.ai/kira.png",
+              descriptionOverride: "x".repeat(2001),
+            },
+          ],
+        },
+      })
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("validation_error")
+    })
   })
 
   describe("referenceLock token", () => {
