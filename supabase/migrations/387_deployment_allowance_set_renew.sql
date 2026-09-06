@@ -1,8 +1,8 @@
 -- The allowance VERBS: `set`, `renew`, the pending grant, and the audit line
 -- that says which credential moved a quota.
--- (Track spec 2026-09-06 §6.3. Companion TypeScript — `setAllowance`,
--- `writePendingAllowance`, `applyPendingAllowance` and the two SSO-subject
--- lookups — ships in the same PR; the routes that call them ship in the next.)
+-- The companion TypeScript — `setAllowance`, `writePendingAllowance`,
+-- `applyPendingAllowance` and the two SSO-subject lookups — ships in the same
+-- PR; the routes that call them ship in the next one.
 --
 -- Depends on 381 (`deployment_payer_settings`, the singleton this file reads
 -- for the payer id and the default), 382 (the ledger, the grants table and
@@ -225,7 +225,11 @@ CREATE TABLE IF NOT EXISTS public.deployment_allowance_pending (
   target_credits integer NOT NULL CHECK (target_credits >= 0),
   mode           text NOT NULL CHECK (mode IN ('set', 'renew')),
   note           text,
-  created_by     uuid NOT NULL,          -- always the payer; asserted at write
+  -- Always the payer. Asserted at write by `writePendingAllowance`, which
+  -- refuses any other actor before a row exists — the same restatement of
+  -- "only the billing account may change an allowance" the two RPCs make in
+  -- SQL. No foreign key, for 381's reason (`payer_user_id`, 381:52-56).
+  created_by     uuid NOT NULL,
   credential_id  uuid REFERENCES public.deployment_integration_keys(id) ON DELETE SET NULL,
   created_at     timestamptz NOT NULL DEFAULT now(),
   expires_at     timestamptz NOT NULL,
@@ -260,11 +264,12 @@ COMMENT ON TABLE public.deployment_allowance_pending IS
 -- credit mutation behind for four generations. The GRANTs are re-issued at the
 -- new arity because the DROP takes them with it.
 --
--- The body below is 382's section 7 VERBATIM. The only edit is the final
--- INSERT, which now carries `credential_id`. `p_credential_id` gets NO DEFAULT
--- for the same reason `p_kind` and `p_note` have none: on the only writer of
--- `granted_credits`, an omitted argument must be a loud "function not found",
--- never a silent write with a guessed value.
+-- The body below is 382's section 7 VERBATIM in every executable line. The
+-- only edit is the final INSERT, which now carries `credential_id`; two
+-- comments are reworded where they named a document rather than a rule.
+-- `p_credential_id` gets NO DEFAULT for the same reason `p_kind` and `p_note`
+-- have none: on the only writer of `granted_credits`, an omitted argument must
+-- be a loud "function not found", never a silent write with a guessed value.
 DROP FUNCTION IF EXISTS public.grant_deployment_allowance(UUID, INTEGER, UUID, TEXT, TEXT);
 DROP FUNCTION IF EXISTS public.grant_deployment_allowance(UUID, INTEGER, UUID, TEXT, TEXT, UUID);
 
@@ -272,10 +277,10 @@ CREATE OR REPLACE FUNCTION public.grant_deployment_allowance(
   p_user_id UUID,
   p_credits INTEGER,
   p_actor_id UUID,
-  -- No DEFAULTs on these three, deliberately (spec §7.4's shape): a defaulted
-  -- `kind` on the ONLY writer of `granted_credits` would let a caller that
-  -- forgot the argument silently perform a top-up, and a defaulted credential
-  -- would let one silently claim the page did it.
+  -- No DEFAULTs on these three, deliberately: a defaulted `kind` on the ONLY
+  -- writer of `granted_credits` would let a caller that forgot the argument
+  -- silently perform a top-up, and a defaulted credential would let one
+  -- silently claim the page did it.
   p_kind TEXT,
   p_note TEXT,
   p_credential_id UUID
@@ -364,9 +369,9 @@ GRANT EXECUTE ON FUNCTION public.grant_deployment_allowance(UUID, INTEGER, UUID,
 -- seed at the settings default, the refusal below what is committed, and one
 -- grant row per move so the reconciliation cannot diverge.
 --
--- NO DEFAULTS on any argument (the rule the whole track follows for writers of
--- this column): the caller states the mode, the target, the actor, the note and
--- the credential every single time.
+-- NO DEFAULTS on any argument — the rule every writer of `granted_credits`
+-- follows: the caller states the mode, the target, the actor, the note and the
+-- credential every single time.
 --
 -- RETURNS THE ROW, not void, and that is not a convenience. `set` is idempotent
 -- by construction — a replay computes a delta of zero and writes nothing — so
@@ -545,6 +550,41 @@ COMMENT ON FUNCTION public.set_deployment_allowance(UUID, INTEGER, UUID, TEXT, T
 -- UPDATE: the actor assertion, the seed, the refusal and the audit row are all
 -- properties of that function, and a second path into `granted_credits` would
 -- have to restate every one of them correctly forever.
+--
+-- ============================================================================
+-- MARKED DECISION: ALL-OR-NOTHING, AND WHAT IT COSTS
+-- ============================================================================
+-- There is no per-row subtransaction here, so ONE refusable intent takes the
+-- whole call down: `set_deployment_allowance` raises (say a `set` below
+-- `reserved + spent` — the target has a job running against more than the new
+-- plan allows), the RAISE propagates, everything this call did rolls back, the
+-- TypeScript caller logs and answers 0, and the sign-in proceeds. The costs
+-- are real and are accepted deliberately for this cut:
+--
+--   * the refused row is re-attempted and refused again on EVERY sign-in until
+--     it expires, and
+--   * a SIBLING row that would have applied cleanly is blocked behind it,
+--     because the loop never reaches it.
+--
+-- Fail-closed is still the right default: the alternative is a partial apply
+-- whose failure nobody sees, and an allowance that silently did not land is
+-- worse than one that visibly has not landed yet. The refusals that reach here
+-- are also self-healing in the common case — the job finishes, `reserved`
+-- drops, and the next sign-in applies the intent.
+--
+-- THE ALTERNATIVE, when this stops being acceptable: wrap the PERFORM in a
+-- per-row `BEGIN … EXCEPTION WHEN OTHERS` subtransaction that records the
+-- refusal on the row (a `refused_at` / `refusal` column pair, added in that
+-- same migration) and CONTINUEs, so one bad intent cannot block a good one and
+-- the state is legible to the page rather than only to a log. That is a
+-- schema change plus a surface that shows it, which is why it is not in this
+-- one.
+--
+-- Until then the exception below carries the pending row's id, so the log line
+-- names WHICH intent is stuck and why — without that, the operator sees a
+-- refusal with no way to find the row it came from. The `BEGIN … EXCEPTION`
+-- block that adds it re-raises, so the all-or-nothing behaviour above is
+-- unchanged: it buys the message, not a partial apply.
 DROP FUNCTION IF EXISTS public.apply_pending_deployment_allowance(UUID, TEXT, TEXT);
 
 CREATE OR REPLACE FUNCTION public.apply_pending_deployment_allowance(
@@ -580,8 +620,17 @@ BEGIN
   LOOP
     -- The actor is the PAYER, not the signing-in user: the intent was the
     -- billing account's, and `granted_by` must keep naming it (invariant C-B).
-    PERFORM * FROM set_deployment_allowance(
-      p_user_id, v_row.target_credits, v_payer, v_row.mode, v_row.note, v_row.credential_id);
+    --
+    -- The handler RE-RAISES (see the marked decision above): it exists to name
+    -- the row, not to skip it. SQLERRM carries the original refusal — prefix
+    -- included — so the log line says both which intent is stuck and why.
+    BEGIN
+      PERFORM * FROM set_deployment_allowance(
+        p_user_id, v_row.target_credits, v_payer, v_row.mode, v_row.note, v_row.credential_id);
+    EXCEPTION WHEN OTHERS THEN
+      RAISE EXCEPTION 'ALLOWANCE_PENDING_REFUSED: pending % (mode %, target %) was refused: %',
+        v_row.id, v_row.mode, v_row.target_credits, SQLERRM;
+    END;
     UPDATE deployment_allowance_pending p
        SET applied_at = now(), applied_user_id = p_user_id
      WHERE p.id = v_row.id;

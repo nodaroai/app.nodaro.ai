@@ -387,6 +387,16 @@ describe("resolveUserRef — subject first, email second, uuid accepted", () => 
     expect(String(ilike?.args[1]).replace(/\\./g, "")).not.toMatch(/[%_]/)
   })
 
+  it("refuses an address containing `*` up front, and queries nothing", async () => {
+    // PostgREST rewrites `*` to `%` inside an ilike value and no escape
+    // survives that rewrite; the TypeScript re-check would keep the ANSWER
+    // exact, but `limit(5)` could truncate the true match out of a widened
+    // result set and turn a real account into `absent`.
+    payerDeployment()
+    expect(await resolveUserRef({ email: "per*son@example.test" })).toEqual({ kind: "ambiguous" })
+    expect(from).not.toHaveBeenCalled()
+  })
+
   it("a lookup that could not be PERFORMED is ambiguous, never absent", async () => {
     // `sso-linking.ts` takes exactly this posture at its own maybeSingle()
     // error branch: "we cannot tell which account this address names" is never
@@ -435,11 +445,81 @@ describe("writePendingAllowance — the intent stored before the account exists"
     expect(inserted.credential_id).toBe(KEY)
   })
 
-  it("clears by SUBJECT when one is given", async () => {
+  it("clears BOTH keys when the intent names both — one delete per partial index", async () => {
+    // There are TWO partial unique indexes, `(sso_subject)` and
+    // `(lower(email))`, each WHERE `applied_at IS NULL`. Clearing only one of
+    // them leaves a row the insert then collides with.
+    payerDeployment()
+    await writePendingAllowance({
+      ssoSubject: "subject-1",
+      email: "Person@Example.TEST",
+      targetCredits: 10,
+      mode: "renew",
+      note: null,
+      createdBy: PAYER,
+    })
+    const eqs = calls.filter((c) => c.table === "deployment_allowance_pending" && c.op === "eq")
+    expect(eqs.map((c) => c.args)).toEqual([
+      ["sso_subject", "subject-1"],
+      ["email", "person@example.test"],
+    ])
+  })
+
+  it("an email-only intent then a subject+email intent for the same person does NOT collide", async () => {
+    // The sequence the one-key clear got wrong: the first row is keyed by
+    // address alone, so a later subject+email write that cleared only by
+    // subject would leave it standing and violate the email index — a 500 for
+    // an integrator that did nothing wrong.
+    payerDeployment()
+    await writePendingAllowance({
+      email: "person@example.test",
+      targetCredits: 10,
+      mode: "set",
+      note: null,
+      createdBy: PAYER,
+    })
+    calls = []
+    const second = await writePendingAllowance({
+      ssoSubject: "subject-1",
+      email: "PERSON@example.test",
+      targetCredits: 20,
+      mode: "set",
+      note: null,
+      createdBy: PAYER,
+    })
+    expect(second.ok).toBe(true)
+    const cleared = calls.filter((c) => c.op === "eq").map((c) => c.args)
+    expect(cleared).toContainEqual(["email", "person@example.test"])
+    expect(cleared).toContainEqual(["sso_subject", "subject-1"])
+  })
+
+  it("and the reverse order clears the subject row too", async () => {
     payerDeployment()
     await writePendingAllowance({
       ssoSubject: "subject-1",
       email: "person@example.test",
+      targetCredits: 10,
+      mode: "set",
+      note: null,
+      createdBy: PAYER,
+    })
+    calls = []
+    const second = await writePendingAllowance({
+      ssoSubject: "subject-1",
+      targetCredits: 20,
+      mode: "set",
+      note: null,
+      createdBy: PAYER,
+    })
+    expect(second.ok).toBe(true)
+    // Only the subject key this time — there is no address to collide on.
+    expect(calls.filter((c) => c.op === "eq").map((c) => c.args)).toEqual([["sso_subject", "subject-1"]])
+  })
+
+  it("clears by SUBJECT alone when no address is given", async () => {
+    payerDeployment()
+    await writePendingAllowance({
+      ssoSubject: "subject-1",
       targetCredits: 10,
       mode: "renew",
       note: null,
@@ -447,6 +527,38 @@ describe("writePendingAllowance — the intent stored before the account exists"
     })
     const eqOnPending = calls.find((c) => c.table === "deployment_allowance_pending" && c.op === "eq")
     expect(eqOnPending?.args).toEqual(["sso_subject", "subject-1"])
+  })
+
+  it("refuses an actor that is not the billing account, and writes nothing", async () => {
+    // `created_by` is documented as "always the payer, asserted at write".
+    // This is that assertion — a pending row has no RPC behind it to make the
+    // one the two verbs make in SQL.
+    payerDeployment()
+    const result = await writePendingAllowance({
+      ssoSubject: "subject-1",
+      targetCredits: 10,
+      mode: "set",
+      note: null,
+      createdBy: U1,
+    })
+    expect(result).toEqual({
+      ok: false,
+      code: "allowance_actor_not_payer",
+      message: "actor is not the billing account",
+    })
+    expect(calls.some((c) => c.op === "insert" || c.op === "delete")).toBe(false)
+  })
+
+  it("refuses when there is no payer at all", async () => {
+    const result = await writePendingAllowance({
+      ssoSubject: "subject-1",
+      targetCredits: 10,
+      mode: "set",
+      note: null,
+      createdBy: PAYER,
+    })
+    expect(result.ok).toBe(false)
+    expect(result.ok === false && result.code).toBe("allowance_unconfigured")
   })
 
   it("expires 90 days out by default", async () => {

@@ -142,6 +142,38 @@ describe("the pending allowance is applied at sign-in", () => {
     )
   })
 
+  it("on the short-circuit it passes the ACCOUNT's trusted subject, not the assertion's", async () => {
+    // The same-provider marker is checked; the SUBJECT is not (for a
+    // non-payer). An intent bought for the identity this account actually
+    // carries must reach it — and one bought for the subject the assertion
+    // merely claims must not.
+    state.profileByEmail = { id: "existing-user" }
+    state.userById = {
+      id: "existing-user",
+      email: "new@example.com",
+      user_metadata: { sso: "librechat", sso_subject: "idp-7" },
+      app_metadata: { sso: "librechat", sso_subject: "the-account-real-subject" },
+    }
+    const r = await resolveSsoUser(provider, assertion({ subject: "idp-7" }))
+    expect(r).toMatchObject({ ok: true, action: "linked" })
+    await vi.waitFor(() =>
+      expect(applyPendingAllowance).toHaveBeenCalledWith("existing-user", "the-account-real-subject", "new@example.com"),
+    )
+  })
+
+  it("and passes null when the account carries no trusted subject — address matching only", async () => {
+    state.profileByEmail = { id: "existing-user" }
+    state.userById = {
+      id: "existing-user",
+      email: "new@example.com",
+      user_metadata: { sso: "librechat", sso_subject: "idp-7" },
+      app_metadata: { sso: "librechat" },
+    }
+    const r = await resolveSsoUser(provider, assertion())
+    expect(r).toMatchObject({ ok: true, action: "linked" })
+    await vi.waitFor(() => expect(applyPendingAllowance).toHaveBeenCalledWith("existing-user", null, "new@example.com"))
+  })
+
   it("fires when an existing LOCAL account is adopted under the link-existing flag", async () => {
     state.linkExisting = true
     state.profileByEmail = { id: "local-user" }
