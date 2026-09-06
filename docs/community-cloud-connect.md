@@ -4,8 +4,9 @@
 > only while its `COMMUNITY_CONNECT_ENABLED` flag is on — live on
 > `app.nodaro.ai` since 2026-08-16. If it is ever off, your instance's
 > **Connect nodaro.ai** button says so in place
-> (`cloud_connect_unavailable`) and your own provider keys keep working;
-> nothing about your install is broken.
+> (`cloud_connect_unavailable`) and your own provider keys keep working —
+> including a pasted or `NODARO_API_KEY` nodaro.ai key, which is a personal
+> token and never consults this flag; nothing about your install is broken.
 
 Self-hosted community instances can connect to Nodaro Cloud and use it as a
 **provider in your provider list** — the same way you'd connect ElevenLabs
@@ -28,15 +29,24 @@ How much of your generation the connection carries is **your choice** — see
 [Choose how nodaro.ai is used](#choose-how-nodaroai-is-used).
 
 **The vendor-direct nodes are covered too.** AI Avatar / Cinematic Avatar
-(HeyGen), Relight & Switch (Beeble) and Web Scrape (Apify) do not go through
-the model router — their handlers call the vendor. On a connected install with
+(HeyGen), Relight & Switch (Beeble), Web Scrape (Apify), the Suno music nodes
+(every operation, when you have no KIE key), Transcribe and the transcription
+step of the subtitle nodes (Replicate or ElevenLabs key, per the chosen
+engine) and Generate Script (any LLM key) do not go through the model
+router — their handlers call the vendor. On a connected install with
 no key for that vendor, the worker replays the job on your nodaro.ai account's
-identical route, brings the finished media back into your own storage, and
+identical route, brings the finished output back into your own storage, and
 finalizes it as a local job (`providers/nodaro/run-on-cloud.ts`); the HeyGen
 avatar/voice pickers list the cloud's catalog the same way. Billed to the
 connected account like any other cloud model. Paste your own key for any of
-them and that vendor is called directly instead — your own vendor key always
-wins on these vendor-direct lanes, whatever the routing choice below says.
+them and that vendor is called directly instead — under **My keys first**
+(and on installs connected before the choice existed) your own vendor key
+wins on these lanes. Under **nodaro first** the connection serves them too,
+key or no key; under **Only the Nodaro-exclusive nodes** they never use the
+connection, even without a vendor key. Suno and Generate Script are the two
+exceptions: with your own key (KIE for Suno; KIE, Anthropic or Gemini for
+Generate Script) they always run locally, without one they always run on the
+connection — those two handlers do not read the routing choice at all.
 
 **The text (LLM) nodes work the same way, standalone or inside a workflow.**
 Generate Text, AI Writer, Choose Best (AI judge), Image to Text, QA Check,
@@ -56,7 +66,7 @@ on installs connected before the choice existed) your own key wins.
 ## How to connect
 
 1. In your instance: **/setup → step 2 → Connect nodaro.ai** (or
-   **Integrations → Nodaro Cloud → Connect**). Two accounts are involved and
+   **Integrations → nodaro.ai → Connect**). Two accounts are involved and
    only two: your **server login** (lives in your own database) and your
    **nodaro.ai account** (created or signed into on the consent screen).
 2. Your browser opens the Nodaro Cloud consent screen — sign in (or sign
@@ -67,17 +77,26 @@ on installs connected before the choice existed) your own key wins.
    account it is about to connect — this is a **cloud** account, unrelated
    to the operator login you created for the instance itself. Click **Use
    a different account** to connect a different one.
-3. You land back on your instance with the connection active. The card
-   shows your live cloud balance. The connection is **per instance**, not
-   per user — whoever clicks Connect binds the whole install to their
-   nodaro.ai account.
+3. You land back on your instance with the connection active. The token the
+   instance receives is valid for **90 days** and is not renewed
+   automatically: after that the card still reads connected but cloud calls
+   fail with `Token expired` — click **Disconnect**, then **Connect** again
+   (the instance reuses its registration, so this does not count against the
+   attempt limit). The card shows your live cloud balance (when the cloud
+   host is a deployment whose usage is paid by one billing account, that
+   balance is visible only in the billing account's own browser session —
+   the card stays connected but shows no figure). The connection is **per
+   instance**, not per user — whoever clicks Connect binds the whole install
+   to their nodaro.ai account.
 4. Generation through the Nodaro provider is picked up on the next start
    of the app container (`docker compose … restart nodaro`); until then
    the first job that finds no provider re-checks the connection on its
    own, so a Run right after connecting also works.
 
 The instance's credential is stored server-side only — it never reaches
-your browser.
+your browser. It is encrypted with your `NODARO_ENCRYPTION_KEY` (the same
+key that protects pasted provider keys); without one the connection row is
+stored unencrypted and the app logs a warning when you connect.
 
 If the button reports that nodaro.ai is not accepting connections or cannot
 be reached, that is the cloud side or your network — your own provider keys
@@ -97,7 +116,13 @@ disconnect and reuses it.
 Right after a connection is made — the OAuth Connect **or** pasting an API
 key — a dialog asks how the credential should participate in routing. Closing
 the dialog without choosing applies the pre-selected defaults. Change it any
-time from **Integrations → nodaro.ai → Change**.
+time by making a new connection: **Change key** on the nodaro.ai tile
+(pasting the same key is fine; on an `.env`-managed key the button reads
+**Replace .env key**) or **Disconnect** → **Connect** on the OAuth card —
+the dialog opens again after either. There is no standalone control yet;
+scripts can `PUT /v1/nodaro-connect/prefs` with
+`{ "scope": "all" | "exclusives", "precedence": "nodaro" | "local" }` from a
+signed-in editor session (an admin on Business).
 
 - **nodaro for everything** *(pre-selected)* — every capability the
   connection covers routes through nodaro.ai, billed to the connected
@@ -110,17 +135,22 @@ time from **Integrations → nodaro.ai → Change**.
     behaved before this choice existed.
 - **Only the Nodaro-exclusive nodes** — the [exclusive
   nodes](#the-nodaro-exclusive-nodes) run through the connection;
-  everything else behaves as if the credential did not exist.
+  everything else behaves as if the credential did not exist — with two
+  exceptions today: the Suno nodes (when you have no KIE key) and Generate
+  Script (when you have no LLM key) still run on the connection rather than
+  failing.
 
 Two deliberate bounds, so the choice never surprises you:
 
 - **Installs connected before this dialog existed keep their old routing**
   (everything + my-keys-first) until they open the dialog — routing is never
   changed silently under an active install.
-- **"nodaro first" applies to the model router.** The vendor-direct nodes
-  (HeyGen avatars, Beeble relight, Apify web-scrape) still call the vendor
-  directly whenever you have that vendor's key, and local processing
-  (ffmpeg-family nodes) always runs locally.
+- **"nodaro first" applies beyond the model router.** The vendor-direct
+  nodes (HeyGen avatars, Beeble relight, Apify web-scrape, Transcribe) also
+  run on the connection under it, even when you hold that vendor's key;
+  under **My keys first** your vendor key wins. Local processing (the
+  ffmpeg-family nodes) always renders locally — only the transcription step
+  of the subtitle nodes follows the same rule as Transcribe.
 
 ## Managing provider keys (disable · replace · remove)
 
@@ -188,18 +218,20 @@ key and an OAuth connection exist, the OAuth connection is used.
 On app.nodaro.ai → Billing → **Connected Instances**, the account owner
 sees every connected instance with its spend this month, and can:
 
-- set a **monthly spend cap** per instance (auto-saved; the instance gets
-  `402 instance_cap_reached` past it), and
+- set a **monthly spend cap** per instance — 100 to 1,000,000 credits, or
+  empty for no cap (auto-saved; the instance gets `402 instance_cap_reached`
+  past it), and
 - **Disconnect** an instance — its tokens die immediately.
 
 ## Configuration reference
 
 | Where | Variable | Meaning |
 |---|---|---|
-| Instance | `NODARO_CLOUD_URL` | Cloud host to connect to (default `https://app.nodaro.ai`) |
+| Instance | `NODARO_CLOUD_URL` | Cloud host to connect to and relay through (default `https://app.nodaro.ai`) |
+| Instance | `R2_SHARED_WITH_RELAY_TARGET` | Default `false`. Set `true` (only `true` / `1` count) ONLY when your `R2_PUBLIC_URL` names the same bucket the cloud host at `NODARO_CLOUD_URL` writes to. Relayed outputs are then referenced in place instead of copied under a second key, are never deleted by this instance and do not count against its storage quota. Not passed through by `docker-compose.community.yml` — add it to the `nodaro` service environment yourself. |
 | Instance | `NODARO_API_KEY` | Personal API token from app.nodaro.ai → Settings → API — nodaro.ai as a plain provider, no OAuth flow. The OAuth connection wins if both exist. |
-| Instance | `PUBLIC_URL` | Your instance's public URL — used for the OAuth callback |
-| Cloud | `COMMUNITY_CONNECT_ENABLED` | Master flag for instance registrations + the Connected Instances surface |
+| Instance | `PUBLIC_URL` | Your instance's public URL — the OAuth callback is registered as `<PUBLIC_URL>/v1/nodaro-connect/callback`. Must be set: when empty it falls back to `https://app.nodaro.ai` and the consent screen can never return to your instance. The compose file defaults it to `http://localhost:3000`. |
+| Cloud | `COMMUNITY_CONNECT_ENABLED` | Master flag for self-hosted instance registrations (`software_id: nodaro-community`) + the Connected Instances surface. Default off; only `true` / `1` enable it; read at boot — redeploy after changing. Personal API keys are not affected by it. |
 
 Disconnecting from the instance only forgets the local access token — the
 instance keeps its cloud registration so the next Connect reuses it; revoke

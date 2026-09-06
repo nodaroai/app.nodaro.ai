@@ -40,13 +40,11 @@ vi.mock("../supabase.js", () => ({
     },
     auth: {
       admin: {
+        // NO `getUserById` stub, on purpose: D15.2 removed the boot-time read
+        // of the payer's identity provider, so a call here would throw rather
+        // than pass quietly. deployment-payer-boot.test.ts asserts the same
+        // property directly.
         listUsers: h.listUsers,
-        // Track A D15.1: configureDeploymentPayer() now reads the resolved
-        // payer's app_metadata to refuse an SSO-FEDERATED payer at boot, and
-        // an unreadable account fails CLOSED — so with no stub here every
-        // activation is refused. Non-federated by default; the refusal itself
-        // is proved in deployment-payer-boot.test.ts.
-        getUserById: async (id: string) => ({ data: { user: { id, app_metadata: {} } }, error: null }),
       },
     },
   },
@@ -135,23 +133,5 @@ describe("configureDeploymentPayer — uuid and email resolution", () => {
 describe("deploymentBillingContext — misuse guard", () => {
   it("throws while inactive — callers must gate on deploymentPayerActive()", () => {
     expect(() => deploymentBillingContext("u-1")).toThrow(/inactive/)
-  })
-})
-
-describe("payerSsoLinkConflict — the combination that must not boot", () => {
-  it("refuses ONLY when a payer is active AND link-existing is on", async () => {
-    const { payerSsoLinkConflict, __setDeploymentPayerForTests } = await import("../deployment-payer.js")
-
-    // No payer: the flag is the deployment's own business either way.
-    expect(payerSsoLinkConflict(false)).toBeNull()
-    expect(payerSsoLinkConflict(true)).toBeNull()
-
-    __setDeploymentPayerForTests("payer-acct")
-    // Payer + flag off: the supported configuration.
-    expect(payerSsoLinkConflict(false)).toBeNull()
-    // Payer + flag on: takeover of every local admin, including the operator.
-    const reason = payerSsoLinkConflict(true)
-    expect(reason).toMatch(/EXTERNAL_SSO_LINK_EXISTING/)
-    expect(reason).toMatch(/platform-operator gate/)
   })
 })

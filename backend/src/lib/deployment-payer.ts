@@ -104,7 +104,16 @@ async function resolveAccount(account: string): Promise<{ ok: true; id: string }
     const { data, error } = await supabase.from("profiles").select("id").eq("id", account).maybeSingle()
     if (error) return { ok: false, reason: `profile read failed: ${error.message}` }
     if (!data) return { ok: false, reason: `no profile row for uuid ${account}` }
-    return { ok: true, id: account }
+    // LOWER-CASED, always. `UUID_RE` is case-insensitive and Postgres compares
+    // `uuid` case-insensitively, so an upper-case `billing.payerAccount` boots
+    // happily — and then every `=== deploymentPayerId()` guard in the codebase
+    // misses, because they compare against lower-case ids from PostgREST,
+    // GoTrue and the JWT: the H6 exemption (middleware/auth.ts), the payer
+    // branch in sso-linking.ts, the admin-sso de-provision refusal,
+    // require-deployment-payer.ts and payer-balance-guard.ts. One misconfigured
+    // capital would silently open all five. The email branch below already
+    // returns GoTrue's own id, which is lower-case by construction.
+    return { ok: true, id: account.toLowerCase() }
   }
   const wanted = account.toLowerCase()
   const perPage = 200
@@ -154,72 +163,6 @@ function seedDefaultAllowanceCredits(): number | null {
  */
 export function deploymentDefaultAllowanceCredits(): number | null {
   return seedDefaultAllowanceCredits()
-}
-
-/**
- * The SSO marker key, written as a LITERAL rather than imported from its home
- * (`lib/sso-linking.ts`, `SSO_APP_METADATA_KEY`). That module statically
- * imports `supabase.js` AND `sso-providers.js` → `config.js`, which is exactly
- * the import-graph pollution this file's header exists to avoid: this module is
- * in the path of every money route and half the backend suite mocks
- * `config.js` partially. The string is the service-role-only `app_metadata` key
- * that `middleware/auth.ts`'s H6 gate already treats as authoritative;
- * `user_metadata` is forgeable by a public signUp and is never consulted.
- */
-const SSO_MARKER_KEY = "sso"
-
-/**
- * Is the resolved payer account SSO-FEDERATED? `null` when the answer could not
- * be read — the caller must treat that as a refusal, never as "no".
- *
- * One service-role admin call, on the payer path only (mainline never reaches
- * it — R2). Deliberately uncached and un-retried: it runs once, at boot, and a
- * boot that cannot establish who owns the money account should not come up.
- */
-async function payerAccountFederated(id: string): Promise<boolean | null> {
-  const supabase = await db()
-  try {
-    const { data, error } = await supabase.auth.admin.getUserById(id)
-    if (error || !data?.user) return null
-    return Boolean((data.user.app_metadata as Record<string, unknown> | undefined)?.[SSO_MARKER_KEY])
-  } catch {
-    return null
-  }
-}
-
-/**
- * D15.1 — the payer must not be an identity the CUSTOMER's IdP controls.
- *
- * A deployment payer already means the customer runs the identity provider. If
- * the payer account is itself federated, the customer's IdP can re-assert the
- * account that holds Nodaro's credits — and then buy credits on Nodaro's
- * Stripe, mint allowances and read the real balance, all through the third
- * guard that exists to keep exactly that principal out.
- * `requirePlatformOperator` refuses federated accounts on the money routes for
- * this reason (`require-platform-operator.ts:128-140`); the payer identity
- * needs the same rule one layer earlier, at boot, where it can still refuse.
- *
- * A pure predicate over an already-read fact, so it is testable without any
- * process or network surgery — the `payerSsoLinkConflict` shape. It takes the
- * boolean rather than the user object precisely so this module needs no import
- * from the SSO graph.
- *
- * DEVIATION FROM THE PLAN, ON PURPOSE: this one is consulted INSIDE
- * `configureDeploymentPayer`, before the settings write, not beside
- * `payerSsoLinkConflict` in `app.ts` after configure returns. Wiring it after
- * would mean a federated payer's uuid is already installed as
- * `deployment_payer_settings.payer_user_id` — the value migration 381's RLS
- * helper trusts — before the process exits. The refusal must land before
- * anything is written.
- */
-export function payerFederatedConflict(federated: boolean): string | null {
-  if (!federated) return null
-  return (
-    "the configured billing.payerAccount is an SSO-FEDERATED account. On a deployment-payer instance the customer " +
-    "runs the identity provider, so a federated payer is an account the customer can re-assert at will — handing " +
-    "them Nodaro's credit balance, the card on file and every allowance grant. Use a local password account for " +
-    "billing.payerAccount (and enrol MFA on it)."
-  )
 }
 
 /**
@@ -351,19 +294,16 @@ export async function configureDeploymentPayer(): Promise<{ ok: true } | { ok: f
   }
   const resolved = await resolveAccount(account)
   if (!resolved.ok) return resolved
-  // D15.1, BEFORE the settings write: the settings row is what migration 381's
-  // RLS helper trusts, so a federated payer must never get that far. An
-  // unreadable account fails CLOSED — "we could not tell who owns the money
-  // account" is not a state to boot in.
-  const federated = await payerAccountFederated(resolved.id)
-  if (federated === null) {
-    return {
-      ok: false,
-      reason: `payer account ${resolved.id} resolved but its identity provider could not be read (fail-closed: refusing to boot rather than assume it is not federated)`,
-    }
-  }
-  const federatedConflict = payerFederatedConflict(federated)
-  if (federatedConflict) return { ok: false, reason: federatedConflict }
+  // D15.2 — boot does NOT read which identity provider owns the payer, and must
+  // not start again. The superseded D15.1 refused a payer carrying
+  // `app_metadata.sso`, to keep the customer's IdP away from the account holding
+  // the credits; but that pool is the DEPLOYMENT's own money, and the identity
+  // that signs into it is the deployment's call. The check also failed CLOSED on
+  // an unreadable directory, so a transient admin-API blip took the whole
+  // instance down. The PLATFORM's money is guarded elsewhere and is unchanged:
+  // `requirePlatformOperator` still refuses a federated account on every
+  // credit-GRANT route, so nothing the customer's IdP asserts can mint credits.
+
   // BEFORE activating: a failed write leaves this module in its pristine
   // inactive state, so the refusal needs no unwind branch.
   const settings = await writePayerSettings(resolved.id)
@@ -407,30 +347,7 @@ export function allowanceEnforcementActive(): boolean {
 }
 
 /**
- * The one combination that must never boot: a deployment payer (⇒ the CUSTOMER
- * runs the identity provider) together with SSO link-existing (⇒ a verified
- * assertion may adopt a pre-existing local account). Either alone is fine.
- * Together, the customer's IdP can assert a local admin's email and assume
- * that account — including the one the platform-operator allowlist names,
- * which hands back every money route the gate was built to hold.
- *
- * Returns the refusal REASON, or null when the combination is absent. The
- * predicate lives here (testable, no env or process surgery) and app.ts owns
- * the exit(1) — the same split `configureDeploymentPayer` already uses. The
- * flag is passed in rather than read here so this module stays free of the
- * SSO import graph; it is in the import path of every money route.
- */
-export function payerSsoLinkConflict(ssoLinkExistingOn: boolean): string | null {
-  if (!deploymentPayerActive() || !ssoLinkExistingOn) return null
-  return (
-    "EXTERNAL_SSO_LINK_EXISTING is on for an instance with a billing.payerAccount. " +
-    "The customer's IdP could then assert an existing admin's email and assume that account, " +
-    "defeating the platform-operator gate on every money route. Set EXTERNAL_SSO_LINK_EXISTING=false and redeploy."
-  )
-}
-
-/**
- * D15.3 / B5 — the payg web block and a deployment payer cannot both be on
+ * D15 item 3 / B5 — the payg web block and a deployment payer cannot both be on
  * while the payer's own grade is `free` or `payg`.
  *
  * The payg surface block resolves the spendable pool at the PAYER's tier under
@@ -444,9 +361,11 @@ export function payerSsoLinkConflict(ssoLinkExistingOn: boolean): string | null 
  * refusal and not a runbook note: the day someone sets the flag must not be
  * the day the instance dies.
  *
- * The flag is PASSED IN, not read here, for the same reason
- * `payerSsoLinkConflict` takes its flag: this module stays out of the
- * `config.js` import graph. `app.ts` passes `config.PAYG_WEB_BLOCK_ENABLED`.
+ * The flag is PASSED IN rather than read from `config` here, so the predicate
+ * stays pure: it is testable with no env or process surgery, and this module's
+ * own tests can keep mocking `config.js` down to `hasCredits` alone. `app.ts`
+ * passes `config.PAYG_WEB_BLOCK_ENABLED` and owns the exit(1) — the same split
+ * as `configureDeploymentPayer`.
  *
  * Returns null when there is no payer (mainline — R2), when the flag is off,
  * or when the payer is on any paid grade.

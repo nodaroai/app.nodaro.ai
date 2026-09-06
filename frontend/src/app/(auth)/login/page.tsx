@@ -107,9 +107,12 @@ export default function LoginPage() {
   ]
   const authMethods = surfaceAuthMethods(codeDefaultAuthMethods)
 
-  // B2 — the billing account's sign-in lane. On a deployment-payer instance the
-  // account that holds the credits is a local password account, and this page
-  // has no way to render a form for it: `codeDefaultAuthMethods` omits "email"
+  // B2 — the billing account's BREAK-GLASS sign-in lane. On a deployment-payer
+  // instance the account that holds the credits signs in through the
+  // deployment's provider like everyone else (it links on its first verified
+  // assertion), but it also keeps a platform-issued password for the day that
+  // provider cannot assert it — and this page has no way to render a form for
+  // that password: `codeDefaultAuthMethods` omits "email"
   // on cloud, and `surfaceAuthMethods` INTERSECTS the profile with that default
   // (surface-selectors.ts:81), so a profile can only ever narrow. Adding
   // "email" to the code default before the narrowing — the shape the spec

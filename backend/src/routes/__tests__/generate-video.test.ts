@@ -85,8 +85,7 @@ vi.mock("@/lib/video-schemas.js", async () => {
 // ---------------------------------------------------------------------------
 
 import { generateVideoRoutes, assembleVideoConnectedReferences } from "../generate-video.js"
-import { VIDEO_GEN_PROVIDERS, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, type ConnectedReference } from "@nodaro/shared"
-import { videoProviderFoldsLoneEndFrame } from "../../lib/video-image-required.js"
+import { VIDEO_GEN_PROVIDERS, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame, type ConnectedReference } from "@nodaro/shared"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { probeMediaDuration } from "../../providers/video/ffmpeg-utils.js"

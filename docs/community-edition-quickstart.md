@@ -62,16 +62,20 @@ that do not apply to your install (you already added a provider key, for
 example) are reported as skipped rather than failed. The same script runs in
 our CI against a keyless stack on every change.
 
-Added a provider key already? Opt in to the success-path check too:
+Added a KIE.ai or Replicate key already? Opt in to the success-path check
+too:
 
 ```bash
 node tools/community-smoke.mjs http://localhost:3000 --keyed
 ```
 
-`--keyed` submits one real generation on the cheapest model (Z-Image,
-typically under a cent of provider spend), follows it to completion, and
-verifies the media actually lands in your install's own storage. Without the
-flag the probe never spends anything.
+`--keyed` needs a KIE.ai or Replicate key on the install (`KIE_API_KEY` /
+`REPLICATE_API_TOKEN` in `.env`, or pasted on /setup) — a nodaro.ai
+connection or token is the connect lane and is checked separately. It submits
+one real generation on the cheapest model for that key (Z-Image on KIE.ai,
+Flux 2 Klein on Replicate — typically under a cent of provider spend),
+follows it to completion, and verifies the media actually lands in your
+install's own storage. Without the flag the probe never spends anything.
 
 ## 3. Generate for real
 
@@ -83,11 +87,14 @@ Viewing the demo is free and works offline. To run nodes yourself you need
 a model provider — until you have one, the dashboard shows a dismissible
 *"This install can't generate yet"* callout with both buttons (Connect
 nodaro.ai · Paste a key); it disappears on its own once a provider exists.
-Three ways, and they run side by side:
+Three ways, and they run side by side — with one rule: if this install is
+both connected to nodaro.ai and holds a `NODARO_API_KEY`, the connection is
+used and the token is ignored:
 
 **Paste a key in the app (no files, no restart).** Two places show the same
-tiles: http://localhost:3000/setup → **Install health** (setup time, works
-before you log in) and, once you are in the app, **Integrations → Model
+tiles: http://localhost:3000/setup → **Install health** (the health screen
+needs no login; saving a key does — create your server login first, step 1
+on that page) and, once you are in the app, **Integrations → Model
 providers**. Every provider is a tile — nodaro.ai, KIE.ai, Replicate,
 Anthropic, Google Gemini, ElevenLabs, fal.ai, and, grouped apart as *used by
 specific nodes*, HeyGen (avatar nodes), Beeble (Relight & Switch), Apify (Web
@@ -125,7 +132,11 @@ NODARO_API_KEY=...         # nodaro.ai as a plain provider — a personal API to
 
 then `docker compose -f docker-compose.community.yml up -d`. A key set in
 `.env` takes precedence over one pasted on the screen; the tile shows
-`set (env)` and is read-only there until you remove it from `.env`.
+`set (env)` and cannot be edited in place — remove the key from `.env` (and
+restart), or press **Replace .env key** on the tile to override it from the
+screen without touching the file (the nodaro.ai tile has no Replace: its
+`.env` token can only be removed from the file). Any tile with a key, `.env`
+or pasted, can also be **disabled** from the screen.
 
 You pay providers directly; the Community edition has no credit system, no
 Nodaro fees, and no watermark.
@@ -195,22 +206,39 @@ For anything reachable by other people:
 Every bundled service can be swapped for a managed one in `.env`:
 
 - **Managed Supabase**: set `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
-  `SUPABASE_SERVICE_ROLE_KEY` to your supabase.com project values and set
-  `RUN_MIGRATIONS_ON_BOOT=false` (apply `supabase/migrations/` via the
-  Supabase SQL editor or CLI instead).
-- **Cloudflare R2**: set the four `R2_*` account values and clear
-  `R2_ENDPOINT` / `R2_FORCE_PATH_STYLE`.
+  `SUPABASE_SERVICE_ROLE_KEY` to your supabase.com project values, set
+  `FRONTEND_SUPABASE_URL` to the same project URL (the browser's copy — the
+  published image is built for the bundled proxy and only learns another URL
+  from this variable at boot), set `RUN_MIGRATIONS_ON_BOOT=false` (apply
+  `supabase/migrations/` via the Supabase SQL editor or CLI instead), and set
+  `NODARO_ENCRYPTION_KEY` (64-char hex, `openssl rand -hex 32`) — the key the
+  stack otherwise generates for you only exists while the migration runner is
+  on; without it, pasting keys on the screen and Connect nodaro.ai fail with
+  `EncryptionKeyMissingError`. An install that already ran the bundled stack
+  keeps its key at `/data/nodaro/encryption-key` in the `app-data` volume —
+  reuse that value.
+- **Cloudflare R2**: set `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`,
+  `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME` and `R2_PUBLIC_URL` (the bucket's
+  public r2.dev or custom-domain URL), plus
+  `R2_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com` and
+  `R2_FORCE_PATH_STYLE=false`. Leaving those last two empty does not clear
+  them — the compose file's `${VAR:-default}` falls back to the MinIO values
+  for an empty variable. (Boot logs one harmless
+  `[storage] failed to create bucket` line: R2 tokens cannot create buckets,
+  and yours already exists.)
 
 ## Updating
 
-Every release publishes the image under four kinds of tag:
+Every build of `main` publishes the image under `latest` and its commit
+`<sha>`; a release adds three version tags:
 
 | Tag | Meaning |
 |---|---|
 | `vX.Y.Z` (e.g. `v2.0.0`) | Immutable — exactly one build, never re-pointed. Pin this for byte-stable deploys. |
 | `vX.Y` | Floats across patches of one minor. |
 | `vX` | Floats across a whole major — features and fixes arrive, breaking changes never do. |
-| `latest` | Tracks every release, majors included. |
+| `latest` | Tracks `main` — every merged change, released or not, majors included. |
+| `<sha>` | One commit, never re-pointed — the other way to reproduce exactly one build. |
 
 To update, pull and restart — database migrations apply themselves on boot:
 
@@ -239,10 +267,12 @@ it starts anything. Full guide: [Backup & restore](backup-restore.html).
 The running version is shown in the app sidebar and at `/health`. Click the
 version for the release notes — of the version you are running, or of the
 newest release when one is available: then a red dot appears next to it and
-the same dialog adds the exact upgrade commands, with the backup step first. The check is one anonymous
-request a day to GitHub's API; set `NODARO_UPDATE_CHECK=off` in `.env` to
-disable it entirely (air-gapped installs — the version then shows as plain
-text).
+the same dialog adds the exact upgrade commands, with the backup step first.
+The check is one anonymous request a day to GitHub's API; for air-gapped
+installs, add `NODARO_UPDATE_CHECK: "off"` under the `nodaro` service's
+`environment:` block in `docker-compose.community.yml` to disable it
+entirely — the compose file does not pass this variable through from `.env`
+(the version then shows as plain text).
 
 ## Troubleshooting
 
@@ -263,5 +293,9 @@ text).
   the app port, set `PUBLIC_URL` to match.
 - **Storage errors on upload**: open the MinIO console at
   http://localhost:9001 (default credentials are in the compose file).
-- **CORS errors in browser**: set `CORS_ORIGIN=http://localhost:3000` in `.env`.
+- **CORS errors in browser**: `http://localhost:3000` and `PUBLIC_URL` are
+  always allowed, so this means you opened the app on another origin (a LAN
+  address, another port). Set `PUBLIC_URL` to that origin — or list extra
+  origins, comma-separated, in `CORS_ORIGIN=http://192.168.1.20:3000` — and
+  restart.
 - **Need help?** Open an issue at https://github.com/nodaroai/app.nodaro.ai/issues.

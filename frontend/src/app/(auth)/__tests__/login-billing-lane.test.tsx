@@ -1,8 +1,11 @@
 /**
  * B2 — the billing account's sign-in lane, and the trap under it.
  *
- * On an SSO-only deployment the account that holds the deployment's credits is
- * a local password account, and this page cannot render a form for it. The
+ * On an SSO-only deployment the account that holds the deployment's credits
+ * normally signs in through the deployment's own provider, like every other
+ * user — it links on its first verified assertion (D15.2). What it also keeps
+ * is a platform-issued password, the BREAK-GLASS door for the day that provider
+ * cannot assert it, and this page cannot render a form for that password. The
  * spec's sketch was to add "email" to `codeDefaultAuthMethods` BEFORE
  * `surfaceAuthMethods` narrows — but `surfaceAuthMethods` is an INTERSECTION
  * (`surface-selectors.ts:81`), so on a profile of `["sso"]` the added method is

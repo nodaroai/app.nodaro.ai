@@ -158,14 +158,8 @@ import { connectedInstancesRoutes } from "./ee/routes/connected-instances.js"
 import { galleryRoutes } from "./routes/gallery.js"
 import { runtimeSurfaceProfile, surfaceProfileFailedToLoad } from "./lib/surface-profile.js"
 import { loadAvailabilityOverrides } from "./lib/availability-override.js"
-import {
-  configureDeploymentPayer,
-  deploymentPayerActive,
-  payerSsoLinkConflict,
-  payerWebFreeConflict,
-} from "./lib/deployment-payer.js"
+import { configureDeploymentPayer, deploymentPayerActive, payerWebFreeConflict } from "./lib/deployment-payer.js"
 import { deploymentBillingRoutes } from "./ee/routes/deployment-billing.js"
-import { ssoLinkExistingEnabled } from "./lib/sso-providers.js"
 import { surfaceAvailabilityRoutes } from "./routes/surface-availability.js"
 import { userSettingsRoutes } from "./routes/user-settings.js"
 import { meRoutes } from "./routes/me.js"
@@ -352,24 +346,12 @@ export async function buildApp() {
   const payerBoot = await configureDeploymentPayer()
   if (!payerBoot.ok) {
     console.error(
-      // The fixed half no longer says "did not resolve": this branch now also
-      // carries a resolved-but-refused payer (federated, or an unwritable
-      // settings row). `reason` names which.
+      // The fixed half no longer says "did not resolve": this branch also
+      // carries a payer that resolved but could not be brought up (an
+      // unwritable settings row, an unreadable grade). `reason` names which.
       `[deployment-payer] FATAL: billing.payerAccount is configured but could not be brought up — ${payerBoot.reason}. ` +
         "Refusing to boot a deployment-payer instance requester-billed. Fix the profile (or the payer account) and redeploy.",
     )
-    process.exit(1)
-  }
-
-  // A deployment payer means the CUSTOMER runs the identity provider, and
-  // EXTERNAL_SSO_LINK_EXISTING lets a verified assertion adopt a pre-existing
-  // local account. Together they are account takeover of every local admin —
-  // including whichever account the operator allowlist names, which would hand
-  // the money routes (require-platform-operator.ts) straight back to the
-  // customer. Neither is wrong alone; the combination has no safe use.
-  const payerSsoConflict = payerSsoLinkConflict(ssoLinkExistingEnabled())
-  if (payerSsoConflict) {
-    console.error(`[deployment-payer] FATAL: ${payerSsoConflict}`)
     process.exit(1)
   }
 
@@ -378,10 +360,10 @@ export async function buildApp() {
   // combination refuses EVERY browser-session run on the instance against a
   // free pool of zero — credits bought, nothing runnable, and no error naming
   // the cause. Latent while the flag is off; refuse rather than let the day
-  // someone sets it be the day the instance dies. (The third boot refusal, the
-  // federated-payer one, lives INSIDE configureDeploymentPayer above: it must
-  // land before the settings row names the payer to migration 381's RLS
-  // helper.)
+  // someone sets it be the day the instance dies. (The other refusal, a
+  // `deployment_payer_settings` write that did not land, lives INSIDE
+  // configureDeploymentPayer above — it must land before anything trusts the
+  // row migration 381's RLS helper reads.)
   const payerWebFree = payerWebFreeConflict(config.PAYG_WEB_BLOCK_ENABLED)
   if (payerWebFree) {
     console.error(`[deployment-payer] FATAL: ${payerWebFree}`)

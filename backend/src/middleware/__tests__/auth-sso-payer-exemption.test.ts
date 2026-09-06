@@ -1,12 +1,20 @@
 /**
- * B1 — the billing account cannot authenticate today, and the fix is ONE
- * uuid-wide hole in the H6 SSO gate.
+ * B1 — the billing account's BREAK-GLASS door: ONE uuid-wide hole in the H6
+ * SSO gate.
  *
  * `auth.methods: ["sso"]` makes `surfaceSsoOnly()` true, and H6 then 403s
  * `sso_required` for every JWT whose service-role `app_metadata.sso` marker is
- * unset. `support@acme.example` is a password account with no marker: GoTrue
- * authenticates it happily and its very first API request is refused. The
- * account that holds Nodaro's money cannot reach a single route.
+ * unset. Since D15.2 the billing account normally HAS that marker — it is an
+ * identity of the deployment's own provider and links on its first verified
+ * sign-in — and the marker lives on the USER RECORD this gate reads back, not
+ * on the session, so a linked payer passes the ordinary path from any session,
+ * its platform-issued password session included (proved below). The exemption
+ * is load-bearing for the window BEFORE that first assertion: an IdP entry not
+ * yet created, or a provider that cannot assert the address. There the password
+ * is the only way in and there is no marker to show — GoTrue authenticates the
+ * account happily and, without the exemption, its very first API request is
+ * refused, locking the account that holds the deployment's money out of every
+ * route, including the ones used to fix the outage.
  *
  * WHY NOT WIDEN `auth.methods`. Adding `"email"` to the profile flips
  * `surfaceSsoOnly()` to FALSE, which disables the gate for the ENTIRE instance
@@ -97,26 +105,30 @@ afterEach(() => {
   __resetDeploymentPayerForTests()
 })
 
-describe("the marker key does not drift", () => {
-  it("`lib/deployment-payer.ts`'s SSO_MARKER_KEY literal still matches its home", () => {
-    // The boot-time federated-payer refusal (D15.1) reads `app_metadata.sso`
-    // from a LITERAL in `lib/deployment-payer.ts`, not from this constant —
-    // that module may not import `sso-linking.js`, which drags `supabase.js`
-    // and `config.js` into the import graph of every money route. This is the
-    // guard that keeps the copy honest: rename the key here and the payer's
-    // federation check would silently start answering "not federated" for
-    // every account, admitting exactly the identity D15.1 exists to refuse.
-    expect(SSO_APP_METADATA_KEY).toBe("sso")
-  })
-})
-
 describe("the exemption", () => {
-  it("the payer passes H6 with NO app_metadata.sso marker", async () => {
+  it("the payer passes H6 with NO app_metadata.sso marker (the password door)", async () => {
     setProfile(SSO_ONLY)
     __setDeploymentPayerForTests(PAYER_UUID)
     getUser.mockResolvedValue(userResult(PAYER_UUID))
 
     const res = await inject(app, "tok-payer-no-marker")
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ userId: PAYER_UUID })
+  })
+
+  it("a LINKED payer is still 200 — no regression when the marker is present (D15.2)", async () => {
+    // NOT a proof that the marker path carries it: with the uuid exemption in
+    // place this 200 arrives either way, so the case can only fail if BOTH the
+    // exemption and the marker path break at once. It is a regression pin —
+    // "stamping the payer does not make it worse" — and the marker path's own
+    // proof is the `a marked SSO account still passes` case below, which uses a
+    // non-payer uuid and therefore discriminates.
+    setProfile(SSO_ONLY)
+    __setDeploymentPayerForTests(PAYER_UUID)
+    getUser.mockResolvedValue(userResult(PAYER_UUID, { [SSO_APP_METADATA_KEY]: "acme-idp", sso_subject: "idp-7" }))
+
+    const res = await inject(app, "tok-payer-linked")
 
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual({ userId: PAYER_UUID })
@@ -138,7 +150,7 @@ describe("the exemption is exactly one uuid wide", () => {
   it("a marked SSO account still passes (the gate's normal path is unchanged)", async () => {
     setProfile(SSO_ONLY)
     __setDeploymentPayerForTests(PAYER_UUID)
-    getUser.mockResolvedValue(userResult("33333333-4444-4555-8666-777777777777", { sso: { provider: "sai" } }))
+    getUser.mockResolvedValue(userResult("33333333-4444-4555-8666-777777777777", { sso: "acme-idp" }))
 
     const res = await inject(app, "tok-marked-sso")
 

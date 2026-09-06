@@ -109,7 +109,8 @@ Everything `backend/src/lib/config.ts` reads. **Required** means the API
 refuses to boot without it (the community compose sets or generates all
 three). Everything else has a working default. A guard test
 (`backend/src/lib/__tests__/config-docs.test.ts`) fails CI if a variable is
-added to `config.ts` without a row here.
+added to `config.ts` without being named anywhere in this file — keep a row
+here for each one anyway.
 
 | Variable | Default | What it does |
 |---|---|---|
@@ -149,7 +150,7 @@ added to `config.ts` without a row here.
 | `NODARO_ENCRYPTION_KEY` | `""` (compose: generated) | 64-char hex; encrypts pasted provider keys and social connections at rest |
 | `HEYGEN_CATALOG_REFRESH_HOURS` | `24` | How often the shared HeyGen preset catalog is refreshed |
 | `REPLICATE_WEBHOOK_SECRET` | `""` | Cloud edition — LoRA training callbacks; unset = webhook fast-fails 503 |
-| `R2_ENDPOINT` · `R2_FORCE_PATH_STYLE` · `R2_ACCOUNT_ID` · `R2_ACCESS_KEY_ID` · `R2_SECRET_ACCESS_KEY` · `R2_BUCKET_NAME` · `R2_PUBLIC_URL` | bundled MinIO | Object storage — see 2d |
+| `R2_ENDPOINT` · `R2_FORCE_PATH_STYLE` · `R2_ACCOUNT_ID` · `R2_ACCESS_KEY_ID` · `R2_SECRET_ACCESS_KEY` · `R2_BUCKET_NAME` · `R2_PUBLIC_URL` | bundled MinIO (compose); outside compose `R2_BUCKET_NAME` defaults to `scenenode-assets` — always set it to your bucket | Object storage — see 2d |
 | `R2_REGION` | `auto` | S3 region. `auto` suits Cloudflare R2 and MinIO ignores it; set a real one for Supabase-local (`local`), DO Spaces (`nyc3`, …) or AWS — they reject `auto` |
 | `STORAGE_OBJECT_ACL` | `""` (header omitted) | Canned ACL stamped on every uploaded object. For S3-compatible stores that cannot take a bucket policy — e.g. DO Spaces refuses `PutBucketPolicy` to a bucket-scoped key. See 2d |
 | `R2_PUBLIC_FALLBACK_DOMAIN` | `""` | A second public host for assets (e.g. the raw `pub-<id>.r2.dev` beside a CDN domain) |
@@ -161,16 +162,16 @@ added to `config.ts` without a row here.
 | `REMOTION_CONCURRENCY` | Remotion default (50 % of cores) | Browser tabs per render |
 | `FFMPEG_CONCURRENCY` | `4` (max 32) | Concurrent ffmpeg processes across every ffmpeg node |
 | `MCP_PUBLIC_URL` | `""` = the Nodaro Cloud host | Public base of the MCP host when it differs from `PUBLIC_URL`; self-hosters serving MCP on their main host set it equal to `PUBLIC_URL` |
-| `MCP_DYNAMIC_REGISTRATION` · `MCP_DCR_ALLOWLIST` | off · `""` | RFC 7591 dynamic client registration for MCP clients, and its allowlist |
+| `MCP_DYNAMIC_REGISTRATION` · `MCP_DCR_ALLOWLIST` | `allowlist` · 14 known clients (Claude, Claude Code, Cursor, Cline, Continue, Goose, ChatGPT, OpenAI, Lovable, Gemini, Gemini CLI, Codex, MCP Inspector, mcp-inspector) | RFC 7591 dynamic client registration for MCP clients (`allowlist` · `open` · `off`), and the `client_name` allowlist consulted in `allowlist` mode — see §10 |
 | `COMMUNITY_CONNECT_ENABLED` | off | **Cloud side only** — accept community-instance connections |
 | `PLATFORM_OWNER_EMAIL` | `""` | Business/Cloud — the super_admin no other admin can demote; empty = none |
-| `PLATFORM_OPERATOR_EMAILS` | `""` | Comma-separated emails allowed to reach the **money** admin routes (credit grants, tier/role changes, model pricing and cost settings) on a deployment that sets `billing.payerAccount`. Those routes additionally require a non-federated account, so an identity the deployment's own SSO provider asserts can never reach them. Empty falls back to `PLATFORM_OWNER_EMAIL`; empty with no owner closes the money routes to everyone. Inert on deployments with no payer account. |
-| `EXTERNAL_SSO_PROVIDERS` | `""` (SSO off) | Trusted external identity providers, as inline JSON or `@/path/to/file.json`. Unset ⇒ no SSO button, `/v1/sso/*` 404s. A malformed value **fails the boot loud** (never silently disables auth). Shape + linking rules: [External SSO](./sso.md) |
-| `EXTERNAL_SSO_LINK_EXISTING` | `false` | Whether a verified-email assertion may link to a **pre-existing** account not already SSO-linked. Default `false` is takeover-safe; `true` links only when the IdP also asserts a verified email. See [External SSO](./sso.md#account-linking-rules) |
+| `PLATFORM_OPERATOR_EMAILS` | `""` | Comma-separated emails allowed to reach the **money** admin routes (credit grants, tier/role changes, model pricing and cost settings) on a deployment that sets `billing.payerAccount`. Those routes additionally require a non-federated account, so an identity the deployment's own SSO provider asserts can never reach them — and on such a deployment an SSO assertion for an address on this list is refused rather than newly linked, so the operator account cannot become federated and lock itself out (an operator account already linked to the provider is unaffected). Empty falls back to `PLATFORM_OWNER_EMAIL`; empty with no owner closes the money routes to everyone. Inert on deployments with no payer account. |
+| `EXTERNAL_SSO_PROVIDERS` | `""` (SSO off) | Trusted external identity providers, as inline JSON or `@/path/to/file.json`. Unset ⇒ no SSO button (`GET /v1/sso/providers` answers an empty list) and every per-provider route answers `404 unknown_provider`. A malformed value **fails the boot loud** (never silently disables auth). Shape + linking rules: [External SSO](./sso.md) |
+| `EXTERNAL_SSO_LINK_EXISTING` | `false` | Whether a verified-email assertion may link to a **pre-existing** account not already SSO-linked. Default `false` is takeover-safe; `true` links only when the IdP also asserts a verified email. One account is outside the flag: a deployment's own `billing.payerAccount` links on its first verified assertion either way. See [External SSO](./sso.md#account-linking-rules) |
 | `KIE_UNIQUE_ID` | `""` | Cloud — KIE account id for the credit audit |
 | `STRIPE_SECRET_KEY` · `STRIPE_WEBHOOK_SECRET` | `""` | Cloud only — billing; ignored on community/business |
-| `PAYG_WEB_BLOCK_ENABLED` · `PAYG_WEB_BLOCK_EXEMPT_USER_IDS` | off · `""` | Cloud only — pay-as-you-go web block and its grandfathered accounts, comma-separated |
-| `AUTO_RECHARGE_ENABLED` | off | Cloud only — auto-recharge kill switch (§10) |
+| `PAYG_WEB_BLOCK_ENABLED` · `PAYG_WEB_BLOCK_EXEMPT_USER_IDS` | off · `""` | Cloud only — pay-as-you-go web block and its grandfathered accounts, comma-separated. Not combinable with a `billing.payerAccount` whose effective grade is `free` or `payg`: the pool is resolved at the payer's tier, so the API refuses to boot (`PAYG_WEB_BLOCK_ENABLED is on and the deployment payer's effective tier is …`) rather than refuse every run — put the payer on a paid subscription or leave the flag off |
+| `AUTO_RECHARGE_ENABLED` | off | Cloud only — auto-recharge kill switch: it guards the trigger + charge path only, while webhook provisioning stays on so in-flight payments still settle |
 | `ORGS_ENABLED` | off | Cloud only — multi-tenant organizations (schools / teams) rollout gate. Ships dark; the schema migrations run in every edition regardless |
 | `MCP_ENABLED` | off | Serve the MCP endpoint (§10) |
 | `COPILOT_ENABLED` | off | Cloud only — the in-app [Workflow Copilot](./features/workflow-copilot.md). Needs `ANTHROPIC_API_KEY`; admins can also pause it at runtime from Settings |
@@ -423,8 +424,9 @@ UPDATE profiles
 ```
 
 The user UUID is visible in **Authentication → Users**. The change
-takes effect on next request — Nodaro caches admin status for 30
-seconds.
+takes effect within five minutes — Nodaro caches admin status for 5
+minutes (`CACHE_TTL_MS` in `backend/src/lib/admin-check.ts`); restart the
+API to apply it at once.
 
 ## 5. Three editions
 
@@ -484,11 +486,15 @@ Set `NODARO_SURFACE_PROFILE` to inline JSON or `@/path/to/profile.json` to narro
 the UI without a rebuild: hide nav entries and dashboard tabs, deny node and model
 types, set the product name, sibling-app links and login methods, pin a default
 locale, and force outputs private. It rides the same `/config.js` channel as the
-values above (env → validated at boot → mirrored to the browser); a
-malformed/unreadable value degrades to the stock surface with a warning and never
-blocks boot. Unset = the full default surface. The profile can only **narrow** —
-it never turns on a surface the edition gates off. Fields (all optional; each
-array empty = "keep the default"):
+values above (env → validated at boot → mirrored to the browser); a malformed
+*field* degrades element-wise to that field's default with a warning, but a
+profile that is set and does not load at all — an unreadable `@file`, invalid
+JSON, or a value that fails validation as a whole — **refuses to boot** on
+Business/Cloud (`[surface-profile] FATAL … Refusing to boot a narrowing
+deployment mainline-open`, exit 1): a narrowing deployment must never come up
+serving the full surface. Unset = the full default surface. The profile can only
+**narrow** — it never turns on a surface the edition gates off. Fields (all
+optional; each array empty = "keep the default"):
 
 - `nav.hide`: `["gallery","explore","pricing","templates","apps","community","integrations"]`
 - `dashboard.tabs`: one ordered whitelist governing **both** dashboard tab groups —
@@ -514,7 +520,16 @@ array empty = "keep the default"):
   only by an explicit `deny` entry. An admin can further adjust availability at
   runtime from **Admin → Availability** (full list with per-item toggles); a
   stored runtime override replaces this factory set until "Reset to factory".
-- `auth.methods`: `["email","google","sso"]` (plus `auth.ssoLabel`)
+- `auth.methods`: `["email","google","sso"]` (plus `auth.ssoLabel` — `sso` is
+  dropped from the list unless `ssoLabel` is set). A list that names **only**
+  `sso` also turns on a server-side gate: every signed-in account must have been
+  provisioned or linked through `/v1/sso/*` (it carries the service-role
+  `app_metadata.sso` marker), and any other session is refused on its first API
+  call with `403 sso_required` — a self-registered account against the reachable
+  auth stack cannot spend. The one exemption is the deployment's
+  `billing.payerAccount` (see `billing` below), which can also always sign in
+  with its platform-issued password at `/login?billing=1`. Adding `email` to the
+  list disables the gate for the whole instance.
 - `siblings.apps`: `[{ "label": "...", "url": "..." }]` — replaces the Nodaro
   family links in the product switcher
 - `brand.productName`: replaces the wordmark and the document title (absent =
@@ -582,23 +597,53 @@ array empty = "keep the default"):
     at the payer account's grade, with watermarking and daily caps off;
     per-user storage quotas stop enforcing (usage is still tracked); the
     payer is never auto-recharged; and `/usage` shows each user their own
-    consumption for the period, plus their own allowance when the allowance
-    keys are configured — never the payer's balance. The value is
-    backend-only: it is stripped from `/config.js`, and the browser learns
-    only a boolean `deploymentPayer` flag from `GET /v1/billing/surface`.
+    consumption for the period, plus their own allowance as soon as a payer is
+    set (the seeded or billing-account-set default until the user has a row of
+    their own; it only *binds* under `billing.allowances: "enforce"`) — never
+    the payer's balance. The value is backend-only: it is stripped from
+    `/config.js`, and the browser learns only a boolean `deploymentPayer` flag
+    from `GET /v1/billing/surface`.
     The payer account gets a **billing page** (`/billing-admin`) that no
     other account can reach: it shows the pool, the per-user allowances and
-    the grant history, and — when `STRIPE_SECRET_KEY` and
-    `STRIPE_WEBHOOK_SECRET` are set (see the variable table above) — lets the
-    payer load credits with its own card. Without those two the page still
-    works and simply reports that card payment is not configured.
-    **Fail-loud:** if set but the account does not resolve at boot, the
-    instance refuses to start. Unset = requesters pay, exactly as before.
+    the grant history, and — when `STRIPE_SECRET_KEY` is set — lets the payer
+    load credits with its own card (`POST /v1/deployment-billing/checkout`, a
+    Stripe Checkout session that the Stripe webhook credits to the payer
+    account). Set **both** Stripe variables or neither: the page and the
+    checkout route key on `STRIPE_SECRET_KEY` alone, while the credits are
+    granted by the webhook, which rejects every event until
+    `STRIPE_WEBHOOK_SECRET` is set — with only the secret key the card is
+    charged and nothing lands. Without `STRIPE_SECRET_KEY` the page still works
+    and reports that card payment is not configured (the route answers `503
+    stripe_not_configured`); Nodaro then tops the payer up by hand.
+    The billing account is an ordinary **SSO identity of the deployment's own
+    provider**: it links on its first verified sign-in whatever
+    `EXTERNAL_SSO_LINK_EXISTING` says (an unverified assertion is refused), and
+    it keeps a platform-issued password as a **break-glass** door for when that
+    provider cannot assert it — reachable at `/login?billing=1` on an SSO-only
+    deployment. It is the one federated account an admin cannot de-provision
+    (`403 payer_account_protected`). Platform credit grants are unaffected and
+    still require a non-federated operator account. See
+    [External SSO](./sso.md#the-billing-account).
+    **Fail-loud:** the payer needs a credit ledger, so `billing.payerAccount`
+    is honoured only on `EDITION=cloud` — on `business` the API refuses to
+    start (`billing.payerAccount is set but this edition has no credit system
+    to redirect`), as it does when the account does not resolve, or when
+    migration `381_deployment_payer_identity.sql` has not been applied yet (the
+    boot write to `deployment_payer_settings` fails and the API crash-loops
+    until it lands — on a managed Supabase project apply 381 and 382 before the
+    first image carrying a payer boots). Unset = requesters pay, exactly as
+    before.
   - `billing.defaultAllowanceUnits`: the starting allowance every user gets,
     in display units — the per-user ceiling on how much of the payer's pool
-    one person may spend. **Seed only:** it is written to the deployment's
-    billing settings on the FIRST boot that creates them, and never again;
-    afterwards only the billing account changes it, from `/billing-admin`.
+    one person may spend **over the lifetime of the account**. An allowance is
+    a one-time pot, not a monthly budget: nothing resets it, and the billing
+    account raises it for one user with a grant from `/billing-admin`.
+    **Seed only:** it is written to the deployment's billing settings when the
+    row is first created, and again on any later boot that finds the stored
+    default still unset (`0` or NULL — a deployment that booted before the
+    profile carried the key); a positive stored value is the billing account's
+    and no boot overwrites it, so afterwards only the billing account changes
+    it, from `/billing-admin`.
     A member of the unit family — it needs a coherent `unitLabel` +
     `unitRate`, drops with them, and `defaultAllowanceUnits / unitRate` must
     be a whole number of credits (the ledger stores platform credits) or the
@@ -653,11 +698,12 @@ produced object and writes a structured `error_hint` (`kind: "policy-block"`); a
 `hold` parks the job in the `pending_review` status — an in-flight status,
 exempt from the reconcile and timeout sweeps, output withheld, credits still
 reserved — until an admin approves it onto the normal completion path or rejects
-it, from **Admin → Review** (`/v1/admin/review/jobs…`). Both gates are
-**fail-closed** once a policy is registered: a check that throws never publishes —
-the request gate blocks, the result gate holds when the job is hold-eligible and
-blocks otherwise, recorded with `reason: "policy-unavailable"` and a
-platform-owned user message, never the policy's own wording. A job row the
+it, from **Admin → Content Review** (`/admin/review`, backed by
+`/v1/admin/review/jobs…`). Both gates are **fail-closed** once a policy is
+registered: a check that throws never publishes — the request gate blocks,
+the result gate holds when the job is hold-eligible and blocks otherwise,
+recorded with `reason: "policy-unavailable"` and a platform-owned user
+message, never the policy's own wording. A job row the
 result gate cannot read is treated the same way: the read is retried once and
 then blocks (never holds — eligibility is a property of the row it could not
 read), while only a confirmed missing row answers allow. Every decision,
@@ -692,8 +738,12 @@ On the bundled stack, migrations apply **automatically on boot**
 (`RUN_MIGRATIONS_ON_BOOT`, §2c) — there is nothing to run by hand. Only
 when pointing at your own managed Supabase project with boot migrations
 disabled do new files under `supabase/migrations/` need applying in
-filename order before restarting; the backend won't crash on a missing
-migration, but specific routes will 500 until their schema lands.
+filename order before restarting; the backend usually won't crash on a
+missing migration — specific routes 500 until their schema lands — with one
+exception: a deployment that names a `billing.payerAccount` writes
+`deployment_payer_settings` at boot and refuses to start until
+`381_deployment_payer_identity.sql` (and the allowance tables of `382`) are
+applied, so land those before restarting onto an image that carries a payer.
 
 We aim to keep migrations forward-compatible (new tables, additive
 columns) — if anything changes destructively, it'll be called out in
@@ -974,7 +1024,6 @@ If you're still stuck, file an issue with the Docker logs at
 The MCP (Model Context Protocol) server lets Claude.ai, Cursor, Cline,
 Continue.dev, Goose, and any MCP-compatible client drive Nodaro tools on
 a user's behalf via OAuth. It is gated behind `MCP_ENABLED` (default
-a user's behalf via OAuth. It is gated behind `AUTO_RECHARGE_ENABLED` (default — enables the auto-recharge trigger/charge path (webhook provisioning always on). Default `false`.
 `false`) and lives at the `mcp.nodaro.ai/mcp` subdomain.
 
 **To enable on a hosted instance:**
@@ -1032,8 +1081,8 @@ the flow itself.
 
 | Where | Variable | Meaning |
 |---|---|---|
-| Your instance (community / business) | `NODARO_CLOUD_URL` | Cloud host the **Connect nodaro.ai** button registers with. Default `https://app.nodaro.ai`. Set to `https://next.nodaro.ai` for a staging soak. |
-| Your instance (community / business) | `NODARO_API_KEY` | nodaro.ai as a provider like KIE or Replicate: a personal API token from app.nodaro.ai → Settings → API, billed to that account. Alternative to the OAuth connect flow — both light the same **nodaro.ai** tile on `/setup`; if both exist the OAuth connection is used (it carries per-instance spend caps and Connected Instances visibility). |
+| Your instance (community / business, or a self-hosted copy of a dedicated deployment) | `NODARO_CLOUD_URL` | The cloud host this instance relays to — where the **Connect nodaro.ai** button registers, **and** where every call made with `NODARO_API_KEY` goes (relayed generations, uploads, the LLM proxy). Default `https://app.nodaro.ai`. A self-hosted copy of a dedicated deployment points it at that deployment's own hosted instance; set `https://next.nodaro.ai` for a staging soak. Read at boot. |
+| Your instance (community / business, or a self-hosted copy of a dedicated deployment) | `NODARO_API_KEY` | nodaro.ai as a provider like KIE or Replicate: a personal API token (`ndr_…`) minted on the host named by `NODARO_CLOUD_URL` under **Settings → API**, billed to that account. The key alone arms the relay — no cloud-side flag and no OAuth registration are needed. What it is: a credential with **no scope, no spend cap and no expiry** (at most 10 per account; revoke it by deleting or deactivating it on the same page). What it cannot do: money routes are session-only — a key can spend, never allocate allowances, buy credits or administer (`payer_balance_jwt_only`). On a deployment that names a `billing.payerAccount`, **only the billing account may create one** (`403 api_tokens_payer_only`), and the Settings card is hidden for everyone — the billing account opens `/settings/api` directly. Alternative to the OAuth connect flow — both light the same **nodaro.ai** tile on `/setup`; if both exist the OAuth connection is used (it carries per-instance spend caps and Connected Instances visibility, and needs `COMMUNITY_CONNECT_ENABLED` on the cloud side). |
 | The cloud (a `cloud`-edition deployment) | `COMMUNITY_CONNECT_ENABLED` | Master switch for accepting self-hosted registrations (`software_id: nodaro-community` at `/v1/oauth/register`) and for the account's **Connected Instances** page. Default `false`. Enabled on `app.nodaro.ai` since 2026-08-16. Requires migration 312 (`developer_apps.kind = community_instance`). Read at boot — redeploy after changing. |
 
 When the cloud has it off, the instance's `POST /v1/nodaro-connect/start`

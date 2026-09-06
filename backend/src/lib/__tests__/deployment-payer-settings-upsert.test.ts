@@ -87,11 +87,9 @@ vi.mock("../supabase.js", () => ({
     },
     auth: {
       admin: {
+        // No `getUserById`: D15.2 removed the boot-time federation read, so
+        // nothing on this path may call it (see deployment-payer.test.ts).
         listUsers: async () => ({ data: { users: [] }, error: null }),
-        // Track A D15.1 — see the note in deployment-payer.test.ts. Without
-        // this stub the federation read fails closed and every activation in
-        // this file is refused before the upsert runs.
-        getUserById: async (id: string) => ({ data: { user: { id, app_metadata: {} } }, error: null }),
       },
     },
   },
