@@ -53,7 +53,13 @@
  */
 import { supabase } from "../../lib/supabase.js"
 import { deploymentPayerActive, deploymentPayerId } from "../../lib/deployment-payer.js"
-import type { AllowanceGrant, UserAllowance } from "../../types/deployment-allowance.js"
+import type {
+  AllowanceApplied,
+  AllowanceGrant,
+  ResolvedUserRef,
+  UserAllowance,
+  UserRef,
+} from "../../types/deployment-allowance.js"
 
 /** The settings row is read once per TTL: `allowanceFor` consults it on every
  *  no-row user, and the admin list would otherwise read it once per page. The
@@ -112,9 +118,12 @@ type AllowanceRow = {
   granted_credits: number | null
   reserved_credits: number | null
   spent_credits: number | null
+  /** Written for the first time by `set_deployment_allowance` in `renew` mode
+   *  (migration 387). Absent on every row no renewal has touched. */
+  reset_at?: string | null
 }
 
-const ALLOWANCE_COLUMNS = "user_id, granted_credits, reserved_credits, spent_credits"
+const ALLOWANCE_COLUMNS = "user_id, granted_credits, reserved_credits, spent_credits, reset_at"
 
 function fromRow(row: AllowanceRow): UserAllowance {
   const granted = row.granted_credits ?? 0
@@ -122,7 +131,15 @@ function fromRow(row: AllowanceRow): UserAllowance {
   const spent = row.spent_credits ?? 0
   // GREATEST(…, 0): the D2 clamp lets a metered overrun be absorbed into
   // `spent`, so remaining must floor at 0 rather than render a negative.
-  return { granted, remaining: Math.max(granted - reserved - spent, 0), spent }
+  const out: UserAllowance = { granted, remaining: Math.max(granted - reserved - spent, 0), spent }
+  // OMITTED, not null, when nothing has ever renewed this allowance: `spent`
+  // is then a LIFETIME figure, and the key's absence is exactly what tells a
+  // renderer to say "total" rather than "this period". `reset_at` stays
+  // column-private to the browser (382 granted four columns and deliberately
+  // not this one), so it only ever arrives through the service-role reads
+  // here.
+  if (row.reset_at) out.resetAt = row.reset_at
+  return out
 }
 
 /**
@@ -301,7 +318,7 @@ export async function grantsFor(
   if (!deploymentPayerActive()) return null
   const { data, error } = await supabase
     .from("deployment_allowance_grants")
-    .select("id, credits, kind, note, created_at")
+    .select("id, credits, kind, note, created_at, credential_id")
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .range(opts.offset, opts.offset + opts.limit - 1)
@@ -315,12 +332,18 @@ export async function grantsFor(
     kind: string
     note: string | null
     created_at: string
+    credential_id?: string | null
   }>).map((r) => ({
     id: r.id,
     credits: r.credits ?? 0,
     kind: r.kind as AllowanceGrant["kind"],
     createdAt: r.created_at,
     note: r.note,
+    // NULL = the billing account's own browser session. The page renders
+    // "via <key>" only when this names a key that still exists — the FK is
+    // ON DELETE SET NULL, so a revoked key's history degrades to "the page"
+    // rather than disappearing.
+    credentialId: r.credential_id ?? null,
   }))
 }
 
@@ -336,6 +359,12 @@ export type AllowanceWriteErrorCode =
   | "allowance_kind_invalid"
   | "allowance_zero_grant"
   | "allowance_below_committed"
+  // 387's two verbs add two refusals: a mode that is neither `set` nor
+  // `renew`, and a target that is NULL or negative. ZERO is not among them —
+  // a cancelled plan is a quota of 0, and only a MOVE of zero (the additive
+  // grant) is a caller bug.
+  | "allowance_mode_invalid"
+  | "allowance_target_invalid"
   | "allowance_write_failed"
 
 export type AllowanceWriteResult = { ok: true } | { ok: false; code: AllowanceWriteErrorCode; message: string }
@@ -349,6 +378,8 @@ const GRANT_PREFIXES: ReadonlyArray<[string, AllowanceWriteErrorCode]> = [
   ["ALLOWANCE_KIND_INVALID:", "allowance_kind_invalid"],
   ["ALLOWANCE_ZERO_GRANT:", "allowance_zero_grant"],
   ["ALLOWANCE_BELOW_COMMITTED:", "allowance_below_committed"],
+  ["ALLOWANCE_MODE_INVALID:", "allowance_mode_invalid"],
+  ["ALLOWANCE_TARGET_INVALID:", "allowance_target_invalid"],
 ]
 
 function classifyGrantError(raw: string): { code: AllowanceWriteErrorCode; message: string } {
@@ -361,10 +392,13 @@ function classifyGrantError(raw: string): { code: AllowanceWriteErrorCode; messa
 /**
  * Move a user's `granted_credits`, through the RPC that is its only writer.
  *
- * All five parameters are supplied every time: `grant_deployment_allowance`
+ * All SIX parameters are supplied every time: `grant_deployment_allowance`
  * declares NO defaults, so an omitted one is a different arity and PostgREST
  * answers "function not found" — which would surface as a 500 on a top-up that
- * simply had no note.
+ * simply had no note. (It took five until migration 387 added the credential
+ * line, and 387 DROPS the five-argument signature — which is why an image
+ * rolled back below 387 cannot call this function at all. 387's header says
+ * what a rollback has to re-apply.)
  *
  * `actorId` must be the payer's own id. The route guard already established
  * that, and the RPC asserts it again against `deployment_payer_settings` — a
@@ -381,6 +415,11 @@ export async function grantAllowance(params: {
   actorId: string
   kind: "topup" | "correction"
   note: string | null
+  /** Which credential moved the quota — null (or omitted) for the billing
+   *  account's own browser session. Optional HERE and required by the RPC:
+   *  the page has no credential to name, and 387 gave the argument no default
+   *  precisely so that this module, its one caller, states it every time. */
+  credentialId?: string | null
 }): Promise<AllowanceWriteResult> {
   const { error } = await supabase.rpc("grant_deployment_allowance", {
     p_user_id: params.userId,
@@ -388,6 +427,7 @@ export async function grantAllowance(params: {
     p_actor_id: params.actorId,
     p_kind: params.kind,
     p_note: params.note,
+    p_credential_id: params.credentialId ?? null,
   })
   if (error) {
     const classified = classifyGrantError(error.message ?? "")
@@ -465,4 +505,326 @@ export async function provisionedUserCount(): Promise<number | null> {
     return null
   }
   return count ?? null
+}
+
+// ===========================================================================
+// The INTEGRATION half (migration 387): set, renew, pending, and the two
+// identity lookups an integration names a person with.
+// ===========================================================================
+//
+// Everything below is still RAW NODARO CREDITS (R3): `creditsFromUnits` on the
+// way in at the route, `toUnits` at render, and nothing in between multiplies.
+// A display unit that reached `set_deployment_allowance` would make every
+// stored allowance wrong the day the rate moved — and unlike a rendered
+// figure, a stored one is wrong forever.
+//
+// The table names stay in this file. `deployment_allowance_pending` joins
+// `deployment_user_allowances` and `deployment_allowance_grants` under that
+// rule: one module knows the relations, so no second place can grow a
+// different idea of what a row means.
+
+/** What `setAllowance` did, plus what the database now holds. `applied:
+ *  "noop"` is a SUCCESS — the target was already the granted figure, which is
+ *  the correct answer to a replayed call. */
+export type AllowanceSetResult =
+  | { ok: true; applied: AllowanceApplied; row: UserAllowance }
+  | { ok: false; code: AllowanceWriteErrorCode; message: string }
+
+/**
+ * Set a user's allowance to an ABSOLUTE target, through the RPC that computes
+ * the delta server-side.
+ *
+ * Why absolute rather than additive: an integration knows "this customer's
+ * plan is 50 000", not the delta from a figure it never read — and a delta
+ * computed on the caller's side turns a retry after a timeout into a second
+ * allocation. `set` is idempotent by construction; `renew` additionally zeroes
+ * `spent` and stamps the period.
+ *
+ * `targetCredits` may be ZERO (a cancelled plan is a quota of 0) but never
+ * negative. Both refusals, and the "below what is already committed" refusal,
+ * come back through the same prefix classifier as a grant's, so a new database
+ * refusal cannot silently become a 500.
+ *
+ * NOT gated on `deploymentPayerActive()` — deliberately, unlike every READ in
+ * this file. The RPC asserts the actor against `deployment_payer_settings`
+ * itself, which is the check that actually holds, and a local gate here would
+ * add a second answer to "is there a payer?" that could disagree with the
+ * database's. Every caller is a route that is only registered when a payer
+ * exists.
+ */
+export async function setAllowance(params: {
+  userId: string
+  targetCredits: number
+  actorId: string
+  mode: "set" | "renew"
+  note: string | null
+  credentialId?: string | null
+}): Promise<AllowanceSetResult> {
+  const { data, error } = await supabase.rpc("set_deployment_allowance", {
+    p_user_id: params.userId,
+    p_target_credits: params.targetCredits,
+    p_actor_id: params.actorId,
+    p_mode: params.mode,
+    p_note: params.note,
+    p_credential_id: params.credentialId ?? null,
+  })
+  if (error) {
+    const classified = classifyGrantError(error.message ?? "")
+    console.error(`[deployment-allowance] ${params.mode} refused (${classified.code}):`, classified.message)
+    return { ok: false, ...classified }
+  }
+  // The RPC RETURNS TABLE, so PostgREST answers an ARRAY of one row. A missing
+  // row is not "nothing changed" — it is a function that did not behave as
+  // declared, and reporting success would tell the caller a quota moved when
+  // nothing is known to have.
+  const row = (Array.isArray(data) ? data[0] : data) as
+    | (AllowanceRow & { applied?: string })
+    | undefined
+    | null
+  if (!row || typeof row.applied !== "string") {
+    return {
+      ok: false,
+      code: "allowance_write_failed",
+      message: "set_deployment_allowance returned no row",
+    }
+  }
+  return { ok: true, applied: row.applied as AllowanceApplied, row: fromRow(row) }
+}
+
+/** 90 days: long enough that a plan bought before a slow onboarding still
+ *  lands, short enough that one bought for somebody who never arrives does not
+ *  wait forever to be applied to whoever eventually claims that address. */
+const PENDING_TTL_DAYS = 90
+
+export type PendingWriteResult =
+  | { ok: true; id: string; expiresAt: string }
+  | { ok: false; code: AllowanceWriteErrorCode; message: string }
+
+/**
+ * Store an allowance for someone who has no studio account yet, keyed by the
+ * identity their IdP will assert.
+ *
+ * A purchase precedes the first sign-in by construction: the back office knows
+ * an email and a subject, and there is no studio uuid to name. The alternative
+ * — refusing and asking the integration to retry after the first login — puts
+ * ledger state into the back office and loses it when the retry never comes.
+ *
+ * A REPLAY REPLACES rather than queues: the unapplied row for that identity is
+ * deleted first, so "the plan is now 50 000, no, 60 000" leaves one intent and
+ * not two. (The partial unique indexes make the alternative a constraint
+ * violation rather than a silent double-apply, so this is the only shape that
+ * both replays cleanly and cannot double-allocate.)
+ *
+ * The email is stored LOWER-CASED, which is what makes the delete above an
+ * `eq` and matches the `lower(email)` index the apply RPC selects on.
+ */
+export async function writePendingAllowance(params: {
+  ssoSubject?: string | null
+  email?: string | null
+  targetCredits: number
+  mode: "set" | "renew"
+  note: string | null
+  createdBy: string
+  credentialId?: string | null
+  ttlDays?: number
+}): Promise<PendingWriteResult> {
+  const subject = params.ssoSubject?.trim() || null
+  const email = params.email?.trim().toLowerCase() || null
+  if (!subject && !email) {
+    return {
+      ok: false,
+      code: "allowance_write_failed",
+      message: "a pending allowance must name an SSO subject or an email address",
+    }
+  }
+  if (!Number.isInteger(params.targetCredits) || params.targetCredits < 0) {
+    // The same rule the RPC enforces, restated before a row is written: a
+    // stored intent that the apply would later refuse is a quota that silently
+    // never lands.
+    return {
+      ok: false,
+      code: "allowance_target_invalid",
+      message: "a pending allowance target must be zero or a positive whole number of credits",
+    }
+  }
+  const expiresAt = new Date(Date.now() + (params.ttlDays ?? PENDING_TTL_DAYS) * 86_400_000).toISOString()
+
+  const clear = supabase.from("deployment_allowance_pending").delete().is("applied_at", null)
+  const { error: clearError } = subject ? await clear.eq("sso_subject", subject) : await clear.eq("email", email)
+  if (clearError) {
+    console.error("[deployment-allowance] pending replace failed:", clearError.message)
+    return { ok: false, code: "allowance_write_failed", message: clearError.message }
+  }
+
+  const { data, error } = await supabase
+    .from("deployment_allowance_pending")
+    .insert({
+      sso_subject: subject,
+      email,
+      target_credits: params.targetCredits,
+      mode: params.mode,
+      note: params.note,
+      created_by: params.createdBy,
+      credential_id: params.credentialId ?? null,
+      expires_at: expiresAt,
+    })
+    .select("id, expires_at")
+    .maybeSingle()
+  if (error || !data) {
+    const message = error?.message ?? "the pending allowance was not written"
+    console.error("[deployment-allowance] pending write failed:", message)
+    return { ok: false, code: "allowance_write_failed", message }
+  }
+  const row = data as { id: string; expires_at: string }
+  return { ok: true, id: row.id, expiresAt: row.expires_at }
+}
+
+/**
+ * Apply every unapplied, unexpired intent for this identity. Returns how many
+ * were applied — and NEVER THROWS.
+ *
+ * Called from the SSO path on EVERY successful sign-in, for both a newly
+ * provisioned account and an existing one being linked: an intent written
+ * between an account's creation and its owner's next sign-in would otherwise
+ * never apply, and an apply that failed once heals on the following sign-in
+ * instead of stranding a paid-for quota.
+ *
+ * BEST EFFORT IS THE WHOLE CONTRACT. A sign-in must never fail, and must never
+ * wait, because of a quota that can be applied a minute later — so every
+ * failure path here is a log line and a 0. The database half is idempotent
+ * (`applied_at IS NULL` is both the selection and the effect), so a repeat is
+ * free.
+ *
+ * Inert without a payer: no payer means no settings row, which the RPC answers
+ * with `ALLOWANCE_UNCONFIGURED` — but the gate is checked here first so a
+ * mainline deployment issues no query at all on a path that runs on every
+ * single sign-in.
+ */
+export async function applyPendingAllowance(
+  userId: string,
+  ssoSubject: string | null,
+  email: string | null,
+): Promise<number> {
+  if (!deploymentPayerActive()) return 0
+  try {
+    const { data, error } = await supabase.rpc("apply_pending_deployment_allowance", {
+      p_user_id: userId,
+      p_sso_subject: ssoSubject?.trim() || null,
+      p_email: email?.trim().toLowerCase() || null,
+    })
+    if (error) {
+      console.warn("[deployment-allowance] pending apply failed (the sign-in is unaffected):", error.message)
+      return 0
+    }
+    const applied = typeof data === "number" ? data : Number(data)
+    if (!Number.isFinite(applied) || applied <= 0) return 0
+    console.log(`[deployment-allowance] applied ${applied} pending allowance(s) at sign-in`)
+    return applied
+  } catch (e) {
+    // A thrown error here would propagate into the SSO path and turn a working
+    // sign-in into a 500 over a quota.
+    console.warn(
+      "[deployment-allowance] pending apply threw (the sign-in is unaffected):",
+      e instanceof Error ? e.message : String(e),
+    )
+    return 0
+  }
+}
+
+/**
+ * Resolve "who is this?" from the three forms an integration may use.
+ *
+ * SUBJECT FIRST, email second, uuid accepted (the identity the customer's own
+ * IdP asserts is the only one their back office reliably has). The subject is
+ * matched against `auth.users.raw_app_meta_data`, the SERVICE-ROLE-ONLY copy
+ * the SSO gate trusts — never the `user_metadata` twin, which a public
+ * `signUp({ options: { data } })` can forge.
+ *
+ * AMBIGUOUS IS A REFUSAL. Two accounts answering to one address is a state the
+ * customer has to resolve; allocating a paid quota to an arbitrary half of it
+ * is the failure that costs money. A lookup that could not be PERFORMED
+ * answers `ambiguous` for the same reason — `sso-linking.ts` takes exactly
+ * this posture at its own `maybeSingle()` error branch: "we cannot tell which
+ * account this address names" is never a licence to act on one.
+ *
+ * The email match is EXACT and case-insensitive: `ilike` on the escaped
+ * address (never a `%` pattern — `profiles.email` is user-supplied text and a
+ * wildcard there is a filter-injection shaped bug), and the returned rows are
+ * re-checked in TypeScript against the lower-cased address, so a pattern
+ * metacharacter that survived escaping still cannot widen the match.
+ */
+export async function resolveUserRef(ref: UserRef): Promise<ResolvedUserRef> {
+  const id = ref.id?.trim() || null
+  const subject = ref.ssoSubject?.trim() || null
+  const email = ref.email?.trim().toLowerCase() || null
+
+  if (id) {
+    const { data, error } = await supabase.from("profiles").select("id").eq("id", id).maybeSingle()
+    if (error) {
+      console.error("[deployment-allowance] user lookup by id failed:", error.message)
+      return { kind: "ambiguous" }
+    }
+    return data ? { kind: "user", userId: (data as { id: string }).id } : { kind: "absent" }
+  }
+
+  if (subject) {
+    const { data, error } = await supabase.rpc("find_user_by_sso_subject", { p_subject: subject })
+    if (error) {
+      console.error("[deployment-allowance] user lookup by subject failed:", error.message)
+      return { kind: "ambiguous" }
+    }
+    // The function answers NULL both for "no account" and for "more than one
+    // account carries this subject" — it fails closed rather than choosing.
+    // From here that is indistinguishable, and `absent` is the honest reading:
+    // there is no ONE account this subject names.
+    const userId = typeof data === "string" ? data : null
+    return userId ? { kind: "user", userId } : { kind: "absent" }
+  }
+
+  if (email) {
+    const escaped = email.replace(/[\\%_]/g, (c) => `\\${c}`)
+    const { data, error } = await supabase.from("profiles").select("id, email").ilike("email", escaped).limit(5)
+    if (error) {
+      console.error("[deployment-allowance] user lookup by email failed:", error.message)
+      return { kind: "ambiguous" }
+    }
+    const rows = ((data ?? []) as ReadonlyArray<{ id: string; email: string | null }>).filter(
+      (r) => (r.email ?? "").trim().toLowerCase() === email,
+    )
+    if (rows.length === 0) return { kind: "absent" }
+    if (rows.length > 1) {
+      console.warn("[deployment-allowance] refusing an ambiguous email — more than one account answers to it")
+      return { kind: "ambiguous" }
+    }
+    return { kind: "user", userId: rows[0]!.id }
+  }
+
+  return { kind: "absent" }
+}
+
+/**
+ * The trusted IdP subject for each of the given users that has one, so a page
+ * of users costs one query rather than one per row.
+ *
+ * An id with no subject is simply absent from the map: the caller renders "not
+ * federated", which is a different fact from "unknown". An unavailable read
+ * answers an EMPTY map rather than null — every consumer of this decorates a
+ * list it already has, and losing the decoration must not lose the list.
+ */
+export async function ssoSubjectsFor(userIds: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>()
+  if (!deploymentPayerActive()) return out
+  const ids = [...new Set(userIds)].filter(Boolean)
+  if (ids.length === 0) return out
+  const { data, error } = await supabase.rpc("sso_subjects_for", { p_ids: ids })
+  if (error) {
+    console.error("[deployment-allowance] sso subject batch read failed:", error.message)
+    return out
+  }
+  for (const row of (data ?? []) as ReadonlyArray<{ id?: string | null; sso_subject?: string | null }>) {
+    if (typeof row.id === "string" && typeof row.sso_subject === "string" && row.sso_subject.length > 0) {
+      out.set(row.id, row.sso_subject)
+    }
+  }
+  return out
 }

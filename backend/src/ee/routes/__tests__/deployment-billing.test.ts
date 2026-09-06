@@ -630,7 +630,7 @@ describe("POST /v1/deployment-billing/users/:id/grant", () => {
     })
   })
 
-  it("calls grant_deployment_allowance with all five arguments, in RAW credits, actor = the payer", async () => {
+  it("calls grant_deployment_allowance with all six arguments, in RAW credits, actor = the payer", async () => {
     const res = await app.inject({
       method: "POST",
       url: `/v1/deployment-billing/users/${U1}/grant`,
@@ -645,6 +645,10 @@ describe("POST /v1/deployment-billing/users/:id/grant", () => {
       p_actor_id: PAYER,
       p_kind: "topup",
       p_note: "September top-up",
+      // Migration 387 added the audit line and DROPPED the five-argument
+      // signature, so every call states the credential: null here, because
+      // this route is the payer's own page and the page has no key to name.
+      p_credential_id: null,
     })
   })
 
