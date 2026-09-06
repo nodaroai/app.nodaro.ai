@@ -124,7 +124,7 @@ here for each one anyway.
 | `EDITION` | `community` | `community` · `business` · `cloud` — see §5 |
 | `PUBLIC_URL` | `http://localhost:3000` | The install's public origin: OAuth callbacks, media URLs, CORS |
 | `PUBLIC_URL_SAME_ORIGIN` | `""` (unset = `apiUrl` is `PUBLIC_URL`) | Set to `true` when the service answers on more than one hostname and the API shares the origin of the app (the default single-container layout, where the bundled proxy fronts both the SPA and `/v1`). `/config.js` then carries `apiUrl: "/"` instead of `PUBLIC_URL`, so the browser's SSE streams stay on whichever hostname the visitor is actually on rather than being pinned to the one `PUBLIC_URL` names. Leave unset for a genuine split origin — an API served from a different host than the app. Only the exact value `true` enables it. Restart to apply |
-| `CORS_ORIGIN` | `""` | Extra allowed browser origins, comma-separated (PUBLIC_URL is always allowed) |
+| `CORS_ORIGIN` | `""` | Extra allowed browser origins, comma-separated (PUBLIC_URL is always allowed). These are also the hosts the SSO landing redirect is emitted **relative** on — same-origin by construction — where a request arriving on any other host gets the absolute `PUBLIC_URL` form |
 | `RESEND_API_KEY` | `""` | Cloud, organizations: API key for sending invitation emails through Resend. Unset = invitations are not emailed; the API returns a copy-and-paste link instead |
 | `EMAIL_FROM` | `""` | Cloud, organizations: the From address for invitation emails (a verified sender on the Resend account) |
 | `LOOPS_API_KEY` | `""` | Cloud: API key for syncing marketing-email consent to Loops (loops.so). Unset = the consent-to-contact sync is inert; consent is still recorded locally and reconciled once a key is set |

@@ -76,7 +76,7 @@ export function getStaticPublicAppUrl(): string {
  * structural type (a `FastifyRequest` satisfies it) so they stay pure and can be
  * unit-tested with a hand-built object.
  */
-export interface OriginRequestLike {
+export interface HostRequestLike {
   headers: Record<string, string | string[] | undefined>
 }
 
@@ -106,7 +106,7 @@ function firstHeaderEntry(v: string | string[] | undefined): string | undefined 
  * peer is a trusted proxy), so a scheme derived here would be the proxy's, not
  * the browser's. Nothing this file decides needs it.
  */
-export function requestHost(req: OriginRequestLike): string | null {
+export function requestHost(req: HostRequestLike): string | null {
   const raw = firstHeaderEntry(req.headers["x-forwarded-host"]) ?? firstHeaderEntry(req.headers.host)
   return raw ? raw.toLowerCase() : null
 }
@@ -117,7 +117,7 @@ export function requestHost(req: OriginRequestLike): string | null {
  * `requestHost` above is not. A bracketed IPv6 literal keeps its brackets, which
  * is how it is written in a Host header.
  */
-export function requestHostname(req: OriginRequestLike): string | null {
+export function requestHostname(req: HostRequestLike): string | null {
   const host = requestHost(req)
   if (!host) return null
   if (host.startsWith("[")) {
@@ -158,7 +158,7 @@ function allowedHosts(): Set<string> {
  * only import the edge proxy's rewriting of `X-Forwarded-Proto` into an answer
  * that has nothing to do with the scheme.
  */
-export function isAllowedRequestHost(req: OriginRequestLike): boolean {
+export function isAllowedRequestHost(req: HostRequestLike): boolean {
   const host = requestHost(req)
   return host !== null && allowedHosts().has(host)
 }

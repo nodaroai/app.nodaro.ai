@@ -15,6 +15,7 @@ vi.mock("../../lib/queue.js", () => ({
 vi.mock("../../lib/supabase.js", () => ({ supabase: { auth: { admin: {} } } }))
 
 import { ssoRoutes } from "../sso.js"
+import { parseSsoProviders } from "../../lib/sso-providers.js"
 
 describe("ssoRoutes boot (fail-loud config)", () => {
   it("FAILS registration when EXTERNAL_SSO_PROVIDERS is malformed", async () => {
@@ -33,8 +34,6 @@ describe("ssoRoutes boot (fail-loud config)", () => {
  * `getSsoProviders`); calling it with an explicit payload sidesteps that
  * module-level memo, so several provider lists can be checked in one file.
  */
-import { parseSsoProviders } from "../../lib/sso-providers.js"
-
 describe("EXTERNAL_SSO_PROVIDERS schema — initiateUrlByHost", () => {
   const base = {
     id: "librechat",
@@ -56,6 +55,29 @@ describe("EXTERNAL_SSO_PROVIDERS schema — initiateUrlByHost", () => {
     expect(() =>
       parseSsoProviders(JSON.stringify([{ ...base, initiateUrlByHost: { "studio.example.com": "chat.example.com" } }])),
     ).toThrow(/EXTERNAL_SSO_PROVIDERS invalid/)
+  })
+
+  it("REFUSES a key that is not the bare lower-case hostname the lookup uses", () => {
+    // The map is read with the request's lower-cased, port-stripped host, so an
+    // upper-cased or ported key could never match — it would vanish into the
+    // `initiateUrl` fallback instead of bouncing that host to its own IdP.
+    const badKey = /initiateUrlByHost key ".+" must be a bare lower-case hostname \(no port\)/
+    expect(() =>
+      parseSsoProviders(
+        JSON.stringify([{ ...base, initiateUrlByHost: { "Studio.Example.com": "https://chat.example.com/login" } }]),
+      ),
+    ).toThrow(badKey)
+    expect(() =>
+      parseSsoProviders(
+        JSON.stringify([{ ...base, initiateUrlByHost: { "studio.example.com:443": "https://chat.example.com/login" } }]),
+      ),
+    ).toThrow(badKey)
+    // The form the lookup actually produces is accepted.
+    expect(() =>
+      parseSsoProviders(
+        JSON.stringify([{ ...base, initiateUrlByHost: { "studio.example.com": "https://chat.example.com/login" } }]),
+      ),
+    ).not.toThrow()
   })
 
   it("leaves the field absent when no map is configured (today's provider)", () => {

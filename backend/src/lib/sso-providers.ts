@@ -96,6 +96,20 @@ const ProviderSchema = z
         message: `provider "${p.id}": ${p.kind} kind requires "domain" or "supabaseProvider"`,
       })
     }
+    // The map is looked up with `requestHostname()`, which yields a
+    // LOWER-CASED, PORT-STRIPPED host (a bracketed IPv6 literal keeps its
+    // brackets). A key in any other form can never match, so it would be a
+    // silent no-op — the bounce would quietly fall back to `initiateUrl` and
+    // send that host's users to the wrong IdP. Refuse it at boot instead.
+    for (const k of Object.keys(p.initiateUrlByHost ?? {})) {
+      const bracketedIpv6 = k.startsWith("[") && k.endsWith("]")
+      if (k !== k.toLowerCase() || k !== k.trim() || (!bracketedIpv6 && k.includes(":"))) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `provider "${p.id}": initiateUrlByHost key "${k}" must be a bare lower-case hostname (no port)`,
+        })
+      }
+    }
   })
 
 export function parseSsoProviders(raw: string | undefined): SsoProviderConfig[] {
