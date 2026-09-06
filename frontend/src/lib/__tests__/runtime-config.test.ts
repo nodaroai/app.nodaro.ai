@@ -32,6 +32,42 @@ describe("runtime-config getters", () => {
   })
 })
 
+/**
+ * WS-D — the same-origin sentinel. A hosted studio reachable on more than one
+ * hostname cannot name its API host in `apiUrl`: PUBLIC_URL is single-valued and
+ * whichever host it names would be the one every SSE call goes to, from every
+ * other host. `PUBLIC_URL_SAME_ORIGIN=true` makes the /config.js writer emit
+ * `apiUrl: "/"`, which reads here as "" — the value the four SSE consumers
+ * already treat as same-origin.
+ */
+describe("runtimeApiUrl same-origin sentinel", () => {
+  afterEach(() => { delete window.__NODARO_RUNTIME__ })
+
+  it('reads "/" as same-origin ("")', () => {
+    window.__NODARO_RUNTIME__ = { apiUrl: "/" }
+    expect(runtimeApiUrl()).toBe("")
+  })
+
+  it('reads a padded "/" the same way (the writer trims, this does not depend on it)', () => {
+    window.__NODARO_RUNTIME__ = { apiUrl: "  /  " }
+    expect(runtimeApiUrl()).toBe("")
+  })
+
+  it("leaves every other value alone — including a path-suffixed origin", () => {
+    window.__NODARO_RUNTIME__ = { apiUrl: "https://api.example.com" }
+    expect(runtimeApiUrl()).toBe("https://api.example.com")
+    window.__NODARO_RUNTIME__ = { apiUrl: "https://api.example.com/" }
+    expect(runtimeApiUrl()).toBe("https://api.example.com/")
+    window.__NODARO_RUNTIME__ = { apiUrl: "/api" }
+    expect(runtimeApiUrl()).toBe("/api")
+  })
+
+  it("is unaffected when no override is set (the baked value still wins)", () => {
+    delete window.__NODARO_RUNTIME__
+    expect(runtimeApiUrl()).toBe(import.meta.env.VITE_API_URL ?? "")
+  })
+})
+
 describe("runtimeDefaultLocale (A3 — deployment default locale)", () => {
   afterEach(() => { delete window.__NODARO_RUNTIME__ })
 
