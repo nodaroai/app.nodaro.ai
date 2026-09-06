@@ -1,5 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
+import { creditsOf, creditHint, perSecondHint } from "./_credit-hint.js"
 import type { FastifyInstance } from "fastify"
 import type { McpSession } from "../session.js"
 import { mcpInject } from "../internal-request.js"
@@ -388,7 +389,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           "Nano Banana family doesn't nail a specific case.\n" +
           "  • **`ideogram-remix`** — character-aware, good for stylized remix.\n" +
           "  • **`seedream-edit`** — high-res output for instruction-style edits.\n" +
-          "  • **`recraft-remove-bg`** — background removal (1 credit, no prompt).\n" +
+          `  • **\`recraft-remove-bg\`** — background removal (${creditHint("recraft-remove-bg")}, no prompt).\n` +
           "  • **AVOID `flux-kontext`** for general use — degrades quickly across " +
           "multi-turn edits in practice. Only consider for one-shot texture-heavy " +
           "edits, and even then prefer Nano Banana Pro.\n\n" +

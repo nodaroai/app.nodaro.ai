@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { creditsOf, creditHint, perSecondHint } from "./_credit-hint.js"
 import { resolveAssetId } from "../asset-resolver.js"
 import { buildCompositePrompt } from "../prompt-builder-bridge.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
@@ -1163,33 +1164,33 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "OR video_url / video_asset_id (an existing clip whose mouth gets " +
         "re-driven) — and ONE audio source: audio_url / audio_asset_id.\n\n" +
         "**Picking a model** (sorted by quality, with cost as tiebreaker):\n" +
-        "  • **`seedance-2`** (~50 cr @ 720p / 75 cr @ 1080p, 8s w/audio ref) — ByteDance " +
+        `  • **\`seedance-2\`** (${creditHint("seedance-2:8s:720p-ref")} @ 720p / ${creditHint("seedance-2:8s:1080p-ref")} @ 1080p, 8s w/audio ref) — ByteDance ` +
         "multimodal video model with **native phoneme-level lip sync in " +
         "8+ languages**. Cinematic full-body output (not just talking " +
         "heads), strong identity preservation, premium quality. Pick this " +
         "for hero scenes, multi-language dubs, or when the user wants the " +
         "absolute best quality.\n" +
-        "  • **`seedance-2-fast`** (~18 cr @ 480p / 40 cr @ 720p, 8s w/audio ref; 480p/720p only) — same " +
+        `  • **\`seedance-2-fast\`** (${creditHint("seedance-2-fast:8s:480p-ref")} @ 480p / ${creditHint("seedance-2-fast:8s:720p-ref")} @ 720p, 8s w/audio ref; 480p/720p only) — same ` +
         "Seedance 2 phoneme lip sync, cheaper / faster tier. Pick when the " +
         "user wants Seedance quality on a budget.\n" +
-        "  • **`kling-avatar`** (default, 28 cr) — KIE talking head, 720p, " +
+        `  • **\`kling-avatar\`** (default, ${creditHint("kling-avatar:15s")} per 15 s of audio) — KIE talking head, 720p, ` +
         "speech-optimized. Best balance of cost and quality for plain " +
         "talking-head shots.\n" +
-        "  • **`kling-avatar-pro`** (56 cr) — KIE premium talking head, " +
+        `  • **\`kling-avatar-pro\`** (${creditHint("kling-avatar-pro:15s")} per 15 s of audio) — KIE premium talking head, ` +
         "1080p. Sharper mouth sync + better micro-expressions than the " +
         "standard Kling avatar.\n" +
-        "  • **`infinitalk`** (11 cr @ 480p / 42 cr @ 720p) — KIE flexible " +
+        `  • **\`infinitalk\`** (${creditHint("infinitalk:480p")} @ 480p / ${creditHint("infinitalk:720p")} @ 720p) — KIE flexible ` +
         "resolution lever via the `resolution` param. Cheapest KIE option at 480p.\n" +
-        "  • **`latentsync`** (5 cr) — diffusion-based; **best for singing** " +
+        `  • **\`latentsync\`** (${creditHint("latentsync")}) — diffusion-based; **best for singing** ` +
         "or strong vocal performance. Requires video input.\n" +
-        "  • **`wav2lip`** (1 cr) — fastest and cheapest. Accepts image OR video. " +
+        `  • **\`wav2lip\`** (${creditHint("wav2lip")}) — fastest and cheapest. Accepts image OR video. ` +
         "Pick when the user wants a quick draft or many iterations on a budget.\n" +
-        "  • **`video-retalking`** (20 cr) — built-in face enhancement, clean " +
+        `  • **\`video-retalking\`** (${creditHint("video-retalking")}) — built-in face enhancement, clean ` +
         "output. Requires video input. Good when the source clip's face is " +
         "small / blurry and you want sharpening on top of the lip sync.\n" +
-        "  • **`sadtalker`** (9 cr) — talking avatar from a SINGLE image. Good " +
+        `  • **\`sadtalker\`** (${creditHint("sadtalker")}) — talking avatar from a SINGLE image. Good ` +
         "for animating a portrait into a speaking head when no video exists.\n" +
-        "  • **`volcengine-lipsync`** (2 cr/s — e.g. 30 cr/15s, 120 cr/60s) — KIE " +
+        `  • **\`volcengine-lipsync\`** (${perSecondHint("volcengine-lipsync")} — e.g. ${creditHint("volcengine-lipsync:15s")}/15s, ${creditHint("volcengine-lipsync:60s")}/60s) — KIE ` +
         "**video-to-video AI dubbing**: re-syncs an existing clip's lips to a new " +
         "vocal track. Set `mode: basic` + `open_scenedet: true` for multi-speaker " +
         "(scene detection + speaker ID). Cheapest modern dubbing option. Requires video input.\n\n" +
@@ -1222,15 +1223,15 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             "Lip-sync model. Default kling-avatar. All 11 options: " +
-            "seedance-2 (~50/75 cr, image, native phoneme lip-sync 8+ languages, premium), " +
-            "seedance-2-fast (~40/60 cr, image, same lip-sync cheaper), " +
-            "kling-avatar (28 cr, image, 720p), kling-avatar-pro (56 cr, image, 1080p), " +
-            "infinitalk (11/42 cr, image, 480p|720p), " +
-            "omnihuman-1-5 (102/203/405 cr for 15/30/60s, image, prompt-directed performance, 720p|1080p, premium), " +
-            "latentsync (5 cr, video, singing), " +
-            "wav2lip (1 cr, image|video, fastest+cheapest), video-retalking " +
-            "(20 cr, video, face enhancement), sadtalker (9 cr, single image), " +
-            "volcengine-lipsync (2 cr/s, video, AI dubbing, mode lite|basic for multi-speaker). " +
+            `seedance-2 (${creditsOf("seedance-2:8s:720p-ref")}/${creditsOf("seedance-2:8s:1080p-ref")} cr @ 720p/1080p, image, native phoneme lip-sync 8+ languages, premium), ` +
+            `seedance-2-fast (${creditsOf("seedance-2-fast:8s:480p-ref")}/${creditsOf("seedance-2-fast:8s:720p-ref")} cr @ 480p/720p, image, same lip-sync cheaper), ` +
+            `kling-avatar (${creditHint("kling-avatar:15s")}/15s, image, 720p), kling-avatar-pro (${creditHint("kling-avatar-pro:15s")}/15s, image, 1080p), ` +
+            `infinitalk (${creditsOf("infinitalk:480p")}/${creditsOf("infinitalk:720p")} cr, image, 480p|720p), ` +
+            `omnihuman-1-5 (${creditsOf("omnihuman-1-5:15s")}/${creditsOf("omnihuman-1-5:30s")}/${creditsOf("omnihuman-1-5:60s")} cr for 15/30/60s, image, prompt-directed performance, 720p|1080p, premium), ` +
+            `latentsync (${creditHint("latentsync")}, video, singing), ` +
+            `wav2lip (${creditHint("wav2lip")}, image|video, fastest+cheapest), video-retalking ` +
+            `(${creditHint("video-retalking")}, video, face enhancement), sadtalker (${creditHint("sadtalker")}, single image), ` +
+            `volcengine-lipsync (${perSecondHint("volcengine-lipsync")}, video, AI dubbing, mode lite|basic for multi-speaker). ` +
             "Unknown values fall back to kling-avatar.",
           ),
         resolution: z
