@@ -161,21 +161,28 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
    * the billing account itself, so it carries that account's identity — reads
    * the exact figure the REST guard exists to withhold.
    *
-   * IT REFUSES MORE THAN THE REST GUARD DOES, AND THAT IS DELIBERATE. It is
-   * NOT true that every MCP session is a token session; two callers build one:
-   *   - `/mcp` (`routes/mcp.ts:73`) takes its scopes from `req.appAuthorization`,
+   * IT IS NOT TRUE THAT EVERY MCP SESSION IS A TOKEN SESSION; two callers
+   * build one, and they land on opposite sides of this rule:
+   *   - `/mcp` (`routes/mcp.ts`) takes its scopes from `req.appAuthorization`,
    *     so a browser JWT arrives with `[]` and the `credits:read` gate above
-   *     never registers these tools at all — that door is shut before this one.
+   *     never registers these tools at all — that door is shut before this
+   *     one. It sets no `firstParty`, deliberately: its `clientName` is
+   *     `developer_apps.name` and its bearer is a token, so nothing there is
+   *     first-party however the account behind it consented.
    *   - The Workflow Copilot builds an IN-PROCESS server for the BROWSER user
-   *     (`ee/copilot/turn-runner.ts:96`) with `COPILOT_SCOPES`, which include
+   *     (`ee/copilot/turn-runner.ts`) with `COPILOT_SCOPES`, which include
    *     `credits:read`, and `check_balance` is on its `MCP_TOOL_ALLOWLIST`
    *     (`credit_transactions` is not).
-   * So on a payer instance the billing account's OWN Copilot is refused too.
-   * Accepted for now: it withholds a number that account reads on its own
-   * billing page anyway, and refusing too much is the safe direction. A
-   * carve-out would need a SERVER-SET first-party flag on the session — never
-   * `clientName`, which at `/mcp` is `developer_apps.name` and is therefore
-   * chosen by the third-party developer being guarded against.
+   *
+   * THE COPILOT CARVE-OUT, keyed on `session.firstParty`: a first-party
+   * session of the payer sees the balance exactly as that account's own
+   * billing page does — same identity, same browser credential, a number it
+   * already reads there. The flag is SERVER-SET and set only by the copilot
+   * entry route from `req.authKind === "jwt"`, so it follows the CREDENTIAL
+   * and not the caller's say-so; it is never `clientName`, which at `/mcp` is
+   * chosen by the third-party developer being guarded against. Every
+   * programmatic session of the payer — the self-host Connect token included —
+   * still gets the refusal below, which is the whole point of the axis.
    *
    * INERT on mainline: with no `billing.payerAccount` configured
    * `deploymentPayerActive()` is false and this short-circuits, so a
@@ -187,6 +194,7 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
    */
   const payerBalanceRefusal = () => {
     if (!deploymentPayerActive() || session.userId !== deploymentPayerId()) return null
+    if (session.firstParty) return null
     return {
       content: [
         {

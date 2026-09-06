@@ -44,6 +44,7 @@ vi.mock("../../supabase.js", () => ({
 }))
 
 const { buildMcpServer } = await import("../server.js")
+const { newSession } = await import("../session.js")
 const { callTool } = await import("../tools/__tests__/_helpers.js")
 const { supabase } = await import("../../supabase.js")
 const { CreditsService } = await import("../../../ee/billing/credits.js")
@@ -86,12 +87,13 @@ function stubTransactions(): void {
   ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue(chain)
 }
 
-async function serverFor(userId: string) {
+async function serverFor(userId: string, opts: { firstParty?: boolean } = {}) {
   return buildMcpServer({
     userId,
     scopes: ["credits:read"] as Scope[],
     clientName: "Claude",
     fastify: Fastify(),
+    ...opts,
   })
 }
 
@@ -144,7 +146,47 @@ describe("MCP credits tools under a deployment payer", () => {
     expect(transactions.content[0]?.text).toContain("\"tx-1\"")
   })
 
-  it("R2 — mainline (no payer configured) answers the same user unchanged", async () => {
+  it("answers the payer's own FIRST-PARTY session — the in-app Copilot — normally", async () => {
+    // The carve-out. A session the server built for a BROWSER (JWT) user
+    // in-process reads the pool figure exactly as that account's own billing
+    // page does; the REST guard allows the same caller for the same reason.
+    __setDeploymentPayerForTests(PAYER_ID)
+    const server = await serverFor(PAYER_ID, { firstParty: true })
+
+    const balance = await callTool(server, "check_balance", {})
+    expect(balance.isError).toBeUndefined()
+    expect(balance.content[0]?.text).toContain("\"total\": 250")
+    expect(getBalance).toHaveBeenCalledWith(PAYER_ID)
+
+    const transactions = await callTool(server, "credit_transactions", { limit: 10 })
+    expect(transactions.isError).toBeUndefined()
+    expect(transactions.content[0]?.text).toContain("\"tx-1\"")
+  })
+
+  it("still refuses the payer when the flag is explicitly false", async () => {
+    __setDeploymentPayerForTests(PAYER_ID)
+    const server = await serverFor(PAYER_ID, { firstParty: false })
+
+    const balance = await callTool(server, "check_balance", {})
+    expect(balance.isError).toBe(true)
+    expect(balance.content[0]?.text).toBe(REFUSAL)
+    expect(getBalance).not.toHaveBeenCalled()
+
+    const transactions = await callTool(server, "credit_transactions", { limit: 10 })
+    expect(transactions.isError).toBe(true)
+    expect(transactions.content[0]?.text).toBe(REFUSAL)
+    expect(supabase.from).not.toHaveBeenCalledWith("transactions")
+  })
+
+  it("the flag is SERVER-SET: a session built without the option is not first-party", async () => {
+    // Nothing a client sends can reach it — not a tool input, not the client
+    // name, not a header. The only way in is the `firstParty` build option,
+    // and its absence is the refusing value.
+    const session = newSession({ userId: PAYER_ID, scopes: ["credits:read"] as Scope[], clientName: "Claude" })
+    expect(session.firstParty).toBe(false)
+  })
+
+  it("mainline (no payer configured): answers the same user unchanged", async () => {
     // No __setDeploymentPayerForTests: `deploymentPayerActive()` is false, so
     // the guard short-circuits and this id is just another user.
     const server = await serverFor(PAYER_ID)

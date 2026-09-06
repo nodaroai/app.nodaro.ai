@@ -99,6 +99,44 @@ vi.mock("../../copilot/memories.js", async (importOriginal) => {
   return { ...actual, listMemories: memoriesMock.listMemories, deleteMemory: memoriesMock.deleteMemory }
 })
 
+/**
+ * The SSE controller, stubbed: `app.inject()` resolves when the raw response
+ * ends, and the real controller ends it in `close()` — so the stub must too,
+ * or the request never returns. `hijack()` keeps Fastify from answering a
+ * reply the handler already wrote to.
+ */
+const sseEvents = vi.hoisted(() => ({ list: [] as Array<Record<string, unknown>> }))
+vi.mock("@/lib/sse.js", () => ({
+  createSSEStream: async (_req: unknown, reply: { hijack: () => void; raw: { end: () => void } }) => {
+    reply.hijack()
+    return {
+      sendEvent: (e: Record<string, unknown>) => sseEvents.list.push(e),
+      sendComment: vi.fn(),
+      close: () => reply.raw.end(),
+      isClosed: false,
+    }
+  },
+}))
+
+/** Every turn the route started, so what it derived can be read off the input. */
+const turnInputs = vi.hoisted(() => ({ list: [] as Array<Record<string, unknown>> }))
+vi.mock("../../copilot/turn-runner.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../copilot/turn-runner.js")>()
+  return {
+    ...actual,
+    runCopilotTurn: async (input: Record<string, unknown>) => {
+      turnInputs.list.push(input)
+      return {
+        status: "completed",
+        assistantMessageId: "msg1",
+        finalVersion: 4,
+        creditsCharged: 10,
+        usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 0 },
+      }
+    },
+  }
+})
+
 const { registerCopilotRoutes } = await import("../copilot.js")
 const { TURN_ERROR_TEXT } = await import("../../copilot/turn-runner.js")
 
@@ -135,6 +173,8 @@ beforeEach(() => {
   state.activeThreads = 0
   jobPatches.list.length = 0
   jobFilters.list.length = 0
+  turnInputs.list.length = 0
+  sseEvents.list.length = 0
   refundMock.fn.mockClear()
 })
 
@@ -151,6 +191,9 @@ describe("copilot routes — access", () => {
       expect(res.statusCode, kind).toBe(403)
       expect(res.json().error.code).toBe("in_app_only")
     }
+    // No turn, therefore no MCP session, therefore nothing that could carry
+    // the first-party flag: a programmatic credential is refused at the door.
+    expect(turnInputs.list).toHaveLength(0)
   })
 
   it("answers 503 when the kill switch is off", async () => {
@@ -345,5 +388,46 @@ describe("the lost turn claim is never charged (#903)", () => {
         ["user_id", "u1"],
       ]),
     )
+  })
+})
+
+describe("the turn's first-party flag follows the CREDENTIAL", () => {
+  // The flag lets the deployment payer's own in-app Copilot read the pool
+  // balance through MCP. It is derived HERE, from the request's real auth
+  // kind, and never in the runner: the day this route accepts anything but a
+  // browser JWT, the flag has to follow that credential rather than stay true
+  // because the runner assumed it.
+  it("a browser (JWT) turn is first-party", async () => {
+    state.claimedTurn = { id: "turn1" }
+    const app = await buildApp()
+    await app.inject({
+      method: "POST",
+      url: "/v1/copilot/threads/th1/messages",
+      // Stated, not inherited from the stub's default: the credential IS the
+      // precondition of this test.
+      headers: { "x-test-auth": "jwt" },
+      payload: { message: "hi" },
+    })
+
+    expect(turnInputs.list).toHaveLength(1)
+    expect(turnInputs.list[0]?.firstParty).toBe(true)
+  })
+
+  it("a programmatic credential is refused before a turn exists", async () => {
+    // Today `requireJwt` answers 403 `in_app_only` — asserted as the route's
+    // CURRENT behaviour, so a future route that starts accepting tokens has to
+    // come back here and decide what the flag means for them.
+    state.claimedTurn = { id: "turn1" }
+    const app = await buildApp()
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/copilot/threads/th1/messages",
+      headers: { "x-test-auth": "api_token" },
+      payload: { message: "hi" },
+    })
+
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("in_app_only")
+    expect(turnInputs.list).toHaveLength(0)
   })
 })

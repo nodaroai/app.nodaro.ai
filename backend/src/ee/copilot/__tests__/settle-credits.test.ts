@@ -8,7 +8,8 @@
 import { describe, expect, it, vi, beforeEach } from "vitest"
 import type Anthropic from "@anthropic-ai/sdk"
 
-const { commitMock, refundMock, fromMock, jobPatches, loopResult } = vi.hoisted(() => ({
+const { commitMock, refundMock, fromMock, jobPatches, loopResult, builtSessions } = vi.hoisted(() => ({
+  builtSessions: [] as Record<string, unknown>[],
   commitMock: vi.fn(),
   refundMock: vi.fn(),
   fromMock: vi.fn(),
@@ -23,7 +24,12 @@ vi.mock("@/workers/shared.js", () => ({ commitJobCredits: commitMock }))
 vi.mock("@/lib/credits-job-lifecycle.js", () => ({ refundReservedCreditsForJob: refundMock }))
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: fromMock } }))
 vi.mock("@/lib/app-reports.js", () => ({ insertAppReport: vi.fn() }))
-vi.mock("@/lib/mcp/server.js", () => ({ buildMcpServer: async () => ({}) }))
+vi.mock("@/lib/mcp/server.js", () => ({
+  buildMcpServer: async (opts: Record<string, unknown>) => {
+    builtSessions.push(opts)
+    return {}
+  },
+}))
 vi.mock("@/lib/mcp/invoke.js", () => ({
   createMcpInvoker: () => ({ listTools: async () => [], callTool: async () => ({ content: [] }), close: async () => undefined }),
 }))
@@ -85,6 +91,7 @@ const input = () => ({
   reservedCredits: 150,
   emit: vi.fn(),
   signal: new AbortController().signal,
+  firstParty: false,
 })
 
 function loop(overrides: Record<string, unknown>) {
@@ -108,6 +115,7 @@ beforeEach(() => {
   fromMock.mockReset()
   fromMock.mockImplementation(chain)
   jobPatches.length = 0
+  builtSessions.length = 0
   loopResult.value = loop({})
   loopResult.error = null
 })
@@ -141,5 +149,18 @@ describe("turn settlement", () => {
   it("leaves the job row terminal so the reconcile cron does not re-scan every finished turn", async () => {
     await runCopilotTurn(input())
     expect(jobPatches.some((p) => p.status === "completed" && p.completed_at)).toBe(true)
+  })
+})
+
+describe("the first-party flag reaches the MCP session", () => {
+  // The runner never DECIDES this — the entry route does, from the request's
+  // auth kind — so both values have to survive the trip unchanged.
+  it("passes the route's value through to buildMcpServer, whichever it is", async () => {
+    for (const firstParty of [true, false]) {
+      builtSessions.length = 0
+      await runCopilotTurn({ ...input(), firstParty })
+      expect(builtSessions).toHaveLength(1)
+      expect(builtSessions[0]?.firstParty, String(firstParty)).toBe(firstParty)
+    }
   })
 })

@@ -42,7 +42,7 @@ function fakeServer() {
 }
 
 function session(scopes: Scope[], workspaceId?: string): McpSession {
-  return { userId: USER, scopes, clientName: "test", workspaceId }
+  return { userId: USER, scopes, clientName: "test", workspaceId, firstParty: false }
 }
 
 const ME = {

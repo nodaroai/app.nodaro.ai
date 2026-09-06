@@ -42,6 +42,23 @@ export interface McpSession {
    * exists to prevent.
    */
   workspaceId?: string
+  /**
+   * True only for a session the server built for a browser (JWT) user
+   * in-process; never derivable from anything a client sends.
+   *
+   * There is exactly one way to set it: the `firstParty` build option, passed
+   * by a caller that has already established the credential is a browser JWT.
+   * It is NOT `clientName` (at `/mcp` that is `developer_apps.name`, chosen by
+   * the third-party developer), not a header, not a tool input, and not a
+   * scope — a token can carry any scope its consenting user approved.
+   *
+   * Read by the payer-balance refusal in `tools/models.ts`: on a
+   * deployment-payer instance the billing account's own in-app Copilot may see
+   * the pool figure, every programmatic session of the same account may not.
+   * Absent ⇒ false ⇒ refused, which is the safe default for a field a new
+   * caller might forget.
+   */
+  readonly firstParty: boolean
 }
 
 export function newSession(opts: {
@@ -50,6 +67,8 @@ export function newSession(opts: {
   clientName: string
   workspaceId?: string
   scopedProjectId?: string
+  /** See {@link McpSession.firstParty} — server-set, defaults to false. */
+  firstParty?: boolean
 }): McpSession {
-  return { ...opts, progressTokens: new Map() }
+  return { ...opts, firstParty: opts.firstParty ?? false, progressTokens: new Map() }
 }

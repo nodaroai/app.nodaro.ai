@@ -10,7 +10,7 @@ import { supabase } from "../../../supabase.js"
 import type { McpSession } from "../../session.js"
 
 function makeSession(overrides: Partial<McpSession> = {}): McpSession {
-  return { userId: "user-1", scopes: [], clientName: "test", ...overrides }
+  return { userId: "user-1", scopes: [], clientName: "test", firstParty: false, ...overrides }
 }
 
 // findOldestMcpProject: select.eq.eq.order.order.limit.maybeSingle

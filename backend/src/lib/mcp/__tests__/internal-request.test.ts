@@ -14,7 +14,7 @@ const USER = "00000000-0000-4000-8000-000000000001"
 const WS = "20000000-0000-4000-8000-000000000001"
 
 function session(workspaceId?: string): McpSession {
-  return { userId: USER, scopes: [], clientName: "test", workspaceId }
+  return { userId: USER, scopes: [], clientName: "test", workspaceId, firstParty: false }
 }
 
 /** Records what would have been injected, without a real Fastify instance. */
