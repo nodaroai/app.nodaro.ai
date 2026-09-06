@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
+import { readFileSync } from "node:fs"
+import { dirname, resolve } from "node:path"
+import { fileURLToPath } from "node:url"
 
 import { newSession } from "../../session.js"
 import type { Scope } from "../../../scopes.js"
@@ -141,10 +144,26 @@ beforeEach(() => {
 })
 
 describe("registration", () => {
-  it("the skill and validation are ungated — the free loop has to be reachable", async () => {
+  it("only the skill is ungated — reading the format is the one thing that costs nothing", async () => {
     const { server } = serverWith([])
     const names = (await listTools(server)).map((t) => t.name).sort()
-    expect(names).toEqual(["get_studio_production_skill", "validate_studio_plan"])
+    expect(names).toEqual(["get_studio_production_skill"])
+  })
+
+  it("validation needs workflows:read, exactly as its route does", async () => {
+    // `POST /v1/studio/productions/validate` authorizes on `workflows:read`,
+    // because validating resolves every `cast` name against the caller's own
+    // characters, locations, objects and creatures — a name-existence oracle
+    // over four entity tables. A tool that is registered more widely than the
+    // route it calls just moves the 403 later; register it where the route is.
+    const none = (await listTools(serverWith([]).server)).map((t) => t.name)
+    expect(none).not.toContain("validate_studio_plan")
+
+    const read = (await listTools(serverWith(["workflows:read"]).server)).map((t) => t.name)
+    expect(read).toContain("validate_studio_plan")
+
+    const write = (await listTools(serverWith(["workflows:write"]).server)).map((t) => t.name)
+    expect(write).not.toContain("validate_studio_plan")
   })
 
   it("reading needs workflows:read, writing needs workflows:write", async () => {
@@ -178,7 +197,7 @@ describe("get_studio_production_skill", () => {
 
 describe("validate_studio_plan", () => {
   it("posts the plan to the validate route and hands back its verdict", async () => {
-    const { server, seen } = serverWith([])
+    const { server, seen } = serverWith(["workflows:read"])
     const res = await callTool(server, "validate_studio_plan", { plan: PLAN })
     expect(seen.url).toBe("/v1/studio/productions/validate")
     expect(seen.body).toMatchObject({ plan: PLAN, userId: "u1" })
@@ -337,5 +356,41 @@ describe("import_studio_production", () => {
     })
     expect(res.isError).toBe(true)
     expect(res.content[0].text).toContain("not_found")
+  })
+})
+
+describe("the open-editor warning", () => {
+  // A production the user has open in the studio editor is held in the
+  // browser's store and written back WHOLE on a debounce, so an editor that
+  // was already open when an import landed overwrites it the next time the
+  // user touches anything. Nothing on this side can stop that today, so the
+  // two places an agent actually reads — this tool's description, and the
+  // operating guide it is told to read first — both have to say it plainly.
+  const importDescription = async (): Promise<string> => {
+    const tools = await listTools(serverWith(ALL).server)
+    return tools.find((t) => t.name === "import_studio_production")?.description ?? ""
+  }
+
+  it("import_studio_production tells the caller to have the user reload the editor", async () => {
+    const description = await importDescription()
+    expect(description).toMatch(/reload/i)
+    expect(description).toMatch(/editor/i)
+  })
+
+  it("create_studio_production does not — a production that does not exist yet is open nowhere", async () => {
+    const tools = await listTools(serverWith(ALL).server)
+    const create = tools.find((t) => t.name === "create_studio_production")?.description ?? ""
+    expect(create).not.toMatch(/reload/i)
+  })
+
+  it("the operating skill says the same thing", () => {
+    // Tool/skill parity for one warning, not a route test: the file read here
+    // is exactly the one `get_studio_production_skill` serves as
+    // `part: "operating"`, so an agent that reads the guide once and never
+    // re-reads a description still learns it.
+    const here = dirname(fileURLToPath(import.meta.url))
+    const skill = readFileSync(resolve(here, "../../../../../skills/studio-production.md"), "utf8")
+    expect(skill).toMatch(/reload/i)
+    expect(skill).toMatch(/editor/i)
   })
 })

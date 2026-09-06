@@ -184,7 +184,6 @@
   "start_video_director",
   "start_workflow_editor",
   "validate_recast_script",
-  "validate_studio_plan",
   "wait_for_job"
  ],
  "cloud/none": [
@@ -201,8 +200,7 @@
   "start_film_director",
   "start_video_director",
   "start_workflow_editor",
-  "validate_recast_script",
-  "validate_studio_plan"
+  "validate_recast_script"
  ],
  "community/all": [
   "add_captions",
@@ -368,7 +366,6 @@
   "list_shot_shapes",
   "ping",
   "start_video_director",
-  "start_workflow_editor",
-  "validate_studio_plan"
+  "start_workflow_editor"
  ]
 }

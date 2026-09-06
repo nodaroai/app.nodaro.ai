@@ -13,9 +13,18 @@ import { isUuid } from "./_id-guard.js"
  * The studio production family — a film, from a story to a document, over MCP.
  *
  * A production is a Nodaro workflow whose `settings.studio` holds the shots, and
- * these tools reach it through `/v1/studio/productions/*` (never Supabase
- * directly): the ROUTES own the semantics, so an agent, the studio app and the
- * copilot cannot end up with three opinions about one row.
+ * every read and write of one goes through `/v1/studio/productions/*`: the
+ * ROUTES own the semantics, so an agent, the studio app and the copilot cannot
+ * end up with three opinions about one row.
+ *
+ * There is ONE direct Supabase read here, and it touches no production:
+ * `planFromJob` reads the `jobs` row of a finished Director run to recover the
+ * plan the model wrote — the same direct job read this layer already does
+ * (`_wait-for-job.ts`, `gallery.ts`), with the owner filter (`.eq("user_id", …)`)
+ * alongside the id, so somebody else's job reads as `not_found`, never 403. It
+ * interprets only what the platform's own writers put in that row (`status`,
+ * `input_data.type` / `schemaName`, the `output_data.output` envelope); the plan
+ * it recovers is then handed to the import ROUTE like any other.
  *
  * Phase 0's six are the read half plus the two ways a production comes into
  * existence. The shape of the loop is the recast family's, because it is the
@@ -117,39 +126,45 @@ export function registerStudioProductionTools({
     },
   )
 
-  // ── validate (ungated — the loop has to be free, or nobody runs it) ────────
-  server.registerTool(
-    "validate_studio_plan",
-    {
-      title: "Validate Studio Plan",
-      description:
-        "FREE validation of an authored studio production plan (see " +
-        "`get_studio_production_skill`). Returns `{ valid, errors, warnings, " +
-        "summary }` — each error names the field it is about, and the summary " +
-        "says how many `cast` names found a row in the user's own library. Fix " +
-        "and call again until `valid: true`. Never charges credits, persists " +
-        "nothing.",
-      inputSchema: {
-        plan: z
-          .record(z.string(), z.unknown())
-          .describe("The authored `nodaro-studio-production` plan document."),
-      },
-      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-    },
-    async (args) => {
-      const res = await mcpInject(fastify, session, {
-        method: "POST",
-        url: "/v1/studio/productions/validate",
-        headers: headers(),
-        payload: { userId: session.userId, plan: args.plan },
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      return textResult(unwrap(res.body))
-    },
-  )
-
-  // ── list (workflows:read) ──────────────────────────────────────────────────
+  // ── the workflows:read half: validate, list, get ───────────────────────────
   if (passesGate(session, readGate)) {
+    // ── validate: free, but `workflows:read`, exactly as its route is.
+    //    Validating resolves every `cast` name against the caller's own
+    //    characters, locations, objects and creatures, so an ungated tool
+    //    would be a name-existence oracle over four entity tables that the
+    //    route itself refuses. Registering it where the route is means a
+    //    session that cannot use it never sees it. ─────────────────────────
+    server.registerTool(
+      "validate_studio_plan",
+      {
+        title: "Validate Studio Plan",
+        description:
+          "FREE validation of an authored studio production plan (see " +
+          "`get_studio_production_skill`). Returns `{ valid, errors, warnings, " +
+          "summary }` — each error names the field it is about, and the summary " +
+          "says how many `cast` names found a row in the user's own library. Fix " +
+          "and call again until `valid: true`. Never charges credits, persists " +
+          "nothing.",
+        inputSchema: {
+          plan: z
+            .record(z.string(), z.unknown())
+            .describe("The authored `nodaro-studio-production` plan document."),
+        },
+        annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      },
+      async (args) => {
+        const res = await mcpInject(fastify, session, {
+          method: "POST",
+          url: "/v1/studio/productions/validate",
+          headers: headers(),
+          payload: { userId: session.userId, plan: args.plan },
+        })
+        if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+        return textResult(unwrap(res.body))
+      },
+    )
+
+    // ── list ───────────────────────────────────────────────────────────────
     server.registerTool(
       "list_studio_productions",
       {
@@ -280,7 +295,10 @@ export function registerStudioProductionTools({
           "\"Add scenes\" lane. Appending adds shots and enrolls whoever is new " +
           "in the cast; it never renames, re-briefs or re-looks the production. " +
           "Pass a `plan` you have validated, or `plan_job_id` of a FINISHED " +
-          "`studio_production` LLM run to land its output. Free.",
+          "`studio_production` LLM run to land its output. Free. If the user " +
+          "has this production OPEN in the studio editor, that tab saves its " +
+          "own copy a moment after any edit and will overwrite what you add — " +
+          "ask them to reload the editor before you import and again after.",
         inputSchema: {
           production_id: z.string().uuid().describe("The production to add scenes to."),
           plan: z

@@ -57,12 +57,22 @@ saying twice, because they are the ones plans get wrong:
   free. Generating stills and clips, voicing a shot, scoring a film and exporting
   a cut are separate tools that quote first; they arrive with the generation
   routes.
-- **Nothing here deletes a production.** `set_archived` soft-hides one, and it is
-  an edit, not a delete. If a user asks you to remove a production, hide it and
-  tell them where it went.
+- **Nothing here deletes a production.** There is no delete and no archive in
+  this set — archiving arrives with the editing tools. If a user asks you to
+  remove a production, say it stays on their dashboard until they hide it there.
 - **Nothing here publishes.** A production is private until its owner shares it.
   Never share on the user's behalf without them asking, in this conversation, for
   that specific production to be shared.
+
+## While the user has it open
+
+The studio editor keeps the production in the browser and writes the whole
+document back a moment after every edit. So a tab that was already open when you
+imported will overwrite what you added the next time the user touches anything —
+your scenes are on the production, and then they are not. Work around it out
+loud: **ask the user to reload the studio tab before you write, and again
+afterwards to see what landed.** If they are mid-edit, do the write when they
+are done rather than alongside them.
 
 ## Reading a production
 
