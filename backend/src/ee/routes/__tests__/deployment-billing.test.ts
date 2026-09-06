@@ -930,9 +930,23 @@ describe("GET /v1/deployment-billing/users/:id/grants", () => {
     })
     tableResults.set("deployment_allowance_grants", {
       data: [
-        { id: "g1", credits: 200, kind: "default", note: null, created_at: "2026-02-01T00:00:00Z" },
-        { id: "g2", credits: 10, kind: "topup", note: "extra", created_at: "2026-02-02T00:00:00Z" },
-        { id: "g3", credits: -4, kind: "overrun", note: "metered overrun", created_at: "2026-02-03T00:00:00Z" },
+        { id: "g1", credits: 200, kind: "default", note: null, created_at: "2026-02-01T00:00:00Z", credential_id: null },
+        {
+          id: "g2",
+          credits: 10,
+          kind: "topup",
+          note: "extra",
+          created_at: "2026-02-02T00:00:00Z",
+          credential_id: BILLING_KEY_ID,
+        },
+        {
+          id: "g3",
+          credits: -4,
+          kind: "overrun",
+          note: "metered overrun",
+          created_at: "2026-02-03T00:00:00Z",
+          credential_id: null,
+        },
       ],
       error: null,
     })
@@ -946,6 +960,44 @@ describe("GET /v1/deployment-billing/users/:id/grants", () => {
     // Negative, and NOT in `granted` — 'overrun' is audit-only (invariant 4).
     expect(body.grants[2].units).toBe(-8_000)
     expect(body.user.granted).toBe(420_000)
+  })
+
+  it("carries the raw credits twin and the credential that made each move", async () => {
+    payerDeployment()
+    tableResults.set("deployment_payer_settings", { data: { default_allowance_credits: 200 }, error: null })
+    tableResults.set("deployment_user_allowances", {
+      data: { user_id: U1, granted_credits: 210, reserved_credits: 0, spent_credits: 0 },
+      error: null,
+    })
+    tableResults.set("deployment_allowance_grants", {
+      data: [
+        {
+          id: "g1",
+          credits: 10,
+          kind: "topup",
+          note: "plan 10",
+          created_at: "2026-02-02T00:00:00Z",
+          credential_id: BILLING_KEY_ID,
+        },
+        { id: "g2", credits: 5, kind: "renewal", note: null, created_at: "2026-02-03T00:00:00Z", credential_id: null },
+      ],
+      error: null,
+    })
+
+    const res = await app.inject({ method: "GET", url: `/v1/deployment-billing/users/${U1}/grants`, headers: AS_PAYER })
+
+    expect(res.statusCode).toBe(200)
+    const grants = res.json().data.grants as Array<Record<string, unknown>>
+    // Both denominations on the one row where they can be checked against each
+    // other — an integration reconciling its own ledger against this history
+    // must not have to re-derive `unitRate` to do it.
+    expect(grants[0]).toMatchObject({ units: 20_000, credits: 10 })
+    // The audit line the page renders as "via <key name>", resolved against
+    // the keys list. Null is the billing account's own browser session, and
+    // `granted_by` is the payer either way — the credential is recorded
+    // beside the actor, never instead of it.
+    expect(grants[0].credentialId).toBe(BILLING_KEY_ID)
+    expect(grants[1].credentialId).toBeNull()
   })
 })
 

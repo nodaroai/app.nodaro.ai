@@ -854,9 +854,19 @@ export async function deploymentBillingRoutes(app: FastifyInstance): Promise<voi
         grants: grants.map((g) => ({
           id: g.id,
           units: inUnits(g.credits, u),
+          // The raw twin of `units`, added beside it rather than in place of
+          // it: a history row is the only place the two denominations can be
+          // checked against each other, and an integration reconciling its own
+          // ledger against this one should not have to re-derive `unitRate`.
+          credits: g.credits,
           kind: g.kind,
           note: g.note,
           createdAt: g.createdAt,
+          // The integration credential that made this move, or null for the
+          // billing account's own browser session. Audit only — `granted_by`
+          // is the payer either way — and it is what lets a history line say
+          // "via <key name>" by resolving the id against the keys list.
+          credentialId: g.credentialId,
         })),
         limit,
         offset,
