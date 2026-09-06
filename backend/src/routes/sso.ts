@@ -4,7 +4,8 @@ import { config } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import { redis } from "../lib/queue.js"
 import { callerKeyHash } from "./oauth-register.js"
-import { getSsoProvider, getSsoProviders, ssoPublicInfo } from "../lib/sso-providers.js"
+import { getSsoProvider, getSsoProviders, ssoPublicInfo, type SsoProviderConfig } from "../lib/sso-providers.js"
+import { isAllowedRequestOrigin, requestHost } from "../lib/allowed-origins.js"
 import { verifyAssertion, SsoAssertionError } from "../lib/sso-assertion.js"
 import { claimAssertionJti } from "../lib/sso-replay.js"
 import { resolveSsoUser } from "../lib/sso-linking.js"
@@ -17,6 +18,22 @@ const QuerySchema = z.object({ assertion: z.string().optional(), next: z.string(
 function safeNext(raw: string | undefined): string {
   if (raw && raw.startsWith("/") && !raw.startsWith("//")) return raw
   return "/projects"
+}
+
+/**
+ * Where the login-button entry point bounces to for THIS request's host.
+ *
+ * One studio can be reached on more than one hostname, and each may have its own
+ * IdP deployment; `initiateUrlByHost` names them, `initiateUrl` is the default
+ * for every other host. Read with an OWN-key check: the host comes from an
+ * attacker-influencable header, and a plain JSON object inherits
+ * Object.prototype — a host literally named "constructor" would otherwise
+ * resolve to a function.
+ */
+function initiateUrlFor(provider: SsoProviderConfig, host: string | null): string | undefined {
+  const byHost = provider.initiateUrlByHost
+  if (host && byHost && Object.prototype.hasOwnProperty.call(byHost, host)) return byHost[host]
+  return provider.initiateUrl
 }
 
 // Unauthenticated crypto + DB + Redis route ⇒ per-IP rate limit (the shared
@@ -90,9 +107,11 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
       })
     }
 
-    // No assertion ⇒ this is the login-button entry point: bounce to the IdP.
+    // No assertion ⇒ this is the login-button entry point: bounce to the IdP
+    // this request's host belongs to (initiateUrl for every unmapped host).
     if (!assertion) {
-      if (provider.initiateUrl) return reply.redirect(provider.initiateUrl)
+      const initiate = initiateUrlFor(provider, requestHost(req))
+      if (initiate) return reply.redirect(initiate)
       return reply.status(400).send({ error: { code: "no_assertion" } })
     }
 
@@ -120,9 +139,12 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(500).send({ error: { code: "session_mint_failed" } })
     }
 
-    // 5. Redirect to the landing. Relative when PUBLIC_URL is unset (same-origin
-    //    by construction); PUBLIC_URL for a split-origin dev setup.
-    const base = config.PUBLIC_URL || ""
+    // 5. Redirect to the landing. Relative for any allow-listed host (the hosted
+    //    lane is same-origin by construction — Caddy fronts both the SPA and
+    //    /v1, and the studio may answer on more than one hostname while
+    //    PUBLIC_URL can only name one); PUBLIC_URL only for a split-origin dev
+    //    setup, i.e. a host that is not allow-listed.
+    const base = isAllowedRequestOrigin(req) ? "" : config.PUBLIC_URL || ""
     const url = `${base}/sso?sso_token=${encodeURIComponent(hashedToken)}&next=${encodeURIComponent(safeNext(next))}`
     return reply.redirect(url)
   })

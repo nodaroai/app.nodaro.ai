@@ -34,6 +34,12 @@ export interface SsoProviderConfig {
   /** Where GET /v1/sso/:provider 302s when hit WITHOUT an assertion (the login
    *  button target). The IdP authenticates then redirects back with ?assertion. */
   initiateUrl?: string
+  /** Per-host override of `initiateUrl`, keyed by the bare lower-cased hostname
+   *  the browser arrived on (no port). One studio reachable on two domains has
+   *  one IdP per domain — same provider id, same secret, same audience, so
+   *  account linking is unaffected. Absent ⇒ `initiateUrl` for every host.
+   *  NEVER exposed by `ssoPublicInfo` (the login page needs id/label/kind only). */
+  initiateUrlByHost?: Record<string, string>
   /** Server-enforced cap on (exp - iat); rejects a long-lived assertion even if
    *  the IdP mints one. Default 300s. */
   maxLifetimeSeconds: number
@@ -72,6 +78,7 @@ const ProviderSchema = z
     audience: z.string().min(1).optional(),
     claimMap: ClaimMapSchema,
     initiateUrl: z.string().url().optional(),
+    initiateUrlByHost: z.record(z.string().min(1), z.string().url()).optional(),
     maxLifetimeSeconds: z.number().int().positive().max(3600).default(300),
     domain: z.string().min(1).optional(),
     supabaseProvider: z.string().min(1).optional(),

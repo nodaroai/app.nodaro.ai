@@ -23,3 +23,43 @@ describe("ssoRoutes boot (fail-loud config)", () => {
     await app.close()
   })
 })
+
+/**
+ * WS-D — `initiateUrlByHost` is validated at boot like every other provider
+ * field: a typo'd entry must abort startup, not vanish and leave the IdP bounce
+ * silently pointing at the wrong host.
+ *
+ * `parseSsoProviders` IS what `ssoRoutes` runs at register time (through
+ * `getSsoProviders`); calling it with an explicit payload sidesteps that
+ * module-level memo, so several provider lists can be checked in one file.
+ */
+import { parseSsoProviders } from "../../lib/sso-providers.js"
+
+describe("EXTERNAL_SSO_PROVIDERS schema — initiateUrlByHost", () => {
+  const base = {
+    id: "librechat",
+    label: "LibreChat",
+    kind: "assertion",
+    secret: "test-sso-hmac-secret-not-real-000",
+    audience: "nodaro",
+    initiateUrl: "https://idp.example/login",
+  }
+
+  it("accepts a valid host → URL map", () => {
+    const [p] = parseSsoProviders(
+      JSON.stringify([{ ...base, initiateUrlByHost: { "studio.sai-kehila.com": "https://chat.sai-kehila.com/login" } }]),
+    )
+    expect(p.initiateUrlByHost).toEqual({ "studio.sai-kehila.com": "https://chat.sai-kehila.com/login" })
+  })
+
+  it("REFUSES a non-URL value at boot", () => {
+    expect(() =>
+      parseSsoProviders(JSON.stringify([{ ...base, initiateUrlByHost: { "studio.sai-kehila.com": "chat.sai-kehila.com" } }])),
+    ).toThrow(/EXTERNAL_SSO_PROVIDERS invalid/)
+  })
+
+  it("leaves the field absent when no map is configured (today's provider)", () => {
+    const [p] = parseSsoProviders(JSON.stringify([base]))
+    expect(p.initiateUrlByHost).toBeUndefined()
+  })
+})
