@@ -39,11 +39,13 @@
  * customer's unit, and converting it would invent an exchange rate for
  * something that is not being exchanged.
  */
+import { createHash } from "node:crypto"
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
+import { MODEL_CATALOG } from "@nodaro/shared"
 import { supabase } from "../../lib/supabase.js"
 import { config } from "../../lib/config.js"
-import { CreditsService } from "../billing/credits.js"
+import { CreditsService, PriceNotConfiguredError } from "../billing/credits.js"
 import { getStripe } from "../billing/stripe-client.js"
 import { ensureStripeCustomer } from "../billing/provision-credits.js"
 import { creditsForLoadUsd, MIN_LOAD_USD, MAX_LOAD_USD } from "../billing/load-rate.js"
@@ -60,6 +62,7 @@ import {
 import { requireDeploymentPayer, PAYER_JWT_ONLY_MSG } from "../middleware/require-deployment-payer.js"
 import { allowanceEnforcementActive, deploymentPayerId } from "../../lib/deployment-payer.js"
 import { runtimeSurfaceProfile } from "../../lib/surface-profile.js"
+import { isModelDenied } from "../../lib/surface-deny.js"
 import { toUnits } from "../../lib/billing-display-unit.js"
 import { invalidateBalanceCache } from "./credits.js"
 import {
@@ -468,6 +471,121 @@ function readNote(raw: unknown): NoteInput {
 const RENEWAL_MIN_INTERVAL_MS = 24 * 60 * 60 * 1000
 
 // ---------------------------------------------------------------------------
+// The pool, read once and shared
+// ---------------------------------------------------------------------------
+
+/**
+ * The payer's balance and this period's burn — the two figures `/overview` and
+ * `/balance` both answer with, in ONE place so a page and an integration can
+ * never disagree about the money.
+ *
+ * RAW NODARO CREDITS throughout, deliberately: this is the pool the customer
+ * bought from Nodaro, not an allocation denominated in the customer's own
+ * unit, and converting it would invent an exchange rate for something that is
+ * not being exchanged.
+ *
+ * `null` on any figure means UNAVAILABLE and must stay null all the way out.
+ * A balance that could not be read is not a balance of zero, and the
+ * difference is the one that decides whether a low-balance alarm is real.
+ */
+async function readPool(payerId: string) {
+  const since = periodStart()
+  // Client-side aggregation, capped — the `/usage` provider's posture. At the
+  // cap the figure under-reports and says so, rather than pretending.
+  const BURN_CAP = 5000
+  const [balance, burnRows] = await Promise.all([
+    CreditsService.getBalance(payerId).catch((e: unknown) => {
+      console.error("[deployment-billing] payer balance read failed:", (e as Error).message)
+      return null
+    }),
+    supabase
+      .from("usage_logs")
+      .select("credits_used, status")
+      .eq("user_id", payerId)
+      .in("status", ["reserved", "committed"])
+      .gte("created_at", since.toISOString())
+      .limit(BURN_CAP),
+  ])
+
+  const rows = burnRows.error ? [] : ((burnRows.data ?? []) as ReadonlyArray<{ credits_used: number | null }>)
+  if (burnRows.error) console.error("[deployment-billing] burn read failed:", burnRows.error.message)
+  return {
+    balance,
+    burn: {
+      periodStart: since.toISOString(),
+      credits: burnRows.error ? null : rows.reduce((sum, r) => sum + (r.credits_used ?? 0), 0),
+      generations: burnRows.error ? null : rows.length,
+      capped: rows.length === BURN_CAP,
+    },
+  }
+}
+
+/** The pool balance, in RAW credits, below which `lowBalance` is true — or
+ *  null when the payer has not set one.
+ *
+ *  A read that fails answers null rather than throwing: a threshold is a
+ *  convenience on top of a balance, and losing it must not take the balance
+ *  down with it. Null is also the honest value for a database that has not
+ *  reached the migration yet, which is the same answer as "not set". */
+async function lowBalanceThreshold(): Promise<number | null> {
+  const { data, error } = await supabase
+    .from("deployment_payer_settings")
+    .select("low_balance_threshold_credits")
+    .eq("id", true)
+    .maybeSingle()
+  if (error) {
+    console.error("[deployment-billing] low-balance threshold read failed:", error.message)
+    return null
+  }
+  const raw = (data as { low_balance_threshold_credits?: number | null } | null)?.low_balance_threshold_credits
+  return typeof raw === "number" && Number.isFinite(raw) ? raw : null
+}
+
+// ---------------------------------------------------------------------------
+// The usage page: a keyset cursor that cannot be injected into a filter
+// ---------------------------------------------------------------------------
+
+/**
+ * The characters a Postgres `timestamptz` can print, and NOT ONE MORE.
+ *
+ * This is the whole injection defence: the cursor's timestamp is interpolated
+ * into a PostgREST `or()` FILTER EXPRESSION, where a quote, a comma or a
+ * parenthesis is syntax rather than data. A value that matches this pattern
+ * cannot carry any of the three, so the interpolation below is safe by
+ * construction rather than by escaping — and escaping is what would have to be
+ * audited every time PostgREST's grammar moves.
+ */
+const CURSOR_TS_RE = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(\.\d{1,6})?([+-]\d{2}(:?\d{2})?|Z)?$/
+
+/** The boundary row, VERBATIM. `created_at` travels as the exact string the
+ *  database printed — microseconds included — because rounding it through a
+ *  `Date` loses the last three digits, the `created_at = c` leg of the keyset
+ *  then never matches, and the boundary row is silently skipped or served
+ *  twice. Base64url only so a caller is not tempted to construct one. */
+function encodeUsageCursor(createdAt: string, id: string): string {
+  return Buffer.from(`${createdAt}|${id}`, "utf8").toString("base64url")
+}
+
+function decodeUsageCursor(raw: string): { createdAt: string; id: string } | null {
+  const decoded = Buffer.from(raw, "base64url").toString("utf8")
+  const sep = decoded.lastIndexOf("|")
+  if (sep <= 0) return null
+  const createdAt = decoded.slice(0, sep)
+  const id = decoded.slice(sep + 1)
+  if (!CURSOR_TS_RE.test(createdAt) || !USER_UUID_RE.test(id)) return null
+  return { createdAt, id }
+}
+
+/** An ISO instant, or `"invalid"` — never a silent fallback. A window the
+ *  caller did not ask for is worse than a refusal: they would reconcile a
+ *  month against a different month and never learn why the totals disagree. */
+function readInstant(raw: string | undefined): string | null | "invalid" {
+  if (raw === undefined || raw.trim() === "") return null
+  const t = Date.parse(raw)
+  return Number.isFinite(t) ? new Date(t).toISOString() : "invalid"
+}
+
+// ---------------------------------------------------------------------------
 
 export async function deploymentBillingRoutes(app: FastifyInstance): Promise<void> {
   // -------------------------------------------------------------------------
@@ -477,23 +595,11 @@ export async function deploymentBillingRoutes(app: FastifyInstance): Promise<voi
     const payerId = deploymentPayerId()
     if (!payerId) return reply.status(404).send(err("not_found", "Not found"))
     const u = configuredUnit()
-    const since = periodStart()
 
-    // Client-side aggregation, capped — the `/usage` provider's posture. At the
-    // cap the figure under-reports and says so, rather than pretending.
-    const BURN_CAP = 5000
-    const [balance, burnRows, userCount, provisionedCount, defaultCredits] = await Promise.all([
-      CreditsService.getBalance(payerId).catch((e: unknown) => {
-        console.error("[deployment-billing] payer balance read failed:", (e as Error).message)
-        return null
-      }),
-      supabase
-        .from("usage_logs")
-        .select("credits_used, status")
-        .eq("user_id", payerId)
-        .in("status", ["reserved", "committed"])
-        .gte("created_at", since.toISOString())
-        .limit(BURN_CAP),
+    const [pool, userCount, provisionedCount, defaultCredits] = await Promise.all([
+      // The pool and the burn, through the one helper `GET /balance` also
+      // uses — so the page and the integration cannot disagree about the money.
+      readPool(payerId),
       supabase.from("profiles").select("id", { count: "exact", head: true }).neq("id", payerId),
       // Through the service, never a direct read: the allowance tables are
       // named in exactly one file so the D7 no-row rule cannot be forgotten in
@@ -501,10 +607,7 @@ export async function deploymentBillingRoutes(app: FastifyInstance): Promise<voi
       provisionedUserCount(),
       defaultAllowanceCredits(),
     ])
-
-    const rows = burnRows.error ? [] : ((burnRows.data ?? []) as ReadonlyArray<{ credits_used: number | null }>)
-    if (burnRows.error) console.error("[deployment-billing] burn read failed:", burnRows.error.message)
-    const burnCredits = burnRows.error ? null : rows.reduce((sum, r) => sum + (r.credits_used ?? 0), 0)
+    const balance = pool.balance
 
     return reply.send({
       data: {
@@ -517,12 +620,7 @@ export async function deploymentBillingRoutes(app: FastifyInstance): Promise<voi
           tier: balance?.effectiveTier ?? balance?.tier ?? null,
           periodEnd: balance?.periodEnd ?? null,
         },
-        burn: {
-          periodStart: since.toISOString(),
-          credits: burnCredits,
-          generations: burnRows.error ? null : rows.length,
-          capped: rows.length === BURN_CAP,
-        },
+        burn: pool.burn,
         defaultAllowance: { credits: defaultCredits, units: inUnits(defaultCredits, u) },
         users: { total: userCount.count ?? null, provisioned: provisionedCount },
         unit: u,
@@ -1113,6 +1211,416 @@ export async function deploymentBillingRoutes(app: FastifyInstance): Promise<voi
       console.error("[deployment-billing] checkout failed:", (e as Error).message)
       return reply.status(500).send(err("checkout_failed", "Could not start the payment session."))
     }
+  })
+
+  // =========================================================================
+  // THE INTEGRATION'S READS — the pool, the usage rows, the price list
+  // =========================================================================
+
+  // -------------------------------------------------------------------------
+  // GET /balance — the prepaid pool, and whether it is running low
+  // -------------------------------------------------------------------------
+  //
+  // `/overview` answers this and more, and the page reads that. This is the
+  // machine's version: the four figures an integration polls, plus a
+  // `lowBalance` boolean computed HERE rather than in each caller, so two
+  // integrations cannot hold two different ideas of what "low" means.
+  app.get("/v1/deployment-billing/balance", { preHandler: requireDeploymentPayer }, async (req, reply) => {
+    const payerId = deploymentPayerId()
+    if (!payerId) return reply.status(404).send(err("not_found", "Not found"))
+
+    const [pool, threshold] = await Promise.all([readPool(payerId), lowBalanceThreshold()])
+    const total = pool.balance?.total ?? null
+
+    return reply.send({
+      data: {
+        // RAW Nodaro credits — the one figure in this surface that is not in
+        // display units, and labelled so by its own field name.
+        balanceCredits: total,
+        burn: pool.burn,
+        periodEnd: pool.balance?.periodEnd ?? null,
+        // BOTH must be known. A null balance means "we could not read it", and
+        // comparing that against a threshold would silently treat it as 0 —
+        // the loudest possible false alarm, raised exactly when the system is
+        // already having a bad day.
+        lowBalance: threshold !== null && total !== null && total < threshold,
+        threshold,
+      },
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // PUT /balance/threshold — what "low" means on this deployment
+  // -------------------------------------------------------------------------
+  app.put("/v1/deployment-billing/balance/threshold", { preHandler: requireDeploymentPayer }, async (req, reply) => {
+    if (rejectProgrammaticAuth(req, reply, PAYER_JWT_ONLY_MSG, { allowBillingKey: true })) return
+    const actorId = req.userId
+    if (!actorId) return reply.status(401).send(err("unauthorized", "Authentication required"))
+    const payerId = deploymentPayerId()
+    if (!payerId) return reply.status(404).send(err("not_found", "Not found"))
+    // The same actor assertion `setDefaultAllowance` makes in the service:
+    // there is no RPC behind this column, so the check the database would have
+    // made is made here instead — belt for the route guard's braces.
+    if (actorId !== payerId) {
+      return reply
+        .status(WRITE_STATUS.allowance_actor_not_payer)
+        .send(err("allowance_actor_not_payer", WRITE_MESSAGE.allowance_actor_not_payer))
+    }
+
+    // RAW CREDITS, not display units — the threshold is judged against the
+    // pool, and the pool is the one figure this surface keeps in credits.
+    const parsed = z.object({ credits: z.unknown() }).safeParse(req.body)
+    const raw = parsed.success ? parsed.data.credits : undefined
+    const threshold =
+      raw === null ? null : typeof raw === "number" && Number.isInteger(raw) && raw >= 0 ? raw : undefined
+    if (threshold === undefined) {
+      return reply
+        .status(400)
+        .send(
+          err(
+            "invalid_threshold",
+            "credits must be a whole number of Nodaro credits, zero or more — or null to clear the threshold.",
+          ),
+        )
+    }
+
+    const { data, error } = await supabase
+      .from("deployment_payer_settings")
+      .update({
+        low_balance_threshold_credits: threshold,
+        updated_by: actorId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", true)
+      .select("id")
+    if (error) {
+      console.error("[deployment-billing] threshold write failed:", error.message)
+      return reply
+        .status(WRITE_STATUS.allowance_write_failed)
+        .send(err("allowance_write_failed", WRITE_MESSAGE.allowance_write_failed, error.message))
+    }
+    // An UPDATE that matches nothing is a success to PostgREST — here it means
+    // the singleton the boot upsert should have written does not exist, and
+    // answering 200 would report a save that went nowhere.
+    if (Array.isArray(data) && data.length === 0) {
+      return reply
+        .status(WRITE_STATUS.allowance_unconfigured)
+        .send(err("allowance_unconfigured", WRITE_MESSAGE.allowance_unconfigured))
+    }
+
+    return reply.send({ data: { threshold } })
+  })
+
+  // -------------------------------------------------------------------------
+  // GET /usage — one row per generation, newest first, NEVER an aggregate
+  // -------------------------------------------------------------------------
+  //
+  // The pool's own usage records, attributed to the person each generation ran
+  // for. An aggregate here would be a number the caller could not reconcile
+  // and could not re-cut by a different period, so this route emits rows and
+  // the caller sums.
+  //
+  // KEYSET, not offset. An offset page over a table that is still being
+  // written skips and repeats rows as new ones arrive at the top; the cursor
+  // names the last row served and the next page is strictly older than it, so
+  // a walk covers every row exactly once even while generations are landing.
+  app.get("/v1/deployment-billing/usage", { preHandler: requireDeploymentPayer }, async (req, reply) => {
+    const payerId = deploymentPayerId()
+    if (!payerId) return reply.status(404).send(err("not_found", "Not found"))
+    const query = req.query as Record<string, string | undefined>
+    const u = configuredUnit()
+
+    const from = readInstant(query.from)
+    const to = readInstant(query.to)
+    if (from === "invalid" || to === "invalid") {
+      return reply
+        .status(400)
+        .send(err("invalid_range", "from and to must be ISO 8601 timestamps."))
+    }
+    // The current UTC month by default — the same window `/overview` and
+    // `/balance` call "this period", so a burn figure and a summed usage page
+    // cannot disagree about when the period started.
+    const fromIso = from ?? periodStart().toISOString()
+
+    // A TRUE clamp into 1..500, unlike `paging()`'s `|| fallback` idiom above:
+    // the published contract says 1 to 500, and `?limit=0` landing on 200
+    // rather than on 1 would make a caller's own bound-check look wrong.
+    const rawLimit = Number.parseInt(query.limit ?? "", 10)
+    const limit = Number.isFinite(rawLimit) ? Math.min(500, Math.max(1, rawLimit)) : 200
+
+    let onBehalfOf: string | null = null
+    if (query.user !== undefined) {
+      const outcome = await resolveRef(query.user, reply)
+      if (outcome.kind === "refused") return
+      if (outcome.kind === "absent") {
+        // An EMPTY PAGE, not a 404. "Nobody by that name has generated" is a
+        // true answer to this question, and a 404 would make a caller walking
+        // its customer list treat a person who has not signed in yet as an
+        // error rather than as zero usage.
+        return reply.send({ data: [], nextCursor: null, from: fromIso, to: to ?? null, limit, unit: u })
+      }
+      onBehalfOf = outcome.userId
+    }
+
+    let keyset: { createdAt: string; id: string } | null = null
+    if (query.cursor !== undefined && query.cursor !== "") {
+      keyset = decodeUsageCursor(query.cursor)
+      if (!keyset) {
+        return reply
+          .status(400)
+          .send(err("invalid_cursor", "cursor must be a value this route returned as nextCursor."))
+      }
+    }
+
+    let q = supabase
+      .from("usage_logs")
+      .select("id, created_at, job_id, action, provider, status, credits_used, on_behalf_of")
+      // THE POOL. Every generation on this deployment is charged to the
+      // billing account, so this predicate is what makes the page "the pool's
+      // usage" rather than "one person's".
+      .eq("user_id", payerId)
+      .gte("created_at", fromIso)
+    if (to !== null) q = q.lt("created_at", to)
+    if (onBehalfOf !== null) q = q.eq("on_behalf_of", onBehalfOf)
+    if (keyset !== null) {
+      // `(created_at, id) < (c, i)`, spelled the way PostgREST can express it.
+      // Both legs are STRICTLY less than: the row the cursor names was already
+      // served, and `lte` on the timestamp would serve it a second time — a
+      // double-counted generation in whatever sums this.
+      //
+      // The values are interpolated, and that is safe ONLY because
+      // `decodeUsageCursor` has already proved they contain nothing but the
+      // characters a timestamp and a uuid can hold. Raw query input never
+      // reaches this string.
+      q = q.or(
+        `created_at.lt."${keyset.createdAt}",and(created_at.eq."${keyset.createdAt}",id.lt."${keyset.id}")`,
+      )
+    }
+    const { data, error } = await q
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(limit)
+
+    if (error) {
+      console.error("[deployment-billing] usage read failed:", error.message)
+      return reply.status(500).send(err("read_failed", "Could not read this deployment's usage."))
+    }
+
+    const rows = (data ?? []) as ReadonlyArray<{
+      id: string
+      created_at: string
+      job_id: string | null
+      action: string | null
+      provider: string | null
+      status: string | null
+      credits_used: number | null
+      on_behalf_of: string | null
+    }>
+
+    // `on_behalf_of` is NULL on the billing account's own runs, which are
+    // still real spend out of the pool — attributing them to the account that
+    // made them keeps a per-requester sum equal to the pool's total, instead
+    // of quietly losing staff generations.
+    const requesterOf = (r: { on_behalf_of: string | null }) => r.on_behalf_of ?? payerId
+    const requesterIds = [...new Set(rows.map(requesterOf))]
+    const jobIds = [...new Set(rows.map((r) => r.job_id).filter((id): id is string => typeof id === "string"))]
+
+    // TWO batched reads for the page, never one per row.
+    const [profileRes, jobRes, subjects] = await Promise.all([
+      requesterIds.length > 0
+        ? supabase.from("profiles").select("id, email, full_name").in("id", requesterIds)
+        : Promise.resolve({ data: [], error: null }),
+      jobIds.length > 0
+        ? supabase.from("jobs").select("id, job_type, provider").in("id", jobIds)
+        : Promise.resolve({ data: [], error: null }),
+      ssoSubjectsFor(requesterIds),
+    ])
+    if (profileRes.error) console.error("[deployment-billing] usage requester read failed:", profileRes.error.message)
+    if (jobRes.error) console.error("[deployment-billing] usage job read failed:", jobRes.error.message)
+
+    const profiles = new Map(
+      ((profileRes.data ?? []) as ReadonlyArray<{ id: string; email: string | null; full_name: string | null }>).map(
+        (p) => [p.id, p],
+      ),
+    )
+    const jobs = new Map(
+      ((jobRes.data ?? []) as ReadonlyArray<{ id: string; job_type: string | null; provider: string | null }>).map(
+        (j) => [j.id, j],
+      ),
+    )
+
+    const out = rows.map((r) => {
+      const requesterId = requesterOf(r)
+      const profile = profiles.get(requesterId)
+      const job = r.job_id ? jobs.get(r.job_id) : undefined
+      return {
+        id: r.id,
+        createdAt: r.created_at,
+        jobId: r.job_id ?? null,
+        jobType: job?.job_type ?? null,
+        // The credit identifier the reservation was priced against, which is
+        // what `/pricing` lists — so a row can be checked against a price.
+        model: r.action ?? null,
+        provider: r.provider ?? job?.provider ?? null,
+        // `reserved` rows are not final: a generation reserves when it starts
+        // and commits or refunds when it finishes, so a window that still
+        // holds one has to be re-read before it is closed.
+        status: r.status ?? null,
+        credits: r.credits_used ?? null,
+        units: inUnits(r.credits_used ?? null, u),
+        requester: {
+          id: requesterId,
+          email: profile?.email ?? null,
+          name: profile?.full_name ?? null,
+          ssoSubject: subjects.get(requesterId) ?? null,
+        },
+      }
+    })
+
+    // Null on a SHORT page. A full final page still hands back a cursor whose
+    // next page is empty — the walk ends on `null`, and it always comes.
+    const last = rows.length === limit ? rows[rows.length - 1] : undefined
+    return reply.send({
+      data: out,
+      nextCursor: last ? encodeUsageCursor(last.created_at, last.id) : null,
+      from: fromIso,
+      to: to ?? null,
+      limit,
+      unit: u,
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // GET /pricing — the effective price of every model this deployment offers
+  // -------------------------------------------------------------------------
+  //
+  // Not the platform's public catalog (no markup, no narrowing) and not the
+  // operator's pricing table (no narrowing, no display unit): the models THIS
+  // deployment allows, at the cost a reservation would actually charge,
+  // in both denominations.
+  app.get("/v1/deployment-billing/pricing", { preHandler: requireDeploymentPayer }, async (req, reply) => {
+    const payerId = deploymentPayerId()
+    if (!payerId) return reply.status(404).send(err("not_found", "Not found"))
+    const query = req.query as Record<string, string | undefined>
+    const u = configuredUnit()
+
+    const since = readInstant(query.since)
+    if (since === "invalid") {
+      return reply.status(400).send(err("invalid_range", "since must be an ISO 8601 timestamp."))
+    }
+    const sinceMs = since === null ? null : Date.parse(since)
+
+    // The allow-list is the deployment's narrowing when it has one; an EMPTY
+    // allow-list means "nothing is narrowed away", not "no models", so the
+    // catalog is the universe in that case. Both branches then go through
+    // `isModelDenied`, which also honours the deny list and the operator's
+    // availability override — pricing a model the picker no longer shows would
+    // be a quote nobody can spend.
+    const allow = runtimeSurfaceProfile().models.allow
+    const ids = [...new Set(allow.length > 0 ? allow : Object.keys(MODEL_CATALOG))]
+      .filter((id) => !isModelDenied(id))
+      .sort()
+
+    // ONE read for the whole list. `display_name` is not created by any
+    // migration — production has drifted — so a database without it answers
+    // 42703, and the retry without the column is the same posture
+    // `/transactions` takes above.
+    type PricingRow = {
+      model_identifier: string
+      display_name?: string | null
+      category?: string | null
+      is_enabled?: boolean | null
+      updated_at?: string | null
+    }
+    const withName = await supabase
+      .from("model_pricing")
+      .select("model_identifier, display_name, category, is_enabled, updated_at")
+      .in("model_identifier", ids)
+    const pricingRows =
+      withName.error?.code === "42703"
+        ? await supabase
+            .from("model_pricing")
+            .select("model_identifier, category, is_enabled, updated_at")
+            .in("model_identifier", ids)
+        : withName
+    if (pricingRows.error) {
+      console.error("[deployment-billing] pricing read failed:", pricingRows.error.message)
+      return reply.status(500).send(err("read_failed", "Could not read this deployment's price list."))
+    }
+    const byId = new Map(
+      ((pricingRows.data ?? []) as ReadonlyArray<PricingRow>).map((r) => [r.model_identifier, r]),
+    )
+
+    // Per-model fault isolation: one unpriced identifier must not take the
+    // whole list down, because the list is what tells the caller which one is
+    // unpriced.
+    const settled = await Promise.allSettled(ids.map((id) => CreditsService.getModelCreditCost(id)))
+
+    const missing: string[] = []
+    const errors: string[] = []
+    let updatedAt: string | null = null
+
+    const rows = ids.map((id, i) => {
+      const entry = MODEL_CATALOG[id]
+      const row = byId.get(id)
+      const settledOne = settled[i]!
+      let creditCost: number | null = null
+      if (settledOne.status === "fulfilled") {
+        creditCost = settledOne.value
+      } else if (settledOne.reason instanceof PriceNotConfiguredError) {
+        // Listed, and honestly empty. Dropping the row would say "this
+        // deployment does not offer that model", which is a different and
+        // wrong statement — the model IS offered, and its price is missing.
+        missing.push(id)
+      } else {
+        errors.push(id)
+        console.error(`[deployment-billing] pricing lookup failed for "${id}":`, settledOne.reason)
+      }
+      const rowUpdatedAt = row?.updated_at ?? null
+      if (rowUpdatedAt !== null && (updatedAt === null || rowUpdatedAt > updatedAt)) updatedAt = rowUpdatedAt
+      return {
+        modelIdentifier: id,
+        displayName: entry?.label ?? row?.display_name ?? null,
+        category: row?.category ?? entry?.kind ?? null,
+        kind: entry?.kind ?? null,
+        modes: entry?.modes ?? null,
+        // The EFFECTIVE cost, through the same call a reservation makes, so
+        // the deployment's markup is included and a quoted price is the price.
+        creditCost,
+        units: inUnits(creditCost, u),
+        // The catalog's own shape, so a metered model's per-second or
+        // per-token rate is readable without a second call.
+        pricing: entry?.pricing ?? null,
+        isEnabled: row?.is_enabled ?? true,
+        updatedAt: rowUpdatedAt,
+      }
+    })
+
+    // `?since=` keeps only rows that have MOVED since then. A row with no
+    // pricing row has no `updated_at` and therefore no evidence it changed, so
+    // it is not a change — an empty list is the "nothing changed" answer, and
+    // `updatedAt` still carries the whole list's high-water mark so the caller
+    // can advance its bookmark without having received a row.
+    const data =
+      sinceMs === null
+        ? rows
+        : rows.filter((r) => r.updatedAt !== null && Date.parse(r.updatedAt) > sinceMs)
+
+    const body = { data, missing, errors, updatedAt }
+    // The tag is over the body WITHOUT itself — a hash cannot cover the field
+    // that carries it — and the same value goes in the header and the body so
+    // a caller that keeps only the JSON can still send `If-None-Match`.
+    const etag = `"sha256-${createHash("sha256").update(JSON.stringify(body)).digest("hex")}"`
+
+    reply.header("ETag", etag)
+    reply.header("Cache-Control", "private, max-age=300")
+
+    const inm = req.headers["if-none-match"]
+    if (typeof inm === "string" && inm.split(",").some((t) => t.trim().replace(/^W\//, "") === etag)) {
+      return reply.status(304).send()
+    }
+
+    return reply.send({ ...body, etag })
   })
 
   // =========================================================================

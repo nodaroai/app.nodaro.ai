@@ -935,3 +935,495 @@ describe("the integration key on the write verbs", () => {
     expect(rec.rpcCalls.find((c) => c.name === "grant_deployment_allowance")?.args.p_credential_id).toBe(KEY_ID)
   })
 })
+
+// ===========================================================================
+// GET /balance and PUT /balance/threshold
+// ===========================================================================
+
+describe("GET /balance", () => {
+  beforeEach(() => {
+    payerDeployment()
+    h.getBalance.mockResolvedValue({ total: 41_250, subscription: 0, topup: 41_250, tier: "pro", periodEnd: null })
+    tableResults.set("usage_logs:list", { data: [{ credits_used: 300 }, { credits_used: 600 }], error: null })
+  })
+
+  it("reports the pool in RAW Nodaro credits, with the period's burn", async () => {
+    tableResults.set("deployment_payer_settings:single", { data: { low_balance_threshold_credits: null }, error: null })
+    const res = await app.inject({ method: "GET", url: "/v1/deployment-billing/balance", headers: AS_KEY })
+    expect(res.statusCode).toBe(200)
+    const d = res.json().data
+    // The pool is Nodaro's money, not an allocation in the customer's unit —
+    // converting it would invent an exchange rate for something that is not
+    // being exchanged. It is the ONE figure in this API that is not in units.
+    expect(d.balanceCredits).toBe(41_250)
+    expect(d.burn).toMatchObject({ credits: 900, generations: 2, capped: false })
+    expect(d.periodEnd).toBeNull()
+  })
+
+  it("has lowBalance FALSE while no threshold is set — never a fabricated default", async () => {
+    tableResults.set("deployment_payer_settings:single", { data: { low_balance_threshold_credits: null }, error: null })
+    const res = await app.inject({ method: "GET", url: "/v1/deployment-billing/balance", headers: AS_PAYER })
+    expect(res.json().data).toMatchObject({ threshold: null, lowBalance: false })
+  })
+
+  it("flips lowBalance exactly at the threshold", async () => {
+    for (const [threshold, expected] of [
+      [41_251, true],
+      [41_250, false],
+      [10_000, false],
+    ] as Array<[number, boolean]>) {
+      tableResults.set("deployment_payer_settings:single", {
+        data: { low_balance_threshold_credits: threshold },
+        error: null,
+      })
+      const res = await app.inject({ method: "GET", url: "/v1/deployment-billing/balance", headers: AS_PAYER })
+      expect(res.json().data.lowBalance, String(threshold)).toBe(expected)
+      expect(res.json().data.threshold, String(threshold)).toBe(threshold)
+    }
+  })
+
+  it("cannot claim lowBalance when the balance itself is unknown", async () => {
+    // `null` means "we could not read it", and a null compared against a
+    // threshold would silently read as 0 — the loudest possible false alarm.
+    h.getBalance.mockRejectedValue(new Error("upstream down"))
+    tableResults.set("deployment_payer_settings:single", {
+      data: { low_balance_threshold_credits: 10_000 },
+      error: null,
+    })
+    const res = await app.inject({ method: "GET", url: "/v1/deployment-billing/balance", headers: AS_PAYER })
+    expect(res.json().data.balanceCredits).toBeNull()
+    expect(res.json().data.lowBalance).toBe(false)
+  })
+})
+
+describe("PUT /balance/threshold", () => {
+  beforeEach(() => {
+    payerDeployment()
+    tableResults.set("deployment_payer_settings:list", { data: [{ id: true }], error: null })
+  })
+
+  it("stores a threshold in RAW credits and echoes it back", async () => {
+    const res = await app.inject({
+      method: "PUT",
+      url: "/v1/deployment-billing/balance/threshold",
+      headers: AS_KEY,
+      payload: { credits: 10_000 },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toEqual({ threshold: 10_000 })
+    expect(rec.writePayloads.find((w) => w.table === "deployment_payer_settings")?.payload).toMatchObject({
+      low_balance_threshold_credits: 10_000,
+    })
+  })
+
+  it("clears it with null", async () => {
+    const res = await app.inject({
+      method: "PUT",
+      url: "/v1/deployment-billing/balance/threshold",
+      headers: AS_PAYER,
+      payload: { credits: null },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toEqual({ threshold: null })
+  })
+
+  it("refuses anything that is not a whole non-negative number of credits", async () => {
+    for (const credits of [-1, 1.5, "10000", undefined]) {
+      const res = await app.inject({
+        method: "PUT",
+        url: "/v1/deployment-billing/balance/threshold",
+        headers: AS_PAYER,
+        payload: { credits },
+      })
+      expect(res.statusCode, String(credits)).toBe(400)
+      expect(res.json().error.code, String(credits)).toBe("invalid_threshold")
+    }
+    expect(rec.writePayloads.filter((w) => w.table === "deployment_payer_settings")).toHaveLength(0)
+  })
+
+  it("reports the missing settings singleton rather than a save that went nowhere", async () => {
+    tableResults.set("deployment_payer_settings:list", { data: [], error: null })
+    const res = await app.inject({
+      method: "PUT",
+      url: "/v1/deployment-billing/balance/threshold",
+      headers: AS_PAYER,
+      payload: { credits: 10_000 },
+    })
+    expect(res.statusCode).toBe(500)
+    expect(res.json().error.code).toBe("allowance_unconfigured")
+  })
+})
+
+// ===========================================================================
+// GET /usage
+// ===========================================================================
+
+/** Microseconds on purpose: Postgres stores `timestamptz` to the microsecond
+ *  and PostgREST hands it back that way. Rounding a cursor through `new Date()`
+ *  would lose the last three digits, the `created_at = c` half of the keyset
+ *  would never match, and the boundary row would be silently skipped or
+ *  served twice — which is precisely what this route promises not to do. */
+const T3 = "2026-09-05T14:02:11.123456+00:00"
+const T2 = "2026-09-04T09:31:22.000001+00:00"
+const T1 = "2026-09-03T08:00:00.500000+00:00"
+
+const JOB1 = "00000000-0000-4000-8000-0000000j0001".replace("j", "a")
+const LOG1 = "00000000-0000-4000-8000-00000000e001"
+const LOG2 = "00000000-0000-4000-8000-00000000e002"
+const LOG3 = "00000000-0000-4000-8000-00000000e003"
+
+function usageRows() {
+  return [
+    {
+      id: LOG3,
+      created_at: T3,
+      job_id: JOB1,
+      action: "nano-banana",
+      provider: "kie",
+      status: "committed",
+      credits_used: 4,
+      on_behalf_of: U1,
+    },
+    {
+      id: LOG2,
+      created_at: T2,
+      job_id: null,
+      action: "flux",
+      provider: "kie",
+      status: "reserved",
+      credits_used: 2,
+      on_behalf_of: U2,
+    },
+    {
+      id: LOG1,
+      created_at: T1,
+      job_id: null,
+      action: "flux",
+      provider: "kie",
+      status: "refunded",
+      credits_used: 1,
+      on_behalf_of: null,
+    },
+  ]
+}
+
+describe("GET /usage", () => {
+  beforeEach(() => {
+    payerDeployment()
+    tableResults.set("profiles:list", {
+      data: [
+        { id: U1, email: "dana@example.com", full_name: "Dana" },
+        { id: U2, email: "yosef@example.com", full_name: "Yosef" },
+        { id: PAYER, email: "billing@example.com", full_name: "Billing" },
+      ],
+      error: null,
+    })
+    tableResults.set("jobs:list", { data: [{ id: JOB1, job_type: "image", provider: "kie" }], error: null })
+    rpcHandlers.set("sso_subjects_for", () => ({ data: [{ id: U1, sso_subject: "usr_dana" }], error: null }))
+  })
+
+  it("answers one row per usage record, with both denominations and the requester", async () => {
+    tableResults.set("usage_logs:list", { data: usageRows(), error: null })
+    const res = await app.inject({ method: "GET", url: "/v1/deployment-billing/usage", headers: AS_KEY })
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.data).toHaveLength(3)
+    expect(body.data[0]).toEqual({
+      id: LOG3,
+      createdAt: T3,
+      jobId: JOB1,
+      jobType: "image",
+      model: "nano-banana",
+      provider: "kie",
+      status: "committed",
+      credits: 4,
+      units: 8_000,
+      requester: { id: U1, email: "dana@example.com", name: "Dana", ssoSubject: "usr_dana" },
+    })
+    // The pool's own runs are attributed to the account that made them, so a
+    // caller summing by requester sees every credit the pool spent.
+    expect(body.data[2].requester.id).toBe(PAYER)
+    // NEVER an aggregate: the caller sums.
+    expect(body.total).toBeUndefined()
+    expect(body.credits).toBeUndefined()
+  })
+
+  it("scopes to the pool, orders newest-first on a stable tiebreak, and windows on created_at", async () => {
+    tableResults.set("usage_logs:list", { data: usageRows(), error: null })
+    await app.inject({
+      method: "GET",
+      url: "/v1/deployment-billing/usage?from=2026-09-01T00:00:00Z&to=2026-10-01T00:00:00Z",
+      headers: AS_PAYER,
+    })
+    const calls = rec.filterCalls.filter((c) => c.table === "usage_logs")
+    expect(calls.find((c) => c.op === "eq")?.args).toEqual(["user_id", PAYER])
+    expect(calls.find((c) => c.op === "gte")?.args).toEqual(["created_at", "2026-09-01T00:00:00.000Z"])
+    expect(calls.find((c) => c.op === "lt")?.args).toEqual(["created_at", "2026-10-01T00:00:00.000Z"])
+    const orders = calls.filter((c) => c.op === "order").map((c) => c.args[0])
+    expect(orders).toEqual(["created_at", "id"])
+  })
+
+  it("filters by on_behalf_of when ?user= names somebody", async () => {
+    userExists(U1, { subject: "usr_dana" })
+    tableResults.set("usage_logs:list", { data: [usageRows()[0]], error: null })
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/deployment-billing/usage?user=sso:usr_dana",
+      headers: AS_PAYER,
+    })
+    expect(res.statusCode).toBe(200)
+    const eqs = rec.filterCalls.filter((c) => c.table === "usage_logs" && c.op === "eq").map((c) => c.args)
+    expect(eqs).toContainEqual(["on_behalf_of", U1])
+  })
+
+  it("answers an EMPTY PAGE, not a 404, for a ?user= nobody answers to", async () => {
+    userAbsent()
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/deployment-billing/usage?user=sso:usr_ghost",
+      headers: AS_PAYER,
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toEqual([])
+    expect(res.json().nextCursor).toBeNull()
+    // Not even asked: a page that cannot contain a row costs nothing.
+    expect(rec.fromCalls).not.toContain("usage_logs")
+  })
+
+  it("pages with a keyset cursor that covers the boundary row EXACTLY ONCE", async () => {
+    const page1 = usageRows().slice(0, 2)
+    tableResults.set("usage_logs:list", { data: page1, error: null })
+    const first = await app.inject({ method: "GET", url: "/v1/deployment-billing/usage?limit=2", headers: AS_PAYER })
+    expect(first.statusCode).toBe(200)
+    const cursor = first.json().nextCursor as string
+    expect(cursor).toBeTruthy()
+    // The cursor carries the boundary row VERBATIM, microseconds included.
+    expect(Buffer.from(cursor, "base64url").toString("utf8")).toBe(`${T2}|${LOG2}`)
+
+    rec.filterCalls = []
+    tableResults.set("usage_logs:list", { data: usageRows().slice(2), error: null })
+    const second = await app.inject({
+      method: "GET",
+      url: `/v1/deployment-billing/usage?limit=2&cursor=${encodeURIComponent(cursor)}`,
+      headers: AS_PAYER,
+    })
+    expect(second.statusCode).toBe(200)
+    const or = rec.filterCalls.find((c) => c.table === "usage_logs" && c.op === "or")?.args[0] as string
+    // STRICTLY less than the boundary on both legs: the row the cursor names
+    // was already served, so serving it again would double-count a generation,
+    // and `lte` on the timestamp would do exactly that.
+    expect(or).toContain(`created_at.lt."${T2}"`)
+    expect(or).toContain(`and(created_at.eq."${T2}",id.lt."${LOG2}")`)
+    // A short page ends the walk.
+    expect(second.json().nextCursor).toBeNull()
+  })
+
+  it("refuses a tampered cursor rather than interpolating it into a filter", async () => {
+    tableResults.set("usage_logs:list", { data: [], error: null })
+    const evil = Buffer.from(`2026-09-04T09:31:22Z",id.gt."0|${LOG2}`, "utf8").toString("base64url")
+    for (const cursor of [evil, "not-base64!!", Buffer.from("nonsense").toString("base64url")]) {
+      const res = await app.inject({
+        method: "GET",
+        url: `/v1/deployment-billing/usage?cursor=${encodeURIComponent(cursor)}`,
+        headers: AS_PAYER,
+      })
+      expect(res.statusCode, cursor).toBe(400)
+      expect(res.json().error.code, cursor).toBe("invalid_cursor")
+    }
+    expect(rec.filterCalls.some((c) => c.table === "usage_logs" && c.op === "or")).toBe(false)
+  })
+
+  it("refuses an unparseable from/to rather than silently answering a different window", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/deployment-billing/usage?from=last-tuesday",
+      headers: AS_PAYER,
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("invalid_range")
+  })
+
+  it("clamps limit to 1..500 and defaults to 200", async () => {
+    tableResults.set("usage_logs:list", { data: [], error: null })
+    for (const [q, expected] of [
+      ["", 200],
+      ["?limit=1000", 500],
+      ["?limit=0", 1],
+      ["?limit=7", 7],
+    ] as Array<[string, number]>) {
+      rec.filterCalls = []
+      await app.inject({ method: "GET", url: `/v1/deployment-billing/usage${q}`, headers: AS_PAYER })
+      const limit = rec.filterCalls.find((c) => c.table === "usage_logs" && c.op === "limit")?.args[0]
+      expect(limit, q).toBe(expected)
+    }
+  })
+})
+
+// ===========================================================================
+// GET /pricing
+// ===========================================================================
+
+describe("GET /pricing", () => {
+  const ALLOWED = ["nano-banana", "flux"]
+
+  beforeEach(() => {
+    payerDeployment({}, { allow: ALLOWED })
+    h.getModelCreditCost.mockImplementation(async (id: string) => (id === "nano-banana" ? 12 : 15))
+    tableResults.set("model_pricing:list", {
+      data: [
+        {
+          model_identifier: "nano-banana",
+          display_name: "Nano Banana",
+          category: "image",
+          is_enabled: true,
+          updated_at: "2026-08-30T09:12:00.000Z",
+        },
+        {
+          model_identifier: "flux",
+          display_name: "Flux",
+          category: "image",
+          is_enabled: true,
+          updated_at: "2026-08-01T09:12:00.000Z",
+        },
+      ],
+      error: null,
+    })
+  })
+
+  it("prices only the models this deployment allows, sorted, in both denominations", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/deployment-billing/pricing", headers: AS_KEY })
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.data.map((r: { modelIdentifier: string }) => r.modelIdentifier)).toEqual(["flux", "nano-banana"])
+    expect(body.data[1]).toMatchObject({
+      modelIdentifier: "nano-banana",
+      displayName: "Nano Banana",
+      category: "image",
+      kind: "image",
+      creditCost: 12,
+      units: 24_000,
+      isEnabled: true,
+      updatedAt: "2026-08-30T09:12:00.000Z",
+    })
+    // The catalog's own price shape travels, so a metered model's per-second
+    // or per-token rate is readable without a second call.
+    expect(Array.isArray(body.data[1].pricing)).toBe(true)
+    expect(body.updatedAt).toBe("2026-08-30T09:12:00.000Z")
+    expect(body.etag).toMatch(/^"sha256-[0-9a-f]{64}"$/)
+    expect(res.headers["cache-control"]).toBe("private, max-age=300")
+    // The EFFECTIVE cost, through the same call the reservation makes, so the
+    // markup is included and a quoted price matches what is actually charged.
+    expect(h.getModelCreditCost).toHaveBeenCalledWith("nano-banana")
+  })
+
+  it("answers 304 to its own ETag and sends no body", async () => {
+    const first = await app.inject({ method: "GET", url: "/v1/deployment-billing/pricing", headers: AS_PAYER })
+    const etag = first.headers.etag as string
+    expect(etag).toBe(first.json().etag)
+    const second = await app.inject({
+      method: "GET",
+      url: "/v1/deployment-billing/pricing",
+      headers: { ...AS_PAYER, "if-none-match": etag },
+    })
+    expect(second.statusCode).toBe(304)
+    expect(second.body).toBe("")
+    expect(second.headers.etag).toBe(etag)
+  })
+
+  it("?since= returns only the rows changed after it — an empty list means nothing changed", async () => {
+    const since = "2026-08-15T00:00:00Z"
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/deployment-billing/pricing?since=${encodeURIComponent(since)}`,
+      headers: AS_PAYER,
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.map((r: { modelIdentifier: string }) => r.modelIdentifier)).toEqual(["nano-banana"])
+
+    const quiet = await app.inject({
+      method: "GET",
+      url: `/v1/deployment-billing/pricing?since=${encodeURIComponent("2026-09-01T00:00:00Z")}`,
+      headers: AS_PAYER,
+    })
+    expect(quiet.json().data).toEqual([])
+    // Still the whole list's high-water mark, so the caller can advance its
+    // bookmark without having received a row.
+    expect(quiet.json().updatedAt).toBe("2026-08-30T09:12:00.000Z")
+  })
+
+  it("lists an allowed model with no configured price in missing[], with creditCost null", async () => {
+    h.getModelCreditCost.mockImplementation(async (id: string) => {
+      if (id === "flux") throw new h.PriceNotConfiguredError(id)
+      return 12
+    })
+    const res = await app.inject({ method: "GET", url: "/v1/deployment-billing/pricing", headers: AS_PAYER })
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.missing).toEqual(["flux"])
+    const flux = body.data.find((r: { modelIdentifier: string }) => r.modelIdentifier === "flux")
+    // Present, and honestly empty: dropping the row would say "this deployment
+    // does not offer flux", which is a different and wrong statement.
+    expect(flux).toMatchObject({ creditCost: null, units: null })
+  })
+
+  it("refuses an unparseable ?since=", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/deployment-billing/pricing?since=yesterday",
+      headers: AS_PAYER,
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("invalid_range")
+  })
+})
+
+// ===========================================================================
+// Mainline — none of this exists without a payer
+// ===========================================================================
+
+describe("mainline byte-identity", () => {
+  const NEW_PATHS: ReadonlyArray<{ method: "GET" | "PUT"; url: string; body?: Record<string, unknown> }> = [
+    { method: "GET", url: "/v1/deployment-billing/balance" },
+    { method: "PUT", url: "/v1/deployment-billing/balance/threshold", body: { credits: 1 } },
+    { method: "GET", url: "/v1/deployment-billing/users/resolve?email=a@example.com" },
+    { method: "PUT", url: ALLOWANCE(U1), body: { units: 2000, mode: "set" } },
+    { method: "GET", url: "/v1/deployment-billing/usage" },
+    { method: "GET", url: "/v1/deployment-billing/pricing" },
+  ]
+
+  it("404s every new path when no payer is configured, and queries nothing", async () => {
+    for (const r of NEW_PATHS) {
+      const res = await app.inject({ method: r.method, url: r.url, headers: AS_PAYER, payload: r.body })
+      expect(res.statusCode, `${r.method} ${r.url}`).toBe(404)
+    }
+    expect(rec.fromCalls).toEqual([])
+    expect(rec.rpcCalls).toEqual([])
+  })
+
+  it("refuses an admin who is not the billing account on every new path", async () => {
+    payerDeployment()
+    for (const r of NEW_PATHS) {
+      const res = await app.inject({
+        method: r.method,
+        url: r.url,
+        headers: { "x-user-id": GHOST },
+        payload: r.body,
+      })
+      expect(res.statusCode, `${r.method} ${r.url}`).toBe(403)
+      expect(res.json().error.code, `${r.method} ${r.url}`).toBe("payer_required")
+    }
+  })
+
+  it("refuses the payer's own PERSONAL API TOKEN on every new path — identity is not enough", async () => {
+    payerDeployment()
+    for (const r of NEW_PATHS) {
+      const res = await app.inject({
+        method: r.method,
+        url: r.url,
+        headers: { ...AS_PAYER, "x-auth-kind": "api_token" },
+        payload: r.body,
+      })
+      expect(res.statusCode, `${r.method} ${r.url}`).toBe(403)
+    }
+  })
+})
