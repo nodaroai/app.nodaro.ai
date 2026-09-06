@@ -1219,6 +1219,29 @@ policy reason if the review rejects it.
 
 **Input:** `{ job_id: uuid }`
 
+
+**Job envelope (structuredContent):** `jobId`, `status`, `progress`, `jobType`,
+`assetKind` (`image` / `video` / `audio` / null), `outputUrl`, `outputData`,
+`errorMessage`, `credits`, `createdAt`, `startedAt`, `completedAt`, plus
+`retryable`, `guidance` and `suggestedProvider` on a failed, cancelled or held
+job. `get_asset` and `wait_for_job` return the same envelope. Poll every 5–10 s
+(an image usually finishes within a minute, a video in 2–10 minutes), or call
+`wait_for_job` to block.
+
+---
+
+### `wait_for_job`
+
+**Scope:** `jobs:read`
+
+Block until one of your jobs finishes and return the job envelope above.
+
+**Input:** `job_id`, `timeout_s?` (seconds to wait, default 60, max 120)
+
+If the job is still running at the deadline the result has `status: "timeout"`
+— it is **not** an error; call `wait_for_job` again or poll `get_job`. A held
+job answers `pending_review` at once (do not re-run it). For a long video
+render prefer polling `get_job` every 5–10 s over repeated waits.
 ---
 
 ### `diagnose_run`

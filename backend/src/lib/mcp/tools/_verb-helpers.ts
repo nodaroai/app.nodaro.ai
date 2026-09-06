@@ -142,6 +142,15 @@ export function idempotencyHeaders(clientRequestId: string | undefined): Record<
   return id ? { "idempotency-key": `mcp:${id}` } : {}
 }
 
+/**
+ * ONE CADENCE SENTENCE (audit 2026-09-06 fix #2, A-9): "poll get_job with this
+ * id" named no cadence, no expected duration and no blocking alternative, so
+ * agents polled in tight loops or gave up. Every job-returning verb says this.
+ */
+export const GET_JOB_POLL_HINT =
+  "poll get_job with this id every 5–10 s (an image usually finishes within a minute, a video in 2–10 minutes), " +
+  "or call wait_for_job to block up to 120 s for the result"
+
 export function uiMeta(uri: string) {
   return {
     "ui/resourceUri": uri,
@@ -407,7 +416,7 @@ export function jobResultWithWidget(opts: JobResultOpts) {
     text: cardResultText({
       started: `${label} started (id ${jobId}).`,
       noun: "result",
-      pollHint: "poll get_job with this id",
+      pollHint: GET_JOB_POLL_HINT,
     }),
   }
 
