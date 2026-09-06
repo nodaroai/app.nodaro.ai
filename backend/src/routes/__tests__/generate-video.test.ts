@@ -1093,6 +1093,77 @@ describe("POST /v1/generate-video — connectedReferences integration", () => {
     expect(queued.referenceImageUrls).toEqual(["https://cdn.example/flat.png"])
   })
 
+  it("assembles a described-references-only request (the gate trips without connectedReferences)", async () => {
+    mockJobInsert({ data: { id: "job-desc" }, error: null })
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-video",
+      payload: {
+        prompt: "Natalie walks down the pier.",
+        userId: USER,
+        provider: "seedance-2",
+        imageUrl: "https://cdn.example/frame.png",
+        describedReferences: [{ name: "Natalie", description: "a tall woman in a red coat" }],
+      },
+    })
+    expect(res.statusCode).toBe(200)
+    const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)![1] as Record<string, unknown>
+    expect(queued.prompt).toBe(
+      "Use these characters:\n- Natalie — a tall woman in a red coat.\n\nNatalie walks down the pier.",
+    )
+  })
+
+  it("assembles a captions-only request (the gate trips on a rail caption too)", async () => {
+    mockJobInsert({ data: { id: "job-cap" }, error: null })
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-video",
+      payload: {
+        prompt: "A cut between two shots.",
+        userId: USER,
+        provider: "seedance-2",
+        imageUrl: "https://cdn.example/frame.png",
+        referenceVideoUrls: ["https://cdn.example/clip.mp4"],
+        referenceVideoCaptions: ["the establishing drone shot"],
+      },
+    })
+    expect(res.statusCode).toBe(200)
+    const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)![1] as Record<string, unknown>
+    expect(queued.prompt).toContain("- @video_1: the establishing drone shot.")
+  })
+
+  it("rejects an over-long described reference and a list over the cap", async () => {
+    for (const describedReferences of [
+      [{ name: "x".repeat(81), description: "ok" }],
+      [{ name: "ok", description: "x".repeat(2001) }],
+      Array.from({ length: 11 }, (_, i) => ({ name: `n${i}`, description: "d" })),
+    ]) {
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-video",
+        payload: { prompt: "x", userId: USER, provider: "seedance-2", imageUrl: "https://cdn.example/f.png", describedReferences },
+      })
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("validation_error")
+    }
+  })
+
+  it("rejects an over-long rail caption", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-video",
+      payload: {
+        prompt: "x",
+        userId: USER,
+        provider: "seedance-2",
+        imageUrl: "https://cdn.example/f.png",
+        referenceVideoCaptions: ["x".repeat(501)],
+      },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
   it("rejects a connectedReference with an invalid url (SSRF/Zod gate parity with flat refs)", async () => {
     const res = await app.inject({
       method: "POST",

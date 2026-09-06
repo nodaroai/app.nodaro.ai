@@ -21,8 +21,8 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { EXTEND_VIDEO_PROVIDERS, PROMPT_HARD_CEILING, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, applyVideoNegativePrompt, type ConnectedReference } from "@nodaro/shared"
-import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
+import { EXTEND_VIDEO_PROVIDERS, PROMPT_HARD_CEILING, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, applyVideoNegativePrompt, type ConnectedReference, type DescribedReference } from "@nodaro/shared"
+import { connectedReferenceSchema, describedReferenceSchema, DESCRIBED_REFERENCE_LIMIT } from "../lib/connected-reference-schema.js"
 import { buildSeedanceExtendCreditIdentifier } from "../lib/seedance-extend-model.js"
 import { assembleVideoConnectedReferences } from "./generate-video.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -55,6 +55,12 @@ export const extendVideoBody = z.object({
   // into referenceImageUrls + identity directives, so an entity chip travels
   // as a real reference instead of degrading to a name in the prompt.
   connectedReferences: z.array(connectedReferenceSchema).max(14).optional(),
+  // References the caller NAMED and DESCRIBED but has no media for (parity with
+  // generate-video). They carry no url, so — unlike `connectedReferences` — they
+  // are NOT gated on the reference-capable transport: prose reaches every extend
+  // provider. No rail captions here: this route has no `referenceVideoUrls` /
+  // `referenceAudioUrls` array for a caption to be index-aligned with.
+  describedReferences: z.array(describedReferenceSchema).max(DESCRIBED_REFERENCE_LIMIT).optional(),
 })
 
 /**
@@ -90,11 +96,13 @@ export function assembleExtendVideoReferences(args: {
   prompt: string | undefined
   referenceImageUrls?: string[]
   connectedReferences?: ConnectedReference[]
+  describedReferences?: readonly DescribedReference[]
 }): { prompt: string | undefined; referenceImageUrls: string[] | undefined } {
   return assembleVideoConnectedReferences({
     prompt: args.prompt,
     provider: SEEDANCE_2_EXTEND_GENERATION_MODEL,
     connectedReferences: args.connectedReferences ?? [],
+    ...(args.describedReferences !== undefined ? { describedReferences: args.describedReferences } : {}),
     baseReferenceImageUrls: args.referenceImageUrls,
     imageCapOverride: SEEDANCE_2_REF_LIMITS.images - EXTEND_ANCHOR_IMAGE_SLOTS,
     referenceVideoCount: 1,
@@ -214,11 +222,16 @@ export async function extendVideoRoutes(app: FastifyInstance) {
     // entity chips gain identity directives — and produces the final capped
     // reference list. It must run BEFORE the negative injection so the
     // "Avoid: …" clause stays the prompt's last line.
-    const assembled = hasImageRefs
+    // Described references have no url, so they are NOT part of `hasImageRefs`
+    // (which gates the transport refusal above) — but they still need assembling
+    // or the names they describe would reach the model undescribed.
+    const hasDescribedRefs = (parsed.data.describedReferences?.length ?? 0) > 0
+    const assembled = hasImageRefs || hasDescribedRefs
       ? assembleExtendVideoReferences({
           prompt,
           referenceImageUrls: parsed.data.referenceImageUrls,
           connectedReferences: parsed.data.connectedReferences,
+          describedReferences: parsed.data.describedReferences,
         })
       : undefined
 

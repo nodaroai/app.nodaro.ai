@@ -1285,6 +1285,77 @@ describe("POST /v1/generate-image", () => {
   // format's lock-snippet slot; inert under legacy. `NODE_ENV=test` forces
   // LEGACY, so the hybrid cases flip the env with the same save/restore-in-
   // finally pattern generate-video-direction.test.ts uses.
+  // ── Described references — the seat-less channel ─────────────────────────
+  describe("describedReferences", () => {
+    const VALID_UUID = "00000000-0000-4000-8000-000000000001"
+
+    it("enters structured mode on its own and queues the assembled prompt", async () => {
+      setupSupabaseMock({})
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "Natalie walks down the pier.",
+          userId: VALID_UUID,
+          provider: "nano-banana",
+          describedReferences: [{ name: "Natalie", description: "a tall woman in a red coat" }],
+        },
+      })
+      expect(res.statusCode).toBe(200)
+      const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>
+      expect(queued.prompt).toBe(
+        "Use these characters:\n- Natalie — a tall woman in a red coat.\n\nNatalie walks down the pier.",
+      )
+      // A described reference carries no url — nothing is attached (structured
+      // mode queues the ASSEMBLED list, which is empty here).
+      expect(queued.referenceImageUrls).toEqual([])
+    })
+
+    it("rejects an over-long name / description and a list over the cap", async () => {
+      for (const describedReferences of [
+        [{ name: "x".repeat(81), description: "ok" }],
+        [{ name: "ok", description: "x".repeat(2001) }],
+        Array.from({ length: 11 }, (_, i) => ({ name: `n${i}`, description: "d" })),
+      ]) {
+        const res = await app.inject({
+          method: "POST",
+          url: "/v1/generate-image",
+          payload: { prompt: "x", userId: VALID_UUID, provider: "nano-banana", describedReferences },
+        })
+        expect(res.statusCode).toBe(400)
+        expect(res.json().error.code).toBe("validation_error")
+      }
+    })
+
+    it("accepts a per-reference descriptionOverride and honors it in the assembled prompt", async () => {
+      setupSupabaseMock({})
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "Kira walks.",
+          userId: VALID_UUID,
+          provider: "nano-banana",
+          connectedReferences: [
+            {
+              id: "c1",
+              defaultName: "Kira",
+              source: "wired-character",
+              characterSlug: "kira",
+              url: "https://r2.nodaro.ai/kira.png",
+              characterCanonicalDescription: "a woman with short black hair",
+              descriptionOverride: "a woman with a shaved head and a scar",
+            },
+          ],
+        },
+      })
+      expect(res.statusCode).toBe(200)
+      const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>
+      expect(queued.prompt).toContain("a woman with a shaved head and a scar")
+      expect(queued.prompt).not.toContain("short black hair")
+    })
+  })
+
   describe("referenceLock token", () => {
     const VALID_UUID = "00000000-0000-4000-8000-000000000001"
     const kira = {

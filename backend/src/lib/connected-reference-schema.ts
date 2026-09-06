@@ -81,3 +81,32 @@ export const connectedReferenceSchema = z.object({
   // the described-reference schema uses.
   descriptionOverride: z.string().max(2000).optional(),
 })
+
+/**
+ * Route-level Zod schema for a `@nodaro/shared` `DescribedReference` — a
+ * reference the caller can NAME and DESCRIBE but has no media for (an un-bound
+ * cast role, an analysis slot). The SSOT shared by every route that accepts one.
+ *
+ * No `url`, so there is no SSRF gate to apply and no reference-image budget to
+ * consume: the entry reaches the model purely as prose. Both halves are bounded
+ * as prompt-affecting free text from an authenticated caller — the name at the
+ * ceiling an entity display name already lives under, the description at the
+ * same 2000 as `descriptionOverride`. Neither is `.min(1)`: an un-described role
+ * is a real state a client can hold, and the renderer simply drops it rather
+ * than 400-ing a run that would otherwise have gone through.
+ */
+export const describedReferenceSchema = z.object({
+  name: z.string().max(80),
+  description: z.string().max(2000),
+})
+
+/** Wire ceiling for a described-reference list — a cast, not a corpus. */
+export const DESCRIBED_REFERENCE_LIMIT = 10
+
+/**
+ * A caption for one video / audio rail reference, INDEX-ALIGNED with the
+ * caller's `referenceVideoUrls` / `referenceAudioUrls`. Rendered as
+ * `@video_N: <caption>.` and bounded by the count of references that actually
+ * ship, so a caption can never bind a slot the payload dropped.
+ */
+export const referenceCaptionSchema = z.string().max(500)

@@ -274,6 +274,43 @@ describe("POST /v1/text-to-video", () => {
     expect(queued.prompt).toContain("a chase scene")
   })
 
+  it("assembles a described-references-only request (the gate trips without connectedReferences)", async () => {
+    mockJobInsert({ data: { id: "job-desc" }, error: null })
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/text-to-video",
+      payload: {
+        prompt: "Natalie walks down the pier.",
+        userId: "00000000-0000-4000-8000-000000000001",
+        provider: "seedance-2",
+        describedReferences: [{ name: "Natalie", description: "a tall woman in a red coat" }],
+      },
+    })
+    expect(res.statusCode).toBe(200)
+    const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>
+    expect(queued.prompt).toBe(
+      "Use these characters:\n- Natalie — a tall woman in a red coat.\n\nNatalie walks down the pier.",
+    )
+  })
+
+  it("assembles a rail-caption-only request", async () => {
+    mockJobInsert({ data: { id: "job-cap" }, error: null })
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/text-to-video",
+      payload: {
+        prompt: "A cut between two shots.",
+        userId: "00000000-0000-4000-8000-000000000001",
+        provider: "seedance-2",
+        referenceVideoUrls: ["https://cdn.nodaro.ai/uploads/clip.mp4"],
+        referenceVideoCaptions: ["the establishing drone shot"],
+      },
+    })
+    expect(res.statusCode).toBe(200)
+    const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>
+    expect(queued.prompt).toContain("- @video_1: the establishing drone shot.")
+  })
+
   it("returns 500 when job insert fails", async () => {
     mockJobInsert({
       data: null,

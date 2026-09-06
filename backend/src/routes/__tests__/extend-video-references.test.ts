@@ -179,6 +179,41 @@ describe("POST /v1/extend-video — reference-image gating", () => {
   })
 })
 
+describe("POST /v1/extend-video — described references", () => {
+  it("assembles them for seedance-2-extend without any image reference", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/extend-video",
+      payload: seedanceBody({
+        describedReferences: [{ name: "Natalie", description: "a tall woman in a red coat" }],
+      }),
+    })
+    expect(res.statusCode).toBe(200)
+    expect(queuedPayload().prompt).toBe(
+      "Use these characters:\n- Natalie — a tall woman in a red coat.\n\nshe walks out of frame",
+    )
+  })
+
+  it("is NOT gated on the reference-capable transport — they carry no url", async () => {
+    // `connectedReferences` on a non-seedance extend is a 400 (nothing can carry
+    // the image). A described reference is prose, so the same request goes
+    // through and the description rides the prompt the provider does consume.
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/extend-video",
+      payload: {
+        userId: USER,
+        provider: "veo-extend",
+        kieTaskId: "kie-task-1",
+        prompt: "she walks out of frame",
+        describedReferences: [{ name: "Natalie", description: "a tall woman in a red coat" }],
+      },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(queuedPayload().prompt).toContain("- Natalie — a tall woman in a red coat.")
+  })
+})
+
 describe("POST /v1/extend-video — seedance-2-extend reference plumbing", () => {
   it("forwards flat referenceImageUrls on the queue payload, prompt untouched", async () => {
     const res = await app.inject({

@@ -20,7 +20,7 @@ import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, isMinimaxH3Provider, isVeoProvider, estimateLoopTrimAddonCredits, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, buildVideoCreditModelIdentifier, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame, type ConnectedReference, type DescribedReference } from "@nodaro/shared"
 import { imageRequiredError } from "../lib/video-image-required.js"
 import { resolveVideoReferenceCore, resolveReferenceTokens, resolveRefIdTokens, composeVideoPromptText, appendReferenceLines, renderDescribedReferenceLines, renderReferenceCaptionLines, type VideoExtraRef, type CharacterMeta } from "@nodaro/prompts"
-import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
+import { connectedReferenceSchema, describedReferenceSchema, referenceCaptionSchema, DESCRIBED_REFERENCE_LIMIT } from "../lib/connected-reference-schema.js"
 import { directionSchema } from "../lib/direction-schema.js"
 import { subjectSchema } from "../lib/subject-schema.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -80,6 +80,18 @@ export const generateVideoBody = z.object({
   // to the pre-assembly flat path. The `url` of each rides `safeUrlSchema` (same
   // SSRF gate as the flat `referenceImageUrls`).
   connectedReferences: z.array(connectedReferenceSchema).max(14).optional(),
+  // References the caller NAMED and DESCRIBED but has no media for. No url →
+  // no image-reference budget consumed and no `@image_N` seat claimed; the
+  // assembly renders them as prose so a name in the prompt reaches the model as
+  // a real, described subject. Enters server-side assembly on its own.
+  describedReferences: z.array(describedReferenceSchema).max(DESCRIBED_REFERENCE_LIMIT).optional(),
+  // Captions for the video / audio rail references, INDEX-ALIGNED with the url
+  // arrays above — `referenceVideoCaptions[0]` describes `referenceVideoUrls[0]`.
+  // Rendered as `@video_N: <caption>.` / `@audio_N: <caption>.` and bounded by
+  // the shipped rail counts, so a caption for a url the provider dropped never
+  // binds a slot the payload does not carry. Absent → unchanged.
+  referenceVideoCaptions: z.array(referenceCaptionSchema).max(SEEDANCE_2_5_REF_LIMITS.videos).optional(),
+  referenceAudioCaptions: z.array(referenceCaptionSchema).max(SEEDANCE_2_5_REF_LIMITS.audio).optional(),
   // User-defined reorder of the injected reference list (stable tile ids),
   // honored by `resolveVideoReferenceCore`'s `applyReferenceOrderToVideo` pass.
   referenceOrder: z.array(z.string()).max(14).optional(),
@@ -387,6 +399,30 @@ export function assembleVideoConnectedReferences(args: {
   }
 }
 
+/**
+ * True when the request carries ANY channel the server-side video assembly
+ * renders — the structured references, the seat-less described references, or a
+ * rail caption. The single gate every "assemble only when there is something to
+ * assemble" call site reads (this route's pricing preHandler, its shed frame and
+ * its handler, plus text-to-video and extend-video), so a new channel can never
+ * be silently dropped by a site that still asks only about
+ * `connectedReferences`.
+ */
+export function hasVideoReferenceChannels(b: {
+  connectedReferences?: unknown
+  describedReferences?: unknown
+  referenceVideoCaptions?: unknown
+  referenceAudioCaptions?: unknown
+} | null | undefined): boolean {
+  if (!b || typeof b !== "object") return false
+  return (
+    (Array.isArray(b.connectedReferences) && b.connectedReferences.length > 0)
+    || (Array.isArray(b.describedReferences) && b.describedReferences.length > 0)
+    || (Array.isArray(b.referenceVideoCaptions) && b.referenceVideoCaptions.length > 0)
+    || (Array.isArray(b.referenceAudioCaptions) && b.referenceAudioCaptions.length > 0)
+  )
+}
+
 /** True when the request carries a character-voice spec (voices and/or dialogue). */
 function voiceSpecPresent(b: { characterVoices?: unknown; dialogue?: unknown }): boolean {
   return (
@@ -660,6 +696,18 @@ export async function generateVideoRoutes(app: FastifyInstance) {
               referenceOrder: (Array.isArray(b.referenceOrder) ? b.referenceOrder : undefined) as string[] | undefined,
               referenceVideoCount: refVideos.length,
               referenceAudioCount: Array.isArray(b.referenceAudioUrls) ? (b.referenceAudioUrls as unknown[]).length : 0,
+              // Text-only channels: they move no reference COUNT, so the price
+              // is unchanged — forwarded so this prediction stays the handler's
+              // mirror if a later channel ever does move one.
+              ...(Array.isArray(b.describedReferences)
+                ? { describedReferences: b.describedReferences as DescribedReference[] }
+                : {}),
+              ...(Array.isArray(b.referenceVideoCaptions)
+                ? { referenceVideoCaptions: b.referenceVideoCaptions as string[] }
+                : {}),
+              ...(Array.isArray(b.referenceAudioCaptions)
+                ? { referenceAudioCaptions: b.referenceAudioCaptions as string[] }
+                : {}),
             })
             const refImageCount = minimaxH3BillableRefImageCount({
               referenceImageUrls: assembled.referenceImageUrls,
@@ -772,17 +820,20 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     //
     // Mirrors the assembly's own gate exactly: no `connectedReferences` → the
     // body is not framed at all, so the frame is identity.
-    const connectedRefs = parsed.data.connectedReferences
+    const framesReferences = hasVideoReferenceChannels(parsed.data)
     const frameWithReferences = (body: string | undefined): string | undefined =>
-      connectedRefs && connectedRefs.length > 0
+      framesReferences
         ? assembleVideoConnectedReferences({
           prompt: body,
           provider,
-          connectedReferences: connectedRefs,
+          connectedReferences: parsed.data.connectedReferences ?? [],
+          describedReferences: parsed.data.describedReferences,
           baseReferenceImageUrls: parsed.data.referenceImageUrls,
           referenceOrder: parsed.data.referenceOrder,
           referenceVideoCount: parsed.data.referenceVideoUrls?.length ?? 0,
           referenceAudioCount: parsed.data.referenceAudioUrls?.length ?? 0,
+          referenceVideoCaptions: parsed.data.referenceVideoCaptions,
+          referenceAudioCaptions: parsed.data.referenceAudioCaptions,
         }).prompt
         : body
 
@@ -845,15 +896,18 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     // (byte-identical to before). Runs BEFORE identity injection so that, when
     // both are set, the canonical-description suffix layers on top of the
     // assembled prompt (mirrors generate-image's ordering).
-    if (parsed.data.connectedReferences && parsed.data.connectedReferences.length > 0) {
+    if (hasVideoReferenceChannels(parsed.data)) {
       const assembled = assembleVideoConnectedReferences({
         prompt,
         provider,
-        connectedReferences: parsed.data.connectedReferences,
+        connectedReferences: parsed.data.connectedReferences ?? [],
+        describedReferences: parsed.data.describedReferences,
         baseReferenceImageUrls: referenceImageUrls,
         referenceOrder: parsed.data.referenceOrder,
         referenceVideoCount: referenceVideoUrls?.length ?? 0,
         referenceAudioCount: referenceAudioUrls?.length ?? 0,
+        referenceVideoCaptions: parsed.data.referenceVideoCaptions,
+        referenceAudioCaptions: parsed.data.referenceAudioCaptions,
       })
       prompt = assembled.prompt
       referenceImageUrls = assembled.referenceImageUrls
