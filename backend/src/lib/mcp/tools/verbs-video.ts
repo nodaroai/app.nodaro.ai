@@ -1,6 +1,5 @@
 import { z } from "zod"
-import { creditsOf, creditHint, perSecondHint } from "./_credit-hint.js"
-import { STATIC_CREDIT_COSTS } from "../../../ee/billing/credits.js"
+import { creditsOf, creditHint, perSecondHint, lipSyncPriceSuffix } from "./_credit-hint.js"
 import { resolveAssetId } from "../asset-resolver.js"
 import { buildCompositePrompt } from "../prompt-builder-bridge.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
@@ -18,7 +17,7 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { modelIdsByKindMode, VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, ALL_CAPTION_STYLES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_TIER, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, readPromptAffixes, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_PROVIDERS, isPerSecondLipSyncProvider } from "@nodaro/shared"
+import { modelIdsByKindMode, VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, ALL_CAPTION_STYLES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_TIER, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, readPromptAffixes, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_PROVIDERS } from "@nodaro/shared"
 import { applyPromptAffixes } from "@nodaro/prompts"
 
 // Map list_models catalog/display ids → /v1/motion-transfer route providers.
@@ -71,15 +70,8 @@ const VIDEO_AUDIT_PRICING_HINT = [true, false]
 
 
 /** A-14 (audit 2026-09-06): the lip_sync model list derives from LIP_SYNC_PROVIDERS and
- *  its prices from the static table — a flat price, a per-second model's 15 s bucket,
- *  or "duration-tiered" for the video-model lanes (seedance-2 family, minimax-h3). */
-function lipSyncPriceSuffix(id: string): string {
-  const flat = STATIC_CREDIT_COSTS[id]
-  const bucket = STATIC_CREDIT_COSTS[`${id}:15s`]
-  if (typeof bucket === "number" && isPerSecondLipSyncProvider(id)) return ` (${bucket} cr/15s)`
-  if (typeof flat === "number" && !STATIC_CREDIT_COSTS[`${id}:8s:480p`] && !STATIC_CREDIT_COSTS[`${id}:4s:480p`]) return ` (${flat} cr)`
-  return " (duration-tiered)"
-}
+ *  its prices from `lipSyncPriceSuffix` (`_credit-hint.ts`) — a flat price, a per-second
+ *  model's 15 s bucket, "duration-tiered" for the video-model lanes, nothing off-cloud. */
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 
