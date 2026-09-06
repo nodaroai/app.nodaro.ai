@@ -81,7 +81,21 @@ generated_from: 7dbf4818b
 
 ## When to use
 
-(Add prose here. Auto-gen will preserve it across regenerations.)
+Make a face talk to an audio track (`lip_sync` over MCP): lip-sync, talking heads, dubbing onto a character. ONE face source (an image, or a video whose mouth gets re-driven) and ONE audio source.
+
+### Picking a model (quality first, cost as tiebreaker — credits are on the tool's `model` parameter and in `list_models`)
+
+- **`seedance-2`** — ByteDance multimodal video model with native phoneme-level lip sync in 8+ languages; cinematic full-body output, strong identity preservation, premium. Hero scenes, multi-language dubs, best quality.
+- **`seedance-2-fast`** — the same Seedance 2 phoneme lip sync, cheaper and faster (480p/720p only).
+- **`kling-avatar`** (default) — KIE talking head, 720p, speech-optimized; the best cost/quality balance for plain talking-head shots.
+- **`kling-avatar-pro`** — KIE premium talking head, 1080p; sharper mouth sync and micro-expressions.
+- **`infinitalk`** — KIE flexible resolution via the `resolution` parameter; the cheapest KIE option at 480p.
+- **`omnihuman-1-5`** — prompt-directed performance, 720p/1080p, premium.
+- **`latentsync`** — diffusion-based; best for singing or a strong vocal performance. Video input.
+- **`wav2lip`** — fastest and cheapest; image OR video. Quick drafts and many iterations.
+- **`video-retalking`** — built-in face enhancement, clean output. Video input; good when the source face is small or blurry.
+- **`sadtalker`** — talking avatar from a SINGLE image, when no video exists.
+- **`volcengine-lipsync`** — KIE video-to-video AI dubbing: re-syncs an existing clip's lips to a new vocal track; `mode: basic` + `open_scenedet: true` for multi-speaker. The cheapest modern dubbing option. Video input.
 
 <!-- AUTO-GEN:START mcp-call -->
 **MCP tool:** `lip_sync`
@@ -108,7 +122,8 @@ generated_from: 7dbf4818b
 
 ## Common gotchas
 
-(Add prose here.)
+- Input requirements by model: `seedance-2(-fast)`, `kling-avatar(-pro)`, `infinitalk`, `sadtalker`, `omnihuman-1-5` → image input only. `latentsync`, `video-retalking`, `volcengine-lipsync` → video input only. `wav2lip` → image OR video.
+- Per-second providers (`kling-avatar(-pro)`, `volcengine-lipsync`, `omnihuman-1-5`) are priced by audio-duration bucket (15/30/60/120/300 s); the tool's `model` parameter states the current list price.
 
 <!-- AUTO-GEN:START examples -->
 ## Worked example

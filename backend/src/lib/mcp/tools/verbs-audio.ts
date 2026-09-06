@@ -755,31 +755,17 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
     {
       title: "Voice Changer Pro",
       description:
-        "Detect each speaker in an audio or video clip and recast each one to " +
-        "a different target voice (first-appearance order). Supply an ordered " +
-        "list of voices — speaker 1 → voices[0], speaker 2 → voices[1], " +
-        "etc. Unmapped speakers keep their original voice, and a null entry " +
-        "is a keep-slot — that speaker keeps their original voice while later " +
-        "speakers are still recast (at least one entry must be non-null).\n\n" +
-        "Each entry is EITHER a bare voice id OR an object with per-voice " +
-        "speech-to-speech settings — { voiceId, stability, similarityBoost, " +
-        "style, useSpeakerBoost, seed, volumeMode, volume }. volumeMode 'match' " +
-        "(default) matches the original speaker's loudness, 'normalize' applies " +
-        "loudnorm, 'manual' uses volume (0–200%). A per-voice `seed` " +
-        "(0–4294967295) makes that speaker's recast reproducible.\n\n" +
-        "Provide ONE source: audio_url / audio_asset_id to recast audio→audio, " +
-        "OR video_url / video_asset_id to recast the voices in a full video clip.\n\n" +
-        "Voice and music are ALWAYS separated first; preserve_background " +
-        "(default true) just controls whether the music/SFX bed is mixed " +
-        "back in under the new voices. " +
-        "music_volume_mode sets the level of that preserved background — 'match' " +
-        "(default) keeps the original level, 'normalize' loudnorms it, 'manual' " +
-        "uses music_volume (0–200%).\n\n" +
-        "voice_fx applies a reverb/echo to the COMBINED recast voices BEFORE the " +
-        "background is mixed back in (the effect sits on the voices, not the music bed).\n\n" +
-        "Voice ids use the same naming as `generate_speech`: pass a premade " +
-        "voice NAME (Rachel, Aria, Roger, ...) or an ElevenLabs UUID for a " +
-        "custom clone. Cloud-only.",
+        "Detect each speaker in an audio or video clip and recast each one to a different target voice, " +
+        "in first-appearance order: speaker 1 → voices[0], speaker 2 → voices[1], and so on. A null " +
+        "entry keeps that speaker's own voice while later speakers are still recast (at least one entry " +
+        "must be non-null). Each entry is a bare voice id or an object with per-voice settings " +
+        "(engine sts|v3, stability, similarityBoost, style, useSpeakerBoost, seed, volumeMode, volume).\n\n" +
+        "Provide ONE source: audio_url / audio_asset_id (audio → audio), OR video_url / video_asset_id " +
+        "(recasts the voices inside the clip). Voice and music are always separated first; " +
+        "preserve_background mixes the bed back in and music_volume_mode sets its level; voice_fx " +
+        "applies reverb/echo to the recast voices before the bed returns. Voice ids as in " +
+        "`generate_speech` (a premade NAME or an ElevenLabs UUID). Cloud-only. Field semantics in full: " +
+        "`get_node_skill(\"voice-changer-pro\")`.",
       inputSchema: {
         audio_url: z.string().url().optional(),
         audio_asset_id: z.string().optional(),

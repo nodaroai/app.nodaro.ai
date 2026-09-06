@@ -105,6 +105,16 @@ generated_from: 88a6e05b4
 
 Text-to-image generation. For trailer / cinematic flows, embed character + location descriptions directly in the prompt rather than pre-generating separate character / location nodes (which would require types outside the strict 8-node whitelist).
 
+### Quick model picks (MCP `generate_image`)
+
+- `nano-banana-pro` — best overall; best for typography / logos / text-heavy and multi-character scenes; the face-identity pick for reference images.
+- `nano-banana-2` (default) — very good consistency, faster and cheaper.
+- `gpt-image-2` — strong for logos / short copy / prompt adherence.
+- `z-image` — cheapest stylized output.
+- **Avoid `flux`** for general use — it degrades in multi-turn workflows; use one of the above.
+
+Aspect ratios are model-specific: for 21:9 use a model whose `aspectRatios` includes it (the Nano Banana family, Seedream). Pass `reference_image_urls` (up to 14 URLs or Nodaro asset ids) for "the same person / character / product as this image" — identity, style and composition guidance; the tool's response text confirms how many references attached, and if it does not mention them they did not make it.
+
 ## Common gotchas
 
 - Field name is `generatedImageUrl` — NOT `imageUrl`, `outputUrl`, or `result.url`. The frontend reads only `generatedImageUrl` (or `generatedResults[].url`); anything else renders an empty placeholder.

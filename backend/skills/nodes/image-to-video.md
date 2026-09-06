@@ -119,6 +119,26 @@ Animate a still image into a short video clip (5-15s typical). For multi-shot fi
 - Seedance 2 (`seedance-2-fast`, `seedance-2`) always runs in multishot mode: pass `multishot: true`, `disable_internal_music: true`, `allow_sfx: true` to the MCP call.
 - Veo / Veo 3.1 use fixed 8-second duration — the `duration` config field is ignored; the response is always 8s.
 
+## Reference modes and caps (MCP `animate_image`)
+
+Two modes, auto-selected from the inputs you provide:
+
+- **`frames`** (default) — start/end-frame mode: `image_url` is the first frame and `end_frame_url` optionally the last. With a start AND end frame, pick a model whose `features` includes `end-frame` (VEO, MiniMax, Hailuo Standard, Bytedance Lite, Kling Turbo, Seedance).
+- **`references`** — reference-media mode: reference images via `reference_image_urls`, reference videos via `reference_video_urls` (style/motion transfer), audio clips via `reference_audio_urls` (soundtrack-driven motion). `image_url` / `end_frame_url` are ignored in this mode, and reference videos/audio cannot be combined with `end_frame_url`.
+
+Every model takes references at its OWN caps: `seedance-2-5` 30 images / 10 videos / 10 audio clips; the `seedance-2` family and `minimax-h3` 9/3/3; `wan-3` / `wan-3-prime` 10/5/5 (each reference video and audio clip 1–15 s, ≤15 s combined; input video seconds + output duration ≤30 s); `gemini-omni-video` / `gemini-omni-flash` 7 images (the first image is the opening frame, the rest are identity refs; images + 2×videos ≤ 7); `kling-3-omni` / `grok-i2v` 7; `veo3` / `veo3.1` 3 images.
+
+- **Reference order = priority.** Put the identity-critical image FIRST and refer by ordinal in the prompt (`@Image 1`, `Video 2`). Identity = ONE headshot + ONE full-body image — multi-view character sheets cause identity drift and twin duplicates. 4–5 assets total beats maxing the caps.
+- **Edit/extend phrasing.** Name clips directly (`Extend Video 1 backward`, `Remove X from Video 1`) — saying `reference Video 1` flips the model into reference mode and breaks the edit. Track completion: `Video 1 + [transition] + followed by Video 2` (≤3 clips, ≤15 s total).
+
+## Perfect loop (three calls)
+
+1. `animate_image` with `model: "veo3.1"`, `sound: false`, and the **same image** as both `image_url` (start) and `end_frame_url` (or the same `image_asset_id` and `end_frame_asset_id`). VEO 3.1's first+last-frame mode plus Nodaro's auto tail-trim produces a frame-perfect VISUAL loop. `sound: false` matters — VEO 3.1's generated audio does NOT loop seamlessly (start and end audio differ even when frames match), so leaving it on creates audible seams when copies are stitched.
+2. `combine_videos` with N copies of that single clip's `asset_id` (`transition: "cut"`, `audio_mode: "remove"`) to extend the loop to the desired duration. The visual seam is invisible because the last frame of clip K equals the first frame of clip K+1.
+3. `merge_video_audio` to attach a pre-made looping audio track to the FINAL stitched video (not to the individual loop clip). The user-supplied audio should match the total stitched duration.
+
+**Prompt phrasing for step 1:** describe the loop as a *frame-match constraint*, not a *motion-reversal command*. Use "motion begins and ends in the exact same composition and lighting so the first and last frames match perfectly" — NOT "all elements return to their starting positions". The first aligns with VEO's end-frame interpolation; the second tends to conflict with any directional motion in the same prompt (e.g. "clouds drifting left to right") and gets ignored, leaving a video that does not actually loop.
+
 <!-- AUTO-GEN:START examples -->
 ## Worked example
 
