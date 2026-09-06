@@ -4717,6 +4717,17 @@ export const en = {
   "billingAdmin.enforcementOff": "Allowances are shown but not enforced yet — no run is refused because of one.",
   "billingAdmin.enforcementOn": "Allowances are enforced: a user with nothing left cannot start a run.",
 
+  // The low-balance alert. In RAW Nodaro credits, like every other figure in
+  // this block: the pool is the deployment's real money, and a threshold in the
+  // display unit would be wrong by the unit rate in the expensive direction.
+  // Empty CLEARS the alert; 0 is a real threshold meaning "tell me when the
+  // pool is empty", so the two are never the same instruction.
+  "billingAdmin.thresholdLabel": "Warn me below (Nodaro credits)",
+  "billingAdmin.thresholdNote": "Leave it empty for no warning. Zero means warn only when the pool is empty.",
+  "billingAdmin.thresholdSave": "Save warning",
+  "billingAdmin.thresholdSaved": "The low-balance warning was updated.",
+  "billingAdmin.lowBalanceOn": "The pool is below the warning level you set.",
+
   "billingAdmin.txTitle": "Purchases",
   "billingAdmin.txEmpty": "No purchases yet.",
   "billingAdmin.txDate": "Date",
@@ -4741,6 +4752,14 @@ export const en = {
   "billingAdmin.colGranted": "Granted",
   "billingAdmin.colRemaining": "Remaining",
   "billingAdmin.colSpent": "Used",
+  // The PERIOD wording. A renewal zeroes the used figure and stamps a period
+  // start, so from that moment it means something different — and until one has
+  // happened it is a lifetime total. The label follows the DATA (a period start
+  // present or absent), never a setting: "this period" over a lifetime figure
+  // is a true number under a false sentence.
+  "billingAdmin.colSpentPeriod": "Used this period",
+  "billingAdmin.periodSince": "Period began {date}",
+  "billingAdmin.usersPeriodNote": "Some allowances have been renewed. For those the used figure counts from the renewal; for the rest it is the total since the user joined.",
   "billingAdmin.colActions": "Actions",
   "billingAdmin.notProvisioned": "Default — has not generated yet",
   "billingAdmin.provisioned": "Active",
@@ -4758,7 +4777,15 @@ export const en = {
   "billingAdmin.kindTopup": "Top-up",
   "billingAdmin.kindCorrection": "Correction",
   "billingAdmin.kindOverrun": "Overrun",
+  "billingAdmin.kindRenewal": "Renewal",
   "billingAdmin.overrunNote": "Overrun rows record a run that cost more than it reserved. They are audit-only and are not counted in the granted total.",
+  // WHO wrote the row. The account recorded on every grant is the billing
+  // account, key or no key — so the credential has to be named separately, or
+  // a move an integration made is indistinguishable from a click on this page.
+  // A row with no credential says nothing: it was this page, which is the
+  // common case and needs no label.
+  "billingAdmin.viaKey": "via {name}",
+  "billingAdmin.viaUnknownKey": "via an integration key",
   "billingAdmin.pagePrev": "Previous",
   "billingAdmin.pageNext": "Next",
   "billingAdmin.pageShowing": "{from}–{to} of {total}",
@@ -4788,6 +4815,55 @@ export const en = {
   "billingAdmin.errNoteTooLong": "That note is too long — keep it to 500 characters or fewer.",
   "billingAdmin.errInvalidNote": "The note must be text.",
   "billingAdmin.noteCharsLeft": "{n} characters left",
+
+  // ── The Integrations block — the keys a back office authenticates with ──
+  //    A key ADMINISTERS allowances and reads figures. It can never generate
+  //    and never buy, which is what the copy has to convey without promising
+  //    that a leak is harmless: it cannot move money, it can mis-allocate
+  //    quotas, and that is reversible from this page.
+  "billingAdmin.integrationsTitle": "Integrations",
+  "billingAdmin.integrationsNote": "A key lets another system set allowances and read figures on this deployment. It can never start a run and never buy credits, and it works only on the billing routes.",
+  "billingAdmin.integrationsEmpty": "No integration keys yet.",
+  "billingAdmin.integrationsName": "Name",
+  "billingAdmin.integrationsNamePlaceholder": "Where the key will be used",
+  "billingAdmin.integrationsExpiry": "Expires (optional)",
+  "billingAdmin.integrationsExpiryHint": "A year is a good default. Leave it empty for a key with no expiry.",
+  "billingAdmin.integrationsCidrs": "Allowed source addresses (optional)",
+  "billingAdmin.integrationsCidrsHint": "One address range per line, in CIDR form, up to {max}. Leave it empty to accept any source.",
+  "billingAdmin.integrationsMint": "Create key",
+  "billingAdmin.integrationsCount": "Using {n} of {max} keys.",
+  // The copy-once panel. The bearer is in one response body, once; there is no
+  // second chance to read it, and the recovery is a rotation, not a lookup.
+  "billingAdmin.integrationsTokenTitle": "Copy this key now",
+  "billingAdmin.integrationsTokenOnce": "This is the only time the key is shown. Copy it into the system that will use it before you close this. If it is lost, revoke it here and create another — it cannot be shown again.",
+  "billingAdmin.integrationsCopy": "Copy",
+  "billingAdmin.integrationsCopied": "Copied.",
+  "billingAdmin.integrationsTokenDone": "I have copied it",
+  "billingAdmin.integrationsColCreated": "Created",
+  "billingAdmin.integrationsColLastUsed": "Last used",
+  "billingAdmin.integrationsColExpires": "Expires",
+  "billingAdmin.integrationsColSources": "Allowed sources",
+  "billingAdmin.integrationsNeverUsed": "Never used",
+  "billingAdmin.integrationsNoExpiry": "No expiry",
+  "billingAdmin.integrationsAnySource": "Any source",
+  "billingAdmin.integrationsRevokedAt": "Revoked",
+  "billingAdmin.integrationsExpired": "Expired",
+  "billingAdmin.integrationsRevoke": "Revoke",
+  "billingAdmin.integrationsRevokeWarn": "Whatever is using this key stops working at once, and it cannot be un-revoked.",
+  "billingAdmin.integrationsRevokeConfirm": "Yes, revoke it",
+  "billingAdmin.integrationsRevokeCancel": "Keep it",
+  "billingAdmin.integrationsRevokedDone": "The key was revoked.",
+
+  "billingAdmin.errKeyLimitReached": "This deployment already has the most keys it may hold at once. Revoke one before creating another.",
+  "billingAdmin.errInvalidName": "Give the key a name, so it can be told apart from the others later.",
+  "billingAdmin.errInvalidExpiry": "The expiry must be a date in the future.",
+  "billingAdmin.errInvalidCidr": "One of the source ranges is not a valid CIDR range.",
+  "billingAdmin.errTooManyCidrs": "That is more source ranges than a key may carry — keep it to {max}.",
+  "billingAdmin.errKeyNotFound": "That key no longer exists.",
+  "billingAdmin.errKeyWriteFailed": "The key could not be changed. Nothing was changed.",
+  "billingAdmin.errPayerSessionRequired": "Keys can be managed only from the billing account's own browser, never through a key.",
+  "billingAdmin.errInvalidThreshold": "Enter a whole number of Nodaro credits, or leave it empty for no warning.",
+  "billingAdmin.errReadFailed": "That could not be read. Nothing was changed.",
 } as const
 
 export type MessageKey = keyof typeof en

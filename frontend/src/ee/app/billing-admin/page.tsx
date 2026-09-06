@@ -1,22 +1,33 @@
 import { useEffect, useState } from "react"
 import { useSearchParams } from "react-router-dom"
-import { CheckCircle2, Loader2 } from "lucide-react"
+import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useT } from "@/lib/i18n"
 import { creditsForLoadUsd, MIN_LOAD_USD, MAX_LOAD_USD } from "@/lib/pricing-data"
 import { ConnectedInstances } from "@/ee/components/billing/ConnectedInstances"
 import {
+  useDeploymentBalance,
   useDeploymentBillingRefresh,
   useDeploymentBillingTransactions,
   useDeploymentCheckoutMutation,
   useDeploymentPayerViewer,
+  useSetBalanceThresholdMutation,
   useSetDefaultAllowanceMutation,
   type DeploymentBillingOverview,
 } from "@/ee/hooks/queries/use-deployment-billing"
 import { UsersBlock, errorText } from "./users-block"
+import { IntegrationsBlock } from "./integrations-block"
 import { ListError } from "./list-error"
-import { dollarsInputError, orDash, parseWhole, unitsInputError, type DisplayUnit } from "./units"
+import {
+  dollarsInputError,
+  orDash,
+  parseThreshold,
+  parseWhole,
+  thresholdInputError,
+  unitsInputError,
+  type DisplayUnit,
+} from "./units"
 
 /**
  * `/billing-admin` — the deployment BILLING ACCOUNT's own page (spec §9.3).
@@ -115,6 +126,11 @@ export default function BillingAdminPage() {
       <UsersBlock unit={overview.unit} />
       <CardBlock overview={overview} />
 
+      {/* The credentials another system authenticates with. Mintable here and
+          nowhere else: the route refuses a key that tries to mint a key, so the
+          billing account's own browser is the only place one comes from. */}
+      <IntegrationsBlock />
+
       {/* Track B: `/billing` is not registered on a `selfServe: false`
           deployment, so the ONE component that shows a relay key's spend, caps
           it and revokes it is unreachable there. The billing account is exactly
@@ -174,10 +190,90 @@ function PoolBlock({ overview }: { overview: DeploymentBillingOverview }) {
         )}
       </div>
 
+      <ThresholdField />
+
       <p className="mt-4 text-xs text-muted-foreground">
         {overview.allowancesEnforced ? t("billingAdmin.enforcementOn") : t("billingAdmin.enforcementOff")}
       </p>
     </section>
+  )
+}
+
+/**
+ * The low-balance warning, beside the pool figure it is judged against.
+ *
+ * RAW Nodaro credits, like the rest of block 1 — the pool is the deployment's
+ * real money, and a threshold in the display unit would be wrong by the unit
+ * rate in the expensive direction.
+ *
+ * THE FLAG IS THE SERVER'S. `lowBalance` is computed against the stored
+ * threshold, so the page renders it rather than comparing two numbers itself:
+ * a client-side comparison would disagree with the same judgement made for the
+ * integration's `GET /balance`, and the two must never differ.
+ *
+ * A READ THAT FAILED RENDERS NOTHING. An empty field over an unread threshold
+ * invites the payer to "save" a clear they never asked for, and a missing
+ * warning would read as an all-clear nobody established.
+ */
+function ThresholdField() {
+  const t = useT()
+  const balance = useDeploymentBalance(true)
+  const save = useSetBalanceThresholdMutation()
+  const [value, setValue] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const data = balance.data
+  if (!data) return null
+
+  // The stored figure until the payer types; `null` means "no warning", which
+  // is an EMPTY field and never a zero.
+  const shown = value ?? (data.threshold == null ? "" : String(data.threshold))
+
+  function submit() {
+    if (thresholdInputError(shown) !== null) {
+      setError(t("billingAdmin.errInvalidThreshold"))
+      return
+    }
+    setError(null)
+    save.mutate({ credits: parseThreshold(shown) })
+  }
+
+  return (
+    <div className="mt-5 border-t border-border/60 pt-4">
+      {data.lowBalance && (
+        <p
+          data-testid="low-balance"
+          className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300"
+        >
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          {t("billingAdmin.lowBalanceOn")}
+        </p>
+      )}
+      <label className="block text-xs text-muted-foreground" htmlFor="billing-admin-threshold">
+        {t("billingAdmin.thresholdLabel")}
+      </label>
+      <div className="mt-1 flex flex-wrap items-center gap-2">
+        <Input
+          id="billing-admin-threshold"
+          data-testid="threshold-input"
+          className="w-48 tabular-nums"
+          inputMode="numeric"
+          value={shown}
+          onChange={(e) => setValue(e.target.value)}
+        />
+        <Button
+          size="sm"
+          variant="outline"
+          data-testid="threshold-save"
+          disabled={save.isPending}
+          onClick={submit}
+        >
+          {t("billingAdmin.thresholdSave")}
+        </Button>
+      </div>
+      <p className="mt-1 text-xs text-muted-foreground">{t("billingAdmin.thresholdNote")}</p>
+      {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
+    </div>
   )
 }
 
