@@ -365,7 +365,7 @@ async function planFromJob(userId: string, jobId: string): Promise<PlanFromJob> 
   }
   const { data } = await supabase
     .from("jobs")
-    .select("id, status, job_type, input_data, output_data")
+    .select("id, status, input_data, output_data")
     .eq("id", jobId)
     .eq("user_id", userId)
     .maybeSingle()
@@ -375,7 +375,6 @@ async function planFromJob(userId: string, jobId: string): Promise<PlanFromJob> 
 
   const row = data as unknown as {
     status?: string | null
-    job_type?: string | null
     input_data?: Record<string, unknown> | null
     output_data?: Record<string, unknown> | null
   }
@@ -390,23 +389,34 @@ async function planFromJob(userId: string, jobId: string): Promise<PlanFromJob> 
       },
     }
   }
+  // `input_data.type` — NOT the `job_type` column. `buildJobInputData` stamps
+  // the type into the projection at INSERT, whereas `job_type` is written by
+  // the queue worker at pickup; `GET /v1/jobs` filters `input_data->>type` for
+  // exactly that reason, and the studio client narrows a run the same way
+  // (`schemaName`, which rides through from the request body). Reading the
+  // column here refused every genuine Director run.
+  const jobType = row.input_data?.type
   const schemaName = row.input_data?.schemaName
-  if (row.job_type !== "llm-structured" || schemaName !== "studio_production") {
+  if (jobType !== "llm-structured" || schemaName !== "studio_production") {
     return {
       status: 400,
       error: {
         code: "not_studio_plan",
         message:
           `Job ${jobId} is not a studio production run (` +
-          `${row.job_type ?? "unknown"}${
+          `${typeof jobType === "string" ? jobType : "unknown"}${
             typeof schemaName === "string" ? `/${schemaName}` : ""
           }). Use the job id of an \`llm-structured\` run whose schema is ` +
           `\`studio_production\`.`,
       },
     }
   }
-  const output = row.output_data
-  if (!output || typeof output !== "object") {
+  // The completion write is an ENVELOPE — `{ output, inputTokens, outputTokens }`
+  // (workers/handlers/llm-structured.ts) — so the plan is `output_data.output`
+  // and nothing else. Falling back to the envelope itself would land the token
+  // counts as if they were a production.
+  const plan = row.output_data?.output
+  if (!plan || typeof plan !== "object") {
     return {
       status: 409,
       error: {
@@ -415,8 +425,5 @@ async function planFromJob(userId: string, jobId: string): Promise<PlanFromJob> 
       },
     }
   }
-  // The structured job stores the model's answer under `output`; older rows
-  // wrote it flat. Read both rather than making a caller care which.
-  const plan = (output.output ?? output) as Record<string, unknown>
-  return { plan }
+  return { plan: plan as Record<string, unknown> }
 }

@@ -37,6 +37,42 @@ const PRODUCTION = "00000000-0000-4000-8000-000000000020"
 
 const PLAN = { format: "nodaro-studio-production", version: 2, scenes: [] }
 
+/**
+ * A Director run's `jobs` row, shaped as the PLATFORM actually writes it —
+ * not as the reader happens to want it.
+ *
+ * `input_data` is `structuredJobInputData` (lib/llm-structured-request.ts): the
+ * request body minus `userId`, plus `type` (stamped at INSERT by
+ * `buildJobInputData`), with `system` replaced by a digest and `jsonSchema`
+ * replaced by `{ name, bytes }` — so `schemaName` rides through from the body
+ * and the schema's name appears twice. `output_data` is what
+ * `workers/handlers/llm-structured.ts` writes at completion:
+ * `{ output, inputTokens, outputTokens }`.
+ *
+ * The `job_type` COLUMN is deliberately absent from every fixture here. It is
+ * written by the queue worker at pickup (`workers/video-worker.ts`), which is
+ * why `GET /v1/jobs` filters `input_data->>type` instead — and this reader
+ * follows that same precedent.
+ */
+function directorRow(over: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: JOB,
+    status: "completed",
+    input_data: {
+      type: "llm-structured",
+      origin: "studio",
+      schemaName: "studio_production",
+      jsonSchema: { name: "studio_production", bytes: 41234 },
+      system: "sha256:9f2c…",
+      input: "A chase in Rome.",
+      llmModel: "claude-fable-5",
+      label: "Rome",
+    },
+    output_data: { output: PLAN, inputTokens: 1200, outputTokens: 4300 },
+    ...over,
+  }
+}
+
 interface Captured {
   url?: string
   method?: string
@@ -208,12 +244,7 @@ describe("import_studio_production", () => {
   })
 
   it("lands a FINISHED studio_production run's output", async () => {
-    h.jobRow = {
-      status: "completed",
-      job_type: "llm-structured",
-      input_data: { schemaName: "studio_production" },
-      output_data: { output: PLAN },
-    }
+    h.jobRow = directorRow()
     const { server, seen } = serverWith(ALL)
     await callTool(server, "import_studio_production", {
       production_id: PRODUCTION,
@@ -223,11 +254,7 @@ describe("import_studio_production", () => {
   })
 
   it("a job still running is `not_finished` — poll, then call again", async () => {
-    h.jobRow = {
-      status: "processing",
-      job_type: "llm-structured",
-      input_data: { schemaName: "studio_production" },
-    }
+    h.jobRow = directorRow({ status: "processing", output_data: { stage: "drafting" } })
     const { server } = serverWith(ALL)
     const res = await callTool(server, "import_studio_production", {
       production_id: PRODUCTION,
@@ -241,11 +268,7 @@ describe("import_studio_production", () => {
   })
 
   it("a failed job is `not_finished` too, and says so", async () => {
-    h.jobRow = {
-      status: "failed",
-      job_type: "llm-structured",
-      input_data: { schemaName: "studio_production" },
-    }
+    h.jobRow = directorRow({ status: "failed", output_data: null })
     const { server } = serverWith(ALL)
     const res = await callTool(server, "import_studio_production", {
       production_id: PRODUCTION,
@@ -257,12 +280,10 @@ describe("import_studio_production", () => {
   it("a finished job of the WRONG kind is `not_studio_plan`", async () => {
     // A different mistake from "not finished", and it must read differently:
     // the answer here is "you have the wrong job id", not "wait".
-    h.jobRow = {
-      status: "completed",
-      job_type: "generate-image",
-      input_data: {},
+    h.jobRow = directorRow({
+      input_data: { type: "generate-image", userPrompt: "a cat" },
       output_data: { imageUrl: "https://r2/x.png" },
-    }
+    })
     const { server } = serverWith(ALL)
     const res = await callTool(server, "import_studio_production", {
       production_id: PRODUCTION,
@@ -270,6 +291,36 @@ describe("import_studio_production", () => {
     })
     expect(res.isError).toBe(true)
     expect(res.content[0].text).toContain("not_studio_plan")
+  })
+
+  it("an llm-structured run for a DIFFERENT schema is `not_studio_plan`", async () => {
+    // The nearest miss: right job type, wrong document. Only the schema name
+    // separates a production run from every other structured draft.
+    h.jobRow = directorRow({
+      input_data: { type: "llm-structured", schemaName: "recast_script" },
+      output_data: { output: { scenes: [] } },
+    })
+    const { server } = serverWith(ALL)
+    const res = await callTool(server, "import_studio_production", {
+      production_id: PRODUCTION,
+      plan_job_id: JOB,
+    })
+    expect(res.isError).toBe(true)
+    expect(res.content[0].text).toContain("not_studio_plan")
+  })
+
+  it("never lands the ENVELOPE when the row carries no `output`", async () => {
+    // `output_data` is the worker's envelope — `{ output, inputTokens }`. A
+    // completed row missing `output` must refuse, not import the token counts
+    // as if they were a production.
+    h.jobRow = directorRow({ output_data: { inputTokens: 1200, outputTokens: 0 } })
+    const { server, seen } = serverWith(ALL)
+    const res = await callTool(server, "import_studio_production", {
+      production_id: PRODUCTION,
+      plan_job_id: JOB,
+    })
+    expect(res.isError).toBe(true)
+    expect(seen.url).toBeUndefined()
   })
 
   it("a job that is not the caller's is simply not found", async () => {

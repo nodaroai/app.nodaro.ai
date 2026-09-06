@@ -42,16 +42,59 @@ const REFERENCE_KIND: Record<LibraryKind, "character" | "location" | "creature" 
   object: "image",
 }
 
-async function rowsOf(table: string, userId: string): Promise<EntityRow[]> {
-  const { data, error } = await entityOwnerFilter(
-    supabase
-      .from(table)
-      .select("id, name, source_image_url, canonical_description")
-      .order("updated_at", { ascending: false })
-      .limit(PER_KIND_LIMIT),
-    userId,
-  )
-  if (error) throw new Error(`Failed to read ${table}: ${error.message}`)
+const SELECT = "id, name, source_image_url, canonical_description"
+
+/** Most recently touched first — the rows a plan is likeliest to mean. */
+const NEWEST = { by: "updated_at", dir: { ascending: false } } as const
+
+type LibraryRead = PromiseLike<{
+  data: unknown
+  error: { message: string } | null
+}>
+
+/**
+ * The four library reads, each naming its table LITERALLY and carrying its own
+ * owner filter, one read per blank-line-separated block.
+ *
+ * Both halves of that shape are load-bearing for `entity-scope-guard`, the one
+ * test that checks entity reads are scoped to their owner. It recognises a
+ * table named as a bare string literal in the query builder (plus the
+ * hydrator's lookup-map form) and nothing else, so a read built from a
+ * VARIABLE table name is invisible to it — skipped, not approved. And it judges
+ * a blank-line-delimited block, so several reads packed into one block would
+ * let a single scoped read vouch for an unscoped neighbour.
+ *
+ * The same trap catches prose: a comment sharing a block with a read can
+ * satisfy the matcher on the read's behalf, which is why this one says none of
+ * the words it is describing.
+ */
+
+function ownedCharacters(userId: string): LibraryRead {
+  return entityOwnerFilter(supabase.from("characters").select(SELECT).order(NEWEST.by, NEWEST.dir).limit(PER_KIND_LIMIT), userId)
+}
+
+function ownedLocations(userId: string): LibraryRead {
+  return entityOwnerFilter(supabase.from("locations").select(SELECT).order(NEWEST.by, NEWEST.dir).limit(PER_KIND_LIMIT), userId)
+}
+
+function ownedObjects(userId: string): LibraryRead {
+  return entityOwnerFilter(supabase.from("objects").select(SELECT).order(NEWEST.by, NEWEST.dir).limit(PER_KIND_LIMIT), userId)
+}
+
+function ownedCreatures(userId: string): LibraryRead {
+  return entityOwnerFilter(supabase.from("creatures").select(SELECT).order(NEWEST.by, NEWEST.dir).limit(PER_KIND_LIMIT), userId)
+}
+
+const LIBRARY_READS: Record<LibraryKind, (userId: string) => LibraryRead> = {
+  character: ownedCharacters,
+  location: ownedLocations,
+  object: ownedObjects,
+  creature: ownedCreatures,
+}
+
+async function rowsOf(kind: LibraryKind, userId: string): Promise<EntityRow[]> {
+  const { data, error } = await LIBRARY_READS[kind](userId)
+  if (error) throw new Error(`Failed to read the ${kind} library: ${error.message}`)
   return (data ?? []) as unknown as EntityRow[]
 }
 
@@ -74,10 +117,10 @@ function toCandidate(row: EntityRow, kind: LibraryKind): MentionCandidate {
 /** Every row of every library the caller owns, as importer candidates. */
 export async function mentionCandidatesFor(userId: string): Promise<MentionCandidate[]> {
   const [characters, locations, objects, creatures] = await Promise.all([
-    rowsOf("characters", userId),
-    rowsOf("locations", userId),
-    rowsOf("objects", userId),
-    rowsOf("creatures", userId),
+    rowsOf("character", userId),
+    rowsOf("location", userId),
+    rowsOf("object", userId),
+    rowsOf("creature", userId),
   ])
   return [
     ...characters.map((r) => toCandidate(r, "character")),
