@@ -58,6 +58,14 @@ interface BuildOpts {
    * row — see `McpSession.scopedProjectId`.
    */
   projectScope?: { projectId: string }
+  /**
+   * Mark this session as built for a browser (JWT) user in-process — the
+   * in-app Workflow Copilot. Server-set only, and only by a caller that has
+   * already established the credential is a browser JWT: see
+   * `McpSession.firstParty` for what must never be used to derive it.
+   * Omitted ⇒ false ⇒ treated as programmatic.
+   */
+  firstParty?: boolean
 }
 
 /**
@@ -111,7 +119,14 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
   const workspaceId = await resolveSessionWorkspace(opts.userId)
   const { projectScope, ...sessionOpts } = opts
   if (projectScope) await assertProjectOwnership(opts.userId, projectScope.projectId)
-  const session = newSession({ ...sessionOpts, workspaceId, scopedProjectId: projectScope?.projectId })
+  // `firstParty` is named here rather than left to the spread: it is a
+  // security flag, and a reader grepping for it must find it at every hop.
+  const session = newSession({
+    ...sessionOpts,
+    workspaceId,
+    scopedProjectId: projectScope?.projectId,
+    firstParty: opts.firstParty,
+  })
   const server = new McpServer(
     { name: "nodaro-mcp", version: "1.0.0" },
     {
