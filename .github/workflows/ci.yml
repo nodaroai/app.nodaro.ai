@@ -774,7 +774,7 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           pkg_changes=$(git diff --name-only "$BASE_SHA"..."$HEAD_SHA" -- \
-            packages/shared packages/client packages/cli | grep -v CHANGELOG.md || true)
+            packages/shared packages/client packages/cli packages/studio-production | grep -v CHANGELOG.md || true)
           if [ -z "$pkg_changes" ]; then
             echo "No published-package changes — guard not applicable."
             exit 0
