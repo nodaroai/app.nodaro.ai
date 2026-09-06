@@ -82,6 +82,38 @@ describe("video core — described references alongside a wired character", () =
         + "Natalie — a tall woman in a red coat.",
     )
   })
+
+  it("rides the reorder exit unrenumbered — it carries no @image_N binding", () => {
+    const wiredCharRefs = [
+      charRef(),
+      charRef({
+        id: "n2",
+        defaultName: "Milo",
+        url: "https://r2/milo.png",
+        characterSlug: "milo",
+        characterCanonicalDescription: "a boy with a red scarf",
+      }),
+    ]
+    const out = resolveVideoReferenceCore({
+      prompt: "Kira and Milo meet Natalie.",
+      wiredCharRefs,
+      describedReferences: described,
+      hybridRoles: true,
+      // Swap the two canonical seats — the tile ids the reorder matches on.
+      referenceOrder: ["char-canonical:milo", "char-canonical:kira"],
+    })
+    // Non-vacuous: the reorder branch really ran (assets swapped) and its
+    // `@image_N` renumber pass rewrote both role phrases…
+    expect(out.additionalUrls).toEqual(["https://r2/milo.png", "https://r2/kira.png"])
+    expect(out.prompt).toBe(
+      "Kira and Milo meet Natalie.\n"
+        + "the person from @image_2\n"
+        + "the person from @image_1\n"
+        // …while the described line, which binds no seat, is byte-identical to
+        // the un-reordered run's.
+        + "Natalie — a tall woman in a red coat.",
+    )
+  })
 })
 
 describe("video core — rail captions", () => {
@@ -172,6 +204,17 @@ describe("video core — descriptionOverride", () => {
     )
   })
 
+  it("replaces the canonical description on the legacy @-mention bullet", () => {
+    const out = resolveVideoReferenceCore({
+      prompt: "@kira:1 walks.",
+      wiredCharRefs: [overridden],
+    })
+    // The shared `resolveCharacterMentions` bullet — `Image N (Name)` subject,
+    // not the canonical fallback's bare name (pinned above).
+    expect(out.prompt).toContain("- Image 1 (Kira) — a woman with a shaved head and a scar.")
+    expect(out.prompt).not.toContain("short black hair")
+  })
+
   it("fills an extra-ref's own description slot", () => {
     const out = resolveVideoReferenceCore({
       prompt: "A still life.",
@@ -185,6 +228,23 @@ describe("video core — descriptionOverride", () => {
       ],
     })
     expect(out.prompt).toContain("- @image_1 (reference): a cracked terracotta urn.")
+    expect(out.prompt).not.toContain("blue vase")
+  })
+
+  it("fills an extra-ref's own description slot in hybrid too", () => {
+    const out = resolveVideoReferenceCore({
+      prompt: "A still life.",
+      wiredCharRefs: [],
+      hybridRoles: true,
+      extraRefs: [
+        {
+          url: "https://r2/vase.png",
+          description: "a blue vase",
+          descriptionOverride: "a cracked terracotta urn",
+        },
+      ],
+    })
+    expect(out.prompt).toBe("A still life.\na cracked terracotta urn (@image_1).")
     expect(out.prompt).not.toContain("blue vase")
   })
 })

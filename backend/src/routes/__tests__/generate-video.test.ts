@@ -839,6 +839,35 @@ describe("assembleVideoConnectedReferences (server-side video reference assembly
     expect(out.referenceImageUrls).toBeUndefined()
   })
 
+  it("renders described references on the cap-0 branch in HYBRID too", () => {
+    // The cap-0 branch never reaches the shared core, so it repeats the join
+    // itself — including the format pick. `backendHybridRoles()` is false
+    // whenever NODE_ENV === "test", so the format var alone would not flip it.
+    const prevNodeEnv = process.env.NODE_ENV
+    const prevFmt = process.env.IMAGE_REFERENCE_FORMAT
+    try {
+      process.env.NODE_ENV = "development"
+      process.env.IMAGE_REFERENCE_FORMAT = "hybrid"
+      const out = assembleVideoConnectedReferences({
+        prompt: "drive {image:1:car} fast",
+        provider: "kling", // not in VIDEO_REF_LIMITS_BY_PROVIDER → image cap 0
+        connectedReferences: [cref({ source: "wired-image", url: "https://r2/car.png", description: "car" })],
+        describedReferences: [{ name: "Natalie", description: "a tall woman in a red coat" }],
+        referenceVideoCount: 0,
+        referenceAudioCount: 0,
+      })
+      // Trailing line, not the legacy "Use these characters:" block the
+      // NODE_ENV=test default renders (pinned by the case above).
+      expect(out.prompt).toBe("drive car fast\nNatalie — a tall woman in a red coat.")
+      expect(out.referenceImageUrls).toBeUndefined()
+    } finally {
+      if (prevNodeEnv === undefined) delete process.env.NODE_ENV
+      else process.env.NODE_ENV = prevNodeEnv
+      if (prevFmt === undefined) delete process.env.IMAGE_REFERENCE_FORMAT
+      else process.env.IMAGE_REFERENCE_FORMAT = prevFmt
+    }
+  })
+
   it("renders rail captions index-aligned with the video/audio reference counts", () => {
     const out = assembleVideoConnectedReferences({
       prompt: "A cut between two shots.",
