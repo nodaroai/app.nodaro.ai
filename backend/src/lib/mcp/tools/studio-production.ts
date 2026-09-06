@@ -417,11 +417,16 @@ async function planFromJob(userId: string, jobId: string): Promise<PlanFromJob> 
   // counts as if they were a production.
   const plan = row.output_data?.output
   if (!plan || typeof plan !== "object") {
+    // NOT `not_finished`: this row is terminal, so "poll and call again" would
+    // send the model round a loop that can never end. The run finished and
+    // produced nothing — the only way forward is a new draft.
     return {
-      status: 409,
+      status: 422,
       error: {
-        code: "not_finished",
-        message: `Job ${jobId} finished with no output to land.`,
+        code: "no_output",
+        message:
+          `Job ${jobId} finished without a plan. Start a new Director run — ` +
+          `polling this one will not produce anything.`,
       },
     }
   }

@@ -321,6 +321,11 @@ describe("import_studio_production", () => {
     })
     expect(res.isError).toBe(true)
     expect(seen.url).toBeUndefined()
+    // A TERMINAL row, so it must not read as `not_finished`: that would send
+    // the model polling a job that will never change. The studio client calls
+    // this same row failed ("The run finished without a plan.").
+    expect(res.content[0].text).toContain("no_output")
+    expect(res.content[0].text).not.toContain("not_finished")
   })
 
   it("a job that is not the caller's is simply not found", async () => {
