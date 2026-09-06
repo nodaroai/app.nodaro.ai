@@ -348,10 +348,17 @@ export function assembleVideoConnectedReferences(args: {
       characterName: m.defaultName,
       defaultUsageMode: m.defaultUsageMode,
       // A per-use override IS this run's identity description, so it stands in
-      // for the character's stored canonical text on the extras leg too.
+      // for the character's stored canonical text on the extras leg too. ROUTE-
+      // ONLY today: the FE (video-prompt-assembly.ts) and orchestrator
+      // (payload-builder.ts) producers still read the character record, so a
+      // canvas / DAG re-run of a node whose stored `connectedReferences` carry
+      // an override does NOT honour it on the extras leg. Adopting it in those
+      // two is the follow-up that closes the gap.
       canonicalDescription: m.descriptionOverride?.trim() || m.characterCanonicalDescription || undefined,
       // Keep this third CharacterMeta producer in lockstep with the FE
-      // (video-prompt-assembly.ts) and orchestrator (payload-builder.ts) ones.
+      // (video-prompt-assembly.ts) and orchestrator (payload-builder.ts) ones —
+      // `canonicalDescription`'s override source above is the one field
+      // deliberately ahead of them until that follow-up lands.
       defaultRole: m.defaultRole,
       identityLock: m.identityLock,
     }
