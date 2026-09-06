@@ -69,3 +69,71 @@ export function getStaticPublicAppUrl(): string {
   }
   return cachedPublicAppUrl
 }
+
+/**
+ * The parts of a request these helpers read — headers, nothing else. A
+ * structural type (a `FastifyRequest` satisfies it) so they stay pure and can be
+ * unit-tested with a hand-built object.
+ */
+export interface OriginRequestLike {
+  headers: Record<string, string | string[] | undefined>
+}
+
+/**
+ * First value of a possibly-repeated header. `x-forwarded-*` arrives as an array
+ * (repeated header) or as a comma-separated chain when several proxies appended
+ * to it; the FIRST entry is the one the client actually reached.
+ *
+ * A local one-liner rather than an import of `request-helpers.js` for the reason
+ * job-source.ts documents (that module is routinely partial-mocked by route
+ * suites, and this file is on the CORS path of every request) — and because the
+ * comma split is specific to the forwarded headers.
+ */
+function firstHeaderEntry(v: string | string[] | undefined): string | undefined {
+  const raw = Array.isArray(v) ? v[0] : v
+  const first = raw?.split(",")[0]?.trim()
+  return first || undefined
+}
+
+/** The host the browser used, as forwarded by Caddy (`host` when nothing is). */
+function forwardedHost(req: OriginRequestLike): string | undefined {
+  return firstHeaderEntry(req.headers["x-forwarded-host"]) ?? firstHeaderEntry(req.headers.host)
+}
+
+/**
+ * The origin THIS request arrived on, derived from the proxy's forwarded
+ * headers: `${x-forwarded-proto ?? "https"}://${x-forwarded-host ?? host}`.
+ * Keeps the port — an origin is scheme + host + port, and `http://localhost:5173`
+ * must match the allowlist entry of the same name. Lower-cased: DNS is
+ * case-insensitive but `Array.includes` is not.
+ *
+ * `null` when the request carries no host at all (HTTP/1.0 without a Host).
+ */
+export function requestOrigin(req: OriginRequestLike): string | null {
+  const host = forwardedHost(req)
+  if (!host) return null
+  const proto = firstHeaderEntry(req.headers["x-forwarded-proto"]) ?? "https"
+  return `${proto.toLowerCase()}://${host.toLowerCase()}`
+}
+
+/** Whether this request arrived on one of the operator's own origins. */
+export function isAllowedRequestOrigin(req: OriginRequestLike): boolean {
+  return isOriginAllowed(requestOrigin(req) ?? undefined, getStaticAllowedOrigins())
+}
+
+/**
+ * The bare hostname this request arrived on — lower-cased, port stripped — for
+ * keying a per-host map (the SSO `initiateUrlByHost`). A bracketed IPv6 literal
+ * keeps its brackets, which is how it is written in a Host header.
+ */
+export function requestHost(req: OriginRequestLike): string | null {
+  const raw = forwardedHost(req)
+  if (!raw) return null
+  const host = raw.toLowerCase()
+  if (host.startsWith("[")) {
+    const close = host.indexOf("]")
+    return close === -1 ? host : host.slice(0, close + 1)
+  }
+  const colon = host.indexOf(":")
+  return colon === -1 ? host : host.slice(0, colon)
+}
