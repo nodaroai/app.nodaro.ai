@@ -1,0 +1,54 @@
+{
+  "format": "nodaro-studio-production",
+  "version": 2,
+  "title": "Rain in Rome",
+  "brief": "A rain-soaked chase through Rome, teal-orange, sparse dialogue.",
+  "film": { "cameraFormatId": "arri-alexa", "colorLookId": "teal-orange" },
+  "folders": ["Act 1"],
+  "scenes": [
+    {
+      "name": "The chase begins",
+      "folder": "Act 1",
+      "look": { "lighting-time-of-day": "golden-hour", "atmosphereId": ["fog", "light-rain"] },
+      "frame": {
+        "prompt": "@Natalie sprints down a narrow Roman alley, SUV headlights behind her",
+        "negativePrompt": "",
+        "model": "gpt-image-2", "aspectRatio": "16:9", "resolution": "2K", "count": 2,
+        "referenceImageUrls": [],
+        "subject": { "hairColor": "hair-auburn", "outfit": "outfit-streetwear" }
+      },
+      "motion": {
+        "scenePrompt": "A rain-soaked rooftop chase, shot handheld. Sparse dialogue.",
+        "model": "seedance-2", "aspectRatio": "16:9", "resolution": "1080p", "duration": 10,
+        "cameraMotionId": "tracking-shot", "input": "start",
+        "endTransition": { "id": "cross-dissolve", "duration": "short" }
+      },
+      "shots": [
+        { "seconds": 4, "label": "Sprint", "text": "she sprints toward camera",
+          "picks": { "framingId": "wide-shot" }, "transition": { "id": "cross-dissolve" },
+          "audio": [
+            { "mode": "speech", "content": "Go, go, go!", "speaker": "Natalie", "voice": "female, urgent" },
+            { "mode": "sfx", "content": "heavy rain hammering the cobblestones, distant thunder" }
+          ] },
+        { "seconds": 6, "text": "the SUV swerves", "picks": { "framingAngleId": "low-angle" },
+          "transition": { "id": "whip-pan", "position": "start", "duration": "short", "intensity": "dynamic" },
+          "characterFx": { "id": "werewolf", "position": "start", "intensity": "crazy" } }
+      ],
+      "voice": { "text": "She wasn't stopping — not for anything.", "casting": "female, urgent" }
+    }
+  ],
+  "cast": [
+    {
+      "kind": "character",
+      "name": "Natalie",
+      "description": "late 20s, red raincoat",
+      "imageUrl": "https://cdn.nodaro.ai/images/example-natalie.png"
+    }
+  ],
+  "music": {
+    "prompt": "A tense, rain-soaked chase score — driving strings, pulsing low end, no vocals.",
+    "duration": 30,
+    "vocals": "instrumental",
+    "genre": "cinematic"
+  }
+}
