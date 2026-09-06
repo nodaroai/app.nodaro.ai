@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { creditsOf, creditHint, perSecondHint } from "./_credit-hint.js"
 import { OBJECT_MOTION_PROVIDERS, OBJECT_ASPECT_OPTIONS } from "@nodaro/shared"
 import type { McpSession } from "../session.js"
 import { mcpInject } from "../internal-request.js"
@@ -284,7 +285,7 @@ function registerGenerationTools(opts: RegisterCreatureToolsOpts): void {
           .enum(OBJECT_MOTION_PROVIDERS)
           .optional()
           .default("kling-turbo")
-          .describe("i2v provider. Defaults to 'kling-turbo' (5s, 10 credits)."),
+          .describe(`i2v provider. Defaults to 'kling-turbo' (5s, ${creditHint("kling-turbo:5s")}).`),
         name: z
           .string()
           .min(1)
