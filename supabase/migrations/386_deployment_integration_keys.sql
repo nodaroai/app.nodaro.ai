@@ -1,6 +1,6 @@
 -- Billing integration keys: a machine credential for the billing account's own
 -- routes, and nothing else.
--- (Track spec 2026-09-06 §6.1. Companion TypeScript — the auth-hook branch,
+-- (Design spec §6.1. Companion TypeScript — the auth-hook branch,
 -- the resolver and the mint/list/revoke routes — ships in the same PR.)
 --
 -- ============================================================================
