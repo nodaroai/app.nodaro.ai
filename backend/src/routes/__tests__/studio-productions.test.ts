@@ -137,21 +137,12 @@ function entityChain(rows: Array<Record<string, unknown>> = []) {
 /** `workflows` reads answer with `data`; `projects` answers the ensure chain. */
 function withTables(opts: {
   workflowRow?: Record<string, unknown> | null
-  listRows?: Array<Record<string, unknown>>
   insertRow?: Record<string, unknown>
   library?: Record<string, Array<Record<string, unknown>>>
 }) {
   vi.mocked(supabase.from).mockImplementation(((table: string) => {
     if (table === "projects") return projectsChain(PROJECT) as never
     if (ENTITY_TABLES.includes(table)) return entityChain(opts.library?.[table]) as never
-    if (opts.listRows) {
-      const limit = vi.fn().mockResolvedValue({ data: opts.listRows, error: null })
-      const order = vi.fn().mockReturnValue({ limit, lt: vi.fn().mockReturnValue({ limit }) })
-      const eq2 = vi.fn().mockReturnValue({ order })
-      const eq1 = vi.fn().mockReturnValue({ eq: eq2 })
-      const select = vi.fn().mockReturnValue({ eq: eq1 })
-      return { select } as never
-    }
     const single = vi.fn().mockImplementation(async () => ({
       data: opts.insertRow ?? null,
       error: null,
@@ -374,44 +365,11 @@ describe("GET /v1/studio/productions/:id", () => {
   })
 })
 
-describe("GET /v1/studio/productions", () => {
-  it("lists the caller's productions and hides the archived ones", async () => {
-    withTables({
-      listRows: [
-        row({ id: PRODUCTION, name: "Visible" }),
-        row({
-          id: "00000000-0000-4000-8000-000000000021",
-          name: "Put away",
-          settings: { studio: { version: 3, shots: [], shotOrder: [], archived: true } },
-        }),
-        // A bare workflow that shares the project is not a production.
-        row({ id: "00000000-0000-4000-8000-000000000022", settings: {} }),
-      ],
-    })
-    const res = await app.inject({
-      method: "GET",
-      url: "/v1/studio/productions",
-      headers: { "x-user-id": OWNER },
-    })
-    expect(res.statusCode).toBe(200)
-    const names = (res.json().data.data as Array<{ name: string }>).map((p) => p.name)
-    expect(names).toEqual(["Visible"])
-  })
-
-  it("includeArchived brings the hidden rows back", async () => {
-    withTables({
-      listRows: [
-        row({
-          name: "Put away",
-          settings: { studio: { version: 3, shots: [], shotOrder: [], archived: true } },
-        }),
-      ],
-    })
-    const res = await app.inject({
-      method: "GET",
-      url: "/v1/studio/productions?includeArchived=true",
-      headers: { "x-user-id": OWNER },
-    })
-    expect((res.json().data.data as unknown[]).length).toBe(1)
-  })
-})
+/**
+ * The LIST has its own suite — `studio-productions-list.test.ts`.
+ *
+ * Its filters and its page boundary are the query's, so it is pinned against a
+ * recording query builder rather than the hand-shaped chains above: what that
+ * suite asserts is the SQL the route asks for, which is the only place the
+ * archived / internal / production filters live.
+ */
