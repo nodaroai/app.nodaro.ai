@@ -69,6 +69,7 @@ _Generated from \`IMAGE_REFERENCE_PROMPT_DOCTRINE\` in \`@nodaro/prompts\` — e
 - \`guidance_scale\`
 - \`structured\`
 - \`connected_references\`
+- \`described_references\`
 - \`reference_order\`",
   "node-data-shape": "**Type:** \`generate-image\`
 **Category:** ai
@@ -272,6 +273,7 @@ exports[`per-node skill file snapshots > generate-video.md auto-gen blocks match
 - \`seed\`
 - \`structured\`
 - \`connected_references\`
+- \`described_references\`
 - \`reference_order\`
 - \`reference_image_urls\`
 - \`reference_video_urls\`
@@ -691,6 +693,7 @@ exports[`per-node skill file snapshots > image-to-video.md auto-gen blocks match
 - \`loop_trim\`
 - \`auto_loop_trim\`
 - \`connected_references\`
+- \`described_references\`
 - \`reference_order\`",
   "node-data-shape": "**Type:** \`image-to-video\`
 **Category:** ai
