@@ -281,3 +281,63 @@ describe("the public-publish flag is an audience decision, not an edit", () => {
     )
   })
 })
+
+/**
+ * D12 — the public read is a PROJECTION, not a mirror.
+ *
+ * `settings.studio` carries the owner's working state beside the film: the
+ * recycle bin (every shot, still and clip they deleted, prompts and urls
+ * intact), the jobs in flight, and an unsaved editor draft. A share viewer
+ * receives none of it — the sharpest of the four being the bin, which hands out
+ * exactly the work its owner threw away.
+ */
+describe("the public share read strips the owner's working state", () => {
+  const SHARED = {
+    ...ROW,
+    settings: {
+      studio: {
+        version: 3,
+        shots: [{ id: "shot-1" }],
+        shotOrder: ["img-1"],
+        shared: true,
+        trash: [{ kind: "still", id: "t-1", result: { url: "https://r2/deleted.png" } }],
+        pendingStills: [{ jobId: "job-1" }],
+        pendingClips: [{ jobId: "job-2" }],
+        freecutDraftUrl: "https://r2/draft.json",
+      },
+    },
+  }
+
+  function publicRead(row: Record<string, unknown>) {
+    const single = vi.fn().mockResolvedValue({ data: row, error: null })
+    const eq = vi.fn().mockReturnValue({ single })
+    const select = vi.fn().mockReturnValue({ eq })
+    vi.mocked(supabase.from).mockReturnValue({ select } as never)
+  }
+
+  it("returns the film and none of the four transient keys", async () => {
+    publicRead(SHARED)
+    const res = await app.inject({ method: "GET", url: `/v1/public/workflows/${WF}` })
+
+    expect(res.statusCode).toBe(200)
+    const studio = res.json().data.settings.studio as Record<string, unknown>
+    expect(studio.trash).toBeUndefined()
+    expect(studio.pendingStills).toBeUndefined()
+    expect(studio.pendingClips).toBeUndefined()
+    expect(studio.freecutDraftUrl).toBeUndefined()
+    // Everything the viewer is meant to see survives untouched.
+    expect(studio.shots).toEqual([{ id: "shot-1" }])
+    expect(studio.shotOrder).toEqual(["img-1"])
+    expect(studio.shared).toBe(true)
+  })
+
+  it("leaves a production with nothing to strip exactly as it was", async () => {
+    const clean = {
+      ...ROW,
+      settings: { studio: { version: 3, shots: [], shotOrder: [], shared: true } },
+    }
+    publicRead(clean)
+    const res = await app.inject({ method: "GET", url: `/v1/public/workflows/${WF}` })
+    expect(res.json().data.settings).toEqual(clean.settings)
+  })
+})

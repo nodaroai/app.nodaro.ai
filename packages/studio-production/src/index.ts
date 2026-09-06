@@ -60,6 +60,7 @@ export * from "./workflow-like"
 export * from "./bundle/production-bundle"
 export * from "./bundle/production-bundle-parse"
 export * from "./bundle/production-bundle-strip"
+export * from "./bundle/strip-settings"
 
 // ── the `nodaro-studio-production` plan format and the skill it renders ─────
 export * from "./format/audio"

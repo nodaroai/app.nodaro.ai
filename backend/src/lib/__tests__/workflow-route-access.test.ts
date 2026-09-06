@@ -89,6 +89,18 @@ describe("every route that judges a workflow selects the columns to judge it by"
         const literal = args.match(/"((?:[a-z_]+\s*,\s*)+[a-z_]+)"/)
         if (!literal) {
           if (/WORKFLOW_(FULL|META|ACCESS)_COLS/.test(args)) continue
+          // A route may name its own projection constant. That is fine when
+          // the constant is DEFINED by interpolating the shared one — the four
+          // columns are then there by construction, which is exactly the
+          // property this guard is asking about — so resolve the name in the
+          // same file rather than refusing a shape that is provably correct.
+          const named = args.match(/,\s*([A-Z][A-Z0-9_]*)\s*,/)
+          if (named) {
+            const definition = src.match(
+              new RegExp(`const\\s+${named[1]}\\s*=\\s*\`([^\`]*)\``),
+            )
+            if (definition?.[1]?.includes("${WORKFLOW_ACCESS_COLS}")) continue
+          }
           offenders.push(`${file}: loadWorkflowFor with an unrecognised projection`)
           continue
         }
