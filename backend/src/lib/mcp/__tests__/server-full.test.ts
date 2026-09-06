@@ -184,8 +184,9 @@ describe("buildMcpServer full catalog (v1.1)", () => {
     // a new tool family rather than tracking every single tool.
     // (last bump: +4 entity reads — list/get for objects and creatures, which
     //  had action tools taking an id and no way to produce one, 2026-08-24)
-    expect(tools.length).toBeGreaterThanOrEqual(30)
-    expect(tools.length).toBeLessThanOrEqual(165)
+    // The exact membership (per edition × scope grant) and the wire budget
+    // live in tool-surface-snapshot.test.ts (audit 2026-09-06 fix #3); the
+    // `has()` checks above stay as the readable catalogue.
   })
 
   it("with only jobs:read, registers ping + jobs tools and nothing else", async () => {
@@ -282,7 +283,7 @@ describe("buildMcpServer full catalog (v1.1)", () => {
     // create_explainer / create_launch_video require workflows:execute
     expect(names).not.toContain("create_explainer")
     expect(names).not.toContain("create_launch_video")
-    expect(tools).toHaveLength(13)
+    // Exact unscoped membership: tool-surface-snapshot.test.ts (cloud/none).
   })
 
   it("v3.0: dynamic per-user tools dropped — list_apps + get_app_inputs + run_app cover the same surface", async () => {

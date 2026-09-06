@@ -84,7 +84,16 @@ generated_from: 5fe66b0ff
 
 ## When to use
 
-(Add prose here. Auto-gen will preserve it across regenerations.)
+Detect each speaker in an audio or video clip and recast each one to a different target voice (`voice_changer_pro` over MCP; cloud-only).
+
+### Field semantics
+
+- **`ordered_voices`** — first-appearance order: speaker 1 → voices[0], speaker 2 → voices[1], … Unmapped speakers keep their original voice; a `null` entry is a keep-slot (that speaker keeps their voice while later speakers are still recast). At least one entry must be non-null.
+- Each entry is EITHER a bare voice id OR an object with per-voice settings — `{ voiceId, engine, stability, similarityBoost, style, useSpeakerBoost, seed, volumeMode, volume }`. `engine`: `sts` (default, speech-to-speech recast) or `v3` (re-speak: the performance is regenerated from the transcript with eleven_v3; stability 0/0.5/1 only; similarityBoost/style/useSpeakerBoost ignored; needs transcript text). `volumeMode` `match` (default) keeps the original speaker's loudness, `normalize` applies loudnorm, `manual` uses `volume` (0–200 %). A per-voice `seed` (0–4294967295) makes that speaker's recast reproducible.
+- **Source** — ONE of `audio_url` / `audio_asset_id` (audio → audio) or `video_url` / `video_asset_id` (recast the voices in a full clip: demux, recast, remux).
+- **Background** — voice and music are ALWAYS separated first; `preserve_background` (default true) controls whether the music/SFX bed is mixed back under the new voices; `music_volume_mode` sets its level (`match` keeps the original, `normalize` loudnorms, `manual` uses `music_volume` 0–200 %).
+- **`voice_fx`** — reverb/echo applied to the COMBINED recast voices BEFORE the background is mixed back (the effect sits on the voices, not the music bed).
+- **Voice ids** — the same naming as `generate_speech`: a premade voice NAME (Rachel, Aria, Roger, …) or an ElevenLabs UUID for a custom clone.
 
 <!-- AUTO-GEN:START mcp-call -->
 <!-- AUTO-GEN:END mcp-call -->

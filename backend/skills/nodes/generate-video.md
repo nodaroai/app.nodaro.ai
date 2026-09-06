@@ -87,7 +87,17 @@ generated_from: 88a6e05b4
 
 ## When to use
 
-(Add prose here. Auto-gen will preserve it across regenerations.)
+Text-to-video from a prompt (`generate_video` over MCP, this node on the canvas). Pick the model with `list_models { kind: "video", mode: "t2v" }` when the user has not named one — pricing is duration-tiered for most providers.
+
+### Prompting essentials (Seedance, the default family)
+
+- Storyboard multi-moment videos as `Shot 1: … Shot 2: …`.
+- On the 2.0 SKUs do NOT add timestamps — timed shots like `(0-3s)` destabilize generation; `seedance-2-5` honours integer-second timestamps.
+- One camera move per shot.
+- Cue native audio inline: `（background music）`, `<sound effects>`, quoted dialogue.
+- End with: `HD, rich details, stable picture, keep it subtitle-free, do not generate a watermark.`
+
+The per-family doctrine below (Kling, MiniMax, VEO, Gemini Omni, Grok, Wan, HappyHorse, Runway) says what each model wants instead.
 
 <!-- AUTO-GEN:START mcp-call -->
 **MCP tool:** `generate_video`
