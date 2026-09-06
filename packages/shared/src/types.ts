@@ -224,6 +224,13 @@ export interface ConnectedReference {
    * renders no description at all, it adds one trailing `<binding> — <override>.`
    * line instead.
    *
+   * The two formats are deliberately ASYMMETRIC where a reference renders no
+   * directive at all — a plain upload (`manual` / `wired-image`, non-extra) that
+   * is neither `@`-mentioned nor `{image:N}`-covered: the LEGACY format stays
+   * silent, and the override is not surfaced there (a bullet would force a
+   * fidelity verb onto an opaque image); the HYBRID format — the production
+   * default — adds the trailing line above for it.
+   *
    * DISTINCT from `description`, which stays the reference's own label slot (the
    * free text an extra-ref row / an upstream node carries) — a caller that edits
    * the wording for ONE use writes it here, so the label is untouched and

@@ -409,11 +409,22 @@ export function assembleVideoConnectedReferences(args: {
 /**
  * True when the request carries ANY channel the server-side video assembly
  * renders — the structured references, the seat-less described references, or a
- * rail caption. The single gate every "assemble only when there is something to
- * assemble" call site reads (this route's pricing preHandler, its shed frame and
- * its handler, plus text-to-video and extend-video), so a new channel can never
- * be silently dropped by a site that still asks only about
+ * rail caption. The single gate the four "assemble only when there is something
+ * to assemble" call sites read: this route's shed frame (`frameWithReferences`)
+ * and its handler, and text-to-video's matching pair — so a new channel can
+ * never be silently dropped by a site that still asks only about
  * `connectedReferences`.
+ *
+ * The pricing preHandlers do NOT gate on it: the MiniMax-H3 branch calls
+ * `assembleVideoConnectedReferences` unconditionally (`connectedReferences: []`
+ * when there are none) purely to predict the assembled reference COUNT, and
+ * forwards the three channels above without reading them, so its prediction
+ * stays the handler's mirror if one ever moves a count.
+ *
+ * `extend-video` mirrors the gate with its own predicate
+ * (`hasImageRefs || hasDescribedRefs`) rather than calling this: it already
+ * computes `hasImageRefs` for its transport refusal, and its schema carries no
+ * rail captions to gate on (nothing for one to be index-aligned with).
  */
 export function hasVideoReferenceChannels(b: {
   connectedReferences?: unknown
