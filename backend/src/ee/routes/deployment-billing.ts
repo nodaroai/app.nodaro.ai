@@ -39,7 +39,7 @@
  * customer's unit, and converting it would invent an exchange rate for
  * something that is not being exchanged.
  */
-import type { FastifyInstance, FastifyRequest } from "fastify"
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
 import { config } from "../../lib/config.js"
@@ -69,10 +69,15 @@ import {
   grantAllowance,
   grantsFor,
   provisionedUserCount,
+  resolveUserRef,
+  setAllowance,
   setDefaultAllowance,
+  ssoSubjectsFor,
+  writePendingAllowance,
   type AllowanceLedgerRow,
   type AllowanceWriteErrorCode,
 } from "../billing/deployment-allowance-service.js"
+import type { UserAllowance, UserRef } from "../../types/deployment-allowance.js"
 
 // ---------------------------------------------------------------------------
 // The unit seam
@@ -116,8 +121,14 @@ type UnitInput =
  * a number nobody can reconcile against the sum of the grant rows. So it is a
  * 400 that names the rate, and the payer learns the granularity from the
  * product rather than from a support ticket.
+ *
+ * `allowZero` is the one thing an ABSOLUTE target needs that an additive grant
+ * must never have. "The plan is now 0" is what a cancelled subscription means
+ * and it has to be expressible; "add 0 credits" is a call that moves nothing
+ * and is a bug in the caller, so it keeps its refusal. Only the `set`/`renew`
+ * verb passes it.
  */
-function creditsFromUnits(raw: unknown, opts: { allowNegative: boolean }): UnitInput {
+function creditsFromUnits(raw: unknown, opts: { allowNegative: boolean; allowZero?: boolean }): UnitInput {
   const u = configuredUnit()
   if (u === null) {
     return {
@@ -129,7 +140,7 @@ function creditsFromUnits(raw: unknown, opts: { allowNegative: boolean }): UnitI
   if (typeof raw !== "number" || !Number.isInteger(raw)) {
     return { ok: false, code: "invalid_units", message: "units must be a whole number." }
   }
-  if (raw === 0 || (raw < 0 && !opts.allowNegative)) {
+  if ((raw === 0 && opts.allowZero !== true) || (raw < 0 && !opts.allowNegative)) {
     return {
       ok: false,
       code: "invalid_units",
@@ -293,6 +304,168 @@ function refuseWithoutPayerSession(req: FastifyRequest, reply: { status: (n: num
   }
   return false
 }
+
+// ---------------------------------------------------------------------------
+// Naming a user: the three forms an integration may use
+// ---------------------------------------------------------------------------
+//
+// An integration in the customer's back office knows the identity its own
+// identity provider asserts — a subject, and an email address — and has never
+// seen the studio's uuid until a response hands it one. So a user is named
+// three ways, resolved through the service (which owns the trusted
+// `app_metadata` copy of the subject), and the answer echoes all three so the
+// caller can store the uuid after the first call and stop looking it up.
+
+/** Canonical uuid. Deliberately strict: a near-miss must be
+ *  `invalid_user_ref`, not a lookup that finds nobody and is then
+ *  indistinguishable from a person who has simply not signed in yet — which
+ *  would silently be stored as a pending quota for an identity nobody holds. */
+const USER_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** The narrowest thing that can be called an address. `profiles.email` is the
+ *  authority; this only has to reject a reference that is plainly not an
+ *  address, so `email:nope` answers 400 rather than a 404 the integration
+ *  would read as "not signed in yet" and act on. */
+const REF_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+/**
+ * `<uuid>` | `sso:<subject>` | `email:<address>` → the ref the service
+ * resolves, or null when it is none of the three.
+ *
+ * The prefixes are tested BEFORE the uuid shape, so a subject that happens to
+ * look like a uuid still resolves as a subject: the customer's IdP owns that
+ * namespace and the studio's uuid space is a different one.
+ */
+function parseUserRef(raw: string | undefined): UserRef | null {
+  const s = (raw ?? "").trim()
+  if (!s) return null
+  if (s.startsWith("sso:")) {
+    const subject = s.slice(4).trim()
+    return subject ? { ssoSubject: subject } : null
+  }
+  if (s.startsWith("email:")) {
+    const email = s.slice(6).trim()
+    return email && REF_EMAIL_RE.test(email) ? { email } : null
+  }
+  return USER_UUID_RE.test(s) ? { id: s } : null
+}
+
+/** D13, in one string: the billing account holds the pool and has no quota
+ *  against it. Shared by every verb that takes a user reference so the three
+ *  cannot drift apart. */
+const PAYER_NO_ALLOWANCE_MSG =
+  "The billing account holds the deployment's credits and has no allowance. Buy credits instead."
+
+type RefOutcome =
+  | { kind: "user"; userId: string; ref: UserRef }
+  | { kind: "absent"; ref: UserRef }
+  | { kind: "refused" }
+
+/**
+ * Parse a reference, resolve it, and SEND the refusal when there is one — the
+ * caller checks `kind` and returns immediately on `refused`.
+ *
+ * THE PAYER IS NEVER A VALID USER REFERENCE, and that check is made after
+ * resolution rather than only on the uuid form: `sso:` and `email:` can both
+ * name the billing account, and a quota against the account that holds the
+ * pool is a concept that does not exist.
+ *
+ * `absent` is NOT a refusal — it is the answer each caller decides about: the
+ * allowance verb stores an intent, `/users/resolve` answers 404, `/usage`
+ * answers an empty page. An ambiguous match IS a refusal everywhere, because
+ * acting on half of a duplicated address moves a paid quota to the wrong
+ * person.
+ */
+async function resolveRef(raw: string | undefined, reply: FastifyReply): Promise<RefOutcome> {
+  const ref = parseUserRef(raw)
+  if (!ref) {
+    reply
+      .status(400)
+      .send(
+        err(
+          "invalid_user_ref",
+          "Name the user by studio id, by sso:<subject> or by email:<address>.",
+        ),
+      )
+    return { kind: "refused" }
+  }
+  const resolved = await resolveUserRef(ref)
+  if (resolved.kind === "ambiguous") {
+    return refuseAmbiguous(reply)
+  }
+  if (resolved.kind === "absent") return { kind: "absent", ref }
+  if (resolved.userId === deploymentPayerId()) {
+    reply.status(400).send(err("payer_has_no_allowance", PAYER_NO_ALLOWANCE_MSG))
+    return { kind: "refused" }
+  }
+  return { kind: "user", userId: resolved.userId, ref }
+}
+
+function refuseAmbiguous(reply: FastifyReply): RefOutcome {
+  reply
+    .status(409)
+    .send(
+      err(
+        "user_ambiguous",
+        "More than one account answers to that email address. Name the user by their SSO subject instead.",
+      ),
+    )
+  return { kind: "refused" }
+}
+
+/** One figure in BOTH denominations. An integration is a render boundary, so
+ *  it gets the display unit its customer's invoice speaks and the raw credit
+ *  the ledger stores — never one alone, because deriving the other on their
+ *  side means re-implementing `unitRate` in a second codebase. `null` survives
+ *  as null on both halves (§5.2 rule 1): an unavailable figure is never a 0. */
+function pair(credits: number | null | undefined, u: DisplayUnit | null) {
+  return { units: inUnits(credits ?? null, u), credits: credits ?? null }
+}
+
+/** The allowance block every integration verb answers with. `resetAt` is null
+ *  — not absent — on the wire: an integration branches on a key it can always
+ *  read, and "this allowance has never been renewed" is a value, not a gap. */
+function allowancePairs(row: UserAllowance | null, u: DisplayUnit | null) {
+  return {
+    granted: pair(row?.granted, u),
+    remaining: pair(row?.remaining, u),
+    spent: pair(row?.spent, u),
+    resetAt: row?.resetAt ?? null,
+  }
+}
+
+type NoteInput = { ok: true; note: string | null } | { ok: false; code: string; message: string }
+
+/** The note's own validation, with its own code and its own field named — the
+ *  lesson at `POST /grant`: judging `note` inside the same object as `units`
+ *  answered `invalid_units` for an over-long note and named a field that was
+ *  fine. Fail-closed and before any RPC, so nothing is written and the retry
+ *  is safe. */
+function readNote(raw: unknown): NoteInput {
+  if (raw !== undefined && raw !== null && typeof raw !== "string") {
+    return { ok: false, code: "invalid_note", message: "note must be text." }
+  }
+  if (typeof raw === "string" && raw.length > NOTE_MAX_CHARS) {
+    return {
+      ok: false,
+      code: "note_too_long",
+      message: `The note is too long — keep it to ${NOTE_MAX_CHARS} characters or fewer.`,
+    }
+  }
+  return { ok: true, note: typeof raw === "string" ? raw : null }
+}
+
+/**
+ * How recently a `renew` must NOT have happened for another one to be allowed
+ * without `force`.
+ *
+ * This rule is in the route because it is not in the database: the RPC will
+ * renew twice a minute apart and zero a real period's `spent` the second time.
+ * A back office retries, and a webhook arrives twice — so the default answer
+ * to "renew again, an hour later" has to be a refusal, and `force: true` is
+ * how a genuine second period inside one day is expressed.
+ */
+const RENEWAL_MIN_INTERVAL_MS = 24 * 60 * 60 * 1000
 
 // ---------------------------------------------------------------------------
 
@@ -461,14 +634,92 @@ export async function deploymentBillingRoutes(app: FastifyInstance): Promise<voi
     // allowance table: the D7 no-row rule lives in the service, and a user who
     // has never generated must show the DEFAULT here — that is what they will
     // actually get at their first Generate.
-    const ledger = await allowanceLedgerFor(rows.map((r) => r.id))
+    const ids = rows.map((r) => r.id)
+    const [ledger, subjects] = await Promise.all([
+      allowanceLedgerFor(ids),
+      // ONE subject lookup for the whole page, never one per row. An id with
+      // no subject is simply absent from the map and renders `null`: "not
+      // federated" is a different fact from "the read failed", and the batch
+      // answers an empty map rather than null, so losing the decoration cannot
+      // lose the list.
+      ssoSubjectsFor(ids),
+    ])
 
     return reply.send({
-      data: rows.map((r) => ({ ...r, ...ledgerInUnits(ledger?.get(r.id) ?? null, u) })),
+      data: rows.map((r) => {
+        const row = ledger?.get(r.id) ?? null
+        return {
+          ...r,
+          ...ledgerInUnits(row, u),
+          // The two fields an integration reads off this table: the identity
+          // its own IdP asserts, and when this quota's period began — null
+          // until something has renewed it, which is exactly what tells a
+          // renderer to say "total" rather than "this period".
+          ssoSubject: subjects.get(r.id) ?? null,
+          resetAt: row?.resetAt ?? null,
+        }
+      }),
       total: count ?? 0,
       limit,
       offset,
       unit: u,
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // GET /users/resolve — the lookup an integration does once per customer
+  // -------------------------------------------------------------------------
+  //
+  // Registered BEFORE `/users/:id/grants` reads in the file, though the router
+  // does not care: a static segment always beats a parameter at the same
+  // position, so `resolve` can never be mistaken for a user id.
+  app.get("/v1/deployment-billing/users/resolve", { preHandler: requireDeploymentPayer }, async (req, reply) => {
+    const payerId = deploymentPayerId()
+    if (!payerId) return reply.status(404).send(err("not_found", "Not found"))
+    const query = req.query as Record<string, string | undefined>
+    const subject = query.sso_subject?.trim() || null
+    const email = query.email?.trim() || null
+
+    // EXACTLY ONE. Both is a question with two answers that may disagree, and
+    // silently preferring one would make the caller believe it had confirmed
+    // an identity it had not; neither is not a lookup at all.
+    if ((subject === null) === (email === null)) {
+      return reply
+        .status(400)
+        .send(err("invalid_user_ref", "Name the user with exactly one of sso_subject or email."))
+    }
+
+    const outcome = await resolveRef(subject !== null ? `sso:${subject}` : `email:${email}`, reply)
+    if (outcome.kind === "refused") return
+    if (outcome.kind === "absent") {
+      // 404, never a pending write: this route is a question, not a verb. The
+      // caller that wants the quota stored calls the allowance verb, which
+      // answers 202.
+      return reply
+        .status(404)
+        .send(err("user_not_found", "No account on this deployment answers to that identity."))
+    }
+
+    const userId = outcome.userId
+    const u = configuredUnit()
+    const [row, subjects, profile] = await Promise.all([
+      allowanceLedgerOne(userId),
+      ssoSubjectsFor([userId]),
+      supabase.from("profiles").select("id, email").eq("id", userId).maybeSingle(),
+    ])
+
+    // All three identities on every answer, so the caller stores the uuid once
+    // and never resolves this person again.
+    return reply.send({
+      data: {
+        id: userId,
+        email: (profile.data as { email?: string | null } | null)?.email ?? null,
+        ssoSubject: subjects.get(userId) ?? null,
+        // False means "no row of their own": the figures beside it are the
+        // deployment DEFAULT, which is what this person would actually get.
+        provisioned: row?.provisioned ?? false,
+        allowance: allowancePairs(row, u),
+      },
     })
   })
 
@@ -509,7 +760,16 @@ export async function deploymentBillingRoutes(app: FastifyInstance): Promise<voi
   // PUT /default-allowance — what a user who has not generated yet will get
   // -------------------------------------------------------------------------
   app.put("/v1/deployment-billing/default-allowance", { preHandler: requireDeploymentPayer }, async (req, reply) => {
-    if (rejectProgrammaticAuth(req, reply, PAYER_JWT_ONLY_MSG)) return
+    // A credential that may allocate may also set what an unallocated user
+    // gets. `allowBillingKey` is opt-IN, one verb at a time: every other
+    // caller of this helper in the codebase keeps refusing the key by default,
+    // which is the second defence behind the auth hook's path allow-list.
+    //
+    // NO `credential_id` HERE, unlike the two verbs below: the default lives
+    // on the settings singleton, which has no audit row and no credential
+    // column to stamp. A default changed through a key is therefore
+    // indistinguishable from one changed on the page.
+    if (rejectProgrammaticAuth(req, reply, PAYER_JWT_ONLY_MSG, { allowBillingKey: true })) return
     const actorId = req.userId
     if (!actorId) return reply.status(401).send(err("unauthorized", "Authentication required"))
 
@@ -532,7 +792,10 @@ export async function deploymentBillingRoutes(app: FastifyInstance): Promise<voi
   // POST /users/:id/grant — a top-up (or a correction) for one user
   // -------------------------------------------------------------------------
   app.post("/v1/deployment-billing/users/:id/grant", { preHandler: requireDeploymentPayer }, async (req, reply) => {
-    if (rejectProgrammaticAuth(req, reply, PAYER_JWT_ONLY_MSG)) return
+    // Opted in, exactly as `PUT /default-allowance` above and the absolute
+    // verb below. This one DOES stamp the credential: it writes a grant row,
+    // and a grant row is where "via <key name>" comes from.
+    if (rejectProgrammaticAuth(req, reply, PAYER_JWT_ONLY_MSG, { allowBillingKey: true })) return
     const actorId = req.userId
     if (!actorId) return reply.status(401).send(err("unauthorized", "Authentication required"))
     const { id } = req.params as { id: string }
@@ -541,14 +804,7 @@ export async function deploymentBillingRoutes(app: FastifyInstance): Promise<voi
       // D13: the payer holds the real credits. An allowance for it would be a
       // quota against its own pool — a concept that does not exist — and a row
       // for it would make its own runs refusable at the flip.
-      return reply
-        .status(400)
-        .send(
-          err(
-            "payer_has_no_allowance",
-            "The billing account holds the deployment's credits and has no allowance. Buy credits instead.",
-          ),
-        )
+      return reply.status(400).send(err("payer_has_no_allowance", PAYER_NO_ALLOWANCE_MSG))
     }
 
     // BOTH FIELDS ARE `unknown` HERE, DELIBERATELY. `note: z.string().max(500)`
@@ -569,23 +825,25 @@ export async function deploymentBillingRoutes(app: FastifyInstance): Promise<voi
     // that is running right now.
     const input = creditsFromUnits(parsed.success ? parsed.data.units : undefined, { allowNegative: true })
     if (!input.ok) return reply.status(400).send(err(input.code, input.message))
-    // The note's own refusal, with its own code and its own field named. The
-    // 500-char cap has no client counterpart (the column is bare `text`), so
-    // this is the only place it is enforced; fail-closed, before any RPC call,
-    // so nothing is written and the retry is safe.
-    const rawNote = parsed.success ? parsed.data.note : undefined
-    if (rawNote !== undefined && rawNote !== null && typeof rawNote !== "string") {
-      return reply.status(400).send(err("invalid_note", "note must be text."))
-    }
-    if (typeof rawNote === "string" && rawNote.length > NOTE_MAX_CHARS) {
-      return reply
-        .status(400)
-        .send(err("note_too_long", `The note is too long — keep it to ${NOTE_MAX_CHARS} characters or fewer.`))
-    }
-    const note = typeof rawNote === "string" ? rawNote : null
+    // The note's own refusal, with its own code and its own field named — see
+    // `readNote`, which the absolute verb below shares so the cap and its two
+    // codes cannot drift between the page's verb and the integration's.
+    const noteInput = readNote(parsed.success ? parsed.data.note : undefined)
+    if (!noteInput.ok) return reply.status(400).send(err(noteInput.code, noteInput.message))
+    const note = noteInput.note
 
     const kind = input.credits > 0 ? "topup" : "correction"
-    const result = await grantAllowance({ userId: id, credits: input.credits, actorId, kind, note })
+    const result = await grantAllowance({
+      userId: id,
+      credits: input.credits,
+      actorId,
+      kind,
+      note,
+      // The credential that acted, never the actor: `granted_by` stays the
+      // billing account (the key acts AS it), and the key's id is the separate
+      // audit line the history renders as "via <key name>". Null is the page.
+      credentialId: req.billingKey?.id ?? null,
+    })
     if (!result.ok) {
       return reply.status(WRITE_STATUS[result.code]).send(err(result.code, WRITE_MESSAGE[result.code], result.message))
     }
@@ -603,6 +861,156 @@ export async function deploymentBillingRoutes(app: FastifyInstance): Promise<voi
     const { provisioned: _provisioned, ...figures } = ledgerInUnits(row, u)
     return reply.send({
       data: { userId: id, kind, credits: input.credits, units: inUnits(input.credits, u), allowance: figures },
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // PUT /users/:ref/allowance — the ABSOLUTE verbs: set and renew
+  // -------------------------------------------------------------------------
+  //
+  // WHY ABSOLUTE. A back office knows "this customer's plan is 50 000", never
+  // the delta from a figure it has not read. A delta computed on its side
+  // turns a retry after a timeout into a second allocation; an absolute target
+  // replayed is a no-op. That is the whole idempotency story, and it is why
+  // this verb exists beside the additive `grant` rather than instead of it.
+  //
+  // THREE ANSWERS, and the caller branches on the status alone:
+  //   200 — applied (or a `noop`, which is a success: the target was already
+  //         the granted figure).
+  //   202 — the person has no account yet, so the INTENT is stored against the
+  //         identity their IdP will assert and applied at their first sign-in.
+  //   4xx — a refusal, none of which wrote anything.
+  app.put("/v1/deployment-billing/users/:ref/allowance", { preHandler: requireDeploymentPayer }, async (req, reply) => {
+    if (rejectProgrammaticAuth(req, reply, PAYER_JWT_ONLY_MSG, { allowBillingKey: true })) return
+    const actorId = req.userId
+    if (!actorId) return reply.status(401).send(err("unauthorized", "Authentication required"))
+    const payerId = deploymentPayerId()
+    if (!payerId) return reply.status(404).send(err("not_found", "Not found"))
+
+    // EVERY FIELD IS `unknown`, judged on its own — the coupling lesson from
+    // the grant route above: a typed `note` fails the WHOLE object on an
+    // over-long note, and the amount is then read as `undefined` and refused
+    // by a code that names a field which was fine.
+    const parsed = z
+      .object({
+        units: z.unknown(),
+        mode: z.unknown().optional(),
+        note: z.unknown().optional(),
+        force: z.unknown().optional(),
+      })
+      .safeParse(req.body)
+    const body: { units?: unknown; mode?: unknown; note?: unknown; force?: unknown } = parsed.success
+      ? parsed.data
+      : {}
+
+    const mode = body.mode
+    if (mode !== "set" && mode !== "renew") {
+      return reply
+        .status(WRITE_STATUS.allowance_mode_invalid)
+        .send(err("allowance_mode_invalid", WRITE_MESSAGE.allowance_mode_invalid, 'mode must be "set" or "renew".'))
+    }
+    // ZERO IS LEGAL HERE and nowhere else: a cancelled plan is a quota of 0,
+    // and refusing to express it would leave the last plan's figure standing.
+    // Negative is not — a downgrade is a lower target, never a negative one.
+    const input = creditsFromUnits(body.units, { allowNegative: false, allowZero: true })
+    if (!input.ok) return reply.status(400).send(err(input.code, input.message))
+    const noteInput = readNote(body.note)
+    if (!noteInput.ok) return reply.status(400).send(err(noteInput.code, noteInput.message))
+    const force = body.force === true
+    const credentialId = req.billingKey?.id ?? null
+
+    const outcome = await resolveRef((req.params as { ref?: string }).ref, reply)
+    if (outcome.kind === "refused") return
+
+    if (outcome.kind === "absent") {
+      // A UUID CANNOT BE PENDING. Pending intents are keyed by the identity an
+      // IdP will assert; a uuid is the studio's own id, which exists only
+      // after an account does — so a uuid nobody answers to is a caller
+      // holding a stale or wrong id, and saying so is the only useful answer.
+      if (outcome.ref.id) {
+        return reply
+          .status(404)
+          .send(err("user_not_found", "No account on this deployment has that id."))
+      }
+      const pending = await writePendingAllowance({
+        ssoSubject: outcome.ref.ssoSubject ?? null,
+        email: outcome.ref.email ?? null,
+        targetCredits: input.credits,
+        mode,
+        note: noteInput.note,
+        createdBy: actorId,
+        credentialId,
+      })
+      if (!pending.ok) {
+        return reply
+          .status(WRITE_STATUS[pending.code])
+          .send(err(pending.code, WRITE_MESSAGE[pending.code], pending.message))
+      }
+      // 202, not 200, so the caller can tell "stored, will apply" from
+      // "applied" without parsing the body — and a replay REPLACES the stored
+      // intent rather than queueing a second one, so the last figure sent is
+      // the one that lands.
+      return reply.status(202).send({ data: { status: "pending", expiresAt: pending.expiresAt } })
+    }
+
+    const userId = outcome.userId
+    const u = configuredUnit()
+
+    // THE MOST EXPENSIVE RULE IN THIS FILE. `renew` zeroes `spent`, and the
+    // database will happily do it twice — so a duplicate webhook an hour after
+    // the first would erase a period's real consumption and the customer would
+    // be given back credits they had already used. The route owns the guard,
+    // and `force` is how a genuine second period inside one day is expressed.
+    if (mode === "renew" && !force) {
+      const current = await allowanceLedgerOne(userId)
+      if (current === null) {
+        // The read failed, so "when was this last renewed?" has no answer.
+        // Guessing "never" is the expensive direction, so this refuses with a
+        // fault the caller retries rather than a business refusal it would
+        // treat as final.
+        return reply
+          .status(503)
+          .send(
+            err(
+              "read_failed",
+              "Could not check when this allowance was last renewed. Nothing was changed — try again.",
+            ),
+          )
+      }
+      const last = current.resetAt ? Date.parse(current.resetAt) : Number.NaN
+      if (Number.isFinite(last) && Date.now() - last < RENEWAL_MIN_INTERVAL_MS) {
+        return reply
+          .status(409)
+          .send(
+            err(
+              "renewal_too_soon",
+              "This allowance was renewed less than 24 hours ago. Send force: true only if a new period really started.",
+              `resetAt ${current.resetAt}`,
+            ),
+          )
+      }
+    }
+
+    const result = await setAllowance({
+      userId,
+      targetCredits: input.credits,
+      actorId,
+      mode,
+      note: noteInput.note,
+      credentialId,
+    })
+    if (!result.ok) {
+      return reply.status(WRITE_STATUS[result.code]).send(err(result.code, WRITE_MESSAGE[result.code], result.message))
+    }
+
+    // The user's own balance readout caches for 15 s, so without this the
+    // person whose quota just moved keeps seeing the old figure. A `noop`
+    // moved nothing, and dropping the cache for it would make the page redraw
+    // for a write that never happened.
+    if (result.applied !== "noop") invalidateBalanceCache(userId)
+
+    return reply.send({
+      data: { userId, applied: result.applied, allowance: allowancePairs(result.row, u) },
     })
   })
 

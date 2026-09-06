@@ -201,6 +201,11 @@ const AS_PAYER = { "x-user-id": PAYER }
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  // A resolved default, not `undefined`: several routes now make an RPC call
+  // they do not otherwise care about (the per-page SSO-subject lookup), and a
+  // bare `vi.fn()` answers `undefined`, which destructuring turns into a 500
+  // in a test that is about something else entirely.
+  mockRpc.mockResolvedValue({ data: null, error: null })
   tableResults.clear()
   rec.fromCalls = []
   rec.selectCols = {}
