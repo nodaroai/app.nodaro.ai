@@ -628,3 +628,139 @@ describe("run_workflow — client_request_id", () => {
     expect(schema.properties?.client_request_id?.description).toContain("reuse the same value when retrying")
   })
 })
+
+// ── update_workflow_json — delta + the Studio-document guard ────────────────
+// Audit 2026-09-06 fix #6 (C-2(b)(a), C-13(3)): the REST route has carried an
+// id-keyed `delta` (migration 219, `apply_workflow_delta`) since P3, while the
+// MCP tool could only replace whole graphs — and a whole-settings replace from
+// an agent silently dropped `settings.studio`, the Studio production document
+// (shots, results, plan). The tool now forwards `delta` to the route (which
+// owns the RPC, the access check and the audience gate) and refuses a settings
+// replace that would clobber a stored `settings.studio` unless it is echoed
+// unchanged.
+describe("update_workflow_json — delta", () => {
+  function patchStub(response: { status: number; body: object }) {
+    const fastify = Fastify()
+    const seen: { body?: Record<string, unknown>; userHeader?: unknown; hits: number } = { hits: 0 }
+    fastify.patch("/v1/workflows/:id", async (req, reply) => {
+      seen.hits += 1
+      seen.body = req.body as Record<string, unknown>
+      seen.userHeader = req.headers["x-internal-user-id"]
+      return reply.status(response.status).send(response.body)
+    })
+    return { fastify, seen }
+  }
+
+  it("forwards an id-keyed delta to PATCH /v1/workflows/:id as the caller and returns the new version", async () => {
+    const { fastify, seen } = patchStub({ status: 200, body: { data: { id: WORKFLOW_ID, version: 8, updatedAt: "2026-09-06T10:00:00Z" } } })
+    // The mcp-project floor is checked here (one read); the write itself is the route's.
+    const floor = chain({ data: { id: WORKFLOW_ID, project_id: MCP_PROJECT_ID }, error: null })
+    fromMock.mockReturnValueOnce(floor)
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:write"]), fastify })
+    const result = await callTool(server, "update_workflow_json", {
+      workflow_id: WORKFLOW_ID,
+      delta: {
+        base_version: 7,
+        upsert_nodes: [{ id: "n2", type: "text-prompt", data: { prompt: "hi" } }],
+        delete_node_ids: ["n9"],
+        upsert_edges: [],
+        delete_edge_ids: [],
+        set: { name: "Renamed" },
+      },
+    })
+    expect(result.isError).toBeUndefined()
+    expect(seen.hits).toBe(1)
+    expect(seen.userHeader).toBe("u1")
+    expect(seen.body?.delta).toEqual({
+      baseVersion: 7,
+      upsertNodes: [{ id: "n2", type: "text-prompt", data: { prompt: "hi" } }],
+      deleteNodeIds: ["n9"],
+      upsertEdges: [],
+      deleteEdgeIds: [],
+      set: { name: "Renamed" },
+    })
+    expect(result.structuredContent?.version).toBe(8)
+    expect(result.structuredContent?.updated_at).toBe("2026-09-06T10:00:00Z")
+    expect(fromMock).toHaveBeenCalledTimes(1)
+    expect(floor.update).not.toHaveBeenCalled()
+  })
+
+  it("refuses a delta mixed with full-body fields — never hits the route", async () => {
+    const { fastify, seen } = patchStub({ status: 200, body: {} })
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:write"]), fastify })
+    const result = await callTool(server, "update_workflow_json", {
+      workflow_id: WORKFLOW_ID,
+      nodes: [],
+      edges: [],
+      delta: { base_version: 1 },
+    })
+    expect(result.isError).toBe(true)
+    expect(result.content[0]?.text).toContain("mutually exclusive")
+    expect(seen.hits).toBe(0)
+  })
+
+  it("maps the route's 409 to the same conflict guidance the full-body path gives, with the current version", async () => {
+    const { fastify } = patchStub({ status: 409, body: { error: { code: "workflow_conflict", message: "Workflow was updated by another writer", currentVersion: 9, currentUpdatedAt: "t9" } } })
+    fromMock.mockReturnValueOnce(chain({ data: { id: WORKFLOW_ID, project_id: MCP_PROJECT_ID }, error: null }))
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:write"]), fastify })
+    const result = await callTool(server, "update_workflow_json", { workflow_id: WORKFLOW_ID, delta: { base_version: 7 } })
+    expect(result.isError).toBe(true)
+    expect(result.content[0]?.text).toContain("modified since")
+    expect(result.content[0]?.text).toContain("9")
+  })
+
+  it("advertises delta with its base_version guidance", async () => {
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:write"]), fastify: Fastify() })
+    const tools = await listTools(server)
+    const tool = tools.find((t) => t.name === "update_workflow_json")
+    const schema = tool?.inputSchema as { properties?: Record<string, { description?: string }> }
+    expect(schema.properties?.delta?.description).toContain("base_version")
+  })
+})
+
+describe("update_workflow_json — settings.studio guard", () => {
+  const stored = { studio: { shots: [{ id: "s1" }], version: 2 }, other: 1 }
+
+  it("refuses a settings replace that would drop or change the stored Studio production document", async () => {
+    // One read of the stored settings, then NO update.
+    fromMock.mockReturnValueOnce(chain({ data: { settings: stored }, error: null }))
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:write"]), fastify: Fastify() })
+    const result = await callTool(server, "update_workflow_json", {
+      workflow_id: WORKFLOW_ID,
+      settings: { other: 2 },
+    })
+    expect(result.isError).toBe(true)
+    expect(result.content[0]?.text).toContain("Studio production")
+    expect(fromMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("accepts a settings replace that echoes settings.studio unchanged", async () => {
+    fromMock
+      .mockReturnValueOnce(chain({ data: { settings: stored }, error: null }))
+      .mockReturnValueOnce(chain({ data: { id: WORKFLOW_ID, name: "Flow", updated_at: "t3", version: 3 }, error: null }))
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:write"]), fastify: Fastify() })
+    const result = await callTool(server, "update_workflow_json", {
+      workflow_id: WORKFLOW_ID,
+      settings: { other: 2, studio: { shots: [{ id: "s1" }], version: 2 } },
+    })
+    expect(result.isError).toBeUndefined()
+    expect(result.structuredContent?.updated_at).toBe("t3")
+  })
+
+  it("leaves a workflow with no stored settings.studio unguarded (one read, then the update)", async () => {
+    fromMock
+      .mockReturnValueOnce(chain({ data: { settings: { other: 1 } }, error: null }))
+      .mockReturnValueOnce(chain({ data: { id: WORKFLOW_ID, name: "Flow", updated_at: "t4", version: 4 }, error: null }))
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:write"]), fastify: Fastify() })
+    const result = await callTool(server, "update_workflow_json", { workflow_id: WORKFLOW_ID, settings: { other: 2 } })
+    expect(result.isError).toBeUndefined()
+    expect(result.structuredContent?.updated_at).toBe("t4")
+  })
+})
