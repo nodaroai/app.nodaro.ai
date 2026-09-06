@@ -362,7 +362,19 @@ That's it. The next sections cover production hardening.
 
 The container already runs Caddy internally on port 3000 — it serves the
 frontend statics and proxies `/v1/*` to the Fastify backend on port
-9000. For HTTPS you have two options:
+9000.
+
+Caddy accepts the `X-Forwarded-*` headers only from peers in the private
+ranges (`127.0.0.1/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`,
+`fd00::/8`, `::1`), and rewrites `X-Forwarded-For` to the single client
+address it derives — the rightmost entry that is not itself a trusted proxy,
+so an address a client put in the header is skipped. A proxy reaching it from
+a public address has those headers replaced with the values Caddy itself
+observed. One consequence worth knowing if you serve an intranet: the same
+rule skips your users' own addresses when those are private too, so a client
+on the LAN can choose the address the backend records.
+
+For HTTPS you have two options:
 
 **Option A — Front Caddy with another reverse proxy.** Recommended if
 you already run nginx or another proxy.

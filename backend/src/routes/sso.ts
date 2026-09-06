@@ -144,9 +144,9 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
     //    /v1, and the studio may answer on more than one hostname while
     //    PUBLIC_URL can only name one); PUBLIC_URL only for a host that is NOT
     //    allow-listed, i.e. a split-origin dev setup. The test is on the HOST,
-    //    not the whole origin, on purpose: the edge proxy owns the scheme (it
-    //    rewrites X-Forwarded-Proto to the one IT received, which behind a
-    //    TLS-terminating edge is http), and a relative redirect never needs a
+    //    not the whole origin, on purpose: whether the forwarded scheme
+    //    survives at all depends on the proxy chain (frontend/Caddyfile's
+    //    trusted_proxies decides it), and a relative redirect never needs a
     //    scheme — the browser resolves it against the page it is already on.
     const base = isAllowedRequestHost(req) ? "" : config.PUBLIC_URL || ""
     const url = `${base}/sso?sso_token=${encodeURIComponent(hashedToken)}&next=${encodeURIComponent(safeNext(next))}`
