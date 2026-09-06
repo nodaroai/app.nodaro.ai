@@ -25,6 +25,19 @@ describe("serving lane selects the rate band", () => {
     expect(direct).toBeCloseTo(0.00525, 10)
   })
 
+  it("costs gemini-3.8-flash at Google's INTRO list price on the direct lane", () => {
+    // Direct row is the launch INTRO rate ($0.75/$3.75) running through
+    // 2026-12-31; standard $1.50/$7.50 lands 2027-01-01 and this expectation
+    // is what will fail if the row is bumped without updating the KIE-vs-direct
+    // story. (1000 * 0.75 + 500 * 3.75) / 1e6 = 0.002625
+    const direct = calculateLlmCost("gemini-3.8-flash", { inputTokens: 1000, outputTokens: 500 }, "direct")
+    expect(direct).toBeCloseTo(0.002625, 10)
+    // ...and the KIE resale band is exactly 30% of that intro rate (15% of the
+    // standard rate that lands 2027-01-01), which is why this model is
+    // registered KIE-first with no `preferDirect`.
+    expect(calculateLlmCost("gemini-3.8-flash", { inputTokens: 1000, outputTokens: 500 })).toBeCloseTo(0.0007875, 10)
+  })
+
   it("never prices the direct lane BELOW the aggregator", () => {
     // A direct row cheaper than its KIE row would mean the two bands got
     // swapped — a vendor's own list price is never the discounted one.
@@ -43,7 +56,11 @@ describe("serving lane selects the rate band", () => {
     // The Gemini gap is the entire reason lane routing is a per-model
     // decision. If a copy-paste ever made these equal, the cost case for
     // KIE-first routing would vanish and nothing else would catch it.
-    for (const id of ["gemini-3-flash", "gemini-3.6-flash", "gemini-3.1-pro"]) {
+    // gemini-3.7-flash is deliberately NOT here: KIE never published a list
+    // price for it, so its KIE row is pinned to Google's own intro rate and the
+    // two bands are equal BY CONSTRUCTION. gemini-3.8-flash does have a
+    // published KIE price (45/225 credits per M), so the gap is real again.
+    for (const id of ["gemini-3-flash", "gemini-3.6-flash", "gemini-3.8-flash", "gemini-3.1-pro"]) {
       const usage = { inputTokens: 10_000, outputTokens: 2_000 }
       expect(
         calculateLlmCost(id, usage, "direct"),

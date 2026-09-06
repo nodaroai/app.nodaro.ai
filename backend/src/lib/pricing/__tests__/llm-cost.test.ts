@@ -85,6 +85,25 @@ describe("calculateLlmCost", () => {
     // (1000 * 1.40 + 500 * 8.40) / 1_000_000 = 0.0056
     expect(calculateLlmCost("gpt-5.5", { inputTokens: 1000, outputTokens: 500 })).toBeCloseTo(0.0056, 10)
   })
+  it("prices gemini-3.8-flash at KIE list rates", () => {
+    // 45/225 KIE credits per M @ $0.005 = $0.225/$1.125.
+    // (1000 * 0.225 + 500 * 1.125) / 1_000_000 = 0.0007875
+    expect(calculateLlmCost("gemini-3.8-flash", { inputTokens: 1000, outputTokens: 500 })).toBeCloseTo(0.0007875, 10)
+  })
+  it("prices gpt-6-astra at KIE list rates", () => {
+    // 560/2800 KIE credits per M @ $0.005 = $2.80/$14.00. 1M/1M: 2.80 + 14.00 = 16.80
+    expect(calculateLlmCost("gpt-6-astra", { inputTokens: 1_000_000, outputTokens: 1_000_000 })).toBeCloseTo(16.8, 10)
+  })
+  it("prices gpt-6-astra on ONE flat input band (KIE's cached/cache-write rows are deliberately unmodelled)", () => {
+    // KIE bills cached input at 56 and cache writes at 700 credits/M, but this
+    // is an OpenAI-shape lane: it reports cached tokens INSIDE the prompt
+    // total, so the table carries the uncached band only and callers pass
+    // input/output alone. Doubling the prompt must therefore exactly double the
+    // input charge — no band switch, no threshold hiding in the row.
+    const small = calculateLlmCost("gpt-6-astra", { inputTokens: 100_000, outputTokens: 0 })
+    const big = calculateLlmCost("gpt-6-astra", { inputTokens: 200_000, outputTokens: 0 })
+    expect(big / small).toBeCloseTo(2, 10)
+  })
 })
 
 describe("calculateLlmCost — prompt-cache tokens", () => {

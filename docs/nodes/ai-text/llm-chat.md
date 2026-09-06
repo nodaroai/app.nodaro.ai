@@ -28,8 +28,8 @@ When the prompt (or a template) produces a single block with no `===NEXT===` mar
 | Instructions (System Prompt) | `string` | `""` | Optional system instructions that guide the model's behavior and output format. Labeled **Instructions (System Prompt)** in the config panel and **Instructions** on the node handle |
 | User Input | `string` | `""` | The main prompt. Can include references to upstream nodes via field mappings |
 | Model | `string` | `gemini-3.6-flash` | LLM model picked via the model selector — drives both capability and credit cost (see [Credit pricing](#credit-pricing)) |
-| Temperature | `number` | `0.7` | Creativity control (0 = deterministic, 1 = more creative). Ignored by models that reject the parameter (Claude Opus 4.7, GPT-5.5, the GPT-5.6 family, Grok 4.6, Claude Sonnet 5, Claude Opus 4.8, Claude Opus 5, and Claude Fable 5) |
-| Max Tokens | `number` | `8192` | Maximum output length in tokens. At `xhigh`/`max` effort the effective cap is floored to 32768 so reasoning tokens can't truncate the answer |
+| Temperature | `number` | `0.7` | Creativity control (0 = deterministic, 1 = more creative). Ignored by models that reject the parameter (Claude Opus 4.7, GPT-5.5, the GPT-5.6 family, GPT-6 Astra, Grok 4.6, Claude Sonnet 5, Claude Opus 4.8, Claude Opus 5, and Claude Fable 5) |
+| Max Tokens | `number` | `8192` | Maximum output length in tokens. At `xhigh`/`max` effort — and at **every** effort, including `Auto`, for the models that reason by default (Claude Opus 5, Grok 4.6, GPT-6 Astra) — the effective cap is floored to 32768 so reasoning tokens can't truncate the answer |
 | # of runs | `number` | `1` | How many generations to produce per Run click (1–4 in the node's quick toolbar). Each run is charged separately — the Run button shows the multiplied credit cost |
 | Effort | `string` | `Auto` | Reasoning effort for models that support it — hidden entirely for models with no reasoning levels. See [Reasoning effort](#reasoning-effort) |
 | Advanced mode | `boolean` | `false` | Gemini models only. Runs the model on the provider's own API so **Temperature**, **Max Tokens** and the full reasoning-depth range actually apply — those controls appear once it is on. Bills one credit tier up; the node's cost badge updates immediately. Disabled with an inline reason on non-Gemini models |
@@ -44,6 +44,7 @@ The model is chosen from the shared LLM model selector — a searchable picker g
 | Gemini 3 Flash | Economy | image + video + audio |
 | Gemini 3.6 Flash | Economy | image + video + audio |
 | Gemini 3.7 Flash | Economy | image only |
+| Gemini 3.8 Flash | Economy | image only |
 | Claude Haiku 4.5 | Economy | image only |
 | GPT-5.6 Luna | Economy | image only |
 | Claude Sonnet 4.6 | Standard | image only |
@@ -56,13 +57,14 @@ The model is chosen from the shared LLM model selector — a searchable picker g
 | GPT-5.4 | Premium | image only |
 | GPT-5.5 | Premium | image only |
 | GPT-5.6 Sol | Premium | image only |
+| GPT-6 Astra | Premium | image only |
 | Claude Opus 4.8 | Premium | image only |
 | Claude Opus 5 | Premium | image only |
 | Claude Fable 5 | Premium | image only |
 
 The default model is Gemini 3.6 Flash (economy tier). Most models expose reasoning levels and show an **Effort** selector next to the model picker (the exceptions: Gemini 3 Flash, Claude Haiku 4.5, GPT-5.2, and Gemini 3.1 Pro have no effort lever — though the two Gemini models gain one under **Advanced mode**, which reaches the provider's fuller range) — see [Reasoning effort](#reasoning-effort).
 
-Gemini 3.7 Flash currently accepts **image references only** — video/audio references for it are not yet enabled (use Gemini 3.6 Flash or Gemini 3.1 Pro for those).
+Gemini 3.7 Flash and Gemini 3.8 Flash currently accept **image references only** — video/audio references for them are not yet enabled (use Gemini 3.6 Flash or Gemini 3.1 Pro for those).
 
 ## Canvas controls
 
@@ -91,7 +93,7 @@ Drag the **magnifier handle** at the bottom-left corner to zoom the node up to 2
 ### Multimodal inputs
 
 - **Image reference** — supported by every model. Useful for "describe this image", "write a caption", or generating prompts from a connected image.
-- **Video / audio reference** — supported **only by the video-capable Gemini models** (Gemini 3 Flash, Gemini 3.6 Flash, or Gemini 3.1 Pro — Gemini 3.7 Flash is image-only for now). If a video or audio reference is connected, select one of those models or the reference is ignored.
+- **Video / audio reference** — supported **only by the video-capable Gemini models** (Gemini 3 Flash, Gemini 3.6 Flash, or Gemini 3.1 Pro — Gemini 3.7 Flash and Gemini 3.8 Flash are image-only for now). If a video or audio reference is connected, select one of those models or the reference is ignored.
 
 ## Presets
 
@@ -137,7 +139,7 @@ Cost depends on the selected model's tier.
 |------|----------------|---------|
 | Economy | Gemini Flash, Claude Haiku | **1** |
 | Standard | Claude Sonnet, GPT-5.2, Grok 4.6 | **2** |
-| Premium | Claude Opus, Claude Fable 5, GPT-5.4, Gemini Pro | **3** |
+| Premium | Claude Opus, Claude Fable 5, GPT-5.4, GPT-6 Astra, Gemini Pro | **3** |
 
 The credit identifier is `llm-chat` (standard), `llm-chat:economy`, or `llm-chat:premium`, built from the selected model at request time. These match the runtime `STATIC_CREDIT_COSTS` values (`llm-chat` = 2, `llm-chat:economy` = 1, `llm-chat:premium` = 3).
 
@@ -153,18 +155,19 @@ Examples (LLM Chat: 1 cr economy / 2 cr standard / 3 cr premium):
 - GPT-5.6 Terra at `xhigh` → 3 credits (standard billed as premium)
 - Grok 4.6 at `xhigh` → 3 credits (standard billed as premium; its ladder is low/medium/high/xhigh)
 - GPT-5.6 Sol at `max` → 3 credits (premium, unchanged)
+- GPT-6 Astra at `xhigh` → 3 credits (premium, unchanged; its ladder is low/medium/high/xhigh)
 - Claude Sonnet 5 at `high` → 2 credits (high never changes the price)
-- Gemini 3.6 Flash and Gemini 3.7 Flash expose `low`/`high` only — neither changes the price (requests above `high` clamp down to it)
+- Gemini 3.6 Flash, Gemini 3.7 Flash, and Gemini 3.8 Flash expose `low`/`high` only — none of them changes the price (requests above `high` clamp down to it)
 
 ## Best Practices
 
 - Use the Instructions (System Prompt) to define output format, tone, and constraints — good instructions dramatically improve consistency.
 - Reference upstream nodes in the User Input via field mappings for dynamic, context-aware prompts.
 - Keep Temperature at 0.7 for a balance of creativity and coherence. Lower it for factual or structured output; raise it for brainstorming.
-- For long-form content, raise Max Tokens. The default (8192) handles most cases but may truncate very long outputs. At `xhigh`/`max` effort the cap is automatically floored to 32768.
+- For long-form content, raise Max Tokens. The default (8192) handles most cases but may truncate very long outputs. At `xhigh`/`max` effort the cap is automatically floored to 32768 — and so it is at **every** effort, including `Auto`, on the models that reason by default (Claude Opus 5, Grok 4.6, GPT-6 Astra), whose reasoning tokens share the output budget on every call.
 - For image-prompt fan-out (Photo Shoot Planner / Product Catalog Writer / Storyboard Writer), connect a reference image upstream — running these templates is blocked without one. The Custom template does not require one.
 - Pick the cheapest model that meets your quality bar — economy (1 cr) is plenty for rewriting and captioning; reserve premium (3 cr) for complex reasoning.
-- To process a video or audio reference, select a video-capable Gemini model (see the model table — Gemini 3.7 Flash is image-only for now).
+- To process a video or audio reference, select a video-capable Gemini model (see the model table — Gemini 3.7 Flash and Gemini 3.8 Flash are image-only for now).
 
 ## Common Use Cases
 
