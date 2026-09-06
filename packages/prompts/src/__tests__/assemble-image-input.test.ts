@@ -417,3 +417,33 @@ describe("assembleImageInput — platform-caller parity (no direction)", () => {
     })
   }
 })
+
+// ---------------------------------------------------------------------------
+// Described references — forwarded verbatim to `buildImagePrompt`, including
+// when they are the ONLY reference channel the caller sends (a story landing
+// whose cast has no entities yet).
+// ---------------------------------------------------------------------------
+describe("assembleImageInput — describedReferences", () => {
+  it("forwards them with no connected references", () => {
+    const described = [{ name: "Natalie", description: "a tall woman in a red coat" }]
+    expect(
+      assembleImageInput({
+        userPrompt: "Natalie walks down the pier.",
+        provider: "nano-banana-pro",
+        describedReferences: described,
+      }),
+    ).toEqual(
+      buildImagePrompt({
+        prompt: "Natalie walks down the pier.",
+        provider: "nano-banana-pro",
+        describedReferences: described,
+      }),
+    )
+  })
+
+  it("omits the field entirely when absent (byte-identical to today)", () => {
+    expect(
+      assembleImageInput({ userPrompt: "A woman walks.", provider: "nano-banana-pro" }),
+    ).toEqual(buildImagePrompt({ prompt: "A woman walks.", provider: "nano-banana-pro" }))
+  })
+})

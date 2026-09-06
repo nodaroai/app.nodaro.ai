@@ -21,7 +21,8 @@ import { buildIdentityLockLine, withForcedIdentityLock } from "./identity-lock.j
 import { findLocationMentionTokens, DEFAULT_LOCATION_USAGE_MODE, type LocationMentionTokenInfo, type LocationUsageMode } from "@nodaro/shared"
 import { findImageMentionTokens, imageMentionSlugForRef, knownImageSlugsFromRefs, type ImageMentionTokenInfo } from "@nodaro/shared"
 import { findEntityMentionTokens, entityMentionSlugForRef, knownEntitySlugsFromRefs, type EntityMentionTokenInfo } from "@nodaro/shared"
-import type { CharacterDef, ConnectedReference, IdentityFidelity, IdentityMeta, ReferenceSource, SceneData } from "@nodaro/shared"
+import type { CharacterDef, ConnectedReference, DescribedReference, IdentityFidelity, IdentityMeta, ReferenceSource, SceneData } from "@nodaro/shared"
+import { appendReferenceLines, referenceDescriptionLine, renderDescribedReferenceLines } from "./described-references.js"
 import { locationReferencePhotoKindLabel, type LocationReferencePhotoKind } from "@nodaro/shared"
 
 export interface ResolveCharacterMentionsResult {
@@ -60,6 +61,30 @@ function composeIdentityDescPart(
   const e = elementInjection?.trim()
   if (e) parts.push(e)
   return parts.length > 0 ? `${subject} — ${parts.join(". ")}` : subject
+}
+
+/**
+ * The trailing line a per-use `descriptionOverride` contributes in HYBRID
+ * format. The hybrid role phrase ("the person from reference image A") carries
+ * no description slot, so the override is surfaced as its own binding-subject
+ * line via the ONE phrasing helper in `described-references.ts`. It is pushed
+ * onto the reference's `elementDirectives` — the array every hybrid renderer
+ * already uses for "the trailing scene directives this reference contributes" —
+ * so it lands with that reference's other lines instead of threading a ninth
+ * channel through eight call sites.
+ *
+ * The hybrid EXTRAS path does not call this: it has a real `, <desc>` clause,
+ * which the override fills instead (so the model is never told twice). Nothing
+ * is pushed without an override, which is what keeps every existing hybrid
+ * output byte-identical.
+ */
+function pushOverrideDirective(
+  out: string[],
+  ref: Pick<ConnectedReference, "descriptionOverride">,
+  binding: string,
+): void {
+  const line = referenceDescriptionLine(binding, ref.descriptionOverride)
+  if (line) out.push(line)
 }
 
 /**
@@ -176,9 +201,15 @@ export function resolveCharacterMentions(
       // (held-prop / styling / text) ride the bullet in every mode that emits
       // one. Byte-identical to the old `${subject} — ${canonical}` form when no
       // injection is present.
+      // A per-use `descriptionOverride` IS the caller describing this subject
+      // for this run, so it fills the identity slot ahead of the entity's stored
+      // canonical description — and rides every mode that emits a bullet at all
+      // (the mode gate exists to suppress STORED identity noise, not the
+      // caller's own words). "none" still emits nothing: it returned above.
       const descPart = composeIdentityDescPart(
         subject,
-        includeCanonicalDesc ? match.characterCanonicalDescription : undefined,
+        match.descriptionOverride?.trim()
+          || (includeCanonicalDesc ? match.characterCanonicalDescription : undefined),
         match.elementInjection,
       )
       // `directive` is non-null here because usageModeDirective only returns
@@ -407,6 +438,7 @@ function resolveCharacterMentionsHybrid(
     const binding = bindingFor(m.url)
     const lock = buildIdentityLockLine(withForcedIdentityLock(ref, lockOverrideByUrl.get(m.url)), binding)
     if (lock) lockLines.push(lock)
+    pushOverrideDirective(elementDirectives, ref, binding)
     const inject = ref.elementInjection?.trim()
     if (inject) elementDirectives.push(inject)
   }
@@ -830,6 +862,7 @@ function resolveLocationMentionsHybrid(
     const binding = bindingFor(m.url)
     const lock = buildIdentityLockLine(withForcedIdentityLock(ref, lockOverrideByUrl.get(m.url)), binding)
     if (lock) lockLines.push(lock)
+    pushOverrideDirective(elementDirectives, ref, binding)
     const inject = ref.elementInjection?.trim()
     if (inject) elementDirectives.push(inject)
   }
@@ -955,6 +988,7 @@ function resolveImageMentionsHybrid(
     const binding = bindingFor(m.url)
     const lock = buildIdentityLockLine(withForcedIdentityLock(ref, lockOverrideByUrl.get(m.url)), binding)
     if (lock) lockLines.push(lock)
+    pushOverrideDirective(elementDirectives, ref, binding)
     const inject = ref.elementInjection?.trim()
     if (inject) elementDirectives.push(inject)
   }
@@ -1137,6 +1171,7 @@ function resolveEntityMentionsHybrid(
     const binding = bindingFor(m.url)
     const lock = buildIdentityLockLine(withForcedIdentityLock(ref, lockOverrideByUrl.get(m.url)), binding)
     if (lock) lockLines.push(lock)
+    pushOverrideDirective(elementDirectives, ref, binding)
     const inject = ref.elementInjection?.trim()
     if (inject) elementDirectives.push(inject)
   }
@@ -1221,9 +1256,12 @@ function buildCanonicalFallback(
     // the (mode-gated) canonical description. This is the reported path — a
     // character wired with no @-mention — so a composed character surfaces its
     // elements wherever it's used downstream.
+    // Per-use override ahead of the stored canonical description, mode-gate
+    // included — same rule as the mention path above.
     const descPart = composeIdentityDescPart(
       subject,
-      includeCanonicalDesc ? r.characterCanonicalDescription : undefined,
+      r.descriptionOverride?.trim()
+        || (includeCanonicalDesc ? r.characterCanonicalDescription : undefined),
       r.elementInjection,
     )
     // `directive` is non-null here ("none"/"name" already short-circuited).
@@ -1283,7 +1321,12 @@ function buildExtraRefDirectives(
   for (const r of refs) {
     if (!r.isExtraRef) continue
     if (!r.url) continue
-    const description = (r.description ?? r.variantDescription ?? "").trim()
+    // A per-use `descriptionOverride` fills THIS extra's description slot —
+    // every branch below reads one `description`, so the override lands in the
+    // pair-back tail, the name-mode bullet and the first-sight descriptor alike
+    // (and, being the caller's own words, outranks the stored canonical too).
+    const description = (r.descriptionOverride ?? "").trim()
+      || (r.description ?? r.variantDescription ?? "").trim()
     // Character extra
     if (r.source === "wired-character" && r.characterSlug) {
       const effectiveMode: UsageMode = r.defaultUsageMode ?? DEFAULT_USAGE_MODE
@@ -1421,6 +1464,7 @@ function renderCanonicalFallbackHybrid(
     phrases.push(roleToPhrase(resolveDefaultRole(r.defaultRole, r.defaultUsageMode, r.source), binding))
     const lock = buildIdentityLockLine(r, binding)
     if (lock) lockLines.push(lock)
+    pushOverrideDirective(elementDirectives, r, binding)
     const inject = r.elementInjection?.trim()
     if (inject) elementDirectives.push(inject)
   }
@@ -1464,7 +1508,10 @@ function renderExtraRefsHybrid(
     if (!r.url) continue
     const letter = letterForUrl(r.url)
     const binding = `reference image ${letter}`
-    const description = (r.description ?? r.variantDescription ?? "").trim()
+    // Per-use override fills the extras' own `, <desc>` clause — the one
+    // description slot the hybrid format has (see `described-references.ts`).
+    const description = (r.descriptionOverride ?? "").trim()
+      || (r.description ?? r.variantDescription ?? "").trim()
     if (r.source === "wired-character" && r.characterSlug) {
       const earlier = firstLetterByChar.get(r.characterSlug)
       if (earlier !== undefined && earlier !== letter) {
@@ -1546,6 +1593,7 @@ function renderLocationCanonicalHybrid(
     phrases.push(roleToPhrase(resolveLocationRole(null, null, r), binding))
     const lock = buildIdentityLockLine(r, binding)
     if (lock) lockLines.push(lock)
+    pushOverrideDirective(elementDirectives, r, binding)
     const inject = r.elementInjection?.trim()
     if (inject) elementDirectives.push(inject)
   }
@@ -1597,6 +1645,7 @@ function renderObjectCreatureCanonicalHybrid(
     phrases.push(roleToPhrase(defaultRoleForSource(r.source), binding))
     const lock = buildIdentityLockLine(r, binding)
     if (lock) lockLines.push(lock)
+    pushOverrideDirective(elementDirectives, r, binding)
     const inject = r.elementInjection?.trim()
     if (inject) elementDirectives.push(inject)
   }
@@ -1874,6 +1923,16 @@ export interface BuildImagePromptConfig {
    * in order, and tokens expand to "the {label} from image {N}".
    */
   connectedReferences?: ConnectedReference[]
+  /**
+   * References the caller can NAME and DESCRIBE but has no media for (an
+   * un-bound cast role, an analysis slot). They attach no URL and claim no
+   * `Image N` / lettered slot — they reach the model as prose, rendered once by
+   * `renderDescribedReferenceLines` and joined the way the active format joins
+   * its trailing directives. Present with NO `connectedReferences` is the normal
+   * case (a story landing before any entity exists), so they enter the
+   * connected-reference path on their own.
+   */
+  describedReferences?: readonly DescribedReference[]
   /** Per-identity (imageIndex+label) user overrides for fidelity / custom text. */
   identityMeta?: readonly IdentityMeta[]
   /**
@@ -2141,6 +2200,13 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
   // reassignment, so computing this once up front is stable. Gates the hybrid
   // character convergence (Phase 0) and the non-capitalizing scene render below.
   const isHybrid = config.referenceFormat === "hybrid"
+  // Described references (name + description, no media) — rendered ONCE, up
+  // front, so the reassignments below can't lose them. They attach no URL, so
+  // they take no part in numbering; they are joined onto the assembled prompt at
+  // the single site in the connected-reference path below, ahead of the provider
+  // cap so a shed sees them like any other body text. Empty for every caller
+  // that doesn't send them → nothing downstream changes.
+  const describedLines = renderDescribedReferenceLines(config.describedReferences)
   // Set when Phase 0 converged character OR location @-mentions into inline
   // hybrid role phrases (+ identity-lock + element directives). Tells the hybrid
   // scene render to expand any remaining {image:N} tokens WITHOUT capitalizing
@@ -2646,7 +2712,11 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
   // wired-image, wired-face, wired-object, wired-location) still auto-
   // attach so unchanged behavior for them.
   // -------------------------------------------------------------------------
-  if (connectedReferences) {
+  // Entered by `connectedReferences` OR by described references alone: a story
+  // landing whose cast has no entities yet sends only names + descriptions, and
+  // the legacy path below has no directive seam to join them onto.
+  if (connectedReferences || describedLines.length > 0) {
+    const structuredRefs = connectedReferences ?? []
     let prompt = config.prompt
 
     // Non-character refs are still emitted as per-identity directives + URLs.
@@ -2658,7 +2728,7 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
     // subject as Image M, …") and merged their URLs into `referenceImageUrls`.
     // Letting them through here would double-emit the URLs (and append a
     // second positional directive via the {image:N:label} path).
-    const nonCharacterRefs = connectedReferences.filter(
+    const nonCharacterRefs = structuredRefs.filter(
       (r) => r.source !== "wired-character" && r.isExtraRef !== true,
     )
 
@@ -2811,6 +2881,20 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
       }
     }
 
+    // Described references — the ONE join site for the image lane. Runs AFTER
+    // the directive assembly so a legacy block it created is consolidated into
+    // (never duplicated), and BEFORE the provider cap so the lines are body text
+    // like any other. In hybrid they land as trailing scene directives ahead of
+    // the `[style]` section, after the reference role phrases.
+    if (describedLines.length > 0) {
+      prompt = appendReferenceLines(prompt, describedLines, isHybrid ? "hybrid" : "legacy")
+      // The legacy join can PREPEND a block ahead of a captured directive
+      // prefix, which would make `marks.directivesPrefix` no longer a prefix of
+      // `prompt`. Clear it — the same documented degradation the hybrid branch
+      // takes, collapsing the segment decomposition to a single body span.
+      if (marks) marks.directivesPrefix = ""
+    }
+
     const styleText = style?.trim()
     const styleLine = styleText && !isDeniedStyleId(styleText) ? `Style: ${getStylePromptHint(styleText) || styleText}` : ""
 
@@ -2883,7 +2967,7 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
       const reordered = applyReferenceOrder(
         assembledUrls,
         prompt,
-        connectedReferences,
+        structuredRefs,
         referenceOrder,
         sourceNodeIdById,
       )
@@ -3110,7 +3194,10 @@ function collectIdentities(
       label,
       fidelity: m?.fidelity ?? defaultFidelityForSource(ref?.source),
       customText: m?.customText?.trim() || undefined,
-      description: ref?.description,
+      // Per-use override ahead of the ref's own description; the directive
+      // builder's location-canonical fallback only fires when BOTH are absent,
+      // so an override outranks the stored location wording too.
+      description: ref?.descriptionOverride?.trim() || ref?.description,
       source: ref?.source,
       locationCanonicalDescription: ref?.locationCanonicalDescription,
       locationSlug: ref?.locationSlug,
@@ -3303,7 +3390,7 @@ function buildNonCharacterDirectives(
             ? "creature"
             : "object",
         fidelity: defaultFidelityForSource(ref.source),
-        description: ref.description?.trim() || undefined,
+        description: ref.descriptionOverride?.trim() || ref.description?.trim() || undefined,
         source: ref.source,
         locationCanonicalDescription: ref.locationCanonicalDescription,
         locationSlug: ref.locationSlug,
