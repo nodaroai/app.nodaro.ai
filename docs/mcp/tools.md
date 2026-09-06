@@ -1611,8 +1611,9 @@ Idempotent, non-destructive, zero credits.
 **Scope:** `workflows:execute` (Cloud only)
 
 Author and render a narrated, time-coded concept-led explainer video in one
-call. Costs **20 credits** (9 authoring + 3 speech + 3 alignment + 0 resolve +
-5 render). Returns a `job_id`.
+call. Priced as the `video-director` entry in `list_models` (authoring,
+speech, alignment and render stages; credits vary by deployment). Returns a
+`job_id`.
 
 **Input:** `topic` (string, 1–8000 chars) — what the explainer should cover.
 
@@ -1624,7 +1625,8 @@ call. Costs **20 credits** (9 authoring + 3 speech + 3 alignment + 0 resolve +
 
 Author and render a narrated product-launch video. Pass `brief` describing the
 product. Passing `url` without `brief` returns a deferred-capability message
-(real-UI capture is not yet supported). Costs **20 credits**. Returns a `job_id`.
+(real-UI capture is not yet supported). Priced as the `video-director` entry
+in `list_models`. Returns a `job_id`.
 
 **Input:** `brief` (string, 1–8000 chars), `url` (string, optional — not yet supported)
 

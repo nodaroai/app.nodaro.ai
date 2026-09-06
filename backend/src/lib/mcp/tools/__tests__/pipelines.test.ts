@@ -382,3 +382,27 @@ describe("pipeline_pending_approvals (pipelines:read)", () => {
     expect(result.isError).toBe(true)
   })
 })
+
+// Audit 2026-09-06 follow-up (C-5 #5/#6): the wired-stage sentence derives from
+// CHAT_WIRED_STAGES, and start_pipeline no longer sends agents after events
+// no tool exposes.
+import { CHAT_WIRED_STAGES } from "@nodaro/shared"
+describe("pipelines — descriptions derive from the stage constants", () => {
+  it("chat_pipeline_stage.stage names exactly the wired stages", async () => {
+    const server = buildServer()
+    registerPipelineTools({ server, session: pipelineSession(["pipelines:execute", "pipelines:approve"] as Scope[]) })
+    const tool = (await listTools(server)).find((t) => t.name === "chat_pipeline_stage")
+    const desc = ((tool?.inputSchema as { properties?: Record<string, { description?: string }> }).properties?.stage?.description) ?? ""
+    const wired = Object.entries(CHAT_WIRED_STAGES).filter(([, on]) => on).map(([k]) => k)
+    for (const w of wired) expect(desc).toContain(w)
+    expect(desc).not.toContain("Only 'script'")
+  })
+
+  it("start_pipeline points at get_pipeline_status, not at events", async () => {
+    const server = buildServer()
+    registerPipelineTools({ server, session: pipelineSession(["pipelines:execute", "pipelines:approve"] as Scope[]) })
+    const tool = (await listTools(server)).find((t) => t.name === "start_pipeline")
+    expect(tool?.description ?? "").not.toContain("subscribe to events")
+    expect(tool?.description ?? "").toContain("get_pipeline_status")
+  })
+})

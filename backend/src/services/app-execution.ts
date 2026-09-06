@@ -7,6 +7,7 @@ import { supabase } from "../lib/supabase.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import { payloadBillingContext, type BillingContext } from "../lib/billing-context.js"
 import { billingPairColumns } from "../lib/insert-job.js"
+import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
 import type { WorkflowExecutionJob } from "./workflow-engine/types.js"
 
 // ---------------------------------------------------------------------------
@@ -40,11 +41,21 @@ export interface ExecuteAppRunParams {
    * PARENT execution's context this way; absent means personal.
    */
   billingContext?: BillingContext
+  /**
+   * Client retry token (the `idempotency-key` header, ≥ MIN_IDEMPOTENCY_KEY_LENGTH,
+   * already validated by the route). Dedups the execution row on
+   * `(user_id, idempotency_key)` (migration 163): a retry of the same run
+   * returns the existing execution + run and enqueues nothing. Absent → a
+   * plain insert, exactly as before.
+   */
+  idempotencyKey?: string
 }
 
 export interface ExecuteAppRunResult {
   executionId: string
   appRunId: string
+  /** True when `idempotencyKey` matched an existing execution — nothing new ran. */
+  deduped: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -72,25 +83,45 @@ export async function executeAppRun(
     webFreeMode,
     billingContext,
     isComponentExecution,
+    idempotencyKey,
   } = params
 
-  // 1. Create workflow_execution record
-  const { data: execution, error: execError } = await supabase
-    .from("workflow_executions")
-    .insert({
-      workflow_id: workflowId,
-      user_id: userId,
-      status: "pending",
-      trigger_type: "app_run",
-      ...(isComponentExecution ? { is_component_execution: true } : {}),
-      // P14/W7: the carried payer's pair rides the row (personal adds nothing).
-      ...billingPairColumns(billingContext),
-    })
-    .select("id")
-    .single()
-
-  if (execError || !execution) {
+  // 1. Create workflow_execution record — through the idempotent insert
+  //    (a plain INSERT when no key), so a client retry of the same run does
+  //    not start and charge the work twice (audit 2026-09-06, D-2/A-15/B-3).
+  let execution: { id: string }
+  let created: boolean
+  try {
+    const result = await insertWithIdempotencyKey<{ id: string }>(
+      "workflow_executions",
+      {
+        workflow_id: workflowId,
+        user_id: userId,
+        status: "pending",
+        trigger_type: "app_run",
+        ...(isComponentExecution ? { is_component_execution: true } : {}),
+        // P14/W7: the carried payer's pair rides the row (personal adds nothing).
+        ...billingPairColumns(billingContext),
+      },
+      idempotencyKey,
+      "id",
+    )
+    execution = result.row
+    created = result.created
+  } catch {
     throw new Error("Failed to create workflow execution")
+  }
+
+  if (!created) {
+    // A retry: the run already exists for this execution — hand it back and
+    // enqueue nothing (the first request did).
+    const { data: existingRun } = await supabase
+      .from("app_runs")
+      .select("id")
+      .eq("execution_id", execution.id)
+      .maybeSingle()
+    if (!existingRun) throw new Error("Failed to create app run")
+    return { executionId: execution.id, appRunId: (existingRun as { id: string }).id, deduped: true }
   }
 
   // 2. Create app_runs record
@@ -132,5 +163,6 @@ export async function executeAppRun(
   return {
     executionId: execution.id,
     appRunId: appRun.id,
+    deduped: false,
   }
 }

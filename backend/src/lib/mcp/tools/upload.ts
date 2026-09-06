@@ -340,8 +340,7 @@ function registerHandoffUpload(
         `**Use this whenever** the user attached a ${meta.kind} (or asked you ` +
         `to use one they have locally) and there is no public URL for it yet. ` +
         `Don't try \`prepare_${meta.kind}_upload\` first — it FAILS on Claude.ai ` +
-        `web/Android (sandbox blocks egress). Don't try \`upload_${meta.kind}\` ` +
-        `first either — its ~30 KB cap will silently truncate user photos.\n\n` +
+        `web/Android (sandbox blocks egress).\n\n` +
         `Returns:\n` +
         `  - \`upload_page_url\` — short Nodaro link the user opens in any ` +
         `browser to drop the file.\n` +
