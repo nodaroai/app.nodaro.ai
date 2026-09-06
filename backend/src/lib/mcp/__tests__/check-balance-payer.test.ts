@@ -3,7 +3,9 @@ import Fastify from "fastify"
 import type { Scope } from "../../scopes.js"
 
 /**
- * WS-A — the MCP balance leak (spec §3.4).
+ * The MCP balance leak: on a deployment that funds its users from one
+ * account, that account's own pool figure — the operator's remaining money —
+ * must not be readable by any programmatic caller.
  *
  * The REST balance routes already refuse the deployment payer's real pool
  * figure to any programmatic credential (`refusePayerBalanceToProgrammaticCaller`,

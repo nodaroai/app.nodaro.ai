@@ -149,14 +149,17 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
   if (!passesGate(session, creditsReadGate)) return
 
   /**
-   * WS-A — the deployment payer's own pool balance is not readable through MCP.
+   * The deployment payer's own pool balance is not readable through MCP.
    *
+   * On a deployment that funds its users from one account, that account's
+   * balance is the operator's remaining money — not the caller's — so no
+   * programmatic credential may read it.
    * `refusePayerBalanceToProgrammaticCaller` (ee/lib/payer-balance-guard.ts)
-   * holds the REST doors by refusing every `authKind !== "jwt"` caller. Here
-   * the rule is IDENTITY ALONE. Without it the self-host Connect token —
-   * minted with `credits:read` and, per the runbook, consented AS the billing
-   * account — reads the exact figure the REST guard exists to withhold
-   * (spec 3.4).
+   * holds the REST doors by refusing every `authKind !== "jwt"` caller. MCP
+   * was the door left open, and here the rule is IDENTITY ALONE. Without it
+   * the self-host Connect token — minted with `credits:read`, and consented by
+   * the billing account itself, so it carries that account's identity — reads
+   * the exact figure the REST guard exists to withhold.
    *
    * IT REFUSES MORE THAN THE REST GUARD DOES, AND THAT IS DELIBERATE. It is
    * NOT true that every MCP session is a token session; two callers build one:
