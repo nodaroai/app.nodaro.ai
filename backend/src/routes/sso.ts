@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase.js"
 import { redis } from "../lib/queue.js"
 import { callerKeyHash } from "./oauth-register.js"
 import { getSsoProvider, getSsoProviders, ssoPublicInfo, type SsoProviderConfig } from "../lib/sso-providers.js"
-import { isAllowedRequestOrigin, requestHost } from "../lib/allowed-origins.js"
+import { isAllowedRequestHost, requestHostname } from "../lib/allowed-origins.js"
 import { verifyAssertion, SsoAssertionError } from "../lib/sso-assertion.js"
 import { claimAssertionJti } from "../lib/sso-replay.js"
 import { resolveSsoUser } from "../lib/sso-linking.js"
@@ -110,7 +110,7 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
     // No assertion ⇒ this is the login-button entry point: bounce to the IdP
     // this request's host belongs to (initiateUrl for every unmapped host).
     if (!assertion) {
-      const initiate = initiateUrlFor(provider, requestHost(req))
+      const initiate = initiateUrlFor(provider, requestHostname(req))
       if (initiate) return reply.redirect(initiate)
       return reply.status(400).send({ error: { code: "no_assertion" } })
     }
@@ -142,9 +142,13 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
     // 5. Redirect to the landing. Relative for any allow-listed host (the hosted
     //    lane is same-origin by construction — Caddy fronts both the SPA and
     //    /v1, and the studio may answer on more than one hostname while
-    //    PUBLIC_URL can only name one); PUBLIC_URL only for a split-origin dev
-    //    setup, i.e. a host that is not allow-listed.
-    const base = isAllowedRequestOrigin(req) ? "" : config.PUBLIC_URL || ""
+    //    PUBLIC_URL can only name one); PUBLIC_URL only for a host that is NOT
+    //    allow-listed, i.e. a split-origin dev setup. The test is on the HOST,
+    //    not the whole origin, on purpose: the edge proxy owns the scheme (it
+    //    rewrites X-Forwarded-Proto to the one IT received, which behind a
+    //    TLS-terminating edge is http), and a relative redirect never needs a
+    //    scheme — the browser resolves it against the page it is already on.
+    const base = isAllowedRequestHost(req) ? "" : config.PUBLIC_URL || ""
     const url = `${base}/sso?sso_token=${encodeURIComponent(hashedToken)}&next=${encodeURIComponent(safeNext(next))}`
     return reply.redirect(url)
   })

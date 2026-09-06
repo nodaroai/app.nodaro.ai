@@ -202,6 +202,22 @@ describe("the landing redirect is host-aware (WS-D)", () => {
     expect(res.headers.location).toBe("/sso?sso_token=HASHED_TOKEN_123&next=%2Fprojects")
   })
 
+  it('is RELATIVE from that host even when the edge stamped proto "http" on an https allow-list entry', async () => {
+    // The production shape: a TLS-terminating platform edge, Caddy rewriting
+    // x-forwarded-proto to its own http. The predicate is host-based precisely
+    // so this still resolves to the same-origin form.
+    publicUrl.value = "https://app.example.com"
+    const app = await build()
+    const token = await mintAssertion()
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/sso/librechat?assertion=${token}`,
+      headers: { "x-forwarded-proto": "http", "x-forwarded-host": "studio.sai-kehila.com" },
+    })
+    expect(res.statusCode).toBe(302)
+    expect(res.headers.location).toBe("/sso?sso_token=HASHED_TOKEN_123&next=%2Fprojects")
+  })
+
   it("is ABSOLUTE on PUBLIC_URL from a host that is NOT allow-listed (the split-origin dev setup)", async () => {
     publicUrl.value = "https://app.example.com"
     const app = await build()

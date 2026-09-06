@@ -70,6 +70,7 @@ export function getStaticPublicAppUrl(): string {
   return cachedPublicAppUrl
 }
 
+
 /**
  * The parts of a request these helpers read — headers, nothing else. A
  * structural type (a `FastifyRequest` satisfies it) so they stay pure and can be
@@ -95,45 +96,69 @@ function firstHeaderEntry(v: string | string[] | undefined): string | undefined 
   return first || undefined
 }
 
-/** The host the browser used, as forwarded by Caddy (`host` when nothing is). */
-function forwardedHost(req: OriginRequestLike): string | undefined {
-  return firstHeaderEntry(req.headers["x-forwarded-host"]) ?? firstHeaderEntry(req.headers.host)
-}
-
 /**
- * The origin THIS request arrived on, derived from the proxy's forwarded
- * headers: `${x-forwarded-proto ?? "https"}://${x-forwarded-host ?? host}`.
- * Keeps the port — an origin is scheme + host + port, and `http://localhost:5173`
- * must match the allowlist entry of the same name. Lower-cased: DNS is
- * case-insensitive but `Array.includes` is not.
+ * The host the browser used — `x-forwarded-host` as the edge proxy set it, else
+ * the `Host` header. Lower-cased, **port kept**: this is a URL `host` (the
+ * `hostname:port` form), so `localhost:3000` and `localhost:5173` stay distinct.
  *
- * `null` when the request carries no host at all (HTTP/1.0 without a Host).
- */
-export function requestOrigin(req: OriginRequestLike): string | null {
-  const host = forwardedHost(req)
-  if (!host) return null
-  const proto = firstHeaderEntry(req.headers["x-forwarded-proto"]) ?? "https"
-  return `${proto.toLowerCase()}://${host.toLowerCase()}`
-}
-
-/** Whether this request arrived on one of the operator's own origins. */
-export function isAllowedRequestOrigin(req: OriginRequestLike): boolean {
-  return isOriginAllowed(requestOrigin(req) ?? undefined, getStaticAllowedOrigins())
-}
-
-/**
- * The bare hostname this request arrived on — lower-cased, port stripped — for
- * keying a per-host map (the SSO `initiateUrlByHost`). A bracketed IPv6 literal
- * keeps its brackets, which is how it is written in a Host header.
+ * Deliberately does NOT read `x-forwarded-proto`: the edge owns the scheme and
+ * rewrites it (Caddy replaces the header with the scheme IT received unless the
+ * peer is a trusted proxy), so a scheme derived here would be the proxy's, not
+ * the browser's. Nothing this file decides needs it.
  */
 export function requestHost(req: OriginRequestLike): string | null {
-  const raw = forwardedHost(req)
-  if (!raw) return null
-  const host = raw.toLowerCase()
+  const raw = firstHeaderEntry(req.headers["x-forwarded-host"]) ?? firstHeaderEntry(req.headers.host)
+  return raw ? raw.toLowerCase() : null
+}
+
+/**
+ * The same value with the port stripped — the key form for a per-host map (the
+ * SSO `initiateUrlByHost`), which is deliberately port-agnostic where
+ * `requestHost` above is not. A bracketed IPv6 literal keeps its brackets, which
+ * is how it is written in a Host header.
+ */
+export function requestHostname(req: OriginRequestLike): string | null {
+  const host = requestHost(req)
+  if (!host) return null
   if (host.startsWith("[")) {
     const close = host.indexOf("]")
     return close === -1 ? host : host.slice(0, close + 1)
   }
   const colon = host.indexOf(":")
   return colon === -1 ? host : host.slice(0, colon)
+}
+
+/** The allowlist reduced to `host` (hostname + non-default port). Rebuilt only
+ *  when getStaticAllowedOrigins() hands back a different array. */
+let cachedAllowedHosts: { from: string[]; hosts: Set<string> } | null = null
+function allowedHosts(): Set<string> {
+  const origins = getStaticAllowedOrigins()
+  if (!cachedAllowedHosts || cachedAllowedHosts.from !== origins) {
+    const hosts = new Set<string>()
+    for (const o of origins) {
+      // An operator's CORS_ORIGIN entry is free text; a non-URL is skipped
+      // rather than throwing on a login request.
+      try {
+        hosts.add(new URL(o).host.toLowerCase())
+      } catch {
+        /* not a URL — it could never have matched an Origin header either */
+      }
+    }
+    cachedAllowedHosts = { from: origins, hosts }
+  }
+  return cachedAllowedHosts.hosts
+}
+
+/**
+ * Whether this request arrived on one of the operator's own hostnames.
+ *
+ * HOST-based, not origin-based, on purpose: the one decision it drives is
+ * "redirect relative", and a relative redirect never needs a scheme — the
+ * browser resolves it against the page it is already on. Comparing schemes would
+ * only import the edge proxy's rewriting of `X-Forwarded-Proto` into an answer
+ * that has nothing to do with the scheme.
+ */
+export function isAllowedRequestHost(req: OriginRequestLike): boolean {
+  const host = requestHost(req)
+  return host !== null && allowedHosts().has(host)
 }
