@@ -1379,6 +1379,13 @@ purchased credits (all models unlocked, no watermark, no daily cap).
 Top-up credits are valid for 12 months from purchase; subscription
 credits reset each billing cycle and are spent first.
 
+On a deployment with a billing account (`billing.payerAccount` in the
+surface profile), this tool and `credit_transactions` refuse a session that
+acts as that account through a token — the deployment's pool balance is
+visible only to the billing account's own browser session and its in-app
+Copilot, never to a connected client — with the error
+`payer_balance_jwt_only`. Every other user sees their own figures as usual.
+
 **Input:** none
 
 ---
