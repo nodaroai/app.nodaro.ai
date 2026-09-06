@@ -12,8 +12,15 @@ import type { Scope } from "../../scopes.js"
  * AND is owned by the billing account, so `check_balance` / `credit_transactions`
  * answered the operator's wallet to whoever holds that token.
  *
- * Every MCP session is a token session (`routes/mcp.ts:73`) — there is no
- * `authKind === "jwt"` case to allow — so the tool-side rule is identity alone.
+ * The tool-side rule is IDENTITY ALONE, and it refuses more than the REST
+ * guard does. Not every MCP session is a token session: `/mcp` takes its
+ * scopes from `req.appAuthorization` (`routes/mcp.ts:73`), so a browser JWT
+ * arrives with `[]` and these tools never register — but the Workflow Copilot
+ * builds an in-process server for the BROWSER user (`ee/copilot/turn-runner.ts:96`)
+ * whose `COPILOT_SCOPES` include `credits:read`, with `check_balance` on its
+ * allowlist. So the billing account's own Copilot is refused too. That
+ * narrowing is deliberate; a carve-out would need a server-set first-party
+ * flag on the session, never the client name.
  *
  * THE PAYER PREDICATES ARE DRIVEN FOR REAL (`__setDeploymentPayerForTests`),
  * never mocked: a mocked `deploymentPayerActive` would pass whether or not the
@@ -114,7 +121,11 @@ describe("MCP credits tools under a deployment payer", () => {
     const transactions = await callTool(server, "credit_transactions", { limit: 10 })
     expect(transactions.isError).toBe(true)
     expect(transactions.content[0]?.text).toBe(REFUSAL)
-    expect(supabase.from).not.toHaveBeenCalled()
+    // Named table, not a bare `not.toHaveBeenCalled()`: registration-time
+    // codepaths in the full catalog may legitimately touch the client (see the
+    // mock note above), so the assertion has to be about the READ that must
+    // not happen, not about the client being untouched.
+    expect(supabase.from).not.toHaveBeenCalledWith("transactions")
   })
 
   it("answers an ordinary user on the same payer instance normally", async () => {

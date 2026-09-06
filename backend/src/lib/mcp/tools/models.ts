@@ -152,12 +152,27 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
    * WS-A — the deployment payer's own pool balance is not readable through MCP.
    *
    * `refusePayerBalanceToProgrammaticCaller` (ee/lib/payer-balance-guard.ts)
-   * holds the REST doors by refusing every `authKind !== "jwt"` caller. Every
-   * MCP session is a token session (`routes/mcp.ts:73`), so there is no
-   * first-party case to allow here and the identity check is the whole rule.
-   * Without it the self-host Connect token — minted with `credits:read` and,
-   * per the runbook, consented AS the billing account — reads the exact figure
-   * the REST guard exists to withhold (spec 3.4).
+   * holds the REST doors by refusing every `authKind !== "jwt"` caller. Here
+   * the rule is IDENTITY ALONE. Without it the self-host Connect token —
+   * minted with `credits:read` and, per the runbook, consented AS the billing
+   * account — reads the exact figure the REST guard exists to withhold
+   * (spec 3.4).
+   *
+   * IT REFUSES MORE THAN THE REST GUARD DOES, AND THAT IS DELIBERATE. It is
+   * NOT true that every MCP session is a token session; two callers build one:
+   *   - `/mcp` (`routes/mcp.ts:73`) takes its scopes from `req.appAuthorization`,
+   *     so a browser JWT arrives with `[]` and the `credits:read` gate above
+   *     never registers these tools at all — that door is shut before this one.
+   *   - The Workflow Copilot builds an IN-PROCESS server for the BROWSER user
+   *     (`ee/copilot/turn-runner.ts:96`) with `COPILOT_SCOPES`, which include
+   *     `credits:read`, and `check_balance` is on its `MCP_TOOL_ALLOWLIST`
+   *     (`credit_transactions` is not).
+   * So on a payer instance the billing account's OWN Copilot is refused too.
+   * Accepted for now: it withholds a number that account reads on its own
+   * billing page anyway, and refusing too much is the safe direction. A
+   * carve-out would need a SERVER-SET first-party flag on the session — never
+   * `clientName`, which at `/mcp` is `developer_apps.name` and is therefore
+   * chosen by the third-party developer being guarded against.
    *
    * INERT on mainline: with no `billing.payerAccount` configured
    * `deploymentPayerActive()` is false and this short-circuits, so a
