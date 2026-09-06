@@ -1562,6 +1562,40 @@ describe("POST /v1/generate-image", () => {
       expect(check).toBe("flux-2-max:1MP:1ref")
     })
 
+    it("CHECK === DEBIT for describedReferences alone (structured mode, ZERO refs)", async () => {
+      // The described channel puts the request in structured mode, so the CHECK
+      // now runs the assembler where it used to read the flat ref list. It adds
+      // no URL, so both sites must still price at 0 refs — a described role can
+      // never move the bill.
+      const body = {
+        prompt: "Natalie walks down the pier.",
+        userId: VALID_UUID,
+        provider: "flux-2-max",
+        describedReferences: [{ name: "Natalie", description: "a tall woman in a red coat" }],
+        direction: DIRECTION,
+      }
+      const { identifier: debit } = await debitIdentifierFor(body)
+      const check = checkIdentifierFor(body)
+      expect(check).toBe(debit)
+      expect(check).toBe("flux-2-max:1MP:0ref")
+    })
+
+    it("CHECK === DEBIT for describedReferences alongside connectedReferences", async () => {
+      const body = {
+        prompt: "Kira meets Natalie.",
+        userId: VALID_UUID,
+        provider: "flux-2-max",
+        connectedReferences: mkManualRefs(2),
+        describedReferences: [{ name: "Natalie", description: "a tall woman in a red coat" }],
+        direction: DIRECTION,
+      }
+      const { identifier: debit } = await debitIdentifierFor(body)
+      const check = checkIdentifierFor(body)
+      expect(check).toBe(debit)
+      // Unchanged from the 2-ref case above: the described entry adds no URL.
+      expect(check).toBe("flux-2-max:1MP:2ref")
+    })
+
     it("CHECK === DEBIT for the i2i auto-swap case (T2I provider + assembled refs)", async () => {
       const body = {
         prompt: "make it night",
