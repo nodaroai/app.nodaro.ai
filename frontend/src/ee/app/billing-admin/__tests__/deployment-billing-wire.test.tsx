@@ -29,6 +29,10 @@ vi.mock("@/lib/edition", async (importOriginal) => ({
 
 vi.mock("@/lib/api", () => ({ getAuthHeaders: async () => ({ Authorization: "Bearer test" }) }))
 
+// The mutations below toast on success; the toast itself is not what this file
+// asserts, and a real one needs a mounted <Toaster />.
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+
 const surface = { deploymentPayer: true as boolean, isLoading: false }
 vi.mock("@/hooks/use-billing-surface", () => ({
   useBillingSurface: () => ({ surface, isLoading: surface.isLoading }),
@@ -39,6 +43,11 @@ const {
   useDeploymentPayerViewer,
   useDeploymentBillingTransactions,
   useUserGrants,
+  useIntegrationKeys,
+  useMintIntegrationKeyMutation,
+  useRevokeIntegrationKeyMutation,
+  useDeploymentBalance,
+  useSetBalanceThresholdMutation,
   errorMessageKey,
   DeploymentBillingError,
 } = await import("@/ee/hooks/queries/use-deployment-billing")
@@ -83,6 +92,40 @@ const GRANTS_BODY = {
 
 const TX_BODY = { data: { purchases: [{ id: "t1" }], ledger: [{ id: "l1" }], limit: 50, offset: 0 } }
 
+// The billing-integration bodies. `GET /integration-keys` carries a PREFIX and
+// never a bearer; `POST` is the one body in the whole API that carries one.
+const KEYS_BODY = {
+  data: [
+    {
+      id: "k1", name: "back office", tokenPrefix: "ndr_bill_9f3",
+      createdAt: "2026-09-01T00:00:00.000Z", expiresAt: "2027-09-01T00:00:00.000Z",
+      lastUsedAt: "2026-09-05T00:00:00.000Z", revokedAt: null, allowedCidrs: ["203.0.113.0/24"],
+    },
+  ],
+}
+
+const MINT_BODY = {
+  data: {
+    id: "k2", name: "new one",
+    token: "ndr_bill_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd",
+    tokenPrefix: "ndr_bill_012", expiresAt: null,
+  },
+}
+
+const REVOKE_BODY = { data: { id: "k1", revoked: true } }
+
+const BALANCE_BODY = {
+  data: {
+    balanceCredits: 41_250,
+    burn: { periodStart: "2026-09-01T00:00:00.000Z", credits: 3_180, generations: 412, capped: false },
+    periodEnd: null,
+    lowBalance: true,
+    threshold: 50_000,
+  },
+}
+
+const THRESHOLD_BODY = { data: { threshold: 10_000 } }
+
 function reply(body: unknown, status = 200) {
   return Promise.resolve({ ok: status < 400, status, json: async () => body } as Response)
 }
@@ -97,11 +140,17 @@ function wrapper({ children }: { children: ReactNode }) {
 beforeEach(() => {
   surface.deploymentPayer = true
   surface.isLoading = false
-  fetchMock = vi.fn((url: string) => {
+  fetchMock = vi.fn((url: string, init?: RequestInit) => {
     if (url.startsWith("/v1/deployment-billing/overview")) return reply(OVERVIEW_BODY)
     if (url.startsWith("/v1/deployment-billing/users/")) return reply(GRANTS_BODY)
     if (url.startsWith("/v1/deployment-billing/users")) return reply(USERS_BODY)
     if (url.startsWith("/v1/deployment-billing/transactions")) return reply(TX_BODY)
+    // The longer paths FIRST, exactly as `users/` precedes `users` above.
+    if (url.startsWith("/v1/deployment-billing/integration-keys/")) return reply(REVOKE_BODY)
+    if (url.startsWith("/v1/deployment-billing/integration-keys"))
+      return reply(init?.method === "POST" ? MINT_BODY : KEYS_BODY, init?.method === "POST" ? 201 : 200)
+    if (url.startsWith("/v1/deployment-billing/balance/threshold")) return reply(THRESHOLD_BODY)
+    if (url.startsWith("/v1/deployment-billing/balance")) return reply(BALANCE_BODY)
     throw new Error(`unexpected fetch: ${url}`)
   })
   vi.stubGlobal("fetch", fetchMock)
@@ -244,5 +293,116 @@ describe("errorMessageKey — the note's refusals reach the payer as the note's"
 
   it("leaves an unrecognised code on the generic sentence", () => {
     expect(errorMessageKey(err("something_new"))).toBe("billingAdmin.errGeneric")
+  })
+})
+
+
+/**
+ * The billing-integration credential, on the wire.
+ *
+ * R9's product half. The bearer exists in ONE response body, once — so the
+ * hooks must not put it anywhere that outlives the panel showing it, and above
+ * all the mint call must not be something a re-render can repeat. A component
+ * that re-issued the POST on every render would mint a key per paint, blow
+ * through the five-key cap, and leave four bearers nobody ever saw.
+ */
+describe("the integration keys — the bearer travels once", () => {
+  it("GET /integration-keys unwraps `data` and carries no token on any row", async () => {
+    const { result } = renderHook(() => useIntegrationKeys(true), { wrapper })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(result.current.data).toHaveLength(1)
+    expect(result.current.data?.[0].tokenPrefix).toBe("ndr_bill_9f3")
+    // The route never selects `token_hash` and never returns a bearer; a row
+    // that grew one would be the leak this asserts against.
+    expect(JSON.stringify(result.current.data)).not.toMatch(/ndr_bill_[0-9a-f]{64}/)
+  })
+
+  it("POST mints once, and RE-RENDERING never mints again", async () => {
+    const { result, rerender } = renderHook(() => useMintIntegrationKeyMutation(), { wrapper })
+    result.current.mutate({ name: "back office" })
+    await waitFor(() => expect(result.current.data?.token).toBeTruthy())
+
+    const posts = () =>
+      fetchMock.mock.calls.filter(
+        (c) => String(c[0]).includes("/integration-keys") && (c[1] as RequestInit)?.method === "POST",
+      )
+    expect(posts()).toHaveLength(1)
+    expect(JSON.parse(String((posts()[0][1] as RequestInit).body))).toEqual({ name: "back office" })
+
+    // The claim: the bearer is a MUTATION result, not a query. Nothing about
+    // painting the panel again re-issues the call that produced it.
+    rerender()
+    rerender()
+    expect(posts()).toHaveLength(1)
+    expect(result.current.data?.token).toBe(MINT_BODY.data.token)
+  })
+
+  it("sends the optional expiry and source ranges through untouched", async () => {
+    const { result } = renderHook(() => useMintIntegrationKeyMutation(), { wrapper })
+    result.current.mutate({
+      name: "back office",
+      expiresAt: "2099-01-31T00:00:00.000Z",
+      allowedCidrs: ["10.0.0.0/8"],
+    })
+    await waitFor(() => expect(result.current.data?.token).toBeTruthy())
+    const post = fetchMock.mock.calls.find((c) => (c[1] as RequestInit)?.method === "POST")!
+    expect(JSON.parse(String((post[1] as RequestInit).body))).toEqual({
+      name: "back office",
+      expiresAt: "2099-01-31T00:00:00.000Z",
+      allowedCidrs: ["10.0.0.0/8"],
+    })
+  })
+
+  it("revoking is a DELETE on that key's own path", async () => {
+    const { result } = renderHook(() => useRevokeIntegrationKeyMutation(), { wrapper })
+    result.current.mutate({ id: "k1" })
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some((c) => (c[1] as RequestInit)?.method === "DELETE"),
+      ).toBe(true),
+    )
+    const del = fetchMock.mock.calls.find((c) => (c[1] as RequestInit)?.method === "DELETE")!
+    expect(String(del[0])).toBe("/v1/deployment-billing/integration-keys/k1")
+  })
+
+  it("the five-key refusal arrives as its own code, not as a generic failure", () => {
+    expect(errorMessageKey(new DeploymentBillingError(409, "key_limit_reached", "no"))).toBe(
+      "billingAdmin.errKeyLimitReached",
+    )
+  })
+})
+
+describe("GET /balance — the pool for a machine, and the payer's own alert", () => {
+  it("unwraps `data` and keeps the threshold and the flag", async () => {
+    const { result } = renderHook(() => useDeploymentBalance(true), { wrapper })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    // RAW Nodaro credits — the one figure in this API that is not display units.
+    expect(result.current.data?.balanceCredits).toBe(41_250)
+    expect(result.current.data?.lowBalance).toBe(true)
+    expect(result.current.data?.threshold).toBe(50_000)
+  })
+
+  it("PUT /balance/threshold sends whole credits", async () => {
+    const { result } = renderHook(() => useSetBalanceThresholdMutation(), { wrapper })
+    result.current.mutate({ credits: 10_000 })
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some((c) => (c[1] as RequestInit)?.method === "PUT")).toBe(true),
+    )
+    const put = fetchMock.mock.calls.find((c) => (c[1] as RequestInit)?.method === "PUT")!
+    expect(String(put[0])).toBe("/v1/deployment-billing/balance/threshold")
+    expect(JSON.parse(String((put[1] as RequestInit).body))).toEqual({ credits: 10_000 })
+  })
+
+  it("clearing the threshold sends null, not 0 — 0 is a real threshold", async () => {
+    // `low_balance_threshold_credits` is `integer NULL CHECK (>= 0)`: 0 means
+    // "warn me when the pool is empty", NULL means "do not warn me". Sending 0
+    // for "cleared" would arm an alert the payer just turned off.
+    const { result } = renderHook(() => useSetBalanceThresholdMutation(), { wrapper })
+    result.current.mutate({ credits: null })
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some((c) => (c[1] as RequestInit)?.method === "PUT")).toBe(true),
+    )
+    const put = fetchMock.mock.calls.find((c) => (c[1] as RequestInit)?.method === "PUT")!
+    expect(JSON.parse(String((put[1] as RequestInit).body))).toEqual({ credits: null })
   })
 })
