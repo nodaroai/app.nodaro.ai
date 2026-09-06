@@ -8,6 +8,22 @@ import { supabase } from "../supabase.js"
  */
 export const STUDIO_PROJECT_NAME = "Studio"
 
+/**
+ * The project-level `settings.studio` marker — the app's own
+ * `STUDIO_PROJECT_SETTINGS`, spelled the same.
+ *
+ * Its PRESENCE is what identifies the dedicated Studio project (the app's
+ * project-level read-only, sharing the whole project by link, depends on it
+ * being written), and the version is how that shape is allowed to evolve. It is
+ * distinct from each workflow's own `settings.studio` shot index.
+ *
+ * Writing a bare `{}` here would satisfy the app's presence-only check and so
+ * never be repaired by it: the project would sit unversioned forever, differing
+ * from every project a user created through the app for no reason a later
+ * reader could explain.
+ */
+export const STUDIO_PROJECT_SETTINGS = { version: 1 } as const
+
 async function findOldestStudioProject(userId: string): Promise<string | null> {
   const { data } = await supabase
     .from("projects")
@@ -37,7 +53,11 @@ export async function ensureStudioProject(userId: string): Promise<string> {
 
   const { error } = await supabase
     .from("projects")
-    .insert({ user_id: userId, name: STUDIO_PROJECT_NAME, settings: { studio: {} } })
+    .insert({
+      user_id: userId,
+      name: STUDIO_PROJECT_NAME,
+      settings: { studio: { ...STUDIO_PROJECT_SETTINGS } },
+    })
 
   const resolved = await findOldestStudioProject(userId)
   if (resolved) return resolved

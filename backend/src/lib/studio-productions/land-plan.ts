@@ -7,10 +7,13 @@ import {
   parseProduction,
   serializeProduction,
   type Cast,
+  type CastEnrollment,
   type ImportResult,
   type MentionCandidate,
   type SerializedProduction,
   type Shot,
+  type StudioSettingsV1,
+  type StudioSettingsV3,
   type ViewableWorkflow,
 } from "@nodaro/studio-production"
 
@@ -113,6 +116,84 @@ export function serializeCreate(landed: LandedPlanOk): SerializedProduction {
 }
 
 /**
+ * Every key the index has EVER owned inside `settings.studio` — v3's, plus the
+ * legacy v1 shape's, which a v1 row still carries when it is appended to.
+ *
+ * An append is a read-modify-write of ONE row's `settings.studio`, and the
+ * serializer writes that object whole. So anything the row was carrying that
+ * this build has never heard of — a newer studio's composer draft, a soundtrack
+ * draft, the hidden favorites row's own payload and its `hidden` flag — is
+ * destroyed by the write unless it is carried across: spec §11, "`settings.studio`
+ * unknown to the serializer is never erased".
+ *
+ * It is a DENY list over the serializer's own keys rather than a diff against
+ * what it emitted, because the serializer deliberately OMITS things: a pruned
+ * storyboard, an empty cast, a `shared` that is false. Preserving by difference
+ * would put every one of those back and undo the prune on every single append.
+ *
+ * v1's `perShot` is on the list for the same reason the app's own v1→v3 read
+ * drops it: it maps node ids the rewrite is about to replace, so preserving it
+ * would keep a dead job map alive in the v3 blob for good.
+ */
+export const SERIALIZER_OWNED_STUDIO_KEYS = [
+  "version",
+  "shots",
+  "selectedShotId",
+  "shotOrder",
+  "music",
+  "musicPlan",
+  "shared",
+  "archived",
+  "folders",
+  "storyboard",
+  "cuts",
+  "freecutDraftUrl",
+  "trash",
+  "film",
+  "cast",
+  "perShot",
+] as const satisfies ReadonlyArray<keyof StudioSettingsV3 | keyof StudioSettingsV1>
+
+/**
+ * The compile-time half of the list above: a field added to `StudioSettingsV3`
+ * and left off it fails `tsc` HERE rather than surviving as a stale value that
+ * every append quietly restores from the old blob. (`AssertNever` is written
+ * with the constraint rather than a conditional so an empty union does not
+ * distribute away to a passing check.)
+ */
+type AssertNever<T extends never> = T
+export type EverySettingsKeyIsOwned = AssertNever<
+  Exclude<
+    keyof StudioSettingsV3 | keyof StudioSettingsV1,
+    (typeof SERIALIZER_OWNED_STUDIO_KEYS)[number]
+  >
+>
+
+const OWNED = new Set<string>(SERIALIZER_OWNED_STUDIO_KEYS)
+
+/** The row's own `settings.studio` keys this serializer does not write. */
+function unownedStudioKeys(current: ViewableWorkflow): Record<string, unknown> {
+  const studio = (current.settings as { studio?: unknown } | undefined)?.studio
+  if (typeof studio !== "object" || studio === null || Array.isArray(studio)) return {}
+  const carried: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(studio)) {
+    if (!OWNED.has(key)) carried[key] = value
+  }
+  return carried
+}
+
+/**
+ * An append's graph PLUS the receipt only the merge can give.
+ *
+ * `enrolled` is the roles the append actually added — the append's own
+ * `castEnrolled` figure. The size of the resulting cast is a different number:
+ * appending one scene to a production with ten roles enrolls one, not eleven.
+ */
+export interface AppendedProduction extends SerializedProduction {
+  readonly enrolled: ReadonlyArray<CastEnrollment>
+}
+
+/**
  * A landed plan APPENDED to a production that already exists.
  *
  * Appending adds scenes; it does not rename, re-brief or re-look a production —
@@ -124,7 +205,7 @@ export function serializeCreate(landed: LandedPlanOk): SerializedProduction {
 export function serializeAppend(
   current: ViewableWorkflow,
   landed: LandedPlanOk,
-): SerializedProduction {
+): AppendedProduction {
   const parsed = parseProduction(current)
   // `mergeCast` takes the incoming shots as well as the incoming cast: a role
   // is only real if some shot's prose or chips actually refer to it, so the
@@ -136,8 +217,15 @@ export function serializeAppend(
     // construction — the importer mints ids per import.
     ...landed.result.folders,
   ]
-  return serializeProduction(
-    [...parsed.shots, ...landed.shots],
+  const serialized = serializeProduction(
+    // `merged.shots`, NOT `landed.shots` — the same choice `pasteShots` makes
+    // in the studio app's own store. A collision (a different actor arriving
+    // under a name this production already gave to someone else) enrolls the
+    // newcomer as `kira-2` AND rewrites the arriving prose and chips to say so;
+    // persisting the pre-merge shots would enroll the suffix and leave every
+    // arriving scene still saying `@kira`, which points the newcomer's scenes
+    // at the keeper's role — the exact ambiguity D6a exists to kill.
+    [...parsed.shots, ...merged.shots],
     parsed.selectedShotId,
     parsed.music,
     parsed.shared,
@@ -151,4 +239,14 @@ export function serializeAppend(
     parsed.musicPlan,
     parsed.archived,
   )
+  return {
+    nodes: serialized.nodes,
+    edges: serialized.edges,
+    settings: {
+      // The serializer's own keys WIN (it is the fresh write); everything else
+      // the row was carrying rides through untouched.
+      studio: { ...unownedStudioKeys(current), ...serialized.settings.studio },
+    },
+    enrolled: merged.enrolled,
+  }
 }
