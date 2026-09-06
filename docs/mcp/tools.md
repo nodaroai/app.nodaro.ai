@@ -344,6 +344,13 @@ text wrapped around that node's prompt at run time (settings-only; see
 | `thumbnail_url` | string (URL) or null | Optional; sets the workflow's thumbnail image, or `null` to clear it. Must be an already-hosted image URL. |
 | `expected_updated_at` | string (ISO 8601) | Optional; enables optimistic concurrency |
 | `expected_version` | integer | Optional; integer CAS from `get_workflow_json` (preferred over `expected_updated_at`) |
+| `delta` | object | Optional; id-keyed partial update applied atomically against `delta.base_version` (from `get_workflow_json`): `upsert_nodes`, `delete_node_ids`, `upsert_edges`, `delete_edge_ids`, `set: { name?, settings? }`. Mutually exclusive with every other content field. Prefer it over re-sending the graph. |
+
+**Studio productions:** a workflow whose stored `settings.studio` exists is a
+Studio production (its shots, results and plan live there). A `settings`
+replace — full-body or `delta.set.settings` — that changes or drops
+`settings.studio` is refused; echo it back unchanged (copy it from
+`get_workflow_json`) or leave `settings` out.
 
 **Optimistic concurrency:** Pass the `updated_at` value from a prior
 `get_workflow_json` call as `expected_updated_at`. If the workflow has been

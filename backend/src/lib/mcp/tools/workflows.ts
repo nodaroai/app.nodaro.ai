@@ -3,6 +3,7 @@ import { hasCredits } from "../../config.js"
 import { findCloudOnlyNodeTypes, cloudOnlyRejectionMessage } from "../../cloud-only-nodes.js"
 import { findDeniedNodeTypes, deniedNodeRejectionMessage } from "../../surface-deny.js"
 import { z } from "zod"
+import { isDeepStrictEqual } from "node:util"
 import { clientRequestIdSchema, idempotencyHeaders } from "./_verb-helpers.js"
 import type { FastifyInstance } from "fastify"
 import { stripExportContent, stripTransientRuntimeData, normalizeNodeModelParams, describeNodeAdjustments, type GenericNode, type WorkflowExport } from "@nodaro/shared"
@@ -99,6 +100,27 @@ function mcpRouteError(statusCode: number, body: string): string {
  * `userId` in the body); the rest query Supabase directly, scoped by
  * `user_id` (the service-role client bypasses RLS).
  */
+/**
+ * THE STUDIO-DOCUMENT GUARD (audit 2026-09-06 fix #6, C-13(3)). A Studio
+ * production lives in its workflow's `settings.studio` — shots, result
+ * histories, the plan. `update_workflow_json` replaces `settings` wholesale,
+ * so an agent that read the workflow, edited one key and wrote the object
+ * back without `studio` erased a production in one call. The guard refuses a
+ * settings replace that changes or drops a STORED `settings.studio`; echoing
+ * it back unchanged (as `get_workflow_json` returned it) passes. A workflow
+ * with no stored `studio` is untouched by this — the key may be created.
+ */
+export function studioSettingsClobbered(next: unknown, stored: unknown): boolean {
+  const storedStudio = (stored as { studio?: unknown } | null | undefined)?.studio
+  if (storedStudio === undefined || storedStudio === null) return false
+  const nextStudio = (next as { studio?: unknown } | null | undefined)?.studio
+  return !isDeepStrictEqual(nextStudio, storedStudio)
+}
+
+export const STUDIO_SETTINGS_GUARD_MESSAGE =
+  "This workflow is a Studio production: `settings.studio` holds its shots, results and plan and is owned by Studio. " +
+  "Send it back unchanged (copy `settings.studio` from get_workflow_json into your settings) or leave `settings` out."
+
 export function registerWorkflows({
   server,
   session,
@@ -415,10 +437,83 @@ export function registerWorkflows({
             .describe(
               "Integer CAS — the version from get_workflow_json. Preferred over expected_updated_at (monotonic counter bumped by the DB on every content change).",
             ),
+          delta: z
+            .object({
+              base_version: z.number().int().min(1).describe("The version from get_workflow_json this delta was computed against; the write is refused (conflict) if the workflow moved on."),
+              upsert_nodes: z.array(z.record(z.string(), z.unknown())).optional().describe("Whole nodes to add or replace, matched by id."),
+              delete_node_ids: z.array(z.string()).optional().describe("Node ids to remove (their edges are removed by the server)."),
+              upsert_edges: z.array(z.record(z.string(), z.unknown())).optional().describe("Whole edges to add or replace, matched by id."),
+              delete_edge_ids: z.array(z.string()).optional().describe("Edge ids to remove."),
+              set: z
+                .object({
+                  name: z.string().min(1).max(200).optional(),
+                  settings: z.record(z.string(), z.unknown()).optional().describe("Replaces settings wholesale — subject to the same `settings.studio` guard as a full-body settings write."),
+                })
+                .optional(),
+            })
+            .optional()
+            .describe(
+              "Id-keyed partial update applied atomically against base_version (from get_workflow_json): upsert or delete whole nodes and edges by id, optionally set name/settings. " +
+                "Mutually exclusive with nodes/edges/settings/thumbnail_url/expected_*. Prefer this over re-sending the whole graph — a stale full-body write clobbers concurrent edits.",
+            ),
         },
         annotations: { readOnlyHint: false, destructiveHint: false },
       },
       async (args) => {
+        // DELTA (audit 2026-09-06 fix #6): the REST route has carried the
+        // id-keyed delta protocol since P3 (migration 219, `apply_workflow_delta`
+        // — access at `edit`, the audience gate on `set.settings`, the atomic
+        // version CAS). Forward it there rather than re-implement the RPC; the
+        // mcp-project floor stays this tool's (the route accepts any workflow
+        // the caller may edit).
+        if (args.delta !== undefined) {
+          const mixed =
+            args.nodes !== undefined || args.edges !== undefined || args.settings !== undefined ||
+            args.thumbnail_url !== undefined || args.expected_updated_at !== undefined || args.expected_version !== undefined
+          if (mixed) {
+            return err("`delta` is mutually exclusive with nodes/edges/settings/thumbnail_url/expected_updated_at/expected_version — send one representation.")
+          }
+          const loaded = await loadMcpWorkflow(session, args.workflow_id, "edit", "id, settings")
+          if (!loaded.ok) return err(loaded.message)
+          if (args.delta.set?.settings !== undefined && studioSettingsClobbered(args.delta.set.settings, loaded.row.settings)) {
+            return err(STUDIO_SETTINGS_GUARD_MESSAGE)
+          }
+          const d = args.delta
+          const res = await mcpInject(fastify, session, {
+            method: "PATCH",
+            url: `/v1/workflows/${encodeURIComponent(args.workflow_id)}`,
+            headers: { "x-internal-user-id": session.userId },
+            payload: {
+              userId: session.userId,
+              mcp_client: session.clientName,
+              delta: {
+                baseVersion: d.base_version,
+                ...(d.upsert_nodes !== undefined ? { upsertNodes: d.upsert_nodes } : {}),
+                ...(d.delete_node_ids !== undefined ? { deleteNodeIds: d.delete_node_ids } : {}),
+                ...(d.upsert_edges !== undefined ? { upsertEdges: d.upsert_edges } : {}),
+                ...(d.delete_edge_ids !== undefined ? { deleteEdgeIds: d.delete_edge_ids } : {}),
+                ...(d.set !== undefined ? { set: d.set } : {}),
+              },
+            },
+          })
+          if (res.statusCode === 409) {
+            let current: { currentVersion?: number; currentUpdatedAt?: string } = {}
+            try { current = (JSON.parse(res.body) as { error?: typeof current }).error ?? {} } catch { /* opaque */ }
+            return err(
+              `Workflow was modified since you last read it${current.currentVersion !== undefined ? ` (current version ${current.currentVersion})` : ""}. ` +
+                "Fetch the latest with get_workflow_json and retry the delta with its version as base_version.",
+            )
+          }
+          if (res.statusCode >= 400) return err(mcpRouteError(res.statusCode, res.body))
+          let out: { id?: string; version?: number; updatedAt?: string } = {}
+          try { out = (JSON.parse(res.body) as { data?: typeof out }).data ?? {} } catch { /* opaque */ }
+          return ok(`Applied delta to workflow ${args.workflow_id} (version ${out.version ?? "?"}).`, {
+            id: args.workflow_id,
+            ...(out.version !== undefined ? { version: out.version } : {}),
+            ...(out.updatedAt !== undefined ? { updated_at: out.updatedAt } : {}),
+          })
+        }
+
         // Fork on workspace, exactly as the by-id reads do. In a workspace the
         // P10 seam decides who may write (`edit` access) and the write is scoped
         // to the id alone; with no workspace the long-standing creator + "mcp"
@@ -449,6 +544,25 @@ export function registerWorkflows({
           return err(
             "Nothing to update — provide nodes+edges, settings, and/or thumbnail_url.",
           )
+        }
+
+        // The Studio-document guard (see studioSettingsClobbered). The workspace
+        // fork loaded `settings` above; the no-workspace fork reads it here,
+        // only when a settings replace is on the table, under the same floor
+        // the UPDATE below uses.
+        if (args.settings !== undefined) {
+          if (!isWorkspace) {
+            const { data: current, error: readError } = await supabase
+              .from("workflows")
+              .select("settings")
+              .eq("id", args.workflow_id)
+              .eq("user_id", session.userId)
+              .eq("project_id", mcpProjectId!)
+              .maybeSingle()
+            if (readError) return err(`Error: ${readError.message}`)
+            storedSettings = (current as { settings?: unknown } | null)?.settings
+          }
+          if (studioSettingsClobbered(args.settings, storedSettings)) return err(STUDIO_SETTINGS_GUARD_MESSAGE)
         }
 
         // Audience gate — workspace only. A settings write that would change WHO
