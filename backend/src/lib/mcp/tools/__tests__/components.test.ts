@@ -173,3 +173,24 @@ describe("run_component tool", () => {
     expect(tools.map((t) => t.name)).not.toContain("run_component")
   })
 })
+
+// Audit 2026-09-06 fix #1: `client_request_id` → `idempotency-key` header on
+// the component execute dispatch (namespaced `mcp:`).
+describe("run_component — client_request_id", () => {
+  it("forwards client_request_id as the mcp-namespaced idempotency-key header", async () => {
+    chainResolvesSingle({
+      component_metadata: { inputs: [{ id: "h1", name: "source image", fieldKey: "url", type: "image", required: true }] },
+    })
+    const fastify = Fastify()
+    const seen: { key?: unknown } = {}
+    fastify.post("/v1/component/execute", async (req, reply) => {
+      seen.key = req.headers["idempotency-key"]
+      return reply.status(202).send({ jobId: "j-comp" })
+    })
+    const server = buildServer()
+    registerComponents({ server, session: newSession({ userId: "u1", scopes: ["workflows:execute"] as Scope[], clientName: "Cursor" }), fastify })
+    const result = await callTool(server, "run_component", { component_id: "thumbnail-maker", inputs: { source_image: "https://r2/img.jpg" }, client_request_id: "comp-retry-01" })
+    expect(result.isError).toBeUndefined()
+    expect(seen.key).toBe("mcp:comp-retry-01")
+  })
+})

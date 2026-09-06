@@ -11,7 +11,7 @@ import {
   flatInputsToOverrides,
   mergeInputOverrides,
 } from "../extract-app-inputs.js"
-import { cardResultText } from "./_verb-helpers.js"
+import { cardResultText, clientRequestIdSchema, idempotencyHeaders } from "./_verb-helpers.js"
 
 const appsReadGate: ToolGate = { required: ["apps:read"] }
 const executeGate: ToolGate = { required: ["workflows:execute"] }
@@ -204,6 +204,7 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
           "Run a published app by slug. The caller pays for credits. `inputs` is a FLAT object keyed by the schema's input keys (call `get_app_inputs` first to learn them). Returns an execution_id. `inputOverrides` (advanced) sets raw node fields such as promptPrefix/promptSuffix.",
         inputSchema: {
           slug: z.string().min(1).describe("App slug, e.g. 'photo-restoration'"),
+          client_request_id: clientRequestIdSchema.optional(),
           inputs: z
             .record(z.string(), z.unknown())
             .optional()
@@ -276,6 +277,7 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
           method: "POST",
           url: `/v1/app/${encodeURIComponent(args.slug)}/run`,
           payload,
+          headers: idempotencyHeaders(args.client_request_id),
         })
         if (res.statusCode >= 400) {
           return {

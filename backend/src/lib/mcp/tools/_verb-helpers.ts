@@ -109,6 +109,39 @@ export const JOB_OUTPUT_SCHEMA = {
  *
  *   _meta: uiMeta(WIDGET_URI.jobAuto),
  */
+/**
+ * IDEMPOTENCY ON MCP-TRIGGERED SPEND (audit 2026-09-06 fix #1 — D-2 / A-15 /
+ * B-3, open since the June audit). A client that retries a spending call
+ * after a timeout or a dropped connection used to run — and pay for — the
+ * work twice: `mcpInject` forwarded no `idempotency-key`, and the routes
+ * treat "no header" as "no dedup" on purpose (two distinct clicks must be two
+ * rows — `routes/workflow-execution.ts`). The routes already dedup on the
+ * header, unique per `(user_id, idempotency_key)` (migration 163), minimum
+ * length `MIN_IDEMPOTENCY_KEY_LENGTH` (8).
+ *
+ * The MCP layer forwards the client's own token, namespaced `mcp:` so it can
+ * never collide with the app UI's per-click UUIDs, and NEVER derives one: a
+ * derived key would silently collapse two genuine "again" requests into one
+ * run. Explicit retry token, or nothing.
+ */
+export const CLIENT_REQUEST_ID_DESCRIPTION =
+  "Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, " +
+  "reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run."
+
+export const clientRequestIdSchema = z
+  .string()
+  .trim()
+  .min(8)
+  .max(128)
+  .regex(/^[A-Za-z0-9_.:-]+$/)
+  .describe(CLIENT_REQUEST_ID_DESCRIPTION)
+
+/** The `idempotency-key` header for a client retry token — `{}` when none was given. */
+export function idempotencyHeaders(clientRequestId: string | undefined): Record<string, string> {
+  const id = clientRequestId?.trim() ?? ""
+  return id ? { "idempotency-key": `mcp:${id}` } : {}
+}
+
 export function uiMeta(uri: string) {
   return {
     "ui/resourceUri": uri,
@@ -409,12 +442,15 @@ export async function dispatchJob(
     label: string
     widgetKind?: WidgetKind
     widgetData?: Omit<SingleJobStructuredContent, "jobId">
+    /** The client's retry token → `idempotency-key` header (see idempotencyHeaders). */
+    clientRequestId?: string
   },
 ) {
   const res = await mcpInject(fastify, session, {
     method: "POST",
     url: opts.url,
     payload: opts.payload as string | object | Buffer | undefined,
+    headers: idempotencyHeaders(opts.clientRequestId),
   })
   if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
   const jobId = parseJobId(res.body)

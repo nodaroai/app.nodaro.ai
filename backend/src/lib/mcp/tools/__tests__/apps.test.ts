@@ -204,3 +204,26 @@ describe("run_app tool", () => {
     expect(tools.map((t) => t.name)).not.toContain("run_app")
   })
 })
+
+// Audit 2026-09-06 fix #1: `client_request_id` → `idempotency-key` header on
+// the app run dispatch (namespaced `mcp:`). The app-runner route does not yet
+// dedup on it (follow-up); forwarding it now makes the contract one name.
+describe("run_app — client_request_id", () => {
+  it("forwards client_request_id as the mcp-namespaced idempotency-key header", async () => {
+    chainResolvesSingle({
+      snapshot_settings: { presentationSettings: { inputItems: [{ type: "node", nodeId: "n1" }] } },
+      snapshot_nodes: [{ id: "n1", type: "upload-image", data: { label: "Photo" } }],
+    })
+    const fastify = Fastify()
+    const seen: { key?: unknown } = {}
+    fastify.post("/v1/app/:slug/run", async (req, reply) => {
+      seen.key = req.headers["idempotency-key"]
+      return reply.status(202).send({ executionId: "e-app" })
+    })
+    const server = buildServer()
+    registerApps({ server, session: newSession({ userId: "u1", scopes: ["workflows:execute"] as Scope[], clientName: "Claude" }), fastify })
+    const result = await callTool(server, "run_app", { slug: "headshot-pro", inputs: { photo: "https://r2/photo.jpg" }, client_request_id: "app-retry-01" })
+    expect(result.isError).toBeUndefined()
+    expect(seen.key).toBe("mcp:app-retry-01")
+  })
+})

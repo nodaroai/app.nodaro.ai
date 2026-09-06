@@ -588,3 +588,43 @@ describe("registerWorkflows catalog", () => {
     }
   })
 })
+
+// Audit 2026-09-06 fix #1: a client retry of the same run must not double-run
+// or double-charge — `client_request_id` rides to the route as the
+// `idempotency-key` header (mcp-namespaced), which `/v1/workflows/:id/run`
+// already dedups on (`routes/workflow-execution.ts`). Absent → no header.
+describe("run_workflow — client_request_id", () => {
+  function runWithHeaderCapture() {
+    const fastify = Fastify()
+    const seen: { key?: unknown } = {}
+    fastify.post("/v1/workflows/:id/run", async (req) => {
+      seen.key = req.headers["idempotency-key"]
+      return { executionId: "e-1", status: "pending" }
+    })
+    fromMock.mockReturnValue(chain({ data: { name: "My Flow", project_id: MCP_PROJECT_ID }, error: null }))
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:execute"]), fastify })
+    return { server, seen }
+  }
+
+  it("forwards client_request_id as the mcp-namespaced idempotency-key header", async () => {
+    const { server, seen } = runWithHeaderCapture()
+    const result = await callTool(server, "run_workflow", { workflow_id: WORKFLOW_ID, client_request_id: "retry-7f3a9c" })
+    expect(result.isError).toBeUndefined()
+    expect(seen.key).toBe("mcp:retry-7f3a9c")
+  })
+
+  it("sends no idempotency-key header when the client gave no id", async () => {
+    const { server, seen } = runWithHeaderCapture()
+    await callTool(server, "run_workflow", { workflow_id: WORKFLOW_ID })
+    expect(seen.key).toBeUndefined()
+  })
+
+  it("advertises the parameter with its retry guidance", async () => {
+    const { server } = runWithHeaderCapture()
+    const tools = await listTools(server)
+    const tool = tools.find((t) => t.name === "run_workflow")
+    const schema = tool?.inputSchema as { properties?: Record<string, { description?: string }> }
+    expect(schema.properties?.client_request_id?.description).toContain("reuse the same value when retrying")
+  })
+})

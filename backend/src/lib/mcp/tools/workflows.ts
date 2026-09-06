@@ -3,6 +3,7 @@ import { hasCredits } from "../../config.js"
 import { findCloudOnlyNodeTypes, cloudOnlyRejectionMessage } from "../../cloud-only-nodes.js"
 import { findDeniedNodeTypes, deniedNodeRejectionMessage } from "../../surface-deny.js"
 import { z } from "zod"
+import { clientRequestIdSchema, idempotencyHeaders } from "./_verb-helpers.js"
 import type { FastifyInstance } from "fastify"
 import { stripExportContent, stripTransientRuntimeData, normalizeNodeModelParams, describeNodeAdjustments, type GenericNode, type WorkflowExport } from "@nodaro/shared"
 import type { McpSession } from "../session.js"
@@ -684,9 +685,10 @@ export function registerWorkflows({
       {
         title: "Run Workflow",
         description:
-          "Run a saved workflow from the mcp project. Returns an execution_id",
+          "Run a saved workflow from the mcp project. Returns an execution_id. Retrying after a timeout? Reuse the same client_request_id so the run is not started or charged twice.",
         inputSchema: {
           workflow_id: z.string().uuid(),
+          client_request_id: clientRequestIdSchema.optional(),
           inputs: z
             .record(z.string(), z.unknown())
             .optional()
@@ -733,6 +735,7 @@ export function registerWorkflows({
           method: "POST",
           url: `/v1/workflows/${encodeURIComponent(args.workflow_id)}/run`,
           payload,
+          headers: idempotencyHeaders(args.client_request_id),
         })
         if (res.statusCode >= 400) {
           return err(`Error from Nodaro: ${res.statusCode} ${res.body}`)
