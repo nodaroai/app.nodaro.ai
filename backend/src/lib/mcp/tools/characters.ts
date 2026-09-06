@@ -437,7 +437,7 @@ function registerWriteTools(opts: RegisterCharacterToolsOpts): void {
       }
       const row = data as { id: string; name: string }
       return okText(
-        `Created character "${row.name}" (id ${row.id}). Next: call generate_character(kind='main', name=${JSON.stringify(row.name)}, attachToCharacterId=${JSON.stringify(row.id)}) to produce a portrait.`,
+        `Created character "${row.name}" (id ${row.id}). Next: call generate_character(kind='main', name=${JSON.stringify(row.name)}, attach_to_character_id=${JSON.stringify(row.id)}) to produce a portrait.`,
         { id: row.id, name: row.name },
       )
     },

@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { creditsOf, creditHint, perSecondHint } from "./_credit-hint.js"
+import { STATIC_CREDIT_COSTS } from "../../../ee/billing/credits.js"
 import { resolveAssetId } from "../asset-resolver.js"
 import { buildCompositePrompt } from "../prompt-builder-bridge.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
@@ -17,7 +18,7 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { modelIdsByKindMode, VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, ALL_CAPTION_STYLES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_TIER, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, readPromptAffixes } from "@nodaro/shared"
+import { modelIdsByKindMode, VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, ALL_CAPTION_STYLES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_TIER, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, readPromptAffixes, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_PROVIDERS, isPerSecondLipSyncProvider } from "@nodaro/shared"
 import { applyPromptAffixes } from "@nodaro/prompts"
 
 // Map list_models catalog/display ids → /v1/motion-transfer route providers.
@@ -67,6 +68,18 @@ const VIDEO_AUDIT_PRICING_HINT = [true, false]
     return `${familyLabel} ${VIDEO_ANALYSIS_DURATION_BUCKETS.map((b) => VIDEO_AUDIT_BUCKET_CREDITS[buildVideoAuditCreditId({ analysisProvided, durationSec: b })]).join("/")} credits`
   })
   .join("; ")
+
+
+/** A-14 (audit 2026-09-06): the lip_sync model list derives from LIP_SYNC_PROVIDERS and
+ *  its prices from the static table — a flat price, a per-second model's 15 s bucket,
+ *  or "duration-tiered" for the video-model lanes (seedance-2 family, minimax-h3). */
+function lipSyncPriceSuffix(id: string): string {
+  const flat = STATIC_CREDIT_COSTS[id]
+  const bucket = STATIC_CREDIT_COSTS[`${id}:15s`]
+  if (typeof bucket === "number" && isPerSecondLipSyncProvider(id)) return ` (${bucket} cr/15s)`
+  if (typeof flat === "number" && !STATIC_CREDIT_COSTS[`${id}:8s:480p`] && !STATIC_CREDIT_COSTS[`${id}:4s:480p`]) return ` (${flat} cr)`
+  return " (duration-tiered)"
+}
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 
@@ -1029,7 +1042,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
     {
       title: "Extract Frame",
       description:
-        "Extract a single frame from a video as an image. Provide either video_url OR video_asset_id, and either mode (first/last) or a timestamp in seconds.",
+        "Extract a single frame from a video as an image. Provide either video_url OR video_asset_id, and either mode (first/last) or time_seconds (mode 'timestamp' is inferred when time_seconds is given).",
       inputSchema: {
         video_url: z.string().url().optional(),
         video_asset_id: z.string().optional(),
@@ -1078,7 +1091,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       }
       const payload = {
         videoUrl,
-        mode: args.mode ?? "first",
+        // C-5 #8 (audit 2026-09-06): a bare time_seconds used to be silently
+        // dropped because mode defaulted to "first"; a timestamp IS the mode.
+        mode: args.mode ?? (args.time_seconds !== undefined ? "timestamp" : "first"),
         timestamp: args.time_seconds,
         mcp_client: session.clientName,
         userId: session.userId,
@@ -1110,7 +1125,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "dub-onto-character work. Use it directly; do NOT search the apps marketplace for lip-sync.\n\n" +
         "Provide ONE face source — image_url / image_asset_id (a portrait) OR video_url / video_asset_id " +
         "(an existing clip whose mouth gets re-driven) — and ONE audio source: audio_url / audio_asset_id.\n\n" +
-        "Default model kling-avatar (talking head, 720p). The `model` parameter lists all 11 with their " +
+        "Default model kling-avatar (talking head, 720p). The `model` parameter lists every model with its " +
         "list price and input type; which one to pick for singing, dubbing, cinematic full-body shots or " +
         "the cheapest draft is `get_node_skill(\"lip-sync\")`.\n\n" +
         "Returns a job_id. The widget renders the resulting video inline.",
@@ -1138,17 +1153,10 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .string()
           .optional()
           .describe(
-            "Lip-sync model. Default kling-avatar. All 11 options: " +
-            `seedance-2 (${creditsOf("seedance-2:8s:720p-ref")}/${creditsOf("seedance-2:8s:1080p-ref")} cr @ 720p/1080p, image, native phoneme lip-sync 8+ languages, premium), ` +
-            `seedance-2-fast (${creditsOf("seedance-2-fast:8s:480p-ref")}/${creditsOf("seedance-2-fast:8s:720p-ref")} cr @ 480p/720p, image, same lip-sync cheaper), ` +
-            `kling-avatar (${creditHint("kling-avatar:15s")}/15s, image, 720p), kling-avatar-pro (${creditHint("kling-avatar-pro:15s")}/15s, image, 1080p), ` +
-            `infinitalk (${creditsOf("infinitalk:480p")}/${creditsOf("infinitalk:720p")} cr, image, 480p|720p), ` +
-            `omnihuman-1-5 (${creditsOf("omnihuman-1-5:15s")}/${creditsOf("omnihuman-1-5:30s")}/${creditsOf("omnihuman-1-5:60s")} cr for 15/30/60s, image, prompt-directed performance, 720p|1080p, premium), ` +
-            `latentsync (${creditHint("latentsync")}, video, singing), ` +
-            `wav2lip (${creditHint("wav2lip")}, image|video, fastest+cheapest), video-retalking ` +
-            `(${creditHint("video-retalking")}, video, face enhancement), sadtalker (${creditHint("sadtalker")}, single image), ` +
-            `volcengine-lipsync (${perSecondHint("volcengine-lipsync")}, video, AI dubbing, mode lite|basic for multi-speaker). ` +
-            "Unknown values fall back to kling-avatar.",
+            `Lip-sync model. Default kling-avatar. Options (list price where the model has one fixed price; per-second models show their 15 s bucket; duration-tiered models say so): ` +
+            LIP_SYNC_PROVIDERS.map((id) => `${id}${lipSyncPriceSuffix(id)}`).join(", ") +
+            `. Input type (image vs video) and which model fits singing, dubbing, cinematic or the cheapest draft: get_node_skill("lip-sync"). ` +
+            `Unknown values fall back to kling-avatar.`,
           ),
         resolution: z
           .enum(["480p", "720p", "1080p"])
@@ -1342,7 +1350,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .string()
           .optional()
           .describe(
-            "v2v model. Default `wan`. Options: wan, wan-flash, runway-aleph. " +
+            `v2v model. Default \`wan\`. Options: ${VIDEO_TO_VIDEO_PROVIDERS.join(", ")}. ` +
             "Unknown values fall back to wan.",
           ),
         duration: z.enum(["5", "10"]).optional().describe("Wan / Wan Flash only — 5s or 10s output."),

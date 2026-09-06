@@ -206,8 +206,8 @@ describe("run_app tool", () => {
 })
 
 // Audit 2026-09-06 fix #1: `client_request_id` → `idempotency-key` header on
-// the app run dispatch (namespaced `mcp:`). The app-runner route does not yet
-// dedup on it (follow-up); forwarding it now makes the contract one name.
+// the app run dispatch (namespaced `mcp:`); the app-runner route dedups the
+// execution on it (services/app-execution.ts).
 describe("run_app — client_request_id", () => {
   it("forwards client_request_id as the mcp-namespaced idempotency-key header", async () => {
     chainResolvesSingle({

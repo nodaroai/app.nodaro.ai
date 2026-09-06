@@ -9,9 +9,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 
-const { mockExecuteAppRun, mockInsertJob } = vi.hoisted(() => ({
+const { mockExecuteAppRun, mockInsertJob, mockInsertJobIdempotent } = vi.hoisted(() => ({
   mockExecuteAppRun: vi.fn(),
   mockInsertJob: vi.fn(),
+  mockInsertJobIdempotent: vi.fn(),
 }))
 
 vi.mock("@/services/app-execution.js", () => ({
@@ -20,6 +21,7 @@ vi.mock("@/services/app-execution.js", () => ({
 
 vi.mock("@/lib/insert-job.js", () => ({
   insertJob: mockInsertJob,
+  insertJobIdempotent: mockInsertJobIdempotent,
   billingPairColumns: (ctx?: { payer?: string; workspaceId?: string; orgId?: string }) =>
     ctx?.payer === "workspace" ? { workspace_id: ctx.workspaceId, org_id: ctx.orgId } : {},
 }))
@@ -148,5 +150,28 @@ describe("POST /v1/component/execute — the forwarded payer (P14)", () => {
     expect(res.statusCode).toBe(202)
     const params = mockExecuteAppRun.mock.calls[0]?.[0] as { billingContext?: BillingContext }
     expect(params.billingContext).toBeUndefined()
+  })
+})
+
+
+// Audit 2026-09-06 follow-up: the wrapper job is the unit a client retries;
+// with an `idempotency-key` header it is inserted through the idempotent
+// path, and a hit answers the existing job without starting a second inner
+// run.
+describe("POST /v1/component/execute — idempotency-key header", () => {
+  it("inserts the wrapper job idempotently and skips the inner run on a hit", async () => {
+    mockInsertJobIdempotent.mockResolvedValue({ row: { id: "job-existing" }, created: false })
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/component/execute",
+      headers: { "idempotency-key": "mcp:comp-retry-01" },
+      payload: { appSlug: "thumbnail-maker", inputOverrides: {} },
+    })
+    expect(res.statusCode).toBe(202)
+    expect(res.json()).toEqual({ jobId: "job-existing", deduped: true })
+    expect(mockInsertJobIdempotent).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ provider: "component" }), "mcp:comp-retry-01")
+    expect(mockInsertJob).not.toHaveBeenCalled()
+    await new Promise((r) => setImmediate(r))
+    expect(mockExecuteAppRun).not.toHaveBeenCalled()
   })
 })

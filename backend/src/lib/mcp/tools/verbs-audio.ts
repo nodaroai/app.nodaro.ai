@@ -311,8 +311,8 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "`elevenlabs-multilingual` is a legacy v2 model routed through a " +
         "third-party wrapper known to garble some languages (Hebrew observed) " +
         "— only pick it when a specific library voice is verified for v2 " +
-        "only, or the text exceeds v3's 5,000-char single-request cap (v2 " +
-        "takes ~10,000). Never switch away from v3 for language reasons " +
+        "only. `text` is capped at 5,000 chars on every model here — split longer " +
+        "scripts into several calls. Never switch away from v3 for language reasons " +
         "alone. Call `list_models { kind: \"audio\", mode: \"tts\" }` for the " +
         "full sheet.\n\n" +
         "**Presets/templates**: call list_node_presets { nodeType: \"text-to-speech\" } " +
@@ -370,8 +370,8 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
             "`elevenlabs-turbo` is cheaper for plain narration. " +
             "`elevenlabs-multilingual` is a legacy v2 model via a third-party " +
             "wrapper known to garble some languages (Hebrew observed) — only " +
-            "use it for a v2-only-verified voice or text over v3's 5,000-char " +
-            "cap (v2 allows ~10,000). Call " +
+            "use it for a v2-only-verified voice (`text` is capped at 5,000 chars on " +
+            "every model — split longer scripts). Call " +
             "list_models { kind: \"audio\", mode: \"tts\" } for the full sheet.",
           ),
         voice_type: z.enum(["premade", "custom", "library"]).optional(),

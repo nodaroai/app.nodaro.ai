@@ -13,6 +13,7 @@ import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import { resolveWebSurfaceFlag } from "../middleware/credit-guard.js"
+import { MIN_IDEMPOTENCY_KEY_LENGTH } from "../lib/dedup-fingerprint.js"
 import { hasCredits } from "../lib/config.js"
 import { CreditsService } from "../ee/billing/credits.js"
 import { flattenItems } from "@nodaro/shared"
@@ -458,7 +459,12 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       })
     }
 
-    // New run path — use extracted core function
+    // New run path — use extracted core function. The client's retry token
+    // (the `idempotency-key` header the MCP verbs forward, ≥ 8 chars) dedups
+    // the execution inside the core (audit 2026-09-06, D-2/A-15/B-3).
+    const headerKeyRaw = req.headers["idempotency-key"]
+    const headerKey = typeof headerKeyRaw === "string" ? headerKeyRaw.trim() : ""
+    const idempotencyKey = headerKey.length >= MIN_IDEMPOTENCY_KEY_LENGTH ? headerKey : undefined
     try {
       const result = await executeAppRun({
         appVersionId: appRow.id,
@@ -467,14 +473,17 @@ export async function appRunnerRoutes(app: FastifyInstance) {
         appId: appRow.id,
         inputOverrides,
         nodeIds,
+        idempotencyKey,
         webFreeMode: await resolveWebSurfaceFlag(req),
         billingContext: req.billingContext ?? personalPayer(req.userId),
       })
 
+      if (result.deduped) reply.header("X-Dedup-Hit", "1")
       return reply.status(202).send({
         executionId: result.executionId,
         runId: result.appRunId,
         status: "pending",
+        deduped: result.deduped,
       })
     } catch {
       return sendInternalError(reply, req, undefined, "Failed to create app run")
