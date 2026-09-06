@@ -753,3 +753,16 @@ describe("scope gating", () => {
     }
   })
 })
+
+// Audit 2026-09-06 follow-up (C-5 #1): the create_character success text named
+// `attachToCharacterId`; the parameter is `attach_to_character_id`, and the
+// zod object strips unknown keys — a model copying the hint generated an
+// UNATTACHED portrait with no error.
+describe("create_character — the next-step hint names the real parameter", () => {
+  it("says attach_to_character_id, never attachToCharacterId", async () => {
+    const src = (await import("node:fs")).readFileSync(new URL("../characters.ts", import.meta.url), "utf8")
+    const hint = src.split("\n").find((l) => l.includes("Next: call generate_character(")) ?? ""
+    expect(hint).toContain("attach_to_character_id=")
+    expect(hint).not.toContain("attachToCharacterId=")
+  })
+})

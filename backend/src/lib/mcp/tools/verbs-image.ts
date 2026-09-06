@@ -371,7 +371,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
             .optional()
             .describe(
               `I2I / edit model. Default nano-banana-2. Recommended: ${I2I_MODEL_IDS.join(", ")}. ` +
-              `For identity-preserving edits use flux-kontext. Unknown values fall back. ` +
+              `For identity-preserving edits use nano-banana-pro. Unknown values fall back. ` +
               `Call list_models for capability details.`,
             ),
           resolution: z.string().optional().describe("Resolution: falls back to nearest supported."),

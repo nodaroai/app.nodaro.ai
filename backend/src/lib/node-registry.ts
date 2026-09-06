@@ -236,7 +236,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     // unknown duration reserves the 600s ceiling. See @nodaro/shared video-analysis-pricing.ts.
     description: "Scene-segmented analysis of a video: prompt-ready visuals, camera language, mode-tagged audio, castable entity slots.",
     outputType: "data",
-    creditCost: "181-2076",
+    creditCost: "181-2081",
     inputSchema: {
       fields: [
         { key: "videoUrl", type: "string" },
@@ -268,7 +268,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     description:
       "Re-watches a clip against a wired analysis (or auto-runs a fast analysis first when none is wired), applies video-verified corrections under guards, and returns a disclosed report of what was checked, fixed, and left open.",
     outputType: "data",
-    creditCost: "215-1921",
+    creditCost: "215-1924",
     inputSchema: {
       fields: [
         { key: "videoUrl", type: "video-url", required: true },

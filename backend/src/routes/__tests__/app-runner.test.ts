@@ -42,6 +42,18 @@ vi.mock("@/lib/orchestration-queue.js", () => ({
   orchestrationQueue: { add: vi.fn().mockResolvedValue({}) },
 }))
 
+// Audit 2026-09-06 follow-up: the run route hands the `idempotency-key`
+// header to the core, which dedups the execution. Spied here so the header
+// → key plumbing is asserted without a real UNIQUE index.
+const mockExecuteAppRun = vi.hoisted(() => vi.fn())
+vi.mock("@/services/app-execution.js", async (importOriginal) => {
+  const orig = (await importOriginal()) as { executeAppRun: (p: unknown) => Promise<unknown> }
+  // Delegates to the real core unless a test queues a value — the existing
+  // 202 tests keep exercising the real inserts through the supabase mock.
+  mockExecuteAppRun.mockImplementation((p: unknown) => orig.executeAppRun(p))
+  return { ...orig, executeAppRun: (p: unknown) => mockExecuteAppRun(p) }
+})
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -456,6 +468,37 @@ describe("POST /v1/app/:slug/run", () => {
       expect.any(Object)
     )
   })
+
+  // ── audit 2026-09-06 follow-up: idempotency-key header ──
+  it("forwards a well-formed header to the core as the idempotency key and echoes a dedup hit", async () => {
+    setupSuccessfulRunMocks()
+    mockExecuteAppRun.mockResolvedValueOnce({ executionId: TEST_EXECUTION_ID, appRunId: TEST_RUN_ID, deduped: true })
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/app/${TEST_SLUG}/run`,
+      headers: { "x-user-id": TEST_USER_ID, "idempotency-key": "mcp:app-retry-01" },
+      payload: { inputOverrides: {} },
+    })
+    expect(res.statusCode).toBe(202)
+    expect(mockExecuteAppRun).toHaveBeenCalledWith(expect.objectContaining({ idempotencyKey: "mcp:app-retry-01" }))
+    expect(res.headers["x-dedup-hit"]).toBe("1")
+    expect(res.json().deduped).toBe(true)
+  })
+
+  it("ignores a header shorter than the minimum key length", async () => {
+    setupSuccessfulRunMocks()
+    mockExecuteAppRun.mockResolvedValueOnce({ executionId: TEST_EXECUTION_ID, appRunId: TEST_RUN_ID, deduped: false })
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/app/${TEST_SLUG}/run`,
+      headers: { "x-user-id": TEST_USER_ID, "idempotency-key": "short" },
+      payload: { inputOverrides: {} },
+    })
+    expect(res.statusCode).toBe(202)
+    expect(mockExecuteAppRun.mock.calls[0]?.[0]?.idempotencyKey).toBeUndefined()
+    expect(res.headers["x-dedup-hit"]).toBeUndefined()
+  })
+
 })
 
 // ---------------------------------------------------------------------------
@@ -729,3 +772,4 @@ describe("DELETE /v1/app/:slug/runs/:runId", () => {
     expect(res.json().error.code).toBe("not_found")
   })
 })
+

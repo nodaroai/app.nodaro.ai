@@ -111,7 +111,7 @@ export function registerPipelineTools({ server, session }: RegisterPipelineTools
       {
         title: "Start Pipeline",
         description:
-          "Start a new Story->Video pipeline from a prompt. The engine runs autonomously (default mode 'auto' completes end-to-end). Returns the new pipeline id; subscribe to events / poll status to watch progress.",
+          "Start a new Story->Video pipeline from a prompt. The engine runs autonomously (default mode 'auto' completes end-to-end). Returns the new pipeline id; poll get_pipeline_status (and pipeline_pending_approvals while a stage awaits approval) to watch progress.",
         inputSchema: {
           story_prompt: z
             .string()
@@ -211,7 +211,7 @@ export function registerPipelineTools({ server, session }: RegisterPipelineTools
           stage: z
             .enum(CHAT_ENABLED_STAGES as unknown as [string, ...string[]])
             .describe(
-              "The stage to chat with — must be awaiting_approval. Only 'script' is wired in Phase 1D.2b.",
+              `The stage to chat with — must be awaiting_approval. Wired today: ${(Object.keys(CHAT_WIRED_STAGES) as Array<keyof typeof CHAT_WIRED_STAGES>).filter((k) => CHAT_WIRED_STAGES[k]).join(", ")}.`,
             ),
           message: z
             .string()

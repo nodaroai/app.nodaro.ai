@@ -36,6 +36,7 @@ const ALLOWLIST = new Set([
   // already, but the static import forces ee/ to load even in community builds.
   // Each one needs the same dynamic-require pattern used in workers/shared.ts.
   "backend/src/lib/mcp/tools/models.ts",                   // CreditsService for cost display
+  "backend/src/lib/mcp/tools/_credit-hint.ts",             // STATIC_CREDIT_COSTS for the tool-description credit hints; every read is behind hasCredits(), like models.ts
   "backend/src/lib/node-registry.ts",                      // STATIC_CREDIT_COSTS for NODE_REGISTRY
   "backend/src/utils/file-validation.ts",                  // TIER_STORAGE_LIMITS
   "backend/src/services/workflow-engine/node-executor.ts", // estimateWorkflowCredits
