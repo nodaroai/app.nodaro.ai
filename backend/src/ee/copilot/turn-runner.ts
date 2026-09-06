@@ -66,6 +66,14 @@ export interface RunTurnInput {
   caps: TierCaps
   usageLogId: string | null
   reservedCredits: number
+  /**
+   * Was this turn started by a browser (JWT) request? DERIVED BY THE ROUTE,
+   * carried here — never decided in this file. It reaches the MCP session as
+   * `firstParty` and is what lets a deployment payer's own in-app Copilot read
+   * the pool balance; hard-coding it true here would keep that open the day the
+   * entry route starts accepting a programmatic credential.
+   */
+  firstParty: boolean
   emit: TurnEmit
   signal: AbortSignal
 }
@@ -99,6 +107,7 @@ export async function runCopilotTurn(input: RunTurnInput): Promise<TurnOutcome> 
     clientName: "copilot",
     fastify: input.fastify,
     projectScope: { projectId: input.projectId },
+    firstParty: input.firstParty,
   })
   const invoker = createMcpInvoker(server)
 

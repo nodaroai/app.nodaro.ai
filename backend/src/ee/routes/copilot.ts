@@ -539,6 +539,14 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
           caps: effectiveCaps,
           usageLogId: reservation?.usageLogId ?? null,
           reservedCredits: reservation?.creditsReserved ?? 0,
+          // Derived from the CREDENTIAL, here, at the door — not assumed by the
+          // runner. `accessGate` has already refused every non-JWT caller, so
+          // this reads true today; it is written as a derivation anyway so that
+          // the day this route accepts anything else, the flag follows the
+          // credential instead of silently staying true. Downstream it becomes
+          // `McpSession.firstParty`, which on a deployment-payer instance is
+          // what lets the billing account's own Copilot read the pool balance.
+          firstParty: req.authKind === "jwt",
           emit: (event) => sse.sendEvent(event as never),
           signal: abort.signal,
         })

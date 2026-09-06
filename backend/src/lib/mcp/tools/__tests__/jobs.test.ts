@@ -335,3 +335,88 @@ describe("get_job tool", () => {
     expect(tools.map((t) => t.name)).not.toContain("get_job")
   })
 })
+
+// ── Audit 2026-09-06 fix #2: one envelope + a supported wait ────────────────
+function mockJobReads(rows: Array<unknown | null>) {
+  const queue = [...rows]
+  const maybeSingle = vi.fn().mockImplementation(() => Promise.resolve({ data: queue.length > 1 ? queue.shift() : queue[0], error: null }))
+  const chain: Record<string, unknown> = {}
+  chain.select = vi.fn().mockReturnValue(chain)
+  chain.eq = vi.fn().mockReturnValue(chain)
+  chain.maybeSingle = maybeSingle
+  ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue(chain)
+  return { maybeSingle }
+}
+const JOB = "11111111-1111-4111-8111-111111111111"
+const jobsSession = () => newSession({ userId: "u1", scopes: ["jobs:read"] as Scope[], clientName: "Claude" })
+
+describe("get_job — the one job envelope", () => {
+  it("declares the envelope as outputSchema and returns it as structuredContent", async () => {
+    mockGetJob({ id: JOB, user_id: "u1", status: "completed", job_type: "generate-image", progress: 100, output_data: { imageUrl: "https://r2/x.png" }, credits: 12 })
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const tools = await listTools(server)
+    const tool = tools.find((t) => t.name === "get_job")
+    expect((tool as { outputSchema?: unknown } | undefined)?.outputSchema).toBeDefined()
+    expect((tool?.description ?? "")).toContain("every 5")
+    const result = await callTool(server, "get_job", { job_id: JOB })
+    expect(result.isError).toBeUndefined()
+    const sc = result.structuredContent as Record<string, unknown>
+    expect(sc.jobId).toBe(JOB)
+    expect(sc.status).toBe("completed")
+    expect(sc.outputUrl).toBe("https://r2/x.png")
+    expect(sc.assetKind).toBe("image")
+    // The text envelope is unchanged for existing clients.
+    expect(result.content[0]?.text).toContain('"data"')
+  })
+})
+
+describe("wait_for_job tool", () => {
+  it("blocks until the owned job completes and returns the envelope", async () => {
+    mockJobReads([
+      { id: JOB, user_id: "u1", status: "processing", job_type: "generate-image", output_data: null, error_message: null },
+      { id: JOB, user_id: "u1", status: "completed", job_type: "generate-image", output_data: { imageUrl: "https://r2/x.png" }, error_message: null },
+    ])
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const result = await callTool(server, "wait_for_job", { job_id: JOB, timeout_s: 30 })
+    expect(result.isError).toBeUndefined()
+    const sc = result.structuredContent as Record<string, unknown>
+    expect(sc.status).toBe("completed")
+    expect(sc.outputUrl).toBe("https://r2/x.png")
+    expect(sc.jobId).toBe(JOB)
+  })
+
+  it("answers status timeout (not an error) when the job is still running at the deadline, with next-step guidance", async () => {
+    mockJobReads([{ id: JOB, user_id: "u1", status: "processing", job_type: "generate-video", output_data: null, error_message: null }])
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const result = await callTool(server, "wait_for_job", { job_id: JOB, timeout_s: 1 })
+    expect(result.isError).toBeUndefined()
+    const sc = result.structuredContent as Record<string, unknown>
+    expect(sc.status).toBe("timeout")
+    expect(result.content[0]?.text).toContain("wait_for_job again")
+  })
+
+  it("returns not found for a job the caller does not own — never waits on it", async () => {
+    const { maybeSingle } = mockJobReads([null])
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const result = await callTool(server, "wait_for_job", { job_id: JOB, timeout_s: 30 })
+    expect(result.isError).toBe(true)
+    expect(result.content[0]?.text).toContain("not found")
+    expect(maybeSingle).toHaveBeenCalledTimes(1)
+  })
+
+  it("caps timeout_s at 120 in the schema and does NOT register without jobs:read", async () => {
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const tools = await listTools(server)
+    const tool = tools.find((t) => t.name === "wait_for_job")
+    const schema = tool?.inputSchema as { properties?: Record<string, { maximum?: number }> }
+    expect(schema.properties?.timeout_s?.maximum).toBe(120)
+    const noScope = buildServer()
+    registerJobs({ server: noScope, session: newSession({ userId: "u1", scopes: [] as Scope[], clientName: "Claude" }), fastify: Fastify() })
+    expect((await listTools(noScope)).map((t) => t.name)).not.toContain("wait_for_job")
+  })
+})

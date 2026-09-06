@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 import { registerVerbs } from "../verbs.js"
+import { LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_PROVIDERS } from "@nodaro/shared"
 import { newSession } from "../../session.js"
 import { _resetRegistry } from "../../tasks.js"
 import type { Scope } from "../../../scopes.js"
@@ -1427,5 +1428,50 @@ describe("image_collage verb", () => {
     expect(received.body?.numbered).toBeUndefined()
     // No badge_position → the route's own default applies; nothing is sent.
     expect(received.body?.badgePosition).toBeUndefined()
+  })
+})
+
+// ── Audit 2026-09-06 follow-ups (A-14 / C-5): model facts derive, wrong-action strings go ──
+describe("audit follow-ups — descriptions tell the truth", () => {
+  it("extract_frame: time_seconds without a mode sends mode 'timestamp' (C-5 #8)", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/extract-frame", { jobId: "j-ef2" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "extract_frame", { video_url: "https://a/v.mp4", time_seconds: 4.2 })
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.mode).toBe("timestamp")
+    expect(received.body?.timestamp).toBe(4.2)
+  })
+
+  it("lip_sync's model parameter lists every LIP_SYNC_PROVIDERS id (A-14)", async () => {
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify: Fastify() })
+    const tool = (await listTools(server)).find((t) => t.name === "lip_sync")
+    const desc = ((tool?.inputSchema as { properties?: Record<string, { description?: string }> }).properties?.model?.description) ?? ""
+    for (const id of LIP_SYNC_PROVIDERS) expect(desc, id).toContain(id)
+  })
+
+  it("modify_video's model parameter lists every VIDEO_TO_VIDEO_PROVIDERS id (A-14)", async () => {
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify: Fastify() })
+    const tool = (await listTools(server)).find((t) => t.name === "modify_video")
+    const desc = ((tool?.inputSchema as { properties?: Record<string, { description?: string }> }).properties?.model?.description) ?? ""
+    for (const id of VIDEO_TO_VIDEO_PROVIDERS) expect(desc, id).toContain(id)
+  })
+
+  it("modify_image's model parameter no longer sends identity edits to flux-kontext (C-5 #3)", async () => {
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify: Fastify() })
+    const tool = (await listTools(server)).find((t) => t.name === "modify_image")
+    const desc = ((tool?.inputSchema as { properties?: Record<string, { description?: string }> }).properties?.model?.description) ?? ""
+    expect(desc).not.toContain("use flux-kontext")
+  })
+
+  it("generate_speech does not promise a 10,000-char v2 lane its own text cap forbids (C-5 #7)", async () => {
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify: Fastify() })
+    const tool = (await listTools(server)).find((t) => t.name === "generate_speech")
+    const all = JSON.stringify(tool)
+    expect(all).not.toContain("10,000")
   })
 })

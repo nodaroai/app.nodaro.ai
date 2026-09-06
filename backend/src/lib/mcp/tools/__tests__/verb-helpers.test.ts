@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest"
+import { idempotencyHeaders, clientRequestIdSchema, GET_JOB_POLL_HINT } from "../_verb-helpers.js"
 
 vi.mock("../../asset-resolver.js", () => ({
   resolveAssetId: vi.fn(async ({ assetId }: { assetId: string }) => {
@@ -76,5 +77,41 @@ describe("resolveRefArray", () => {
   it("accepts the JSON-stringified form end-to-end", async () => {
     const out = await resolveRefArray('["https://cdn.nodaro.ai/uploads/x.png"]', "u1", "image", 14)
     expect(out).toEqual(["https://cdn.nodaro.ai/uploads/x.png"])
+  })
+})
+
+// Audit 2026-09-06 fix #1 (D-2 / A-15 / B-3, open since June): no MCP-triggered
+// spend carried an idempotency key, so a client retry after a timeout ran —
+// and charged — the work twice. The route side already dedups on the
+// `idempotency-key` header (`(user_id, idempotency_key)` unique, migration
+// 163; `MIN_IDEMPOTENCY_KEY_LENGTH` = 8). The MCP layer forwards a client's
+// `client_request_id` under an `mcp:` namespace; no key → no header → the
+// route's documented "two clicks, two rows" behaviour.
+describe("idempotencyHeaders / clientRequestIdSchema", () => {
+  it("forwards a client_request_id as the mcp-namespaced idempotency-key header", () => {
+    expect(idempotencyHeaders("retry-7f3a9c")).toEqual({ "idempotency-key": "mcp:retry-7f3a9c" })
+  })
+
+  it("sends no header when the client gave no id", () => {
+    expect(idempotencyHeaders(undefined)).toEqual({})
+    expect(idempotencyHeaders("")).toEqual({})
+  })
+
+  it("accepts 8–128 chars of [A-Za-z0-9_.:-] and rejects anything shorter, longer or with other characters", () => {
+    expect(clientRequestIdSchema.safeParse("retry-7f3a9c").success).toBe(true)
+    expect(clientRequestIdSchema.safeParse("a".repeat(128)).success).toBe(true)
+    expect(clientRequestIdSchema.safeParse("short").success).toBe(false)
+    expect(clientRequestIdSchema.safeParse("a".repeat(129)).success).toBe(false)
+    expect(clientRequestIdSchema.safeParse("has space here").success).toBe(false)
+  })
+})
+
+// Audit 2026-09-06 fix #2 (A-9): "poll get_job with this id" named no cadence
+// and no expected duration, and never mentioned the blocking wait.
+describe("GET_JOB_POLL_HINT — one cadence sentence", () => {
+  it("names the cadence, the expected durations and the blocking alternative", () => {
+    expect(GET_JOB_POLL_HINT).toContain("poll get_job with this id")
+    expect(GET_JOB_POLL_HINT).toContain("every 5")
+    expect(GET_JOB_POLL_HINT).toContain("wait_for_job")
   })
 })

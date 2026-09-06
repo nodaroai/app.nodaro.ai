@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { creditsOf, creditHint, perSecondHint, lipSyncPriceSuffix } from "./_credit-hint.js"
 import { resolveAssetId } from "../asset-resolver.js"
 import { buildCompositePrompt } from "../prompt-builder-bridge.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
@@ -16,7 +17,7 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { modelIdsByKindMode, VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, ALL_CAPTION_STYLES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_TIER, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, readPromptAffixes } from "@nodaro/shared"
+import { modelIdsByKindMode, VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, ALL_CAPTION_STYLES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_TIER, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, readPromptAffixes, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_PROVIDERS } from "@nodaro/shared"
 import { applyPromptAffixes } from "@nodaro/prompts"
 
 // Map list_models catalog/display ids → /v1/motion-transfer route providers.
@@ -67,6 +68,11 @@ const VIDEO_AUDIT_PRICING_HINT = [true, false]
   })
   .join("; ")
 
+
+/** A-14 (audit 2026-09-06): the lip_sync model list derives from LIP_SYNC_PROVIDERS and
+ *  its prices from `lipSyncPriceSuffix` (`_credit-hint.ts`) — a flat price, a per-second
+ *  model's 15 s bucket, "duration-tiered" for the video-model lanes, nothing off-cloud. */
+
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 
 export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): void {
@@ -79,24 +85,16 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       title: "Generate Video",
       description:
         "Generate a video from a text prompt (text-to-video). Returns a job_id.\n\n" +
-        "**Picking a model**: call `list_models { kind: \"video\", mode: \"t2v\" }` " +
-        "first when the user hasn't specified a model. The recommendations " +
-        "array tells you which is best for cinematic / cheap-batch / audio-" +
-        "synced. Pricing is duration-tiered for most providers — check the " +
-        "`pricing` array of the chosen model so cost matches what the user " +
-        "expects.\n\n" +
-        "**Seedance prompting (the default model family)**: storyboard " +
-        "multi-moment videos as `Shot 1: … Shot 2: …`. On the 2.0 SKUs do NOT " +
-        "add timestamps (timed shots like '(0-3s)' destabilize generation); " +
-        "seedance-2-5 honours integer-second timestamps. One camera move " +
-        "per shot. Cue native audio inline: （background music）, <sound " +
-        "effects>, quoted dialogue. End with: 'HD, rich details, stable " +
-        "picture, keep it subtitle-free, do not generate a watermark.' " +
-        "Full doctrine: `get_node_skill(\"generate-video\")`.\n\n" +
-        "**Presets/templates**: call list_node_presets { nodeType: \"generate-video\" } " +
-        "to browse built-ins (e.g. Slow Push-In, FPV Drone, Vertical Hero) + your saved " +
-        "presets, get_node_preset to read one's config, or pass presetId here to apply " +
-        "one directly.",
+        "**Picking a model**: call `list_models { kind: \"video\", mode: \"t2v\" }` first when the user " +
+        "hasn't specified one — its recommendations say which is best for cinematic / cheap-batch / " +
+        "audio-synced, and pricing is duration-tiered for most providers, so check the chosen model's " +
+        "`pricing` before quoting a cost.\n\n" +
+        "**Prompting** (Seedance is the default family): storyboard multi-moment videos as " +
+        "`Shot 1: … Shot 2: …`, one camera move per shot, native audio cued inline. The per-family " +
+        "doctrine — timestamps, audio cues, closing quality line — is `get_node_skill(\"generate-video\")`; " +
+        "read it before the first render on a family you have not used in this session.\n\n" +
+        "**Presets**: list_node_presets { nodeType: \"generate-video\" } to browse, get_node_preset to read " +
+        "one, or pass presetId here to apply it.",
       inputSchema: {
         // Optional in the preset path: when presetId is supplied the preset
         // provides the prompt, so the caller may omit it. The handler enforces
@@ -359,61 +357,18 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
     {
       title: "Animate Image",
       description:
-        "Animate an image into a video (image-to-video). Provide either " +
-        "image_url OR image_asset_id. Returns a job_id.\n\n" +
-        "**Picking a model**: call `list_models { kind: \"video\", mode: \"i2v\" }` " +
-        "for capability sheets and recommendations. If the user supplied a start " +
-        "AND end frame, pick a model whose `features` includes `end-frame` (VEO, " +
-        "MiniMax, Hailuo Standard, Bytedance Lite, Kling Turbo, Seedance). " +
-        "Default `veo3.1` is the best price/quality balance with native audio.\n\n" +
-        "**Reference modes** (auto-selected from the inputs you provide):\n" +
-        "  • `'frames'` (default) — start/end-frame mode: provide `image_url` as " +
-        "the first frame and optionally `end_frame_url` as the last frame.\n" +
-        "  • `'references'` — reference-media mode: provide reference images " +
-        "via `reference_image_urls`, reference videos via `reference_video_urls` " +
-        "(style/motion transfer), and/or audio clips via `reference_audio_urls` " +
-        "(soundtrack-driven motion). Every model takes refs at its OWN caps — " +
-        "seedance-2-5 30/10/10, seedance-2 family + minimax-h3 9/3/3, " +
-        "wan-3 / wan-3-prime 10/5/5 (each reference video and audio clip 1-15s, " +
-        "≤15s combined; input video seconds + output duration ≤30s), " +
-        "gemini-omni-video / gemini-omni-flash 7 images (first image = opening frame, " +
-        "the rest are identity refs; images + 2×videos ≤ 7), " +
-        "kling-3-omni/grok-i2v 7, veo3/veo3.1 3 images. " +
-        "`image_url` / `end_frame_url` are ignored in this mode. Reference " +
-        "videos/audio cannot be combined with `end_frame_url`.\n" +
-        "  • Reference order = priority: put the identity-critical image FIRST " +
-        "and refer by ordinal in the prompt (@Image 1, Video 2). Identity = ONE " +
-        "headshot + ONE full-body image — multi-view character sheets cause ID " +
-        "drift and twin duplicates. 4-5 assets total beats maxing the caps.\n" +
-        "  • Edit/extend phrasing: name clips directly ('Extend Video 1 backward', " +
-        "'Remove X from Video 1') — saying 'reference Video 1' flips the model " +
-        "into reference mode and breaks the edit. Track completion: 'Video 1 + " +
-        "[transition] + followed by Video 2' (≤3 clips, ≤15s total). Full " +
-        "doctrine: `get_node_skill(\"image-to-video\")`.\n\n" +
-        "**Perfect loop** (the canonical recipe — three calls):\n" +
-        "  1. `animate_image` with `model: \"veo3.1\"`, `sound: false`, and the " +
-        "**same image** as both `image_url` (start) and `end_frame_url` (or the " +
-        "same `image_asset_id` and `end_frame_asset_id`). VEO3.1's first+last-" +
-        "frame mode + Nodaro's auto tail-trim produces a frame-perfect VISUAL " +
-        "loop. `sound: false` is important — VEO3.1's generated audio does NOT " +
-        "loop seamlessly (start and end audio differ even when frames match), " +
-        "so leaving it on creates audible seams when copies are stitched.\n" +
-        "  2. `combine_videos` with N copies of that single clip's `asset_id` " +
-        "(`transition: \"cut\"`, `audio_mode: \"remove\"`) to extend the loop to " +
-        "the desired duration. The visual seam is invisible because the last " +
-        "frame of clip K equals the first frame of clip K+1.\n" +
-        "  3. `merge_video_audio` to attach a pre-made looping audio track to " +
-        "the FINAL stitched video (not to the individual loop clip). The " +
-        "user-supplied audio should match the total stitched duration.\n\n" +
-        "**Prompt phrasing tip for step 1**: describe the loop as a *frame-" +
-        "match constraint*, not a *motion-reversal command*. Use \"motion " +
-        "begins and ends in the exact same composition and lighting so the " +
-        "first and last frames match perfectly\" — NOT \"all elements return " +
-        "to their starting positions\". The first phrasing aligns with VEO's " +
-        "end-frame interpolation; the second tends to conflict with any " +
-        "directional motion in the same prompt (e.g. \"clouds drifting left " +
-        "to right\") and gets ignored, leaving a video that doesn't actually " +
-        "loop.",
+        "Animate an image into a video (image-to-video). Provide either image_url OR image_asset_id. " +
+        "Returns a job_id.\n\n" +
+        "**Picking a model**: call `list_models { kind: \"video\", mode: \"i2v\" }` for capability sheets " +
+        "and recommendations. With a start AND end frame, pick a model whose `features` includes " +
+        "`end-frame`. Default `veo3.1` is the best price/quality balance with native audio.\n\n" +
+        "**Reference modes** (auto-selected from the inputs you provide): `frames` — image_url is the " +
+        "first frame, end_frame_url optionally the last; `references` — reference_image_urls / " +
+        "reference_video_urls / reference_audio_urls at each model's own caps (image_url and " +
+        "end_frame_url are ignored; reference video/audio cannot combine with end_frame_url). " +
+        "Per-model caps, reference ordering, edit-versus-reference phrasing and the perfect-loop recipe " +
+        "(the same image as start and end frame, sound off, then combine_videos and merge_video_audio) " +
+        "are in `get_node_skill(\"image-to-video\")` — read it before a references or loop render.",
       inputSchema: {
         prompt: z.string().max(8000).optional(),
         image_url: z.string().url().optional(),
@@ -1079,7 +1034,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
     {
       title: "Extract Frame",
       description:
-        "Extract a single frame from a video as an image. Provide either video_url OR video_asset_id, and either mode (first/last) or a timestamp in seconds.",
+        "Extract a single frame from a video as an image. Provide either video_url OR video_asset_id, and either mode (first/last) or time_seconds (mode 'timestamp' is inferred when time_seconds is given).",
       inputSchema: {
         video_url: z.string().url().optional(),
         video_asset_id: z.string().optional(),
@@ -1128,7 +1083,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       }
       const payload = {
         videoUrl,
-        mode: args.mode ?? "first",
+        // C-5 #8 (audit 2026-09-06): a bare time_seconds used to be silently
+        // dropped because mode defaulted to "first"; a timestamp IS the mode.
+        mode: args.mode ?? (args.time_seconds !== undefined ? "timestamp" : "first"),
         timestamp: args.time_seconds,
         mcp_client: session.clientName,
         userId: session.userId,
@@ -1156,46 +1113,13 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
     {
       title: "Lip Sync",
       description:
-        "Make a face talk to an audio track. PRIMARY tool for lip-sync / " +
-        "talking-head / dub-onto-character workflows. Use this directly — do " +
-        "NOT search the apps marketplace for lip-sync.\n\n" +
-        "Provide ONE face source — image_url / image_asset_id (a portrait), " +
-        "OR video_url / video_asset_id (an existing clip whose mouth gets " +
-        "re-driven) — and ONE audio source: audio_url / audio_asset_id.\n\n" +
-        "**Picking a model** (sorted by quality, with cost as tiebreaker):\n" +
-        "  • **`seedance-2`** (~50 cr @ 720p / 75 cr @ 1080p, 8s w/audio ref) — ByteDance " +
-        "multimodal video model with **native phoneme-level lip sync in " +
-        "8+ languages**. Cinematic full-body output (not just talking " +
-        "heads), strong identity preservation, premium quality. Pick this " +
-        "for hero scenes, multi-language dubs, or when the user wants the " +
-        "absolute best quality.\n" +
-        "  • **`seedance-2-fast`** (~18 cr @ 480p / 40 cr @ 720p, 8s w/audio ref; 480p/720p only) — same " +
-        "Seedance 2 phoneme lip sync, cheaper / faster tier. Pick when the " +
-        "user wants Seedance quality on a budget.\n" +
-        "  • **`kling-avatar`** (default, 28 cr) — KIE talking head, 720p, " +
-        "speech-optimized. Best balance of cost and quality for plain " +
-        "talking-head shots.\n" +
-        "  • **`kling-avatar-pro`** (56 cr) — KIE premium talking head, " +
-        "1080p. Sharper mouth sync + better micro-expressions than the " +
-        "standard Kling avatar.\n" +
-        "  • **`infinitalk`** (11 cr @ 480p / 42 cr @ 720p) — KIE flexible " +
-        "resolution lever via the `resolution` param. Cheapest KIE option at 480p.\n" +
-        "  • **`latentsync`** (5 cr) — diffusion-based; **best for singing** " +
-        "or strong vocal performance. Requires video input.\n" +
-        "  • **`wav2lip`** (1 cr) — fastest and cheapest. Accepts image OR video. " +
-        "Pick when the user wants a quick draft or many iterations on a budget.\n" +
-        "  • **`video-retalking`** (20 cr) — built-in face enhancement, clean " +
-        "output. Requires video input. Good when the source clip's face is " +
-        "small / blurry and you want sharpening on top of the lip sync.\n" +
-        "  • **`sadtalker`** (9 cr) — talking avatar from a SINGLE image. Good " +
-        "for animating a portrait into a speaking head when no video exists.\n" +
-        "  • **`volcengine-lipsync`** (2 cr/s — e.g. 30 cr/15s, 120 cr/60s) — KIE " +
-        "**video-to-video AI dubbing**: re-syncs an existing clip's lips to a new " +
-        "vocal track. Set `mode: basic` + `open_scenedet: true` for multi-speaker " +
-        "(scene detection + speaker ID). Cheapest modern dubbing option. Requires video input.\n\n" +
-        "**Input requirements by model**: seedance-2(-fast), kling-avatar(-pro), " +
-        "infinitalk, sadtalker → image input only. latentsync, video-retalking, " +
-        "volcengine-lipsync → video input only. wav2lip → image OR video.\n\n" +
+        "Make a face talk to an audio track — the PRIMARY tool for lip-sync / talking-head / " +
+        "dub-onto-character work. Use it directly; do NOT search the apps marketplace for lip-sync.\n\n" +
+        "Provide ONE face source — image_url / image_asset_id (a portrait) OR video_url / video_asset_id " +
+        "(an existing clip whose mouth gets re-driven) — and ONE audio source: audio_url / audio_asset_id.\n\n" +
+        "Default model kling-avatar (talking head, 720p). The `model` parameter lists every model with its " +
+        "list price and input type; which one to pick for singing, dubbing, cinematic full-body shots or " +
+        "the cheapest draft is `get_node_skill(\"lip-sync\")`.\n\n" +
         "Returns a job_id. The widget renders the resulting video inline.",
       inputSchema: {
         image_url: z
@@ -1221,17 +1145,10 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .string()
           .optional()
           .describe(
-            "Lip-sync model. Default kling-avatar. All 11 options: " +
-            "seedance-2 (~50/75 cr, image, native phoneme lip-sync 8+ languages, premium), " +
-            "seedance-2-fast (~40/60 cr, image, same lip-sync cheaper), " +
-            "kling-avatar (28 cr, image, 720p), kling-avatar-pro (56 cr, image, 1080p), " +
-            "infinitalk (11/42 cr, image, 480p|720p), " +
-            "omnihuman-1-5 (102/203/405 cr for 15/30/60s, image, prompt-directed performance, 720p|1080p, premium), " +
-            "latentsync (5 cr, video, singing), " +
-            "wav2lip (1 cr, image|video, fastest+cheapest), video-retalking " +
-            "(20 cr, video, face enhancement), sadtalker (9 cr, single image), " +
-            "volcengine-lipsync (2 cr/s, video, AI dubbing, mode lite|basic for multi-speaker). " +
-            "Unknown values fall back to kling-avatar.",
+            `Lip-sync model. Default kling-avatar. Options (list price where the model has one fixed price; per-second models show their 15 s bucket; duration-tiered models say so): ` +
+            LIP_SYNC_PROVIDERS.map((id) => `${id}${lipSyncPriceSuffix(id)}`).join(", ") +
+            `. Input type (image vs video) and which model fits singing, dubbing, cinematic or the cheapest draft: get_node_skill("lip-sync"). ` +
+            `Unknown values fall back to kling-avatar.`,
           ),
         resolution: z
           .enum(["480p", "720p", "1080p"])
@@ -1425,7 +1342,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .string()
           .optional()
           .describe(
-            "v2v model. Default `wan`. Options: wan, wan-flash, runway-aleph. " +
+            `v2v model. Default \`wan\`. Options: ${VIDEO_TO_VIDEO_PROVIDERS.join(", ")}. ` +
             "Unknown values fall back to wan.",
           ),
         duration: z.enum(["5", "10"]).optional().describe("Wan / Wan Flash only — 5s or 10s output."),

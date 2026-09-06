@@ -3,6 +3,41 @@
 	# /.well-known/oauth-* handle blocks were added.
 	auto_https off
 	admin off
+	# Forwarded-header trust. The platform edge terminates TLS and reaches this
+	# container over the private network, speaking plain HTTP. Untrusted, Caddy
+	# replaces the edge's X-Forwarded-For with the edge's own address (so every
+	# user shares one rate-limit key on unauthenticated routes such as the SSO
+	# exchange) and X-Forwarded-Proto with "http". Trusting the private ranges
+	# lets the real client address and scheme through; a public-address proxy in
+	# front of a self-host stays untrusted, so its headers are still replaced.
+	#
+	# Why `_strict` AND the `client_ip_header` rewrite below, together: the
+	# backend keys unauthenticated rate limits on the LEFTMOST X-Forwarded-For
+	# entry, and a forwarding hop may either REPLACE that header or APPEND to a
+	# value the client chose (nginx's $proxy_add_x_forwarded_for appends, and
+	# the hosted edge is documented both ways). Strict mode derives {client_ip}
+	# by walking X-Forwarded-For from the RIGHT and skipping trusted proxies, so
+	# a client-supplied leftmost value is passed over either way; the rewrite
+	# then hands the backend that one address as the only entry, which its
+	# existing leftmost keying reads. When the peer is NOT trusted, {client_ip}
+	# is simply the peer's own address — exactly what the backend sees today, so
+	# this is never worse than the current behaviour.
+	servers {
+		trusted_proxies static private_ranges
+		trusted_proxies_strict
+	}
+}
+
+# The one trustworthy client address, written as the only X-Forwarded-For entry
+# an upstream sees. Imported into EVERY reverse_proxy here, without exception:
+# the Fastify backend, and the bundled self-host sidecars too. GoTrue keys its
+# own per-IP limits (OTP, verify, token refresh) on the leftmost entry exactly
+# as the backend does, so leaving it out of the Supabase routes would leave that
+# key rotatable by anyone behind an appending proxy. For an upstream that reads
+# no client address the line is inert, and for an untrusted peer {client_ip} is
+# just the peer — so there is no upstream it can harm and none worth excluding.
+(client_ip_header) {
+	header_up X-Forwarded-For {client_ip}
 }
 
 :3000 {
@@ -21,6 +56,7 @@
 		request_header -X-Internal-Orchestrator
 		request_header -X-Internal-Orchestrator-Secret
 		reverse_proxy 127.0.0.1:9000 {
+			import client_ip_header
 			# Disable response buffering for SSE streams
 			flush_interval -1
 		}
@@ -33,12 +69,16 @@
 	handle /.well-known/oauth-authorization-server {
 		request_header -X-Internal-Orchestrator
 		request_header -X-Internal-Orchestrator-Secret
-		reverse_proxy 127.0.0.1:9000
+		reverse_proxy 127.0.0.1:9000 {
+			import client_ip_header
+		}
 	}
 	handle /.well-known/oauth-protected-resource {
 		request_header -X-Internal-Orchestrator
 		request_header -X-Internal-Orchestrator-Secret
-		reverse_proxy 127.0.0.1:9000
+		reverse_proxy 127.0.0.1:9000 {
+			import client_ip_header
+		}
 	}
 	# RFC 9728 §3.1 — resource-specific variants. Cursor probes these FIRST
 	# for path-suffixed resources (mcp.nodaro.ai/mcp). Without these handles
@@ -47,12 +87,16 @@
 	handle /.well-known/oauth-protected-resource/* {
 		request_header -X-Internal-Orchestrator
 		request_header -X-Internal-Orchestrator-Secret
-		reverse_proxy 127.0.0.1:9000
+		reverse_proxy 127.0.0.1:9000 {
+			import client_ip_header
+		}
 	}
 	handle /.well-known/oauth-authorization-server/* {
 		request_header -X-Internal-Orchestrator
 		request_header -X-Internal-Orchestrator-Secret
-		reverse_proxy 127.0.0.1:9000
+		reverse_proxy 127.0.0.1:9000 {
+			import client_ip_header
+		}
 	}
 
 	# The MCP endpoint lives on the mcp.* host (Railway routes that domain
@@ -79,7 +123,9 @@
 	}
 	handle @social_bot {
 		rewrite * /og{uri}
-		reverse_proxy 127.0.0.1:9000
+		reverse_proxy 127.0.0.1:9000 {
+			import client_ip_header
+		}
 	}
 
 	# Self-host media path: proxies the bundled MinIO so ONE origin serves both
@@ -92,7 +138,9 @@
 	# route is dead weight, resolved lazily per request, never at boot.
 	handle_path /storage/* {
 		header Cache-Control "public, max-age=31536000, immutable"
-		reverse_proxy {$MINIO_UPSTREAM:minio:9000}
+		reverse_proxy {$MINIO_UPSTREAM:minio:9000} {
+			import client_ip_header
+		}
 	}
 
 	# Self-host Supabase path: SUPABASE_URL=http://localhost:3000/supabase, and
@@ -105,10 +153,14 @@
 	# supabase-js retries its websocket quietly against the 502. Dead routes on
 	# cloud — upstreams resolve lazily, never at boot.
 	handle_path /supabase/auth/v1/* {
-		reverse_proxy {$SUPABASE_AUTH_UPSTREAM:auth:9999}
+		reverse_proxy {$SUPABASE_AUTH_UPSTREAM:auth:9999} {
+			import client_ip_header
+		}
 	}
 	handle_path /supabase/rest/v1/* {
-		reverse_proxy {$SUPABASE_REST_UPSTREAM:rest:3000}
+		reverse_proxy {$SUPABASE_REST_UPSTREAM:rest:3000} {
+			import client_ip_header
+		}
 	}
 
 	# Bust stale CDN cache for favicon.ico by rewriting to a versioned file

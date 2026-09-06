@@ -52,9 +52,22 @@ function runtime(): NodaroRuntimeConfig {
 const pick = (override: string | undefined, baked: string | undefined): string =>
   (override && override.trim()) || (baked ?? "")
 
-/** Where the browser reaches the API directly (SSE — everything else is same-origin). */
+/**
+ * Where the browser reaches the API directly (SSE — everything else is
+ * same-origin).
+ *
+ * `"/"` is the same-origin SENTINEL: a hosted studio answering on more than one
+ * hostname cannot name an API host here, because PUBLIC_URL is single-valued and
+ * whichever host it named would be the one every SSE call went to — from every
+ * other host, cross-origin. `PUBLIC_URL_SAME_ORIGIN=true` makes the /config.js
+ * writer (start.sh → tools/build-runtime-config.mjs) emit `"/"`, and it resolves
+ * here to "", which the four SSE consumers already treat as "build the URL
+ * relative to this page". It cannot be written as "" in /config.js: an empty
+ * override means "no override" and would fall back to the baked VITE_API_URL.
+ */
 export function runtimeApiUrl(): string {
-  return pick(runtime().apiUrl, import.meta.env.VITE_API_URL as string | undefined)
+  const picked = pick(runtime().apiUrl, import.meta.env.VITE_API_URL as string | undefined)
+  return picked.trim() === "/" ? "" : picked
 }
 
 /** The Supabase URL the BROWSER uses (auth + PostgREST). */

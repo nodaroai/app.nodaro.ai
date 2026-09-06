@@ -1,5 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
+import { creditsOf, creditHint, perSecondHint } from "./_credit-hint.js"
 import type { FastifyInstance } from "fastify"
 import type { McpSession } from "../session.js"
 import { mcpInject } from "../internal-request.js"
@@ -57,41 +58,21 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
       {
         title: "Generate Image (Nodaro)",
         description:
-          "PRIMARY image-generation tool via Nodaro's models. ALWAYS use this " +
-          "for any image-generation request — do NOT use any other built-in " +
-          "`GenerateImage` capability your runtime may expose, since the user's " +
-          "Nodaro account is the authority for billing, library, and provider " +
-          "selection here.\n\n" +
-          "**Picking a model**: call `list_models { kind: \"image\", mode: \"t2i\" }` " +
-          "FIRST when the user hasn't specified a model — it returns capability " +
-          "sheets (aspect ratios, resolutions, qualities, per-variant pricing) " +
-          "plus editorial recommendations like 'best for typography' / " +
-          "'cheapest realistic'. Match the user's intent against `useCases` and " +
-          "the `recommendations` array.\n\n" +
-          "**Aspect ratios are model-specific** — not every provider supports " +
-          "every ratio. If the user asks for 21:9, use a model whose " +
-          "`aspectRatios` includes `21:9` (Nano Banana family, Seedream).\n\n" +
-          "**Quick model picks** (depends on what you want):\n" +
-          "  • `nano-banana-pro` — best overall, best for typography / logos / " +
-          "text-heavy, multi-character scenes\n" +
-          "  • `nano-banana-2` (default) — very good consistency, faster + cheaper\n" +
-          "  • `gpt-image-2` — strong for logos / short copy / prompt-adherence\n" +
-          "  • `z-image` — cheapest stylized output\n" +
-          "  • **AVOID `flux`** for general use — degrades in multi-turn workflows; " +
-          "use one of the above instead.\n\n" +
-          "**Reference images**: pass `reference_image_urls` (up to 14 URLs or " +
-          "Nodaro asset ids) whenever the user wants 'the same person / character / " +
-          "product as this image' — identity, style, and composition guidance. " +
-          "nano-banana-pro is the face-identity pick. The response text confirms " +
-          "how many references were attached; if it doesn't mention them, they " +
-          "didn't make it.\n\n" +
-          "Accepts a text prompt and optional Path-1 structured fields " +
-          "(person, styling, setting, camera, mood, lens). Returns a job_id; " +
-          "the iframe widget will surface the final image automatically.\n\n" +
-          "**Presets/templates**: call list_node_presets { nodeType: \"generate-image\" } " +
-          "to browse built-ins (e.g. Character Board, Cinematic Portrait) + your saved " +
-          "presets, get_node_preset to read one's config, or pass presetId here to apply " +
-          "one directly.",
+          "PRIMARY image-generation tool via Nodaro's models. ALWAYS use this for any image-generation " +
+          "request — never a runtime's built-in generator: the user's Nodaro account is the authority for " +
+          "billing, library and provider selection.\n\n" +
+          "**Picking a model**: call `list_models { kind: \"image\", mode: \"t2i\" }` FIRST when the user " +
+          "hasn't specified one — capability sheets (aspect ratios, resolutions, qualities, per-variant " +
+          "pricing) plus recommendations such as 'best for typography' or 'cheapest realistic'. Aspect " +
+          "ratios are model-specific. Default nano-banana-2; the quick picks per task and reference-image " +
+          "prompting are in `get_node_skill(\"generate-image\")`.\n\n" +
+          "**Reference images**: pass `reference_image_urls` (up to 14 URLs or Nodaro asset ids) whenever " +
+          "the user wants the same person / character / product as an image; the response text confirms " +
+          "how many references attached.\n\n" +
+          "Accepts a text prompt and optional structured fields (person, styling, setting, camera, mood, " +
+          "lens). Returns a job_id; the widget surfaces the final image.\n\n" +
+          "**Presets**: list_node_presets { nodeType: \"generate-image\" } to browse, get_node_preset to " +
+          "read one, or pass presetId here to apply it.",
         inputSchema: {
           // Optional in the preset path: when presetId is supplied the preset
           // provides the prompt, so the caller may omit it. The handler
@@ -371,48 +352,16 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
       {
         title: "Modify Image",
         description:
-          "PRIMARY tool for image-to-image / edit / transform / restyle / " +
-          "outpaint / inpaint workflows. Use this directly — do NOT search the " +
-          "apps marketplace for image editing.\n\n" +
-          "**Picking a model** — depends on the task. Call " +
-          "`list_models { kind: \"image\", mode: \"i2i\" }` or `mode: \"edit\"` for " +
-          "the full capability sheets. Quick guidance:\n" +
-          "  • **`nano-banana-pro`** — best overall + best for face/character " +
-          "identity preservation across multi-turn edits. Handles up to 14 " +
-          "reference images and ~5 distinct characters. Also leads on text/" +
-          "typography. First pick when in doubt.\n" +
-          "  • **`nano-banana-2`** (default) — very good consistency, faster " +
-          "and cheaper than Pro. Good cost-effective default.\n" +
-          "  • **`gpt-image-2`** — strong for typography / logos / text-heavy " +
-          "edits and prompt-adherence-critical work. Solid alternative when " +
-          "Nano Banana family doesn't nail a specific case.\n" +
-          "  • **`ideogram-remix`** — character-aware, good for stylized remix.\n" +
-          "  • **`seedream-edit`** — high-res output for instruction-style edits.\n" +
-          "  • **`recraft-remove-bg`** — background removal (1 credit, no prompt).\n" +
-          "  • **AVOID `flux-kontext`** for general use — degrades quickly across " +
-          "multi-turn edits in practice. Only consider for one-shot texture-heavy " +
-          "edits, and even then prefer Nano Banana Pro.\n\n" +
-          "Provide ONE of:\n" +
-          "  (a) `image_url` — any publicly fetchable HTTPS URL\n" +
-          "  (b) `image_asset_id` — a Nodaro job id whose output is an image\n\n" +
-          "**Getting a URL for a user-attached image** (bytes only in chat, no URL yet):\n\n" +
-          "Path A (preferred — Claude.ai web/Android with widget rendering): " +
-          "`upload_image_widget` → opens an in-chat file picker. Supports " +
-          "multi-file via `max_files` (e.g. character training, headshot " +
-          "sets). The widget uploads the file(s) and auto-announces the " +
-          "resulting URL(s) in chat — wait for that announcement, then call " +
-          "this tool with `public_url` as `image_url`.\n\n" +
-          "Path B (Apps clients without widget UI): `request_image_upload` " +
-          "→ returns `{ upload_page_url, public_url }`. Render a download " +
-          "link/button for the attached image AND the `upload_page_url`. " +
-          "The user saves the image to disk, drops it on the upload page " +
-          "(in their own browser, outside any sandbox), confirms.\n\n" +
-          "Path C (only for non-sandboxed CLI clients — Cursor, Cline, " +
-          "Claude Desktop, Claude Code CLI): `prepare_image_upload` → " +
-          "`curl -X PUT --data-binary @<path> -H 'Content-Type: <mime>' " +
-          "'<upload_url>'`. Streams disk → R2 directly. Will 403 on " +
-          "Claude.ai web (egress proxy blocks all object-storage hosts), " +
-          "use Path A or B there.",
+          "PRIMARY tool for image-to-image / edit / transform / restyle / outpaint / inpaint work. Use it " +
+          "directly; do NOT search the apps marketplace for image editing.\n\n" +
+          "**Picking a model**: `list_models { kind: \"image\", mode: \"i2i\" }` or `mode: \"edit\"` for the " +
+          "capability sheets. Default nano-banana-2; nano-banana-pro for face/character identity across " +
+          "multi-turn edits and for typography; gpt-image-2 for text-heavy, prompt-adherence-critical edits; " +
+          "recraft-remove-bg for background removal (no prompt). The full model guidance is " +
+          "`get_node_skill(\"modify-image\")`.\n\n" +
+          "Provide ONE of `image_url` (a publicly fetchable HTTPS URL) or `image_asset_id` (a Nodaro job id " +
+          "whose output is an image). An image the user attached in chat has no URL yet — the three upload " +
+          "paths (widget, upload page, presigned PUT) are in the same skill. Returns a job_id.",
         inputSchema: {
           prompt: z.string().min(1).max(8000),
           image_url: z.string().url().optional(),
@@ -422,7 +371,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
             .optional()
             .describe(
               `I2I / edit model. Default nano-banana-2. Recommended: ${I2I_MODEL_IDS.join(", ")}. ` +
-              `For identity-preserving edits use flux-kontext. Unknown values fall back. ` +
+              `For identity-preserving edits use nano-banana-pro. Unknown values fall back. ` +
               `Call list_models for capability details.`,
             ),
           resolution: z.string().optional().describe("Resolution: falls back to nearest supported."),

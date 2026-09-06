@@ -133,3 +133,12 @@ describe("upload_<kind>_widget tools", () => {
     expect(names.has("upload_video")).toBe(false)
   })
 })
+
+// Audit 2026-09-06 follow-up (C-5 #2): request_*_upload told agents not to try
+// `upload_<kind>` first — no such tool exists; agents went hunting for it.
+describe("request_*_upload — no phantom tool in the guidance", () => {
+  it("never names an upload_<kind> tool", async () => {
+    const src = (await import("node:fs")).readFileSync(new URL("../upload.ts", import.meta.url), "utf8")
+    expect(src).not.toContain("Don't try \\`upload_${meta.kind}\\`")
+  })
+})

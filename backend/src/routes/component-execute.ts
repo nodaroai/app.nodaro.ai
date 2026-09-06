@@ -2,7 +2,8 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { resolveWebSurfaceFlag } from "../middleware/credit-guard.js"
-import { insertJob } from "../lib/insert-job.js"
+import { insertJob, insertJobIdempotent } from "../lib/insert-job.js"
+import { MIN_IDEMPOTENCY_KEY_LENGTH } from "../lib/dedup-fingerprint.js"
 import { executeAppRun } from "../services/app-execution.js"
 import { buildCreditModelIdentifier, resolveTopazUpscale } from "@nodaro/shared"
 import type { ComponentMetadata } from "@nodaro/shared"
@@ -119,7 +120,7 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
       appSlug,
       inputs: inputOverrides ?? {},
     }
-    const { data: wrapperJob, error: jobError } = await insertJob(req, {
+    const wrapperRow = {
         user_id: req.userId,
         provider: "component",
         status: "processing",
@@ -130,7 +131,32 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
         // P14/W7: the HONORED context's pair (the internal lane carries it in
         // the body, where the request-level stamp cannot see it).
         ...billingPairColumns(runBillingContext),
-      })
+      }
+    // The wrapper job is the unit a client retries: with an `idempotency-key`
+    // header (≥ 8 chars; the MCP verbs forward the client's token) it goes
+    // through the idempotent insert, and a hit answers the existing job and
+    // starts no second inner run (audit 2026-09-06, D-2/A-15/B-3).
+    const headerKeyRaw = req.headers["idempotency-key"]
+    const headerKey = typeof headerKeyRaw === "string" ? headerKeyRaw.trim() : ""
+    const idempotencyKey = headerKey.length >= MIN_IDEMPOTENCY_KEY_LENGTH ? headerKey : undefined
+    let wrapperJob: { id: string } | null = null
+    let jobError: unknown = null
+    if (idempotencyKey) {
+      try {
+        const dedup = await insertJobIdempotent<{ id: string }>(req, wrapperRow, idempotencyKey)
+        if (!dedup.created) {
+          reply.header("X-Dedup-Hit", "1")
+          return reply.status(202).send({ jobId: dedup.row.id, deduped: true })
+        }
+        wrapperJob = dedup.row
+      } catch (err) {
+        jobError = err
+      }
+    } else {
+      const inserted = await insertJob(req, wrapperRow)
+      wrapperJob = inserted.data as { id: string } | null
+      jobError = inserted.error
+    }
 
     if (jobError || !wrapperJob) {
       return sendInternalError(reply, req, jobError, "Failed to create component job")

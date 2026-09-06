@@ -8,6 +8,8 @@ import { isUuid } from "./_id-guard.js"
 import { failureGuidance } from "./_job-error.js"
 import { redactPrivateJobData } from "../../public-job-data.js"
 import { JOB_STATUSES } from "../../job-status.js"
+import { jobView, JOB_VIEW_SCHEMA } from "./_job-view.js"
+import { waitForJob } from "./_wait-for-job.js"
 
 const jobsReadGate: ToolGate = { required: ["jobs:read"] }
 
@@ -188,10 +190,14 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
     {
       title: "Get Job",
       description:
-        "Fetch a single job by id. Returns its status, output_data (when complete), credits used, and timestamps.",
+        "Fetch one of your jobs by id. structuredContent is the job envelope: status (pending | processing | completed | failed | cancelled | pending_review), " +
+        "progress, jobType, assetKind, outputUrl (the finished image/video/audio), outputData, errorMessage, credits and timestamps; on failed/cancelled/pending_review " +
+        "also retryable, guidance and — for a safety block with a catalog fallback — suggestedProvider. " +
+        "Poll every 5–10 s (an image usually finishes within a minute, a video in 2–10 minutes), or call wait_for_job to block up to 120 s.",
       inputSchema: {
         job_id: z.string().min(1),
       },
+      outputSchema: JOB_VIEW_SCHEMA,
       annotations: { readOnlyHint: true },
     },
     async (args) => {
@@ -262,7 +268,81 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
           : { data: publicData }
       return {
         content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
+        // The one envelope (audit 2026-09-06 fix #2): the text keeps its
+        // `{ data, … }` shape for existing clients; hosts and agents that read
+        // structuredContent get the same normalised view get_asset and
+        // wait_for_job return.
+        structuredContent: jobView(data as Parameters<typeof jobView>[0]),
       }
+    },
+  )
+
+  // WAIT (audit 2026-09-06 fix #2, A-9 / D-7): the blocking alternative to
+  // polling. Ownership is checked BEFORE waiting (the loop itself reads by id
+  // only), the wait stops on the request's own signal, and a deadline is a
+  // status (`timeout`) with next-step guidance, never an error — the job is
+  // still running.
+  server.registerTool(
+    "wait_for_job",
+    {
+      title: "Wait For Job",
+      description:
+        "Block until one of your jobs finishes (up to timeout_s, max 120 s) and return the same job envelope get_job returns. " +
+        "If the job is still running at the deadline the result is status `timeout` (not an error): call wait_for_job again or poll get_job. " +
+        "A held job answers `pending_review` at once — do not re-run it. Use this instead of a tight get_job loop; for a long video render prefer polling every 5–10 s.",
+      inputSchema: {
+        job_id: z.string().min(1),
+        timeout_s: z
+          .number()
+          .int()
+          .min(1)
+          .max(120)
+          .optional()
+          .describe("Seconds to wait before answering `timeout` (default 60, max 120)."),
+      },
+      outputSchema: JOB_VIEW_SCHEMA,
+      annotations: { readOnlyHint: true },
+    },
+    async (args, extra) => {
+      if (!isUuid(args.job_id)) {
+        return { content: [{ type: "text", text: `Job ${args.job_id} not found (expected a job UUID)` }], isError: true }
+      }
+      const { data: own, error } = await supabase
+        .from("jobs")
+        .select("id")
+        .eq("id", args.job_id)
+        .eq("user_id", session.userId)
+        .maybeSingle()
+      if (error) return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true }
+      if (!own) return { content: [{ type: "text", text: `Job ${args.job_id} not found` }], isError: true }
+      const timeoutMs = (args.timeout_s ?? 60) * 1000
+      const waited = await waitForJob({ jobId: args.job_id, timeoutMs, signal: extra?.signal })
+      if (waited.status === "timeout" || waited.status === "aborted") {
+        const view = { jobId: args.job_id, status: waited.status, outputUrl: null, outputData: null, errorMessage: null }
+        const text =
+          waited.status === "timeout"
+            ? `Job ${args.job_id} is still running after ${args.timeout_s ?? 60} s. Call wait_for_job again, or poll get_job every 5–10 s.`
+            : `Wait for job ${args.job_id} was cancelled by the client; the job itself keeps running — poll get_job.`
+        return { content: [{ type: "text", text }], structuredContent: view }
+      }
+      // Terminal or held: read the full public row once so the envelope
+      // carries credits, timestamps and the failure guidance.
+      const { data: row } = await supabase
+        .from("jobs")
+        .select("id, status, progress, output_data, error_message, error_hint, created_at, started_at, completed_at, job_type, credits")
+        .eq("id", args.job_id)
+        .eq("user_id", session.userId)
+        .maybeSingle()
+      const view = row
+        ? jobView(row as Parameters<typeof jobView>[0])
+        : { jobId: args.job_id, status: waited.status, outputUrl: waited.outputUrl, outputData: waited.outputData, errorMessage: waited.error, jobType: waited.jobType }
+      const summary =
+        view.status === "completed"
+          ? `Job ${args.job_id} completed${view.outputUrl ? `: ${view.outputUrl}` : ""}.`
+          : view.status === "pending_review"
+            ? `Job ${args.job_id} is held for review. ${view.guidance ?? ""}`
+            : `Job ${args.job_id} ${view.status}${view.errorMessage ? `: ${view.errorMessage}` : ""}. ${view.guidance ?? ""}`
+      return { content: [{ type: "text", text: summary.trim() }], structuredContent: view }
     },
   )
 }

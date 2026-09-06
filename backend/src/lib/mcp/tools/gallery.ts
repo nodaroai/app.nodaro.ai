@@ -1,5 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
+import { resolveOutputUrl, assetKindOf } from "./_job-view.js"
 import type { FastifyInstance } from "fastify"
 import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
@@ -729,20 +730,10 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         // imageUrl / videoUrl / audioUrl / outputUrl). The widget polls this
         // tool every 2s and reads structuredContent to update its preview.
         const out = (data.output_data ?? {}) as Record<string, unknown>
-        const outputUrl =
-          (out.imageUrl as string | undefined) ??
-          (out.videoUrl as string | undefined) ??
-          (out.audioUrl as string | undefined) ??
-          (out.outputUrl as string | undefined) ??
-          (out.url as string | undefined) ??
-          null
-        const assetKind = out.imageUrl
-          ? "image"
-          : out.videoUrl
-            ? "video"
-            : out.audioUrl
-              ? "audio"
-              : null
+        // Shared with get_job / wait_for_job (audit 2026-09-06 fix #2): one
+        // resolver for the per-type output keys, one asset-kind rule.
+        const outputUrl = resolveOutputUrl(out)
+        const assetKind = assetKindOf(out)
 
         // Log (structured, keys only) when a completed MEDIA job has no URL
         // we can find. Text/component jobs (script, lyrics, transcripts,

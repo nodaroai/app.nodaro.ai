@@ -344,6 +344,13 @@ text wrapped around that node's prompt at run time (settings-only; see
 | `thumbnail_url` | string (URL) or null | Optional; sets the workflow's thumbnail image, or `null` to clear it. Must be an already-hosted image URL. |
 | `expected_updated_at` | string (ISO 8601) | Optional; enables optimistic concurrency |
 | `expected_version` | integer | Optional; integer CAS from `get_workflow_json` (preferred over `expected_updated_at`) |
+| `delta` | object | Optional; id-keyed partial update applied atomically against `delta.base_version` (from `get_workflow_json`): `upsert_nodes`, `delete_node_ids`, `upsert_edges`, `delete_edge_ids`, `set: { name?, settings? }`. Mutually exclusive with every other content field. Prefer it over re-sending the graph. |
+
+**Studio productions:** a workflow whose stored `settings.studio` exists is a
+Studio production (its shots, results and plan live there). A `settings`
+replace — full-body or `delta.set.settings` — that changes or drops
+`settings.studio` is refused; echo it back unchanged (copy it from
+`get_workflow_json`) or leave `settings` out.
 
 **Optimistic concurrency:** Pass the `updated_at` value from a prior
 `get_workflow_json` call as `expected_updated_at`. If the workflow has been
@@ -476,6 +483,7 @@ registers an async task for progress tracking.
 | Field | Type | Notes |
 |-------|------|-------|
 | `workflow_id` | UUID string | Must be in the mcp project |
+| `client_request_id` | string | Optional retry token (8–128 chars of letters, digits, `_ - . :`). Reuse the same value when retrying after a timeout or dropped connection so the run is not started or charged twice; use a fresh value for a new run |
 | `inputs` | object | Optional; per-node input overrides keyed by node id |
 
 **Response:** `{ executionId: "...", name: "..." }` — use `executionId` with
@@ -1211,6 +1219,29 @@ policy reason if the review rejects it.
 
 **Input:** `{ job_id: uuid }`
 
+
+**Job envelope (structuredContent):** `jobId`, `status`, `progress`, `jobType`,
+`assetKind` (`image` / `video` / `audio` / null), `outputUrl`, `outputData`,
+`errorMessage`, `credits`, `createdAt`, `startedAt`, `completedAt`, plus
+`retryable`, `guidance` and `suggestedProvider` on a failed, cancelled or held
+job. `get_asset` and `wait_for_job` return the same envelope. Poll every 5–10 s
+(an image usually finishes within a minute, a video in 2–10 minutes), or call
+`wait_for_job` to block.
+
+---
+
+### `wait_for_job`
+
+**Scope:** `jobs:read`
+
+Block until one of your jobs finishes and return the job envelope above.
+
+**Input:** `job_id`, `timeout_s?` (seconds to wait, default 60, max 120)
+
+If the job is still running at the deadline the result has `status: "timeout"`
+— it is **not** an error; call `wait_for_job` again or poll `get_job`. A held
+job answers `pending_review` at once (do not re-run it). For a long video
+render prefer polling `get_job` every 5–10 s over repeated waits.
 ---
 
 ### `diagnose_run`
@@ -1266,7 +1297,7 @@ input keys (from `get_app_inputs`). Returns an `execution_id`.
 `inputOverrides` (advanced) sets raw node fields such as `promptPrefix` /
 `promptSuffix` per run.
 
-**Input:** `slug`, `inputs?`, `inputOverrides?`
+**Input:** `slug`, `inputs?`, `inputOverrides?`, `client_request_id?` (retry token — reuse it when retrying after a timeout so the run is not started or charged twice)
 
 ---
 
@@ -1312,7 +1343,7 @@ Returns the typed input schema for a saved component. Use before
 Execute a saved component by id. `inputs` is a FLAT object keyed by the
 component's input schema keys. Returns an `execution_id`.
 
-**Input:** `component_id`, `inputs?`
+**Input:** `component_id`, `inputs?`, `client_request_id?` (retry token — reuse it when retrying after a timeout so the run is not started or charged twice)
 
 ---
 
@@ -1580,8 +1611,9 @@ Idempotent, non-destructive, zero credits.
 **Scope:** `workflows:execute` (Cloud only)
 
 Author and render a narrated, time-coded concept-led explainer video in one
-call. Costs **20 credits** (9 authoring + 3 speech + 3 alignment + 0 resolve +
-5 render). Returns a `job_id`.
+call. Priced as the `video-director` entry in `list_models` (authoring,
+speech, alignment and render stages; credits vary by deployment). Returns a
+`job_id`.
 
 **Input:** `topic` (string, 1–8000 chars) — what the explainer should cover.
 
@@ -1593,7 +1625,8 @@ call. Costs **20 credits** (9 authoring + 3 speech + 3 alignment + 0 resolve +
 
 Author and render a narrated product-launch video. Pass `brief` describing the
 product. Passing `url` without `brief` returns a deferred-capability message
-(real-UI capture is not yet supported). Costs **20 credits**. Returns a `job_id`.
+(real-UI capture is not yet supported). Priced as the `video-director` entry
+in `list_models`. Returns a `job_id`.
 
 **Input:** `brief` (string, 1–8000 chars), `url` (string, optional — not yet supported)
 

@@ -75,6 +75,13 @@ export async function registerMcpRoute(app: FastifyInstance): Promise<void> {
       ? await resolveClientName(req.appAuthorization.appId)
       : "Nodaro Web"
 
+    // NO `firstParty` HERE, and never one. That flag marks a session the
+    // server built for a browser (JWT) user in-process, and this is the public
+    // door: `clientName` is `developer_apps.name` — chosen by a third-party
+    // developer — and the bearer is a token, whoever consented to it. On a
+    // deployment-payer instance the flag is what lets the billing account's own
+    // Copilot read the pool balance, so setting it here would hand that figure
+    // to any token that account ever approved. Omitted ⇒ false ⇒ refused.
     const server = await buildMcpServer({
       userId: req.userId,
       scopes,
