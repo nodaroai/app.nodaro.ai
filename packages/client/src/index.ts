@@ -29,6 +29,9 @@ export {
 export type { GenericNode, GenericEdge, WorkflowExport, WorkflowExportCharacter, WorkflowExportObject, WorkflowExportLocation, // The editor's structured-reference shape, used by GenerateImageParams /
   // GenerateVideoParams below so callers can build `connectedReferences`.
   ConnectedReference,
+  // A reference the caller can NAME and DESCRIBE but has no media for — used by
+  // `StructuredReferenceParams.describedReferences` on both media lanes.
+  DescribedReference,
   // Node-data prompt affix fields (promptPrefix / promptSuffix) — set them via
   // workflow JSON or `apps.run(..., { inputOverrides })`.
   PromptAffixFields } from "@nodaro/shared"

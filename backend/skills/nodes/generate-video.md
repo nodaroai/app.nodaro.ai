@@ -1,7 +1,7 @@
 ---
 node_type: generate-video
-generated_at: 2026-09-01T21:25:23.906Z
-generated_from: f99d6fa6e
+generated_at: 2026-09-06T10:23:30.804Z
+generated_from: 88a6e05b4
 ---
 
 # Generate Video
@@ -104,6 +104,7 @@ generated_from: f99d6fa6e
 - `seed`
 - `structured`
 - `connected_references`
+- `described_references`
 - `reference_order`
 - `reference_image_urls`
 - `reference_video_urls`

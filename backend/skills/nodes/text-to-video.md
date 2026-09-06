@@ -1,7 +1,7 @@
 ---
 node_type: text-to-video
-generated_at: 2026-09-01T21:25:23.989Z
-generated_from: f99d6fa6e
+generated_at: 2026-09-06T10:23:30.886Z
+generated_from: 88a6e05b4
 ---
 
 # Text to Video
@@ -81,6 +81,7 @@ generated_from: f99d6fa6e
 - `seed`
 - `structured`
 - `connected_references`
+- `described_references`
 - `reference_order`
 - `reference_image_urls`
 - `reference_video_urls`

@@ -1,7 +1,7 @@
 ---
 node_type: generate-image
-generated_at: 2026-09-03T19:32:26.292Z
-generated_from: 619cd04df
+generated_at: 2026-09-06T10:23:30.753Z
+generated_from: 88a6e05b4
 ---
 
 # generate-image
@@ -97,6 +97,7 @@ generated_from: 619cd04df
 - `guidance_scale`
 - `structured`
 - `connected_references`
+- `described_references`
 - `reference_order`
 <!-- AUTO-GEN:END mcp-call -->
 

@@ -214,6 +214,49 @@ export interface ConnectedReference {
    * The single new structured-shape field for external (API/MCP/SDK) parity.
    */
   readonly identityLock?: { enabled: boolean; text?: string }
+  /**
+   * PER-USE identity description for this reference — what the caller wants the
+   * model told about this subject THIS TIME, overriding whatever the entity's
+   * library record says. Wherever a reference's identity description already
+   * renders (the legacy identity bullet's `— <desc>` part, a `{image:N:label}`
+   * directive's descriptor) it WINS over `characterCanonicalDescription` /
+   * `locationCanonicalDescription` / `description`; where the HYBRID format
+   * renders no description at all, it adds one trailing `<binding> — <override>.`
+   * line instead.
+   *
+   * The two formats are deliberately ASYMMETRIC where a reference renders no
+   * directive at all — a plain upload (`manual` / `wired-image`, non-extra) that
+   * is neither `@`-mentioned nor `{image:N}`-covered: the LEGACY format stays
+   * silent, and the override is not surfaced there (a bullet would force a
+   * fidelity verb onto an opaque image); the HYBRID format — the production
+   * default — adds the trailing line above for it.
+   *
+   * DISTINCT from `description`, which stays the reference's own label slot (the
+   * free text an extra-ref row / an upstream node carries) — a caller that edits
+   * the wording for ONE use writes it here, so the label is untouched and
+   * dropping the override falls back to the library wording. Absent →
+   * byte-identical to a caller that never sent it.
+   */
+  readonly descriptionOverride?: string
+}
+
+/**
+ * A reference the caller can NAME and DESCRIBE but has no media for — a cast
+ * role no entity has been bound to yet, an analysis slot, a character the author
+ * has only written down. It carries no `url`, so it attaches no reference image
+ * and claims no `@image_N` seat; it reaches the model purely as prose
+ * (`<Name> — <description>.`), rendered in ONE place per lane by
+ * `@nodaro/prompts`' `renderDescribedReferenceLines`.
+ *
+ * Correlation with the prompt body is BY NAME: the caller leaves the name in the
+ * prose (never an indexed `@slug:N` mention — that grammar is url-gated) and the
+ * described line tells the model who that name is.
+ */
+export interface DescribedReference {
+  /** Display name exactly as it appears in the prompt prose (e.g. "Natalie"). */
+  readonly name: string
+  /** What the model should picture when it reads that name. */
+  readonly description: string
 }
 
 /** Default label per source — used by `@` autocomplete and inventory fallback. */

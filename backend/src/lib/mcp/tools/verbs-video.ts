@@ -3,7 +3,7 @@ import { resolveAssetId } from "../asset-resolver.js"
 import { buildCompositePrompt } from "../prompt-builder-bridge.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import type { RegisterOpts } from "./verbs-image.js"
-import { connectedReferenceSchema } from "../../connected-reference-schema.js"
+import { connectedReferenceSchema, describedReferenceSchema, DESCRIBED_REFERENCE_LIMIT } from "../../connected-reference-schema.js"
 import {
   parseJobId,
   errorResult,
@@ -144,6 +144,13 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             "{id, defaultName, source, url}, url a public https URL). Assembled server-side into per-ref " +
             "@image_N directives + {image:N} token resolution (labeled/ordered refs, unlike flat " +
             "reference_image_urls). Only models with image-reference support attach them.",
+          ),
+        described_references: z.array(describedReferenceSchema).max(DESCRIBED_REFERENCE_LIMIT).optional()
+          .describe(
+            "References you can NAME and DESCRIBE but have no image for — an un-bound cast role, " +
+            "a character that exists only in the script. No url, so nothing is attached and no " +
+            "@image_N seat is used: each becomes a `<Name> — <description>.` line, so a name in " +
+            "your prompt reaches the model as a real, described subject.",
           ),
         reference_order: z.array(z.string()).max(14).optional()
           .describe("Advanced: reorder connected_references by their stable ids; renumbers the @image_N bindings."),
@@ -321,6 +328,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         negativePrompt: effective.negative_prompt as string | undefined,
         seed: effective.seed as number | undefined,
         ...(args.connected_references ? { connectedReferences: args.connected_references } : {}),
+        ...(args.described_references ? { describedReferences: args.described_references } : {}),
         ...(args.reference_order ? { referenceOrder: args.reference_order } : {}),
         ...(t2vRefImages.length ? { referenceImageUrls: t2vRefImages } : {}),
         ...(t2vRefVideos.length ? { referenceVideoUrls: t2vRefVideos } : {}),
@@ -493,6 +501,13 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             "@image_N directives + {image:N} token resolution (labeled/ordered refs, unlike flat " +
             "reference_image_urls). Only models with image-reference support attach them.",
           ),
+        described_references: z.array(describedReferenceSchema).max(DESCRIBED_REFERENCE_LIMIT).optional()
+          .describe(
+            "References you can NAME and DESCRIBE but have no image for — an un-bound cast role, " +
+            "a character that exists only in the script. No url, so nothing is attached and no " +
+            "@image_N seat is used: each becomes a `<Name> — <description>.` line, so a name in " +
+            "your prompt reaches the model as a real, described subject.",
+          ),
         reference_order: z.array(z.string()).max(14).optional()
           .describe("Advanced: reorder connected_references by their stable ids; renumbers the @image_N bindings."),
       },
@@ -614,6 +629,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         ...(refVideoUrls.length ? { referenceVideoUrls: refVideoUrls } : {}),
         ...(refAudioUrls.length ? { referenceAudioUrls: refAudioUrls } : {}),
         ...(args.connected_references ? { connectedReferences: args.connected_references } : {}),
+        ...(args.described_references ? { describedReferences: args.described_references } : {}),
         ...(args.reference_order ? { referenceOrder: args.reference_order } : {}),
         // Pass through only when explicitly set so the route's default (true)
         // applies when the caller doesn't specify. Worker still gates on

@@ -32,7 +32,13 @@ import { findCharacterMentionTokens, type CharacterMentionTokenInfo } from "@nod
 import { resolveCharacterMentions, applyReferenceOrderToVideo } from "./prompt-builder.js"
 import { roleToPhrase, REFERENCE_ROLE_PRESETS, resolveDefaultRole } from "@nodaro/shared"
 import { buildIdentityLockLine, withForcedIdentityLock } from "./identity-lock.js"
-import type { ConnectedReference } from "@nodaro/shared"
+import type { ConnectedReference, DescribedReference } from "@nodaro/shared"
+import {
+  appendReferenceLines,
+  referenceDescriptionLine,
+  renderDescribedReferenceLines,
+  renderReferenceCaptionLines,
+} from "./described-references.js"
 import { REF_BINDING } from "./ref-binding.js"
 import { resolveRefIdTokens } from "./ref-id-tokens.js"
 import { insertBeforeStyleSection } from "./prompt-style-section.js"
@@ -152,6 +158,13 @@ export interface VideoExtraRef {
    * orchestrator extras leave this unset (they resolve via `CharacterMeta`).
    */
   defaultRole?: string
+  /**
+   * The `ConnectedReference.descriptionOverride` analogue — the PER-USE identity
+   * description for this extra. Fills the row's own description slot (the
+   * pair-back tail, the name-mode bullet, the first-sight descriptor), winning
+   * over `description`, which keeps its label semantics. Absent → unchanged.
+   */
+  descriptionOverride?: string
 }
 
 /**
@@ -230,6 +243,24 @@ export interface ResolveVideoReferenceCoreArgs {
    * The wired character refs' `defaultName`s are known without this.
    */
   refNamesById?: ReadonlyMap<string, string>
+  /**
+   * References the caller can NAME and DESCRIBE but has no media for — an
+   * un-bound cast role, an analysis slot. They attach no URL and claim no
+   * `@image_N` seat: they are rendered as prose by `renderDescribedReferenceLines`
+   * and joined the way this lane joins its trailing directives. The
+   * described-ONLY request (no wired characters, no extras) is the normal case,
+   * so the early return below carries the join too.
+   */
+  describedReferences?: readonly DescribedReference[]
+  /**
+   * Captions for the node's video / audio rail references, INDEX-ALIGNED with
+   * the caller's `referenceVideoUrls` / `referenceAudioUrls`. Rendered as
+   * `@video_N: <caption>.` / `@audio_N: <caption>.` and bounded by
+   * `videoRefCount` / `audioRefCount`, so a caption for a url the provider cap
+   * dropped never binds a slot the payload does not ship.
+   */
+  videoCaptions?: readonly string[]
+  audioCaptions?: readonly string[]
 }
 
 /** Result of the HYBRID mention pass — inline role phrases + surfaced opt-in
@@ -368,6 +399,11 @@ function resolveVideoCharacterMentionsHybrid(
     const binding = bindingFor(m.url)
     const lock = buildIdentityLockLine(withForcedIdentityLock(ref, lockOverrideByUrl.get(m.url)), binding)
     if (lock) lockLines.push(lock)
+    // A per-use `descriptionOverride` has no slot in a hybrid role phrase, so it
+    // rides the trailing-directive channel as its own binding-subject line —
+    // exactly as on the image lane (`pushOverrideDirective`).
+    const overrideLine = referenceDescriptionLine(binding, ref.descriptionOverride)
+    if (overrideLine) elementDirectives.push(overrideLine)
     const inject = ref.elementInjection?.trim()
     if (inject) elementDirectives.push(inject)
   }
@@ -429,6 +465,18 @@ export function resolveVideoReferenceCore(
     video: args.videoRefCount ?? 0,
     audio: args.audioRefCount ?? 0,
   })
+  // Described references (name + description, no media) and the video/audio rail
+  // captions — rendered ONCE, ahead of every exit, because both the early return
+  // below and the main assembly have to carry them. They attach no URL and claim
+  // no `@image_N` seat, so they take no part in the numbering walk. Empty for
+  // every caller that sends neither → every existing output is untouched.
+  const describedAndCaptionLines = [
+    ...renderDescribedReferenceLines(args.describedReferences),
+    ...renderReferenceCaptionLines(args.videoCaptions, args.audioCaptions, {
+      video: args.videoRefCount ?? 0,
+      audio: args.audioRefCount ?? 0,
+    }),
+  ]
   let wiredCharRefs = [...args.wiredCharRefs]
   const suppressedSlugs = new Set(args.suppressedCanonicalCharacterIds ?? [])
   if (suppressedSlugs.size > 0) {
@@ -469,14 +517,20 @@ export function resolveVideoReferenceCore(
     // leading refs were passed); the leading URLs are returned for the payload.
     // Nothing was seated, so every `{ref:}` degrades (label → name → "").
     const counts = tokenCounts(leadingRefUrls.length)
+    // tokenCounts(leadingRefUrls.length) → image count == offset (no assets here):
+    // leadingRefUrls mode counts the leading refs; ordinalOffset mode counts the
+    // caller-owned leading refs the offset stands in for.
+    const resolved = resolveReferenceTokens(
+      resolveRefIdTokens(args.prompt, { slotById: slotByRefId, nameById: nameByRefId, imageCount: counts.image }),
+      counts,
+    )
     return {
-      // tokenCounts(leadingRefUrls.length) → image count == offset (no assets here):
-      // leadingRefUrls mode counts the leading refs; ordinalOffset mode counts the
-      // caller-owned leading refs the offset stands in for.
-      prompt: resolveReferenceTokens(
-        resolveRefIdTokens(args.prompt, { slotById: slotByRefId, nameById: nameByRefId, imageCount: counts.image }),
-        counts,
-      ),
+      // Described references and rail captions are the ONE thing this branch can
+      // still contribute: they need no seat, so a request that carries only them
+      // (a story landing before any entity exists) reaches the model here.
+      prompt: describedAndCaptionLines.length > 0
+        ? appendReferenceLines(resolved ?? "", describedAndCaptionLines, args.hybridRoles === true ? "hybrid" : "legacy")
+        : resolved,
       additionalUrls: [...leadingRefUrls],
     }
   }
@@ -579,6 +633,8 @@ export function resolveVideoReferenceCore(
       canonicalPhrases.push(roleToPhrase(resolveDefaultRole(r.defaultRole, r.defaultUsageMode, r.source), binding))
       const lock = buildIdentityLockLine(r, binding)
       if (lock) canonicalLockLines.push(lock)
+      const overrideLine = referenceDescriptionLine(binding, r.descriptionOverride)
+      if (overrideLine) canonicalElementDirectives.push(overrideLine)
       const inject = r.elementInjection?.trim()
       if (inject) canonicalElementDirectives.push(inject)
       continue
@@ -601,7 +657,13 @@ export function resolveVideoReferenceCore(
     // mirrors the shared image-side `composeIdentityDescPart`. The subject here
     // is the bare display name (video numbering is applied separately above).
     const descBodyParts: string[] = []
-    if (includeCanonicalDesc && r.characterCanonicalDescription?.trim()) {
+    // The per-use override IS the caller describing this subject for this run,
+    // so it fills the identity slot ahead of the stored canonical description —
+    // and rides every mode that emits a bullet at all ("none" returned above).
+    const canonicalOverride = r.descriptionOverride?.trim()
+    if (canonicalOverride) {
+      descBodyParts.push(canonicalOverride)
+    } else if (includeCanonicalDesc && r.characterCanonicalDescription?.trim()) {
       descBodyParts.push(r.characterCanonicalDescription.trim())
     }
     if (r.elementInjection?.trim()) descBodyParts.push(r.elementInjection.trim())
@@ -637,7 +699,9 @@ export function resolveVideoReferenceCore(
       if (!ex.url) continue
       position += 1
       if (ex.id && !slotByRefId.has(ex.id)) slotByRefId.set(ex.id, position)
-      const desc = (ex.description ?? "").trim()
+      // Per-use override fills this row's description slot; `description` keeps
+      // its own label semantics (mirrors the image extras).
+      const desc = (ex.descriptionOverride ?? "").trim() || (ex.description ?? "").trim()
       if (ex.characterSlug) {
         // First sight of this character via an extra. Resolution chain
         // matches the image side: per-ref override → upstream character
@@ -819,6 +883,17 @@ export function resolveVideoReferenceCore(
   for (const u of extraUrls) {
     if (u && !seen.has(u)) { seen.add(u); merged.push(u) }
   }
+
+  // Described references + rail captions — joined the way this format joins its
+  // own trailing directives (hybrid: ahead of the `[style]` section; legacy:
+  // bullets consolidated into the "Use these characters:" block the branch above
+  // may just have created). Ahead of the reorder, like every other assembled
+  // line; they carry no `@image_N` binding for the renumber to move.
+  finalPrompt = appendReferenceLines(
+    finalPrompt,
+    describedAndCaptionLines,
+    hybrid ? "hybrid" : "legacy",
+  )
 
   // `{ref:<id>}` tokens resolve HERE — after the walk has seated every reference
   // (the slot map is complete) and BEFORE the user reorder below, so the

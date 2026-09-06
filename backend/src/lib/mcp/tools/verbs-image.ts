@@ -6,7 +6,7 @@ import { mcpInject } from "../internal-request.js"
 import { buildCompositePrompt } from "../prompt-builder-bridge.js"
 import { resolveAssetId } from "../asset-resolver.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
-import { connectedReferenceSchema } from "../../connected-reference-schema.js"
+import { connectedReferenceSchema, describedReferenceSchema, DESCRIBED_REFERENCE_LIMIT } from "../../connected-reference-schema.js"
 import {
   errorResult,
   dispatchJob,
@@ -157,6 +157,13 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
               "{id, defaultName, source, url}, url a public https URL). Assembled server-side into per-ref " +
               "@image_N directives + {image:N} token resolution (labeled/ordered refs, unlike flat " +
               "reference_image_urls).",
+            ),
+          described_references: z.array(describedReferenceSchema).max(DESCRIBED_REFERENCE_LIMIT).optional()
+            .describe(
+              "References you can NAME and DESCRIBE but have no image for — an un-bound cast role, " +
+              "a character that exists only in the script. No url, so nothing is attached and no " +
+              "@image_N seat is used: each becomes a `<Name> — <description>.` line, so a name in " +
+              "your prompt reaches the model as a real, described subject.",
             ),
           reference_order: z.array(z.string()).max(14).optional()
             .describe("Advanced: reorder connected_references by their stable ids; renumbers the @image_N bindings."),
@@ -323,6 +330,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           negativePrompt: effective.negative_prompt as string | undefined,
           ...(refUrls.length ? { referenceImageUrls: refUrls } : {}),
           ...(args.connected_references ? { connectedReferences: args.connected_references } : {}),
+          ...(args.described_references ? { describedReferences: args.described_references } : {}),
           ...(args.reference_order ? { referenceOrder: args.reference_order } : {}),
           ...(effective.base_image_url ? { baseImageUrl: effective.base_image_url } : {}),
           ...(effective.mask_url ? { maskUrl: effective.mask_url } : {}),

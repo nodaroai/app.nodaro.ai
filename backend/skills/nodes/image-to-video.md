@@ -1,7 +1,7 @@
 ---
 node_type: image-to-video
-generated_at: 2026-09-01T21:25:23.887Z
-generated_from: f99d6fa6e
+generated_at: 2026-09-06T10:23:30.787Z
+generated_from: 88a6e05b4
 ---
 
 # image-to-video
@@ -105,6 +105,7 @@ generated_from: f99d6fa6e
 - `loop_trim`
 - `auto_loop_trim`
 - `connected_references`
+- `described_references`
 - `reference_order`
 <!-- AUTO-GEN:END mcp-call -->
 

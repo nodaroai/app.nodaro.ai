@@ -1202,6 +1202,27 @@ if ("jobId" in result) {
 > [Reference Roles guide](./reference-roles-guide.md) for the role-label + lock
 > model.
 
+> **A name you have no picture for.** The same three params take
+> `describedReferences: DescribedReference[]` (also re-exported from the SDK) —
+> up to 10 `{ name, description }` entries for a subject you can name and
+> describe but have no media for: a cast role nothing is bound to yet, a
+> character that exists only in the script. They carry no url, so nothing is
+> attached and no `@image_N` seat is used; each becomes a
+> `<Name> — <description>.` line, and correlation is by NAME — leave the name in
+> your prompt prose and the line tells the model who it is. They are a reference
+> channel on their own: send them with no `connectedReferences` and the route
+> still assembles. Per-use wording for a reference you DO have a picture for
+> goes on the entry itself as `descriptionOverride` (it fills the directive's
+> description slot ahead of the entity's stored description, which stays the
+> label).
+
+> **Captioning the video / audio rails.** `GenerateVideoParams` and
+> `TextToVideoParams` take `referenceVideoCaptions` / `referenceAudioCaptions` —
+> string arrays **index-aligned** with `referenceVideoUrls` /
+> `referenceAudioUrls`, rendered as `@video_N: <caption>.` / `@audio_N:
+> <caption>.` and bounded by the number of rail references that actually ship.
+> A blank entry is a hole in the alignment, not a line.
+
 > **Naming an image reference in the prompt.** On
 > `run("generate-image", …)`, a media reference (`source: "wired-image"` or
 > `"manual"`) is mentionable by the slug of its `defaultName` —

@@ -60,7 +60,7 @@ import {
   type SlottedPromptClause,
 } from "./prompt-style-section.js"
 import { keepableDirectionHints } from "./hint-shedding.js"
-import type { CharacterDef, ConnectedReference, IdentityMeta } from "@nodaro/shared"
+import type { CharacterDef, ConnectedReference, DescribedReference, IdentityMeta } from "@nodaro/shared"
 
 /**
  * Flat cinematic-direction ids the Studio framing UI, the MCP route and the
@@ -98,6 +98,13 @@ export interface AssembleImageInput {
    * (gated per provider there). Omit when the caller wires only raw URLs.
    */
   connectedReferences?: ConnectedReference[]
+  /**
+   * References the caller can NAME and DESCRIBE but has no media for — an
+   * un-bound cast role, an analysis slot. They attach no URL and claim no
+   * `Image N` slot; `buildImagePrompt` renders them as prose. Present with no
+   * `connectedReferences` is the normal case, so they are forwarded on their own.
+   */
+  describedReferences?: readonly DescribedReference[]
   /**
    * Flat cinematic-direction ids → folded into the prompt as hints. Studio /
    * MCP-route use, and the platform callers' narrow-read of a node's STORED
@@ -294,6 +301,9 @@ export function assembleImageInput(
     provider: input.provider,
     ...(input.connectedReferences !== undefined
       ? { connectedReferences: input.connectedReferences }
+      : {}),
+    ...(input.describedReferences !== undefined
+      ? { describedReferences: input.describedReferences }
       : {}),
     // Manual uploads / direct refs ride the builder's reference-URL channel so
     // the per-provider reference gate filters them alongside bound entities.

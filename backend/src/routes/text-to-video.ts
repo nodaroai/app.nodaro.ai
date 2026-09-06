@@ -12,13 +12,13 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { insertJobIdempotent } from "../lib/insert-job.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
-import { TEXT_TO_VIDEO_PROVIDERS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, videoProviderRequiresImage, isSeedance2Provider, isMinimaxH3Provider, applyDefaultVideoSelection, buildVideoCreditModelIdentifier, type ConnectedReference } from "@nodaro/shared"
+import { TEXT_TO_VIDEO_PROVIDERS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, videoProviderRequiresImage, isSeedance2Provider, isMinimaxH3Provider, applyDefaultVideoSelection, buildVideoCreditModelIdentifier, type ConnectedReference, type DescribedReference } from "@nodaro/shared"
 import { imageRequiredError } from "../lib/video-image-required.js"
 import { composeVideoPromptText } from "@nodaro/prompts"
-import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
+import { connectedReferenceSchema, describedReferenceSchema, referenceCaptionSchema, DESCRIBED_REFERENCE_LIMIT } from "../lib/connected-reference-schema.js"
 import { directionSchema } from "../lib/direction-schema.js"
 import { subjectSchema } from "../lib/subject-schema.js"
-import { assembleVideoConnectedReferences, validateRefVideoDurationPreHandler } from "./generate-video.js"
+import { assembleVideoConnectedReferences, hasVideoReferenceChannels, validateRefVideoDurationPreHandler } from "./generate-video.js"
 import { formatZodError } from "../lib/zod-error.js"
 
 export const textToVideoBody = z.object({
@@ -47,6 +47,15 @@ export const textToVideoBody = z.object({
   // unmentioned wired refs to referenceImageUrls, emitting per-ref directives, and
   // expanding {image:N} tokens. Absent → byte-identical to the flat path.
   connectedReferences: z.array(connectedReferenceSchema).max(14).optional(),
+  // References the caller NAMED and DESCRIBED but has no media for (parity with
+  // /v1/generate-video). No url → no reference budget, no `@image_N` seat; the
+  // assembly renders them as prose. Enters server-side assembly on its own.
+  describedReferences: z.array(describedReferenceSchema).max(DESCRIBED_REFERENCE_LIMIT).optional(),
+  // Captions INDEX-ALIGNED with `referenceVideoUrls` / `referenceAudioUrls`,
+  // rendered as `@video_N: <caption>.` / `@audio_N: <caption>.` and bounded by
+  // the shipped rail counts. Absent → unchanged.
+  referenceVideoCaptions: z.array(referenceCaptionSchema).max(SEEDANCE_2_5_REF_LIMITS.videos).optional(),
+  referenceAudioCaptions: z.array(referenceCaptionSchema).max(SEEDANCE_2_5_REF_LIMITS.audio).optional(),
   referenceOrder: z.array(z.string()).max(14).optional(),
   // Structured cinematic direction: catalog IDS, not hint text (parity with
   // /v1/generate-video, same shared schema). Rendered server-side with the
@@ -151,6 +160,17 @@ export async function textToVideoRoutes(app: FastifyInstance) {
               referenceOrder: (Array.isArray(b.referenceOrder) ? b.referenceOrder : undefined) as string[] | undefined,
               referenceVideoCount: refVideos.length,
               referenceAudioCount: Array.isArray(b.referenceAudioUrls) ? (b.referenceAudioUrls as unknown[]).length : 0,
+              // Text-only channels — they move no reference COUNT, so the price
+              // is unchanged; forwarded to keep this the handler's mirror.
+              ...(Array.isArray(b.describedReferences)
+                ? { describedReferences: b.describedReferences as DescribedReference[] }
+                : {}),
+              ...(Array.isArray(b.referenceVideoCaptions)
+                ? { referenceVideoCaptions: b.referenceVideoCaptions as string[] }
+                : {}),
+              ...(Array.isArray(b.referenceAudioCaptions)
+                ? { referenceAudioCaptions: b.referenceAudioCaptions as string[] }
+                : {}),
             })
             const refImageCount = minimaxH3BillableRefImageCount({
               referenceImageUrls: assembled.referenceImageUrls,
@@ -253,17 +273,20 @@ export async function textToVideoRoutes(app: FastifyInstance) {
     // and gated the same way as the assembly below. The resolver runs AFTER the
     // fold and APPENDS binding text, so it must be inside the shed's budget
     // while staying un-sheddable. Pure: safe to call once per shed iteration.
-    const connectedRefs = parsed.data.connectedReferences
+    const framesReferences = hasVideoReferenceChannels(parsed.data)
     const frameWithReferences = (body: string | undefined): string | undefined =>
-      connectedRefs && connectedRefs.length > 0
+      framesReferences
         ? assembleVideoConnectedReferences({
           prompt: body,
           provider,
-          connectedReferences: connectedRefs,
+          connectedReferences: parsed.data.connectedReferences ?? [],
+          describedReferences: parsed.data.describedReferences,
           baseReferenceImageUrls: parsed.data.referenceImageUrls,
           referenceOrder: parsed.data.referenceOrder,
           referenceVideoCount: parsed.data.referenceVideoUrls?.length ?? 0,
           referenceAudioCount: parsed.data.referenceAudioUrls?.length ?? 0,
+          referenceVideoCaptions: parsed.data.referenceVideoCaptions,
+          referenceAudioCaptions: parsed.data.referenceAudioCaptions,
         }).prompt
         : body
 
@@ -290,11 +313,14 @@ export async function textToVideoRoutes(app: FastifyInstance) {
     // connectedReferences server-side via the SAME shared resolver the canvas +
     // orchestrator use, so an MCP/SDK t2v run binds inline {image:N} references
     // identically. Absent → flat path untouched. Provider-gated by the cap map.
-    if (parsed.data.connectedReferences && parsed.data.connectedReferences.length > 0) {
+    if (hasVideoReferenceChannels(parsed.data)) {
       const assembled = assembleVideoConnectedReferences({
         prompt,
         provider,
-        connectedReferences: parsed.data.connectedReferences,
+        connectedReferences: parsed.data.connectedReferences ?? [],
+        describedReferences: parsed.data.describedReferences,
+        referenceVideoCaptions: parsed.data.referenceVideoCaptions,
+        referenceAudioCaptions: parsed.data.referenceAudioCaptions,
         baseReferenceImageUrls: referenceImageUrls,
         referenceOrder: parsed.data.referenceOrder,
         referenceVideoCount: referenceVideoUrls?.length ?? 0,
