@@ -8,8 +8,10 @@ import { isDeploymentPayer } from "@/lib/surface-selectors"
 import { ENTRY_BY_LINK } from "@/lib/surface-nav-registry"
 import { unitsInputError, orDash } from "../units"
 import type {
+  DeploymentBalance,
   DeploymentBillingOverview,
   DeploymentUsersPage,
+  IntegrationKey,
   UserGrantsPage,
   DeploymentTransactions,
 } from "@/ee/hooks/queries/use-deployment-billing"
@@ -63,6 +65,7 @@ const usersPage: DeploymentUsersPage = {
       id: "u1", email: "alpha@example.com", full_name: "Alpha",
       created_at: "2026-08-01T00:00:00.000Z",
       granted: 400_000, remaining: 399_000, spent: 1_000, provisioned: true,
+      ssoSubject: "usr_01HZX", resetAt: "2026-09-01T00:00:00.000Z",
     },
     {
       id: "u2", email: "beta@example.com", full_name: null,
@@ -84,12 +87,34 @@ const usersPage: DeploymentUsersPage = {
 const grantsPage: UserGrantsPage = {
   user: { id: "u1", granted: 400_000, remaining: 399_000, spent: 1_000, provisioned: true },
   grants: [
-    { id: "g1", units: 400_000, kind: "default", note: null, createdAt: "2026-08-01T00:00:00.000Z" },
-    { id: "g2", units: -2_000, kind: "overrun", note: null, createdAt: "2026-08-05T00:00:00.000Z" },
+    { id: "g1", units: 400_000, kind: "default", note: null, createdAt: "2026-08-01T00:00:00.000Z", credentialId: null },
+    { id: "g2", units: -2_000, kind: "overrun", note: null, createdAt: "2026-08-05T00:00:00.000Z", credentialId: null },
+    // Written THROUGH a key: the history has to say which one, because
+    // `granted_by` is the billing account on every row and the audit line is
+    // otherwise indistinguishable from a click on this page.
+    { id: "g3", units: 20_000, kind: "renewal", note: null, createdAt: "2026-09-01T00:00:00.000Z", credentialId: "k1" },
+    // A credential the keys list does not know about — the fallback lane.
+    { id: "g4", units: 4_000, kind: "topup", note: null, createdAt: "2026-09-02T00:00:00.000Z", credentialId: "gone" },
   ],
   limit: 50,
   offset: 0,
   unit: { ...UNIT },
+}
+
+const integrationKeys: IntegrationKey[] = [
+  {
+    id: "k1", name: "back office", tokenPrefix: "ndr_bill_9f3",
+    createdAt: "2026-09-01T00:00:00.000Z", expiresAt: null,
+    lastUsedAt: "2026-09-05T00:00:00.000Z", revokedAt: null, allowedCidrs: null,
+  },
+]
+
+const balance: DeploymentBalance = {
+  balanceCredits: 12_345,
+  burn: { periodStart: "2026-09-01T00:00:00.000Z", credits: 987, generations: 42, capped: false },
+  periodEnd: null,
+  lowBalance: false,
+  threshold: 10_000,
 }
 
 const transactions: DeploymentTransactions = { purchases: [], ledger: [], limit: 50, offset: 0 }
@@ -103,6 +128,10 @@ const grantMutate = vi.fn()
 const defaultMutate = vi.fn()
 const checkoutMutate = vi.fn()
 const refresh = vi.fn()
+const thresholdMutate = vi.fn()
+const mintMutate = vi.fn()
+const mintReset = vi.fn()
+const revokeMutate = vi.fn()
 
 const usersRefetch = vi.fn()
 const txRefetch = vi.fn()
@@ -123,6 +152,12 @@ const state = {
   usersEmptyResult: false,
   txFailed: false,
   grantsFailed: false,
+  /** Every row's `resetAt` dropped: the state a deployment is in until the
+   *  first renewal, where `spent` is a LIFETIME figure. */
+  noPeriod: false,
+  balance: balance as DeploymentBalance | undefined,
+  balanceFailed: false,
+  keys: integrationKeys as IntegrationKey[],
 }
 
 vi.mock("@/ee/hooks/queries/use-deployment-billing", async (importOriginal) => {
@@ -143,7 +178,9 @@ vi.mock("@/ee/hooks/queries/use-deployment-billing", async (importOriginal) => {
         ? undefined
         : state.usersEmptyResult
           ? { ...usersPage, data: [], total: 0 }
-          : usersPage,
+          : state.noPeriod
+            ? { ...usersPage, data: usersPage.data.map(({ resetAt: _drop, ...r }) => r) }
+            : usersPage,
       isLoading: false,
       isError: state.usersFailed,
       refetch: usersRefetch,
@@ -160,6 +197,23 @@ vi.mock("@/ee/hooks/queries/use-deployment-billing", async (importOriginal) => {
       isError: state.grantsFailed,
       refetch: grantsRefetch,
     }),
+    useIntegrationKeys: () => ({
+      data: state.keys,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    }),
+    useMintIntegrationKeyMutation: () => ({
+      mutate: mintMutate, reset: mintReset, isPending: false, data: undefined, error: undefined,
+    }),
+    useRevokeIntegrationKeyMutation: () => ({ mutate: revokeMutate, isPending: false }),
+    useDeploymentBalance: () => ({
+      data: state.balanceFailed ? undefined : state.balance,
+      isLoading: false,
+      isError: state.balanceFailed,
+      refetch: vi.fn(),
+    }),
+    useSetBalanceThresholdMutation: () => ({ mutate: thresholdMutate, isPending: false }),
     useGrantAllowanceMutation: () => ({ mutate: grantMutate, isPending: false }),
     useSetDefaultAllowanceMutation: () => ({ mutate: defaultMutate, isPending: false }),
     useDeploymentCheckoutMutation: () => ({ mutate: checkoutMutate, isPending: false }),
@@ -195,6 +249,10 @@ beforeEach(() => {
   state.usersEmptyResult = false
   state.txFailed = false
   state.grantsFailed = false
+  state.noPeriod = false
+  state.balance = balance
+  state.balanceFailed = false
+  state.keys = integrationKeys
   useLocaleStore.setState({ locale: "he" })
 })
 
@@ -645,6 +703,157 @@ describe("the top-up form cannot grant the same allowance twice (F13)", () => {
     fireEvent.click(container.querySelector("[data-testid='topup-open-u1']")!)
     const input = container.querySelector("[data-testid='topup-form-u1'] input") as HTMLInputElement
     expect(input.value).toBe("")
+  })
+})
+
+/**
+ * The PERIOD wording (C-D6).
+ *
+ * `renew` zeroes `spent` and stamps `reset_at`; until it has, `spent` is a
+ * LIFETIME figure. The backend says so by OMITTING `resetAt` rather than
+ * answering null, so the page's only honest reading is presence-or-absence.
+ * Printing "this period" beside a lifetime total is the kind of wrong that
+ * looks right — the number is real, the sentence about it is not.
+ */
+describe("block 4 — 'this period' follows resetAt, and only resetAt", () => {
+  it("says 'this period' once ANY row has been renewed", () => {
+    const { container } = renderPage()
+    const table = container.querySelector("[data-testid='users-block']")!
+    expect(table.textContent).toContain(he["billingAdmin.colSpentPeriod"] as string)
+  })
+
+  it("keeps the lifetime wording while NO row has a period", () => {
+    // Non-vacuity: without this the assertion above would pass on a page that
+    // simply renamed the column.
+    state.noPeriod = true
+    const { container } = renderPage()
+    const table = container.querySelector("[data-testid='users-block']")!
+    expect(table.textContent).toContain(he["billingAdmin.colSpent"] as string)
+    expect(table.textContent).not.toContain(he["billingAdmin.colSpentPeriod"] as string)
+  })
+
+  it("shows the renewed row's own period start, and shows none on a row without one", () => {
+    const { container } = renderPage()
+    expect(
+      container.querySelector("[data-testid='user-period-u1']")!.textContent,
+    ).toContain(new Date("2026-09-01T00:00:00.000Z").toLocaleDateString())
+    // u2 has never renewed: an invented date here would be a fabricated fact.
+    expect(container.querySelector("[data-testid='user-period-u2']")).toBeNull()
+  })
+})
+
+/**
+ * "via <key name>" (§6.3).
+ *
+ * `granted_by` is the billing account on EVERY row, key or no key — that is
+ * invariant C-B, and it is why the credential has to be named separately.
+ * Without this line the payer cannot tell a move their back office made from
+ * one they made themselves on this page, which is the whole point of stamping
+ * `credential_id`.
+ */
+describe("block 4 — the grant history names the credential", () => {
+  it("labels a row written through a key with that key's name", () => {
+    const { container } = renderPage()
+    fireEvent.click(container.querySelector("[data-testid='grants-open-u1']")!)
+    const history = container.querySelector("[data-testid='grants-u1']")!
+    expect(history.textContent).toContain(
+      (he["billingAdmin.viaKey"] as string).replace("{name}", "back office"),
+    )
+  })
+
+  it("falls back to a generic sentence when the credential is no longer known", () => {
+    const { container } = renderPage()
+    fireEvent.click(container.querySelector("[data-testid='grants-open-u1']")!)
+    const history = container.querySelector("[data-testid='grants-u1']")!
+    expect(history.textContent).toContain(he["billingAdmin.viaUnknownKey"] as string)
+  })
+
+  it("says nothing at all about a row the PAGE wrote", () => {
+    // `credential_id IS NULL` means this browser session did it. A "via the
+    // page" label would be noise on the common case and, worse, would read as
+    // a credential name.
+    const { container } = renderPage()
+    fireEvent.click(container.querySelector("[data-testid='grants-open-u1']")!)
+    const row = container.querySelector("[data-testid='grant-row-g1']")!
+    expect(row.textContent).not.toContain(he["billingAdmin.viaUnknownKey"] as string)
+    expect(row.textContent ?? "").not.toContain("via")
+  })
+
+  it("labels a renewal row, which the reconciliation sum includes", () => {
+    const { container } = renderPage()
+    fireEvent.click(container.querySelector("[data-testid='grants-open-u1']")!)
+    const history = container.querySelector("[data-testid='grants-u1']")!
+    expect(history.textContent).toContain(he["billingAdmin.kindRenewal"] as string)
+  })
+})
+
+/**
+ * The low-balance threshold, beside the pool figure (C-D7).
+ *
+ * RAW Nodaro credits, like everything else in block 1 — the pool is the one
+ * place the product renders the deployment's real money, and a threshold in
+ * display units would be off by the unit rate in the expensive direction.
+ */
+describe("block 1 — the low-balance threshold", () => {
+  it("shows the stored threshold and saves a new one in raw credits", () => {
+    const { container } = renderPage()
+    const input = container.querySelector("[data-testid='threshold-input']") as HTMLInputElement
+    expect(input.value).toBe("10000")
+    fireEvent.change(input, { target: { value: "25000" } })
+    fireEvent.click(container.querySelector("[data-testid='threshold-save']")!)
+    expect(thresholdMutate).toHaveBeenCalledWith({ credits: 25_000 })
+  })
+
+  it("an EMPTY field clears the threshold with null, never with a zero", () => {
+    // 0 is a real threshold ("warn me when the pool is empty"); NULL is "do
+    // not warn me". Sending 0 for a cleared field arms an alert the payer
+    // just turned off.
+    const { container } = renderPage()
+    fireEvent.change(container.querySelector("[data-testid='threshold-input']")!, {
+      target: { value: "" },
+    })
+    fireEvent.click(container.querySelector("[data-testid='threshold-save']")!)
+    expect(thresholdMutate).toHaveBeenCalledWith({ credits: null })
+  })
+
+  it("refuses a non-integer client-side and never calls the mutation", () => {
+    const { container } = renderPage()
+    fireEvent.change(container.querySelector("[data-testid='threshold-input']")!, {
+      target: { value: "12.5" },
+    })
+    fireEvent.click(container.querySelector("[data-testid='threshold-save']")!)
+    expect(thresholdMutate).not.toHaveBeenCalled()
+    expect(container.querySelector("[data-testid='pool-block']")!.textContent).toContain(
+      he["billingAdmin.errInvalidThreshold"] as string,
+    )
+  })
+
+  it("renders a visible state when the pool is BELOW the threshold", () => {
+    state.balance = { ...balance, lowBalance: true }
+    const { container } = renderPage()
+    expect(container.querySelector("[data-testid='low-balance']")!.textContent).toContain(
+      he["billingAdmin.lowBalanceOn"] as string,
+    )
+  })
+
+  it("renders no alarm when the pool is above it", () => {
+    const { container } = renderPage()
+    expect(container.querySelector("[data-testid='low-balance']")).toBeNull()
+  })
+
+  it("says nothing about a balance it could not read — no field, no false all-clear", () => {
+    state.balanceFailed = true
+    state.balance = undefined
+    const { container } = renderPage()
+    expect(container.querySelector("[data-testid='low-balance']")).toBeNull()
+    expect(container.querySelector("[data-testid='threshold-input']")).toBeNull()
+  })
+})
+
+describe("the Integrations block is on the page", () => {
+  it("mounts it — the keys are mintable nowhere else", () => {
+    renderPage()
+    expect(screen.getByTestId("integrations-block")).toBeInTheDocument()
   })
 })
 
