@@ -809,6 +809,120 @@ describe("assembleVideoConnectedReferences (server-side video reference assembly
     expect(out.prompt).toContain("Kira")
   })
 
+  it("renders described references with no connected references at all", () => {
+    const out = assembleVideoConnectedReferences({
+      prompt: "Natalie walks down the pier.",
+      provider: "seedance-2",
+      connectedReferences: [],
+      describedReferences: [{ name: "Natalie", description: "a tall woman in a red coat" }],
+      referenceVideoCount: 0,
+      referenceAudioCount: 0,
+    })
+    expect(out.prompt).toBe(
+      "Use these characters:\n- Natalie — a tall woman in a red coat.\n\nNatalie walks down the pier.",
+    )
+    expect(out.referenceImageUrls).toBeUndefined()
+  })
+
+  it("renders described references for a provider without image-ref support (the cap-0 branch)", () => {
+    const out = assembleVideoConnectedReferences({
+      prompt: "drive {image:1:car} fast",
+      provider: "kling", // not in VIDEO_REF_LIMITS_BY_PROVIDER → image cap 0
+      connectedReferences: [cref({ source: "wired-image", url: "https://r2/car.png", description: "car" })],
+      describedReferences: [{ name: "Natalie", description: "a tall woman in a red coat" }],
+      referenceVideoCount: 0,
+      referenceAudioCount: 0,
+    })
+    expect(out.prompt).toBe(
+      "Use these characters:\n- Natalie — a tall woman in a red coat.\n\ndrive car fast",
+    )
+    expect(out.referenceImageUrls).toBeUndefined()
+  })
+
+  it("renders described references on the cap-0 branch in HYBRID too", () => {
+    // The cap-0 branch never reaches the shared core, so it repeats the join
+    // itself — including the format pick. `backendHybridRoles()` is false
+    // whenever NODE_ENV === "test", so the format var alone would not flip it.
+    const prevNodeEnv = process.env.NODE_ENV
+    const prevFmt = process.env.IMAGE_REFERENCE_FORMAT
+    try {
+      process.env.NODE_ENV = "development"
+      process.env.IMAGE_REFERENCE_FORMAT = "hybrid"
+      const out = assembleVideoConnectedReferences({
+        prompt: "drive {image:1:car} fast",
+        provider: "kling", // not in VIDEO_REF_LIMITS_BY_PROVIDER → image cap 0
+        connectedReferences: [cref({ source: "wired-image", url: "https://r2/car.png", description: "car" })],
+        describedReferences: [{ name: "Natalie", description: "a tall woman in a red coat" }],
+        referenceVideoCount: 0,
+        referenceAudioCount: 0,
+      })
+      // Trailing line, not the legacy "Use these characters:" block the
+      // NODE_ENV=test default renders (pinned by the case above).
+      expect(out.prompt).toBe("drive car fast\nNatalie — a tall woman in a red coat.")
+      expect(out.referenceImageUrls).toBeUndefined()
+    } finally {
+      if (prevNodeEnv === undefined) delete process.env.NODE_ENV
+      else process.env.NODE_ENV = prevNodeEnv
+      if (prevFmt === undefined) delete process.env.IMAGE_REFERENCE_FORMAT
+      else process.env.IMAGE_REFERENCE_FORMAT = prevFmt
+    }
+  })
+
+  it("renders rail captions index-aligned with the video/audio reference counts", () => {
+    const out = assembleVideoConnectedReferences({
+      prompt: "A cut between two shots.",
+      provider: "seedance-2",
+      connectedReferences: [],
+      referenceVideoCount: 2,
+      referenceAudioCount: 1,
+      referenceVideoCaptions: ["the establishing drone shot", "the close-up"],
+      referenceAudioCaptions: ["the score"],
+    })
+    expect(out.prompt).toContain("- @video_1: the establishing drone shot.")
+    expect(out.prompt).toContain("- @video_2: the close-up.")
+    expect(out.prompt).toContain("- @audio_1: the score.")
+  })
+
+  it("honors a per-use descriptionOverride on a wired character's canonical fallback", () => {
+    const out = assembleVideoConnectedReferences({
+      prompt: "she walks",
+      provider: "seedance-2",
+      connectedReferences: [
+        cref({
+          source: "wired-character",
+          url: "https://r2/kira.png",
+          defaultName: "Kira",
+          characterSlug: "kira",
+          characterCanonicalDescription: "auburn hair, hazel eyes",
+          descriptionOverride: "a shaved head and a scar",
+        }),
+      ],
+      referenceVideoCount: 0,
+      referenceAudioCount: 0,
+    })
+    expect(out.prompt).toContain("- Kira — a shaved head and a scar.")
+    expect(out.prompt).not.toContain("auburn hair")
+  })
+
+  it("honors a per-use descriptionOverride on a non-character reference", () => {
+    const out = assembleVideoConnectedReferences({
+      prompt: "a person dancing",
+      provider: "seedance-2",
+      connectedReferences: [
+        cref({
+          source: "wired-image",
+          url: "https://r2/car.png",
+          description: "a red car",
+          descriptionOverride: "a rusted pickup truck",
+        }),
+      ],
+      referenceVideoCount: 0,
+      referenceAudioCount: 0,
+    })
+    expect(out.prompt).toContain("a rusted pickup truck")
+    expect(out.prompt).not.toContain("a red car")
+  })
+
   it("strips {image:N} to bare labels + attaches nothing for a provider without image-ref support", () => {
     const out = assembleVideoConnectedReferences({
       prompt: "drive {image:1:car} fast",
@@ -1006,6 +1120,77 @@ describe("POST /v1/generate-video — connectedReferences integration", () => {
     const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)![1] as Record<string, unknown>
     expect(queued.prompt).toBe("plain prompt")
     expect(queued.referenceImageUrls).toEqual(["https://cdn.example/flat.png"])
+  })
+
+  it("assembles a described-references-only request (the gate trips without connectedReferences)", async () => {
+    mockJobInsert({ data: { id: "job-desc" }, error: null })
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-video",
+      payload: {
+        prompt: "Natalie walks down the pier.",
+        userId: USER,
+        provider: "seedance-2",
+        imageUrl: "https://cdn.example/frame.png",
+        describedReferences: [{ name: "Natalie", description: "a tall woman in a red coat" }],
+      },
+    })
+    expect(res.statusCode).toBe(200)
+    const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)![1] as Record<string, unknown>
+    expect(queued.prompt).toBe(
+      "Use these characters:\n- Natalie — a tall woman in a red coat.\n\nNatalie walks down the pier.",
+    )
+  })
+
+  it("assembles a captions-only request (the gate trips on a rail caption too)", async () => {
+    mockJobInsert({ data: { id: "job-cap" }, error: null })
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-video",
+      payload: {
+        prompt: "A cut between two shots.",
+        userId: USER,
+        provider: "seedance-2",
+        imageUrl: "https://cdn.example/frame.png",
+        referenceVideoUrls: ["https://cdn.example/clip.mp4"],
+        referenceVideoCaptions: ["the establishing drone shot"],
+      },
+    })
+    expect(res.statusCode).toBe(200)
+    const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)![1] as Record<string, unknown>
+    expect(queued.prompt).toContain("- @video_1: the establishing drone shot.")
+  })
+
+  it("rejects an over-long described reference and a list over the cap", async () => {
+    for (const describedReferences of [
+      [{ name: "x".repeat(81), description: "ok" }],
+      [{ name: "ok", description: "x".repeat(2001) }],
+      Array.from({ length: 11 }, (_, i) => ({ name: `n${i}`, description: "d" })),
+    ]) {
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-video",
+        payload: { prompt: "x", userId: USER, provider: "seedance-2", imageUrl: "https://cdn.example/f.png", describedReferences },
+      })
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("validation_error")
+    }
+  })
+
+  it("rejects an over-long rail caption", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-video",
+      payload: {
+        prompt: "x",
+        userId: USER,
+        provider: "seedance-2",
+        imageUrl: "https://cdn.example/f.png",
+        referenceVideoCaptions: ["x".repeat(501)],
+      },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
   })
 
   it("rejects a connectedReference with an invalid url (SSRF/Zod gate parity with flat refs)", async () => {

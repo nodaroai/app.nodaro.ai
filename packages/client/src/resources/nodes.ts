@@ -1,7 +1,7 @@
 import type { NodaroClient } from "../client.js"
 import type { JobStatusResult } from "./jobs.js"
 import { JobAbortedError, JobFailedError, JobHeldError, JobTimeoutError } from "../errors.js"
-import type { ConnectedReference, ModelInputAdjustment } from "@nodaro/shared"
+import type { ConnectedReference, DescribedReference, ModelInputAdjustment } from "@nodaro/shared"
 import type { DirectionFields, SubjectFields } from "@nodaro/prompts"
 
 export type NodeCategory =
@@ -107,8 +107,29 @@ export type RunNodeResult =
 export interface StructuredReferenceParams {
   /** Wired references assembled server-side (deduped + capped per provider). */
   connectedReferences?: ConnectedReference[]
+  /**
+   * References you can NAME and DESCRIBE but have no media for — a cast role no
+   * entity is bound to yet, a character that exists only in the script. They
+   * carry no url, so nothing is attached and no `@image_N` seat is used: each
+   * becomes a `<Name> — <description>.` line, and a name left in the prompt
+   * prose reaches the model as a real, described subject. Up to 10.
+   */
+  describedReferences?: DescribedReference[]
   /** Reorder the assembled reference list by stable ref ids; renumbers `@image_N`. */
   referenceOrder?: string[]
+}
+
+/**
+ * Captions for a node's video / audio rail references — INDEX-ALIGNED with
+ * `referenceVideoUrls` / `referenceAudioUrls`, so `referenceVideoCaptions[0]`
+ * describes `referenceVideoUrls[0]`. Each renders as `@video_N: <caption>.` /
+ * `@audio_N: <caption>.` in the assembled prompt and is bounded by the number of
+ * rail references that actually ship, so a caption can never bind a slot the
+ * payload dropped. A blank entry is a hole in the alignment, not a line.
+ */
+export interface ReferenceCaptionParams {
+  referenceVideoCaptions?: string[]
+  referenceAudioCaptions?: string[]
 }
 
 /**
@@ -129,7 +150,7 @@ export interface GenerateImageParams extends StructuredReferenceParams {
  * Typed request body for `nodes.run("generate-video", …)` / `runAndWait`.
  * Common fields are typed; any other route field passes through.
  */
-export interface GenerateVideoParams extends StructuredReferenceParams {
+export interface GenerateVideoParams extends StructuredReferenceParams, ReferenceCaptionParams {
   prompt?: string
   provider?: string
   /** Start-frame image (image-to-video). */
@@ -152,7 +173,7 @@ export interface GenerateVideoParams extends StructuredReferenceParams {
  *
  * Common fields are typed; any other route field passes through.
  */
-export interface TextToVideoParams extends StructuredReferenceParams {
+export interface TextToVideoParams extends StructuredReferenceParams, ReferenceCaptionParams {
   prompt: string
   provider?: string
   duration?: number

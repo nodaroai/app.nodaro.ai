@@ -15,7 +15,7 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { IMAGE_GEN_PROVIDERS, T2I_TO_I2I_VARIANT, FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_ASPECT_RATIO_VALUES, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING, resolveNormalizedImageGen } from "@nodaro/shared"
 import { assembleImageInput, REFERENCE_RULES, REFERENCE_RULES_MULTI_PERSON, type AssembleImageInput, type BuildImagePromptResult } from "@nodaro/prompts"
-import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
+import { connectedReferenceSchema, describedReferenceSchema, DESCRIBED_REFERENCE_LIMIT } from "../lib/connected-reference-schema.js"
 import { directionSchema } from "../lib/direction-schema.js"
 import { subjectSchema } from "../lib/subject-schema.js"
 import { backendHybridRoles } from "../lib/reference-format.js"
@@ -120,6 +120,12 @@ export const generateImageBody = z.object({
   // `assembleImageInput`. When ALL are absent, the route behaves
   // byte-identically to before (the pre-assembled flat-prompt path).
   connectedReferences: z.array(connectedReferenceSchema).max(14).optional(),
+  // References the caller NAMED and DESCRIBED but has no media for — an un-bound
+  // cast role, an analysis slot. They attach no URL and consume no reference-image
+  // budget; the assembler renders them as prose so a name in the prompt reaches
+  // the model as a real, described subject. Structured-mode on their own: the
+  // normal case (a story landing before any entity exists) sends nothing else.
+  describedReferences: z.array(describedReferenceSchema).max(DESCRIBED_REFERENCE_LIMIT).optional(),
   // User-defined reorder of the assembled reference list (stable tile ids),
   // honored by `assembleImageInput`'s reference-order pass — parity with
   // generate-video. No-op without `connectedReferences` (nothing to reorder).
@@ -217,6 +223,7 @@ const IDENTITY_PRESERVE_SUFFIX =
  */
 function isStructuredImageMode(body: {
   connectedReferences?: unknown
+  describedReferences?: unknown
   direction?: unknown
   subject?: unknown
   structured?: unknown
@@ -230,6 +237,9 @@ function isStructuredImageMode(body: {
   if (!body || typeof body !== "object") return false
   return (
     (Array.isArray(body.connectedReferences) && body.connectedReferences.length > 0) ||
+    // Described references have no url, so they never reach the flat path's
+    // reference channel — without this gate they would be silently dropped.
+    (Array.isArray(body.describedReferences) && body.describedReferences.length > 0) ||
     (body.direction != null && typeof body.direction === "object") ||
     (body.subject != null && typeof body.subject === "object") ||
     (body.structured != null && typeof body.structured === "object")
@@ -250,6 +260,7 @@ function buildAssembleInput(
     prompt?: string
     provider?: string
     connectedReferences?: AssembleImageInput["connectedReferences"]
+    describedReferences?: AssembleImageInput["describedReferences"]
     referenceOrder?: AssembleImageInput["referenceOrder"]
     direction?: AssembleImageInput["direction"]
     subject?: AssembleImageInput["subject"]
@@ -273,6 +284,7 @@ function buildAssembleInput(
     // written to mirror this site, so calling it removes a two-site drift.
     ...(backendHybridRoles() ? { referenceFormat: "hybrid" as const } : {}),
     ...(body.connectedReferences !== undefined ? { connectedReferences: body.connectedReferences } : {}),
+    ...(body.describedReferences !== undefined ? { describedReferences: body.describedReferences } : {}),
     ...(body.referenceOrder !== undefined ? { referenceOrder: body.referenceOrder } : {}),
     ...(body.direction !== undefined ? { direction: body.direction } : {}),
     // Carried by the SHARED builder, not by the handler alone: the pricing
@@ -312,6 +324,7 @@ function assembledRefCountForPricing(body: {
   prompt?: string
   provider?: string
   connectedReferences?: AssembleImageInput["connectedReferences"]
+  describedReferences?: AssembleImageInput["describedReferences"]
   direction?: AssembleImageInput["direction"]
   subject?: AssembleImageInput["subject"]
   structured?: AssembleImageInput["structured"]
@@ -373,6 +386,7 @@ export function resolveImageCreditIdentifier(req: FastifyRequest): string {
   // 402 / false pass.)
   const structured = isStructuredImageMode(body as {
     connectedReferences?: unknown
+    describedReferences?: unknown
     direction?: unknown
     subject?: unknown
     structured?: unknown

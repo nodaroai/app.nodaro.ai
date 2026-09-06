@@ -92,3 +92,27 @@ describe("MCP structured references (connected_references + reference_order)", (
     expect(received.body?.referenceOrder).toEqual(["r1"])
   })
 })
+
+// A reference the caller can name and describe but has no image for.
+const DESCRIBED = [{ name: "Natalie", description: "a tall woman in a red coat" }]
+
+describe("MCP described references (described_references)", () => {
+  it.each([
+    ["animate_image", "/v1/generate-video", { image_url: "https://cdn.nodaro.ai/uploads/x.jpg", model: "seedance-2" }],
+    ["generate_video", "/v1/text-to-video", { model: "seedance-2" }],
+    ["generate_image", "/v1/generate-image", {}],
+  ] as const)("%s forwards described_references to %s", async (verb, route, extra) => {
+    const { fastify, received } = stubRoute("POST", route, { jobId: "j-desc" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, verb, {
+      prompt: "Natalie walks down the pier.",
+      ...extra,
+      described_references: DESCRIBED,
+    })
+
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.describedReferences).toEqual(DESCRIBED)
+  })
+})
