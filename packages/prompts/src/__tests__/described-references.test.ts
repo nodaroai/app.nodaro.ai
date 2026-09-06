@@ -454,4 +454,120 @@ describe("descriptionOverride — hybrid", () => {
     expect(prompt).toBe("A still life.\na cracked terracotta urn (reference image A).")
     expect(prompt).not.toContain("blue vase")
   })
+
+  // References the hybrid format renders NO role phrase for: a `{image:N:label}`
+  // token expands the ref inline (and suppresses both canonical renders), and an
+  // unmentioned `wired-image` / `manual` ref has no canonical render at all. The
+  // per-use override still has to reach the model — same one-line grammar, bound
+  // to the seat the reference actually ships in.
+  const boat: ConnectedReference = {
+    id: "i1",
+    defaultName: "Boat",
+    source: "wired-image",
+    url: "https://r2/boat.png",
+    descriptionOverride: "a wrecked boat at dawn",
+  }
+  const vase: ConnectedReference = {
+    id: "o1",
+    defaultName: "Vase",
+    source: "wired-object",
+    url: "https://r2/vase.png",
+    descriptionOverride: "a cracked urn",
+  }
+
+  it("adds one binding-subject line for an object a {image:N} token expanded", () => {
+    const { prompt } = buildImagePrompt({
+      provider: PROVIDER,
+      prompt: "A still life with {image:1:vase}.",
+      connectedReferences: [vase],
+      referenceFormat: "hybrid",
+    })
+    expect(prompt).toBe(
+      "A still life with the vase from reference image A.\n"
+        + "reference image A — a cracked urn.",
+    )
+  })
+
+  it("adds one binding-subject line for a wired image a {image:N} token expanded", () => {
+    const { prompt } = buildImagePrompt({
+      provider: PROVIDER,
+      prompt: "{image:1:boat} drifts.",
+      connectedReferences: [boat],
+      referenceFormat: "hybrid",
+    })
+    expect(prompt).toBe(
+      "The boat from reference image A drifts.\n"
+        + "reference image A — a wrecked boat at dawn.",
+    )
+  })
+
+  it("adds one binding-subject line for an unmentioned wired image", () => {
+    const { prompt } = buildImagePrompt({
+      provider: PROVIDER,
+      prompt: "A boat drifts.",
+      connectedReferences: [boat],
+      referenceFormat: "hybrid",
+    })
+    expect(prompt).toBe(
+      "A boat drifts.\nreference image A — a wrecked boat at dawn.",
+    )
+  })
+
+  it("adds one binding-subject line for a manual reference that is not an extra", () => {
+    const { prompt } = buildImagePrompt({
+      provider: PROVIDER,
+      prompt: "A still life.",
+      connectedReferences: [
+        {
+          id: "m1",
+          defaultName: "Vase",
+          source: "manual",
+          url: "https://r2/vase.png",
+          description: "a blue vase",
+          descriptionOverride: "a cracked urn",
+        },
+      ],
+      referenceFormat: "hybrid",
+    })
+    expect(prompt).toBe("A still life.\nreference image A — a cracked urn.")
+  })
+
+  it("leaves those same requests byte-identical without an override", () => {
+    const withoutOverride = (ref: ConnectedReference, text: string) =>
+      buildImagePrompt({
+        provider: PROVIDER,
+        prompt: text,
+        connectedReferences: [{ ...ref, descriptionOverride: undefined }],
+        referenceFormat: "hybrid",
+      }).prompt
+    expect(withoutOverride(vase, "A still life with {image:1:vase}.")).toBe(
+      "A still life with the vase from reference image A.",
+    )
+    expect(withoutOverride(boat, "{image:1:boat} drifts.")).toBe(
+      "The boat from reference image A drifts.",
+    )
+    expect(withoutOverride(boat, "A boat drifts.")).toBe("A boat drifts.")
+  })
+
+  it("tells a reference that is BOTH @-mentioned and token-covered once", () => {
+    const line = "reference image A — a wrecked boat at dawn."
+    const { prompt } = buildImagePrompt({
+      provider: PROVIDER,
+      prompt: "@boat:1 drifts past {image:1:boat}.",
+      connectedReferences: [boat],
+      referenceFormat: "hybrid",
+    })
+    expect(prompt.split(line)).toHaveLength(2)
+  })
+
+  it("tells a token-covered entity the @-mention already bound once", () => {
+    const line = "reference image A — a cracked urn."
+    const { prompt } = buildImagePrompt({
+      provider: PROVIDER,
+      prompt: "@vase:1 sits beside {image:1:vase}.",
+      connectedReferences: [vase],
+      referenceFormat: "hybrid",
+    })
+    expect(prompt.split(line)).toHaveLength(2)
+  })
 })

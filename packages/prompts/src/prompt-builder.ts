@@ -885,6 +885,14 @@ interface ResolveImageMentionsHybridResult {
    *  mentioned refs out of `connectedReferences`, and this pass deliberately
    *  does no such filtering (see the caller's NOTE). Carrying the set anyway
    *  would advertise a filter that does not exist. */
+  /**
+   * The URLs a mention BOUND (deduped). This pass already surfaced each bound
+   * ref's per-use `descriptionOverride` as its own trailing line, so the
+   * caller's untold-override sweep skips them — the same by-URL suppression
+   * contract `resolveEntityMentionsHybrid` carries, for the same reason: told
+   * once, never twice.
+   */
+  mentionedUrls: Set<string>
   /** Per-reference identity-lock lines (deduped per URL). Caller prepends them
    *  as ONE block, merged with the character/location lock lines. */
   lockLines: string[]
@@ -997,7 +1005,7 @@ function resolveImageMentionsHybrid(
     if (inject) elementDirectives.push(inject)
   }
 
-  return { prompt: resolvedPrompt, additionalUrls, lockLines, elementDirectives }
+  return { prompt: resolvedPrompt, additionalUrls, mentionedUrls: seenUrls, lockLines, elementDirectives }
 }
 
 interface ResolveEntityMentionsHybridResult {
@@ -1574,12 +1582,16 @@ function renderExtraRefsHybrid(
  * the call site). A location that is BOTH unmentioned AND `{image:N}`-token-
  * referenced is rendered ONCE (inline, via the scene); we `continue` here so it
  * is not ALSO emitted as a trailing canonical phrase (the C1 review Minor).
+ *
+ * `renderedUrls` reports the URLs that DID render here — and therefore already
+ * carry their per-use `descriptionOverride` line — so the caller's untold-
+ * override sweep skips them instead of re-deriving this loop's predicate.
  */
 function renderLocationCanonicalHybrid(
   nonCharacterRefs: readonly ConnectedReference[],
   finalIndexByUrl: ReadonlyMap<string, number>,
   coveredUrls: ReadonlySet<string>,
-): { phrases: string[]; lockLines: string[]; elementDirectives: string[] } {
+): { phrases: string[]; lockLines: string[]; elementDirectives: string[]; renderedUrls: Set<string> } {
   const phrases: string[] = []
   const lockLines: string[] = []
   const elementDirectives: string[] = []
@@ -1601,7 +1613,7 @@ function renderLocationCanonicalHybrid(
     const inject = r.elementInjection?.trim()
     if (inject) elementDirectives.push(inject)
   }
-  return { phrases, lockLines, elementDirectives }
+  return { phrases, lockLines, elementDirectives, renderedUrls: seenUrls }
 }
 
 /**
@@ -1628,13 +1640,15 @@ function renderLocationCanonicalHybrid(
  * has to happen HERE, per URL. The mention pass emits the same lock line and
  * `elementInjection` this loop would have, so nothing is lost by skipping it.
  *
- * Deduped per URL (an object wired twice → one phrase).
+ * Deduped per URL (an object wired twice → one phrase). `renderedUrls` reports
+ * the URLs that DID render — already carrying their per-use
+ * `descriptionOverride` line — for the caller's untold-override sweep.
  */
 function renderObjectCreatureCanonicalHybrid(
   nonCharacterRefs: readonly ConnectedReference[],
   finalIndexByUrl: ReadonlyMap<string, number>,
   coveredUrls: ReadonlySet<string>,
-): { phrases: string[]; lockLines: string[]; elementDirectives: string[] } {
+): { phrases: string[]; lockLines: string[]; elementDirectives: string[]; renderedUrls: Set<string> } {
   const phrases: string[] = []
   const lockLines: string[] = []
   const elementDirectives: string[] = []
@@ -1653,7 +1667,45 @@ function renderObjectCreatureCanonicalHybrid(
     const inject = r.elementInjection?.trim()
     if (inject) elementDirectives.push(inject)
   }
-  return { phrases, lockLines, elementDirectives }
+  return { phrases, lockLines, elementDirectives, renderedUrls: seenUrls }
+}
+
+/**
+ * The per-use `descriptionOverride` of every non-character reference the hybrid
+ * format renders NO role phrase for — the last leg of "the override is honoured
+ * wherever the reference ships".
+ *
+ * Three kinds land here: a ref a `{image:N:label}` token expanded INLINE (the
+ * expansion carries no description slot, and the covered set suppresses both
+ * canonical renders), an unmentioned `wired-image` / `manual` / `wired-face` ref
+ * (no canonical render exists for those sources at all), and any other seated
+ * ref the passes above left unspoken. Each gets ONE
+ * `reference image <LETTER> — <override>.` line, from the same helper every
+ * other site uses, numbered against `finalIndexByUrl`.
+ *
+ * `toldUrls` is every URL a pass above ALREADY gave an override line — the two
+ * canonical renders' `renderedUrls` plus the image / entity mention passes'
+ * bound URLs — so a reference that is both @-mentioned and token-covered is told
+ * once, never twice. A URL is marked swept only when it actually emitted a line,
+ * so two refs sharing one URL where only the later carries an override still
+ * speak.
+ */
+function renderUntoldOverridesHybrid(
+  nonCharacterRefs: readonly ConnectedReference[],
+  finalIndexByUrl: ReadonlyMap<string, number>,
+  toldUrls: ReadonlySet<string>,
+): string[] {
+  const lines: string[] = []
+  const sweptUrls = new Set<string>()
+  for (const r of nonCharacterRefs) {
+    if (!r.url || toldUrls.has(r.url) || sweptUrls.has(r.url)) continue
+    const slot = finalIndexByUrl.get(r.url)
+    if (!slot) continue
+    const before = lines.length
+    pushOverrideDirective(lines, r, `reference image ${slotToLetter(slot)}`)
+    if (lines.length > before) sweptUrls.add(r.url)
+  }
+  return lines
 }
 
 /**
@@ -2225,6 +2277,12 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
   // every prompt without an entity mention, which is what keeps those outputs
   // byte-identical.
   const mentionedEntityUrls = new Set<string>()
+  // URLs bound by a Phase-0 named-image (`@<image-name>`) mention. Bridges the
+  // same two blocks for the OTHER suppression the New path owes: that pass
+  // already emitted each bound ref's per-use `descriptionOverride` line, so the
+  // untold-override sweep must not say it a second time. Empty for every prompt
+  // without an image mention.
+  const mentionedImageUrls = new Set<string>()
 
   // Character LoRA inference path: trigger word + LoRA model carry identity,
   // so we strip raw `@slug[:V[:variant]]` tokens from the prompt AND drop the
@@ -2480,6 +2538,10 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
           resolved.additionalUrls = [...resolved.additionalUrls, ...hi.additionalUrls]
           hybridImageLockLines = hi.lockLines
           hybridImageElementDirectives = hi.elementDirectives
+          // The override handoff to the New path: a bound URL was already told
+          // its per-use description here, inline with the mention, so the
+          // untold-override sweep below skips it.
+          for (const u of hi.mentionedUrls) mentionedImageUrls.add(u)
           // Inline role phrases now live in the body → skip line-initial
           // capitalization, which would otherwise corrupt a mid-sentence
           // "the background from reference image C".
@@ -2847,9 +2909,27 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
       const objCanon = renderObjectCreatureCanonicalHybrid(nonCharacterRefs, finalIndexByUrl, objCoveredUrls)
       const canonLockLines = [...locCanon.lockLines, ...objCanon.lockLines]
       const canonLockBlock = canonLockLines.length > 0 ? `${canonLockLines.join("\n")}\n\n` : ""
+      // Per-use descriptions nothing above spoke for: a `{image:N}`-covered ref
+      // (expanded inline, suppressed from both canonical renders) and a seated
+      // `wired-image` / `manual` ref (which has no canonical render at all)
+      // would otherwise drop their `descriptionOverride` silently — the one
+      // place the hybrid format renders neither a description slot nor a role
+      // phrase. Deduped against every URL a pass above already told.
+      const toldOverrideUrls = new Set<string>([
+        ...locCanon.renderedUrls,
+        ...objCanon.renderedUrls,
+        ...mentionedEntityUrls,
+        ...mentionedImageUrls,
+      ])
+      const untoldOverrides = renderUntoldOverridesHybrid(
+        nonCharacterRefs,
+        finalIndexByUrl,
+        toldOverrideUrls,
+      )
       const canonTrailingLines = [
         ...locCanon.phrases, ...objCanon.phrases,
         ...locCanon.elementDirectives, ...objCanon.elementDirectives,
+        ...untoldOverrides,
       ]
       // Role phrases and element injections are scene content → they extend the
       // BODY, ahead of the `[style]` section (which has no terminator, so a flat
