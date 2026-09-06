@@ -10,7 +10,7 @@ import {
   extractComponentInputSchema,
   flatInputsToOverrides,
 } from "../extract-app-inputs.js"
-import { cardResultText, uiMeta } from "./_verb-helpers.js"
+import { cardResultText, uiMeta, clientRequestIdSchema, idempotencyHeaders } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
 
 const readGate: ToolGate = { required: ["workflows:read"] }
@@ -201,6 +201,7 @@ export function registerComponents({
             .string()
             .min(1)
             .describe("Component slug (matches the published_apps.slug)"),
+          client_request_id: clientRequestIdSchema.optional(),
           inputs: z
             .record(z.string(), z.unknown())
             .optional()
@@ -246,6 +247,7 @@ export function registerComponents({
           method: "POST",
           url: "/v1/component/execute",
           payload,
+          headers: idempotencyHeaders(args.client_request_id),
         })
         if (res.statusCode >= 400) {
           return {

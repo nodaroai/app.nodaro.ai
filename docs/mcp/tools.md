@@ -476,6 +476,7 @@ registers an async task for progress tracking.
 | Field | Type | Notes |
 |-------|------|-------|
 | `workflow_id` | UUID string | Must be in the mcp project |
+| `client_request_id` | string | Optional retry token (8–128 chars of letters, digits, `_ - . :`). Reuse the same value when retrying after a timeout or dropped connection so the run is not started or charged twice; use a fresh value for a new run |
 | `inputs` | object | Optional; per-node input overrides keyed by node id |
 
 **Response:** `{ executionId: "...", name: "..." }` — use `executionId` with
@@ -1266,7 +1267,7 @@ input keys (from `get_app_inputs`). Returns an `execution_id`.
 `inputOverrides` (advanced) sets raw node fields such as `promptPrefix` /
 `promptSuffix` per run.
 
-**Input:** `slug`, `inputs?`, `inputOverrides?`
+**Input:** `slug`, `inputs?`, `inputOverrides?`, `client_request_id?` (retry token — reuse it when retrying after a timeout so the run is not started or charged twice)
 
 ---
 
@@ -1312,7 +1313,7 @@ Returns the typed input schema for a saved component. Use before
 Execute a saved component by id. `inputs` is a FLAT object keyed by the
 component's input schema keys. Returns an `execution_id`.
 
-**Input:** `component_id`, `inputs?`
+**Input:** `component_id`, `inputs?`, `client_request_id?` (retry token — reuse it when retrying after a timeout so the run is not started or charged twice)
 
 ---
 
