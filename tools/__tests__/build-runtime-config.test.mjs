@@ -14,6 +14,22 @@ test("carries the A3 trio + locale, omitting absent keys", () => {
   assert.ok(!("supabaseUrl" in cfg))
 })
 
+// "/" is the same-origin SENTINEL start.sh emits for
+// PUBLIC_URL_SAME_ORIGIN=true. It must survive `pick` verbatim: it is a real
+// value, not a blank, and the frontend reads exactly "/" as "same origin"
+// (runtime-config.ts) while an EMPTY apiUrl means "no override" and would fall
+// back to the baked VITE_API_URL — the one value a multi-hostname studio must
+// not use.
+test('the same-origin sentinel "/" passes through as apiUrl', () => {
+  const cfg = buildRuntimeConfig({ RUNTIME_API_URL: "/" })
+  assert.equal(cfg.apiUrl, "/")
+})
+
+test("a blank RUNTIME_API_URL is still no override at all", () => {
+  assert.ok(!("apiUrl" in buildRuntimeConfig({ RUNTIME_API_URL: "  " })))
+  assert.ok(!("apiUrl" in buildRuntimeConfig({})))
+})
+
 test("carries the editor URLs (freecut + audiomass), omitting absent ones", () => {
   const cfg = buildRuntimeConfig({ RUNTIME_FREECUT_URL: "https://fc.test", RUNTIME_AUDIOMASS_URL: "https://am.test" })
   assert.equal(cfg.freecutUrl, "https://fc.test")
