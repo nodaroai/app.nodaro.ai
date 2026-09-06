@@ -319,10 +319,21 @@ function refuseWithoutPayerSession(req: FastifyRequest, reply: { status: (n: num
 // `app_metadata` copy of the subject), and the answer echoes all three so the
 // caller can store the uuid after the first call and stop looking it up.
 
-/** Canonical uuid. Deliberately strict: a near-miss must be
- *  `invalid_user_ref`, not a lookup that finds nobody and is then
- *  indistinguishable from a person who has simply not signed in yet — which
- *  would silently be stored as a pending quota for an identity nobody holds. */
+/**
+ * Canonical uuid, checked BEFORE the reference is handed to the resolver.
+ *
+ * Two reasons, and both are refusals that would otherwise come out wrong:
+ *
+ *  - A near-miss must answer `invalid_user_ref`, not a lookup that finds
+ *    nobody — which is indistinguishable from a person who has simply not
+ *    signed in yet, and would silently be stored as a pending quota for an
+ *    identity nobody holds.
+ *  - A MALFORMED uuid reaching `resolveUserRef` makes Postgres refuse the
+ *    predicate outright (22P02), and the service maps any failed lookup to
+ *    `ambiguous` — so a typo would answer `409 user_ambiguous`, a refusal that
+ *    reads as "two people share this identity" and tells the caller to fix
+ *    something that is not wrong. The shape check here is what keeps it a 400.
+ */
 const USER_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /** The narrowest thing that can be called an address. `profiles.email` is the

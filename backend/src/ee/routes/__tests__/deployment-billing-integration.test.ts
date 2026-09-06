@@ -346,7 +346,12 @@ describe("PUT /users/:ref/allowance — naming the user", () => {
 
   it("refuses a reference that is none of the three forms with 400 invalid_user_ref", async () => {
     userExists(U1)
-    for (const ref of ["not-a-uuid", "sso:", "email:", "email:nope", "%20"]) {
+    // The fourth entry is uuid-SHAPED but malformed: without the shape check
+    // in the route it reaches Postgres, the predicate is refused (22P02), the
+    // service maps any failed lookup to `ambiguous`, and a typo comes back as
+    // `409 user_ambiguous` — telling the caller to fix a duplicate that does
+    // not exist.
+    for (const ref of ["not-a-uuid", "00000000-0000-4000-8000-00000000zzzz", "sso:", "email:", "email:nope", "%20"]) {
       const res = await app.inject({
         method: "PUT",
         url: ALLOWANCE(ref),
