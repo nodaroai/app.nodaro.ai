@@ -2370,6 +2370,7 @@ export const en = {
   "cfgext.scene3dEditInstruction": "Edit instruction",
   "cfgext.scene3dPhEdit": "Move the camera lower and push the back wall two metres further away",
   "cfgext.scene3dReferences": "References",
+  "cfgext.scene3dVideoAnalysisCost": "Video references add a separate video-analysis charge to the scene generation cost.",
   "cfgext.scene3dConnectScene": "Connect a 3D scene to the Scene input, then run this node.",
   "cfgext.scene3dLockedCount": "{count} locked objects must come back unchanged — enforced after the model answers.",
   "cfgext.scene3dLockHint": "Lock an object below to require the model to return it unchanged.",

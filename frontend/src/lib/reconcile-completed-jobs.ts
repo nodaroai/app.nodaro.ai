@@ -135,6 +135,7 @@ function nodeHasResult(data: Record<string, unknown>): boolean {
 export function buildScene3DRecoveryPatch(
   data: Record<string, unknown>,
   output: Record<string, unknown> | null | undefined,
+  source: "generate" | "edit" = "generate",
 ): Record<string, unknown> | null {
   const incoming = output?.scenePlan as Record<string, unknown> | undefined
   if (!incoming) return null
@@ -151,7 +152,7 @@ export function buildScene3DRecoveryPatch(
     incoming,
     changeSummary: typeof output?.changeSummary === "string" ? output.changeSummary : undefined,
     history,
-    source: "generate",
+    source,
   })
   return { ...result.patch }
 }
@@ -170,7 +171,7 @@ export function buildCompletedResultPatch(
   // here so every recovery caller inherits the revision guard. `nodeData` is
   // what that guard reads — a caller that cannot supply it gets the
   // fresh-node answer (adopt), which is the right default for an empty node.
-  if (isScene3DNodeType(nodeType)) return buildScene3DRecoveryPatch(nodeData, output)
+  if (isScene3DNodeType(nodeType)) return buildScene3DRecoveryPatch(nodeData, output, nodeType === "edit-3d-scene" ? "edit" : "generate")
   // The analysis emitters are the nodes whose result is a JSON payload
   // (`output_data.json` → `data.generatedJson`), not a media URL — without this
   // branch a completed analysis fell through every recovery layer and the node

@@ -51,6 +51,17 @@ describe("Scene3D workflow authoring through its HTTP route", () => {
     expect(result.output.plan).toEqual(plan)
     expect(result.creditsUsed).toBe(34)
   })
+  it.each([
+    ["generate-3d-scene", null, 40, 12, 52],
+    ["edit-3d-scene", null, 40, 0, 40],
+    ["generate-3d-scene", 0, 40, 12, 12],
+    ["edit-3d-scene", 25, 40, 0, 25],
+  ])("reports %s parent and analysis charges when actual is %s", async (type, actual, credits, analysisCredits, expected) => {
+    mocks.row = { status: "completed", credits_actual: actual, credits, output_data: { scenePlan: plan, analysisCredits } }
+    const node: SimpleNode = { id: "scene-node", type, data: { scenePrompt: "Match", editPrompt: "Move", scenePlan: plan } }
+    const result = await executeNode(node, {}, [], [node], {}, context())
+    expect(result.creditsUsed).toBe(expected)
+  })
   it("resolves the fresh upstream scene into the edit route body", () => {
     const source: SimpleNode = { id: "source", type: "generate-3d-scene", data: {} }
     const edit: SimpleNode = { id: "edit", type: "edit-3d-scene", data: { editPrompt: "Move the box", references: [video] } }

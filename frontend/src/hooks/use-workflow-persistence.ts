@@ -4,7 +4,7 @@ import { useWorkflowStore, type PresentationSettings } from "@/hooks/use-workflo
 import { getBatchJobStatus, listWorkflowExecutions, type BatchJobStatus } from "@/lib/api"
 import { applyWorkflowAccess } from "@/hooks/workflow-access-mode"
 import { reconcileWorkflowNodeResults } from "@/lib/reconcile-node-results"
-import { reconcileCompletedSingleNodeJobs } from "@/lib/reconcile-completed-jobs"
+import { reconcileCompletedSingleNodeJobs, buildScene3DRecoveryPatch, isScene3DNodeType } from "@/lib/reconcile-completed-jobs"
 import { prefetchModelCredits } from "@/ee/hooks/queries/use-credits-queries"
 import { toast } from "sonner"
 import type { WorkflowNode, WorkflowEdge, CharacterDefinition, GeneratedResult, SceneNodeData, JobErrorHint } from "@/types/nodes"
@@ -63,6 +63,8 @@ interface NodeExecutionState {
     splitResults?: string[]
     combinedText?: string
     listResults?: string[]
+    plan?: Record<string, unknown>
+    changeSummary?: string
     /** Fan-in (reduce / Choose Best) aggregated value + strategy meta. */
     result?: string
     reduceMeta?: Record<string, unknown>
@@ -363,6 +365,11 @@ function applyBackendExecutionState(
       data.executionStatus = "completed"
       if (state.output) {
         const nodeType = node.type ?? ""
+        if (isScene3DNodeType(nodeType) && state.output.plan) {
+          Object.assign(data, buildScene3DRecoveryPatch(data, {
+            scenePlan: state.output.plan, changeSummary: state.output.changeSummary,
+          }, nodeType === "edit-3d-scene" ? "edit" : "generate"))
+        }
         if (state.output.imageUrl) {
           if (["character", "face", "object", "location"].includes(nodeType)) {
             data.sourceImageUrl = state.output.imageUrl
@@ -448,6 +455,16 @@ function applyCompletedExecutionResults(
     if (!state || state.status !== "completed" || !state.output) return node
 
     const data = node.data as Record<string, unknown>
+
+    // Scene results are revisions, not URLs. Recover even if an older load
+    // marked the node complete without restoring its plan; the shared guard
+    // preserves newer manual edits and makes repeated loads idempotent.
+    if (isScene3DNodeType(node.type) && state.output.plan) {
+      const patch = buildScene3DRecoveryPatch(data, {
+        scenePlan: state.output.plan, changeSummary: state.output.changeSummary,
+      }, node.type === "edit-3d-scene" ? "edit" : "generate")
+      return patch ? { ...node, data: { ...data, ...patch } as SceneNodeData } : node
+    }
 
     // Skip nodes that were already marked completed in the saved workflow.
     // Their results were already synced (via SSE or a previous load).

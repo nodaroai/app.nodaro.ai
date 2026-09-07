@@ -1577,7 +1577,7 @@ const CANCEL_CHECK_INTERVAL = 5
  *  success path and the cancel-race adoption path so both extract output and
  *  credits identically. Throws if the job completed with no usable output. */
 function completedJobResult(
-  jobRecord: { output_data?: unknown; credits_actual?: unknown },
+  jobRecord: { output_data?: unknown; credits_actual?: unknown; credits?: unknown },
   nodeType: string,
   jobId: string,
   usageLogId: string | undefined,
@@ -1589,9 +1589,13 @@ function completedJobResult(
   if (!hasOutput) {
     throw new Error(`Job ${jobId} completed but produced no output — provider may have returned an empty result`)
   }
+  const isScene3D = nodeType === "generate-3d-scene" || nodeType === "edit-3d-scene"
+  // Scene authoring commits the reserved fixed-tier charge without mirroring
+  // credits_actual. Keep the parent charge alongside its analysis child.
   const effectiveCreditsUsed = creditsUsed
     ?? (typeof jobRecord.credits_actual === "number" ? jobRecord.credits_actual : undefined)
-  const analysisCredits = (nodeType === "generate-3d-scene" || nodeType === "edit-3d-scene")
+    ?? (isScene3D && typeof jobRecord.credits === "number" ? jobRecord.credits : undefined)
+  const analysisCredits = isScene3D
     && typeof outputData.analysisCredits === "number" ? outputData.analysisCredits : 0
   return { output, jobId, usageLogId,
     creditsUsed: analysisCredits > 0 ? (effectiveCreditsUsed ?? 0) + analysisCredits : effectiveCreditsUsed }
@@ -1624,7 +1628,7 @@ export async function loadCompletedFanOutIterations(
   const byIndex = new Map<number, ExecuteNodeResult>()
   const { data: jobs, error } = await supabase
     .from("jobs")
-    .select("id, output_data, credits_actual, input_data")
+    .select("id, output_data, credits_actual, credits, input_data")
     .eq("workflow_execution_id", executionId)
     .eq("status", "completed")
   if (error || !jobs) return byIndex
@@ -1637,7 +1641,7 @@ export async function loadCompletedFanOutIterations(
       byIndex.set(
         idx,
         completedJobResult(
-          { output_data: j.output_data, credits_actual: j.credits_actual },
+          { output_data: j.output_data, credits_actual: j.credits_actual, credits: j.credits },
           nodeType,
           j.id as string,
           undefined, // usageLogId — already committed on the prior attempt; not needed for reuse
@@ -1720,7 +1724,7 @@ async function cancelJobAndThrow(
   // 0 rows flipped → the job reached a terminal state in the poll gap.
   const { data: jobRecord } = await supabase
     .from("jobs")
-    .select("status, output_data, error_message, credits_actual")
+    .select("status, output_data, error_message, credits_actual, credits")
     .eq("id", jobId)
     .single()
   if (jobRecord?.status === "completed") {
@@ -1800,7 +1804,7 @@ async function pollJobToCompletion(
     // way a mapped billing refusal's errorCode already does.
     const { data: jobRecord } = await supabase
       .from("jobs")
-      .select("status, output_data, error_message, progress, credits_actual, error_hint")
+      .select("status, output_data, error_message, progress, credits_actual, credits, error_hint")
       .eq("id", jobId)
       .single()
 

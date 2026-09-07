@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { renderHook, act } from "@testing-library/react"
+import { makePlan, REV_A, REV_B } from "@/lib/scene3d/__tests__/fixture"
 
 // ---------------------------------------------------------------------------
 // Mock variables (hoisted above vi.mock calls)
@@ -1528,5 +1529,44 @@ describe("useWorkflowPersistence — character node re-hydration on load", () =>
     })
 
     expect(mockGetCharacter).not.toHaveBeenCalled()
+  })
+})
+
+
+describe("Scene3D workflow reload", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockGetBatchJobStatus.mockResolvedValue([])
+  })
+
+  it.each(["running", "completed"])("restores scene revisions from a %s DAG without replacing a manual edit", async (status) => {
+    const incoming = makePlan({ revisionId: REV_B })
+    const manual = makePlan()
+    const recorded = [{ revisionId: REV_B, scenePlan: incoming, source: "generate", createdAt: "2026-09-07T00:00:00Z" }]
+    setupSupabaseLoad({ id: "w1", name: "WF", edges: [], nodes: [
+      makeNode({ id: "fresh", type: "generate-3d-scene", data: { label: "Fresh", executionStatus: "completed" } }),
+      makeNode({ id: "manual", type: "edit-3d-scene", data: { label: "Manual", scenePlan: manual } }),
+      makeNode({ id: "recorded", type: "generate-3d-scene", data: { label: "Recorded", scenePlan: manual, sceneHistory: recorded } }),
+    ] })
+    const run = { id: "exec", triggerType: "manual", status, nodeStates: Object.fromEntries(
+      ["fresh", "manual", "recorded"].map(id => [id, { status: "completed", output: { plan: incoming, changeSummary: "Updated scene" } }]),
+    ) }
+    mockListWorkflowExecutions.mockImplementation((_id: string, opts: { status?: string }) => Promise.resolve({
+      data: (opts.status === "pending,running,stopping") === (status === "running") ? [run] : [],
+    }))
+    const { result } = renderHook(() => useWorkflowPersistence("p1"))
+    await act(async () => { await result.current.load("w1") })
+    const byId = Object.fromEntries(getSyncedNodes().map(n => {
+      const node = n as { id: string; data: Record<string, unknown> }; return [node.id, node.data]
+    }))
+    expect(byId.fresh.scenePlan).toEqual(incoming)
+    expect(byId.fresh.sceneHistory).toEqual([expect.objectContaining({ revisionId: REV_B, source: "generate" })])
+    expect(byId.manual.scenePlan).toEqual(manual)
+    expect(byId.manual.scenePendingPlan).toEqual(incoming)
+    expect(byId.manual.sceneHistory).toEqual([expect.objectContaining({ revisionId: REV_B, source: "edit" })])
+    expect(byId.recorded.scenePlan).toEqual(manual)
+    expect(byId.recorded.sceneHistory).toEqual(recorded)
+    expect(byId.recorded.scenePendingPlan).toBeUndefined()
+    expect(manual.revisionId).toBe(REV_A)
   })
 })

@@ -2348,6 +2348,7 @@ export const he: ChromeDict = {
   "cfgext.scene3dEditInstruction": "הוראת עריכה",
   "cfgext.scene3dPhEdit": "הנמיכו את המצלמה והרחיקו את הקיר האחורי בשני מטרים",
   "cfgext.scene3dReferences": "ייחוסים",
+  "cfgext.scene3dVideoAnalysisCost": "ייחוסי וידאו מוסיפים חיוב נפרד על ניתוח הווידאו לעלות יצירת הסצנה.",
   "cfgext.scene3dConnectScene": "חברו סצנת תלת־ממד לקלט הסצנה, ואז הריצו את הרכיב.",
   "cfgext.scene3dLockedCount": "{count} אובייקטים נעולים חייבים לחזור ללא שינוי — נאכף לאחר תשובת המודל.",
   "cfgext.scene3dLockHint": "נעלו אובייקט למטה כדי לחייב את המודל להחזיר אותו ללא שינוי.",

@@ -147,11 +147,14 @@ function ReferenceRoles({
     () => sources.filter((s) => s.targetHandle === "references"),
     [sources],
   )
-  if (wired.length === 0) return null
+  const hasVideo = wired.some((source) => isVideoUrl(source.value))
+    || data.references?.some((reference) => reference.kind === "video")
+  if (wired.length === 0 && !hasVideo) return null
   const roles = data.referenceRoles ?? {}
   return (
     <div className="flex flex-col gap-1.5">
       <Label className="text-xs">{t("cfgext.scene3dReferences")}</Label>
+      {hasVideo && <p className="text-xs text-muted-foreground">{t("cfgext.scene3dVideoAnalysisCost")}</p>}
       {wired.map((source) => (
         <div key={source.id} className="grid grid-cols-[1fr_110px] items-center gap-1.5">
           <span className="text-[11px] truncate text-muted-foreground" title={source.label}>

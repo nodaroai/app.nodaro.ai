@@ -403,32 +403,25 @@ export async function probeVideoSource(srcUrlOrPath: string): Promise<{
     "-protocol_whitelist", "file,http,https,tcp,tls",
     "-select_streams", "v:0",
     "-show_entries", "stream=width,height:format=duration",
-    "-of", "csv=p=0",
+    "-of", "json",
     srcUrlOrPath,
   ])
-  const lines = output.trim().split(/\r?\n/)
-  // ffprobe outputs lines: stream first ("W,H"), format second (duration).
-  // Order can vary by ffprobe version; parse both.
-  let width = 0, height = 0, durationSeconds = 0
-  for (const line of lines) {
-    const parts = line.split(",").map((p) => p.trim())
-    if (parts.length === 2) {
-      // stream line: "W,H"
-      const w = parseInt(parts[0]!, 10)
-      const h = parseInt(parts[1]!, 10)
-      if (!Number.isNaN(w) && !Number.isNaN(h)) {
-        width = w
-        height = h
-      }
-    } else if (parts.length === 1) {
-      // format line: "duration"
-      const d = parseFloat(parts[0]!)
-      if (!Number.isNaN(d) && d > 0) {
-        durationSeconds = d
-      }
-    }
+  // CSV inserts extra fields for stream side data (including an empty field
+  // on Remotion MP4s). Read named fields so metadata cannot shift dimensions.
+  let metadata: {
+    streams?: Array<{ width?: unknown; height?: unknown }>
+    format?: { duration?: unknown }
   }
-  if (width === 0 || height === 0 || durationSeconds === 0) {
+  try {
+    metadata = JSON.parse(output)
+  } catch {
+    throw new Error(`probeVideoSource failed to parse: "${output.trim()}"`)
+  }
+  const width = Number(metadata?.streams?.[0]?.width)
+  const height = Number(metadata?.streams?.[0]?.height)
+  const durationSeconds = Number(metadata?.format?.duration)
+  if (!Number.isInteger(width) || width <= 0 || !Number.isInteger(height) || height <= 0
+    || !Number.isFinite(durationSeconds) || durationSeconds <= 0) {
     throw new Error(`probeVideoSource failed to parse: "${output.trim()}"`)
   }
   return { width, height, durationSeconds }
