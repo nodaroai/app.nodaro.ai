@@ -211,9 +211,12 @@ function PoolBlock({ overview }: { overview: DeploymentBillingOverview }) {
  * a client-side comparison would disagree with the same judgement made for the
  * integration's `GET /balance`, and the two must never differ.
  *
- * A READ THAT FAILED RENDERS NOTHING. An empty field over an unread threshold
- * invites the payer to "save" a clear they never asked for, and a missing
- * warning would read as an all-clear nobody established.
+ * A READ THAT FAILED SAYS SO, and offers the retry every other list on this
+ * page offers. An empty field over an unread threshold invites the payer to
+ * "save" a clear they never asked for, and a missing warning would read as an
+ * all-clear nobody established — but rendering NOTHING at all made a failed
+ * read indistinguishable from a deployment that has no threshold field, with
+ * no way back except reloading the page.
  */
 function ThresholdField() {
   const t = useT()
@@ -223,6 +226,14 @@ function ThresholdField() {
   const [error, setError] = useState<string | null>(null)
 
   const data = balance.data
+  if (balance.isError) {
+    return (
+      <div className="mt-5 border-t border-border/60 pt-4">
+        <ListError retryTestId="threshold-retry" onRetry={() => void balance.refetch()} />
+      </div>
+    )
+  }
+  // Still loading: no field yet, and no sentence claiming anything either.
   if (!data) return null
 
   // The stored figure until the payer types; `null` means "no warning", which
@@ -242,6 +253,7 @@ function ThresholdField() {
     <div className="mt-5 border-t border-border/60 pt-4">
       {data.lowBalance && (
         <p
+          role="status"
           data-testid="low-balance"
           className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300"
         >

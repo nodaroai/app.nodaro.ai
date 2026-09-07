@@ -4827,7 +4827,7 @@ export const en = {
   "billingAdmin.integrationsName": "Name",
   "billingAdmin.integrationsNamePlaceholder": "Where the key will be used",
   "billingAdmin.integrationsExpiry": "Expires (optional)",
-  "billingAdmin.integrationsExpiryHint": "A year is a good default. Leave it empty for a key with no expiry.",
+  "billingAdmin.integrationsExpiryHint": "The key stops working at the end of the day you pick, in your own time zone. A year is a good default. Leave it empty for a key with no expiry.",
   "billingAdmin.integrationsCidrs": "Allowed source addresses (optional)",
   "billingAdmin.integrationsCidrsHint": "One address range per line, in CIDR form, up to {max}. Leave it empty to accept any source.",
   "billingAdmin.integrationsMint": "Create key",
@@ -4856,6 +4856,7 @@ export const en = {
 
   "billingAdmin.errKeyLimitReached": "This deployment already has the most keys it may hold at once. Revoke one before creating another.",
   "billingAdmin.errInvalidName": "Give the key a name, so it can be told apart from the others later.",
+  "billingAdmin.errNameTooLong": "Keep the name to {max} characters or fewer.",
   "billingAdmin.errInvalidExpiry": "The expiry must be a date in the future.",
   "billingAdmin.errInvalidCidr": "One of the source ranges is not a valid CIDR range.",
   "billingAdmin.errTooManyCidrs": "That is more source ranges than a key may carry — keep it to {max}.",

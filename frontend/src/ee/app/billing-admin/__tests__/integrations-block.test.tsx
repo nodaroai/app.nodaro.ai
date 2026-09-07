@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import { toast } from "sonner"
 import { render, screen, fireEvent, act } from "@testing-library/react"
 import { en } from "@/lib/i18n/en"
 import { he } from "@/lib/i18n/he"
@@ -193,7 +194,7 @@ describe("the mint form validates before it spends a round trip", () => {
       target: { value: "  back office  " },
     })
     fireEvent.click(container.querySelector("[data-testid='integration-mint']")!)
-    expect(mintMutate).toHaveBeenCalledWith({ name: "back office" })
+    expect(mintMutate.mock.calls[0][0]).toEqual({ name: "back office" })
   })
 
   it("sends the expiry as an instant and the ranges as a trimmed list", () => {
@@ -221,6 +222,24 @@ describe("the mint form validates before it spends a round trip", () => {
     // half the world on the day it is chosen.
     expect(new Date(call.expiresAt).toISOString()).toBe(call.expiresAt)
     expect(new Date(call.expiresAt).getTime()).toBeGreaterThan(Date.now())
+  })
+
+  it("caps the name at the route's own maximum, so an over-long one never reaches it", () => {
+    // The server answers `invalid_name` for an EMPTY name and for an over-long
+    // one alike, and that code renders as "give the key a name" — which points
+    // a payer who gave it 200 characters at the wrong problem entirely. The
+    // input cannot hold more than the route accepts, and the guard behind it
+    // has its own sentence.
+    const { container } = renderBlock()
+    const name = container.querySelector("[data-testid='integration-name']") as HTMLInputElement
+    expect(name.getAttribute("maxLength")).toBe("80")
+
+    fireEvent.change(name, { target: { value: "x".repeat(81) } })
+    fireEvent.click(container.querySelector("[data-testid='integration-mint']")!)
+    expect(mintMutate).not.toHaveBeenCalled()
+    const shown = container.querySelector("[data-testid='integration-error']")!.textContent
+    expect(shown).toBe((he["billingAdmin.errNameTooLong"] as string).replace("{max}", "80"))
+    expect(shown).not.toBe(he["billingAdmin.errInvalidName"] as string)
   })
 
   it("refuses more source ranges than the route accepts, before sending them", () => {
@@ -301,6 +320,46 @@ describe("the bearer is shown once, and the page says so", () => {
   })
 })
 
+// ── A second mint would discard the first bearer ───────────────────────────
+
+describe("the copy-once panel closes the door behind it", () => {
+  it("disables Create while a bearer is on screen, and re-enables it after dismissal", () => {
+    // `mint.data` IS the only copy of the bearer. A second mint overwrites it
+    // — with the panel still open, showing what looks like the same key — and
+    // the first, uncopied, is then unrecoverable: it can only be revoked and
+    // replaced.
+    state.minted = MINTED
+    const { container, rerender } = renderBlock()
+    const button = () => container.querySelector("[data-testid='integration-mint']") as HTMLButtonElement
+    expect(button().disabled).toBe(true)
+
+    fireEvent.click(container.querySelector("[data-testid='integration-token-done']")!)
+    expect(mintReset).toHaveBeenCalled()
+    // The reset is what empties `mint.data`; the hook is mocked here, so the
+    // state it would have cleared is cleared by hand.
+    state.minted = undefined
+    rerender(<IntegrationsBlock />)
+    expect(button().disabled).toBe(false)
+  })
+
+  it("empties the form on success, so the next key is not a near-duplicate of the last", () => {
+    const { container } = renderBlock()
+    const name = container.querySelector("[data-testid='integration-name']") as HTMLInputElement
+    const expiry = container.querySelector("[data-testid='integration-expiry']") as HTMLInputElement
+    const cidrs = container.querySelector("[data-testid='integration-cidrs']") as HTMLTextAreaElement
+    fireEvent.change(name, { target: { value: "back office" } })
+    fireEvent.change(expiry, { target: { value: "2099-01-31" } })
+    fireEvent.change(cidrs, { target: { value: "10.0.0.0/8" } })
+    fireEvent.click(container.querySelector("[data-testid='integration-mint']")!)
+
+    const options = mintMutate.mock.calls[0][1] as { onSuccess: () => void }
+    act(() => options.onSuccess())
+    expect(name.value).toBe("")
+    expect(expiry.value).toBe("")
+    expect(cidrs.value).toBe("")
+  })
+})
+
 // ── The refusals ───────────────────────────────────────────────────────────
 
 describe("the route's refusals reach the payer as sentences, not as codes", () => {
@@ -328,6 +387,25 @@ describe("the route's refusals reach the payer as sentences, not as codes", () =
     const { container } = renderBlock()
     expect(container.querySelector("[data-testid='integration-error']")!.textContent).toContain(
       he["billingAdmin.errPayerSessionRequired"] as string,
+    )
+  })
+
+  it("refuses WITHOUT a toast — the inline sentence is the whole surface", () => {
+    // The query client's default `mutations.onError` toasts `error.message`,
+    // which is the server's ENGLISH sentence, on a Hebrew-first page and on top
+    // of the localized line below the button. The mint mutation defines its own
+    // handler to suppress it; nothing here may put the raw message on screen.
+    state.mintError = new DeploymentBillingError(409, "key_limit_reached", "too many live keys")
+    const { container } = renderBlock()
+    expect(toast.error).not.toHaveBeenCalled()
+    expect(container.textContent ?? "").not.toContain("too many live keys")
+  })
+
+  it("announces the refusal rather than only painting it", () => {
+    state.mintError = new DeploymentBillingError(400, "invalid_cidr", "bad range")
+    const { container } = renderBlock()
+    expect(container.querySelector("[data-testid='integration-error']")!.getAttribute("role")).toBe(
+      "alert",
     )
   })
 })
@@ -361,6 +439,34 @@ describe("revoking takes two clicks", () => {
   it("offers no revoke on a key that is already revoked", () => {
     const { container } = renderBlock()
     expect(container.querySelector("[data-testid='integration-revoke-k2']")).toBeNull()
+  })
+
+  it("moves focus to the confirm button, which replaced the one that had it", () => {
+    // The Revoke button UNMOUNTS when the question opens. Without this the
+    // focus falls to the document body and a keyboard payer has to walk back
+    // through the whole list to the row they were already on.
+    const { container } = renderBlock()
+    fireEvent.click(container.querySelector("[data-testid='integration-revoke-k1']")!)
+    expect(document.activeElement).toBe(
+      container.querySelector("[data-testid='integration-revoke-confirm-k1']"),
+    )
+  })
+})
+
+describe("what a screen reader is told", () => {
+  it('the copy button\'s "copied" state is inside a polite live region', async () => {
+    // The label changing is the ONLY confirmation that the bearer reached the
+    // clipboard, and a silent change confirms nothing.
+    state.minted = MINTED
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true })
+    const { container } = renderBlock()
+    const live = container.querySelector("[data-testid='integration-copy'] [aria-live='polite']")!
+    expect(live.textContent).toBe(he["billingAdmin.integrationsCopy"] as string)
+    await act(async () => {
+      fireEvent.click(container.querySelector("[data-testid='integration-copy']")!)
+    })
+    expect(live.textContent).toBe(he["billingAdmin.integrationsCopied"] as string)
   })
 })
 

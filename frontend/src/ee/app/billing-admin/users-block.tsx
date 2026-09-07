@@ -80,7 +80,10 @@ export function UsersBlock({ unit }: { unit: DisplayUnit | null }) {
   // carry only one label, and the one that is true of some rows and merely
   // over-specific for the rest is the safer of the two — hence the note below
   // the table, which says exactly that.
-  const periodic = rows.some((r) => r.resetAt != null)
+  // TRUTHY, not `!= null`: the wire carries `resetAt: null` for "never
+  // renewed", but an empty string would pass a null check and flip the whole
+  // column's label on a value that names no instant.
+  const periodic = rows.some((r) => !!r.resetAt)
 
   return (
     <section data-testid="users-block" className="rounded-xl border border-border bg-card p-5">
@@ -139,7 +142,7 @@ export function UsersBlock({ unit }: { unit: DisplayUnit | null }) {
                 </div>
                 {/* Only on a row that HAS one. A user who has never renewed has
                     no period, and a date here would be a fabricated fact. */}
-                {row.resetAt != null && (
+                {!!row.resetAt && (
                   <div
                     data-testid={`user-period-${row.id}`}
                     className="mt-0.5 text-xs text-muted-foreground tabular-nums"
@@ -218,7 +221,7 @@ export function UsersBlock({ unit }: { unit: DisplayUnit | null }) {
                 )}
                 <ul className="mt-2 space-y-1 text-sm">
                   {(grants.data?.grants ?? []).map((g) => {
-                    const via = credentialLabel(t, g, keys.data)
+                    const via = credentialLabel(t, g, keys.data, keys.isLoading)
                     return (
                       <li
                         key={g.id}
@@ -305,15 +308,23 @@ function kindLabel(t: ReturnType<typeof useT>, kind: AllowanceGrantKind): string
  *  - a credential we cannot name ⇒ the generic sentence. Never the raw uuid:
  *    it identifies nothing to the person reading, and never blank, which would
  *    silently attribute an integration's move to this page.
+ *
+ * WHILE THE KEYS LIST IS STILL LOADING there is a fourth case, and it is not
+ * the third one: "we cannot name it" is only true once the list has arrived.
+ * Rendering the generic sentence first and the key's real name a moment later
+ * is a flicker that reads as the history changing its mind about who acted, so
+ * the label waits.
  */
 export function credentialLabel(
   t: ReturnType<typeof useT>,
   g: Pick<AllowanceGrantRow, "credentialId" | "credentialName">,
   keys: readonly { id: string; name: string }[] | undefined,
+  keysLoading = false,
 ): string | null {
   if (!g.credentialId) return null
   const name = g.credentialName ?? keys?.find((k) => k.id === g.credentialId)?.name
-  return name ? t("billingAdmin.viaKey", { name }) : t("billingAdmin.viaUnknownKey")
+  if (name) return t("billingAdmin.viaKey", { name })
+  return keysLoading ? null : t("billingAdmin.viaUnknownKey")
 }
 
 function TopupForm({

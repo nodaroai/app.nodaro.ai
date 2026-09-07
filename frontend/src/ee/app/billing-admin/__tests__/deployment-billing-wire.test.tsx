@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { toast } from "sonner"
 import { renderHook, waitFor } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import type { ReactNode } from "react"
@@ -37,6 +38,12 @@ const surface = { deploymentPayer: true as boolean, isLoading: false }
 vi.mock("@/hooks/use-billing-surface", () => ({
   useBillingSurface: () => ({ surface, isLoading: surface.isLoading }),
 }))
+
+/** THE APP'S OWN CLIENT, not a fresh one: it carries the default
+ *  `mutations.onError` that toasts `error.message`, which is the whole point of
+ *  the refusal test at the bottom of this file. Every other test here builds a
+ *  bare client on purpose. */
+const { queryClient } = await import("@/lib/query-client")
 
 const {
   useDeploymentBillingUsers,
@@ -137,6 +144,11 @@ function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={qc}>{children}</QueryClientProvider>
 }
 
+/** The provider the product actually mounts. */
+function appWrapper({ children }: { children: ReactNode }) {
+  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+}
+
 beforeEach(() => {
   surface.deploymentPayer = true
   surface.isLoading = false
@@ -158,6 +170,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  queryClient.clear()
 })
 
 describe("GET /users — the envelope IS the page", () => {
@@ -369,6 +382,34 @@ describe("the integration keys — the bearer travels once", () => {
     expect(errorMessageKey(new DeploymentBillingError(409, "key_limit_reached", "no"))).toBe(
       "billingAdmin.errKeyLimitReached",
     )
+  })
+
+  it("a refused mint raises NO toast under the app's own query client", async () => {
+    // `lib/query-client.ts` sets a default `mutations.onError` that toasts
+    // `error.message` — the server's ENGLISH sentence. A mutation with no
+    // handler of its own inherits it, which put an untranslated line on a
+    // Hebrew-first page, on top of the localized sentence the block renders
+    // inline. The mint mutation defines an empty handler to suppress exactly
+    // that, and this is the only test that can see it: every other case here
+    // builds its own client, which carries no such default.
+    fetchMock.mockImplementation((_url: string, init?: RequestInit) =>
+      init?.method === "POST"
+        ? Promise.resolve({
+            ok: false,
+            status: 409,
+            json: async () => ({
+              error: { code: "key_limit_reached", message: "This deployment already has 5 live keys." },
+            }),
+          } as Response)
+        : reply(KEYS_BODY),
+    )
+    const { result } = renderHook(() => useMintIntegrationKeyMutation(), { wrapper: appWrapper })
+    result.current.mutate({ name: "one too many" })
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(toast.error).not.toHaveBeenCalled()
+    // The code still reaches the block, which renders it as a localized
+    // sentence beside the button that refused.
+    expect(errorMessageKey(result.current.error)).toBe("billingAdmin.errKeyLimitReached")
   })
 })
 

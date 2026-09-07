@@ -129,6 +129,7 @@ const defaultMutate = vi.fn()
 const checkoutMutate = vi.fn()
 const refresh = vi.fn()
 const thresholdMutate = vi.fn()
+const balanceRefetch = vi.fn()
 const mintMutate = vi.fn()
 const mintReset = vi.fn()
 const revokeMutate = vi.fn()
@@ -158,6 +159,9 @@ const state = {
   balance: balance as DeploymentBalance | undefined,
   balanceFailed: false,
   keys: integrationKeys as IntegrationKey[],
+  /** The keys list in flight — the window in which a history row knows a
+   *  credential id it cannot yet name. */
+  keysLoading: false,
 }
 
 vi.mock("@/ee/hooks/queries/use-deployment-billing", async (importOriginal) => {
@@ -198,8 +202,8 @@ vi.mock("@/ee/hooks/queries/use-deployment-billing", async (importOriginal) => {
       refetch: grantsRefetch,
     }),
     useIntegrationKeys: () => ({
-      data: state.keys,
-      isLoading: false,
+      data: state.keysLoading ? undefined : state.keys,
+      isLoading: state.keysLoading,
       isError: false,
       refetch: vi.fn(),
     }),
@@ -211,7 +215,7 @@ vi.mock("@/ee/hooks/queries/use-deployment-billing", async (importOriginal) => {
       data: state.balanceFailed ? undefined : state.balance,
       isLoading: false,
       isError: state.balanceFailed,
-      refetch: vi.fn(),
+      refetch: balanceRefetch,
     }),
     useSetBalanceThresholdMutation: () => ({ mutate: thresholdMutate, isPending: false }),
     useGrantAllowanceMutation: () => ({ mutate: grantMutate, isPending: false }),
@@ -253,6 +257,7 @@ beforeEach(() => {
   state.balance = balance
   state.balanceFailed = false
   state.keys = integrationKeys
+  state.keysLoading = false
   useLocaleStore.setState({ locale: "he" })
 })
 
@@ -769,6 +774,18 @@ describe("block 4 — the grant history names the credential", () => {
     expect(history.textContent).toContain(he["billingAdmin.viaUnknownKey"] as string)
   })
 
+  it("says nothing while the keys list is still in flight, rather than guessing", () => {
+    // g3 was written through k1, whose NAME is in the list that has not
+    // arrived. "via an integration key" now, replaced by "via back office" a
+    // moment later, reads as the history changing its mind about who acted.
+    state.keysLoading = true
+    const { container } = renderPage()
+    fireEvent.click(container.querySelector("[data-testid='grants-open-u1']")!)
+    const history = container.querySelector("[data-testid='grants-u1']")!
+    expect(history.textContent).not.toContain(he["billingAdmin.viaUnknownKey"] as string)
+    expect(history.textContent ?? "").not.toContain("דרך")
+  })
+
   it("says nothing at all about a row the PAGE wrote", () => {
     // `credential_id IS NULL` means this browser session did it. A "via the
     // page" label would be noise on the common case and, worse, would read as
@@ -777,7 +794,10 @@ describe("block 4 — the grant history names the credential", () => {
     fireEvent.click(container.querySelector("[data-testid='grants-open-u1']")!)
     const row = container.querySelector("[data-testid='grant-row-g1']")!
     expect(row.textContent).not.toContain(he["billingAdmin.viaUnknownKey"] as string)
-    expect(row.textContent ?? "").not.toContain("via")
+    // The page renders in Hebrew here, where the English "via" could never
+    // appear whatever the code did — so the assertion is against the word both
+    // Hebrew labels start with.
+    expect(row.textContent ?? "").not.toContain("דרך")
   })
 
   it("labels a renewal row, which the reconciliation sum includes", () => {
@@ -848,6 +868,18 @@ describe("block 1 — the low-balance threshold", () => {
     const { container } = renderPage()
     expect(container.querySelector("[data-testid='low-balance']")).toBeNull()
     expect(container.querySelector("[data-testid='threshold-input']")).toBeNull()
+  })
+
+  it("a failed read is VISIBLE and retryable, like every other list on the page", () => {
+    // Rendering nothing made a failed read indistinguishable from a build with
+    // no threshold field at all: the payer sees no warning, no field and no
+    // reason, and the only way back is reloading the page.
+    state.balanceFailed = true
+    state.balance = undefined
+    const { container } = renderPage()
+    expect(container.textContent).toContain(he["billingAdmin.listError"] as string)
+    fireEvent.click(container.querySelector("[data-testid='threshold-retry']")!)
+    expect(balanceRefetch).toHaveBeenCalled()
   })
 })
 

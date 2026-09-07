@@ -45,6 +45,13 @@ import { ListError } from "./list-error"
  *  routing table — mirrored here so the payer learns it while typing. */
 const MAX_CIDRS = 20
 
+/** The route's `KEY_NAME_MAX`. Mirrored for the `maxLength` below, which is
+ *  what actually keeps an over-long name off the wire: the server answers
+ *  `invalid_name` for BOTH an empty name and an over-long one, so a 400 from
+ *  here would render "give the key a name" at a payer who gave it far too much
+ *  of one. The guard in `submit` is belt for a form filled programmatically. */
+const MAX_NAME = 80
+
 export function IntegrationsBlock() {
   const t = useT()
   const keys = useIntegrationKeys(true)
@@ -67,6 +74,10 @@ export function IntegrationsBlock() {
     const trimmedName = name.trim()
     if (trimmedName === "") {
       setLocalError(t("billingAdmin.errInvalidName"))
+      return
+    }
+    if (trimmedName.length > MAX_NAME) {
+      setLocalError(t("billingAdmin.errNameTooLong", { max: MAX_NAME }))
       return
     }
 
@@ -98,11 +109,25 @@ export function IntegrationsBlock() {
     // The SHAPE is deliberately sparse: an absent key means "no restriction",
     // and sending `expiresAt: null` / `allowedCidrs: []` would ask the route to
     // decide whether those mean the same thing.
-    mint.mutate({
-      name: trimmedName,
-      ...(expiresAt ? { expiresAt } : {}),
-      ...(ranges.length > 0 ? { allowedCidrs: ranges } : {}),
-    })
+    mint.mutate(
+      {
+        name: trimmedName,
+        ...(expiresAt ? { expiresAt } : {}),
+        ...(ranges.length > 0 ? { allowedCidrs: ranges } : {}),
+      },
+      {
+        // EMPTIED ON SUCCESS, together with the disabled button below. A form
+        // that still holds the values it was minted from is one click away
+        // from minting a near-duplicate — and that click would replace the
+        // bearer the panel is still showing, discarding a key the payer had
+        // not copied yet.
+        onSuccess: () => {
+          setName("")
+          setExpiry("")
+          setCidrs("")
+        },
+      },
+    )
   }
 
   return (
@@ -158,6 +183,7 @@ export function IntegrationsBlock() {
             id="integration-name"
             data-testid="integration-name"
             className="mt-1"
+            maxLength={MAX_NAME}
             value={name}
             placeholder={t("billingAdmin.integrationsNamePlaceholder")}
             onChange={(e) => setName(e.target.value)}
@@ -199,7 +225,17 @@ export function IntegrationsBlock() {
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-3">
-        <Button size="sm" data-testid="integration-mint" disabled={mint.isPending} onClick={submit}>
+        {/* DISABLED WHILE THE PANEL IS UP. The bearer exists in exactly one
+            response body and lives only in `mint.data`; a second mint would
+            overwrite it with a new one and the first — uncopied — would be
+            unrecoverable. Dismissing the panel resets the mutation, which is
+            what re-enables this. */}
+        <Button
+          size="sm"
+          data-testid="integration-mint"
+          disabled={mint.isPending || !!mint.data}
+          onClick={submit}
+        >
           {t("billingAdmin.integrationsMint")}
         </Button>
         {/* One number inside a sentence, never `3 / 5`: a bare pair inverts
@@ -213,7 +249,7 @@ export function IntegrationsBlock() {
           at the list they have to revoke from, and the answer belongs beside
           the button that refused. */}
       {error && (
-        <p data-testid="integration-error" className="mt-2 text-xs text-destructive">
+        <p role="alert" data-testid="integration-error" className="mt-2 text-xs text-destructive">
           {error}
         </p>
       )}
@@ -250,7 +286,11 @@ function KeyRow({
 }) {
   const t = useT()
   const [confirming, setConfirming] = useState(false)
-  const expired = !k.revokedAt && !!k.expiresAt && new Date(k.expiresAt).getTime() <= Date.now()
+  // The list's own predicate, never a second copy of it: `isIntegrationKeyLive`
+  // is what counts the keys against the cap a few lines up, and a row that
+  // disagreed with the counter about which keys are dead would be the harder
+  // bug to see.
+  const expired = !k.revokedAt && !isIntegrationKeyLive(k)
 
   return (
     <div
@@ -339,6 +379,12 @@ function KeyRow({
               size="sm"
               variant="destructive"
               data-testid={`integration-revoke-confirm-${k.id}`}
+              // The Revoke button UNMOUNTS when this panel opens, so focus
+              // would fall back to the document body and a keyboard payer
+              // would have to find their way back to the row they were on.
+              // It moves to the destructive action, which is also what a
+              // screen reader then announces.
+              autoFocus
               disabled={pending}
               onClick={() => {
                 setConfirming(false)
@@ -387,7 +433,13 @@ function CopyButton({ value }: { value: string }) {
   return (
     <Button size="sm" variant="outline" data-testid="integration-copy" onClick={() => void copy()}>
       {copied ? <Check className="me-1.5 h-3.5 w-3.5" /> : <Copy className="me-1.5 h-3.5 w-3.5" />}
-      {copied ? t("billingAdmin.integrationsCopied") : t("billingAdmin.integrationsCopy")}
+      {/* The label is the ONLY confirmation that the bearer reached the
+          clipboard, and a label that changes silently confirms nothing to a
+          screen reader. Polite, not assertive: it must not interrupt the
+          sentence saying the key is shown once. */}
+      <span aria-live="polite">
+        {copied ? t("billingAdmin.integrationsCopied") : t("billingAdmin.integrationsCopy")}
+      </span>
     </Button>
   )
 }

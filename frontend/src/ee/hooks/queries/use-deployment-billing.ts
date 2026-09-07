@@ -636,8 +636,18 @@ export function useMintIntegrationKeyMutation() {
       // thing worth saying about this one.
       void qc.invalidateQueries({ queryKey: deploymentBillingKeys.integrationKeys })
     },
-    // Deliberately no `onError` toast either — the block renders the refusal
-    // inline, beside the button that refused, where the payer can act on it.
+    // EXPLICIT, and it does nothing ON PURPOSE. `lib/query-client.ts` sets a
+    // default `mutations.onError` that toasts `error.message` — the SERVER's
+    // English sentence — and a mutation without its own handler inherits it.
+    // On this Hebrew-first page that put an untranslated `key_limit_reached`
+    // sentence on screen beside the localized inline one. Defining the handler
+    // suppresses the default; the block renders the refusal inline, beside the
+    // button that refused, where the payer can act on it.
+    onError: () => {},
+    // The bearer lives in this mutation's `data` and nowhere else, so the
+    // MutationCache must not keep it after `reset()` or after the block
+    // unmounts. Zero means the entry is dropped the moment nothing observes it.
+    gcTime: 0,
   })
 }
 
