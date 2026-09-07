@@ -1542,6 +1542,7 @@ export interface PluginToolkit {
   /** Optional durable, fenced stage journal. Absent on older hosts. */
   stages?: PluginStageToolkit
   sceneArtifacts?: PluginSceneArtifactToolkit
+  scenePlayback?: import("./scene3d-playback-contract.js").PluginScenePlaybackToolkit
   providers: PluginProvidersToolkit
   ffmpeg: PluginFfmpegToolkit
   media: PluginMediaToolkit

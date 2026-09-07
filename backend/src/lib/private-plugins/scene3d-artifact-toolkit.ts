@@ -8,6 +8,7 @@ import { publishScene3DRevision } from "../../services/scene3d-artifacts/publish
 import { Scene3DArtifactError, type Scene3DUploadIntent } from "../../services/scene3d-artifacts/types.js"
 import { scene3DPrivateStore } from "./scene3d-storage.js"
 import { createScene3DUploadGranter } from "./scene3d-upload-grants.js"
+import { writeScene3DJson } from "./scene3d-write-json.js"
 import type { PluginSceneArtifactScope, PluginSceneArtifactToolkit } from "./scene3d-artifact-contract.js"
 
 export async function authorizeScene3DJob(scope: { jobId: string; userId: string }): Promise<{ workflowId: string | null }> {
@@ -42,7 +43,8 @@ export function createScene3DArtifactToolkit(): PluginSceneArtifactToolkit | und
   const grant = createScene3DUploadGranter(cfg, config.R2_BUCKET_NAME,
     async (scope) => { await authorizeScene3DJob(scope) },
     async (input) => { await reserveScene3DUploadIntent(store, { ...input, ttlSeconds: input.ttlSeconds }) })
-  return {
+  const toolkit: PluginSceneArtifactToolkit = {
+    writeJson: (input, options) => writeScene3DJson(toolkit, input, options),
     async grant(input) {
       const result = await grant(input)
       return { ...result.upload, key: result.key, verifyUrl: result.verifyUrl,
@@ -101,4 +103,5 @@ export function createScene3DArtifactToolkit(): PluginSceneArtifactToolkit | und
         requireIntents: true }, { store })
     },
   }
+  return toolkit
 }

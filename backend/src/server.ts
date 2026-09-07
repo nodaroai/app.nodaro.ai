@@ -38,6 +38,8 @@ process.on("uncaughtException", (err) => {
 
 async function main() {
   const app = await buildApp()
+  let stopScene3DArtifactCleanup: (() => Promise<void>) | undefined
+  app.addHook("onClose", async () => { await stopScene3DArtifactCleanup?.() })
 
   // Load Telegram routing table before accepting traffic
   try {
@@ -72,8 +74,7 @@ async function main() {
   // Classify recent failed jobs into app_reports (model rejections) — a
   // sweep, because job failure has no single write choke point.
   startAppReportSweepCron()
-  const stopScene3DArtifactCleanup = startScene3DArtifactCleanup((message) => app.log.warn(message))
-  app.addHook("onClose", stopScene3DArtifactCleanup)
+  stopScene3DArtifactCleanup = startScene3DArtifactCleanup((message) => app.log.warn(message))
 
   // Built-in guided tutorials. Self-host only — Cloud already has these rows,
   // and staging/production share one Supabase project, so this must never run

@@ -1,6 +1,7 @@
 import { completeStructuredMetered } from "./llm-metered.js"
 import { directVoiceChanger } from "../../providers/elevenlabs/voice-changer.js"
 import { createScene3DArtifactToolkit } from "./scene3d-artifact-toolkit.js"
+import { createScene3DPlaybackToolkit } from "./scene3d-playback-toolkit.js"
 import { createDurableScene3DStageJournal } from "./scene3d-stage-storage.js"
 import { ReplicateAudioSeparationProvider } from "../../providers/replicate/audio-separation.js"
 import { extractAudio } from "../../providers/video/extract-audio.js"
@@ -1062,8 +1063,10 @@ function internalRequest(app: FastifyInstance, opts: PluginInternalRequestOption
 }
 
 export function buildToolkit(): PluginToolkit {
+  const sceneArtifacts = createScene3DArtifactToolkit()
   return {
-    sceneArtifacts: createScene3DArtifactToolkit(),
+    sceneArtifacts,
+    scenePlayback: sceneArtifacts ? createScene3DPlaybackToolkit(sceneArtifacts) : undefined,
     stages: createDurableScene3DStageJournal(),
     providers: {
       directVoiceChanger,

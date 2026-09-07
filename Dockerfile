@@ -103,6 +103,7 @@ COPY --from=shared-build /app/packages/prompts/package.json ./packages/prompts/p
 
 # Backend source.
 COPY backend/ ./backend/
+COPY packages/remotion/src/scene3d/ ./packages/remotion/src/scene3d/
 
 WORKDIR /app/backend
 # Skip the `prebuild` lifecycle hook (which would re-run tsup against

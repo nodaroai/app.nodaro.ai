@@ -205,8 +205,8 @@ describe("the lane allowlists are total", () => {
       const playback = scene3DIsReadable({ kind, usage }, "playback")
       const source = scene3DIsReadable({ kind, usage }, "source")
       expect(playback && source, `${kind} is on both lanes`).toBe(false)
-      if (kind === "source-json") {
-        expect(playback || source, "the private recipe is user-readable").toBe(false)
+      if (usage === "checkpoint") {
+        expect(playback || source, "a private checkpoint is user-readable").toBe(false)
       }
     }
   })

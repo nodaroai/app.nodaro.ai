@@ -22,6 +22,7 @@ export const SCENE3D_ARTIFACT_KINDS = [
   "validation-report",
   "blend-source",
   "source-json",
+  "build-manifest",
 ] as const
 export type Scene3DArtifactKind = (typeof SCENE3D_ARTIFACT_KINDS)[number]
 
@@ -51,6 +52,7 @@ export const SCENE3D_ARTIFACT_KIND_USAGE: Readonly<Record<Scene3DArtifactKind, S
   "validation-report": "validation",
   "blend-source": "source",
   "source-json": "checkpoint",
+  "build-manifest": "checkpoint",
 }
 
 /**
@@ -91,6 +93,7 @@ export const SCENE3D_ARTIFACT_CONTENT_TYPES: Readonly<Record<Scene3DArtifactKind
   "validation-report": "application/json",
   "blend-source": "application/octet-stream",
   "source-json": "application/json",
+  "build-manifest": "application/json",
 }
 
 /** A stored artifact, as the store hands it around. Never serialized to a

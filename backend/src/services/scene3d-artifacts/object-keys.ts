@@ -24,6 +24,7 @@ const KIND_EXTENSION: Readonly<Record<Scene3DArtifactKind, string>> = {
   "validation-report": "validation.json",
   "blend-source": "blend",
   "source-json": "source.json",
+  "build-manifest": "build.json",
 }
 
 export function isScene3DId(value: unknown): value is string {

@@ -1,5 +1,5 @@
 /** Opaque owned artifacts. No authoring recipe or service protocol crosses this boundary. */
-export type PluginSceneArtifactKind = "glb" | "camera-track-json" | "poster" | "validation-report" | "blend-source" | "source-json"
+export type PluginSceneArtifactKind = "glb" | "camera-track-json" | "poster" | "validation-report" | "blend-source" | "source-json" | "build-manifest"
 export interface PluginSceneArtifactScope { jobId: string; userId: string; revisionId: string }
 export interface PluginSceneArtifactUpload extends PluginSceneArtifactScope {
   artifactId: string
@@ -34,6 +34,8 @@ export interface PluginSceneArtifactPublish extends PluginSceneArtifactScope {
 export interface PluginSceneArtifactToolkit {
   grant(input: PluginSceneArtifactUpload): Promise<PluginSceneArtifactGrant>
   receive(input: PluginSceneArtifactScope & { artifactId: string }): Promise<PluginSceneArtifactReceipt>
+  /** Store bounded JSON at an owned immutable key; repeated identical writes adopt the receipt. */
+  writeJson?(input: PluginSceneArtifactUpload & { bytes: Uint8Array }, options?: { signal?: AbortSignal }): Promise<PluginSceneArtifactReceipt>
   /** Bounded, digest-verified bytes of this active job's reserved artifact. Never a user API. */
   read(input: PluginSceneArtifactScope & { artifactId: string }, options?: { signal?: AbortSignal }): Promise<Uint8Array>
   /** Workflow scope comes from the owned parent job, never from a producer manifest. */
