@@ -49,7 +49,7 @@ vi.mock("@/ee/pipelines/llms/prompt-registry.js", () => ({
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { getPluginServices, loadPrivatePlugins } from "../load.js"
+import { getPluginEngines, getPluginServices, loadPrivatePlugins } from "../load.js"
 import type { NodaroPrivatePlugin, PluginToolkit } from "../types.js"
 
 // ---------------------------------------------------------------------------
@@ -221,6 +221,17 @@ describe("loadPrivatePlugins", () => {
       "shared.key": "from B",
       "b.only": "only B",
     })
+  })
+
+  it("publishes optional scene engines and clears them after a degraded reload", async () => {
+    const scene3d = { capabilities: vi.fn(), generate: vi.fn(), edit: vi.fn() }
+    await loadPrivatePlugins({ toolkit: fakeToolkit, importer: async () => ({
+      contractVersion: 1, plugins: [makePlugin({ engines: () => ({ scene3d }) })],
+    }) })
+    expect(getPluginEngines().scene3d).toBe(scene3d)
+    process.env.PRIVATE_MODULES = "optional"
+    await loadPrivatePlugins({ toolkit: fakeToolkit, importer: async () => { throw new Error("unavailable") } })
+    expect(getPluginEngines().scene3d).toBeUndefined()
   })
 
   it("cloud + valid module + no app passed: does not register routes, still merges handlers (worker-only load)", async () => {

@@ -38,6 +38,8 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import type { ZodError, ZodType } from "zod"
 import type { AudioFxPreset, PresetSettings, SurroundDirection } from "@nodaro/shared"
+import type { PluginScene3DEngine, PluginStageToolkit } from "./scene3d-contract.js"
+export type * from "./scene3d-contract.js"
 
 // ============================================================================
 // Job / handler shapes
@@ -1518,6 +1520,8 @@ export interface PluginPipelinesToolkit {
 // ============================================================================
 
 export interface PluginToolkit {
+  /** Optional durable, fenced stage journal. Absent on older hosts. */
+  stages?: PluginStageToolkit
   providers: PluginProvidersToolkit
   ffmpeg: PluginFfmpegToolkit
   media: PluginMediaToolkit
@@ -1606,6 +1610,8 @@ export interface PluginBillingToolkit {
 /** One member per gated feature. `organizations` = `hasOrganizations()`. */
 export interface PluginFeatures {
   organizations: boolean
+  scene3dAdvanced?: boolean
+  scene3dLocal?: boolean
 }
 
 export interface PluginDeploymentToolkit {
@@ -2154,6 +2160,7 @@ export interface PluginServices {
  * `prompts()`) are separate top-level `NodaroPrivatePlugin` members instead.
  */
 export interface PluginEngines {
+  scene3d?: PluginScene3DEngine
   surround?: PluginSurroundEngine
   smartCut?: PluginSmartCutEngine
 }

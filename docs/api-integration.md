@@ -2703,6 +2703,13 @@ Per-node request fields beyond the flagship pair are documented in the
 
 ## 3D scenes
 
+`GET /v1/3d-scene/capabilities` reports Basic support and an optional `advanced`
+capability. When Advanced is unavailable, `advanced` is `null`. An explicitly
+selected unavailable engine returns `503 SCENE_CAPABILITY_UNAVAILABLE` before
+Basic credit checks; it never silently substitutes Basic authoring. Existing
+requests without an `engine` field, or with `engine: "basic"`, retain Basic
+behavior. Advanced engines own their admission and quote requirements.
+
 Editable clay scenes use `POST /v1/3d-scene/generate` and `POST /v1/3d-scene/edit`, returning job IDs. Render via `POST /v1/render-video/plan` with `planType: "3d-scene"`. See [Generate 3D Scene](nodes/composition/generate-3d-scene.md) and [Edit 3D Scene](nodes/composition/edit-3d-scene.md) for inputs and revision behavior.
 
 The node-slug aliases `POST /v1/generate-3d-scene` and `POST /v1/edit-3d-scene` use the same validation, authorization and credit handling. `POST /v1/render-video` also accepts a `planType` and `plan`, dispatching to the same composition renderer; requests without `planType` retain the template format. These paths support generic SDK node execution.

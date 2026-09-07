@@ -1,4 +1,5 @@
 import { directVoiceChanger } from "../../providers/elevenlabs/voice-changer.js"
+import { createStageJournal } from "./stage-journal.js"
 import { ReplicateAudioSeparationProvider } from "../../providers/replicate/audio-separation.js"
 import { extractAudio } from "../../providers/video/extract-audio.js"
 import {
@@ -1060,6 +1061,14 @@ function internalRequest(app: FastifyInstance, opts: PluginInternalRequestOption
 
 export function buildToolkit(): PluginToolkit {
   return {
+    stages: createStageJournal(redis, async ({ jobId, userId }) => {
+      const { data, error } = await supabase.from("jobs").select("status")
+        .eq("id", jobId).eq("user_id", userId).maybeSingle()
+      if (error) throw new Error("Failed to authorize job stage", { cause: error })
+      if (!data || (data.status !== "pending" && data.status !== "processing")) {
+        throw new Error("Job stage is unavailable")
+      }
+    }),
     providers: {
       directVoiceChanger,
       // Exposed as a plain function per the contract; the real capability is
@@ -1375,7 +1384,11 @@ export function buildToolkit(): PluginToolkit {
       },
       getSnapshot: getPipelineSnapshot,
     },
-    features: { organizations: hasOrganizations() },
+    features: {
+      organizations: hasOrganizations(),
+      scene3dAdvanced: hasCredits() && config.SCENE3D_ADVANCED_ENABLED,
+      scene3dLocal: hasCredits() && config.SCENE3D_ADVANCED_ENABLED && config.SCENE3D_LOCAL_ENABLED,
+    },
     deployment: { publicUrl: appBaseUrl() },
     redis: {
       url: config.REDIS_URL,

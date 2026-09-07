@@ -76,6 +76,7 @@ import { safeUrlSchema } from "../lib/url-validator.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import type { Scene3DJobPayload } from "../workers/handlers/scene3d.js"
+import { dispatchAdvancedScene3D, requestedScene3DEngine, scene3DCapabilities } from "../services/scene3d/scene3d-engine.js"
 
 export const SCENE3D_GENERATE_JOB_TYPE = "generate-3d-scene"
 export const SCENE3D_EDIT_JOB_TYPE = "edit-3d-scene"
@@ -324,7 +325,17 @@ export async function scene3DRoutes(app: FastifyInstance) {
     return undefined
   }
 
-  const generateOptions = { preHandler: creditGuard((req) => resolveLlmCreditId(SCENE3D_LLM_FEATURE, req.body)) }
+  app.get("/v1/3d-scene/capabilities", async (req, reply) => {
+    try { return await scene3DCapabilities() }
+    catch (error) { return sendInternalError(reply, req, error, "Failed to read 3D capabilities") }
+  })
+
+  const basicGenerateGuard = creditGuard((req) => resolveLlmCreditId(SCENE3D_LLM_FEATURE, req.body))
+  const generateOptions = { preHandler: async (req: FastifyRequest, reply: FastifyReply) => {
+    const engine = requestedScene3DEngine(req.body)
+    if (engine !== undefined && engine !== "basic") return dispatchAdvancedScene3D("generate", req, reply)
+    return basicGenerateGuard(req, reply)
+  } }
   const generateHandler = async (req: FastifyRequest, reply: FastifyReply) => {
       const refusal = await refuseKeylessOrProxied()
       if (refusal) return reply.status(refusal.status).send(refusal.body)
@@ -423,7 +434,12 @@ export async function scene3DRoutes(app: FastifyInstance) {
   app.post("/v1/3d-scene/generate", generateOptions, generateHandler)
   app.post("/v1/generate-3d-scene", generateOptions, generateHandler)
 
-  const editOptions = { preHandler: creditGuard((req) => scene3DEditCreditId(req.body)) }
+  const basicEditGuard = creditGuard((req) => scene3DEditCreditId(req.body))
+  const editOptions = { preHandler: async (req: FastifyRequest, reply: FastifyReply) => {
+    const engine = requestedScene3DEngine(req.body)
+    if (engine !== undefined && engine !== "basic") return dispatchAdvancedScene3D("edit", req, reply)
+    return basicEditGuard(req, reply)
+  } }
   const editHandler = async (req: FastifyRequest, reply: FastifyReply) => {
       const parsed = scene3DEditBody.safeParse(req.body)
       if (!parsed.success) {
