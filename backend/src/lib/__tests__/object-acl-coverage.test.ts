@@ -68,7 +68,9 @@ function writeSites(): Site[] {
       if (WRITE_COMMANDS.has(name)) {
         sites.push({
           where: `${rel}:${lineOf(sf, n)} — new ${name}`,
-          wrapped: isWithObjectAcl(arg),
+          wrapped: isWithObjectAcl(arg) || (rel === "lib/private-plugins/scene3d-upload-grants.ts" &&
+            !!arg && ts.isCallExpression(arg) && ts.isIdentifier(arg.expression) &&
+            arg.expression.text === "withPrivateSceneObjectParams"),
         })
       } else if (name === UPLOADER) {
         sites.push({

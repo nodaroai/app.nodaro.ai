@@ -200,6 +200,9 @@ import { textToPickerRoutes } from "./routes/text-to-picker.js"
 import { llmStructuredRoutes } from "./routes/llm-structured.js"
 import { llmStructuredJobsRoutes } from "./routes/llm-structured-jobs.js"
 import { scene3DRoutes } from "./routes/3d-scene.js"
+import { scene3DArtifactRoutes } from "./routes/scene3d-artifacts.js"
+import { scene3DRevisionEditRoutes } from "./routes/scene3d-revision-edits.js"
+import { scene3DPrivateStore } from "./lib/private-plugins/scene3d-storage.js"
 import { shotsRoutes } from "./routes/shots.js"
 import { modelsRoutes } from "./routes/models.js"
 import { voicesRoutes } from "./routes/voices.js"
@@ -634,6 +637,8 @@ export async function buildApp() {
   await app.register(llmStructuredRoutes)
   await app.register(llmStructuredJobsRoutes)
   await app.register(scene3DRoutes)
+  await app.register(scene3DArtifactRoutes, { store: scene3DPrivateStore() })
+  await app.register(scene3DRevisionEditRoutes, { store: scene3DPrivateStore() })
   await app.register(shotsRoutes)
   await app.register(modelsRoutes)
   await app.register(surfaceAvailabilityRoutes)

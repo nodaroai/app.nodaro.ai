@@ -1,3 +1,4 @@
+import { readBinaryResponse } from "./binary-response.js"
 import { throwFromResponse } from "./errors.js"
 import type { Auth } from "./auth.js"
 import { WorkflowsResource } from "./resources/workflows.js"
@@ -297,11 +298,12 @@ export class NodaroClient {
 
     const ac = new AbortController()
     const timeoutId = setTimeout(() => ac.abort(), this.timeoutMs)
-    if (options.signal) {
-      options.signal.addEventListener("abort", () => ac.abort(), { once: true })
-    }
+    const abort = () => ac.abort(options.signal?.reason)
+    options.signal?.addEventListener("abort", abort, { once: true })
+    if (options.signal?.aborted) abort()
 
     try {
+      ac.signal.throwIfAborted()
       const res = await this.fetch(url, {
         method,
         headers,
@@ -327,7 +329,14 @@ export class NodaroClient {
       return await read(res)
     } finally {
       clearTimeout(timeoutId)
+      options.signal?.removeEventListener("abort", abort)
     }
+  }
+
+  /** Authenticated, bounded binary reads through the normal timeout/error transport. */
+  async requestBytes(method: string, path: string, options: RequestOptions & { maxBytes: number }): Promise<ArrayBuffer> {
+    if (!Number.isSafeInteger(options.maxBytes) || options.maxBytes < 1) throw new Error("maxBytes must be a positive integer")
+    return this.send(method, path, options, (response) => readBinaryResponse(response, options.maxBytes))
   }
 
   async request<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {

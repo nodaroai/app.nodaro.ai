@@ -1,3 +1,5 @@
+import type { PluginSceneArtifactToolkit } from "./scene3d-artifact-contract.js"
+export type * from "./scene3d-artifact-contract.js"
 /**
  * Plugin contract v1 — the interface boundary between this app repo's
  * private-plugin loader (`backend/src/lib/private-plugins/`, Stage 1 Tasks
@@ -1539,6 +1541,7 @@ export interface PluginPipelinesToolkit {
 export interface PluginToolkit {
   /** Optional durable, fenced stage journal. Absent on older hosts. */
   stages?: PluginStageToolkit
+  sceneArtifacts?: PluginSceneArtifactToolkit
   providers: PluginProvidersToolkit
   ffmpeg: PluginFfmpegToolkit
   media: PluginMediaToolkit

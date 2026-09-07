@@ -4549,3 +4549,24 @@ const clip = await client.nodes.runAndWait("render-video", {
 Scene authoring uses `/v1/3d-scene/generate` and `/v1/3d-scene/edit`. Typed composition rendering uses `/v1/render-video/plan`; legacy template renders retain `/v1/render-video`. For image/video conditioning, pass `references` with explicit appearance/layout/motion roles. See [Generate 3D Scene](nodes/composition/generate-3d-scene.md).
 
 SDK versions with the generic `nodes.run(type, params)` overload can use the same node names without typed Scene3D overloads. The server accepts their node-slug generate/edit paths and dispatches `render-video` requests carrying `planType` to the composition renderer. For an interactive preview, check the generate node's `scene3d-embed-v1` capability and use the [3D preview embed](scene3d-embed.md); it does not require a copy of the renderer or any authentication tokens in its messages.
+
+### Scene asset reads
+
+`client.scene3d.assetBytes(revisionId, asset, { signal })` fetches a GLB, camera
+track, poster or validation report through the authenticated API. Pass the exact
+asset descriptor from that retained revision; the SDK caps decoded response bytes
+at its declared length. The scene renderer additionally verifies the SHA-256
+digest before parsing.
+
+`client.scene3d.sourceBytes(revisionId, { signal })` uses the separate native
+source authorization endpoint. Both return an `ArrayBuffer`, use fresh credentials,
+respect cancellation, and preserve typed API errors. A native source file is
+available only when it represents that exact accepted revision.
+
+Use `client.scene3d.applyEdits(revisionId, { newRevisionId,
+expectedContentHash, operations, lockedObjectIds? })` to persist deterministic
+v2 edits without authoring. It returns `{ scenePlan, changeSummary }`. Keep the
+same `newRevisionId` for retries of the same edit. Adopt the returned scene only
+if the user is still editing the request's base revision. Geometry and camera
+assets are reused; posters, validation and native downloads are attached again
+only after being regenerated for the new revision.

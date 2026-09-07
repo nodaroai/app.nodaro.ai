@@ -4,6 +4,7 @@ import { startCommunityReaperCron } from "./ee/services/community/reaper.js"
 import { startCleanupCron } from "./ee/billing/cleanup-cron.js"
 import { startReconcileCron } from "./lib/reconcile/start.js"
 import { startAppReportSweepCron } from "./lib/app-report-sweep.js"
+import { startScene3DArtifactCleanup } from "./lib/scene3d-artifact-cleanup.js"
 import { startScheduleCron, stopScheduleCron } from "./lib/schedule-cron.js"
 import { SHUTDOWN_DRAIN_MS } from "./lib/worker-drain.js"
 import { seedTutorialTemplates } from "./lib/tutorial-seed/index.js"
@@ -71,6 +72,8 @@ async function main() {
   // Classify recent failed jobs into app_reports (model rejections) — a
   // sweep, because job failure has no single write choke point.
   startAppReportSweepCron()
+  const stopScene3DArtifactCleanup = startScene3DArtifactCleanup((message) => app.log.warn(message))
+  app.addHook("onClose", stopScene3DArtifactCleanup)
 
   // Built-in guided tutorials. Self-host only — Cloud already has these rows,
   // and staging/production share one Supabase project, so this must never run

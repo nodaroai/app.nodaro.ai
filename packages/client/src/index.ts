@@ -467,3 +467,4 @@ export { PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY } from "@nodaro/shared"
 
 export type { GenerateScene3DParams, EditScene3DParams, RenderScene3DParams, Scene3DJobOutput, Scene3DCapabilities, Scene3DAuthoringEngine } from "./resources/scene3d-types.js"
 export { Scene3DResource } from "./resources/scene3d.js"
+export type { RetainedScene3DEditParams, RetainedScene3DEditResult } from "./resources/scene3d-types.js"

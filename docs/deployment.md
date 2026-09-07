@@ -134,6 +134,10 @@ here for each one anyway.
 | `REDIS_URL` | `redis://localhost:6379` | BullMQ queues + caches (bundled: `redis://redis:6379`) |
 | `SCENE3D_ADVANCED_ENABLED` | disabled | Enables an installed Advanced scene-authoring engine in Cloud. Only `true` or `1` enables it; absent engine remains unavailable. |
 | `SCENE3D_LOCAL_ENABLED` | disabled | Allows an installed local scene-authoring engine when Advanced is also enabled. Does not expose a desktop port. |
+| `SCENE3D_PRIVATE_BUCKET` | unset | Separate private bucket for retained scene geometry, cameras and native source files. Must differ from the public media bucket. Required for scene asset reads; existing revisions remain readable when Advanced authoring is disabled. |
+| `SCENE3D_PRIVATE_S3_ENDPOINT` / `SCENE3D_PRIVATE_S3_REGION` | existing R2 settings | S3-compatible endpoint and region for the private scene bucket. No public bucket URL is used. |
+| `SCENE3D_PRIVATE_S3_ACCESS_KEY_ID` / `SCENE3D_PRIVATE_S3_SECRET_ACCESS_KEY` | existing R2 credentials | Server-side credentials for the private scene bucket. Prefer credentials restricted to that bucket. |
+| `SCENE3D_PRIVATE_S3_FORCE_PATH_STYLE` | existing R2 setting | Enable with `true` or `1` for an S3-compatible store that requires path-style addressing. |
 | `RUNTIME_ENV` | `RAILWAY_ENVIRONMENT_NAME`, else `local` | Names this deployment. Only matters when two installs share ONE database but have SEPARATE Redis instances (a staging + production pair): each install's stale-execution sweeps then reconcile only the runs its own orchestrator claimed, instead of marking the other install's healthy executions "orphaned". On Railway, `RAILWAY_ENVIRONMENT_NAME` already supplies it — set `RUNTIME_ENV` yourself only elsewhere. Every container of one install (API, workers, orchestrator) must use the SAME value |
 | `DATABASE_URL` | `""` | Direct Postgres URL — used only to apply migrations on boot |
 | `RUN_MIGRATIONS_ON_BOOT` | `false` (compose: `true`) | Apply `supabase/migrations` before the API starts; `false` on a managed Supabase project (see 2c) |

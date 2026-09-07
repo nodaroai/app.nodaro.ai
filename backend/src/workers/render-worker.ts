@@ -254,7 +254,7 @@ export function stripAuthoringOnlyFields(
   planType: string,
   plan: Record<string, unknown>,
 ): Record<string, unknown> {
-  if (planType !== SCENE3D_PLAN_TYPE || !("references" in plan)) return plan
+  if (planType !== SCENE3D_PLAN_TYPE || plan.schemaVersion === 2 || !("references" in plan)) return plan
   const { references: _authoringOnly, ...rest } = plan
   return rest
 }
@@ -944,7 +944,24 @@ export function createRenderWorker() {
           const stopFileServer = await normalizeInputVideos(inputProps, workDir)
           console.log(`[render-worker] Job ${jobId}: input videos ready (${((Date.now() - t0) / 1000).toFixed(1)}s)`)
 
+          let sceneAssets: { assetUrls: Record<string, string>; close(): void } | undefined
           try {
+            if (isPlanJob(data) && data.planType === SCENE3D_PLAN_TYPE && data.plan.schemaVersion === 2) {
+              if (!jobUserId) throw new Error("Scene render requires an authenticated owner")
+              const { prepareScene3DRenderAssets } = await import("./scene3d-render-assets.js")
+              const { scene3DPrivateStore } = await import("../lib/private-plugins/scene3d-storage.js")
+              const controller = new AbortController()
+              await withRenderCancellation({ jobId, timeoutMs: 120_000,
+                isCancelled: async () => !await shouldSaveJobResult(jobId), isDraining: isWorkerDraining,
+                cancel: () => controller.abort(),
+              }, async () => {
+                sceneAssets = await prepareScene3DRenderAssets({
+                  userId: jobUserId, plan: data.plan as unknown as import("@nodaro/shared").Scene3DPlanV2,
+                  workDir, store: scene3DPrivateStore(), signal: controller.signal,
+                })
+                inputProps.assetUrls = sceneAssets.assetUrls
+              })
+            }
             console.log(`[render-worker] Rendering ${compositionId} (${modeLabel}) for job ${jobId}`)
 
             // Bundle Remotion compositions (cached after first call per entry point)
@@ -1020,6 +1037,8 @@ export function createRenderWorker() {
                   },
                   serveUrl: bundlePath,
                   codec: "h264",
+                  // Scene previews are silent; omit Remotion's synthetic AAC track.
+                  muted: compositionId === "3d-scene",
                   outputLocation: outputPath,
                   inputProps,
                   browserExecutable,
@@ -1044,6 +1063,7 @@ export function createRenderWorker() {
               await browser?.close({ silent: true })
             }
           } finally {
+            sceneAssets?.close()
             stopFileServer?.()
           }
         }

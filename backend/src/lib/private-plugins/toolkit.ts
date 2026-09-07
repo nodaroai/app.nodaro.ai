@@ -1,5 +1,6 @@
 import { completeStructuredMetered } from "./llm-metered.js"
 import { directVoiceChanger } from "../../providers/elevenlabs/voice-changer.js"
+import { createScene3DArtifactToolkit } from "./scene3d-artifact-toolkit.js"
 import { createStageJournal } from "./stage-journal.js"
 import { ReplicateAudioSeparationProvider } from "../../providers/replicate/audio-separation.js"
 import { extractAudio } from "../../providers/video/extract-audio.js"
@@ -1062,6 +1063,7 @@ function internalRequest(app: FastifyInstance, opts: PluginInternalRequestOption
 
 export function buildToolkit(): PluginToolkit {
   return {
+    sceneArtifacts: createScene3DArtifactToolkit(),
     stages: createStageJournal(redis, async ({ jobId, userId }) => {
       const { data, error } = await supabase.from("jobs").select("status")
         .eq("id", jobId).eq("user_id", userId).maybeSingle()

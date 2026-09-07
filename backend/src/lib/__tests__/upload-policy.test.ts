@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach, vi } from "vitest"
+import ts from "typescript"
 import { readFileSync, readdirSync } from "node:fs"
 import { resolve, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -92,7 +93,7 @@ describe("upload-policy totality — every byte-carrying lane polices", () => {
     expect(uploadSrc.split("applyUploadPolicies(").length - 1).toBeGreaterThanOrEqual(4)
   })
 
-  it("no backend code mints raw presigned R2 PUTs (bytes always pass through a policed lane)", () => {
+  it("public ingestion cannot mint presigned PUTs; private build output has one scoped quarantine lane", () => {
     // If someone imports @aws-sdk/s3-request-presigner, bytes could go
     // browser→R2 directly and bypass every policed lane — that lane must then
     // either be dropped again or grow its own policing point. (The package
@@ -102,8 +103,21 @@ describe("upload-policy totality — every byte-carrying lane polices", () => {
       for (const e of readdirSync(dir, { withFileTypes: true })) {
         if (e.isDirectory()) {
           if (e.name !== "__tests__" && e.name !== "node_modules") walk(resolve(dir, e.name))
-        } else if (e.name.endsWith(".ts") && readFileSync(resolve(dir, e.name), "utf8").includes("s3-request-presigner")) {
-          offenders.push(resolve(dir, e.name))
+        } else if (e.name.endsWith(".ts")) {
+          const file = resolve(dir, e.name)
+          const source = ts.createSourceFile(file, readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true)
+          let usesPresigner = false
+          const inspect = (node: ts.Node): void => {
+            if (ts.isStringLiteralLike(node) && node.text.includes("s3-request-presigner")) usesPresigner = true
+            ts.forEachChild(node, inspect)
+          }
+          inspect(source)
+          if (!usesPresigner) continue
+          // Trusted build outputs land in a separate private bucket. They have
+          // no readable revision until receipt verification, and their signed
+          // conditional PUT cannot replace an existing artifact. This is not
+          // the browser/MCP ingestion lane protected by the checks above.
+          if (file !== resolve(SRC, "lib/private-plugins/scene3d-upload-grants.ts")) offenders.push(file)
         }
       }
     }

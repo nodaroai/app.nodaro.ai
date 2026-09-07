@@ -262,6 +262,16 @@ describe("chromiumOptionsFor", () => {
 })
 
 describe("stripAuthoringOnlyFields", () => {
+  it("preserves the entire immutable v2 manifest, including hash-covered authoring context", () => {
+    const plan = {
+      planType: "3d-scene", schemaVersion: 2,
+      references: [{ id: "look", url: "https://cdn.example.com/look.png", kind: "image" }],
+      provenance: { contentHash: "hash-of-the-complete-manifest" },
+    }
+    expect(stripAuthoringOnlyFields("3d-scene", plan)).toBe(plan)
+    expect(plan.references).toHaveLength(1)
+  })
+
   it("drops 3d-scene references so the render never downloads media no frame contains", () => {
     const plan = makeScene3DPlan({
       references: [{ id: "r1", url: "https://cdn.example.com/ref.mp4", kind: "video", role: "motion" }],
@@ -763,4 +773,3 @@ describe("releasesReservationOnIncompleteRender", () => {
     expect(releasesReservationOnIncompleteRender("completed")).toBe(false)
   })
 })
-
