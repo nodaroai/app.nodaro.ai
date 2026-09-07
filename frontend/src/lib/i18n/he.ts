@@ -4756,7 +4756,7 @@ export const he: ChromeDict = {
   "billingAdmin.integrationsName": "שם",
   "billingAdmin.integrationsNamePlaceholder": "היכן ישמש המפתח",
   "billingAdmin.integrationsExpiry": "תפוגה (אופציונלי)",
-  "billingAdmin.integrationsExpiryHint": "המפתח יפסיק לעבוד בסוף היום שנבחר, לפי שעון המקום שלכם. שנה היא ברירת מחדל טובה. אפשר להשאיר ריק למפתח ללא תפוגה.",
+  "billingAdmin.integrationsExpiryHint": "המפתח יפסיק לעבוד בסוף היום שנבחר, לפי השעון המקומי. שנה היא ברירת מחדל טובה. אפשר להשאיר ריק למפתח ללא תפוגה.",
   "billingAdmin.integrationsCidrs": "כתובות מקור מותרות (אופציונלי)",
   "billingAdmin.integrationsCidrsHint": "טווח כתובות אחד בכל שורה, בכתיב CIDR, עד {max} טווחים. אפשר להשאיר ריק כדי לקבל כל מקור.",
   "billingAdmin.integrationsMint": "יצירת מפתח",

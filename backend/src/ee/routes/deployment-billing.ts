@@ -1617,7 +1617,11 @@ export async function deploymentBillingRoutes(app: FastifyInstance): Promise<voi
 
     const since = readInstant(query.since)
     if (since === "invalid") {
-      return reply.status(400).send(err("invalid_range", "since must be an ISO 8601 timestamp."))
+      return reply
+        .status(400)
+        .send(
+          err("invalid_range", "since must be an ISO 8601 date-time with a zone, e.g. 2026-09-01T00:00:00Z."),
+        )
     }
     const sinceMs = since === null ? null : Date.parse(since)
 

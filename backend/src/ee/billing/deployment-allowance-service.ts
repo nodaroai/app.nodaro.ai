@@ -506,7 +506,9 @@ export async function setDefaultAllowance(credits: number, actorId: string): Pro
  * keeps the allowance table in one place.
  */
 export async function readLowBalanceThreshold(payerId: string): Promise<number | null> {
-  if (!payerId) return null
+  // The module's first line, like every other entry point here: a mainline
+  // deployment issues no query against a table its database may not have.
+  if (!deploymentPayerActive() || !payerId) return null
   const { data, error } = await supabase
     .from("deployment_payer_settings")
     .select("low_balance_threshold_credits")
