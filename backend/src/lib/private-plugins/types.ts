@@ -1353,6 +1353,7 @@ export interface PluginLlmRequest {
 export type PluginLlmContentBlock =
   | { type: "text"; text: string }
   | { type: "image"; url: string }
+  | { type: "image_base64"; mediaType: string; data: string }
   | {
       type: "video"
       url: string
