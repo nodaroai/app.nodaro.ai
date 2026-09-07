@@ -114,8 +114,10 @@ const KEYS_BODY = {
 const MINT_BODY = {
   data: {
     id: "k2", name: "new one",
-    token: "ndr_bill_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd",
-    tokenPrefix: "ndr_bill_012", expiresAt: null,
+    // Zero-entropy stand-in (64 valid hex chars) so the secret scanner does not
+    // mistake a fixture for a real bearer.
+    token: `ndr_bill_${"a".repeat(64)}`,
+    tokenPrefix: "ndr_bill_aaa", expiresAt: null,
   },
 }
 
