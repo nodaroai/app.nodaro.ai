@@ -316,6 +316,19 @@ explicitly. A policy block is not a new column: it is a new `error_hint`
 **kind**, so it reaches the editor, the API, the SDK and MCP through the same
 path a provider content-policy block already uses.
 
+## Result context and classification labels
+
+The result context includes the job's stored `inputData`. A deployment can
+select the prompt fields it needs without sending the entire request payload
+to a moderation service. `requesterIdentity()` is a lazy lookup of the job
+requester's trusted SSO provider and subject from Auth `app_metadata`; it
+returns null for an account without a federated identity and throws when the
+identity service is unavailable. User-editable metadata is never consulted.
+No identity request occurs unless a policy calls the method.
+
+`flag`, `block` and `hold` verdicts can carry machine-readable `labels` into
+the decision audit. Labels never become the user-visible explanation.
+
 ## What is deliberately not gated
 
 The seam sits on jobs. Anything that produces no job row — synchronous text

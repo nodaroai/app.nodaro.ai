@@ -72,7 +72,10 @@ export function runtimeApiUrl(): string {
 
 /** The Supabase URL the BROWSER uses (auth + PostgREST). */
 export function runtimeSupabaseUrl(): string {
-  return pick(runtime().supabaseUrl, import.meta.env.VITE_SUPABASE_URL as string | undefined)
+  const picked = pick(runtime().supabaseUrl, import.meta.env.VITE_SUPABASE_URL as string | undefined)
+  // supabase-js requires an absolute URL; resolve the deployment's explicit
+  // proxy sentinel on the page so additional studio hostnames stay on-origin.
+  return picked.trim() === "/supabase" ? `${window.location.origin}/supabase` : picked
 }
 
 export function runtimeSupabaseAnonKey(): string {

@@ -78,10 +78,11 @@ interface GateJobRow {
    *  plugin job read-merges checkpoints into it mid-run (`updateJobCheckpoint`),
    *  so a block has to CLEAR it rather than merely decline to write it. */
   output_data: Record<string, unknown> | null
+  input_data?: Record<string, unknown> | null
 }
 
 const GATE_ROW_COLUMNS =
-  "id, job_type, user_id, workflow_execution_id, pipeline_id, parent_job_id, provider, started_at, status, output_data"
+  "id, job_type, user_id, workflow_execution_id, pipeline_id, parent_job_id, provider, started_at, status, output_data, input_data"
 
 /**
  * The statuses a verdict can still act on: in-flight, minus the parked one. A
@@ -539,6 +540,16 @@ export async function applyResultGate(
     jobType: row.job_type,
     mediaKind: mediaKindOf(outputData),
     userId: row.user_id,
+    inputData: row.input_data ?? {},
+    requesterIdentity: async () => {
+      if (!row.user_id) return null
+      const { data, error } = await supabase.auth.admin.getUserById(row.user_id)
+      if (error) throw new Error("Requester identity unavailable")
+      const metadata = data.user?.app_metadata
+      return typeof metadata?.sso === "string" && typeof metadata.sso_subject === "string" && metadata.sso_subject.length > 0
+        ? { provider: metadata.sso, subject: metadata.sso_subject }
+        : null
+    },
     statusToBe: "completed",
     outputData,
     outputs,

@@ -80,7 +80,8 @@ const db = vi.hoisted(() => {
   return { from, jobRow, jobRowError, jobRowReads, heldUpdateRows, heldUpdateError, updateArgs, inArgs, reservedLogs }
 })
 
-vi.mock("../supabase.js", () => ({ supabase: { from: db.from } }))
+const identity = vi.hoisted(() => ({ getUserById: vi.fn() }))
+vi.mock("../supabase.js", () => ({ supabase: { from: db.from, auth: { admin: identity } } }))
 vi.mock("../config.js", () => ({
   config: { R2_PUBLIC_URL: "https://cdn.example.com" },
   hasAdmin: () => true,
@@ -130,6 +131,30 @@ import {
 import { extractJobOutputs, ownedHeldObjects, isOwnedObjectKey, mediaKindOf, MAX_HELD_OBJECTS, deleteOwnedObjects } from "../job-policy-outputs.js"
 
 const OUT = { imageUrl: "https://cdn.example.com/images/job-1.png" }
+
+it("passes the stored request payload to the result policy", async () => {
+  db.jobRow.value = { ...db.jobRow.value, input_data: { prompt: "requested scene" } }
+  let captured: JobResultContext | undefined
+  registerJobPolicy({ id: "context", checkResult: (ctx) => { captured = ctx; return { verdict: "allow" } } })
+  await applyResultGate("job-1", { output_data: OUT }, "finalize")
+  expect(captured?.inputData).toEqual({ prompt: "requested scene" })
+})
+
+it("resolves only trusted requester identity and only when a policy asks", async () => {
+  identity.getUserById.mockResolvedValue({ data: { user: { app_metadata: { sso: "idp", sso_subject: "trusted" }, user_metadata: { sso_subject: "spoofed" } } }, error: null })
+  let captured: JobResultContext | undefined
+  registerJobPolicy({ id: "context", checkResult: (ctx) => { captured = ctx; return { verdict: "allow" } } })
+  await applyResultGate("job-1", { output_data: OUT }, "finalize")
+  expect(identity.getUserById).not.toHaveBeenCalled()
+  await expect(captured!.requesterIdentity!()).resolves.toEqual({ provider: "idp", subject: "trusted" })
+  expect(identity.getUserById).toHaveBeenCalledWith("u1")
+})
+
+it("an unavailable identity lookup fails closed when the policy requires it", async () => {
+  identity.getUserById.mockResolvedValue({ data: { user: null }, error: { message: "unavailable" } })
+  registerJobPolicy({ id: "context", checkResult: async (ctx) => { await ctx.requesterIdentity!(); return { verdict: "allow" } } })
+  expect(await applyResultGate("job-1", { output_data: OUT }, "finalize")).toBe("held")
+})
 
 const LIVE_ROW = {
   id: "job-1",

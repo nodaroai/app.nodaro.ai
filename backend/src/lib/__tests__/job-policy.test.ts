@@ -195,6 +195,11 @@ describe("job-policy registry", () => {
       expect(await applyJobResultPolicies(res())).toMatchObject({ verdict: "flag", labels: ["nudity"] })
     })
 
+    it.each(["block", "hold"] as const)("%s preserves machine labels for the audit", async (verdict) => {
+      registerJobPolicy({ id: "classified", checkResult: () => ({ verdict, reason: "A user-safe explanation", labels: ["policy-category"] }) })
+      expect(await applyJobResultPolicies(res())).toMatchObject({ verdict, labels: ["policy-category"] })
+    })
+
     it("hold on a hold-INELIGIBLE job downgrades to block and says so in the audit", async () => {
       registerJobPolicy({ id: "h", checkResult: () => ({ verdict: "hold", reason: "nsfw_score=0.71 label=suggestive" }) })
       const d = await applyJobResultPolicies(res({ holdEligible: false }))
