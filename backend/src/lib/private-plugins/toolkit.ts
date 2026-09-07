@@ -81,12 +81,23 @@ import { sunoGenerate, sunoCreditType } from "../../providers/kie/suno-client.js
 import { combineVideos as combineVideosCore } from "../../providers/video/combine-videos.js"
 import { extractTailToFile } from "../../providers/video/extract-tail.js"
 import { llmCompleteStructured } from "../llm-client.js"
+import type { FastifyInstance } from "fastify"
 import type { LlmReasoningEffort } from "@nodaro/shared"
+import { ENTITY_TABLE, WORKSPACE_HEADER_LOWER } from "@nodaro/shared"
+import type { EntityNodeKind } from "@nodaro/shared"
+import { WORKFLOW_ACCESS_COLS, loadWorkflowFor } from "../workflow-route-access.js"
+import { canChangeWorkflowVisibility } from "../workflow-access.js"
+import { changesStudioPublishFlag } from "../studio-audience.js"
+import { requireScope, type Scope } from "../scopes.js"
+import { entityOwnerFilter } from "../mcp/tools/_entity-scope.js"
+import { waitForJob } from "../mcp/tools/_wait-for-job.js"
+import { redactPrivateJobData } from "../public-job-data.js"
 import type { ProviderOptions, ReconcileOpts } from "../../providers/provider.interface.js"
 import { randomUUID } from "node:crypto"
 import { dirname, join } from "node:path"
 import { promises as fs } from "node:fs"
 import type { ZodType } from "zod"
+import type { PluginEntityRead, PluginEntityTable, PluginInternalRequestOptions, PluginOwnedJobRow } from "./types.js"
 import type { PluginToolkit, PluginLlmRequest, PluginLlmMultimodalRequest, PluginVideoGenOptions, PluginVideoGenResult, PluginImageGenOptions, PluginImageGenResult, PluginMusicGenOptions, PluginMusicGenResult, PipelineSnapshot } from "./types.js"
 
 /**
@@ -947,6 +958,106 @@ async function getPipelineSnapshot(
   }
 }
 
+/**
+ * Which table each library kind is stored in.
+ *
+ * The contract names the four kinds as the TABLES they are (`"creatures"`),
+ * because that is the vocabulary a route reads and writes; core's own map is
+ * keyed by the singular node kind. This is the two-line bridge between them,
+ * and it exists so the query below can index core's map LITERALLY —
+ * `entity-scope-guard` recognises `.from(ENTITY_TABLE[…])` and a bare
+ * variable is invisible to it (skipped, not approved).
+ */
+const PLUGIN_ENTITY_KIND: Record<PluginEntityTable, EntityNodeKind> = {
+  characters: "character",
+  locations: "location",
+  objects: "object",
+  creatures: "creature",
+}
+
+/**
+ * `tk.entities.listOwned` — the caller's own rows of one library kind.
+ *
+ * The read carries the caller's ordering and cap because it hands back a
+ * resolved array: a caller cannot re-bound rows it has already been given, so
+ * an unbounded read here would be an unbounded read forever.
+ */
+async function listOwnedEntities(
+  userId: string,
+  kind: PluginEntityTable,
+  columns: string,
+  read: PluginEntityRead,
+): Promise<Array<Record<string, unknown>>> {
+  const { data, error } = await entityOwnerFilter(
+    supabase
+      .from(ENTITY_TABLE[PLUGIN_ENTITY_KIND[kind]])
+      .select(columns)
+      .order(read.orderBy, { ascending: read.ascending })
+      .limit(read.limit),
+    userId,
+  )
+  if (error) throw new Error(`Failed to read the ${kind} library: ${error.message}`)
+  return (data ?? []) as unknown as Array<Record<string, unknown>>
+}
+
+/**
+ * `tk.jobs.readJobsOwnedBy` — the status of these jobs, for this user.
+ *
+ * The owner predicate is part of the query, never a post-filter, so an id the
+ * caller does not own is simply not in the answer and "not yours" and "does
+ * not exist" stay the same fact.
+ */
+async function readJobsOwnedBy(
+  userId: string,
+  jobIds: readonly string[],
+): Promise<PluginOwnedJobRow[]> {
+  const ids = [...new Set(jobIds)].filter((id) => id.length > 0)
+  if (ids.length === 0) return []
+
+  const { data, error } = await supabase
+    .from("jobs")
+    .select("id, status, output_data, error_message")
+    .in("id", ids)
+    .eq("user_id", userId)
+  if (error) throw new Error(`Failed to read jobs: ${error.message}`)
+
+  return ((data ?? []) as unknown as Array<Record<string, unknown>>).map((raw) => ({
+    id: raw.id as string,
+    status: (raw.status as string) ?? "pending",
+    // `output_data` can carry server-only fields, and a landed result is
+    // persisted on a document that can later be shared by link.
+    output_data: redactPrivateJobData(
+      (raw.output_data as Record<string, unknown> | null) ?? null,
+    ),
+    error_message: (raw.error_message as string | null) ?? null,
+  }))
+}
+
+/**
+ * `tk.http.internalRequest` — a plugin route reaching another `/v1` route.
+ *
+ * The same shape and the same trust model as `lib/mcp/internal-request.ts`,
+ * with the caller's id added: the outer route has a `userId` but no JWT it
+ * could replay. Caller headers are spread FIRST, so the three this function
+ * owns cannot be overridden by a HEADER — but the auth hook prefers
+ * `body.userId` to `x-internal-user-id`, so a `payload` with a `userId`
+ * string still picks the identity. Callers that forward a request body strip
+ * or pin that field first.
+ */
+function internalRequest(app: FastifyInstance, opts: PluginInternalRequestOptions) {
+  return app.inject({
+    method: opts.method,
+    url: opts.url,
+    headers: {
+      ...opts.headers,
+      "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
+      "x-internal-user-id": opts.userId,
+      ...(opts.workspaceId ? { [WORKSPACE_HEADER_LOWER]: opts.workspaceId } : {}),
+    },
+    ...(opts.payload !== undefined ? { payload: opts.payload } : {}),
+  })
+}
+
 export function buildToolkit(): PluginToolkit {
   return {
     providers: {
@@ -1072,6 +1183,8 @@ export function buildToolkit(): PluginToolkit {
       refundStorage,
     },
     jobs: {
+      readJobsOwnedBy,
+      waitForJob,
       storeRecastAudioBase,
       readRecastAudioBase,
       clearRecastAudioBase,
@@ -1102,6 +1215,7 @@ export function buildToolkit(): PluginToolkit {
     },
     http: {
       supabase,
+      internalRequest,
       videoQueue,
       creditGuard,
       reserveCreditsForJob,
@@ -1278,8 +1392,19 @@ export function buildToolkit(): PluginToolkit {
       },
     },
     db: supabase,
+    workflows: {
+      accessCols: WORKFLOW_ACCESS_COLS,
+      loadWorkflowFor,
+      canChangeVisibility: canChangeWorkflowVisibility,
+      changesStudioPublishFlag,
+    },
+    entities: { listOwned: listOwnedEntities },
     auth: {
       isPlatformAdmin: checkIsAdmin,
+      // `required` is `string` on the contract — the scope union is core's to
+      // grow, and a structural mirror that pinned it would make every new
+      // scope a contract change. Narrowed back here, at the one wiring site.
+      requireScope: (granted, required) => requireScope(granted, required as Scope),
       // Throws on a lookup failure rather than returning null: null means
       // "this user holds no platform role", and a plugin gating on a SPECIFIC
       // role (`=== "super_admin"`) fails closed on that, but one gating the

@@ -1051,3 +1051,10 @@ export {
 } from "./entity-node-fields.js"
 export { ENTITY_NODE_KINDS } from "./entity-node-fields.js"
 export type { EntityNodeKind } from "./entity-node-fields.js"
+
+// --- transient studio keys — the public share read strips them ---
+export {
+  STUDIO_TRANSIENT_KEYS,
+  STUDIO_SHOT_TRANSIENT_KEYS,
+  stripStudioTransientSettings,
+} from "./studio-transient.js"

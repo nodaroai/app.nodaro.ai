@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest"
 
-import { stripTransientSettings } from "../strip-transient-settings.js"
+import {
+  STUDIO_SHOT_TRANSIENT_KEYS,
+  STUDIO_TRANSIENT_KEYS,
+  stripStudioTransientSettings,
+} from "../studio-transient.js"
 
 /**
  * The public projection of `settings.studio` (D12).
@@ -57,18 +61,18 @@ function written(): Record<string, unknown> {
 }
 
 /** `settings.studio` of a stripped document. */
-function studioOf(settings: Record<string, unknown> | null | undefined): Record<string, unknown> {
+function studioOf(settings: unknown): Record<string, unknown> {
   return (settings as { studio: Record<string, unknown> }).studio
 }
 
-describe("stripTransientSettings", () => {
+describe("stripStudioTransientSettings", () => {
   it("drops the bin and the draft the writer put at the top level", () => {
     const settings = written()
     // The oracle: the document really does carry these two here.
     expect(studioOf(settings).trash).toHaveLength(1)
     expect(studioOf(settings).freecutDraftUrl).toBe("https://cdn/draft.json")
 
-    const studio = studioOf(stripTransientSettings(settings))
+    const studio = studioOf(stripStudioTransientSettings(settings))
     expect(studio.trash).toBeUndefined()
     expect(studio.freecutDraftUrl).toBeUndefined()
   })
@@ -79,7 +83,7 @@ describe("stripTransientSettings", () => {
     const stored = (studioOf(settings).shots as Array<Record<string, unknown>>)[0]
     expect(stored.pendingClips).toEqual([PENDING])
 
-    const shots = studioOf(stripTransientSettings(settings)).shots as Array<
+    const shots = studioOf(stripStudioTransientSettings(settings)).shots as Array<
       Record<string, unknown>
     >
     expect(shots[0].pendingClips).toBeUndefined()
@@ -89,7 +93,7 @@ describe("stripTransientSettings", () => {
   })
 
   it("leaves the film — the shots, the order, the share flag — untouched", () => {
-    const studio = studioOf(stripTransientSettings(written()))
+    const studio = studioOf(stripStudioTransientSettings(written()))
     expect(studio.version).toBe(3)
     expect(studio.shotOrder).toEqual(["img-1"])
     expect(studio.shared).toBe(true)
@@ -99,7 +103,7 @@ describe("stripTransientSettings", () => {
   it("never mutates the caller's document", () => {
     const settings = written()
     const before = JSON.stringify(settings)
-    stripTransientSettings(settings)
+    stripStudioTransientSettings(settings)
     expect(JSON.stringify(settings)).toBe(before)
   })
 
@@ -108,7 +112,7 @@ describe("stripTransientSettings", () => {
     const settings: Record<string, unknown> = {
       studio: { version: 3, shots: [{ id: "s1" }], selectedShotId: "s1", shotOrder: [] },
     }
-    expect(stripTransientSettings(settings)).toBe(settings)
+    expect(stripStudioTransientSettings(settings)).toBe(settings)
   })
 
   it("drops a shot's pendingStills — the still marker D5 lands there", () => {
@@ -124,7 +128,7 @@ describe("stripTransientSettings", () => {
     }))
     const withStills = { ...settings, studio: { ...studio, shots } }
 
-    const out = studioOf(stripTransientSettings(withStills))
+    const out = studioOf(stripStudioTransientSettings(withStills))
     expect((out.shots as Array<Record<string, unknown>>)[0].pendingStills).toBeUndefined()
   })
 
@@ -137,22 +141,65 @@ describe("stripTransientSettings", () => {
     const shots = [{ id: "s2", pendingClip: PENDING }]
     const legacy = { ...settings, studio: { ...studio, shots } }
 
-    const out = studioOf(stripTransientSettings(legacy))
+    const out = studioOf(stripStudioTransientSettings(legacy))
     expect((out.shots as Array<Record<string, unknown>>)[0]).toEqual({ id: "s2" })
   })
 
   it("leaves a workflow that is not a production alone", () => {
     const settings = { presentationSettings: { shareReadOnly: true } }
-    expect(stripTransientSettings(settings)).toBe(settings)
-    expect(stripTransientSettings(null)).toBeNull()
-    expect(stripTransientSettings(undefined)).toBeUndefined()
+    expect(stripStudioTransientSettings(settings)).toBe(settings)
+    expect(stripStudioTransientSettings(null)).toBeNull()
+    expect(stripStudioTransientSettings(undefined)).toBeUndefined()
   })
 
   it("survives a document whose shots are not what the editor writes", () => {
     // The strip runs on whatever is in the column, including a row written by
     // something that is not the studio editor. It must project, never throw.
     const odd = { studio: { version: 3, shots: ["nonsense", null, 7] } }
-    expect(() => stripTransientSettings(odd)).not.toThrow()
-    expect(studioOf(stripTransientSettings(odd)).shots).toEqual(["nonsense", null, 7])
+    expect(() => stripStudioTransientSettings(odd)).not.toThrow()
+    expect(studioOf(stripStudioTransientSettings(odd)).shots).toEqual(["nonsense", null, 7])
+  })
+
+  it("drops the DOCUMENT's own pendingMusic and pendingDraft (D5)", () => {
+    // The document-level twin of the per-shot pair: a soundtrack render and a
+    // Director run in flight. Same rule — they name jobs on the owner's
+    // account, and no viewer can read or land one.
+    const settings = written()
+    const studio = studioOf(settings)
+    const inFlight = {
+      ...settings,
+      studio: {
+        ...studio,
+        pendingMusic: { jobId: "job-3", startedAt: 1_756_000_000_000 },
+        pendingDraft: { jobId: "job-4", startedAt: 1_756_000_000_000 },
+      },
+    }
+    // The oracle: the document really does carry both before the public read.
+    expect(studioOf(inFlight).pendingMusic).toBeDefined()
+    expect(studioOf(inFlight).pendingDraft).toBeDefined()
+
+    const out = studioOf(stripStudioTransientSettings(inFlight))
+    expect(out.pendingMusic).toBeUndefined()
+    expect(out.pendingDraft).toBeUndefined()
+    // ...and the film is still there.
+    expect(out.version).toBe(3)
+  })
+
+  it("pins the two lists — a key added to the type alone strips nothing", () => {
+    // The lists are the contract: the codec's own strip re-exports them, so a
+    // key that falls off here falls off there too, silently, on both sides.
+    expect([...STUDIO_TRANSIENT_KEYS]).toEqual([
+      "trash",
+      "pendingStills",
+      "pendingClips",
+      "pendingMusic",
+      "pendingDraft",
+      "freecutDraftUrl",
+    ])
+    expect([...STUDIO_SHOT_TRANSIENT_KEYS]).toEqual([
+      "pendingClips",
+      "pendingClip",
+      "pendingStills",
+    ])
   })
 })
