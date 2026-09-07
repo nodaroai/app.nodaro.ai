@@ -1169,9 +1169,13 @@ routing").
 ## Managed Supabase through the studio origin
 
 For networks that filter every browser request by hostname, the studio can
-proxy its managed Supabase project. Set `SUPABASE_MANAGED_PROXY=true` and
-`FRONTEND_SUPABASE_URL=/supabase` together. Keep `SUPABASE_URL` set to the
+proxy its managed Supabase project. Set `SUPABASE_MANAGED_PROXY=true`,
+`FRONTEND_SUPABASE_URL=/supabase` and
+`SUPABASE_PROXY_UPSTREAM=https://YOUR-PROJECT.supabase.co` together. The proxy
+upstream must be an origin without a path. Keep `SUPABASE_URL` set to the
 managed project's HTTPS URL; backend connections continue to use it directly.
+The separate upstream variable also keeps bundled deployments' path-bearing
+`SUPABASE_URL` out of Caddy's upstream parser when this feature is disabled.
 
 The browser resolves `/supabase` against the page's origin. Caddy forwards
 auth, REST, storage and realtime requests, including WebSocket upgrades, to

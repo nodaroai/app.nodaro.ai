@@ -32,7 +32,7 @@ test("managed Supabase proxy preserves HTTP requests and WebSocket upgrades; bun
       const config = join(temp, "Caddyfile")
       writeFileSync(config, readFileSync(new URL("../../frontend/Caddyfile", import.meta.url), "utf8").replace(":3000 {", `:${port} {`))
       const child = spawn("caddy", ["run", "--config", config, "--adapter", "caddyfile"], {
-        env: { ...process.env, SUPABASE_MANAGED_PROXY: String(managed), SUPABASE_URL: `http://127.0.0.1:${up}`, SUPABASE_AUTH_UPSTREAM: `127.0.0.1:${up}`, SUPABASE_REST_UPSTREAM: `127.0.0.1:${up}` },
+        env: { ...process.env, SUPABASE_MANAGED_PROXY: String(managed), SUPABASE_URL: managed ? `http://127.0.0.1:${up}` : `http://localhost:${port}/supabase`, SUPABASE_PROXY_UPSTREAM: managed ? `http://127.0.0.1:${up}` : "", SUPABASE_AUTH_UPSTREAM: `127.0.0.1:${up}`, SUPABASE_REST_UPSTREAM: `127.0.0.1:${up}` },
         stdio: ["ignore", "ignore", "pipe"],
       })
       let logs = ""
