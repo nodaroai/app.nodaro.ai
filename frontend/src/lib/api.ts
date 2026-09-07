@@ -5349,6 +5349,7 @@ export async function generate3DScene(params: {
 export async function edit3DScene(params: {
   scenePlan: Record<string, unknown>
   expectedRevisionId: string
+  replaceReferences?: boolean
   prompt?: string
   operations?: readonly Record<string, unknown>[]
   references?: readonly Scene3DReferenceInput[]

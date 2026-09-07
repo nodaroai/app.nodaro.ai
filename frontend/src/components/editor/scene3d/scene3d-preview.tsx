@@ -65,6 +65,21 @@ export interface Scene3DPreviewProps {
   pendingPlan?: Record<string, unknown>
   /** True while a generate/edit job is running — the scene stays live, edits keep working. */
   isGenerating?: boolean
+  /**
+   * Look, don't touch. Playback, scrubbing and selection stay live; every
+   * MUTATION — a numeric/colour commit, a lock toggle, a restore, resolving a
+   * pending revision — is withheld.
+   *
+   * Enforced in BOTH directions: the controls that would produce a mutation are
+   * disabled or not rendered, AND the callbacks refuse. Disabling alone is not a
+   * guard (a `change` event still dispatches against a disabled input in jsdom,
+   * and a control can be re-enabled from devtools); refusing alone would leave
+   * live-looking controls that do nothing.
+   *
+   * Defaults to FALSE so the editor canvas — the only caller before the embed —
+   * behaves exactly as it did.
+   */
+  readOnly?: boolean
   onSelectionChange: (objectIds: string[]) => void
   onLockChange: (objectIds: string[]) => void
   /** A NEW immutable revision produced by a deterministic edit. */
@@ -98,6 +113,7 @@ export function Scene3DPreview({
   history,
   pendingPlan,
   isGenerating,
+  readOnly = false,
   onSelectionChange,
   onLockChange,
   onPlanChange,
@@ -136,7 +152,7 @@ export function Scene3DPreview({
 
   const applyOperation = useCallback(
     (operation: Scene3DEditOperationLike | null) => {
-      if (!operation) return
+      if (!operation || readOnly) return
       // `lockedObjectIds` is passed so the canvas obeys the SAME lock the model
       // is held to — a locked object is not editable by hand either.
       const result = applyLocalSceneEdits(scenePlan, [operation], { lockedObjectIds })
@@ -147,7 +163,7 @@ export function Scene3DPreview({
       setError(null)
       onPlanChange(result.plan, result.changeSummary)
     },
-    [scenePlan, onPlanChange, lockedObjectIds],
+    [scenePlan, onPlanChange, lockedObjectIds, readOnly],
   )
 
   /** Apply a pose edit, surfacing its one refusal (the keyframe cap) as UI copy. */
@@ -167,7 +183,16 @@ export function Scene3DPreview({
     onSelectionChange(selected.includes(objectId) ? selected.filter((id) => id !== objectId) : [...selected, objectId])
   }
   const toggleLocked = (objectId: string) => {
+    if (readOnly) return
     onLockChange(locked.includes(objectId) ? locked.filter((id) => id !== objectId) : [...locked, objectId])
+  }
+  const restore = (revisionId: string) => {
+    if (readOnly) return
+    onRestore(revisionId)
+  }
+  const resolvePending = (adopt: boolean) => {
+    if (readOnly) return
+    onResolvePending(adopt)
   }
 
   /** "Base pose" / "Keyframe @ N" — so the write is labelled, not guessed. */
@@ -187,7 +212,7 @@ export function Scene3DPreview({
     return activeSample[channel] as Vec3
   }
 
-  const editsDisabled = !validPlan
+  const editsDisabled = !validPlan || readOnly
 
   return (
     <div className="flex flex-col gap-2">
@@ -241,14 +266,18 @@ export function Scene3DPreview({
           <p className="text-[11px] text-amber-500">
             {t("cfgext.scene3dPendingRevision")}
           </p>
-          <div className="flex gap-1.5">
-            <Button type="button" size="sm" className="h-6 text-[11px]" onClick={() => onResolvePending(true)}>
-              <Check className="w-3 h-3 mr-1" /> {t("cfgext.scene3dUsePending")}
-            </Button>
-            <Button type="button" size="sm" variant="ghost" className="h-6 text-[11px]" onClick={() => onResolvePending(false)}>
-              <X className="w-3 h-3 mr-1" /> {t("cfgext.scene3dKeepMine")}
-            </Button>
-          </div>
+          {/* A read-only viewer is TOLD a newer revision arrived — resolving it
+              is the owner's decision, made where the state lives. */}
+          {!readOnly && (
+            <div className="flex gap-1.5">
+              <Button type="button" size="sm" className="h-6 text-[11px]" onClick={() => resolvePending(true)}>
+                <Check className="w-3 h-3 mr-1" /> {t("cfgext.scene3dUsePending")}
+              </Button>
+              <Button type="button" size="sm" variant="ghost" className="h-6 text-[11px]" onClick={() => resolvePending(false)}>
+                <X className="w-3 h-3 mr-1" /> {t("cfgext.scene3dKeepMine")}
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
@@ -290,15 +319,23 @@ export function Scene3DPreview({
                     <span className="text-[9px] text-muted-foreground/70 shrink-0">{object.keyframeCount}k</span>
                   )}
                 </button>
-                <button
-                  type="button"
-                  aria-label={isLocked ? `Unlock ${object.name}` : `Lock ${object.name}`}
-                  aria-pressed={isLocked}
-                  className={isLocked ? "text-amber-500" : "text-muted-foreground/50 hover:text-muted-foreground"}
-                  onClick={() => toggleLocked(object.id)}
-                >
-                  {isLocked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
-                </button>
+                {readOnly ? (
+                  // Read-only still SHOWS the lock (it explains why the model
+                  // left an object alone) — as a static badge, not a control.
+                  isLocked && (
+                    <Lock role="img" aria-label={`${object.name} locked`} className="w-3 h-3 text-amber-500" />
+                  )
+                ) : (
+                  <button
+                    type="button"
+                    aria-label={isLocked ? `Unlock ${object.name}` : `Lock ${object.name}`}
+                    aria-pressed={isLocked}
+                    className={isLocked ? "text-amber-500" : "text-muted-foreground/50 hover:text-muted-foreground"}
+                    onClick={() => toggleLocked(object.id)}
+                  >
+                    {isLocked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+                  </button>
+                )}
               </div>
             )
           })}
@@ -465,15 +502,19 @@ export function Scene3DPreview({
                   {entry.revisionId === revisionId ? (
                     <span className="text-[9px] text-[#ff0073] shrink-0">{t("cfgext.scene3dActiveRevision")}</span>
                   ) : (
-                    <button
-                      type="button"
-                      aria-label={`Restore revision ${entry.revisionId.slice(0, 6)}`}
-                      title={entry.context?.prompt}
-                      className="text-muted-foreground/60 hover:text-foreground shrink-0"
-                      onClick={() => onRestore(entry.revisionId)}
-                    >
-                      <RotateCcw className="w-3 h-3" />
-                    </button>
+                    // The history stays READABLE read-only — only the restore
+                    // control, which would rewrite the parent's state, is gone.
+                    !readOnly && (
+                      <button
+                        type="button"
+                        aria-label={`Restore revision ${entry.revisionId.slice(0, 6)}`}
+                        title={entry.context?.prompt}
+                        className="text-muted-foreground/60 hover:text-foreground shrink-0"
+                        onClick={() => restore(entry.revisionId)}
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                      </button>
+                    )
                   )}
                 </div>
               ))}

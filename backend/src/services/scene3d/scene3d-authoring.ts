@@ -88,6 +88,7 @@ export interface GenerateScenePlanInput extends CommonInput {
 }
 
 export interface EditScenePlanInput extends CommonInput {
+  replaceReferences?: boolean
   plan: Scene3DPlan
   instruction: string
   lockedObjectIds: string[]
@@ -211,12 +212,12 @@ export async function editScenePlan(input: EditScenePlanInput): Promise<Scene3DA
   // The set the model is shown AND the set the produced revision carries: the
   // plan's own references with this request's merged in by id. Computed once,
   // here, so the conditioning and the persisted plan cannot disagree.
-  const references = mergeScene3DReferences(input.plan.references, input.references)
+  const references = mergeScene3DReferences(input.plan.references, input.references, input.replaceReferences)
   const modalityError = scene3DImageModalityError(input.llmModel, references)
   if (modalityError) throw new Error(modalityError)
   const context = [
     `INSTRUCTION\n${input.instruction}`,
-    `CURRENT SCENE (JSON)\n${planForModel(input.plan)}`,
+    `CURRENT SCENE (JSON)\n${planForModel(withScene3DReferences(input.plan, references))}`,
     `FRAME\n${input.plan.width}x${input.plan.height} at ${input.plan.fps} fps, ${input.plan.durationInFrames} frames. Every keyframe must be an integer in 0..${input.plan.durationInFrames - 1}.`,
     input.lockedObjectIds.length > 0
       ? `LOCKED (must not change in any way): ${input.lockedObjectIds.join(", ")}`
@@ -265,6 +266,7 @@ export async function editScenePlan(input: EditScenePlanInput): Promise<Scene3DA
         plan: input.plan,
         operations: converted.operations,
         references: input.references,
+        replaceReferences: input.replaceReferences,
         expectedRevisionId: input.plan.revisionId,
         lockedObjectIds: input.lockedObjectIds,
         ...(input.revisionId ? { revisionId: input.revisionId } : {}),
@@ -314,6 +316,7 @@ export function applyScene3DEditWithReferences(args: {
   operations: readonly Scene3DEditOperation[] | unknown
   /** The request's references. Merged into the plan's by id. */
   references?: readonly Scene3DReference[]
+  replaceReferences?: boolean
   expectedRevisionId?: string
   lockedObjectIds?: readonly string[]
   revisionId?: string
@@ -329,7 +332,7 @@ export function applyScene3DEditWithReferences(args: {
   })
   if (!applied.ok) return applied
 
-  const references = mergeScene3DReferences(args.plan.references, args.references)
+  const references = mergeScene3DReferences(args.plan.references, args.references, args.replaceReferences)
   const plan = withScene3DReferences(applied.plan, references)
   const bindingError = scene3DReferenceBindingError(plan)
   if (bindingError) {
@@ -348,6 +351,7 @@ export function applyDeterministicScene3DEdit(args: {
   plan: Scene3DPlan
   operations: readonly Scene3DEditOperation[]
   references?: readonly Scene3DReference[]
+  replaceReferences?: boolean
   expectedRevisionId?: string
   lockedObjectIds?: readonly string[]
   revisionId?: string

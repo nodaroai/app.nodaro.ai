@@ -35,7 +35,7 @@
  * caller synchronously. Order is load-bearing: the parent row and its
  * reservation exist BEFORE the child, so a refused child has one thing to undo.
  */
-import type { FastifyInstance, FastifyRequest, LightMyRequestResponse } from "fastify"
+import type { FastifyInstance, FastifyReply, FastifyRequest, LightMyRequestResponse } from "fastify"
 import { z } from "zod"
 import {
   ASPECT_RATIO_DIMENSIONS,
@@ -132,6 +132,7 @@ export const scene3DGenerateBody = z
 export const scene3DEditBody = z
   .object({
     scenePlan: z.unknown(),
+    replaceReferences: z.boolean().optional(),
     expectedRevisionId: z.uuid(),
     prompt: z.string().trim().min(1).max(SCENE3D_PROMPT_MAX).optional(),
     operations: z.unknown().optional(),
@@ -323,10 +324,8 @@ export async function scene3DRoutes(app: FastifyInstance) {
     return undefined
   }
 
-  app.post(
-    "/v1/3d-scene/generate",
-    { preHandler: creditGuard((req) => resolveLlmCreditId(SCENE3D_LLM_FEATURE, req.body)) },
-    async (req, reply) => {
+  const generateOptions = { preHandler: creditGuard((req) => resolveLlmCreditId(SCENE3D_LLM_FEATURE, req.body)) }
+  const generateHandler = async (req: FastifyRequest, reply: FastifyReply) => {
       const refusal = await refuseKeylessOrProxied()
       if (refusal) return reply.status(refusal.status).send(refusal.body)
 
@@ -417,13 +416,15 @@ export async function scene3DRoutes(app: FastifyInstance) {
         return sendInternalError(reply, req, err, "Failed to start 3D scene authoring")
       }
       return { jobId: job.id }
-    },
-  )
+  }
 
-  app.post(
-    "/v1/3d-scene/edit",
-    { preHandler: creditGuard((req) => scene3DEditCreditId(req.body)) },
-    async (req, reply) => {
+  // The node-slug aliases keep the generic nodes.run contract usable by
+  // already-published SDKs; both paths install the exact same guards/handler.
+  app.post("/v1/3d-scene/generate", generateOptions, generateHandler)
+  app.post("/v1/generate-3d-scene", generateOptions, generateHandler)
+
+  const editOptions = { preHandler: creditGuard((req) => scene3DEditCreditId(req.body)) }
+  const editHandler = async (req: FastifyRequest, reply: FastifyReply) => {
       const parsed = scene3DEditBody.safeParse(req.body)
       if (!parsed.success) {
         return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
@@ -468,7 +469,7 @@ export async function scene3DRoutes(app: FastifyInstance) {
       // that is the list the plan ends up holding — a request that is legal on
       // its own can still push the merged list past the reference cap or add a
       // second video, and finding that out after the charge is not a fix.
-      const mergedReferences = mergeScene3DReferences(plan.references, references)
+      const mergedReferences = mergeScene3DReferences(plan.references, references, parsed.data.replaceReferences)
       const referenceError = scene3DReferenceListError(references) ?? scene3DReferenceListError(mergedReferences)
       if (referenceError) {
         return reply.status(400).send({ error: { code: "validation_error", message: referenceError } })
@@ -505,6 +506,7 @@ export async function scene3DRoutes(app: FastifyInstance) {
           plan,
           operations,
           references,
+          replaceReferences: parsed.data.replaceReferences,
           expectedRevisionId: parsed.data.expectedRevisionId,
           lockedObjectIds,
           revisionId,
@@ -573,6 +575,7 @@ export async function scene3DRoutes(app: FastifyInstance) {
 
         const payload: Scene3DJobPayload = {
           kind: "edit",
+          replaceReferences: parsed.data.replaceReferences,
           jobId: job.id,
           usageLogId: reservation?.usageLogId,
           plan,
@@ -595,6 +598,7 @@ export async function scene3DRoutes(app: FastifyInstance) {
         return sendInternalError(reply, req, err, "Failed to start the 3D scene edit")
       }
       return { jobId: job.id }
-    },
-  )
+  }
+  app.post("/v1/3d-scene/edit", editOptions, editHandler)
+  app.post("/v1/edit-3d-scene", editOptions, editHandler)
 }

@@ -1080,7 +1080,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     type: "generate-3d-scene", label: "Generate 3D Scene", category: "composition",
     description: "Generate an editable animated 3D clay scene from a prompt and optional image/video references. Video reference analysis is charged separately.",
     creditCost: `${scene3DMinCost}-${scene3DMaxCost}`,
-    outputType: "data", capabilities: ["supports-reference-image", "supports-reference-video", "editable-3d-scene"],
+    outputType: "data", capabilities: ["supports-reference-image", "supports-reference-video", "editable-3d-scene", "scene3d-embed-v1"],
     inputSchema: { fields: [
       { key: "prompt", type: "string", required: true },
       { key: "durationSeconds", type: "number" }, { key: "fps", type: "number" },

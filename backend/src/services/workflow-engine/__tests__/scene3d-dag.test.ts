@@ -240,3 +240,12 @@ describe("edit-3d-scene", () => {
     expect(result.payload).toMatchObject({ lockedObjectIds: ["hero"], selectedObjectIds: ["hero"] })
   })
 })
+
+ it("the DAG forwards reference replacement before validating the resulting set", () => {
+   const result = build("edit-3d-scene", {
+     scenePlan: { ...PLAN, references: [{ id: "old", url: "https://x.test/old.mp4", kind: "video", role: "motion" }] },
+     editPrompt: "match the new move", replaceReferences: true,
+     references: [{ id: "new", url: "https://x.test/new.mp4", kind: "video", role: "motion" }],
+   })
+   expect(result.payload).toMatchObject({ replaceReferences: true, references: [{ id: "new" }] })
+ })

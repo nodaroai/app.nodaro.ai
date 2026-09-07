@@ -233,6 +233,11 @@ describe("edit-3d-scene — the instruction lane", () => {
     llmModel: "claude-sonnet-4.6",
   }
 
+  it("preserves reference replacement across the durable worker boundary", async () => {
+    await handleEdit3dScene(job({ ...instruction, replaceReferences: true }), CTX)
+    expect(mocks.editScenePlan).toHaveBeenCalledWith(expect.objectContaining({ replaceReferences: true, references: [] }))
+  })
+
   it("forwards the locks and the selection to the authoring service", async () => {
     await handleEdit3dScene(job(instruction), CTX)
     expect(mocks.editScenePlan).toHaveBeenCalledWith(

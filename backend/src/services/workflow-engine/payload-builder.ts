@@ -6158,7 +6158,7 @@ export function buildPayload(
       // edit produces is the plan's references with the node's merged in, so
       // that is the list which has to be legal.
       const editPreflight = scene3DNodePreflightError(
-        mergeScene3DReferences(upstreamPlan.references, editReferences),
+        mergeScene3DReferences(upstreamPlan.references, editReferences, data.replaceReferences === true),
         editLlmModel,
         Boolean(editOperations),
       )
@@ -6180,6 +6180,7 @@ export function buildPayload(
           lockedObjectIds: Array.isArray(data.lockedObjectIds) ? data.lockedObjectIds : [],
           selectedObjectIds: Array.isArray(data.selectedObjectIds) ? data.selectedObjectIds : [],
           references: editReferences,
+          replaceReferences: data.replaceReferences === true,
           ...(editOperations ? { operations: editOperations } : { instruction: editInstruction }),
           llmModel: editLlmModel,
           reasoningEffort: editEffort,

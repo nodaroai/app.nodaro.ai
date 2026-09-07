@@ -1,7 +1,7 @@
 ---
 node_type: edit-3d-scene
-generated_at: 2026-09-07T13:21:36.729Z
-generated_from: faf85b35e
+generated_at: 2026-09-07T16:19:50.631Z
+generated_from: e3da6f32a
 ---
 
 # Edit 3D Scene
@@ -30,6 +30,7 @@ generated_from: faf85b35e
 - `references?: Scene3DNodeReference[]`
 - `referenceRoles?: Record<string, string>`
 - `referenceObjectIds?: Record<string, string>`
+- `replaceReferences?: boolean`
 - `expectedRevisionId?: string`
 - `llmModel?: string`
 - `reasoningEffort?: LlmReasoningEffort`

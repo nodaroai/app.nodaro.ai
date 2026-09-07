@@ -4050,6 +4050,7 @@ export type Edit3DSceneData = PromptAffixFields & Scene3DCommonFields & {
   [key: string]: unknown
   label: string
   editPrompt: string
+  replaceReferences?: boolean
   /**
    * The revision the next edit is based on. Sent verbatim to
    * `POST /v1/3d-scene/edit`, which REJECTS the call when the stored scene has

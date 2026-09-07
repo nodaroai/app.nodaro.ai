@@ -69,6 +69,7 @@ export interface Scene3DGeneratePayload extends Scene3DJobPayloadBase {
 }
 
 export interface Scene3DEditPayload extends Scene3DJobPayloadBase {
+  replaceReferences?: boolean
   kind: "edit"
   plan: Scene3DPlan
   expectedRevisionId: string
@@ -171,6 +172,7 @@ export const handleEdit3dScene: HandlerFn = async function handleEdit3dScene(job
     if (payload.operations) {
       const applied = applyDeterministicScene3DEdit({
         plan: payload.plan,
+        replaceReferences: payload.replaceReferences,
         operations: payload.operations,
         // The caller's references are merged into the plan's own and land on
         // the produced revision — the deterministic lane attaches references
@@ -198,6 +200,7 @@ export const handleEdit3dScene: HandlerFn = async function handleEdit3dScene(job
 
     const authored = await editScenePlan({
       plan: payload.plan,
+      replaceReferences: payload.replaceReferences,
       instruction: payload.instruction ?? "",
       lockedObjectIds: payload.lockedObjectIds ?? [],
       selectedObjectIds: payload.selectedObjectIds ?? [],

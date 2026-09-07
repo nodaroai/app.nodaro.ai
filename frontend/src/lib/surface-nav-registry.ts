@@ -42,6 +42,10 @@ export const ENTRY_BY_LINK: readonly string[] = [
   "/present/:shareToken",
   "/app/:slug",
   "/embed/:slug",
+  // Stateless Scene3D preview frame. Reached only by a host application that
+  // builds the URL itself (parentOrigin + channel); no nav entry can lead here
+  // and none should — it renders nothing until its parent pushes a scene.
+  "/embed/scene3d",
   "/tutorials/:slug",
 
   // Core app (dashboard) — the default landing, not gated by a surface nav entry.

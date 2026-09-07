@@ -17,6 +17,8 @@ export interface GenerateScene3DParams extends Record<string, unknown> {
 export interface EditScene3DParams extends Record<string, unknown> {
   scenePlan: Scene3DPlan
   expectedRevisionId: string
+  /** Replace the complete reference set, including clearing it with an empty list. Default: merge by id. */
+  replaceReferences?: boolean
   /** Supply an instruction or deterministic operations, never both. */
   prompt?: string
   operations?: readonly Scene3DEditOperation[]

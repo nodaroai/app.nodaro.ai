@@ -154,7 +154,9 @@ export function scene3DImageModalityError(
 export function mergeScene3DReferences(
   existing: readonly Scene3DReference[] | undefined,
   incoming: readonly Scene3DReference[] | undefined,
+  replace = false,
 ): Scene3DReference[] {
+  if (replace) return [...(incoming ?? [])]
   const supplied = new Map((incoming ?? []).map((r) => [r.id, r]))
   const merged: Scene3DReference[] = []
   const taken = new Set<string>()

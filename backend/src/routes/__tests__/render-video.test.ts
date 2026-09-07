@@ -373,7 +373,7 @@ describe("POST /v1/render-video/plan", () => {
     }
   }
 
-  it("queues a 3d-scene render and forwards the plan verbatim", async () => {
+  it.each(["/v1/render-video/plan", "/v1/render-video"])("queues a 3d-scene render verbatim through %s", async (url) => {
     mockJobInsert("job-3d-1")
     // Explicit pass-through: the SCHEMA is covered in plan-schemas.test.ts;
     // this case is about the route's plumbing and must not depend on whatever
@@ -387,7 +387,7 @@ describe("POST /v1/render-video/plan", () => {
 
     const res = await app.inject({
       method: "POST",
-      url: "/v1/render-video/plan",
+      url,
       payload: { planType: "3d-scene", plan, userId: TEST_USER_ID },
     })
 
@@ -414,7 +414,7 @@ describe("POST /v1/render-video/plan", () => {
     expect(refundReservedCreditsForJob).toHaveBeenCalledWith("job-queue-failure")
   })
 
-  it("rejects an invalid scene with 400 before any job or reservation exists", async () => {
+  it.each(["/v1/render-video/plan", "/v1/render-video"])("rejects an invalid scene before a job through %s", async (url) => {
     const insert = mockJobInsert("job-3d-2")
     vi.mocked(validatePlanByType).mockImplementation(() => {
       throw new Error('Plan validation failed for "3d-scene": objects.0.parentId: parent cycle')
@@ -422,7 +422,7 @@ describe("POST /v1/render-video/plan", () => {
 
     const res = await app.inject({
       method: "POST",
-      url: "/v1/render-video/plan",
+      url,
       payload: { planType: "3d-scene", plan: validScene3DPlan(), userId: TEST_USER_ID },
     })
 

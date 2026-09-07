@@ -2408,6 +2408,13 @@ export const en = {
   "cfgext.scene3dUsePending": "Use the new one",
   "cfgext.scene3dKeepMine": "Keep mine",
   "cfgext.scene3dLiveWhileRunning": "A revision is being generated — this view stays live and editable until it lands.",
+  // /embed/scene3d — the stateless preview frame. It owns no scene, so all four
+  // of these describe the CONVERSATION with the page that framed it.
+  "embed3d.waiting": "Waiting for the scene…",
+  "embed3d.waitingHint": "This preview holds no data of its own. The page that opened it sends the scene.",
+  "embed3d.configError": "This preview was opened without a valid parent origin and channel: {reason}",
+  "embed3d.rejected": "The last update was refused and the scene below is unchanged: {reason}",
+  "embed3d.readOnly": "View only",
   "cfgext.compTitlePrompt": "Title Prompt",
   "cfgext.compPh3dTitlePrompt": "Describe the 3D title: epic gold ADVENTURE text with particles, cinematic camera...",
   "cfgext.compEngine": "Engine",

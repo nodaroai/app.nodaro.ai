@@ -295,6 +295,17 @@ describe("editScenePlan — references", () => {
     expect(result.plan.references?.map((r) => r.id)).toEqual(["hero-ref"])
   })
 
+  it("replaces the reference set in both model conditioning and the new revision", async () => {
+    answers({ operations: [{ op: "set-background", color: "#000000" }], changeSummary: "Darkened it." })
+    const previous: Scene3DPlan = { ...PLAN, references: [{ id: "removed", url: IMG, kind: "image", role: "appearance" }] }
+    const result = await editScenePlan({ ...editArgs, plan: previous, references: [], replaceReferences: true })
+    expect(userTextAt(0)).not.toContain("removed")
+    expect(userTextAt(0)).not.toContain(IMG)
+    expect(result.plan.references).toBeUndefined()
+    expect(previous.references).toHaveLength(1)
+    expect(result.plan.parentRevisionId).toBe(previous.revisionId)
+  })
+
   it("persists a reference supplied WITH the instruction", async () => {
     answers({ operations: [{ op: "set-background", color: "#000000" }], changeSummary: "Darkened it." })
     const result = await editScenePlan({
@@ -321,6 +332,15 @@ describe("applyScene3DEditWithReferences", () => {
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.plan.references).toEqual([{ id: "r1", url: IMG, kind: "image", role: "appearance" }])
+  })
+
+  it("can remove a referenced object when its reference is explicitly cleared", () => {
+    const previous: Scene3DPlan = { ...PLAN, references: [{ id: "removed", url: IMG, kind: "image", role: "appearance", objectId: "hero" }] }
+    const result = applyScene3DEditWithReferences({ plan: previous, operations: [{ op: "remove-object", objectId: "hero" }], references: [], replaceReferences: true })
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw Error(result.message)
+    expect(result.plan.references).toBeUndefined()
+    expect(previous.objects.some((object) => object.id === "hero")).toBe(true)
   })
 
   it("keeps prior references and replaces the one sharing an id", () => {

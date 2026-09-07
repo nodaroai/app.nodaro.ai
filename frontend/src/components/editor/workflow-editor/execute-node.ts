@@ -7470,6 +7470,7 @@ function executeNodeCore(
       start: () => edit3DScene({
         scenePlan: e3dPlan,
         expectedRevisionId: e3dRevision,
+        replaceReferences: e3d.replaceReferences,
         prompt: e3dPrompt,
         references: e3dRefs.length > 0 ? e3dRefs : undefined,
         lockedObjectIds: e3d.lockedObjectIds?.length ? e3d.lockedObjectIds : undefined,

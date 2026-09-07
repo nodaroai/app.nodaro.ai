@@ -183,3 +183,93 @@ describe("Scene3DPreview", () => {
     expect(screen.getByText(/stays live and editable/i)).toBeInTheDocument()
   })
 })
+
+/**
+ * `readOnly` is the mode `/embed/scene3d` runs in by default. Its contract is
+ * that the panel stays a full VIEWER — playback, scrubbing, selection, the
+ * object list, the revision history — while every write is withheld.
+ *
+ * Each case asserts BOTH halves: the control is disabled or absent, AND the
+ * callback stays uncalled when the event is dispatched anyway. Only the first
+ * would leave a guard that a re-enabled input (devtools, a future refactor)
+ * walks straight past; only the second would leave live-looking controls that
+ * quietly do nothing.
+ */
+describe("Scene3DPreview — readOnly", () => {
+  const history: Scene3DRevisionEntry[] = [
+    { revisionId: REV_B, scenePlan: makePlan({ revisionId: REV_B }), source: "generate", createdAt: "x" },
+    { revisionId: REV_A, scenePlan: makePlan(), source: "manual", changeSummary: "moved hero", createdAt: "y" },
+  ]
+
+  it("defaults to OFF — the editor canvas behaves exactly as before", () => {
+    const props = setup({ selectedObjectIds: ["hero"] })
+    const field = screen.getByLabelText("Hero Position X") as HTMLInputElement
+    expect(field.disabled).toBe(false)
+    fireEvent.change(field, { target: { value: "2.5" } })
+    fireEvent.blur(field)
+    expect(props.onPlanChange).toHaveBeenCalledTimes(1)
+    expect(screen.getByLabelText("Lock Hero")).toBeInTheDocument()
+  })
+
+  it("still plays, scrubs and selects", () => {
+    const props = setup({ readOnly: true })
+    const scrub = screen.getByLabelText("Scrub") as HTMLInputElement
+    expect(scrub.disabled).toBe(false)
+    fireEvent.change(scrub, { target: { value: "48" } })
+    expect(screen.getByText("2.00s")).toBeInTheDocument()
+    fireEvent.click(screen.getByLabelText("Play"))
+
+    fireEvent.click(screen.getByText("Hero"))
+    expect(props.onSelectionChange).toHaveBeenCalledWith(["hero"])
+  })
+
+  it("refuses a numeric commit — disabled AND the callback declines", () => {
+    const props = setup({ readOnly: true, selectedObjectIds: ["hero"] })
+    const field = screen.getByLabelText("Hero Position X") as HTMLInputElement
+    expect(field.disabled).toBe(true)
+    fireEvent.change(field, { target: { value: "2.5" } })
+    fireEvent.blur(field)
+    expect(props.onPlanChange).not.toHaveBeenCalled()
+  })
+
+  it("refuses a colour commit on the object and on the backdrop", () => {
+    const props = setup({ readOnly: true, selectedObjectIds: ["hero"] })
+    for (const label of ["Hero color", "Background color"]) {
+      const input = screen.getByLabelText(label) as HTMLInputElement
+      expect(input.disabled).toBe(true)
+      fireEvent.change(input, { target: { value: "#ff0073" } })
+    }
+    expect(props.onPlanChange).not.toHaveBeenCalled()
+  })
+
+  it("refuses a camera commit", () => {
+    const props = setup({ readOnly: true })
+    const lens = screen.getByLabelText("Camera focal length") as HTMLInputElement
+    expect(lens.disabled).toBe(true)
+    fireEvent.change(lens, { target: { value: "85" } })
+    fireEvent.blur(lens)
+    expect(props.onPlanChange).not.toHaveBeenCalled()
+  })
+
+  it("withholds the lock control but still shows which objects are locked", () => {
+    setup({ readOnly: true, lockedObjectIds: ["hero"] })
+    expect(screen.queryByLabelText("Lock Ground")).toBeNull()
+    expect(screen.queryByLabelText("Unlock Hero")).toBeNull()
+    // The state is still legible — it explains why the model left Hero alone.
+    expect(screen.getByLabelText("Hero locked")).toBeInTheDocument()
+  })
+
+  it("keeps the revision history readable but withholds restore", () => {
+    setup({ readOnly: true, history })
+    expect(screen.getByText("2 revisions")).toBeInTheDocument()
+    expect(screen.getByText("moved hero")).toBeInTheDocument()
+    expect(screen.queryByLabelText(`Restore revision ${REV_B.slice(0, 6)}`)).toBeNull()
+  })
+
+  it("announces a pending revision but leaves the decision to the owner", () => {
+    setup({ readOnly: true, pendingPlan: makePlan({ revisionId: REV_B }) })
+    expect(screen.getByText(/arrived after you edited/i)).toBeInTheDocument()
+    expect(screen.queryByText("Use the new one")).toBeNull()
+    expect(screen.queryByText("Keep mine")).toBeNull()
+  })
+})

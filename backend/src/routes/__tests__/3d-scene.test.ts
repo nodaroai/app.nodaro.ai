@@ -140,6 +140,31 @@ describe("scene3DRenderFrame", () => {
   })
 })
 
+describe("generic SDK node-slug routes", () => {
+  it("starts the same guarded generation through the node slug", async () => {
+    const res = await post("/v1/generate-3d-scene", { prompt: "A dolly around a chair", userId: USER_ID })
+    expect(res.statusCode).toBe(200)
+    expect(mocks.creditIds).toHaveLength(1)
+    expect(mocks.reserveCreditsForJob).toHaveBeenCalledTimes(1)
+    expect(enqueued()).toMatchObject({ kind: "generate", prompt: "A dolly around a chair" })
+  })
+  it("retains free deterministic edits and revision conflicts through the node slug", async () => {
+    const payload = { scenePlan: PLAN, expectedRevisionId: REV, userId: USER_ID,
+      operations: [{ op: "set-background", color: "#112233" }] }
+    const res = await post("/v1/edit-3d-scene", payload)
+    expect(res.statusCode).toBe(200)
+    expect(mocks.creditIds).toEqual(["3d-scene-ops"])
+    const conflict = await post("/v1/edit-3d-scene", { ...payload, expectedRevisionId: USER_ID })
+    expect(conflict.statusCode).toBe(409)
+    expect(mocks.queueAdd).toHaveBeenCalledTimes(1)
+  })
+  it("does not bypass authentication or schema admission", async () => {
+    expect((await post("/v1/generate-3d-scene", { prompt: "A chair" })).statusCode).toBe(401)
+    expect((await post("/v1/edit-3d-scene", { userId: USER_ID })).statusCode).toBe(400)
+    expect(mocks.insertJob).not.toHaveBeenCalled()
+  })
+})
+
 describe("POST /v1/3d-scene/generate", () => {
   it("creates the row, reserves, and enqueues a payload the worker can run", async () => {
     const res = await generate({ durationSeconds: 3, fps: 30, aspectRatio: "1:1" })
@@ -535,6 +560,26 @@ describe("POST /v1/3d-scene/edit — what reaches the worker", () => {
     expect(res.statusCode).toBe(400)
     expect(res.json().error.message).toContain("At most 1 video reference")
     expect(mocks.insertJob).not.toHaveBeenCalled()
+  })
+
+  it("replaces an inherited video before validating and queues that intent durably", async () => {
+    const res = await edit({
+      scenePlan: { ...PLAN, references: [{ id: "old", url: VIDEO, kind: "video", role: "motion" }] },
+      prompt: "match this camera move", replaceReferences: true,
+      references: [{ id: "new", url: `${VIDEO}?new`, kind: "video", role: "motion" }],
+    })
+    expect(res.statusCode).toBe(200)
+    expect(enqueued()).toMatchObject({ replaceReferences: true, references: [{ id: "new" }] })
+    expect(mocks.insertJob.mock.calls[0][1].input_data.replaceReferences).toBe(true)
+  })
+
+  it("clears obsolete bindings before the deterministic edit dry run", async () => {
+    const res = await edit({
+      scenePlan: { ...PLAN, references: [{ id: "old", url: IMAGE, kind: "image", role: "appearance", objectId: "hero" }] },
+      operations: [{ op: "remove-object", objectId: "hero" }], references: [], replaceReferences: true,
+    })
+    expect(res.statusCode).toBe(200)
+    expect(enqueued()).toMatchObject({ replaceReferences: true, references: [] })
   })
 
   it("400s a deterministic edit whose reference points at an object it removes", async () => {
