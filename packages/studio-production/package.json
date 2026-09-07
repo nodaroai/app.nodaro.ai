@@ -1,6 +1,6 @@
 {
   "name": "@nodaro/studio-production",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "The Nodaro studio's production document as code — the shot/graph codec, the nodaro-studio-production plan format, the bundle codec and the cast/look/direction vocabulary, shared by the Nodaro platform and the studio app.",
   "type": "module",
   "license": "FSL-1.1-Apache-2.0",
@@ -24,7 +24,7 @@
   },
   "dependencies": {
     "@nodaro/prompts": "^1.17.0",
-    "@nodaro/shared": "^2.23.0",
+    "@nodaro/shared": "^2.24.0",
     "zod": "^4.4.0"
   },
   "devDependencies": {

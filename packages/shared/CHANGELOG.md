@@ -1,5 +1,43 @@
 # @nodaro/shared
 
+## 2.24.0
+
+### Minor Changes
+
+- 15d2086: **@nodaro/shared**
+
+  - LLM catalog gains `gemini-3.8-flash` (KIE `gemini-3-8-flash-openai` chat-completions + direct `gemini-3.8-flash`; economy tier; reasoning low|high on KIE, full minimal→high ladder in Advanced mode; enforced `response_format` json_schema; 16384 output cap — measured on the KIE lane rather than inherited from its 8192-capped 3.6/3.7 siblings). Image-only modality caps by decision: it stays out of the video-analysis picker until the 3.8-vs-3.7 analysis A/B concludes.
+  - LLM catalog gains `gpt-6-astra` (KIE responses dialect on the OpenAI family path; premium tier; reasoning low|medium|high|xhigh, on by default with no reasoning param sent; enforced `text.format` json_schema; `temperature` silently ignored, so the registry does not offer it). Image-only inputs.
+  - `gemini-3.7-flash` and `gpt-5.6-sol` descriptions lose their superlatives — those belong to the current top model of each family, and a stale one steers quality-critical work backwards in every picker.
+
+- e846720: **@nodaro/shared** — the wire contract of `/v1/studio/productions`, as types.
+
+  `StudioProductionView` is the one read shape every studio production route and
+  every studio MCP tool returns: the production's identity and audience, its
+  film look, cast, folders, cuts and bin, what is in flight, and its shots in
+  timeline order. `detail: "summary"` carries counts and the active urls;
+  `detail: "full"` adds every result with the context that regenerates it.
+  `ResultKey` is how a result is ADDRESSED — its job id when it has one, its url
+  otherwise, never a position, because two writers hold a production open by
+  design and an index is stale the moment either inserts.
+
+  The document's own sub-objects (`Cast`, `ScenePlan`, `LookSelectionMap`, …) are
+  named JSON aliases rather than re-declared shapes: their definition lives in
+  `@nodaro/studio-production` and re-declaring it here would be a second
+  definition of the document, which is exactly the disagreement this contract
+  exists to end.
+
+  **@nodaro/studio-production** — `toProductionView` / `toProductionSummary`
+  (a pure projection of `parseProduction`: no reconciling, no writes) and
+  `resultKey` / `findResult`. A build-time pin holds the projection assignable to
+  the shared contract, so the two cannot drift in silence.
+
+### Patch Changes
+
+- 055b122: **@nodaro/shared**
+
+  - `VIDEO_ANALYSIS_BUCKET_CREDITS` and `VIDEO_AUDIT_BUCKET_CREDITS` regenerated for the analyser's 9_434-token system-prompt pin (cloud-plugins 0.221.7): 17 of 20 analysis rows and 6 of 8 audit rows tick up by 1–5 credits.
+
 ## 2.23.0
 
 ### Minor Changes
