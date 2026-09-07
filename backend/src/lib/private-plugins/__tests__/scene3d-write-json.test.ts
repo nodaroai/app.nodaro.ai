@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto"
 import { describe, expect, it, vi } from "vitest"
-import { writeScene3DJson } from "../scene3d-write-json.js"
+import { writeScene3DJson, writeScene3DPng } from "../scene3d-write-json.js"
 import type { PluginSceneArtifactToolkit } from "../scene3d-artifact-contract.js"
 
 function fixture(status = 200) {
@@ -53,5 +53,25 @@ describe("owned scene JSON writes", () => {
     vi.mocked(f.toolkit.grant).mockImplementation(async () => { f.input.bytes.fill(120); return grant })
     await writeScene3DJson(f.toolkit, f.input, { fetch: f.fetch })
     expect(f.fetch.mock.calls[0][1]?.body).toEqual(original)
+  })
+})
+
+describe("owned scene still writes", () => {
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a6XcAAAAASUVORK5CYII=", "base64")
+  it("verifies a rendered PNG through the same immutable receipt path", async () => {
+    const f = fixture(412)
+    const receipt = { ...f.receipt, kind: "poster" as const, byteLength: png.length,
+      sha256: createHash("sha256").update(png).digest("hex") }
+    vi.mocked(f.toolkit.receive).mockResolvedValue(receipt)
+    await expect(writeScene3DPng(f.toolkit, { ...f.input, kind: "poster", bytes: png }, { fetch: f.fetch })).resolves.toEqual(receipt)
+  })
+  it("rejects invalid headers, oversize images and wrong kinds before granting", async () => {
+    const f = fixture()
+    const wide = Buffer.from(png); wide.writeUInt32BE(1921, 16)
+    for (const bytes of [Buffer.from("not a png"), wide, Buffer.alloc(8 * 1024 * 1024 + 1)]) {
+      await expect(writeScene3DPng(f.toolkit, { ...f.input, kind: "poster", bytes }, { fetch: f.fetch })).rejects.toThrow("bounded PNG")
+    }
+    await expect(writeScene3DPng(f.toolkit, { ...f.input, bytes: png }, { fetch: f.fetch })).rejects.toThrow()
+    expect(f.toolkit.grant).not.toHaveBeenCalled()
   })
 })

@@ -1,3 +1,4 @@
+import { createSceneRenderingToolkit } from "./scene3d-render-toolkit.js"
 import { completeStructuredMetered } from "./llm-metered.js"
 import { directVoiceChanger } from "../../providers/elevenlabs/voice-changer.js"
 import { createScene3DArtifactToolkit } from "./scene3d-artifact-toolkit.js"
@@ -1064,8 +1065,18 @@ function internalRequest(app: FastifyInstance, opts: PluginInternalRequestOption
 
 export function buildToolkit(): PluginToolkit {
   const sceneArtifacts = createScene3DArtifactToolkit()
+  // Queue and asset authorization modules join the graph only when this lane runs.
+  // Loading them during plugin boot creates an access-check/plugin-loader cycle.
+  let sceneRenderer: Promise<NonNullable<PluginToolkit["sceneRendering"]>> | undefined
+  const renderScenes = () => sceneRenderer ??= import("./scene3d-render-store.js")
+    .then(({ createSceneRenderPorts }) => createSceneRenderingToolkit(createSceneRenderPorts()))
   return {
     sceneArtifacts,
+    sceneRendering: {
+      submit: async (...args) => (await renderScenes()).submit(...args),
+      status: async (...args) => (await renderScenes()).status(...args),
+      cancel: async (...args) => (await renderScenes()).cancel(...args),
+    },
     scenePlayback: sceneArtifacts ? createScene3DPlaybackToolkit(sceneArtifacts) : undefined,
     stages: createDurableScene3DStageJournal(),
     providers: {

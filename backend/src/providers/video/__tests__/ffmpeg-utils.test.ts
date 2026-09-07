@@ -118,6 +118,7 @@ vi.mock("@/lib/config.js", () => ({
 import {
   downloadFile,
   runFfmpeg,
+  withFfmpegSlot,
   runFfprobe,
   getVideoDuration,
   getVideoStreamDuration,
@@ -384,6 +385,24 @@ describe("runFfmpeg", () => {
     const second = await runFfmpeg(["b"])
 
     expect(second).toBe("ok2")
+  })
+
+  it("removes a cancelled waiter without consuming a future CPU slot", async () => {
+    const releases: Array<() => void> = []
+    const hold = () => new Promise<void>((resolve) => releases.push(resolve))
+    const busy = [withFfmpegSlot(hold), withFfmpegSlot(hold)]
+    await Promise.resolve(); await Promise.resolve()
+    const controller = new AbortController(), cancelledWork = vi.fn(async () => {})
+    const cancelled = withFfmpegSlot(cancelledWork, controller.signal)
+    const rejection = expect(cancelled).rejects.toThrow("stop")
+    const nextWork = vi.fn(async () => {})
+    const next = withFfmpegSlot(nextWork)
+    controller.abort(new Error("stop"))
+    await rejection
+    releases.forEach((release) => release())
+    await Promise.all([...busy, next])
+    expect(cancelledWork).not.toHaveBeenCalled()
+    expect(nextWork).toHaveBeenCalledOnce()
   })
 })
 
