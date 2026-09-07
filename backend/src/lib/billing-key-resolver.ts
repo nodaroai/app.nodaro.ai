@@ -219,6 +219,9 @@ export function normalizeCidr(raw: unknown): string | null {
 
   const slash = value.lastIndexOf("/")
   const addressPart = slash === -1 ? value : value.slice(0, slash)
+  // A zone-suffixed IPv6 literal (fe80::1%eth0) is not a range Postgres's cidr
+  // type accepts; refuse it here (400) rather than let the insert fail (500).
+  if (addressPart.includes("%")) return null
   const parsed = parseAddress(addressPart)
   if (!parsed) return null
   const width = parsed.version === 4 ? 32 : 128

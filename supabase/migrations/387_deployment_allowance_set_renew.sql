@@ -2,7 +2,7 @@
 -- that says which credential moved a quota.
 -- The companion TypeScript — `setAllowance`, `writePendingAllowance`,
 -- `applyPendingAllowance` and the two SSO-subject lookups — ships in the same
--- PR; the routes that call them ship in the next one.
+-- PR, together with the routes that call them.
 --
 -- Depends on 381 (`deployment_payer_settings`, the singleton this file reads
 -- for the payer id and the default), 382 (the ledger, the grants table and
