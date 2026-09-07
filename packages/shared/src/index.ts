@@ -1051,20 +1051,3 @@ export {
 } from "./entity-node-fields.js"
 export { ENTITY_NODE_KINDS } from "./entity-node-fields.js"
 export type { EntityNodeKind } from "./entity-node-fields.js"
-
-// --- wire contract of /v1/studio/productions — types only ---
-// The studio production CODEC (the reader/writer of `settings.studio`, the
-// plan format, the catalogs and the reducers) lives in the FSL-licensed
-// `@nodaro/studio-production`. What crosses into this Apache package is the
-// envelope those routes return and the bodies they take, so the SDK can be
-// typed against it — the document's own sub-objects stay named JSON here and
-// are narrowed, and pinned, by the package that owns them.
-export type * from "./studio-production-wire.js"
-
-// --- write protocol of /v1/studio/productions — types only ---
-// The operation vocabulary every writer uses (the editor, an MCP agent, the
-// copilot): one discriminated union, addressed by stable key rather than by
-// position, so concurrent writers cannot clobber one another. The zod schemas,
-// the handlers and `applyOps` live in `@nodaro/studio-production` and pin
-// themselves against this union at build time.
-export type * from "./studio-production-ops.js"
