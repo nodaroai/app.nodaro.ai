@@ -9,6 +9,9 @@ import { createWorkDir, cleanupWorkDir, downloadFile, runFfmpeg, needsTranscode,
 import { applyVideoWatermark } from "../utils/watermark.js"
 import { commitJobCredits, refundJobCredits, shouldSaveJobResult, markJobCompletedDetailed, generateAndUploadThumbnail, createAssetFromJob, isFinalJobAttempt, type MarkJobCompletedOutcome } from "./shared.js"
 import { markJobFailed } from "../lib/job-failure.js"
+import { JobCancelledError } from "../lib/job-cancellation.js"
+import { DrainAbortError, isWorkerDraining } from "../lib/worker-drain.js"
+import { withRenderCancellation } from "./render-cancellation.js"
 
 /**
  * Which non-completed completion outcome releases the reservation.
@@ -950,7 +953,7 @@ export function createRenderWorker() {
             await bullJob.updateProgress(40)
 
             // Select composition and render
-            const { selectComposition, renderMedia } = await import("@remotion/renderer")
+            const { selectComposition, renderMedia, openBrowser, makeCancelSignal } = await import("@remotion/renderer")
 
             // Allow overriding Remotion's bundled chrome-headless-shell (e.g. custom Docker images)
             const browserExecutable = process.env.CHROME_PATH || undefined
@@ -958,68 +961,88 @@ export function createRenderWorker() {
             // WebGL compositions need an explicit GL backend in headless Chromium.
             const chromiumOptions = chromiumOptionsFor(compositionId)
 
-            console.log(`[render-worker] selectComposition(${compositionId}) starting...`)
-            const composition = await selectComposition({
-              serveUrl: bundlePath,
-              id: compositionId,
-              inputProps,
-              browserExecutable,
-              chromiumOptions,
-              timeoutInMilliseconds: 120_000,
-            })
-            console.log(`[render-worker] selectComposition(${compositionId}) done: ${composition.width}x${composition.height} ${composition.fps}fps ${composition.durationInFrames}fr`)
-
+            const cancellation = makeCancelSignal()
+            let browser: Awaited<ReturnType<typeof openBrowser>> | undefined
+            let stopped = false
             outputPath = join(workDir, "output.mp4")
-
-            const remotionConcurrency = config.REMOTION_CONCURRENCY ?? undefined
-
-            // Warn about expensive motion effects that multiply render time
-            const planEffects = (inputProps.plan as Record<string, unknown> | undefined)?.effects as Array<{ type: string; samples?: number; layers?: number }> | undefined
-            if (planEffects) {
-              const mb = planEffects.find((e) => e.type === "motion-blur")
-              const tr = planEffects.find((e) => e.type === "trail")
-              const multiplier = (mb?.samples ?? 1) * ((tr?.layers ?? 0) + 1)
-              if (multiplier > 1) {
-                console.log(`[render-worker] Job ${jobId}: motion effects multiplier ${multiplier}x (${durationInFrames} frames → ~${durationInFrames * multiplier} renders)`)
-              }
-            }
-
-            console.log(`[render-worker] renderMedia(${compositionId}) starting... output: ${outputPath}`)
-            const RENDER_TIMEOUT_MS = 25 * 60 * 1000
-            let timer: ReturnType<typeof setTimeout> | undefined
-            let lastLoggedPct = -10
-            await Promise.race([
-              renderMedia({
-                composition: {
-                  ...composition,
-                  width,
-                  height,
-                  fps,
-                  durationInFrames,
+            try {
+              await withRenderCancellation({
+                jobId,
+                timeoutMs: 25 * 60 * 1000,
+                isCancelled: async () => !await shouldSaveJobResult(jobId),
+                isDraining: isWorkerDraining,
+                cancel: async () => {
+                  stopped = true
+                  try { cancellation.cancel() }
+                  finally { await browser?.close({ silent: true }) }
                 },
-                serveUrl: bundlePath,
-                codec: "h264",
-                outputLocation: outputPath,
-                inputProps,
-                browserExecutable,
-                chromiumOptions,
-                concurrency: remotionConcurrency,
-                timeoutInMilliseconds: 120_000,
-                logLevel: "warn",
-                onProgress: ({ progress, renderedFrames, encodedFrames }: { progress: number; renderedFrames: number; encodedFrames: number }) => {
-                  const overall = 40 + Math.round(progress * 50)
-                  bullJob.updateProgress(overall).catch(() => {})
-                  const pct = Math.floor(progress * 100)
-                  if (pct >= lastLoggedPct + 10 || (progress >= 1 && lastLoggedPct < 100)) {
-                    lastLoggedPct = pct
-                    console.log(`[render-worker] Job ${jobId}: render ${pct}% (${renderedFrames} rendered, ${encodedFrames} encoded)`)
+              }, async () => {
+                browser = await openBrowser("chrome", { browserExecutable, chromiumOptions })
+                if (stopped) {
+                  await browser.close({ silent: true })
+                  throw new Error("Render stopped during browser startup")
+                }
+
+                console.log(`[render-worker] selectComposition(${compositionId}) starting...`)
+                const composition = await selectComposition({
+                  serveUrl: bundlePath,
+                  id: compositionId,
+                  inputProps,
+                  browserExecutable,
+                  chromiumOptions,
+                  timeoutInMilliseconds: 120_000,
+                  puppeteerInstance: browser,
+                })
+                console.log(`[render-worker] selectComposition(${compositionId}) done: ${composition.width}x${composition.height} ${composition.fps}fps ${composition.durationInFrames}fr`)
+
+                const remotionConcurrency = config.REMOTION_CONCURRENCY ?? undefined
+
+                // Warn about expensive motion effects that multiply render time
+                const planEffects = (inputProps.plan as Record<string, unknown> | undefined)?.effects as Array<{ type: string; samples?: number; layers?: number }> | undefined
+                if (planEffects) {
+                  const mb = planEffects.find((e) => e.type === "motion-blur")
+                  const tr = planEffects.find((e) => e.type === "trail")
+                  const multiplier = (mb?.samples ?? 1) * ((tr?.layers ?? 0) + 1)
+                  if (multiplier > 1) {
+                    console.log(`[render-worker] Job ${jobId}: motion effects multiplier ${multiplier}x (${durationInFrames} frames → ~${durationInFrames * multiplier} renders)`)
                   }
-                },
-              }),
-              new Promise((_, reject) => {
-                timer = setTimeout(() => reject(new Error("Render timed out after 25 minutes")), RENDER_TIMEOUT_MS)
-              }),
-            ]).finally(() => clearTimeout(timer))
+                }
+
+                console.log(`[render-worker] renderMedia(${compositionId}) starting... output: ${outputPath}`)
+                let lastLoggedPct = -10
+                await renderMedia({
+                  composition: {
+                    ...composition,
+                    width,
+                    height,
+                    fps,
+                    durationInFrames,
+                  },
+                  serveUrl: bundlePath,
+                  codec: "h264",
+                  outputLocation: outputPath,
+                  inputProps,
+                  browserExecutable,
+                  chromiumOptions,
+                  puppeteerInstance: browser,
+                  cancelSignal: cancellation.cancelSignal,
+                  concurrency: remotionConcurrency,
+                  timeoutInMilliseconds: 120_000,
+                  logLevel: "warn",
+                  onProgress: ({ progress, renderedFrames, encodedFrames }: { progress: number; renderedFrames: number; encodedFrames: number }) => {
+                    const overall = 40 + Math.round(progress * 50)
+                    bullJob.updateProgress(overall).catch(() => {})
+                    const pct = Math.floor(progress * 100)
+                    if (pct >= lastLoggedPct + 10 || (progress >= 1 && lastLoggedPct < 100)) {
+                      lastLoggedPct = pct
+                      console.log(`[render-worker] Job ${jobId}: render ${pct}% (${renderedFrames} rendered, ${encodedFrames} encoded)`)
+                    }
+                  },
+                })
+              })
+            } finally {
+              await browser?.close({ silent: true })
+            }
           } finally {
             stopFileServer?.()
           }
@@ -1069,6 +1092,10 @@ export function createRenderWorker() {
 
         console.log(`[render-worker] Job ${jobId} completed successfully`)
       } catch (error) {
+        // A deployment interruption retries without terminalizing or refunding.
+        if (error instanceof DrainAbortError) throw error
+        // The cancellation endpoint owns the status and credit transition.
+        if (error instanceof JobCancelledError) return
         const errMsg = error instanceof Error ? error.message : String(error)
         console.error(`[render-worker] Job ${jobId} failed:`, errMsg)
 

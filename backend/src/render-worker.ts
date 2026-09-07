@@ -1,6 +1,7 @@
 import { createRenderWorker } from "./workers/render-worker.js"
 import { loadOverlay } from "./lib/overlay/load.js"
 import { registerMainlinePromptPolicies } from "./lib/prompt-policies/index.js"
+import { beginWorkerDrain, SHUTDOWN_DRAIN_MS } from "./lib/worker-drain.js"
 
 process.on("unhandledRejection", (err) => {
   console.error("Unhandled rejection:", err)
@@ -23,10 +24,11 @@ const worker = createRenderWorker()
 console.log("Render worker started, waiting for jobs...")
 
 const shutdown = async () => {
+  beginWorkerDrain()
   const timeout = setTimeout(() => {
     console.error("Render worker shutdown timed out, forcing exit")
     process.exit(1)
-  }, 30_000)
+  }, SHUTDOWN_DRAIN_MS)
   try {
     await worker.close()
   } finally {
