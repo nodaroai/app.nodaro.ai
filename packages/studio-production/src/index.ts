@@ -77,3 +77,26 @@ export * from "./format/registry"
 export * from "./format/render-skill"
 export * from "./format/schema"
 export * from "./format/warnings"
+
+// ── the write protocol: one batch of semantic operations, applied atomically ─
+// `applyOps` is the ONE writer. The ops route applies a batch here before it
+// writes the row back under a compare-and-swap, and the studio editor applies
+// the same function locally for its optimistic state — which is what makes
+// replaying an outbox on a newer document an exact merge rather than a guess.
+// The twelve section modules under `ops/sections/` are reached through it: a
+// caller names an operation, never a handler.
+export * from "./ops/apply"
+export * from "./ops/errors"
+export * from "./ops/inverse"
+export * from "./ops/production"
+export * from "./ops/schema"
+export * from "./ops/types"
+export * from "./describe-ops"
+
+// ── the request builders: a shot → the params a generation route takes ──────
+// The assembly the studio's hooks used to do inline, as pure functions, so a
+// route, an MCP tool and the editor all put the same shot on the wire.
+export * from "./requests/context"
+export * from "./requests/directing"
+export * from "./requests/export"
+export * from "./requests/framing"
