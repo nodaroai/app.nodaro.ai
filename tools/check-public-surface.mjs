@@ -91,7 +91,7 @@ const RULES = [
     // Written with character classes so this file does not itself carry the
     // names — the publish-path marker gate greps fixed strings and would
     // otherwise abort on the very check that guards them.
-    pattern: /\bh[i]ggsfield\b|\bap[i]yi\b|\bkr[e]a\.ai\b|\bfre[e]pik\b/i,
+    pattern: /\bh[i]ggsfield\b|\bap[i]yi\b|\bkr[e]a\.ai\b|\bfre[e]pik\b|\bartl[i]st\b/i,
   },
   {
     id: "internal-planning-ref",
@@ -147,12 +147,7 @@ const EXCEPTIONS = [
 
 function trackedFiles() {
   const out = execFileSync("git", ["ls-files", "-z"], { encoding: "utf8", maxBuffer: 128 * 1024 * 1024 })
-  return out.split("\0").filter(Boolean).filter((f) => {
-    if (SKIP_DIRS.some((d) => f.includes(d))) return false
-    if (SKIP_PATHS.some((p) => f.startsWith(p) || f === p)) return false
-    if (SKIP_EXT.some((e) => f.toLowerCase().endsWith(e))) return false
-    return true
-  })
+  return out.split("\0").filter(Boolean).filter(scannablePath)
 }
 
 /** Comment markers + newlines collapsed, so a wrapped phrase reads as one line. */
@@ -168,56 +163,95 @@ function excepted(file, ruleId) {
   return EXCEPTIONS.some((e) => e.path === file && e.ruleId === ruleId)
 }
 
-const offenders = []
-for (const file of trackedFiles()) {
-  let content
-  try {
-    content = readFileSync(file, "utf8")
-  } catch {
-    continue // binary or unreadable — nothing to say
-  }
-  if (content.includes("\0")) continue // binary that slipped the extension list
-  const lines = content.split("\n")
-  const joined = dewrap(content)
+/**
+ * Scan every tracked file, per line and de-wrapped.
+ * @returns {{file: string, line: number, rule: Rule, text: string}[]}
+ */
+function scanTrackedFiles() {
+  const found = []
+  for (const file of trackedFiles()) {
+    let content
+    try {
+      content = readFileSync(file, "utf8")
+    } catch {
+      continue // binary or unreadable — nothing to say
+    }
+    if (content.includes("\0")) continue // binary that slipped the extension list
+    const lines = content.split("\n")
+    const joined = dewrap(content)
 
+    for (const rule of RULES) {
+      if (excepted(file, rule.id)) continue
+      if (rule.allowPaths?.some((p) => p.test(file))) continue
+      let hit = null
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i]
+        if (!rule.pattern.test(line)) continue
+        if (rule.allow?.some((a) => a.test(line))) continue
+        hit = { line: i + 1, text: line.trim().slice(0, 160) }
+        break
+      }
+      if (!hit) {
+        // Nothing per-line: try the de-wrapped view for a phrase split across lines.
+        const m = joined.match(rule.pattern)
+        if (m && !rule.allow?.some((a) => a.test(joined))) {
+          hit = { line: 0, text: `…${m[0]}… (wrapped across lines)` }
+        }
+      }
+      if (hit) found.push({ file, line: hit.line, rule, text: hit.text })
+    }
+  }
+  return found
+}
+
+// The rule data and the per-line verdict are exported so the HISTORY gate
+// (tools/check-history-surface.mjs) scans commit diffs against the SAME
+// categories — one list, two scopes. A category added here is a category both
+// gates enforce.
+export { RULES, EXCEPTIONS, SKIP_DIRS, SKIP_PATHS, SKIP_EXT, excepted }
+
+/** True when a repo-relative path is in this check's scope at all. */
+export function scannablePath(file) {
+  if (SKIP_DIRS.some((d) => file.includes(d))) return false
+  if (SKIP_PATHS.some((p) => file.startsWith(p) || file === p)) return false
+  if (SKIP_EXT.some((e) => file.toLowerCase().endsWith(e))) return false
+  return true
+}
+
+/**
+ * The verdict for ONE line of ONE file: the rule it trips, or null.
+ * @returns {Rule | null}
+ */
+export function ruleTrippedByLine(file, line) {
   for (const rule of RULES) {
     if (excepted(file, rule.id)) continue
     if (rule.allowPaths?.some((p) => p.test(file))) continue
-    let hit = null
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i]
-      if (!rule.pattern.test(line)) continue
-      if (rule.allow?.some((a) => a.test(line))) continue
-      hit = { line: i + 1, text: line.trim().slice(0, 160) }
-      break
-    }
-    if (!hit) {
-      // Nothing per-line: try the de-wrapped view for a phrase split across lines.
-      const m = joined.match(rule.pattern)
-      if (m && !rule.allow?.some((a) => a.test(joined))) {
-        hit = { line: 0, text: `…${m[0]}… (wrapped across lines)` }
-      }
-    }
-    if (hit) offenders.push({ file, line: hit.line, rule, text: hit.text })
+    if (!rule.pattern.test(line)) continue
+    if (rule.allow?.some((a) => a.test(line))) continue
+    return rule
   }
+  return null
 }
 
-if (offenders.length > 0) {
-  console.error(`Public-surface check FAILED — ${offenders.length} finding(s) in tracked files:\n`)
-  const byRule = new Map()
-  for (const o of offenders) {
-    if (!byRule.has(o.rule.id)) byRule.set(o.rule.id, [])
-    byRule.get(o.rule.id).push(o)
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const offenders = scanTrackedFiles()
+  if (offenders.length > 0) {
+    console.error(`Public-surface check FAILED — ${offenders.length} finding(s) in tracked files:\n`)
+    const byRule = new Map()
+    for (const o of offenders) {
+      if (!byRule.has(o.rule.id)) byRule.set(o.rule.id, [])
+      byRule.get(o.rule.id).push(o)
+    }
+    for (const [id, list] of byRule) {
+      console.error(`  [${id}] ${list[0].rule.why}`)
+      for (const o of list) console.error(`    ${o.file}:${o.line}\n      ${o.text}`)
+      console.error("")
+    }
+    console.error("Every tracked file ships inside the public release tarball. Reword the")
+    console.error("finding, or — if it is genuinely sanctioned — add a path-anchored entry to")
+    console.error("EXCEPTIONS in tools/check-public-surface.mjs with a reason.")
+    process.exit(1)
+  } else {
+    console.log(`Public-surface check passed — ${RULES.length} categories over every tracked file.`)
   }
-  for (const [id, list] of byRule) {
-    console.error(`  [${id}] ${list[0].rule.why}`)
-    for (const o of list) console.error(`    ${o.file}:${o.line}\n      ${o.text}`)
-    console.error("")
-  }
-  console.error("Every tracked file ships inside the public release tarball. Reword the")
-  console.error("finding, or — if it is genuinely sanctioned — add a path-anchored entry to")
-  console.error("EXCEPTIONS in tools/check-public-surface.mjs with a reason.")
-  process.exit(1)
-} else {
-  console.log(`Public-surface check passed — ${RULES.length} categories over every tracked file.`)
 }
