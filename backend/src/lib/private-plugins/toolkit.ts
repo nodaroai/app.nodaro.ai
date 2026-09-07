@@ -1,3 +1,4 @@
+import { completeStructuredMetered } from "./llm-metered.js"
 import { directVoiceChanger } from "../../providers/elevenlabs/voice-changer.js"
 import { createStageJournal } from "./stage-journal.js"
 import { ReplicateAudioSeparationProvider } from "../../providers/replicate/audio-separation.js"
@@ -1294,6 +1295,7 @@ export function buildToolkit(): PluginToolkit {
       youtubeHosts: YOUTUBE_HOSTS,
     },
     llm: {
+      completeStructuredMetered,
       // Adapts PluginLlmRequest {model, system?, prompt, maxTokens?} to
       // lib/llm-client.ts's LlmRequest and unwraps StructuredLlmOutput<T> to
       // the contract's bare Promise<T>.

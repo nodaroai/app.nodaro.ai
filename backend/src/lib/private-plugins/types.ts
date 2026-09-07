@@ -1420,7 +1420,24 @@ export interface PluginLlmMultimodalRequest {
   minPromptTokens?: number
 }
 
+export interface PluginLlmMeteredUsage {
+  inputTokens: number
+  outputTokens: number
+  providerCost?: number
+  /** False means some provider usage is unknown; never treat it as zero cost. */
+  complete: boolean
+}
+export type PluginLlmMeteredResult<T> =
+  | { ok: true; output: T; usage: PluginLlmMeteredUsage }
+  | { ok: false; message: string; usage: PluginLlmMeteredUsage }
+
 export interface PluginLlmToolkit {
+  /** Preserves usage on failures and uses the selected model's normal lane. */
+  completeStructuredMetered?<T>(
+    req: PluginLlmMultimodalRequest,
+    schema: unknown,
+    opts?: { schemaName?: string; maxRetries?: number },
+  ): Promise<PluginLlmMeteredResult<T>>
   /** Mirrors `llmCompleteStructured` (`lib/llm-client.ts:133`). */
   completeStructured<T>(
     req: PluginLlmRequest,
