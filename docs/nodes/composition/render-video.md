@@ -2,7 +2,7 @@
 > Finalize and render composition plans into video files.
 
 ## Overview
-The Render Video node takes a composition plan from any upstream composer node (Video Composer, After Effects, Lottie Overlay, 3D Title, Motion Graphics, or Composite) and renders it into a final video file using Remotion. It auto-detects the upstream composition type and renders accordingly via a dedicated BullMQ render worker.
+The Render Video node takes a composition plan from any upstream composer node (Video Composer, After Effects, Lottie Overlay, 3D Title, Generate 3D Scene, Edit 3D Scene, Motion Graphics, or Composite) and renders it into a final video file using Remotion. It auto-detects the upstream composition type and renders accordingly via a dedicated BullMQ render worker.
 
 ## Configuration
 
@@ -39,3 +39,9 @@ The Render Video node takes a composition plan from any upstream composer node (
 - Render progress is tracked via `currentJobId` and `currentJobProgress` fields, which update during execution.
 - If no upstream composer is connected, the node falls back to arranging raw assets using the Asset Order configuration.
 - This is typically the final node in a composition pipeline before output nodes (Save to Storage, social posts, etc.).
+
+## 3D scene compositions
+
+Connect Generate 3D Scene or Edit 3D Scene to render a clay MP4 from the selected revision. The camera, dimensions, frame rate and duration come from the scene plan. Export does not call an LLM or reinterpret the prompt. The API form is `POST /v1/render-video/plan` with `{ planType: "3d-scene", plan: scenePlan }`; the SDK also accepts this through `nodes.run("render-video", …)` and `nodes.runAndWait`. For MCP, use `render_3d_scene`.
+
+A completed 3D scene render includes `videoUrl`, `thumbnailUrl`, `sceneRevisionId` and `renderer: "scene3d/three"` in the job output. Reference image/video URLs remain attached to the editable scene but are not downloaded or rendered as scene textures. The built-in Cloud export price is **15 credits**; use the model-cost API for the instance's current price.

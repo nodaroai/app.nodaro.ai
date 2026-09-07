@@ -1118,6 +1118,12 @@ export function useWorkflowPersistence(projectId?: string) {
         // that already has a result or user edits.
         reconcileCompletedSingleNodeJobs(id, nodes, storeUpdateNodeData, {
           listCompleted: (wfId) => listWorkflowExecutions(wfId, { limit: 50, status: "completed", source: "editor" }),
+          // Re-read after each job lookup: the canvas is interactive while this
+          // runs, so a node edited DURING recovery must win over the snapshot.
+          readLiveData: (nodeId) =>
+            useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.data as
+              | Record<string, unknown>
+              | undefined,
         }).catch(() => {})
 
         // Refresh every placed ENTITY node (character / object / creature /

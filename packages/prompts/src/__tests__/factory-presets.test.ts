@@ -1001,10 +1001,16 @@ describe("lottie-overlay factory preset data validity", () => {
 })
 
 describe("PRESET_APPLY_CLEAR_KEYS", () => {
-  it("equals every COMPOSER_PLAN_MAP plan field plus lottieUrl (drift guard)", () => {
+  it("clears every composition plan, its artifact and Scene3D revision context (drift guard)", () => {
     // Deliberately re-derived from COMPOSER_PLAN_MAP (not COMPOSER_PLAN_FIELDS):
     // asserting against the same constant production reads would be tautological.
-    const expected = [...new Set(Object.values(COMPOSER_PLAN_MAP).map((m) => m.planField)), "lottieUrl"]
+    const expected = [
+      ...new Set(Object.values(COMPOSER_PLAN_MAP).map((m) => m.planField)), "lottieUrl",
+      // Histories contain previous prompts/references; revision-bound selections
+      // and locks cannot survive replacing the plan with a preset.
+      "sceneHistory", "scenePendingPlan", "sceneJobBaseRevisionId", "expectedRevisionId",
+      "changeSummary", "selectedObjectIds", "lockedObjectIds", "referenceObjectIds", "referenceRoles",
+    ]
     expect([...PRESET_APPLY_CLEAR_KEYS].sort()).toEqual([...expected].sort())
   })
 

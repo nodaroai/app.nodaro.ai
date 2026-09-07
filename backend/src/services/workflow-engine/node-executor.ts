@@ -17,6 +17,7 @@ import { hasCredits, config } from "../../lib/config.js"
 import { mapReserveError } from "../../lib/reserve-errors.js"
 import { CreditsService } from "../../ee/billing/credits.js"
 import { refundJobCredits } from "../../workers/shared.js"
+import { buildScene3DHttpBody } from "./scene3d-http.js"
 import { buildPayload, buildNodeRefMap, type WorkflowSettings } from "./payload-builder.js"
 import { ensureWorkflowSheetPanels } from "./reference-sheet-stage-a.js"
 import { buildNodeOutputFromJobData } from "./output-extractor.js"
@@ -51,6 +52,8 @@ import type { ErrorHint } from "../../lib/safety-block.js"
 // ---------------------------------------------------------------------------
 
 const SYNC_HTTP_NODES = new Set([
+  "generate-3d-scene",
+  "edit-3d-scene",
   "ai-writer",
   "llm-chat",
   "video-composer",
@@ -82,6 +85,8 @@ const SYNC_HTTP_NODES = new Set([
 // When renaming routes, update this map in the same change. Exported for
 // testing so a regression test can assert every entry is actually routable.
 export const SYNC_HTTP_ROUTES: Record<string, string> = {
+  "generate-3d-scene": "/v1/3d-scene/generate",
+  "edit-3d-scene": "/v1/3d-scene/edit",
   "ai-writer": "/v1/ai-writer/generate",
   "llm-chat": "/v1/llm-chat/generate",
   "video-composer": "/v1/scene-graph/generate",
@@ -234,6 +239,10 @@ export function extractUserPromptTemplate(node: SimpleNode): string | undefined 
       return pick("effectPrompt", "prompt")
     case "lottie-overlay":
       return pick("overlayPrompt", "prompt")
+    case "generate-3d-scene":
+      return pick("scenePrompt", "prompt")
+    case "edit-3d-scene":
+      return pick("editPrompt", "prompt")
     case "3d-title":
       return pick("titlePrompt", "prompt")
     case "motion-graphics":
@@ -414,7 +423,7 @@ export async function executeNode(
   const isLottieMotionGraphics =
     node.type === "motion-graphics" && (node.data.engine as string | undefined) === "lottie"
   if (SYNC_HTTP_NODES.has(node.type) && !isLottieMotionGraphics) {
-    return executeSyncHttpNode(node, resolvedInputs, ctx, userPromptTemplate, edges, allNodes, nodeStates)
+    return executeSyncHttpNode(node, resolvedInputs, ctx, userPromptTemplate, edges, allNodes, nodeStates, authoredData, iterationIndex)
   }
 
   // Reference Sheet — run Stage A (generate the panels the chosen type needs but
@@ -509,7 +518,16 @@ async function executeSyncHttpNode(
   edges?: SimpleEdge[],
   allNodes?: SimpleNode[],
   nodeStates?: Record<string, NodeExecutionState>,
+  authoredData?: Record<string, unknown>,
+  iterationIndex?: number,
 ): Promise<ExecuteNodeResult> {
+  const isScene3D = node.type === "generate-3d-scene" || node.type === "edit-3d-scene"
+  const adopted = isScene3D && iterationIndex === undefined ? ctx.adoptableJobs?.get(node.id) : undefined
+  if (adopted) {
+    ctx.adoptableJobs!.delete(node.id)
+    ctx.onJobCreated?.(node.id, adopted.jobId)
+    return pollJobToCompletion(adopted.jobId, node.type, ctx, adopted.usageLogId, adopted.creditsReserved)
+  }
   const route = SYNC_HTTP_ROUTES[node.type]
   if (!route) {
     throw new Error(`No route mapping for sync HTTP node: ${node.type}`)
@@ -542,7 +560,12 @@ async function executeSyncHttpNode(
       : []
 
   // Build request body from node data + resolved inputs
-  const body = buildSyncHttpBody(node, resolvedInputs, ctx, userPromptTemplate, refMap, downstreamPickerTypes)
+  const body = isScene3D
+    ? buildScene3DHttpBody(node, resolvedInputs, ctx, {
+        settings: ctx.workflowSettings as WorkflowSettings | undefined,
+        nodes: allNodes, edges, nodeStates, authoredData,
+      }, userPromptTemplate)
+    : buildSyncHttpBody(node, resolvedInputs, ctx, userPromptTemplate, refMap, downstreamPickerTypes)
 
   // Polling sources resume from the DURABLE cursor, not from the node's saved
   // data. Only the editor can persist back into node data (updateNodeData +
@@ -614,6 +637,7 @@ async function executeSyncHttpNode(
     // degrades reconciler recovery (back to the 4h abandon threshold for
     // this job), so we log + continue rather than fail the workflow.
     const stampJobId = result.jobId as string
+    if (isScene3D) ctx.onJobCreated?.(node.id, stampJobId)
     try {
       const { data: jobRow } = await supabase
         .from("jobs")
@@ -623,7 +647,7 @@ async function executeSyncHttpNode(
       const existing = (jobRow?.input_data as Record<string, unknown>) ?? {}
       await supabase
         .from("jobs")
-        .update({ input_data: { ...existing, node_id: node.id } })
+        .update({ input_data: { ...existing, node_id: node.id, ...(isScene3D && iterationIndex !== undefined ? { iterationIndex } : {}) }, ...(isScene3D ? { workflow_execution_id: ctx.executionId } : {}) })
         .eq("id", stampJobId)
     } catch (err) {
       console.warn(`[orchestrator] Failed to stamp node_id on sync-HTTP job ${stampJobId}:`, err)
@@ -1567,7 +1591,10 @@ function completedJobResult(
   }
   const effectiveCreditsUsed = creditsUsed
     ?? (typeof jobRecord.credits_actual === "number" ? jobRecord.credits_actual : undefined)
-  return { output, jobId, usageLogId, creditsUsed: effectiveCreditsUsed }
+  const analysisCredits = (nodeType === "generate-3d-scene" || nodeType === "edit-3d-scene")
+    && typeof outputData.analysisCredits === "number" ? outputData.analysisCredits : 0
+  return { output, jobId, usageLogId,
+    creditsUsed: analysisCredits > 0 ? (effectiveCreditsUsed ?? 0) + analysisCredits : effectiveCreditsUsed }
 }
 
 /**

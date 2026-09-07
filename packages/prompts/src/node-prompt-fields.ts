@@ -118,6 +118,8 @@ export const NODE_PROMPT_FIELDS: Readonly<Record<string, PromptFieldSpec>> = {
   // ── Composition / FX (compact, no media-result preview → no inline editor) ──
   "image-critic": { prompt: "prompt", promptLabel: "Criteria", media: "image", inline: false },
   "motion-graphics": { prompt: "motionPrompt", promptLabel: "Motion prompt", media: "video", inline: false },
+  "generate-3d-scene": { prompt: "scenePrompt", promptLabel: "Scene", media: "text", inline: false },
+  "edit-3d-scene": { prompt: "editPrompt", promptLabel: "Edit instruction", media: "text", inline: false },
   "3d-title": { prompt: "titlePrompt", promptLabel: "Title", media: "text", inline: false },
   // ── Script / alignment (their primary text field) ──
   "generate-script": { prompt: "styleGuide", promptLabel: "Style guide", media: "text", inline: false },

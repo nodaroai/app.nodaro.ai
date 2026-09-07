@@ -20,6 +20,9 @@ vi.mock("@/lib/supabase.js", () => {
   }
 })
 
+vi.mock("@/lib/job-failure.js", () => ({ markJobFailed: vi.fn().mockResolvedValue(true) }))
+vi.mock("@/lib/credits-job-lifecycle.js", () => ({ refundReservedCreditsForJob: vi.fn().mockResolvedValue(1) }))
+
 vi.mock("@/lib/queue.js", () => ({
   videoQueue: {
     add: vi.fn().mockResolvedValue({ id: "queue-job-1" }),
@@ -81,6 +84,8 @@ vi.mock("@/lib/plan-schemas.js", async () => {
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
+import { markJobFailed } from "../../lib/job-failure.js"
+import { refundReservedCreditsForJob } from "../../lib/credits-job-lifecycle.js"
 import { renderVideoRoutes } from "../render-video.js"
 import { supabase } from "../../lib/supabase.js"
 import { renderQueue } from "../../lib/render-queue.js"
@@ -337,5 +342,104 @@ describe("POST /v1/render-video/plan", () => {
         planType: "after-effects",
       })
     )
+  })
+
+  // ── 3d-scene (Scene3D previz) ─────────────────────────────────────────
+  // The renderer reuses this generic plan route rather than owning one, so
+  // these cases pin the two things that would silently break it: the planType
+  // enum accepting "3d-scene", and a bad scene being rejected BEFORE a job row
+  // and a credit reservation exist.
+
+  function validScene3DPlan(overrides: Record<string, unknown> = {}) {
+    return {
+      planType: "3d-scene",
+      schemaVersion: 1,
+      revisionId: "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+      width: 1280,
+      height: 720,
+      fps: 24,
+      durationInFrames: 48,
+      backgroundColor: "#101014",
+      camera: { position: [0, 2, 8], target: [0, 1, 0], focalLengthMm: 35, sensorWidthMm: 36 },
+      objects: [
+        {
+          id: "hero", name: "Hero", primitive: "box",
+          dimensions: [2, 2, 2], position: [0, 1, 0], rotation: [0, 0, 0], scale: [1, 1, 1],
+          color: "#e4a04c",
+        },
+      ],
+      lighting: { ambientIntensity: 0.5, keyIntensity: 1.5, keyPosition: [4, 6, 5] },
+      ...overrides,
+    }
+  }
+
+  it("queues a 3d-scene render and forwards the plan verbatim", async () => {
+    mockJobInsert("job-3d-1")
+    // Explicit pass-through: the SCHEMA is covered in plan-schemas.test.ts;
+    // this case is about the route's plumbing and must not depend on whatever
+    // implementation an earlier test left on the shared mock.
+    vi.mocked(validatePlanByType).mockImplementation(((_type: string, plan: unknown) => plan) as never)
+    const plan = validScene3DPlan({
+      references: [
+        { id: "ref-1", url: "https://cdn.example.com/board.png", kind: "image", role: "layout" },
+      ],
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/render-video/plan",
+      payload: { planType: "3d-scene", plan, userId: TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().jobId).toBe("job-3d-1")
+    expect(renderQueue.add).toHaveBeenCalledWith(
+      "render-video",
+      expect.objectContaining({ jobId: "job-3d-1", planType: "3d-scene", plan }),
+    )
+    // references survive to the queue (and the job row) — the worker strips
+    // them from the Remotion inputProps, not the route.
+    const queued = vi.mocked(renderQueue.add).mock.calls[0][1] as { plan: { references?: unknown[] } }
+    expect(queued.plan.references).toHaveLength(1)
+  })
+
+  it("fails and refunds a reserved plan job when enqueueing fails", async () => {
+    mockJobInsert("job-queue-failure")
+    vi.mocked(validatePlanByType).mockImplementation(((_type: string, plan: unknown) => plan) as never)
+    vi.mocked(renderQueue.add).mockRejectedValueOnce(new Error("Redis unavailable"))
+    const res = await app.inject({ method: "POST", url: "/v1/render-video/plan",
+      payload: { planType: "3d-scene", plan: validScene3DPlan(), userId: TEST_USER_ID } })
+    expect(res.statusCode).toBe(500)
+    expect(markJobFailed).toHaveBeenCalledWith("job-queue-failure", { error_message: "Failed to enqueue video render" })
+    expect(refundReservedCreditsForJob).toHaveBeenCalledWith("job-queue-failure")
+  })
+
+  it("rejects an invalid scene with 400 before any job or reservation exists", async () => {
+    const insert = mockJobInsert("job-3d-2")
+    vi.mocked(validatePlanByType).mockImplementation(() => {
+      throw new Error('Plan validation failed for "3d-scene": objects.0.parentId: parent cycle')
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/render-video/plan",
+      payload: { planType: "3d-scene", plan: validScene3DPlan(), userId: TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("plan_validation_error")
+    expect(insert.mockInsert).not.toHaveBeenCalled()
+    expect(renderQueue.add).not.toHaveBeenCalled()
+  })
+
+  it("rejects an unknown planType at the route boundary", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/render-video/plan",
+      payload: { planType: "3d-scene-v2", plan: {}, userId: TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
   })
 })

@@ -642,6 +642,12 @@ export type LlmFeature =
   | "motion-graphics-lottie"
   | "lottie-overlay"
   | "3d-title"
+  // Scene3D previz authoring — generate-3d-scene AND edit-3d-scene share one
+  // feature: both send the model a scene (the edit sends the WHOLE plan in) and
+  // both get back structured geometry, so the token profile is the same shape.
+  // The deterministic edit lane never reaches an LLM and bills the separate
+  // zero-cost `3d-scene-ops` identifier instead.
+  | "3d-scene"
   | "image-to-text"
   | "describe-to-picker"
   | "qa-check"
@@ -672,6 +678,7 @@ export const LLM_FEATURE_DEFAULTS: Record<LlmFeature, string> = {
   "motion-graphics-lottie": "claude-sonnet-4.6",
   "lottie-overlay": "claude-sonnet-4.6",
   "3d-title": "claude-sonnet-4.6",
+  "3d-scene": "claude-sonnet-4.6",
   "image-to-text": "claude-sonnet-4.6",
   "describe-to-picker": "claude-opus-5",
   "qa-check": "gemini-3.6-flash",
@@ -849,6 +856,9 @@ export const LLM_ROUTE_DEFAULTS: Record<string, LlmRouteDefaults> = {
   "motion-graphics":         { temperature: 0.3,  maxTokens: 2048, structuredOutput: true },
   "motion-graphics-lottie":  { temperature: 0.3,  maxTokens: 8192, structuredOutput: true },
   "3d-title":                { temperature: 0.4,  maxTokens: 3072, structuredOutput: true },
+  // A 100-object plan with keyframe tracks is the biggest structured payload
+  // any composer feature emits — 3072 (3d-title's cap) truncates it mid-array.
+  "3d-scene":                { temperature: 0.3,  maxTokens: 8192, structuredOutput: true },
 }
 
 /** Route defaults for a feature; `{}` for an unknown one. */

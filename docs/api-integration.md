@@ -2700,3 +2700,7 @@ openapi-generator generate -i https://app.nodaro.ai/v1/openapi.json -g python -o
 
 Per-node request fields beyond the flagship pair are documented in the
 [node catalog](./nodes/README.md) (every page also exists as raw `.md`).
+
+## 3D scenes
+
+Editable clay scenes use `POST /v1/3d-scene/generate` and `POST /v1/3d-scene/edit`, returning job IDs. Render via `POST /v1/render-video/plan` with `planType: "3d-scene"`. See [Generate 3D Scene](nodes/composition/generate-3d-scene.md) and [Edit 3D Scene](nodes/composition/edit-3d-scene.md) for inputs and revision behavior.

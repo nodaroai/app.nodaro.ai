@@ -313,3 +313,106 @@ describe("content-policy rewrite disclosure recovery (Task A4 follow-up)", () =>
     ])
   })
 })
+
+/**
+ * Scene3D reload recovery.
+ *
+ * The gap: a first scene generation whose in-memory poll died (reload, tab
+ * close) left the node EMPTY — the result was billed and sitting in
+ * `jobs.output_data`, but `buildCompletedResultPatch` only recognised media
+ * URLs and analysis JSON, so nothing put it back on the canvas.
+ */
+describe("Scene3D recovery", () => {
+  const REV_A = "11111111-1111-4111-8111-111111111111"
+  const REV_B = "22222222-2222-4222-8222-222222222222"
+  const REV_C = "33333333-3333-4333-8333-333333333333"
+
+  const plan = (revisionId: string, parentRevisionId?: string) => ({
+    planType: "3d-scene",
+    revisionId,
+    ...(parentRevisionId ? { parentRevisionId } : {}),
+  })
+
+  function sceneJob(revisionId: string, parentRevisionId?: string) {
+    return async () => ({ status: "completed", output_data: { scenePlan: plan(revisionId, parentRevisionId), changeSummary: "built the set" } })
+  }
+
+  it("recovers a first generation onto an empty scene node", async () => {
+    const patches = await computeCompletedJobPatches(
+      [{ nodeId: "n1", jobId: "job-1" }],
+      [node("n1", "generate-3d-scene", {})],
+      sceneJob(REV_A),
+      NOW,
+    )
+    expect(patches).toHaveLength(1)
+    const updates = patches[0].updates
+    expect((updates.scenePlan as Record<string, unknown>).revisionId).toBe(REV_A)
+    expect((updates.sceneHistory as Array<{ revisionId: string }>).map((e) => e.revisionId)).toEqual([REV_A])
+    expect(updates.expectedRevisionId).toBe(REV_A)
+    expect(updates.sceneJobBaseRevisionId).toBeUndefined()
+  })
+
+  it("PARKS the recovered plan when the node already holds a different scene", async () => {
+    // Uncertain provenance (the run's base is unknown or has moved) → keep the
+    // user's scene active and offer the recovered one, never the reverse.
+    const patches = await computeCompletedJobPatches(
+      [{ nodeId: "n1", jobId: "job-1" }],
+      [node("n1", "generate-3d-scene", { scenePlan: plan(REV_B) })],
+      sceneJob(REV_A),
+      NOW,
+    )
+    expect(patches).toHaveLength(1)
+    expect(patches[0].updates.scenePlan).toBeUndefined()
+    expect((patches[0].updates.scenePendingPlan as Record<string, unknown>).revisionId).toBe(REV_A)
+  })
+
+  it("ADOPTS when the node is still on the revision the interrupted run started from", async () => {
+    // `sceneJobBaseRevisionId` is not a transient runtime key, so it survives
+    // the save and a mid-run reload still knows what the job was based on.
+    const patches = await computeCompletedJobPatches(
+      [{ nodeId: "n1", jobId: "job-1" }],
+      [node("n1", "edit-3d-scene", { scenePlan: plan(REV_B), sceneJobBaseRevisionId: REV_B })],
+      sceneJob(REV_C, REV_B),
+      NOW,
+    )
+    expect((patches[0].updates.scenePlan as Record<string, unknown>).revisionId).toBe(REV_C)
+  })
+
+  it("is IDEMPOTENT across reloads — a revision already in history is not re-parked", async () => {
+    const history = [{ revisionId: REV_A, scenePlan: plan(REV_A), source: "generate", createdAt: NOW }]
+    const patches = await computeCompletedJobPatches(
+      [{ nodeId: "n1", jobId: "job-1" }],
+      [node("n1", "generate-3d-scene", { scenePlan: plan(REV_B), sceneHistory: history })],
+      sceneJob(REV_A),
+      NOW,
+    )
+    expect(patches).toEqual([])
+  })
+
+  it("respects an edit made DURING recovery, not the pre-fetch snapshot", async () => {
+    // The job lookup is async and the canvas stays interactive: the user
+    // nudges an object while it is in flight. Deciding against the snapshot
+    // would overwrite exactly that edit.
+    const snapshot = node("n1", "generate-3d-scene", {})
+    const live: Record<string, unknown> = { scenePlan: plan(REV_B) }
+    const patches = await computeCompletedJobPatches(
+      [{ nodeId: "n1", jobId: "job-1" }],
+      [snapshot],
+      sceneJob(REV_A),
+      NOW,
+      () => live,
+    )
+    expect(patches[0].updates.scenePlan).toBeUndefined()
+    expect((patches[0].updates.scenePendingPlan as Record<string, unknown>).revisionId).toBe(REV_A)
+  })
+
+  it("skips a job that produced no scene", async () => {
+    const patches = await computeCompletedJobPatches(
+      [{ nodeId: "n1", jobId: "job-1" }],
+      [node("n1", "generate-3d-scene", {})],
+      async () => ({ status: "completed", output_data: { videoUrl: "https://r2/v.mp4" } }),
+      NOW,
+    )
+    expect(patches).toEqual([])
+  })
+})

@@ -1,6 +1,8 @@
 import type { FastifyInstance } from "fastify"
 import { sendInternalError } from "../lib/http-errors.js"
 import { insertJob } from "../lib/insert-job.js"
+import { markJobFailed } from "../lib/job-failure.js"
+import { refundReservedCreditsForJob } from "../lib/credits-job-lifecycle.js"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
@@ -315,12 +317,19 @@ export async function renderVideoRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await renderQueue.add("render-video", {
-      jobId: job.id,
-      planType,
-      plan,
-      usageLogId,
-    })
+    try {
+      await renderQueue.add("render-video", {
+        jobId: job.id,
+        planType,
+        plan,
+        usageLogId,
+      })
+    } catch (error) {
+      if (await markJobFailed(job.id, { error_message: "Failed to enqueue video render" })) {
+        await refundReservedCreditsForJob(job.id)
+      }
+      return sendInternalError(reply, req, error, "Failed to enqueue video render")
+    }
 
     return { jobId: job.id }
   })

@@ -395,10 +395,12 @@ describe("LLM_FEATURE_DEFAULTS", () => {
     "image-critic",
     "pick-best-llm",
     "workflow-copilot",
+    // Scene3D previz authoring — generate-3d-scene AND edit-3d-scene share it.
+    "3d-scene",
   ]
 
-  it("has entries for all 17 features", () => {
-    expect(Object.keys(LLM_FEATURE_DEFAULTS)).toHaveLength(17)
+  it("has entries for all 18 features", () => {
+    expect(Object.keys(LLM_FEATURE_DEFAULTS)).toHaveLength(18)
     for (const feature of ALL_FEATURES) {
       expect(LLM_FEATURE_DEFAULTS).toHaveProperty(feature)
     }

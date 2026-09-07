@@ -1,3 +1,4 @@
+import type { Scene3DReference } from "@nodaro/shared"
 /**
  * Build BullMQ job payloads for each node type from node data + resolved inputs.
  * Returns { jobName, queueName, payload } for worker-queued nodes.
@@ -8,7 +9,7 @@ import { normalizeCollageLabels } from "../../providers/image/collage-badges.js"
 
 // Shared logic from packages/shared — single source of truth
 import { resolveVideoRequestNorm } from "../../lib/video-request-norm.js"
-import { resolveSlideshowTransition, collectAncestorRefs as sharedCollectAncestorRefs, applyDefaultVideoSelection, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionableAssetArrays, buildCreditModelIdentifier, resolveImageGenCreditIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, resolveVideoModeForInputs, videoProviderRequiresImage, isVeoProvider, buildLipSyncCreditId, isPerSecondLipSyncProvider, resolveAiAvatarCreditId, resolveSwitchXCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, buildVideoAuditCreditId, resolveVideoAnalysisModel, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName, validateAiAvatarPayload, validateCinematicAvatarPayload, resolveNodeRefs, resolveEffectiveSourceType, PARAMETER_NODE_TYPES, characterMentionSlug, expandExtraRefsToConnectedReferences, PLATFORM_SPECS, isSeedance2Provider, isMinimaxH3Provider, isWan3Provider, isGeminiOmniProvider, PRICING_DEFAULT_RESOLUTION, supportsExtendRender, MODEL_CATALOG, hasFeature, referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality, COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS, buildLlmCreditIdentifier, motionGraphicsFeature, FLUX_LORA_CHARACTER_MODEL_ID, extractCharacterLoraFields, clampSmartCutWindow, resolveGvpAnchorWire, normalizeModelInput, readPromptAffixes, findImageMentionTokens, knownImageSlugsFromRefs, findEntityMentionTokens, knownEntitySlugsFromRefs, uiAspectRatioFill, uiResolutionFill, resolveTopazUpscale, unresolvedRefTokens, classifyRefToken, parseNodeRef, NODE_REF_PATTERN, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY } from "@nodaro/shared"
+import { resolveSlideshowTransition, collectAncestorRefs as sharedCollectAncestorRefs, applyDefaultVideoSelection, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionableAssetArrays, buildCreditModelIdentifier, resolveImageGenCreditIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, resolveVideoModeForInputs, videoProviderRequiresImage, isVeoProvider, buildLipSyncCreditId, isPerSecondLipSyncProvider, resolveAiAvatarCreditId, resolveSwitchXCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, buildVideoAuditCreditId, resolveVideoAnalysisModel, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName, validateAiAvatarPayload, validateCinematicAvatarPayload, resolveNodeRefs, resolveEffectiveSourceType, PARAMETER_NODE_TYPES, characterMentionSlug, expandExtraRefsToConnectedReferences, PLATFORM_SPECS, isSeedance2Provider, isMinimaxH3Provider, isWan3Provider, isGeminiOmniProvider, PRICING_DEFAULT_RESOLUTION, supportsExtendRender, MODEL_CATALOG, hasFeature, referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality, COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS, buildLlmCreditIdentifier, motionGraphicsFeature, FLUX_LORA_CHARACTER_MODEL_ID, extractCharacterLoraFields, clampSmartCutWindow, resolveGvpAnchorWire, normalizeModelInput, readPromptAffixes, findImageMentionTokens, knownImageSlugsFromRefs, findEntityMentionTokens, knownEntitySlugsFromRefs, uiAspectRatioFill, uiResolutionFill, resolveTopazUpscale, unresolvedRefTokens, classifyRefToken, parseNodeRef, NODE_REF_PATTERN, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, newScene3DRevisionId, scene3DPlanSchema, type Scene3DPlan } from "@nodaro/shared"
 import { composeNegative, resolveTemplate, applyTemplate, computeNodePrompt, assembleImageInput, readDirectionFields, readStructuredFields, readSubjectFields, buildImagePrompt, buildScenePrompt, collectIdentityLockClause as sharedCollectIdentityLockClause, getParameterPromptHint, characterLockToRefLock, buildCharacterPrompt, buildObjectPrompt, buildCreaturePrompt, buildLocationPrompt, buildFaceTemplateInputs, appendMusicMeta, composeSoundHintFromConnections, truncateForField, appendField, assembleSunoInput, type SoundConsumerType, type SoundComposition, resolveVideoReferenceCore, applyPromptAffixes, composeVideoPromptText, isMinorAge, containsMinorAgeHint, type DirectionFields, type StructuredPromptFields, type SubjectFields, NODE_PROMPT_CANDIDATE_FIELDS } from "@nodaro/prompts"
 import type { CharacterDef, ConnectedReference, SceneData, ExtraRefInput, ExtraRefCharacterContext } from "@nodaro/shared"
 import type { CharacterMeta } from "@nodaro/prompts"
@@ -17,6 +18,8 @@ import { backendHybridRoles } from "../../lib/reference-format.js"
 import { selectLoraRoutingForMentions } from "../../lib/character-lora.js"
 import { config } from "../../lib/config.js"
 import { isNodeDenied, deniedNodeRejectionMessage, isModelDenied, deniedModelRejectionMessage } from "../../lib/surface-deny.js"
+import { scene3DFrameFromNode, scene3DNodePreflightError, scene3DReferencesFromNode } from "../../lib/scene3d-node.js"
+import { mergeScene3DReferences } from "../scene3d/scene3d-references.js"
 import { imageRequiredMessage } from "../../lib/video-image-required.js"
 import { isVoiceGenderAllowed, premadeVoiceGender } from "../../lib/voice-policy.js"
 import { applyPromptPolicies } from "../../lib/prompt-policy.js"
@@ -6083,6 +6086,108 @@ export function buildPayload(
       }
     }
 
+    // --- Scene3D previz (generate / edit) ---
+    //
+    // Shared graph resolution for scene authoring. The orchestrator converts
+    // this payload to the HTTP route body; that route owns reference analysis,
+    // validation, credit reservation and the durable worker queue.
+    case "generate-3d-scene": {
+      const frame = scene3DFrameFromNode(data)
+      const sceneLlmModel = data.llmModel as string | undefined
+      const sceneEffort = data.reasoningEffort as string | undefined
+      // BESPOKE prompt field (`scenePrompt`, per NODE_PROMPT_FIELDS), so the
+      // affixes are wrapped explicitly — the motion-graphics-lottie idiom.
+      // `promptFor` would read `data.prompt`, which this node does not have.
+      const scenePrompt =
+        applyPromptAffixes(
+          resolvedInputs.prompt || resolveRefs(data.scenePrompt as string | undefined, refMap),
+          readPromptAffixes(data),
+          refMap,
+        ) ?? ""
+      if (!scenePrompt.trim()) {
+        throw new Error("Generate 3D Scene has no brief — describe the scene, or wire a prompt in.")
+      }
+      const sceneReferences = scene3DReferencesFromNode(data, resolvedInputs, scene3DGraphReferences(node, data, resolvedInputs, buildCtx))
+      // The route's own pre-flight, from the same helpers. Thrown BEFORE this
+      // function returns a payload, which is before the orchestrator reserves —
+      // so an unreadable image reference or a list the contract refuses costs
+      // nothing here, exactly as it costs nothing at the route.
+      const scenePreflight = scene3DNodePreflightError(sceneReferences, sceneLlmModel, false)
+      if (scenePreflight) throw new Error(`Generate 3D Scene: ${scenePreflight}`)
+      return {
+        jobName: "generate-3d-scene",
+        queueName: "video-generation",
+        modelIdentifier: buildLlmCreditIdentifier("3d-scene", sceneLlmModel, sceneEffort),
+        payload: {
+          kind: "generate",
+          jobId,
+          prompt: scenePrompt,
+          llmModel: sceneLlmModel,
+          reasoningEffort: sceneEffort,
+          references: sceneReferences,
+          revisionId: newScene3DRevisionId(),
+          ...frame,
+          usageLogId,
+        },
+      }
+    }
+
+    case "edit-3d-scene": {
+      const upstreamPlan = resolveScene3DPlan(node, data, buildCtx)
+      if (!upstreamPlan) {
+        throw new Error(
+          "Edit 3D Scene has no scene to edit — wire a Generate 3D Scene node into its scene input, or run that node first.",
+        )
+      }
+      const editOperations = Array.isArray(data.operations) ? (data.operations as unknown[]) : undefined
+      const editInstruction =
+        applyPromptAffixes(
+          resolvedInputs.prompt || resolveRefs(data.editPrompt as string | undefined, refMap),
+          readPromptAffixes(data),
+          refMap,
+        ) ?? ""
+      if (!editOperations && !editInstruction.trim()) {
+        throw new Error(
+          "Edit 3D Scene has nothing to do — write an edit instruction, or wire one in.",
+        )
+      }
+      const editLlmModel = data.llmModel as string | undefined
+      const editEffort = data.reasoningEffort as string | undefined
+      const editReferences = scene3DReferencesFromNode(data, resolvedInputs, scene3DGraphReferences(node, data, resolvedInputs, buildCtx))
+      // Checked against the MERGED list, the same way the route does: what the
+      // edit produces is the plan's references with the node's merged in, so
+      // that is the list which has to be legal.
+      const editPreflight = scene3DNodePreflightError(
+        mergeScene3DReferences(upstreamPlan.references, editReferences),
+        editLlmModel,
+        Boolean(editOperations),
+      )
+      if (editPreflight) throw new Error(`Edit 3D Scene: ${editPreflight}`)
+      return {
+        jobName: "edit-3d-scene",
+        queueName: "video-generation",
+        // The deterministic lane never reaches a model and bills nothing; the
+        // instruction lane bills the feature's tier exactly like the route.
+        modelIdentifier: editOperations
+          ? "3d-scene-ops"
+          : buildLlmCreditIdentifier("3d-scene", editLlmModel, editEffort),
+        payload: {
+          kind: "edit",
+          jobId,
+          plan: upstreamPlan,
+          expectedRevisionId: upstreamPlan.revisionId,
+          revisionId: newScene3DRevisionId(),
+          lockedObjectIds: Array.isArray(data.lockedObjectIds) ? data.lockedObjectIds : [],
+          selectedObjectIds: Array.isArray(data.selectedObjectIds) ? data.selectedObjectIds : [],
+          references: editReferences,
+          ...(editOperations ? { operations: editOperations } : { instruction: editInstruction }),
+          llmModel: editLlmModel,
+          reasoningEffort: editEffort,
+          usageLogId,
+        },
+      }
+    }
+
     // --- Render video (goes to render queue) ---
     case "render-video": {
       // Resolve plan from upstream composer nodes (matches frontend execute-node.ts logic)
@@ -6151,6 +6256,74 @@ export function buildPayload(
 // ---------------------------------------------------------------------------
 // Auto-composition helpers for render-video fallback (matches frontend)
 // ---------------------------------------------------------------------------
+
+/**
+ * The Scene3D plan an `edit-3d-scene` node edits: the node's own stored
+ * `scenePlan` first (a re-run of an already-edited node), otherwise the plan
+ * an upstream composer produced — this run's output before the saved data, the
+ * same precedence `render-video` uses. Anything that does not parse as a plan
+ * is treated as absent, so a stale or foreign plan fails with the node's own
+ * sentence rather than deep inside the worker.
+ */
+/** Match the canvas reference binding: producer IDs identify references, and
+ * per-producer roles/object bindings survive a whole-workflow run. */
+function scene3DGraphReferences(
+  node: SimpleNode,
+  data: Record<string, unknown>,
+  inputs: ResolvedInputs,
+  ctx?: PayloadBuildContext,
+): Scene3DReference[] {
+  const references: Scene3DReference[] = []
+  const seen = new Set<string>()
+  const roles = (data.referenceRoles ?? {}) as Record<string, string>
+  const objectIds = (data.referenceObjectIds ?? {}) as Record<string, string>
+  for (const edge of ctx?.edges ?? []) {
+    if (edge.target !== node.id || edge.targetHandle !== "references" || seen.has(edge.source)) continue
+    const source = ctx?.nodes?.find((candidate) => candidate.id === edge.source)
+    if (!source) continue
+    const output = ctx?.nodeStates?.[source.id]?.output ?? extractSourceNodeOutput(source) ?? extractSavedNodeOutput(source)
+    const url = output ? getPrimaryOutput(output, source.type, edge.sourceHandle) : undefined
+    if (!url || !/^https?:\/\//.test(url)) continue
+    seen.add(source.id)
+    const kind = output?.videoUrl === url || inputs.referenceVideoUrls?.includes(url) || VIDEO_SOURCE_TYPES.has(source.type) ? "video" : "image"
+    const role = roles[source.id] ?? (kind === "video" ? "motion" : "appearance")
+    references.push({ id: source.id, url, kind, role: role as Scene3DReference["role"],
+      ...(objectIds[source.id] ? { objectId: objectIds[source.id] } : {}) })
+  }
+  return references
+}
+
+function resolveScene3DPlan(
+  node: SimpleNode,
+  data: Record<string, unknown>,
+  buildCtx?: PayloadBuildContext,
+): Scene3DPlan | undefined {
+  const thisRun: unknown[] = []
+  const upstreamSaved: unknown[] = []
+  if (buildCtx?.edges && buildCtx?.nodes) {
+    for (const edge of buildCtx.edges.filter((e) => e.target === node.id)) {
+      const srcNode = buildCtx.nodes.find((n) => n.id === edge.source)
+      if (!srcNode) continue
+      const mapping = COMPOSER_PLAN_MAP[srcNode.type]
+      if (!mapping) continue
+      const fromRun = buildCtx.nodeStates?.[srcNode.id]?.output?.plan
+      if (fromRun) thisRun.push(fromRun)
+      const saved = srcNode.data[mapping.planField]
+      if (saved) upstreamSaved.push(saved)
+    }
+  }
+  // Order matters and is NOT render-video's: there `plan` is an INPUT field, so
+  // the node's own data legitimately wins. On edit-3d-scene `scenePlan` is the
+  // node's OUTPUT — reading it first means a workflow whose generate node just
+  // re-ran would edit last run's stale revision and silently ignore the fresh
+  // upstream one.
+  const candidates: unknown[] = [...thisRun, ...upstreamSaved, ...(data.scenePlan ? [data.scenePlan] : [])]
+  for (const candidate of candidates) {
+    const parsed = scene3DPlanSchema.safeParse(candidate)
+    if (parsed.success) return parsed.data as Scene3DPlan
+  }
+  return undefined
+}
 
 /** Collect image/video/audio assets from upstream nodes (matches frontend collectMediaAssets). */
 function collectMediaAssetsForRender(

@@ -1,3 +1,4 @@
+import type { GenerateScene3DParams, EditScene3DParams, RenderScene3DParams, Scene3DJobOutput } from "./scene3d-types.js"
 import type { NodaroClient } from "../client.js"
 import type { JobStatusResult } from "./jobs.js"
 import { JobAbortedError, JobFailedError, JobHeldError, JobTimeoutError } from "../errors.js"
@@ -309,9 +310,9 @@ export class NodesResource {
 
   /**
    * Run a single node directly without wrapping it in a workflow. Posts
-   * `params` as the request body to `POST /v1/<type>` (the route convention
-   * every generation node follows: `generate-image`, `image-to-video`,
-   * `text-to-speech`, etc.).
+   * `params` as the request body to the node's API route. Most use
+   * `POST /v1/<type>`; scene authoring uses `/v1/3d-scene/generate|edit`,
+   * and render-video with a planType uses `/v1/render-video/plan`.
    *
    * This is the SDK equivalent of the MCP server's verb tools — and the
    * path the Nodaro CLI uses for `nodaro nodes run <type>`.
@@ -326,13 +327,20 @@ export class NodesResource {
    * @param params  Request body. Field names must match the node's
    *                `inputSchema` (see `get(type).inputSchema`).
    */
+  run(type: "generate-3d-scene", params: GenerateScene3DParams): Promise<RunNodeResult>
+  run(type: "edit-3d-scene", params: EditScene3DParams): Promise<RunNodeResult>
+  run(type: "render-video", params: RenderScene3DParams): Promise<RunNodeResult>
   run(type: "generate-image", params?: GenerateImageParams): Promise<RunNodeResult>
   run(type: "generate-video", params?: GenerateVideoParams): Promise<RunNodeResult>
   run(type: "text-to-video", params: TextToVideoParams): Promise<RunNodeResult>
   run(type: "assemble-narrated-video", params?: AssembleNarratedVideoParams): Promise<RunNodeResult>
   run(type: string, params?: Record<string, unknown>): Promise<RunNodeResult>
   run(type: string, params: Record<string, unknown> = {}): Promise<RunNodeResult> {
-    return this.client.request("POST", `/v1/${encodeURIComponent(type)}`, { body: params })
+    const route = type === "generate-3d-scene" ? "/v1/3d-scene/generate"
+      : type === "edit-3d-scene" ? "/v1/3d-scene/edit"
+      : type === "render-video" && typeof params.planType === "string" ? "/v1/render-video/plan"
+      : `/v1/${encodeURIComponent(type)}`
+    return this.client.request("POST", route, { body: params })
   }
 
   /**
@@ -362,11 +370,14 @@ export class NodesResource {
    * @param params  Request body — field names match the node's `inputSchema`.
    * @param opts    `signal` / `onProgress` / `pollMs` / `maxMs`.
    */
+  runAndWait(type: "generate-3d-scene", params: GenerateScene3DParams, options?: RunAndWaitOptions): Promise<Scene3DJobOutput>
+  runAndWait(type: "edit-3d-scene", params: EditScene3DParams, options?: RunAndWaitOptions): Promise<Scene3DJobOutput>
+  runAndWait(type: "render-video", params: RenderScene3DParams, options?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "generate-image", params?: GenerateImageParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "generate-video", params?: GenerateVideoParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "text-to-video", params: TextToVideoParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "assemble-narrated-video", params?: AssembleNarratedVideoParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
-  runAndWait(type: string, params?: Record<string, unknown>, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
+  runAndWait<T extends string>(type: T, params?: Record<string, unknown>, opts?: RunAndWaitOptions): Promise<T extends "generate-3d-scene" | "edit-3d-scene" ? Scene3DJobOutput : NodeJobOutput>
   async runAndWait(
     type: string,
     params: Record<string, unknown> = {},

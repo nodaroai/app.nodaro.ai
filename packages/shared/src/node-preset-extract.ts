@@ -25,13 +25,19 @@ import { PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY } from "./prompt-affixes.js"
  *     blob (~tens of KB) + a stale url, re-injecting them on every apply and
  *     bloating the preset row. These keys are in the capture-exclusion set below.
  */
-export const PRESET_APPLY_CLEAR_KEYS: readonly string[] = [...COMPOSER_PLAN_FIELDS, "lottieUrl"]
+export const PRESET_APPLY_CLEAR_KEYS: readonly string[] = [
+  ...COMPOSER_PLAN_FIELDS, "lottieUrl",
+  // Scene revision history contains old plans and their reference/prompt context.
+  // Preserve it in workflows, never capture or resurrect it through a preset.
+  "sceneHistory", "scenePendingPlan", "sceneJobBaseRevisionId", "expectedRevisionId",
+  "changeSummary", "selectedObjectIds", "lockedObjectIds", "referenceObjectIds", "referenceRoles",
+]
 
 /**
  * The three keys that carry a preset's PROMPT CONTENT: the prompt itself plus the pre/post text
  * wrapped around it at run time. A preset "owns prompt content" iff its data defines any of them.
  */
-const PROMPT_CONTENT_KEYS: readonly string[] = ["prompt", PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY]
+const PROMPT_CONTENT_KEYS: readonly string[] = ["prompt", "scenePrompt", "editPrompt", PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY]
 
 /**
  * The keys applying THIS preset must clear on the node: always `PRESET_APPLY_CLEAR_KEYS`, plus

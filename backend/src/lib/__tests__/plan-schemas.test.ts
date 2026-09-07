@@ -168,8 +168,8 @@ function makeSceneGraphPlan(overrides: Record<string, unknown> = {}) {
 // ── PLAN_TYPES ───────────────────────────────────────────────────────────
 
 describe("PLAN_TYPES", () => {
-  it("has exactly 8 entries", () => {
-    expect(PLAN_TYPES).toHaveLength(9)
+  it("has exactly 10 entries", () => {
+    expect(PLAN_TYPES).toHaveLength(10)
   })
 
   it("contains all expected types", () => {
@@ -181,6 +181,109 @@ describe("PLAN_TYPES", () => {
     expect(PLAN_TYPES).toContain("composite")
     expect(PLAN_TYPES).toContain("burn-captions")
     expect(PLAN_TYPES).toContain("lottie-graphic")
+    expect(PLAN_TYPES).toContain("3d-scene")
+  })
+})
+
+// ── 3d-scene (Scene3D previz) ────────────────────────────────────────────
+
+function makeScene3DPlan(overrides: Record<string, unknown> = {}) {
+  return {
+    planType: "3d-scene",
+    schemaVersion: 1,
+    revisionId: "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+    width: 1920,
+    height: 1080,
+    fps: 24,
+    durationInFrames: 96,
+    backgroundColor: "#101014",
+    camera: {
+      position: [0, 2, 8],
+      target: [0, 1, 0],
+      focalLengthMm: 35,
+      sensorWidthMm: 36,
+    },
+    objects: [
+      {
+        id: "hero",
+        name: "Hero",
+        primitive: "box",
+        dimensions: [2, 2, 2],
+        position: [0, 1, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+        color: "#e4a04c",
+      },
+    ],
+    lighting: { ambientIntensity: 0.5, keyIntensity: 1.5, keyPosition: [4, 6, 5] },
+    ...overrides,
+  }
+}
+
+describe("3d-scene plan schema", () => {
+  it("is registered in PLAN_TYPES and planSchemaMap", () => {
+    expect(PLAN_TYPES).toContain("3d-scene")
+    expect(planSchemaMap["3d-scene"]).toBeDefined()
+  })
+
+  it("accepts a valid scene and returns the parsed plan", () => {
+    const parsed = validatePlanByType("3d-scene", makeScene3DPlan()) as Record<string, unknown>
+    expect(parsed.planType).toBe("3d-scene")
+    expect((parsed.objects as unknown[]).length).toBe(1)
+  })
+
+  it("delegates the structural contract to @nodaro/shared — a parent cycle is rejected here too", () => {
+    const plan = makeScene3DPlan({
+      objects: [
+        { id: "a", name: "A", primitive: "box", parentId: "b", dimensions: [1, 1, 1], position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1], color: "#ffffff" },
+        { id: "b", name: "B", primitive: "box", parentId: "a", dimensions: [1, 1, 1], position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1], color: "#ffffff" },
+      ],
+    })
+    expect(() => validatePlanByType("3d-scene", plan)).toThrow(/3d-scene/)
+  })
+
+  it("rejects a keyframe past the end of the scene", () => {
+    const plan = makeScene3DPlan({
+      durationInFrames: 24,
+      objects: [
+        {
+          id: "hero", name: "Hero", primitive: "box",
+          dimensions: [1, 1, 1], position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1],
+          color: "#ffffff",
+          keyframes: [{ frame: 240, position: [1, 0, 0] }],
+        },
+      ],
+    })
+    expect(() => validatePlanByType("3d-scene", plan)).toThrow(/frame/)
+  })
+
+  it("accepts an https reference URL", () => {
+    const plan = makeScene3DPlan({
+      references: [
+        { id: "ref-1", url: "https://cdn.example.com/board.png", kind: "image", role: "layout" },
+      ],
+    })
+    expect(() => validatePlanByType("3d-scene", plan)).not.toThrow()
+  })
+
+  it("applies the backend SSRF gate to reference URLs the shared schema alone would allow", () => {
+    // Shared validation only knows "is it http(s)"; a published browser package
+    // cannot judge private networks. The backend must.
+    for (const url of ["http://localhost:3000/board.png", "http://169.254.169.254/latest/meta-data"]) {
+      const plan = makeScene3DPlan({
+        references: [{ id: "ref-1", url, kind: "image", role: "layout" }],
+      })
+      expect(() => validatePlanByType("3d-scene", plan)).toThrow(/references\.0\.url/)
+    }
+  })
+
+  it("rejects an unknown field instead of silently dropping it", () => {
+    expect(() => validatePlanByType("3d-scene", makeScene3DPlan({ shadowQuality: "ultra" }))).toThrow()
+  })
+
+  it("parses through the render plan envelope by its planType discriminator", () => {
+    const result = renderPlanSchema.safeParse(makeScene3DPlan())
+    expect(result.success).toBe(true)
   })
 })
 

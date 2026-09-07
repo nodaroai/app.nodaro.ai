@@ -2632,6 +2632,11 @@ export const COMPOSER_PLAN_MAP: Readonly<Record<string, { planType: string; plan
   "3d-title": { planType: "3d-title", planField: "titlePlan" },
   "motion-graphics": { planType: "motion-graphics", planField: "motionPlan" },
   "composite": { planType: "composite", planField: "compositePlan" },
+  // Scene3D previz (v1) — both the generator and the editor emit the SAME
+  // validated `Scene3DPlan` revision on their `composition` handle, so
+  // render-video routes either one to the `3d-scene` renderer unchanged.
+  "generate-3d-scene": { planType: "3d-scene", planField: "scenePlan" },
+  "edit-3d-scene": { planType: "3d-scene", planField: "scenePlan" },
 }
 
 /** Every composer plan-field name, derived from COMPOSER_PLAN_MAP (single source

@@ -104,6 +104,8 @@ const NODE_TYPE_TO_TOOL: Record<string, string> = {
   "generate-object": "generate_object",
   "generate-mask": "generate_mask",
   "generate-script": "generate_script",
+  "generate-3d-scene": "generate_3d_scene",
+  "edit-3d-scene": "edit_3d_scene",
   "transcribe": "transcribe",
   "dubbing": "dubbing",
   "audio-isolation": "audio_isolation",
@@ -141,6 +143,8 @@ const NODE_TYPE_TO_TOOL: Record<string, string> = {
 const INTERFACE_NAME_OVERRIDES: Record<string, string> = {
   "llm-chat": "LLMChatData",
   "3d-title": "ThreeDTitleData",
+  "generate-3d-scene": "Generate3DSceneData",
+  "edit-3d-scene": "Edit3DSceneData",
   "qa-check": "QACheckData",
   "switchx": "SwitchXData",
 }

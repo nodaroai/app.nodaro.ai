@@ -44,6 +44,8 @@ export const NODE_MAPPABLE_FIELDS: Readonly<Record<string, readonly string[]>> =
   "after-effects":       ["effectPrompt"],
   "lottie-overlay":      ["overlayPrompt"],
   "3d-title":            ["titlePrompt"],
+  "generate-3d-scene":   ["scenePrompt"],
+  "edit-3d-scene":       ["editPrompt"],
   "motion-graphics":     ["motionPrompt"],
   "generate-script":     ["styleGuide"],
   "speech-to-video":     ["prompt", "negativePrompt"],

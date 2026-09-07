@@ -13,7 +13,7 @@ import { queryKeys } from "@/lib/query-keys";
 import { getCachedCredits } from "@/ee/hooks/use-model-credits";
 import { spendableCredits, type CreditAllowance } from "@/lib/spendable-credits";
 import { BILLING_SURFACE_QUERY_KEY, type BillingSurface } from "@/lib/billing-surface";
-import type { GeneratedResult, WorkflowNode, WorkflowEdge, JobErrorHint } from "@/types/nodes";
+import type { GeneratedResult, WorkflowNode, WorkflowEdge, JobErrorHint, Scene3DRevisionEntry } from "@/types/nodes";
 import {
   MAX_CONSECUTIVE_POLL_FAILURES,
   isExecutableNode,
@@ -34,6 +34,8 @@ import { buildVariantResults } from "./variant-results";
 import { getJobStatusLeanForNode } from "./poll-job";
 import { sunoVariantFields } from "@/lib/suno-ids";
 import { tx } from "@/lib/i18n";
+import { resolveSceneCompletion } from "@/lib/scene3d/revisions";
+import { planRevisionId } from "@/lib/scene3d/plan-view";
 
 // Phase 1 runs at most one whole-workflow stream at a time. We keep its teardown
 // here so a Discard / Run-instead can fully stop the OLD stream (abort its SSE +
@@ -1419,7 +1421,26 @@ function syncNodeStatesToStore(
         }
         if (state.output.plan) {
           const mapping = COMPOSER_PLAN_MAP[node.type ?? ""];
-          if (mapping) {
+          if (mapping?.planType === "3d-scene") {
+            // A 3D scene is not a plan field you assign — it is a REVISION.
+            // The user keeps nudging objects and restoring revisions while a
+            // backend DAG run is in flight (the panel is live on purpose), so
+            // a raw `updates[planField] = plan` here would silently overwrite
+            // an edit the single-node lane is careful to protect. Same guard,
+            // same history: whatever the outcome, the arriving revision is
+            // kept and only the ACTIVE one is in question.
+            const sceneResult = resolveSceneCompletion({
+              current: data.scenePlan as Record<string, unknown> | undefined,
+              baseRevisionId: data.sceneJobBaseRevisionId as string | undefined,
+              incoming: state.output.plan as Record<string, unknown>,
+              changeSummary: typeof (state.output as Record<string, unknown>).changeSummary === "string"
+                ? ((state.output as Record<string, unknown>).changeSummary as string)
+                : undefined,
+              history: data.sceneHistory as Scene3DRevisionEntry[] | undefined,
+              source: node.type === "edit-3d-scene" ? "edit" : "generate",
+            });
+            Object.assign(updates, sceneResult.patch);
+          } else if (mapping) {
             updates[mapping.planField] = state.output.plan;
             if (node.type === "video-composer") updates.sceneGraph = state.output.plan;
           }
@@ -1549,6 +1570,16 @@ function syncNodeStatesToStore(
       if (typeof state.progress === "number") {
         runPatch.currentJobProgress = state.progress
       }
+      // Capture the scene revision this backend run is authoring FROM, on the
+      // one tick the node enters `running`. It is what the completion branch
+      // above compares against to tell "the user edited the scene while the
+      // orchestrator worked" from "nothing moved" — without it every DAG
+      // completion would look unsuperseded and clobber. Persisted (not a
+      // transient key) on purpose: a reload mid-run leaves it on the node for
+      // `reconcile-completed-jobs` to use as the same base.
+      if (currentStatus !== "running" && COMPOSER_PLAN_MAP[node.type ?? ""]?.planType === "3d-scene") {
+        runPatch.sceneJobBaseRevisionId = planRevisionId(data.scenePlan as Record<string, unknown> | undefined)
+      }
       // The single source of the hold flag for backend-driven runs; the poll
       // loops write the same key for canvas-driven runs and BaseNode renders
       // both identically. Written ONLY on a transition — putting the key in
@@ -1561,7 +1592,8 @@ function syncNodeStatesToStore(
       if (
         currentStatus !== "running" ||
         runPatch.currentJobProgress !== undefined ||
-        runPatch.jobAwaitingReview !== undefined
+        runPatch.jobAwaitingReview !== undefined ||
+        "sceneJobBaseRevisionId" in runPatch
       ) {
         patchMap.set(node.id, runPatch)
       }

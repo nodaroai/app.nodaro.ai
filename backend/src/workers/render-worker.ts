@@ -1,5 +1,5 @@
 import { Worker, type ConnectionOptions } from "bullmq"
-import { resolveEffectiveTier } from "@nodaro/shared"
+import { resolveEffectiveTier, SCENE3D_PLAN_TYPE } from "@nodaro/shared"
 import IORedis from "ioredis"
 import { config } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
@@ -125,6 +125,7 @@ export function isSceneGraphJob(data: RenderJobData): data is SceneGraphRenderJo
 // share the same in-flight build instead of starting duplicate webpack builds.
 let mainBundlePromise: Promise<string> | null = null
 let threeDBundlePromise: Promise<string> | null = null
+let scene3DBundlePromise: Promise<string> | null = null
 
 const REMOTION_PKG_DIR = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -179,7 +180,44 @@ async function bundleEntry(
   return bundlePath
 }
 
+/**
+ * Compositions that draw with WebGL and therefore need an explicit GL backend
+ * in headless Chromium (which has no GPU): without one the canvas encodes
+ * black. ANGLE talks to Metal on macOS; `swangle` is ANGLE over SwiftShader,
+ * the software path that works inside a Linux container.
+ *
+ * Deliberately scoped to the 3D compositions — handing every render a GL flag
+ * would change behaviour for compositions that never asked for it.
+ */
+const WEBGL_COMPOSITION_IDS = new Set<string>([SCENE3D_PLAN_TYPE])
+
+type OpenGlBackend = "angle" | "angle-egl" | "egl" | "swangle" | "swiftshader" | "vulkan"
+
+export function chromiumOptionsFor(
+  compositionId: string,
+): { gl: OpenGlBackend } | undefined {
+  if (!WEBGL_COMPOSITION_IDS.has(compositionId)) return undefined
+  const override = process.env.REMOTION_GL as OpenGlBackend | undefined
+  if (override) return { gl: override }
+  return { gl: process.platform === "darwin" ? "angle" : "swangle" }
+}
+
 function getBundlePath(compositionId: string): Promise<string> {
+  if (compositionId === SCENE3D_PLAN_TYPE) {
+    // Its own bundle on purpose: three.js is large enough that every non-3D
+    // render would pay for it in the main bundle, and Root3D.tsx (3d-title)
+    // installs @react-three/fiber's own React reconciler, which this
+    // native-three composition must not share a module graph with.
+    if (!scene3DBundlePromise) {
+      scene3DBundlePromise = bundleEntry("Root3DScene.tsx", "3D scene compositions", false).catch(
+        (err) => {
+          scene3DBundlePromise = null
+          throw err
+        },
+      )
+    }
+    return scene3DBundlePromise
+  }
   if (compositionId === "3d-title") {
     if (!threeDBundlePromise) {
       threeDBundlePromise = bundleEntry("Root3D.tsx", "3D compositions", true).catch((err) => {
@@ -200,6 +238,40 @@ function getBundlePath(compositionId: string): Promise<string> {
 
 
 /**
+ * Drop plan fields the RENDERER never reads.
+ *
+ * A 3d-scene plan carries the image/video references the authoring LLM was
+ * conditioned on. Nothing draws them, but they are URLs sitting in inputProps —
+ * which is where `normalizeInputVideos()` looks for videos to pre-download and
+ * transcode. Leaving them in would burn minutes on media no frame contains and
+ * fail the render outright once one of those URLs expires. The full plan
+ * (references included) stays on the job row for provenance and re-runs.
+ */
+export function stripAuthoringOnlyFields(
+  planType: string,
+  plan: Record<string, unknown>,
+): Record<string, unknown> {
+  if (planType !== SCENE3D_PLAN_TYPE || !("references" in plan)) return plan
+  const { references: _authoringOnly, ...rest } = plan
+  return rest
+}
+
+/**
+ * Provenance stamped onto a rendered 3d-scene MP4: which scene revision the
+ * pixels came from and which renderer drew them, so a result found later can be
+ * traced back to the exact plan (revisions are immutable) instead of being
+ * guessed at from a timestamp.
+ */
+export function renderProvenance(data: RenderJobData): Record<string, string> {
+  if (!isPlanJob(data) || data.planType !== SCENE3D_PLAN_TYPE) return {}
+  const revisionId = (data.plan as { revisionId?: unknown } | undefined)?.revisionId
+  return {
+    renderer: "scene3d/three",
+    ...(typeof revisionId === "string" && revisionId ? { sceneRevisionId: revisionId } : {}),
+  }
+}
+
+/**
  * Build composition ID and input props for generic plan mode.
  * Routes to the composition matching the planType (e.g. "after-effects").
  */
@@ -216,7 +288,7 @@ export function buildPlanRender(data: PlanRenderJobData): {
 
   return {
     compositionId: data.planType,
-    inputProps: { plan: validatedPlan },
+    inputProps: { plan: stripAuthoringOnlyFields(data.planType, validatedPlan) },
     width: (validatedPlan.width as number) ?? 1920,
     height: (validatedPlan.height as number) ?? 1080,
     fps: (validatedPlan.fps as number) ?? 30,
@@ -883,12 +955,16 @@ export function createRenderWorker() {
             // Allow overriding Remotion's bundled chrome-headless-shell (e.g. custom Docker images)
             const browserExecutable = process.env.CHROME_PATH || undefined
 
+            // WebGL compositions need an explicit GL backend in headless Chromium.
+            const chromiumOptions = chromiumOptionsFor(compositionId)
+
             console.log(`[render-worker] selectComposition(${compositionId}) starting...`)
             const composition = await selectComposition({
               serveUrl: bundlePath,
               id: compositionId,
               inputProps,
               browserExecutable,
+              chromiumOptions,
               timeoutInMilliseconds: 120_000,
             })
             console.log(`[render-worker] selectComposition(${compositionId}) done: ${composition.width}x${composition.height} ${composition.fps}fps ${composition.durationInFrames}fr`)
@@ -926,6 +1002,7 @@ export function createRenderWorker() {
                 outputLocation: outputPath,
                 inputProps,
                 browserExecutable,
+                chromiumOptions,
                 concurrency: remotionConcurrency,
                 timeoutInMilliseconds: 120_000,
                 logLevel: "warn",
@@ -975,7 +1052,7 @@ export function createRenderWorker() {
         // and — since the result gate moved inside this call — if a policy
         // blocked or held the output).
         const outcome = await markJobCompletedDetailed(jobId, {
-          output_data: { videoUrl, thumbnailUrl },
+          output_data: { videoUrl, thumbnailUrl, ...renderProvenance(data) },
           is_public: isPublic,
         })
         if (outcome !== "completed") {
@@ -997,7 +1074,9 @@ export function createRenderWorker() {
 
         // Terminal errors won't resolve on retry — skip BullMQ retries (return,
         // not throw). Non-terminal errors are rethrown so BullMQ retries them.
-        const isTerminal = /composition.*not found|plan validation|zod|invalid plan|timed out/i.test(errMsg)
+        // `webgl`: a 3d-scene render cancels itself when the GL context is
+        // unavailable — deterministic, so retrying just delays the refund.
+        const isTerminal = /composition.*not found|plan validation|zod|invalid plan|timed out|webgl/i.test(errMsg)
 
         // Finalize (mark failed) + refund only when the job will NOT run again:
         // a terminal error (we return below), or the final BullMQ attempt.

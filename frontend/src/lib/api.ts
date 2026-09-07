@@ -5300,6 +5300,75 @@ export async function generate3DTitle(params: {
   })
 }
 
+// --- 3D Scene (previz) ---
+
+/** One image/video reference forwarded to the 3D-scene authoring LLM. */
+export interface Scene3DReferenceInput {
+  id: string
+  url: string
+  kind: "image" | "video"
+  role: "appearance" | "layout" | "motion"
+  objectId?: string
+  startSeconds?: number
+  endSeconds?: number
+}
+
+/**
+ * `POST /v1/3d-scene/generate` — queues an LLM job that authors a validated
+ * scene revision. Returns only the job id; the plan arrives in the job's
+ * `output_data.scenePlan` (see `pollScene3DJob`).
+ */
+export async function generate3DScene(params: {
+  prompt: string
+  durationSeconds?: number
+  fps?: number
+  aspectRatio?: string
+  references?: readonly Scene3DReferenceInput[]
+  llmModel?: string
+  reasoningEffort?: string
+  advancedMode?: boolean
+  temperature?: number
+  maxTokens?: number
+  userId?: string
+  nodeId?: string
+}): Promise<{ jobId: string }> {
+  return apiJson("/v1/3d-scene/generate", {
+    body: params,
+    workflowId: true,
+    label: "3D scene generation failed",
+  })
+}
+
+/**
+ * `POST /v1/3d-scene/edit` — derives a NEW revision from an existing one.
+ *
+ * Supply `prompt` for an instruction-driven edit (LLM) or `operations` for a
+ * deterministic one (no LLM, no LLM credits) — never both. `expectedRevisionId`
+ * is the stale-revision guard: the call is rejected when the scene has moved on.
+ */
+export async function edit3DScene(params: {
+  scenePlan: Record<string, unknown>
+  expectedRevisionId: string
+  prompt?: string
+  operations?: readonly Record<string, unknown>[]
+  references?: readonly Scene3DReferenceInput[]
+  lockedObjectIds?: readonly string[]
+  selectedObjectIds?: readonly string[]
+  llmModel?: string
+  reasoningEffort?: string
+  advancedMode?: boolean
+  temperature?: number
+  maxTokens?: number
+  userId?: string
+  nodeId?: string
+}): Promise<{ jobId: string }> {
+  return apiJson("/v1/3d-scene/edit", {
+    body: params,
+    workflowId: true,
+    label: "3D scene edit failed",
+  })
+}
+
 // --- Motion Graphics ---
 
 export async function generateMotionGraphics(params: {

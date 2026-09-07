@@ -76,6 +76,13 @@ const EXCLUDED_ROUTES: Readonly<Record<string, string>> = {
   "prompt-helper.ts": "LLM lane — the user edits the result; generation lanes police downstream",
   "scene-graph-ai.ts": "LLM lane",
   "three-d-title-ai.ts": "LLM plan lane",
+  // Scene3D previz: the brief authors a STRUCTURED SCENE GRAPH (primitives,
+  // transforms, keyframes), never a prompt sent to an image/video provider.
+  // A modesty clause spliced into it would be corruption, exactly as for the
+  // other plan lanes above — and the rendered MP4 that eventually leaves the
+  // platform is a Remotion render of grey-box geometry, with no generative
+  // prompt anywhere in its lineage.
+  "3d-scene.ts": "LLM plan lane — authors a scene graph, not a media-generation prompt",
 }
 
 /** The same heuristic the exhaustiveness half scans with: a zod prompt-ish

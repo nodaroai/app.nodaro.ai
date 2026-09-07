@@ -43,3 +43,43 @@ export type {
 } from "./plan-types"
 
 export { legacyToSceneGraph } from "./lib/legacy-converter"
+
+// ── Scene3D previz (3d-scene) ───────────────────────────────────────────
+// `Scene3DRenderer` is the Remotion composition component (reads
+// `useCurrentFrame()`), so it needs a Remotion context — a `<Player>` in the
+// editor, or the `3d-scene` composition in the render worker. Hosts that want
+// the raw canvas with their own scrubber should import `Scene3DCanvas` (from
+// here or, to keep `remotion` out of the bundle, from `@nodaro/remotion/scene3d`).
+export { Scene3DRenderer } from "./compositions/scene3d-renderer"
+export { Scene3DCanvas } from "./scene3d/scene3d-canvas"
+export type { Scene3DCanvasProps } from "./scene3d/scene3d-canvas"
+export {
+  buildScene3DScene,
+  buildScene3DGeometry,
+  type Scene3DSceneHandle,
+} from "./scene3d/scene-builder"
+export {
+  sampleScene3DFrame,
+  sampleScene3DObject,
+  sampleScene3DCamera,
+  focalLengthToVerticalFovDeg,
+  scene3DFrameCount,
+  type Scene3DFrameSample,
+  type Scene3DObjectSample,
+  type Scene3DCameraSample,
+  type Scene3DTransformSample,
+} from "./scene3d/sampler"
+export type {
+  Scene3DPlan,
+  Scene3DObject,
+  Scene3DReference,
+  Scene3DCamera,
+  Scene3DLighting,
+  Scene3DPrimitive,
+  Scene3DObjectKeyframe,
+  Scene3DCameraKeyframe,
+  Scene3DEasing,
+  Vec3,
+} from "./scene3d/types"
+export { DEFAULT_SENSOR_WIDTH_MM } from "./scene3d/types"
+export { SCENE3D_DEFAULT_PLAN } from "./scene3d/default-plan"
