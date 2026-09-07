@@ -572,17 +572,40 @@ jobs:
     # line and de-wrapped. The other leak checks are scoped (packages/*/src, a
     # symbol list, JSON shape) — four consecutive release-artifact audits found
     # content those scopes never read, mostly in backend/src and frontend/src.
+    # Second half: the same categories over the COMMITS this PR would merge —
+    # feature branches land in dev with a regular merge and the nightly mirror
+    # pushes full history, so a line one commit adds and a later commit scrubs
+    # is public forever via `git log -p` with the tree gate green.
     name: Check Public Surface
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
+          # The history half needs the commits, not just the merge tree.
+          fetch-depth: 0
       - uses: actions/setup-node@v5
         with:
           node-version: 22
       - name: Check every tracked file for never-public content
         run: node tools/check-public-surface.mjs
+      - name: Check every commit this PR adds for never-public content
+        env:
+          BASE: ${{ github.base_ref }}
+        # Step-level skip, not a job `if:` — a skipped JOB breaks every
+        # `needs:` chain that lists this one. On a push to main there is no PR
+        # base to diff against; the tree half above still ran.
+        run: |
+          if [ -z "$BASE" ]; then
+            echo "(no PR base ref — the history half runs on pull_request events)"
+            exit 0
+          fi
+          # fetch-depth: 0 already brought origin/$BASE down, and the checkout
+          # keeps no credentials — a re-fetch here would fail for lack of a
+          # token, not for a finding. Verify the ref instead, so a shallow
+          # regression fails visibly rather than scanning a bogus range.
+          git rev-parse --verify --quiet "origin/$BASE^{commit}" > /dev/null
+          node tools/check-history-surface.mjs "origin/$BASE..HEAD"
 
   check-billing-dumps:
     # Provider-billing extracts (backend/scripts/*.mts output: per-task provider
