@@ -28,6 +28,9 @@ const JOB_AUTO_URI = "ui://nodaro/widget/v4/job-auto"
 
 /** Every previously widget-less job verb that must now bind the job-auto card. */
 const JOB_AUTO_VERBS = [
+  "generate_3d_scene",
+  "edit_3d_scene",
+  "render_3d_scene",
   "generate_character_motion",
   "generate_location_motion",
   "generate_object_motion",

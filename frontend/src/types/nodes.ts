@@ -1,7 +1,7 @@
 import type { Node, Edge } from "@xyflow/react"
 import { MODIFY_IMAGE_PROVIDERS } from "@nodaro/shared"
 import { MUSIC_GENRE_DEFAULT_DATA, MUSIC_MOOD_DEFAULT_DATA, INSTRUMENTATION_DEFAULT_DATA, VOICE_CHARACTER_DEFAULT_DATA, VOICE_DELIVERY_DEFAULT_DATA } from "@nodaro/prompts"
-import type { ImageI2IProvider, ImageGenProvider, ImageEditProvider, ModifyImageProvider, UpscaleImageProvider, ImageToVideoProvider, TextToVideoProvider, VideoToVideoProvider, VideoGenProvider, VideoUpscaleProvider, ExtendVideoProvider, FaceSwapProvider, TtsProvider, TextToAudioProvider, MusicProvider, TranscribeProvider, LipSyncProvider, ScriptProvider, QaCheckProvider, SunoModel, VoiceDesignModel, VoiceChangerModel, CaptionStyle, ImageCriticMode, ReduceStrategyId, ReduceMeta, SelectorConfig, ScraperActorId, CharacterAspectRatio, AudioFxPreset, LocationReferencePhotoKind as SharedLocationReferencePhotoKind, PipelineFormat, PipelineMode, PipelinePinnableImageModel, PipelinePinnableScriptLlm, PipelinePinnableVideoModel, VideoCriticFrameMode, SceneNodeData as SharedSceneNodeData, PipelineState, ReferenceSheet, SheetType, SheetSkin, SheetFlavour, EntityKind, VideoAnalysisResult, ExposableField, ExposableOutput, ComponentMetadata, IdentityMeta, LlmReasoningEffort } from "@nodaro/shared"
+import type { ImageI2IProvider, ImageGenProvider, ImageEditProvider, ModifyImageProvider, UpscaleImageProvider, ImageToVideoProvider, TextToVideoProvider, VideoToVideoProvider, VideoGenProvider, VideoUpscaleProvider, ExtendVideoProvider, FaceSwapProvider, TtsProvider, TextToAudioProvider, MusicProvider, TranscribeProvider, LipSyncProvider, ScriptProvider, QaCheckProvider, SunoModel, VoiceDesignModel, VoiceChangerModel, CaptionStyle, ImageCriticMode, ReduceStrategyId, ReduceMeta, SelectorConfig, ScraperActorId, CharacterAspectRatio, AudioFxPreset, LocationReferencePhotoKind as SharedLocationReferencePhotoKind, PipelineFormat, PipelineMode, PipelinePinnableImageModel, PipelinePinnableScriptLlm, PipelinePinnableVideoModel, VideoCriticFrameMode, SceneNodeData as SharedSceneNodeData, PipelineState, ReferenceSheet, SheetType, SheetSkin, SheetFlavour, EntityKind, VideoAnalysisResult, ExposableField, ExposableOutput, ComponentMetadata, IdentityMeta, LlmReasoningEffort, Scene3DReference } from "@nodaro/shared"
 import type { WardrobeValue, TransitionPosition, TransitionDuration, TransitionIntensity, CharacterFxPosition, CharacterFxDuration, CharacterFxIntensity, PersonValue, PickerApplyMode, PickerGaps, DirectionFields, StructuredPromptFields } from "@nodaro/prompts"
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 import { IMAGE_STYLE_PRESETS, GVP_PROVIDERS, getAspectRatiosForVideoModel, getVideoResolutionOptions } from "@/components/editor/config-panels/model-options"
@@ -3943,6 +3943,128 @@ export type ThreeDTitleData = PromptAffixFields & {
   errorMessage?: string
 }
 
+/**
+ * One image/video reference attached to a 3D-scene node.
+ *
+ * This IS the shared wire type — the alias exists only so the node-data types
+ * read in the canvas's own vocabulary. Re-declaring the shape locally (which
+ * this used to do) is exactly the drift the Provider-Enum-Sync rule is about:
+ * a field added to the wire contract would have compiled fine here and been
+ * dropped on the way out. `import type` erases, so nothing is pulled into the
+ * editor bundle.
+ */
+export type Scene3DNodeReference = Scene3DReference
+
+/**
+ * The AUTHORING CONTEXT a revision was produced under.
+ *
+ * A plan on its own answers "what does the scene look like" but not "what did I
+ * ask for to get it" — and the spec requires restoring a revision to restore
+ * the inputs that made it, so the next run continues from that state instead of
+ * whatever the panel happens to hold. Everything here is small and bounded (the
+ * base is a revision ID, never a second copy of a plan) because the whole stack
+ * is persisted inside the workflow row.
+ */
+export type Scene3DRevisionContext = {
+  /** The RAW prompt field (`scenePrompt` / `editPrompt`), before affixes. */
+  prompt?: string
+  llmModel?: string
+  reasoningEffort?: LlmReasoningEffort
+  advancedMode?: boolean
+  temperature?: number
+  maxTokens?: number
+  /** The reference set the run actually sent. */
+  references?: Scene3DNodeReference[]
+  referenceRoles?: Record<string, string>
+  referenceObjectIds?: Record<string, string>
+  /** The revision this one was authored FROM (also on the plan as `parentRevisionId`). */
+  baseRevisionId?: string
+  lockedObjectIds?: string[]
+  selectedObjectIds?: string[]
+}
+
+/**
+ * One stored scene revision. Revisions are IMMUTABLE: an edit never mutates a
+ * stored plan, it appends a new entry whose `scenePlan.parentRevisionId` points
+ * at the one it was derived from. Newest last.
+ */
+export type Scene3DRevisionEntry = {
+  revisionId: string
+  scenePlan: Record<string, unknown>
+  /** Where this revision came from — an LLM generate, an LLM edit, a deterministic
+   *  canvas edit, or a plan adopted from the connected upstream scene at run start. */
+  source: "generate" | "edit" | "manual" | "upstream"
+  changeSummary?: string
+  createdAt: string
+  /** What was asked for to produce it. Absent on revisions written before this
+   *  existed — those restore plan-only. */
+  context?: Scene3DRevisionContext
+}
+
+/** Fields shared by both 3D-scene nodes (generate + edit). */
+type Scene3DCommonFields = {
+  /** The ACTIVE scene revision. Also the node's `composition` output. */
+  scenePlan?: Record<string, unknown>
+  /** Immutable revision stack, newest last. Drives undo/restore in the panel. */
+  sceneHistory?: Scene3DRevisionEntry[]
+  /**
+   * The revision that was active when the in-flight job was submitted. A job
+   * completing against a DIFFERENT current revision means the user edited the
+   * scene while the LLM ran — the arriving plan is parked in `scenePendingPlan`
+   * instead of silently replacing the newer manual edit.
+   */
+  sceneJobBaseRevisionId?: string
+  /** A completed job's plan that lost the stale-completion race; the user adopts or discards it. */
+  scenePendingPlan?: Record<string, unknown>
+  /** Human-readable summary of what the last accepted revision changed. */
+  changeSummary?: string
+  /** Object ids the user has selected on the canvas (context for the LLM, not permission to edit). */
+  selectedObjectIds?: string[]
+  /** Object ids the LLM must leave byte-identical (enforced server-side after the model answers). */
+  lockedObjectIds?: string[]
+  /** The reference set the last run resolved — kept so restoring or re-running
+   *  a revision reproduces the exact inputs it was authored from. */
+  references?: Scene3DNodeReference[]
+  /** Per-wired-source role override chosen in the panel (source node id → role). */
+  referenceRoles?: Record<string, string>
+  /** Per-wired-source object binding chosen in the panel (source node id → object id). */
+  referenceObjectIds?: Record<string, string>
+}
+
+export type Generate3DSceneData = PromptAffixFields & Scene3DCommonFields & {
+  [key: string]: unknown
+  label: string
+  scenePrompt: string
+  aspectRatio: "16:9" | "9:16" | "1:1" | "4:5"
+  fps: number
+  durationSeconds: number
+  llmModel?: string
+  reasoningEffort?: LlmReasoningEffort
+  currentJobId?: string
+  currentJobProgress?: number
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+}
+
+export type Edit3DSceneData = PromptAffixFields & Scene3DCommonFields & {
+  [key: string]: unknown
+  label: string
+  editPrompt: string
+  replaceReferences?: boolean
+  /**
+   * The revision the next edit is based on. Sent verbatim to
+   * `POST /v1/3d-scene/edit`, which REJECTS the call when the stored scene has
+   * moved on — the platform's stale-revision guard.
+   */
+  expectedRevisionId?: string
+  llmModel?: string
+  reasoningEffort?: LlmReasoningEffort
+  currentJobId?: string
+  currentJobProgress?: number
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+}
+
 export type MotionGraphicsData = PromptAffixFields & {
   [key: string]: unknown
   label: string
@@ -5738,6 +5860,8 @@ export type SceneNodeData =
   | AfterEffectsData
   | LottieOverlayData
   | ThreeDTitleData
+  | Generate3DSceneData
+  | Edit3DSceneData
   | MotionGraphicsData
   | CompositeData
   | RenderVideoData
@@ -5926,6 +6050,8 @@ export type SceneNodeType =
   | "after-effects"
   | "lottie-overlay"
   | "3d-title"
+  | "generate-3d-scene"
+  | "edit-3d-scene"
   | "motion-graphics"
   | "composite"
   | "render-video"
@@ -7706,6 +7832,39 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       fieldMappings: {},
       executionStatus: "idle",
     } as ThreeDTitleData,
+  },
+  {
+    type: "generate-3d-scene",
+    label: "Generate 3D Scene",
+    category: "ai",
+    creditCost: 30,
+    inputs: ["references"],
+    outputs: ["composition"],
+    defaultData: {
+      label: "Generate 3D Scene",
+      scenePrompt: "",
+      aspectRatio: "16:9",
+      // Previz defaults are deliberately SHORT and cheap: 4s @ 24fps is one
+      // beat of blocking, which is what a previz pass is for.
+      fps: 24,
+      durationSeconds: 4,
+      fieldMappings: {},
+      executionStatus: "idle",
+    } as Generate3DSceneData,
+  },
+  {
+    type: "edit-3d-scene",
+    label: "Edit 3D Scene",
+    category: "ai",
+    creditCost: 30,
+    inputs: ["scene", "references"],
+    outputs: ["composition"],
+    defaultData: {
+      label: "Edit 3D Scene",
+      editPrompt: "",
+      fieldMappings: {},
+      executionStatus: "idle",
+    } as Edit3DSceneData,
   },
   {
     type: "motion-graphics",

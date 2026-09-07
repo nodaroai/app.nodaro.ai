@@ -32,6 +32,7 @@ import { createSurroundHandlers } from "./handlers/surround.js"
 import { referenceSheetHandlers } from "./handlers/reference-sheet.js"
 import { motionGraphicsLottieHandlers } from "./handlers/motion-graphics-lottie.js"
 import { llmStructuredHandlers } from "./handlers/llm-structured.js"
+import { scene3dHandlers } from "./handlers/scene3d.js"
 import { buildStatsKey, upsertExecutionStats } from "../services/execution-stats.js"
 import { tryInlineReconcile } from "./inline-reconcile.js"
 import { loadPrivatePlugins } from "../lib/private-plugins/load.js"
@@ -53,6 +54,7 @@ const allHandlers: Record<string, HandlerFn> = {
   ...referenceSheetHandlers,
   ...motionGraphicsLottieHandlers,
   ...llmStructuredHandlers,
+  ...scene3dHandlers,
   // video-analysis handler moved to @nodaroai/cloud-plugins — it arrives via
   // `privatePluginHandlers` (loadPrivatePlugins below), keyed "video-analysis".
 }

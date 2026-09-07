@@ -19,6 +19,7 @@ import {
   ACCEPTS_ANALYSIS,
 } from "./data-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES, isVisualPickerType } from "./parameter-picker-types"
+import { SCENE3D_HANDLE_LABELS, isValidScene3DConnection } from "./scene3d-handles"
 import {
   IMAGE_PRODUCER_HANDLE_LABELS,
   isValidEditImageConnection,
@@ -374,6 +375,17 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   "lottie-overlay":     [
     { handleId: "video",  label: "Video",  accepts: ACCEPTS_VIDEO },
     { handleId: "lottie", label: "Lottie", accepts: ACCEPTS_LOTTIE_ASSET },
+  ],
+
+  // 3D Scene previz — `references` takes image/video producers the authoring
+  // LLM reads; Edit 3D Scene's `scene` takes an upstream 3D scene plan (which
+  // travels on the source's `composition` pip).
+  "generate-3d-scene": [
+    { handleId: "references", label: SCENE3D_HANDLE_LABELS.references, accepts: (s) => isValidScene3DConnection("references", s) },
+  ],
+  "edit-3d-scene": [
+    { handleId: "scene",      label: SCENE3D_HANDLE_LABELS.scene,      accepts: (s) => isValidScene3DConnection("scene", s) },
+    { handleId: "references", label: SCENE3D_HANDLE_LABELS.references, accepts: (s) => isValidScene3DConnection("references", s) },
   ],
 
   // ─── Audio & Speech (Batch 1 of audio/text typed-handles migration) ───

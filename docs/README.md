@@ -23,6 +23,7 @@ REST-first; the included visual editor is one of many possible clients.
 - **Enrich prompts with reusable fragments** (Identity Lock, Golden Hour, Slow Dolly-In — `/` slash menu) → [Prompt Snippets](./prompt-snippets.md)
 - **Run Nodaro from the terminal** → [CLI](./cli.md)
 - **Embed a published Nodaro MiniApp in an external UI** (Lovable / v0 / Bolt) → [Embed App Guide](./embed-app-guide.md)
+- **Embed the 3D scene previsualization viewport in my own app** (stateless iframe, postMessage, no auth) → [Scene3D Preview Embed](./scene3d-embed.md)
 - **Script Character Studio (REST / SDK / CLI / MCP)** → [Character Platform](./character-platform.md)
 - **Browse & clone the shared community library** (admin-curated characters / locations / objects; Business + Cloud) → [Community Library](./community-library.md)
 - **Build a workflow by describing it** (in-app chat that edits your canvas; Cloud) → [Workflow Copilot](./features/workflow-copilot.md)

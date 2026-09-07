@@ -481,24 +481,25 @@ describe("getVideoFps", () => {
 // ===========================================================================
 
 describe("probeVideoSource", () => {
-  it("parses 2-line CSV output (stream first, format second)", async () => {
-    execFileOnce("1920,1080\n8.5\n")
+  it("reads dimensions and duration from named JSON fields", async () => {
+    execFileOnce(JSON.stringify({ streams: [{ width: 1920, height: 1080 }], format: { duration: "8.5" } }))
+
+    const result = await probeVideoSource("/tmp/v.mp4")
+
+    expect(result).toEqual({ width: 1920, height: 1080, durationSeconds: 8.5 })
+    expect(execArgs()).toEqual(expect.arrayContaining(["-of", "json"]))
+  })
+
+  it("ignores JSON field order", async () => {
+    execFileOnce(JSON.stringify({ format: { duration: "8.5" }, streams: [{ width: 1920, height: 1080 }] }))
 
     const result = await probeVideoSource("/tmp/v.mp4")
 
     expect(result).toEqual({ width: 1920, height: 1080, durationSeconds: 8.5 })
   })
 
-  it("parses output regardless of line order (format first, stream second)", async () => {
-    execFileOnce("8.5\n1920,1080\n")
-
-    const result = await probeVideoSource("/tmp/v.mp4")
-
-    expect(result).toEqual({ width: 1920, height: 1080, durationSeconds: 8.5 })
-  })
-
-  it("handles \\r\\n line endings (Windows ffprobe builds)", async () => {
-    execFileOnce("1280,720\r\n5.0\r\n")
+  it("reads streams with side data without losing dimensions", async () => {
+    execFileOnce(JSON.stringify({ streams: [{ width: 1280, height: 720, side_data_list: [{}] }], format: { duration: "5.0" } }, null, 2))
 
     const result = await probeVideoSource("/tmp/v.mp4")
 
@@ -513,11 +514,24 @@ describe("probeVideoSource", () => {
   })
 
   it("works with a remote URL (passes it through to ffprobe)", async () => {
-    execFileOnce("1920,1080\n10.0\n")
+    execFileOnce(JSON.stringify({ streams: [{ width: 1920, height: 1080 }], format: { duration: "10.0" } }))
 
     await probeVideoSource("https://r2/video.mp4")
 
     expect(execArgs()).toContain("https://r2/video.mp4")
+  })
+
+  it.each([
+    { streams: [], format: { duration: "4" } },
+    { streams: [{ width: 960, height: 540 }], format: { duration: "N/A" } },
+    { streams: [{ width: 960, height: 540 }], format: { duration: "Infinity" } },
+    { streams: [{ width: 960, height: 540 }], format: { duration: "0" } },
+    { streams: [{ width: -1, height: 540 }], format: { duration: "4" } },
+    { streams: [{ width: 960.5, height: 540 }], format: { duration: "4" } },
+    null,
+  ])("rejects missing or invalid video metadata: %j", async (metadata) => {
+    execFileOnce(JSON.stringify(metadata))
+    await expect(probeVideoSource("/tmp/v.mp4")).rejects.toThrow(/probeVideoSource failed to parse/)
   })
 
   // --- SSRF guard (ffprobe does its own DNS+network I/O, bypassing safeFetch) ---
@@ -547,14 +561,14 @@ describe("probeVideoSource", () => {
   })
 
   it("passes -protocol_whitelist to ffprobe (blocks protocol pivots)", async () => {
-    execFileOnce("1920,1080\n10.0\n")
+    execFileOnce(JSON.stringify({ streams: [{ width: 1920, height: 1080 }], format: { duration: "10.0" } }))
     await probeVideoSource("/tmp/v.mp4")
     const args = execArgs()
     expect(args).toContain("-protocol_whitelist")
   })
 
   it("allows a local filesystem path with no DNS lookup", async () => {
-    execFileOnce("1920,1080\n7.0\n")
+    execFileOnce(JSON.stringify({ streams: [{ width: 1920, height: 1080 }], format: { duration: "7.0" } }))
     const result = await probeVideoSource("/tmp/local.mp4")
     expect(result).toEqual({ width: 1920, height: 1080, durationSeconds: 7.0 })
     expect(mocks.dnsLookup).not.toHaveBeenCalled()

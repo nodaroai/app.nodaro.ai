@@ -38,6 +38,25 @@ const EXTRA_DATA: Record<string, Record<string, unknown>> = {
   "suno-upload-extend": { uploadUrl: "https://x/a.mp3" },
   "video-analysis": { videoUrl: "https://x/v.mp4" },
   "video-retake": { videoUrl: "https://x/v.mp4" },
+  // edit-3d-scene refuses (correctly) when there is no scene to edit, before
+  // the prompt is ever read. The minimal valid plan is the "non-prompt input".
+  "edit-3d-scene": {
+    scenePlan: {
+      planType: "3d-scene",
+      schemaVersion: 1,
+      revisionId: "11111111-2222-4333-8444-555555555555",
+      width: 1920,
+      height: 1080,
+      fps: 24,
+      durationInFrames: 96,
+      backgroundColor: "#101014",
+      camera: { position: [0, 2, 6], target: [0, 0, 0], focalLengthMm: 35, sensorWidthMm: 36 },
+      objects: [
+        { id: "hero", name: "Hero", primitive: "capsule", dimensions: [0.5, 1.7, 0.5], position: [0, 0.85, 0], rotation: [0, 0, 0], scale: [1, 1, 1], color: "#cc8844" },
+      ],
+      lighting: { ambientIntensity: 0.4, keyIntensity: 1.2, keyPosition: [4, 6, 4] },
+    },
+  },
 }
 const INPUTS: ResolvedInputs = {
   imageUrl: "https://x/i.png",

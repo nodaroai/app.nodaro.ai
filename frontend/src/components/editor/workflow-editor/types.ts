@@ -73,6 +73,9 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "after-effects": 20,
   "lottie-overlay": 5,
   "3d-title": 20,
+  // LLM authoring only — the MP4 is billed by the downstream render-video node.
+  "generate-3d-scene": 15,
+  "edit-3d-scene": 15,
   "motion-graphics": 10, // lottie engine standard tier (the default); live cost comes from useModelCredits
   "composite": 0,
   "render-video": 50,
@@ -563,6 +566,8 @@ export const EXECUTABLE_TYPES = new Set([
   "after-effects",
   "lottie-overlay",
   "3d-title",
+  "generate-3d-scene",
+  "edit-3d-scene",
   "motion-graphics",
   "composite",
   "render-video",

@@ -435,6 +435,8 @@ AI-powered video composition and rendering. Create professional video production
 | [After Effects](./composition/after-effects.md) | AI-generated post-processing effects | Apply color grading, vignette, grain, blur, letterbox to video |
 | [Lottie Overlay](./composition/lottie-overlay.md) | AI-placed timed Lottie animations over video | Add confetti, particles, animated graphics at specific times |
 | [3D Title](./composition/3d-title.md) | AI animated 3D text scenes | Create cinematic 3D title cards with particles and lighting |
+| [Generate 3D Scene](./composition/generate-3d-scene.md) | Create editable animated clay scenes | Preview blocking and camera motion from prompts and references |
+| [Edit 3D Scene](./composition/edit-3d-scene.md) | Revise a scene through instructions or deterministic operations | Adjust objects, camera and timing before MP4 export |
 | [Motion Graphics](./composition/motion-graphics.md) | AI 2D motion graphics generation | Create lower thirds, title cards, kinetic typography |
 | [Composite](./composition/composite.md) | Multi-layer video compositing | Picture-in-picture, split screen, overlay with blend modes |
 | [Render Video](./composition/render-video.md) | Finalize composition to video file | Render any composition plan to final video output |

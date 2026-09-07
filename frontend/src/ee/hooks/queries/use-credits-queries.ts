@@ -18,18 +18,7 @@ export function useUserCredits(userId: string | undefined) {
   })
 }
 
-export function useModelCreditCost(model: string | undefined) {
-  return useQuery({
-    queryKey: queryKeys.credits.modelCost(model ?? ""),
-    queryFn: async () => {
-      const { data } = await getModelCreditCost(model!)
-      return data.creditCost
-    },
-    enabled: !!model && hasCredits(),
-    staleTime: Infinity,
-    gcTime: 30 * 60_000,
-  })
-}
+export { useModelCreditCost } from "@/hooks/use-model-credit-cost"
 
 export function getCachedCredits(model: string): number | undefined {
   return queryClient.getQueryData<number>(queryKeys.credits.modelCost(model))

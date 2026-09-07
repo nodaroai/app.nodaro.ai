@@ -223,3 +223,14 @@ describe("presetApplyClearKeys", () => {
     expect(PRESET_APPLY_CLEAR_KEYS).not.toContain("promptSuffix")
   })
 })
+
+describe("Scene3D presets", () => {
+  it("excludes and clears revision history and object bindings while retaining the brief", () => {
+    const state = { scenePrompt: "A dolly shot", scenePlan: { revisionId: "r1" }, sceneHistory: [{ context: { prompt: "old private brief", references: [{ url: "https://example.com/old.png" }] } }], scenePendingPlan: {}, sceneJobBaseRevisionId: "r1", expectedRevisionId: "r1", lockedObjectIds: ["old-object"], selectedObjectIds: ["old-object"], referenceRoles: { source: "layout" }, referenceObjectIds: { source: "old-object" }, changeSummary: "Old edit" }
+    expect(extractPresetData(state)).toEqual({ scenePrompt: "A dolly shot" })
+    for (const key of Object.keys(state).filter((key) => key !== "scenePrompt")) {
+      expect(presetApplyClearKeys({ scenePrompt: "New scene" })).toContain(key)
+    }
+    expect(presetApplyClearKeys({ scenePrompt: "New scene" })).toContain("promptPrefix")
+  })
+})

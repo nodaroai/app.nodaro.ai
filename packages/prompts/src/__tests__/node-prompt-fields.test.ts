@@ -16,10 +16,10 @@ describe("nodeSupportsPromptAffixes", () => {
     expect(nodeSupportsPromptAffixes("not-a-node")).toBe(false)
     expect(nodeSupportsPromptAffixes(undefined)).toBe(false)
   })
-  it("PROMPT_AFFIX_NODE_TYPES is exactly the registry minus opt-outs (37 types)", () => {
+  it("PROMPT_AFFIX_NODE_TYPES is exactly the registry minus opt-outs (39 types)", () => {
     const expected = Object.entries(NODE_PROMPT_FIELDS).filter(([, s]) => s.affixes !== false).map(([t]) => t)
     expect([...PROMPT_AFFIX_NODE_TYPES].sort()).toEqual(expected.sort())
-    expect(PROMPT_AFFIX_NODE_TYPES.size).toBe(37)
+    expect(PROMPT_AFFIX_NODE_TYPES.size).toBe(39)
   })
   it("getPromptFields still resolves", () => expect(getPromptFields("generate-image")?.prompt).toBe("prompt"))
 })
@@ -28,6 +28,8 @@ describe("promptAffixCoreField — the data key the RUN wraps with pre/post text
   it("most nodes: the editor's primary prompt field", () => {
     expect(promptAffixCoreField("generate-image")).toBe("prompt")
     expect(promptAffixCoreField("llm-chat")).toBe("userInput")
+    expect(promptAffixCoreField("generate-3d-scene")).toBe("scenePrompt")
+    expect(promptAffixCoreField("edit-3d-scene")).toBe("editPrompt")
     expect(promptAffixCoreField("text-to-speech")).toBe("directText")
   })
   it("generate-script: the run wraps the topic `prompt`, NOT the editor's styleGuide (spec §7)", () => {

@@ -687,6 +687,8 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
   // model dropdown here wrote a field the node never reads.
   "motion-graphics": [llmModelControl, reasoningEffortControl],
   "3d-title": [llmModelControl, reasoningEffortControl],
+  "generate-3d-scene": [llmModelControl, reasoningEffortControl],
+  "edit-3d-scene": [llmModelControl, reasoningEffortControl],
   // ── Audio / voice (inline-mirrored lists) ──
   "transcribe": [sttProviderControl],
   "audio-isolation": [sttProviderControl],

@@ -101,7 +101,9 @@ export const HANDLE_COMPATIBILITY: Record<string, readonly string[]> = {
 
   // Specialized
   voiceId: ["voiceId"],
-  composition: ["composition"],
+  // A composer's plan output feeds render-video (`composition`) and, for a
+  // 3D scene, the Edit 3D Scene node's `scene` input.
+  composition: ["composition", "scene"],
   "picker-json": ["picker-json"],
   narration: ["audio", "ref-audio", "media"],
   dialogue: ["audio", "ref-audio", "media"],
@@ -211,6 +213,9 @@ export const TYPED_HANDLE_IDS: ReadonlySet<string> = new Set([
   "analysis",
   // suno-generate secondary text fields (field-<key> mappable handles).
   "field-style", "field-lyrics", "field-title", "field-negativeStyle",
+  //   - scene: Edit 3D Scene's upstream-plan input (accepts only the two
+  //     3D-scene authoring nodes, never a Parameter picker).
+  "scene",
 ])
 /** Subset that requires consumer-type dispatch — the dev-time warning in
  *  getCompatibleNodes triggers when one of these is passed without a

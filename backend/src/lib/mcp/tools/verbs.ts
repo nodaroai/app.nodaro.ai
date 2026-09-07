@@ -2,6 +2,7 @@ import { registerImageVerbs, type RegisterOpts } from "./verbs-image.js"
 import { registerVideoVerbs } from "./verbs-video.js"
 import { registerAudioVerbs } from "./verbs-audio.js"
 import { registerCloVerbs } from "./verbs-clo.js"
+import { registerScene3DVerbs } from "./verbs-scene3d.js"
 import { registerShotSequenceVerbs } from "./verbs-shot-sequence.js"
 import { registerShotShapeTools } from "./shot-shapes.js"
 import { registerBrandPresetTools } from "./brand-presets.js"
@@ -39,6 +40,7 @@ export function registerVerbs(opts: RegisterVerbsOpts): void {
   registerAudioVerbs(opts)
   registerCloVerbs(opts)
   registerShotSequenceVerbs(opts)
+  registerScene3DVerbs(opts)
   // list_shot_shapes / get_shot_shape: pure catalog discovery — no scope gate,
   // no side effects. Same posture as list_models / get_node_skill. Ungated so
   // the blueprint catalog is discoverable regardless of session scopes.

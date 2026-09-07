@@ -629,3 +629,7 @@ const { data } = await client.jobs.getStatus(jobId)
 if (data.status === "completed") console.log((data.output_data as { output: { title: string } }).output.title)
 const { data: runs } = await client.jobs.list({ type: "llm-structured", origin: "my-app" })
 ```
+
+## 3D scenes
+
+See [editable 3D scenes](sdk-reference.md#editable-3d-scenes) for prompt → editable scene → MP4 using `nodes.runAndWait`.

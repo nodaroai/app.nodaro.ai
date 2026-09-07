@@ -1,6 +1,6 @@
 import { z } from "zod"
 import { safeUrlSchema } from "./url-validator.js"
-import { KINETIC_CAPTION_STYLES, SUPPORTED_FONT_NAMES } from "@nodaro/shared"
+import { KINETIC_CAPTION_STYLES, SUPPORTED_FONT_NAMES, scene3DPlanSchema } from "@nodaro/shared"
 import type { BrandTokens } from "@nodaro/prompts"
 import type { ShotElement } from "@nodaro/shared"
 import { cdnMediaUrlSchema } from "./cdn-media-url.js"
@@ -22,6 +22,7 @@ export const PLAN_TYPES = [
   "burn-captions",
   "lottie-graphic",
   "shot-sequence",
+  "3d-scene",
 ] as const
 
 export type PlanType = (typeof PLAN_TYPES)[number]
@@ -777,6 +778,32 @@ export const alignmentWordSchema = z.object({
   end: z.number().finite().min(0),
 })
 
+// ── Scene3D (3d-scene) ──────────────────────────────────────────────────
+
+/**
+ * The plan contract itself lives in `@nodaro/shared` (`scene3DPlanSchema`) and
+ * is NOT restated here — the LLM authoring path, the editor and this render
+ * route must accept exactly the same scenes.
+ *
+ * What the backend adds on top is the trust boundary: a reference URL that a
+ * client can hand us has to clear `safeUrlSchema` (SSRF/host allowlist), which
+ * a published, browser-side package cannot enforce. Everything else — bounds,
+ * hierarchy, keyframe tracks — is already checked by the shared schema.
+ */
+export const scene3DRenderPlanSchema = scene3DPlanSchema.superRefine((plan, ctx) => {
+  const references = plan.references ?? []
+  references.forEach((reference, index) => {
+    const parsed = safeUrlSchema.safeParse(reference.url)
+    if (!parsed.success) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["references", index, "url"],
+        message: parsed.error.issues[0]?.message ?? "Reference URL is not allowed",
+      })
+    }
+  })
+})
+
 // ── Render Plan Envelope (discriminated union) ──────────────────────────
 
 export const renderPlanSchema = z.discriminatedUnion("planType", [
@@ -789,6 +816,7 @@ export const renderPlanSchema = z.discriminatedUnion("planType", [
   burnCaptionsPlanSchema,
   lottieGraphicPlanSchema,
   shotSequencePlanBaseSchema,
+  scene3DPlanSchema,
 ])
 
 // ── Plan type → schema lookup ───────────────────────────────────────────
@@ -803,6 +831,7 @@ export const planSchemaMap: Record<string, z.ZodType> = {
   "burn-captions": burnCaptionsPlanSchema,
   "lottie-graphic": lottieGraphicPlanSchema,
   "shot-sequence": shotSequencePlanSchema,
+  "3d-scene": scene3DRenderPlanSchema,
 }
 
 /**

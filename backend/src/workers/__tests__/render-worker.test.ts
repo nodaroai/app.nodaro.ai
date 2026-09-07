@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterAll } from "vitest"
 
 // ---------------------------------------------------------------------------
 // Mocks — vi.hoisted() for variables used inside vi.mock()
@@ -126,6 +126,9 @@ import {
   canUseFfmpegFastPath,
   collectVideoUrls,
   replaceVideoUrls,
+  chromiumOptionsFor,
+  stripAuthoringOnlyFields,
+  renderProvenance,
   type SceneGraphData,
 } from "../render-worker.js"
 
@@ -201,6 +204,132 @@ describe("buildPlanRender", () => {
     expect(result.height).toBe(1080)
     expect(result.fps).toBe(30)
     expect(result.durationInFrames).toBe(300)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 3d-scene (Scene3D previz)
+// ---------------------------------------------------------------------------
+
+function makeScene3DPlan(overrides: Record<string, unknown> = {}) {
+  return {
+    planType: "3d-scene",
+    schemaVersion: 1,
+    revisionId: "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+    width: 1280,
+    height: 720,
+    fps: 24,
+    durationInFrames: 48,
+    backgroundColor: "#101014",
+    camera: { position: [0, 2, 8], target: [0, 0, 0], focalLengthMm: 35, sensorWidthMm: 36 },
+    objects: [],
+    lighting: { ambientIntensity: 0.5, keyIntensity: 1.5, keyPosition: [4, 6, 5] },
+    ...overrides,
+  }
+}
+
+describe("chromiumOptionsFor", () => {
+  const originalGl = process.env.REMOTION_GL
+
+  beforeEach(() => {
+    delete process.env.REMOTION_GL
+  })
+
+  afterAll(() => {
+    if (originalGl === undefined) delete process.env.REMOTION_GL
+    else process.env.REMOTION_GL = originalGl
+  })
+
+  it("selects a GL backend for the WebGL composition", () => {
+    // Headless Chromium has no GPU: without this the 3d canvas encodes black.
+    const options = chromiumOptionsFor("3d-scene")
+    expect(options).toBeDefined()
+    expect(["angle", "swangle"]).toContain(options?.gl)
+    expect(options?.gl).toBe(process.platform === "darwin" ? "angle" : "swangle")
+  })
+
+  it("honours a REMOTION_GL override (containers that need a different backend)", () => {
+    process.env.REMOTION_GL = "swiftshader"
+    expect(chromiumOptionsFor("3d-scene")?.gl).toBe("swiftshader")
+  })
+
+  it("leaves every other composition on Remotion's default", () => {
+    process.env.REMOTION_GL = "swiftshader"
+    for (const id of ["after-effects", "scene-graph", "3d-title", "shot-sequence", "burn-captions"]) {
+      expect(chromiumOptionsFor(id)).toBeUndefined()
+    }
+  })
+})
+
+describe("stripAuthoringOnlyFields", () => {
+  it("drops 3d-scene references so the render never downloads media no frame contains", () => {
+    const plan = makeScene3DPlan({
+      references: [{ id: "r1", url: "https://cdn.example.com/ref.mp4", kind: "video", role: "motion" }],
+    })
+    const stripped = stripAuthoringOnlyFields("3d-scene", plan)
+    expect(stripped.references).toBeUndefined()
+    expect(stripped.objects).toBe(plan.objects)
+    // the caller's plan (which is what gets persisted) is untouched
+    expect((plan as { references?: unknown[] }).references).toHaveLength(1)
+  })
+
+  it("returns the same object when there is nothing to strip", () => {
+    const plan = makeScene3DPlan()
+    expect(stripAuthoringOnlyFields("3d-scene", plan)).toBe(plan)
+  })
+
+  it("never touches other plan types", () => {
+    const plan = { references: ["keep me"] } as unknown as Record<string, unknown>
+    expect(stripAuthoringOnlyFields("after-effects", plan)).toBe(plan)
+  })
+})
+
+describe("renderProvenance", () => {
+  it("stamps the scene revision and renderer onto a 3d-scene result", () => {
+    expect(renderProvenance({ jobId: "1", planType: "3d-scene", plan: makeScene3DPlan() })).toEqual({
+      renderer: "scene3d/three",
+      sceneRevisionId: "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+    })
+  })
+
+  it("omits the revision when a plan somehow has none, but still names the renderer", () => {
+    const { revisionId: _dropped, ...plan } = makeScene3DPlan()
+    expect(renderProvenance({ jobId: "1", planType: "3d-scene", plan })).toEqual({
+      renderer: "scene3d/three",
+    })
+  })
+
+  it("adds nothing for other plan types or scene-graph jobs", () => {
+    expect(renderProvenance({ jobId: "1", planType: "after-effects", plan: {} })).toEqual({})
+    expect(
+      renderProvenance({
+        jobId: "1",
+        sceneGraph: { fps: 30, width: 1920, height: 1080, durationInFrames: 300, backgroundColor: "#000", tracks: [] },
+      }),
+    ).toEqual({})
+  })
+})
+
+describe("buildPlanRender for 3d-scene", () => {
+  it("takes composition, framing and timing from the plan", () => {
+    const plan = makeScene3DPlan()
+    const result = buildPlanRender({ jobId: "1", planType: "3d-scene", plan })
+
+    expect(result.compositionId).toBe("3d-scene")
+    expect(result.width).toBe(1280)
+    expect(result.height).toBe(720)
+    expect(result.fps).toBe(24)
+    expect(result.durationInFrames).toBe(48)
+  })
+
+  it("hands the composition a plan without authoring references", () => {
+    const plan = makeScene3DPlan({
+      references: [{ id: "r1", url: "https://cdn.example.com/ref.mp4", kind: "video", role: "motion" }],
+    })
+    const result = buildPlanRender({ jobId: "1", planType: "3d-scene", plan })
+    const inputPlan = (result.inputProps as { plan: Record<string, unknown> }).plan
+    expect(inputPlan.references).toBeUndefined()
+    expect(collectVideoUrls(result.inputProps)).toEqual([])
   })
 })
 

@@ -89,6 +89,11 @@ export interface JobResultContext {
   readonly jobType: string | null
   readonly mediaKind: "image" | "video" | "audio" | "other"
   readonly userId: string | null
+  /** Stored request payload, supplied only after the result gate is active. */
+  readonly inputData?: Record<string, unknown>
+  /** Lazy, trusted identity lookup, bound to this job's requester. No lookup
+   *  occurs unless a deployment policy needs its own IdP identifier. */
+  readonly requesterIdentity?: () => Promise<{ provider: string; subject: string } | null>
   /** Always "completed" today. Present so a future funnel (a partial
    *  deliverable, say) can be distinguished without a signature change. */
   readonly statusToBe: "completed"
@@ -122,10 +127,10 @@ export type JobResultVerdict =
   | { readonly verdict: "allow" }
   /** Publish, but record the annotation. Never changes the row's status. */
   | { readonly verdict: "flag"; readonly reason: string; readonly labels?: readonly string[] }
-  | { readonly verdict: "block"; readonly reason: string; readonly userMessage?: string }
+  | { readonly verdict: "block"; readonly reason: string; readonly userMessage?: string; readonly labels?: readonly string[] }
   /** Quarantine for human review: status → `pending_review`, output kept but
    *  NOT exposed, credits stay reserved. */
-  | { readonly verdict: "hold"; readonly reason: string }
+  | { readonly verdict: "hold"; readonly reason: string; readonly labels?: readonly string[] }
 
 export interface JobPolicy {
   readonly id: string
@@ -343,6 +348,7 @@ export async function applyJobResultPolicies(input: JobResultContext): Promise<J
         reason: v.reason,
         userMessage: v.userMessage ?? DEFAULT_RESULT_BLOCK_MESSAGE,
         policyId: p.id,
+        ...(v.labels ? { labels: v.labels } : {}),
       }
     }
     if (RESULT_RANK[v.verdict] > RESULT_RANK[best.verdict]) {
@@ -357,7 +363,7 @@ export async function applyJobResultPolicies(input: JobResultContext): Promise<J
         // sentence, the hold downgraded to a block below, is handed the
         // platform's.
         userMessage: undefined,
-        labels: v.verdict === "flag" ? v.labels : undefined,
+        labels: "labels" in v ? v.labels : undefined,
         policyId: p.id,
       }
     }

@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-08-27T21:15:55.365Z
-generated_from: 2266777f4
+generated_at: 2026-09-07T13:04:05.912Z
+generated_from: faf85b35e
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -106,6 +106,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `describe-to-picker` — Describe to Picker
 - `dubbing` — Dubbing
 - `duration` — Duration
+- `edit-3d-scene` — Edit 3D Scene
 - `edit-video-pro` — Edit Video Pro
 - `era` — Era / Period
 - `exposure-settings` — Exposure Settings
@@ -121,6 +122,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `forced-alignment` — Forced Alignment
 - `framing` — Framing
 - `furniture` — Furniture
+- `generate-3d-scene` — Generate 3D Scene
 - `generate-image` — Generate Image
 - `generate-mask` — Generate Mask
 - `generate-music` — Generate Music

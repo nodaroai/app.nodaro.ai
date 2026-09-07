@@ -9,6 +9,11 @@
 > **Audience:** AI code generators (Lovable, v0, Bolt, Cursor, Claude,
 > ChatGPT). Hand this whole doc to the model — it is self-contained for
 > the app-embedding use case.
+>
+> **Not this doc:** if you want to frame Nodaro's 3D previsualization
+> *viewport* rather than run an app, that is a different, token-free
+> iframe with its own postMessage contract — see
+> [Scene3D Preview Embed](./scene3d-embed.md).
 
 You are building a web (or mobile) UI that runs an existing **published
 Nodaro app** via Nodaro's REST API. The Nodaro app is already built and

@@ -29,7 +29,10 @@
  */
 
 import { getJobStatusLean } from "./api"
-import type { GeneratedResult, WorkflowNode } from "@/types/nodes"
+import { COMPOSER_PLAN_MAP } from "@nodaro/shared"
+import { findRevision, resolveSceneCompletion } from "@/lib/scene3d/revisions"
+import { planRevisionId } from "@/lib/scene3d/plan-view"
+import type { GeneratedResult, Scene3DRevisionEntry, WorkflowNode } from "@/types/nodes"
 
 /** The single-entry nodeState a completed single-node job carries (backend
  *  `jobToExecutionSummary` keys it by canvas node_id, falls back to job id). */
@@ -74,7 +77,26 @@ export function pickLatestCompletedJobPerNode(items: readonly ExecItemLike[]): C
   return [...byNode].map(([nodeId, jobId]) => ({ nodeId, jobId }))
 }
 
-/** True when the node already carries a generated result — don't clobber it. */
+/** True when this node's result is a Scene3D plan rather than a media URL. */
+export function isScene3DNodeType(nodeType: string | undefined): boolean {
+  return COMPOSER_PLAN_MAP[nodeType ?? ""]?.planType === "3d-scene"
+}
+
+/**
+ * True when the node already carries a generated result — don't clobber it.
+ *
+ * `scenePlan` is deliberately NOT on this list, and must not be added. Holding
+ * a plan is the NORMAL state of a scene node — it keeps the previous revision
+ * on screen while a job runs, and an edit node adopts its upstream scene before
+ * running — so treating that as "already has a result" would make the Scene3D
+ * recovery below dead code for exactly the runs it exists to recover. Scene
+ * nodes get a stronger guard instead: `buildScene3DRecoveryPatch` skips a
+ * revision already in history (idempotent across reloads) and routes the rest
+ * through `resolveSceneCompletion`, which protects a manual edit made AFTER the
+ * job started — something a "has any plan" test cannot see.
+ * (`reconcile-completed-jobs.test.ts` fails if a plan-holding scene node stops
+ * being reconciled.)
+ */
 function nodeHasResult(data: Record<string, unknown>): boolean {
   if (data.executionStatus === "completed") return true
   if (data.generatedVideoUrl || data.generatedImageUrl || data.generatedAudioUrl || data.sourceImageUrl) return true
@@ -90,13 +112,66 @@ function nodeHasResult(data: Record<string, unknown>): boolean {
  * jobId, `activeResultIndex: 0`, `executionStatus: "completed"`. Returns null
  * when the job produced no recognizable media URL.
  */
+/**
+ * Recover a completed 3D-scene authoring job onto its node after a reload.
+ *
+ * Three things make this different from the media branch below:
+ *
+ *  - **Idempotence is by revision, not by emptiness.** A revision already in
+ *    `sceneHistory` was recovered (or arrived live) on an earlier pass; writing
+ *    it again would park it a second time on every reload.
+ *  - **A newer edit wins.** The completion goes through the SAME
+ *    `resolveSceneCompletion` a live poll uses, comparing the node's current
+ *    revision against the base the run was launched on. `sceneJobBaseRevisionId`
+ *    survives the save (it is not a transient runtime key), so a run interrupted
+ *    mid-flight still knows what it started from. When it does not, base
+ *    `undefined` against an existing scene reads as superseded — the arriving
+ *    plan is parked for the user, which is the right answer under uncertainty.
+ *  - **Nothing is discarded.** Park or adopt, the revision lands in history.
+ *
+ * `executionStatus` is deliberately NOT set to `"completed"`: the value is the
+ * scene itself, and the node paints from `scenePlan`.
+ */
+export function buildScene3DRecoveryPatch(
+  data: Record<string, unknown>,
+  output: Record<string, unknown> | null | undefined,
+  source: "generate" | "edit" = "generate",
+): Record<string, unknown> | null {
+  const incoming = output?.scenePlan as Record<string, unknown> | undefined
+  if (!incoming) return null
+
+  const history = data.sceneHistory as Scene3DRevisionEntry[] | undefined
+  const incomingRevision = planRevisionId(incoming)
+  // Already recorded — this job was reconciled before, or its result arrived
+  // live. Re-parking it every reload would be its own bug.
+  if (incomingRevision && findRevision(history, incomingRevision)) return null
+
+  const result = resolveSceneCompletion({
+    current: data.scenePlan as Record<string, unknown> | undefined,
+    baseRevisionId: data.sceneJobBaseRevisionId as string | undefined,
+    incoming,
+    changeSummary: typeof output?.changeSummary === "string" ? output.changeSummary : undefined,
+    history,
+    source,
+  })
+  return { ...result.patch }
+}
+
 export function buildCompletedResultPatch(
   nodeType: string | undefined,
   output: Record<string, unknown> | null | undefined,
   jobId: string,
   timestamp: string,
+  /** The node's LIVE data. Only the Scene3D lane reads it (its guard compares
+   *  the arriving revision against what the node holds now). */
+  nodeData: Record<string, unknown> = {},
 ): Record<string, unknown> | null {
   if (!output) return null
+  // 3D-scene authoring nodes: the result is a plan revision, not a URL. Routed
+  // here so every recovery caller inherits the revision guard. `nodeData` is
+  // what that guard reads — a caller that cannot supply it gets the
+  // fresh-node answer (adopt), which is the right default for an empty node.
+  if (isScene3DNodeType(nodeType)) return buildScene3DRecoveryPatch(nodeData, output, nodeType === "edit-3d-scene" ? "edit" : "generate")
   // The analysis emitters are the nodes whose result is a JSON payload
   // (`output_data.json` → `data.generatedJson`), not a media URL — without this
   // branch a completed analysis fell through every recovery layer and the node
@@ -162,6 +237,9 @@ export async function computeCompletedJobPatches(
   nodes: readonly WorkflowNode[],
   fetchOutput: (jobId: string) => Promise<{ status: string; output_data?: Record<string, unknown> | null } | null>,
   nowIso: string,
+  /** Live node data by id, re-read after each `fetchOutput` await. Omitted →
+   *  the pre-fetch snapshot is used (the historical behaviour). */
+  readLiveData?: (nodeId: string) => Record<string, unknown> | undefined,
 ): Promise<NodeResultUpdate[]> {
   const nodeById = new Map(nodes.map((n) => [n.id, n]))
   const out: NodeResultUpdate[] = []
@@ -177,9 +255,17 @@ export async function computeCompletedJobPatches(
     } catch {
       continue // best-effort — a lookup hiccup shouldn't block load
     }
-    if (!job || job.status !== "completed") continue
+    if (!job || job.status !== "completed" ) continue
 
-    const patch = buildCompletedResultPatch(node.type, job.output_data ?? null, jobId, nowIso)
+    // Re-read the node AFTER the await. `nodes` is the snapshot taken before
+    // the fetch, and a scene node is interactive the whole time this runs —
+    // the user can nudge an object, restore a revision or clear the scene
+    // while the job lookup is in flight. Deciding against the stale snapshot
+    // would overwrite exactly the edit that was made during recovery.
+    const live = readLiveData?.(nodeId) ?? data
+    if (readLiveData && nodeHasResult(live)) continue
+
+    const patch = buildCompletedResultPatch(node.type, job.output_data ?? null, jobId, nowIso, live)
     if (patch) out.push({ nodeId, updates: patch })
   }
   return out
@@ -198,6 +284,7 @@ export async function reconcileCompletedSingleNodeJobs(
     listCompleted: (workflowId: string) => Promise<{ data: ExecItemLike[] }>
     fetchOutput?: (jobId: string) => Promise<{ status: string; output_data?: Record<string, unknown> | null }>
     nowIso?: string
+    readLiveData?: (nodeId: string) => Record<string, unknown> | undefined
   },
 ): Promise<void> {
   try {
@@ -206,7 +293,13 @@ export async function reconcileCompletedSingleNodeJobs(
     if (refs.length === 0) return
     const fetchOutput =
       deps.fetchOutput ?? (async (jobId: string) => (await getJobStatusLean(jobId)) as { status: string; output_data?: Record<string, unknown> | null })
-    const patches = await computeCompletedJobPatches(refs, nodes, fetchOutput, deps.nowIso ?? new Date().toISOString())
+    const patches = await computeCompletedJobPatches(
+      refs,
+      nodes,
+      fetchOutput,
+      deps.nowIso ?? new Date().toISOString(),
+      deps.readLiveData,
+    )
     for (const p of patches) updateNodeData(p.nodeId, p.updates)
   } catch {
     console.warn("[reconcile-completed-jobs] reconcile skipped; long-job results may be missing until re-run")

@@ -4,6 +4,12 @@ import { nodeSupportsPromptAffixes } from "@nodaro/prompts"
 import { STATIC_CREDIT_COSTS } from "../ee/billing/credits.js"
 import { hasCredits } from "./config.js"
 
+/** Authoring prices exclude the separately priced optional video-analysis job. */
+const scene3DAuthoringCosts = ["3d-scene:economy", "3d-scene", "3d-scene:premium"]
+  .map((id) => STATIC_CREDIT_COSTS[id])
+const scene3DMinCost = Math.min(...scene3DAuthoringCosts)
+const scene3DMaxCost = Math.max(...scene3DAuthoringCosts)
+
 export type NodeCategory =
   | "input"
   | "parameter"
@@ -1070,6 +1076,31 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
   { type: "render-video", label: "Render Video", category: "composition", description: "Render a Remotion composition to MP4.", outputType: "video", creditCost: 15 },
   { type: "after-effects", label: "After Effects", category: "composition", description: "AI-generated post-processing layer.", outputType: "video", creditCost: 2 },
   { type: "motion-graphics", label: "Motion Graphics", category: "composition", description: "AI-generated 2D motion graphics (classic elements or AI-authored Lottie).", outputType: "video", creditCost: "1-8" },
+  {
+    type: "generate-3d-scene", label: "Generate 3D Scene", category: "composition",
+    description: "Generate an editable animated 3D clay scene from a prompt and optional image/video references. Video reference analysis is charged separately.",
+    creditCost: `${scene3DMinCost}-${scene3DMaxCost}`,
+    outputType: "data", capabilities: ["supports-reference-image", "supports-reference-video", "editable-3d-scene", "scene3d-embed-v1"],
+    inputSchema: { fields: [
+      { key: "prompt", type: "string", required: true },
+      { key: "durationSeconds", type: "number" }, { key: "fps", type: "number" },
+      { key: "aspectRatio", type: "string" }, { key: "references", type: "array" },
+      { key: "llmModel", type: "string" }, { key: "reasoningEffort", type: "string" },
+    ] },
+  },
+  {
+    type: "edit-3d-scene", label: "Edit 3D Scene", category: "composition",
+    description: "Create a new 3D scene revision from an instruction or deterministic edits; preserve locked objects. Deterministic edits are free; optional video reference analysis is charged separately.",
+    creditCost: `0-${scene3DMaxCost}`,
+    outputType: "data", capabilities: ["supports-reference-image", "supports-reference-video", "editable-3d-scene"],
+    inputSchema: { fields: [
+      { key: "scenePlan", type: "object", required: true },
+      { key: "expectedRevisionId", type: "string", required: true },
+      { key: "prompt", type: "string" }, { key: "operations", type: "array" },
+      { key: "references", type: "array" }, { key: "lockedObjectIds", type: "array" },
+      { key: "selectedObjectIds", type: "array" }, { key: "llmModel", type: "string" },
+    ] },
+  },
   { type: "3d-title", label: "3D Title", category: "composition", description: "AI-generated 3D animated text.", outputType: "video", creditCost: 15 },
   // composition siblings of after-effects / motion-graphics / 3d-title (rendered video output).
   { type: "video-composer", label: "Video Composer", category: "composition", description: "AI-powered scene-graph video composition from natural language prompts.", outputType: "video", creditCost: "1-4" },

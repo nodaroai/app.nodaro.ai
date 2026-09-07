@@ -1052,6 +1052,12 @@ export {
 export { ENTITY_NODE_KINDS } from "./entity-node-fields.js"
 export type { EntityNodeKind } from "./entity-node-fields.js"
 
+// --- Scene3D previsualization (v1): the frozen wire contract shared by the
+//     authoring LLM jobs, the Three.js/Remotion renderer, the canvas and the
+//     SDK/MCP surface. Structure only — no prompts, no pricing. ---
+export * from "./scene3d.js"
+export * from "./scene3d-edit.js"
+
 // --- transient studio keys — the public share read strips them ---
 export {
   STUDIO_TRANSIENT_KEYS,

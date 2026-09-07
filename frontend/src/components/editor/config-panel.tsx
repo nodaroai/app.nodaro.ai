@@ -174,6 +174,8 @@ import {
   AfterEffectsConfig,
   LottieOverlayConfig,
   ThreeDTitleConfig,
+  Generate3DSceneConfig,
+  Edit3DSceneConfig,
   MotionGraphicsConfig,
   CompositeConfig,
   RenderVideoConfig,
@@ -251,6 +253,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "suno-mashup", "suno-replace-section", "suno-style-boost", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend",
   "llm-chat", "web-scrape", "video-analysis", "video-audit",
   "video-composer", "after-effects", "lottie-overlay", "3d-title", "motion-graphics",
+  "generate-3d-scene", "edit-3d-scene",
   "image-to-text", "qa-check", "transcribe", "describe-to-picker",
   "render-video",
   "instagram-post", "tiktok-post", "youtube-upload", "linkedin-post", "x-post", "facebook-post", "telegram-post", "publish-social",
@@ -477,6 +480,8 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "after-effects": return <AfterEffectsConfig {...configProps} />
     case "lottie-overlay": return <LottieOverlayConfig {...configProps} />
     case "3d-title": return <ThreeDTitleConfig {...configProps} nodeId={selectedNodeId} />
+    case "generate-3d-scene": return <Generate3DSceneConfig {...configProps} nodeId={selectedNodeId} />
+    case "edit-3d-scene": return <Edit3DSceneConfig {...configProps} nodeId={selectedNodeId} />
     case "motion-graphics": return <MotionGraphicsConfig {...configProps} nodeId={selectedNodeId} />
     case "composite": return <CompositeConfig {...configProps} />
     case "render-video": return <RenderVideoConfig {...configProps} />

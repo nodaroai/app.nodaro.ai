@@ -1766,3 +1766,7 @@ nothing — so compact prompt assembly needs no `detail: "full"` round-trip.
 
 See [Parameter Picker Catalogs](../picker-catalogs.md) for the underlying
 `@nodaro/shared` data and the prompt-fragment helpers.
+
+## 3D scenes
+
+[3D scene tools](3d-scenes.md): `generate_3d_scene`, `edit_3d_scene`, and `render_3d_scene` create editable scenes, revise them, and export MP4s.

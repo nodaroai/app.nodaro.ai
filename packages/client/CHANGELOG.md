@@ -1,5 +1,23 @@
 # @nodaro/sdk
 
+## 1.30.1
+
+### Patch Changes
+
+- 33b783f: Allow scene edits to replace or clear their complete reference set explicitly.
+
+## 1.30.0
+
+### Minor Changes
+
+- 2c1f0b2: Add the versioned Scene3D wire contract, deterministic edit operations, and typed SDK inputs/results for 3D scene generation, editing and composition rendering. Register scene authoring prompt fields for consistent canvas and workflow execution.
+
+### Patch Changes
+
+- Updated dependencies [2c1f0b2]
+  - @nodaro/shared@2.27.0
+  - @nodaro/prompts@1.17.1
+
 ## 1.29.0
 
 ### Minor Changes

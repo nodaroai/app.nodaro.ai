@@ -71,6 +71,8 @@ const RELEVANT_FIELDS: Record<string, readonly string[]> = {
   "llm-chat":         ["model"],
   "lottie-overlay":   ["model"],
   "3d-title":         ["model"],
+  "generate-3d-scene": ["model"],
+  "edit-3d-scene":    ["model"],
   "motion-graphics":  ["model"],
   "image-to-text":    ["model"],
   "qa-check":         ["model"],

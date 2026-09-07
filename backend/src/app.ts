@@ -199,6 +199,7 @@ import { describeToPickerRoutes } from "./routes/describe-to-picker.js"
 import { textToPickerRoutes } from "./routes/text-to-picker.js"
 import { llmStructuredRoutes } from "./routes/llm-structured.js"
 import { llmStructuredJobsRoutes } from "./routes/llm-structured-jobs.js"
+import { scene3DRoutes } from "./routes/3d-scene.js"
 import { shotsRoutes } from "./routes/shots.js"
 import { modelsRoutes } from "./routes/models.js"
 import { voicesRoutes } from "./routes/voices.js"
@@ -632,6 +633,7 @@ export async function buildApp() {
   await app.register(textToPickerRoutes)
   await app.register(llmStructuredRoutes)
   await app.register(llmStructuredJobsRoutes)
+  await app.register(scene3DRoutes)
   await app.register(shotsRoutes)
   await app.register(modelsRoutes)
   await app.register(surfaceAvailabilityRoutes)

@@ -132,6 +132,8 @@ import { VideoComposerNode } from "./video-composer-node";
 import { AfterEffectsNode } from "./after-effects-node";
 import { LottieOverlayNode } from "./lottie-overlay-node";
 import { ThreeDTitleNode } from "./three-d-title-node";
+import { Generate3DSceneNode } from "./generate-3d-scene-node";
+import { Edit3DSceneNode } from "./edit-3d-scene-node";
 import { MotionGraphicsNode } from "./motion-graphics-node";
 import { CompositeNode } from "./composite-node";
 import { RenderVideoNode } from "./render-video-node";
@@ -326,6 +328,8 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "after-effects": AfterEffectsNode,
   "lottie-overlay": LottieOverlayNode,
   "3d-title": ThreeDTitleNode,
+  "generate-3d-scene": Generate3DSceneNode,
+  "edit-3d-scene": Edit3DSceneNode,
   "motion-graphics": MotionGraphicsNode,
   "composite": CompositeNode,
   "render-video": RenderVideoNode,

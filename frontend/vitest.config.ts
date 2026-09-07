@@ -38,6 +38,10 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      // Mirrors vite.config + tsconfig `paths`. The 3D-scene viewport imports
+      // `@remotion-pkg/scene3d` (the render-runtime-free three.js entry), so
+      // the alias has to exist here too or its module graph can't resolve.
+      "@remotion-pkg": path.resolve(__dirname, "../packages/remotion/src"),
     },
     // The picker-ui package is consumed via a workspace symlink; without
     // dedupe its own node_modules/react loads as a SECOND React copy and every

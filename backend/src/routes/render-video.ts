@@ -1,6 +1,8 @@
-import type { FastifyInstance } from "fastify"
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { sendInternalError } from "../lib/http-errors.js"
 import { insertJob } from "../lib/insert-job.js"
+import { markJobFailed } from "../lib/job-failure.js"
+import { refundReservedCreditsForJob } from "../lib/credits-job-lifecycle.js"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
@@ -155,6 +157,11 @@ const renderPlanBody = z.object({
 export async function renderVideoRoutes(app: FastifyInstance) {
   // Legacy template-based render
   app.post("/v1/render-video", { preHandler: [renderRateLimit, creditGuard(() => "render-video")] }, async (req, reply) => {
+    // Generic SDK node execution uses the node slug. Both plan endpoints use
+    // the same handler, after one rate-limit/credit guard invocation.
+    if (req.body && typeof req.body === "object" && "planType" in req.body) {
+      return renderPlan(req, reply)
+    }
     const parsed = renderVideoBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -266,7 +273,7 @@ export async function renderVideoRoutes(app: FastifyInstance) {
   })
 
   // Generic plan-based render (after-effects, future composers)
-  app.post("/v1/render-video/plan", { preHandler: [renderRateLimit, creditGuard(() => "render-video")] }, async (req, reply) => {
+  async function renderPlan(req: FastifyRequest, reply: FastifyReply) {
     const parsed = renderPlanBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -315,13 +322,21 @@ export async function renderVideoRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await renderQueue.add("render-video", {
-      jobId: job.id,
-      planType,
-      plan,
-      usageLogId,
-    })
+    try {
+      await renderQueue.add("render-video", {
+        jobId: job.id,
+        planType,
+        plan,
+        usageLogId,
+      })
+    } catch (error) {
+      if (await markJobFailed(job.id, { error_message: "Failed to enqueue video render" })) {
+        await refundReservedCreditsForJob(job.id)
+      }
+      return sendInternalError(reply, req, error, "Failed to enqueue video render")
+    }
 
     return { jobId: job.id }
-  })
+  }
+  app.post("/v1/render-video/plan", { preHandler: [renderRateLimit, creditGuard(() => "render-video")] }, renderPlan)
 }

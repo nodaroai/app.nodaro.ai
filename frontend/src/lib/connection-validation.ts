@@ -38,6 +38,7 @@ import {
   isValidSplitTextConnection,
   isValidPreviewConnection,
 } from "./audio-text-handles"
+import { SCENE3D_NODE_TYPES, isValidScene3DConnection } from "./scene3d-handles"
 import {
   isValidListNodeConnection,
   isValidWebScrapeConnection,
@@ -228,10 +229,19 @@ export function isValidWorkflowConnection(
     }
   }
 
-  // Composition output may ONLY target render-video. (Same rule as in
-  // workflow-canvas.tsx::isValidConnection.)
+  // Composition output may ONLY target render-video, or the `scene` input of
+  // Edit 3D Scene — a 3D scene plan is the one composer plan another AUTHORING
+  // node consumes (edit derives a new revision from the upstream one).
+  // (workflow-canvas.tsx::isValidConnection delegates here, so this is the
+  // single rule.)
   if (connection.sourceHandle === "composition") {
-    return typeOf(connection.target) === "render-video"
+    const compositionTarget = typeOf(connection.target)
+    if (compositionTarget === "render-video") return true
+    return (
+      compositionTarget === "edit-3d-scene" &&
+      connection.targetHandle === "scene" &&
+      SCENE3D_NODE_TYPES.has(typeOf(connection.source) ?? "")
+    )
   }
 
   // motion-graphics `lottie` source (the authored Lottie JSON URL, lottie
@@ -331,6 +341,13 @@ export function isValidWorkflowConnection(
   // and the target pip's accepts predicate agree.
   if (isAnalyzablePicker(targetType ?? "") && connection.targetHandle === "picker-json") {
     return ACCEPTS_PICKER_JSON(typeOf(connection.source) ?? "")
+  }
+
+  // 3D Scene (generate / edit) — `references` accepts image + video producers;
+  // `scene` accepts only another 3D-scene node's plan. The `scene` wire also
+  // has to satisfy the `composition` source rule above, so both ends agree.
+  if (SCENE3D_NODE_TYPES.has(targetType ?? "") && connection.targetHandle) {
+    return isValidScene3DConnection(connection.targetHandle, imageSourceType ?? "")
   }
 
   // Reference Sheet — `in` accepts ONLY composable entity refs (character /

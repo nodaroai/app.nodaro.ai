@@ -42,6 +42,7 @@ const PresentPage = lazy(() => import("@/routes/present-page"))
 const AppRunnerPage = lazy(() => import("@/routes/app-runner-page"))
 const TutorialPage = lazy(() => import("@/routes/tutorial-page"))
 const EmbedPage = lazy(() => import("@/routes/embed-page"))
+const EmbedScene3DPage = lazy(() => import("@/routes/embed-scene3d-page"))
 const ApiSettingsPage = lazy(() => import("@/app/(dashboard)/settings/api/page"))
 const DeveloperAppsPage = lazy(() => import("@/app/(dashboard)/settings/developer-apps/page"))
 const DeveloperAppDetailPage = lazy(() => import("@/app/(dashboard)/settings/developer-apps/detail/page"))
@@ -260,6 +261,17 @@ export const router = createBrowserRouter([
     // app bar, so it sits outside DashboardLayout.
     path: "/tutorials/:slug",
     element: <SuspenseWrapper><TutorialPage /></SuspenseWrapper>,
+    errorElement: <RouteErrorBoundary />,
+  },
+  {
+    // Stateless Scene3D preview frame. Declared BEFORE /embed/:slug for
+    // readability — React Router ranks a static segment above a dynamic one, so
+    // the order is not what decides it, but a reader should not have to know
+    // that to see which route wins. Unlike /embed/:slug this is NOT an app
+    // runner: it takes no slug, makes no API call, and speaks the versioned
+    // postMessage contract in `lib/scene3d/embed-protocol.ts`.
+    path: "/embed/scene3d",
+    element: <SuspenseWrapper><EmbedScene3DPage /></SuspenseWrapper>,
     errorElement: <RouteErrorBoundary />,
   },
   {

@@ -16,6 +16,8 @@ import { SYNC_HTTP_ROUTES } from "../node-executor.js"
 // Map each node type to the route source file that must contain its path.
 // Multiple node types can map to the same file (e.g. all social posts).
 const NODE_TYPE_TO_ROUTE_FILE: Record<string, string> = {
+  "generate-3d-scene": "backend/src/routes/3d-scene.ts",
+  "edit-3d-scene": "backend/src/routes/3d-scene.ts",
   "ai-writer": "backend/src/routes/ai-writer.ts",
   "llm-chat": "backend/src/routes/llm-chat.ts",
   "video-composer": "backend/src/routes/scene-graph-ai.ts",

@@ -763,6 +763,14 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       ? "plan-ready"
       : undefined;
   }
+  // Both 3D-scene nodes emit the SAME validated scene revision on `composition`
+  // (COMPOSER_PLAN_MAP maps both to planType "3d-scene" / planField "scenePlan"),
+  // so render-video and Edit 3D Scene read either one identically.
+  if (type === "generate-3d-scene" || type === "edit-3d-scene") {
+    return (data.scenePlan as Record<string, unknown> | undefined)
+      ? "plan-ready"
+      : undefined;
+  }
   if (type === "motion-graphics") {
     // The `lottie` source handle (lottie engine only) emits the authored Lottie
     // JSON's R2 URL for placement by a Lottie Overlay node — NOT the plan marker.

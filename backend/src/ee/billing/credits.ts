@@ -1288,6 +1288,19 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "motion-graphics-lottie": 33,         // standard (Sonnet 4.6, ~3K in + 4K out)
   "motion-graphics-lottie:economy": 1,
   "motion-graphics-lottie:premium": 80, // Opus 4.7 at the lottie token profile
+  // Scene3D previz authoring (generate-3d-scene / edit-3d-scene). Priced on
+  // scene-graph-ai's ladder — the closest analogue: one structured scene
+  // description in, one structured scene graph out.
+  "3d-scene": 30,                // standard
+  "3d-scene:economy": 10,
+  "3d-scene:premium": 40,
+  // The DETERMINISTIC edit lane: the caller sent `operations`, they are applied
+  // by `applyScene3DEditOperations` in-process and no model is ever called. It
+  // still gets an identifier (and a job row) so the wire contract, the job
+  // history and the refund machinery are identical on both lanes — the price is
+  // just zero. Spelled with a hyphen, not `3d-scene:ops`, so it can never be
+  // mistaken for a tier suffix that `buildLlmCreditIdentifier` produces.
+  "3d-scene-ops": 0,
   ...PINNABLE_SCRIPT_LLM_STATIC,
   "composite": 0,
   "sub-workflow": 0,

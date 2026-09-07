@@ -1166,6 +1166,27 @@ Direct-lane keys are unaffected: set `ANTHROPIC_API_KEY` or `GEMINI_API_KEY`
 and those models leave KIE entirely, proxy or no proxy (see "Gemini
 routing").
 
+## Managed Supabase through the studio origin
+
+For networks that filter every browser request by hostname, the studio can
+proxy its managed Supabase project. Set `SUPABASE_MANAGED_PROXY=true`,
+`FRONTEND_SUPABASE_URL=/supabase` and
+`SUPABASE_PROXY_UPSTREAM=https://YOUR-PROJECT.supabase.co` together. The proxy
+upstream must be an origin without a path. Keep `SUPABASE_URL` set to the
+managed project's HTTPS URL; backend connections continue to use it directly.
+The separate upstream variable also keeps bundled deployments' path-bearing
+`SUPABASE_URL` out of Caddy's upstream parser when this feature is disabled.
+
+The browser resolves `/supabase` against the page's origin. Caddy forwards
+auth, REST, storage and realtime requests, including WebSocket upgrades, to
+the configured project. Bearer tokens and API keys pass through unchanged;
+the proxy supplies no privileged credential. Multiple studio domains can use
+this configuration without another custom domain on Supabase.
+
+Unset, the managed proxy is disabled and the bundled auth and REST routes
+keep their existing behavior. To test the gateway locally with Caddy installed,
+run `node --test tools/__tests__/managed-supabase-proxy.test.mjs`.
+
 ## See also
 
 - [Community Edition Quickstart](./community-edition-quickstart.md) —

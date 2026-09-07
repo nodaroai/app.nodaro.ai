@@ -4519,3 +4519,26 @@ Re-exported from `@nodaro/shared` for convenience:
 - [SDK Quickstart](./sdk-quickstart.md) — task-oriented walkthrough
 - [OAuth Flow](./oauth-flow.md) — third-party app authorization-code flow
 - [API Integration](./api-integration.md) — direct REST patterns
+
+## Editable 3D scenes
+
+`nodes.run` and `nodes.runAndWait` accept typed `GenerateScene3DParams`, `EditScene3DParams` and `RenderScene3DParams`. Generation/edit completion returns `Scene3DJobOutput` with `scenePlan` and an optional `changeSummary`.
+
+```typescript
+const created = await client.nodes.runAndWait("generate-3d-scene", {
+  prompt: "Orbit a single box on a floor over four seconds",
+  durationSeconds: 4, fps: 24, aspectRatio: "16:9",
+});
+const edited = await client.nodes.runAndWait("edit-3d-scene", {
+  scenePlan: created.scenePlan,
+  expectedRevisionId: created.scenePlan.revisionId,
+  operations: [{ op: "set-camera", changes: { focalLengthMm: 50 } }],
+});
+const clip = await client.nodes.runAndWait("render-video", {
+  planType: "3d-scene", plan: edited.scenePlan,
+});
+```
+
+Scene authoring uses `/v1/3d-scene/generate` and `/v1/3d-scene/edit`. Typed composition rendering uses `/v1/render-video/plan`; legacy template renders retain `/v1/render-video`. For image/video conditioning, pass `references` with explicit appearance/layout/motion roles. See [Generate 3D Scene](nodes/composition/generate-3d-scene.md).
+
+SDK versions with the generic `nodes.run(type, params)` overload can use the same node names without typed Scene3D overloads. The server accepts their node-slug generate/edit paths and dispatches `render-video` requests carrying `planType` to the composition renderer. For an interactive preview, check the generate node's `scene3d-embed-v1` capability and use the [3D preview embed](scene3d-embed.md); it does not require a copy of the renderer or any authentication tokens in its messages.

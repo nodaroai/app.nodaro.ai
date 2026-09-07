@@ -26,6 +26,8 @@ const NODE_TYPE_LABELS: Record<string, string> = {
   "motion-graphics": "Motion Graphics",
   "lottie-overlay": "Lottie Overlay",
   "3d-title": "3D Title",
+  "generate-3d-scene": "Generate 3D Scene",
+  "edit-3d-scene": "Edit 3D Scene",
   "combine-videos": "Combine Videos",
   "merge-video-audio": "Merge Video & Audio",
   "add-captions": "Add Captions",

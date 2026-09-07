@@ -185,6 +185,8 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "generative-pipeline": "Story → Video",
   // Types whose title-cased fallback would miss the Hebrew node-label table.
   "3d-title": "3D Title",
+  "generate-3d-scene": "Generate 3D Scene",
+  "edit-3d-scene": "Edit 3D Scene",
   "video-composer": "Compose Video",
   "group": "Group",
   "collect": "Collect",

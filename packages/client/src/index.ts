@@ -464,3 +464,5 @@ export type {
 } from "@nodaro/shared"
 export { USAGE_GROUP_BYS, WORKSPACE_HEADER } from "@nodaro/shared"
 export { PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY } from "@nodaro/shared"
+
+export type { GenerateScene3DParams, EditScene3DParams, RenderScene3DParams, Scene3DJobOutput } from "./resources/scene3d-types.js"

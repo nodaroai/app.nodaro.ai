@@ -49,6 +49,8 @@ import {
   generateAfterEffects,
   generateLottieOverlay,
   generate3DTitle,
+  generate3DScene,
+  edit3DScene,
   generateMotionGraphics,
   mergeVideoAudioApi,
   imageCollageApi,
@@ -153,6 +155,8 @@ import type {
   AfterEffectsData,
   LottieOverlayData,
   ThreeDTitleData,
+  Generate3DSceneData,
+  Edit3DSceneData,
   MotionGraphicsData,
   CompositeData,
   RenderVideoData,
@@ -232,7 +236,11 @@ import {
 } from "./types";
 import { iterationIdempotencyKey } from "@/lib/idempotency-key";
 import { PLATFORM_SPECS } from "@/lib/social-media-specs";
-import { extractNodeOutput, collectMediaAssets, buildAutoComposition, collectAncestorRefs, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES_FOR_RENDER, AUDIO_SOURCE_TYPES } from "./execution-graph";
+import { extractNodeOutput, collectMediaAssets, buildAutoComposition, collectAncestorRefs, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES_FOR_RENDER, AUDIO_SOURCE_TYPES, VIDEO_URL_RE } from "./execution-graph";
+import { runScene3DJob } from "./scene3d-execution";
+import { resolveScene3DReferences, checkScene3DReferenceLimit } from "@/lib/scene3d/references";
+import { planRevisionId } from "@/lib/scene3d/plan-view";
+import { descendsFrom, pushRevision, scene3DRunContext } from "@/lib/scene3d/revisions";
 import { addCaptionsPreflight } from "./add-captions-preflight";
 import { resolveNodeInputs, extractNodeOutputAsList, resolveSourceThroughConnectedList, resolveSeedPromptHint, stampElementInjections, type FrontendResolvedInputs } from "./node-input-resolver";
 import { collectPreviewItems } from "./preview-items";
@@ -7315,6 +7323,164 @@ function executeNodeCore(
         });
         throw err;
       });
+  }
+
+  // ── 3D Scene previz ───────────────────────────────────────────────────
+  // Both nodes author a validated `Scene3DPlan` REVISION (they never render);
+  // the MP4 comes from a downstream render-video reading the same plan through
+  // COMPOSER_PLAN_MAP. Both routes answer `{ jobId }` and finish with
+  // `output_data.scenePlan`, so both go through `runScene3DJob`.
+  if (node.type === "generate-3d-scene") {
+    const g3d = node.data as Generate3DSceneData;
+    const g3dPrompt = applyPromptAffixes(inputs.prompt || g3d.scenePrompt, readPromptAffixes(g3d), refMap);
+    if (!g3dPrompt?.trim()) {
+      toast.error(`Node "${g3d.label}": no scene prompt set`);
+      return Promise.reject(new Error("No scene prompt"));
+    }
+    const g3dRefs = resolveScene3DReferences({
+      nodeId: node.id,
+      references: g3d.references,
+      edges,
+      outputOf: (sourceId) => {
+        const sourceNode = nodes.find((n) => n.id === sourceId);
+        if (!sourceNode) return undefined;
+        const output = extractNodeOutput(sourceNode);
+        return output === "plan-ready" ? undefined : output;
+      },
+      roles: g3d.referenceRoles,
+      objectIds: g3d.referenceObjectIds,
+      isVideoUrl: (url) => VIDEO_URL_RE.test(url),
+    });
+    // Refuse an over-wired run BEFORE the request — a charged generation that
+    // silently ignored half the references is worse than not starting.
+    const g3dLimit = checkScene3DReferenceLimit(g3dRefs);
+    if (!g3dLimit.ok) {
+      toast.error(`Node "${g3d.label}": ${g3dLimit.message}`);
+      return Promise.reject(new Error(g3dLimit.message));
+    }
+    // History retains the resolved inputs; live wires stay graph-owned.
+    return runScene3DJob({
+      nodeId: node.id,
+      source: "generate",
+      label: "Scene generation",
+      ctx,
+      // The RAW prompt, not the affixed one: restoring must put back what the
+      // user typed, and the affixes are re-applied from the node on the next run.
+      context: scene3DRunContext(g3d, g3d.scenePrompt, g3dRefs, planRevisionId(g3d.scenePlan as Record<string, unknown> | undefined)),
+      start: () => generate3DScene({
+        prompt: g3dPrompt,
+        durationSeconds: g3d.durationSeconds,
+        fps: g3d.fps,
+        aspectRatio: g3d.aspectRatio,
+        references: g3dRefs.length > 0 ? g3dRefs : undefined,
+        llmModel: g3d.llmModel,
+        reasoningEffort: g3d.reasoningEffort,
+        userId: ctx.userId,
+        nodeId: node.id,
+      }),
+    });
+  }
+
+  if (node.type === "edit-3d-scene") {
+    const e3d = node.data as Edit3DSceneData;
+    // The scene under edit is the one wired into `scene`, falling back to the
+    // revision already held on the node (a node re-run after a manual edit).
+    let e3dPlan = e3d.scenePlan as Record<string, unknown> | undefined;
+    for (const edge of edges) {
+      if (edge.target !== node.id || edge.targetHandle !== "scene") continue;
+      const sourceNode = nodes.find((n) => n.id === edge.source);
+      if (!sourceNode) continue;
+      const composerInfo = COMPOSER_PLAN_MAP[sourceNode.type ?? ""];
+      const upstream = composerInfo
+        ? ((sourceNode.data as Record<string, unknown>)[composerInfo.planField] as Record<string, unknown> | undefined)
+        : undefined;
+      if (upstream) {
+        e3dPlan = upstream;
+        break;
+      }
+    }
+    if (!e3dPlan) {
+      toast.error(`Node "${e3d.label}": no scene connected`);
+      return Promise.reject(new Error("No scene to edit"));
+    }
+    const e3dRevision = planRevisionId(e3dPlan);
+    if (!e3dRevision) {
+      toast.error(`Node "${e3d.label}": the connected scene has no revision id`);
+      return Promise.reject(new Error("Scene has no revision id"));
+    }
+    const e3dPrompt = applyPromptAffixes(inputs.prompt || e3d.editPrompt, readPromptAffixes(e3d), refMap);
+    if (!e3dPrompt?.trim()) {
+      toast.error(`Node "${e3d.label}": no edit instruction set`);
+      return Promise.reject(new Error("No edit instruction"));
+    }
+    const e3dRefs = resolveScene3DReferences({
+      nodeId: node.id,
+      references: e3d.references,
+      edges,
+      outputOf: (sourceId) => {
+        const sourceNode = nodes.find((n) => n.id === sourceId);
+        if (!sourceNode) return undefined;
+        const output = extractNodeOutput(sourceNode);
+        return output === "plan-ready" ? undefined : output;
+      },
+      roles: e3d.referenceRoles,
+      objectIds: e3d.referenceObjectIds,
+      isVideoUrl: (url) => VIDEO_URL_RE.test(url),
+    });
+    const e3dLimit = checkScene3DReferenceLimit(e3dRefs);
+    if (!e3dLimit.ok) {
+      toast.error(`Node "${e3d.label}": ${e3dLimit.message}`);
+      return Promise.reject(new Error(e3dLimit.message));
+    }
+    // Adopt the scene being edited locally FIRST: the panel must show what is
+    // under edit, and the completion guard compares against THIS revision.
+    //
+    // Which plan wins is NOT a free choice — `payload-builder.ts`'s
+    // `resolveScene3DPlan` resolves upstream-before-own on the backend engine,
+    // and the two engines must agree. A local revision the user made on this
+    // node therefore stops being ACTIVE here, but it is never lost: it is in
+    // `sceneHistory` and one click away in the panel. Say so when the lineage
+    // actually diverged (a re-generated upstream), and stay quiet when the
+    // local plan simply descends from the scene we are about to edit.
+    const e3dLocalRevision = planRevisionId(e3d.scenePlan as Record<string, unknown> | undefined);
+    if (
+      e3dLocalRevision &&
+      e3dLocalRevision !== e3dRevision &&
+      !descendsFrom(e3d.scenePlan as Record<string, unknown> | undefined, e3dRevision, e3d.sceneHistory)
+    ) {
+      guardedToast.info(`Node "${e3d.label}": editing the connected scene`, {
+        description: "Your previous revision is kept in this node's history.",
+      });
+    }
+    useWorkflowStore.getState().updateNodeData(node.id, {
+      scenePlan: e3dPlan,
+      expectedRevisionId: e3dRevision,
+      // Record the adopted upstream revision so "restore what came in" is
+      // possible after the edit lands.
+      sceneHistory: pushRevision(e3d.sceneHistory, e3dPlan, "upstream", {
+        context: { references: e3dRefs, baseRevisionId: e3dLocalRevision },
+      }),
+    });
+    return runScene3DJob({
+      nodeId: node.id,
+      source: "edit",
+      label: "Scene edit",
+      ctx,
+      context: scene3DRunContext(e3d, e3d.editPrompt, e3dRefs, e3dRevision),
+      start: () => edit3DScene({
+        scenePlan: e3dPlan,
+        expectedRevisionId: e3dRevision,
+        replaceReferences: e3d.replaceReferences,
+        prompt: e3dPrompt,
+        references: e3dRefs.length > 0 ? e3dRefs : undefined,
+        lockedObjectIds: e3d.lockedObjectIds?.length ? e3d.lockedObjectIds : undefined,
+        selectedObjectIds: e3d.selectedObjectIds?.length ? e3d.selectedObjectIds : undefined,
+        llmModel: e3d.llmModel,
+        reasoningEffort: e3d.reasoningEffort,
+        userId: ctx.userId,
+        nodeId: node.id,
+      }),
+    });
   }
 
   if (node.type === "motion-graphics") {

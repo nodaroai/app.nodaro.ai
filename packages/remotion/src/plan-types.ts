@@ -404,4 +404,4 @@ export interface LottieGraphicPlan {
 }
 
 // Union type for all composer plans (extend as more composers are added)
-export type ComposerPlanType = "scene-graph" | "after-effects" | "lottie-overlay" | "3d-title" | "motion-graphics" | "composite" | "lottie-graphic" | "shot-sequence"
+export type ComposerPlanType = "scene-graph" | "after-effects" | "lottie-overlay" | "3d-title" | "3d-scene" | "motion-graphics" | "composite" | "lottie-graphic" | "shot-sequence"

@@ -110,7 +110,7 @@ export const NODE_FAMILIES: readonly NodeFamily[] = [
     id: "video-titles-graphics",
     label: "Titles, Graphics & Captions",
     tab: "video",
-    types: ["3d-title", "motion-graphics", "after-effects", "lottie-overlay", "add-captions", "render-video"],
+    types: ["3d-title", "generate-3d-scene", "edit-3d-scene", "motion-graphics", "after-effects", "lottie-overlay", "add-captions", "render-video"],
   },
   {
     id: "video-format-export",
