@@ -1,4 +1,9 @@
 {
+ "_flags": [
+  "STUDIO_PRODUCTIONS_API=true — forced ON for the whole suite by backend/src/test/setup.ts, so the six studio production tools below are the FLAG-ON surface, not the shipped default (the flag ships off, D11).",
+  "The flag-OFF surface — the six absent from tools/list — is pinned by backend/src/lib/mcp/tools/__tests__/studio-production-flag-off.test.ts, and its route half by backend/src/routes/__tests__/studio-productions-flag-off.test.ts.",
+  "Every other key here is an (edition/scope-grant) tool set; a key starting with _ is a note and is not asserted."
+ ],
  "cloud/all": [
   "add_captions",
   "analyze_prompt",

@@ -2,7 +2,6 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 
-import { supabase } from "../../supabase.js"
 import { mcpInject } from "../internal-request.js"
 import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
@@ -17,14 +16,15 @@ import { isUuid } from "./_id-guard.js"
  * ROUTES own the semantics, so an agent, the studio app and the copilot cannot
  * end up with three opinions about one row.
  *
- * There is ONE direct Supabase read here, and it touches no production:
- * `planFromJob` reads the `jobs` row of a finished Director run to recover the
- * plan the model wrote — the same direct job read this layer already does
- * (`_wait-for-job.ts`, `gallery.ts`), with the owner filter (`.eq("user_id", …)`)
- * alongside the id, so somebody else's job reads as `not_found`, never 403. It
- * interprets only what the platform's own writers put in that row (`status`,
- * `input_data.type` / `schemaName`, the `output_data.output` envelope); the plan
- * it recovers is then handed to the import ROUTE like any other.
+ * Nothing here reads Supabase — not even the one read that touches no
+ * production. `planFromJob` recovers a finished Director run's plan through
+ * `GET /v1/jobs/:id`, the same route `get_job` answers from, so the ownership
+ * filter and the outward projection are the platform's rather than this file's:
+ * somebody else's job is that route's 404, never a 403 and never a row this
+ * layer had to remember to scope. What it then INTERPRETS is only what the
+ * platform's own writers put in the row (`status`, `input_data.type` /
+ * `schemaName`, the `output_data.output` envelope), and the plan it recovers is
+ * handed to the import ROUTE like any other.
  *
  * Phase 0's six are the read half plus the two ways a production comes into
  * existence. The shape of the loop is the recast family's, because it is the
@@ -320,7 +320,7 @@ export function registerStudioProductionTools({
         if (args.plan) {
           plan = args.plan
         } else if (args.plan_job_id) {
-          const fromJob = await planFromJob(session.userId, args.plan_job_id)
+          const fromJob = await planFromJob(fastify, session, args.plan_job_id)
           if ("error" in fromJob) {
             return errorResult(fromJob.status, JSON.stringify({ error: fromJob.error }))
           }
@@ -364,38 +364,70 @@ interface PlanFromJobRefusal {
 }
 type PlanFromJob = PlanFromJobOk | PlanFromJobRefusal
 
+/** A route's own `{ error: { code, message } }`, when it sent one. */
+function routeError(body: string): PlanFromJobRefusal["error"] | null {
+  try {
+    const parsed = JSON.parse(body) as { error?: { code?: unknown; message?: unknown } }
+    const code = parsed.error?.code
+    const message = parsed.error?.message
+    if (typeof code === "string" && typeof message === "string") return { code, message }
+  } catch {
+    // Not JSON — the route said nothing this reader can pass on.
+  }
+  return null
+}
+
 /**
  * A finished Director run's output, as a plan.
  *
- * Three refusals, each a different mistake and each said differently so the
- * model can correct itself rather than retry blindly: a job that is not the
- * caller's (or is not a job at all) is `not_found`; one that has not finished is
- * `not_finished` with its status, so the answer is "poll, then call again";
- * one that finished but is not a studio plan is `not_studio_plan`, so the answer
- * is "you have the wrong job id".
+ * The ROW comes from `GET /v1/jobs/:id` (§8: a tool asks a route), so the read
+ * is already the caller's own and already carries the outward projection every
+ * other job reader sees. What is left is the reading, and its refusals: each a
+ * different mistake, each said differently so the model can correct itself
+ * rather than retry blindly. A job that is not the caller's (or is not a job at
+ * all) is `not_found`; one that has not finished is `not_finished` with its
+ * status, so the answer is "poll, then call again"; one that finished but is
+ * not a studio plan is `not_studio_plan`, so the answer is "you have the wrong
+ * job id"; one that finished with nothing is `no_output`, so the answer is
+ * "start a new run".
  */
-async function planFromJob(userId: string, jobId: string): Promise<PlanFromJob> {
+async function planFromJob(
+  fastify: FastifyInstance,
+  session: McpSession,
+  jobId: string,
+): Promise<PlanFromJob> {
   if (!isUuid(jobId)) {
     return {
       status: 404,
       error: { code: "not_found", message: `Job ${jobId} not found (expected a job UUID)` },
     }
   }
-  const { data } = await supabase
-    .from("jobs")
-    .select("id, status, input_data, output_data")
-    .eq("id", jobId)
-    .eq("user_id", userId)
-    .maybeSingle()
-  if (!data) {
+  const res = await mcpInject(fastify, session, {
+    method: "GET",
+    url: `/v1/jobs/${encodeURIComponent(jobId)}`,
+    headers: internalHeaders(session.userId),
+  })
+  if (res.statusCode === 404) {
+    // "Not yours" and "does not exist" are the same answer, and it names the id
+    // the model passed so it can tell WHICH of several ids it got wrong.
     return { status: 404, error: { code: "not_found", message: `Job ${jobId} not found` } }
   }
+  if (res.statusCode >= 400) {
+    // Anything else is the route's to explain, not this reader's to rephrase.
+    return {
+      status: res.statusCode,
+      error: routeError(res.body) ?? {
+        code: "job_read_failed",
+        message: `Could not read job ${jobId}.`,
+      },
+    }
+  }
 
-  const row = data as unknown as {
+  const row = unwrap<{
     status?: string | null
     input_data?: Record<string, unknown> | null
     output_data?: Record<string, unknown> | null
-  }
+  }>(res.body)
   if (row.status !== "completed") {
     return {
       status: 409,

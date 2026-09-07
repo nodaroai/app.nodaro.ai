@@ -21,19 +21,28 @@ import { buildServer, callTool, listTools } from "./_helpers.js"
 
 const h = vi.hoisted(() => ({
   jobRow: null as Record<string, unknown> | null,
+  /** A `GET /v1/jobs/:id` that answers something other than a row. */
+  jobFailure: null as { status: number; body: unknown } | null,
 }))
 
+/**
+ * NOTHING in this family reads Supabase.
+ *
+ * Spec §8: every tool dispatches to a §7 route through `mcpInject`, because the
+ * ROUTES own the semantics — the owner filter, the outward projection, the 404.
+ * A direct read is a second opinion about one row, so this mock refuses to
+ * answer rather than quietly standing in for a database.
+ */
 vi.mock("../../../supabase.js", () => ({
   supabase: {
-    from: () => ({
-      select: () => ({
-        eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: h.jobRow }) }) }),
-      }),
-    }),
+    from: () => {
+      throw new Error("a studio production tool must not read Supabase directly")
+    },
   },
 }))
 
 const { registerStudioProductionTools } = await import("../studio-production.js")
+const { sanitizeJobForPublic } = await import("../../../../routes/jobs.js")
 
 const JOB = "00000000-0000-4000-8000-0000000000aa"
 const PRODUCTION = "00000000-0000-4000-8000-000000000020"
@@ -80,6 +89,11 @@ interface Captured {
   url?: string
   method?: string
   body?: Record<string, unknown>
+  /** The job read is captured apart from the studio routes: several cases turn
+   *  on the import route NOT having been reached, and a shared field would let
+   *  the job read answer for it. */
+  jobUrl?: string
+  jobHeaders?: Record<string, unknown>
 }
 
 /** A Fastify stub standing in for the whole `/v1/studio/productions` surface. */
@@ -123,6 +137,25 @@ function stubRoutes(): { fastify: FastifyInstance; seen: Captured } {
     capture(req)
     return { data: { production: { id: PRODUCTION }, warnings: [] } }
   })
+  /**
+   * `GET /v1/jobs/:id` — the route the `plan_job_id` lane reads a finished
+   * Director run through, answering with the route's OWN outward projection
+   * (`sanitizeJobForPublic`, routes/jobs.ts) rather than the raw row: a key the
+   * platform strips on the way out can then never be one this reader depends
+   * on. A job that is not the caller's is a 404 there, which is why the "not
+   * the caller's" fixture below is simply an absent row.
+   */
+  fastify.get("/v1/jobs/:id", async (req, reply) => {
+    seen.jobUrl = req.url
+    seen.jobHeaders = req.headers as Record<string, unknown>
+    if (h.jobFailure) return reply.status(h.jobFailure.status).send(h.jobFailure.body)
+    if (!h.jobRow) {
+      return reply
+        .status(404)
+        .send({ error: { code: "not_found", message: "Job not found" } })
+    }
+    return { data: sanitizeJobForPublic(h.jobRow as never, false) }
+  })
   return { fastify, seen }
 }
 
@@ -141,6 +174,7 @@ const ALL: Scope[] = ["workflows:read", "workflows:write"]
 
 beforeEach(() => {
   h.jobRow = null
+  h.jobFailure = null
 })
 
 describe("registration", () => {
@@ -272,6 +306,34 @@ describe("import_studio_production", () => {
     expect(seen.body).toMatchObject({ plan: PLAN, mode: "append" })
   })
 
+  it("reads the run through the jobs ROUTE, as the job's owner", async () => {
+    // The whole point of §8: the tool asks a route, and the route is what makes
+    // the read the CALLER's. The owner header is that scoping — without it the
+    // injected request has no user at all and the route's owner filter has
+    // nothing to filter on.
+    h.jobRow = directorRow()
+    const { server, seen } = serverWith(ALL)
+    await callTool(server, "import_studio_production", {
+      production_id: PRODUCTION,
+      plan_job_id: JOB,
+    })
+    expect(seen.jobUrl).toBe(`/v1/jobs/${JOB}`)
+    expect(seen.jobHeaders?.["x-internal-user-id"]).toBe("u1")
+  })
+
+  it("a malformed job id never reaches the route", async () => {
+    // Postgres answers `invalid input syntax for type uuid` with a 500, and a
+    // 500 is not an answer a model can correct itself from.
+    const { server, seen } = serverWith(ALL)
+    const res = await callTool(server, "import_studio_production", {
+      production_id: PRODUCTION,
+      plan_job_id: "nope",
+    })
+    expect(res.isError).toBe(true)
+    expect(res.content[0].text).toContain("not_found")
+    expect(seen.jobUrl).toBeUndefined()
+  })
+
   it("a job still running is `not_finished` — poll, then call again", async () => {
     h.jobRow = directorRow({ status: "processing", output_data: { stage: "drafting" } })
     const { server } = serverWith(ALL)
@@ -345,6 +407,26 @@ describe("import_studio_production", () => {
     // this same row failed ("The run finished without a plan.").
     expect(res.content[0].text).toContain("no_output")
     expect(res.content[0].text).not.toContain("not_finished")
+  })
+
+  it("passes a refusal that is not a 404 through in the route's own words", async () => {
+    // The job read is a ROUTE call now, so a failure there is the route's to
+    // explain: rephrasing it as one of this reader's four verdicts would tell
+    // the model to fix a plan when what broke was the platform.
+    h.jobFailure = {
+      status: 401,
+      body: { error: { code: "unauthorized", message: "Authentication required" } },
+    }
+    const { server, seen } = serverWith(ALL)
+    const res = await callTool(server, "import_studio_production", {
+      production_id: PRODUCTION,
+      plan_job_id: JOB,
+    })
+    expect(res.isError).toBe(true)
+    expect(res.content[0].text).toContain("unauthorized")
+    expect(res.content[0].text).toContain("Authentication required")
+    // And nothing was imported on the strength of a job nobody could read.
+    expect(seen.url).toBeUndefined()
   })
 
   it("a job that is not the caller's is simply not found", async () => {
