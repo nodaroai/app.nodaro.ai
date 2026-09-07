@@ -6,7 +6,7 @@ import { render, cleanup } from "@testing-library/react"
 const mocks = vi.hoisted(() => ({
   currentFrame: { value: 0 },
   environment: { isRendering: true },
-  delayRender: vi.fn(() => 7),
+  delayRender: vi.fn((_label?: string, _options?: unknown) => 7),
   continueRender: vi.fn(),
   cancelRender: vi.fn(),
   canvasProps: [] as Array<Record<string, unknown>>,
@@ -32,6 +32,7 @@ vi.mock("../../scene3d/scene3d-canvas", () => ({
 
 const { Scene3DRenderer } = await import("../scene3d-renderer")
 const { makePlan } = await import("../../scene3d/__tests__/fixtures")
+const { makeV2Plan } = await import("../../scene3d/v2/__tests__/v2-fixtures")
 
 const lastProps = () => mocks.canvasProps[mocks.canvasProps.length - 1]
 
@@ -94,5 +95,52 @@ describe("Scene3DRenderer", () => {
     expect(mocks.cancelRender).not.toHaveBeenCalled()
     // the Player must stop waiting on the delayRender handle
     expect(mocks.continueRender).toHaveBeenCalledWith(7)
+  })
+
+  it("CANCELS on a v2 asset failure too, not just on a WebGL failure", () => {
+    render(<Scene3DRenderer plan={makeV2Plan()} assetUrls={{ cam: "https://x/y" }} />)
+    const err = new Error("[SCENE_ASSET_INVALID] SHA-256 mismatch")
+    ;(lastProps().onContextError as (e: Error) => void)(err)
+    expect(mocks.cancelRender).toHaveBeenCalledWith(err)
+    expect(mocks.continueRender).not.toHaveBeenCalled()
+  })
+})
+
+describe("Scene3DRenderer — v2 asset plumbing", () => {
+  it("builds a resolver from the JSON-only assetUrls prop", () => {
+    // A resolver FUNCTION cannot cross `inputProps`, so the backend sends
+    // short-lived URLs and the composition turns them into one here.
+    render(<Scene3DRenderer plan={makeV2Plan()} assetUrls={{ cam: "https://assets/x" }} />)
+    expect(lastProps().assetResolver).toBeDefined()
+  })
+
+  it("passes no resolver for a v1 plan (v1 has no assets)", () => {
+    render(<Scene3DRenderer plan={makePlan()} />)
+    expect(lastProps().assetResolver).toBeUndefined()
+  })
+
+  it("raises the delayRender timeout well past Remotion's 30s default", () => {
+    // 64 MiB of assets over the network does not fit in 30 seconds, and the
+    // default would abort a perfectly healthy render.
+    render(<Scene3DRenderer plan={makeV2Plan()} assetUrls={{ cam: "https://assets/x" }} />)
+    const options = mocks.delayRender.mock.calls[0][1] as { timeoutInMilliseconds: number }
+    expect(options.timeoutInMilliseconds).toBeGreaterThanOrEqual(120_000)
+  })
+
+  it("lets the caller override the asset timeout", () => {
+    render(
+      <Scene3DRenderer
+        plan={makeV2Plan()}
+        assetUrls={{ cam: "https://assets/x" }}
+        assetTimeoutInMilliseconds={300_000}
+      />,
+    )
+    const options = mocks.delayRender.mock.calls[0][1] as { timeoutInMilliseconds: number }
+    expect(options.timeoutInMilliseconds).toBe(300_000)
+  })
+
+  it("labels the v2 delay so a stuck render says WHAT it is waiting on", () => {
+    render(<Scene3DRenderer plan={makeV2Plan()} assetUrls={{ cam: "https://assets/x" }} />)
+    expect(mocks.delayRender.mock.calls[0][0]).toMatch(/verifying scene assets/)
   })
 })

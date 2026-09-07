@@ -51,8 +51,9 @@ export { legacyToSceneGraph } from "./lib/legacy-converter"
 // the raw canvas with their own scrubber should import `Scene3DCanvas` (from
 // here or, to keep `remotion` out of the bundle, from `@nodaro/remotion/scene3d`).
 export { Scene3DRenderer } from "./compositions/scene3d-renderer"
+export type { Scene3DRendererProps } from "./compositions/scene3d-renderer"
 export { Scene3DCanvas } from "./scene3d/scene3d-canvas"
-export type { Scene3DCanvasProps } from "./scene3d/scene3d-canvas"
+export type { Scene3DCanvasProps, Scene3DAnyPlan } from "./scene3d/scene3d-canvas"
 export {
   buildScene3DScene,
   buildScene3DGeometry,
@@ -70,7 +71,7 @@ export {
   type Scene3DTransformSample,
 } from "./scene3d/sampler"
 export type {
-  Scene3DPlan,
+  Scene3DPlanV1,
   Scene3DObject,
   Scene3DReference,
   Scene3DCamera,
@@ -83,3 +84,35 @@ export type {
 } from "./scene3d/types"
 export { DEFAULT_SENSOR_WIDTH_MM } from "./scene3d/types"
 export { SCENE3D_DEFAULT_PLAN } from "./scene3d/default-plan"
+// v2 playback: the host-facing surface only (asset resolution, version
+// support, failure codes). See `./scene3d/index.ts` for the full list.
+export {
+  isScene3DPlanV2,
+  isScene3DPlanV1,
+  isScene3DSchemaVersionSupported,
+  scene3DPlanSchemaVersion,
+  SCENE3D_SUPPORTED_SCHEMA_VERSIONS,
+} from "./scene3d/v2/plan-shape"
+export type {
+  Scene3DPlanV2,
+  Scene3DEntityV2,
+  Scene3DEntityVisual,
+  Scene3DAssetRef,
+  Scene3DShot,
+  Scene3DOverride,
+  Scene3DCameraTrackV1,
+  /** The V1|V2 union — what every host-facing surface should accept. */
+  Scene3DPlan,
+} from "./scene3d/v2/plan-shape"
+export {
+  createUrlAssetResolver,
+  verifyAssetBytes,
+  type Scene3DAssetResolver,
+} from "./scene3d/v2/asset-resolver"
+export {
+  Scene3DError,
+  isScene3DError,
+  type Scene3DErrorCode,
+  type Scene3DReadinessWarning,
+} from "./scene3d/v2/errors"
+export { SCENE3D_V2_LIMITS } from "./scene3d/v2/limits"

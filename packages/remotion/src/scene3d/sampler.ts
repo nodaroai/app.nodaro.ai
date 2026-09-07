@@ -24,7 +24,7 @@ import type {
   Scene3DCamera,
   Scene3DEasing,
   Scene3DObject,
-  Scene3DPlan,
+  Scene3DPlanV1,
   Vec3,
 } from "./types"
 import { DEFAULT_SENSOR_WIDTH_MM } from "./types"
@@ -203,7 +203,7 @@ export function focalLengthToVerticalFovDeg(
 }
 
 /** Camera state at `frame`, including the FOV the renderer should apply. */
-export function sampleScene3DCamera(plan: Scene3DPlan, frame: number): Scene3DCameraSample {
+export function sampleScene3DCamera(plan: Scene3DPlanV1, frame: number): Scene3DCameraSample {
   const camera = plan.camera as Scene3DCamera & { keyframes?: ReadonlyArray<AnyKeyframe> }
   const kfs = camera.keyframes
 
@@ -240,7 +240,7 @@ export function sampleScene3DCamera(plan: Scene3DPlan, frame: number): Scene3DCa
  * Full deterministic sample of a plan at `frame` — the single source both the
  * preview canvas and the Remotion export read.
  */
-export function sampleScene3DFrame(plan: Scene3DPlan, frame: number): Scene3DFrameSample {
+export function sampleScene3DFrame(plan: Scene3DPlanV1, frame: number): Scene3DFrameSample {
   const objects = plan.objects ?? []
   const byIndex = new Map<string, Scene3DObject>()
   for (const obj of objects) byIndex.set(obj.id, obj)
@@ -310,6 +310,6 @@ export function sampleScene3DFrame(plan: Scene3DPlan, frame: number): Scene3DFra
 }
 
 /** Frame count of a plan, clamped to at least one frame. */
-export function scene3DFrameCount(plan: Scene3DPlan): number {
+export function scene3DFrameCount(plan: Scene3DPlanV1): number {
   return Math.max(1, Math.round(plan.durationInFrames))
 }

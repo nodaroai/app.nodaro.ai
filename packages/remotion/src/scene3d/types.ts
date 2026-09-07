@@ -7,15 +7,21 @@
  * (`Scene3DPlan`, `Scene3DObject`, `Scene3DReference`). Nothing here re-declares a
  * field, so a contract change surfaces as a type error rather than as silent drift.
  */
-import type { Scene3DPlan, Scene3DObject, Scene3DReference } from "@nodaro/shared"
+import type { Scene3DPlanV1, Scene3DObject, Scene3DReference } from "@nodaro/shared"
 
-export type { Scene3DPlan, Scene3DObject, Scene3DReference }
+/**
+ * `Scene3DPlan` in the contract is now `Scene3DPlanV1 | Scene3DPlanV2`. The
+ * modules below (sampler, v1 scene builder, default plan) implement V1
+ * semantics specifically, so they name the v1 branch — a v2 plan reaching them
+ * is a type error rather than a runtime surprise.
+ */
+export type { Scene3DPlanV1, Scene3DObject, Scene3DReference }
 
 /** World-space triple. Meters, Y-up. Rotations are Euler radians in XYZ order. */
 export type Vec3 = [number, number, number]
 
-export type Scene3DCamera = Scene3DPlan["camera"]
-export type Scene3DLighting = Scene3DPlan["lighting"]
+export type Scene3DCamera = Scene3DPlanV1["camera"]
+export type Scene3DLighting = Scene3DPlanV1["lighting"]
 export type Scene3DPrimitive = Scene3DObject["primitive"]
 export type Scene3DObjectKeyframe = NonNullable<Scene3DObject["keyframes"]>[number]
 export type Scene3DCameraKeyframe = NonNullable<Scene3DCamera["keyframes"]>[number]

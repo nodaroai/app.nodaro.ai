@@ -54,7 +54,7 @@ import {
   scene3DPlanSchema,
   scene3DReferenceSchema,
   type Scene3DEditOperation,
-  type Scene3DPlan,
+  type Scene3DPlanV1,
   type Scene3DReference,
 } from "@nodaro/shared"
 import { cancelOwnedJob } from "../lib/cancel-job.js"
@@ -461,7 +461,7 @@ export async function scene3DRoutes(app: FastifyInstance) {
           error: { code: "validation_error", ...formatZodError(planParse.error) },
         })
       }
-      const plan = planParse.data as Scene3DPlan
+      const plan = planParse.data as Scene3DPlanV1
       // The optimistic-concurrency check, in the ONE place a caller can act on
       // it. Failing this in the worker would turn a client-side conflict into
       // a failed job the caller has to poll to discover.

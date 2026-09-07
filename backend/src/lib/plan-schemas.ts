@@ -1,6 +1,6 @@
 import { z } from "zod"
 import { safeUrlSchema } from "./url-validator.js"
-import { KINETIC_CAPTION_STYLES, SUPPORTED_FONT_NAMES, scene3DPlanSchema } from "@nodaro/shared"
+import { KINETIC_CAPTION_STYLES, SUPPORTED_FONT_NAMES, scene3DAnyPlanSchema } from "@nodaro/shared"
 import type { BrandTokens } from "@nodaro/prompts"
 import type { ShotElement } from "@nodaro/shared"
 import { cdnMediaUrlSchema } from "./cdn-media-url.js"
@@ -781,7 +781,7 @@ export const alignmentWordSchema = z.object({
 // ── Scene3D (3d-scene) ──────────────────────────────────────────────────
 
 /**
- * The plan contract itself lives in `@nodaro/shared` (`scene3DPlanSchema`) and
+ * The plan contract itself lives in `@nodaro/shared` (`scene3DAnyPlanSchema`) and
  * is NOT restated here — the LLM authoring path, the editor and this render
  * route must accept exactly the same scenes.
  *
@@ -790,7 +790,7 @@ export const alignmentWordSchema = z.object({
  * a published, browser-side package cannot enforce. Everything else — bounds,
  * hierarchy, keyframe tracks — is already checked by the shared schema.
  */
-export const scene3DRenderPlanSchema = scene3DPlanSchema.superRefine((plan, ctx) => {
+export const scene3DRenderPlanSchema = scene3DAnyPlanSchema.superRefine((plan, ctx) => {
   const references = plan.references ?? []
   references.forEach((reference, index) => {
     const parsed = safeUrlSchema.safeParse(reference.url)
@@ -816,7 +816,7 @@ export const renderPlanSchema = z.discriminatedUnion("planType", [
   burnCaptionsPlanSchema,
   lottieGraphicPlanSchema,
   shotSequencePlanBaseSchema,
-  scene3DPlanSchema,
+  scene3DAnyPlanSchema,
 ])
 
 // ── Plan type → schema lookup ───────────────────────────────────────────

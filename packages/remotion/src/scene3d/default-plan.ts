@@ -1,4 +1,4 @@
-import type { Scene3DPlan } from "./types"
+import type { Scene3DPlanV1 } from "./types"
 
 /**
  * A minimal, VALID Scene3D plan: ground, hero block and a key light.
@@ -10,7 +10,7 @@ import type { Scene3DPlan } from "./types"
  * `.strict()`, so a contract change that this fixture misses fails there
  * instead of at render time.
  */
-export const SCENE3D_DEFAULT_PLAN: Scene3DPlan = {
+export const SCENE3D_DEFAULT_PLAN: Scene3DPlanV1 = {
   planType: "3d-scene",
   schemaVersion: 1,
   revisionId: "00000000-0000-4000-8000-000000000000",

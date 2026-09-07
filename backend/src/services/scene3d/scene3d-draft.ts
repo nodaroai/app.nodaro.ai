@@ -32,7 +32,7 @@ import {
   type Scene3DEditOperation,
   type Scene3DLighting,
   type Scene3DObject,
-  type Scene3DPlan,
+  type Scene3DPlanV1,
   type Scene3DReference,
   type Vec3,
 } from "@nodaro/shared"
@@ -199,7 +199,7 @@ export interface Scene3DPlanFrame {
  * identity. The result is not trusted — the caller parses it with
  * `scene3DPlanSchema` and feeds any issue back to the model.
  */
-export function draftToScene3DPlan(draft: Scene3DDraftPlan, frame: Scene3DPlanFrame): Scene3DPlan {
+export function draftToScene3DPlan(draft: Scene3DDraftPlan, frame: Scene3DPlanFrame): Scene3DPlanV1 {
   return {
     planType: SCENE3D_PLAN_TYPE,
     schemaVersion: SCENE3D_SCHEMA_VERSION,

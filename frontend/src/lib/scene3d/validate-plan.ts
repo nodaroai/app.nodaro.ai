@@ -16,10 +16,10 @@
  * preview and the pose editor share one parse per revision rather than three.
  */
 import { SCENE3D_LIMITS, scene3DPlanSchema } from "@nodaro/shared"
-import type { Scene3DPlan } from "@nodaro/shared"
+import type { Scene3DPlanV1 } from "@nodaro/shared"
 
 export type Scene3DValidation =
-  | { ok: true; plan: Scene3DPlan }
+  | { ok: true; plan: Scene3DPlanV1 }
   | { ok: false; issue: string }
 
 const cache = new WeakMap<object, Scene3DValidation>()
@@ -74,7 +74,7 @@ export function validateScene3DPlan(plan: unknown): Scene3DValidation {
     : (() => {
         const parsed = scene3DPlanSchema.safeParse(record)
         return parsed.success
-          ? ({ ok: true, plan: parsed.data as Scene3DPlan } as const)
+          ? ({ ok: true, plan: parsed.data as Scene3DPlanV1 } as const)
           : ({ ok: false, issue: firstIssue(parsed.error) } as const)
       })()
 

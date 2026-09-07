@@ -5,7 +5,7 @@
  * but constructed here (not imported from a factory) so the numbers under test
  * are visible in the test file itself.
  */
-import type { Scene3DObject, Scene3DPlan } from "../types"
+import type { Scene3DObject, Scene3DPlanV1 } from "../types"
 
 export function makeObject(partial: Partial<Scene3DObject> & { id: string }): Scene3DObject {
   return {
@@ -20,7 +20,7 @@ export function makeObject(partial: Partial<Scene3DObject> & { id: string }): Sc
   } as Scene3DObject
 }
 
-export function makePlan(partial: Partial<Scene3DPlan> = {}): Scene3DPlan {
+export function makePlan(partial: Partial<Scene3DPlanV1> = {}): Scene3DPlanV1 {
   return {
     planType: "3d-scene",
     schemaVersion: 1,
@@ -43,5 +43,5 @@ export function makePlan(partial: Partial<Scene3DPlan> = {}): Scene3DPlan {
       keyPosition: [4, 6, 5],
     },
     ...partial,
-  } as Scene3DPlan
+  } as Scene3DPlanV1
 }

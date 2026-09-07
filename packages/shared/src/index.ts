@@ -1057,6 +1057,10 @@ export type { EntityNodeKind } from "./entity-node-fields.js"
 //     SDK/MCP surface. Structure only — no prompts, no pricing. ---
 export * from "./scene3d.js"
 export * from "./scene3d-edit.js"
+export * from "./scene3d-v2.js"
+export * from "./scene3d-v2-plan.js"
+export * from "./scene3d-v2-resources.js"
+export * from "./scene3d-camera-track.js"
 
 // --- transient studio keys — the public share read strips them ---
 export {
@@ -1064,3 +1068,5 @@ export {
   STUDIO_SHOT_TRANSIENT_KEYS,
   stripStudioTransientSettings,
 } from "./studio-transient.js"
+
+export * from "./scene3d-v2-edit.js"

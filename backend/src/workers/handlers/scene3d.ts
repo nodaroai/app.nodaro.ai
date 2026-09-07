@@ -17,7 +17,7 @@ import type {
   LlmReasoningEffort,
   Scene3DEditOperation,
   Scene3DJobOutput,
-  Scene3DPlan,
+  Scene3DPlanV1,
   Scene3DReference,
   VideoAnalysisResult,
 } from "@nodaro/shared"
@@ -71,7 +71,7 @@ export interface Scene3DGeneratePayload extends Scene3DJobPayloadBase {
 export interface Scene3DEditPayload extends Scene3DJobPayloadBase {
   replaceReferences?: boolean
   kind: "edit"
-  plan: Scene3DPlan
+  plan: Scene3DPlanV1
   expectedRevisionId: string
   lockedObjectIds: string[]
   selectedObjectIds: string[]
