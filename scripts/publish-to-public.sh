@@ -108,6 +108,32 @@ if [ -n "$BAD_IDENTITIES" ]; then
 fi
 echo "author-identity gate ✓"
 
+echo "== history gate (never-public content added by the commits about to be published) =="
+# The other leak gates read the tracked TREE. This push carries HISTORY: a line
+# one commit added and a later commit scrubbed is world-readable forever through
+# `git log -p` on the public remote, with every tree gate green — and public
+# history can never be re-scrubbed. Scope is exactly the commits that have NOT
+# been published yet, which is also exactly the set that can still be rewritten
+# (public/$BRANCH stays an ancestor, so the push still fast-forwards). Anything
+# older is already out and re-flagging it would deadlock the mirror.
+# "Already published" is the union of BOTH public heads, not just this branch's:
+# after a dev->main promotion, main..public/main is full of commits the world
+# already read on public/dev, and re-flagging those would abort the mirror over
+# history no one can rewrite any more.
+NOT_PUBLISHED=""
+for PB in main dev; do
+  PSHA=$(git ls-remote "$PUBLIC_REMOTE" "refs/heads/$PB" 2>/dev/null | awk '{print $1}')
+  [ -n "${PSHA:-}" ] || continue
+  git fetch -q "$PUBLIC_REMOTE" "$PB" 2>/dev/null || true
+  git cat-file -e "${PSHA}^{commit}" 2>/dev/null && NOT_PUBLISHED="$NOT_PUBLISHED $PSHA"
+done
+if [ -n "$NOT_PUBLISHED" ]; then
+  # shellcheck disable=SC2086  # SHAs, deliberately word-split into rev-list args
+  node tools/check-history-surface.mjs "$BRANCH" --not $NOT_PUBLISHED
+else
+  echo "(no public head readable — history gate skipped; the tree gates still ran)"
+fi
+
 if [ "${MIRROR_DRY_RUN:-0}" = "1" ]; then
   echo "== DRY RUN: gate passed for $BRANCH; NOT pushing (dry-run / no token) =="
   exit 0

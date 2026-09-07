@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
+import {
+  serializeProduction,
+  type Shot,
+  type TrashedStill,
+} from "@nodaro/studio-production"
 
 /**
  * `settings.studio.shared` — the fourth audience lever, and the one that is not
@@ -279,5 +284,127 @@ describe("the public-publish flag is an audience decision, not an edit", () => {
     expect(update).toHaveBeenCalledWith(
       expect.objectContaining({ settings: { studio: { shared: true } } }),
     )
+  })
+})
+
+/**
+ * D12 — the public read is a PROJECTION, not a mirror.
+ *
+ * `settings.studio` carries the owner's working state beside the film: the
+ * recycle bin (every shot, still and clip they deleted, prompts and urls
+ * intact), the jobs in flight, and an unsaved editor draft. A share viewer
+ * receives none of it — the sharpest being the bin, which hands out exactly the
+ * work its owner threw away.
+ *
+ * The shared document below is written by the REAL writer
+ * (`serializeProduction`, the one the studio app saves through) and never typed
+ * out, because the LEVEL is the thing under test: the in-flight markers live on
+ * the shot entry, not on `settings.studio`, and a fixture shaped to the reader
+ * would let a top-level-only strip pass while every marker still shipped.
+ */
+describe("the public share read strips the owner's working state", () => {
+  const PENDING = {
+    jobId: "job-2",
+    provider: "seedance-2",
+    prompt: "a slow dolly in",
+    startedAt: 1_756_000_000_000,
+  }
+
+  const TRASHED: TrashedStill = {
+    kind: "still",
+    id: "trash-1",
+    shotId: "shot-1",
+    index: 0,
+    deletedAt: "2026-09-01T10:00:00.000Z",
+    stillBase: { nodeId: "img-1", provider: "flux-2", prompt: "a lighthouse at dawn" },
+    result: { url: "https://r2/deleted.png" },
+  }
+
+  /** A shared production with an animate in flight, a full bin and a draft. */
+  function sharedRow() {
+    const shot: Shot = {
+      id: "shot-1",
+      still: {
+        nodeId: "img-1",
+        url: "https://r2/still.png",
+        provider: "flux-2",
+        prompt: "a lighthouse at dawn",
+      },
+      pendingClips: [PENDING],
+    }
+    const graph = serializeProduction(
+      [shot],
+      "shot-1",
+      undefined,
+      true,
+      undefined,
+      undefined,
+      undefined,
+      [TRASHED],
+      "https://r2/draft.json",
+    )
+    return { ...ROW, nodes: graph.nodes, edges: graph.edges, settings: graph.settings }
+  }
+
+  function publicRead(row: Record<string, unknown>) {
+    const single = vi.fn().mockResolvedValue({ data: row, error: null })
+    const eq = vi.fn().mockReturnValue({ single })
+    const select = vi.fn().mockReturnValue({ eq })
+    vi.mocked(supabase.from).mockReturnValue({ select } as never)
+  }
+
+  it("returns the film and none of the owner's working state", async () => {
+    const row = sharedRow()
+    // The oracle: the writer really does put the bin and the draft here...
+    const stored = (row.settings as unknown as { studio: Record<string, unknown> }).studio
+    expect(stored.trash).toHaveLength(1)
+    expect(stored.freecutDraftUrl).toBe("https://r2/draft.json")
+    // ...and the in-flight marker on the SHOT, which is the level that matters.
+    expect((stored.shots as Array<Record<string, unknown>>)[0].pendingClips).toEqual([
+      PENDING,
+    ])
+
+    publicRead(row)
+    const res = await app.inject({ method: "GET", url: `/v1/public/workflows/${WF}` })
+
+    expect(res.statusCode).toBe(200)
+    const studio = res.json().data.settings.studio as Record<string, unknown>
+    expect(studio.trash).toBeUndefined()
+    expect(studio.freecutDraftUrl).toBeUndefined()
+    const shots = studio.shots as Array<Record<string, unknown>>
+    expect(shots[0].pendingClips).toBeUndefined()
+
+    // Everything the viewer is meant to see survives untouched.
+    expect(shots[0].id).toBe("shot-1")
+    expect(shots[0].imageNodeId).toBe("img-1")
+    expect(studio.shotOrder).toEqual(["img-1"])
+    expect(studio.shared).toBe(true)
+    // The graph is the film itself and is not a studio concern — untouched.
+    expect(res.json().data.nodes).toEqual(row.nodes)
+  })
+
+  it("strips a shot's pendingStills — the still marker D5 lands there", async () => {
+    // `pendingStills` is additive (the generation routes write it onto the same
+    // shot entry `pendingClips` rides on, and the view already reads it there),
+    // so the projection has to know the key before its writer exists.
+    const row = sharedRow()
+    const studio = (row.settings as unknown as { studio: Record<string, unknown> }).studio
+    const shots = (studio.shots as Array<Record<string, unknown>>).map((s) => ({
+      ...s,
+      pendingStills: [{ jobId: "job-1", batchId: "batch-1", count: 4 }],
+    }))
+    publicRead({ ...row, settings: { studio: { ...studio, shots } } })
+
+    const res = await app.inject({ method: "GET", url: `/v1/public/workflows/${WF}` })
+    const out = res.json().data.settings.studio.shots as Array<Record<string, unknown>>
+    expect(out[0].pendingStills).toBeUndefined()
+  })
+
+  it("leaves a production with nothing to strip exactly as it was", async () => {
+    const graph = serializeProduction([{ id: "shot-1" }], "shot-1", undefined, true)
+    const clean = { ...ROW, settings: graph.settings }
+    publicRead(clean)
+    const res = await app.inject({ method: "GET", url: `/v1/public/workflows/${WF}` })
+    expect(res.json().data.settings).toEqual(clean.settings)
   })
 })
