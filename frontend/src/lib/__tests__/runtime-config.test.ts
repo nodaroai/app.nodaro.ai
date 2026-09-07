@@ -23,6 +23,11 @@ describe("runtime-config getters", () => {
     expect(runtimeSupabaseAnonKey()).toBe("anon-runtime")
   })
 
+  it("resolves the managed Supabase proxy against the current studio origin", () => {
+    window.__NODARO_RUNTIME__ = { supabaseUrl: "/supabase" }
+    expect(runtimeSupabaseUrl()).toBe(`${window.location.origin}/supabase`)
+  })
+
   it("fall back to the build-time value when the override is missing or blank", () => {
     window.__NODARO_RUNTIME__ = { apiUrl: "  ", supabaseUrl: "" }
     expect(runtimeApiUrl()).toBe(import.meta.env.VITE_API_URL ?? "")

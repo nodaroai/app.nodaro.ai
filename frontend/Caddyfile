@@ -160,14 +160,30 @@
 	# the URL. Realtime is not bundled (the app's polling covers job updates);
 	# supabase-js retries its websocket quietly against the 502. Dead routes on
 	# cloud — upstreams resolve lazily, never at boot.
-	handle_path /supabase/auth/v1/* {
-		reverse_proxy {$SUPABASE_AUTH_UPSTREAM:auth:9999} {
-			import client_ip_header
+	handle /supabase/* {
+		# Opt-in gateway for a managed project. The browser keeps its studio
+		# origin for auth, REST, storage and realtime; backend calls stay direct.
+		# The upstream is deployment-owned, never selected by a request.
+		@managed expression {$SUPABASE_MANAGED_PROXY:false}
+		handle @managed {
+			uri strip_prefix /supabase
+			reverse_proxy {$SUPABASE_URL:http://127.0.0.1:9} {
+				import client_ip_header
+				header_up Host {upstream_hostport}
+				flush_interval -1
+			}
 		}
-	}
-	handle_path /supabase/rest/v1/* {
-		reverse_proxy {$SUPABASE_REST_UPSTREAM:rest:3000} {
-			import client_ip_header
+		handle {
+			handle_path /supabase/auth/v1/* {
+				reverse_proxy {$SUPABASE_AUTH_UPSTREAM:auth:9999} {
+					import client_ip_header
+				}
+			}
+			handle_path /supabase/rest/v1/* {
+				reverse_proxy {$SUPABASE_REST_UPSTREAM:rest:3000} {
+					import client_ip_header
+				}
+			}
 		}
 	}
 
