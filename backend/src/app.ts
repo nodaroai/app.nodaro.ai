@@ -43,7 +43,6 @@ import { loadPrivatePlugins } from "./lib/private-plugins/load.js"
 import { healthRoutes } from "./routes/health.js"
 import { projectRoutes } from "./routes/projects.js"
 import { workflowRoutes } from "./routes/workflows.js"
-import { studioProductionRoutes } from "./routes/studio-productions.js"
 import { jobRoutes } from "./routes/jobs.js"
 import { generateImageRoutes } from "./routes/generate-image.js"
 import { editImageRoutes } from "./routes/edit-image.js"
@@ -460,11 +459,6 @@ export async function buildApp() {
   await app.register(healthRoutes)
   await app.register(projectRoutes)
   await app.register(workflowRoutes)
-  // The studio production API reads and writes the SAME `settings.studio` the
-  // workflow routes store, through the same codec the studio app runs — hence
-  // its place beside them. Behind a flag: off = 404 on every route, which is
-  // the feature-detect a client uses (D11).
-  if (config.STUDIO_PRODUCTIONS_API) await app.register(studioProductionRoutes)
   await app.register(jobRoutes)
   await app.register(generateImageRoutes)
   await app.register(editImageRoutes)

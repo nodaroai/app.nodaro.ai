@@ -235,13 +235,6 @@ jobs:
       - name: Run @nodaro/prompts test suite
         if: always() && steps.build-packages.outcome == 'success'
         run: npm run test --workspace=@nodaro/prompts
-      # @nodaro/studio-production carries the studio's production codec, moved
-      # out of the studio app so the platform's routes, MCP tools and copilot
-      # run the SAME reader/writer the editor does. Its suite is the regression
-      # oracle for that move — gate it here, beside its siblings.
-      - name: Run @nodaro/studio-production test suite
-        if: always() && steps.build-packages.outcome == 'success'
-        run: npm run test --workspace=@nodaro/studio-production
 
   typecheck:
     name: Type Check
@@ -797,7 +790,7 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           pkg_changes=$(git diff --name-only "$BASE_SHA"..."$HEAD_SHA" -- \
-            packages/shared packages/client packages/cli packages/studio-production | grep -v CHANGELOG.md || true)
+            packages/shared packages/client packages/cli | grep -v CHANGELOG.md || true)
           if [ -z "$pkg_changes" ]; then
             echo "No published-package changes — guard not applicable."
             exit 0

@@ -99,7 +99,6 @@ jobs:
         run: |
           npm -w @nodaro/shared run build
           npm -w @nodaro/prompts run build
-          npm -w @nodaro/studio-production run build
           npm -w @nodaro/sdk run build
           npm -w @nodaro/cli run build
       - name: Leak gate — block publish if a package carries secrets/IP
