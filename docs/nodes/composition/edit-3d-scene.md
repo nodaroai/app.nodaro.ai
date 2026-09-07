@@ -1,5 +1,9 @@
 # Edit 3D Scene
 
+Basic remains the default. Optional Advanced engines are advertised by
+`GET /v1/3d-scene/capabilities`; an unavailable explicit engine is rejected
+before starting a Basic edit or reserving its credits.
+
 Create a new revision of an existing editable 3D scene. Connect a [Generate 3D Scene](generate-3d-scene.md) or another Edit 3D Scene composition to its Scene input. Connect its output to [Render Video](render-video.md) to export MP4.
 
 Use an instruction such as “Move the pillar back one meter and keep the suitcase path unchanged,” or supply deterministic operations through the API. Preserve selected objects with `lockedObjectIds`. Optional image/video references provide additional layout, motion or appearance guidance.

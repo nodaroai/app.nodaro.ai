@@ -80,6 +80,8 @@ export interface LoadPrivatePluginsResult {
  * `loadPrivatePlugins()` exactly once at startup.
  */
 let pluginServices: PluginServices = {}
+export { getPluginEngines } from "./engine-registry.js"
+import { setPluginEngines } from "./engine-registry.js"
 
 /**
  * The private plugins' service surface, or `{}` when no plugin provided one
@@ -98,6 +100,7 @@ function emptyResult(): LoadPrivatePluginsResult {
   // success path would leave a previous load's services readable after a
   // later one failed.
   pluginServices = {}
+  setPluginEngines({})
   // Fresh object per call — loadPrivatePlugins() is called from more than
   // one boot path (app.ts + video-worker.ts, Task 10), and callers merge
   // into `handlers` (e.g. Object.assign(allHandlers, handlers)). Sharing one
@@ -261,6 +264,7 @@ export async function loadPrivatePlugins(
   }
 
   pluginServices = services
+  setPluginEngines(engines)
   return { handlers, loaded, engines, prompts, services }
 }
 

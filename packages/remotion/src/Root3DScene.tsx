@@ -14,7 +14,7 @@ import React from "react"
 import { Composition, registerRoot } from "remotion"
 import { Scene3DRenderer } from "./compositions/scene3d-renderer"
 import { SCENE3D_DEFAULT_PLAN } from "./scene3d/default-plan"
-import type { Scene3DPlan } from "./scene3d/types"
+import type { Scene3DAnyPlan } from "./scene3d/scene3d-canvas"
 
 /**
  * Bridge specific component prop types with Remotion's
@@ -28,7 +28,7 @@ function asRemotionComponent(Comp: React.FC<any>): React.FC<Record<string, unkno
 }
 
 /** Only used by Remotion Studio / a bare CLI render; jobs always pass inputProps. */
-const SCENE_3D_DEFAULT_PROPS: { plan: Scene3DPlan } = { plan: SCENE3D_DEFAULT_PLAN }
+const SCENE_3D_DEFAULT_PROPS: { plan: Scene3DAnyPlan } = { plan: SCENE3D_DEFAULT_PLAN }
 
 function Root3DScene() {
   return (
@@ -43,8 +43,10 @@ function Root3DScene() {
       // The plan is the single source of timing and framing: a CLI or Studio
       // render of an arbitrary plan gets the right metadata without the caller
       // restating width/height/fps/duration.
+      // Both schema versions carry the same four timing/framing fields at the
+      // top level, so this needs no version branch.
       calculateMetadata={({ props }) => {
-        const plan = (props as { plan?: Scene3DPlan }).plan
+        const plan = (props as { plan?: Scene3DAnyPlan }).plan
         if (!plan) return {}
         return {
           width: plan.width,

@@ -29,6 +29,7 @@
 import { copyFile, mkdir, readdir, stat } from "node:fs/promises"
 import { dirname, join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
+import { buildScene3DReader } from "./build-scene3d-reader.mjs"
 
 /** Directories under src/ whose matching files must ship under dist/. */
 export const BUILD_ASSETS = Object.freeze([
@@ -99,7 +100,8 @@ const invokedDirectly =
 if (invokedDirectly) {
   const backendRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..")
   copyBuildAssets({ rootDir: backendRoot })
-    .then((report) => {
+    .then(async (report) => {
+      await buildScene3DReader(backendRoot)
       for (const { dir, files } of report) {
         console.log(`[copy-build-assets] ${files.length} file(s) -> dist/${dir}`)
       }

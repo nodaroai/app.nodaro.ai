@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { act, render, screen, fireEvent } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import EmbedScene3DPage from "../embed-scene3d-page"
-import { makePlan, REV_A, REV_B } from "@/lib/scene3d/__tests__/fixture"
+import { makePlan, makeV2Plan, FAKE_DIGEST, REV_A, REV_B, REV_V2 } from "@/lib/scene3d/__tests__/fixture"
 import {
   SCENE3D_EMBED_EVENT_TYPE,
   SCENE3D_EMBED_PROTOCOL_VERSION,
@@ -77,6 +77,9 @@ describe("/embed/scene3d — the load handshake", () => {
       type: SCENE3D_EMBED_READY_TYPE,
       version: SCENE3D_EMBED_PROTOCOL_VERSION,
       channel: CHANNEL,
+      // Additive capability negotiation: a version-1 parent ignores these.
+      protocolVersions: [1, 2],
+      capabilities: { assetTransport: true, sceneSchemaVersions: [1, 2] },
     })
     expect(sent(SCENE3D_EMBED_READY_TYPE)[0].targetOrigin).toBe(PARENT)
     expect(screen.getByText(/Waiting for the scene/i)).toBeInTheDocument()
@@ -296,6 +299,104 @@ describe("/embed/scene3d — an editable frame", () => {
     for (const { message } of posted) {
       expect(message.version).toBe(SCENE3D_EMBED_PROTOCOL_VERSION)
       expect(message.channel).toBe(CHANNEL)
+    }
+  })
+})
+
+/**
+ * Protocol 2: a v2 scene, whose geometry the frame cannot fetch itself.
+ *
+ * The version on the push is what says whether the parent can serve those bytes
+ * — the frame's own capability is irrelevant if the page framing it has no
+ * handler. So a v2 scene arriving on a version-1 push is refused with the
+ * reason, rather than accepted into a viewport that would never draw.
+ */
+describe("/embed/scene3d — protocol 2 and v2 scenes", () => {
+  it("refuses a v2 scene from a version-1 parent, and says what is missing", () => {
+    mount()
+    deliver(stateMessage({ scenePlan: makeV2Plan() }))
+    expect(screen.getByText(/needs embed protocol version 2/i)).toBeInTheDocument()
+    // The refused push is not applied: the frame is still waiting, not showing
+    // half a scene.
+    expect(screen.getByText(/Waiting for the scene/i)).toBeInTheDocument()
+  })
+
+  it("accepts a v2 scene on a version-2 push and renders the baked panel", () => {
+    mount()
+    deliver(stateMessage({ version: 2, scenePlan: makeV2Plan() }))
+    expect(screen.getByText("2 objects")).toBeInTheDocument()
+    expect(screen.getByLabelText(/Shot 1 — Wide/)).toBeInTheDocument()
+    // v1 scenes keep working on the same frame afterwards.
+    deliver(stateMessage({ scenePlan: makePlan() }))
+    expect(screen.getByText("2 objects")).toBeInTheDocument()
+  })
+
+  it("sends a v2 edit as OPERATIONS stamped with both stale-check fields", () => {
+    mount()
+    deliver(stateMessage({ version: 2, scenePlan: makeV2Plan(), readOnly: false }))
+    // Select the entity, then nudge it.
+    fireEvent.click(screen.getByText("Hero"))
+    deliver(
+      stateMessage({
+        version: 2,
+        scenePlan: makeV2Plan(),
+        readOnly: false,
+        selectedObjectIds: ["hero"],
+      }),
+    )
+    const field = screen.getByLabelText("Hero Position X")
+    fireEvent.change(field, { target: { value: "3" } })
+    fireEvent.blur(field)
+
+    const events = sent(SCENE3D_EMBED_EVENT_TYPE).filter(
+      (p) => (p.message.event as { kind?: string }).kind === "edit-operations",
+    )
+    expect(events).toHaveLength(1)
+    expect(events[0].message).toEqual({
+      type: SCENE3D_EMBED_EVENT_TYPE,
+      // The edit needs protocol 2; every pre-existing event kind still says 1.
+      version: 2,
+      channel: CHANNEL,
+      expectedRevisionId: REV_V2,
+      event: {
+        kind: "edit-operations",
+        operations: [
+          {
+            op: "set-override",
+            override: {
+              kind: "entity-transform",
+              entityId: "hero",
+              space: "local",
+              position: [3, 0.5, 0],
+            },
+          },
+        ],
+        expectedContentHash: FAKE_DIGEST,
+      },
+    })
+    expect(events[0].targetOrigin).toBe(PARENT)
+    // No plan ever leaves the frame for a v2 scene: it does not mint revisions.
+    expect(
+      sent(SCENE3D_EMBED_EVENT_TYPE).some((p) => (p.message.event as { kind?: string }).kind === "plan"),
+    ).toBe(false)
+  })
+
+  it("never emits a v2 edit from a read-only frame", () => {
+    mount()
+    deliver(stateMessage({ version: 2, scenePlan: makeV2Plan(), selectedObjectIds: ["hero"] }))
+    expect((screen.getByLabelText("Hero Position X") as HTMLInputElement).disabled).toBe(true)
+    expect(sent(SCENE3D_EMBED_EVENT_TYPE)).toHaveLength(0)
+  })
+
+  it("asks the parent for the scene's assets — ids and digests, never a URL or a token", () => {
+    mount()
+    deliver(stateMessage({ version: 2, scenePlan: makeV2Plan() }))
+    // jsdom has no WebGL, so the canvas never mounts and no request is made
+    // here; what this pins is that nothing about the ASSET lane is sent as a
+    // credential-bearing message.
+    for (const { message } of posted) {
+      const serialized = JSON.stringify(message)
+      expect(serialized).not.toMatch(/bearer|authorization|access_token|supabase/i)
     }
   })
 })

@@ -194,7 +194,13 @@ export interface Scene3DReference {
   endSeconds?: number
 }
 
-export interface Scene3DPlan {
+/**
+ * The v1 plan. `Scene3DPlan` is the DISCRIMINATED UNION of this and
+ * `Scene3DPlanV2` (see `scene3d-v2.ts`) — a consumer holding one must narrow
+ * with `isScene3DPlanV1` / `isScene3DPlanV2` before reading version-specific
+ * fields. Nothing about v1's shape, bounds or messages changed when v2 landed.
+ */
+export interface Scene3DPlanV1 {
   planType: typeof SCENE3D_PLAN_TYPE
   schemaVersion: typeof SCENE3D_SCHEMA_VERSION
   /** UUID. Changes on EVERY accepted edit. */
@@ -382,10 +388,15 @@ export const scene3DReferenceSchema = z
 // Semantic (cross-field) validation
 // ---------------------------------------------------------------------------
 
-interface SemanticIssue {
+/** One cross-field failure, in the shape `ctx.addIssue` wants. Shared by the
+ *  v1 and v2 validators so both report the same way. */
+export interface Scene3DSemanticIssue {
   path: (string | number)[]
   message: string
 }
+
+/** @internal Historic in-file name. */
+type SemanticIssue = Scene3DSemanticIssue
 
 function checkKeyframeTrack(
   frames: readonly { frame: number }[],
@@ -421,7 +432,7 @@ function checkKeyframeTrack(
  * report the SAME sentences without re-parsing, and so a caller holding an
  * already-parsed plan can re-check it cheaply.
  */
-export function scene3DPlanIssues(plan: Scene3DPlan): SemanticIssue[] {
+export function scene3DPlanV1Issues(plan: Scene3DPlanV1): SemanticIssue[] {
   const issues: SemanticIssue[] = []
 
   const seconds = plan.durationInFrames / plan.fps
@@ -526,7 +537,12 @@ export function scene3DPlanIssues(plan: Scene3DPlan): SemanticIssue[] {
  * consumer that parses with this cannot be handed a cycle, a dangling parent,
  * an out-of-range keyframe or a 90-second "one-minute-max" scene.
  */
-export const scene3DPlanSchema = z
+/**
+ * The v1 object shape WITHOUT the cross-field pass. Exported only so
+ * `scene3DAnyPlanSchema` can discriminate on `schemaVersion` (zod cannot
+ * discriminate through a `superRefine`); parse with `scene3DPlanV1Schema`.
+ */
+export const scene3DPlanV1ObjectSchema = z
   .object({
     planType: z.literal(SCENE3D_PLAN_TYPE),
     schemaVersion: z.literal(SCENE3D_SCHEMA_VERSION),
@@ -547,11 +563,20 @@ export const scene3DPlanSchema = z
     references: z.array(scene3DReferenceSchema).max(SCENE3D_LIMITS.maxReferences).optional(),
   })
   .strict()
-  .superRefine((plan, ctx) => {
-    for (const issue of scene3DPlanIssues(plan as Scene3DPlan)) {
-      ctx.addIssue({ code: "custom", path: issue.path, message: issue.message })
-    }
-  })
+
+export const scene3DPlanV1Schema = scene3DPlanV1ObjectSchema.superRefine((plan, ctx) => {
+  for (const issue of scene3DPlanV1Issues(plan as Scene3DPlanV1)) {
+    ctx.addIssue({ code: "custom", path: issue.path, message: issue.message })
+  }
+})
+
+/** @deprecated v1-only, and it always was. Kept so every existing v1 call site
+ *  keeps EXACTLY its current accept/reject set. Use `scene3DPlanV1Schema` for
+ *  v1, or `scene3DAnyPlanSchema` when either version is acceptable. */
+export const scene3DPlanSchema = scene3DPlanV1Schema
+
+/** @deprecated Renamed to `scene3DPlanV1Issues`. */
+export const scene3DPlanIssues = scene3DPlanV1Issues
 
 /** Order-insensitive deep equality over the JSON subset a plan is made of. */
 export function scene3DDeepEqual(a: unknown, b: unknown): boolean {
@@ -588,9 +613,10 @@ export function newScene3DRevisionId(): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
 }
 
-/** Narrowing helper for callers holding `unknown` (job output, workflow JSON). */
-export function isScene3DPlan(value: unknown): value is Scene3DPlan {
-  return scene3DPlanSchema.safeParse(value).success
+/** Narrowing helper for callers holding `unknown` (job output, workflow JSON).
+ *  V1 ONLY — `isScene3DPlan` (in `scene3d-v2.ts`) accepts either version. */
+export function isScene3DPlanV1(value: unknown): value is Scene3DPlanV1 {
+  return scene3DPlanV1Schema.safeParse(value).success
 }
 
 // ---------------------------------------------------------------------------
@@ -601,7 +627,7 @@ export function isScene3DPlan(value: unknown): value is Scene3DPlan {
  *  `output_data`. The canvas, the SDK and the DAG output extractor all read
  *  THIS shape — `scenePlan` is also the node's stored plan field. */
 export interface Scene3DJobOutput {
-  scenePlan: Scene3DPlan
+  scenePlan: Scene3DPlanV1
   /** One paragraph naming what changed. Absent on a first generation. */
   changeSummary?: string
 }

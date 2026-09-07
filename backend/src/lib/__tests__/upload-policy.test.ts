@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach, vi } from "vitest"
+import ts from "typescript"
 import { readFileSync, readdirSync } from "node:fs"
 import { resolve, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -71,6 +72,20 @@ describe("upload-policy seam — inert default, ordered, fail-closed", () => {
   })
 })
 
+// Most files cannot contain this decoded literal. Escapes always take the full
+// parser path, preserving AST semantics around regexes and template expressions.
+function importsPresigner(text: string): boolean {
+  if (!text.includes("s3-request-presigner") && !text.includes("\\")) return false
+  const source = ts.createSourceFile("scan.ts", text, ts.ScriptTarget.Latest, false)
+  let found = false
+  const inspect = (node: ts.Node): void => {
+    if (ts.isStringLiteralLike(node) && node.text.includes("s3-request-presigner")) found = true
+    if (!found) ts.forEachChild(node, inspect)
+  }
+  inspect(source)
+  return found
+}
+
 /**
  * Totality half (mirrors prompt-policy-totality): every lane where upload
  * bytes flow through this backend must ask the seam before writing. The MCP
@@ -92,7 +107,14 @@ describe("upload-policy totality — every byte-carrying lane polices", () => {
     expect(uploadSrc.split("applyUploadPolicies(").length - 1).toBeGreaterThanOrEqual(4)
   })
 
-  it("no backend code mints raw presigned R2 PUTs (bytes always pass through a policed lane)", () => {
+  it("the presigner scan preserves decoded literals, template expressions and comments", () => {
+    expect(importsPresigner(String.raw`import { getSignedUrl } from "@aws-sdk/s3-request-\u0070resigner"`)).toBe(true)
+    expect(importsPresigner('const loader = import(`@aws-sdk/s3-request-presigner`)')).toBe(true)
+    expect(importsPresigner('const nested = `${import("@aws-sdk/s3-request-presigner")}`')).toBe(true)
+    expect(importsPresigner('// @aws-sdk/s3-request-presigner\nconst other = "safe"')).toBe(false)
+  })
+
+  it("public ingestion cannot mint presigned PUTs; private build output has one scoped quarantine lane", () => {
     // If someone imports @aws-sdk/s3-request-presigner, bytes could go
     // browser→R2 directly and bypass every policed lane — that lane must then
     // either be dropped again or grow its own policing point. (The package
@@ -102,8 +124,14 @@ describe("upload-policy totality — every byte-carrying lane polices", () => {
       for (const e of readdirSync(dir, { withFileTypes: true })) {
         if (e.isDirectory()) {
           if (e.name !== "__tests__" && e.name !== "node_modules") walk(resolve(dir, e.name))
-        } else if (e.name.endsWith(".ts") && readFileSync(resolve(dir, e.name), "utf8").includes("s3-request-presigner")) {
-          offenders.push(resolve(dir, e.name))
+        } else if (e.name.endsWith(".ts")) {
+          const file = resolve(dir, e.name)
+          if (!importsPresigner(readFileSync(file, "utf8"))) continue
+          // Trusted build outputs land in a separate private bucket. They have
+          // no readable revision until receipt verification, and their signed
+          // conditional PUT cannot replace an existing artifact. This is not
+          // the browser/MCP ingestion lane protected by the checks above.
+          if (file !== resolve(SRC, "lib/private-plugins/scene3d-upload-grants.ts")) offenders.push(file)
         }
       }
     }

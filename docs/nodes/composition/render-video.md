@@ -2,6 +2,11 @@
 > Finalize and render composition plans into video files.
 
 ## Overview
+
+Cancelling a job stops an active Remotion render and closes its browser. A render
+timeout also stops the underlying work before cleanup. Deployment interruptions
+retain the job's reservation for retry rather than charging again.
+
 The Render Video node takes a composition plan from any upstream composer node (Video Composer, After Effects, Lottie Overlay, 3D Title, Generate 3D Scene, Edit 3D Scene, Motion Graphics, or Composite) and renders it into a final video file using Remotion. It auto-detects the upstream composition type and renders accordingly via a dedicated BullMQ render worker.
 
 ## Configuration

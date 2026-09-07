@@ -29,14 +29,36 @@
 import { z } from "zod"
 import { SCENE3D_LIMITS } from "@nodaro/shared"
 import type { Scene3DRevisionEntry } from "@/types/nodes"
-import { validateScene3DPlan } from "./validate-plan"
+import type { Scene3DV2EditOperation } from "@nodaro/shared"
+import { validateScene3DAnyPlan } from "./validate-plan"
 
 /** The route this contract belongs to. Quoted by the router and the docs. */
 export const SCENE3D_EMBED_PATH = "/embed/scene3d"
 
-/** Bumped only for a BREAKING change to the messages below. A frame handed a
- *  version it does not implement refuses the payload rather than guessing. */
+/**
+ * The BASELINE version — every frame speaks it and every `ready` still declares
+ * it, so a parent written against version 1 keeps working unchanged.
+ *
+ * Bumped only for a BREAKING change. Version 2 is not one: it is a superset
+ * that adds v2 scenes and the asset transport they need
+ * (`embed-asset-transport.ts`). A frame handed a version it does not implement
+ * refuses the payload rather than guessing.
+ */
 export const SCENE3D_EMBED_PROTOCOL_VERSION = 1
+
+/** Adds: v2 (`schemaVersion: 2`) scenes, asset requests, `edit-operations`. */
+export const SCENE3D_EMBED_PROTOCOL_VERSION_2 = 2
+
+/** Everything this frame accepts on an inbound `state`, newest last. */
+export const SCENE3D_EMBED_PROTOCOL_VERSIONS = [
+  SCENE3D_EMBED_PROTOCOL_VERSION,
+  SCENE3D_EMBED_PROTOCOL_VERSION_2,
+] as const
+
+export type Scene3DEmbedProtocolVersion = (typeof SCENE3D_EMBED_PROTOCOL_VERSIONS)[number]
+
+/** Scene schema versions this build can draw. Advertised in the handshake. */
+export const SCENE3D_EMBED_SCENE_SCHEMA_VERSIONS = [1, 2] as const
 
 export const SCENE3D_EMBED_STATE_TYPE = "nodaro:scene3d:state"
 export const SCENE3D_EMBED_READY_TYPE = "nodaro:scene3d:ready"
@@ -123,6 +145,15 @@ export interface Scene3DEmbedState {
   isGenerating: boolean
   /** DEFAULTS TO TRUE. A parent that forgets to say gets the safe answer. */
   readOnly: boolean
+  /** The version the PARENT declared on this push. What the frame may ask of
+   *  it — asset bytes, v2 edits — is bounded by this, not by what the frame can
+   *  do: a version-1 parent has no handler for either. */
+  protocolVersion: Scene3DEmbedProtocolVersion
+  /** The scene's own schema version. Decides which panel is rendered. */
+  planVersion: 1 | 2
+  /** The revision the accepted scene carries. Stamped on outbound events and
+   *  used to scope asset requests to the scene actually on screen. */
+  revisionId: string
 }
 
 export type Scene3DEmbedVerdict =
@@ -167,7 +198,10 @@ const historyEntrySchema = z
 const stateEnvelopeSchema = z
   .object({
     type: z.literal(SCENE3D_EMBED_STATE_TYPE),
-    version: z.literal(SCENE3D_EMBED_PROTOCOL_VERSION),
+    version: z.union([
+      z.literal(SCENE3D_EMBED_PROTOCOL_VERSION),
+      z.literal(SCENE3D_EMBED_PROTOCOL_VERSION_2),
+    ]),
     channel: z.string(),
     scenePlan: z.unknown(),
     selectedObjectIds: idListSchema.optional(),
@@ -246,10 +280,10 @@ export function classifyScene3DEmbedMessage(
   if (data.channel !== context.channel) return { kind: "ignore" }
 
   // 3. Content. From here on every failure is visible.
-  if (data.version !== SCENE3D_EMBED_PROTOCOL_VERSION) {
+  if (!(SCENE3D_EMBED_PROTOCOL_VERSIONS as readonly unknown[]).includes(data.version)) {
     return {
       kind: "reject",
-      reason: `unsupported protocol version ${String(data.version)}; this embed speaks version ${SCENE3D_EMBED_PROTOCOL_VERSION}`,
+      reason: `unsupported protocol version ${String(data.version)}; this embed speaks version ${SCENE3D_EMBED_PROTOCOL_VERSIONS.join(" and ")}`,
     }
   }
   const tooBig = oversizedList(data)
@@ -262,14 +296,26 @@ export function classifyScene3DEmbedMessage(
   // Said plainly rather than through the validator, whose "this node holds no
   // scene data" is editor vocabulary — there is no node here.
   if (message.scenePlan === undefined) return { kind: "reject", reason: "scenePlan is required" }
-  const scene = validateScene3DPlan(message.scenePlan)
+  const scene = validateScene3DAnyPlan(message.scenePlan)
   if (!scene.ok) return { kind: "reject", reason: `scenePlan — ${scene.issue}` }
+
+  // A v2 scene is ids and digests; its geometry and its baked camera only reach
+  // the frame through the parent's asset transport, which exists in protocol 2
+  // and not in protocol 1. Accepting it from a version-1 parent would mean a
+  // frame that is never going to draw, and no message saying why — so the push
+  // is refused with the reason instead.
+  if (scene.version === 2 && message.version < SCENE3D_EMBED_PROTOCOL_VERSION_2) {
+    return {
+      kind: "reject",
+      reason: `scenePlan — this scene uses schema version 2, which needs embed protocol version ${SCENE3D_EMBED_PROTOCOL_VERSION_2} (asset transport)`,
+    }
+  }
 
   const history: Scene3DRevisionEntry[] = []
   for (const [index, entry] of (message.history ?? []).entries()) {
     // EVERY plan is validated, not just the active one: the panel restores from
     // history, so an unchecked entry is an unchecked plan one click away.
-    const entryScene = validateScene3DPlan(entry.scenePlan)
+    const entryScene = validateScene3DAnyPlan(entry.scenePlan)
     if (!entryScene.ok) {
       return { kind: "reject", reason: `history.${index}.scenePlan — ${entryScene.issue}` }
     }
@@ -288,7 +334,7 @@ export function classifyScene3DEmbedMessage(
 
   let pendingPlan: Record<string, unknown> | undefined
   if (message.pendingPlan !== undefined) {
-    const pending = validateScene3DPlan(message.pendingPlan)
+    const pending = validateScene3DAnyPlan(message.pendingPlan)
     if (!pending.ok) return { kind: "reject", reason: `pendingPlan — ${pending.issue}` }
     pendingPlan = message.pendingPlan as Record<string, unknown>
   }
@@ -304,6 +350,9 @@ export function classifyScene3DEmbedMessage(
       isGenerating: message.isGenerating ?? false,
       // The safe default. A parent that wants an editable frame must SAY so.
       readOnly: message.readOnly ?? true,
+      protocolVersion: message.version,
+      planVersion: scene.version,
+      revisionId: scene.plan.revisionId,
     },
   }
 }
@@ -312,23 +361,64 @@ export function classifyScene3DEmbedMessage(
 // Outbound: embed → parent
 // ---------------------------------------------------------------------------
 
+/**
+ * The handshake. `version` stays 1 — it is the baseline both sides always
+ * speak, and a parent written against version 1 checks it. What version 2 adds
+ * is ANNOUNCED in additive fields a v1 parent simply does not read.
+ *
+ * Which is why a parent must match on `type` + `channel` and read
+ * `protocolVersions`, never compare the whole message for equality.
+ */
 export interface Scene3DEmbedReadyMessage {
   type: typeof SCENE3D_EMBED_READY_TYPE
   version: typeof SCENE3D_EMBED_PROTOCOL_VERSION
   channel: string
+  /** Every version this frame accepts on a `state` push. */
+  protocolVersions: readonly Scene3DEmbedProtocolVersion[]
+  capabilities: {
+    /** The frame can ask the parent for asset bytes (protocol 2). */
+    assetTransport: boolean
+    /** Scene `schemaVersion`s this build can draw. */
+    sceneSchemaVersions: readonly number[]
+  }
 }
 
 export type Scene3DEmbedEvent =
-  /** A deterministic local edit produced a NEW immutable revision. */
+  /** A deterministic local edit produced a NEW immutable revision. v1 only. */
   | { kind: "plan"; plan: Record<string, unknown>; changeSummary: string }
   | { kind: "selection"; objectIds: string[] }
   | { kind: "locks"; objectIds: string[] }
   | { kind: "restore"; revisionId: string }
   | { kind: "resolve-pending"; adopt: boolean }
+  /**
+   * A v2 edit, as OPERATIONS — never as a plan.
+   *
+   * The frame does not apply them: a v2 revision the server has not retained
+   * would render as if it were saved while its assets still belong to the
+   * revision it came from. The parent applies them with
+   * `applyScene3DV2EditOperations` (which checks both stale fields), publishes
+   * the result, and pushes the persisted plan back down.
+   */
+  | {
+      kind: "edit-operations"
+      operations: Scene3DV2EditOperation[]
+      /** `provenance.contentHash` of the revision the user acted on. The
+       *  envelope's `expectedRevisionId` is the other half of the CAS. */
+      expectedContentHash: string
+    }
+
+/** `edit-operations` exists only in protocol 2; every other kind is original. */
+function eventProtocolVersion(event: Scene3DEmbedEvent): Scene3DEmbedProtocolVersion {
+  return event.kind === "edit-operations"
+    ? SCENE3D_EMBED_PROTOCOL_VERSION_2
+    : SCENE3D_EMBED_PROTOCOL_VERSION
+}
 
 export interface Scene3DEmbedEventMessage {
   type: typeof SCENE3D_EMBED_EVENT_TYPE
-  version: typeof SCENE3D_EMBED_PROTOCOL_VERSION
+  /** The version the EVENT needs, not the frame's maximum: a v1 parent never
+   *  sees a version it does not know on a message it does understand. */
+  version: Scene3DEmbedProtocolVersion
   channel: string
   /**
    * The revision the embed was SHOWING when the user acted. The parent adopts
@@ -341,7 +431,16 @@ export interface Scene3DEmbedEventMessage {
 }
 
 export function buildScene3DReadyMessage(channel: string): Scene3DEmbedReadyMessage {
-  return { type: SCENE3D_EMBED_READY_TYPE, version: SCENE3D_EMBED_PROTOCOL_VERSION, channel }
+  return {
+    type: SCENE3D_EMBED_READY_TYPE,
+    version: SCENE3D_EMBED_PROTOCOL_VERSION,
+    channel,
+    protocolVersions: SCENE3D_EMBED_PROTOCOL_VERSIONS,
+    capabilities: {
+      assetTransport: true,
+      sceneSchemaVersions: SCENE3D_EMBED_SCENE_SCHEMA_VERSIONS,
+    },
+  }
 }
 
 export function buildScene3DEventMessage(
@@ -351,7 +450,7 @@ export function buildScene3DEventMessage(
 ): Scene3DEmbedEventMessage {
   return {
     type: SCENE3D_EMBED_EVENT_TYPE,
-    version: SCENE3D_EMBED_PROTOCOL_VERSION,
+    version: eventProtocolVersion(event),
     channel,
     expectedRevisionId,
     event,

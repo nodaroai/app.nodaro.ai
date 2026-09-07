@@ -22,12 +22,12 @@ import {
   scene3DIdSchema,
   scene3DObjectKeyframeSchema,
   scene3DObjectSchema,
-  scene3DPlanSchema,
+  scene3DPlanV1Schema,
   scene3DPrimitiveSchema,
   sizeVec3Schema,
   vec3Schema,
   type Scene3DObject,
-  type Scene3DPlan,
+  type Scene3DPlanV1,
 } from "./scene3d.js"
 
 
@@ -119,14 +119,14 @@ export interface Scene3DEditOptions {
 }
 
 export type Scene3DEditResult =
-  | { ok: true; plan: Scene3DPlan; changedObjectIds: string[]; changeSummary: string }
+  | { ok: true; plan: Scene3DPlanV1; changedObjectIds: string[]; changeSummary: string }
   | { ok: false; code: Scene3DEditErrorCode; message: string; operationIndex?: number }
 
 /** Structural clone that cannot share a reference with its input. `structured-
  *  Clone` is not available in every consumer runtime we ship to, and a plan is
  *  pure JSON by construction. */
-function clonePlan(plan: Scene3DPlan): Scene3DPlan {
-  return JSON.parse(JSON.stringify(plan)) as Scene3DPlan
+function clonePlan(plan: Scene3DPlanV1): Scene3DPlanV1 {
+  return JSON.parse(JSON.stringify(plan)) as Scene3DPlanV1
 }
 
 /** One human sentence per operation — the deterministic lane's answer to the
@@ -183,15 +183,15 @@ function firstIssueMessage(error: z.ZodError): string {
  *    at.
  */
 export function applyScene3DEditOperations(
-  plan: Scene3DPlan,
+  plan: Scene3DPlanV1,
   operations: readonly Scene3DEditOperation[] | unknown,
   options: Scene3DEditOptions = {},
 ): Scene3DEditResult {
-  const parsedPlan = scene3DPlanSchema.safeParse(plan)
+  const parsedPlan = scene3DPlanV1Schema.safeParse(plan)
   if (!parsedPlan.success) {
     return { ok: false, code: "invalid_plan", message: `scenePlan is invalid — ${firstIssueMessage(parsedPlan.error)}` }
   }
-  const source = parsedPlan.data as Scene3DPlan
+  const source = parsedPlan.data as Scene3DPlanV1
 
   if (options.expectedRevisionId !== undefined && options.expectedRevisionId !== source.revisionId) {
     return {
@@ -293,7 +293,7 @@ export function applyScene3DEditOperations(
   next.parentRevisionId = source.revisionId
   next.revisionId = options.revisionId ?? newScene3DRevisionId()
 
-  const validated = scene3DPlanSchema.safeParse(next)
+  const validated = scene3DPlanV1Schema.safeParse(next)
   if (!validated.success) {
     return {
       ok: false,
@@ -304,7 +304,7 @@ export function applyScene3DEditOperations(
 
   return {
     ok: true,
-    plan: validated.data as Scene3DPlan,
+    plan: validated.data as Scene3DPlanV1,
     changedObjectIds: [...changed],
     changeSummary: summarizeScene3DOperations(ops),
   }

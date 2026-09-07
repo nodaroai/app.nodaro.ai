@@ -14,14 +14,14 @@ import {
   SCENE3D_PLAN_TYPE,
   SCENE3D_SCHEMA_VERSION,
   applyScene3DEditOperations,
-  isScene3DPlan,
+  isScene3DPlanV1,
   newScene3DRevisionId,
   scene3DDeepEqual,
   scene3DEditOperationSchema,
   scene3DPlanSchema,
   summarizeScene3DOperations,
   type Scene3DObject,
-  type Scene3DPlan,
+  type Scene3DPlanV1,
 } from "../index.js"
 
 const REV_A = "11111111-2222-4333-8444-555555555555"
@@ -41,7 +41,7 @@ function object(id: string, over: Partial<Scene3DObject> = {}): Scene3DObject {
   }
 }
 
-function plan(over: Partial<Scene3DPlan> = {}): Scene3DPlan {
+function plan(over: Partial<Scene3DPlanV1> = {}): Scene3DPlanV1 {
   return {
     planType: SCENE3D_PLAN_TYPE,
     schemaVersion: SCENE3D_SCHEMA_VERSION,
@@ -61,7 +61,7 @@ function plan(over: Partial<Scene3DPlan> = {}): Scene3DPlan {
 describe("scene3DPlanSchema — structure", () => {
   it("accepts a minimal well-formed plan", () => {
     expect(scene3DPlanSchema.safeParse(plan()).success).toBe(true)
-    expect(isScene3DPlan(plan())).toBe(true)
+    expect(isScene3DPlanV1(plan())).toBe(true)
   })
 
   it("defaults sensorWidthMm to full frame", () => {
@@ -345,7 +345,7 @@ describe("applyScene3DEditOperations", () => {
   })
 
   it("refuses to remove an object a reference points at", () => {
-    const referenced: Scene3DPlan = {
+    const referenced: Scene3DPlanV1 = {
       ...plan({ objects: [object("hero"), object("prop")] }),
       references: [{ id: "r1", url: "https://x.test/a.png", kind: "image", role: "appearance", objectId: "prop" }],
     }
@@ -378,7 +378,7 @@ describe("applyScene3DEditOperations", () => {
   })
 
   it("rejects an invalid input plan without applying anything", () => {
-    const result = applyScene3DEditOperations({ ...base, objects: [] } as Scene3DPlan, [
+    const result = applyScene3DEditOperations({ ...base, objects: [] } as Scene3DPlanV1, [
       { op: "set-background", color: "#000000" },
     ])
     expect(result.ok).toBe(false)

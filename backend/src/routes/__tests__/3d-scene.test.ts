@@ -60,6 +60,8 @@ vi.mock("@/lib/supabase.js", () => {
 
 import { SCENE3D_PLAN_TYPE, SCENE3D_SCHEMA_VERSION, type Scene3DPlan } from "@nodaro/shared"
 import { scene3DRoutes, scene3DEditCreditId, scene3DRenderFrame } from "../3d-scene.js"
+import { setPluginEngines } from "../../lib/private-plugins/engine-registry.js"
+import { config } from "../../lib/config.js"
 
 const USER_ID = "00000000-0000-4000-8000-000000000001"
 const REV = "11111111-2222-4333-8444-555555555555"
@@ -105,6 +107,9 @@ const enqueued = () => mocks.queueAdd.mock.calls.at(-1)?.[1] as Record<string, u
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  setPluginEngines({})
+  config.SCENE3D_ADVANCED_ENABLED = false
+  config.SCENE3D_LOCAL_ENABLED = false
   mocks.creditIds = []
   mocks.shouldProxyLlmToCloud.mockResolvedValue(false)
   mocks.insertJob.mockResolvedValue({ data: { id: "job-1" }, error: null })
@@ -137,6 +142,50 @@ describe("scene3DRenderFrame", () => {
     expect(scene3DRenderFrame({ durationSeconds: 2.5, fps: 30, aspectRatio: "9:16" })).toEqual({
       fps: 30, durationInFrames: 75, width: 1080, height: 1920,
     })
+  })
+})
+
+describe("optional advanced engine admission", () => {
+  it("refuses unavailable or unknown engines before Basic credit checks", async () => {
+    const advanced = await generate({ engine: "blender-cloud" })
+    expect(advanced.statusCode).toBe(503)
+    expect(advanced.json().error.code).toBe("SCENE_CAPABILITY_UNAVAILABLE")
+    expect((await generate({ engine: "misspelled" })).statusCode).toBe(400)
+    expect(mocks.creditIds).toEqual([])
+    expect(mocks.insertJob).not.toHaveBeenCalled()
+    expect(mocks.reserveCreditsForJob).not.toHaveBeenCalled()
+  })
+
+  it("delegates the authenticated request intact and skips the Basic reservation", async () => {
+    config.SCENE3D_ADVANCED_ENABLED = true
+    const advanced = {
+      capabilities: vi.fn().mockResolvedValue({ version: "1", engines: ["blender-cloud"], sceneSchemaVersions: [2], maxRepairPasses: 2 }),
+      generate: vi.fn().mockResolvedValue({ jobId: "advanced-job" }), edit: vi.fn(),
+    }
+    setPluginEngines({ scene3d: advanced })
+    const references = [{ id: "ref", kind: "image", url: IMAGE }]
+    const result = await generate({ engine: "blender-cloud", references, acceptedSceneSchemaVersions: [2] })
+    expect(result.json()).toEqual({ jobId: "advanced-job" })
+    const req = advanced.generate.mock.calls[0][0]
+    expect(req.userId).toBe(USER_ID)
+    expect(req.headers["x-nodaro-workspace"]).toBe("ws-1")
+    expect(req.body.references).toEqual(references)
+    expect(mocks.creditIds).toEqual([])
+    expect(mocks.insertJob).not.toHaveBeenCalled()
+  })
+
+  it("keeps local execution disabled independently of cloud authoring", async () => {
+    config.SCENE3D_ADVANCED_ENABLED = true
+    const engine = { capabilities: vi.fn(), generate: vi.fn(), edit: vi.fn() }
+    setPluginEngines({ scene3d: engine })
+    expect((await generate({ engine: "blender-local" })).statusCode).toBe(503)
+    expect(engine.generate).not.toHaveBeenCalled()
+    expect(mocks.creditIds).toEqual([])
+  })
+
+  it("reports Basic capabilities when no advanced engine is installed", async () => {
+    expect((await app.inject({ method: "GET", url: "/v1/3d-scene/capabilities" })).json())
+      .toEqual({ basic: { available: true, sceneSchemaVersions: [1] }, advanced: null })
   })
 })
 
