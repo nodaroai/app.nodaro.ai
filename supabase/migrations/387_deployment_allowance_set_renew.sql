@@ -688,17 +688,28 @@ BEGIN
   IF p_subject IS NULL OR btrim(p_subject) = '' THEN
     RETURN NULL;
   END IF;
-  -- LIMIT 2 and then insist on exactly one: two accounts carrying the same
-  -- subject is a broken IdP state, and answering "this one" would allocate a
-  -- customer's quota to an arbitrary half of it. FAIL CLOSED — NULL means
-  -- "no unambiguous account", and the caller answers 404 or 409 rather than
-  -- guessing.
+  -- TWO ANSWERS, NOT ONE. "No account carries this subject" and "two accounts
+  -- do" are different facts and the caller does opposite things with them: the
+  -- first is a person who has not signed in yet, and the route stores a
+  -- PENDING intent against the identity their IdP will assert. Returning NULL
+  -- for the second made that intent land on whichever of the duplicated
+  -- accounts signed in first — a customer's paid quota on an arbitrary half of
+  -- a split identity, which is the failure this function exists to prevent.
+  --
+  -- So the duplicate RAISES. Fail closed either way: the function never
+  -- chooses between two accounts, it just stops calling that "no account".
   SELECT array_agg(u.id) INTO v_ids
     FROM (SELECT id FROM auth.users
-           WHERE raw_app_meta_data->>'sso_subject' = p_subject
-           LIMIT 2) u;
-  IF v_ids IS NULL OR array_length(v_ids, 1) <> 1 THEN
+           WHERE raw_app_meta_data->>'sso_subject' = p_subject) u;
+  IF v_ids IS NULL OR array_length(v_ids, 1) IS NULL THEN
     RETURN NULL;
+  END IF;
+  IF array_length(v_ids, 1) > 1 THEN
+    -- The count is exact (no LIMIT above), because the operator reading this
+    -- line has to go and merge exactly that many accounts. The predicate is
+    -- unindexed either way, so the scan is the same one.
+    RAISE EXCEPTION 'SSO_SUBJECT_AMBIGUOUS: subject % matches % accounts',
+      p_subject, array_length(v_ids, 1);
   END IF;
   RETURN v_ids[1];
 END;
@@ -710,7 +721,7 @@ REVOKE EXECUTE ON FUNCTION public.find_user_by_sso_subject(TEXT) FROM authentica
 GRANT EXECUTE ON FUNCTION public.find_user_by_sso_subject(TEXT) TO service_role;
 
 COMMENT ON FUNCTION public.find_user_by_sso_subject(TEXT) IS
-  'The studio uuid whose auth.users.raw_app_meta_data->>''sso_subject'' equals the argument, or NULL when there is no match OR more than one (fail closed). Service-role only.';
+  'The studio uuid whose auth.users.raw_app_meta_data->>''sso_subject'' equals the argument, or NULL when no account carries it. RAISES SSO_SUBJECT_AMBIGUOUS when more than one does — never chooses between them. Service-role only.';
 
 -- The batch form, so a page of users costs one query rather than one per row.
 -- Rows with no subject are simply absent from the result — the caller renders

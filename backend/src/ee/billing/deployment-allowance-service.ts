@@ -382,6 +382,12 @@ const GRANT_PREFIXES: ReadonlyArray<[string, AllowanceWriteErrorCode]> = [
   ["ALLOWANCE_TARGET_INVALID:", "allowance_target_invalid"],
 ]
 
+/** What `find_user_by_sso_subject` raises when a subject matches more than one
+ *  account (migration 387). The function used to answer NULL for that, which
+ *  is the same answer it gives for "no account" — and the route acts on the
+ *  two very differently. */
+const SSO_SUBJECT_AMBIGUOUS_PREFIX = "SSO_SUBJECT_AMBIGUOUS:"
+
 function classifyGrantError(raw: string): { code: AllowanceWriteErrorCode; message: string } {
   for (const [prefix, code] of GRANT_PREFIXES) {
     if (raw.startsWith(prefix)) return { code, message: raw }
@@ -482,6 +488,79 @@ export async function setDefaultAllowance(credits: number, actorId: string): Pro
   // minute, so without this the payer saves a new figure and the page keeps
   // showing the old one — which reads as a save that silently failed.
   invalidateDefaultAllowanceCache()
+  return { ok: true }
+}
+
+/**
+ * The pool balance, in RAW credits, below which the deployment calls itself
+ * low — or null when the payer has not set one.
+ *
+ * A FAILED READ ANSWERS NULL, like "not set". A threshold is a convenience on
+ * top of a balance, and losing it must not take the balance down with it; null
+ * is also the honest answer for a database that has not reached the migration
+ * yet. The judgement itself (`balance < threshold`) belongs to the caller,
+ * which is the only place that knows whether the balance is even readable.
+ *
+ * Here rather than in the route because `deployment_payer_settings` is named
+ * in this file and in the boot upsert, and nowhere else — the same rule that
+ * keeps the allowance table in one place.
+ */
+export async function readLowBalanceThreshold(payerId: string): Promise<number | null> {
+  if (!payerId) return null
+  const { data, error } = await supabase
+    .from("deployment_payer_settings")
+    .select("low_balance_threshold_credits")
+    .eq("id", true)
+    .maybeSingle()
+  if (error) {
+    console.error("[deployment-allowance] low-balance threshold read failed:", error.message)
+    return null
+  }
+  const raw = (data as { low_balance_threshold_credits?: number | null } | null)?.low_balance_threshold_credits
+  return typeof raw === "number" && Number.isFinite(raw) ? raw : null
+}
+
+/**
+ * Set — or CLEAR — that threshold. `null` clears it; `0` is a real threshold
+ * meaning "tell me when the pool is empty", and the two must never be
+ * collapsed: sending 0 for a clear arms an alert the payer just turned off.
+ *
+ * The same shape as `setDefaultAllowance` above, and for the same reasons:
+ * there is no RPC behind this column, so the actor assertion the database
+ * would have made is made here, and an UPDATE that matched no row is reported
+ * rather than answered as a save.
+ */
+export async function setLowBalanceThreshold(
+  credits: number | null,
+  actorId: string,
+): Promise<AllowanceWriteResult> {
+  const payerId = deploymentPayerId()
+  if (!payerId) {
+    return { ok: false, code: "allowance_unconfigured", message: "no deployment payer is configured" }
+  }
+  if (actorId !== payerId) {
+    return { ok: false, code: "allowance_actor_not_payer", message: "actor is not the billing account" }
+  }
+  const { data, error } = await supabase
+    .from("deployment_payer_settings")
+    .update({
+      low_balance_threshold_credits: credits,
+      updated_by: actorId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", true)
+    .select("id")
+  if (error) {
+    console.error("[deployment-allowance] threshold write failed:", error.message)
+    return { ok: false, code: "allowance_write_failed", message: error.message }
+  }
+  if (Array.isArray(data) && data.length === 0) {
+    return {
+      ok: false,
+      code: "allowance_unconfigured",
+      message: "deployment_payer_settings has no row — the boot upsert has not run against this database",
+    }
+  }
   return { ok: true }
 }
 
@@ -769,10 +848,15 @@ export async function applyPendingAllowance(
  *
  * AMBIGUOUS IS A REFUSAL. Two accounts answering to one address is a state the
  * customer has to resolve; allocating a paid quota to an arbitrary half of it
- * is the failure that costs money. A lookup that could not be PERFORMED
- * answers `ambiguous` for the same reason — `sso-linking.ts` takes exactly
- * this posture at its own `maybeSingle()` error branch: "we cannot tell which
- * account this address names" is never a licence to act on one.
+ * is the failure that costs money.
+ *
+ * A LOOKUP THAT COULD NOT BE PERFORMED IS `unavailable`, NOT `ambiguous`. Both
+ * refuse to act — "we cannot tell which account this names" is never a licence
+ * to act on one — but they are different facts and the caller does different
+ * things with them: `ambiguous` is final and tells a back office to go and fix
+ * a duplicated identity, while a dropped connection is a fault it should
+ * simply retry. Answering the first for the second sends somebody editing an
+ * identity provider over a network blip.
  *
  * The email match is EXACT and case-insensitive: `ilike` on the escaped
  * address (never a `%` pattern — `profiles.email` is user-supplied text and a
@@ -789,7 +873,7 @@ export async function resolveUserRef(ref: UserRef): Promise<ResolvedUserRef> {
     const { data, error } = await supabase.from("profiles").select("id").eq("id", id).maybeSingle()
     if (error) {
       console.error("[deployment-allowance] user lookup by id failed:", error.message)
-      return { kind: "ambiguous" }
+      return { kind: "unavailable" }
     }
     return data ? { kind: "user", userId: (data as { id: string }).id } : { kind: "absent" }
   }
@@ -797,13 +881,21 @@ export async function resolveUserRef(ref: UserRef): Promise<ResolvedUserRef> {
   if (subject) {
     const { data, error } = await supabase.rpc("find_user_by_sso_subject", { p_subject: subject })
     if (error) {
-      console.error("[deployment-allowance] user lookup by subject failed:", error.message)
-      return { kind: "ambiguous" }
+      const raw = error.message ?? ""
+      // NULL from this function means "no account". More than one account
+      // carrying the subject RAISES (387), because the two are different
+      // answers and the route does different things with them: `absent` stores
+      // a pending intent against the identity, which for a duplicated subject
+      // would land on whichever of the accounts signs in first. Prefix match,
+      // like `classifyGrantError` — the raised text carries the subject after
+      // the colon and a message merely containing the token is not one.
+      if (raw.startsWith(SSO_SUBJECT_AMBIGUOUS_PREFIX)) {
+        console.warn("[deployment-allowance] refusing a subject that names more than one account")
+        return { kind: "ambiguous" }
+      }
+      console.error("[deployment-allowance] user lookup by subject failed:", raw)
+      return { kind: "unavailable" }
     }
-    // The function answers NULL both for "no account" and for "more than one
-    // account carries this subject" — it fails closed rather than choosing.
-    // From here that is indistinguishable, and `absent` is the honest reading:
-    // there is no ONE account this subject names.
     const userId = typeof data === "string" ? data : null
     return userId ? { kind: "user", userId } : { kind: "absent" }
   }
@@ -815,14 +907,18 @@ export async function resolveUserRef(ref: UserRef): Promise<ResolvedUserRef> {
     // exact, but `limit(5)` could truncate the true match out of a widened
     // result set and turn a real account into `absent`. No address needs one.
     if (email.includes("*")) {
+      // `invalid`, not `ambiguous`: nothing about the database is uncertain
+      // here and no second account is implied. The address itself is one this
+      // lookup cannot be performed with, which is a 400 the caller fixes by
+      // sending a real address.
       console.warn("[deployment-allowance] refusing an email lookup containing a wildcard character")
-      return { kind: "ambiguous" }
+      return { kind: "invalid" }
     }
     const escaped = email.replace(/[\\%_]/g, (c) => `\\${c}`)
     const { data, error } = await supabase.from("profiles").select("id, email").ilike("email", escaped).limit(5)
     if (error) {
       console.error("[deployment-allowance] user lookup by email failed:", error.message)
-      return { kind: "ambiguous" }
+      return { kind: "unavailable" }
     }
     const rows = ((data ?? []) as ReadonlyArray<{ id: string; email: string | null }>).filter(
       (r) => (r.email ?? "").trim().toLowerCase() === email,

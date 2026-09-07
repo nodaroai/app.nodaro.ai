@@ -345,10 +345,36 @@ describe("resolveUserRef — subject first, email second, uuid accepted", () => 
     expect(from).not.toHaveBeenCalled()
   })
 
-  it("answers absent when the subject names no ONE account", async () => {
+  it("answers absent when the subject names no account", async () => {
     payerDeployment()
     rpc.mockResolvedValue({ data: null, error: null })
     expect(await resolveUserRef({ ssoSubject: "nobody" })).toEqual({ kind: "absent" })
+  })
+
+  it("a subject on TWO accounts is ambiguous — the RPC raises, and NULL no longer means both things", async () => {
+    // 387 used to answer NULL for "no account" and for "more than one", and
+    // the route does opposite things with them: `absent` stores a pending
+    // intent against the identity, which for a duplicated subject would land
+    // on whichever of the two accounts signs in first — a paid quota on an
+    // arbitrary half of a split identity.
+    payerDeployment()
+    rpc.mockResolvedValue({
+      data: null,
+      error: { message: "SSO_SUBJECT_AMBIGUOUS: subject usr_01HZX matches 2 accounts" },
+    })
+    expect(await resolveUserRef({ ssoSubject: "usr_01HZX" })).toEqual({ kind: "ambiguous" })
+  })
+
+  it("any OTHER failure of that lookup is unavailable, not a duplicated identity", async () => {
+    payerDeployment()
+    rpc.mockResolvedValue({ data: null, error: { message: "connection reset" } })
+    expect(await resolveUserRef({ ssoSubject: "usr_01HZX" })).toEqual({ kind: "unavailable" })
+  })
+
+  it("matches the raise on its PREFIX, so a message merely containing it is not read as one", async () => {
+    payerDeployment()
+    rpc.mockResolvedValue({ data: null, error: { message: "wrapped: SSO_SUBJECT_AMBIGUOUS: subject x" } })
+    expect(await resolveUserRef({ ssoSubject: "x" })).toEqual({ kind: "unavailable" })
   })
 
   it("answers AMBIGUOUS for two profiles sharing an email in different case", async () => {
@@ -387,23 +413,35 @@ describe("resolveUserRef — subject first, email second, uuid accepted", () => 
     expect(String(ilike?.args[1]).replace(/\\./g, "")).not.toMatch(/[%_]/)
   })
 
-  it("refuses an address containing `*` up front, and queries nothing", async () => {
+  it("refuses an address containing `*` as INVALID, and queries nothing", async () => {
     // PostgREST rewrites `*` to `%` inside an ilike value and no escape
     // survives that rewrite; the TypeScript re-check would keep the ANSWER
     // exact, but `limit(5)` could truncate the true match out of a widened
     // result set and turn a real account into `absent`.
+    //
+    // `invalid`, not `ambiguous`: nothing is uncertain about the database and
+    // no second account is implied. The route answers 400 rather than a 409
+    // telling the caller to go and merge two accounts that do not exist.
     payerDeployment()
-    expect(await resolveUserRef({ email: "per*son@example.test" })).toEqual({ kind: "ambiguous" })
+    expect(await resolveUserRef({ email: "per*son@example.test" })).toEqual({ kind: "invalid" })
     expect(from).not.toHaveBeenCalled()
   })
 
-  it("a lookup that could not be PERFORMED is ambiguous, never absent", async () => {
-    // `sso-linking.ts` takes exactly this posture at its own maybeSingle()
-    // error branch: "we cannot tell which account this address names" is never
-    // a licence to act on one — and here acting means moving a paid quota.
+  it("a lookup that could not be PERFORMED is UNAVAILABLE — never absent, and never ambiguous", async () => {
+    // Both refuse to act, which is the shared half: "we cannot tell which
+    // account this names" is never a licence to act on one. They differ in
+    // what the caller does next, and that is the half worth a kind of its own
+    // — `ambiguous` sends a back office hunting for a duplicated identity, and
+    // a dropped connection is something it should simply retry.
     payerDeployment()
     profileList = { data: null, error: { message: "connection reset" } }
-    expect(await resolveUserRef({ email: "person@example.test" })).toEqual({ kind: "ambiguous" })
+    expect(await resolveUserRef({ email: "person@example.test" })).toEqual({ kind: "unavailable" })
+  })
+
+  it("an id lookup that could not be performed is unavailable too", async () => {
+    payerDeployment()
+    profileRow = { data: null, error: { message: "connection reset" } }
+    expect(await resolveUserRef({ id: U1 })).toEqual({ kind: "unavailable" })
   })
 
   it("accepts a studio uuid, but verifies it exists rather than trusting it", async () => {

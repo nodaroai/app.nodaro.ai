@@ -72,9 +72,11 @@ import {
   grantAllowance,
   grantsFor,
   provisionedUserCount,
+  readLowBalanceThreshold,
   resolveUserRef,
   setAllowance,
   setDefaultAllowance,
+  setLowBalanceThreshold,
   ssoSubjectsFor,
   writePendingAllowance,
   type AllowanceLedgerRow,
@@ -116,6 +118,18 @@ type UnitInput =
   | { ok: false; code: "unit_not_configured" | "unit_not_whole_credits" | "invalid_units"; message: string }
 
 /**
+ * The largest allowance, in RAW credits, this surface will express.
+ *
+ * The ledger's columns are `integer` — 2 147 483 647 — and `granted_credits`
+ * is a RUNNING SUM: a target at the type's ceiling leaves no room for the next
+ * top-up, and the overflow arrives from inside the RPC as a 500 the caller
+ * reads as "the platform is broken". A billion is far above any real quota and
+ * leaves headroom for two maximal moves, so an absurd figure is refused HERE,
+ * as the client error it is.
+ */
+const MAX_ALLOWANCE_CREDITS = 1_000_000_000
+
+/**
  * Display units → raw credits, or a refusal.
  *
  * The whole-credits rule is the load-bearing half. The ledger is an INTEGER
@@ -148,6 +162,16 @@ function creditsFromUnits(raw: unknown, opts: { allowNegative: boolean; allowZer
       ok: false,
       code: "invalid_units",
       message: opts.allowNegative ? "units must not be zero." : "units must be a positive whole number.",
+    }
+  }
+  if (Math.abs(raw) > MAX_ALLOWANCE_CREDITS * u.rate) {
+    // In UNITS, because that is what the caller sent — the credit ceiling is
+    // this figure divided by the rate, and quoting the raw one would ask them
+    // to do the conversion this surface exists to spare them.
+    return {
+      ok: false,
+      code: "invalid_units",
+      message: `units must be at most ${MAX_ALLOWANCE_CREDITS * u.rate} ${u.label}.`,
     }
   }
   if (raw % u.rate !== 0) {
@@ -375,6 +399,10 @@ type RefOutcome =
   | { kind: "absent"; ref: UserRef }
   | { kind: "refused" }
 
+/** The refusal a reference gets when it is not one of the three forms — shared
+ *  by the parse failure and by a reference the SERVICE cannot look up with. */
+const INVALID_REF_MSG = "Name the user by studio id, by sso:<subject> or by email:<address>."
+
 /**
  * Parse a reference, resolve it, and SEND the refusal when there is one — the
  * caller checks `kind` and returns immediately on `refused`.
@@ -382,46 +410,74 @@ type RefOutcome =
  * THE PAYER IS NEVER A VALID USER REFERENCE, and that check is made after
  * resolution rather than only on the uuid form: `sso:` and `email:` can both
  * name the billing account, and a quota against the account that holds the
- * pool is a concept that does not exist.
+ * pool is a concept that does not exist. `payerMessage` exists because the
+ * sentence depends on the verb: a READ route refusing the payer must not tell
+ * the caller to buy credits.
  *
  * `absent` is NOT a refusal — it is the answer each caller decides about: the
  * allowance verb stores an intent, `/users/resolve` answers 404, `/usage`
- * answers an empty page. An ambiguous match IS a refusal everywhere, because
- * acting on half of a duplicated address moves a paid quota to the wrong
- * person.
+ * answers an empty page. Everything else IS a refusal, and the three of them
+ * are deliberately different statuses:
+ *
+ *   409 `user_ambiguous`   — two accounts answer to that identity. FINAL: a
+ *                            retry cannot change it, and the customer has to
+ *                            resolve the duplicate.
+ *   400 `invalid_user_ref` — the reference is not one this lookup can be
+ *                            performed with at all.
+ *   503 `read_failed`      — the lookup could not be PERFORMED. A fault, and
+ *                            the same status and posture the renew check below
+ *                            takes when it cannot read the ledger: nothing was
+ *                            changed, try again. Answering 409 here (which is
+ *                            what a failed read used to do) sends a back office
+ *                            hunting for a duplicate identity that does not
+ *                            exist, and a back office treats 409 as final.
  */
-async function resolveRef(raw: string | undefined, reply: FastifyReply): Promise<RefOutcome> {
+async function resolveRef(
+  raw: string | undefined,
+  reply: FastifyReply,
+  opts?: { payerMessage?: string },
+): Promise<RefOutcome> {
   const ref = parseUserRef(raw)
   if (!ref) {
-    reply
-      .status(400)
-      .send(
-        err(
-          "invalid_user_ref",
-          "Name the user by studio id, by sso:<subject> or by email:<address>.",
-        ),
-      )
+    reply.status(400).send(err("invalid_user_ref", INVALID_REF_MSG))
     return { kind: "refused" }
   }
   const resolved = await resolveUserRef(ref)
-  if (resolved.kind === "ambiguous") {
-    return refuseAmbiguous(reply)
+  if (resolved.kind === "ambiguous") return refuseAmbiguous(reply, ref)
+  if (resolved.kind === "invalid") {
+    reply.status(400).send(err("invalid_user_ref", INVALID_REF_MSG))
+    return { kind: "refused" }
   }
+  if (resolved.kind === "unavailable") return refuseUnreadable(reply)
   if (resolved.kind === "absent") return { kind: "absent", ref }
   if (resolved.userId === deploymentPayerId()) {
-    reply.status(400).send(err("payer_has_no_allowance", PAYER_NO_ALLOWANCE_MSG))
+    reply.status(400).send(err("payer_has_no_allowance", opts?.payerMessage ?? PAYER_NO_ALLOWANCE_MSG))
     return { kind: "refused" }
   }
   return { kind: "user", userId: resolved.userId, ref }
 }
 
-function refuseAmbiguous(reply: FastifyReply): RefOutcome {
+/** Two accounts, one identity. The recovery differs by which identity was
+ *  used, so the sentence does too: an address has an unambiguous alternative
+ *  (the subject), a duplicated subject has none and the customer's identity
+ *  provider is where it has to be fixed. */
+function refuseAmbiguous(reply: FastifyReply, ref: UserRef): RefOutcome {
+  const message = ref.ssoSubject
+    ? "More than one account on this deployment carries that SSO subject. Resolve the duplicate before allocating to it."
+    : "More than one account answers to that email address. Name the user by their SSO subject instead."
+  reply.status(409).send(err("user_ambiguous", message))
+  return { kind: "refused" }
+}
+
+/** The lookup itself failed. 503 and not 409: a fault the caller retries, not
+ *  a state of the customer's identities that it would go and investigate. */
+function refuseUnreadable(reply: FastifyReply): RefOutcome {
   reply
-    .status(409)
+    .status(503)
     .send(
       err(
-        "user_ambiguous",
-        "More than one account answers to that email address. Name the user by their SSO subject instead.",
+        "read_failed",
+        "Could not look that user up. Nothing was changed — try again.",
       ),
     )
   return { kind: "refused" }
@@ -531,27 +587,6 @@ async function readPool(payerId: string) {
   }
 }
 
-/** The pool balance, in RAW credits, below which `lowBalance` is true — or
- *  null when the payer has not set one.
- *
- *  A read that fails answers null rather than throwing: a threshold is a
- *  convenience on top of a balance, and losing it must not take the balance
- *  down with it. Null is also the honest value for a database that has not
- *  reached the migration yet, which is the same answer as "not set". */
-async function lowBalanceThreshold(): Promise<number | null> {
-  const { data, error } = await supabase
-    .from("deployment_payer_settings")
-    .select("low_balance_threshold_credits")
-    .eq("id", true)
-    .maybeSingle()
-  if (error) {
-    console.error("[deployment-billing] low-balance threshold read failed:", error.message)
-    return null
-  }
-  const raw = (data as { low_balance_threshold_credits?: number | null } | null)?.low_balance_threshold_credits
-  return typeof raw === "number" && Number.isFinite(raw) ? raw : null
-}
-
 // ---------------------------------------------------------------------------
 // The usage page: a keyset cursor that cannot be injected into a filter
 // ---------------------------------------------------------------------------
@@ -587,12 +622,27 @@ function decodeUsageCursor(raw: string): { createdAt: string; id: string } | nul
   return { createdAt, id }
 }
 
-/** An ISO instant, or `"invalid"` — never a silent fallback. A window the
- *  caller did not ask for is worse than a refusal: they would reconcile a
- *  month against a different month and never learn why the totals disagree. */
+/**
+ * A full ISO 8601 date-time WITH a zone, or `"invalid"` — never a silent
+ * fallback. A window the caller did not ask for is worse than a refusal: they
+ * would reconcile a month against a different month and never learn why the
+ * totals disagree.
+ *
+ * THE REGEX IS THE POINT, and `Date.parse` alone was the bug. It accepts
+ * `2026-09`, `Sep 1 2026` and every other shape a JavaScript engine feels like
+ * taking, and — worse — it reads a bare `2026-09-01T00:00:00` as the SERVER's
+ * local time. The server runs in UTC and the customer does not, so a caller in
+ * a +03:00 zone asking for their September got three hours of August, silently
+ * and every month. A zone is therefore required, not defaulted.
+ */
+const INSTANT_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?(Z|[+-]\d{2}:?\d{2})$/
+
 function readInstant(raw: string | undefined): string | null | "invalid" {
   if (raw === undefined || raw.trim() === "") return null
-  const t = Date.parse(raw)
+  const value = raw.trim()
+  if (!INSTANT_RE.test(value)) return "invalid"
+  // The shape is right; the CALENDAR may still not be (a 31st of February).
+  const t = Date.parse(value)
   return Number.isFinite(t) ? new Date(t).toISOString() : "invalid"
 }
 
@@ -817,6 +867,24 @@ export async function deploymentBillingRoutes(app: FastifyInstance): Promise<voi
       supabase.from("profiles").select("id, email").eq("id", userId).maybeSingle(),
     ])
 
+    // `allowanceLedgerOne` answers null ONLY when the read was unavailable — a
+    // user with no row gets the D7 default instead — so null here cannot be
+    // rendered as `provisioned: false` with the default beside it. That pair
+    // is a FACT about the person ("no row of their own, and this is what they
+    // would get"), and manufacturing it out of a failed read tells a back
+    // office a quota is untouched when nobody knows whether it is. The whole
+    // lookup answers 503, which is what the caller retries.
+    if (row === null) {
+      return reply
+        .status(503)
+        .send(
+          err(
+            "read_failed",
+            "Could not read this user's allowance. Nothing was changed — try again.",
+          ),
+        )
+    }
+
     // All three identities on every answer, so the caller stores the uuid once
     // and never resolves this person again.
     return reply.send({
@@ -825,8 +893,9 @@ export async function deploymentBillingRoutes(app: FastifyInstance): Promise<voi
         email: (profile.data as { email?: string | null } | null)?.email ?? null,
         ssoSubject: subjects.get(userId) ?? null,
         // False means "no row of their own": the figures beside it are the
-        // deployment DEFAULT, which is what this person would actually get.
-        provisioned: row?.provisioned ?? false,
+        // deployment DEFAULT, which is what this person would actually get. It
+        // is never a guess — an unreadable ledger answered 503 above.
+        provisioned: row.provisioned,
         allowance: allowancePairs(row, u),
       },
     })
@@ -1250,7 +1319,7 @@ export async function deploymentBillingRoutes(app: FastifyInstance): Promise<voi
     const payerId = deploymentPayerId()
     if (!payerId) return reply.status(404).send(err("not_found", "Not found"))
 
-    const [pool, threshold] = await Promise.all([readPool(payerId), lowBalanceThreshold()])
+    const [pool, threshold] = await Promise.all([readPool(payerId), readLowBalanceThreshold(payerId)])
     const total = pool.balance?.total ?? null
 
     return reply.send({
@@ -1305,28 +1374,13 @@ export async function deploymentBillingRoutes(app: FastifyInstance): Promise<voi
         )
     }
 
-    const { data, error } = await supabase
-      .from("deployment_payer_settings")
-      .update({
-        low_balance_threshold_credits: threshold,
-        updated_by: actorId,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", true)
-      .select("id")
-    if (error) {
-      console.error("[deployment-billing] threshold write failed:", error.message)
-      return reply
-        .status(WRITE_STATUS.allowance_write_failed)
-        .send(err("allowance_write_failed", WRITE_MESSAGE.allowance_write_failed, error.message))
-    }
-    // An UPDATE that matches nothing is a success to PostgREST — here it means
-    // the singleton the boot upsert should have written does not exist, and
-    // answering 200 would report a save that went nowhere.
-    if (Array.isArray(data) && data.length === 0) {
-      return reply
-        .status(WRITE_STATUS.allowance_unconfigured)
-        .send(err("allowance_unconfigured", WRITE_MESSAGE.allowance_unconfigured))
+    // Through the service, like every other write on this surface:
+    // `deployment_payer_settings` is named there and in the boot upsert and
+    // nowhere else, so a second idea of what that singleton means cannot grow
+    // here. The refusals are the shared codes, so the statuses are unchanged.
+    const result = await setLowBalanceThreshold(threshold, actorId)
+    if (!result.ok) {
+      return reply.status(WRITE_STATUS[result.code]).send(err(result.code, WRITE_MESSAGE[result.code], result.message))
     }
 
     return reply.send({ data: { threshold } })
@@ -1356,7 +1410,20 @@ export async function deploymentBillingRoutes(app: FastifyInstance): Promise<voi
     if (from === "invalid" || to === "invalid") {
       return reply
         .status(400)
-        .send(err("invalid_range", "from and to must be ISO 8601 timestamps."))
+        .send(
+          err(
+            "invalid_range",
+            "from and to must be ISO 8601 date-times with a zone, e.g. 2026-09-01T00:00:00Z.",
+          ),
+        )
+    }
+    // An EMPTY page is the wrong answer to a window nobody meant: `to` before
+    // `from` is a caller that swapped its two arguments, and answering "no
+    // usage" would be read as "nothing was spent".
+    if (from !== null && to !== null && to <= from) {
+      return reply
+        .status(400)
+        .send(err("invalid_range", "to must be after from."))
     }
     // The current UTC month by default — the same window `/overview` and
     // `/balance` call "this period", so a burn figure and a summed usage page
@@ -1371,7 +1438,13 @@ export async function deploymentBillingRoutes(app: FastifyInstance): Promise<voi
 
     let onBehalfOf: string | null = null
     if (query.user !== undefined) {
-      const outcome = await resolveRef(query.user, reply)
+      // The write verbs tell the payer to buy credits instead; on a read that
+      // is advice about the wrong thing entirely. The pool's own generations
+      // are attributed to the account that made them and carry no
+      // `on_behalf_of`, so there is nothing to filter by here.
+      const outcome = await resolveRef(query.user, reply, {
+        payerMessage: "The billing account has no allowance and no usage rows of its own.",
+      })
       if (outcome.kind === "refused") return
       if (outcome.kind === "absent") {
         // An EMPTY PAGE, not a 404. "Nobody by that name has generated" is a
@@ -1446,17 +1519,34 @@ export async function deploymentBillingRoutes(app: FastifyInstance): Promise<voi
     const requesterIds = [...new Set(rows.map(requesterOf))]
     const jobIds = [...new Set(rows.map((r) => r.job_id).filter((id): id is string => typeof id === "string"))]
 
-    // TWO batched reads for the page, never one per row.
-    const [profileRes, jobRes, subjects] = await Promise.all([
+    // A page may be 500 rows, so the `in` list may be 500 ids — well past the
+    // 200 this file calls a page everywhere else, and long enough to make the
+    // URL PostgREST receives a liability. Chunked, and the chunks run
+    // together: the decoration is per row, and losing it would blank the job
+    // type on every row of a page that read perfectly well.
+    const IN_CHUNK = 200
+    const chunks = <T,>(xs: readonly T[]): T[][] => {
+      const out: T[][] = []
+      for (let i = 0; i < xs.length; i += IN_CHUNK) out.push(xs.slice(i, i + IN_CHUNK))
+      return out
+    }
+
+    // TWO batched reads for the page, never one per row. `ssoSubjectsFor`
+    // short-circuits on an empty list itself, so it costs nothing here.
+    const [profileRes, jobResults, subjects] = await Promise.all([
       requesterIds.length > 0
         ? supabase.from("profiles").select("id, email, full_name").in("id", requesterIds)
         : Promise.resolve({ data: [], error: null }),
-      jobIds.length > 0
-        ? supabase.from("jobs").select("id, job_type, provider").in("id", jobIds)
-        : Promise.resolve({ data: [], error: null }),
+      Promise.all(
+        chunks(jobIds).map((ids) => supabase.from("jobs").select("id, job_type, provider").in("id", ids)),
+      ),
       ssoSubjectsFor(requesterIds),
     ])
     if (profileRes.error) console.error("[deployment-billing] usage requester read failed:", profileRes.error.message)
+    const jobRes = {
+      data: jobResults.flatMap((r) => (r.error ? [] : (r.data ?? []))),
+      error: jobResults.find((r) => r.error)?.error ?? null,
+    }
     if (jobRes.error) console.error("[deployment-billing] usage job read failed:", jobRes.error.message)
 
     const profiles = new Map(

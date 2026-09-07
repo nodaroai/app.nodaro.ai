@@ -97,15 +97,30 @@ export interface UserRef {
 }
 
 /**
- * The answer to "who is this?". `ambiguous` is a REFUSAL, never a guess: two
- * accounts answering to one address is a state the customer has to resolve,
- * and allocating a paid quota to an arbitrary half of it is the failure that
- * costs money. A lookup that could not be performed answers `ambiguous` too,
- * for the reason `sso-linking.ts` gives at its own `maybeSingle()` error
- * branch — "we cannot tell which account this address names" is never a
- * licence to act on one.
+ * The answer to "who is this?", in four kinds because a caller has to be able
+ * to tell a REFUSAL from a FAULT.
+ *
+ * `ambiguous` is a refusal, never a guess: two accounts answering to one
+ * identity is a state the customer has to resolve, and allocating a paid quota
+ * to an arbitrary half of it is the failure that costs money. It is FINAL —
+ * retrying changes nothing until somebody merges the two accounts.
+ *
+ * `unavailable` is the fault: the lookup could not be PERFORMED. It used to
+ * answer `ambiguous`, which told a back office that two accounts share an
+ * identity — a lie it would act on by editing an identity provider — when the
+ * truth was a dropped connection it should simply retry. Both refuse to act,
+ * which is the shared half; they differ in what the caller does next, and that
+ * is the half worth a separate kind.
+ *
+ * `invalid` is the reference itself: a string this lookup cannot be performed
+ * WITH, whatever the state of the database. Its one case today is a `*` in an
+ * address (PostgREST rewrites it to `%` inside an `ilike` value and no escape
+ * survives that rewrite), and the honest answer to it is the same 400 a
+ * malformed reference gets.
  */
 export type ResolvedUserRef =
   | { kind: "user"; userId: string }
   | { kind: "absent" }
   | { kind: "ambiguous" }
+  | { kind: "unavailable" }
+  | { kind: "invalid" }

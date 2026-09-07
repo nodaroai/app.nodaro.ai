@@ -383,6 +383,57 @@ describe("PUT /users/:ref/allowance — naming the user", () => {
     expect(rec.rpcCalls.some((c) => c.name === "set_deployment_allowance")).toBe(false)
   })
 
+  it("answers 503 read_failed when the LOOKUP itself failed, and writes nothing", async () => {
+    // The refusal used to be `409 user_ambiguous` — "two accounts answer to
+    // that identity", which a back office treats as FINAL and goes off to fix
+    // in its identity provider. A dropped connection is a fault, and the only
+    // useful thing to say about it is "nothing changed, try again": the same
+    // status and the same posture the renew check takes when it cannot read
+    // the ledger.
+    tableResults.set("profiles:single", { data: null, error: { message: "connection reset" } })
+    const res = await app.inject({
+      method: "PUT",
+      url: ALLOWANCE(U1),
+      headers: AS_PAYER,
+      payload: { units: 20_000, mode: "set" },
+    })
+    expect(res.statusCode).toBe(503)
+    expect(res.json().error.code).toBe("read_failed")
+    expect(rec.rpcCalls.some((c) => c.name === "set_deployment_allowance")).toBe(false)
+    expect(rec.writePayloads.some((w) => w.table === "deployment_allowance_pending")).toBe(false)
+  })
+
+  it("answers 400 invalid_user_ref for an address carrying a `*`, and never queries with it", async () => {
+    // PostgREST rewrites `*` to `%` inside an `ilike` value. That is a
+    // reference this lookup cannot be performed WITH — a client error, not a
+    // duplicated identity the customer has to go and resolve.
+    const res = await app.inject({
+      method: "PUT",
+      url: ALLOWANCE(encodeURIComponent("email:da*a@example.com")),
+      headers: AS_PAYER,
+      payload: { units: 20_000, mode: "set" },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("invalid_user_ref")
+    expect(rec.fromCalls).not.toContain("profiles")
+  })
+
+  it("refuses an absurd target rather than letting the integer column overflow inside the RPC", async () => {
+    // `granted_credits` is `integer` and a RUNNING SUM. A target at the type's
+    // ceiling arrives back from the database as a 500 the caller reads as "the
+    // platform is broken", when it is a figure nobody could have meant.
+    userExists(U1)
+    const res = await app.inject({
+      method: "PUT",
+      url: ALLOWANCE(U1),
+      headers: AS_PAYER,
+      payload: { units: 9_000_000_000_000, mode: "set" },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("invalid_units")
+    expect(rec.rpcCalls.some((c) => c.name === "set_deployment_allowance")).toBe(false)
+  })
+
   it("refuses the billing account itself, by uuid AND through a subject that resolves to it", async () => {
     userExists(PAYER)
     for (const ref of [PAYER, "sso:usr_01HZX"]) {
@@ -874,6 +925,25 @@ describe("GET /users/resolve", () => {
     expect(res.json().error.code).toBe("user_ambiguous")
   })
 
+  it("answers 503 rather than reporting `provisioned: false` off a failed ledger read", async () => {
+    // `provisioned: false` plus the default beside it is a FACT about the
+    // person — "no row of their own, and this is what they would get". A
+    // failed read is not that fact, and a back office storing it would believe
+    // a quota was untouched when nobody knows whether it was.
+    rpcHandlers.set("find_user_by_sso_subject", () => ({ data: U1, error: null }))
+    tableResults.set("deployment_user_allowances:single", {
+      data: null,
+      error: { message: "connection reset" },
+    })
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/deployment-billing/users/resolve?sso_subject=usr_dana",
+      headers: AS_PAYER,
+    })
+    expect(res.statusCode).toBe(503)
+    expect(res.json().error.code).toBe("read_failed")
+  })
+
   it("refuses both parameters at once, and neither, with invalid_user_ref", async () => {
     for (const q of ["", "?sso_subject=a&email=b@example.com"]) {
       const res = await app.inject({
@@ -1246,6 +1316,83 @@ describe("GET /usage", () => {
     })
     expect(res.statusCode).toBe(400)
     expect(res.json().error.code).toBe("invalid_range")
+  })
+
+  it("refuses a date-time with no zone — the server's clock is not the caller's", async () => {
+    // `Date.parse` reads a bare `2026-09-01T00:00:00` as the SERVER's local
+    // time. The server runs in UTC and the customer does not, so a caller in a
+    // +03:00 zone asking for their September silently got three hours of
+    // August — every month, in a figure they reconcile against their own
+    // books.
+    for (const q of ["from=2026-09-01T00:00:00", "from=2026-09", "from=2026-09-01", "to=Sep 1 2026"]) {
+      const res = await app.inject({
+        method: "GET",
+        url: `/v1/deployment-billing/usage?${encodeURI(q)}`,
+        headers: AS_PAYER,
+      })
+      expect(res.statusCode, q).toBe(400)
+      expect(res.json().error.code, q).toBe("invalid_range")
+    }
+  })
+
+  it("accepts an offset as readily as a Z, and refuses a window that runs backwards", async () => {
+    tableResults.set("usage_logs:list", { data: [], error: null })
+    const ok = await app.inject({
+      method: "GET",
+      url: "/v1/deployment-billing/usage?from=2026-09-01T00:00:00%2B03:00&to=2026-10-01T00:00:00%2B03:00",
+      headers: AS_PAYER,
+    })
+    expect(ok.statusCode).toBe(200)
+
+    // An empty page would be read as "nothing was spent" by a caller that had
+    // simply swapped its two arguments.
+    const backwards = await app.inject({
+      method: "GET",
+      url: "/v1/deployment-billing/usage?from=2026-10-01T00:00:00Z&to=2026-09-01T00:00:00Z",
+      headers: AS_PAYER,
+    })
+    expect(backwards.statusCode).toBe(400)
+    expect(backwards.json().error.code).toBe("invalid_range")
+  })
+
+  it("reads the job decoration in chunks, never one `in` list of 500 ids", async () => {
+    const rows = Array.from({ length: 450 }, (_, i) => ({
+      id: `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`,
+      created_at: T1,
+      job_id: `00000000-0000-4000-8000-${String(i + 500).padStart(12, "0")}`,
+      action: "flux",
+      provider: "kie",
+      status: "committed",
+      credits_used: 1,
+      on_behalf_of: U1,
+    }))
+    tableResults.set("usage_logs:list", { data: rows, error: null })
+    rec.filterCalls = []
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/deployment-billing/usage?limit=500",
+      headers: AS_PAYER,
+    })
+    expect(res.statusCode).toBe(200)
+    const ins = rec.filterCalls.filter((c) => c.table === "jobs" && c.op === "in")
+    expect(ins).toHaveLength(3)
+    for (const call of ins) expect((call.args[1] as string[]).length).toBeLessThanOrEqual(200)
+    expect(ins.reduce((n, c) => n + (c.args[1] as string[]).length, 0)).toBe(450)
+  })
+
+  it("refuses the billing account as a filter with a sentence about READS", async () => {
+    // Shared with the write verbs, this said "Buy credits instead", which is
+    // advice about the wrong thing entirely on a route that changes nothing.
+    userExists(PAYER)
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/deployment-billing/usage?user=${PAYER}`,
+      headers: AS_PAYER,
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("payer_has_no_allowance")
+    expect(res.json().error.message).not.toMatch(/buy/i)
+    expect(res.json().error.message).toMatch(/usage rows/i)
   })
 
   it("clamps limit to 1..500 and defaults to 200", async () => {

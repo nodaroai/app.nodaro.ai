@@ -53,7 +53,9 @@
 --        stamps `reset_at`, and writes the fourth reconciled kind.
 --   15   the pending grant: the purchase that precedes the first sign-in,
 --        applied once, matched case-insensitively by email, ignored when
---        expired — plus the two SECURITY DEFINER subject lookups.
+--        expired — plus the two SECURITY DEFINER subject lookups, including
+--        the duplicated subject that RAISES rather than answering the NULL
+--        that means "nobody carries this" (15h).
 --   16   the audit line: which CREDENTIAL moved a quota (NULL = the page),
 --        surviving the key's deletion, and the new arities' privileges.
 --   17   the Σ-grants reconciliation over every row this file created.
@@ -849,6 +851,29 @@ SELECT pg_temp.assert_eq('15f sso_subjects_for answers only the ids that have on
      FROM sso_subjects_for(ARRAY['00000000-0000-4000-8000-000000000997',
                                  '00000000-0000-4000-8000-000000000998']::uuid[])),
   '00000000-0000-4000-8000-000000000997=subject-997');
+
+-- TWO ACCOUNTS, ONE SUBJECT. The function used to answer NULL for this — the
+-- same answer it gives for "nobody carries this subject" — and the route acts
+-- on those two in opposite ways: "nobody" stores a PENDING intent against the
+-- identity the IdP will assert, which for a duplicated subject lands on
+-- whichever of the two accounts signs in first. A customer's paid quota on an
+-- arbitrary half of a split identity is exactly what fail-closed was for, so
+-- the duplicate raises and the caller answers 409 instead of storing anything.
+UPDATE auth.users SET raw_app_meta_data = '{"sso":"idp","sso_subject":"subject-dup"}'::jsonb
+ WHERE id IN ('00000000-0000-4000-8000-000000000998', '00000000-0000-4000-8000-000000000999');
+SELECT pg_temp.assert_raises('15h a subject on TWO accounts raises rather than answering NULL',
+  $q$SELECT find_user_by_sso_subject('subject-dup')$q$,
+  'SSO_SUBJECT_AMBIGUOUS:');
+-- The raise is about the DUPLICATE, not about the subject: with one of them
+-- cleared the very same argument resolves.
+UPDATE auth.users SET raw_app_meta_data = '{}'::jsonb
+ WHERE id = '00000000-0000-4000-8000-000000000999';
+SELECT pg_temp.assert_eq('15h2 one account carrying it still resolves to that account',
+  find_user_by_sso_subject('subject-dup')::text, '00000000-0000-4000-8000-000000000998');
+UPDATE auth.users SET raw_app_meta_data = '{}'::jsonb
+ WHERE id = '00000000-0000-4000-8000-000000000998';
+SELECT pg_temp.assert_eq('15h3 and none at all is NULL — absence is not a refusal',
+  COALESCE(find_user_by_sso_subject('subject-dup')::text, '<null>'), '<null>');
 
 -- ---------------------------------------------------------------------------
 -- 16. The audit line: WHICH CREDENTIAL moved a quota, and the new arities.
