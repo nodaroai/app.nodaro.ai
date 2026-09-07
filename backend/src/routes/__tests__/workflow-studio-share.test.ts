@@ -1,10 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
-import {
-  serializeProduction,
-  type Shot,
-  type TrashedStill,
-} from "@nodaro/studio-production"
 
 /**
  * `settings.studio.shared` — the fourth audience lever, and the one that is not
@@ -296,11 +291,12 @@ describe("the public-publish flag is an audience decision, not an edit", () => {
  * receives none of it — the sharpest being the bin, which hands out exactly the
  * work its owner threw away.
  *
- * The shared document below is written by the REAL writer
- * (`serializeProduction`, the one the studio app saves through) and never typed
- * out, because the LEVEL is the thing under test: the in-flight markers live on
- * the shot entry, not on `settings.studio`, and a fixture shaped to the reader
- * would let a top-level-only strip pass while every marker still shipped.
+ * The shared document below is a real saved document — the studio editor's own
+ * writer produced it, and it is pinned here byte for byte (2026-09-07, when
+ * that writer left this repo). It is not shaped by hand to the reader, because
+ * the LEVEL is the thing under test: the in-flight markers live on the shot
+ * entry, not on `settings.studio`, and a fixture shaped to the reader would let
+ * a top-level-only strip pass while every marker still shipped.
  */
 describe("the public share read strips the owner's working state", () => {
   const PENDING = {
@@ -310,7 +306,7 @@ describe("the public share read strips the owner's working state", () => {
     startedAt: 1_756_000_000_000,
   }
 
-  const TRASHED: TrashedStill = {
+  const TRASHED = {
     kind: "still",
     id: "trash-1",
     shotId: "shot-1",
@@ -320,29 +316,52 @@ describe("the public share read strips the owner's working state", () => {
     result: { url: "https://r2/deleted.png" },
   }
 
-  /** A shared production with an animate in flight, a full bin and a draft. */
-  function sharedRow() {
-    const shot: Shot = {
-      id: "shot-1",
-      still: {
-        nodeId: "img-1",
-        url: "https://r2/still.png",
-        provider: "flux-2",
-        prompt: "a lighthouse at dawn",
+  /**
+   * A shared production with an animate in flight, a full bin and a draft — the
+   * writer's own output for one framed shot, pinned.
+   */
+  function sharedGraph() {
+    return {
+      nodes: [
+        {
+          id: "img-1",
+          type: "generate-image",
+          position: { x: 0, y: 0 },
+          width: 220,
+          data: {
+            label: "Shot 1 frame",
+            prompt: "a lighthouse at dawn",
+            provider: "flux-2",
+            generatedImageUrl: "https://r2/still.png",
+            generatedResults: [{ url: "https://r2/still.png" }],
+            activeResultIndex: 0,
+          },
+        },
+      ],
+      edges: [],
+      settings: {
+        studio: {
+          version: 3,
+          shots: [
+            {
+              id: "shot-1",
+              imageNodeId: "img-1",
+              stillProvider: "flux-2",
+              pendingClips: [{ ...PENDING }],
+            },
+          ],
+          selectedShotId: "shot-1",
+          shotOrder: ["img-1"],
+          shared: true,
+          freecutDraftUrl: "https://r2/draft.json",
+          trash: [{ ...TRASHED }],
+        },
       },
-      pendingClips: [PENDING],
     }
-    const graph = serializeProduction(
-      [shot],
-      "shot-1",
-      undefined,
-      true,
-      undefined,
-      undefined,
-      undefined,
-      [TRASHED],
-      "https://r2/draft.json",
-    )
+  }
+
+  function sharedRow() {
+    const graph = sharedGraph()
     return { ...ROW, nodes: graph.nodes, edges: graph.edges, settings: graph.settings }
   }
 
@@ -401,7 +420,18 @@ describe("the public share read strips the owner's working state", () => {
   })
 
   it("leaves a production with nothing to strip exactly as it was", async () => {
-    const graph = serializeProduction([{ id: "shot-1" }], "shot-1", undefined, true)
+    // The same writer's output for an unframed shot — nothing transient in it.
+    const graph = {
+      settings: {
+        studio: {
+          version: 3,
+          shots: [{ id: "shot-1" }],
+          selectedShotId: "shot-1",
+          shotOrder: [],
+          shared: true,
+        },
+      },
+    }
     const clean = { ...ROW, settings: graph.settings }
     publicRead(clean)
     const res = await app.inject({ method: "GET", url: `/v1/public/workflows/${WF}` })

@@ -1,5 +1,24 @@
 # @nodaro/shared
 
+## 2.26.0
+
+### Minor Changes
+
+- c2a939e: Adds the transient-key list the public share read strips: `STUDIO_TRANSIENT_KEYS`, `STUDIO_SHOT_TRANSIENT_KEYS` and the pure `stripStudioTransientSettings`.
+
+  The list has two readers — the public share read of a workflow, and the production writer's own bundle projection — and a second copy of it does not stay equal: it goes one key stale, and the stale side is the one that publishes. So it lives here, once.
+
+## 2.25.0
+
+### Minor Changes
+
+- 04411f2: Remove the studio production wire and op types; the studio codec now lives in a private package.
+
+  `studio-production-wire.ts` and `studio-production-ops.ts` typed the envelope and
+  the write protocol of a route family that is no longer served from this repo.
+  They shipped in 2.24.0 and nothing consumes them — the SDK never referenced
+  either module, and no other client app's types were ever declared here.
+
 ## 2.24.0
 
 ### Minor Changes

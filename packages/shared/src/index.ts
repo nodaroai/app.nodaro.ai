@@ -1052,11 +1052,9 @@ export {
 export { ENTITY_NODE_KINDS } from "./entity-node-fields.js"
 export type { EntityNodeKind } from "./entity-node-fields.js"
 
-// --- wire contract of /v1/studio/productions — types only ---
-// The studio production CODEC (the reader/writer of `settings.studio`, the
-// plan format, the catalogs and the reducers) lives in the FSL-licensed
-// `@nodaro/studio-production`. What crosses into this Apache package is the
-// envelope those routes return and the bodies they take, so the SDK can be
-// typed against it — the document's own sub-objects stay named JSON here and
-// are narrowed, and pinned, by the package that owns them.
-export type * from "./studio-production-wire.js"
+// --- transient studio keys — the public share read strips them ---
+export {
+  STUDIO_TRANSIENT_KEYS,
+  STUDIO_SHOT_TRANSIENT_KEYS,
+  stripStudioTransientSettings,
+} from "./studio-transient.js"

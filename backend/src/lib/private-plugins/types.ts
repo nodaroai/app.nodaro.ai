@@ -671,7 +671,69 @@ export interface PluginStorageToolkit {
 // tk.jobs — backend/src/workers/shared.ts
 // ============================================================================
 
+/** One job row as `readJobsOwnedBy` returns it, `output_data` already redacted. */
+export interface PluginOwnedJobRow {
+  id: string
+  status: string
+  output_data: Record<string, unknown> | null
+  error_message: string | null
+}
+
+/** Structural mirror of `_wait-for-job.ts`'s own (unexported) options. */
+export interface PluginWaitForJobOptions {
+  jobId: string
+  /** Maximum wall-clock to wait. Host default: 120s (image), 300s otherwise. */
+  timeoutMs?: number
+  /** Stop waiting (status `aborted`) when this fires — the request's signal. */
+  signal?: AbortSignal
+}
+
+/**
+ * Structural mirror of `_wait-for-job.ts`'s own (unexported) result.
+ *
+ * `pending_review` is NOT a failure and NOT a timeout — the job produced a
+ * result whose release is waiting on a human.
+ */
+export interface PluginWaitForJobResult {
+  status: "completed" | "failed" | "cancelled" | "pending_review" | "timeout" | "aborted"
+  outputUrl: string | null
+  outputData: Record<string, unknown> | null
+  error: string | null
+  jobType: string | null
+}
+
 export interface PluginJobsToolkit {
+  /**
+   * The status of jobs THIS user owns, by id, redacted.
+   *
+   * Ids the caller does not own — and ids that name nothing at all — are
+   * simply absent from the answer, which is what makes the two
+   * indistinguishable to everything downstream. The owner filter is part of
+   * the QUERY, never a post-filter in JS: a read that fetches rows it must
+   * then throw away is one refactor away from keeping them.
+   *
+   * `output_data` comes back through `redactPrivateJobData`, for the same
+   * reason every other job reader applies it — it can carry server-only
+   * fields, and a landed result is persisted on a document that can later be
+   * shared by link. An empty id list issues no query. A read ERROR throws
+   * rather than reading as "nothing landed", which would invite a caller to
+   * give up on a render that is sitting there finished.
+   *
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it.
+   */
+  readJobsOwnedBy?(userId: string, jobIds: readonly string[]): Promise<PluginOwnedJobRow[]>
+  /**
+   * Mirrors `waitForJob` (`lib/mcp/tools/_wait-for-job.ts`) — block until a
+   * job reaches a terminal state, then hand back its output.
+   *
+   * The same waiter the MCP tools use, deliberately: the jittered backoff,
+   * the abort signal, the one forgiven transient DB error and the held-job
+   * (`pending_review`) early return are decisions the host owns, and a plugin
+   * polling on its own would re-decide all four differently.
+   *
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it.
+   */
+  waitForJob?(opts: PluginWaitForJobOptions): Promise<PluginWaitForJobResult>
   /** Persist the pre-watermark Recast remux base outside owner-readable jobs JSON. */
   storeRecastAudioBase(args: {
     gvpJobId: string
@@ -1197,6 +1259,50 @@ export interface PluginHttpToolkit {
   hostnameMatchesAllowlist(hostname: string, domains: readonly string[]): boolean
   /** Mirrors `YOUTUBE_HOSTS` (`lib/url-validator.ts`) — the narrow YouTube host allowlist. */
   youtubeHosts: readonly string[]
+  /**
+   * How a plugin route reaches another `/v1` route.
+   *
+   * A plugin that needs what a core route already does — the credit
+   * reservation, the model gates, the job row, the 402/413 refusals, the
+   * provenance stamp — CALLS it, so behaviour and pricing cannot drift
+   * between "the plugin did it" and "an agent did it".
+   *
+   * The identity travels the way `lib/mcp/internal-request.ts` sends it: the
+   * internal-orchestrator secret plus `x-internal-user-id`, which the auth
+   * hook reads. The route handling the outer request has a `userId` but no
+   * JWT it could replay, which is the same situation the MCP tools are in.
+   *
+   * `headers` is spread FIRST on purpose — a caller adds what its route needs
+   * (an `idempotency-key`, say) and cannot override the ones this member owns.
+   * That is a HEADER guarantee only: the auth hook reads `body.userId` before
+   * it reads `x-internal-user-id` and the body wins, so a `payload` carrying a
+   * `userId` string decides the identity no matter what `opts.userId` says.
+   * A route forwarding a caller-supplied body must strip or pin that field.
+   *
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it.
+   */
+  internalRequest?(
+    app: FastifyInstance,
+    opts: PluginInternalRequestOptions,
+  ): Promise<PluginInjectedResponse>
+}
+
+export interface PluginInternalRequestOptions {
+  method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE"
+  url: string
+  /** The caller — impersonated through the internal secret, exactly as MCP does. */
+  userId: string
+  payload?: object
+  /** The caller's workspace, when the outer request carried one. */
+  workspaceId?: string
+  /** Extra headers this route needs; cannot override the ones above. */
+  headers?: Record<string, string>
+}
+
+/** What `fastify.inject()` answers with, narrowed to what a caller reads. */
+export interface PluginInjectedResponse {
+  statusCode: number
+  body: string
 }
 
 // ============================================================================
@@ -1423,6 +1529,18 @@ export interface PluginToolkit {
   redis: PluginRedisToolkit
   auth: PluginAuthToolkit
   /**
+   * The by-id workflow door, for a plugin that owns routes over workflows it
+   * did not create. ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump): a plugin
+   * built against it must `?.`-guard the group, because it may load on an
+   * older host that predates it.
+   */
+  workflows?: PluginWorkflowsToolkit
+  /**
+   * The caller's saved-entity library. ADDITIVE-OPTIONAL (no
+   * CONTRACT_VERSION bump) — `?.`-guard it; an older host has no such member.
+   */
+  entities?: PluginEntitiesToolkit
+  /**
    * The service-role Supabase client, for a plugin that owns tables of its
    * own and needs a real query surface (filters, ordering, pagination,
    * writes, RPC) rather than the single insert chain `http.supabase` was
@@ -1533,6 +1651,135 @@ export interface PluginAuthToolkit {
   isPlatformAdmin(userId: string): Promise<boolean>
   /** The raw role, so a plugin can require `super_admin` specifically. */
   platformRole(userId: string): Promise<string | null>
+  /**
+   * Mirrors `requireScope` (`lib/scopes.ts`) — the OAuth-token scope check,
+   * as a ready-to-send refusal. Null means the scope is granted; otherwise
+   * the route sends `reply.status(err.statusCode).send(err.body)` verbatim.
+   *
+   * A first-party session JWT carries no `appAuthorization` and is not
+   * scope-checked at all, which is why this takes the granted list as an
+   * argument rather than reading the request: the CALLER decides whether the
+   * question applies, exactly as the app's own routes do.
+   *
+   * `required` is `string` here rather than the app's `Scope` union: the
+   * union is core's to grow, and a structural mirror that pinned it would
+   * make every new scope a contract change. The wiring site casts.
+   *
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it.
+   */
+  requireScope?(granted: readonly string[], required: string): PluginScopeError | null
+}
+
+/** Mirrors `ScopeError` (`lib/scopes.ts`) — a refusal shaped to be sent. */
+export interface PluginScopeError {
+  statusCode: 403
+  body: { error: { code: string; message: string; missingScope: string } }
+}
+
+// ============================================================================
+// tk.workflows — backend/src/lib/workflow-route-access.ts + workflow-access.ts
+// ============================================================================
+
+/**
+ * Mirrors `LoadedWorkflow` (`lib/workflow-route-access.ts`). `{ ok: false }`
+ * means the reply has ALREADY been sent, so a route reads
+ * `if (!loaded.ok) return`.
+ */
+export type PluginLoadedWorkflow =
+  | { ok: true; row: Record<string, unknown>; access: WorkflowAccessLevel }
+  | { ok: false }
+
+/**
+ * Reaching a workflow BY ID, and deciding what this caller may do with it.
+ *
+ * A plugin that serves routes over workflows must not re-implement any of
+ * this: inside a workspace the person entitled to open a workflow is very
+ * often not the person who created it, and a query filtered by creator
+ * decides that question before asking it. One rule, one place.
+ */
+export interface PluginWorkflowsToolkit {
+  /**
+   * Mirrors `WORKFLOW_ACCESS_COLS` — the columns a row must carry to be
+   * judgeable. A projection one column short is REFUSED (loudly) rather than
+   * read leniently, so a plugin appends its own columns to this string
+   * instead of writing its own list.
+   *
+   * Additive-optional with its group (no CONTRACT_VERSION bump).
+   */
+  accessCols: string
+  /**
+   * Mirrors `loadWorkflowFor` (`lib/workflow-route-access.ts`), signature for
+   * signature. Answers 404 for a caller who may not reach the workflow at all
+   * (a 403 there would confirm to a stranger that the id is real) and 403 once
+   * they can already see it but need more than they have.
+   *
+   * Additive-optional with its group (no CONTRACT_VERSION bump).
+   */
+  loadWorkflowFor(
+    req: FastifyRequest,
+    reply: FastifyReply,
+    userId: string,
+    workflowId: string,
+    min: Exclude<WorkflowAccessLevel, "none">,
+    cols: string,
+    failureMessage: string,
+  ): Promise<PluginLoadedWorkflow>
+  /**
+   * Mirrors `canChangeWorkflowVisibility` (`lib/workflow-access.ts`) — may
+   * this user change WHO CAN REACH the work? Wider than `edit`: a
+   * collaborator saves all day and still may not publish.
+   *
+   * Additive-optional with its group (no CONTRACT_VERSION bump).
+   */
+  canChangeVisibility(userId: string, workflowId: string): Promise<boolean>
+  /**
+   * Mirrors `changesStudioPublishFlag` (`lib/studio-audience.ts`) — would this
+   * settings write move either audience lever the free-form column carries?
+   * A full-body write that OMITS them erases them, and erasing is a change,
+   * so this compares effective state rather than looking for the keys.
+   *
+   * Additive-optional with its group (no CONTRACT_VERSION bump).
+   */
+  changesStudioPublishFlag(next: unknown, stored: unknown): boolean
+}
+
+// ============================================================================
+// tk.entities — backend/src/lib/mcp/tools/_entity-scope.ts
+// ============================================================================
+
+/** The four saved-entity tables, named as the tables they are. */
+export type PluginEntityTable = "characters" | "locations" | "objects" | "creatures"
+
+/**
+ * How much of a library to read, and in what order. REQUIRED, never
+ * optional-with-a-default: `listOwned` hands back a resolved array rather
+ * than a query, so a caller that forgot to bound the read cannot re-bound it,
+ * and an unbounded library read is not something to make writable by omission.
+ */
+export interface PluginEntityRead {
+  orderBy: string
+  ascending: boolean
+  limit: number
+}
+
+export interface PluginEntitiesToolkit {
+  /**
+   * The caller's own characters / locations / objects / creatures.
+   *
+   * Every read goes through the app's ONE ownership predicate
+   * (`entityOwnerFilter`), applied to the QUERY rather than checked after the
+   * fetch, so a row that is not the caller's comes back as zero rows and "not
+   * yours" and "does not exist" stay the same answer. Throws on a read error
+   * rather than reporting an empty library.
+   *
+   * ADDITIVE-OPTIONAL as a group (no CONTRACT_VERSION bump).
+   */
+  listOwned(
+    userId: string,
+    kind: PluginEntityTable,
+    columns: string,
+    read: PluginEntityRead,
+  ): Promise<Array<Record<string, unknown>>>
 }
 
 // ============================================================================
