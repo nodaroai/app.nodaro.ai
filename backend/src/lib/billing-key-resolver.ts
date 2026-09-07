@@ -28,6 +28,12 @@
  *   * a key whose `expires_at` falls INSIDE a cached window must stop working
  *     at the expiry, not at the end of the window — so expiry is re-checked on
  *     every cache hit, not only on the read that populated it.
+ *
+ * The cache is PER PROCESS, so on a multi-replica deployment the invalidation
+ * above only reaches the replica that served the revoke; every other replica
+ * forgets the key within one TTL, which bounds a revocation at 60 seconds
+ * fleet-wide. Identical to the personal-token resolver's property, and the
+ * reason the TTL is short.
  */
 
 import { createHash, randomBytes } from "node:crypto"

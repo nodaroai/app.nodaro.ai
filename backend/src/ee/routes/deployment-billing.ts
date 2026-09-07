@@ -1664,8 +1664,10 @@ export async function deploymentBillingRoutes(app: FastifyInstance): Promise<voi
   // R9 — KEY MATERIAL. The bearer exists in exactly one response body, once:
   // the mint route's. It is never logged, never stored unhashed, and never
   // echoed by a read — `GET` returns the 12-character prefix, and not even the
-  // hash, which against a known 9-character prefix would be a verifier worth
-  // cracking.
+  // hash. Not because the hash could be cracked (it is a sha256 of 256 random
+  // bits) but because it IS the verifier: it is what the database stores in
+  // place of the bearer and what a lookup matches on, so handing it out would
+  // hand out the credential.
 
   /** What the page sees. Neither the bearer nor its hash is in this shape, and
    *  the resolver never selects the hash column in the first place. */

@@ -15,10 +15,12 @@ import Fastify, { type FastifyInstance } from "fastify"
  *     merely that a `token` column is absent, because a payload that stored the
  *     plaintext under any name would pass that weaker check.
  *
- *  2. **`GET` never echoes it.** Not the bearer, and not the hash either: the
- *     hash is offline-crackable against a 9-character known prefix, so a list
- *     route that returned it would be handing out a verifier. The page gets the
- *     12-character prefix, which names a key and reconstructs nothing.
+ *  2. **`GET` never echoes it.** Not the bearer, and not the hash either. The
+ *     hash of 256 random bits is not crackable — it is withheld because it IS
+ *     the verifier: the column a lookup matches on, so a list route that
+ *     returned it would hand out the thing that authenticates a caller. The
+ *     page gets the 12-character prefix, which names a key and authenticates
+ *     nothing.
  *
  *  3. **Five live keys is the cap.** An integration needs one, plus one during
  *     a rotation. A credential class with no cap is a credential class that
