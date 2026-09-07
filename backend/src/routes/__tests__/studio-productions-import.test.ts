@@ -23,6 +23,14 @@ import { serializeProduction, type Cast, type Shot } from "@nodaro/studio-produc
  * 3. **Its receipt must count what actually happened.** `castEnrolled` is the
  *    roles the merge ADDED, which on an append is not the size of the cast: a
  *    name the production already has enrolls nothing.
+ * 4. **It must not decide the AUDIENCE.** `settings.studio.shared` and
+ *    `presentationSettings.shareReadOnly` are the two levers that say who can
+ *    reach the work and who can spend the owner's credits through the link. An
+ *    append adds scenes; both must come out of it exactly as they went in.
+ * 5. **It must not clobber a concurrent writer.** The write carries a
+ *    compare-and-swap on `workflows.version` (D1) — the studio editor autosaves
+ *    the same row, and a read-modify-write with no predicate silently discards
+ *    whatever landed in between.
  *
  * The current document in every test below is built by the real writer
  * (`serializeProduction`) rather than typed out, so a fixture cannot quietly
@@ -95,12 +103,20 @@ function existingShots(): Shot[] {
  * `extraStudio` is the half a serializer-shaped write destroys: keys the studio
  * app writes beside the shot index and `serializeProduction` never emits.
  */
-function row(opts: { cast?: Cast; extraStudio?: Record<string, unknown>; extraSettings?: Record<string, unknown> } = {}) {
+function row(
+  opts: {
+    cast?: Cast
+    /** The public-share flag, written by the real writer (its 4th parameter). */
+    shared?: boolean
+    extraStudio?: Record<string, unknown>
+    extraSettings?: Record<string, unknown>
+  } = {},
+) {
   const graph = serializeProduction(
     existingShots(),
     undefined,
     undefined,
-    undefined,
+    opts.shared,
     undefined,
     undefined,
     undefined,
@@ -153,10 +169,23 @@ function entityChain(rows: Array<Record<string, unknown>> = []) {
 
 let app: FastifyInstance
 let updated: Record<string, unknown> | undefined
+/** Every `.eq(column, value)` the UPDATE was filtered by, in call order. */
+let updateFilters: Array<[string, unknown]> = []
 
-/** The load (`select → eq → maybeSingle`) and the write (`update → eq → select → maybeSingle`). */
-function withRow(current: Record<string, unknown> | null) {
+/**
+ * The load (`select → eq → maybeSingle`) and the write
+ * (`update → eq → eq → select → maybeSingle`).
+ *
+ * `casConflict` is the state a compare-and-swap exists for: the row is there,
+ * the predicate does not match it any more because somebody else wrote first,
+ * and PostgREST answers `{ data: null, error: null }` — 0 rows, no error.
+ */
+function withRow(
+  current: Record<string, unknown> | null,
+  opts: { casConflict?: boolean } = {},
+) {
   updated = undefined
+  updateFilters = []
   vi.mocked(supabase.from).mockImplementation(((table: string) => {
     if (ENTITY_TABLES.includes(table)) return entityChain() as never
     const readMaybeSingle = vi.fn().mockResolvedValue({ data: current, error: null })
@@ -164,13 +193,20 @@ function withRow(current: Record<string, unknown> | null) {
       eq: vi.fn().mockReturnValue({ maybeSingle: readMaybeSingle }),
       // The `select` that follows an `update` — the row as it now stands.
       maybeSingle: vi.fn(async () => ({
-        data: current ? { ...current, ...updated } : null,
+        data: current && !opts.casConflict ? { ...current, ...updated } : null,
         error: null,
       })),
     })
     const update = vi.fn((payload: Record<string, unknown>) => {
       updated = payload
-      return { eq: vi.fn().mockReturnValue({ select }) }
+      const chain: { eq: (c: string, v: unknown) => unknown; select: typeof select } = {
+        eq: vi.fn((column: string, value: unknown) => {
+          updateFilters.push([column, value])
+          return chain
+        }),
+        select,
+      }
+      return chain
     })
     return { select, update } as never
   }) as never)
@@ -193,6 +229,7 @@ function writtenStudio(): Record<string, unknown> {
 beforeEach(async () => {
   vi.clearAllMocks()
   updated = undefined
+  updateFilters = []
   app = Fastify({ logger: false })
   app.addHook("onRequest", async (req) => {
     req.orgs = async () => ({ organizations: [], workspaces: [] })
@@ -292,5 +329,50 @@ describe("POST /v1/studio/productions/:id/import", () => {
     const res = await importPlan(OWNER, { format: "nodaro-studio-production", version: 2 })
     expect(res.statusCode).toBe(400)
     expect(updated).toBeUndefined()
+  })
+
+  it("keeps both audience levers exactly as it found them", async () => {
+    // `shared` opens the no-auth public read; `presentationSettings.shareReadOnly`
+    // keeps a share link view-only, and erasing it lets link holders RUN the
+    // production on the owner's credits. Neither is a scene, and adding scenes
+    // is all this route does — so a write that replaced `settings` (or replaced
+    // `settings.studio` alone) would decide the audience by omission.
+    withRow(
+      row({
+        shared: true,
+        extraSettings: { presentationSettings: { shareReadOnly: true } },
+      }),
+    )
+    const res = await importPlan(OWNER)
+    expect(res.statusCode).toBe(200)
+
+    const settings = updated?.settings as Record<string, unknown>
+    expect(settings.presentationSettings).toEqual({ shareReadOnly: true })
+    expect((settings.studio as Record<string, unknown>).shared).toBe(true)
+    // ...and the append still happened.
+    expect((settings.studio as { shots: unknown[] }).shots).toHaveLength(3)
+  })
+
+  it("writes under a compare-and-swap on the version it read", async () => {
+    // D1: every write CASes on `workflows.version` (the trigger bumps it on any
+    // content change, so it is a real change counter). Without the predicate the
+    // studio editor's autosave and this append race, and the loser's work is
+    // gone with no error anywhere.
+    withRow(row())
+    const res = await importPlan(OWNER)
+
+    expect(res.statusCode).toBe(200)
+    expect(updateFilters).toEqual([
+      ["id", PRODUCTION],
+      ["version", 3],
+    ])
+  })
+
+  it("answers 409 production_busy when the row moved under it", async () => {
+    withRow(row(), { casConflict: true })
+    const res = await importPlan(OWNER)
+
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("production_busy")
   })
 })

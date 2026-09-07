@@ -47,6 +47,7 @@ const OWNER = "00000000-0000-4000-8000-000000000001"
 const STRANGER = "00000000-0000-4000-8000-0000000000ff"
 const PRODUCTION = "00000000-0000-4000-8000-000000000020"
 const PROJECT = "00000000-0000-4000-8000-000000000010"
+const KIRA = "00000000-0000-4000-8000-000000000030"
 
 /** The worked example, trimmed to what a Phase-0 route has to land. */
 const PLAN = {
@@ -243,6 +244,43 @@ describe("POST /v1/studio/productions/validate", () => {
     // nothing — which is a WARNING, not an error: the name still lands, as a
     // described role with the plan's own words.
     expect(body.summary.bound).toBe(0)
+  })
+
+  it("binds a cast name to a row the caller actually owns", async () => {
+    // The other half of the sentence above: with `@Kira` in the library, the
+    // same plan reports the name BOUND — which is the whole difference between
+    // a production with a character in it and one with a character's name in
+    // it. The row is shaped as `candidates.ts` selects it (`id, name,
+    // source_image_url, canonical_description`), so a column renamed there
+    // fails here rather than silently binding nothing.
+    withTables({
+      library: {
+        characters: [
+          {
+            id: KIRA,
+            name: "Kira",
+            source_image_url: "https://cdn.nodaro.ai/images/kira.png",
+            canonical_description: "a lighthouse keeper, late 30s",
+          },
+        ],
+      },
+    })
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/studio/productions/validate",
+      headers: { "x-user-id": OWNER },
+      payload: { plan: PLAN },
+    })
+    expect(res.statusCode).toBe(200)
+    const body = res.json().data as {
+      summary: { cast: number; bound: number }
+      warnings: Array<{ hint: string }>
+    }
+    expect(body.summary.cast).toBe(1)
+    expect(body.summary.bound).toBe(1)
+    // And the 1 is provably that row: an unbound name warns, and nothing here
+    // did.
+    expect(body.warnings.map((w) => w.hint)).not.toContain("unresolved-cast")
   })
 
   it("persists nothing", async () => {

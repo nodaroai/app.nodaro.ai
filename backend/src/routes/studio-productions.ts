@@ -17,8 +17,9 @@ import type {
 
 import { sendInternalError } from "../lib/http-errors.js"
 import { requireScope, type Scope } from "../lib/scopes.js"
+import { changesStudioPublishFlag } from "../lib/studio-audience.js"
 import { supabase } from "../lib/supabase.js"
-import type { AccessLevel } from "../lib/workflow-access.js"
+import { canChangeWorkflowVisibility, type AccessLevel } from "../lib/workflow-access.js"
 import {
   loadWorkflowFor,
   WORKFLOW_ACCESS_COLS,
@@ -501,23 +502,75 @@ export async function studioProductionRoutes(app: FastifyInstance): Promise<void
        */
       const currentSettings = (loaded.row.settings as Record<string, unknown> | null) ?? {}
       const currentStudio = (currentSettings.studio as Record<string, unknown> | null) ?? {}
+      const settings = {
+        ...currentSettings,
+        ...appended.settings,
+        studio: { ...currentStudio, ...appended.settings.studio },
+      }
+
+      /**
+       * The audience guard, on the SAME helper the PATCH route runs
+       * (`routes/workflows.ts`) — one rule, one place.
+       *
+       * Two levers inside this JSON say who can reach the work:
+       * `studio.shared` opens the no-auth public read, and
+       * `presentationSettings.shareReadOnly` decides whether a link holder may
+       * RUN it on the owner's credits. This route admits an EDITOR, and an
+       * editor may change the film all day without deciding its audience.
+       *
+       * The assembled write above is audience-neutral by construction — the
+       * append carries both bits over from the stored row — so today this can
+       * only fire if that stops being true. Which is exactly what it is for:
+       * the day `serializeAppend` learns to write a flag, or a plan learns to
+       * carry one, the change is asked of the audience authority instead of
+       * arriving as a side effect of adding scenes.
+       */
+      if (changesStudioPublishFlag(settings, currentSettings)) {
+        if (!(await canChangeWorkflowVisibility(userId, params.id))) {
+          return reply.status(403).send({
+            error: {
+              code: "forbidden",
+              message: "Only the owner or a workspace admin can change who this is shared with",
+            },
+          })
+        }
+      }
+
       const { data, error } = await supabase
         // tenant-scope-ignore: authorized by loadWorkflowFor(..., "edit") above.
         .from("workflows")
-        .update({
-          nodes: appended.nodes,
-          edges: appended.edges,
-          settings: {
-            ...currentSettings,
-            ...appended.settings,
-            studio: { ...currentStudio, ...appended.settings.studio },
-          },
-        })
+        .update({ nodes: appended.nodes, edges: appended.edges, settings })
         .eq("id", params.id)
+        /**
+         * COMPARE-AND-SWAP (D1). An append is a read-modify-write of one row's
+         * whole document, and the studio editor autosaves that same row while
+         * an agent is appending to it. Without the predicate the second writer
+         * silently discards the first's shots — no error, nothing in a log.
+         *
+         * `version` is a real change counter (the `bump_workflow_version`
+         * trigger increments it on any nodes/edges/settings/name write), so the
+         * read version is the token to swap on. Fail-closed by construction:
+         * the predicate is unconditional, so a row whose version could not be
+         * read is not written unguarded — it is not written at all.
+         */
+        .eq("version", loaded.row.version as number)
         .select(PRODUCTION_COLS)
         .maybeSingle()
       if (error) return sendInternalError(reply, req, error, "Failed to import plan")
-      if (!data) return notFound(reply)
+      /**
+       * 0 rows: the caller already proved they may edit this row, so the row
+       * being unreachable NOW means it moved (or went) since the read. 409 and
+       * let them re-read — the re-read-and-reapply retry lands with the
+       * operations route (D4), which is where a rebase has somewhere to stand.
+       */
+      if (!data) {
+        return reply.status(409).send({
+          error: {
+            code: "production_busy",
+            message: "This production changed while the plan was being applied. Read it again and retry.",
+          },
+        })
+      }
 
       const view = toProductionView(
         viewableFor(data as Record<string, unknown>, loaded.access),

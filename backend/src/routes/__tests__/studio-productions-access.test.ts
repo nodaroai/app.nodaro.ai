@@ -155,7 +155,14 @@ async function importAs(userId: string) {
     })
     const update = vi.fn((payload: Record<string, unknown>) => {
       updated = payload
-      return { eq: vi.fn().mockReturnValue({ select }) }
+      // `.eq("id").eq("version")` — the write CASes on the version it read, so
+      // the filter chain is two deep before `.select()` (see
+      // `studio-productions-import.test.ts`, which pins the predicate itself).
+      const chain: { eq: () => unknown; select: typeof select } = {
+        eq: vi.fn(() => chain),
+        select,
+      }
+      return chain
     })
     return { select, update } as never
   }) as never)
