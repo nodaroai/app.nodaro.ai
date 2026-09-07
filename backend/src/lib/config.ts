@@ -327,16 +327,6 @@ export const envSchema = z.object({
     .string()
     .optional()
     .transform((v) => v === "true" || v === "1"),
-
-  /** The studio production API (`/v1/studio/productions/*`) and its MCP tool
-   *  family. Default OFF so the routes ship dark and are flipped on
-   *  deliberately per environment; off = 404 on every route and the tools are
-   *  absent from `tools/list`, which is the feature-detect a client uses.
-   *  Strict parsing like MCP_ENABLED. */
-  STUDIO_PRODUCTIONS_API: z
-    .string()
-    .optional()
-    .transform((v) => v === "true" || v === "1"),
   /** Kill switch for the in-app Workflow Copilot (cloud). Unset/false = the
    *  routes answer 503 feature_disabled. Strict parsing like MCP_ENABLED; the
    *  admin `copilot_enabled` app setting can additionally pause it at runtime. */

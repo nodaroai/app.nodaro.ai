@@ -1,9 +1,6 @@
 import { describe, it, expect } from "vitest"
 
-import { serializeProduction } from "../shot-graph"
-import { stripTransientSettings } from "../bundle/strip-settings"
-import type { Shot } from "../shot"
-import type { TrashedStill } from "../trash"
+import { stripTransientSettings } from "../strip-transient-settings.js"
 
 /**
  * The public projection of `settings.studio` (D12).
@@ -13,11 +10,11 @@ import type { TrashedStill } from "../trash"
  * shot, still and clip they deleted, prompts and urls intact), the jobs in
  * flight, and an unsaved editor draft.
  *
- * EVERY fixture below is built by the real writer (`serializeProduction`) and
- * never typed out, because the level is the whole finding this test exists for:
- * the in-flight markers are written PER SHOT, inside `settings.studio.shots[]`,
- * and a strip that only walks the top level hands a viewer all of them while a
- * hand-placed fixture says it does not.
+ * The fixture below is a real saved document, pinned here byte for byte, and
+ * the LEVEL is the whole finding this test exists for: the in-flight markers
+ * are written PER SHOT, inside `settings.studio.shots[]`, and a strip that only
+ * walks the top level hands a viewer all of them while a fixture shaped to the
+ * top level says it does not.
  */
 
 const PENDING = {
@@ -27,21 +24,7 @@ const PENDING = {
   startedAt: 1_756_000_000_000,
 }
 
-/** A shot with an animate in flight — the marker rides on the SHOT. */
-function shotWithPending(): Shot {
-  return {
-    id: "s1",
-    still: {
-      nodeId: "img-1",
-      url: "https://cdn/still.png",
-      provider: "flux-2",
-      prompt: "a lighthouse at dawn",
-    },
-    pendingClips: [PENDING],
-  }
-}
-
-const TRASHED: TrashedStill = {
+const TRASHED = {
   kind: "still",
   id: "trash-1",
   shotId: "s1",
@@ -51,20 +34,26 @@ const TRASHED: TrashedStill = {
   result: { url: "https://cdn/deleted.png" },
 }
 
-/** The document as the codec writes it, carrying every marker it can write. */
+/** A saved document carrying every marker its writer can write. */
 function written(): Record<string, unknown> {
-  const graph = serializeProduction(
-    [shotWithPending()],
-    "s1",
-    undefined,
-    true,
-    undefined,
-    undefined,
-    undefined,
-    [TRASHED],
-    "https://cdn/draft.json",
-  )
-  return graph.settings as unknown as Record<string, unknown>
+  return {
+    studio: {
+      version: 3,
+      shots: [
+        {
+          id: "s1",
+          imageNodeId: "img-1",
+          stillProvider: "flux-2",
+          pendingClips: [{ ...PENDING }],
+        },
+      ],
+      selectedShotId: "s1",
+      shotOrder: ["img-1"],
+      shared: true,
+      freecutDraftUrl: "https://cdn/draft.json",
+      trash: [{ ...TRASHED }],
+    },
+  }
 }
 
 /** `settings.studio` of a stripped document. */
@@ -75,7 +64,7 @@ function studioOf(settings: Record<string, unknown> | null | undefined): Record<
 describe("stripTransientSettings", () => {
   it("drops the bin and the draft the writer put at the top level", () => {
     const settings = written()
-    // The oracle: the writer really does put these two here.
+    // The oracle: the document really does carry these two here.
     expect(studioOf(settings).trash).toHaveLength(1)
     expect(studioOf(settings).freecutDraftUrl).toBe("https://cdn/draft.json")
 
@@ -116,16 +105,17 @@ describe("stripTransientSettings", () => {
 
   it("hands back the very same object when there is nothing to strip", () => {
     // An ordinary share read of an ordinary production allocates nothing.
-    const graph = serializeProduction([{ id: "s1" }], "s1")
-    const settings = graph.settings as unknown as Record<string, unknown>
+    const settings: Record<string, unknown> = {
+      studio: { version: 3, shots: [{ id: "s1" }], selectedShotId: "s1", shotOrder: [] },
+    }
     expect(stripTransientSettings(settings)).toBe(settings)
   })
 
   it("drops a shot's pendingStills — the still marker D5 lands there", () => {
     // `pendingStills` is additive: the generation routes write it onto the same
-    // shot entry `pendingClips` rides on (`view.ts` already reads it there), so
-    // the strip has to know the key before its writer exists — otherwise the
-    // first framing batch in flight ships to every share viewer.
+    // shot entry `pendingClips` rides on, so the strip has to know the key
+    // before its writer exists — otherwise the first framing batch in flight
+    // ships to every share viewer.
     const settings = written()
     const studio = studioOf(settings)
     const shots = (studio.shots as Array<Record<string, unknown>>).map((s) => ({
@@ -139,9 +129,9 @@ describe("stripTransientSettings", () => {
   })
 
   it("drops a legacy single `pendingClip` too", () => {
-    // Pre-concurrent-markers saves wrote one marker under the singular key;
-    // `readPendingClips` still migrates it, so it is still in-flight state a
-    // viewer must not receive.
+    // Pre-concurrent-markers saves wrote one marker under the singular key; the
+    // reader still migrates it, so it is still in-flight state a viewer must
+    // not receive.
     const settings = written()
     const studio = studioOf(settings)
     const shots = [{ id: "s2", pendingClip: PENDING }]
@@ -158,9 +148,9 @@ describe("stripTransientSettings", () => {
     expect(stripTransientSettings(undefined)).toBeUndefined()
   })
 
-  it("survives a document whose shots are not what the codec writes", () => {
+  it("survives a document whose shots are not what the editor writes", () => {
     // The strip runs on whatever is in the column, including a row written by
-    // something that is not this codec. It must project, never throw.
+    // something that is not the studio editor. It must project, never throw.
     const odd = { studio: { version: 3, shots: ["nonsense", null, 7] } }
     expect(() => stripTransientSettings(odd)).not.toThrow()
     expect(studioOf(stripTransientSettings(odd)).shots).toEqual(["nonsense", null, 7])

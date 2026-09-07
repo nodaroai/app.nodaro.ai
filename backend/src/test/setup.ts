@@ -11,12 +11,6 @@ export {}
 process.env.SUPABASE_URL = "https://test.supabase.co"
 process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key"
 process.env.EDITION = "cloud"
-// The studio production API ships behind a default-OFF flag (D11). Turn it ON
-// here rather than in each suite: with it off, the routes 404 and the MCP
-// family never registers, so the tool-surface snapshot, the docs set-equality
-// check and the wire budget would all pass by not seeing it — the tools would
-// ship with zero coverage from the three suites that exist to cover them.
-process.env.STUDIO_PRODUCTIONS_API = "true"
 process.env.NODE_ENV = "test"
 process.env.INTERNAL_ORCHESTRATOR_SECRET = "0".repeat(64)
 // The self-host config seams default to "vendor host / no ACL / auto region",

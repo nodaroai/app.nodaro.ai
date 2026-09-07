@@ -19,7 +19,6 @@ import { registerCreatureTools } from "./tools/creatures.js"
 import { registerUploadTools } from "./tools/upload.js"
 import { registerFilmDirectorTool } from "./tools/film-director.js"
 import { registerRecastTools } from "./tools/recast.js"
-import { registerStudioProductionTools } from "./tools/studio-production.js"
 import { registerSkillLoaders } from "./tools/skill-loaders.js"
 import { registerPipelineTools } from "./tools/pipelines.js"
 import { registerReduce } from "./tools/reduce.js"
@@ -36,7 +35,7 @@ import { registerTaskHandlers } from "./tasks.js"
 import { startProgressEmitter as _startProgressEmitter } from "./progress-emitter.js"
 void _startProgressEmitter
 import { registerWidgetResources } from "./widgets/registrar.js"
-import { config, hasCredits } from "../config.js"
+import { hasCredits } from "../config.js"
 import type { Scope } from "../scopes.js"
 import { supabase } from "../supabase.js"
 import { resolveSessionWorkspace } from "./workspace-session.js"
@@ -200,12 +199,6 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
     // Recast authored-script lane (spec 2026-08-06 §5): Cloud-only — the
     // routes these verbs call live in the cloud plugin and 404 off-cloud.
     registerRecastTools({ server, session, fastify: opts.fastify })
-  }
-  // The studio production family (D11): behind its own flag, and NOT behind
-  // `hasCredits()` — the codec is core, nothing in Phase 0 spends, and a
-  // self-hosted studio reads and writes the same document a cloud one does.
-  if (config.STUDIO_PRODUCTIONS_API) {
-    registerStudioProductionTools({ server, session, fastify: opts.fastify })
   }
   registerReduce({ server, session, fastify: opts.fastify })
   registerPromptHelper({ server, session, fastify: opts.fastify })

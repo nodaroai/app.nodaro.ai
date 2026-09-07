@@ -3,7 +3,7 @@ import { hasCredits, hasOrganizations } from "../lib/config.js"
 import { findCloudOnlyNodeTypes, cloudOnlyRejectionMessage } from "../lib/cloud-only-nodes.js"
 import { findDeniedNodeTypes, deniedNodeRejectionMessage } from "../lib/surface-deny.js"
 import { z } from "zod"
-import { stripTransientSettings } from "@nodaro/studio-production"
+import { stripTransientSettings } from "../lib/strip-transient-settings.js"
 import { stripExportContent, stripTransientRuntimeData, validateSubWorkflowRoutes, WORKFLOW_VISIBILITIES, type WorkflowExport } from "@nodaro/shared"
 import { supabase } from "../lib/supabase.js"
 import { ensureDefaultProject, PERSONAL_SPACE_DISABLED_ERROR } from "../lib/default-project.js"
@@ -1252,8 +1252,8 @@ export async function workflowRoutes(app: FastifyInstance) {
     // (D12) without the owner's working state: `settings.studio` carries their
     // recycle bin, their in-flight jobs and their unsaved editor draft, none of
     // which a share viewer has any business receiving. The strip list lives in
-    // `@nodaro/studio-production` beside the bundle exporter's own use of it,
-    // so the two paths cannot disagree about what "transient" means.
+    // `lib/strip-transient-settings.ts` — a plain JSON walker, so this route
+    // never has to know what writes the rest of the free-form column.
     return {
       data: {
         id: full.id,

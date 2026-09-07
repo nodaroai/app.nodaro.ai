@@ -12,13 +12,16 @@
  * - `freecutDraftUrl` — an unsaved editor draft.
  *
  * They do NOT all live at the same level, and that is the whole reason this
- * file exists rather than one array: the codec writes `trash` and
+ * file exists rather than one array: the editor writes `trash` and
  * `freecutDraftUrl` on `settings.studio` itself, and writes the in-flight
- * markers PER SHOT, on the `settings.studio.shots[]` entry
- * (`shot-graph-write.ts` — `pendingClips`; `pendingStills` lands there with the
- * generation routes, D5, and `view.ts` already reads it there). A strip that
- * walked only the top level would pass its own test and still hand a share
- * viewer every marker in the production.
+ * markers PER SHOT, on the `settings.studio.shots[]` entry. A strip that walked
+ * only the top level would pass its own test and still hand a share viewer
+ * every marker in the production.
+ *
+ * This is a plain JSON walker on purpose. `settings` is a free-form column that
+ * a client owns end to end; the projection reads the keys it must drop and
+ * nothing else, so it never needs — and must never grow — a dependency on
+ * whatever writes the rest of the document.
  */
 
 /**
@@ -26,8 +29,8 @@
  *
  * The pending lists are on this list as well as the per-shot one on purpose:
  * nothing writes them here today, and a stray one from an older client — or
- * from something that is not this codec at all — still must not ride out to a
- * viewer.
+ * from a client that is not the studio editor at all — still must not ride out
+ * to a viewer.
  */
 export const TRANSIENT_STUDIO_KEYS = [
   "trash",
@@ -39,9 +42,9 @@ export const TRANSIENT_STUDIO_KEYS = [
 /**
  * ...and a SHOT entry's, which is where the markers actually are.
  *
- * `pendingClip` (singular) is the pre-concurrent-markers shape; `readPendingClips`
- * still migrates it on parse, so a row can still be carrying one and it is still
- * in-flight state.
+ * `pendingClip` (singular) is the pre-concurrent-markers shape; the editor's
+ * reader still migrates it on parse, so a row can still be carrying one and it
+ * is still in-flight state.
  */
 export const TRANSIENT_SHOT_KEYS = ["pendingClips", "pendingClip", "pendingStills"] as const
 
