@@ -1,0 +1,531 @@
+{
+  "nodes": [
+    {
+      "id": "generate-image-shot-1",
+      "type": "generate-image",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "width": 220,
+      "data": {
+        "label": "Shot 1 frame",
+        "prompt": "@kira on the rooftop, tighter",
+        "provider": "flux-2-max",
+        "generatedImageUrl": "https://r2.example/still-1x.png",
+        "generatedResults": [
+          {
+            "url": "https://r2.example/still-1e.png",
+            "jobId": "job-still-1e",
+            "prompt": "@kira on the rooftop, tighter",
+            "provider": "flux-2-max",
+            "aspectRatio": "16:9",
+            "resolution": "2k",
+            "promptFormat": 2,
+            "look": {
+              "timeOfDay": "blue-hour"
+            }
+          },
+          {
+            "url": "https://r2.example/still-1a.png",
+            "jobId": "job-still-1a",
+            "prompt": "@kira on the rooftop at first light",
+            "negativePrompt": "motion blur",
+            "provider": "flux-2-max",
+            "name": "Wide establishing",
+            "referenceImageUrls": [
+              "https://r2.example/ref/rooftop.png"
+            ],
+            "references": [
+              {
+                "id": "char-kira",
+                "defaultName": "Kira",
+                "source": "wired-character",
+                "url": "https://r2.example/cast/kira-front.png",
+                "characterSlug": "kira",
+                "description": "A courier in a rain-black coat."
+              }
+            ],
+            "aspectRatio": "16:9",
+            "resolution": "2k",
+            "count": 2,
+            "promptFormat": 2,
+            "look": {
+              "timeOfDay": "blue-hour",
+              "style": "neo-noir"
+            },
+            "filmLook": {
+              "style": "neo-noir"
+            },
+            "sceneLook": {
+              "timeOfDay": "blue-hour"
+            },
+            "subject": {
+              "heldProp": [
+                "lantern"
+              ]
+            }
+          },
+          {
+            "url": "https://r2.example/still-1b.png",
+            "jobId": "job-still-1b",
+            "prompt": "@kira on the rooftop at first light",
+            "provider": "flux-2-max",
+            "filerobotDesignStateUrl": "https://r2.example/design/still-1b.json",
+            "promptFormat": 2,
+            "look": {
+              "timeOfDay": "blue-hour"
+            }
+          },
+          {
+            "url": "https://r2.example/still-1x.png",
+            "jobId": "job-still-1x",
+            "prompt": "@kira on the rooftop at first light",
+            "provider": "flux-2-max"
+          }
+        ],
+        "activeResultIndex": 3
+      }
+    },
+    {
+      "id": "generate-video-shot-1",
+      "type": "generate-video",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "width": 220,
+      "data": {
+        "label": "Shot 1 video",
+        "provider": "grok-i2v",
+        "prompt": "she turns into the wind",
+        "imageUrl": "https://r2.example/still-1x.png",
+        "generatedVideoUrl": "https://r2.example/clip-1b.mp4",
+        "generatedResults": [
+          {
+            "url": "https://r2.example/clip-1b.mp4",
+            "jobId": "job-clip-1b",
+            "prompt": "she turns into the wind, slower",
+            "provider": "grok-i2v",
+            "duration": 5,
+            "startFrameUrl": "https://r2.example/still-1b.png",
+            "freecutProjectUrl": "https://r2.example/freecut/clip-1b.json"
+          }
+        ],
+        "activeResultIndex": 0,
+        "duration": 5,
+        "direction": {
+          "cameraMotion": "dolly-in"
+        }
+      }
+    },
+    {
+      "id": "generate-video-shot-2",
+      "type": "generate-video",
+      "position": {
+        "x": 340,
+        "y": 460
+      },
+      "width": 220,
+      "data": {
+        "label": "Shot 2 video",
+        "provider": "seedance-2",
+        "prompt": "Kira crosses @sunspire-valley, longer",
+        "generatedVideoUrl": "https://r2.example/clip-2b.mp4",
+        "generatedResults": [
+          {
+            "url": "https://r2.example/clip-2a.mp4",
+            "jobId": "job-clip-2a",
+            "prompt": "Kira crosses @sunspire-valley as the light goes",
+            "provider": "seedance-2",
+            "duration": 6,
+            "referenceImageUrls": [
+              "https://r2.example/ref/valley.png"
+            ],
+            "referenceVideoUrls": [
+              "https://r2.example/ref/crossing.mp4"
+            ],
+            "referenceAudioUrls": [
+              "https://r2.example/ref/wind.mp3"
+            ],
+            "references": [
+              {
+                "id": "loc-sunspire",
+                "defaultName": "Sunspire Valley",
+                "source": "wired-location",
+                "url": "https://r2.example/cast/sunspire.png"
+              }
+            ]
+          },
+          {
+            "url": "https://r2.example/clip-2b.mp4",
+            "jobId": "job-clip-2b",
+            "prompt": "Kira crosses @sunspire-valley, longer",
+            "provider": "seedance-2",
+            "duration": 8,
+            "referenceImageUrls": [
+              "https://r2.example/ref/valley.png"
+            ]
+          }
+        ],
+        "activeResultIndex": 1,
+        "duration": 8
+      }
+    },
+    {
+      "id": "generate-image-minted-2",
+      "type": "generate-image",
+      "position": {
+        "x": 0,
+        "y": 920
+      },
+      "width": 220,
+      "data": {
+        "label": "Shot 3 frame",
+        "prompt": "the road out of the valley",
+        "provider": "flux-2-max",
+        "generatedImageUrl": "https://r2.example/still-pasted.png",
+        "generatedResults": [
+          {
+            "url": "https://r2.example/still-pasted.png"
+          }
+        ],
+        "activeResultIndex": 0
+      }
+    },
+    {
+      "id": "combine-videos-export",
+      "type": "combine-videos",
+      "position": {
+        "x": 1120,
+        "y": 920
+      },
+      "data": {
+        "label": "Combine shots"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-generate-image-shot-1-generate-video-shot-1",
+      "source": "generate-image-shot-1",
+      "target": "generate-video-shot-1",
+      "sourceHandle": "image",
+      "targetHandle": "startFrame"
+    },
+    {
+      "id": "e-generate-video-shot-1-combine-videos-export",
+      "source": "generate-video-shot-1",
+      "target": "combine-videos-export",
+      "sourceHandle": "video",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e-generate-video-shot-2-combine-videos-export",
+      "source": "generate-video-shot-2",
+      "target": "combine-videos-export",
+      "sourceHandle": "video",
+      "targetHandle": "in"
+    }
+  ],
+  "settings": {
+    "studio": {
+      "version": 3,
+      "shots": [
+        {
+          "id": "shot-1",
+          "name": "Rooftop dawn",
+          "folderId": "folder-act-1",
+          "imageNodeId": "generate-image-shot-1",
+          "stillProvider": "flux-2-max",
+          "videoNodeId": "generate-video-shot-1",
+          "clipProvider": "grok-i2v",
+          "clipDuration": 5,
+          "startFrameUrl": "https://r2.example/still-1b.png",
+          "endFrameUrl": "https://r2.example/still-1a.png",
+          "directingReferenceUrls": [
+            "https://r2.example/ref/rooftop.png"
+          ],
+          "look": {
+            "timeOfDay": "blue-hour",
+            "lightingStyle": [
+              "rim-light"
+            ]
+          },
+          "beats": [
+            {
+              "id": "beat-1",
+              "seconds": 3,
+              "text": "Kira steps to the parapet and looks east.",
+              "label": "Opening",
+              "picks": {
+                "cameraMotionId": "dolly-in"
+              },
+              "transition": {
+                "id": "cross-dissolve"
+              },
+              "characterFx": {
+                "id": "wind-swept",
+                "intensity": "subtle"
+              },
+              "references": [
+                {
+                  "id": "char-kira",
+                  "defaultName": "Kira",
+                  "source": "wired-character",
+                  "url": "https://r2.example/cast/kira-front.png",
+                  "characterSlug": "kira",
+                  "description": "A courier in a rain-black coat."
+                }
+              ],
+              "directions": [
+                {
+                  "kind": "speech",
+                  "text": "[quietly] We move at first light.",
+                  "speaker": "Kira",
+                  "voice": "voice-kira"
+                }
+              ]
+            },
+            {
+              "id": "beat-2",
+              "seconds": 2,
+              "text": "The storm front rolls over the ridge behind her.",
+              "directions": [
+                {
+                  "kind": "sfx",
+                  "text": "distant thunder"
+                }
+              ]
+            }
+          ],
+          "scenePrompt": "A courier crosses the valley before the storm."
+        },
+        {
+          "id": "shot-2",
+          "name": "Valley crossing",
+          "videoNodeId": "generate-video-shot-2",
+          "clipProvider": "seedance-2",
+          "clipDuration": 8,
+          "voice": {
+            "url": "https://r2.example/voice/shot-2.mp3",
+            "text": "Nothing followed her out of the valley.",
+            "voiceId": "voice-narrator",
+            "voiceType": "premade",
+            "ttsProvider": "elevenlabs-multilingual",
+            "model": "eleven_multilingual_v2",
+            "delivery": {
+              "stability": 0.7
+            }
+          },
+          "startFrameUrl": "https://r2.example/still-1a.png",
+          "directingReferenceUrls": [
+            "https://r2.example/ref/valley.png"
+          ],
+          "directingReferenceVideoUrls": [
+            "https://r2.example/ref/crossing.mp4"
+          ],
+          "directingReferenceAudioUrls": [
+            "https://r2.example/ref/wind.mp3"
+          ],
+          "pendingClips": [
+            {
+              "jobId": "job-clip-pending-2",
+              "provider": "seedance-2",
+              "prompt": "Kira crosses @sunspire-valley, longer",
+              "startedAt": 1757116860000,
+              "duration": 8
+            }
+          ],
+          "look": {
+            "timeOfDay": "dusk"
+          },
+          "castLook": {
+            "kira": {
+              "url": "https://r2.example/cast/kira-front.png",
+              "variantSlug": "angles:front",
+              "label": "front"
+            }
+          },
+          "beats": [
+            {
+              "id": "beat-2a",
+              "seconds": 3,
+              "text": "She steps off the shoulder of the road."
+            },
+            {
+              "id": "beat-2b",
+              "seconds": 3,
+              "text": "The valley opens.",
+              "directions": [
+                {
+                  "kind": "ambience",
+                  "text": "wind in dry grass"
+                }
+              ]
+            }
+          ],
+          "scenePrompt": "The crossing, in one move.",
+          "endTransition": {
+            "id": "cross-dissolve"
+          }
+        },
+        {
+          "id": "minted-2",
+          "name": "Pasted crossing",
+          "imageNodeId": "generate-image-minted-2",
+          "stillProvider": "flux-2-max"
+        },
+        {
+          "id": "shot-3",
+          "name": "Ridge line",
+          "plan": {
+            "frame": {
+              "prompt": "the ridge line at dusk, wolf on the crest",
+              "provider": "flux-2-max"
+            },
+            "voice": {
+              "text": "Nothing followed her out of the valley.",
+              "casting": "the narrator, dry and level",
+              "voiceId": "voice-narrator",
+              "voiceType": "premade",
+              "ttsProvider": "elevenlabs-multilingual",
+              "model": "eleven_multilingual_v2",
+              "delivery": {
+                "stability": 0.7
+              }
+            }
+          },
+          "recipe": {
+            "framing": {
+              "prompt": "the ridge line at dusk, no figures",
+              "provider": "flux-2-max",
+              "negativePrompt": "people",
+              "aspectRatio": "16:9",
+              "resolution": "2k",
+              "promptFormat": 2,
+              "look": {
+                "timeOfDay": "dusk"
+              },
+              "subject": {
+                "animal": "wolf"
+              }
+            },
+            "directing": {
+              "prompt": "the wolf crests the ridge and stops",
+              "provider": "grok-i2v",
+              "duration": 5,
+              "negativePrompt": "camera shake",
+              "directions": [
+                {
+                  "kind": "ambience",
+                  "text": "wind in dry grass"
+                }
+              ],
+              "promptFormat": 2,
+              "look": {
+                "timeOfDay": "dusk"
+              }
+            },
+            "voice": {
+              "text": "Nothing followed her out of the valley.",
+              "voiceId": "voice-narrator",
+              "voiceType": "premade",
+              "model": "eleven_multilingual_v2",
+              "ttsProvider": "elevenlabs-multilingual"
+            }
+          }
+        },
+        {
+          "id": "shot-4",
+          "name": "Coda, reprise"
+        }
+      ],
+      "selectedShotId": "minted-2",
+      "shotOrder": [
+        "generate-image-shot-1",
+        "generate-video-shot-1",
+        "generate-video-shot-2",
+        "generate-image-minted-2"
+      ],
+      "folders": [
+        {
+          "id": "folder-act-1",
+          "name": "Act I"
+        }
+      ],
+      "storyboard": {
+        "on": true,
+        "brief": "A courier outruns a storm she cannot beat.",
+        "filmLength": 60,
+        "scripts": {
+          "shot-1": "She checks the sky, then the road.",
+          "shot-2": "The crossing, in one unbroken move."
+        },
+        "breakdowns": {
+          "shot-1": "Wide, then a slow push as the wind takes her coat."
+        },
+        "seconds": {
+          "shot-1": 8,
+          "shot-2": 6
+        }
+      },
+      "cuts": [
+        {
+          "id": "cut-a",
+          "name": "Cut A",
+          "url": "https://r2.example/cuts/cut-a.mp4",
+          "exportedAt": "2026-09-05T10:15:00.000Z",
+          "freecutProjectUrl": "https://r2.example/cuts/cut-a.json",
+          "duration": 42.5,
+          "shotsCount": 3
+        },
+        {
+          "id": "cut-c",
+          "name": "Cut B, tight copy",
+          "url": "https://r2.example/cuts/cut-b.mp4",
+          "exportedAt": "2026-09-06T18:00:00.000Z",
+          "duration": 39,
+          "shotsCount": 4,
+          "final": true
+        }
+      ],
+      "film": {
+        "style": "neo-noir",
+        "era": "1970s"
+      },
+      "cast": {
+        "kira": {
+          "kind": "character",
+          "assetId": "char-kira",
+          "displayName": "Kira",
+          "defaultLook": {
+            "url": "https://r2.example/cast/kira-front.png",
+            "variantSlug": "angles:front",
+            "label": "front"
+          },
+          "description": "A courier in a rain-black coat."
+        },
+        "sunspire-valley": {
+          "kind": "location",
+          "assetId": "loc-sunspire",
+          "displayName": "Sunspire Valley",
+          "defaultRole": "background"
+        }
+      },
+      "musicPlan": {
+        "prompt": "Low strings, then nothing at all.",
+        "duration": 24,
+        "selections": {
+          "vocals": "instrumental",
+          "vocalGender": "any",
+          "genre": "ambient",
+          "mood": "bleak",
+          "instruments": [
+            "strings"
+          ]
+        }
+      }
+    }
+  }
+}
