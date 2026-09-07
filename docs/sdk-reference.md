@@ -4522,6 +4522,13 @@ Re-exported from `@nodaro/shared` for convenience:
 
 ## Editable 3D scenes
 
+`client.scene3d` provides named `generate`, `edit`, and `render` methods, plus
+`generateAndWait`, `editAndWait`, and `renderAndWait`. They submit the same nodes
+shown below. `render` exports the supplied revision without an authoring call.
+Use `await client.scene3d.capabilities()` to discover optional Advanced engines;
+`advanced: null` means they are unavailable. Explicit engines that are unavailable
+are rejected before a Basic generation or its credit checks.
+
 `nodes.run` and `nodes.runAndWait` accept typed `GenerateScene3DParams`, `EditScene3DParams` and `RenderScene3DParams`. Generation/edit completion returns `Scene3DJobOutput` with `scenePlan` and an optional `changeSummary`.
 
 ```typescript

@@ -23,6 +23,20 @@ function setup() {
 }
 
 describe("3D scene node transport", () => {
+  it("named helpers preserve the same authoring, revision and render-only requests", async () => {
+    const { client, fetchMock } = setup()
+    await client.scene3d.capabilities()
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/3d-scene/capabilities")
+    await client.scene3d.generate({ prompt: "Orbit a car", engine: "blender-cloud", acceptedSceneSchemaVersions: [2] })
+    expect(fetchMock.mock.calls[1][0]).toBe("https://api.example.com/v1/3d-scene/generate")
+    expect(JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string)).toMatchObject({ engine: "blender-cloud", acceptedSceneSchemaVersions: [2] })
+    await client.scene3d.edit({ scenePlan: scene, expectedRevisionId: scene.revisionId, prompt: "Move it left" })
+    expect(fetchMock.mock.calls[2][0]).toBe("https://api.example.com/v1/3d-scene/edit")
+    await client.scene3d.render({ planType: "3d-scene", plan: scene })
+    expect(fetchMock.mock.calls[3][0]).toBe("https://api.example.com/v1/render-video/plan")
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+  })
+
   it("runs generation through the authoring route and preserves reference roles", async () => {
     const { client, fetchMock } = setup()
     const references = [{ id: "product", kind: "image" as const, role: "appearance" as const, url: "https://example.com/product.png" }]

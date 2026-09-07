@@ -632,4 +632,8 @@ const { data: runs } = await client.jobs.list({ type: "llm-structured", origin: 
 
 ## 3D scenes
 
+The named helpers `client.scene3d.generateAndWait`, `editAndWait`, and
+`renderAndWait` follow the same flow. `client.scene3d.capabilities()` reports
+which optional authoring engines are available on the connected instance.
+
 See [editable 3D scenes](sdk-reference.md#editable-3d-scenes) for prompt → editable scene → MP4 using `nodes.runAndWait`.

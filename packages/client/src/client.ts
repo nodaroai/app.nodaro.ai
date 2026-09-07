@@ -6,6 +6,7 @@ import { JobsResource } from "./resources/jobs.js"
 import { VideoProResource } from "./resources/video-pro.js"
 import { ExecutionsResource } from "./resources/executions.js"
 import { NodesResource } from "./resources/nodes.js"
+import { Scene3DResource } from "./resources/scene3d.js"
 import { DeveloperAppsResource } from "./resources/developer-apps.js"
 import { OAuthResource } from "./resources/oauth.js"
 import { AppsResource } from "./resources/apps.js"
@@ -160,6 +161,7 @@ export class NodaroClient {
   readonly videoPro: VideoProResource
   readonly executions: ExecutionsResource
   readonly nodes: NodesResource
+  readonly scene3d: Scene3DResource
   readonly developerApps: DeveloperAppsResource
   readonly oauth: OAuthResource
   readonly apps: AppsResource
@@ -208,6 +210,7 @@ export class NodaroClient {
     this.videoPro = new VideoProResource(this)
     this.executions = new ExecutionsResource(this)
     this.nodes = new NodesResource(this)
+    this.scene3d = new Scene3DResource(this)
     this.developerApps = new DeveloperAppsResource(this)
     this.oauth = new OAuthResource(this)
     this.apps = new AppsResource(this)
