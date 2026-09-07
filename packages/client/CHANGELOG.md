@@ -1,5 +1,11 @@
 # @nodaro/sdk
 
+## 1.30.1
+
+### Patch Changes
+
+- 33b783f: Allow scene edits to replace or clear their complete reference set explicitly.
+
 ## 1.30.0
 
 ### Minor Changes
