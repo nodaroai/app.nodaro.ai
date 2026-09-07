@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, fireEvent } from "@testing-library/react"
 import { Scene3DPreview } from "../scene3d-preview"
-import { makePlan, REV_A, REV_B } from "@/lib/scene3d/__tests__/fixture"
+import { makePlan, makeV2Plan, FAKE_DIGEST, REV_A, REV_B, REV_V2 } from "@/lib/scene3d/__tests__/fixture"
 import { planObjects, planRevisionId, planBackgroundColor } from "@/lib/scene3d/plan-view"
 import { validateScene3DPlan } from "@/lib/scene3d/validate-plan"
 import { sampleScene3DObject } from "@remotion-pkg/scene3d/sampler"
@@ -271,5 +271,101 @@ describe("Scene3DPreview — readOnly", () => {
     expect(screen.getByText(/arrived after you edited/i)).toBeInTheDocument()
     expect(screen.queryByText("Use the new one")).toBeNull()
     expect(screen.queryByText("Keep mine")).toBeNull()
+  })
+})
+
+/**
+ * v2 is a different scene object, so the panel dispatches on the plan's own
+ * `schemaVersion` rather than being told which one it holds. These cover what
+ * that panel must NOT do as much as what it shows: no local revision, no
+ * pretending an edit was saved, no camera controls over a baked track.
+ */
+function setupV2(overrides: Record<string, unknown> = {}) {
+  const props = {
+    scenePlan: makeV2Plan(),
+    selectedObjectIds: [] as string[],
+    lockedObjectIds: [] as string[],
+    onSelectionChange: vi.fn(),
+    onLockChange: vi.fn(),
+    onPlanChange: vi.fn(),
+    onRestore: vi.fn(),
+    onResolvePending: vi.fn(),
+    assetResolver: { resolve: vi.fn() },
+    ...overrides,
+  }
+  render(<Scene3DPreview {...props} />)
+  return props
+}
+
+describe("Scene3DPreview — a v2 (baked) scene", () => {
+  it("shows shots and semantic entities, and jumps to a shot's first frame", () => {
+    setupV2()
+    expect(screen.getByText("2 objects")).toBeInTheDocument()
+    expect(screen.getByText("Hero")).toBeInTheDocument()
+    expect(screen.getByText("Car")).toBeInTheDocument()
+
+    // The camera is baked: the transport is the only camera control, and there
+    // are no camera position/target editors to disagree with the track.
+    expect(screen.queryByLabelText("Camera Position X")).toBeNull()
+    expect(screen.queryByLabelText("Camera focal length")).toBeNull()
+
+    const close = screen.getByLabelText(/Shot 2 — Close/)
+    expect(close.getAttribute("aria-pressed")).toBe("false")
+    fireEvent.click(close)
+    expect(screen.getByLabelText(/Shot 2 — Close/).getAttribute("aria-pressed")).toBe("true")
+    // Frame 48 at 24fps.
+    expect(screen.getByText("2.00s")).toBeInTheDocument()
+  })
+
+  it("refuses to edit until a host can SAVE the result, and says why", () => {
+    setupV2({ selectedObjectIds: ["hero"] })
+    expect(screen.getByText(/editing is unavailable in this viewer/i)).toBeInTheDocument()
+    expect((screen.getByLabelText("Hero Position X") as HTMLInputElement).disabled).toBe(true)
+  })
+
+  it("emits an OPERATION with both stale-check fields — never a new plan", () => {
+    const onEditOperations = vi.fn()
+    const props = setupV2({ selectedObjectIds: ["hero"], onEditOperations })
+
+    const field = screen.getByLabelText("Hero Position X")
+    fireEvent.change(field, { target: { value: "3" } })
+    fireEvent.blur(field)
+
+    expect(onEditOperations).toHaveBeenCalledTimes(1)
+    expect(onEditOperations.mock.calls[0][0]).toEqual({
+      operations: [
+        {
+          op: "set-override",
+          override: {
+            kind: "entity-transform",
+            entityId: "hero",
+            space: "local",
+            position: [3, 0.5, 0],
+          },
+        },
+      ],
+      expectedRevisionId: REV_V2,
+      expectedContentHash: FAKE_DIGEST,
+    })
+    // The panel does NOT mint a revision: a v2 plan the server has not retained
+    // would draw as if it were saved.
+    expect(props.onPlanChange).not.toHaveBeenCalled()
+  })
+
+  it("says the scene cannot load when no authorized resolver was supplied", () => {
+    setupV2({ assetResolver: undefined })
+    expect(screen.getByText(/3D assets unavailable/i)).toBeInTheDocument()
+    // The scene DATA is still on screen — the panel never blanks a scene it
+    // merely cannot draw.
+    expect(screen.getByText("Hero")).toBeInTheDocument()
+  })
+
+  it("withholds every mutation in read-only mode, and keeps the rest live", () => {
+    const props = setupV2({ readOnly: true, selectedObjectIds: ["hero"], onEditOperations: vi.fn() })
+    expect(screen.queryByLabelText("Lock Hero")).toBeNull()
+    expect((screen.getByLabelText("Hero Position X") as HTMLInputElement).disabled).toBe(true)
+    // Selection and scrubbing stay live: a viewer may still look around.
+    fireEvent.click(screen.getByText("Car"))
+    expect(props.onSelectionChange).toHaveBeenCalledWith(["hero", "car"])
   })
 })

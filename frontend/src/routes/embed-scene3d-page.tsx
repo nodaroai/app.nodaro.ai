@@ -29,6 +29,7 @@ import { AlertTriangle, Boxes } from "lucide-react"
 import { Scene3DPreview } from "@/components/editor/scene3d/scene3d-preview"
 import { planRevisionId } from "@/lib/scene3d/plan-view"
 import {
+  SCENE3D_EMBED_PROTOCOL_VERSION_2,
   buildScene3DEventMessage,
   buildScene3DReadyMessage,
   classifyScene3DEmbedMessage,
@@ -37,6 +38,9 @@ import {
   type Scene3DEmbedEvent,
   type Scene3DEmbedState,
 } from "@/lib/scene3d/embed-protocol"
+import { Scene3DEmbedAssetTransport } from "@/lib/scene3d/embed-asset-transport"
+import { createMemoizedAssetResolver } from "@/lib/scene3d/asset-cache"
+import { scene3DV2Text } from "@/lib/scene3d/v2-strings"
 import { useT } from "@/lib/i18n"
 
 /**
@@ -52,6 +56,7 @@ const READY_RETRY_LIMIT = 8
 
 export default function EmbedScene3DPage() {
   const t = useT()
+  const V2_TEXT = scene3DV2Text(t)
   const [searchParams] = useSearchParams()
   const params = useMemo(
     () => parseScene3DEmbedParams(searchParams.toString()),
@@ -60,6 +65,7 @@ export default function EmbedScene3DPage() {
 
   const [state, setState] = useState<Scene3DEmbedState | null>(null)
   const [rejection, setRejection] = useState<string | null>(null)
+  const [assetError, setAssetError] = useState<string | null>(null)
 
   /** The revision the user is looking at — stamped on every outbound event. */
   const revisionId = state ? planRevisionId(state.scenePlan) ?? null : null
@@ -67,6 +73,42 @@ export default function EmbedScene3DPage() {
   revisionRef.current = revisionId
 
   const readOnly = state?.readOnly ?? true
+  const planVersion = state?.planVersion ?? 1
+  const protocolVersion = state?.protocolVersion ?? 1
+
+  /**
+   * A v2 scene's bytes come from the PARENT, one transport per revision.
+   *
+   * The frame holds no session, so it cannot fetch them itself; it asks for
+   * exactly the assets the manifest declares and verifies what comes back
+   * against the declared length and digest. A new revision gets a new
+   * transport, and the old one is disposed — every request still in flight for
+   * a scene the user has left is rejected rather than allowed to land on a
+   * canvas that has moved on.
+   */
+  const transport = useMemo(() => {
+    if (!params.ok || !revisionId) return null
+    if (planVersion !== 2 || protocolVersion < SCENE3D_EMBED_PROTOCOL_VERSION_2) return null
+    const { parentOrigin, channel } = params
+    return new Scene3DEmbedAssetTransport({
+      channel,
+      revisionId,
+      // Never `"*"`: the asset id and the revision id leave this frame
+      // addressed to exactly one origin.
+      post: (message) => window.parent.postMessage(message, parentOrigin),
+    })
+  }, [params, revisionId, planVersion, protocolVersion])
+
+  useEffect(() => () => transport?.dispose(), [transport])
+
+  const transportRef = useRef<Scene3DEmbedAssetTransport | null>(null)
+  transportRef.current = transport
+
+  /** Memoized so a re-render never re-requests bytes the frame already holds. */
+  const assetResolver = useMemo(
+    () => (transport ? createMemoizedAssetResolver(transport) : undefined),
+    [transport],
+  )
 
   useEffect(() => {
     if (!params.ok) return
@@ -81,11 +123,18 @@ export default function EmbedScene3DPage() {
     let attempts = 0
 
     const onMessage = (event: MessageEvent) => {
-      const verdict = classifyScene3DEmbedMessage(
-        { data: event.data, origin: event.origin, source: event.source },
-        { parentOrigin, channel, expectedSource: parent },
-      )
-      if (verdict.kind === "ignore") return
+      const transportEvent = { data: event.data, origin: event.origin, source: event.source }
+      const context = { parentOrigin, channel, expectedSource: parent }
+      const verdict = classifyScene3DEmbedMessage(transportEvent, context)
+      if (verdict.kind === "ignore") {
+        // Not a `state` message. It may be an answer to an asset request — the
+        // transport applies the same origin/source/channel checks and then the
+        // correlation and digest ones, and tells us only about a FAILURE, which
+        // is the case the user has to be shown (a scene that will never draw).
+        const failure = transportRef.current?.handleMessage(transportEvent, context)
+        if (failure) setAssetError(failure)
+        return
+      }
       heard = true
       if (verdict.kind === "reject") {
         // The refused push is NOT applied. Whatever was accepted before stays on
@@ -95,6 +144,10 @@ export default function EmbedScene3DPage() {
         return
       }
       setRejection(null)
+      // A new snapshot gets a clean slate: the previous revision's asset
+      // failure said nothing about this one, and the transport that produced it
+      // has been disposed.
+      setAssetError(null)
       setState(verdict.state)
     }
 
@@ -151,6 +204,7 @@ export default function EmbedScene3DPage() {
   return (
     <div className="min-h-screen bg-background p-3 flex flex-col gap-2">
       {rejection && <RejectionBanner reason={rejection} />}
+      {assetError && <RejectionBanner reason={V2_TEXT.assetFailed(assetError)} />}
       {readOnly && (
         <span className="self-start rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
           {t("embed3d.readOnly")}
@@ -164,9 +218,23 @@ export default function EmbedScene3DPage() {
         pendingPlan={state.pendingPlan}
         isGenerating={state.isGenerating}
         readOnly={readOnly}
+        assetResolver={assetResolver}
         onSelectionChange={(objectIds) => emit({ kind: "selection", objectIds })}
         onLockChange={(objectIds) => emit({ kind: "locks", objectIds })}
         onPlanChange={(plan, changeSummary) => emit({ kind: "plan", plan, changeSummary })}
+        onEditOperations={(edit) => {
+          // The panel stamps the revision it was showing; if the frame has
+          // since accepted another one, the edit describes a scene that is no
+          // longer on screen and is dropped rather than sent against the new
+          // one. (The parent checks the same thing — this is the earlier of the
+          // two gates, and the one that keeps a stale click off the wire.)
+          if (edit.expectedRevisionId !== revisionRef.current) return
+          emit({
+            kind: "edit-operations",
+            operations: edit.operations,
+            expectedContentHash: edit.expectedContentHash,
+          })
+        }}
         onRestore={(id) => emit({ kind: "restore", revisionId: id })}
         onResolvePending={(adopt) => emit({ kind: "resolve-pending", adopt })}
       />

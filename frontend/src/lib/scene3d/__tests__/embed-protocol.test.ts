@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { makePlan, REV_A, REV_B } from "./fixture"
+import { FAKE_DIGEST, makePlan, makeV2Plan, REV_A, REV_B, REV_V2 } from "./fixture"
 import {
   SCENE3D_EMBED_EVENT_TYPE,
   SCENE3D_EMBED_LIMITS,
@@ -137,9 +137,11 @@ describe("classifyScene3DEmbedMessage — transport and addressing are IGNORED, 
 
 describe("classifyScene3DEmbedMessage — content failures are REJECTED out loud", () => {
   it("rejects an unknown protocol version on our channel", () => {
-    const verdict = inbound(state({ version: 2 }))
+    // 1 and 2 are spoken; 3 is not. The frame says so rather than guessing
+    // which half of a future envelope it is safe to read.
+    const verdict = inbound(state({ version: 3 }))
     expect(verdict.kind).toBe("reject")
-    expect(verdict.kind === "reject" && verdict.reason).toMatch(/unsupported protocol version 2/)
+    expect(verdict.kind === "reject" && verdict.reason).toMatch(/unsupported protocol version 3/)
   })
 
   it("rejects a missing version rather than assuming v1", () => {
@@ -297,11 +299,16 @@ describe("classifyScene3DEmbedMessage — a good push", () => {
 })
 
 describe("outbound messages", () => {
-  it("stamps ready with the version and channel and nothing else", () => {
+  it("stamps ready with the BASELINE version, the channel, and what else it can do", () => {
+    // `version` stays 1 forever: it is what a parent written against version 1
+    // checks. Everything version 2 adds is announced in fields such a parent
+    // does not read — which is what makes the handshake additive.
     expect(buildScene3DReadyMessage(CHANNEL)).toEqual({
       type: SCENE3D_EMBED_READY_TYPE,
       version: SCENE3D_EMBED_PROTOCOL_VERSION,
       channel: CHANNEL,
+      protocolVersions: [1, 2],
+      capabilities: { assetTransport: true, sceneSchemaVersions: [1, 2] },
     })
   })
 
@@ -328,5 +335,60 @@ describe("outbound messages", () => {
     expect(isScene3DEmbedMutation({ kind: "locks", objectIds: ["hero"] })).toBe(true)
     expect(isScene3DEmbedMutation({ kind: "restore", revisionId: REV_A })).toBe(true)
     expect(isScene3DEmbedMutation({ kind: "resolve-pending", adopt: true })).toBe(true)
+  })
+})
+
+describe("classifyScene3DEmbedMessage — schema version negotiation", () => {
+  it("accepts a v2 scene on a version-2 push and reports both versions", () => {
+    const verdict = inbound(state({ version: 2, scenePlan: makeV2Plan() }))
+    expect(verdict.kind).toBe("accept")
+    if (verdict.kind !== "accept") return
+    expect(verdict.state.planVersion).toBe(2)
+    expect(verdict.state.protocolVersion).toBe(2)
+    expect(verdict.state.revisionId).toBe(REV_V2)
+    // The safe default still applies: an editable v2 frame must be asked for.
+    expect(verdict.state.readOnly).toBe(true)
+  })
+
+  it("refuses a v2 scene on a version-1 push — that parent cannot serve its bytes", () => {
+    const verdict = inbound(state({ scenePlan: makeV2Plan() }))
+    expect(verdict.kind).toBe("reject")
+    expect(verdict.kind === "reject" && verdict.reason).toMatch(/schema version 2.*protocol version 2/)
+  })
+
+  it("still accepts a v1 scene on either version", () => {
+    expect(inbound(state()).kind).toBe("accept")
+    const upgraded = inbound(state({ version: 2 }))
+    expect(upgraded.kind).toBe("accept")
+    if (upgraded.kind !== "accept") return
+    expect(upgraded.state.planVersion).toBe(1)
+  })
+
+  it("validates v2 history entries with the same union validator", () => {
+    const accepted = inbound(
+      state({
+        version: 2,
+        scenePlan: makeV2Plan(),
+        history: [historyEntry({ revisionId: REV_V2, scenePlan: makeV2Plan() })],
+      }),
+    )
+    expect(accepted.kind).toBe("accept")
+
+    // …and still refuses a broken one, one click from being restored.
+    const broken = inbound(
+      state({
+        version: 2,
+        scenePlan: makeV2Plan(),
+        history: [historyEntry({ revisionId: REV_V2, scenePlan: makeV2Plan({ shots: [] }) })],
+      }),
+    )
+    expect(broken.kind).toBe("reject")
+    expect(broken.kind === "reject" && broken.reason).toMatch(/history\.0\.scenePlan/)
+  })
+
+  it("treats a v2 edit as a mutation, so a read-only frame cannot emit one", () => {
+    expect(
+      isScene3DEmbedMutation({ kind: "edit-operations", operations: [], expectedContentHash: FAKE_DIGEST }),
+    ).toBe(true)
   })
 })

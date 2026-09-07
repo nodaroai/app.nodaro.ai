@@ -31,6 +31,7 @@ export const envSchema = z.object({
   REDIS_URL: z.string().default("redis://localhost:6379"),
   SCENE3D_ADVANCED_ENABLED: z.string().optional().transform((v) => v === "true" || v === "1"),
   SCENE3D_LOCAL_ENABLED: z.string().optional().transform((v) => v === "true" || v === "1"),
+  SCENE3D_STAGE_REDIS_URL: z.string().default(""),
   R2_ACCOUNT_ID: z.string().default(""),
   R2_ACCESS_KEY_ID: z.string().default(""),
   R2_SECRET_ACCESS_KEY: z.string().default(""),

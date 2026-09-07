@@ -396,7 +396,7 @@ function clayMaterial(color: string, doubleSided: boolean): THREE.MeshStandardMa
  * per material ROLE so recolouring a car's body paint leaves its tyres alone.
  *
  * Precedence: colour override for the role → the manifest binding's baked
- * colour → the entity's identity colour → the GLB's own base colour → clay
+ * colour → the GLB's own base colour → the entity's identity colour → clay
  * default. A binding may only name a material inside this entity's own asset
  * root, which is what stops "recolour the person" from reaching its chair.
  */
@@ -433,8 +433,8 @@ function applyClayMaterials(
     material.name = sourceName
     if (overrideColor) material.color.set(new THREE.Color(overrideColor))
     else if (binding?.color) material.color.set(new THREE.Color(binding.color))
-    else if (entity.identityColor) material.color.set(new THREE.Color(entity.identityColor))
     else if (bakedColor) material.color.copy(bakedColor) // already in working space
+    else if (entity.identityColor) material.color.set(new THREE.Color(entity.identityColor))
     else material.color.set(new THREE.Color(CLAY_DEFAULT_COLOR))
 
     // The GLB's materials are replaced wholesale, so free them here rather than

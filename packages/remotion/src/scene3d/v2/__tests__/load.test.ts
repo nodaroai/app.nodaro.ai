@@ -209,7 +209,7 @@ describe("loading a real scene", () => {
     expect(loaded.warnings).toEqual([])
   })
 
-  it("warns (does not fail) on a material binding that names an absent material", async () => {
+  it("rejects a material role that cannot be edited because its material is absent", async () => {
     const { plan, resolver } = makeLoadableScene({
       glb: makeGlb(CAR_GLB),
       objects: [
@@ -218,8 +218,9 @@ describe("loading a real scene", () => {
         }),
       ],
     })
-    const loaded = await loadScene3DV2(plan, { resolver, signal: signal() })
-    expect(loaded.warnings.map((w) => w.code)).toContain("SCENE_MATERIAL_BINDING_UNMATCHED")
+    await expect(loadScene3DV2(plan, { resolver, signal: signal() })).rejects.toThrow(
+      /ghostMaterial.*not in this entity's asset root/,
+    )
   })
 
   it("fails the load when a GLB's digest does not match the manifest", async () => {

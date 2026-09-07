@@ -134,6 +134,7 @@ here for each one anyway.
 | `REDIS_URL` | `redis://localhost:6379` | BullMQ queues + caches (bundled: `redis://redis:6379`) |
 | `SCENE3D_ADVANCED_ENABLED` | disabled | Enables an installed Advanced scene-authoring engine in Cloud. Only `true` or `1` enables it; absent engine remains unavailable. |
 | `SCENE3D_LOCAL_ENABLED` | disabled | Allows an installed local scene-authoring engine when Advanced is also enabled. Does not expose a desktop port. |
+| `SCENE3D_STAGE_REDIS_URL` | unset | Dedicated storage for durable scene stages. Requires persistent disk, `appendonly yes`, `appendfsync always`, `no-appendfsync-on-rewrite no`, and `maxmemory-policy noeviction`. The host verifies these settings before journal operations and never falls back to the shared queue. |
 | `SCENE3D_PRIVATE_BUCKET` | unset | Separate private bucket for retained scene geometry, cameras and native source files. Must differ from the public media bucket. Required for scene asset reads; existing revisions remain readable when Advanced authoring is disabled. |
 | `SCENE3D_PRIVATE_S3_ENDPOINT` / `SCENE3D_PRIVATE_S3_REGION` | existing R2 settings | S3-compatible endpoint and region for the private scene bucket. No public bucket URL is used. |
 | `SCENE3D_PRIVATE_S3_ACCESS_KEY_ID` / `SCENE3D_PRIVATE_S3_SECRET_ACCESS_KEY` | existing R2 credentials | Server-side credentials for the private scene bucket. Prefer credentials restricted to that bucket. |

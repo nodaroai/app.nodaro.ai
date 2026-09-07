@@ -1,7 +1,7 @@
 import { completeStructuredMetered } from "./llm-metered.js"
 import { directVoiceChanger } from "../../providers/elevenlabs/voice-changer.js"
 import { createScene3DArtifactToolkit } from "./scene3d-artifact-toolkit.js"
-import { createStageJournal } from "./stage-journal.js"
+import { createDurableScene3DStageJournal } from "./scene3d-stage-storage.js"
 import { ReplicateAudioSeparationProvider } from "../../providers/replicate/audio-separation.js"
 import { extractAudio } from "../../providers/video/extract-audio.js"
 import {
@@ -1064,14 +1064,7 @@ function internalRequest(app: FastifyInstance, opts: PluginInternalRequestOption
 export function buildToolkit(): PluginToolkit {
   return {
     sceneArtifacts: createScene3DArtifactToolkit(),
-    stages: createStageJournal(redis, async ({ jobId, userId }) => {
-      const { data, error } = await supabase.from("jobs").select("status")
-        .eq("id", jobId).eq("user_id", userId).maybeSingle()
-      if (error) throw new Error("Failed to authorize job stage", { cause: error })
-      if (!data || (data.status !== "pending" && data.status !== "processing")) {
-        throw new Error("Job stage is unavailable")
-      }
-    }),
+    stages: createDurableScene3DStageJournal(),
     providers: {
       directVoiceChanger,
       // Exposed as a plain function per the contract; the real capability is

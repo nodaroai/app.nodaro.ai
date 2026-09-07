@@ -100,17 +100,24 @@ describe("v2 scene assembly", () => {
     handle.dispose()
   })
 
-  it("applies the clay material and the entity identity colour", async () => {
+  it("preserves authored body and tire colors when an entity has an identity color", async () => {
     const { handle } = await buildScene({
-      glb: makeGlb(DRIVING_CAR),
+      glb: makeGlb({ ...DRIVING_CAR, mutate(json) {
+        const materials = json.materials as Array<{ name: string; pbrMetallicRoughness: { baseColorFactor: number[] } }>
+        for (const material of materials) {
+          material.pbrMetallicRoughness.baseColorFactor = material.name === "rubber"
+            ? [0, 0, 0, 1] : [0, 0, 1, 1]
+        }
+      } }),
       objects: [carEntity({ identityColor: "#ff0000" })],
     })
     const mesh = handle.raycastTargets[0] as THREE.Mesh
     const material = mesh.material as THREE.MeshStandardMaterial
     expect(material.roughness).toBeCloseTo(0.78, 6)
     expect(material.metalness).toBeCloseTo(0.02, 6)
-    // #ff0000 is sRGB; three converts it into the working space exactly once.
-    expect(material.color.getHexString()).toBe("ff0000")
+    expect(material.color.getHexString()).toBe("0000ff")
+    const tire = handle.raycastTargets[1] as THREE.Mesh
+    expect((tire.material as THREE.MeshStandardMaterial).color.getHexString()).toBe("000000")
     handle.dispose()
   })
 
@@ -119,6 +126,7 @@ describe("v2 scene assembly", () => {
       glb: makeGlb(DRIVING_CAR),
       objects: [
         carEntity({
+          identityColor: "#ff0000",
           materialBindings: [{ role: "paint", materialName: "bodyPaint", color: "#00ff00" }],
         }),
       ],

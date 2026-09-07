@@ -223,11 +223,12 @@ describe("v2 readiness gating", () => {
 
   it("reports readiness warnings without failing the render", async () => {
     const { plan, resolver } = makeLoadableScene({
-      glb: CAR,
+      glb: makeGlb({ nodes: [{ name: "car", entityRootId: "car", translation: [3, 0, 0],
+        children: [{ name: "car/body", mesh: true }] }] }),
       objects: [
         {
           ...CAR_ENTITY,
-          materialBindings: [{ role: "identity", materialName: "ghost", color: "#ff0000" }],
+          position: [2, 0, 0],
         },
       ],
     })
@@ -244,8 +245,21 @@ describe("v2 readiness gating", () => {
     )
     await until(() => expect(onFirstDraw).toHaveBeenCalledTimes(1))
     expect(onReadinessWarnings).toHaveBeenCalledWith([
-      expect.objectContaining({ code: "SCENE_MATERIAL_BINDING_UNMATCHED" }),
+      expect.objectContaining({ code: "SCENE_ENTITY_TRANSFORM_IGNORED" }),
     ])
+  })
+
+  it("does not release render readiness when an editable material role has no material", async () => {
+    const { plan, resolver } = makeLoadableScene({ glb: CAR, objects: [{ ...CAR_ENTITY,
+      materialBindings: [{ role: "identity", materialName: "ghost", color: "#ff0000" }],
+    }] })
+    const onFirstDraw = vi.fn()
+    const onContextError = vi.fn()
+    render(<Scene3DCanvas plan={plan} frame={0} assetResolver={resolver}
+      onFirstDraw={onFirstDraw} onContextError={onContextError} />)
+    await until(() => expect(onContextError).toHaveBeenCalledTimes(1))
+    expect(onFirstDraw).not.toHaveBeenCalled()
+    expect(state.draw).not.toHaveBeenCalled()
   })
 
   it("redraws when the frame changes, without reloading the assets", async () => {

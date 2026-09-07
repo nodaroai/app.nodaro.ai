@@ -20,7 +20,10 @@ assets before drawing. Playback loads geometry and camera data; native source
 files are a separate download capability.
 
 GLB node transforms are authoritative for exported geometry. Semantic entities
-address named roots and material roles for selection and editing. A dense
+address named roots and material roles for selection and editing. Every editable
+material role must name a material within that entity's geometry. Clay shading
+preserves each material's base color, so changing a vehicle's body paint leaves
+its tires unchanged. A dense
 camera sidecar supplies position, quaternion and projection for every frame;
 the reader preserves those values, including roll and exact shot cuts. Animation
 is sampled from the requested frame so backward scrubbing and independent frame

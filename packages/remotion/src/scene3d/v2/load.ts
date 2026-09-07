@@ -288,13 +288,12 @@ function bindEntitiesToAssets(
     }
 
     for (const binding of entity.materialBindings ?? []) {
-      if (!root.materialNames.includes(binding.materialName)) {
-        warnings.push({
-          code: "SCENE_MATERIAL_BINDING_UNMATCHED",
-          message: `material binding for role "${binding.role}" names material "${binding.materialName}", which is not in this entity's asset root`,
-          subject: entity.id,
-        })
-      }
+      check(
+        root.materialNames.includes(binding.materialName),
+        "SCENE_ASSET_BINDING",
+        `material binding for role "${binding.role}" names material "${binding.materialName}", which is not in this entity's asset root`,
+        entity.id,
+      )
     }
 
     // The window itself is the contract's business; whether the FILE actually
