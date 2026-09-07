@@ -1,0 +1,1581 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import Fastify, { type FastifyInstance } from "fastify"
+
+/**
+ * The BILLING INTEGRATION surface of `/v1/deployment-billing/*` — the verbs a
+ * machine in the customer's back office drives with an integration key, as
+ * opposed to the page the billing account drives with a browser session.
+ *
+ * Four properties are pinned here, and they are the four ways this surface
+ * loses money or tells a lie:
+ *
+ *  1. **A user is named three ways and resolved once.** The back office knows
+ *     the identity its own IdP asserts, never the studio's uuid, so `sso:` and
+ *     `email:` are first-class. An ambiguous email is a REFUSAL, never a
+ *     guess: allocating a paid quota to an arbitrary half of a duplicated
+ *     address is the failure that costs a customer their plan.
+ *
+ *  2. **Every verb is replay-safe.** An integration retries and a webhook
+ *     arrives twice. A replayed `set` is a `noop`; a replayed `renew` inside a
+ *     day is refused, because a second renewal would zero a period's spend
+ *     that the customer really used. That refusal is the single most
+ *     expensive thing in this file to get wrong, and it lives in the ROUTE —
+ *     the database will happily renew twice.
+ *
+ *  3. **Units never reach the ledger (R3).** `creditsFromUnits` on the way in,
+ *     `toUnits` on the way out, and both figures on every response because an
+ *     integration is a render boundary. Zero is a legal target for `set` and
+ *     `renew` — a cancelled plan is a quota of 0 — and is still refused for a
+ *     `grant`, which must move something.
+ *
+ *  4. **A read is a read.** `/usage` pages with a keyset cursor that covers
+ *     the boundary row exactly once and never aggregates; `/pricing` answers
+ *     304 against its own ETag; `/balance` computes `lowBalance` server-side
+ *     so two callers cannot disagree about it.
+ *
+ * The allowance SERVICE is not mocked — Supabase is, and the RPCs dispatch by
+ * name. Mocking the service would leave the RPC argument shape untested on
+ * both sides of the seam, which is exactly where a unit that reached the
+ * ledger would hide.
+ */
+
+const PAYER = "00000000-0000-4000-8000-000000000009"
+const U1 = "00000000-0000-4000-8000-000000000101"
+const U2 = "00000000-0000-4000-8000-000000000102"
+const GHOST = "00000000-0000-4000-8000-0000000001ff"
+const KEY_ID = "00000000-0000-4000-8000-00000000ffff"
+
+// ---------------------------------------------------------------------------
+// Mocks — hoisted before any route import
+// ---------------------------------------------------------------------------
+
+/** Results are keyed `table` or `table:list` / `table:single`, so one test can
+ *  give a batch read an array and a `maybeSingle` on the SAME table an object.
+ *  Without that split, `allowanceLedgerOne` reading a list fixture would build
+ *  an allowance out of `undefined` and every figure would silently be 0. */
+const h = vi.hoisted(() => {
+  type Result = { data: unknown; error: unknown; count?: number }
+  const tableResults = new Map<string, Result>()
+  const rpcHandlers = new Map<string, (args: Record<string, unknown>) => Result>()
+  const rec = {
+    fromCalls: [] as string[],
+    selectCols: {} as Record<string, string | null>,
+    filterCalls: [] as Array<{ table: string; op: string; args: unknown[] }>,
+    writePayloads: [] as Array<{ table: string; op: string; payload: unknown }>,
+    rpcCalls: [] as Array<{ name: string; args: Record<string, unknown> }>,
+  }
+  function chainFor(table: string): Record<string, unknown> {
+    const chain: Record<string, unknown> = {}
+    const self = () => chain
+    const result = (terminal: "list" | "single"): Result =>
+      tableResults.get(`${table}:${terminal}`) ??
+      tableResults.get(table) ?? { data: terminal === "list" ? [] : null, error: null, count: 0 }
+    chain.select = (cols?: string) => {
+      rec.selectCols[table] = cols ?? null
+      return self()
+    }
+    for (const op of ["update", "insert", "delete", "upsert"] as const) {
+      chain[op] = (payload?: unknown) => {
+        rec.writePayloads.push({ table, op, payload })
+        return self()
+      }
+    }
+    const filters = ["eq", "neq", "in", "is", "gt", "gte", "lt", "lte", "or", "ilike", "order", "range", "limit", "not"]
+    for (const op of filters) {
+      chain[op] = (...args: unknown[]) => {
+        rec.filterCalls.push({ table, op, args })
+        return self()
+      }
+    }
+    chain.single = async () => result("single")
+    chain.maybeSingle = async () => result("single")
+    chain.then = (resolve: (v: unknown) => void) => {
+      const r = result("list")
+      return resolve({ data: r.data, error: r.error, count: r.count ?? null })
+    }
+    return chain
+  }
+  class PriceNotConfiguredError extends Error {
+    constructor(id: string) {
+      super(`no price configured for ${id}`)
+      this.name = "PriceNotConfiguredError"
+    }
+  }
+  return {
+    tableResults,
+    rpcHandlers,
+    rec,
+    chainFor,
+    PriceNotConfiguredError,
+    getBalance: vi.fn(),
+    getModelCreditCost: vi.fn(),
+    invalidateBalanceCache: vi.fn(),
+    config: { EDITION: "cloud" } as { EDITION: string; STRIPE_SECRET_KEY?: string },
+  }
+})
+
+vi.mock("@/lib/supabase.js", () => ({
+  supabase: {
+    from: (table: string) => {
+      h.rec.fromCalls.push(table)
+      return h.chainFor(table)
+    },
+    rpc: async (name: string, args: Record<string, unknown>) => {
+      h.rec.rpcCalls.push({ name, args })
+      const handler = h.rpcHandlers.get(name)
+      return handler ? handler(args) : { data: null, error: null }
+    },
+  },
+}))
+
+vi.mock("@/lib/config.js", () => ({
+  config: h.config,
+  isCloud: () => true,
+  isCommunity: () => false,
+  isBusiness: () => false,
+  hasCredits: () => true,
+  hasAdmin: () => true,
+}))
+
+vi.mock("@/ee/billing/stripe-client.js", () => ({ getStripe: () => ({}) }))
+vi.mock("@/ee/billing/provision-credits.js", () => ({ ensureStripeCustomer: vi.fn() }))
+
+vi.mock("@/ee/billing/credits.js", () => ({
+  CreditsService: {
+    getBalance: (...a: unknown[]) => h.getBalance(...a),
+    getModelCreditCost: (...a: unknown[]) => h.getModelCreditCost(...a),
+  },
+  PriceNotConfiguredError: h.PriceNotConfiguredError,
+}))
+
+vi.mock("@/ee/routes/credits.js", () => ({
+  invalidateBalanceCache: (...a: unknown[]) => h.invalidateBalanceCache(...a),
+}))
+
+const { tableResults, rpcHandlers, rec } = h
+
+// ---------------------------------------------------------------------------
+// Imports (after mocks)
+// ---------------------------------------------------------------------------
+
+import { deploymentBillingRoutes } from "../deployment-billing.js"
+import { __resetSurfaceProfileCacheForTests } from "../../../lib/surface-profile.js"
+import { __setDeploymentPayerForTests, __resetDeploymentPayerForTests } from "../../../lib/deployment-payer.js"
+import {
+  __resetDeploymentAllowanceCacheForTests,
+  applyPendingAllowance,
+} from "../../billing/deployment-allowance-service.js"
+
+// ---------------------------------------------------------------------------
+// Fixtures
+// ---------------------------------------------------------------------------
+
+const REAL_ENV = process.env.NODARO_SURFACE_PROFILE
+
+/** 1 credit = 2000 units, a payer, enforcement still off — the state the
+ *  integration is wired against before the flip. */
+function payerDeployment(extra: Record<string, unknown> = {}, models?: { allow?: string[]; deny?: string[] }): void {
+  process.env.NODARO_SURFACE_PROFILE = JSON.stringify({
+    billing: {
+      unitLabel: "קרדיטים",
+      unitRate: 2000,
+      unitDecimals: 0,
+      selfServe: false,
+      payerAccount: PAYER,
+      ...extra,
+    },
+    ...(models ? { models: { allow: models.allow ?? [], deny: models.deny ?? [] } } : {}),
+  })
+  __resetSurfaceProfileCacheForTests()
+  __setDeploymentPayerForTests(PAYER)
+}
+
+/** What `set_deployment_allowance` answers: PostgREST returns an ARRAY of one
+ *  row for a `RETURNS TABLE` function, and the service unwraps it. */
+function allowanceRpcRow(over: Record<string, unknown> = {}) {
+  return {
+    data: [
+      {
+        applied: "set",
+        granted_credits: 10,
+        reserved_credits: 0,
+        spent_credits: 0,
+        reset_at: null,
+        ...over,
+      },
+    ],
+    error: null,
+  }
+}
+
+let app: FastifyInstance
+
+/** `x-user-id` is the identity, `x-auth-kind` the credential class. A
+ *  `billing_key` request also carries `req.billingKey`, exactly as the auth
+ *  hook stamps it — without that field `rejectProgrammaticAuth`'s billing-key
+ *  branch is never reached and every "a key may do this" assertion below would
+ *  pass for the wrong reason. */
+async function buildApp(): Promise<FastifyInstance> {
+  const instance = Fastify({ logger: false })
+  instance.addHook("preHandler", async (req) => {
+    const userId = req.headers["x-user-id"]
+    if (typeof userId === "string") req.userId = userId
+    const kind = req.headers["x-auth-kind"]
+    req.authKind = typeof kind === "string" ? (kind as NonNullable<typeof req.authKind>) : "jwt"
+    if (req.authKind === "api_token") req.apiToken = { id: "tok", userId: String(userId) } as never
+    if (req.authKind === "app_token") req.appAuthorization = { id: "auth" } as never
+    if (req.authKind === "billing_key") req.billingKey = { id: KEY_ID, name: "back office" }
+  })
+  await instance.register(async (i) => {
+    await deploymentBillingRoutes(i)
+  })
+  await instance.ready()
+  return instance
+}
+
+const AS_PAYER = { "x-user-id": PAYER }
+const AS_KEY = { "x-user-id": PAYER, "x-auth-kind": "billing_key" }
+
+beforeEach(async () => {
+  vi.clearAllMocks()
+  tableResults.clear()
+  rpcHandlers.clear()
+  rec.fromCalls = []
+  rec.selectCols = {}
+  rec.filterCalls = []
+  rec.writePayloads = []
+  rec.rpcCalls = []
+  delete h.config.STRIPE_SECRET_KEY
+  __resetDeploymentPayerForTests()
+  __resetDeploymentAllowanceCacheForTests()
+  delete process.env.NODARO_SURFACE_PROFILE
+  __resetSurfaceProfileCacheForTests()
+  app = await buildApp()
+})
+
+afterEach(async () => {
+  await app.close()
+  __resetDeploymentPayerForTests()
+  __resetDeploymentAllowanceCacheForTests()
+  if (REAL_ENV === undefined) delete process.env.NODARO_SURFACE_PROFILE
+  else process.env.NODARO_SURFACE_PROFILE = REAL_ENV
+  __resetSurfaceProfileCacheForTests()
+})
+
+/** The user exists and every lookup says so. */
+function userExists(userId: string, opts: { subject?: string; email?: string } = {}): void {
+  tableResults.set("profiles:single", { data: { id: userId, email: opts.email ?? "dana@example.com" }, error: null })
+  tableResults.set("profiles:list", {
+    data: [{ id: userId, email: opts.email ?? "dana@example.com", full_name: "Dana" }],
+    error: null,
+    count: 1,
+  })
+  rpcHandlers.set("find_user_by_sso_subject", () => ({ data: userId, error: null }))
+  rpcHandlers.set("sso_subjects_for", () => ({
+    data: [{ id: userId, sso_subject: opts.subject ?? "usr_01HZX" }],
+    error: null,
+  }))
+}
+
+/** Nobody answers to any of the three forms. */
+function userAbsent(): void {
+  tableResults.set("profiles:single", { data: null, error: null })
+  tableResults.set("profiles:list", { data: [], error: null, count: 0 })
+  rpcHandlers.set("find_user_by_sso_subject", () => ({ data: null, error: null }))
+  rpcHandlers.set("sso_subjects_for", () => ({ data: [], error: null }))
+}
+
+const ALLOWANCE = (ref: string) => `/v1/deployment-billing/users/${ref}/allowance`
+
+// ===========================================================================
+// PUT /users/:ref/allowance — the three identity forms
+// ===========================================================================
+
+describe("PUT /users/:ref/allowance — naming the user", () => {
+  beforeEach(() => {
+    payerDeployment()
+    tableResults.set("deployment_user_allowances", { data: null, error: null })
+    tableResults.set("deployment_payer_settings", { data: { default_allowance_credits: 100 }, error: null })
+    rpcHandlers.set("set_deployment_allowance", () => allowanceRpcRow())
+  })
+
+  it("accepts a studio uuid and passes the RESOLVED id to the RPC", async () => {
+    userExists(U1)
+    const res = await app.inject({
+      method: "PUT",
+      url: ALLOWANCE(U1),
+      headers: AS_PAYER,
+      payload: { units: 20_000, mode: "set" },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.userId).toBe(U1)
+    const call = rec.rpcCalls.find((c) => c.name === "set_deployment_allowance")
+    expect(call?.args.p_user_id).toBe(U1)
+    // R3: 20 000 units at 2000/credit is TEN credits, and ten is what the
+    // ledger must see. A unit that reached the RPC would be a 2000x
+    // over-allocation the database cannot notice.
+    expect(call?.args.p_target_credits).toBe(10)
+  })
+
+  it("accepts sso:<subject> and resolves it through the trusted subject lookup", async () => {
+    userExists(U1, { subject: "usr_01HZX" })
+    const res = await app.inject({
+      method: "PUT",
+      url: ALLOWANCE("sso:usr_01HZX"),
+      headers: AS_PAYER,
+      payload: { units: 20_000, mode: "set" },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.userId).toBe(U1)
+    expect(rec.rpcCalls.some((c) => c.name === "find_user_by_sso_subject" && c.args.p_subject === "usr_01HZX")).toBe(
+      true,
+    )
+  })
+
+  it("accepts email:<addr>, URL-ENCODED, and matches it case-insensitively", async () => {
+    userExists(U1, { email: "Dana@Example.com" })
+    const res = await app.inject({
+      method: "PUT",
+      url: ALLOWANCE(encodeURIComponent("email:DANA@example.com")),
+      headers: AS_PAYER,
+      payload: { units: 20_000, mode: "set" },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.userId).toBe(U1)
+  })
+
+  it("refuses a reference that is none of the three forms with 400 invalid_user_ref", async () => {
+    userExists(U1)
+    // The fourth entry is uuid-SHAPED but malformed: without the shape check
+    // in the route it reaches Postgres, the predicate is refused (22P02), the
+    // service maps any failed lookup to `ambiguous`, and a typo comes back as
+    // `409 user_ambiguous` — telling the caller to fix a duplicate that does
+    // not exist.
+    for (const ref of ["not-a-uuid", "00000000-0000-4000-8000-00000000zzzz", "sso:", "email:", "email:nope", "%20"]) {
+      const res = await app.inject({
+        method: "PUT",
+        url: ALLOWANCE(ref),
+        headers: AS_PAYER,
+        payload: { units: 20_000, mode: "set" },
+      })
+      expect(res.statusCode, ref).toBe(400)
+      expect(res.json().error.code, ref).toBe("invalid_user_ref")
+    }
+    expect(rec.rpcCalls.some((c) => c.name === "set_deployment_allowance")).toBe(false)
+  })
+
+  it("refuses an AMBIGUOUS email with 409 user_ambiguous and writes nothing", async () => {
+    tableResults.set("profiles:list", {
+      data: [
+        { id: U1, email: "dana@example.com" },
+        { id: U2, email: "DANA@example.com" },
+      ],
+      error: null,
+    })
+    const res = await app.inject({
+      method: "PUT",
+      url: ALLOWANCE(encodeURIComponent("email:dana@example.com")),
+      headers: AS_PAYER,
+      payload: { units: 20_000, mode: "set" },
+    })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("user_ambiguous")
+    expect(rec.rpcCalls.some((c) => c.name === "set_deployment_allowance")).toBe(false)
+  })
+
+  it("answers 503 read_failed when the LOOKUP itself failed, and writes nothing", async () => {
+    // The refusal used to be `409 user_ambiguous` — "two accounts answer to
+    // that identity", which a back office treats as FINAL and goes off to fix
+    // in its identity provider. A dropped connection is a fault, and the only
+    // useful thing to say about it is "nothing changed, try again": the same
+    // status and the same posture the renew check takes when it cannot read
+    // the ledger.
+    tableResults.set("profiles:single", { data: null, error: { message: "connection reset" } })
+    const res = await app.inject({
+      method: "PUT",
+      url: ALLOWANCE(U1),
+      headers: AS_PAYER,
+      payload: { units: 20_000, mode: "set" },
+    })
+    expect(res.statusCode).toBe(503)
+    expect(res.json().error.code).toBe("read_failed")
+    expect(rec.rpcCalls.some((c) => c.name === "set_deployment_allowance")).toBe(false)
+    expect(rec.writePayloads.some((w) => w.table === "deployment_allowance_pending")).toBe(false)
+  })
+
+  it("answers 400 invalid_user_ref for an address carrying a `*`, and never queries with it", async () => {
+    // PostgREST rewrites `*` to `%` inside an `ilike` value. That is a
+    // reference this lookup cannot be performed WITH — a client error, not a
+    // duplicated identity the customer has to go and resolve.
+    const res = await app.inject({
+      method: "PUT",
+      url: ALLOWANCE(encodeURIComponent("email:da*a@example.com")),
+      headers: AS_PAYER,
+      payload: { units: 20_000, mode: "set" },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("invalid_user_ref")
+    expect(rec.fromCalls).not.toContain("profiles")
+  })
+
+  it("refuses an absurd target rather than letting the integer column overflow inside the RPC", async () => {
+    // `granted_credits` is `integer` and a RUNNING SUM. A target at the type's
+    // ceiling arrives back from the database as a 500 the caller reads as "the
+    // platform is broken", when it is a figure nobody could have meant.
+    userExists(U1)
+    const res = await app.inject({
+      method: "PUT",
+      url: ALLOWANCE(U1),
+      headers: AS_PAYER,
+      payload: { units: 9_000_000_000_000, mode: "set" },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("invalid_units")
+    expect(rec.rpcCalls.some((c) => c.name === "set_deployment_allowance")).toBe(false)
+  })
+
+  it("refuses the billing account itself, by uuid AND through a subject that resolves to it", async () => {
+    userExists(PAYER)
+    for (const ref of [PAYER, "sso:usr_01HZX"]) {
+      const res = await app.inject({
+        method: "PUT",
+        url: ALLOWANCE(ref),
+        headers: AS_PAYER,
+        payload: { units: 20_000, mode: "set" },
+      })
+      expect(res.statusCode, ref).toBe(400)
+      expect(res.json().error.code, ref).toBe("payer_has_no_allowance")
+    }
+  })
+
+  it("answers 404 user_not_found for a UUID nobody answers to — a uuid cannot be pending", async () => {
+    userAbsent()
+    const res = await app.inject({
+      method: "PUT",
+      url: ALLOWANCE(GHOST),
+      headers: AS_PAYER,
+      payload: { units: 20_000, mode: "set" },
+    })
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe("user_not_found")
+    expect(rec.writePayloads.some((w) => w.table === "deployment_allowance_pending")).toBe(false)
+  })
+})
+
+// ===========================================================================
+// set / renew semantics
+// ===========================================================================
+
+describe("PUT /users/:ref/allowance — set, renew and the replay rules", () => {
+  beforeEach(() => {
+    payerDeployment()
+    userExists(U1)
+    tableResults.set("deployment_payer_settings", { data: { default_allowance_credits: 100 }, error: null })
+  })
+
+  it("returns BOTH units and credits for every allowance figure", async () => {
+    tableResults.set("deployment_user_allowances", { data: null, error: null })
+    rpcHandlers.set("set_deployment_allowance", () =>
+      allowanceRpcRow({ applied: "set", granted_credits: 10, reserved_credits: 1, spent_credits: 2 }),
+    )
+    const res = await app.inject({
+      method: "PUT",
+      url: ALLOWANCE(U1),
+      headers: AS_PAYER,
+      payload: { units: 20_000, mode: "set" },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toEqual({
+      userId: U1,
+      applied: "set",
+      allowance: {
+        granted: { units: 20_000, credits: 10 },
+        remaining: { units: 14_000, credits: 7 },
+        spent: { units: 4_000, credits: 2 },
+        resetAt: null,
+      },
+    })
+  })
+
+  it("is idempotent: a replayed set is applied 'noop' and invalidates no cache", async () => {
+    tableResults.set("deployment_user_allowances", { data: null, error: null })
+    rpcHandlers.set("set_deployment_allowance", () => allowanceRpcRow({ applied: "noop" }))
+    const res = await app.inject({
+      method: "PUT",
+      url: ALLOWANCE(U1),
+      headers: AS_PAYER,
+      payload: { units: 20_000, mode: "set" },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.applied).toBe("noop")
+    // Nothing moved, so nothing to invalidate — and a cache drop here would
+    // make the page redraw for a write that never happened.
+    expect(h.invalidateBalanceCache).not.toHaveBeenCalled()
+  })
+
+  it("invalidates the requester's balance cache on an APPLIED write", async () => {
+    tableResults.set("deployment_user_allowances", { data: null, error: null })
+    rpcHandlers.set("set_deployment_allowance", () => allowanceRpcRow({ applied: "set" }))
+    await app.inject({ method: "PUT", url: ALLOWANCE(U1), headers: AS_PAYER, payload: { units: 20_000, mode: "set" } })
+    expect(h.invalidateBalanceCache).toHaveBeenCalledWith(U1)
+  })
+
+  it("renews, then refuses an immediate second renew with 409 renewal_too_soon naming resetAt", async () => {
+    const justNow = new Date(Date.now() - 60_000).toISOString()
+    tableResults.set("deployment_user_allowances:single", {
+      data: { user_id: U1, granted_credits: 10, reserved_credits: 0, spent_credits: 0, reset_at: justNow },
+      error: null,
+    })
+    rpcHandlers.set("set_deployment_allowance", () => allowanceRpcRow({ applied: "renew", reset_at: justNow }))
+    const res = await app.inject({
+      method: "PUT",
+      url: ALLOWANCE(U1),
+      headers: AS_PAYER,
+      payload: { units: 20_000, mode: "renew" },
+    })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("renewal_too_soon")
+    expect(res.json().error.detail).toContain(justNow)
+    // The whole point: the RPC that would zero a real period's spend never ran.
+    expect(rec.rpcCalls.some((c) => c.name === "set_deployment_allowance")).toBe(false)
+  })
+
+  it("allows the same renew with force: true", async () => {
+    const justNow = new Date(Date.now() - 60_000).toISOString()
+    tableResults.set("deployment_user_allowances:single", {
+      data: { user_id: U1, granted_credits: 10, reserved_credits: 0, spent_credits: 0, reset_at: justNow },
+      error: null,
+    })
+    rpcHandlers.set("set_deployment_allowance", () => allowanceRpcRow({ applied: "renew", reset_at: justNow }))
+    const res = await app.inject({
+      method: "PUT",
+      url: ALLOWANCE(U1),
+      headers: AS_PAYER,
+      payload: { units: 20_000, mode: "renew", force: true },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.applied).toBe("renew")
+    expect(rec.rpcCalls.find((c) => c.name === "set_deployment_allowance")?.args.p_mode).toBe("renew")
+  })
+
+  it("allows a renew when the last one was more than 24 hours ago", async () => {
+    const longAgo = new Date(Date.now() - 40 * 3_600_000).toISOString()
+    tableResults.set("deployment_user_allowances:single", {
+      data: { user_id: U1, granted_credits: 10, reserved_credits: 0, spent_credits: 0, reset_at: longAgo },
+      error: null,
+    })
+    rpcHandlers.set("set_deployment_allowance", () => allowanceRpcRow({ applied: "renew" }))
+    const res = await app.inject({
+      method: "PUT",
+      url: ALLOWANCE(U1),
+      headers: AS_PAYER,
+      payload: { units: 20_000, mode: "renew" },
+    })
+    expect(res.statusCode).toBe(200)
+  })
+
+  it("refuses an unverifiable renew rather than risk zeroing a live period", async () => {
+    // The ledger read failed, so "when was this last renewed?" has no answer.
+    // Guessing "never" would let a duplicate webhook wipe a real spend figure.
+    tableResults.set("deployment_user_allowances:single", { data: null, error: { message: "boom" } })
+    const res = await app.inject({
+      method: "PUT",
+      url: ALLOWANCE(U1),
+      headers: AS_PAYER,
+      payload: { units: 20_000, mode: "renew" },
+    })
+    expect(res.statusCode).toBe(503)
+    expect(res.json().error.code).toBe("read_failed")
+    expect(rec.rpcCalls.some((c) => c.name === "set_deployment_allowance")).toBe(false)
+  })
+
+  it("refuses an unknown mode with 400", async () => {
+    tableResults.set("deployment_user_allowances", { data: null, error: null })
+    const res = await app.inject({
+      method: "PUT",
+      url: ALLOWANCE(U1),
+      headers: AS_PAYER,
+      payload: { units: 20_000, mode: "topup" },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("allowance_mode_invalid")
+  })
+
+  it("maps the database's below-committed refusal to 409", async () => {
+    tableResults.set("deployment_user_allowances", { data: null, error: null })
+    rpcHandlers.set("set_deployment_allowance", () => ({
+      data: null,
+      error: { message: "ALLOWANCE_BELOW_COMMITTED: target 4 is below reserved+spent 9" },
+    }))
+    const res = await app.inject({
+      method: "PUT",
+      url: ALLOWANCE(U1),
+      headers: AS_PAYER,
+      payload: { units: 8_000, mode: "set" },
+    })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("allowance_below_committed")
+  })
+})
+
+// ===========================================================================
+// Units
+// ===========================================================================
+
+describe("PUT /users/:ref/allowance — the unit rule", () => {
+  beforeEach(() => {
+    payerDeployment()
+    userExists(U1)
+    tableResults.set("deployment_user_allowances", { data: null, error: null })
+    tableResults.set("deployment_payer_settings", { data: { default_allowance_credits: 100 }, error: null })
+    rpcHandlers.set("set_deployment_allowance", () => allowanceRpcRow())
+  })
+
+  it("still refuses a figure that is not a whole number of credits", async () => {
+    const res = await app.inject({
+      method: "PUT",
+      url: ALLOWANCE(U1),
+      headers: AS_PAYER,
+      payload: { units: 20_001, mode: "set" },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("unit_not_whole_credits")
+    expect(rec.rpcCalls.some((c) => c.name === "set_deployment_allowance")).toBe(false)
+  })
+
+  it("accepts ZERO as a target for set and for renew — a cancelled plan is a quota of 0", async () => {
+    rpcHandlers.set("set_deployment_allowance", () => allowanceRpcRow({ granted_credits: 0 }))
+    for (const mode of ["set", "renew"]) {
+      rec.rpcCalls = []
+      tableResults.set("deployment_user_allowances:single", {
+        data: { user_id: U1, granted_credits: 10, reserved_credits: 0, spent_credits: 0, reset_at: null },
+        error: null,
+      })
+      const res = await app.inject({
+        method: "PUT",
+        url: ALLOWANCE(U1),
+        headers: AS_PAYER,
+        payload: { units: 0, mode },
+      })
+      expect(res.statusCode, mode).toBe(200)
+      expect(rec.rpcCalls.find((c) => c.name === "set_deployment_allowance")?.args.p_target_credits, mode).toBe(0)
+    }
+  })
+
+  it("still refuses ZERO on a grant — a grant must move something", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/deployment-billing/users/${U1}/grant`,
+      headers: AS_PAYER,
+      payload: { units: 0 },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("invalid_units")
+  })
+
+  it("refuses a negative target — a downgrade is a lower target, never a negative one", async () => {
+    const res = await app.inject({
+      method: "PUT",
+      url: ALLOWANCE(U1),
+      headers: AS_PAYER,
+      payload: { units: -20_000, mode: "set" },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("invalid_units")
+  })
+
+  it("caps the note at 500 characters, with its own code", async () => {
+    const res = await app.inject({
+      method: "PUT",
+      url: ALLOWANCE(U1),
+      headers: AS_PAYER,
+      payload: { units: 20_000, mode: "set", note: "x".repeat(501) },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("note_too_long")
+  })
+})
+
+// ===========================================================================
+// The pending path
+// ===========================================================================
+
+describe("PUT /users/:ref/allowance — the user who has not signed in yet", () => {
+  beforeEach(() => {
+    payerDeployment()
+    userAbsent()
+    tableResults.set("deployment_payer_settings", { data: { default_allowance_credits: 100 }, error: null })
+  })
+
+  it("stores the intent and answers 202 pending for an unknown SUBJECT", async () => {
+    tableResults.set("deployment_allowance_pending:single", {
+      data: { id: "11111111-1111-4111-8111-111111111111", expires_at: "2026-12-05T10:41:00.000Z" },
+      error: null,
+    })
+    const res = await app.inject({
+      method: "PUT",
+      url: ALLOWANCE("sso:usr_new"),
+      headers: AS_KEY,
+      payload: { units: 20_000, mode: "set", note: "plan 10" },
+    })
+    expect(res.statusCode).toBe(202)
+    expect(res.json().data).toEqual({ status: "pending", expiresAt: "2026-12-05T10:41:00.000Z" })
+    const write = rec.writePayloads.find((w) => w.table === "deployment_allowance_pending" && w.op === "insert")
+    expect(write?.payload).toMatchObject({
+      sso_subject: "usr_new",
+      target_credits: 10,
+      mode: "set",
+      created_by: PAYER,
+      credential_id: KEY_ID,
+    })
+    // Nothing was applied — no allowance RPC ran at all.
+    expect(rec.rpcCalls.some((c) => c.name === "set_deployment_allowance")).toBe(false)
+  })
+
+  it("stores the intent for an unknown EMAIL, lower-cased", async () => {
+    tableResults.set("deployment_allowance_pending:single", {
+      data: { id: "11111111-1111-4111-8111-111111111112", expires_at: "2026-12-05T10:41:00.000Z" },
+      error: null,
+    })
+    const res = await app.inject({
+      method: "PUT",
+      url: ALLOWANCE(encodeURIComponent("email:Yosef@Example.com")),
+      headers: AS_PAYER,
+      payload: { units: 20_000, mode: "set" },
+    })
+    expect(res.statusCode).toBe(202)
+    const write = rec.writePayloads.find((w) => w.table === "deployment_allowance_pending" && w.op === "insert")
+    expect((write?.payload as { email: string }).email).toBe("yosef@example.com")
+  })
+
+  it("a sign-in applies the intent, and the NEXT set is then a real delta", async () => {
+    // 1. pending
+    tableResults.set("deployment_allowance_pending:single", {
+      data: { id: "11111111-1111-4111-8111-111111111113", expires_at: "2026-12-05T10:41:00.000Z" },
+      error: null,
+    })
+    const first = await app.inject({
+      method: "PUT",
+      url: ALLOWANCE("sso:usr_late"),
+      headers: AS_PAYER,
+      payload: { units: 20_000, mode: "set" },
+    })
+    expect(first.statusCode).toBe(202)
+
+    // 2. the sign-in — the same call `sso-linking.ts` makes after createUser.
+    rpcHandlers.set("apply_pending_deployment_allowance", () => ({ data: 1, error: null }))
+    await expect(applyPendingAllowance(U2, "usr_late", null)).resolves.toBe(1)
+
+    // 3. the account now exists, and a second `set` at the same figure is a
+    //    noop against the applied intent rather than a second allocation.
+    userExists(U2, { subject: "usr_late" })
+    tableResults.set("deployment_user_allowances:single", {
+      data: { user_id: U2, granted_credits: 10, reserved_credits: 0, spent_credits: 0, reset_at: null },
+      error: null,
+    })
+    rpcHandlers.set("set_deployment_allowance", () => allowanceRpcRow({ applied: "noop" }))
+    const second = await app.inject({
+      method: "PUT",
+      url: ALLOWANCE("sso:usr_late"),
+      headers: AS_PAYER,
+      payload: { units: 20_000, mode: "set" },
+    })
+    expect(second.statusCode).toBe(200)
+    expect(second.json().data).toMatchObject({ userId: U2, applied: "noop" })
+
+    // 4. and a HIGHER figure now moves a real delta.
+    rpcHandlers.set("set_deployment_allowance", () => allowanceRpcRow({ applied: "set", granted_credits: 20 }))
+    const third = await app.inject({
+      method: "PUT",
+      url: ALLOWANCE("sso:usr_late"),
+      headers: AS_PAYER,
+      payload: { units: 40_000, mode: "set" },
+    })
+    expect(third.statusCode).toBe(200)
+    expect(third.json().data.applied).toBe("set")
+    expect(third.json().data.allowance.granted).toEqual({ units: 40_000, credits: 20 })
+  })
+
+  it("a replayed pending write REPLACES the stored intent rather than queueing a second", async () => {
+    tableResults.set("deployment_allowance_pending:single", {
+      data: { id: "11111111-1111-4111-8111-111111111114", expires_at: "2026-12-05T10:41:00.000Z" },
+      error: null,
+    })
+    await app.inject({
+      method: "PUT",
+      url: ALLOWANCE("sso:usr_new"),
+      headers: AS_PAYER,
+      payload: { units: 20_000, mode: "set" },
+    })
+    expect(rec.writePayloads.some((w) => w.table === "deployment_allowance_pending" && w.op === "delete")).toBe(true)
+  })
+})
+
+// ===========================================================================
+// GET /users — the two new columns
+// ===========================================================================
+
+describe("GET /users — ssoSubject and resetAt", () => {
+  it("decorates each row with its trusted subject and its period start", async () => {
+    payerDeployment()
+    const resetAt = "2026-09-01T00:00:00.000Z"
+    tableResults.set("profiles:list", {
+      data: [
+        { id: U1, email: "dana@example.com", full_name: "Dana", created_at: "2026-01-01T00:00:00.000Z" },
+        { id: U2, email: "yosef@example.com", full_name: "Yosef", created_at: "2026-01-02T00:00:00.000Z" },
+      ],
+      error: null,
+      count: 2,
+    })
+    tableResults.set("deployment_user_allowances:list", {
+      data: [
+        { user_id: U1, granted_credits: 10, reserved_credits: 0, spent_credits: 1, reset_at: resetAt },
+        { user_id: U2, granted_credits: 5, reserved_credits: 0, spent_credits: 0, reset_at: null },
+      ],
+      error: null,
+    })
+    rpcHandlers.set("sso_subjects_for", () => ({ data: [{ id: U1, sso_subject: "usr_dana" }], error: null }))
+
+    const res = await app.inject({ method: "GET", url: "/v1/deployment-billing/users", headers: AS_PAYER })
+    expect(res.statusCode).toBe(200)
+    const rows = res.json().data as Array<Record<string, unknown>>
+    expect(rows[0]).toMatchObject({ id: U1, ssoSubject: "usr_dana", resetAt })
+    // Absent, not fabricated: a user with no federated identity is a different
+    // fact from one whose subject we failed to read.
+    expect(rows[1]).toMatchObject({ id: U2, ssoSubject: null, resetAt: null })
+    // ONE lookup for the page, never one per row.
+    expect(rec.rpcCalls.filter((c) => c.name === "sso_subjects_for")).toHaveLength(1)
+  })
+})
+
+// ===========================================================================
+// GET /users/resolve
+// ===========================================================================
+
+describe("GET /users/resolve", () => {
+  beforeEach(() => {
+    payerDeployment()
+    tableResults.set("deployment_payer_settings", { data: { default_allowance_credits: 100 }, error: null })
+  })
+
+  it("answers the studio uuid, the email, the subject and the allowance for a subject", async () => {
+    userExists(U1, { subject: "usr_dana", email: "dana@example.com" })
+    tableResults.set("deployment_user_allowances:single", {
+      data: { user_id: U1, granted_credits: 10, reserved_credits: 0, spent_credits: 2, reset_at: null },
+      error: null,
+    })
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/deployment-billing/users/resolve?sso_subject=usr_dana",
+      headers: AS_KEY,
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toEqual({
+      id: U1,
+      email: "dana@example.com",
+      ssoSubject: "usr_dana",
+      provisioned: true,
+      allowance: {
+        granted: { units: 20_000, credits: 10 },
+        remaining: { units: 16_000, credits: 8 },
+        spent: { units: 4_000, credits: 2 },
+        resetAt: null,
+      },
+    })
+  })
+
+  it("answers provisioned: false with the DEFAULT figures for a user who has no row", async () => {
+    userExists(U1, { subject: "usr_dana" })
+    tableResults.set("deployment_user_allowances:single", { data: null, error: null })
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/deployment-billing/users/resolve?sso_subject=usr_dana",
+      headers: AS_PAYER,
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.provisioned).toBe(false)
+    expect(res.json().data.allowance.granted).toEqual({ units: 200_000, credits: 100 })
+  })
+
+  it("404s when nobody matches", async () => {
+    userAbsent()
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/deployment-billing/users/resolve?email=nobody@example.com",
+      headers: AS_PAYER,
+    })
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe("user_not_found")
+  })
+
+  it("409s on an ambiguous email", async () => {
+    tableResults.set("profiles:list", {
+      data: [
+        { id: U1, email: "dana@example.com" },
+        { id: U2, email: "dana@example.com" },
+      ],
+      error: null,
+    })
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/deployment-billing/users/resolve?email=dana@example.com",
+      headers: AS_PAYER,
+    })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("user_ambiguous")
+  })
+
+  it("answers 503 rather than reporting `provisioned: false` off a failed ledger read", async () => {
+    // `provisioned: false` plus the default beside it is a FACT about the
+    // person — "no row of their own, and this is what they would get". A
+    // failed read is not that fact, and a back office storing it would believe
+    // a quota was untouched when nobody knows whether it was.
+    rpcHandlers.set("find_user_by_sso_subject", () => ({ data: U1, error: null }))
+    tableResults.set("deployment_user_allowances:single", {
+      data: null,
+      error: { message: "connection reset" },
+    })
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/deployment-billing/users/resolve?sso_subject=usr_dana",
+      headers: AS_PAYER,
+    })
+    expect(res.statusCode).toBe(503)
+    expect(res.json().error.code).toBe("read_failed")
+  })
+
+  it("refuses both parameters at once, and neither, with invalid_user_ref", async () => {
+    for (const q of ["", "?sso_subject=a&email=b@example.com"]) {
+      const res = await app.inject({
+        method: "GET",
+        url: `/v1/deployment-billing/users/resolve${q}`,
+        headers: AS_PAYER,
+      })
+      expect(res.statusCode, q).toBe(400)
+      expect(res.json().error.code, q).toBe("invalid_user_ref")
+    }
+  })
+
+  it("refuses the billing account", async () => {
+    userExists(PAYER, { subject: "usr_support" })
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/deployment-billing/users/resolve?sso_subject=usr_support",
+      headers: AS_PAYER,
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("payer_has_no_allowance")
+  })
+})
+
+// ===========================================================================
+// The credential — a key may allocate, and stamps its own id
+// ===========================================================================
+
+describe("the integration key on the write verbs", () => {
+  beforeEach(() => {
+    payerDeployment()
+    userExists(U1)
+    tableResults.set("deployment_user_allowances", { data: null, error: null })
+    tableResults.set("deployment_payer_settings", { data: { default_allowance_credits: 100 }, error: null })
+  })
+
+  it("stamps credential_id on a set", async () => {
+    rpcHandlers.set("set_deployment_allowance", () => allowanceRpcRow())
+    const res = await app.inject({
+      method: "PUT",
+      url: ALLOWANCE(U1),
+      headers: AS_KEY,
+      payload: { units: 20_000, mode: "set" },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(rec.rpcCalls.find((c) => c.name === "set_deployment_allowance")?.args.p_credential_id).toBe(KEY_ID)
+  })
+
+  it("stamps NULL from the page's browser session", async () => {
+    rpcHandlers.set("set_deployment_allowance", () => allowanceRpcRow())
+    await app.inject({ method: "PUT", url: ALLOWANCE(U1), headers: AS_PAYER, payload: { units: 20_000, mode: "set" } })
+    expect(rec.rpcCalls.find((c) => c.name === "set_deployment_allowance")?.args.p_credential_id).toBeNull()
+  })
+
+  it("stamps credential_id on a grant too", async () => {
+    rpcHandlers.set("grant_deployment_allowance", () => ({ data: null, error: null }))
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/deployment-billing/users/${U1}/grant`,
+      headers: AS_KEY,
+      payload: { units: 20_000 },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(rec.rpcCalls.find((c) => c.name === "grant_deployment_allowance")?.args.p_credential_id).toBe(KEY_ID)
+  })
+})
+
+// ===========================================================================
+// GET /balance and PUT /balance/threshold
+// ===========================================================================
+
+describe("GET /balance", () => {
+  beforeEach(() => {
+    payerDeployment()
+    h.getBalance.mockResolvedValue({ total: 41_250, subscription: 0, topup: 41_250, tier: "pro", periodEnd: null })
+    tableResults.set("usage_logs:list", { data: [{ credits_used: 300 }, { credits_used: 600 }], error: null })
+  })
+
+  it("reports the pool in RAW Nodaro credits, with the period's burn", async () => {
+    tableResults.set("deployment_payer_settings:single", { data: { low_balance_threshold_credits: null }, error: null })
+    const res = await app.inject({ method: "GET", url: "/v1/deployment-billing/balance", headers: AS_KEY })
+    expect(res.statusCode).toBe(200)
+    const d = res.json().data
+    // The pool is Nodaro's money, not an allocation in the customer's unit —
+    // converting it would invent an exchange rate for something that is not
+    // being exchanged. It is the ONE figure in this API that is not in units.
+    expect(d.balanceCredits).toBe(41_250)
+    expect(d.burn).toMatchObject({ credits: 900, generations: 2, capped: false })
+    expect(d.periodEnd).toBeNull()
+  })
+
+  it("has lowBalance FALSE while no threshold is set — never a fabricated default", async () => {
+    tableResults.set("deployment_payer_settings:single", { data: { low_balance_threshold_credits: null }, error: null })
+    const res = await app.inject({ method: "GET", url: "/v1/deployment-billing/balance", headers: AS_PAYER })
+    expect(res.json().data).toMatchObject({ threshold: null, lowBalance: false })
+  })
+
+  it("flips lowBalance exactly at the threshold", async () => {
+    for (const [threshold, expected] of [
+      [41_251, true],
+      [41_250, false],
+      [10_000, false],
+    ] as Array<[number, boolean]>) {
+      tableResults.set("deployment_payer_settings:single", {
+        data: { low_balance_threshold_credits: threshold },
+        error: null,
+      })
+      const res = await app.inject({ method: "GET", url: "/v1/deployment-billing/balance", headers: AS_PAYER })
+      expect(res.json().data.lowBalance, String(threshold)).toBe(expected)
+      expect(res.json().data.threshold, String(threshold)).toBe(threshold)
+    }
+  })
+
+  it("cannot claim lowBalance when the balance itself is unknown", async () => {
+    // `null` means "we could not read it", and a null compared against a
+    // threshold would silently read as 0 — the loudest possible false alarm.
+    h.getBalance.mockRejectedValue(new Error("upstream down"))
+    tableResults.set("deployment_payer_settings:single", {
+      data: { low_balance_threshold_credits: 10_000 },
+      error: null,
+    })
+    const res = await app.inject({ method: "GET", url: "/v1/deployment-billing/balance", headers: AS_PAYER })
+    expect(res.json().data.balanceCredits).toBeNull()
+    expect(res.json().data.lowBalance).toBe(false)
+  })
+})
+
+describe("PUT /balance/threshold", () => {
+  beforeEach(() => {
+    payerDeployment()
+    tableResults.set("deployment_payer_settings:list", { data: [{ id: true }], error: null })
+  })
+
+  it("stores a threshold in RAW credits and echoes it back", async () => {
+    const res = await app.inject({
+      method: "PUT",
+      url: "/v1/deployment-billing/balance/threshold",
+      headers: AS_KEY,
+      payload: { credits: 10_000 },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toEqual({ threshold: 10_000 })
+    expect(rec.writePayloads.find((w) => w.table === "deployment_payer_settings")?.payload).toMatchObject({
+      low_balance_threshold_credits: 10_000,
+    })
+  })
+
+  it("clears it with null", async () => {
+    const res = await app.inject({
+      method: "PUT",
+      url: "/v1/deployment-billing/balance/threshold",
+      headers: AS_PAYER,
+      payload: { credits: null },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toEqual({ threshold: null })
+  })
+
+  it("refuses anything that is not a whole non-negative number of credits", async () => {
+    for (const credits of [-1, 1.5, "10000", undefined]) {
+      const res = await app.inject({
+        method: "PUT",
+        url: "/v1/deployment-billing/balance/threshold",
+        headers: AS_PAYER,
+        payload: { credits },
+      })
+      expect(res.statusCode, String(credits)).toBe(400)
+      expect(res.json().error.code, String(credits)).toBe("invalid_threshold")
+    }
+    expect(rec.writePayloads.filter((w) => w.table === "deployment_payer_settings")).toHaveLength(0)
+  })
+
+  it("reports the missing settings singleton rather than a save that went nowhere", async () => {
+    tableResults.set("deployment_payer_settings:list", { data: [], error: null })
+    const res = await app.inject({
+      method: "PUT",
+      url: "/v1/deployment-billing/balance/threshold",
+      headers: AS_PAYER,
+      payload: { credits: 10_000 },
+    })
+    expect(res.statusCode).toBe(500)
+    expect(res.json().error.code).toBe("allowance_unconfigured")
+  })
+})
+
+// ===========================================================================
+// GET /usage
+// ===========================================================================
+
+/** Microseconds on purpose: Postgres stores `timestamptz` to the microsecond
+ *  and PostgREST hands it back that way. Rounding a cursor through `new Date()`
+ *  would lose the last three digits, the `created_at = c` half of the keyset
+ *  would never match, and the boundary row would be silently skipped or
+ *  served twice — which is precisely what this route promises not to do. */
+const T3 = "2026-09-05T14:02:11.123456+00:00"
+const T2 = "2026-09-04T09:31:22.000001+00:00"
+const T1 = "2026-09-03T08:00:00.500000+00:00"
+
+const JOB1 = "00000000-0000-4000-8000-0000000j0001".replace("j", "a")
+const LOG1 = "00000000-0000-4000-8000-00000000e001"
+const LOG2 = "00000000-0000-4000-8000-00000000e002"
+const LOG3 = "00000000-0000-4000-8000-00000000e003"
+
+function usageRows() {
+  return [
+    {
+      id: LOG3,
+      created_at: T3,
+      job_id: JOB1,
+      action: "nano-banana",
+      provider: "kie",
+      status: "committed",
+      credits_used: 4,
+      on_behalf_of: U1,
+    },
+    {
+      id: LOG2,
+      created_at: T2,
+      job_id: null,
+      action: "flux",
+      provider: "kie",
+      status: "reserved",
+      credits_used: 2,
+      on_behalf_of: U2,
+    },
+    {
+      id: LOG1,
+      created_at: T1,
+      job_id: null,
+      action: "flux",
+      provider: "kie",
+      status: "refunded",
+      credits_used: 1,
+      on_behalf_of: null,
+    },
+  ]
+}
+
+describe("GET /usage", () => {
+  beforeEach(() => {
+    payerDeployment()
+    tableResults.set("profiles:list", {
+      data: [
+        { id: U1, email: "dana@example.com", full_name: "Dana" },
+        { id: U2, email: "yosef@example.com", full_name: "Yosef" },
+        { id: PAYER, email: "billing@example.com", full_name: "Billing" },
+      ],
+      error: null,
+    })
+    tableResults.set("jobs:list", { data: [{ id: JOB1, job_type: "image", provider: "kie" }], error: null })
+    rpcHandlers.set("sso_subjects_for", () => ({ data: [{ id: U1, sso_subject: "usr_dana" }], error: null }))
+  })
+
+  it("answers one row per usage record, with both denominations and the requester", async () => {
+    tableResults.set("usage_logs:list", { data: usageRows(), error: null })
+    const res = await app.inject({ method: "GET", url: "/v1/deployment-billing/usage", headers: AS_KEY })
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.data).toHaveLength(3)
+    expect(body.data[0]).toEqual({
+      id: LOG3,
+      createdAt: T3,
+      jobId: JOB1,
+      jobType: "image",
+      model: "nano-banana",
+      provider: "kie",
+      status: "committed",
+      credits: 4,
+      units: 8_000,
+      requester: { id: U1, email: "dana@example.com", name: "Dana", ssoSubject: "usr_dana" },
+    })
+    // The pool's own runs are attributed to the account that made them, so a
+    // caller summing by requester sees every credit the pool spent.
+    expect(body.data[2].requester.id).toBe(PAYER)
+    // NEVER an aggregate: the caller sums.
+    expect(body.total).toBeUndefined()
+    expect(body.credits).toBeUndefined()
+  })
+
+  it("scopes to the pool, orders newest-first on a stable tiebreak, and windows on created_at", async () => {
+    tableResults.set("usage_logs:list", { data: usageRows(), error: null })
+    await app.inject({
+      method: "GET",
+      url: "/v1/deployment-billing/usage?from=2026-09-01T00:00:00Z&to=2026-10-01T00:00:00Z",
+      headers: AS_PAYER,
+    })
+    const calls = rec.filterCalls.filter((c) => c.table === "usage_logs")
+    expect(calls.find((c) => c.op === "eq")?.args).toEqual(["user_id", PAYER])
+    expect(calls.find((c) => c.op === "gte")?.args).toEqual(["created_at", "2026-09-01T00:00:00.000Z"])
+    expect(calls.find((c) => c.op === "lt")?.args).toEqual(["created_at", "2026-10-01T00:00:00.000Z"])
+    const orders = calls.filter((c) => c.op === "order").map((c) => c.args[0])
+    expect(orders).toEqual(["created_at", "id"])
+  })
+
+  it("filters by on_behalf_of when ?user= names somebody", async () => {
+    userExists(U1, { subject: "usr_dana" })
+    tableResults.set("usage_logs:list", { data: [usageRows()[0]], error: null })
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/deployment-billing/usage?user=sso:usr_dana",
+      headers: AS_PAYER,
+    })
+    expect(res.statusCode).toBe(200)
+    const eqs = rec.filterCalls.filter((c) => c.table === "usage_logs" && c.op === "eq").map((c) => c.args)
+    expect(eqs).toContainEqual(["on_behalf_of", U1])
+  })
+
+  it("answers an EMPTY PAGE, not a 404, for a ?user= nobody answers to", async () => {
+    userAbsent()
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/deployment-billing/usage?user=sso:usr_ghost",
+      headers: AS_PAYER,
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toEqual([])
+    expect(res.json().nextCursor).toBeNull()
+    // Not even asked: a page that cannot contain a row costs nothing.
+    expect(rec.fromCalls).not.toContain("usage_logs")
+  })
+
+  it("pages with a keyset cursor that covers the boundary row EXACTLY ONCE", async () => {
+    const page1 = usageRows().slice(0, 2)
+    tableResults.set("usage_logs:list", { data: page1, error: null })
+    const first = await app.inject({ method: "GET", url: "/v1/deployment-billing/usage?limit=2", headers: AS_PAYER })
+    expect(first.statusCode).toBe(200)
+    const cursor = first.json().nextCursor as string
+    expect(cursor).toBeTruthy()
+    // The cursor carries the boundary row VERBATIM, microseconds included.
+    expect(Buffer.from(cursor, "base64url").toString("utf8")).toBe(`${T2}|${LOG2}`)
+
+    rec.filterCalls = []
+    tableResults.set("usage_logs:list", { data: usageRows().slice(2), error: null })
+    const second = await app.inject({
+      method: "GET",
+      url: `/v1/deployment-billing/usage?limit=2&cursor=${encodeURIComponent(cursor)}`,
+      headers: AS_PAYER,
+    })
+    expect(second.statusCode).toBe(200)
+    const or = rec.filterCalls.find((c) => c.table === "usage_logs" && c.op === "or")?.args[0] as string
+    // STRICTLY less than the boundary on both legs: the row the cursor names
+    // was already served, so serving it again would double-count a generation,
+    // and `lte` on the timestamp would do exactly that.
+    expect(or).toContain(`created_at.lt."${T2}"`)
+    expect(or).toContain(`and(created_at.eq."${T2}",id.lt."${LOG2}")`)
+    // A short page ends the walk.
+    expect(second.json().nextCursor).toBeNull()
+  })
+
+  it("refuses a tampered cursor rather than interpolating it into a filter", async () => {
+    tableResults.set("usage_logs:list", { data: [], error: null })
+    const evil = Buffer.from(`2026-09-04T09:31:22Z",id.gt."0|${LOG2}`, "utf8").toString("base64url")
+    for (const cursor of [evil, "not-base64!!", Buffer.from("nonsense").toString("base64url")]) {
+      const res = await app.inject({
+        method: "GET",
+        url: `/v1/deployment-billing/usage?cursor=${encodeURIComponent(cursor)}`,
+        headers: AS_PAYER,
+      })
+      expect(res.statusCode, cursor).toBe(400)
+      expect(res.json().error.code, cursor).toBe("invalid_cursor")
+    }
+    expect(rec.filterCalls.some((c) => c.table === "usage_logs" && c.op === "or")).toBe(false)
+  })
+
+  it("refuses an unparseable from/to rather than silently answering a different window", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/deployment-billing/usage?from=last-tuesday",
+      headers: AS_PAYER,
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("invalid_range")
+  })
+
+  it("refuses a date-time with no zone — the server's clock is not the caller's", async () => {
+    // `Date.parse` reads a bare `2026-09-01T00:00:00` as the SERVER's local
+    // time. The server runs in UTC and the customer does not, so a caller in a
+    // +03:00 zone asking for their September silently got three hours of
+    // August — every month, in a figure they reconcile against their own
+    // books.
+    for (const q of ["from=2026-09-01T00:00:00", "from=2026-09", "from=2026-09-01", "to=Sep 1 2026"]) {
+      const res = await app.inject({
+        method: "GET",
+        url: `/v1/deployment-billing/usage?${encodeURI(q)}`,
+        headers: AS_PAYER,
+      })
+      expect(res.statusCode, q).toBe(400)
+      expect(res.json().error.code, q).toBe("invalid_range")
+    }
+  })
+
+  it("accepts an offset as readily as a Z, and refuses a window that runs backwards", async () => {
+    tableResults.set("usage_logs:list", { data: [], error: null })
+    const ok = await app.inject({
+      method: "GET",
+      url: "/v1/deployment-billing/usage?from=2026-09-01T00:00:00%2B03:00&to=2026-10-01T00:00:00%2B03:00",
+      headers: AS_PAYER,
+    })
+    expect(ok.statusCode).toBe(200)
+
+    // An empty page would be read as "nothing was spent" by a caller that had
+    // simply swapped its two arguments.
+    const backwards = await app.inject({
+      method: "GET",
+      url: "/v1/deployment-billing/usage?from=2026-10-01T00:00:00Z&to=2026-09-01T00:00:00Z",
+      headers: AS_PAYER,
+    })
+    expect(backwards.statusCode).toBe(400)
+    expect(backwards.json().error.code).toBe("invalid_range")
+  })
+
+  it("reads the job decoration in chunks, never one `in` list of 500 ids", async () => {
+    const rows = Array.from({ length: 450 }, (_, i) => ({
+      id: `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`,
+      created_at: T1,
+      job_id: `00000000-0000-4000-8000-${String(i + 500).padStart(12, "0")}`,
+      action: "flux",
+      provider: "kie",
+      status: "committed",
+      credits_used: 1,
+      on_behalf_of: U1,
+    }))
+    tableResults.set("usage_logs:list", { data: rows, error: null })
+    rec.filterCalls = []
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/deployment-billing/usage?limit=500",
+      headers: AS_PAYER,
+    })
+    expect(res.statusCode).toBe(200)
+    const ins = rec.filterCalls.filter((c) => c.table === "jobs" && c.op === "in")
+    expect(ins).toHaveLength(3)
+    for (const call of ins) expect((call.args[1] as string[]).length).toBeLessThanOrEqual(200)
+    expect(ins.reduce((n, c) => n + (c.args[1] as string[]).length, 0)).toBe(450)
+  })
+
+  it("refuses the billing account as a filter with a sentence about READS", async () => {
+    // Shared with the write verbs, this said "Buy credits instead", which is
+    // advice about the wrong thing entirely on a route that changes nothing.
+    userExists(PAYER)
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/deployment-billing/usage?user=${PAYER}`,
+      headers: AS_PAYER,
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("payer_has_no_allowance")
+    expect(res.json().error.message).not.toMatch(/buy/i)
+    expect(res.json().error.message).toMatch(/usage rows/i)
+  })
+
+  it("clamps limit to 1..500 and defaults to 200", async () => {
+    tableResults.set("usage_logs:list", { data: [], error: null })
+    for (const [q, expected] of [
+      ["", 200],
+      ["?limit=1000", 500],
+      ["?limit=0", 1],
+      ["?limit=7", 7],
+    ] as Array<[string, number]>) {
+      rec.filterCalls = []
+      await app.inject({ method: "GET", url: `/v1/deployment-billing/usage${q}`, headers: AS_PAYER })
+      const limit = rec.filterCalls.find((c) => c.table === "usage_logs" && c.op === "limit")?.args[0]
+      expect(limit, q).toBe(expected)
+    }
+  })
+})
+
+// ===========================================================================
+// GET /pricing
+// ===========================================================================
+
+describe("GET /pricing", () => {
+  const ALLOWED = ["nano-banana", "flux"]
+
+  beforeEach(() => {
+    payerDeployment({}, { allow: ALLOWED })
+    h.getModelCreditCost.mockImplementation(async (id: string) => (id === "nano-banana" ? 12 : 15))
+    tableResults.set("model_pricing:list", {
+      data: [
+        {
+          model_identifier: "nano-banana",
+          display_name: "Nano Banana",
+          category: "image",
+          is_enabled: true,
+          updated_at: "2026-08-30T09:12:00.000Z",
+        },
+        {
+          model_identifier: "flux",
+          display_name: "Flux",
+          category: "image",
+          is_enabled: true,
+          updated_at: "2026-08-01T09:12:00.000Z",
+        },
+      ],
+      error: null,
+    })
+  })
+
+  it("prices only the models this deployment allows, sorted, in both denominations", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/deployment-billing/pricing", headers: AS_KEY })
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.data.map((r: { modelIdentifier: string }) => r.modelIdentifier)).toEqual(["flux", "nano-banana"])
+    expect(body.data[1]).toMatchObject({
+      modelIdentifier: "nano-banana",
+      displayName: "Nano Banana",
+      category: "image",
+      kind: "image",
+      creditCost: 12,
+      units: 24_000,
+      isEnabled: true,
+      updatedAt: "2026-08-30T09:12:00.000Z",
+    })
+    // The catalog's own price shape travels, so a metered model's per-second
+    // or per-token rate is readable without a second call.
+    expect(Array.isArray(body.data[1].pricing)).toBe(true)
+    expect(body.updatedAt).toBe("2026-08-30T09:12:00.000Z")
+    expect(body.etag).toMatch(/^"sha256-[0-9a-f]{64}"$/)
+    expect(res.headers["cache-control"]).toBe("private, max-age=300")
+    // The EFFECTIVE cost, through the same call the reservation makes, so the
+    // markup is included and a quoted price matches what is actually charged.
+    expect(h.getModelCreditCost).toHaveBeenCalledWith("nano-banana")
+  })
+
+  it("answers 304 to its own ETag and sends no body", async () => {
+    const first = await app.inject({ method: "GET", url: "/v1/deployment-billing/pricing", headers: AS_PAYER })
+    const etag = first.headers.etag as string
+    expect(etag).toBe(first.json().etag)
+    const second = await app.inject({
+      method: "GET",
+      url: "/v1/deployment-billing/pricing",
+      headers: { ...AS_PAYER, "if-none-match": etag },
+    })
+    expect(second.statusCode).toBe(304)
+    expect(second.body).toBe("")
+    expect(second.headers.etag).toBe(etag)
+  })
+
+  it("?since= returns only the rows changed after it — an empty list means nothing changed", async () => {
+    const since = "2026-08-15T00:00:00Z"
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/deployment-billing/pricing?since=${encodeURIComponent(since)}`,
+      headers: AS_PAYER,
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.map((r: { modelIdentifier: string }) => r.modelIdentifier)).toEqual(["nano-banana"])
+
+    const quiet = await app.inject({
+      method: "GET",
+      url: `/v1/deployment-billing/pricing?since=${encodeURIComponent("2026-09-01T00:00:00Z")}`,
+      headers: AS_PAYER,
+    })
+    expect(quiet.json().data).toEqual([])
+    // Still the whole list's high-water mark, so the caller can advance its
+    // bookmark without having received a row.
+    expect(quiet.json().updatedAt).toBe("2026-08-30T09:12:00.000Z")
+  })
+
+  it("lists an allowed model with no configured price in missing[], with creditCost null", async () => {
+    h.getModelCreditCost.mockImplementation(async (id: string) => {
+      if (id === "flux") throw new h.PriceNotConfiguredError(id)
+      return 12
+    })
+    const res = await app.inject({ method: "GET", url: "/v1/deployment-billing/pricing", headers: AS_PAYER })
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.missing).toEqual(["flux"])
+    const flux = body.data.find((r: { modelIdentifier: string }) => r.modelIdentifier === "flux")
+    // Present, and honestly empty: dropping the row would say "this deployment
+    // does not offer flux", which is a different and wrong statement.
+    expect(flux).toMatchObject({ creditCost: null, units: null })
+  })
+
+  it("refuses an unparseable ?since=", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/deployment-billing/pricing?since=yesterday",
+      headers: AS_PAYER,
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("invalid_range")
+  })
+})
+
+// ===========================================================================
+// Mainline — none of this exists without a payer
+// ===========================================================================
+
+describe("mainline byte-identity", () => {
+  const NEW_PATHS: ReadonlyArray<{ method: "GET" | "PUT"; url: string; body?: Record<string, unknown> }> = [
+    { method: "GET", url: "/v1/deployment-billing/balance" },
+    { method: "PUT", url: "/v1/deployment-billing/balance/threshold", body: { credits: 1 } },
+    { method: "GET", url: "/v1/deployment-billing/users/resolve?email=a@example.com" },
+    { method: "PUT", url: ALLOWANCE(U1), body: { units: 2000, mode: "set" } },
+    { method: "GET", url: "/v1/deployment-billing/usage" },
+    { method: "GET", url: "/v1/deployment-billing/pricing" },
+  ]
+
+  it("404s every new path when no payer is configured, and queries nothing", async () => {
+    for (const r of NEW_PATHS) {
+      const res = await app.inject({ method: r.method, url: r.url, headers: AS_PAYER, payload: r.body })
+      expect(res.statusCode, `${r.method} ${r.url}`).toBe(404)
+    }
+    expect(rec.fromCalls).toEqual([])
+    expect(rec.rpcCalls).toEqual([])
+  })
+
+  it("refuses an admin who is not the billing account on every new path", async () => {
+    payerDeployment()
+    for (const r of NEW_PATHS) {
+      const res = await app.inject({
+        method: r.method,
+        url: r.url,
+        headers: { "x-user-id": GHOST },
+        payload: r.body,
+      })
+      expect(res.statusCode, `${r.method} ${r.url}`).toBe(403)
+      expect(res.json().error.code, `${r.method} ${r.url}`).toBe("payer_required")
+    }
+  })
+
+  it("refuses the payer's own PERSONAL API TOKEN on every new path — identity is not enough", async () => {
+    payerDeployment()
+    for (const r of NEW_PATHS) {
+      const res = await app.inject({
+        method: r.method,
+        url: r.url,
+        headers: { ...AS_PAYER, "x-auth-kind": "api_token" },
+        payload: r.body,
+      })
+      expect(res.statusCode, `${r.method} ${r.url}`).toBe(403)
+    }
+  })
+})

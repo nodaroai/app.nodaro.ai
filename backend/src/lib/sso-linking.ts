@@ -71,6 +71,42 @@ function refusedOperatorAddress(providerId: string): string {
   )
 }
 
+/**
+ * Apply any allowance a deployment's billing integration bought for this
+ * identity BEFORE the account existed — fire and forget.
+ *
+ * WHY ON EVERY SUCCESSFUL SIGN-IN, and not only at provisioning. A purchase
+ * precedes the first sign-in by construction, but it may also land between an
+ * account's creation and its owner's next sign-in, and an apply that failed
+ * once (a transient database error on a best-effort call) must heal rather
+ * than strand a paid-for quota forever. The database half selects on
+ * `applied_at IS NULL`, so the repeat costs one indexed lookup and applies
+ * nothing twice.
+ *
+ * NOTHING HERE MAY DELAY OR FAIL A SIGN-IN. It is not awaited, it swallows
+ * everything, and it is called only after the identity is settled — a quota is
+ * not a reason for a person to be unable to log in.
+ *
+ * The import is DYNAMIC for two reasons: `lib/` may not import from `ee/`
+ * (`tools/check-ee-imports.mjs`), and this is the shim pattern the repo
+ * already uses at that seam (`lib/deployment-payer.ts`, `lib/cancel-job.ts`);
+ * and a deployment with no payer must not pull the enterprise billing graph
+ * into its sign-in path at all — which the payer check above the import makes
+ * true.
+ */
+function applyPendingAllowanceInBackground(userId: string, subject: string | null, email: string): void {
+  if (deploymentPayerId() === null) return
+  void (async () => {
+    const { applyPendingAllowance } = await import("../ee/billing/deployment-allowance-service.js")
+    await applyPendingAllowance(userId, subject, email)
+  })().catch((e: unknown) => {
+    console.warn(
+      "[sso-linking] a pending allowance could not be applied (the sign-in is unaffected): " +
+        (e instanceof Error ? e.message : String(e)),
+    )
+  })
+}
+
 /** The payer's unverified-assertion refusal: generic to the browser, named in
  *  the log. `email_unverified` and never `account_exists` — the payer account
  *  demonstrably exists; what is refused is the CLAIM. */
@@ -141,6 +177,24 @@ export async function resolveSsoUser(
   const metadata = { sso: provider.id, sso_subject: assertion.subject }
   const payerId = deploymentPayerId()
 
+  /**
+   * The ONE success shape, so that the best-effort pending-allowance apply
+   * cannot be forgotten on a branch: every `ok: true` in this function goes
+   * through here, after the identity is settled and before the return.
+   *
+   * `subject` is the identity the ACCOUNT carries, which is not always the one
+   * the assertion claims. On every branch that stamps metadata it is
+   * `assertion.subject` by construction; on the same-provider short-circuit
+   * the account already has a TRUSTED `app_metadata.sso_subject` that the
+   * marker alone does not check for a non-payer, so that copy is passed
+   * instead — an intent bought for subject X must reach the account that
+   * actually carries X, never one that merely asserts it.
+   */
+  const signedIn = (userId: string, action: "linked" | "provisioned", subject?: string | null): SsoLinkResult => {
+    applyPendingAllowanceInBackground(userId, subject === undefined ? assertion.subject : subject, email)
+    return { ok: true, email, userId, action }
+  }
+
   // Look up an existing account by email. profiles.email mirrors the auth
   // email (lower-cased). Not addressed by id, so tenant-scope-lint's id-key
   // rule does not apply.
@@ -188,6 +242,14 @@ export async function resolveSsoUser(
     const appMetadata = user.app_metadata as Record<string, unknown> | undefined
     const existingSso = (user.user_metadata as Record<string, unknown> | undefined)?.sso
     const isPayer = profile.id === payerId
+    /** The service-role-only copy — the one the auth gate trusts. On the
+     *  short-circuit below it is the account's real identity at this provider,
+     *  and `null` when the account carries none (an intent can then only be
+     *  matched by address, which is the honest answer rather than a guess). */
+    const trustedAccountSubject =
+      typeof appMetadata?.sso_subject === "string" && appMetadata.sso_subject.length > 0
+        ? (appMetadata.sso_subject as string)
+        : null
     if (existingSso === provider.id) {
       // For the payer the marker alone is NOT a licence — see the header. Both
       // re-checks run on every assertion, not only the linking one.
@@ -206,7 +268,10 @@ export async function resolveSsoUser(
           }
         }
       }
-      return { ok: true, email, userId: profile.id, action: "linked" }
+      // The account's OWN subject, not the assertion's: for the payer the two
+      // were just proved equal, and for everybody else the marker check above
+      // never compared them.
+      return signedIn(profile.id, "linked", trustedAccountSubject)
     }
     // Already federated to a DIFFERENT IdP — never silently re-stamp to this one.
     // A verified provider-B assertion must not seize a provider-A-linked account
@@ -254,7 +319,7 @@ export async function resolveSsoUser(
         user_metadata: metadata,
         app_metadata: metadata,
       })
-      return { ok: true, email, userId: profile.id, action: "linked" }
+      return signedIn(profile.id, "linked")
     }
     if (ssoLinkExistingEnabled() && assertion.emailVerified) {
       // Stamp BOTH: user_metadata for egress/back-compat, app_metadata for the
@@ -263,7 +328,7 @@ export async function resolveSsoUser(
         user_metadata: metadata,
         app_metadata: metadata,
       })
-      return { ok: true, email, userId: profile.id, action: "linked" }
+      return signedIn(profile.id, "linked")
     }
     return { ok: false, code: "account_exists", message: ACCOUNT_EXISTS_MESSAGE }
   }
@@ -300,5 +365,5 @@ export async function resolveSsoUser(
       message: "Could not provision an account for this email.",
     }
   }
-  return { ok: true, email, userId: created.user.id, action: "provisioned" }
+  return signedIn(created.user.id, "provisioned")
 }

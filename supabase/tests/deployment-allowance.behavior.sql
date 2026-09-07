@@ -45,8 +45,20 @@
 --        than clamps a correction that would invalidate a running job.
 --   11   `ALLOWANCE_UNCONFIGURED` in both of its shapes.
 --   12   structure: one function per name (351's stale-6-arg lesson), RLS,
---        the table-level revoke before the column grant (the 347 lesson), and
---        the Σ-grants reconciliation over every row this file created.
+--        the table-level revoke before the column grant (the 347 lesson).
+--   13-14 migration 387's two verbs. `set` computes the delta server-side, so
+--        a replay is a NO-OP rather than a second top-up, and it refuses below
+--        `reserved + spent` exactly as a negative grant does; zero is a legal
+--        target (a cancelled plan). `renew` zeroes `spent`, KEEPS `reserved`,
+--        stamps `reset_at`, and writes the fourth reconciled kind.
+--   15   the pending grant: the purchase that precedes the first sign-in,
+--        applied once, matched case-insensitively by email, ignored when
+--        expired — plus the two SECURITY DEFINER subject lookups, including
+--        the duplicated subject that RAISES rather than answering the NULL
+--        that means "nobody carries this" (15h).
+--   16   the audit line: which CREDENTIAL moved a quota (NULL = the page),
+--        surviving the key's deletion, and the new arities' privileges.
+--   17   the Σ-grants reconciliation over every row this file created.
 --
 -- ============================================================================
 -- CONCURRENCY: WHAT THIS FILE CANNOT PROVE, AND WHERE THE CLAIM RESTS
@@ -402,26 +414,26 @@ SELECT pg_temp.assert_eq('9f the rejected zero-credit call created no allowance 
 -- ---------------------------------------------------------------------------
 SELECT pg_temp.assert_raises('10a a non-payer actor is refused',
   $q$SELECT grant_deployment_allowance('00000000-0000-4000-8000-000000000987', 50,
-       '00000000-0000-4000-8000-000000000982', 'topup', NULL)$q$,
+       '00000000-0000-4000-8000-000000000982', 'topup', NULL, NULL)$q$,
   'ALLOWANCE_ACTOR_NOT_PAYER:');
 SELECT pg_temp.assert_raises('10b kind overrun is refused (it would break the grants sum)',
   $q$SELECT grant_deployment_allowance('00000000-0000-4000-8000-000000000987', 50,
-       '00000000-0000-4000-8000-000000000981', 'overrun', NULL)$q$,
+       '00000000-0000-4000-8000-000000000981', 'overrun', NULL, NULL)$q$,
   'ALLOWANCE_KIND_INVALID:');
 SELECT pg_temp.assert_raises('10c kind default is refused (it belongs to lazy provisioning)',
   $q$SELECT grant_deployment_allowance('00000000-0000-4000-8000-000000000987', 50,
-       '00000000-0000-4000-8000-000000000981', 'default', NULL)$q$,
+       '00000000-0000-4000-8000-000000000981', 'default', NULL, NULL)$q$,
   'ALLOWANCE_KIND_INVALID:');
 SELECT pg_temp.assert_raises('10d a zero grant is refused',
   $q$SELECT grant_deployment_allowance('00000000-0000-4000-8000-000000000987', 0,
-       '00000000-0000-4000-8000-000000000981', 'topup', NULL)$q$,
+       '00000000-0000-4000-8000-000000000981', 'topup', NULL, NULL)$q$,
   'ALLOWANCE_ZERO_GRANT:');
 
 -- A top-up to a user who has NEVER generated must SEED THE DEFAULT FIRST.
 -- Without that seed such a user ends up with less than an untouched user, and
 -- the lazy provision in reserve_credits would then never write their default.
 SELECT grant_deployment_allowance('00000000-0000-4000-8000-000000000987', 50,
-  '00000000-0000-4000-8000-000000000981', 'topup', 'first top-up');
+  '00000000-0000-4000-8000-000000000981', 'topup', 'first top-up', NULL);
 SELECT pg_temp.assert_eq('10e a top-up before the first run seeds the default too (100 + 50)',
   pg_temp.a_col('00000000-0000-4000-8000-000000000987', 'granted_credits'), '150');
 SELECT pg_temp.assert_eq('10f and it wrote both grant rows',
@@ -435,12 +447,12 @@ SELECT pg_temp.assert_eq('10g the top-up carries the note',
 -- 984 sits at granted 100, spent 20, reserved 0 (case 4).
 SELECT pg_temp.assert_raises('10h a correction below reserved + spent is refused, not clamped',
   $q$SELECT grant_deployment_allowance('00000000-0000-4000-8000-000000000984', -90,
-       '00000000-0000-4000-8000-000000000981', 'correction', 'claw back')$q$,
+       '00000000-0000-4000-8000-000000000981', 'correction', 'claw back', NULL)$q$,
   'ALLOWANCE_BELOW_COMMITTED:');
 SELECT pg_temp.assert_eq('10i the refused correction changed nothing',
   pg_temp.a_col('00000000-0000-4000-8000-000000000984', 'granted_credits'), '100');
 SELECT grant_deployment_allowance('00000000-0000-4000-8000-000000000984', -80,
-  '00000000-0000-4000-8000-000000000981', 'correction', 'claw back to the committed floor');
+  '00000000-0000-4000-8000-000000000981', 'correction', 'claw back to the committed floor', NULL);
 SELECT pg_temp.assert_eq('10j a correction down to exactly reserved + spent is allowed',
   pg_temp.a_col('00000000-0000-4000-8000-000000000984', 'granted_credits'), '20');
 
@@ -458,7 +470,7 @@ SELECT pg_temp.assert_raises('11a a NULL payer_user_id refuses an enforced reser
   'ALLOWANCE_UNCONFIGURED:');
 SELECT pg_temp.assert_raises('11b a NULL payer_user_id refuses a grant',
   $q$SELECT grant_deployment_allowance('00000000-0000-4000-8000-000000000989', 10,
-       '00000000-0000-4000-8000-000000000981', 'topup', NULL)$q$,
+       '00000000-0000-4000-8000-000000000981', 'topup', NULL, NULL)$q$,
   'ALLOWANCE_UNCONFIGURED:');
 DELETE FROM deployment_payer_settings WHERE id = true;
 SELECT pg_temp.assert_raises('11c no settings row at all refuses an enforced reserve',
@@ -505,11 +517,11 @@ SELECT pg_temp.assert_eq('12e all four money functions pin search_path = public,
 
 -- Execute privileges: service_role only, on every one of them.
 SELECT pg_temp.assert_eq('12f no browser role may execute grant_deployment_allowance',
-  (has_function_privilege('authenticated', 'public.grant_deployment_allowance(uuid,integer,uuid,text,text)', 'EXECUTE')
-   OR has_function_privilege('anon', 'public.grant_deployment_allowance(uuid,integer,uuid,text,text)', 'EXECUTE'))::text,
+  (has_function_privilege('authenticated', 'public.grant_deployment_allowance(uuid,integer,uuid,text,text,uuid)', 'EXECUTE')
+   OR has_function_privilege('anon', 'public.grant_deployment_allowance(uuid,integer,uuid,text,text,uuid)', 'EXECUTE'))::text,
   'false');
 SELECT pg_temp.assert_eq('12g service_role may execute grant_deployment_allowance',
-  has_function_privilege('service_role', 'public.grant_deployment_allowance(uuid,integer,uuid,text,text)', 'EXECUTE')::text,
+  has_function_privilege('service_role', 'public.grant_deployment_allowance(uuid,integer,uuid,text,text,uuid)', 'EXECUTE')::text,
   'true');
 SELECT pg_temp.assert_eq('12h no browser role may execute the 12-argument reserve_credits',
   (has_function_privilege('authenticated', 'public.reserve_credits(uuid,integer,uuid,text,numeric,numeric,boolean,integer,boolean,uuid,uuid,boolean)', 'EXECUTE')
@@ -604,20 +616,368 @@ END $$;
 RESET ROLE;
 
 -- ---------------------------------------------------------------------------
--- 13. The reconciliation, over every row this file created. It is the one
+-- 13. set_deployment_allowance, mode `set` — the delta is the SERVER's.
+-- ---------------------------------------------------------------------------
+-- 993-999 are 387's own fixtures; 981-989 above are untouched by this section
+-- except where a case says so (14d renews the overrun user on purpose).
+INSERT INTO auth.users (id, email, raw_user_meta_data, raw_app_meta_data, aud, role) VALUES
+  ('00000000-0000-4000-8000-000000000993', 'da-u9@da.test',  '{}', '{}', 'authenticated', 'authenticated'),
+  ('00000000-0000-4000-8000-000000000994', 'da-u10@da.test', '{}', '{}', 'authenticated', 'authenticated'),
+  ('00000000-0000-4000-8000-000000000995', 'da-u11@da.test', '{}', '{}', 'authenticated', 'authenticated'),
+  ('00000000-0000-4000-8000-000000000996', 'da-u12@da.test', '{}', '{}', 'authenticated', 'authenticated'),
+  ('00000000-0000-4000-8000-000000000997', 'da-u13@da.test', '{}',
+     '{"sso":"idp","sso_subject":"subject-997"}', 'authenticated', 'authenticated'),
+  ('00000000-0000-4000-8000-000000000998', 'da-u14@da.test', '{}', '{}', 'authenticated', 'authenticated'),
+  ('00000000-0000-4000-8000-000000000999', 'da-u15@da.test', '{}', '{}', 'authenticated', 'authenticated');
+
+-- A target ABOVE the seeded default is a top-up of the difference — not of the
+-- target. Getting this backwards would double-allocate every first `set`.
+SELECT pg_temp.assert_eq('13a set up applies, and the row is what the database now holds',
+  (SELECT applied || '/' || granted_credits || '/' || reserved_credits || '/' || spent_credits
+     FROM set_deployment_allowance('00000000-0000-4000-8000-000000000993', 400,
+            '00000000-0000-4000-8000-000000000981', 'set', 'plan A', NULL)),
+  'set/400/0/0');
+SELECT pg_temp.assert_eq('13a2 it seeded the default and wrote ONE topup of the difference',
+  (SELECT string_agg(kind || ':' || credits, ',' ORDER BY kind) FROM deployment_allowance_grants
+    WHERE user_id = '00000000-0000-4000-8000-000000000993'), 'default:100,topup:300');
+
+SELECT pg_temp.assert_eq('13b set down writes a correction row',
+  (SELECT applied || '/' || granted_credits
+     FROM set_deployment_allowance('00000000-0000-4000-8000-000000000993', 250,
+            '00000000-0000-4000-8000-000000000981', 'set', 'plan B', NULL)),
+  'set/250');
+SELECT pg_temp.assert_eq('13b2 the correction carries the DELTA, so the sum still equals granted',
+  (SELECT credits::text FROM deployment_allowance_grants
+    WHERE user_id = '00000000-0000-4000-8000-000000000993' AND kind = 'correction'), '-150');
+
+-- THE REPLAY. An integration retries on a timeout it cannot tell from a
+-- failure, so "the plan is already 250" must be a success that writes nothing at all.
+SELECT pg_temp.assert_eq('13c set to the SAME target is a noop',
+  (SELECT applied || '/' || granted_credits
+     FROM set_deployment_allowance('00000000-0000-4000-8000-000000000993', 250,
+            '00000000-0000-4000-8000-000000000981', 'set', 'replayed', NULL)),
+  'noop/250');
+SELECT pg_temp.assert_eq('13c2 the noop wrote NO grant row (three, not four)',
+  (SELECT count(*)::text FROM deployment_allowance_grants
+    WHERE user_id = '00000000-0000-4000-8000-000000000993'), '3');
+-- (`updated_at` cannot be asserted here: the whole proof is one transaction and
+--  every `now()` in it is the same instant. What IS provable is that `set`
+--  never stamps a PERIOD — only `renew` does, case 14a2.)
+SELECT pg_temp.assert_eq('13c3 no `set` — replayed or not — ever stamps reset_at',
+  (SELECT COALESCE(reset_at::text, '<null>') FROM deployment_user_allowances
+    WHERE user_id = '00000000-0000-4000-8000-000000000993'), '<null>');
+
+-- 994 has a job running against 60 of its 100. A downgrade that CLAMPED would
+-- invalidate that job silently; the refusal is a message the payer can act on.
+SELECT reserve_credits(
+  p_user_id := '00000000-0000-4000-8000-000000000981', p_credits := 60, p_job_id := NULL,
+  p_on_behalf_of := '00000000-0000-4000-8000-000000000994', p_enforce_allowance := TRUE);
+SELECT pg_temp.assert_raises('13d set below reserved + spent is refused, not clamped',
+  $q$SELECT * FROM set_deployment_allowance('00000000-0000-4000-8000-000000000994', 50,
+       '00000000-0000-4000-8000-000000000981', 'set', 'downgrade', NULL)$q$,
+  'ALLOWANCE_BELOW_COMMITTED:');
+SELECT pg_temp.assert_eq('13d2 the refusal moved nothing',
+  pg_temp.a_col('00000000-0000-4000-8000-000000000994', 'granted_credits'), '100');
+SELECT pg_temp.assert_eq('13d3 and wrote no grant row beyond the seeded default',
+  (SELECT count(*)::text FROM deployment_allowance_grants
+    WHERE user_id = '00000000-0000-4000-8000-000000000994'), '1');
+
+-- ZERO IS A PLAN, not a bug: a cancelled subscription is a quota of 0, and a
+-- verb that could not express it would push that state into a note. (The
+-- additive grant still refuses a zero MOVE — case 10d.)
+SELECT pg_temp.assert_eq('13e set to zero is legal when nothing is committed',
+  (SELECT applied || '/' || granted_credits
+     FROM set_deployment_allowance('00000000-0000-4000-8000-000000000995', 0,
+            '00000000-0000-4000-8000-000000000981', 'set', 'cancelled', NULL)),
+  'set/0');
+SELECT pg_temp.assert_eq('13e2 the seeded default was corrected away, and the sum holds',
+  (SELECT string_agg(kind || ':' || credits, ',' ORDER BY kind) FROM deployment_allowance_grants
+    WHERE user_id = '00000000-0000-4000-8000-000000000995'), 'correction:-100,default:100');
+SELECT pg_temp.assert_raises('13f a mode that is neither set nor renew is refused',
+  $q$SELECT * FROM set_deployment_allowance('00000000-0000-4000-8000-000000000995', 10,
+       '00000000-0000-4000-8000-000000000981', 'grant', NULL, NULL)$q$,
+  'ALLOWANCE_MODE_INVALID:');
+SELECT pg_temp.assert_raises('13g a negative target is refused',
+  $q$SELECT * FROM set_deployment_allowance('00000000-0000-4000-8000-000000000995', -1,
+       '00000000-0000-4000-8000-000000000981', 'set', NULL, NULL)$q$,
+  'ALLOWANCE_TARGET_INVALID:');
+SELECT pg_temp.assert_raises('13h a non-payer actor is refused here too',
+  $q$SELECT * FROM set_deployment_allowance('00000000-0000-4000-8000-000000000995', 10,
+       '00000000-0000-4000-8000-000000000982', 'set', NULL, NULL)$q$,
+  'ALLOWANCE_ACTOR_NOT_PAYER:');
+
+-- ---------------------------------------------------------------------------
+-- 14. mode `renew` — a new period, and the fourth reconciled kind.
+-- ---------------------------------------------------------------------------
+-- 996 is put into the state a real renewal meets: something settled last
+-- period (spent 50) and something still in flight (reserved 20).
+DO $$
+DECLARE v_log UUID;
+BEGIN
+  v_log := reserve_credits(
+    p_user_id := '00000000-0000-4000-8000-000000000981', p_credits := 50, p_job_id := NULL,
+    p_on_behalf_of := '00000000-0000-4000-8000-000000000996', p_enforce_allowance := TRUE);
+  PERFORM commit_credits(v_log, 50);
+END $$;
+SELECT reserve_credits(
+  p_user_id := '00000000-0000-4000-8000-000000000981', p_credits := 20, p_job_id := NULL,
+  p_on_behalf_of := '00000000-0000-4000-8000-000000000996', p_enforce_allowance := TRUE);
+SELECT pg_temp.assert_eq('14a0 the pre-renewal state is granted 100, reserved 20, spent 50',
+  pg_temp.a_col('00000000-0000-4000-8000-000000000996', 'granted_credits') || '/' ||
+  pg_temp.a_col('00000000-0000-4000-8000-000000000996', 'reserved_credits') || '/' ||
+  pg_temp.a_col('00000000-0000-4000-8000-000000000996', 'spent_credits'), '100/20/50');
+
+-- `reserved` survives for `reset_member_spend`'s reason (351:919-921): it
+-- tracks work that will still commit or refund against this row, and zeroing
+-- it would desynchronise the row from that settlement.
+SELECT pg_temp.assert_eq('14a renew sets granted, zeroes spent and KEEPS reserved',
+  (SELECT applied || '/' || granted_credits || '/' || reserved_credits || '/' || spent_credits
+     FROM set_deployment_allowance('00000000-0000-4000-8000-000000000996', 300,
+            '00000000-0000-4000-8000-000000000981', 'renew', 'october', NULL)),
+  'renew/300/20/0');
+SELECT pg_temp.assert_eq('14a2 renew stamped reset_at (the period figure now has a start)',
+  (SELECT (reset_at IS NOT NULL)::text FROM deployment_user_allowances
+    WHERE user_id = '00000000-0000-4000-8000-000000000996'), 'true');
+SELECT pg_temp.assert_eq('14a3 and wrote ONE renewal row carrying the difference',
+  (SELECT string_agg(kind || ':' || credits, ',' ORDER BY kind) FROM deployment_allowance_grants
+    WHERE user_id = '00000000-0000-4000-8000-000000000996'), 'default:100,renewal:200');
+
+SELECT pg_temp.assert_raises('14b renew below the in-flight reservation is refused',
+  $q$SELECT * FROM set_deployment_allowance('00000000-0000-4000-8000-000000000996', 10,
+       '00000000-0000-4000-8000-000000000981', 'renew', NULL, NULL)$q$,
+  'ALLOWANCE_BELOW_COMMITTED:');
+SELECT pg_temp.assert_eq('14b2 the refused renewal left the period alone',
+  pg_temp.a_col('00000000-0000-4000-8000-000000000996', 'granted_credits'), '300');
+
+-- A renewal at the SAME plan still stamps the period: `credits` may be zero,
+-- and this is the one kind for which that is allowed.
+SELECT pg_temp.assert_eq('14c a renewal at the same target writes a ZERO-credit renewal row',
+  (SELECT applied FROM set_deployment_allowance('00000000-0000-4000-8000-000000000996', 300,
+            '00000000-0000-4000-8000-000000000981', 'renew', 'november', NULL)), 'renew');
+SELECT pg_temp.assert_eq('14c2 granted = SUM(default, topup, correction, renewal) for the renewed user',
+  (SELECT (a.granted_credits = COALESCE((SELECT sum(g.credits) FROM deployment_allowance_grants g
+      WHERE g.user_id = a.user_id AND g.kind IN ('default','topup','correction','renewal')), 0))::text
+     FROM deployment_user_allowances a WHERE a.user_id = '00000000-0000-4000-8000-000000000996'), 'true');
+
+-- 985 carries the file's one `overrun` row (case 5). Renewing it proves the
+-- audit-only kind stays outside the sum AFTER a renewal has moved `granted`.
+SELECT set_deployment_allowance('00000000-0000-4000-8000-000000000985', 300,
+  '00000000-0000-4000-8000-000000000981', 'renew', 'overrun user renews', NULL);
+SELECT pg_temp.assert_eq('14d overrun is STILL excluded after a renewal (300, not 250)',
+  (SELECT COALESCE(sum(g.credits), 0)::text FROM deployment_allowance_grants g
+    WHERE g.user_id = '00000000-0000-4000-8000-000000000985'
+      AND g.kind IN ('default','topup','correction','renewal')), '300');
+SELECT pg_temp.assert_eq('14d2 and the overrun row is still there, untouched',
+  (SELECT credits::text FROM deployment_allowance_grants
+    WHERE user_id = '00000000-0000-4000-8000-000000000985' AND kind = 'overrun'), '-50');
+
+-- ---------------------------------------------------------------------------
+-- 15. Pending allowances — the purchase that precedes the first sign-in.
+-- ---------------------------------------------------------------------------
+INSERT INTO deployment_allowance_pending (sso_subject, email, target_credits, mode, note, created_by, expires_at)
+VALUES ('subject-997', NULL, 400, 'set', 'bought before they arrived',
+        '00000000-0000-4000-8000-000000000981', now() + interval '90 days');
+SELECT pg_temp.assert_eq('15a a pending intent matched by subject applies exactly once',
+  apply_pending_deployment_allowance('00000000-0000-4000-8000-000000000997',
+    'subject-997', 'da-u13@da.test')::text, '1');
+SELECT pg_temp.assert_eq('15a2 it moved the allowance through the same RPC (seed + topup)',
+  pg_temp.a_col('00000000-0000-4000-8000-000000000997', 'granted_credits'), '400');
+SELECT pg_temp.assert_eq('15a3 and the row is stamped applied, with the user it landed on',
+  (SELECT (applied_at IS NOT NULL)::text || '/' || applied_user_id::text
+     FROM deployment_allowance_pending WHERE sso_subject = 'subject-997'),
+  'true/00000000-0000-4000-8000-000000000997');
+SELECT pg_temp.assert_eq('15a4 the grant it wrote is attributed to the PAYER, not the signing-in user',
+  (SELECT granted_by::text FROM deployment_allowance_grants
+    WHERE user_id = '00000000-0000-4000-8000-000000000997' AND kind = 'topup'),
+  '00000000-0000-4000-8000-000000000981');
+
+-- Every successful sign-in calls this, so "already applied" is the common case
+-- and it must cost nothing and change nothing.
+SELECT pg_temp.assert_eq('15b a second sign-in applies nothing',
+  apply_pending_deployment_allowance('00000000-0000-4000-8000-000000000997',
+    'subject-997', 'da-u13@da.test')::text, '0');
+SELECT pg_temp.assert_eq('15b2 and the allowance did not move again',
+  pg_temp.a_col('00000000-0000-4000-8000-000000000997', 'granted_credits'), '400');
+
+INSERT INTO deployment_allowance_pending (sso_subject, email, target_credits, mode, note, created_by, expires_at)
+VALUES (NULL, 'DA-U14@DA.TEST', 700, 'set', 'named by address',
+        '00000000-0000-4000-8000-000000000981', now() + interval '90 days');
+SELECT pg_temp.assert_eq('15c an intent named by email matches case-insensitively',
+  apply_pending_deployment_allowance('00000000-0000-4000-8000-000000000998',
+    NULL, 'da-u14@da.test')::text, '1');
+SELECT pg_temp.assert_eq('15c2 and it landed on that account',
+  pg_temp.a_col('00000000-0000-4000-8000-000000000998', 'granted_credits'), '700');
+
+-- A plan bought for somebody who never arrives must not sit here waiting to be
+-- applied to whoever eventually claims that address.
+INSERT INTO deployment_allowance_pending (sso_subject, email, target_credits, mode, note, created_by, expires_at)
+VALUES ('subject-999', NULL, 900, 'set', 'stale', '00000000-0000-4000-8000-000000000981',
+        now() - interval '1 day');
+SELECT pg_temp.assert_eq('15d an EXPIRED intent is not applied',
+  apply_pending_deployment_allowance('00000000-0000-4000-8000-000000000999',
+    'subject-999', 'da-u15@da.test')::text, '0');
+SELECT pg_temp.assert_eq('15d2 it is still unapplied, and provisioned nobody',
+  (SELECT (applied_at IS NULL)::text FROM deployment_allowance_pending WHERE sso_subject = 'subject-999')
+  || '/' || pg_temp.a_col('00000000-0000-4000-8000-000000000999', 'granted_credits'),
+  'true/<no row>');
+
+-- A REFUSABLE intent (994 has a job running against 60 of its 100, and the
+-- intent would set the plan to 50). The call is ALL-OR-NOTHING by decision:
+-- the refusal propagates, nothing is applied, and the message names the row so
+-- the log line says which intent is stuck rather than only that one is.
+INSERT INTO deployment_allowance_pending (sso_subject, email, target_credits, mode, note, created_by, expires_at)
+VALUES ('subject-994', NULL, 50, 'set', 'below what is committed',
+        '00000000-0000-4000-8000-000000000981', now() + interval '90 days');
+SELECT pg_temp.assert_raises('15g a refused intent aborts the apply and names the pending row',
+  $q$SELECT apply_pending_deployment_allowance('00000000-0000-4000-8000-000000000994',
+       'subject-994', 'da-u10@da.test')$q$,
+  'ALLOWANCE_PENDING_REFUSED:');
+SELECT pg_temp.assert_eq('15g2 the refusal applied nothing and left the intent standing',
+  (SELECT (applied_at IS NULL)::text FROM deployment_allowance_pending WHERE sso_subject = 'subject-994')
+  || '/' || pg_temp.a_col('00000000-0000-4000-8000-000000000994', 'granted_credits'),
+  'true/100');
+-- Cleared, so it cannot block the sweep in case 17 or a later sign-in in this
+-- file (which is exactly the cost the function's header marks as accepted).
+DELETE FROM deployment_allowance_pending WHERE sso_subject = 'subject-994';
+
+-- The subject lookups the routes resolve an identity with. The TRUSTED copy is
+-- `auth.users.raw_app_meta_data`, which only the service-role admin API writes.
+SELECT pg_temp.assert_eq('15e find_user_by_sso_subject reads the trusted app_metadata copy',
+  find_user_by_sso_subject('subject-997')::text, '00000000-0000-4000-8000-000000000997');
+SELECT pg_temp.assert_eq('15e2 an unknown subject answers NULL, not an error',
+  COALESCE(find_user_by_sso_subject('nobody')::text, '<null>'), '<null>');
+SELECT pg_temp.assert_eq('15f sso_subjects_for answers only the ids that have one',
+  (SELECT string_agg(id::text || '=' || sso_subject, ',' ORDER BY id::text)
+     FROM sso_subjects_for(ARRAY['00000000-0000-4000-8000-000000000997',
+                                 '00000000-0000-4000-8000-000000000998']::uuid[])),
+  '00000000-0000-4000-8000-000000000997=subject-997');
+
+-- TWO ACCOUNTS, ONE SUBJECT. The function used to answer NULL for this — the
+-- same answer it gives for "nobody carries this subject" — and the route acts
+-- on those two in opposite ways: "nobody" stores a PENDING intent against the
+-- identity the IdP will assert, which for a duplicated subject lands on
+-- whichever of the two accounts signs in first. A customer's paid quota on an
+-- arbitrary half of a split identity is exactly what fail-closed was for, so
+-- the duplicate raises and the caller answers 409 instead of storing anything.
+UPDATE auth.users SET raw_app_meta_data = '{"sso":"idp","sso_subject":"subject-dup"}'::jsonb
+ WHERE id IN ('00000000-0000-4000-8000-000000000998', '00000000-0000-4000-8000-000000000999');
+SELECT pg_temp.assert_raises('15h a subject on TWO accounts raises rather than answering NULL',
+  $q$SELECT find_user_by_sso_subject('subject-dup')$q$,
+  'SSO_SUBJECT_AMBIGUOUS:');
+-- The raise is about the DUPLICATE, not about the subject: with one of them
+-- cleared the very same argument resolves.
+UPDATE auth.users SET raw_app_meta_data = '{}'::jsonb
+ WHERE id = '00000000-0000-4000-8000-000000000999';
+SELECT pg_temp.assert_eq('15h2 one account carrying it still resolves to that account',
+  find_user_by_sso_subject('subject-dup')::text, '00000000-0000-4000-8000-000000000998');
+UPDATE auth.users SET raw_app_meta_data = '{}'::jsonb
+ WHERE id = '00000000-0000-4000-8000-000000000998';
+SELECT pg_temp.assert_eq('15h3 and none at all is NULL — absence is not a refusal',
+  COALESCE(find_user_by_sso_subject('subject-dup')::text, '<null>'), '<null>');
+
+-- ---------------------------------------------------------------------------
+-- 16. The audit line: WHICH CREDENTIAL moved a quota, and the new arities.
+-- ---------------------------------------------------------------------------
+INSERT INTO deployment_integration_keys (id, name, token_hash, token_prefix, created_by)
+VALUES ('00000000-0000-4000-8000-000000000c01', 'the back office',
+        'sha256-of-a-bearer-that-never-existed', 'ndr_bill_abc',
+        '00000000-0000-4000-8000-000000000981');
+
+SELECT set_deployment_allowance('00000000-0000-4000-8000-000000000995', 200,
+  '00000000-0000-4000-8000-000000000981', 'set', 'via the integration', '00000000-0000-4000-8000-000000000c01');
+SELECT grant_deployment_allowance('00000000-0000-4000-8000-000000000995', 50,
+  '00000000-0000-4000-8000-000000000981', 'topup', 'also via the integration',
+  '00000000-0000-4000-8000-000000000c01');
+SELECT pg_temp.assert_eq('16a both verbs stamp the credential that acted',
+  (SELECT count(*)::text FROM deployment_allowance_grants
+    WHERE user_id = '00000000-0000-4000-8000-000000000995'
+      AND credential_id = '00000000-0000-4000-8000-000000000c01'), '2');
+SELECT pg_temp.assert_eq('16a2 granted_by still names the PAYER on those rows (invariant C-B)',
+  (SELECT count(DISTINCT granted_by)::text || '/' || max(granted_by::text)
+     FROM deployment_allowance_grants WHERE user_id = '00000000-0000-4000-8000-000000000995'),
+  '1/00000000-0000-4000-8000-000000000981');
+SELECT pg_temp.assert_eq('16a3 a move from the PAGE carries no credential at all',
+  (SELECT count(*)::text FROM deployment_allowance_grants
+    WHERE user_id = '00000000-0000-4000-8000-000000000993' AND credential_id IS NOT NULL), '0');
+
+-- Revoking a key must never delete the record of what it allocated: the row
+-- survives and degrades to "the page".
+DELETE FROM deployment_integration_keys WHERE id = '00000000-0000-4000-8000-000000000c01';
+SELECT pg_temp.assert_eq('16b deleting the key keeps every grant row it wrote',
+  (SELECT count(*)::text FROM deployment_allowance_grants
+    WHERE user_id = '00000000-0000-4000-8000-000000000995'), '4');
+SELECT pg_temp.assert_eq('16b2 and nulls the credential rather than cascading',
+  (SELECT count(*)::text FROM deployment_allowance_grants
+    WHERE user_id = '00000000-0000-4000-8000-000000000995' AND credential_id IS NOT NULL), '0');
+
+-- Structure: the arity change kept 351's one-function-per-name property, and
+-- every new function is service-role only.
+SELECT pg_temp.assert_eq('16c the SIX-argument grant is the ONLY grant_deployment_allowance',
+  (SELECT count(*)::text || '/' || max(pronargs)::text FROM pg_proc p
+     JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public' AND p.proname = 'grant_deployment_allowance'), '1/6');
+SELECT pg_temp.assert_eq('16c2 one set_deployment_allowance, one apply, one of each lookup',
+  (SELECT count(*)::text FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public' AND p.proname IN
+      ('set_deployment_allowance','apply_pending_deployment_allowance',
+       'find_user_by_sso_subject','sso_subjects_for')), '4');
+SELECT pg_temp.assert_eq('16c3 all four pin search_path and are SECURITY DEFINER',
+  (SELECT count(*)::text FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public' AND p.proname IN
+      ('set_deployment_allowance','apply_pending_deployment_allowance',
+       'find_user_by_sso_subject','sso_subjects_for')
+      AND p.prosecdef AND 'search_path=public, pg_temp' = ANY(p.proconfig)), '4');
+SELECT pg_temp.assert_eq('16d no browser role may execute any of the four',
+  (SELECT bool_or(has_function_privilege(r, f, 'EXECUTE'))::text
+     FROM unnest(ARRAY['anon','authenticated']) r,
+          unnest(ARRAY['public.set_deployment_allowance(uuid,integer,uuid,text,text,uuid)',
+                       'public.apply_pending_deployment_allowance(uuid,text,text)',
+                       'public.find_user_by_sso_subject(text)',
+                       'public.sso_subjects_for(uuid[])']) f), 'false');
+SELECT pg_temp.assert_eq('16d2 service_role may execute all four',
+  (SELECT bool_and(has_function_privilege('service_role', f, 'EXECUTE'))::text
+     FROM unnest(ARRAY['public.set_deployment_allowance(uuid,integer,uuid,text,text,uuid)',
+                       'public.apply_pending_deployment_allowance(uuid,text,text)',
+                       'public.find_user_by_sso_subject(text)',
+                       'public.sso_subjects_for(uuid[])']) f), 'true');
+
+-- The pending table names a customer's purchase intent for an identity that
+-- may have no account yet: RLS on, no policy, and the table-level revoke.
+SELECT pg_temp.assert_eq('16e the pending table has RLS on and NO policy at all',
+  (SELECT relrowsecurity::text FROM pg_class WHERE oid = 'public.deployment_allowance_pending'::regclass)
+  || '/' || (SELECT count(*)::text FROM pg_policies WHERE schemaname='public'
+              AND tablename='deployment_allowance_pending'), 'true/0');
+SELECT pg_temp.assert_eq('16e2 no browser role may read it',
+  (has_table_privilege('authenticated', 'public.deployment_allowance_pending', 'SELECT')
+   OR has_table_privilege('anon', 'public.deployment_allowance_pending', 'SELECT'))::text, 'false');
+SELECT pg_temp.assert_eq('16e3 an intent must name a subject or an address',
+  (SELECT count(*)::text FROM pg_constraint
+    WHERE conrelid = 'public.deployment_allowance_pending'::regclass
+      AND conname = 'deployment_allowance_pending_names_someone'), '1');
+SELECT pg_temp.assert_eq('16f reset_at is STILL private to authenticated after 387 wrote it',
+  has_column_privilege('authenticated', 'public.deployment_user_allowances', 'reset_at', 'SELECT')::text,
+  'false');
+
+-- ---------------------------------------------------------------------------
+-- 17. The reconciliation, over every row this file created. It is the one
 --     assertion that catches a miswired grant path anywhere above:
 --     granted_credits = SUM(credits) over the non-audit kinds, always.
+--
+--     THE KIND SET GAINED 'renewal' IN 387: a renewal MOVES granted_credits
+--     (to the new target) and its row carries `target - granted`, so it must
+--     be inside this sum or every renewed user would fail it. 'overrun' stays
+--     outside — those rows record a clamped metered overrun and move nothing.
 -- ---------------------------------------------------------------------------
-SELECT pg_temp.assert_eq('13a granted = sum of default/topup/correction grants, for every row',
+SELECT pg_temp.assert_eq('17a granted = sum of default/topup/correction/renewal grants, for every row',
   (SELECT count(*)::text FROM deployment_user_allowances a
     WHERE a.granted_credits <> COALESCE((SELECT sum(g.credits) FROM deployment_allowance_grants g
-      WHERE g.user_id = a.user_id AND g.kind IN ('default','topup','correction')), 0)), '0');
-SELECT pg_temp.assert_eq('13b overrun rows exist and are excluded from that sum',
+      WHERE g.user_id = a.user_id AND g.kind IN ('default','topup','correction','renewal')), 0)), '0');
+SELECT pg_temp.assert_eq('17b overrun rows exist and are excluded from that sum',
   (SELECT count(*)::text FROM deployment_allowance_grants WHERE kind = 'overrun'), '1');
-SELECT pg_temp.assert_eq('13c the CHECK holds on every row this file created',
+SELECT pg_temp.assert_eq('17c the CHECK holds on every row this file created',
   (SELECT count(*)::text FROM deployment_user_allowances
     WHERE reserved_credits + spent_credits > granted_credits), '0');
-SELECT pg_temp.assert_eq('13d 362''s column comment now says attribution is transactional',
+SELECT pg_temp.assert_eq('17d 362''s column comment now says attribution is transactional',
   (SELECT (lower(col_description('public.usage_logs'::regclass,
      (SELECT attnum FROM pg_attribute WHERE attrelid = 'public.usage_logs'::regclass
         AND attname = 'on_behalf_of'))) LIKE '%historical rows only%')::text), 'true');

@@ -89,3 +89,42 @@ export function orDash(v: number | null | undefined): string {
 export function parseWhole(raw: string): number {
   return Number(raw.trim())
 }
+
+/**
+ * A date, or an em dash.
+ *
+ * The `orDash` rule one type over: a timestamp the server did not send is
+ * "unknown", and inventing "now" for it (which is what an unguarded
+ * `new Date(undefined)` degrades to via `Invalid Date`) states a fact nobody
+ * has. Localized by the browser, never formatted by hand — the page is
+ * Hebrew-first and a hard-coded order would be wrong in one of the two.
+ */
+export function dateOrDash(iso: string | null | undefined): string {
+  if (!iso) return "—"
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString()
+}
+
+/**
+ * The low-balance threshold's client-side rule, mirroring the route's.
+ *
+ * EMPTY IS VALID and means `null` — "do not warn me". It is deliberately NOT
+ * folded into zero: `low_balance_threshold_credits` is `integer NULL CHECK
+ * (>= 0)`, so 0 is a real threshold meaning "warn me when the pool is empty",
+ * and collapsing the two would arm an alert the payer just cleared.
+ *
+ * RAW Nodaro credits — the pool's own currency. No unit rate is consulted
+ * here, in either direction.
+ */
+export function thresholdInputError(raw: string): "invalid" | null {
+  const trimmed = raw.trim()
+  if (trimmed === "") return null
+  return /^\d+$/.test(trimmed) ? null : "invalid"
+}
+
+/** The threshold to send for a validated field: `null` for empty (clear it),
+ *  else the whole number typed. Call only after `thresholdInputError` passed. */
+export function parseThreshold(raw: string): number | null {
+  const trimmed = raw.trim()
+  return trimmed === "" ? null : Number(trimmed)
+}

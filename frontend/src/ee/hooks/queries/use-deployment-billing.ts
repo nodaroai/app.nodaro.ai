@@ -81,6 +81,21 @@ export interface DeploymentUserRow {
   /** false ⇒ no allowance row yet: the three figures above are the DEFAULT this
    *  user will actually be given at their first Generate (D7), not a guess. */
   readonly provisioned: boolean
+  /** The subject the identity provider asserts for this person — the name an
+   *  integration knows them by, since it never learns the studio's own uuid.
+   *  Absent when the deployment's IdP asserts none. */
+  readonly ssoSubject?: string | null
+  /**
+   * When this allowance's current PERIOD began — the instant a renewal last
+   * zeroed `spent` — or ABSENT when it has never been renewed.
+   *
+   * Optional and omitted rather than null, because that is the shape the
+   * server sends and because absence is the meaningful answer: until a
+   * renewal has happened `spent` is a LIFETIME figure, and a table that said
+   * "this period" beside it would be printing a true number under a false
+   * sentence.
+   */
+  readonly resetAt?: string | null
 }
 
 export interface DeploymentUsersPage {
@@ -91,7 +106,12 @@ export interface DeploymentUsersPage {
   readonly unit: DisplayUnit | null
 }
 
-export type AllowanceGrantKind = "default" | "topup" | "correction" | "overrun"
+/** `renewal` is the fourth kind inside the reconciliation sum (`granted =
+ *  Σ credits WHERE kind IN ('default','topup','correction','renewal')`); it is
+ *  the one kind whose `credits` may legitimately be ZERO, so that a renewal at
+ *  an unchanged plan still leaves a row saying the period turned over.
+ *  `overrun` remains audit-only and outside the sum. */
+export type AllowanceGrantKind = "default" | "topup" | "correction" | "overrun" | "renewal"
 
 export interface AllowanceGrantRow {
   readonly id: string
@@ -100,6 +120,84 @@ export interface AllowanceGrantRow {
   readonly kind: AllowanceGrantKind
   readonly note: string | null
   readonly createdAt: string
+  /**
+   * The integration credential that performed the move, or null for the
+   * billing account's own browser session (this page).
+   *
+   * AUDIT ONLY. The actor on every row is still the billing account — the key
+   * acts *as* it — which is exactly why the credential has to be named
+   * separately: without this the payer cannot tell a move their integration
+   * made from one they made here themselves.
+   */
+  readonly credentialId?: string | null
+  /** The credential's name, when the route joined it. The page resolves the id
+   *  against the keys list when it did not, so both shapes render alike. */
+  readonly credentialName?: string | null
+}
+
+/**
+ * One billing integration key, as `GET /integration-keys` reports it.
+ *
+ * THERE IS NO `token` FIELD, and there never will be. The bearer exists in
+ * exactly one response body — the mint answer below — once. This route reads
+ * columns that deliberately exclude the hash, so a row cannot grow one by
+ * accident.
+ */
+export interface IntegrationKey {
+  readonly id: string
+  readonly name: string
+  /** The first 12 characters (`ndr_bill_` + 3 hex) — enough to recognise a key
+   *  in a log line, useless as a credential. */
+  readonly tokenPrefix: string
+  readonly createdAt: string
+  readonly expiresAt: string | null
+  readonly lastUsedAt: string | null
+  readonly revokedAt: string | null
+  /** The source ranges the key is accepted from; null = any source. This is
+   *  configuration the payer set, not key material. */
+  readonly allowedCidrs?: readonly string[] | null
+}
+
+/** The ONE body that carries a bearer. It is shown once and is not recoverable
+ *  — a key the payer failed to copy is revoked and replaced, never re-read. */
+export interface MintedIntegrationKey {
+  readonly id: string
+  readonly name: string
+  readonly token: string
+  readonly tokenPrefix: string
+  readonly expiresAt: string | null
+}
+
+/**
+ * The minimal pool read, and the payer's own alert threshold.
+ *
+ * RAW Nodaro credits, like block 1 of the page — the pool is the deployment's
+ * real money and is the one figure on this whole surface that is not in the
+ * deployment's display unit. `threshold` is null when the payer has set none,
+ * and `lowBalance` is then false: never a fabricated default.
+ */
+export interface DeploymentBalance {
+  readonly balanceCredits: number | null
+  readonly burn: {
+    readonly periodStart: string
+    readonly credits: number | null
+    readonly generations: number | null
+    readonly capped: boolean
+  }
+  readonly periodEnd: string | null
+  readonly lowBalance: boolean
+  readonly threshold: number | null
+}
+
+/** The cap the mint route enforces. Mirrored here so the page can say how many
+ *  of them are in use BEFORE the payer meets `key_limit_reached`. */
+export const MAX_LIVE_INTEGRATION_KEYS = 5
+
+/** Live = not revoked, and not past its expiry. The same definition the route
+ *  counts with; a key that has expired frees a slot without being revoked. */
+export function isIntegrationKeyLive(k: IntegrationKey, now = Date.now()): boolean {
+  if (k.revokedAt) return false
+  return !k.expiresAt || new Date(k.expiresAt).getTime() > now
 }
 
 export interface UserGrantsPage {
@@ -237,6 +335,33 @@ export function errorMessageKey(e: unknown): MessageKey {
       return "billingAdmin.errStripeNotConfigured"
     case "invalid_amount":
       return "billingAdmin.errInvalidAmount"
+    // The billing integration credential's own refusals. Each one names the
+    // field or the state that refused, for the reason the note's two codes
+    // exist: a generic "the action did not complete" points the payer at
+    // nothing, and the recovery from `key_limit_reached` (revoke one) is
+    // completely different from the recovery from `invalid_cidr` (fix a range).
+    case "key_limit_reached":
+      return "billingAdmin.errKeyLimitReached"
+    case "invalid_name":
+      return "billingAdmin.errInvalidName"
+    case "invalid_expiry":
+      return "billingAdmin.errInvalidExpiry"
+    case "invalid_cidr":
+      return "billingAdmin.errInvalidCidr"
+    case "invalid_key_id":
+    case "key_not_found":
+      return "billingAdmin.errKeyNotFound"
+    case "key_write_failed":
+      return "billingAdmin.errKeyWriteFailed"
+    // A credential reached a route only the billing account's own browser may
+    // use. That is a configuration mistake in the integration, not a failure of
+    // this page, and the sentence has to say which.
+    case "payer_session_required":
+      return "billingAdmin.errPayerSessionRequired"
+    case "invalid_threshold":
+      return "billingAdmin.errInvalidThreshold"
+    case "read_failed":
+      return "billingAdmin.errReadFailed"
     default:
       return "billingAdmin.errGeneric"
   }
@@ -251,6 +376,8 @@ export const deploymentBillingKeys = {
   transactions: [...ROOT, "transactions"] as const,
   users: (search: string, offset: number) => [...ROOT, "users", search, offset] as const,
   grants: (userId: string) => [...ROOT, "grants", userId] as const,
+  integrationKeys: [...ROOT, "integration-keys"] as const,
+  balance: [...ROOT, "balance"] as const,
 }
 
 // ── Reads ───────────────────────────────────────────────────────────────────
@@ -365,6 +492,43 @@ export function useUserGrants(userId: string | null) {
   })
 }
 
+/**
+ * The billing integration keys.
+ *
+ * ONE query, shared. The Integrations block lists them and the grant history
+ * resolves `credentialId` to a name against the same rows — react-query dedupes
+ * on the key, so the second consumer costs no request. It is also why the list
+ * must include REVOKED keys: a revoked key's grants stay in the history for
+ * good, and their "via <name>" label has to keep resolving.
+ */
+export function useIntegrationKeys(enabled: boolean) {
+  return useQuery({
+    queryKey: deploymentBillingKeys.integrationKeys,
+    queryFn: () => request<readonly IntegrationKey[]>("/integration-keys"),
+    enabled,
+    retry: false,
+    staleTime: 30_000,
+  })
+}
+
+/**
+ * The pool for a machine, plus the payer's own low-balance threshold.
+ *
+ * Separate from `/overview` on purpose: `lowBalance` is a SERVER-side
+ * comparison against a threshold this page also writes, so the flag and the
+ * field it depends on have to invalidate together — and only a route that
+ * returns both can be relied on to agree with itself.
+ */
+export function useDeploymentBalance(enabled: boolean) {
+  return useQuery({
+    queryKey: deploymentBillingKeys.balance,
+    queryFn: () => request<DeploymentBalance>("/balance"),
+    enabled,
+    retry: false,
+    staleTime: 30_000,
+  })
+}
+
 /** Refetch everything the pool's figures depend on (the Stripe return).
  *  Stable across renders — the page lists it in an effect's deps, and a fresh
  *  closure every render would re-invalidate on every re-render. */
@@ -438,6 +602,98 @@ export function useDeploymentCheckoutMutation() {
       }),
     onSuccess: (data) => {
       if (data.url) window.location.href = data.url
+    },
+    onError: (e) => toast.error(tx(errorMessageKey(e))),
+  })
+}
+
+/**
+ * Mint an integration key. THE ONE CALL IN THE PRODUCT THAT PRODUCES A BEARER.
+ *
+ * Three rules, all of them enforced here rather than left to the block:
+ *
+ *  1. It is a MUTATION, never a query. A query would be re-fetched on window
+ *     focus, on reconnect, on any invalidation — each re-fetch minting another
+ *     key, spending one of the five slots on a bearer nobody ever saw.
+ *  2. The token goes NOWHERE but this mutation's own `data`. Not into the query
+ *     cache (which the list shares, and which outlives the panel), and above
+ *     all not into a toast: a toast is copyable, screenshot-able, and stays on
+ *     screen past the moment the payer dismissed the panel.
+ *  3. `onSuccess` invalidates the LIST, which carries no token at all — so the
+ *     new key appears by its prefix while the bearer stays in one place.
+ */
+export function useMintIntegrationKeyMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (vars: { name: string; expiresAt?: string; allowedCidrs?: string[] }) =>
+      request<MintedIntegrationKey>("/integration-keys", {
+        method: "POST",
+        body: JSON.stringify(vars),
+      }),
+    onSuccess: () => {
+      // Deliberately no toast: a success message here would have to say
+      // something about a credential, and the panel already says the only
+      // thing worth saying about this one.
+      void qc.invalidateQueries({ queryKey: deploymentBillingKeys.integrationKeys })
+    },
+    // EXPLICIT, and it does nothing ON PURPOSE. `lib/query-client.ts` sets a
+    // default `mutations.onError` that toasts `error.message` — the SERVER's
+    // English sentence — and a mutation without its own handler inherits it.
+    // On this Hebrew-first page that put an untranslated `key_limit_reached`
+    // sentence on screen beside the localized inline one. Defining the handler
+    // suppresses the default; the block renders the refusal inline, beside the
+    // button that refused, where the payer can act on it.
+    onError: () => {},
+    // The bearer lives in this mutation's `data` and nowhere else, so the
+    // MutationCache must not keep it after `reset()` or after the block
+    // unmounts. Zero means the entry is dropped the moment nothing observes it.
+    gcTime: 0,
+  })
+}
+
+/** Revoke a key. It takes effect on the integration's next request, and there
+ *  is no un-revoke — which is why the block asks twice before calling this. */
+export function useRevokeIntegrationKeyMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (vars: { id: string }) =>
+      request<{ id: string; revoked: boolean }>(`/integration-keys/${vars.id}`, {
+        method: "DELETE",
+      }),
+    onSuccess: () => {
+      toast.success(tx("billingAdmin.integrationsRevokedDone"))
+      void qc.invalidateQueries({ queryKey: deploymentBillingKeys.integrationKeys })
+    },
+    onError: (e) => toast.error(tx(errorMessageKey(e))),
+  })
+}
+
+/**
+ * Set — or CLEAR — the low-balance threshold.
+ *
+ * `credits: null` clears it; `credits: 0` is a real threshold meaning "tell me
+ * when the pool is empty". The column is `integer NULL CHECK (>= 0)` and those
+ * two values mean different things, so a caller must never collapse an empty
+ * field to zero — that arms an alert the payer just turned off.
+ *
+ * RAW Nodaro credits, the pool's own currency rather than the deployment's
+ * display unit. R3 is not in play here: nothing is converted, in either
+ * direction.
+ */
+export function useSetBalanceThresholdMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (vars: { credits: number | null }) =>
+      request<{ threshold: number | null }>("/balance/threshold", {
+        method: "PUT",
+        body: JSON.stringify({ credits: vars.credits }),
+      }),
+    onSuccess: () => {
+      toast.success(tx("billingAdmin.thresholdSaved"))
+      // The FLAG is computed server-side against the figure just written, so
+      // the balance read has to come back. Echoing the stored threshold into
+      // the cache would leave `lowBalance` stale against its own threshold.
+      void qc.invalidateQueries({ queryKey: deploymentBillingKeys.balance })
     },
     onError: (e) => toast.error(tx(errorMessageKey(e))),
   })
