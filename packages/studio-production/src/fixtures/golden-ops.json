@@ -1,0 +1,431 @@
+[
+  {
+    "op": "set_name",
+    "name": "The Rooftop Cut"
+  },
+  {
+    "op": "set_thumbnail",
+    "url": "https://r2.example/thumb/rooftop.png"
+  },
+  {
+    "op": "set_archived",
+    "archived": true
+  },
+  {
+    "op": "select_shot",
+    "shotId": "shot-2"
+  },
+  {
+    "op": "set_film",
+    "film": {
+      "style": "neo-noir",
+      "era": "1970s"
+    }
+  },
+  {
+    "op": "set_music",
+    "music": {
+      "url": "https://r2.example/music/storm.mp3",
+      "prompt": "Low strings under a rising storm.",
+      "duration": 30,
+      "provider": "suno-v5"
+    }
+  },
+  {
+    "op": "clear_music"
+  },
+  {
+    "op": "set_music_plan",
+    "plan": {
+      "prompt": "Low strings, then nothing at all.",
+      "duration": 24,
+      "selections": {
+        "vocals": "instrumental",
+        "vocalGender": "any",
+        "instruments": [
+          "strings"
+        ],
+        "genre": "ambient",
+        "mood": "bleak"
+      }
+    }
+  },
+  {
+    "op": "set_storyboard",
+    "patch": {
+      "brief": "A courier outruns a storm she cannot beat.",
+      "filmLength": 60
+    }
+  },
+  {
+    "op": "add_folder",
+    "id": "folder-act-2",
+    "name": "Act II"
+  },
+  {
+    "op": "rename_folder",
+    "id": "folder-act-2",
+    "name": "Act Two"
+  },
+  {
+    "op": "move_shot_to_folder",
+    "shotId": "shot-2",
+    "folderId": "folder-act-2"
+  },
+  {
+    "op": "move_shot_to_folder",
+    "shotId": "shot-2",
+    "folderId": null
+  },
+  {
+    "op": "remove_folder",
+    "id": "folder-act-2"
+  },
+  {
+    "op": "add_shot",
+    "id": "shot-4",
+    "afterShotId": "shot-3",
+    "name": "Coda"
+  },
+  {
+    "op": "rename_shot",
+    "id": "shot-4",
+    "name": "Coda, reprise"
+  },
+  {
+    "op": "duplicate_shot",
+    "id": "shot-1",
+    "newId": "shot-1-copy"
+  },
+  {
+    "op": "move_shot",
+    "id": "shot-1-copy",
+    "toIndex": 0
+  },
+  {
+    "op": "remove_shot",
+    "id": "shot-1-copy"
+  },
+  {
+    "op": "insert_shots",
+    "graph": {
+      "nodes": [
+        {
+          "id": "generate-image-shot-pasted",
+          "type": "generate-image",
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "width": 220,
+          "data": {
+            "label": "Shot 1 frame",
+            "prompt": "the road out of the valley",
+            "provider": "flux-2-max",
+            "generatedImageUrl": "https://r2.example/still-pasted.png",
+            "generatedResults": [
+              {
+                "url": "https://r2.example/still-pasted.png"
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [],
+      "settings": {
+        "studio": {
+          "version": 3,
+          "shots": [
+            {
+              "id": "shot-pasted",
+              "name": "Pasted crossing",
+              "imageNodeId": "generate-image-shot-pasted",
+              "stillProvider": "flux-2-max"
+            }
+          ],
+          "selectedShotId": "shot-pasted",
+          "shotOrder": [
+            "generate-image-shot-pasted"
+          ]
+        }
+      }
+    },
+    "afterShotId": "shot-2"
+  },
+  {
+    "op": "set_plan",
+    "shotId": "shot-3",
+    "frame": {
+      "prompt": "the ridge line at dusk, wolf on the crest",
+      "provider": "flux-2-max"
+    },
+    "motion": null
+  },
+  {
+    "op": "set_scene_prompt",
+    "shotId": "shot-2",
+    "text": "The crossing, in one move."
+  },
+  {
+    "op": "set_beats",
+    "shotId": "shot-2",
+    "beats": [
+      {
+        "id": "beat-2a",
+        "seconds": 3,
+        "text": "She steps off the shoulder of the road."
+      },
+      {
+        "id": "beat-2b",
+        "seconds": 3,
+        "text": "The valley opens.",
+        "directions": [
+          {
+            "kind": "ambience",
+            "text": "wind in dry grass"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "op": "set_end_transition",
+    "shotId": "shot-2",
+    "transition": {
+      "id": "cross-dissolve"
+    }
+  },
+  {
+    "op": "set_end_transition",
+    "shotId": "shot-1",
+    "transition": null
+  },
+  {
+    "op": "set_look",
+    "shotId": "shot-2",
+    "look": {
+      "timeOfDay": "dusk"
+    }
+  },
+  {
+    "op": "set_cast_look",
+    "shotId": "shot-2",
+    "key": "kira",
+    "look": {
+      "url": "https://r2.example/cast/kira-side.png",
+      "variantSlug": "angles:side",
+      "label": "side"
+    }
+  },
+  {
+    "op": "set_cast_look",
+    "shotId": "shot-1",
+    "key": "kira",
+    "look": null
+  },
+  {
+    "op": "set_cast_look_map",
+    "shotId": "shot-2",
+    "map": {
+      "kira": {
+        "url": "https://r2.example/cast/kira-front.png",
+        "variantSlug": "angles:front",
+        "label": "front"
+      }
+    }
+  },
+  {
+    "op": "add_still_result",
+    "shotId": "shot-1",
+    "atFront": true,
+    "result": {
+      "url": "https://r2.example/still-1e.png",
+      "jobId": "job-still-1e",
+      "prompt": "@kira on the rooftop, tighter",
+      "provider": "flux-2-max",
+      "aspectRatio": "16:9",
+      "resolution": "2k",
+      "promptFormat": 2,
+      "look": {
+        "timeOfDay": "blue-hour"
+      }
+    }
+  },
+  {
+    "op": "set_active_still",
+    "shotId": "shot-1",
+    "result": "job-still-1b"
+  },
+  {
+    "op": "rename_still_result",
+    "shotId": "shot-1",
+    "result": "job-still-1c",
+    "name": "Empty roof"
+  },
+  {
+    "op": "remove_still_result",
+    "shotId": "shot-1",
+    "result": "job-still-1c"
+  },
+  {
+    "op": "add_clip_result",
+    "shotId": "shot-2",
+    "result": {
+      "url": "https://r2.example/clip-2b.mp4",
+      "jobId": "job-clip-2b",
+      "prompt": "Kira crosses @sunspire-valley, longer",
+      "provider": "seedance-2",
+      "duration": 8,
+      "referenceImageUrls": [
+        "https://r2.example/ref/valley.png"
+      ]
+    }
+  },
+  {
+    "op": "set_active_clip",
+    "shotId": "shot-1",
+    "result": "job-clip-1b"
+  },
+  {
+    "op": "rename_clip_result",
+    "shotId": "shot-1",
+    "result": "job-clip-1a",
+    "name": "Take 1, slow"
+  },
+  {
+    "op": "remove_clip_result",
+    "shotId": "shot-1",
+    "result": "job-clip-1a"
+  },
+  {
+    "op": "set_start_frame",
+    "shotId": "shot-2",
+    "url": "https://r2.example/still-1a.png"
+  },
+  {
+    "op": "set_end_frame",
+    "shotId": "shot-2",
+    "url": null
+  },
+  {
+    "op": "set_directing_references",
+    "shotId": "shot-1",
+    "kind": "images",
+    "urls": [
+      "https://r2.example/ref/rooftop.png"
+    ]
+  },
+  {
+    "op": "add_pending_clip",
+    "shotId": "shot-2",
+    "pending": {
+      "jobId": "job-clip-pending-2",
+      "provider": "seedance-2",
+      "prompt": "Kira crosses @sunspire-valley, longer",
+      "startedAt": 1757116860000,
+      "duration": 8
+    }
+  },
+  {
+    "op": "remove_pending_clip",
+    "shotId": "shot-1",
+    "jobId": "job-clip-pending-1"
+  },
+  {
+    "op": "set_voice",
+    "shotId": "shot-2",
+    "voice": {
+      "url": "https://r2.example/voice/shot-2.mp3",
+      "text": "Nothing followed her out of the valley.",
+      "voiceId": "voice-narrator",
+      "voiceType": "premade",
+      "ttsProvider": "elevenlabs-multilingual",
+      "model": "eleven_multilingual_v2",
+      "delivery": {
+        "stability": 0.7
+      }
+    }
+  },
+  {
+    "op": "clear_voice",
+    "shotId": "shot-1"
+  },
+  {
+    "op": "enroll_cast",
+    "member": {
+      "kind": "object",
+      "assetId": "obj-lantern",
+      "displayName": "Lantern"
+    }
+  },
+  {
+    "op": "set_cast_role",
+    "key": "lantern",
+    "role": "prop"
+  },
+  {
+    "op": "recast_cast_member",
+    "key": "lantern",
+    "actor": {
+      "kind": "object",
+      "assetId": "obj-storm-lamp"
+    }
+  },
+  {
+    "op": "rename_cast_member",
+    "key": "lantern",
+    "displayName": "Storm lantern"
+  },
+  {
+    "op": "remove_cast_member",
+    "key": "storm-lantern"
+  },
+  {
+    "op": "mint_cast_from_chips"
+  },
+  {
+    "op": "restore_trashed",
+    "trashId": "trash-still-1"
+  },
+  {
+    "op": "purge_trashed",
+    "trashId": "trash-clip-1"
+  },
+  {
+    "op": "clear_trash"
+  },
+  {
+    "op": "add_cut",
+    "cut": {
+      "id": "cut-b",
+      "name": "Cut B",
+      "url": "https://r2.example/cuts/cut-b.mp4",
+      "exportedAt": "2026-09-06T18:00:00.000Z",
+      "duration": 39,
+      "shotsCount": 4
+    }
+  },
+  {
+    "op": "rename_cut",
+    "id": "cut-b",
+    "name": "Cut B, tight"
+  },
+  {
+    "op": "duplicate_cut",
+    "id": "cut-b",
+    "newId": "cut-c"
+  },
+  {
+    "op": "mark_cut_final",
+    "id": "cut-c"
+  },
+  {
+    "op": "delete_cut",
+    "id": "cut-b"
+  },
+  {
+    "op": "set_archived",
+    "archived": false
+  }
+]
