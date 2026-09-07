@@ -40,3 +40,15 @@ regexes = [
   '''Z1_aDD7opHbwv6f8yrHK0ptlIM2tg1ulhXsggLuDyqo''',
   '''1S--a7iJ0v6nNEKWYcqAfE3-xI0iZ30ypsFs_xrLLbA''',
 ]
+
+[[allowlists]]
+description = """The billing-admin page tests' FAKE integration-key bearer: the literal
+'ndr_bill_' + the hex alphabet spelled out four times. It is not a minted key (real ones
+are 256 random bits and never appear in the tree); two commits on the branch that added the
+credential carry it as a mint-response fixture, and the fixtures since use a zero-entropy
+stand-in. Pinned to the exact literal and the two test files so any other ndr_bill_ string
+still trips the gate."""
+matchCondition = "AND"
+paths = ['''frontend/src/ee/app/billing-admin/__tests__/.*\.test\.tsx$''']
+regexes = ['''ndr_bill_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd''']
+regexTarget = "match"

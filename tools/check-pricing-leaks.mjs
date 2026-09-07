@@ -13,7 +13,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import { join, extname } from "node:path"
 
-const ROOTS = ["packages/shared/src", "packages/prompts/src", "packages/client/src", "packages/cli/src"]
+const ROOTS = ["packages/shared/src", "packages/prompts/src", "packages/studio-production/src", "packages/client/src", "packages/cli/src"]
 const EXTS = new Set([".ts", ".tsx"])
 const SKIP_DIRS = new Set(["node_modules", "dist", "build"])
 
@@ -205,7 +205,7 @@ for (const root of ROOTS) {
 // open channel. Same line patterns as src; write changeset descriptions as if
 // they were public release notes, because they are.
 const PROSE_FILES = []
-for (const pkg of ["shared", "prompts", "client", "cli"]) {
+for (const pkg of ["shared", "prompts", "studio-production", "client", "cli"]) {
   PROSE_FILES.push(`packages/${pkg}/CHANGELOG.md`)
 }
 try {

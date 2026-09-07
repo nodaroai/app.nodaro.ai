@@ -6,11 +6,13 @@ import { useT } from "@/lib/i18n"
 import {
   useDeploymentBillingUsers,
   useGrantAllowanceMutation,
+  useIntegrationKeys,
   useUserGrants,
   type AllowanceGrantKind,
+  type AllowanceGrantRow,
   type DeploymentUserRow,
 } from "@/ee/hooks/queries/use-deployment-billing"
-import { orDash, parseWhole, unitsInputError, type DisplayUnit } from "./units"
+import { dateOrDash, orDash, parseWhole, unitsInputError, type DisplayUnit } from "./units"
 import { ListError } from "./list-error"
 
 /**
@@ -22,6 +24,17 @@ import { ListError } from "./list-error"
  * allowance row yet and those three are the DEFAULT it will be given at its
  * first Generate (D7). Rendering that case as an em dash would be a lie in the
  * expensive direction — it reads as "this person has nothing".
+ *
+ * "THIS PERIOD" IS A PROPERTY OF THE DATA, NOT A SETTING. A renewal zeroes
+ * `spent` and stamps `resetAt`; until one has happened `spent` is a LIFETIME
+ * figure. The server says which by OMITTING `resetAt` rather than answering
+ * null, so the label follows presence-or-absence and nothing else — printing
+ * "this period" over a lifetime total is a true number under a false sentence.
+ *
+ * WHO WROTE A GRANT. The account recorded on every history row is the billing
+ * account, whether the move came from this page or from an integration acting
+ * as it — so the credential is named separately, from `credentialId`. A row
+ * with none was this page, which is the common case and carries no label.
  *
  * RTL (R5): logical properties only, and the remaining/granted pair is three
  * separately labelled fields rather than one `X / Y` string, which inverts.
@@ -52,12 +65,25 @@ export function UsersBlock({ unit }: { unit: DisplayUnit | null }) {
   const { data, isLoading, isError, refetch } = useDeploymentBillingUsers(true, search, offset, PAGE_SIZE)
   const grants = useUserGrants(openGrants)
   const grant = useGrantAllowanceMutation()
+  // Shared with the Integrations block through react-query's cache, so naming
+  // the credential on a history row costs no second request.
+  const keys = useIntegrationKeys(true)
 
   // A FAILED read has no `data` and `isLoading` false, so these two defaults
   // are what turn "we could not read this" into "there is nothing here". Every
   // consumer of them below is guarded on `isError`.
   const rows = data?.data ?? []
   const total = data?.total ?? 0
+
+  // ANY row, not every row: renewals arrive per user on the integration's own
+  // clock, so a deployment mid-rollout has both kinds at once. One column can
+  // carry only one label, and the one that is true of some rows and merely
+  // over-specific for the rest is the safer of the two — hence the note below
+  // the table, which says exactly that.
+  // TRUTHY, not `!= null`: the wire carries `resetAt: null` for "never
+  // renewed", but an empty string would pass a null check and flip the whole
+  // column's label on a value that names no instant.
+  const periodic = rows.some((r) => !!r.resetAt)
 
   return (
     <section data-testid="users-block" className="rounded-xl border border-border bg-card p-5">
@@ -114,6 +140,16 @@ export function UsersBlock({ unit }: { unit: DisplayUnit | null }) {
                 <div className="mt-1 text-xs text-muted-foreground">
                   {row.provisioned ? t("billingAdmin.provisioned") : t("billingAdmin.notProvisioned")}
                 </div>
+                {/* Only on a row that HAS one. A user who has never renewed has
+                    no period, and a date here would be a fabricated fact. */}
+                {!!row.resetAt && (
+                  <div
+                    data-testid={`user-period-${row.id}`}
+                    className="mt-0.5 text-xs text-muted-foreground tabular-nums"
+                  >
+                    {t("billingAdmin.periodSince", { date: dateOrDash(row.resetAt) })}
+                  </div>
+                )}
               </div>
 
               {/* Three labelled fields, never "X / Y": under RTL the numbers of
@@ -128,7 +164,9 @@ export function UsersBlock({ unit }: { unit: DisplayUnit | null }) {
                   <dd className="tabular-nums font-medium">{orDash(row.remaining)}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-muted-foreground">{t("billingAdmin.colSpent")}</dt>
+                  <dt className="text-xs text-muted-foreground">
+                    {t(periodic ? "billingAdmin.colSpentPeriod" : "billingAdmin.colSpent")}
+                  </dt>
                   <dd className="tabular-nums">{orDash(row.spent)}</dd>
                 </div>
               </dl>
@@ -182,16 +220,24 @@ export function UsersBlock({ unit }: { unit: DisplayUnit | null }) {
                   <p className="text-xs text-muted-foreground">{t("billingAdmin.grantsEmpty")}</p>
                 )}
                 <ul className="mt-2 space-y-1 text-sm">
-                  {(grants.data?.grants ?? []).map((g) => (
-                    <li key={g.id} className="flex flex-wrap items-baseline gap-x-3">
-                      <span className="text-xs text-muted-foreground">{kindLabel(t, g.kind)}</span>
-                      <span className="tabular-nums">{orDash(g.units)}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(g.createdAt).toLocaleDateString()}
-                      </span>
-                      {g.note && <span className="text-xs text-muted-foreground">{g.note}</span>}
-                    </li>
-                  ))}
+                  {(grants.data?.grants ?? []).map((g) => {
+                    const via = credentialLabel(t, g, keys.data, keys.isLoading)
+                    return (
+                      <li
+                        key={g.id}
+                        data-testid={`grant-row-${g.id}`}
+                        className="flex flex-wrap items-baseline gap-x-3"
+                      >
+                        <span className="text-xs text-muted-foreground">{kindLabel(t, g.kind)}</span>
+                        <span className="tabular-nums">{orDash(g.units)}</span>
+                        <span className="text-xs text-muted-foreground tabular-nums">
+                          {dateOrDash(g.createdAt)}
+                        </span>
+                        {via && <span className="text-xs text-muted-foreground">{via}</span>}
+                        {g.note && <span className="text-xs text-muted-foreground">{g.note}</span>}
+                      </li>
+                    )
+                  })}
                 </ul>
                 {/* Invariant 4: `overrun` rows are audit-only and are excluded
                     from `granted_credits`, so a history that renders them as
@@ -202,6 +248,10 @@ export function UsersBlock({ unit }: { unit: DisplayUnit | null }) {
           </div>
         ))}
       </div>
+
+      {periodic && (
+        <p className="mt-3 text-xs text-muted-foreground">{t("billingAdmin.usersPeriodNote")}</p>
+      )}
 
       <div className="mt-4 flex items-center gap-2">
         <Button
@@ -235,7 +285,46 @@ function kindLabel(t: ReturnType<typeof useT>, kind: AllowanceGrantKind): string
       return t("billingAdmin.kindCorrection")
     case "overrun":
       return t("billingAdmin.kindOverrun")
+    // A period start: the quota set to the plan's figure, `spent` zeroed and
+    // `resetAt` stamped. Inside the reconciliation sum, and the one kind whose
+    // amount may legitimately be zero.
+    case "renewal":
+      return t("billingAdmin.kindRenewal")
   }
+}
+
+/**
+ * "via <key name>", or nothing.
+ *
+ * Three cases, and the middle one is why this is a function rather than a
+ * ternary at the call site:
+ *
+ *  - NO credential ⇒ nothing at all. The move came from this page, which is
+ *    the common case; a "via the page" label would be noise and, worse, would
+ *    read as the name of a credential.
+ *  - a credential we can NAME ⇒ its name, from the route's own join when it
+ *    provided one, else resolved against the keys list. The list includes
+ *    REVOKED keys precisely so a retired integration's history keeps reading.
+ *  - a credential we cannot name ⇒ the generic sentence. Never the raw uuid:
+ *    it identifies nothing to the person reading, and never blank, which would
+ *    silently attribute an integration's move to this page.
+ *
+ * WHILE THE KEYS LIST IS STILL LOADING there is a fourth case, and it is not
+ * the third one: "we cannot name it" is only true once the list has arrived.
+ * Rendering the generic sentence first and the key's real name a moment later
+ * is a flicker that reads as the history changing its mind about who acted, so
+ * the label waits.
+ */
+export function credentialLabel(
+  t: ReturnType<typeof useT>,
+  g: Pick<AllowanceGrantRow, "credentialId" | "credentialName">,
+  keys: readonly { id: string; name: string }[] | undefined,
+  keysLoading = false,
+): string | null {
+  if (!g.credentialId) return null
+  const name = g.credentialName ?? keys?.find((k) => k.id === g.credentialId)?.name
+  if (name) return t("billingAdmin.viaKey", { name })
+  return keysLoading ? null : t("billingAdmin.viaUnknownKey")
 }
 
 function TopupForm({

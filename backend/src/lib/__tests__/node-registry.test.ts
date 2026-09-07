@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { NODE_REGISTRY } from "../node-registry.js"
-import { VIDEO_AUDIT_BUCKET_CREDITS } from "@nodaro/shared"
+import { VIDEO_ANALYSIS_BUCKET_CREDITS, VIDEO_AUDIT_BUCKET_CREDITS } from "@nodaro/shared"
 
 describe("NODE_REGISTRY: reduce", () => {
   it("has a 'reduce' entry with label, category=control, outputType=text", () => {
@@ -64,6 +64,16 @@ describe("NODE_REGISTRY: video-audit", () => {
     const analysisField = entry!.inputSchema?.fields.find((f) => f.key === "analysis")
     expect(analysisField).toBeDefined()
     expect(analysisField!.required).toBeFalsy()
+  })
+
+  it("declares a creditCost range spanning the full VIDEO_ANALYSIS_BUCKET_CREDITS table", () => {
+    const entry = NODE_REGISTRY.find((n) => n.type === "video-analysis")
+    // Same discipline as the audit node below: the cheapest bucket (legacy fast
+    // tier, 60s) to the priciest (smart, 600s ceiling), derived from the shared
+    // table so a regeneration cannot leave this literal behind — it did once
+    // (the 9_082 → 9_434 round moved the ceiling 2076 → 2081 unnoticed).
+    const values = Object.values(VIDEO_ANALYSIS_BUCKET_CREDITS)
+    expect(entry!.creditCost).toBe(`${Math.min(...values)}-${Math.max(...values)}`)
   })
 
   it("declares a creditCost range spanning the full VIDEO_AUDIT_BUCKET_CREDITS table", () => {

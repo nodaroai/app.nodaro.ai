@@ -22,9 +22,17 @@
 	# existing leftmost keying reads. When the peer is NOT trusted, {client_ip}
 	# is simply the peer's own address — exactly what the backend sees today, so
 	# this is never worse than the current behaviour.
+	#
+	# Which headers carry the client address, in order. The hosted edge
+	# documents X-Real-IP (not X-Forwarded-For) for the client's remote IP, so
+	# without X-Real-IP in this list a trusted edge that sends no
+	# X-Forwarded-For would resolve {client_ip} to the edge itself — today's
+	# value, inert. Both headers are consulted only for a TRUSTED peer; an
+	# untrusted peer's headers are still replaced as before.
 	servers {
 		trusted_proxies static private_ranges
 		trusted_proxies_strict
+		client_ip_headers X-Forwarded-For X-Real-IP
 	}
 }
 

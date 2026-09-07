@@ -36,10 +36,17 @@ const here = dirname(fileURLToPath(import.meta.url))
 const FIXTURE = JSON.parse(readFileSync(resolve(here, "fixtures/tool-surface.json"), "utf8")) as Record<string, string[]>
 
 /** Per-tool and total wire budget for the cloud edition under ALL_GRANTED. */
-// 2026-09-06 baseline after the six trims: max tool 8.1 KB, total 303 KB. The
-// headroom is deliberately small — the studio program's +17 tools (≈ +35 KB)
-// must raise this on purpose, not slide under it.
-export const TOOL_WIRE_BUDGET = { perToolBytes: 8_192, totalBytes: 310_000 }
+// 2026-09-06 baseline after the six trims: max tool 8.1 KB, total 303 KB, with
+// ~7 KB of headroom. The headroom is deliberately small — the studio program's
+// tools must raise this ON PURPOSE, not slide under it.
+//
+// Raised 2026-09-06 for the studio production family's first six: they cost
+// 6,059 B (766–1,283 B each, well inside the per-tool budget) and would
+// otherwise have left 860 B — technically passing, and leaving the next person
+// to add anything at all with a failure that looks like their fault. The rise
+// is exactly the family's cost, so the original headroom is preserved rather
+// than silently spent. Total after: 309,140 B over 165 tools.
+export const TOOL_WIRE_BUDGET = { perToolBytes: 8_192, totalBytes: 316_000 }
 
 type ToolDef = { name: string; description?: string }
 async function list(scopes: Scope[]): Promise<ToolDef[]> {

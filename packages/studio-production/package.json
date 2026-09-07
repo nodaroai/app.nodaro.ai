@@ -1,0 +1,55 @@
+{
+  "name": "@nodaro/studio-production",
+  "version": "0.2.0",
+  "description": "The Nodaro studio's production document as code — the shot/graph codec, the nodaro-studio-production plan format, the bundle codec and the cast/look/direction vocabulary, shared by the Nodaro platform and the studio app.",
+  "type": "module",
+  "license": "FSL-1.1-Apache-2.0",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@nodaro/prompts": "^1.17.0",
+    "@nodaro/shared": "^2.24.0",
+    "zod": "^4.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "tsup": "^8.5.0",
+    "typescript": "^5.7.3",
+    "vitest": "^4.1.2"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nodaroai/app.nodaro.ai.git",
+    "directory": "packages/studio-production"
+  },
+  "homepage": "https://github.com/nodaroai/app.nodaro.ai/tree/main/packages/studio-production#readme",
+  "bugs": "https://github.com/nodaroai/app.nodaro.ai/issues",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "src",
+    "LICENSE"
+  ]
+}

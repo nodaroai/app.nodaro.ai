@@ -6,7 +6,14 @@ import { warmAdminCache } from "../lib/admin-check.js"
 import { firstHeaderValue } from "../lib/request-helpers.js"
 import { resolveApiToken } from "../lib/api-token-resolver.js"
 import { surfaceSsoOnly } from "../lib/surface-profile.js"
-import { deploymentPayerId } from "../lib/deployment-payer.js"
+import { deploymentPayerActive, deploymentPayerId } from "../lib/deployment-payer.js"
+import {
+  BILLING_KEY_PREFIX,
+  callerIp,
+  ipInAnyCidr,
+  resolveBillingKey,
+  touchBillingKeyLastUsed,
+} from "../lib/billing-key-resolver.js"
 import { SSO_APP_METADATA_KEY } from "../lib/sso-linking.js"
 
 /**
@@ -71,7 +78,14 @@ declare module "fastify" {
      *  app OAuth token, internal secret) — the spend-surface guard treats any
      *  non-JWT kind as a programmatic caller regardless of Origin. Unset on
      *  public routes and legacy body-userId fallbacks. */
-    authKind?: "internal" | "app_token" | "api_token" | "jwt"
+    authKind?: "internal" | "app_token" | "api_token" | "jwt" | "billing_key"
+    /** Set when the request is authenticated via a BILLING INTEGRATION KEY
+     *  (`ndr_bill_<64hex>`) — the machine credential for the deployment's
+     *  billing surface. Carries the key's identity, never its bearer, so a
+     *  write made through one can be attributed to the credential rather than
+     *  only to the account. Present only on a deployment that configures a
+     *  billing payer; unset everywhere else. */
+    billingKey?: { id: string; name: string }
     /** Pool-aware spend-surface mode (D1 v2), stamped by creditGuard Step 0:
      *  true = consumer-surface browser session while the flag is on. Payg
      *  resolution happens downstream (check/reserve/RPC self-gate). */
@@ -403,6 +417,74 @@ export function registerAuthHook(app: FastifyInstance): void {
         .eq("id", data.id)
         .then(() => {})
 
+      return
+    }
+
+    // --- Billing integration key path (ndr_bill_<64hex>) ---
+    //
+    // BEFORE the personal-token branch, and it has to be: `ndr_bill_` also
+    // starts with `ndr_`, so a branch placed after it would never be reached —
+    // the bearer would resolve as an unknown personal token and 401.
+    //
+    // REGISTERED ONLY UNDER A DEPLOYMENT PAYER (R2). With no
+    // `billing.payerAccount` this condition is false, the prefix is meaningless,
+    // the keys table is never queried, and the bearer falls through to the line
+    // below and is refused exactly as any other unknown `ndr_` string is today.
+    //
+    // THE PATH ALLOW-LIST IS THE POINT. The credential may administer and read
+    // the billing surface and it may never generate, mint another credential or
+    // buy — and that is enforced HERE, once, before any route handler runs,
+    // rather than by every present and future route remembering to check. A
+    // path outside `/v1/deployment-billing/` is refused whether or not the
+    // route is public: `/mcp` IS public, and a refusal that deferred to the
+    // public-route escape would let the MCP handler run anonymously with a
+    // valid billing key in hand — which is the generate surface this credential
+    // exists to be unable to reach.
+    if (deploymentPayerActive() && token?.startsWith(BILLING_KEY_PREFIX)) {
+      const key = await resolveBillingKey(token)
+      if (!key) {
+        if (isPublic) return
+        // Unknown, revoked and expired answer identically, on purpose: the
+        // refusal must not tell a caller whether a bearer was ever real.
+        reply.status(401).send({
+          error: { code: "unauthorized", message: "Invalid, revoked or expired billing key" },
+        })
+        return
+      }
+
+      // The source restriction, when the payer set one. Not skipped on public
+      // routes: a credential restricted to an integration's egress addresses
+      // must be restricted everywhere, or the restriction is decoration.
+      if (key.allowedCidrs && key.allowedCidrs.length > 0 && !ipInAnyCidr(callerIp(req), key.allowedCidrs)) {
+        console.warn(`[billing-key] ${req.url}: REFUSED — key ${key.id} used from a source outside its allow-list`)
+        reply.status(403).send({
+          error: {
+            code: "billing_key_source",
+            message: "This billing integration key is not permitted from this network address.",
+          },
+        })
+        return
+      }
+
+      const path = req.url.split("?")[0] ?? req.url
+      if (!path.startsWith("/v1/deployment-billing/")) {
+        reply.status(403).send({
+          error: {
+            code: "billing_key_scope",
+            message: "A billing integration key is valid only on /v1/deployment-billing/ routes.",
+          },
+        })
+        return
+      }
+
+      // Acts AS the billing account, on a strict subset of what that account
+      // may do. `requireDeploymentPayer` still checks the identity; the
+      // `authKind` above is what tells it, and the two verbs that stay
+      // browser-only, which credential it is.
+      req.userId = deploymentPayerId() ?? undefined
+      req.authKind = "billing_key"
+      req.billingKey = { id: key.id, name: key.name }
+      touchBillingKeyLastUsed(key.id)
       return
     }
 

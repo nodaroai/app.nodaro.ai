@@ -31,6 +31,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/prompts/package.json ./packages/prompts/
+COPY packages/studio-production/package.json ./packages/studio-production/
 COPY packages/client/package.json ./packages/client/
 COPY packages/remotion/package.json ./packages/remotion/
 COPY packages/picker-ui/package.json ./packages/picker-ui/
@@ -57,6 +58,15 @@ COPY packages/prompts/src ./packages/prompts/src
 COPY packages/prompts/tsconfig.json ./packages/prompts/
 COPY packages/prompts/tsup.config.ts ./packages/prompts/
 WORKDIR /app/packages/prompts
+RUN npm run build
+
+# @nodaro/studio-production (FSL) — the studio's production codec, which the
+# backend's routes, MCP tools and copilot run; depends on the two dists above.
+WORKDIR /app
+COPY packages/studio-production/src ./packages/studio-production/src
+COPY packages/studio-production/tsconfig.json ./packages/studio-production/
+COPY packages/studio-production/tsup.config.ts ./packages/studio-production/
+WORKDIR /app/packages/studio-production
 RUN npm run build
 
 # @nodaro/picker-ui (workspace, SUL, not published) — rich pickers, animated
@@ -100,6 +110,8 @@ COPY --from=shared-build /app/packages/shared/dist ./packages/shared/dist
 COPY --from=shared-build /app/packages/shared/package.json ./packages/shared/package.json
 COPY --from=shared-build /app/packages/prompts/dist ./packages/prompts/dist
 COPY --from=shared-build /app/packages/prompts/package.json ./packages/prompts/package.json
+COPY --from=shared-build /app/packages/studio-production/dist ./packages/studio-production/dist
+COPY --from=shared-build /app/packages/studio-production/package.json ./packages/studio-production/package.json
 
 # Backend source.
 COPY backend/ ./backend/
@@ -263,6 +275,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/prompts/package.json ./packages/prompts/
+COPY packages/studio-production/package.json ./packages/studio-production/
 COPY packages/client/package.json ./packages/client/
 COPY packages/remotion/package.json ./packages/remotion/
 COPY packages/picker-ui/package.json ./packages/picker-ui/
@@ -287,6 +300,7 @@ RUN mkdir -p /app/backend/node_modules
 # Any workspace package a cloud plugin depends on needs its line here.
 COPY --from=shared-build /app/packages/shared/dist ./packages/shared/dist
 COPY --from=shared-build /app/packages/prompts/dist ./packages/prompts/dist
+COPY --from=shared-build /app/packages/studio-production/dist ./packages/studio-production/dist
 
 # Optional Cloud-only private plugin (@nodaroai/cloud-plugins, proprietary —
 # see backend/src/lib/private-plugins/load.ts). This MUST install in THIS
@@ -462,6 +476,7 @@ COPY --chown=node:node --from=prod-deps /app/node_modules ./node_modules
 # 3. Workspace package manifests (so Node's resolver knows the layout).
 COPY --chown=node:node --from=prod-deps /app/packages/shared/package.json ./packages/shared/package.json
 COPY --chown=node:node --from=prod-deps /app/packages/prompts/package.json ./packages/prompts/package.json
+COPY --chown=node:node --from=prod-deps /app/packages/studio-production/package.json ./packages/studio-production/package.json
 COPY --chown=node:node --from=prod-deps /app/packages/remotion/package.json ./packages/remotion/package.json
 COPY --chown=node:node --from=prod-deps /app/backend/package.json ./backend/package.json
 COPY --chown=node:node --from=prod-deps /app/frontend/package.json ./frontend/package.json
@@ -478,6 +493,7 @@ COPY --chown=node:node --from=prod-deps /app/backend/node_modules ./backend/node
 # 4. Built @nodaro/shared dist (resolved via the workspace symlink).
 COPY --chown=node:node --from=shared-build /app/packages/shared/dist ./packages/shared/dist
 COPY --chown=node:node --from=shared-build /app/packages/prompts/dist ./packages/prompts/dist
+COPY --chown=node:node --from=shared-build /app/packages/studio-production/dist ./packages/studio-production/dist
 
 # 5. Backend compiled JS (flat dist/server.js because tsconfig rootDir = ./src).
 COPY --chown=node:node --from=backend-build /app/backend/dist ./backend/dist

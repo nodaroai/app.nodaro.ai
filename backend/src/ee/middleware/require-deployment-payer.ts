@@ -37,6 +37,24 @@ import { deploymentPayerId } from "../../lib/deployment-payer.js"
  * money surface. There is NO `requireAdmin` fallback here, on purpose: a
  * fallback would re-admit exactly the principal the guard excludes.
  *
+ * THE SECOND ACCEPTED KIND. Since the billing integration key
+ * (`authKind === "billing_key"`, `middleware/auth.ts`) this guard accepts two
+ * credential kinds, not one. That key resolves to the payer's own uuid, so the
+ * identity check below is unchanged and every `granted_by = payer` audit row
+ * keeps meaning what it meant; what makes widening safe is that the auth hook
+ * has ALREADY refused the key on every path outside `/v1/deployment-billing/`
+ * before this guard runs, and that the key can only exist at all on a
+ * deployment that configures a payer.
+ *
+ * TWO ROUTES ARE EXCLUDED FROM THE WIDENING, LOCALLY, with their own code
+ * (`payer_session_required`): `POST /checkout` and `POST /integration-keys`.
+ * Checkout is the one verb that turns a leaked credential into a charge on a
+ * real card, and the mint route is the one that turns a leaked credential into
+ * a second credential — the same reason a personal token cannot mint a personal
+ * token. Both refusals live in the route rather than here, so this guard stays
+ * a statement about the SURFACE and the exceptions stay visible at the verb
+ * they protect.
+ *
  * INERT ON MAINLINE (R2). The routes are registered only under `hasCredits()
  * && deploymentPayerActive()`, so with no payer the paths do not exist and this
  * guard never runs. The `payerId` null branch below is consequently dead code
@@ -83,7 +101,7 @@ export async function requireDeploymentPayer(req: FastifyRequest, reply: Fastify
     reply.status(401).send(UNAUTHORIZED)
     return
   }
-  if (req.authKind !== "jwt") {
+  if (req.authKind !== "jwt" && req.authKind !== "billing_key") {
     // A personal API token or a developer-app OAuth token, even one belonging
     // to the payer itself. Loud, because on a payer instance this line is the
     // audit trail for a credential reaching the money surface.

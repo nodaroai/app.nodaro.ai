@@ -10,8 +10,8 @@ authorizing the connector; missing scopes cause tools to be omitted entirely
 
 | Scope | Controls |
 |-------|----------|
-| `workflows:read` | `list_projects`, `get_project`, `list_workflows`, `get_workflow`, `get_workflow_json`, `export_workflow`, `list_components`, `get_component_inputs`, `get_recast_status` |
-| `workflows:write` | `create_workflow`, `delete_workflow`, `update_workflow_json`, `import_workflow`, `import_recast_script` |
+| `workflows:read` | `list_projects`, `get_project`, `list_workflows`, `get_workflow`, `get_workflow_json`, `export_workflow`, `list_components`, `get_component_inputs`, `get_recast_status`, `validate_studio_plan`, `list_studio_productions`, `get_studio_production` |
+| `workflows:write` | `create_workflow`, `delete_workflow`, `update_workflow_json`, `import_workflow`, `import_recast_script`, `create_studio_production`, `import_studio_production` |
 | `workflows:execute` | `run_workflow`, all generation verbs (image/video/audio/Suno/character/location/object), `run_component`, `run_app`, `delete_app_run`, `analyze_prompt`, `generate_prompt`, `enhance_prompt`, `reduce`, `forced_alignment`, `video_analysis`, `video_audit`, `resolve_shot_sequence`, `render_shot_sequence`, `create_explainer`, `create_launch_video`, `start_recast`, `resolve_recast_gate` |
 | `jobs:read` | `list_jobs`, `get_job`, `diagnose_run` |
 | `assets:read` | `browse_gallery`, `browse_uploads`, `list_favorites`, `get_asset`, `display_asset`, `get_app_run`, `list_characters`, `get_character`, `list_locations`, `get_location`, `list_objects`, `get_object`, `list_creatures`, `get_creature` |
@@ -25,7 +25,7 @@ authorizing the connector; missing scopes cause tools to be omitted entirely
 | `workspaces:read` | `list_workspaces` |
 | `workspaces:write` | `select_workspace` |
 
-**Ungated (always visible):** `ping`, `list_models`, `start_film_director`, `start_video_director`, `start_workflow_editor`, `get_node_skill`, `get_picker_catalog`, `list_shot_shapes`, `get_shot_shape`, `list_brand_presets`, `get_recipe`
+**Ungated (always visible):** `ping`, `list_models`, `start_film_director`, `start_video_director`, `start_workflow_editor`, `get_node_skill`, `get_picker_catalog`, `list_shot_shapes`, `get_shot_shape`, `list_brand_presets`, `get_recipe`, `get_studio_production_skill`
 
 The workspace scopes are deliberately **not** granted to tokens issued before
 organizations existed: consenting to an app back then could not have meant
@@ -607,6 +607,12 @@ prompt with no questions round-trip.
 | `start_recast` | (Cloud only) Quote (no `confirm`) then render (`confirm: true` after the user accepts the credits) an imported recast; called again it advances a planned or interactive run. Pass `interactive: true` to choose the cast at pick-1-of-3 gates (priced surcharge — it rides the quote). Optional `anchor_mode` picks the keyframes anchor discipline — `"progressive"` (each part's start still chains off the previous render) or `"none"` (no frame conditioning; the quote drops the anchor-still surcharge); omitted, the server default applies. `workflows:execute`. |
 | `resolve_recast_gate` | (Cloud only) Record the user's pick at an interactive gate (cast / identity sheet / scene stills / music) and advance the run — the pick is free, pure state. `picks` serves the two pick-1-of-3 gates: bare it answers the CAST gate; with `gate: "sheet"` it answers the identity-sheet gate (person slots only, opens after the cast pick — the face panel is identical across the 3 sheets, so the pick chooses body & wardrobe). `finish_auto: true` resolves every remaining gate with the critic's top candidate. `workflows:execute`. |
 | `get_recast_status` | (Cloud only) Progress of a recast run — planning / planned / generating (segments, live preview) / completed (result URL) — plus the recast.nodaro.ai deep link. `workflows:read`. |
+| `get_studio_production_skill` | How to author and operate a Nodaro Studio production — the lane for "make me a film/short/ad of X" when the user wants shots they can edit afterwards at studio.nodaro.ai. `part`: `operating` (the tool map and loop, default), `authoring` (the plan format), `catalog` (every picker/model/enum), `schema` (the JSON Schema). Ungated, free. Behind `STUDIO_PRODUCTIONS_API`. |
+| `validate_studio_plan` | FREE validation of an authored `nodaro-studio-production` plan; returns `{ valid, errors (path+message), warnings, summary }`, where the summary says how many `cast` names bound to a row in the user's own library. Never charges, persists nothing. `workflows:read` — it resolves every `cast` name against the caller's own characters, locations, objects and creatures, exactly as its route does. |
+| `list_studio_productions` | The user's studio productions, newest first — id, name, version, thumbnail, shared flag and shot count. Archived rows are hidden, as on the dashboard. Pages with `cursor`. `workflows:read`. |
+| `get_studio_production` | One production: film look, cast, folders, cuts, bin, what is running, and its shots in timeline order. `detail: "summary"` (default) is counts + each shot's current image; `"full"` adds every past result with its restore context. `shot_id` narrows to one shot. Address a result by its `key` (job id, or url when no job made it) — never by position. `workflows:read`. |
+| `create_studio_production` | Create a production in the user's own Studio project — visible at studio.nodaro.ai immediately. With a `plan`, every scene, cast binding and film look lands with it; without one, an empty production. Free: it writes a document, it generates nothing. `workflows:write`. |
+| `import_studio_production` | Add a validated plan's scenes to a production that already exists — the "Add scenes" lane. Appending adds shots and enrolls whoever is new in the cast; it never renames, re-briefs or re-looks the production. Takes `plan`, or `plan_job_id` of a FINISHED `llm-structured` run whose schema is `studio_production` (a running one is refused with `not_finished`). Free. If the user has the production open in the studio editor, that tab writes the whole document back on a debounce and overwrites an MCP append — ask them to reload the editor before the import and again after. `workflows:write`. |
 
 **Seedance 2 (`model: "seedance-2"`)** accepts `resolution: "4k"` and `aspect_ratio: "adaptive"` (plus `"21:9"`) on `generate_video` / `animate_image` — both fields are free strings, forwarded to the route unaltered. The other variants are resolution-capped: `seedance-2-fast` and `seedance-2-mini` are **480p / 720p only** (no 1080p, no 4K), while `seedance-2-5` spans **480p / 720p / 1080p** (no 4K; 1080p added 2026-08-17). **`seedance-2-5`** also trades 4K for length — up to **30s in one call** vs 15s — and accepts 30 image / 10 video / 10 audio references. Frame inputs and references coexist — when any reference (image / video / audio) is wired alongside `image_url` / `end_frame_url`, the frames become **prompt-directed `Image N` references** rather than pinned endpoints; the resolver decides the mode, so there is no toggle. Reference **videos** are billed `unit × (input + output)` duration — the per-second `-ref` rate (see the [Generate Video node pricing](../nodes/ai-video/generate-video.md)) is scaled by the probed input-video duration plus the output duration, so longer source clips reserve more.
 
@@ -1378,6 +1384,13 @@ Returns your current credit balance split by pool (`subscription` vs
 purchased credits (all models unlocked, no watermark, no daily cap).
 Top-up credits are valid for 12 months from purchase; subscription
 credits reset each billing cycle and are spent first.
+
+On a deployment with a billing account (`billing.payerAccount` in the
+surface profile), this tool and `credit_transactions` refuse a session that
+acts as that account through a token — the deployment's pool balance is
+visible only to the billing account's own browser session and its in-app
+Copilot, never to a connected client — with the error
+`payer_balance_jwt_only`. Every other user sees their own figures as usual.
 
 **Input:** none
 

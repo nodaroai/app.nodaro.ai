@@ -3,6 +3,7 @@ import { hasCredits, hasOrganizations } from "../lib/config.js"
 import { findCloudOnlyNodeTypes, cloudOnlyRejectionMessage } from "../lib/cloud-only-nodes.js"
 import { findDeniedNodeTypes, deniedNodeRejectionMessage } from "../lib/surface-deny.js"
 import { z } from "zod"
+import { stripTransientSettings } from "@nodaro/studio-production"
 import { stripExportContent, stripTransientRuntimeData, validateSubWorkflowRoutes, WORKFLOW_VISIBILITIES, type WorkflowExport } from "@nodaro/shared"
 import { supabase } from "../lib/supabase.js"
 import { ensureDefaultProject, PERSONAL_SPACE_DISABLED_ERROR } from "../lib/default-project.js"
@@ -1247,7 +1248,12 @@ export async function workflowRoutes(app: FastifyInstance) {
       return notFound(reply, "Workflow not found")
     }
 
-    // Trimmed public projection — only what the read-only viewer renders.
+    // Trimmed public projection — only what the read-only viewer renders, and
+    // (D12) without the owner's working state: `settings.studio` carries their
+    // recycle bin, their in-flight jobs and their unsaved editor draft, none of
+    // which a share viewer has any business receiving. The strip list lives in
+    // `@nodaro/studio-production` beside the bundle exporter's own use of it,
+    // so the two paths cannot disagree about what "transient" means.
     return {
       data: {
         id: full.id,
@@ -1255,7 +1261,9 @@ export async function workflowRoutes(app: FastifyInstance) {
         thumbnailUrl: full.thumbnailUrl,
         nodes: full.nodes,
         edges: full.edges,
-        settings: full.settings,
+        settings: stripTransientSettings(
+          full.settings as Record<string, unknown> | null | undefined,
+        ),
       },
     }
   })

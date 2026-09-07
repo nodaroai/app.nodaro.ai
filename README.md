@@ -217,6 +217,7 @@ backend/            Fastify API, workers, providers, workflow engine
 frontend/           Vite SPA — visual editor, published apps, admin
 packages/shared/    Types, model catalog, wire contracts (Apache-2.0)
 packages/prompts/   Prompt catalogs, hints, presets (FSL — non-competing use)
+packages/studio-production/  The studio production codec + plan format (FSL)
 packages/client/    Typed REST SDK, published as @nodaro/sdk (Apache-2.0)
 packages/cli/       nodaro CLI, compiled binaries via bun (Apache-2.0)
 packages/remotion/  Remotion video compositions (captions, lottie, 3D titles)
@@ -277,7 +278,8 @@ Nodaro is **fair-code** with four license tiers — full overview in
   testing, and evaluation; using Enterprise features in production requires a
   Nodaro Cloud or Enterprise subscription (dormant Enterprise code inside
   community builds needs none).
-- **Prompt layer** (`packages/prompts`) — [Functional Source
+- **Prompt layer** (`packages/prompts`) and the **studio production codec**
+  (`packages/studio-production`) — [Functional Source
   License](packages/prompts/LICENSE): free for any non-competing use
   (including your commercial apps on Nodaro); not for competing products;
   Apache-2.0 two years after each release.

@@ -39,6 +39,7 @@ const PAYER = "00000000-0000-4000-8000-000000000009"
 const U1 = "00000000-0000-4000-8000-000000000101"
 const U2 = "00000000-0000-4000-8000-000000000102"
 const OTHER = "00000000-0000-4000-8000-000000000103"
+const BILLING_KEY_ID = "00000000-0000-4000-8000-00000000ffff"
 
 // ---------------------------------------------------------------------------
 // Mocks — hoisted before any route import
@@ -181,9 +182,14 @@ async function buildApp(): Promise<FastifyInstance> {
     const userId = req.headers["x-user-id"]
     if (typeof userId === "string") req.userId = userId
     const kind = req.headers["x-auth-kind"]
-    req.authKind = typeof kind === "string" ? (kind as "jwt" | "api_token" | "app_token") : "jwt"
+    req.authKind = typeof kind === "string" ? (kind as NonNullable<typeof req.authKind>) : "jwt"
     if (req.authKind === "api_token") req.apiToken = { id: "tok", userId: String(userId) } as never
     if (req.authKind === "app_token") req.appAuthorization = { id: "auth" } as never
+    // The billing integration key, stamped exactly as the auth hook stamps it.
+    // WITHOUT `req.billingKey` the widened `rejectProgrammaticAuth` branch is
+    // never reached, and every assertion below would pass for the wrong reason
+    // — the key would be indistinguishable from an ordinary browser session.
+    if (req.authKind === "billing_key") req.billingKey = { id: BILLING_KEY_ID, name: "back office" }
     // A programmatic credential that nonetheless carries authKind "jwt" — the
     // shape the guard alone would let through, and the reason every write verb
     // ALSO calls rejectProgrammaticAuth. The two live in different files, and
@@ -201,6 +207,11 @@ const AS_PAYER = { "x-user-id": PAYER }
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  // A resolved default, not `undefined`: several routes now make an RPC call
+  // they do not otherwise care about (the per-page SSO-subject lookup), and a
+  // bare `vi.fn()` answers `undefined`, which destructuring turns into a 500
+  // in a test that is about something else entirely.
+  mockRpc.mockResolvedValue({ data: null, error: null })
   tableResults.clear()
   rec.fromCalls = []
   rec.selectCols = {}
@@ -303,6 +314,108 @@ describe("the guard is on every route", () => {
       })
       expect(res.statusCode, `${r.method} ${r.url}`).toBe(403)
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The guard, widened by exactly one credential — and by no more than one
+// ---------------------------------------------------------------------------
+//
+// `requireDeploymentPayer` now accepts `authKind === "billing_key"` as well as
+// a browser session, and three write verbs opt into it through
+// `rejectProgrammaticAuth(..., { allowBillingKey: true })`. Both halves are
+// pinned here from the ROUTE side; the credential's own scope proof (the auth
+// hook refusing the key everywhere outside this prefix) lives in
+// `middleware/__tests__/billing-key-scope.test.ts`.
+//
+// The two sides matter separately: a key that could not reach `/users` would
+// make the integration useless, and a key that could reach `/checkout` would
+// turn a leaked credential into a charge on a real card.
+
+const AS_BILLING_KEY = { "x-user-id": PAYER, "x-auth-kind": "billing_key" }
+
+describe("the billing integration key on this surface", () => {
+  beforeEach(() => {
+    payerDeployment()
+    mockGetBalance.mockResolvedValue({ total: 1000, subscription: 0, topup: 1000, tier: "pro", periodEnd: null })
+    tableResults.set("deployment_payer_settings", { data: { default_allowance_credits: 200 }, error: null })
+    tableResults.set("usage_logs", { data: [], error: null })
+    tableResults.set("profiles", { data: [], error: null, count: 0 })
+    tableResults.set("transactions", { data: [], error: null })
+    tableResults.set("credit_transactions", { data: [], error: null })
+    tableResults.set("deployment_allowance_grants", { data: [], error: null })
+    tableResults.set("deployment_user_allowances", { data: null, error: null })
+  })
+
+  it("reaches the reads and the three allowance verbs", async () => {
+    const reachable: ReadonlyArray<{ method: "GET" | "PUT" | "POST"; url: string; body?: Record<string, unknown> }> = [
+      { method: "GET", url: "/v1/deployment-billing/overview" },
+      { method: "GET", url: "/v1/deployment-billing/users" },
+      { method: "GET", url: `/v1/deployment-billing/users/${U1}/grants` },
+      { method: "PUT", url: "/v1/deployment-billing/default-allowance", body: { units: 2000 } },
+      { method: "POST", url: `/v1/deployment-billing/users/${U1}/grant`, body: { units: 2000 } },
+    ]
+    for (const r of reachable) {
+      const res = await app.inject({ method: r.method, url: r.url, headers: AS_BILLING_KEY, payload: r.body })
+      // Not a 403 of any kind: whatever else happens, the credential was
+      // accepted. Asserting the exact status would couple this to each
+      // route's fixtures rather than to the gate.
+      expect(res.statusCode, `${r.method} ${r.url}`).not.toBe(403)
+      expect(res.statusCode, `${r.method} ${r.url}`).not.toBe(401)
+    }
+  })
+
+  it("is refused on POST /checkout with payer_session_required — the one verb that charges a card", async () => {
+    mockConfig.STRIPE_SECRET_KEY = "sk_test_x"
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/deployment-billing/checkout",
+      headers: AS_BILLING_KEY,
+      payload: { amountUsd: 25 },
+    })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("payer_session_required")
+    expect(mockGetStripe).not.toHaveBeenCalled()
+  })
+
+  it("is refused on all three key routes — a key cannot enumerate, mint or revoke a key", async () => {
+    const keyRoutes: ReadonlyArray<{ method: "GET" | "POST" | "DELETE"; url: string; body?: Record<string, unknown> }> =
+      [
+        { method: "GET", url: "/v1/deployment-billing/integration-keys" },
+        { method: "POST", url: "/v1/deployment-billing/integration-keys", body: { name: "second" } },
+        { method: "DELETE", url: `/v1/deployment-billing/integration-keys/${U1}` },
+      ]
+    for (const r of keyRoutes) {
+      const res = await app.inject({ method: r.method, url: r.url, headers: AS_BILLING_KEY, payload: r.body })
+      expect(res.statusCode, `${r.method} ${r.url}`).toBe(403)
+      expect(res.json().error.code, `${r.method} ${r.url}`).toBe("payer_session_required")
+    }
+    // Nothing was read or written on the way to the refusal.
+    expect(rec.fromCalls).not.toContain("deployment_integration_keys")
+  })
+
+  it("still refuses every OTHER programmatic credential on the widened verbs", async () => {
+    // The widening is by exactly one `authKind`. A personal relay token — the
+    // credential on developers' laptops — must stay unable to allocate, which
+    // is the escalation the second gate exists to stop.
+    const widened: ReadonlyArray<{ method: "PUT" | "POST"; url: string; body: Record<string, unknown> }> = [
+      { method: "PUT", url: "/v1/deployment-billing/default-allowance", body: { units: 2000 } },
+      { method: "POST", url: `/v1/deployment-billing/users/${U1}/grant`, body: { units: 2000 } },
+      { method: "PUT", url: `/v1/deployment-billing/users/${U1}/allowance`, body: { units: 2000, mode: "set" } },
+    ]
+    for (const kind of ["api_token", "app_token"]) {
+      for (const r of widened) {
+        const res = await app.inject({
+          method: r.method,
+          url: r.url,
+          headers: { ...AS_PAYER, "x-auth-kind": kind },
+          payload: r.body,
+        })
+        expect(res.statusCode, `${kind} ${r.method} ${r.url}`).toBe(403)
+      }
+    }
+    expect(mockRpc).not.toHaveBeenCalledWith("set_deployment_allowance", expect.anything())
+    expect(mockRpc).not.toHaveBeenCalledWith("grant_deployment_allowance", expect.anything())
   })
 })
 
@@ -630,7 +743,7 @@ describe("POST /v1/deployment-billing/users/:id/grant", () => {
     })
   })
 
-  it("calls grant_deployment_allowance with all five arguments, in RAW credits, actor = the payer", async () => {
+  it("calls grant_deployment_allowance with all six arguments, in RAW credits, actor = the payer", async () => {
     const res = await app.inject({
       method: "POST",
       url: `/v1/deployment-billing/users/${U1}/grant`,
@@ -645,6 +758,10 @@ describe("POST /v1/deployment-billing/users/:id/grant", () => {
       p_actor_id: PAYER,
       p_kind: "topup",
       p_note: "September top-up",
+      // Migration 387 added the audit line and DROPPED the five-argument
+      // signature, so every call states the credential: null here, because
+      // this route is the payer's own page and the page has no key to name.
+      p_credential_id: null,
     })
   })
 
@@ -813,9 +930,23 @@ describe("GET /v1/deployment-billing/users/:id/grants", () => {
     })
     tableResults.set("deployment_allowance_grants", {
       data: [
-        { id: "g1", credits: 200, kind: "default", note: null, created_at: "2026-02-01T00:00:00Z" },
-        { id: "g2", credits: 10, kind: "topup", note: "extra", created_at: "2026-02-02T00:00:00Z" },
-        { id: "g3", credits: -4, kind: "overrun", note: "metered overrun", created_at: "2026-02-03T00:00:00Z" },
+        { id: "g1", credits: 200, kind: "default", note: null, created_at: "2026-02-01T00:00:00Z", credential_id: null },
+        {
+          id: "g2",
+          credits: 10,
+          kind: "topup",
+          note: "extra",
+          created_at: "2026-02-02T00:00:00Z",
+          credential_id: BILLING_KEY_ID,
+        },
+        {
+          id: "g3",
+          credits: -4,
+          kind: "overrun",
+          note: "metered overrun",
+          created_at: "2026-02-03T00:00:00Z",
+          credential_id: null,
+        },
       ],
       error: null,
     })
@@ -829,6 +960,44 @@ describe("GET /v1/deployment-billing/users/:id/grants", () => {
     // Negative, and NOT in `granted` — 'overrun' is audit-only (invariant 4).
     expect(body.grants[2].units).toBe(-8_000)
     expect(body.user.granted).toBe(420_000)
+  })
+
+  it("carries the raw credits twin and the credential that made each move", async () => {
+    payerDeployment()
+    tableResults.set("deployment_payer_settings", { data: { default_allowance_credits: 200 }, error: null })
+    tableResults.set("deployment_user_allowances", {
+      data: { user_id: U1, granted_credits: 210, reserved_credits: 0, spent_credits: 0 },
+      error: null,
+    })
+    tableResults.set("deployment_allowance_grants", {
+      data: [
+        {
+          id: "g1",
+          credits: 10,
+          kind: "topup",
+          note: "plan 10",
+          created_at: "2026-02-02T00:00:00Z",
+          credential_id: BILLING_KEY_ID,
+        },
+        { id: "g2", credits: 5, kind: "renewal", note: null, created_at: "2026-02-03T00:00:00Z", credential_id: null },
+      ],
+      error: null,
+    })
+
+    const res = await app.inject({ method: "GET", url: `/v1/deployment-billing/users/${U1}/grants`, headers: AS_PAYER })
+
+    expect(res.statusCode).toBe(200)
+    const grants = res.json().data.grants as Array<Record<string, unknown>>
+    // Both denominations on the one row where they can be checked against each
+    // other — an integration reconciling its own ledger against this history
+    // must not have to re-derive `unitRate` to do it.
+    expect(grants[0]).toMatchObject({ units: 20_000, credits: 10 })
+    // The audit line the page renders as "via <key name>", resolved against
+    // the keys list. Null is the billing account's own browser session, and
+    // `granted_by` is the payer either way — the credential is recorded
+    // beside the actor, never instead of it.
+    expect(grants[0].credentialId).toBe(BILLING_KEY_ID)
+    expect(grants[1].credentialId).toBeNull()
   })
 })
 

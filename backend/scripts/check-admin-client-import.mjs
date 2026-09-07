@@ -146,6 +146,16 @@ const ALLOWED_PATHS = [
   // credits-balance + user-settings).
   /^src\/routes\/me\.ts$/,
 
+  // Studio productions (/v1/studio/productions): the same `workflows` rows the
+  // baseline entry `workflows.ts` writes, read and written the same way. Every
+  // query is scoped in-handler: the list says `.eq("user_id", userId)` +
+  // `.is("workspace_id", null)` (the tenant-scope lint checks both), the create
+  // inserts `user_id`, and the get / import go through `loadWorkflowFor`
+  // (404-never-403) with the import's UPDATE additionally swapped on
+  // `version`. Migrates to the user-scoped client together with `workflows.ts`
+  // under roadmap #4.
+  /^src\/routes\/studio-productions\.ts$/,
+
   // Extract Audio / Remove Audio / Audio Separation: job-creation routes that
   // derive `userId = req.userId` (401 if absent) and INSERT the job with
   // `user_id: userId`. Service-role mirrors the other media-generation routes
