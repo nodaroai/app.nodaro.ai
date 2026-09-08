@@ -31,6 +31,22 @@ export interface PluginSceneArtifactPublish extends PluginSceneArtifactScope {
     reuseFromRevisionId?: string
   }>
 }
+/** A previous revision's authoring recipe, requested for private re-authoring. */
+export interface PluginSceneAuthoringSourceRequest {
+  /** The active owned job doing the re-authoring, not the job that published the revision. */
+  jobId: string
+  userId: string
+  revisionId: string
+  /** `provenance.contentHash` of the revision the caller prepared against. */
+  expectedContentHash: string
+}
+export interface PluginSceneAuthoringSource {
+  /** The published plan of that revision, manual overlays included. */
+  plan: unknown
+  source: Uint8Array
+  sourceArtifactId: string
+  sourceSha256: string
+}
 export interface PluginSceneArtifactToolkit {
   grant(input: PluginSceneArtifactUpload): Promise<PluginSceneArtifactGrant>
   receive(input: PluginSceneArtifactScope & { artifactId: string }): Promise<PluginSceneArtifactReceipt>
@@ -38,6 +54,8 @@ export interface PluginSceneArtifactToolkit {
   writeJson?(input: PluginSceneArtifactUpload & { bytes: Uint8Array }, options?: { signal?: AbortSignal }): Promise<PluginSceneArtifactReceipt>
   /** Bounded, digest-verified bytes of this active job's reserved artifact. Never a user API. */
   read(input: PluginSceneArtifactScope & { artifactId: string }, options?: { signal?: AbortSignal }): Promise<Uint8Array>
+  /** Bytes of a PREVIOUS revision's pinned recipe, authorized through that revision. Never a user API. */
+  readAuthoringSource?(input: PluginSceneAuthoringSourceRequest, options?: { signal?: AbortSignal }): Promise<PluginSceneAuthoringSource>
   /** Workflow scope comes from the owned parent job, never from a producer manifest. */
   publish(input: PluginSceneArtifactPublish): Promise<{ revisionId: string; status: "created" | "unchanged"; artifactIds: string[] }>
 }

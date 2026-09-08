@@ -1676,6 +1676,8 @@ export interface PluginRedisToolkit {
  * on `profiles`, which core owns and caches.
  */
 export interface PluginAuthToolkit {
+  /** Canonical workflow permission, including organization revocation. */
+  workflowAccess?(userId: string, workflowId: string): Promise<"none" | "view" | "edit" | "own">
   /** `profiles.role` ∈ (admin, super_admin). */
   isPlatformAdmin(userId: string): Promise<boolean>
   /** The raw role, so a plugin can require `super_admin` specifically. */
