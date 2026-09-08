@@ -229,16 +229,18 @@ export function isValidWorkflowConnection(
     }
   }
 
-  // Composition output may ONLY target render-video, or the `scene` input of
-  // Edit 3D Scene — a 3D scene plan is the one composer plan another AUTHORING
-  // node consumes (edit derives a new revision from the upstream one).
+  // Composition output may ONLY target render-video, or the `scene` input of a
+  // node that consumes an existing revision — Edit 3D Scene (which derives a
+  // new revision from it) and 3D Render Pro (which exports it, or revises it
+  // first). A 3D scene plan is the one composer plan another AUTHORING node
+  // consumes.
   // (workflow-canvas.tsx::isValidConnection delegates here, so this is the
   // single rule.)
   if (connection.sourceHandle === "composition") {
     const compositionTarget = typeOf(connection.target)
     if (compositionTarget === "render-video") return true
     return (
-      compositionTarget === "edit-3d-scene" &&
+      (compositionTarget === "edit-3d-scene" || compositionTarget === "pro-3d-render") &&
       connection.targetHandle === "scene" &&
       SCENE3D_NODE_TYPES.has(typeOf(connection.source) ?? "")
     )

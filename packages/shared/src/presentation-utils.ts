@@ -5,6 +5,7 @@
 
 import type { GenericNode, GenericEdge } from "./types.js"
 import type { PresentationItem } from "./presentation-types.js"
+import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES } from "./producer-types.js"
 
 // ---------------------------------------------------------------------------
 // Node type sets
@@ -84,6 +85,15 @@ const NON_OUTPUT_TYPES = new Set([
   "component",
 ])
 
+/**
+ * Node types that count as an output even when something is wired to their
+ * output handle (the legacy `presentationVisible` rule below).
+ *
+ * A hand-kept list, and one the platform has outgrown: it is unioned at the use
+ * site with the producer vocabularies the canvas validators already maintain
+ * (see `isMediaProducingType`), so a new media node is covered by the set it
+ * must join anyway rather than by remembering to edit this one.
+ */
 const MEDIA_PRODUCING_TYPES = new Set([
   "generate-image",
   "edit-image",
@@ -121,6 +131,11 @@ const IMAGE_OUTPUT_TYPES = new Set([
   "upload-image",
 ])
 
+/**
+ * Video-output types NOT already declared by `VIDEO_PRODUCER_TYPES` — the two
+ * are unioned in `getOutputType`, which is where the reading order (and the
+ * reason the literal sets win) is documented.
+ */
 const VIDEO_OUTPUT_TYPES = new Set([
   "image-to-video", "text-to-video", "video-to-video", "extend-video",
   "render-video", "video-composer", "after-effects", "lottie-overlay",
@@ -189,7 +204,7 @@ export function getOutputNodes<T extends GenericNode>(
       // Backwards compat: old flag on output-eligible nodes
       if (n.data.presentationVisible === true) {
         if (NON_OUTPUT_TYPES.has(n.type)) return false
-        return !nodesWithOutgoing.has(n.id) || MEDIA_PRODUCING_TYPES.has(n.type)
+        return !nodesWithOutgoing.has(n.id) || isMediaProducingType(n.type)
       }
       return false
     }
@@ -197,14 +212,51 @@ export function getOutputNodes<T extends GenericNode>(
   })
 }
 
-/** Map node type to its output media type. */
+/**
+ * Map node type to its output media type.
+ *
+ * The four literal sets above are read FIRST and win: they are the presentation
+ * classifier's own opinion, including for dual-mode nodes whose default medium
+ * is not their handle set (voice-changer and dubbing are audio here even though
+ * they can emit video).
+ *
+ * Anything they do not name falls through to the producer vocabularies the
+ * canvas validators and the orchestrator already maintain
+ * (`packages/shared/src/producer-types.ts`). Those sets are what a new media
+ * node MUST join for its outputs to connect at all, so deriving the tail from
+ * them is what stops this map from silently drifting behind the node catalogue
+ * — which it had (3D Render Pro, Generate Video, Generate Video Pro and a dozen
+ * ffmpeg nodes all read as `"data"`, so a published app rendered them as a JSON
+ * blob and `/v1` app schemas declared the wrong output type).
+ *
+ * `DYNAMIC_PRODUCER_TYPES` is deliberately NOT consulted: a node whose medium
+ * is decided at run time has no static answer, and `"data"` is the honest one.
+ */
 export function getOutputType(nodeType: string | undefined): OutputType {
   if (!nodeType) return "data"
   if (IMAGE_OUTPUT_TYPES.has(nodeType)) return "image"
   if (VIDEO_OUTPUT_TYPES.has(nodeType)) return "video"
   if (AUDIO_OUTPUT_TYPES.has(nodeType)) return "audio"
   if (TEXT_OUTPUT_TYPES.has(nodeType)) return "text"
+  if (VIDEO_PRODUCER_TYPES.has(nodeType)) return "video"
+  if (AUDIO_PRODUCER_TYPES.has(nodeType)) return "audio"
   return "data"
+}
+
+/**
+ * Whether a node produces media of its own — the test the legacy
+ * `presentationVisible` rule uses to keep a media node as an OUTPUT even when
+ * it also feeds something downstream.
+ *
+ * Same union, same reason as `getOutputType`: the hand-kept list plus the
+ * producer vocabularies. Text producers stay where the literal list put them
+ * (`generate-script`, `ai-writer`, `llm-chat` are members; `transcribe` and
+ * `qa-check` are not) — this is about media, not about every node with a value.
+ */
+function isMediaProducingType(nodeType: string): boolean {
+  if (MEDIA_PRODUCING_TYPES.has(nodeType)) return true
+  const output = getOutputType(nodeType)
+  return output === "image" || output === "video" || output === "audio"
 }
 
 /** Extract the result URL or text from a node's data. */

@@ -15,6 +15,13 @@ regexes = [
 ]
 
 [[allowlists]]
+description = "Literal idempotency-header fixture in the Pro route tests, not an authentication credential"
+matchCondition = "AND"
+paths = ['''backend/src/routes/__tests__/pro-3d-render\.test\.ts$''']
+regexes = ['''KEY = "idem-key-abcdef0123"''']
+regexTarget = "match"
+
+[[allowlists]]
 description = "Files that exist to SHOW API-usage examples / test model-id matrices — no real secrets"
 paths = [
   '''frontend/src/app/\(dashboard\)/settings/api/page\.tsx''',  # renders curl examples for the user's own API token

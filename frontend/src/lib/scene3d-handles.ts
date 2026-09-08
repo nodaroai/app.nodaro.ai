@@ -14,6 +14,7 @@ import { IMAGE_PRODUCER_TYPES } from "./generate-image-handles"
 
 /** The 3D-scene authoring nodes. Both emit a `3d-scene` plan on `composition`. */
 export const SCENE3D_NODE_TYPES: ReadonlySet<string> = new Set([
+  "pro-3d-render",
   "generate-3d-scene",
   "edit-3d-scene",
 ])

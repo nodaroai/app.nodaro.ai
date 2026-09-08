@@ -202,6 +202,7 @@ import { llmStructuredJobsRoutes } from "./routes/llm-structured-jobs.js"
 import { scene3DRoutes } from "./routes/3d-scene.js"
 import { scene3DArtifactRoutes } from "./routes/scene3d-artifacts.js"
 import { scene3DRevisionEditRoutes } from "./routes/scene3d-revision-edits.js"
+import { pro3DRenderRoutes } from "./routes/pro-3d-render.js"
 import { scene3DPrivateStore } from "./lib/private-plugins/scene3d-storage.js"
 import { shotsRoutes } from "./routes/shots.js"
 import { modelsRoutes } from "./routes/models.js"
@@ -639,6 +640,7 @@ export async function buildApp() {
   await app.register(scene3DRoutes)
   await app.register(scene3DArtifactRoutes, { store: scene3DPrivateStore() })
   await app.register(scene3DRevisionEditRoutes, { store: scene3DPrivateStore() })
+  await app.register(pro3DRenderRoutes)
   await app.register(shotsRoutes)
   await app.register(modelsRoutes)
   await app.register(surfaceAvailabilityRoutes)

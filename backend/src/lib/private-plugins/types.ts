@@ -1037,6 +1037,43 @@ export interface PluginFetchResponse {
   readonly status: number
   readonly headers: { get(name: string): string | null }
   arrayBuffer(): Promise<ArrayBuffer>
+  /**
+   * Streaming body. The reason it exists: `arrayBuffer()` buffers whatever the
+   * upstream sends before anyone can measure it, so a lying or absent
+   * `content-length` on an attacker-influenced URL is an unbounded allocation.
+   * A reader lets a caller enforce a real byte ceiling and destroy the socket
+   * the moment it is crossed. Structurally satisfied by `ReadableStream`.
+   */
+  readonly body?: PluginFetchBody | null
+}
+
+/** The `ReadableStream` subset a bounded reader needs. */
+export interface PluginFetchBody {
+  getReader(): PluginFetchBodyReader
+  cancel(reason?: unknown): Promise<void>
+}
+
+/** The `ReadableStreamDefaultReader<Uint8Array>` subset a bounded reader needs. */
+export interface PluginFetchBodyReader {
+  read(): Promise<{ done: boolean; value?: Uint8Array }>
+  cancel(reason?: unknown): Promise<void>
+  releaseLock(): void
+}
+
+/**
+ * The `SafeFetchInit` (`lib/safe-fetch.ts`) subset a plugin may pass. Narrowed
+ * on purpose: it carries no `body`, no `dispatcher` and no credential-bearing
+ * member, so widening the init cannot be used to turn the SSRF-checked fetch
+ * into a general-purpose outbound client.
+ */
+export interface PluginSafeFetchInit {
+  method?: "GET" | "HEAD"
+  headers?: Record<string, string>
+  /** Cancels the request; applied in addition to `timeoutMs`. */
+  signal?: AbortSignal
+  /** Per-request timeout in ms. The host defaults to 30s when unset. */
+  timeoutMs?: number
+  redirect?: "follow" | "error" | "manual"
 }
 
 /**
@@ -1149,7 +1186,7 @@ export interface PluginHttpToolkit {
    * site (`fetchImageBytes`) never passes `init`, so the member omits it
    * rather than importing undici's `SafeFetchInit`/`Response` types.
    */
-  safeFetch(url: string): Promise<PluginFetchResponse>
+  safeFetch(url: string, init?: PluginSafeFetchInit): Promise<PluginFetchResponse>
   /** Mirrors `insertWithIdempotencyKey` (`lib/idempotent-insert.ts:33`).
    *  P14: the optional context stamps the payer pair (workspace_id/org_id)
    *  onto the row — which also trips the DB privacy clamp for workspace

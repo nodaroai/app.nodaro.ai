@@ -42,6 +42,10 @@ export const NODARO_EXCLUSIVE_NODE_TYPES: ReadonlySet<string> = new Set([
  */
 export const CLOUD_ONLY_NODE_TYPES: ReadonlySet<string> = new Set([
   "generative-pipeline",
+  // 3D Render Pro: the operation runs on a hosted private build service that
+  // no relay fronts, and it settles credits — a credit-less edition has
+  // nothing to charge and nothing to call.
+  "pro-3d-render",
 ])
 
 /**

@@ -1,7 +1,7 @@
 ---
 node_type: generate-3d-scene
-generated_at: 2026-09-07T13:21:36.701Z
-generated_from: faf85b35e
+generated_at: 2026-09-08T02:32:05.270Z
+generated_from: 90fdec2b4
 ---
 
 # Generate 3D Scene
@@ -33,6 +33,7 @@ generated_from: faf85b35e
 - `references?: Scene3DNodeReference[]`
 - `referenceRoles?: Record<string, string>`
 - `referenceObjectIds?: Record<string, string>`
+- `engine?: "basic" | "blender-cloud" | "blender-local"`
 - `llmModel?: string`
 - `reasoningEffort?: LlmReasoningEffort`
 - `currentJobId?: string`

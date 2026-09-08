@@ -89,6 +89,11 @@ export const VIDEO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   // Emits generatedVideoUrl so it connects to any downstream video consumer
   // (e.g. a Seedance video-reference input) by an ordinary edge.
   "gif-to-video",
+  // 3D Render Pro: authors a scene AND exports it in one operation, settling
+  // with the standard `videoUrl` field. It is a video producer as much as it
+  // is a composition producer — omitting it here is the "cannot connect the
+  // outputs" bug, and its `composition` handle is typed separately.
+  "pro-3d-render",
 ])
 
 /**

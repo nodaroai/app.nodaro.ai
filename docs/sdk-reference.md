@@ -4694,6 +4694,63 @@ Scene authoring uses `/v1/3d-scene/generate` and `/v1/3d-scene/edit`. Typed comp
 
 SDK versions with the generic `nodes.run(type, params)` overload can use the same node names without typed Scene3D overloads. The server accepts their node-slug generate/edit paths and dispatches `render-video` requests carrying `planType` to the composition renderer. For an interactive preview, check the generate node's `scene3d-embed-v1` capability and use the [3D preview embed](scene3d-embed.md); it does not require a copy of the renderer or any authentication tokens in its messages.
 
+### 3D Render Pro
+
+`client.scene3d.quotePro(params)`, `client.scene3d.runPro(params, options?)` and
+`client.scene3d.renderProAndWait(params, options?)` drive the one-operation
+node: a `source` goes in, and a single job settles with BOTH `scenePlan` (the
+exact composition) and `videoUrl` (the exported MP4), plus the revision, poster,
+validation and renderer metadata. `nodes.run("pro-3d-render", …)` and
+`nodes.runAndWait("pro-3d-render", …)` reach the same routes with the same
+typed `Pro3DRenderRunParams` / `Pro3DRenderJobOutput`.
+
+`source` is a strict discriminated union: `{kind:"prompt", prompt, references?}`
+authors a new scene; `{kind:"scene", revisionId, sourceJobId}` with **no**
+`editPrompt` is a render-only export that costs no authoring (adding one revises
+first); `{kind:"local-export", exportId, connectionId}` uses a paired desktop.
+`sourceJobId` is required for Basic scenes retained only in job history and
+optional for retained revisions, which use current scene permissions.
+
+```typescript
+const caps = await client.scene3d.capabilities();
+if (caps.pro?.available) {
+  const shot = await client.scene3d.renderProAndWait({
+    source: {
+      kind: "prompt",
+      prompt: "A red suitcase rolls behind a central pillar and reappears",
+      references: [{ id: "look", kind: "image", role: "appearance", url: appearanceImageUrl }],
+    },
+    durationSeconds: 30, fps: 24, aspectRatio: "21:9", maxRepairPasses: 2,
+    acceptedSceneSchemaVersions: [2],
+  });
+  shot.videoUrl;        // the MP4
+  shot.sceneRevisionId; // re-export it later, render-only, for no authoring charge
+}
+```
+
+`renderProAndWait` quotes the identical body first when `params` carries no
+`quoteId`, so the run is admitted against a hash of exactly what was priced.
+To show the ceiling before committing, quote explicitly:
+
+```typescript
+const quote = await client.scene3d.quotePro(params);   // reserves nothing
+// ...show quote.maxCredits and quote.breakdown...
+await client.scene3d.runPro({ ...params, quoteId: quote.quoteId });
+```
+
+Both run methods send an `Idempotency-Key` — a fresh one per call, or your own
+via `options.idempotencyKey`, which you should reuse when retrying a submit that
+timed out. `nodes.run` / `nodes.runAndWait` accept the same option for any node.
+
+`capabilities().pro` reports which engines, quality profiles, styles and aspect
+ratios this install can serve — offer controls from that, not from the full
+vocabulary. An install without the engine answers
+`503 SCENE_CAPABILITY_UNAVAILABLE` and never falls back to Basic authoring; one
+with no configured price answers `503 price_not_configured` before reserving
+anything. There is no model, reasoning-effort or planner field: the planner is
+fixed and server-owned. See
+[3D Render Pro](nodes/composition/pro-3d-render.md).
+
 ### Scene asset reads
 
 `client.scene3d.getDelivery(jobId)` reads retained export metadata, including its

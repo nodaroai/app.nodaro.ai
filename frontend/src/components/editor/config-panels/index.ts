@@ -11,7 +11,7 @@ export { CombineVideosConfig, ImageCollageConfig, AddCaptionsConfig, ResizeVideo
 export { CombineAudioConfig } from "./combine-audio-config"
 export { AssembleNarratedVideoConfig } from "./assemble-narrated-video-config"
 export { VideoComposerConfig, AfterEffectsConfig, LottieOverlayConfig, ThreeDTitleConfig, MotionGraphicsConfig, CompositeConfig, RenderVideoConfig } from "./composition-configs"
-export { Generate3DSceneConfig, Edit3DSceneConfig } from "./scene3d-configs"
+export { Generate3DSceneConfig, Edit3DSceneConfig, Pro3DRenderConfig } from "./scene3d-configs"
 export { MergeVideoAudioConfig } from "./merge-audio-config"
 export { StillToVideoConfig } from "./still-to-video-config"
 export { SlideshowConfig } from "./slideshow-config"

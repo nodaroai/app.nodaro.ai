@@ -2716,6 +2716,64 @@ The node-slug aliases `POST /v1/generate-3d-scene` and `POST /v1/edit-3d-scene` 
 
 The generate node advertises `scene3d-embed-v1` in `GET /v1/nodes` when this deployment includes the [interactive 3D preview embed](scene3d-embed.md). Clients can check this capability before offering the embedded editor.
 
+### 3D Render Pro
+
+Two endpoints, ONE paid job.
+
+`POST /v1/pro-3d-render/quote` prices a request without starting it and answers
+`{quoteId, expiresAt, maxCredits, breakdown, pricingVersion, capabilitiesVersion,
+normalizedInputHash}`. It reserves nothing and spends nothing; `maxCredits` is a
+ceiling, not a charge.
+
+`POST /v1/pro-3d-render` takes the same body plus that `quoteId` and an
+`Idempotency-Key` header (8–255 characters), and returns `{ jobId }`. Admission
+re-checks the quote against the request, so a body edited between the two calls
+is refused rather than run at an unquoted price; an expired or stale quote is
+refused before anything is reserved.
+
+The body's `source` is a strict discriminated union — exactly one of:
+
+- `{kind:"prompt", prompt, references?}` — author a new scene, then render it.
+- `{kind:"scene", revisionId, sourceJobId}` — **render-only** export of that
+  exact revision, with no authoring or build charge. Adding `editPrompt`
+  revises the scene first; **omit** the field for a plain export, since an empty
+  string is a different request.
+- `{kind:"local-export", exportId, connectionId}` — a completed export from a
+  paired desktop Blender, where that is available.
+
+`sourceJobId` is required for Basic scenes retained only in job history. It is
+optional for retained revisions, including manual edits, which the engine
+authorizes through current scene permissions.
+
+Other fields: `engine` (`blender-cloud` default, `blender-local` where paired),
+`localConnectionId`, `quality`, `style` (`clay`), `maxRepairPasses` (0–2,
+default 2), `durationSeconds` / `fps` / `aspectRatio` (including `21:9`),
+`acceptedSceneSchemaVersions`, plus the usual `workflowId` / `nodeId` /
+`forcePrivate` context. There is no model or reasoning-effort field: the planner
+is fixed and server-owned.
+
+**Source timing is not silently overridden.** A `scene` source already has its
+own duration, fps and aspect ratio — omit those fields to keep them. Sending
+them is an explicit re-time request, and an incompatible one is rejected.
+
+`acceptedSceneSchemaVersions` is checked against what the source PRODUCES: a
+prompt or local-export source mints a v2 manifest, so a client that omits `2` is
+refused for free. A `scene` source inherits its revision's version, so a
+retained v1 scene still renders for a v1-only client.
+
+The completed job's `output_data` carries `videoUrl` (the standard resolved
+video field), `scenePlan`, `sceneRevisionId`, `posterAssetId`, an optional
+`sourceArtifactId`, `validation` (`{status, reportAssetId, warnings[]}`),
+`renderer` and `metadata` (`{width, height, fps, frames, duration}`).
+
+Availability is per deployment. `GET /v1/3d-scene/capabilities` reports a `pro`
+block with `available` plus the engines, quality profiles, styles, aspect ratios
+and repair-pass ceiling a client may OFFER; `GET /v1/nodes` omits the type where
+it is unavailable, and both routes answer `503 SCENE_CAPABILITY_UNAVAILABLE`. A
+deployment with no configured credit price answers `503 price_not_configured`
+before anything is reserved. See
+[3D Render Pro](nodes/composition/pro-3d-render.md).
+
 ### Scene versions and binary assets
 
 `Scene3DPlan` is a discriminated union: schema version 1 stores primitives and

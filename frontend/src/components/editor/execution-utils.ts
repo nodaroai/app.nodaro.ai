@@ -75,6 +75,7 @@ export const JOB_TYPE_LABELS: Record<string, string> = {
   "lottie-overlay": "Lottie Overlay",
   "3d-title": "3D Title",
   "generate-3d-scene": "Generate 3D Scene",
+  "pro-3d-render": "3D Render Pro",
   "edit-3d-scene": "Edit 3D Scene",
   "motion-graphics": "Motion Graphics",
   "render-video": "Video Render",
