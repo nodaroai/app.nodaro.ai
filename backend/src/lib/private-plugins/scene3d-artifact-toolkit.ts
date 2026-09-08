@@ -44,7 +44,13 @@ export function createScene3DArtifactToolkit(): PluginSceneArtifactToolkit | und
     async (scope) => { await authorizeScene3DJob(scope) },
     async (input) => { await reserveScene3DUploadIntent(store, { ...input, ttlSeconds: input.ttlSeconds }) })
   let inputGranter: PluginSceneArtifactToolkit["grantInput"]
+  let inputResolver: PluginSceneArtifactToolkit["resolveInput"]
   const toolkit: PluginSceneArtifactToolkit = {
+    resolveInput: async (input, options) => {
+      inputResolver ??= (await import("./scene3d-input-resolver.js"))
+        .createScene3DInputResolver(cfg, config.R2_BUCKET_NAME)
+      return inputResolver(input, options)
+    },
     retainInput: async (input, options) =>
       (await import("./scene3d-retain-input.js"))
         .retainScene3DInput(toolkit, input, { ...options, authorizeJob: authorizeScene3DJob }),

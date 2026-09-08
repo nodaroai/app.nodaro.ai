@@ -68,6 +68,11 @@ export interface PluginSceneDeliveryPublish extends PluginSceneArtifactScope {
   }>
 }
 export interface PluginSceneArtifactToolkit {
+  /** Resolve an authorized pinned input before quoting; immutable metadata only, no fetch grant. */
+  resolveInput?(input: { userId: string; revisionId: string; assetId: string },
+    options?: { signal?: AbortSignal }): Promise<{
+      assetId: string; sourceRevisionId: string; kind: "glb"; sha256: string; byteLength: number
+    }>
   /** Copy an authorized input into this active job's owned immutable retention reservation. */
   retainInput?(input: PluginSceneArtifactScope & { artifactId: string; sourceRevisionId: string;
     asset: { assetId: string; kind: "glb"; sha256: string; byteLength: number } },
