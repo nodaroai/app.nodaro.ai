@@ -38,6 +38,12 @@ frames: scene plans, revision history and blockout renders remain separate from
 final clip results. Copying a scene keeps completed blockouts but drops its pending
 3D jobs. Recipe exports retain blockout authoring inputs without scene/media results.
 
+Compatible saves also preserve scene descriptions, per-prompt cast overrides and
+reference captions. A role can remain description-only; assigning an actor later
+keeps the scene's words and any prompt-specific overrides. Renaming a role moves
+those overrides with it. Reference captions travel with copied settings and are
+recorded when a clip is submitted, so later edits do not rewrite its history.
+
 ## Reading and reviewing frames
 
 `GET /v1/studio/productions/capabilities` reports supported plan versions and
