@@ -1,5 +1,11 @@
 # @nodaro/shared
 
+## 3.3.0
+
+### Minor Changes
+
+- aace203: Expose the dependency capability and structured execution refusal for workflow nodes that require reviewed Studio inputs.
+
 ## 3.2.0
 
 ### Minor Changes
