@@ -63,6 +63,46 @@ describe("toolkit.llm forwards every tuning field", () => {
     }
   })
 
+  /**
+   * Inline video bytes are the one block whose delivery depends on a field the
+   * ADAPTER supplies rather than the caller: the host rejects the request
+   * outright unless the lane is pinned direct. So the block surviving the
+   * adapter and the default pin surviving with it are one property, not two.
+   */
+  it("forwards a video_base64 block verbatim, on the default direct pin", async () => {
+    const tk = buildToolkit()
+    const data = "AAAAGGZ0eXBpc29taXNvbWlzbzJtcDQx"
+
+    await tk.llm.completeStructuredMultimodal(
+      {
+        model: "gemini-3.1-pro",
+        system: "sys",
+        messages: [{
+          role: "user",
+          content: [
+            { type: "video_base64", mediaType: "video/mp4", data, fps: 2 },
+            { type: "text", text: "analyse" },
+          ],
+        }],
+        minPromptTokens: 1000,
+      },
+      {},
+    )
+
+    const sent = mockStructured.mock.calls[0]![0] as Record<string, unknown>
+    expect(sent.requireLane).toBe("direct")
+    expect(sent.messages).toEqual([{
+      role: "user",
+      content: [
+        { type: "video_base64", mediaType: "video/mp4", data, fps: 2 },
+        { type: "text", text: "analyse" },
+      ],
+    }])
+    // The media fail-open floor still rides along — bytes do not exempt a
+    // request from having to prove the model actually ingested them.
+    expect(sent.minPromptTokens).toBe(1000)
+  })
+
   it("completeStructured (text) still forwards the same set", async () => {
     const tk = buildToolkit()
     await tk.llm.completeStructured(

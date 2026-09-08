@@ -12,6 +12,13 @@
  * So this module is the bridge: URL → bytes (SSRF-safe) → either `inlineData`
  * for small assets or a Files API upload for large ones.
  *
+ * One block needs no bridge because it never had a URL: `video_base64` carries
+ * the exact clip inline, for callers that must analyse bytes they already hold
+ * rather than publish them behind a URL whose content can change under the
+ * request. It is validated here — exact media type, canonical base64, MP4
+ * `ftyp` magic, and the same {@link INLINE_MAX_BYTES} raw ceiling used for
+ * inlining a fetched asset — and then passed through untouched.
+ *
  * Sizing rule: Google directs callers to the Files API once the TOTAL request
  * clears ~20 MB, and base64 inflates bytes by 4/3. {@link INLINE_MAX_BYTES} is
  * set well under that so several inline images can coexist with the prompt in
@@ -40,6 +47,21 @@ const FETCH_TIMEOUT_MS = 120_000
 
 /** Google's documented ceiling for `VideoMetadata.fps`. */
 const MAX_SAMPLING_FPS = 24
+
+/** The ONLY container accepted as inline video bytes — exact, not a family. */
+const INLINE_VIDEO_MEDIA_TYPE = "video/mp4"
+
+/**
+ * Pre-decode allocation guard for `video_base64` — NOT the bound. The bound is
+ * {@link INLINE_MAX_BYTES} of RAW bytes, checked on the decoded buffer; this
+ * only stops an absurd string from being decoded at all.
+ *
+ * Base64 is 4 chars per 3 bytes, so one quantum of slack is added deliberately:
+ * without it this guard would be exactly as tight as the raw limit and would
+ * pre-empt it for every input, leaving the authoritative check unreachable and
+ * the real rule stated in the wrong unit.
+ */
+const INLINE_VIDEO_MAX_BASE64_CHARS = Math.ceil(INLINE_MAX_BYTES / 3) * 4 + 4
 
 /** Files API retention is 48h; expire our handles well inside it. */
 const FILE_CACHE_TTL_MS = 12 * 60 * 60 * 1000
@@ -209,7 +231,7 @@ export async function blockToGeminiPart(ai: GoogleGenAI, block: LlmContentBlock)
   // `videoMetadata` is a sibling of inlineData/fileData ON THE PART. Nesting it
   // inside either one is rejected outright by the SDK's own types and is the
   // entire content of google-gemini/cookbook#787.
-  if (block.type === "video" && block.fps !== undefined) {
+  if ((block.type === "video" || block.type === "video_base64") && block.fps !== undefined) {
     assertSamplingRate(block.fps)
     return { ...part, videoMetadata: { fps: block.fps } }
   }
@@ -225,9 +247,72 @@ function assertSamplingRate(fps: number): void {
   }
 }
 
+/**
+ * Validate inline video bytes before they can reach Google.
+ *
+ * Everything here is a bound or an exactness check, and all of it runs while
+ * the request is still being BUILT — `buildContents` is upstream of
+ * `generateContent`, so a bad payload costs one throw, not a provider round
+ * trip, a billed prompt, or a metered usage row.
+ *
+ * The four checks are four different lies a caller can tell:
+ *  - **media type** — Gemini keys its decoder off the declared type. Accepting
+ *    a family (`video/*`) or a near-miss (`video/mpeg`) hands the wrong decoder
+ *    real bytes; the failure is a 400 at best and a misread clip at worst.
+ *  - **canonical base64** — Node's decoder is lenient: it silently skips
+ *    whitespace, tolerates a `data:` prefix's tail and accepts non-canonical
+ *    padding, so `Buffer.from(...)` "succeeding" proves nothing. Round-tripping
+ *    the encode is the only check that the string on the wire is exactly the
+ *    bytes we validated.
+ *  - **`ftyp` magic** — bytes 4..8 of an ISO-BMFF file. Without it any base64
+ *    blob (a JPEG, a JSON dump, a truncated download) passes as "a video" and
+ *    the model answers about nothing.
+ *  - **size** — the raw ceiling, checked on the decoded length. Base64 inflates
+ *    4/3 on the wire, and {@link INLINE_MAX_BYTES} is already set well under
+ *    Google's ~20 MB request limit for exactly that reason.
+ */
+function assertInlineVideoBytes(block: { mediaType: string; data: string }): void {
+  if (block.mediaType !== INLINE_VIDEO_MEDIA_TYPE) {
+    throw new Error(
+      `Gemini inline video: mediaType must be exactly "${INLINE_VIDEO_MEDIA_TYPE}"; got "${block.mediaType}"`,
+    )
+  }
+  const data = block.data
+  if (!data) throw new Error("Gemini inline video: data is empty")
+  if (data.length > INLINE_VIDEO_MAX_BASE64_CHARS) {
+    throw new Error(
+      `Gemini inline video: base64 payload is ${data.length} chars, past the ${INLINE_VIDEO_MAX_BASE64_CHARS} it ` +
+        `would take to encode the ${INLINE_MAX_BYTES}-byte raw limit — use a video URL block (Files API) instead`,
+    )
+  }
+  const bytes = Buffer.from(data, "base64")
+  if (bytes.toString("base64") !== data) {
+    throw new Error(
+      "Gemini inline video: data is not canonical base64 (no whitespace, no data: prefix, no URL-safe alphabet)",
+    )
+  }
+  if (bytes.length > INLINE_MAX_BYTES) {
+    throw new Error(
+      `Gemini inline video: ${bytes.length} raw bytes exceeds the ${INLINE_MAX_BYTES}-byte inline limit — ` +
+        "use a video URL block (Files API) for larger clips",
+    )
+  }
+  // ISO base media file format: a 4-byte box size, then the 'ftyp' box type.
+  if (bytes.length < 12 || bytes.toString("latin1", 4, 8) !== "ftyp") {
+    throw new Error("Gemini inline video: data is not an MP4 (no 'ftyp' box at offset 4)")
+  }
+}
+
 async function resolveBlockPart(ai: GoogleGenAI, block: LlmContentBlock): Promise<Part> {
   if (block.type === "text") return { text: block.text }
   if (block.type === "image_base64") {
+    return { inlineData: { mimeType: block.mediaType, data: block.data } }
+  }
+  // Inline video bytes: validated, then passed through VERBATIM. Re-encoding
+  // would defeat the point of the block — the caller is asking about one exact,
+  // immutable payload, and the bytes it handed us are that payload's identity.
+  if (block.type === "video_base64") {
+    assertInlineVideoBytes(block)
     return { inlineData: { mimeType: block.mediaType, data: block.data } }
   }
 
