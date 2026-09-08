@@ -589,7 +589,26 @@ export interface PluginRetainedJobImage {
   image: { assetId: string; contentHash: string; url: string; width: number; height: number }
 }
 
+export interface PluginRetainedImageCopy {
+  id: string
+  source: { workflowId: string; jobId?: string; copyId?: string }
+  sourceContext: Record<string, unknown>
+  origin: { workflowId: string; jobId: string; submissionContext: Record<string, unknown> }
+  context: Record<string, unknown>
+  image: { assetId: string; contentHash: string; url: string; width: number; height: number }
+}
+
 export interface PluginStorageToolkit {
+  /** Authorize reading the workflow first; verifies destination bytes even if
+   * the original job and source workflows were deleted. */
+  readRetainedImageCopies?(workflowId: string, copyIds: readonly string[]): Promise<PluginRetainedImageCopy[]>
+  /** Authorize both workflows and validate mapped context first. A copy gets
+   * its own proof ID, never a synthetic job or inherited acceptance. */
+  recordRetainedImageCopy?(args: {
+    id: string; userId: string; workflowId: string; imageId: string;
+    source: { workflowId: string; jobId: string; copyId?: never } | { workflowId: string; copyId: string; jobId?: never };
+    context: Record<string, unknown>
+  }): Promise<PluginRetainedImageCopy | null>
   /** Authorize source read and destination edit access first. Copies verified
    * bytes into destination retention; does not transfer job/review authority. */
   copyRetainedImage?(args: { userId: string; sourceWorkflowId: string; workflowId: string; assetId: string }): Promise<{

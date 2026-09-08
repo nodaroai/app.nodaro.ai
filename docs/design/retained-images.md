@@ -67,6 +67,20 @@ before any destination reservation. Copying bytes transfers no job provenance,
 review decision or execution authority; editable production cloning must handle
 those records separately.
 
+`storage.recordRetainedImageCopy` records a separate immutable copy proof after
+an integration authorizes both workflows and validates the mapped context. It
+accepts a retained generation result or an existing copy proof as its source.
+The database requires matching ready image bytes and copies the original job
+identity and source context itself. A copy has its own ID; it creates no job and
+does not imply acceptance. Multiple frames may copy one original result.
+
+`storage.readRetainedImageCopies` reads these proofs within an authorized
+destination workflow and verifies its stored image bytes. Original provenance
+and the immediate source context survive source workflow/job deletion. Exact
+retries reuse the same proof; reusing an ID with different context conflicts.
+Clients cannot read or write these server-only records. Removing the destination
+workflow removes its copy proofs and queues its retained bytes for cleanup.
+
 Snapshot metadata and cleanup tasks are server-only. Ordinary single and batch
 object deletion refuse the reserved storage namespace. Only the cleanup worker
 can physically remove an object, using a durable tombstone after the upload

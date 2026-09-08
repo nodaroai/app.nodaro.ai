@@ -1,5 +1,6 @@
 import { retainImage, readRetainedImage, copyRetainedImage } from "../retained-images.js"
 import { retainJobImage, readRetainedJobImages } from "../retained-job-images.js"
+import { recordRetainedImageCopy, readRetainedImageCopies } from "../retained-image-copies.js"
 import { readPublicVideoFrame } from "../public-video-frame.js"
 import { isStorageConfigured } from "../storage.js"
 import { createSceneRenderingToolkit } from "./scene3d-render-toolkit.js"
@@ -1189,6 +1190,7 @@ export function buildToolkit(): PluginToolkit {
     storage: {
       retainImage, readRetainedImage, copyRetainedImage, canRetainImages: isStorageConfigured(),
       retainJobImage, readRetainedJobImages,
+      recordRetainedImageCopy, readRetainedImageCopies,
       uploadBufferToR2,
       uploadFileToR2,
       runPostProcessing,
