@@ -32,6 +32,19 @@ maxBytes)` helper applies SSRF checks, a 30-second deadline and a streaming byte
 limit capped at 25 MiB. The limit also applies when Content-Length is missing or
 incorrect; the helper supplies no storage credentials.
 
+For generated results, `storage.retainJobImage` additionally checks that the job
+belongs to the caller and destination workflow, has completed, and carries
+server-written submission metadata. It supports the single primary result of
+`generate-image` and `image-to-image`. After capture, a database recheck binds
+the retained image to that job and copies its immutable submission record.
+Held jobs cannot be captured. A failed capture can be retried without accepting
+the image or submitting another generation.
+
+`storage.readRetainedJobImages` reads verified images and their original
+submission records within an authorized workflow. These records survive source
+job deletion and are removed with the destination workflow. Workflow JSON alone
+cannot attest which job produced a particular retained image.
+
 Snapshot metadata and cleanup tasks are server-only. Ordinary single and batch
 object deletion refuse the reserved storage namespace. Only the cleanup worker
 can physically remove an object, using a durable tombstone after the upload

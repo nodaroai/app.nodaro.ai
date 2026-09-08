@@ -1,4 +1,5 @@
 import { retainImage, readRetainedImage } from "../retained-images.js"
+import { retainJobImage, readRetainedJobImages } from "../retained-job-images.js"
 import { isStorageConfigured } from "../storage.js"
 import { completeStructuredMetered } from "./llm-metered.js"
 import { directVoiceChanger } from "../../providers/elevenlabs/voice-changer.js"
@@ -1173,6 +1174,7 @@ export function buildToolkit(): PluginToolkit {
     },
     storage: {
       retainImage, readRetainedImage, canRetainImages: isStorageConfigured(),
+      retainJobImage, readRetainedJobImages,
       uploadBufferToR2,
       uploadFileToR2,
       runPostProcessing,

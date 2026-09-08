@@ -580,7 +580,17 @@ export interface PluginMediaToolkit {
 // tk.storage — backend/src/lib/storage.ts, lib/post-processing-error.ts
 // ============================================================================
 
+export interface PluginRetainedJobImage {
+  jobId: string
+  submissionContext: Record<string, unknown>
+  image: { assetId: string; contentHash: string; url: string; width: number; height: number }
+}
+
 export interface PluginStorageToolkit {
+  /** Authorize editing first; capture an owned completed job with server provenance. */
+  retainJobImage?(args: { userId: string; workflowId: string; jobId: string }): Promise<PluginRetainedJobImage | null>
+  /** Authorize workflow access first; retained results survive source-job deletion. */
+  readRetainedJobImages?(workflowId: string, jobIds: readonly string[]): Promise<PluginRetainedJobImage[]>
   /** Snapshot bytes after the caller authorizes the source and workflow. */
   retainImage?(args: { userId: string; workflowId: string; body: Buffer }): Promise<{
     assetId: string; contentHash: string; url: string; width: number; height: number
