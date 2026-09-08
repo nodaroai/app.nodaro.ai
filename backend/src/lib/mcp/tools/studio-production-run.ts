@@ -12,7 +12,7 @@ import {
 import type { RegisterStudioProductionToolsOpts } from "./studio-production.js"
 
 /**
- * The seven studio production tools that SPEND: a framing or directing run, a
+ * The studio production tools that SPEND: a framing or directing run, a
  * frame grab, a voiceover, a revoice, a soundtrack, and the Director draft that
  * writes a whole production from a brief.
  *
@@ -154,6 +154,37 @@ export function registerStudioProductionRunTools({
         ...(args.dry_run ? { dryRun: true } : {}),
         ...(args.client_request_id ? { clientRequestId: args.client_request_id } : {}),
       }),
+  )
+
+  server.registerTool(
+    "generate_studio_keyframe",
+    {
+      title: "Generate Studio Keyframe",
+      description:
+        "Generate one candidate for an existing planned keyframe at expected_revision. " +
+        "Requires a backend with dependent-frame support. Spends image-generation credits; " +
+        "quoting is not supported. Derived frames require an accepted parent. " +
+        "Description-only cast needs no portrait; only explicit image references use images. " +
+        "Returns a job id. Completion adds a candidate without accepting it or starting " +
+        "another frame. Use edit_studio_production to accept after review.",
+      inputSchema: {
+        production_id: productionId,
+        keyframe_id: z.string().min(1).describe("The planned keyframe id."),
+        expected_revision: z.number().int().positive().describe("The frame plan revision you reviewed."),
+        overrides: z.record(z.string(), z.unknown()).optional().describe("Provider, aspectRatio and resolution overrides; the plan owns prompt and references."),
+        dry_run: z.literal(false).optional().describe("Quoting is unavailable for keyframes. Omit this field; true is rejected before submission."),
+        client_request_id: clientRequestIdSchema.optional(),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+      _meta: confirmMeta("$"),
+    },
+    async (args) => post(args.production_id, "generate", {
+      kind: "keyframe",
+      keyframeId: args.keyframe_id,
+      expectedRevision: args.expected_revision,
+      ...(args.overrides ? { overrides: args.overrides } : {}),
+      ...(args.client_request_id ? { clientRequestId: args.client_request_id } : {}),
+    }),
   )
 
   // ── directing: the shot's clip ────────────────────────────────────────────

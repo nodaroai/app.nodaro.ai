@@ -100,6 +100,7 @@ describe("on cloud, with the routes not installed", () => {
       ["clone_studio_production", { production_id: PRODUCTION }],
       ["describe_studio_production", { production_id: PRODUCTION, brief: "x", llm_model: "m" }],
       ["generate_studio_still", { production_id: PRODUCTION, shot_id: "s1" }],
+      ["generate_studio_keyframe", { production_id: PRODUCTION, keyframe_id: "frame-A", expected_revision: 1 }],
       ["generate_studio_clip", { production_id: PRODUCTION, shot_id: "s1" }],
       ["new_studio_shot_from_frame", { production_id: PRODUCTION, shot_id: "s1" }],
       ["voice_studio_shot", { production_id: PRODUCTION, shot_id: "s1", text: "hello" }],
