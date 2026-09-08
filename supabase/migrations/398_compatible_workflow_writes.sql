@@ -41,16 +41,20 @@ FOR EACH ROW EXECUTE FUNCTION public.guard_compatible_workflow_write();
 
 -- Server-only transport, never a public raw-JSON editing API. The caller must
 -- authorize the workflow and validate the document through its compatible codec.
--- Function-scoped SET restores the flag at return, including exceptions.
+-- Set the custom flag in the body: managed migration roles cannot declare an
+-- unknown custom parameter in a function SET clause. Restore the prior value
+-- on success; the exception block rolls back the local setting on failure.
 CREATE OR REPLACE FUNCTION public.compare_and_swap_compatible_workflow(
   p_workflow_id uuid, p_expected_version integer, p_patch jsonb
 ) RETURNS SETOF public.workflows
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' SET nodaro.compatible_workflow_write = 'on' AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE v_previous text := current_setting('nodaro.compatible_workflow_write', true);
 BEGIN
   IF p_expected_version IS NULL OR p_expected_version < 1 OR jsonb_typeof(p_patch) IS DISTINCT FROM 'object'
     OR (p_patch - ARRAY['nodes','edges','settings','name','thumbnail_url']) <> '{}'::jsonb THEN
     RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'Invalid compatible workflow write';
   END IF;
+  PERFORM set_config('nodaro.compatible_workflow_write', 'on', true);
   RETURN QUERY UPDATE public.workflows AS w SET
     nodes = CASE WHEN p_patch ? 'nodes' THEN p_patch->'nodes' ELSE w.nodes END,
     edges = CASE WHEN p_patch ? 'edges' THEN p_patch->'edges' ELSE w.edges END,
@@ -58,22 +62,30 @@ BEGIN
     name = CASE WHEN p_patch ? 'name' THEN p_patch->>'name' ELSE w.name END,
     thumbnail_url = CASE WHEN p_patch ? 'thumbnail_url' THEN p_patch->>'thumbnail_url' ELSE w.thumbnail_url END
   WHERE w.id = p_workflow_id AND w.version = p_expected_version RETURNING w.*;
+  PERFORM set_config('nodaro.compatible_workflow_write', COALESCE(v_previous, ''), true);
+EXCEPTION WHEN OTHERS THEN
+  RAISE;
 END $$;
 REVOKE ALL ON FUNCTION public.compare_and_swap_compatible_workflow(uuid,integer,jsonb) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.compare_and_swap_compatible_workflow(uuid,integer,jsonb) TO service_role;
 
 CREATE OR REPLACE FUNCTION public.create_compatible_workflow(p_row jsonb)
 RETURNS SETOF public.workflows
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' SET nodaro.compatible_workflow_write = 'on' AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE v_previous text := current_setting('nodaro.compatible_workflow_write', true);
 BEGIN
   IF jsonb_typeof(p_row) IS DISTINCT FROM 'object'
     OR (p_row - ARRAY['project_id','user_id','name','nodes','edges','settings','thumbnail_url','app_slug']) <> '{}'::jsonb THEN
     RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'Invalid compatible workflow create';
   END IF;
+  PERFORM set_config('nodaro.compatible_workflow_write', 'on', true);
   RETURN QUERY INSERT INTO public.workflows(project_id,user_id,name,nodes,edges,settings,thumbnail_url,app_slug)
   VALUES ((p_row->>'project_id')::uuid, (p_row->>'user_id')::uuid, p_row->>'name',
     COALESCE(p_row->'nodes','[]'::jsonb), COALESCE(p_row->'edges','[]'::jsonb), COALESCE(p_row->'settings','{}'::jsonb),
     p_row->>'thumbnail_url', p_row->>'app_slug') RETURNING *;
+  PERFORM set_config('nodaro.compatible_workflow_write', COALESCE(v_previous, ''), true);
+EXCEPTION WHEN OTHERS THEN
+  RAISE;
 END $$;
 REVOKE ALL ON FUNCTION public.create_compatible_workflow(jsonb) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.create_compatible_workflow(jsonb) TO service_role;

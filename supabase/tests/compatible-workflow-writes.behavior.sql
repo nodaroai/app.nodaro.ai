@@ -1,5 +1,10 @@
 \set ON_ERROR_STOP on
 BEGIN;
+-- Exercise managed-host permissions even when the local harness connects as a
+-- superuser. Both ownership changes and the schema grant roll back below.
+GRANT CREATE ON SCHEMA public TO service_role;
+ALTER FUNCTION public.create_compatible_workflow(jsonb) OWNER TO service_role;
+ALTER FUNCTION public.compare_and_swap_compatible_workflow(uuid,integer,jsonb) OWNER TO service_role;
 CREATE FUNCTION pg_temp.assert_true(label text, value boolean) RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
  IF value IS DISTINCT FROM true THEN RAISE EXCEPTION 'ASSERT FAIL: %', label; END IF;
@@ -20,6 +25,22 @@ SELECT pg_temp.assert_true('compatible insert succeeds', EXISTS(SELECT 1 FROM pu
 SELECT pg_temp.assert_true('compatible writer flag does not leak', current_setting('nodaro.compatible_workflow_write',true) IS DISTINCT FROM 'on');
 SELECT pg_temp.assert_true('stale CAS changes nothing', (SELECT count(*) = 0 FROM public.compare_and_swap_compatible_workflow(:'guarded_id',999,'{"name":"stale"}')));
 SELECT pg_temp.assert_true('compatible CAS advances version', (SELECT version = 2 AND name = 'Reviewed' FROM public.compare_and_swap_compatible_workflow(:'guarded_id',1,'{"name":"Reviewed","settings":{"studio":{"keyframes":[],"settledJobIds":["job"]}}}')));
+SELECT set_config('nodaro.compatible_workflow_write','previous-value',true);
+SELECT pg_temp.assert_true('stale CAS still returns no rows', (SELECT count(*) = 0 FROM public.compare_and_swap_compatible_workflow(:'guarded_id',999,'{"name":"stale"}')));
+SELECT pg_temp.assert_true('stale CAS restores the prior flag', current_setting('nodaro.compatible_workflow_write',true) = 'previous-value');
+DO $$ BEGIN
+ BEGIN
+  PERFORM public.compare_and_swap_compatible_workflow(current_setting('test.guarded_id')::uuid,2,'{"name":null}');
+  RAISE EXCEPTION 'ASSERT FAIL: invalid update unexpectedly succeeded';
+ EXCEPTION WHEN not_null_violation THEN NULL; END;
+ PERFORM pg_temp.assert_true('failed update restores the prior flag', current_setting('nodaro.compatible_workflow_write',true) = 'previous-value');
+ BEGIN
+  PERFORM public.create_compatible_workflow('{"user_id":"00000000-0000-4000-8000-000000000986","project_id":"c0000000-0000-4000-8000-000000000986","settings":{"studio":{"keyframes":[]}}}');
+  RAISE EXCEPTION 'ASSERT FAIL: invalid insert unexpectedly succeeded';
+ EXCEPTION WHEN not_null_violation THEN NULL; END;
+ PERFORM pg_temp.assert_true('failed insert restores the prior flag', current_setting('nodaro.compatible_workflow_write',true) = 'previous-value');
+END $$;
+SELECT set_config('nodaro.compatible_workflow_write','',true);
 SELECT pg_temp.assert_true('identity columns cannot be smuggled into CAS', NOT has_function_privilege('authenticated','public.compare_and_swap_compatible_workflow(uuid,integer,jsonb)','EXECUTE'));
 DO $$ BEGIN
  BEGIN
