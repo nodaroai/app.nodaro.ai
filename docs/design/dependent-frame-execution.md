@@ -33,6 +33,11 @@ These boundaries do not by themselves enable the full dependent-frame feature.
 Compatible editor controls, cloning/import handling and deployment capability
 checks must also be available.
 
+Compatible semantic saves preserve existing 3D previsualization alongside linked
+frames: scene plans, revision history and blockout renders remain separate from
+final clip results. Copying a scene keeps completed blockouts but drops its pending
+3D jobs. Recipe exports retain blockout authoring inputs without scene/media results.
+
 ## Reading and reviewing frames
 
 `GET /v1/studio/productions/capabilities` reports supported plan versions and
