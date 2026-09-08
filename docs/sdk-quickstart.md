@@ -12,6 +12,12 @@ If you just want a method-by-method index, see the
 [SDK Reference](./sdk-reference.md). For the OAuth consent flow, see
 [OAuth Flow](./oauth-flow.md).
 
+For editable 3D previews, use `client.scene3d.generate`, then `edit` and
+`render`. New scenes can combine image/video `references` with immutable GLB
+`inputAssets` selectors on an import-capable advanced engine. See the
+[3D scene SDK contract](sdk-reference.md#editable-3d-scenes) for availability,
+selector shape, and the preview-to-MP4 flow.
+
 ## 1. Install + first request
 
 ```bash

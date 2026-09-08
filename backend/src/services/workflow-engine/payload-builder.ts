@@ -1,5 +1,6 @@
 import { assertCanvasExecutionAllowed } from "@nodaro/shared"
 import type { Scene3DReference } from "@nodaro/shared"
+import { scene3DInputAssetsForEngine, type Scene3DInputAsset } from "@nodaro/shared"
 /**
  * Build BullMQ job payloads for each node type from node data + resolved inputs.
  * Returns { jobName, queueName, payload } for worker-queued nodes.
@@ -6113,6 +6114,7 @@ export function buildPayload(
       }
       const sceneEngine = resolveScene3DAuthoringEngine({ requested: data.engine as string | undefined })
       if (!sceneEngine.ok) throw new Error(`Generate 3D Scene: ${sceneEngine.message}`)
+      const inputAssets = scene3DInputAssetsForEngine(data.inputAssets, sceneEngine.engine)
       const sceneReferences = scene3DReferencesFromNode(data, resolvedInputs, scene3DGraphReferences(node, data, resolvedInputs, buildCtx))
       // The route's own pre-flight, from the same helpers. Thrown BEFORE this
       // function returns a payload, which is before the orchestrator reserves —
@@ -6134,6 +6136,7 @@ export function buildPayload(
           jobId,
           ...sceneEngine.fields,
           prompt: scenePrompt,
+          ...(inputAssets.length ? { inputAssets } : {}),
           llmModel: sceneLlmModel,
           reasoningEffort: sceneEffort,
           references: sceneReferences,
@@ -6235,6 +6238,7 @@ export function buildPayload(
       // looking at.
       const proUpstream = resolvePro3DRenderSceneRef(node, data, buildCtx)
       const proSource = buildPro3DRenderSource({
+        inputAssets: data.inputAssets as Scene3DInputAsset[] | undefined,
         sourceMode: data.sourceMode as string | undefined,
         prompt: proPrompt,
         references: proReferences,

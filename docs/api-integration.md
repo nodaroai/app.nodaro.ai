@@ -2836,6 +2836,15 @@ before anything is reserved. See
 
 ### Scene versions and binary assets
 
+New-scene requests may select retained GLBs with `inputAssets` on
+`POST /v1/3d-scene/generate`, or `source.inputAssets` for a Pro prompt source.
+Each selector is `{id, revisionId, assetId, label?}`; the list is limited to
+eight unique logical and artifact IDs. Image/video `references` remains a
+separate field. The server authorizes the exact revision pin and resolves
+immutable byte metadata before quoting or reserving credits. Caller receipts
+and URLs are rejected. Imports require an advanced engine with import support;
+Basic and unavailable import lanes refuse without starting a generation.
+
 `Scene3DPlan` is a discriminated union: schema version 1 stores primitives and
 keyframes; version 2 stores semantic entities, immutable GLB assets, baked camera
 samples and contiguous shots. Read `schemaVersion` before accessing version-specific

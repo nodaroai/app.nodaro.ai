@@ -298,6 +298,19 @@ describe("an unpriced install fails closed", () => {
 })
 
 describe("delegation carries the request intact", () => {
+  it("preserves input selectors for quote/run and refuses caller receipts", async () => {
+    const engine = proEngine()
+    setPluginEngines({ scene3d: engine })
+    const asset = { id: "vehicle", revisionId: USER_ID, assetId: "00000000-0000-4000-8000-000000000011" }
+    const source = { ...PROMPT_SOURCE, inputAssets: [asset] }
+    expect((await quote({ source })).statusCode).toBe(200)
+    expect((await run({ source })).statusCode).toBe(200)
+    expect(engine.quoteProRender.mock.calls[0][0].body.source).toEqual(source)
+    expect(engine.proRender.mock.calls[0][0].body.source).toEqual(source)
+    expect((await quote({ source: { ...source, inputAssets: [{ ...asset, sha256: "a".repeat(64) }] } })).statusCode).toBe(400)
+    expect(engine.quoteProRender).toHaveBeenCalledOnce()
+    spentNothing()
+  })
   it("delegates the parsed source and quote ID while preserving request context", async () => {
     const engine = proEngine()
     setPluginEngines({ scene3d: engine })

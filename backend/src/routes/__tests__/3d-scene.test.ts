@@ -229,6 +229,13 @@ describe("generic SDK node-slug routes", () => {
 })
 
 describe("POST /v1/3d-scene/generate", () => {
+  it("refuses imported geometry on Basic before a job or reservation exists", async () => {
+    const res = await generate({ inputAssets: [{ id: "vehicle", revisionId: REV, assetId: USER_ID }] })
+    expect(res.statusCode).toBe(400)
+    expect(mocks.insertJob).not.toHaveBeenCalled()
+    expect(mocks.reserveCreditsForJob).not.toHaveBeenCalled()
+    expect(mocks.queueAdd).not.toHaveBeenCalled()
+  })
   it("creates the row, reserves, and enqueues a payload the worker can run", async () => {
     const res = await generate({ durationSeconds: 3, fps: 30, aspectRatio: "1:1" })
     expect(res.statusCode).toBe(200)

@@ -11,6 +11,19 @@ These tools expose the same scene authoring and rendering operations as the canv
 
 Each returns a job ID. Use `get_job` or `wait_for_job` to retrieve the completed result. Generation/edit jobs return `output_data.scenePlan`; rendering returns a video URL.
 
+Generate and edit accept `engine` (`basic`, `blender-cloud`, or `blender-local`),
+`accepted_scene_schema_versions`, `local_connection_id`, and
+`max_repair_passes`. Optional engines must be available on the deployment;
+an unavailable selection never falls back to Basic. Advanced uses its fixed
+planner, so omit `llm_model` and `reasoning_effort` on that lane.
+
+Generate also accepts `input_assets`: up to eight existing GLB selectors with
+the shared shape `{id, revisionId, assetId, label?}`. Keep image/video inputs in
+`references`. Imported assets require an advanced engine with import support;
+unavailable imports are refused before charging. The server resolves byte
+receipts, so do not send URLs or hashes. Edit retains its existing construction
+inputs and accepts `replace_references` to replace its image/video list.
+
 1. Call `generate_3d_scene` with a shot description, `duration_seconds`, `fps` and `aspect_ratio`.
 2. Retrieve `scenePlan` from the completed job. Optional references use `{ id, url, kind, role }`, with image/video kind and appearance/layout/motion role.
 3. Call `edit_3d_scene` with that object as `scene_plan`, its `revisionId` as `expected_revision_id`, and either an edit `prompt` or `operations`. Supply `locked_object_ids` to preserve objects.
@@ -28,7 +41,7 @@ metadata).
 
 Its `source` argument is exactly one of:
 
-- `{kind:"prompt", prompt, references?}` — author a new scene, then render it.
+- `{kind:"prompt", prompt, references?, input_assets?}` — author a new scene, then render it. Selectors use the same shape and restrictions as generate.
 - `{kind:"scene", revision_id, source_job_id}` — **render-only** export of that
   revision. Adding `edit_prompt` revises it first, which costs authoring; OMIT
   the field for a plain export. `source_job_id` is required for Basic scenes

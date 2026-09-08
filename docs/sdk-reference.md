@@ -4798,6 +4798,14 @@ are rejected before a Basic generation or its credit checks.
 
 `nodes.run` and `nodes.runAndWait` accept typed `GenerateScene3DParams`, `EditScene3DParams` and `RenderScene3DParams`. Generation/edit completion returns `Scene3DJobOutput` with `scenePlan` and an optional `changeSummary`.
 
+`GenerateScene3DParams.inputAssets` and a Pro prompt source's `inputAssets`
+accept up to eight `Scene3DInputAsset` selectors:
+`{id, revisionId, assetId, label?}`. They select authorized existing GLBs while
+`references` continues to carry appearance images and motion videos. This
+requires an advanced engine with import support; Basic and unsupported imports
+are refused before charging. The server supplies byte receipts. Do not send
+asset URLs or hashes. Reuse identical selectors when submitting a Pro quote.
+
 ```typescript
 const created = await client.nodes.runAndWait("generate-3d-scene", {
   prompt: "Orbit a single box on a floor over four seconds",

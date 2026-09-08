@@ -34,6 +34,7 @@
 import { z } from "zod"
 import { SCENE3D_LIMITS, type Scene3DReference } from "./scene3d.js"
 import { scene3DAnyPlanSchema, type Scene3DPlan } from "./scene3d-v2-plan.js"
+import { scene3DInputAssetsSchema, type Scene3DInputAsset } from "./scene3d-input-assets.js"
 
 /** Canvas/API/MCP node type. */
 export const PRO3D_RENDER_NODE_TYPE = "pro-3d-render"
@@ -140,6 +141,7 @@ export interface Pro3DRenderPromptSource {
   kind: "prompt"
   prompt: string
   references?: readonly Scene3DReference[]
+  inputAssets?: readonly Scene3DInputAsset[]
 }
 
 /**
@@ -384,6 +386,7 @@ export const pro3DRenderCoreOutputSchema = z
 
 /** What a canvas node / DAG builder holds before it can name a source. */
 export interface Pro3DRenderSourceInput {
+  inputAssets?: readonly Scene3DInputAsset[]
   /** `"scene"` selects the existing-revision path; anything else is a brief. */
   sourceMode?: string
   /** The brief, already resolved and affix-applied by the caller. */
@@ -431,9 +434,12 @@ export function buildPro3DRenderSource(input: Pro3DRenderSourceInput): Pro3DRend
     return { ok: false, message: "no brief — describe the scene, or wire a prompt in." }
   }
   const references = input.references ?? []
+  const parsedAssets = scene3DInputAssetsSchema.safeParse(input.inputAssets ?? [])
+  if (!parsedAssets.success) return { ok: false, message: "invalid scene input assets" }
   return {
     ok: true,
-    source: { kind: "prompt", prompt, ...(references.length > 0 ? { references } : {}) },
+    source: { kind: "prompt", prompt, ...(references.length > 0 ? { references } : {}),
+      ...(parsedAssets.data.length ? { inputAssets: parsedAssets.data } : {}) },
   }
 }
 

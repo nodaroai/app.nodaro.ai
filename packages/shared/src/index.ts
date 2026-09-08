@@ -1074,3 +1074,4 @@ export {
 export * from "./scene3d-v2-edit.js"
 export { STUDIO_DEPENDENT_FRAMES_CAPABILITY, SequenceExecutionRequiredError, requiresSequenceExecution, assertCanvasExecutionAllowed } from "./sequence-execution"
 export * from "./scene3d-authoring-engine.js"
+export * from "./scene3d-input-assets.js"

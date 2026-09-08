@@ -11,6 +11,19 @@ function harness(scopes: string[] = ["workflows:execute"], statusCode = 200) {
 }
 
 describe("3D scene MCP tools", () => {
+  it("forwards advanced engine controls and immutable asset selection", async () => {
+    const { handlers, inject } = harness()
+    const inputAssets = [{ id: "vehicle", revisionId: "00000000-0000-4000-8000-000000000010",
+      assetId: "00000000-0000-4000-8000-000000000011" }]
+    await handlers.generate_3d_scene({ prompt: "Drive", engine: "blender-cloud", input_assets: inputAssets,
+      accepted_scene_schema_versions: [2], max_repair_passes: 1 })
+    expect(inject).toHaveBeenLastCalledWith(expect.objectContaining({ payload: expect.objectContaining({
+      engine: "blender-cloud", inputAssets, acceptedSceneSchemaVersions: [2], maxRepairPasses: 1 }) }))
+    await handlers.edit_3d_scene({ scene_plan: { revisionId: "revision" }, expected_revision_id: "revision",
+      prompt: "Move", engine: "blender-cloud", accepted_scene_schema_versions: [2], replace_references: true })
+    expect(inject).toHaveBeenLastCalledWith(expect.objectContaining({ payload: expect.objectContaining({
+      engine: "blender-cloud", acceptedSceneSchemaVersions: [2], replaceReferences: true }) }))
+  })
   it("requires execution scope for every scene operation", () => {
     expect(Object.keys(harness([]).handlers)).toEqual([])
     expect(Object.keys(harness().handlers)).toEqual(["generate_3d_scene", "edit_3d_scene", "render_3d_scene"])

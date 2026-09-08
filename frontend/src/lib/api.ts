@@ -5319,6 +5319,7 @@ export interface Scene3DReferenceInput {
  * `output_data.scenePlan` (see `pollScene3DJob`).
  */
 export async function generate3DScene(params: {
+  inputAssets?: readonly import("@nodaro/shared").Scene3DInputAsset[]
   prompt: string
   durationSeconds?: number
   fps?: number
