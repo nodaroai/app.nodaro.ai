@@ -69,6 +69,7 @@ import { videoQueue } from "../queue.js"
 import { creditGuard, reserveCreditsForJob } from "../../middleware/credit-guard.js"
 import { safeUrlSchema, YOUTUBE_HOSTS, hostnameMatchesAllowlist } from "../url-validator.js"
 import { safeFetch } from "../safe-fetch.js"
+import { safeFetchBytes } from "../safe-fetch-bytes.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../request-helpers.js"
 import { extractMcpClient } from "../extract-mcp-client.js"
 import { buildJobInputData } from "../job-input-data.js"
@@ -1262,6 +1263,7 @@ export function buildToolkit(): PluginToolkit {
       buildJobInputData,
       formatZodError,
       safeFetch,
+      safeFetchBytes,
       // Mirrors `insertWithIdempotencyKey` (`lib/idempotent-insert.ts:33`),
       // narrowed to the "jobs" table + the one column the contract needs.
       insertJobWithIdempotencyKey: async (data, idempotencyKey, billingContext) => {

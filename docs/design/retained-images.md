@@ -27,6 +27,10 @@ The optional toolkit members are `storage.retainImage`,
 `storage.readRetainedImage`, and `storage.canRetainImages`. Integrations must check
 availability before submitting jobs that require this guarantee. These methods
 do not authorize a caller, fetch arbitrary URLs, or start media generation.
+For authorized public HTTP sources, the optional `http.safeFetchBytes(url,
+maxBytes)` helper applies SSRF checks, a 30-second deadline and a streaming byte
+limit capped at 25 MiB. The limit also applies when Content-Length is missing or
+incorrect; the helper supplies no storage credentials.
 
 Snapshot metadata and cleanup tasks are server-only. Ordinary single and batch
 object deletion refuse the reserved storage namespace. Only the cleanup worker

@@ -1163,6 +1163,9 @@ export interface PluginHttpToolkit {
    * rather than importing undici's `SafeFetchInit`/`Response` types.
    */
   safeFetch(url: string): Promise<PluginFetchResponse>
+  /** Public HTTP bytes, SSRF checked, 30s timeout and streaming cap (1–25 MiB).
+   * Caller must separately authorize the source. No storage credentials. */
+  safeFetchBytes?(url: string, maxBytes: number): Promise<Buffer>
   /** Mirrors `insertWithIdempotencyKey` (`lib/idempotent-insert.ts:33`).
    *  P14: the optional context stamps the payer pair (workspace_id/org_id)
    *  onto the row — which also trips the DB privacy clamp for workspace
