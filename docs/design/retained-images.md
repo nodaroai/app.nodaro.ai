@@ -85,3 +85,5 @@ Snapshot metadata and cleanup tasks are server-only. Ordinary single and batch
 object deletion refuse the reserved storage namespace. Only the cleanup worker
 can physically remove an object, using a durable tombstone after the upload
 window and grace period have ended.
+
+Approved video-job snapshots use the corresponding [retained-video lifecycle](retained-videos.md), including independent copy provenance and protected storage.

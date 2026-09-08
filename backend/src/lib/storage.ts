@@ -603,7 +603,13 @@ export async function readR2Object(
       return { body: Buffer.alloc(0), contentType: res.ContentType ?? null, size }
     }
     const chunks: Buffer[] = []
+    let length = 0
     for await (const chunk of res.Body as Readable) {
+      length += Buffer.byteLength(chunk)
+      if (opts.maxBytes !== undefined && length > opts.maxBytes) {
+        ;(res.Body as Readable).destroy?.()
+        return { body: Buffer.alloc(0), contentType: res.ContentType ?? null, size: length }
+      }
       chunks.push(chunk as Buffer)
     }
     const body = Buffer.concat(chunks)

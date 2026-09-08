@@ -36,6 +36,7 @@ describe("physical object deletion boundaries", () => {
       "lib/storage.ts": 2,
       // Only claimed tombstones can enter this exceptional delete lane.
       "lib/retained-images.ts": 1,
+      "lib/retained-videos.ts": 1,
       // Independently configured private bucket; cannot be the public bucket.
       "services/scene3d-artifacts/object-store.ts": 1,
     })

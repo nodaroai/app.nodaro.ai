@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { jobBlockOf, jobBlockedBody } from "./job-policy.js"
-import { RetainedImageInUseError } from "./retained-image-errors.js"
+import { RetainedImageInUseError, RetainedVideoInUseError } from "./retained-image-errors.js"
 import { UploadBlockedError, uploadBlockedBody } from "./upload-policy.js"
 
 /** The single generic string every unmarked `internal_error` 500 collapses to. */
@@ -220,7 +220,7 @@ export function sendInternalError(
   // error must not be reported as a server failure or logged at error level.
   // (The 500-sanitizer net only rewrites `internal_error` 500 bodies, so this
   // 422 passes through it untouched.)
-  if (err instanceof RetainedImageInUseError) {
+  if (err instanceof RetainedImageInUseError || err instanceof RetainedVideoInUseError) {
     return reply.status(err.statusCode).send({ error: { code: err.code, message: err.message } })
   }
   if (err instanceof UploadBlockedError) return reply.status(400).send(uploadBlockedBody(err.decision))

@@ -598,6 +598,21 @@ export interface PluginRetainedImageCopy {
   image: { assetId: string; contentHash: string; url: string; width: number; height: number }
 }
 
+export interface PluginRetainedJobVideo {
+  jobId: string
+  submissionContext: Record<string, unknown>
+  video: { assetId: string; contentHash: string; url: string; width: number; height: number; durationMs: number; byteLength: number }
+}
+
+export interface PluginRetainedVideoCopy {
+  id: string
+  source: { workflowId: string; jobId?: string; copyId?: string }
+  sourceContext: Record<string, unknown>
+  origin: { workflowId: string; jobId: string; submissionContext: Record<string, unknown> }
+  context: Record<string, unknown>
+  video: { assetId: string; contentHash: string; url: string; width: number; height: number; durationMs: number; byteLength: number }
+}
+
 export interface PluginStorageToolkit {
   /** Authorize reading the workflow first; verifies destination bytes even if
    * the original job and source workflows were deleted. */
@@ -627,6 +642,34 @@ export interface PluginStorageToolkit {
     assetId: string; contentHash: string; url: string; width: number; height: number
   } | null>
   canRetainImages?: boolean
+  /** Authorize reading the workflow first; verifies destination bytes even if
+   * the original job and source workflows were deleted. */
+  readRetainedVideoCopies?(workflowId: string, copyIds: readonly string[]): Promise<PluginRetainedVideoCopy[]>
+  /** Authorize both workflows and validate mapped context first. A copy gets
+   * its own proof ID, never a synthetic job or inherited acceptance. */
+  recordRetainedVideoCopy?(args: {
+    id: string; userId: string; workflowId: string; videoId: string;
+    source: { workflowId: string; jobId: string; copyId?: never } | { workflowId: string; copyId: string; jobId?: never };
+    context: Record<string, unknown>
+  }): Promise<PluginRetainedVideoCopy | null>
+  /** Authorize source read and destination edit access first. Copies verified
+   * bytes into destination retention; does not transfer job/review authority. */
+  copyRetainedVideo?(args: { userId: string; sourceWorkflowId: string; workflowId: string; assetId: string }): Promise<{
+    assetId: string; contentHash: string; url: string; width: number; height: number; durationMs: number; byteLength: number
+  } | null>
+  /** Authorize editing first; capture an owned completed job with server provenance. */
+  retainJobVideo?(args: { userId: string; workflowId: string; jobId: string }): Promise<PluginRetainedJobVideo | null>
+  /** Authorize workflow access first; retained results survive source-job deletion. */
+  readRetainedJobVideos?(workflowId: string, jobIds: readonly string[]): Promise<PluginRetainedJobVideo[]>
+  /** Snapshot bytes after the caller authorizes the source and workflow. */
+  retainVideo?(args: { userId: string; workflowId: string; body: Buffer }): Promise<{
+    assetId: string; contentHash: string; url: string; width: number; height: number; durationMs: number; byteLength: number
+  }>
+  /** Read only after workflow access authorization; cross-workflow ids return null. */
+  readRetainedVideo?(workflowId: string, assetId: string): Promise<{
+    assetId: string; contentHash: string; url: string; width: number; height: number; durationMs: number; byteLength: number
+  } | null>
+  canRetainVideos?: boolean
   /** Mirrors `uploadBufferToR2` (`lib/storage.ts`). */
   uploadBufferToR2(
     buffer: Buffer,

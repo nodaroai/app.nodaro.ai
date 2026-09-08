@@ -38,6 +38,7 @@ export type UploadLane =
   | "upload-proxy"
   | "upload-handoff"
   | "retained-image"
+  | "retained-video"
 
 export interface UploadCheckInput {
   readonly kind: UploadKind

@@ -407,3 +407,17 @@ describe("tk.jobs.readJobSubmissionsOwnedBy", () => {
     await expect(tk.jobs.readJobSubmissionsOwnedBy!(CALLER, ["one"])).rejects.toThrow("Failed to read job submission records")
   })
 })
+
+it("wires video retention and independent copy proofs through the host toolkit", async () => {
+  const media = await import("@/lib/retained-videos.js")
+  const jobs = await import("@/lib/retained-job-videos.js")
+  const copies = await import("@/lib/retained-video-copies.js")
+  const storage = buildToolkit().storage
+  expect(storage.retainVideo).toBe(media.retainVideo)
+  expect(storage.readRetainedVideo).toBe(media.readRetainedVideo)
+  expect(storage.copyRetainedVideo).toBe(media.copyRetainedVideo)
+  expect(storage.retainJobVideo).toBe(jobs.retainJobVideo)
+  expect(storage.readRetainedJobVideos).toBe(jobs.readRetainedJobVideos)
+  expect(storage.readRetainedVideoCopies).toBe(copies.readRetainedVideoCopies)
+  expect(storage.recordRetainedVideoCopy).toBe(copies.recordRetainedVideoCopy)
+})

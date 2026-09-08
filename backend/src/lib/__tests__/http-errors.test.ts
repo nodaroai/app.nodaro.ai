@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { RetainedImageInUseError } from "../retained-image-errors.js"
+import { RetainedImageInUseError, RetainedVideoInUseError } from "../retained-image-errors.js"
 import { UploadBlockedError } from "../upload-policy.js"
 import Fastify from "fastify"
 import type { FastifyReply, FastifyRequest } from "fastify"
@@ -575,4 +575,12 @@ describe("image-proxy 400s are not validation-reject reports (W0)", () => {
     expect(insertAppReport).toHaveBeenCalledTimes(1)
     await app.close()
   })
+})
+
+it("returns the retained video deletion refusal without turning it into a 500", () => {
+  const reply = makeReply()
+  const req = { log: { error: vi.fn() } } as unknown as FastifyRequest
+  sendInternalError(reply as unknown as FastifyReply, req, new RetainedVideoInUseError())
+  expect(reply.statusCode).toBe(409)
+  expect(reply.body).toMatchObject({ error: { code: "retained_video_in_use" } })
 })

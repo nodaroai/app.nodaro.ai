@@ -1,3 +1,6 @@
+import { retainVideo, readRetainedVideo, copyRetainedVideo } from "../retained-videos.js"
+import { retainJobVideo, readRetainedJobVideos } from "../retained-job-videos.js"
+import { readRetainedVideoCopies, recordRetainedVideoCopy } from "../retained-video-copies.js"
 import { retainImage, readRetainedImage, copyRetainedImage } from "../retained-images.js"
 import { retainJobImage, readRetainedJobImages } from "../retained-job-images.js"
 import { recordRetainedImageCopy, readRetainedImageCopies } from "../retained-image-copies.js"
@@ -1190,6 +1193,8 @@ export function buildToolkit(): PluginToolkit {
     storage: {
       retainImage, readRetainedImage, copyRetainedImage, canRetainImages: isStorageConfigured(),
       retainJobImage, readRetainedJobImages,
+      retainVideo, readRetainedVideo, copyRetainedVideo, canRetainVideos: isStorageConfigured(),
+      retainJobVideo, readRetainedJobVideos, readRetainedVideoCopies, recordRetainedVideoCopy,
       recordRetainedImageCopy, readRetainedImageCopies,
       uploadBufferToR2,
       uploadFileToR2,
