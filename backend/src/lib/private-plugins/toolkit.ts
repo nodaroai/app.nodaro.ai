@@ -1213,6 +1213,11 @@ export function buildToolkit(): PluginToolkit {
       publishLegacyRecastRescore,
       publishRecastRescore,
       markJobCompleted: pluginMarkJobCompleted,
+      settleReservedJob: async (input) => {
+        if (!hasCredits()) throw new Error("Job settlement is unavailable on this edition")
+        const { settleReservedJob } = await import("../../ee/billing/job-reservation-settlement.js")
+        return settleReservedJob(input)
+      },
       setJobProgress,
       withProgressRamp,
       commitJobCredits,

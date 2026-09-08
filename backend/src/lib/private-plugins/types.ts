@@ -706,6 +706,24 @@ export interface PluginWaitForJobResult {
   jobType: string | null
 }
 
+export interface PluginJobSettlement {
+  jobId: string
+  userId: string
+  usageLogId: string
+  expectedStatus: "completed" | "failed" | "cancelled"
+  actualCredits: number
+  receiptHash: string
+  providerCostUsd?: number
+}
+export interface PluginJobSettlementResult {
+  jobId: string
+  usageLogId: string
+  actualCredits: number
+  releasedCredits: number
+  receiptHash: string
+  replayed: boolean
+}
+
 export interface PluginJobsToolkit {
   /**
    * The status of jobs THIS user owns, by id, redacted.
@@ -838,6 +856,8 @@ export interface PluginJobsToolkit {
     },
     fn: () => Promise<T>,
   ): Promise<T>
+  /** Atomic final settlement of an opt-in reservation; never reprices the admitted ceiling. */
+  settleReservedJob?(input: PluginJobSettlement): Promise<PluginJobSettlementResult>
   /** Mirrors `commitJobCredits` (`workers/shared.ts`). */
   commitJobCredits(
     usageLogId: string | null | undefined,
