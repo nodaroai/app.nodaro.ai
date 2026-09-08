@@ -381,6 +381,14 @@ jobs:
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
         run: node backend/scripts/verify-retained-image-copies-concurrency.mjs
+      - name: Allow the disposable database to exercise Auth deletion
+        # Supabase's postgres login is not a superuser and cannot SET ROLE to
+        # the Auth service by default. This grant is confined to the CI service
+        # container; application migrations never grant this membership.
+        run: >-
+          docker exec -e PGPASSWORD=postgres "${{ job.services.postgres.id }}"
+          psql -U supabase_admin -d postgres -v ON_ERROR_STOP=1
+          -c 'GRANT supabase_auth_admin TO postgres'
       - name: Run every behavioral proof
         env:
           PGPASSWORD: postgres

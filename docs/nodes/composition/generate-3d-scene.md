@@ -34,6 +34,9 @@ The scene stores object IDs, transforms, dimensions, camera position/target/lens
 
 Coordinates use meters with Y pointing up. Euler rotations are radians. Timeline frames start at zero. Each rendered MP4 uses a specific scene revision.
 
+Deleting your account removes retained scene metadata and schedules its private
+files, including abandoned uploads, for cleanup.
+
 ## API and SDK
 
 For existing GLBs, send `inputAssets` alongside your prompt and image/video
