@@ -161,18 +161,16 @@ export function registerStudioProductionRunTools({
     {
       title: "Generate Studio Keyframe",
       description:
-        "Generate one candidate for an existing planned keyframe at expected_revision. " +
-        "Requires a backend with dependent-frame support. Spends image-generation credits; " +
-        "quoting is not supported. Derived frames require an accepted parent. " +
-        "Description-only cast needs no portrait; only explicit image references use images. " +
-        "Returns a job id. Completion adds a candidate without accepting it or starting " +
-        "another frame. Use edit_studio_production to accept after review.",
+        "Generate one candidate at expected_revision; requires dependent-frame support " +
+        "and an accepted parent for derived frames. Spends image credits; no quote. " +
+        "Description-only cast needs no portrait. Returns a job ID; completion neither " +
+        "accepts nor starts another frame. Review, then accept with edit_studio_production.",
       inputSchema: {
         production_id: productionId,
         keyframe_id: z.string().min(1).describe("The planned keyframe id."),
         expected_revision: z.number().int().positive().describe("The frame plan revision you reviewed."),
         overrides: z.record(z.string(), z.unknown()).optional().describe("Provider, aspectRatio and resolution overrides; the plan owns prompt and references."),
-        dry_run: z.literal(false).optional().describe("Quoting is unavailable for keyframes. Omit this field; true is rejected before submission."),
+        dry_run: z.literal(false).optional().describe("No keyframe quotes. Omit or false; true is rejected."),
         client_request_id: clientRequestIdSchema.optional(),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
@@ -193,13 +191,10 @@ export function registerStudioProductionRunTools({
     {
       title: "Generate Studio Clip",
       description:
-        "Animate a shot into a video from its still, its frames and its " +
-        "direction. The lane is chosen from the inputs — pass `mode` only to " +
-        'force one ("start" animates from the start frame, "references" from ' +
-        "the shot's reference media). Spends credits; `dry_run: true` prices it " +
-        "and starts nothing. Returns a job id and marks the shot as rendering, " +
-        "so the clip lands by itself — poll `get_studio_production`. A framing " +
-        "run and a directing run can be in flight at the same time.",
+        "Animate a shot using its saved inputs. Omit mode for automatic lane selection; " +
+        "start uses its start frame, references uses reference media. Spends credits; " +
+        "dry_run quotes without submitting. Returns a job ID and pending marker; poll " +
+        "get_studio_production to land results. Still and clip jobs may run concurrently.",
       inputSchema: {
         production_id: productionId,
         shot_id: shotId,
@@ -208,7 +203,7 @@ export function registerStudioProductionRunTools({
           .optional()
           .describe("Force the directing lane. Omit to let the inputs decide."),
         expected_input_hash: z.string().regex(/^[a-f0-9]{64}$/).optional().describe("The reviewed linked-clip quote hash; required for a retake submission."),
-        retake_result_key: z.string().min(1).optional().describe("Original linked take to retake exactly. Omit mode and overrides; quote first with dry_run, then submit with expected_input_hash and client_request_id."),
+        retake_result_key: z.string().min(1).optional().describe("Native or copied linked take to retake exactly. Omit mode/overrides. Quote with dry_run; submit with expected_input_hash and client_request_id."),
         overrides,
         dry_run: dryRun,
         client_request_id: clientRequestIdSchema.optional(),

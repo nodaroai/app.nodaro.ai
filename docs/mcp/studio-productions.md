@@ -200,6 +200,7 @@ On a server advertising `operations.retakeLinkedClips`, call
 `dry_run: true`. Review the returned price and `inputHash`. Submit the same take
 with `expected_input_hash` and a fresh `client_request_id`; omit `dry_run`,
 `mode`, and `overrides`. The server uses the take's original settings and retained
-endpoint images, independently of later plan changes. Missing or unverifiable
+endpoint images, independently of later plan changes. A retained copied take can
+use its copy result key after the source production or job is deleted. Missing or unverifiable
 original inputs refuse the request. Existing takes remain in history. This
 requires an explicit generation request and spends credits only on submission.
