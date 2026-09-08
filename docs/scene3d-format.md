@@ -26,6 +26,12 @@ active and authorized. Grants use private storage and reject changed objects;
 they are transport credentials and are never part of the scene plan. Engine
 support for imported inputs remains a separate capability.
 
+Authored revisions can retain private copies of their construction inputs.
+Those copies belong to the saved revision's owner and remain pinned through
+manual edits, so rebuilding does not depend on the original import revision.
+They are excluded from playback assets and public download lanes; the
+authoring engine can read them only with current edit access to the revision.
+
 GLB node transforms are authoritative for exported geometry. Semantic entities
 address named roots and material roles for selection and editing. Every editable
 material role must name a material within that entity's geometry. Clay shading

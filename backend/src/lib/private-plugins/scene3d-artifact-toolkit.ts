@@ -45,6 +45,9 @@ export function createScene3DArtifactToolkit(): PluginSceneArtifactToolkit | und
     async (input) => { await reserveScene3DUploadIntent(store, { ...input, ttlSeconds: input.ttlSeconds }) })
   let inputGranter: PluginSceneArtifactToolkit["grantInput"]
   const toolkit: PluginSceneArtifactToolkit = {
+    retainInput: async (input, options) =>
+      (await import("./scene3d-retain-input.js"))
+        .retainScene3DInput(toolkit, input, { ...options, authorizeJob: authorizeScene3DJob }),
     grantInput: async (input, options) => {
       inputGranter ??= (await import("./scene3d-input-grants.js"))
         .createScene3DInputGranter(cfg, config.R2_BUCKET_NAME, authorizeScene3DJob)
@@ -82,7 +85,7 @@ export function createScene3DArtifactToolkit(): PluginSceneArtifactToolkit | und
       options?.signal?.throwIfAborted()
       const intent = await ownedIntent(store, input)
       if (!intent.receipt) throw new Scene3DArtifactError("SCENE_ASSET_INVALID", "Scene artifact has not been received")
-      const limit = intent.kind === "glb" ? 64 * 1024 * 1024 : 8 * 1024 * 1024
+      const limit = intent.kind === "glb" || intent.kind === "input-glb" ? 64 * 1024 * 1024 : 8 * 1024 * 1024
       if (intent.kind === "blend-source" || intent.receipt.byteLength > limit) {
         throw new Scene3DArtifactError("SCENE_ASSET_INVALID", "Scene artifact exceeds the buffered read limit")
       }

@@ -1,7 +1,8 @@
 import { GetObjectCommand, HeadObjectCommand, S3Client } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 import { z } from "zod"
-import { authorizeScene3DArtifact } from "../../services/scene3d-artifacts/authorize.js"
+import type { authorizeScene3DArtifact } from "../../services/scene3d-artifacts/authorize.js"
+import { authorizeScene3DInputArtifact } from "./scene3d-input-authority.js"
 import { normalizeEtag, type Scene3DPrivateStorageConfig } from "../../services/scene3d-artifacts/object-store.js"
 import { Scene3DArtifactError } from "../../services/scene3d-artifacts/types.js"
 import type { PluginSceneArtifactToolkit } from "./scene3d-artifact-contract.js"
@@ -24,7 +25,7 @@ export function createScene3DInputGranter(
   cfg: Scene3DPrivateStorageConfig,
   publicBucket: string,
   assertActiveJob: (scope: { jobId: string; userId: string }) => Promise<unknown>,
-  authorize: typeof authorizeScene3DArtifact = authorizeScene3DArtifact,
+  authorize: typeof authorizeScene3DArtifact = authorizeScene3DInputArtifact,
 ): InputGranter {
   withPrivateSceneObjectParams(cfg.bucket, publicBucket, { Key: "configuration-check" })
   const client = new S3Client({ region: cfg.region, endpoint: cfg.endpoint, forcePathStyle: cfg.forcePathStyle,
@@ -48,7 +49,8 @@ export function createScene3DInputGranter(
       const expiry = artifact.expiresAt === null ? null : Date.parse(artifact.expiresAt)
       const tag = normalizeEtag(artifact.etag)
       if (allowed.revision.revisionId !== input.sourceRevisionId || artifact.artifactId !== input.asset.assetId ||
-          artifact.kind !== "glb" || artifact.usage !== "playback" || artifact.bucket !== cfg.bucket ||
+          !((artifact.kind === "glb" && artifact.usage === "playback") ||
+            (artifact.kind === "input-glb" && artifact.usage === "checkpoint")) || artifact.bucket !== cfg.bucket ||
           artifact.sha256 !== input.asset.sha256 || artifact.byteLength !== input.asset.byteLength ||
           !tag || /[\u0000-\u0020"\u007f]/.test(tag) ||
           (expiry !== null && (!Number.isFinite(expiry) || expiry <= Date.now() + input.expiresInSeconds * 1000))) {

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto"
 import type { PluginSceneArtifactToolkit, PluginSceneArtifactUpload } from "./scene3d-artifact-contract.js"
 import { Scene3DArtifactError } from "../../services/scene3d-artifacts/types.js"
+import { assertScene3DArtifactMagic } from "../../services/scene3d-artifacts/receipt.js"
 
 const JSON_KINDS = new Set(["source-json", "build-manifest", "validation-report", "camera-track-json"])
 
@@ -52,6 +53,21 @@ export async function writeScene3DPng(
       !bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10])) ||
       bytes.toString("ascii",12,16) !== "IHDR" || bytes.readUInt32BE(16) < 1 || bytes.readUInt32BE(16) > 1920 ||
       bytes.readUInt32BE(20) < 1 || bytes.readUInt32BE(20) > 1920) throw new Error("Scene still is not a bounded PNG")
+  return writeScene3DBytes(toolkit, { ...input, bytes }, options)
+}
+
+/** Verified retained input; the copy still uses a reservation and independent host readback. */
+export async function writeScene3DInputGlb(
+  toolkit: Pick<PluginSceneArtifactToolkit, "grant" | "receive">,
+  input: PluginSceneArtifactUpload & { bytes: Uint8Array },
+  options?: { signal?: AbortSignal; fetch?: typeof fetch },
+) {
+  options?.signal?.throwIfAborted()
+  if (input.kind !== "input-glb" || !(input.bytes instanceof Uint8Array) || input.bytes.length > 64 * 1024 * 1024) {
+    throw new Scene3DArtifactError("SCENE_ASSET_INVALID", "Scene input exceeds its kind or byte limit")
+  }
+  const bytes = Buffer.from(input.bytes)
+  assertScene3DArtifactMagic(input.kind, bytes.subarray(0, 16), bytes.length)
   return writeScene3DBytes(toolkit, { ...input, bytes }, options)
 }
 

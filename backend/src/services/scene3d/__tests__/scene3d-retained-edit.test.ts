@@ -19,6 +19,7 @@ async function setup() {
  mocks.assets.mockResolvedValue([
   ...plan.assets.map(a => ({ artifactId:a.assetId,kind:a.kind,sha256:a.sha256,byteLength:a.byteLength,expiresAt:null })),
   { artifactId:"recipe",kind:"source-json",sha256:"1".repeat(64),byteLength:12,expiresAt:null },
+  { artifactId:"input",kind:"input-glb",sha256:"2".repeat(64),byteLength:1024,expiresAt:null },
  ])
  return { plan, input: { revisionId:plan.revisionId,newRevisionId:revisionId,expectedContentHash:plan.provenance.contentHash,
   operations:[{op:"set-override" as const,override:{kind:"entity-color" as const,entityId:"e2",materialRole:"bodyPaint",color:"#ff0000"}}],
@@ -34,7 +35,8 @@ describe("retained deterministic edits", () => {
   const published=mocks.publish.mock.calls[0][0]
   expect(published).toMatchObject({userId:owner,workflowId:"workflow",parentRevisionId:plan.revisionId})
   expect(published.sourceJobId).toBeUndefined()
-  expect(published.artifacts.map((a:{kind:string})=>a.kind)).toEqual(["glb","camera-track-json","source-json"])
+  expect(published.artifacts.map((a:{kind:string})=>a.kind)).toEqual(["glb","camera-track-json","source-json","input-glb"])
+  expect(result.scenePlan.assets.some(a => a.assetId === "input")).toBe(false)
   expect(published.artifacts.every((a:{reuseFromRevisionId:string})=>a.reuseFromRevisionId===plan.revisionId)).toBe(true)
   expect(result.scenePlan.assets.some(a=>a.kind==="blend-source")).toBe(false)
   expect(store.get).not.toHaveBeenCalled()
