@@ -1151,7 +1151,7 @@ export interface PluginHttpToolkit {
   /** Mirrors `supabase` (`lib/supabase.ts`), shaped to VCP route usage. */
   supabase: PluginSupabaseClient
   /** Mirrors `videoQueue` (`lib/queue.ts`), narrowed to the one method used. */
-  videoQueue: { add(name: string, data: Record<string, unknown>, opts?: { attempts?: number }): Promise<unknown> }
+  videoQueue: { add(name: string, data: Record<string, unknown>, opts?: { attempts?: number; jobId?: string }): Promise<unknown> }
   /** Mirrors `creditGuard` (`middleware/credit-guard.ts`). */
   creditGuard(
     modelResolver: (req: FastifyRequest) => string,

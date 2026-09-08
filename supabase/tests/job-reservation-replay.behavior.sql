@@ -78,4 +78,5 @@ DO $$ DECLARE a jsonb; b jsonb; BEGIN
  RAISE NOTICE 'ok delegated requester owns the job, payer debited once';
 END $$;
 RESET ROLE;
+DO $$ BEGIN RAISE NOTICE 'ALL BEHAVIOR ASSERTIONS PASSED'; END $$;
 ROLLBACK;
