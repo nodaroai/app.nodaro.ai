@@ -9,3 +9,5 @@ Add revision-checked editor saves that preserve protected frame and job state an
 Add compatible production bundle import with capability discovery and server-verified retained frame copying.
 
 Add revision-checked bundle append with complete frame dependencies, explicit insertion and film-look choices, and capability discovery.
+
+Expose manual result-rejection capability for the semantic editor without submitting generation jobs.

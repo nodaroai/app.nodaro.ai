@@ -20,6 +20,7 @@ export interface StudioProductionCapabilities {
     editKeyframes: boolean
     generateKeyframes: boolean
     acceptKeyframes: boolean
+    rejectKeyframes?: boolean
     generateLinkedClips: boolean
   }
   sourceFrameReferences: boolean

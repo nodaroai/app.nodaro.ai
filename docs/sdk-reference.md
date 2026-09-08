@@ -930,6 +930,7 @@ plugin returns the usual 404. These methods preserve the API response envelope.
 | `generateShot(id, input)` | Submit or quote a still/clip request |
 | `reconcile(id)` | Record completed jobs without accepting candidates |
 | `acceptKeyframe(id, review, concurrency?)` | Explicitly accept a reviewed candidate |
+| `edit(id, { ops: [{ op: "reject_keyframe_result", keyframeId, expectedRevision, resultKey, expectedAcceptedResultKey, reason? }], baseVersion, strict: true })` | Record Needs revision without generating; requires `operations.rejectKeyframes` support |
 
 The acceptance review supplies `keyframeId`, `expectedRevision`, `resultKey`,
 `expectedAcceptedResultKey` (or `null`), and `requirementChecks`. Each check names
