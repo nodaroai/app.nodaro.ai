@@ -68,9 +68,48 @@ export class WorkflowConflictError extends NodaroError {
     public readonly currentUpdatedAt?: string,
     public readonly currentVersion?: number,
     public readonly currentRecord?: Record<string, unknown>,
+    /**
+     * The wire code this conflict actually arrived with.
+     *
+     * `production_busy` is the studio production routes' own 409: the row
+     * changed under a read-modify-write and the server exhausted its retries.
+     * It is the same situation and the same remedy — re-read and apply again —
+     * so it is the same ERROR, and a caller catching `WorkflowConflictError`
+     * handles both. The code stays truthful because a caller that logs or
+     * branches on it should see what the server said, not what the class is
+     * usually called.
+     */
+    code: WorkflowConflictCode = "workflow_conflict",
   ) {
-    super(message, "workflow_conflict", 409)
+    super(message, code, 409)
     this.name = "WorkflowConflictError"
+  }
+}
+
+/** The 409 codes that mean "somebody else wrote first; re-read and retry". */
+export type WorkflowConflictCode = "workflow_conflict" | "production_busy"
+
+/**
+ * A studio operation batch was refused, and the error names WHICH operation
+ * (`opIndex`, zero-based) was wrong. Nothing in the batch was written: a batch
+ * applies atomically or not at all, so fix that one operation and send the
+ * whole batch again.
+ *
+ * Selected by SHAPE — any 4xx carrying a numeric `opIndex` — not by a list of
+ * codes, so a new refusal reason (`op_invalid`, `op_target_missing`, whatever
+ * the server adds next) reaches the caller as this error without an SDK
+ * release. `code` is whatever the server sent.
+ */
+export class StudioOpError extends NodaroError {
+  constructor(
+    message: string,
+    code: string,
+    status: number,
+    /** Zero-based index into the `ops` array that was sent. */
+    public readonly opIndex: number,
+  ) {
+    super(message, code, status)
+    this.name = "StudioOpError"
   }
 }
 
@@ -165,20 +204,26 @@ export class JobHeldError extends NodaroError {
 }
 
 interface ApiErrorBody {
-  error?: { code?: string; message?: string; missingScope?: string; required?: number; available?: number; limitBytes?: number; [key: string]: unknown }
+  error?: { code?: string; message?: string; missingScope?: string; required?: number; available?: number; limitBytes?: number; opIndex?: number; [key: string]: unknown }
 }
 
 export function throwFromResponse(status: number, body: ApiErrorBody): never {
   const code = body.error?.code ?? "internal_error"
   const message = body.error?.message ?? "Request failed"
   if (status === 401) throw new UnauthorizedError(message)
-  if (status === 409 && code === "workflow_conflict") {
+  if (status === 409 && (code === "workflow_conflict" || code === "production_busy")) {
     throw new WorkflowConflictError(
       message,
       body.error?.currentUpdatedAt as string | undefined,
       body.error?.currentVersion as number | undefined,
       body.error?.currentRecord as Record<string, unknown> | undefined,
+      code,
     )
+  }
+  // By shape, not by code — see StudioOpError. Only the studio operations route
+  // sends an op index, so this cannot capture anyone else's 400.
+  if (status >= 400 && status < 500 && typeof body.error?.opIndex === "number") {
+    throw new StudioOpError(message, code, status, body.error.opIndex)
   }
   if (status === 422 && code === "job_blocked") throw new JobBlockedError(message)
   if (status === 403 && code === "insufficient_scope") {

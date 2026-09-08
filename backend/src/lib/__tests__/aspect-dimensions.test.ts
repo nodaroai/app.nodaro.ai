@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest"
 import { ASPECT_DIMENSIONS } from "@/lib/aspect-dimensions.js"
 
 describe("ASPECT_DIMENSIONS", () => {
-  it("contains exactly 4 aspect ratio entries", () => {
-    expect(Object.keys(ASPECT_DIMENSIONS)).toHaveLength(4)
+  it("contains exactly the ratios the platform can size", () => {
+    expect([...Object.keys(ASPECT_DIMENSIONS)].sort()).toEqual(["16:9", "1:1", "21:9", "4:5", "9:16"].sort())
   })
 
   it("has correct dimensions for 16:9", () => {
@@ -20,5 +20,12 @@ describe("ASPECT_DIMENSIONS", () => {
 
   it("has correct dimensions for 4:5", () => {
     expect(ASPECT_DIMENSIONS["4:5"]).toEqual({ width: 1080, height: 1350 })
+  })
+
+  // Ultra-wide, reachable only from a node whose own enum offers it (3D Render
+  // Pro). 1680x720 rather than a 1920-wide pair: the Scene3D v2 admission
+  // bounds require even integers on both axes and 1920/(21/9) is odd.
+  it("has correct dimensions for 21:9", () => {
+    expect(ASPECT_DIMENSIONS["21:9"]).toEqual({ width: 1680, height: 720 })
   })
 })

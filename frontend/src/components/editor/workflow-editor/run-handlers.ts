@@ -1444,6 +1444,9 @@ function syncNodeStatesToStore(
                 : undefined,
               history: data.sceneHistory as Scene3DRevisionEntry[] | undefined,
               source: node.type === "edit-3d-scene" ? "edit" : "generate",
+              // Recorded on the revision so a later `{kind:'scene'}` source can
+              // name both the revision and the run that authorizes it.
+              jobId: state.jobId,
             });
             Object.assign(updates, sceneResult.patch);
           } else if (mapping) {

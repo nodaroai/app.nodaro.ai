@@ -43,8 +43,11 @@ import {
   LLM_MODEL_IDS,
   LLM_REASONING_EFFORTS,
   SCENE3D_DEFAULT_DURATION_SECONDS,
+  SCENE3D_BASIC_ENGINE,
   SCENE3D_DEFAULT_FPS,
   SCENE3D_LIMITS,
+  SCENE3D_SCHEMA_VERSION,
+  SCENE3D_SUPPORTED_SCHEMA_VERSIONS,
   WORKSPACE_HEADER_LOWER,
   buildLlmCreditIdentifier,
   getLlmModel,
@@ -52,6 +55,7 @@ import {
   resolveLlmCreditId,
   scene3DEditOperationsSchema,
   scene3DPlanSchema,
+  scene3DPlanSchemaVersion,
   scene3DReferenceSchema,
   type Scene3DEditOperation,
   type Scene3DPlanV1,
@@ -115,6 +119,29 @@ const llmFields = {
   nodeId: z.string().optional(),
 }
 
+/**
+ * Lane selection, typed on BOTH bodies.
+ *
+ * The preHandler has already handed anything but `basic` to the private engine
+ * by the time these schemas run, so what they validate is the Basic lane's own
+ * vocabulary: `engine` may be absent or the literal `basic`, and nothing else.
+ * Typing it here (rather than letting `.passthrough()` carry it) is what makes
+ * a typo like `engine: "blender_cloud"` a 400 at the route instead of a
+ * silently-Basic paid run — the exact silent downgrade this lane must not do.
+ *
+ * `acceptedSceneSchemaVersions` is accepted and ignored on Basic, which only
+ * ever answers v1; it is validated so an advanced-shaped body stays a legal
+ * body when a caller falls back to Basic deliberately.
+ */
+const engineFields = {
+  engine: z.literal(SCENE3D_BASIC_ENGINE).optional(),
+  acceptedSceneSchemaVersions: z
+    .array(z.number().int().min(1).max(64))
+    .min(1)
+    .max(SCENE3D_SUPPORTED_SCHEMA_VERSIONS.length + 8)
+    .optional(),
+}
+
 export const scene3DGenerateBody = z
   .object({
     prompt: z.string().trim().min(1).max(SCENE3D_PROMPT_MAX),
@@ -127,6 +154,7 @@ export const scene3DGenerateBody = z
     aspectRatio: z.enum(["16:9", "9:16", "1:1", "4:5"]).optional(),
     references: z.array(referenceBody).max(SCENE3D_LIMITS.maxReferences).optional(),
     ...llmFields,
+    ...engineFields,
   })
   .passthrough()
 
@@ -141,6 +169,7 @@ export const scene3DEditBody = z
     lockedObjectIds: z.array(z.string().min(1).max(SCENE3D_LIMITS.maxIdLength)).max(SCENE3D_LIMITS.maxObjects).optional(),
     selectedObjectIds: z.array(z.string().min(1).max(SCENE3D_LIMITS.maxIdLength)).max(SCENE3D_LIMITS.maxObjects).optional(),
     ...llmFields,
+    ...engineFields,
   })
   .passthrough()
   .refine((b) => Boolean(b.prompt) !== (b.operations !== undefined), {
@@ -453,6 +482,22 @@ export async function scene3DRoutes(app: FastifyInstance) {
       const userId = req.userId
       if (!userId) {
         return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
+      }
+
+      // A NON-v1 scene, named as such before `scene3DPlanV1Schema` turns it
+      // into a wall of Zod issues. This is the Basic parser, and a v2 scene
+      // (everything the advanced engine authors) is not a malformed v1 scene —
+      // it is a scene for the other lane. Answering that plainly is what turns
+      // "Pro composition wired into Edit 3D Scene 400s" into a sentence the
+      // user can act on; downgrading it into this parser is never an option.
+      const claimedVersion = scene3DPlanSchemaVersion(parsed.data.scenePlan)
+      if (claimedVersion !== null && claimedVersion !== SCENE3D_SCHEMA_VERSION) {
+        return reply.status(400).send({
+          error: {
+            code: "scene_schema_unsupported",
+            message: `This scene uses schema version ${claimedVersion}; the Basic 3D engine edits version ${SCENE3D_SCHEMA_VERSION} scenes. Select an advanced engine on this node to edit it.`,
+          },
+        })
       }
 
       const planParse = scene3DPlanSchema.safeParse(parsed.data.scenePlan)

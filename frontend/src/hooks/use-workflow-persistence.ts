@@ -50,6 +50,9 @@ interface ActiveBackendExecution {
 
 interface NodeExecutionState {
   status: "pending" | "running" | "completed" | "failed" | "skipped"
+  /** The backend job this node ran as. Recorded onto a recovered scene
+   *  revision so a later `{kind:'scene'}` source can name its run. */
+  jobId?: string
   output?: {
     imageUrl?: string
     videoUrl?: string
@@ -368,7 +371,7 @@ function applyBackendExecutionState(
         if (isScene3DNodeType(nodeType) && state.output.plan) {
           Object.assign(data, buildScene3DRecoveryPatch(data, {
             scenePlan: state.output.plan, changeSummary: state.output.changeSummary,
-          }, nodeType === "edit-3d-scene" ? "edit" : "generate"))
+          }, nodeType === "edit-3d-scene" ? "edit" : "generate", state.jobId))
         }
         if (state.output.imageUrl) {
           if (["character", "face", "object", "location"].includes(nodeType)) {
@@ -462,7 +465,7 @@ function applyCompletedExecutionResults(
     if (isScene3DNodeType(node.type) && state.output.plan) {
       const patch = buildScene3DRecoveryPatch(data, {
         scenePlan: state.output.plan, changeSummary: state.output.changeSummary,
-      }, node.type === "edit-3d-scene" ? "edit" : "generate")
+      }, node.type === "edit-3d-scene" ? "edit" : "generate", state.jobId)
       return patch ? { ...node, data: { ...data, ...patch } as SceneNodeData } : node
     }
 

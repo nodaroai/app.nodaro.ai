@@ -31,13 +31,46 @@ export interface PluginSceneArtifactPublish extends PluginSceneArtifactScope {
     reuseFromRevisionId?: string
   }>
 }
+/** A previous revision's authoring recipe, requested for private re-authoring. */
+export interface PluginSceneAuthoringSourceRequest {
+  /** The active owned job doing the re-authoring, not the job that published the revision. */
+  jobId: string
+  userId: string
+  revisionId: string
+  /** `provenance.contentHash` of the revision the caller prepared against. */
+  expectedContentHash: string
+}
+export interface PluginSceneAuthoringSource {
+  /** The published plan of that revision, manual overlays included. */
+  plan: unknown
+  source: Uint8Array
+  sourceArtifactId: string
+  sourceSha256: string
+}
+export interface PluginSceneDeliveryPublish extends PluginSceneArtifactScope {
+  source: { kind: "retained-revision" | "job-output"; jobId?: string }
+  mode: "authored" | "render-only"
+  plan: unknown
+  artifacts: Array<{
+    artifactId: string; kind: "poster" | "validation-report"; sha256: string; byteLength: number
+    reuseFromRevisionId?: string
+  }>
+}
 export interface PluginSceneArtifactToolkit {
+  /** Quote/admission source resolution uses current canonical scene permissions. */
+  resolveSource?(input: import("./scene3d-source-contract.js").PluginSceneSourceRequest): Promise<import("./scene3d-source-contract.js").PluginSceneSource>
   grant(input: PluginSceneArtifactUpload): Promise<PluginSceneArtifactGrant>
   receive(input: PluginSceneArtifactScope & { artifactId: string }): Promise<PluginSceneArtifactReceipt>
   /** Store bounded JSON at an owned immutable key; repeated identical writes adopt the receipt. */
   writeJson?(input: PluginSceneArtifactUpload & { bytes: Uint8Array }, options?: { signal?: AbortSignal }): Promise<PluginSceneArtifactReceipt>
   /** Bounded, digest-verified bytes of this active job's reserved artifact. Never a user API. */
   read(input: PluginSceneArtifactScope & { artifactId: string }, options?: { signal?: AbortSignal }): Promise<Uint8Array>
+  /** Bytes of a PREVIOUS revision's pinned recipe, authorized through that revision. Never a user API. */
+  readAuthoringSource?(input: PluginSceneAuthoringSourceRequest, options?: { signal?: AbortSignal }): Promise<PluginSceneAuthoringSource>
   /** Workflow scope comes from the owned parent job, never from a producer manifest. */
   publish(input: PluginSceneArtifactPublish): Promise<{ revisionId: string; status: "created" | "unchanged"; artifactIds: string[] }>
+  /** Retain export evidence without cloning or modifying the source revision. */
+  publishDelivery?(input: PluginSceneDeliveryPublish): Promise<{
+    deliveryId: string; revisionId: string; status: "created" | "unchanged"; artifactIds: string[]
+  }>
 }

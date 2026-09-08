@@ -15,6 +15,7 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.llm`](#clientllm)
   - [`client.videoPro`](#clientvideopro)
   - [`client.recast`](#clientrecast)
+  - [`client.studio`](#clientstudio)
   - [`client.executions`](#clientexecutions)
   - [`client.nodes`](#clientnodes)
   - [`client.models`](#clientmodels)
@@ -71,12 +72,12 @@ const client = createClient({
 | `workspaceId` | `string` | no | The workspace every request acts in, sent as `X-Nodaro-Workspace`. See [`client.withWorkspace`](#clientwithworkspaceworkspaceid). Omit for the caller's personal space. |
 | `clientLabel` | `string` | no | Value sent as the `X-Nodaro-Client` header. Default `sdk/<version>`. The backend records it as the job's origin, so an operator can tell SDK traffic from CLI traffic from browser sessions. `@nodaro/cli` overrides it with `cli/<version>`; set it yourself only if you are building another wrapper. The DEFAULT label is not sent from a browser (the `Origin` header already identifies the app, and Nodaro prefers it) — an explicit `clientLabel` is always sent. |
 
-The instance exposes 30 resource objects: `workflows`, `projects`, `jobs`,
+The instance exposes 35 resource objects: `workflows`, `projects`, `jobs`,
 `videoPro`, `executions`, `nodes`, `characters`, `locations`, `objects`,
 `creatures`, `pipelines`, `reduce`, `promptHelper`, `apps`, `developerApps`,
-`oauth`, `voices`, `media`, `audio`, `credits`, `uploads`, `library`,
-`presets`, `pickerCatalogs`, `catalogs`, `models`, `shots`, `recast`, `community`,
-`templates`, `tutorials`, `organizations`, `workspaces`. It also exposes a low-level
+`oauth`, `voices`, `llm`, `media`, `audio`, `credits`, `uploads`, `library`,
+`presets`, `pickerCatalogs`, `catalogs`, `models`, `shots`, `recast`, `studio`,
+`community`, `templates`, `tutorials`, `organizations`, `workspaces`. It also exposes a low-level
 `request<T>(method, path, options)` method for endpoints not yet wrapped by a
 resource.
 
@@ -313,17 +314,51 @@ HTTP 413. User's storage cap is reached.
 
 ### `class WorkflowConflictError extends NodaroError`
 
-HTTP 409 `workflow_conflict`. An optimistic-concurrency update
-(`workflows.update` with `expectedUpdatedAt`/`expectedVersion`) was rejected
-because another writer updated the row first. Merge onto `currentRecord` and
-retry with its fresh token instead of clobbering the other writer.
+HTTP 409, on either of two codes: `workflow_conflict` — an
+optimistic-concurrency update (`workflows.update` with
+`expectedUpdatedAt`/`expectedVersion`) rejected because another writer updated
+the row first — and `production_busy`, the studio production routes' own 409,
+where the row kept changing under a read-modify-write until the server ran out
+of retries. Same situation, same remedy: re-read and apply again. So it is the
+same ERROR, and `catch (e) { if (e instanceof WorkflowConflictError) … }` covers
+both, while `code` stays truthful about which arrived.
 
-- `code = "workflow_conflict"`, `status = 409`
+- `code` — `"workflow_conflict"` (the default) or `"production_busy"`: the
+  `WorkflowConflictCode` union, though the field itself is the base class's
+  `string`; `status = 409`
 - `currentUpdatedAt?: string` — the row's current `updated_at`
 - `currentVersion?: number` — the row's current `version`
 - `currentRecord?: Record<string, unknown>` — the full current workflow (when
   the server includes it), so no follow-up GET is needed to merge
-- **Constructor:** `new WorkflowConflictError(message?: string, currentUpdatedAt?: string, currentVersion?: number, currentRecord?: Record<string, unknown>)`
+- **Constructor:** `new WorkflowConflictError(message?: string, currentUpdatedAt?: string, currentVersion?: number, currentRecord?: Record<string, unknown>, code?: WorkflowConflictCode)`
+
+`export type WorkflowConflictCode = "workflow_conflict" | "production_busy"`.
+
+### `class StudioOpError extends NodaroError`
+
+A studio operation batch was refused, and the error names WHICH operation was
+wrong. Nothing in the batch was written — a batch applies atomically or not at
+all — so fix that one operation and send the whole batch again.
+
+- `opIndex: number` — zero-based index into the `ops` array you sent
+- `code` / `status` — whatever the server sent
+- **Constructor:** `new StudioOpError(message: string, code: string, status: number, opIndex: number)`
+
+Selected by **shape**, not by a list of codes: any 4xx whose body carries a
+numeric `error.opIndex` arrives as this class. So a refusal reason the server
+adds later reaches you as a `StudioOpError` with no SDK release in between.
+
+```ts
+import { StudioOpError } from "@nodaro/sdk"
+
+try {
+  await client.studio.productions.ops(id, { ops, baseVersion })
+} catch (err) {
+  if (err instanceof StudioOpError) {
+    console.error(`operation ${err.opIndex} was refused: ${err.message}`)
+  }
+}
+```
 
 ### `class JobBlockedError extends NodaroError`
 
@@ -1043,6 +1078,115 @@ For a revisioned replacement, normally send the complete desired `mix`. Omitting
 it is a narrow compatibility path and succeeds only for the exact fixed legacy
 bake (bed Music 35 + Video 100, or replace Music 100); otherwise the server
 returns `409 legacy_mix_mismatch`.
+
+---
+
+### `client.studio`
+
+`client.studio.productions.*` — the studio production document, from a script.
+A production is a workflow whose `settings.studio` holds the shots: each one a
+framed still, an optional animated clip, and the plan, looks, cast bindings and
+voice that made them. **Cloud edition only** — these routes 404 where they are
+not served; feature-detect with `list()`. Full REST contract:
+[Studio productions API](./api/studio-productions.md); over MCP:
+[Studio productions over MCP](./mcp/studio-productions.md).
+
+The ENVELOPES are typed; the production DOCUMENT is not. `production` is
+`Record<string, unknown>` and `ops` is `unknown[]` — the field-level types ship
+with the studio app, the one consumer that narrows them. Everything a caller
+branches on is typed: `version`, `rebased`, `receipts`, `warnings`, a quote's
+`credits`, a run's `jobIds`.
+
+#### Reads
+
+```ts
+skill(): Promise<StudioSkillResponse>                       // GET …/skill — free
+validatePlan(plan): Promise<StudioValidatePlanResponse>     // POST …/validate — free
+list(opts?): Promise<StudioListProductionsResponse>         // GET … — newest first
+get(id, opts?): Promise<StudioProduction>                   // GET …/:id — pure, never lands a job
+exportPlan(id, opts?): Promise<StudioExportPlanResponse>    // GET …/:id/export-plan — priced, runs nothing
+```
+
+`get(id, { detail: "full" })` adds every result with the context that
+regenerates it; `{ shotId }` reads one shot, the cheap re-read after a
+generation. `list({ includeArchived: true })` opts into the rows the dashboard
+hides. `skill()` returns the authoring guide, the full catalog, the plan's JSON
+Schema and the operating guide, rendered server-side from the version that is
+live — so they describe the platform you are actually talking to.
+
+#### The write protocol
+
+```ts
+create(input?): Promise<StudioProductionResponse>           // POST … — optionally lands a plan
+ops(id, input): Promise<StudioOpsResponse>                  // POST …/:id/ops — an atomic batch
+reconcile(id): Promise<StudioReconcileResponse>             // POST …/:id/reconcile — land finished jobs
+importPlan(id, plan, opts?): Promise<StudioProductionResponse>
+describe(id, input): Promise<StudioJobStartedResponse>      // POST …/:id/describe — a Director run
+```
+
+Every change is an **operation**, addressed by stable key — a shot id, a role
+slug, a result's job id or url — never by position. That is what lets two
+writers hold the same production open: a batch composed against a slightly older
+version still applies to the newest document, and the response says
+`rebased: true` (`strict: true` refuses instead, with a `409`). A batch is
+atomic: one bad operation refuses the whole batch as a `StudioOpError` naming
+its index, and nothing is written. `receipts` is one past-tense line per
+operation. Adopt `production` wholesale and carry `version` forward as the next
+`baseVersion`. The operation vocabulary is served, not shipped: read it from
+`skill()`'s `operating` part.
+
+#### Generation and media
+
+```ts
+generate(id, input): Promise<StudioGenerateResult>          // POST …/:id/generate
+generateStill(id, shotId, opts?): Promise<StudioGenerateResult>
+generateClip(id, shotId, opts?): Promise<StudioGenerateResult>
+frame(id, input): Promise<StudioMediaResponse>              // waits (seconds)
+voice(id, input): Promise<StudioMediaResponse>              // waits (seconds)
+revoice(id, input): Promise<StudioJobStartedResponse>       // starts; lands via its marker
+music(id, input): Promise<StudioJobStartedResponse>         // starts; lands via its marker
+```
+
+Run-then-poll: a still or clip run submits the jobs, records a pending marker
+and returns — nothing blocks for minutes. `reconcile()` turns the finished jobs
+into results with no browser in the loop. The request is assembled server-side
+from the shot's own plan, looks and bound references, so a scripted run and a
+press of the button in the app produce the same media; `overrides` changes THIS
+run without changing the shot. For a clip the **lane** is chosen from the
+inputs and reported back as `lane` — never passed in.
+
+```ts
+const quote = await client.studio.productions.generateStill(id, "shot-2", {
+  count: 2,
+  dryRun: true,
+})
+if (isStudioGenerateEstimate(quote)) console.log(quote.credits) // null = unpriced, not free
+
+const run = await client.studio.productions.generateStill(id, "shot-2", {
+  count: 2,
+  clientRequestId: crypto.randomUUID(),
+})
+```
+
+`dryRun: true` prices the run and writes nothing — the reply is the quote,
+narrowed with `isStudioGenerateEstimate`. `clientRequestId` makes a retry safe:
+the same token answers with the jobs the first call started (`deduped: true`),
+having submitted and charged nothing. Never retry a spend without it — and it
+is accepted on every spending call here, `frame` and `voice` included, not only
+on the two that quote.
+
+#### Audience and copies
+
+```ts
+share(id): Promise<StudioProduction>       // POST …/:id/share   — opt in
+unshare(id): Promise<StudioProduction>     // POST …/:id/unshare — and back out
+clone(id, input?): Promise<StudioProduction>
+```
+
+Sharing is its own route rather than an operation: who may see the work is
+decided by the owner, never as a side effect of a batch that was editing
+something else. A clone starts private and visible — `shared` and `archived`
+never travel — and is copied through YOUR view of the source.
 
 ---
 
@@ -4615,7 +4759,71 @@ Scene authoring uses `/v1/3d-scene/generate` and `/v1/3d-scene/edit`. Typed comp
 
 SDK versions with the generic `nodes.run(type, params)` overload can use the same node names without typed Scene3D overloads. The server accepts their node-slug generate/edit paths and dispatches `render-video` requests carrying `planType` to the composition renderer. For an interactive preview, check the generate node's `scene3d-embed-v1` capability and use the [3D preview embed](scene3d-embed.md); it does not require a copy of the renderer or any authentication tokens in its messages.
 
+### 3D Render Pro
+
+`client.scene3d.quotePro(params)`, `client.scene3d.runPro(params, options?)` and
+`client.scene3d.renderProAndWait(params, options?)` drive the one-operation
+node: a `source` goes in, and a single job settles with BOTH `scenePlan` (the
+exact composition) and `videoUrl` (the exported MP4), plus the revision, poster,
+validation and renderer metadata. `nodes.run("pro-3d-render", …)` and
+`nodes.runAndWait("pro-3d-render", …)` reach the same routes with the same
+typed `Pro3DRenderRunParams` / `Pro3DRenderJobOutput`.
+
+`source` is a strict discriminated union: `{kind:"prompt", prompt, references?}`
+authors a new scene; `{kind:"scene", revisionId, sourceJobId}` with **no**
+`editPrompt` is a render-only export that costs no authoring (adding one revises
+first); `{kind:"local-export", exportId, connectionId}` uses a paired desktop.
+`sourceJobId` is required for Basic scenes retained only in job history and
+optional for retained revisions, which use current scene permissions.
+
+```typescript
+const caps = await client.scene3d.capabilities();
+if (caps.pro?.available) {
+  const shot = await client.scene3d.renderProAndWait({
+    source: {
+      kind: "prompt",
+      prompt: "A red suitcase rolls behind a central pillar and reappears",
+      references: [{ id: "look", kind: "image", role: "appearance", url: appearanceImageUrl }],
+    },
+    durationSeconds: 30, fps: 24, aspectRatio: "21:9", maxRepairPasses: 2,
+    acceptedSceneSchemaVersions: [2],
+  });
+  shot.videoUrl;        // the MP4
+  shot.sceneRevisionId; // re-export it later, render-only, for no authoring charge
+}
+```
+
+`renderProAndWait` quotes the identical body first when `params` carries no
+`quoteId`, so the run is admitted against a hash of exactly what was priced.
+To show the ceiling before committing, quote explicitly:
+
+```typescript
+const quote = await client.scene3d.quotePro(params);   // reserves nothing
+// ...show quote.maxCredits and quote.breakdown...
+await client.scene3d.runPro({ ...params, quoteId: quote.quoteId });
+```
+
+Both run methods send an `Idempotency-Key` — a fresh one per call, or your own
+via `options.idempotencyKey`, which you should reuse when retrying a submit that
+timed out. `nodes.run` / `nodes.runAndWait` accept the same option for any node.
+
+`capabilities().pro` reports which engines, quality profiles, styles and aspect
+ratios this install can serve — offer controls from that, not from the full
+vocabulary. An install without the engine answers
+`503 SCENE_CAPABILITY_UNAVAILABLE` and never falls back to Basic authoring; one
+with no configured price answers `503 price_not_configured` before reserving
+anything. There is no model, reasoning-effort or planner field: the planner is
+fixed and server-owned. See
+[3D Render Pro](nodes/composition/pro-3d-render.md).
+
 ### Scene asset reads
+
+`client.scene3d.getDelivery(jobId)` reads retained export metadata, including its
+exact source revision and poster/report descriptors. For each descriptor, call
+`client.scene3d.deliveryAssetBytes(jobId, asset, { signal })` to read bounded
+bytes through fresh authentication. Access requires both delivery and source
+permissions, including after the source revision has been deleted. These methods
+read already published delivery evidence; they do not start a render.
 
 `client.scene3d.assetBytes(revisionId, asset, { signal })` fetches a GLB, camera
 track, poster or validation report through the authenticated API. Pass the exact

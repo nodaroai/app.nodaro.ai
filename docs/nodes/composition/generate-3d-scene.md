@@ -4,6 +4,12 @@ Basic remains the default authoring engine. Clients can discover optional
 Advanced support through `GET /v1/3d-scene/capabilities`. An unavailable engine
 is refused before generation; selecting it does not fall back to Basic.
 
+The Authoring engine control appears when Advanced is available. Basic exposes
+the model and reasoning controls; Advanced uses the deployment's fixed planner.
+The chosen engine is preserved in revision history and used by both canvas and
+headless workflow runs. Advanced requires `SCENE3D_ADVANCED_ENABLED` and an
+installed engine; local Blender additionally requires `SCENE3D_LOCAL_ENABLED`.
+
 Create an editable animated clay scene from a prompt, with optional image and video references. Use the preview to inspect framing, camera motion and object blocking before rendering a video.
 
 The output is a **composition plan**, not an MP4. Connect it to [Edit 3D Scene](edit-3d-scene.md) for changes or [Render Video](render-video.md) for export.

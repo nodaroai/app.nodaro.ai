@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-09-07T13:04:05.912Z
-generated_from: faf85b35e
+generated_at: 2026-09-08T01:00:12.386Z
+generated_from: a56360896
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -170,6 +170,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `pose` — Pose
 - `post-process-effects` — Post-Process Effects
 - `preview` — Preview
+- `pro-3d-render` — 3D Render Pro
 - `provider` — Provider
 - `publish-social` — Publish to Social
 - `qa-check` — QA Check

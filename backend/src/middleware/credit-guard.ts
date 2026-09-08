@@ -302,6 +302,18 @@ const PG_UNIQUE_VIOLATION = "23505"
  * In community/business: skips the cloud credit reservation but still
  * runs the dedup-race detection.
  */
+/** Opt-in replay-safe reservation; a lost response leaves the job and hold recoverable. */
+export async function reserveCreditsForJobOnce(
+  req: FastifyRequest, reply: FastifyReply, jobId: string, modelIdentifier: string,
+): Promise<CreditReservation | undefined> {
+  if (!hasCredits()) {
+    reply.status(503).send({ error: { code: "credit_reservation_unavailable", message: "Job reservations are unavailable" } })
+    return undefined
+  }
+  const impl = await import("../ee/lib/credit-guard-impl.js")
+  return impl.reserveCreditsForJobImpl(req, reply, jobId, modelIdentifier, { oncePerJob: true })
+}
+
 export async function reserveCreditsForJob(
   req: FastifyRequest,
   reply: FastifyReply,

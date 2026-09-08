@@ -1,5 +1,91 @@
 # @nodaro/sdk
 
+## 2.2.0
+
+### Minor Changes
+
+- 5a90703: Add the `pro-3d-render` ("3D Render Pro") wire contract and SDK surface.
+
+  Generate/Edit 3D Scene share an authoring-engine resolver so connected retained
+  scenes use Advanced consistently on the canvas and in headless workflows. The
+  output presentation helpers also classify Pro as a video producer while keeping
+  its separate composition output.
+
+  `@nodaro/shared` gains the node type, the strict discriminated `source` union
+  (`prompt` / `scene` / `local-export`), the engine, quality, style, aspect-ratio
+  (including `21:9`) and correction-budget vocabularies, the request bounds, the
+  `Pro3DRenderQuote` and `Pro3DRenderCapabilities` shapes, the full
+  `Pro3DRenderJobOutput` reader schema (video + composition + revision, poster,
+  validation, renderer and metadata), and the shared `buildPro3DRenderSource` /
+  `pro3DRenderTimingOverrides` helpers both execution engines use so an in-browser
+  run and a headless one mean the same thing. `pro-3d-render` also joins
+  `COMPOSER_PLAN_MAP` (so a stored composition re-renders through the existing
+  `render-video` lane) and `VIDEO_PRODUCER_TYPES` (so its video output connects
+  downstream), and `ASPECT_RATIO_DIMENSIONS` gains `21:9` (1680x720).
+
+  `@nodaro/sdk` gains `scene3d.quotePro()` / `scene3d.runPro()` /
+  `scene3d.renderProAndWait()`, typed `nodes.run` / `runAndWait` overloads for the
+  node, per-call `Idempotency-Key` plumbing on `nodes.run`/`runAndWait`, and
+  `capabilities().pro` for discovering which engines, quality profiles, styles and
+  aspect ratios a deployment can serve. Additive apart from the new options
+  parameter: no existing method, type or route changes.
+
+- 9109815: Add authenticated scene delivery metadata and bounded poster/report asset reads that remain scoped to both delivery and source permissions.
+
+### Patch Changes
+
+- Updated dependencies [5a90703]
+  - @nodaro/shared@3.1.0
+
+## 2.1.0
+
+### Minor Changes
+
+- a35ac60: **@nodaro/sdk** — `client.studio.productions`: the studio production document,
+  from a script.
+
+  A studio production is a workflow whose `settings.studio` holds the shots — each
+  one a framed still, an optional animated clip, and the plan, looks, cast
+  bindings, frames and voice that made them. Until now the only code that could
+  read or write that document ran in the studio app's browser tab. This resource
+  is the SDK half of `/v1/studio/productions`, so a script, an agent and the app
+  work on ONE production instead of three opinions about one row.
+
+  The read half — `skill()`, `validatePlan()`, `list()`, `get()`, `exportPlan()` —
+  returns the route's envelopes typed and the production DOCUMENT as open JSON:
+  `detail: "summary"` (counts and the active urls) or `"full"` (every result with
+  the context that regenerates it), with `shotId` for a single shot. The
+  document's field-level types ship with the studio app, the one consumer that
+  narrows them; everything a caller branches on — `version`, `rebased`,
+  `receipts`, `warnings`, a quote's `credits`, a run's `jobIds` — is typed here.
+
+  The write half is `ops()`: a batch of semantic operations, applied atomically.
+  Operations address by stable KEY — a shot id, a role slug, a result's job id or
+  url — and never by position, which is what lets two writers hold one production
+  open: a batch composed against a slightly older version still applies to the
+  newest document and the response says `rebased: true`. `strict: true` refuses
+  instead. `receipts` says what each operation did, in the words a change log
+  would use.
+
+  Generation is run-then-poll: `generate()` — and its `generateStill()` /
+  `generateClip()` spellings, which only fill in `kind` — submit and record
+  pending markers, and `reconcile()` turns finished jobs into results, no browser
+  required. The request is assembled server-side from the shot's own plan, so a
+  scripted run and a press of the button produce the same media. `dryRun` prices
+  without writing (the reply is the quote — narrow it with
+  `isStudioGenerateEstimate`), and `clientRequestId` makes a retry safe: the same
+  token answers with the jobs the first call started and submits nothing.
+  `describe()` turns a brief into scenes, `frame()` / `voice()` / `revoice()` /
+  `music()` cover the per-shot media, and `share()` / `unshare()` / `clone()` the
+  audience and copies.
+
+  Two error mappings come with it: `409 production_busy` now maps to
+  `WorkflowConflictError` (the same situation and the same remedy as
+  `workflow_conflict` — its `code` says which arrived), and a 4xx carrying an
+  `opIndex` maps to the new `StudioOpError`, which names the operation that was
+  refused. Selected by SHAPE rather than by a list of codes, so a new refusal
+  reason reaches callers without an SDK release.
+
 ## 2.0.0
 
 ### Major Changes

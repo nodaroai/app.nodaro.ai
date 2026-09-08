@@ -1,4 +1,6 @@
 import type { NodaroClient } from "../client.js"
+import { StudioProductionsResource } from "./studio-productions.js"
+export * from "./studio-productions.js"
 
 /** Public response/transport contracts only; document validation and planning
  * remain in the private Studio codec on the server. */
@@ -121,7 +123,11 @@ const path = (id: string) => `${root}/${encodeURIComponent(id)}`
 /** Cloud plugin routes. Check capabilities before exposing dependency controls.
  * Reads do not reconcile jobs, submit media or accept generated candidates. */
 export class StudioResource {
-  constructor(private readonly client: NodaroClient) {}
+  readonly productions: StudioProductionsResource
+
+  constructor(private readonly client: NodaroClient) {
+    this.productions = new StudioProductionsResource(client)
+  }
 
   capabilities(): Promise<{ data: StudioProductionCapabilities }> {
     return this.client.request("GET", `${root}/capabilities`)

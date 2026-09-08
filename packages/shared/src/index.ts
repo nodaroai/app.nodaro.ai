@@ -1061,6 +1061,8 @@ export * from "./scene3d-v2.js"
 export * from "./scene3d-v2-plan.js"
 export * from "./scene3d-v2-resources.js"
 export * from "./scene3d-camera-track.js"
+// --- 3D Render Pro: one durable operation, scene + video in one result ---
+export * from "./pro-3d-render.js"
 
 // --- transient studio keys — the public share read strips them ---
 export {
@@ -1071,3 +1073,4 @@ export {
 
 export * from "./scene3d-v2-edit.js"
 export { STUDIO_DEPENDENT_FRAMES_CAPABILITY, SequenceExecutionRequiredError, requiresSequenceExecution, assertCanvasExecutionAllowed } from "./sequence-execution"
+export * from "./scene3d-authoring-engine.js"

@@ -18,7 +18,7 @@ import { hasCredits, config } from "../../lib/config.js"
 import { mapReserveError } from "../../lib/reserve-errors.js"
 import { CreditsService } from "../../ee/billing/credits.js"
 import { refundJobCredits } from "../../workers/shared.js"
-import { buildScene3DHttpBody } from "./scene3d-http.js"
+import { buildScene3DHttpBody, isScene3DAuthoringType } from "./scene3d-http.js"
 import { buildPayload, buildNodeRefMap, type WorkflowSettings } from "./payload-builder.js"
 import { ensureWorkflowSheetPanels } from "./reference-sheet-stage-a.js"
 import { buildNodeOutputFromJobData } from "./output-extractor.js"
@@ -55,6 +55,7 @@ import type { ErrorHint } from "../../lib/safety-block.js"
 const SYNC_HTTP_NODES = new Set([
   "generate-3d-scene",
   "edit-3d-scene",
+  "pro-3d-render",
   "ai-writer",
   "llm-chat",
   "video-composer",
@@ -88,6 +89,7 @@ const SYNC_HTTP_NODES = new Set([
 export const SYNC_HTTP_ROUTES: Record<string, string> = {
   "generate-3d-scene": "/v1/3d-scene/generate",
   "edit-3d-scene": "/v1/3d-scene/edit",
+  "pro-3d-render": "/v1/pro-3d-render",
   "ai-writer": "/v1/ai-writer/generate",
   "llm-chat": "/v1/llm-chat/generate",
   "video-composer": "/v1/scene-graph/generate",
@@ -244,6 +246,8 @@ export function extractUserPromptTemplate(node: SimpleNode): string | undefined 
       return pick("scenePrompt", "prompt")
     case "edit-3d-scene":
       return pick("editPrompt", "prompt")
+    case "pro-3d-render":
+      return pick("scenePrompt", "prompt")
     case "3d-title":
       return pick("titlePrompt", "prompt")
     case "motion-graphics":
@@ -523,7 +527,7 @@ async function executeSyncHttpNode(
   authoredData?: Record<string, unknown>,
   iterationIndex?: number,
 ): Promise<ExecuteNodeResult> {
-  const isScene3D = node.type === "generate-3d-scene" || node.type === "edit-3d-scene"
+  const isScene3D = isScene3DAuthoringType(node.type)
   const adopted = isScene3D && iterationIndex === undefined ? ctx.adoptableJobs?.get(node.id) : undefined
   if (adopted) {
     ctx.adoptableJobs!.delete(node.id)
@@ -602,6 +606,35 @@ async function executeSyncHttpNode(
   // loopback wire shape stays byte-identical to pre-P14.
   if (ctx.billingContext.payer === "workspace") {
     headers[WORKSPACE_HEADER_LOWER] = ctx.billingContext.workspaceId
+  }
+
+  // 3D Render Pro is quote-then-run: the run route refuses a body with no
+  // `quoteId`, so a headless execution has to obtain one with the SAME body it
+  // is about to submit. Two HTTP calls, still ONE paid job — the quote reserves
+  // and spends nothing, and its `normalizedInputHash` is what admission
+  // re-checks, which is exactly what stops an orchestrated run from executing
+  // at a price nothing ever produced.
+  //
+  // The idempotency key is DERIVED from the execution, not random: a BullMQ
+  // re-pick of the same node must resolve to the same run rather than buy a
+  // second one.
+  if (node.type === "pro-3d-render") {
+    const quoted = await fetch(`${url}/quote`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(NODE_TIMEOUT_MS),
+    })
+    if (!quoted.ok) {
+      throw new Error(`Sync HTTP call to ${route}/quote failed (${quoted.status}): ${await quoted.text()}`)
+    }
+    const quote = (await quoted.json()) as { quoteId?: unknown }
+    if (typeof quote.quoteId !== "string" || quote.quoteId.length === 0) {
+      throw new Error(`3D Render Pro quote returned no quoteId`)
+    }
+    body.quoteId = quote.quoteId
+    headers["Idempotency-Key"] =
+      `wf-${ctx.executionId}-${node.id}${iterationIndex === undefined ? "" : `-${iterationIndex}`}`
   }
 
   const response = await fetch(url, {
@@ -1591,7 +1624,7 @@ function completedJobResult(
   if (!hasOutput) {
     throw new Error(`Job ${jobId} completed but produced no output — provider may have returned an empty result`)
   }
-  const isScene3D = nodeType === "generate-3d-scene" || nodeType === "edit-3d-scene"
+  const isScene3D = isScene3DAuthoringType(nodeType)
   // Scene authoring commits the reserved fixed-tier charge without mirroring
   // credits_actual. Keep the parent charge alongside its analysis child.
   const effectiveCreditsUsed = creditsUsed

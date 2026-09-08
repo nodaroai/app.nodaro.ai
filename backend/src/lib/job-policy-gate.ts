@@ -747,6 +747,7 @@ export async function withdrawHeldJob(jobId: string): Promise<HeldResolution> {
     .from("jobs")
     .update({
       status: "cancelled",
+      billing_force_refund: true,
       completed_at: new Date().toISOString(),
       held_output_data: null,
       held_completion_fields: null,

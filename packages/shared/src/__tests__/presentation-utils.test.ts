@@ -12,6 +12,7 @@ import {
   getItemSortId,
   cleanOrphanedItems,
 } from "../presentation-utils.js"
+import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES } from "../producer-types.js"
 import type { GenericNode, GenericEdge } from "../types.js"
 import type { PresentationItem } from "../presentation-types.js"
 
@@ -1133,5 +1134,101 @@ describe("presentation-utils — action-fx", () => {
 
   it("getInputFieldSchema('action-fx') returns the actionFx select schema", () => {
     expect(getInputFieldSchema("action-fx")).toEqual({ key: "actionFx", type: "select" })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Canonical output typing — the presentation classifier vs the producer sets
+// ---------------------------------------------------------------------------
+
+/**
+ * `getOutputType` is what a published app renders from and what `/v1` app
+ * schemas and run results declare (`routes/api-tokens.ts`). A node it calls
+ * `"data"` is shown as a JSON blob instead of a player, is skipped by the
+ * lightbox media list, and is announced to API consumers with the wrong type.
+ *
+ * The literal sets in the module are the classifier's own opinion and win; the
+ * tail is derived from the producer vocabularies the canvas validators already
+ * maintain, so a node cannot be a declared video producer and be typed `"data"`
+ * at the same time.
+ */
+describe("getOutputType — derived from the producer vocabularies", () => {
+  it("types 3D Render Pro as video (it settles with the standard videoUrl)", () => {
+    expect(getOutputType("pro-3d-render")).toBe("video")
+  })
+
+  it("types every declared video producer as video", () => {
+    for (const t of VIDEO_PRODUCER_TYPES) expect([t, getOutputType(t)]).toEqual([t, "video"])
+  })
+
+  it("types every declared audio producer as audio, except the dual-mode ones the literal sets claim", () => {
+    for (const t of AUDIO_PRODUCER_TYPES) {
+      // voice-changer / voice-changer-pro / dubbing can emit video; the
+      // classifier's own list still calls them audio, which is their default.
+      expect([t, getOutputType(t)]).toEqual([t, "audio"])
+    }
+  })
+
+  it("leaves a run-time-decided producer as data — there is no honest static answer", () => {
+    expect(getOutputType("list")).toBe("data")
+    expect(getOutputType("sub-workflow")).toBe("data")
+    expect(getOutputType("split-media")).toBe("data")
+  })
+
+  it("keeps the literal sets authoritative where they and the producer sets disagree", () => {
+    // adjust-volume is in AUDIO_PRODUCER_TYPES and DYNAMIC_PRODUCER_TYPES;
+    // upload-video is a video producer AND an input node.
+    expect(getOutputType("adjust-volume")).toBe("audio")
+    expect(getOutputType("upload-video")).toBe("video")
+    expect(getOutputType("text-prompt")).toBe("text")
+  })
+})
+
+describe("published-app / API-token output mapping for 3D Render Pro", () => {
+  const proNode = mkNode("pro", "pro-3d-render", { presentationOutput: true, label: "Render" })
+
+  it("declares the app-schema output type the SDK and MCP read (mirrors routes/api-tokens.ts)", () => {
+    // The route builds `{ nodeId, label, type: getOutputType(node.type) }` for
+    // both the app schema and the run result.
+    const outputs = getOutputNodes([proNode], []).map((n) => ({
+      nodeId: n.id,
+      type: getOutputType(n.type),
+    }))
+    expect(outputs).toEqual([{ nodeId: "pro", type: "video" }])
+  })
+
+  it("is an OUTPUT, not an input — the picker must not offer it as an app input", () => {
+    expect(INPUT_NODE_TYPES.has("pro-3d-render")).toBe(false)
+    expect(getInputNodes([mkNode("pro", "pro-3d-render", { presentationVisible: true })])).toEqual([])
+  })
+})
+
+describe("legacy presentationVisible rules for a media producer", () => {
+  it("stays an output when its composition ALSO feeds something downstream", () => {
+    // The Pro node's `composition` handle commonly feeds an editor or a
+    // re-render; the legacy rule drops a node with an outgoing edge unless it
+    // produces media of its own.
+    const nodes = [
+      mkNode("pro", "pro-3d-render", { presentationVisible: true }),
+      mkNode("edit", "edit-3d-scene", {}),
+    ]
+    const out = getOutputNodes(nodes, [mkEdge("pro", "edit")])
+    expect(out.map((n) => n.id)).toEqual(["pro"])
+  })
+
+  it("applies the same rule to the other video producers the literal list forgot", () => {
+    const nodes = [
+      mkNode("gv", "generate-video", { presentationVisible: true }),
+      mkNode("cap", "add-captions", {}),
+    ]
+    expect(getOutputNodes(nodes, [mkEdge("gv", "cap")]).map((n) => n.id)).toEqual(["gv"])
+  })
+
+  it("still drops a non-media node that feeds something downstream", () => {
+    const nodes = [
+      mkNode("txt", "text-prompt", { presentationVisible: true }),
+      mkNode("gv", "generate-video", {}),
+    ]
+    expect(getOutputNodes(nodes, [mkEdge("txt", "gv")])).toEqual([])
   })
 })

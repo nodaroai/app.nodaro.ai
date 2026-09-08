@@ -752,6 +752,34 @@ export interface PluginWaitForJobResult {
   jobType: string | null
 }
 
+export interface PluginJobSettlement {
+  jobId: string
+  userId: string
+  usageLogId: string
+  expectedStatus: "completed" | "failed" | "cancelled"
+  actualCredits: number
+  receiptHash: string
+  providerCostUsd?: number
+}
+export interface PluginJobSettlementCheckpoint {
+  jobId: string
+  userId: string
+  usageLogId: string
+  sequence: number
+  actualCredits: number
+  ready: boolean
+  receiptHash: string
+  providerCostUsd?: number
+}
+export interface PluginJobSettlementResult {
+  jobId: string
+  usageLogId: string
+  actualCredits: number
+  releasedCredits: number
+  receiptHash: string
+  replayed: boolean
+}
+
 export interface PluginJobsToolkit {
   /** Owner-scoped access to immutable server submission records. */
   readJobSubmissionsOwnedBy?(userId: string, jobIds: ReadonlyArray<string>): Promise<Array<{ id: string; submission_context: Record<string, unknown> }>>
@@ -886,6 +914,10 @@ export interface PluginJobsToolkit {
     },
     fn: () => Promise<T>,
   ): Promise<T>
+  /** Atomic final settlement of an opt-in reservation; never reprices the admitted ceiling. */
+  settleReservedJob?(input: PluginJobSettlement): Promise<PluginJobSettlementResult>
+  checkpointReservedJob?(input: PluginJobSettlementCheckpoint): Promise<void>
+  settleCheckpointedJob?(usageLogId: string): Promise<boolean>
   /** Mirrors `commitJobCredits` (`workers/shared.ts`). */
   commitJobCredits(
     usageLogId: string | null | undefined,
@@ -1085,6 +1117,43 @@ export interface PluginFetchResponse {
   readonly status: number
   readonly headers: { get(name: string): string | null }
   arrayBuffer(): Promise<ArrayBuffer>
+  /**
+   * Streaming body. The reason it exists: `arrayBuffer()` buffers whatever the
+   * upstream sends before anyone can measure it, so a lying or absent
+   * `content-length` on an attacker-influenced URL is an unbounded allocation.
+   * A reader lets a caller enforce a real byte ceiling and destroy the socket
+   * the moment it is crossed. Structurally satisfied by `ReadableStream`.
+   */
+  readonly body?: PluginFetchBody | null
+}
+
+/** The `ReadableStream` subset a bounded reader needs. */
+export interface PluginFetchBody {
+  getReader(): PluginFetchBodyReader
+  cancel(reason?: unknown): Promise<void>
+}
+
+/** The `ReadableStreamDefaultReader<Uint8Array>` subset a bounded reader needs. */
+export interface PluginFetchBodyReader {
+  read(): Promise<{ done: boolean; value?: Uint8Array }>
+  cancel(reason?: unknown): Promise<void>
+  releaseLock(): void
+}
+
+/**
+ * The `SafeFetchInit` (`lib/safe-fetch.ts`) subset a plugin may pass. Narrowed
+ * on purpose: it carries no `body`, no `dispatcher` and no credential-bearing
+ * member, so widening the init cannot be used to turn the SSRF-checked fetch
+ * into a general-purpose outbound client.
+ */
+export interface PluginSafeFetchInit {
+  method?: "GET" | "HEAD"
+  headers?: Record<string, string>
+  /** Cancels the request; applied in addition to `timeoutMs`. */
+  signal?: AbortSignal
+  /** Per-request timeout in ms. The host defaults to 30s when unset. */
+  timeoutMs?: number
+  redirect?: "follow" | "error" | "manual"
 }
 
 /**
@@ -1164,7 +1233,7 @@ export interface PluginHttpToolkit {
   /** Mirrors `supabase` (`lib/supabase.ts`), shaped to VCP route usage. */
   supabase: PluginSupabaseClient
   /** Mirrors `videoQueue` (`lib/queue.ts`), narrowed to the one method used. */
-  videoQueue: { add(name: string, data: Record<string, unknown>, opts?: { attempts?: number }): Promise<unknown> }
+  videoQueue: { add(name: string, data: Record<string, unknown>, opts?: { attempts?: number; jobId?: string }): Promise<unknown> }
   /** Mirrors `creditGuard` (`middleware/credit-guard.ts`). */
   creditGuard(
     modelResolver: (req: FastifyRequest) => string,
@@ -1177,6 +1246,11 @@ export interface PluginHttpToolkit {
     jobId: string,
     modelIdentifier: string,
   ): Promise<PluginCreditReservation | undefined>
+
+  /** Optional atomic job reservation with exact replay and transactional ledger. */
+  reserveCreditsForJobOnce?(
+    req: FastifyRequest, reply: FastifyReply, jobId: string, modelIdentifier: string,
+  ): Promise<PluginCreditReservation | undefined>;
   /** Mirrors `safeUrlSchema` (`lib/url-validator.ts`). */
   safeUrlSchema: ZodType<string>
   /** Mirrors `extractWorkflowId` (`lib/request-helpers.ts`). */
@@ -1199,7 +1273,7 @@ export interface PluginHttpToolkit {
    * site (`fetchImageBytes`) never passes `init`, so the member omits it
    * rather than importing undici's `SafeFetchInit`/`Response` types.
    */
-  safeFetch(url: string): Promise<PluginFetchResponse>
+  safeFetch(url: string, init?: PluginSafeFetchInit): Promise<PluginFetchResponse>
   /** Public HTTP bytes, SSRF checked, 30s timeout and streaming cap (1–25 MiB).
    * Caller must separately authorize the source. No storage credentials. */
   safeFetchBytes?(url: string, maxBytes: number): Promise<Buffer>
@@ -1731,6 +1805,8 @@ export interface PluginRedisToolkit {
  * on `profiles`, which core owns and caches.
  */
 export interface PluginAuthToolkit {
+  /** Canonical workflow permission, including organization revocation. */
+  workflowAccess?(userId: string, workflowId: string): Promise<"none" | "view" | "edit" | "own">
   /** `profiles.role` ∈ (admin, super_admin). */
   isPlatformAdmin(userId: string): Promise<boolean>
   /** The raw role, so a plugin can require `super_admin` specifically. */
