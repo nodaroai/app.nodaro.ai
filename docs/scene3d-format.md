@@ -23,7 +23,17 @@ GLB node transforms are authoritative for exported geometry. Semantic entities
 address named roots and material roles for selection and editing. Every editable
 material role must name a material within that entity's geometry. Clay shading
 preserves each material's base color, so changing a vehicle's body paint leaves
-its tires unchanged. A dense
+its tires unchanged. An entity may
+declare a parent. A parented entity's exported root is nested inside its
+parent's root and its node transform is relative to it, so the parent's
+placement and baked animation reach the child through the file itself. The
+reader requires the plan and the file to describe the same parentage and
+refuses one where they disagree. Ownership still stops at a nested child:
+geometry, materials and selection belong to the entity that declares them, so
+recoloring a parent never reaches an entity nested inside it. A parent entity
+may own no geometry at all: an organizational root carries a baked, possibly
+animated transform for the entities nested inside it, and the reader accepts it
+so long as something is nested there. A dense
 camera sidecar supplies position, quaternion and projection for every frame;
 the reader preserves those values, including roll and exact shot cuts. Animation
 is sampled from the requested frame so backward scrubbing and independent frame
@@ -38,7 +48,23 @@ use the entity list to select and show them. Base visibility is part of the
 revision content digest.
 
 V2 supports deterministic transform, material-color, visibility and shot-camera
-offsets as immutable overlays. An edit creates a new revision with a parent
+offsets as immutable overlays. A transform overlay applies above the baked
+placement of the entity and of its ancestors, and its declared `space` says in
+which frame its values are read. `local` names the entity's own parent frame,
+baked placement included, so the values are a constant there and the edit
+travels with a moving parent. `world` names the scene's axes: the values are the
+entity's world position, rotation and scale, and the reader divides the parent's
+world out once at each frame, so a rotated, scaled or animated ancestor changes
+where the entity ends up but never what the numbers mean. Under such an ancestor
+a `world` edit is therefore not one constant; the entity stays parented and
+keeps its own baked animation, and only the channels the edit names are held.
+The one combination neither end can express is an ancestor with non-uniform
+scale under a rotation, which leaves a transform that is not a
+position/rotation/scale at all; the reader refuses it rather than approximate.
+A visibility overlay hides the entity and, as in any scene graph, everything
+nested inside it; each entity's own visibility is unchanged by an ancestor's, so
+showing the ancestor again restores exactly the descendants that were not
+hidden in their own right. An edit creates a new revision with a parent
 revision and a new content digest. It leaves the base geometry and camera bytes
 intact, enforces entity locks, and rejects stale revision/content expectations.
 Derived posters, validation reports and native downloads must be regenerated

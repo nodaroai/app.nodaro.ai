@@ -36,6 +36,10 @@ export interface Scene3DBoundClip {
 /**
  * Bind the tracks of `clip` that address nodes inside `root`.
  *
+ * `root` is the entity's mounted EXPORTED root, never its wrapper: baked
+ * animation belongs to the exported nodes, and `PropertyBinding.findNode`
+ * resolves a track to the binding root itself when the names match.
+ *
  * `allowedNodeNames` must be the MOUNTED object names (post-sanitize,
  * post-dedupe) of this entity's subtree — `AnimationClip` track paths are built
  * from `object.name`, so raw glTF names would match nothing.
@@ -51,14 +55,13 @@ export function bindScene3DClip(
   for (const track of clip.tracks) {
     const parsed = THREE.PropertyBinding.parseTrackName(track.name)
     const nodeName = parsed.nodeName
-    // A track with no node name would bind to the BINDING ROOT — here the
-    // entity wrapper, which we own and drive from the overlays. A GLB clip
-    // never legitimately targets it, so this is a malformed clip rather than
-    // something to silently apply on top of an override.
+    // A track with no node name would bind to the BINDING ROOT itself rather
+    // than to a node it names. A GLB clip never legitimately does that, so it
+    // is a malformed clip rather than something to silently apply.
     check(
       !!nodeName,
       "SCENE_ASSET_BINDING",
-      `animation track "${track.name}" names no node; it would bind to the entity wrapper`,
+      `animation track "${track.name}" names no node; it would bind to the entity's root`,
       subject,
     )
     // One whole-scene clip carries tracks for EVERY entity in the file. Each

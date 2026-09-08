@@ -240,6 +240,7 @@ function bindEntitiesToAssets(
   glbById: ReadonlyMap<string, LoadedGlbAsset>,
   warnings: Scene3DReadinessWarning[],
 ): void {
+  const byId = new Map(plan.objects.map((entity) => [entity.id, entity]))
   for (const entity of plan.objects) {
     const visual = entity.visual
     if (visual.kind !== "asset") continue
@@ -263,12 +264,59 @@ function bindEntitiesToAssets(
       `root node "${visual.rootNodeId}" is owned by entity "${root.entityId}", not by "${entity.id}"`,
       entity.id,
     )
+    // An entity with no mesh of its OWN is legitimate when it is an
+    // organizational one: the compiler gives every entity a root node, and a
+    // recipe that declares a rig or group and hangs the geometry on entities
+    // nested under it exports that root as an empty node carrying the baked -
+    // possibly animated - transform its children inherit. Ownership stopping at
+    // a nested root is what makes its `meshNodeCount` zero, so requiring a mesh
+    // here refused exactly the shape the nesting rule exists to support, and
+    // the only way to build it was to invent a stand-in cube nobody asked for.
+    //
+    // What stays refused is a root with no mesh and nothing nested inside it:
+    // that binds an entity to geometry that is not there.
+    const nestsAnEntity = [...asset.inspection.entityRootsByNodeName.values()]
+      .some((candidate) => candidate.parentEntityId === entity.id)
     check(
-      root.meshNodeCount > 0,
+      root.meshNodeCount > 0 || nestsAnEntity,
       "SCENE_ASSET_BINDING",
-      `entity root "${visual.rootNodeId}" contains no mesh`,
+      `entity root "${visual.rootNodeId}" contains no mesh and nothing is nested inside it`,
       entity.id,
     )
+
+    // Hierarchy agreement between the plan and the file.
+    //
+    // The exporter parents a child entity's root INSIDE its parent entity's
+    // root, and that containment is the child's transform frame — the parent's
+    // baked, possibly animated, transform is inherited through it. So the two
+    // descriptions of the hierarchy have to be the same one: a plan that names
+    // a different parent would render an entity through a chain nobody
+    // authored, and a plan that parents two entities the FILE exports as
+    // independent roots would drop the parent's baked transform silently.
+    const declaredParent = entity.parentId
+    if (root.parentEntityId !== null) {
+      check(
+        declaredParent === root.parentEntityId,
+        "SCENE_ASSET_BINDING",
+        `asset "${visual.assetId}" nests this entity's root inside entity "${root.parentEntityId}", but the plan declares parent "${declaredParent ?? "(none)"}"`,
+        entity.id,
+      )
+      const parent = byId.get(root.parentEntityId)
+      check(
+        parent?.visual.kind === "asset" && parent.visual.assetId === visual.assetId,
+        "SCENE_ASSET_BINDING",
+        `this entity's root is nested inside entity "${root.parentEntityId}", which does not bind asset "${visual.assetId}"`,
+        entity.id,
+      )
+    } else if (declaredParent !== undefined) {
+      const parent = byId.get(declaredParent)
+      check(
+        !(parent?.visual.kind === "asset" && parent.visual.assetId === visual.assetId),
+        "SCENE_ASSET_BINDING",
+        `the plan parents this entity to "${declaredParent}", but asset "${visual.assetId}" exports its root outside that entity, so the parent's baked transform would never reach it`,
+        entity.id,
+      )
+    }
 
     // A track under this entity that nothing will ever play. The whole-scene
     // clip a Blender export emits carries tracks for EVERY entity, so an

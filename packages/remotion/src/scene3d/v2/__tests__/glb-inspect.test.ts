@@ -212,18 +212,84 @@ describe("GLB pre-inspection: binding integrity", () => {
     ).toThrow(/used by two disjoint roots/)
   })
 
-  it("rejects a DIFFERENT entity id nested inside a root", () => {
+  it("reads a DIFFERENT entity id nested inside a root as a nested root", () => {
+    // The exporter parents a child entity's root to its parent's, and that
+    // containment is the child's transform frame. It is a root of its own —
+    // and the loader is what requires the plan to declare the same parent.
+    const result = inspect({
+      nodes: [
+        {
+          name: "Car",
+          entityRootId: "car",
+          translation: [3, 0, 0],
+          children: [
+            { name: "Body", mesh: true, materialName: "bodyPaint" },
+            {
+              name: "Wheel",
+              entityRootId: "wheel",
+              translation: [1, 0, 0],
+              children: [{ name: "Wheel/tread", entityRootId: "wheel", mesh: true, materialName: "rubber" }],
+            },
+          ],
+        },
+      ],
+    })
+    expect([...result.entityRootsByNodeName.keys()].sort()).toEqual(["Car", "Wheel"])
+    expect(result.entityRootsByNodeName.get("Car")?.parentEntityId).toBeNull()
+    expect(result.entityRootsByNodeName.get("Wheel")?.parentEntityId).toBe("car")
+  })
+
+  it("keeps a nested entity's geometry and materials out of its parent's set", () => {
+    // Ownership is what stops "recolour the car" from reaching the wheel and
+    // what keeps a material binding from naming a material it does not own.
+    const result = inspect({
+      nodes: [
+        {
+          name: "Car",
+          entityRootId: "car",
+          children: [
+            { name: "Body", mesh: true, materialName: "bodyPaint" },
+            {
+              name: "Wheel",
+              entityRootId: "wheel",
+              children: [{ name: "Wheel/tread", entityRootId: "wheel", mesh: true, materialName: "rubber" }],
+            },
+          ],
+        },
+      ],
+    })
+    const car = result.entityRootsByNodeName.get("Car")
+    const wheel = result.entityRootsByNodeName.get("Wheel")
+    expect([...(car?.subtreeNodeNames ?? [])].sort()).toEqual(["Body", "Car"])
+    expect(car?.materialNames).toEqual(["bodyPaint"])
+    expect(car?.meshNodeCount).toBe(1)
+    expect([...(wheel?.subtreeNodeNames ?? [])].sort()).toEqual(["Wheel", "Wheel/tread"])
+    expect(wheel?.materialNames).toEqual(["rubber"])
+    expect(wheel?.meshNodeCount).toBe(1)
+    // The FILE-wide counts still see both, because the budget is the file's.
+    expect(result.meshNodeCount).toBe(2)
+  })
+
+  it("rejects an id that reappears BELOW a nested root", () => {
+    // `car → wheel → hub(car)`: the hub is inside the wheel's authorized
+    // subtree while claiming the car, which is the smuggling case.
     expect(() =>
       inspect({
         nodes: [
           {
             name: "Car",
             entityRootId: "car",
-            children: [{ name: "Wheel", entityRootId: "wheel", mesh: true }],
+            children: [
+              {
+                name: "Wheel",
+                entityRootId: "wheel",
+                children: [{ name: "Hub", entityRootId: "car", mesh: true }],
+              },
+            ],
           },
         ],
       }),
-    ).toThrow(/claims a different entity/)
+    ).toThrow(/used by two disjoint roots/)
   })
 
   it("ACCEPTS the same entity id on the meshes a root owns", () => {
