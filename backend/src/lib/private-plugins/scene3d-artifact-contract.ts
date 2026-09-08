@@ -48,6 +48,8 @@ export interface PluginSceneAuthoringSource {
   sourceSha256: string
 }
 export interface PluginSceneArtifactToolkit {
+  /** Quote/admission source resolution uses current canonical scene permissions. */
+  resolveSource?(input: import("./scene3d-source-contract.js").PluginSceneSourceRequest): Promise<import("./scene3d-source-contract.js").PluginSceneSource>
   grant(input: PluginSceneArtifactUpload): Promise<PluginSceneArtifactGrant>
   receive(input: PluginSceneArtifactScope & { artifactId: string }): Promise<PluginSceneArtifactReceipt>
   /** Store bounded JSON at an owned immutable key; repeated identical writes adopt the receipt. */

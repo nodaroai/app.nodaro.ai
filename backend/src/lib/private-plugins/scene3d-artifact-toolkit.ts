@@ -44,6 +44,8 @@ export function createScene3DArtifactToolkit(): PluginSceneArtifactToolkit | und
     async (scope) => { await authorizeScene3DJob(scope) },
     async (input) => { await reserveScene3DUploadIntent(store, { ...input, ttlSeconds: input.ttlSeconds }) })
   const toolkit: PluginSceneArtifactToolkit = {
+    resolveSource: async (input) =>
+      (await import("../../services/scene3d-artifacts/resolve-source.js")).resolveScene3DSource(input),
     writeJson: (input, options) => writeScene3DJson(toolkit, input, options),
     // Loaded on use: reading a published revision needs the revision
     // authorizer, whose module graph reaches `workflow-access` — which reaches
