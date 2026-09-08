@@ -145,6 +145,8 @@ export const IMAGE_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   // image-collage composites N images → ONE image (generatedImageUrl). Its
   // `image` source pip must be enumerable by downstream image consumers.
   "image-collage",
+  // image-overlay places layers on a base → ONE image (generatedImageUrl).
+  "image-overlay",
 ])
 
 /** Identity-locking source node types that feed Subjects. */

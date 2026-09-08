@@ -13,7 +13,7 @@ import { NODE_DEFINITIONS, NODE_DEF_MAP, TELEPORTER_CHANNEL_COLORS, LOOP_COL_ADD
 import { HANDLE_OUTPUT_TYPES } from "@/lib/handle-output-types"
 import type { WorkflowSnapshot } from "./use-undo-redo-store"
 import { setSkipUndoCapture } from "./undo-flags"
-import { filterCloneNodes, EXECUTION_DATA_KEYS, TRANSIENT_RUNTIME_KEYS, migrateToItems, validateNoNestedGroups, cleanOrphanedItems, isCollectInEdge } from "@nodaro/shared"
+import { filterCloneNodes, EXECUTION_DATA_KEYS, TRANSIENT_RUNTIME_KEYS, migrateToItems, validateNoNestedGroups, cleanOrphanedItems, isCollectInEdge, overlayVariantIdFromHandle } from "@nodaro/shared"
 import type { PresentationItem, PipelineStatus } from "@nodaro/shared"
 import type { VariableDisplayMode } from "@/components/editor/config-panels/types"
 import type { NodeDoubleClickAction } from "@/lib/node-double-click-action"
@@ -104,6 +104,9 @@ function detectLoopColumnType(
   // handle id isn't literally image/video/audio (e.g. reference-sheet `sheet`,
   // `panels`). Falls back to the legacy handle-name / outputs heuristic below.
   if (sourceHandle) {
+    // image-overlay's variant:<platformId> pips are dynamic (one per ticked
+    // platform), so they cannot sit in the static registry — every one is an image.
+    if (sourceNode.type === "image-overlay" && overlayVariantIdFromHandle(sourceHandle)) return "image-url"
     const handleType = HANDLE_OUTPUT_TYPES[sourceNode.type ?? ""]?.[sourceHandle]
     if (handleType === "image" || handleType === "imageRef" || handleType === "reference") return "image-url"
     if (handleType === "video") return "video-url"

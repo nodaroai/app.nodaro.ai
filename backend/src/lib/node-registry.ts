@@ -1010,6 +1010,13 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     { key: "gap", type: "number" },
     { key: "backgroundColor", type: "text" },
   ] } },
+  { type: "image-overlay", label: "Image Overlay", category: "processing", description: "Place up to 12 layers — wired pictures (logo, badge, cut-out), real text from bundled fonts (kind text), QR codes (kind qr) and flat shapes (kind shape) — on a base image, pixel-exactly. Each layer has an anchor (9 positions), x/y offset and width in PERCENT of the base image (so the same node works on a 1K preview and a 4K render), optional explicit height, opacity, rotation (any angle), blend mode (over / multiply / screen), fit, drop shadow and rounded corners. SVG logos are rasterised at the target size (crisp). Output keeps the base image's pixel size unless an output canvas is set. Local sharp — no AI, deterministic. Base image ← the image handle; layers ← overlay, overlay2 … overlay12 (index-aligned with layers[]; zIndex reorders the stack); a QR layer with qr.fromInput takes its link from the qrText text handle (a Text node, a List column — one QR per row in a batch). Outputs: image (the composite), mask, and one variant:<platformId> handle per platform in variants[] (e.g. variant:x-header, variant:youtube-thumbnail) so each platform render feeds its own publisher in the same run. Price: 10 credits + 2 per platform in variants[].", outputType: "image", creditCost: 10, inputSchema: { fields: [
+    { key: "imageUrl", type: "image-url", required: true },
+    { key: "layers", type: "json", required: true },
+    { key: "canvas", type: "json" },
+    { key: "baseFit", type: "select", options: ["contain", "cover"] },
+    { key: "outputFormat", type: "select", options: ["png", "jpg", "webp"] },
+  ] } },
   { type: "merge-video-audio", label: "Merge Video + Audio", category: "processing", description: "Mux a video and an audio track.", outputType: "video" },
   { type: "still-to-video", label: "Still to Video", category: "processing", description: "Turn one still image + one audio track into an MP4 with an optional motion effect (zoom / pan / Ken Burns). Local FFmpeg — no provider, no GPU, zero credits. The output duration is the audio's duration (no duration field).", outputType: "video", creditCost: 0, inputSchema: { fields: [
     { key: "imageUrl", type: "image-url", required: true },

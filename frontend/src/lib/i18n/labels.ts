@@ -146,6 +146,7 @@ const NODE_LABELS_HE: Record<string, string> = {
   "Combine Videos": "שילוב סרטונים",
   "Assemble Narrated Video": "הרכבת וידאו מוקרן",
   "Image Collage": "קולאז׳ תמונות",
+  "Image Overlay": "שכבת תמונה",
   "Merge Video & Audio": "מיזוג וידאו ואודיו",
   "Add Captions": "הוספת כתוביות",
   "Resize Video": "שינוי גודל וידאו",
@@ -219,6 +220,7 @@ const NODE_LABELS_HE: Record<string, string> = {
 }
 
 const HANDLE_LABELS_HE: Record<string, string> = {
+  "QR link": "קישור QR",
   "Extend Source": "מקור להרחבה",
   "Source video": "וידאו מקור",
   "Cinematography": "צילום קולנועי",
@@ -687,6 +689,28 @@ export function useLocalizeModelDescription(): (desc: string) => string {
  * translates the word. Brand names and bare tokens pass through.
  */
 const OPTION_LABELS_HE: Record<string, string> = {
+  "YouTube thumbnail": "תמונה ממוזערת ליוטיוב",
+  "YouTube channel banner": "באנר ערוץ יוטיוב",
+  "LinkedIn company cover": "קאבר חברה בלינקדאין",
+  "LinkedIn personal cover": "קאבר אישי בלינקדאין",
+  "X / Twitter header": "כותרת X / טוויטר",
+  "Facebook page cover": "קאבר דף פייסבוק",
+  "Instagram post (1:1)": "פוסט אינסטגרם (1:1)",
+  "Instagram post (4:5)": "פוסט אינסטגרם (4:5)",
+  "Instagram / TikTok story (9:16)": "סטורי אינסטגרם / טיקטוק (9:16)",
+  "Link preview (Open Graph)": "תצוגת קישור (Open Graph)",
+  "Presentation slide (16:9)": "שקופית מצגת (16:9)",
+  "Print A4 @300dpi": "הדפסה A4 ב-300dpi",
+  "The bottom-right corner carries the duration badge.": "בפינה הימנית-תחתונה יושב תג משך הווידאו.",
+  "TV shows the whole banner, desktop a 2560×423 strip, phones only the centre 1546×423.": "טלוויזיה מציגה את כל הבאנר, מחשב רצועה של 2560×423, טלפונים רק את המרכז 1546×423.",
+  "The company logo sits over the left ~200px.": "לוגו החברה יושב על ~200 הפיקסלים השמאליים.",
+  "The profile photo covers the bottom-left.": "תמונת הפרופיל מכסה את הפינה השמאלית-תחתונה.",
+  "The top and bottom 250px sit under the story UI.": "250 הפיקסלים העליונים והתחתונים מוסתרים מתחת לממשק הסטורי.",
+  "5% bleed margin.": "שולי בליד של 5%.",
+  "Watermark (bottom-right)": "סימן מים (ימין למטה)",
+  "Logo (top-left)": "לוגו (שמאל למעלה)",
+  "Centered": "ממורכז",
+  "Full bleed": "מלא עד הקצה",
   "From image": "מתמונה",
   "Catalog avatar": "אווטאר מהקטלוג",
   "Text (TTS)": "טקסט (דיבור)",

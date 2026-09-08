@@ -149,6 +149,7 @@ import {
   CombineVideosConfig,
   AssembleNarratedVideoConfig,
   ImageCollageConfig,
+  ImageOverlayConfig,
   AddCaptionsConfig,
   ResizeVideoConfig,
   SocialMediaFormatConfig,
@@ -260,7 +261,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "instagram-post", "tiktok-post", "youtube-upload", "linkedin-post", "x-post", "facebook-post", "telegram-post", "publish-social",
   "component",
   // FFmpeg processing (tiered credits)
-  "merge-video-audio", "still-to-video", "slideshow", "combine-videos", "assemble-narrated-video", "image-collage", "trim-audio", "split-media", "extract-audio", "remove-audio", "trim-video", "extract-frame",
+  "merge-video-audio", "still-to-video", "slideshow", "combine-videos", "assemble-narrated-video", "image-collage", "image-overlay", "trim-audio", "split-media", "extract-audio", "remove-audio", "trim-video", "extract-frame",
   "speed-ramp", "loop-video", "gif-to-video", "fade-video", "transcode-video", "resize-video", "social-media-format", "adjust-volume", "audio-fx",
   "add-captions", "mix-audio", "combine-audio",
 ])
@@ -463,6 +464,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "combine-videos": return <CombineVideosConfig {...configProps} />
     case "assemble-narrated-video": return <AssembleNarratedVideoConfig {...configProps} />
     case "image-collage": return <ImageCollageConfig {...configProps} />
+    case "image-overlay": return <ImageOverlayConfig {...configProps} nodeId={selectedNodeId} />
     case "merge-video-audio": return <MergeVideoAudioConfig {...configProps} />
     case "add-captions": return <AddCaptionsConfig {...configProps} />
     case "resize-video": return <ResizeVideoConfig {...configProps} />

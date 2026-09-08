@@ -53,7 +53,11 @@ const FIXTURE = JSON.parse(readFileSync(resolve(here, "fixtures/tool-surface.jso
 // Advanced scene controls and immutable input selection add exactly 1_866 B:
 // generate_3d_scene 2_391 -> 3_754 (+1_363), edit_3d_scene 3_146 -> 3_649 (+503).
 // Combined tools/list total is 337_553; preserve the same 85 B headroom.
-export const TOOL_WIRE_BUDGET = { perToolBytes: 8_192, totalBytes: 337_638 }
+//
+// RAISED 2026-09-08 by the image_overlay tool's wire size and nothing else —
+// see IMAGE_OVERLAY_TOOL_BYTES below; the 85 B of headroom is carried across.
+const IMAGE_OVERLAY_TOOL_BYTES = 7_788 // measured: 345_426 total − 337_638 base (layer kinds, eleven shapes, platform variants + pricing note, qr_text + mask controls)
+export const TOOL_WIRE_BUDGET = { perToolBytes: 8_192, totalBytes: 337_638 + IMAGE_OVERLAY_TOOL_BYTES }
 
 type ToolDef = { name: string; description?: string }
 async function list(scopes: Scope[]): Promise<ToolDef[]> {

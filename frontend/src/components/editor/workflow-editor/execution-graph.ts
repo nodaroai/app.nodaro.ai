@@ -1,5 +1,5 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
-import { collectAncestorRefs as sharedCollectAncestorRefs, isExpandedClone, PARAMETER_NODE_TYPES, aggregateByType, buildChildrenByParent, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, ASPECT_RATIO_DIMENSIONS } from "@nodaro/shared"
+import { collectAncestorRefs as sharedCollectAncestorRefs, isExpandedClone, PARAMETER_NODE_TYPES, aggregateByType, buildChildrenByParent, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, ASPECT_RATIO_DIMENSIONS, overlayVariantIdFromHandle } from "@nodaro/shared";
 import { getParameterPromptHint } from "@nodaro/prompts"
 import type {
   WorkflowNode,
@@ -315,7 +315,19 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       (data.generatedImageUrl as string | undefined)
     );
   }
-  if (type === "image-collage") {
+  if (type === "image-overlay" && sourceHandle === "mask") {
+    return data.generatedMaskUrl as string | undefined;
+  }
+  // One source handle per "export also for" platform → that platform's render.
+  if (type === "image-overlay") {
+    const variantId = overlayVariantIdFromHandle(sourceHandle);
+    if (variantId) {
+      const variants = (data.overlayVariants as Array<{ id?: unknown; url?: unknown }> | undefined) ?? [];
+      const hit = variants.find((v) => v.id === variantId);
+      return typeof hit?.url === "string" ? hit.url : undefined;
+    }
+  }
+  if (type === "image-collage" || type === "image-overlay") {
     const results =
       (data.generatedResults as GeneratedResult[] | undefined) ?? [];
     const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;
@@ -947,6 +959,7 @@ export const IMAGE_SOURCE_TYPES = new Set([
   "remove-background",
   "extract-frame",
   "image-collage",
+  "image-overlay",
   "character",
   "face",
   "object",

@@ -4,14 +4,14 @@ import { promises as fs } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { randomUUID } from "node:crypto"
-import { Readable } from "node:stream"
+import { Readable, Transform } from "node:stream"
 import { pipeline } from "node:stream/promises"
 import { lookup as dnsLookup } from "node:dns/promises"
 import { isIP } from "node:net"
 import { config } from "../../lib/config.js"
 import { safeFetch, isPrivateOrReservedIP } from "../../lib/safe-fetch.js"
 
-export async function downloadFile(url: string, dest: string): Promise<void> {
+export async function downloadFile(url: string, dest: string, opts: { maxBytes?: number } = {}): Promise<void> {
   // safeFetch: callers include media-process which streams user-supplied
   // sourceUrl into ffmpeg. Without DNS-aware SSRF protection, a hostname
   // resolving to an internal IP would have the response processed and the
@@ -37,6 +37,22 @@ export async function downloadFile(url: string, dest: string): Promise<void> {
     throw new Error(`Failed to download: ${url} (${response.status})`)
   }
   const nodeStream = Readable.fromWeb(response.body as import("stream/web").ReadableStream)
+  const { maxBytes } = opts
+  if (maxBytes !== undefined && maxBytes > 0) {
+    // Byte cap for callers that fetch attacker-choosable URLs: the stream is
+    // aborted as soon as the cap is crossed, so a hostile host cannot fill the
+    // worker's tmpdir at line rate (each write is the caller's own work dir).
+    let total = 0
+    const counter = new Transform({
+      transform(chunk: Buffer, _enc, cb) {
+        total += chunk.length
+        if (total > maxBytes) cb(new Error(`Download exceeds ${Math.round(maxBytes / (1024 * 1024))} MB: ${url}`))
+        else cb(null, chunk)
+      },
+    })
+    await pipeline(nodeStream, counter, createWriteStream(dest))
+    return
+  }
   await pipeline(nodeStream, createWriteStream(dest))
 }
 

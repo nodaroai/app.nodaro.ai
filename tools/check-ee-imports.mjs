@@ -159,6 +159,7 @@ const ALLOWLIST = new Set([
   "frontend/src/components/nodes/generate-video-node.tsx",
   "frontend/src/components/nodes/generate-video-pro-node.tsx",
   "frontend/src/components/nodes/image-collage-node.tsx",
+  "frontend/src/components/nodes/image-overlay-node.tsx",
   "frontend/src/components/nodes/image-critic-node.tsx",
   "frontend/src/components/nodes/image-to-image-node.tsx",
   "frontend/src/components/nodes/image-to-text-node.tsx",

@@ -135,6 +135,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `held-prop` — Held Prop
 - `image-collage` — Image Collage
 - `image-critic` — Image Critic
+- `image-overlay` — Image Overlay
 - `image-to-text` — Describe Image
 - `image-to-video` — Image to Video
 - `instagram-post` — Instagram Post

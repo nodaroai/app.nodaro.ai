@@ -3179,6 +3179,54 @@ export async function combineVideos(
   })
 }
 
+/**
+ * Image Overlay: base image + 1–12 layers → one composited image (local sharp).
+ * Every layer position/size is in % of the base image; see ImageOverlayData.
+ */
+export async function imageOverlayApi(params: {
+  imageUrl: string
+  layers: Array<Record<string, unknown> & { imageUrl?: string }>
+  canvas?: { width: number; height: number; backgroundColor: string }
+  baseFit?: "contain" | "cover"
+  outputFormat?: "png" | "jpg" | "webp"
+  variants?: string[]
+  /** Text from the node's QR link handle — fills QR layers with `qr.fromInput`. */
+  qrText?: string
+  /** The mask the job also emits (white = may change). Mirrors payload-builder. */
+  maskMode?: "none" | "layers" | "around" | "outside"
+  maskSpread?: number
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { imageUrl: params.imageUrl, layers: params.layers }
+  if (params.variants?.length) body.variants = params.variants
+  if (params.qrText) body.qrText = params.qrText
+  if (params.maskMode) body.maskMode = params.maskMode
+  if (typeof params.maskSpread === "number") body.maskSpread = params.maskSpread
+  if (params.canvas) body.canvas = params.canvas
+  if (params.baseFit) body.baseFit = params.baseFit
+  if (params.outputFormat) body.outputFormat = params.outputFormat
+  if (params.userId) body.userId = params.userId
+  return apiJson("/v1/image-overlay", {
+    body,
+    workflowId: true,
+    label: "Failed to start image overlay",
+  })
+}
+
+/** Ask a vision model where one layer should go on the base (billed as one image-to-text call). */
+export async function suggestOverlayPlacement(params: {
+  imageUrl: string
+  layerAspect?: number
+  intent?: string
+  safeArea?: { x: number; y: number; w: number; h: number }
+}): Promise<{ jobId: string; placement: { anchor: string; x: number; y: number; width: number; reason: string } }> {
+  return apiJson("/v1/image-overlay/suggest-placement", {
+    body: params,
+    workflowId: true,
+    label: "Could not suggest a placement",
+  })
+}
+
 export async function imageCollageApi(
   imageUrls: string[],
   opts: {

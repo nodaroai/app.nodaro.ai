@@ -70,6 +70,7 @@ export const NODE_HANDLES: Readonly<Record<string, NodeHandleSpec>> = {
   "held-prop": { inputs: ["in"], outputs: ["out"] },
   "image-collage": { inputs: ["in"], outputs: ["image"] },
   "image-critic": { inputs: ["image", "reference", "prompt"], outputs: ["approved", "rejected"] },
+  "image-overlay": { inputs: ["image", "overlay", "overlay2", "overlay3", "overlay4", "overlay5", "overlay6", "overlay7", "overlay8", "overlay9", "overlay10", "overlay11", "overlay12", "qrText"], outputs: ["image", "mask"] },
   "image-to-text": { inputs: ["image", "video", "text"], outputs: ["text"] },
   "image-to-video": { inputs: ["startFrame", "endFrame", "audio"], outputs: ["video"] },
   "instagram-post": { inputs: ["in"], outputs: [] },

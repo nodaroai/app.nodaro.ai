@@ -97,3 +97,19 @@ describe("useEstimatedCredits — unsupported node type", () => {
     expect(result.current).toBe(0)
   })
 })
+
+describe("useEstimatedCredits — image-overlay", () => {
+  it("10 base, +2 per exported platform; a platform a wire leaves through counts even when unticked", () => {
+    const bare = makeNode("ov", "image-overlay", {})
+    __store.__setState({ nodes: [bare], edges: [] })
+    expect(renderHook(() => useEstimatedCredits(bare)).result.current).toBe(10)
+
+    const two = makeNode("ov", "image-overlay", { variants: ["instagram-post", "youtube-thumbnail"] })
+    __store.__setState({ nodes: [two], edges: [] })
+    expect(renderHook(() => useEstimatedCredits(two)).result.current).toBe(14)
+
+    const wired = { id: "ov->up", source: "ov", target: "up", sourceHandle: "variant:x-header", targetHandle: "image" } as unknown as WorkflowEdge
+    __store.__setState({ nodes: [two], edges: [wired] })
+    expect(renderHook(() => useEstimatedCredits(two)).result.current).toBe(16)
+  })
+})

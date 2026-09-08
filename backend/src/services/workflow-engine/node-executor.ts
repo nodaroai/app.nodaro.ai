@@ -1,4 +1,4 @@
-import { assertCanvasExecutionAllowed } from "@nodaro/shared"
+import { assertCanvasExecutionAllowed, imageOverlayCredits } from "@nodaro/shared"
 /**
  * Node executor — dispatches node execution based on type category.
  *
@@ -1216,6 +1216,16 @@ async function computeMinimaxH3CreditOverride(
  * even a type-only static import of the ee module's interface would trip the
  * textual import guard.
  */
+/**
+ * Image Overlay: base + 2 per extra platform render (`variants`). Mirrors the
+ * route's creditGuard computeCredits so a workflow run reserves what a single
+ * node run would. Undefined for every other job.
+ */
+export function computeImageOverlayCreditOverride(payload: Record<string, unknown>): number | undefined {
+  if (payload?.jobName !== "image-overlay" && payload?.type !== "image-overlay") return undefined
+  return imageOverlayCredits(Array.isArray(payload.variants) ? payload.variants : undefined)
+}
+
 export async function computeGenerateVideoProCreditOverride(
   payload: Record<string, unknown>,
 ): Promise<{ override: number; pricing: unknown } | undefined> {
@@ -1525,6 +1535,7 @@ async function executeWorkerNode(
       // is safe and short-circuits any later (unneeded) dynamic import +
       // pricing call once an earlier one already applies.
       const creditOverride =
+        computeImageOverlayCreditOverride(payload) ??
         (await computeGenerateVideoProCreditOverride(payload))?.override ??
         (await computeEditVideoProCreditOverride(payload))?.override ??
         (await computeSeedance2RefVideoCreditOverride(payload, refVideoDurationsSec)) ??

@@ -87,7 +87,7 @@ describe("NOT_GENERIC_RECOVERABLE", () => {
   // "classifies every statically-registered worker handler name" case
   // resolved its findings into this set (see job-finalize.ts for the
   // per-handler evidence).
-  it("has exactly 70 members", () => {
-    expect(NOT_GENERIC_RECOVERABLE.size).toBe(70)
+  it("has exactly 71 members", () => {
+    expect(NOT_GENERIC_RECOVERABLE.size).toBe(71)
   })
 })

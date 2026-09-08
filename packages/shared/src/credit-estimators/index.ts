@@ -7,6 +7,13 @@ export {
   assembleNarratedVideoCredits,
 } from "./video-utils.js"
 
+export {
+  IMAGE_OVERLAY_BASE_CREDITS,
+  IMAGE_OVERLAY_VARIANT_CREDITS,
+  imageOverlayBillableVariants,
+  imageOverlayCredits,
+} from "./image-overlay.js"
+
 export type {
   LoopVideoEstimatorInput,
   TrimVideoEstimatorInput,

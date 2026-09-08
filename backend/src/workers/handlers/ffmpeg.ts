@@ -10,6 +10,7 @@ import { cleanupWorkDir, createWorkDir, downloadFile, runFfmpeg, BROWSER_SAFE_VI
 import { combineVideos } from "../../providers/video/combine-videos.js"
 import { assembleNarratedVideo } from "../../providers/video/assemble-narrated-video.js"
 import { createImageCollage } from "../../providers/image/collage.js"
+import { createImageOverlay, type ImageOverlayParams } from "../../providers/image/overlay.js"
 import { socialMediaFormat } from "../../providers/video/social-media-format.js"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import { trimAudio } from "../../providers/video/trim-audio.js"
@@ -896,6 +897,46 @@ const handleImageCollage: HandlerFn = async function handleImageCollage(job, ctx
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
 
+const handleImageOverlay: HandlerFn = async function handleImageOverlay(job, ctx) {
+  const { imageUrl, layers, canvas, baseFit, outputFormat, variants, maskMode, maskSpread, qrText } = job.data as { jobId: string } & ImageOverlayParams
+  console.log(`[worker] image-overlay ${ctx.jobId}: ${layers?.length ?? 0} layer(s)${canvas ? `, canvas=${canvas.width}x${canvas.height}` : ""}, ${outputFormat ?? "png"}`)
+
+  // createImageOverlay removes its work dir itself on failure; this finally
+  // covers the upload leg so a failed R2 put cannot leak the rendered file.
+  const render = await createImageOverlay({ imageUrl, layers, canvas, baseFit, outputFormat, variants, maskMode, maskSpread, qrText })
+  await setJobProgress(job, ctx.jobId, 80)
+
+  let r2Url: string
+  let maskUrl: string | undefined
+  const uploadedVariants: Array<{ id: string; label: string; width: number; height: number; url: string }> = []
+  try {
+    r2Url = await uploadFileToR2(render.outputPath, ctx.jobId, "image", ctx.jobUserId)
+    if (render.maskPath) maskUrl = await uploadFileToR2(render.maskPath, `${ctx.jobId}-mask`, "image", ctx.jobUserId)
+    // Every extra platform render gets a SUFFIXED upload id — a bare job id
+    // would alias all of them onto one R2 object (the gvp "doubled parts" bug).
+    for (const v of render.variants) {
+      const url = await uploadFileToR2(v.path, `${ctx.jobId}-${v.id}`, "image", ctx.jobUserId)
+      uploadedVariants.push({ id: v.id, label: v.label, width: v.width, height: v.height, url })
+    }
+  } finally {
+    await cleanupWorkDir(dirname(render.outputPath))
+  }
+  await setJobProgress(job, ctx.jobId, 100)
+
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+
+  const ok = await markJobCompleted(ctx.jobId, {
+    // width/height let the editor tell a result rendered under other
+    // settings (another platform / canvas) from a fresh one — see
+    // overlayResultMatches on the client.
+    output_data: { imageUrl: r2Url, ...(render.width > 0 && render.height > 0 ? { width: render.width, height: render.height } : {}), ...(maskUrl ? { maskUrl } : {}), ...(uploadedVariants.length ? { variants: uploadedVariants } : {}) },
+  })
+  if (!ok) return
+
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
+}
+
 const handleStillToVideo: HandlerFn = async function handleStillToVideo(job, ctx) {
   const { imageUrl, audioUrl, motion, intensity, resolution, aspectRatio, fps, fit, padColor } = job.data as {
     jobId: string
@@ -1015,6 +1056,7 @@ export const ffmpegHandlers: Record<string, HandlerFn> = {
   "combine-videos": handleCombineVideos,
   "assemble-narrated-video": handleAssembleNarratedVideo,
   "image-collage": handleImageCollage,
+  "image-overlay": handleImageOverlay,
   "merge-video-audio": handleMergeVideoAudio,
   "trim-audio": handleTrimAudio,
   "trim-video": handleTrimVideo,

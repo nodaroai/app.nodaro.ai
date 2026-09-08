@@ -39,6 +39,12 @@ export const BUILD_ASSETS = Object.freeze([
     dir: "lib/tutorial-seed/templates",
     match: /\.json$/i,
   },
+  {
+    // Bundled overlay fonts — read by src/providers/image/overlay-text.ts
+    // (fontkit) and served by src/routes/fonts.ts for the canvas preview.
+    dir: "assets/fonts",
+    match: /\.ttf$/i,
+  },
 ])
 
 /**

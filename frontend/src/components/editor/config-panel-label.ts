@@ -113,6 +113,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "combine-videos": "Combine Videos",
   "assemble-narrated-video": "Assemble Narrated Video",
   "image-collage": "Image Collage",
+  "image-overlay": "Image Overlay",
   "merge-video-audio": "Merge Video & Audio",
   "add-captions": "Add Captions",
   "resize-video": "Resize Video",

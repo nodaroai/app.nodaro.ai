@@ -1,7 +1,7 @@
 import type { Node, Edge } from "@xyflow/react"
 import { MODIFY_IMAGE_PROVIDERS } from "@nodaro/shared"
 import { MUSIC_GENRE_DEFAULT_DATA, MUSIC_MOOD_DEFAULT_DATA, INSTRUMENTATION_DEFAULT_DATA, VOICE_CHARACTER_DEFAULT_DATA, VOICE_DELIVERY_DEFAULT_DATA } from "@nodaro/prompts"
-import type { ImageI2IProvider, ImageGenProvider, ImageEditProvider, ModifyImageProvider, UpscaleImageProvider, ImageToVideoProvider, TextToVideoProvider, VideoToVideoProvider, VideoGenProvider, VideoUpscaleProvider, ExtendVideoProvider, FaceSwapProvider, TtsProvider, TextToAudioProvider, MusicProvider, TranscribeProvider, LipSyncProvider, ScriptProvider, QaCheckProvider, SunoModel, VoiceDesignModel, VoiceChangerModel, CaptionStyle, ImageCriticMode, ReduceStrategyId, ReduceMeta, SelectorConfig, ScraperActorId, CharacterAspectRatio, AudioFxPreset, LocationReferencePhotoKind as SharedLocationReferencePhotoKind, PipelineFormat, PipelineMode, PipelinePinnableImageModel, PipelinePinnableScriptLlm, PipelinePinnableVideoModel, VideoCriticFrameMode, SceneNodeData as SharedSceneNodeData, PipelineState, ReferenceSheet, SheetType, SheetSkin, SheetFlavour, EntityKind, VideoAnalysisResult, ExposableField, ExposableOutput, ComponentMetadata, IdentityMeta, LlmReasoningEffort, Scene3DReference } from "@nodaro/shared"
+import type { ImageI2IProvider, ImageGenProvider, ImageEditProvider, ModifyImageProvider, UpscaleImageProvider, ImageToVideoProvider, TextToVideoProvider, VideoToVideoProvider, VideoGenProvider, VideoUpscaleProvider, ExtendVideoProvider, FaceSwapProvider, TtsProvider, TextToAudioProvider, MusicProvider, TranscribeProvider, LipSyncProvider, ScriptProvider, QaCheckProvider, SunoModel, VoiceDesignModel, VoiceChangerModel, CaptionStyle, ImageCriticMode, ReduceStrategyId, ReduceMeta, SelectorConfig, ScraperActorId, CharacterAspectRatio, AudioFxPreset, LocationReferencePhotoKind as SharedLocationReferencePhotoKind, PipelineFormat, PipelineMode, PipelinePinnableImageModel, PipelinePinnableScriptLlm, PipelinePinnableVideoModel, VideoCriticFrameMode, SceneNodeData as SharedSceneNodeData, PipelineState, ReferenceSheet, SheetType, SheetSkin, SheetFlavour, EntityKind, VideoAnalysisResult, ExposableField, ExposableOutput, ComponentMetadata, IdentityMeta, LlmReasoningEffort, Scene3DReference, OverlayLayerKind, OverlayTextStyle, OverlayQrStyle, OverlayShapeStyle, OverlayImageEffects } from "@nodaro/shared"
 import type { WardrobeValue, TransitionPosition, TransitionDuration, TransitionIntensity, CharacterFxPosition, CharacterFxDuration, CharacterFxIntensity, PersonValue, PickerApplyMode, PickerGaps, DirectionFields, StructuredPromptFields } from "@nodaro/prompts"
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 import { IMAGE_STYLE_PRESETS, GVP_PROVIDERS, getAspectRatiosForVideoModel, getVideoResolutionOptions } from "@/components/editor/config-panels/model-options"
@@ -3501,6 +3501,119 @@ export type ImageCollageData = {
   currentJobId?: string
 }
 
+/** One overlay layer of the Image Overlay node. Every position/size is a
+ *  PERCENTAGE of the base image (x/width of its width, y/height of its
+ *  height) so the same node works on a 1K preview and a 4K render — the
+ *  base's pixel size is decided upstream. Mirrored by the route's Zod
+ *  (backend/src/routes/image-overlay.ts). */
+export type OverlayAnchor =
+  | "top-left" | "top" | "top-right"
+  | "left" | "center" | "right"
+  | "bottom-left" | "bottom" | "bottom-right"
+
+export const OVERLAY_ANCHORS: ReadonlyArray<OverlayAnchor> = [
+  "top-left", "top", "top-right",
+  "left", "center", "right",
+  "bottom-left", "bottom", "bottom-right",
+]
+
+export type OverlayLayerConfig = {
+  /** What the layer is. Absent = "image" (a wired picture). Generated kinds
+   *  (text / qr / shape) need no wire — their style rides in the node data. */
+  kind?: OverlayLayerKind
+  text?: OverlayTextStyle
+  qr?: OverlayQrStyle
+  shape?: OverlayShapeStyle
+  /** Finishing for image layers (circle mask, feather, stroke, glow). */
+  effects?: OverlayImageEffects
+  anchor: OverlayAnchor
+  /** Offset from the anchor in % of the base WIDTH (−100..100). On a right
+   *  anchor a NEGATIVE x moves the layer inward (the watermark case). */
+  x: number
+  /** Offset from the anchor in % of the base HEIGHT (−100..100). */
+  y: number
+  /** Layer width in % of the base width (1..100); height follows the layer's
+   *  own aspect ratio unless `height` is set. */
+  width: number
+  /** Optional explicit height in % of the base height (1..100). */
+  height?: number
+  /** 0..1 */
+  opacity: number
+  /** Degrees, −180..180, around the layer's own centre. */
+  rotation: number
+  blend: "over" | "multiply" | "screen"
+  /** How the source is resized into width×height when BOTH are set. */
+  fit: "contain" | "cover" | "stretch"
+  /** Drop shadow, px on the base image. */
+  shadow?: { blur: number; offsetX: number; offsetY: number; color: string; opacity: number }
+  /** Corner radius in px applied to the layer before compositing. */
+  roundedCorners?: number
+  /** Render order — higher draws on top; absent = handle order (layer 1 lowest). */
+  zIndex?: number
+}
+
+/** The overlay target handles, index-aligned with `layers[]`. */
+export const OVERLAY_HANDLE_IDS = ["overlay", "overlay2", "overlay3", "overlay4", "overlay5", "overlay6", "overlay7", "overlay8", "overlay9", "overlay10", "overlay11", "overlay12"] as const
+export const OVERLAY_MAX_LAYERS = OVERLAY_HANDLE_IDS.length
+/** Handles a fresh node shows before the user adds more. */
+export const DEFAULT_OVERLAY_LAYER_COUNT = 4
+
+/** How many layer handles the node shows: the configured count, grown to cover
+ *  every wired or configured layer, capped at the contract maximum. */
+export function visibleOverlayLayerCount(layerCount: unknown, configured: number, wired: number): number {
+  const asked = typeof layerCount === "number" && Number.isFinite(layerCount) ? Math.round(layerCount) : DEFAULT_OVERLAY_LAYER_COUNT
+  return Math.min(OVERLAY_MAX_LAYERS, Math.max(1, asked, configured, wired))
+}
+
+export const DEFAULT_OVERLAY_LAYER: OverlayLayerConfig = {
+  anchor: "center", x: 0, y: 0, width: 25, opacity: 1, rotation: 0, blend: "over", fit: "contain",
+}
+
+/** Placement presets for the FIRST layer — a starting point, not a mode. */
+export const OVERLAY_PRESETS: ReadonlyArray<{ id: string; label: string; layer: Partial<OverlayLayerConfig> }> = [
+  { id: "watermark-corner", label: "Watermark (bottom-right)", layer: { anchor: "bottom-right", x: -4, y: -6, width: 10, opacity: 0.85 } },
+  { id: "logo-top-left", label: "Logo (top-left)", layer: { anchor: "top-left", x: 4, y: 6, width: 14, opacity: 1 } },
+  { id: "centered", label: "Centered", layer: { anchor: "center", x: 0, y: 0, width: 40, opacity: 1 } },
+  { id: "full-bleed", label: "Full bleed", layer: { anchor: "center", x: 0, y: 0, width: 100, height: 100, fit: "cover", opacity: 1 } },
+]
+
+export type ImageOverlayData = {
+  currentJobProgress?: number
+  [key: string]: unknown
+  label: string
+  /** Index-aligned with the overlay handles: layers[0] ↔ "overlay", [1] ↔
+   *  "overlay2", … A connected handle with no matching entry runs with
+   *  DEFAULT_OVERLAY_LAYER. */
+  layers: OverlayLayerConfig[]
+  /** Layer handles shown on the node (1..OVERLAY_MAX_LAYERS); grown automatically to cover wired layers. */
+  layerCount?: number
+  /** Optional output canvas (output size ≠ base size); the base is placed
+   *  into it with `baseFit`. Absent = output keeps the base's pixel size. */
+  canvas?: { width: number; height: number; backgroundColor: string }
+  baseFit?: "contain" | "cover"
+  /** The platform preset the canvas was set from (OVERLAY_PLATFORMS id) — draws its safe area in the preview. */
+  platform?: string
+  /** Extra platform renders of the same composite (OVERLAY_PLATFORMS ids). */
+  variants?: string[]
+  /** The last run's extra renders, from the job's output_data.variants. */
+  overlayVariants?: Array<{ id: string; label: string; url: string; width: number; height: number }>
+  /** What the `mask` output carries: the layers' silhouette, a ring around it (an AI finish may repaint it), the outside, or nothing. */
+  maskMode?: "none" | "layers" | "around" | "outside"
+  /** Ring width for "around", px on the base. */
+  maskSpread?: number
+  /** The last run's mask PNG (white = may change). */
+  generatedMaskUrl?: string
+  /** png (default, keeps alpha) | jpg | webp */
+  outputFormat: "png" | "jpg" | "webp"
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedImageUrl?: string
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+}
+
 export type AssembleNarratedVideoData = {
   currentJobProgress?: number
   [key: string]: unknown
@@ -5930,6 +6043,7 @@ export type SceneNodeData =
   | ForcedAlignmentData
   | CombineVideosData
   | ImageCollageData
+  | ImageOverlayData
   | AssembleNarratedVideoData
   | MergeVideoAudioData
   | StillToVideoData
@@ -6121,6 +6235,7 @@ export type SceneNodeType =
   | "video-audit"
   | "combine-videos"
   | "image-collage"
+  | "image-overlay"
   | "assemble-narrated-video"
   | "merge-video-audio"
   | "still-to-video"
@@ -7679,6 +7794,35 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       activeResultIndex: 0,
     } as ImageCollageData,
     exposableOutputs: [{ key: "image", label: "Image", outputType: "image" as const }],
+  },
+  {
+    type: "image-overlay",
+    label: "Image Overlay",
+    category: "processing",
+    creditCost: 10,
+    // Base image + layer handles, index-aligned with
+    // data.layers[] (overlay → 0, overlay2 → 1, …).
+    // Literal on purpose (the gen-skills parser reads this file as text) —
+    // must equal ["image", ...OVERLAY_HANDLE_IDS, "qrText"]; the node-def test
+    // pins it. "qrText" is the QR link handle: text for QR layers that read
+    // their link from the workflow (shown only while such a layer exists).
+    inputs: ["image", "overlay", "overlay2", "overlay3", "overlay4", "overlay5", "overlay6", "overlay7", "overlay8", "overlay9", "overlay10", "overlay11", "overlay12", "qrText"],
+    outputs: ["image", "mask"],
+    defaultData: {
+      label: "Image Overlay",
+      // Literal copy of DEFAULT_OVERLAY_LAYER (same parser constraint).
+      layers: [{ anchor: "center", x: 0, y: 0, width: 25, opacity: 1, rotation: 0, blend: "over", fit: "contain" }],
+      layerCount: 4,
+      outputFormat: "png",
+      fieldMappings: {},
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+    } as ImageOverlayData,
+    exposableOutputs: [
+      { key: "image", label: "Composited Image", outputType: "image" as const },
+      { key: "mask", label: "Mask (white = may change)", outputType: "image" as const },
+    ],
   },
   {
     type: "assemble-narrated-video",

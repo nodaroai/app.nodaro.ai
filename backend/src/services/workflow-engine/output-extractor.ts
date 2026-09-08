@@ -14,7 +14,7 @@ import {
   AUDIO_SOURCE_TYPES,
   TEXT_SOURCE_TYPES,
 } from "./execution-graph.js"
-import { COMPOSER_PLAN_MAP, COMPOSER_PLAN_FIELDS, extractAllGeneratedResults, splitGeneratedItems, aggregateByType, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member } from "@nodaro/shared"
+import { COMPOSER_PLAN_MAP, COMPOSER_PLAN_FIELDS, extractAllGeneratedResults, splitGeneratedItems, aggregateByType, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, overlayVariantIdFromHandle } from "@nodaro/shared"
 import type { SceneData } from "@nodaro/shared"
 import { buildScenePrompt } from "@nodaro/prompts"
 export { extractVideoDurationFromNode } from "@nodaro/shared"
@@ -149,6 +149,11 @@ const DIRECT_OUTPUT_KEYS: Array<keyof NodeOutput> = [
   // path drops it, so the "mask" source handle resolves to the passthrough image
   // and downstream inpaint/edit masks the whole frame.
   "maskUrl",
+  // image-overlay emits { imageUrl, maskUrl, variants[] } — one platform
+  // render per "export also for" platform, routed to the variant:<platformId>
+  // source handles. Without this key the live DAG dropped them and every
+  // variant handle resolved to nothing (execution 1180e15d, 2026-09-08).
+  "variants",
   "videoUrl",
   "audioUrl",
   // motion-graphics (lottie engine) emits { motionPlan, lottieUrl }. lottieUrl
@@ -805,6 +810,15 @@ export function getPrimaryOutput(
     return output.imageUrl
   }
 
+  // Image Overlay: the composite on `image`, its mask on `mask` (the layers'
+  // silhouette / a ring around it / the outside — the node's maskMode).
+  if (sourceType === "image-overlay") {
+    if (sourceHandle === "mask") return output.maskUrl
+    const variantId = overlayVariantIdFromHandle(sourceHandle)
+    if (variantId) return output.variants?.find((v) => v.id === variantId)?.url
+    return output.imageUrl
+  }
+
   // Paint-mask: single `mask` source handle — the hand-painted mask PNG is the
   // node's only output regardless of handle. Mirrors frontend execution-graph.ts.
   if (sourceType === "paint-mask") {
@@ -882,6 +896,8 @@ const IMAGE_RESULT_TYPES = new Set([
   // Image Collage: composites N images → one image (generatedImageUrl +
   // generatedResults[].url like every other image producer).
   "image-collage",
+  // Image Overlay: base + up to 12 layers → one image (same result shape).
+  "image-overlay",
 ])
 
 
@@ -999,6 +1015,26 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
 
   // Generate-mask → { imageUrl, maskUrl } from the bespoke per-result shape
   // (generatedResults[i] = { imageUrl, maskUrl }, NOT GeneratedResult.url).
+  // Image Overlay: expose BOTH outputs so the `mask` source handle hydrates
+  // on a skipped / "Run from here" node too. Precedes IMAGE_RESULT_TYPES.
+  if (type === "image-overlay") {
+    const results = (data.generatedResults as Array<{ url?: string }> | undefined) ?? []
+    const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
+    const imageUrl = results[activeIndex]?.url ?? (data.generatedImageUrl as string | undefined)
+    const maskUrl = data.generatedMaskUrl as string | undefined
+    const out: NodeOutput = {}
+    if (imageUrl) out.imageUrl = imageUrl
+    if (maskUrl) out.maskUrl = maskUrl
+    // The platform renders of the last run (the canvas stores them as overlayVariants).
+    const variants = Array.isArray(data.overlayVariants)
+      ? (data.overlayVariants as Array<{ id?: unknown; url?: unknown; label?: unknown; width?: unknown; height?: unknown }>)
+          .filter((v) => typeof v.id === "string" && typeof v.url === "string")
+          .map((v) => ({ id: v.id as string, url: v.url as string, ...(typeof v.label === "string" ? { label: v.label } : {}), ...(typeof v.width === "number" ? { width: v.width } : {}), ...(typeof v.height === "number" ? { height: v.height } : {}) }))
+      : []
+    if (variants.length) out.variants = variants
+    return out.imageUrl || out.maskUrl ? out : undefined
+  }
+
   // Must precede IMAGE_RESULT_TYPES so a skipped / "Run from here" generate-mask
   // still hydrates the mask handle instead of returning only the image.
   if (type === "generate-mask") {

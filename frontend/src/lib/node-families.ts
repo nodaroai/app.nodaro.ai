@@ -50,7 +50,7 @@ export const NODE_FAMILIES: readonly NodeFamily[] = [
     id: "image-edit-retouch",
     label: "Edit & Retouch",
     tab: "image",
-    types: ["modify-image", "upscale-image", "remove-background", "generate-mask", "paint-mask", "image-collage", "extract-frame"],
+    types: ["modify-image", "upscale-image", "remove-background", "generate-mask", "paint-mask", "image-collage", "image-overlay", "extract-frame"],
   },
   {
     id: "image-references",

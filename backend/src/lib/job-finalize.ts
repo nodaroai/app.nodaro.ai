@@ -228,7 +228,7 @@ export const NOT_GENERIC_RECOVERABLE: ReadonlySet<string> = new Set<string>([
   // own markJobCompleted with a handler-specific output_data shape (e.g.
   // combine-videos → {videoUrl, thumbnailUrl}; trim-audio → {audioUrl}) —
   // never finalizeJobWithMedia.
-  "combine-videos", "assemble-narrated-video", "image-collage",
+  "combine-videos", "assemble-narrated-video", "image-collage", "image-overlay",
   "merge-video-audio", "trim-audio", "trim-video", "extract-frame",
   "speed-ramp", "loop-video", "fade-video", "still-to-video",
   "gif-to-video", "slideshow", "resize-video", "adjust-volume",
