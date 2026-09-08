@@ -831,6 +831,10 @@ export function createRenderWorker() {
   return new Worker(
     "video-render",
     async (bullJob) => {
+      if (bullJob.name === "scene-render-child") {
+        const { processSceneRenderChild } = await import("./scene3d-render-child.js")
+        return processSceneRenderChild(bullJob, () => getBundlePath(SCENE3D_PLAN_TYPE), chromiumOptionsFor(SCENE3D_PLAN_TYPE))
+      }
       const data = bullJob.data as RenderJobData
       const { jobId, usageLogId } = data
 

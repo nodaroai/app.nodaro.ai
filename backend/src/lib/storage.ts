@@ -487,12 +487,24 @@ export async function uploadFileToR2(
   jobId: string,
   type: MediaType = "video",
   trackUserId?: string,
-  opts: { ext?: VideoContainerExt } = {},
+  opts: { ext?: VideoContainerExt; signal?: AbortSignal } = {},
 ): Promise<string> {
   const fileStat = await stat(filePath)
   const { key, contentType } = mediaTarget(jobId, type, opts.ext)
 
-  await streamToR2(key, createReadStream(filePath), contentType)
+  if (opts.signal) {
+    opts.signal.throwIfAborted()
+    if (fileStat.size > 512 * 1024 * 1024) throw new Error("Cancellable file upload exceeds its byte limit")
+    const body = createReadStream(filePath)
+    try {
+      // Upload.done() races its abort promise without joining multipart requests. A single
+      // bounded PUT carries the signal to the HTTP request and closes the input stream.
+      await s3.send(new PutObjectCommand(withObjectAcl({ Bucket: config.R2_BUCKET_NAME, Key: key,
+        Body: body, ContentLength: fileStat.size, ContentType: contentType, CacheControl: R2_CACHE_CONTROL,
+      })), { abortSignal: opts.signal })
+      opts.signal.throwIfAborted()
+    } finally { body.destroy() }
+  } else await streamToR2(key, createReadStream(filePath), contentType)
 
   trackStorage(trackUserId, fileStat.size)
 

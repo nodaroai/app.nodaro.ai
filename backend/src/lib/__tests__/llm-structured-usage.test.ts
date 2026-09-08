@@ -37,4 +37,13 @@ describe("structured usage on failed attempts", () => {
     expect(result).toMatchObject({ ok: false, usage: { inputTokens: 12, outputTokens: 3, complete: true } })
     expect(fetch).toHaveBeenCalledTimes(1)
   })
+  it("keeps private critic frames inline through the metered provider request", async () => {
+    const fetch = vi.fn(async () => response('{"value":4}'))
+    vi.stubGlobal("fetch", fetch)
+    await expect(completeStructuredMetered({ model: "gemini-3-flash", messages: [{ role: "user", content: [
+      { type: "image_base64", mediaType: "image/png", data: "cHJpdmF0ZS1mcmFtZQ==" }, { type: "text", text: "Review blocking" },
+    ] }] }, schema)).resolves.toMatchObject({ ok: true, output: { value: 4 } })
+    const body = JSON.parse(String((fetch.mock.calls[0] as unknown as [unknown, RequestInit])[1].body))
+    expect(JSON.stringify(body)).toContain("data:image/png;base64,cHJpdmF0ZS1mcmFtZQ==")
+  })
 })

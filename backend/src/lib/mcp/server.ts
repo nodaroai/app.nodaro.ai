@@ -19,6 +19,7 @@ import { registerCreatureTools } from "./tools/creatures.js"
 import { registerUploadTools } from "./tools/upload.js"
 import { registerFilmDirectorTool } from "./tools/film-director.js"
 import { registerRecastTools } from "./tools/recast.js"
+import { registerStudioProductionTools } from "./tools/studio-production.js"
 import { registerSkillLoaders } from "./tools/skill-loaders.js"
 import { registerPipelineTools } from "./tools/pipelines.js"
 import { registerReduce } from "./tools/reduce.js"
@@ -199,6 +200,11 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
     // Recast authored-script lane (spec 2026-08-06 §5): Cloud-only — the
     // routes these verbs call live in the cloud plugin and 404 off-cloud.
     registerRecastTools({ server, session, fastify: opts.fastify })
+    // Studio productions: Cloud-only for the same reason — the
+    // `/v1/studio/productions/*` routes these tools dispatch to are served by
+    // the cloud plugin, so off-cloud the whole family answers `not_available`.
+    // The installed plugin is the feature detect; there is no separate flag.
+    registerStudioProductionTools({ server, session, fastify: opts.fastify })
   }
   registerReduce({ server, session, fastify: opts.fastify })
   registerPromptHelper({ server, session, fastify: opts.fastify })

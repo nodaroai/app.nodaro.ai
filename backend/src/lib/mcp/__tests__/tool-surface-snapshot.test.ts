@@ -37,9 +37,19 @@ const FIXTURE = JSON.parse(readFileSync(resolve(here, "fixtures/tool-surface.jso
 
 /** Per-tool and total wire budget for the cloud edition under ALL_GRANTED. */
 // 2026-09-06 baseline after the six trims: max tool 8.1 KB, total 303 KB. The
-// headroom is deliberately small — the studio program's +17 tools (≈ +35 KB)
-// must raise this on purpose, not slide under it.
-export const TOOL_WIRE_BUDGET = { perToolBytes: 8_192, totalBytes: 310_000 }
+// headroom is deliberately small — a family that grows the list must raise this
+// on purpose, not slide under it.
+//
+// RAISED 2026-09-08 by the studio production family's wire size and nothing
+// else: 310_000 + 23_730 = 333_730, where 23_730 B is the sum of the seventeen
+// tool definitions as `tools/list` serves them (largest: generate_studio_clip
+// at 1_978 B, well under the per-tool budget). The 85 B of headroom the list
+// had before the family landed is therefore exactly the headroom it has after.
+// 23_578 of those bytes are the tools as first written; the remaining 152 are
+// the sentence the read tool's description gained, saying that reading also
+// lands finished work — the same raise-by-exactly-the-cost rule, applied to a
+// sentence.
+export const TOOL_WIRE_BUDGET = { perToolBytes: 8_192, totalBytes: 333_730 }
 
 type ToolDef = { name: string; description?: string }
 async function list(scopes: Scope[]): Promise<ToolDef[]> {

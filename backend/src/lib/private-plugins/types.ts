@@ -1381,6 +1381,7 @@ export interface PluginLlmRequest {
 export type PluginLlmContentBlock =
   | { type: "text"; text: string }
   | { type: "image"; url: string }
+  | { type: "image_base64"; mediaType: string; data: string }
   | {
       type: "video"
       url: string
@@ -1570,6 +1571,7 @@ export interface PluginToolkit {
   /** Optional durable, fenced stage journal. Absent on older hosts. */
   stages?: PluginStageToolkit
   sceneArtifacts?: PluginSceneArtifactToolkit
+  sceneRendering?: import("./scene3d-render-contract.js").PluginSceneRenderingToolkit
   scenePlayback?: import("./scene3d-playback-contract.js").PluginScenePlaybackToolkit
   providers: PluginProvidersToolkit
   ffmpeg: PluginFfmpegToolkit

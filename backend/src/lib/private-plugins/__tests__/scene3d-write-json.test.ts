@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto"
 import { describe, expect, it, vi } from "vitest"
-import { writeScene3DJson } from "../scene3d-write-json.js"
+import { writeScene3DJson, writeScene3DPng, receiveScene3DPngIfPresent } from "../scene3d-write-json.js"
+import { Scene3DArtifactError } from "../../../services/scene3d-artifacts/types.js"
 import type { PluginSceneArtifactToolkit } from "../scene3d-artifact-contract.js"
 
 function fixture(status = 200) {
@@ -53,5 +54,39 @@ describe("owned scene JSON writes", () => {
     vi.mocked(f.toolkit.grant).mockImplementation(async () => { f.input.bytes.fill(120); return grant })
     await writeScene3DJson(f.toolkit, f.input, { fetch: f.fetch })
     expect(f.fetch.mock.calls[0][1]?.body).toEqual(original)
+  })
+})
+
+describe("owned scene still writes", () => {
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a6XcAAAAASUVORK5CYII=", "base64")
+  it("verifies a rendered PNG through the same immutable receipt path", async () => {
+    const f = fixture(412)
+    const receipt = { ...f.receipt, kind: "poster" as const, byteLength: png.length,
+      sha256: createHash("sha256").update(png).digest("hex") }
+    vi.mocked(f.toolkit.receive).mockResolvedValue(receipt)
+    await expect(writeScene3DPng(f.toolkit, { ...f.input, kind: "poster", bytes: png }, { fetch: f.fetch })).resolves.toEqual(receipt)
+  })
+  it("adopts a previously rendered frame even if a retry encodes different PNG bytes", async () => {
+    const f = fixture(412)
+    const stored = { ...f.receipt, kind: "poster" as const, byteLength: png.length + 8, sha256: "b".repeat(64) }
+    vi.mocked(f.toolkit.receive).mockResolvedValue(stored)
+    await expect(writeScene3DPng(f.toolkit, { ...f.input, kind: "poster", bytes: png }, { fetch: f.fetch })).resolves.toEqual(stored)
+    await expect(receiveScene3DPngIfPresent(f.toolkit, f.input)).resolves.toEqual(stored)
+  })
+  it("treats only a definite missing frame as permission to render again", async () => {
+    const f = fixture()
+    vi.mocked(f.toolkit.receive).mockRejectedValueOnce(new Scene3DArtifactError("SCENE_ASSET_MISSING", "Not found"))
+    await expect(receiveScene3DPngIfPresent(f.toolkit, f.input)).resolves.toBeNull()
+    vi.mocked(f.toolkit.receive).mockRejectedValueOnce(new Scene3DArtifactError("SCENE_STORAGE_FAILED", "Read unavailable"))
+    await expect(receiveScene3DPngIfPresent(f.toolkit, f.input)).rejects.toThrow("Read unavailable")
+  })
+  it("rejects invalid headers, oversize images and wrong kinds before granting", async () => {
+    const f = fixture()
+    const wide = Buffer.from(png); wide.writeUInt32BE(1921, 16)
+    for (const bytes of [Buffer.from("not a png"), wide, Buffer.alloc(8 * 1024 * 1024 + 1)]) {
+      await expect(writeScene3DPng(f.toolkit, { ...f.input, kind: "poster", bytes }, { fetch: f.fetch })).rejects.toThrow("bounded PNG")
+    }
+    await expect(writeScene3DPng(f.toolkit, { ...f.input, bytes: png }, { fetch: f.fetch })).rejects.toThrow()
+    expect(f.toolkit.grant).not.toHaveBeenCalled()
   })
 })

@@ -18,7 +18,7 @@ export class Scene3DRenderPlanError extends Error {
 interface LocalAsset { path: string; bytes: number; mime: string }
 
 /** Only the explicitly downloaded playback files are reachable, behind a job-local token. */
-function serveAssets(files: ReadonlyMap<string, LocalAsset>): Promise<{ assetUrls: Record<string, string>; close(): void }> {
+export function serveScene3DRenderAssets(files: ReadonlyMap<string, LocalAsset>): Promise<{ assetUrls: Record<string, string>; close(): void }> {
   const token = randomUUID()
   return new Promise((resolve, reject) => {
     const server = createServer((request, response) => {
@@ -97,5 +97,5 @@ export async function prepareScene3DRenderAssets(options: {
     files.set(asset.assetId, { path, bytes, mime: asset.kind === "glb" ? "model/gltf-binary" : "application/json" })
   }
   options.signal.throwIfAborted()
-  return serveAssets(files)
+  return serveScene3DRenderAssets(files)
 }

@@ -126,8 +126,11 @@ async function consume(
   try {
     read = await store.get(objectKey)
   } catch (error) {
+    const failure = error as { name?: string; code?: string; message?: string; $metadata?: { httpStatusCode?: number } } | undefined
+    const missing = failure?.$metadata?.httpStatusCode === 404 ||
+      [failure?.name, failure?.code, failure?.message].some((value) => value === "NoSuchKey" || value === "NotFound")
     throw new Scene3DArtifactError(
-      "SCENE_ASSET_MISSING",
+      missing ? "SCENE_ASSET_MISSING" : "SCENE_STORAGE_FAILED",
       "the uploaded artifact could not be read back from private storage",
       error instanceof Error ? error.message : undefined,
     )
