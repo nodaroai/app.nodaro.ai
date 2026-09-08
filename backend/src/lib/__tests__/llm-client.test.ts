@@ -19,15 +19,137 @@ vi.mock("../anthropic.js", () => ({
 }))
 
 describe("LlmContentBlock type coverage", () => {
-  it("supports the five block types end-to-end (compile-time)", () => {
+  it("supports the six block types end-to-end (compile-time)", () => {
     const blocks: LlmContentBlock[] = [
       { type: "text", text: "hi" },
       { type: "image", url: "https://x/y.png" },
       { type: "image_base64", mediaType: "image/png", data: "AAAA" },
       { type: "video", url: "https://x/y.mp4" },
+      { type: "video_base64", mediaType: "video/mp4", data: "AAAA" },
       { type: "audio", url: "https://x/y.mp3" },
     ]
-    expect(blocks.length).toBe(5)
+    expect(blocks.length).toBe(6)
+  })
+})
+
+/**
+ * `video_base64` is servable by exactly ONE lane, and the router is what makes
+ * that total.
+ *
+ * The hazard is not a 400 — it is a 200. Every other lane here either has no
+ * bytes channel (KIE smuggles media as an `image_url` it dereferences itself)
+ * or takes no video at all (Claude `messages`, GPT `responses`), so a block
+ * that slipped through would be dropped, and the model would answer fluently
+ * about media it never received. So the assertion in every case below is the
+ * same two-parter: the call throws, AND nothing was dispatched — no provider
+ * request, nothing billed, nothing metered.
+ */
+describe("inline video bytes are rejected before dispatch on every lane but direct Google", () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  const clip = (): LlmContentBlock[] => [
+    { type: "video_base64", mediaType: "video/mp4", data: "AAAA" },
+    { type: "text", text: "analyse this" },
+  ]
+
+  beforeEach(() => {
+    fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  // One case per KIE wire format: chat-completions (Gemini), messages (Claude),
+  // responses (GPT). None of the three can carry bytes.
+  it.each([
+    ["gemini-3-flash", "KIE chat-completions"],
+    ["claude-sonnet-4.6", "KIE Claude messages"],
+    ["gpt-5.2", "KIE chat-completions (GPT)"],
+    ["gpt-5.4", "KIE responses"],
+    ["grok-4.6", "KIE responses (Grok)"],
+  ])("refuses an unpinned %s call (%s) without touching the network", async (modelId) => {
+    const { llmComplete } = await import("../llm-client.js")
+
+    await expect(
+      llmComplete({ modelId, system: "", messages: [{ role: "user", content: clip() }] }),
+    ).rejects.toThrow(/video_base64 block requires requireLane: "direct"/)
+
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("refuses an explicit KIE pin — an aggregator lane is still an aggregator lane", async () => {
+    const { llmComplete } = await import("../llm-client.js")
+
+    await expect(
+      llmComplete({
+        modelId: "gemini-3.6-flash",
+        system: "",
+        messages: [{ role: "user", content: clip() }],
+        requireLane: "kie",
+      }),
+    ).rejects.toThrow(/pinned to "kie"/)
+
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  // The model-family half of the gate: the pin is right, the model has no
+  // direct Google lane to honour it with. `assertLanePinnable` says so by name.
+  it.each(["claude-sonnet-4.6", "gpt-5.4", "grok-4.6"])(
+    "refuses a direct pin on %s — no directGeminiModel to serve it",
+    async (modelId) => {
+      const { llmComplete } = await import("../llm-client.js")
+
+      await expect(
+        llmComplete({
+          modelId,
+          system: "",
+          messages: [{ role: "user", content: clip() }],
+          requireLane: "direct",
+        }),
+      ).rejects.toThrow(/declares no directGeminiModel/)
+
+      expect(fetchMock).not.toHaveBeenCalled()
+    },
+  )
+
+  it("gates the streaming entry point identically", async () => {
+    const { llmStream } = await import("../llm-client.js")
+    const onToken = vi.fn()
+
+    await expect(
+      llmStream({ modelId: "gemini-3-flash", system: "", messages: [{ role: "user", content: clip() }] }, onToken),
+    ).rejects.toThrow(/video_base64 block requires requireLane: "direct"/)
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(onToken).not.toHaveBeenCalled()
+  })
+
+  it("still rejects when the bytes ride in a later message, not the first", async () => {
+    const { llmComplete } = await import("../llm-client.js")
+
+    await expect(
+      llmComplete({
+        modelId: "gemini-3-flash",
+        system: "",
+        messages: [
+          { role: "user", content: "warm up" },
+          { role: "assistant", content: "ok" },
+          { role: "user", content: clip() },
+        ],
+      }),
+    ).rejects.toThrow(/video_base64 block requires requireLane: "direct"/)
+
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  // Defense in depth for the one non-router path into a provider mapper:
+  // `structured-llm.ts` maps blocks with this function and calls Anthropic
+  // itself, never passing through the router gate above.
+  it("llmBlockToAnthropic throws rather than mapping bytes to a text or image block", async () => {
+    const { llmBlockToAnthropic } = await import("../llm-client.js")
+
+    expect(() =>
+      llmBlockToAnthropic({ type: "video_base64", mediaType: "video/mp4", data: "AAAA" }),
+    ).toThrow(/Anthropic lane cannot carry inline video bytes/)
   })
 })
 

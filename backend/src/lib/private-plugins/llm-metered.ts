@@ -3,7 +3,15 @@ import type { LlmReasoningEffort } from "@nodaro/shared"
 import { llmCompleteStructured, StructuredLlmError } from "../llm-client.js"
 import type { PluginLlmMeteredResult, PluginLlmMultimodalRequest } from "./types.js"
 
-/** No implicit serving-lane pin: the model registry decides unless requested. */
+/**
+ * No implicit serving-lane pin: the model registry decides unless requested.
+ *
+ * Consequence for `video_base64` blocks — the direct Google lane is the only
+ * one that carries inline video bytes, and `llmComplete` REJECTS an unpinned
+ * request that contains one. A caller sending bytes through this adapter must
+ * therefore pass `requireLane: "direct"` itself; its sibling
+ * `toolkit.llm.completeStructuredMultimodal` already defaults to it.
+ */
 export async function completeStructuredMetered<T>(
   req: PluginLlmMultimodalRequest,
   schema: unknown,
