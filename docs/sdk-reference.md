@@ -949,6 +949,20 @@ snapshot cannot change frame plans, acceptance, endpoint bindings, linked-job
 history, protected recycle-bin entries or sharing. Use their dedicated semantic
 actions instead.
 
+`reconcile(id)` also checks submitted jobs belonging to scenes in the recycle
+bin. A completed clip stays in that scene's stored graph with its original
+endpoint pins; it does not recreate the scene on the timeline. Restore it with
+`restore_trashed` to recover the result. Clients should reconcile once when
+reopening an editable dependency production even if no pending marker is
+visible, because the submission response may have been lost. Reconciliation
+never starts generation or accepts a candidate.
+
+Use `edit` with a strict `baseVersion` for `remove_shot`, `restore_trashed` and
+`purge_trashed`. Detach a bound sequence segment before removing its scene.
+When emptying a scoped bin, send `purge_trashed` for the displayed entry IDs;
+`clear_trash` empties every bin, including planned frames. Entries carrying
+frame dependencies are exempt from automatic pruning of ordinary bin entries.
+
 Check `capabilities.operations.revisionedSharing` and pass `expectedVersion` to
 `setShared` to bind sharing or unsharing to the reviewed revision. A concurrent
 edit returns HTTP 409 `workflow_conflict`; the SDK does not retry against the
