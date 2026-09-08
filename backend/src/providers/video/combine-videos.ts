@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs"
 import { join } from "node:path"
-import { downloadFile, runFfmpeg, runFfprobe, getVideoStreamDuration, createWorkDir, cleanupWorkDir, normalizeVideoForCombine, trimEdgeFrames, COMBINE_DELIVERY_CRF } from "./ffmpeg-utils.js"
+import { downloadFile, runFfmpeg, runFfprobe, getVideoFps, getVideoStreamDuration, createWorkDir, cleanupWorkDir, normalizeVideoForCombine, trimEdgeFrames, COMBINE_DELIVERY_CRF } from "./ffmpeg-utils.js"
 import { getSmartCutMatcher, type SmartCutMode } from "./smart-cut.js"
 import { resolveXfadeName, resolveAudioCrossfadeCurve } from "@nodaro/shared"
 
@@ -24,6 +24,9 @@ interface CombineOptions {
   readonly audioCrossfadeDuration?: number
   readonly trimStartFrames: number
   readonly trimEndFrames: number
+  /** Pin the frame rate every clip is conformed to. Omitted → tallied from
+   *  the sources by {@link pickTargetFps} (the common case). */
+  readonly targetFps?: number
   /** Smart cut: replace the fixed boundary trims with PSNR frame matching —
    *  search the last `framesFromPrev` frames of each clip and the first
    *  `framesFromNext` frames of the following one for the closest pair,
@@ -203,6 +206,29 @@ export async function pickTargetResolution(
   }
   // normalizeVideoForCombine rounds to even for yuv420p, so we don't here.
   return { width: best.width, height: best.height }
+}
+
+/**
+ * Pick the frame rate every clip is conformed to before combining — the
+ * frame-index trims and the smart-cut matcher need one uniform rate. Same
+ * policy as {@link pickTargetResolution}: the most common source rate wins,
+ * ties go to the higher one, so a set of 30 fps clips stays 30 fps. (The fixed
+ * 24 this replaced resampled every 30 fps set, dropping one frame in five —
+ * job 597dcf72, 2026-09-08.) Rates are keyed to 0.001 so 29.97 and
+ * 30000/1001 tally together; the result is clamped to a sane 1–60.
+ */
+export async function pickTargetFps(paths: readonly string[]): Promise<number> {
+  const rates = await Promise.all(paths.map(getVideoFps))
+  const tally = new Map<number, number>()
+  for (const r of rates) {
+    const key = Math.round(r * 1000) / 1000
+    tally.set(key, (tally.get(key) ?? 0) + 1)
+  }
+  let best = { fps: 24, count: 0 }
+  for (const [fps, count] of tally) {
+    if (count > best.count || (count === best.count && fps > best.fps)) best = { fps, count }
+  }
+  return Math.min(60, Math.max(1, best.fps))
 }
 
 /**
@@ -440,12 +466,13 @@ export async function combineVideos(options: CombineOptions): Promise<CombineVid
     const target = options.targetWidth && options.targetHeight
       ? { width: options.targetWidth, height: options.targetHeight }
       : await pickTargetResolution(rawPaths)
-    console.log(`[combineVideos] Normalizing ${rawPaths.length} clips to ${target.width}x${target.height}`)
+    const fps = options.targetFps ?? await pickTargetFps(rawPaths)
+    console.log(`[combineVideos] Normalizing ${rawPaths.length} clips to ${target.width}x${target.height} @ ${fps} fps`)
 
     const normalizedPaths: string[] = []
     for (let i = 0; i < rawPaths.length; i++) {
       const normalizedPath = join(workDir, `normalized_${i}.mp4`)
-      await normalizeVideoForCombine(rawPaths[i], normalizedPath, target.width, target.height)
+      await normalizeVideoForCombine(rawPaths[i], normalizedPath, target.width, target.height, fps)
       normalizedPaths.push(normalizedPath)
     }
 

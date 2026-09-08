@@ -44,6 +44,9 @@ const mocks = vi.hoisted(() => {
   const runFfmpeg = vi.fn().mockResolvedValue("")
   const runFfprobe = vi.fn().mockResolvedValue("")
   const getVideoDuration = vi.fn().mockResolvedValue(5)
+  // Every source is 30 fps unless a test says otherwise — the rate the
+  // normalizer must be handed (the fixed 24 it used to apply is the bug).
+  const getVideoFps = vi.fn().mockResolvedValue(30)
   const createWorkDir = vi.fn().mockResolvedValue("/tmp/work")
   const cleanupWorkDir = vi.fn().mockResolvedValue(undefined)
   const normalizeVideoForCombine = vi.fn().mockResolvedValue("")
@@ -55,7 +58,7 @@ const mocks = vi.hoisted(() => {
   const trimEdgeFrames = vi.fn(async (input: string) => input)
   const fsWriteFile = vi.fn().mockResolvedValue(undefined)
   return {
-    downloadFile, runFfmpeg, runFfprobe, getVideoDuration,
+    downloadFile, runFfmpeg, runFfprobe, getVideoDuration, getVideoFps,
     createWorkDir, cleanupWorkDir, normalizeVideoForCombine, trimEdgeFrames, fsWriteFile,
   }
 })
@@ -65,6 +68,7 @@ vi.mock("../ffmpeg-utils.js", () => ({
   runFfmpeg: mocks.runFfmpeg,
   runFfprobe: mocks.runFfprobe,
   getVideoDuration: mocks.getVideoDuration,
+  getVideoFps: mocks.getVideoFps,
   // combine-videos probes VIDEO STREAM durations (audio-overhang-free);
   // tests drive both through the same mock.
   getVideoStreamDuration: mocks.getVideoDuration,
@@ -100,7 +104,7 @@ vi.mock("@/lib/config.js", () => ({
 // Imports under test
 // ---------------------------------------------------------------------------
 
-import { combineVideos } from "../combine-videos.js"
+import { combineVideos, pickTargetFps } from "../combine-videos.js"
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -118,6 +122,7 @@ interface CombineCallOpts {
   trimEndFrames?: number
   targetWidth?: number
   targetHeight?: number
+  targetFps?: number
   transitions?: ReadonlyArray<{ index: number; transition: string; duration: number }>
   edgeFades?: { in?: number; out?: number }
 }
@@ -135,6 +140,7 @@ function defaultOptions(over: CombineCallOpts = {}): Parameters<typeof combineVi
     trimEndFrames: over.trimEndFrames ?? 0,
     targetWidth: over.targetWidth,
     targetHeight: over.targetHeight,
+    targetFps: over.targetFps,
     transitions: over.transitions,
     edgeFades: over.edgeFades,
   }
@@ -1820,5 +1826,42 @@ describe("combineVideos — edge fades", () => {
       return acc
     }, [])
     expect(inputs).toEqual(["/tmp/work/faded_0.mp4", "/tmp/work/faded_1.mp4"])
+  })
+})
+
+// ===========================================================================
+// Frame rate: clips are conformed to their COMMON source rate, never a fixed 24
+// ===========================================================================
+
+describe("frame rate normalization (job 597dcf72, 2026-09-08)", () => {
+  it("hands the normalizer the sources' common rate — two 30 fps clips stay 30 fps", async () => {
+    mocks.getVideoFps.mockResolvedValue(30)
+
+    await combineVideos(defaultOptions())
+
+    expect(mocks.normalizeVideoForCombine).toHaveBeenCalledTimes(2)
+    for (const call of mocks.normalizeVideoForCombine.mock.calls) expect(call[4]).toBe(30)
+  })
+
+  it("picks the most common source rate, and a tie goes to the higher one", async () => {
+    mocks.getVideoFps.mockResolvedValueOnce(24).mockResolvedValueOnce(30).mockResolvedValueOnce(30)
+    expect(await pickTargetFps(["a", "b", "c"])).toBe(30)
+
+    mocks.getVideoFps.mockResolvedValueOnce(24).mockResolvedValueOnce(30)
+    expect(await pickTargetFps(["a", "b"])).toBe(30)
+
+    mocks.getVideoFps.mockResolvedValueOnce(24).mockResolvedValueOnce(24).mockResolvedValueOnce(60)
+    expect(await pickTargetFps(["a", "b", "c"])).toBe(24)
+
+    // 29.97 and 30000/1001 are the same rate — they tally together.
+    mocks.getVideoFps.mockResolvedValueOnce(29.97).mockResolvedValueOnce(30000 / 1001).mockResolvedValueOnce(30)
+    expect(await pickTargetFps(["a", "b", "c"])).toBe(29.97)
+  })
+
+  it("targetFps pins the rate and skips the probe", async () => {
+    await combineVideos(defaultOptions({ targetFps: 25 }))
+
+    expect(mocks.getVideoFps).not.toHaveBeenCalled()
+    expect(mocks.normalizeVideoForCombine.mock.calls[0]?.[4]).toBe(25)
   })
 })
