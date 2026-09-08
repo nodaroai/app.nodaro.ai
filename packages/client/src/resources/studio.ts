@@ -8,6 +8,7 @@ export interface StudioProductionCapabilities {
   planVersions: number[]
   operations: {
     readKeyframes: boolean
+    saveEditorState?: boolean
     editKeyframes: boolean
     generateKeyframes: boolean
     acceptKeyframes: boolean
@@ -137,6 +138,16 @@ export class StudioResource {
 
   edit(id: string, input: StudioEditInput): Promise<{ data: StudioProductionReply & { version: number; rebased: boolean; receipts: StudioDocumentJson[] } }> {
     return this.client.request("POST", `${path(id)}/ops`, { body: input })
+  }
+
+  /** Save ordinary editor fields against the loaded revision. Protected frame
+   * and job state can only change through their dedicated semantic actions. */
+  saveEditorState(id: string, input: { expectedVersion: number; graph: object; clientRequestId?: string }) {
+    return this.edit(id, {
+      baseVersion: input.expectedVersion, strict: true,
+      ...(input.clientRequestId ? { clientRequestId: input.clientRequestId } : {}),
+      ops: [{ op: "save_editor_state", expectedVersion: input.expectedVersion, graph: input.graph }],
+    })
   }
 
   generateKeyframe(id: string, input: StudioKeyframeGenerationInput): Promise<{ data: Exclude<StudioGenerationReply, { dryRun: true }> }> {

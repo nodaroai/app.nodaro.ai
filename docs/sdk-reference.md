@@ -886,6 +886,7 @@ plugin returns the usual 404. These methods preserve the API response envelope.
 | `validatePlan(plan)` | Validate a plan without creating it |
 | `create({ name?, plan? })` | Create a production |
 | `edit(id, { ops, baseVersion?, strict?, clientRequestId? })` | Apply semantic operations with revision conditions |
+| `saveEditorState(id, { expectedVersion, graph, clientRequestId? })` | Save ordinary editor fields against the loaded revision; preserve protected frame and job state |
 | `generateKeyframe(id, { keyframeId, expectedRevision, clientRequestId?, overrides? })` | Generate a planned frame without accepting it |
 | `generateShot(id, input)` | Submit or quote a still/clip request |
 | `reconcile(id)` | Record completed jobs without accepting candidates |
@@ -898,6 +899,13 @@ its `requirementId` and an outcome of `pass` or `waived`; waivers require a
 `clientRequestId`. Conflicts are returned through the normal SDK error path;
 the SDK never selects a different result or retries acceptance against a newer
 revision automatically.
+
+Check `capabilities.operations.saveEditorState` before using the editor-save
+method. It always sends a strict revision condition. A conflicting save returns
+HTTP 409; keep the local draft and reload before resolving the conflict. The
+snapshot cannot change frame plans, acceptance, endpoint bindings, linked-job
+history, protected recycle-bin entries or sharing. Use their dedicated semantic
+actions instead.
 
 Frame generation has no dry-run option. `generateShot` accepts `dryRun` for a
 quote. Both use an explicit `clientRequestId` for safe caller retries. A generated

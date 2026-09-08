@@ -29,6 +29,15 @@ The compatible database functions are server-only and do not grant clients a
 raw JSON replacement path. The server integration must authorize the target and
 validate the document before calling them.
 
+The `save_editor_state` operation accepts an editor graph and its
+`expectedVersion`. The server verifies that revision inside the save loop,
+including after a concurrent writer wins. A stale snapshot returns HTTP 409
+even if the caller omitted the outer `strict` flag. This operation edits ordinary
+scene/settings state while preserving frame plans, reviews, bindings, linked
+jobs/results, protected trash, completion receipts and sharing. It rejects a
+draft whose indexed scenes cannot be reconstructed. Unknown stored settings
+remain preserved by the server.
+
 These boundaries do not by themselves enable the full dependent-frame feature.
 Compatible editor controls, cloning/import handling and deployment capability
 checks must also be available.

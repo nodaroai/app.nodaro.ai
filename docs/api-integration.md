@@ -522,6 +522,12 @@ Character descriptions work without a generated portrait; image conditioning
 is an explicit choice. See [the Studio SDK methods](sdk-reference.md#clientstudio)
 for generation, reconciliation and separate review actions.
 
+When `operations.saveEditorState` is available, `POST /v1/studio/productions/:id/ops` accepts `save_editor_state` with an
+`expectedVersion` and a serialized editor `graph`. This saves ordinary editor
+fields while preserving protected frame and job state. The revision is checked
+inside the compare-and-swap loop; a stale draft returns HTTP 409 even without
+an outer `strict` flag. Retain the local draft when handling that conflict.
+
 ## 6. Webhooks (push into Nodaro)
 
 A complementary path: instead of your server calling Nodaro to start a

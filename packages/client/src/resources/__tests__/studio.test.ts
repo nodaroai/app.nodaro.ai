@@ -7,6 +7,16 @@ function fixture(body: unknown = { data: {} }) {
   return { client, fetch, request: () => fetch.mock.calls[0] as [string, RequestInit] }
 }
 describe("Studio production transport", () => {
+  it("saves an editor draft with an explicit revision and strict conflict handling", async () => {
+    const f = fixture(), graph = { nodes: [], edges: [], settings: { studio: { version: 3, shots: [] } } }
+    await f.client.studio.saveEditorState("film/id", { expectedVersion: 8, graph, clientRequestId: "draft-1" })
+    const [url, init] = f.request()
+    expect(url).toContain("film%2Fid/ops")
+    expect(JSON.parse(init.body as string)).toEqual({
+      baseVersion: 8, strict: true, clientRequestId: "draft-1",
+      ops: [{ op: "save_editor_state", expectedVersion: 8, graph }],
+    })
+  })
   it("keeps the list envelope and pagination cursor intact", async () => {
     const body = { data: { data: [{ id: "film", name: "Canal" }], nextCursor: "next" } }
     const f = fixture(body)
