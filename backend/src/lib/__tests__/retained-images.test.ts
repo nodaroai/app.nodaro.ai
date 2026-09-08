@@ -29,11 +29,13 @@ vi.mock("../supabase.js", () => ({ supabase: {
   },
 } }))
 import { collectRetainedImages, readRetainedImage, retainImage } from "../retained-images.js"
+import { clearUploadPolicies, registerUploadPolicy } from "../upload-policy.js"
 
 const ID = "00000000-0000-4000-8000-000000000001"
 const KEY = `retained-images/${ID}`
 let body: Buffer
 beforeEach(async () => {
+  clearUploadPolicies()
   vi.clearAllMocks()
   state.configured = true; state.credits = true; state.deploymentPayer = false
   state.objects.clear(); state.queries.length = 0
@@ -51,6 +53,15 @@ beforeEach(async () => {
 })
 
 describe("retained canonical image bytes", () => {
+  it("checks final bytes before reserving quota or writing an object", async () => {
+    const check = vi.fn(() => ({ allow: false, reason: "Image not allowed" }))
+    registerUploadPolicy({ id: "private-policy", check })
+    await expect(retainImage({ userId: "owner", workflowId: "film", body })).rejects.toThrow("Image not allowed")
+    expect(check).toHaveBeenCalledWith({ kind: "image", lane: "retained-image", mime: "image/png",
+      userId: "owner", sizeBytes: body.length, buffer: body })
+    expect(state.rpc).not.toHaveBeenCalled()
+    expect(state.send).not.toHaveBeenCalled()
+  })
   it("copies the caller's bytes, conditionally writes them and verifies storage before publication", async () => {
     const input = Buffer.from(body)
     const pending = retainImage({ userId: "owner", workflowId: "film", body: input })

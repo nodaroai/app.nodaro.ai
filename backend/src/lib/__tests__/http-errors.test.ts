@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { RetainedImageInUseError } from "../retained-image-errors.js"
+import { UploadBlockedError } from "../upload-policy.js"
 import Fastify from "fastify"
 import type { FastifyReply, FastifyRequest } from "fastify"
 
@@ -56,6 +57,13 @@ describe("sendInternalError", () => {
     sendInternalError(reply as unknown as FastifyReply, req, new RetainedImageInUseError())
     expect(reply.statusCode).toBe(409)
     expect(reply.body).toEqual({ error: { code: "retained_image_in_use", message: "Retained image bytes cannot be deleted through the gallery" } })
+    expect(error).not.toHaveBeenCalled()
+  })
+  it("maps a service upload denial without exposing its policy identity", () => {
+    const reply = makeReply(), { req, error } = makeReq()
+    sendInternalError(reply as unknown as FastifyReply, req, new UploadBlockedError({ allow: false, reason: "Image not allowed", policyId: "private-policy" }))
+    expect(reply.statusCode).toBe(400)
+    expect(reply.body).toEqual({ error: { code: "upload_blocked", message: "Image not allowed" } })
     expect(error).not.toHaveBeenCalled()
   })
   it("responds 500 with the stable internal_error code and a generic default message", () => {

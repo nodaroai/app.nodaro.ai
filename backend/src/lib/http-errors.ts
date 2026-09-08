@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { jobBlockOf, jobBlockedBody } from "./job-policy.js"
 import { RetainedImageInUseError } from "./retained-image-errors.js"
+import { UploadBlockedError, uploadBlockedBody } from "./upload-policy.js"
 
 /** The single generic string every unmarked `internal_error` 500 collapses to. */
 const GENERIC_INTERNAL_MESSAGE = "Internal server error"
@@ -215,6 +216,7 @@ export function sendInternalError(
   if (err instanceof RetainedImageInUseError) {
     return reply.status(err.statusCode).send({ error: { code: err.code, message: err.message } })
   }
+  if (err instanceof UploadBlockedError) return reply.status(400).send(uploadBlockedBody(err.decision))
   const blocked = jobBlockOf(err)
   if (blocked) {
     req.log.info({ policyId: blocked.policyId }, "job blocked by policy")

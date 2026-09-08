@@ -6,6 +6,7 @@ import { deploymentPayerActive } from "./deployment-payer.js"
 import { supabase } from "./supabase.js"
 import { isStorageConfigured, withObjectAcl, readR2Object, r2Url, s3 } from "./storage.js"
 import { retainedImageKey } from "./retained-image-keys.js"
+import { applyUploadPolicies, UploadBlockedError } from "./upload-policy.js"
 
 const MAX_BYTES = 25 * 1024 * 1024
 const WRITE_TIMEOUT_MS = 30_000
@@ -37,6 +38,9 @@ export async function retainImage(args: { userId: string; workflowId: string; bo
   }
   const contentType = ({ png: "image/png", jpeg: "image/jpeg", webp: "image/webp" } as Record<string, string>)[meta.format ?? ""]
   if (!contentType || !meta.width || !meta.height || body.length > MAX_BYTES) throw new Error("Unsupported retained image")
+  const decision = await applyUploadPolicies({ kind: "image", lane: "retained-image", mime: contentType,
+    sizeBytes: body.length, userId: args.userId, buffer: body })
+  if (!decision.allow) throw new UploadBlockedError(decision)
   const sha256 = digest(body)
   const { data, error } = await supabase.rpc("reserve_retained_image", {
     p_user_id: args.userId, p_workflow_id: args.workflowId, p_sha256: sha256, p_byte_length: body.length,

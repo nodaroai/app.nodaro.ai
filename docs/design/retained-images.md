@@ -5,6 +5,9 @@ destination workflow. The toolkit receives image bytes, stores a separate copy,
 and returns an asset ID, SHA-256 hash, URL and dimensions. Reads verify both the
 workflow binding and the stored bytes. Gallery assets and their editable metadata
 do not determine whether a snapshot is valid.
+Capture applies registered upload policies to the final normalized image bytes
+on the `retained-image` lane before reserving quota or writing storage. A denied
+capture returns HTTP 400 with `upload_blocked`, without exposing policy IDs.
 
 Snapshots remain available for the lifetime of their production. Deleting a
 source image or removing a result from a gallery does not delete the retained
