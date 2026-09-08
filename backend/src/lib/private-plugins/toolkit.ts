@@ -1424,6 +1424,8 @@ export function buildToolkit(): PluginToolkit {
     },
     entities: { listOwned: listOwnedEntities },
     auth: {
+      workflowAccess: async (userId, workflowId) =>
+        (await import("../workflow-access.js")).workflowAccess(userId, workflowId),
       isPlatformAdmin: checkIsAdmin,
       // `required` is `string` on the contract — the scope union is core's to
       // grow, and a structural mirror that pinned it would make every new
