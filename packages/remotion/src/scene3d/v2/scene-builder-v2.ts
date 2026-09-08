@@ -53,6 +53,7 @@ import {
 } from "./overlays"
 import type { Scene3DAssetAnimation, Scene3DEntityV2 } from "./plan-shape"
 import { sampleBakedCamera, type Scene3DCameraSample } from "./camera-track"
+import { createClayShadows } from "./clay-shadows"
 
 /** Pinned clay look — the same numbers the v1 builder uses, on purpose. */
 const CLAY_ROUGHNESS = 0.78
@@ -154,6 +155,8 @@ export function buildScene3DV2Scene(loaded: Scene3DLoadedScene): Scene3DV2SceneH
   const keyLight = new THREE.DirectionalLight(0xffffff, lighting.keyIntensity)
   keyLight.position.set(lighting.keyPosition[0], lighting.keyPosition[1], lighting.keyPosition[2])
   scene.add(keyLight)
+  const shadows = lighting.preset === "clay-studio-v2" ? createClayShadows(keyLight) : undefined
+  if (shadows) scene.add(keyLight.target)
 
   const ordered = topoOrder(plan.objects)
   const nodes = new Map<string, EntityNode>()
@@ -302,6 +305,11 @@ export function buildScene3DV2Scene(loaded: Scene3DLoadedScene): Scene3DV2SceneH
     else scene.add(node.wrapper)
   }
 
+  const shadowMeshes = [...nodes.values()].flatMap((node) => node.meshes)
+  if (shadows) {
+    for (const mesh of shadowMeshes) mesh.castShadow = mesh.receiveShadow = true
+  }
+
   const applyFrame = (frame: number): Scene3DV2FrameSample => {
     const f = Number.isFinite(frame) ? Math.floor(frame) : 0
 
@@ -372,6 +380,7 @@ export function buildScene3DV2Scene(loaded: Scene3DLoadedScene): Scene3DV2SceneH
     camera.updateMatrixWorld(true)
 
     scene.updateMatrixWorld(true)
+    shadows?.update(shadowMeshes)
     return { frame: f, shotId: shot.id, shotIndex, camera: sample }
   }
 
@@ -403,6 +412,7 @@ export function buildScene3DV2Scene(loaded: Scene3DLoadedScene): Scene3DV2SceneH
   }
 
   const dispose = (): void => {
+    shadows?.dispose()
     for (const node of nodes.values()) node.clip?.dispose()
     for (const geometry of ownedGeometries) geometry.dispose()
     for (const material of ownedMaterials) material.dispose()
@@ -426,7 +436,8 @@ export function buildScene3DV2Scene(loaded: Scene3DLoadedScene): Scene3DV2SceneH
 
   applyFrame(0)
 
-  return { scene, camera, entities, meshes, raycastTargets, applyFrame, getAnchorWorldPosition, setSelected, dispose }
+  return { scene, camera, entities, meshes, raycastTargets, shadowMapEnabled: !!shadows,
+    applyFrame, getAnchorWorldPosition, setSelected, dispose }
 }
 
 /**

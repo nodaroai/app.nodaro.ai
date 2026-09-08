@@ -34,6 +34,9 @@ The scene stores object IDs, transforms, dimensions, camera position/target/lens
 
 Coordinates use meters with Y pointing up. Euler rotations are radians. Timeline frames start at zero. Each rendered MP4 uses a specific scene revision.
 
+Deleting your account removes retained scene metadata and schedules its private
+files, including abandoned uploads, for cleanup.
+
 ## API and SDK
 
 For existing GLBs, send `inputAssets` alongside your prompt and image/video
@@ -73,6 +76,8 @@ Cloud defaults are **10 credits for economy LLMs, 30 for standard, and 40 for pr
 The total is **scene authoring + optional video analysis + optional MP4 export**. For example, a standard-model scene using only image references costs 30 credits to author and 45 including one MP4 export. Preview playback and local property edits are free. These are the built-in defaults; the model-cost API supplies the instance's current prices. Community and Business editions do not use Cloud credit billing.
 
 ## Using the exported motion guide
+
+Scene3D v2 revisions record their clay lighting preset. `clay-studio-v2` adds ground and object shadows with the same lighting in interactive previews and MP4 exports. `clay-studio-v1` retains its original appearance; Basic scenes are unchanged. The scene's authoring engine selects the preset when it creates a revision, so an older saved revision is not silently upgraded.
 
 Use the rendered MP4 as a video reference on a model that accepts video references. Also connect the original appearance images to that final generation node; the clay render supplies blocking and camera motion, while those images supply the desired appearance. To compare guided and unguided results, keep the prompt, appearance images, model and generation settings identical; add only the clay video and the instruction identifying it as the motion/layout guide.
 

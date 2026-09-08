@@ -13,6 +13,7 @@ const state = vi.hoisted(() => ({
 vi.mock("three", async (original) => ({
   ...await original<typeof import("three")>(),
   WebGLRenderer: class {
+    shadowMap = { enabled: false, type: 0 }
     domElement: HTMLCanvasElement
     constructor({ canvas }: { canvas: HTMLCanvasElement }) {
       if (state.lost.has(canvas)) throw new Error("The canvas context was lost")

@@ -199,6 +199,9 @@ describe("scene3d v2 resources — content hash", () => {
 
   it("changes when any content changes", async () => {
     const base = await computeScene3DPlanV2ContentHash(planV2())
+    const shadowed = planV2()
+    shadowed.lighting = { ...shadowed.lighting, preset: "clay-studio-v2" }
+    expect(await computeScene3DPlanV2ContentHash(shadowed)).not.toBe(base)
     const recoloured = planV2()
     recoloured.objects[1].materialBindings = [
       { role: "bodyPaint", materialName: "Body Paint", color: "#00ff00" },

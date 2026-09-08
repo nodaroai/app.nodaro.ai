@@ -754,6 +754,9 @@ describe("scene3d v2 — references and engines", () => {
   })
 
   it("pins the clay lighting preset", () => {
+    for (const preset of ["clay-studio-v1", "clay-studio-v2"] as const) {
+      expect(scene3DPlanV2Schema.safeParse(planV2({ lighting: { ...planV2().lighting, preset } })).success).toBe(true)
+    }
     expect(scene3DPlanV2Schema.safeParse(planV2({ lighting: { ...planV2().lighting, preset: "neon" as never } })).success).toBe(
       false,
     )
