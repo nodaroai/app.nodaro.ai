@@ -3,7 +3,8 @@ import { hasCredits, hasOrganizations } from "../lib/config.js"
 import { findCloudOnlyNodeTypes, cloudOnlyRejectionMessage } from "../lib/cloud-only-nodes.js"
 import { findDeniedNodeTypes, deniedNodeRejectionMessage } from "../lib/surface-deny.js"
 import { z } from "zod"
-import { stripExportContent, stripStudioTransientSettings, stripTransientRuntimeData, validateSubWorkflowRoutes, WORKFLOW_VISIBILITIES, type WorkflowExport } from "@nodaro/shared"
+import { stripExportContent, stripTransientRuntimeData, validateSubWorkflowRoutes, WORKFLOW_VISIBILITIES, type WorkflowExport } from "@nodaro/shared"
+import { publicWorkflowProjection } from "../lib/public-workflow-projection.js"
 import { supabase } from "../lib/supabase.js"
 import { ensureDefaultProject, PERSONAL_SPACE_DISABLED_ERROR } from "../lib/default-project.js"
 import { getPluginServices } from "../lib/private-plugins/load.js"
@@ -1247,21 +1248,19 @@ export async function workflowRoutes(app: FastifyInstance) {
       return notFound(reply, "Workflow not found")
     }
 
-    // Trimmed public projection — only what the read-only viewer renders, and
-    // (D12) without the owner's working state: `settings.studio` carries their
-    // recycle bin, their in-flight jobs and their unsaved editor draft, none of
-    // which a share viewer has any business receiving. The strip list lives in
-    // `@nodaro/shared` — a plain JSON walker, so this route never has to know
-    // what writes the rest of the free-form column, and the one other reader
-    // of that list works from the same copy.
+    // Extension documents require their codec's public read projection.
+    // Missing support must not fall back to raw private authoring state.
+    const graph = publicWorkflowProjection({ id: params.id, name: typeof full.name === "string" ? full.name : "",
+      nodes: Array.isArray(full.nodes) ? full.nodes : [], edges: Array.isArray(full.edges) ? full.edges : [],
+      settings: full.settings && typeof full.settings === "object" && !Array.isArray(full.settings)
+        ? full.settings as Record<string, unknown> : {} }, getPluginServices())
+    if (!graph) return notFound(reply, "Workflow not found")
     return {
       data: {
         id: full.id,
         name: full.name,
         thumbnailUrl: full.thumbnailUrl,
-        nodes: full.nodes,
-        edges: full.edges,
-        settings: stripStudioTransientSettings(full.settings),
+        ...graph,
       },
     }
   })

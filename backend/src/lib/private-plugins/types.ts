@@ -2196,6 +2196,13 @@ export interface PluginBillingService {
 }
 
 export interface PluginServices {
+  /** Public read projection for extension documents. Called only after the
+   * host's share-by-link authorization. Null means unsupported; never return
+   * raw authoring state as a fallback. Pure: no jobs, storage or writes. */
+  publicWorkflow?: {
+    project(input: { id: string; name: string; nodes: unknown[]; edges: unknown[]; settings: Record<string, unknown> }):
+      { nodes: unknown[]; edges: unknown[]; settings: Record<string, unknown> } | null
+  }
   orgs?: PluginOrgsService
   /**
    * Payer/entitlement resolution (E2/P14). Optional-by-absence like every

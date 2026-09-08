@@ -535,6 +535,15 @@ checks permission to change visibility. If another edit wins before the write,
 it returns HTTP 409 `workflow_conflict` without rebasing the sharing decision.
 Use `shared: false` on the same route for revision-checked unsharing.
 
+Public link reads of dependency-aware productions require the matching plugin's
+public projection. They return a marked `settings.studio.publicView` media
+snapshot: selected clips, accepted frames, selected previews and planned-frame
+labels. Private inputs, reviews, pending jobs, trash and unselected history are
+omitted. The snapshot is for read-only display; it is not an editable plan or a
+lossless clone source. Without compatible projection support, the public read
+returns the same 404 as an unavailable link. Ordinary public workflows retain
+their existing response shape.
+
 For a linked segment, `POST /v1/studio/productions/:id/generate` with
 `kind: "clip"`, `shotId` and `dryRun: true` verifies both accepted endpoints and
 returns an estimate for the normalized clip settings. Its `inputHash` covers
