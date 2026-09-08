@@ -1,5 +1,15 @@
 # @nodaro/cli
 
+## 1.18.2
+
+### Patch Changes
+
+- Updated dependencies [32493ee]
+- Updated dependencies [32493ee]
+  - @nodaro/sdk@2.0.0
+  - @nodaro/shared@3.0.0
+  - @nodaro/prompts@1.17.2
+
 ## 1.18.1
 
 ### Patch Changes

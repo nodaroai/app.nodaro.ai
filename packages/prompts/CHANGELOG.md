@@ -1,5 +1,12 @@
 # @nodaro/prompts
 
+## 1.17.2
+
+### Patch Changes
+
+- Updated dependencies [32493ee]
+  - @nodaro/shared@3.0.0
+
 ## 1.17.1
 
 ### Patch Changes
