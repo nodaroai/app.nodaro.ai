@@ -16,7 +16,12 @@ describe("physical object deletion boundaries", () => {
   it("requires every new S3 delete site to account for retained image protection", () => {
     const counts: Record<string, number> = {}
     for (const path of files(root)) {
-      const source = ts.createSourceFile(path, readFileSync(path, "utf8"), ts.ScriptTarget.Latest, true)
+      const text = readFileSync(path, "utf8")
+      // The AST predicate below matches these exact constructor names. Files
+      // without either spelling cannot match; avoid parsing the entire backend
+      // under coverage just to discover that. Keep scanning every source file.
+      if (!/DeleteObjects?Command/.test(text)) continue
+      const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true)
       const visit = (node: ts.Node) => {
         if (ts.isNewExpression(node) && /^(DeleteObjectCommand|DeleteObjectsCommand)$/.test(node.expression.getText(source))) {
           const file = relative(root, path)

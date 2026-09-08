@@ -922,6 +922,7 @@ plugin returns the usual 404. These methods preserve the API response envelope.
 | `create({ name?, plan? })` | Create a production |
 | `clone(id, { name?, projectId?, expectedVersion? })` | Copy a saved production; optional destination project must belong to the caller |
 | `importBundle({ bundle, projectId? })` | Import a portable production through the compatible writer, remapping its frame and sequence IDs |
+| `appendBundle(id, { bundle, expectedVersion, afterShotId?, applyFilm? })` | Append a complete bundle slice to an editable production with fresh IDs and an exact revision check |
 | `edit(id, { ops, baseVersion?, strict?, clientRequestId? })` | Apply semantic operations with revision conditions |
 | `saveEditorState(id, { expectedVersion, graph, clientRequestId? })` | Save ordinary editor fields against the loaded revision; preserve protected frame and job state |
 | `setShared(id, { shared, expectedVersion? })` | Change link sharing through the visibility-authorized route |
@@ -959,6 +960,17 @@ before generating dependent media; copying submits no generation jobs and uses
 destination storage quota for retained inputs. Full
 linked copies currently require ownership of the source. Shared media views do
 not expose an editable frame plan and cannot use this operation.
+
+`appendBundle` posts to `/v1/studio/productions/:id/import-bundle` and requires
+`workflows:write` plus edit access to the destination. It returns the production
+and `importedShotIds`/`importedKeyframeIds`. It preserves existing scenes, frames,
+jobs, sharing and unrelated settings, and merges imported cast roles. The imported
+frame closure needs fresh acceptance. Omit `afterShotId` to append at the end;
+an unknown anchor or stale `expectedVersion` fails. `applyFilm: true` explicitly
+adopts the incoming film look; existing music, cuts and film brief stay in place.
+Check `appendPlannedBundles` or `appendLinkedBundles` in capabilities first.
+Linked media has the same owned-source and verified-copy requirements as a new
+production import. Neither method starts generation or retries a revision conflict.
 
 `importBundle` posts to `/v1/studio/productions/import-bundle` and creates a new,
 private production with remapped scene, frame and sequence IDs. Check

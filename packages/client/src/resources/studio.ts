@@ -15,6 +15,8 @@ export interface StudioProductionCapabilities {
     cloneLinkedProductions?: boolean
     importPlannedBundles?: boolean
     importLinkedBundles?: boolean
+    appendPlannedBundles?: boolean
+    appendLinkedBundles?: boolean
     editKeyframes: boolean
     generateKeyframes: boolean
     acceptKeyframes: boolean
@@ -162,6 +164,14 @@ export class StudioResource {
    * Retained frame media requires an authorized source; acceptance never transfers. */
   importBundle(input: { bundle: StudioDocumentJson; projectId?: string }): Promise<{ data: StudioProductionReply }> {
     return this.client.request("POST", `${root}/import-bundle`, { body: input })
+  }
+
+  /** Append a bundle's scenes and frame closure under an exact destination revision. */
+  appendBundle(id: string, input: { bundle: StudioDocumentJson; expectedVersion: number;
+    afterShotId?: string; applyFilm?: boolean }): Promise<{ data: {
+      production: StudioProductionRecord; importedShotIds: string[]; importedKeyframeIds: string[];
+    } }> {
+    return this.client.request("POST", `${path(id)}/import-bundle`, { body: input })
   }
 
   /** Copy a saved production. Linked copies retain verified inputs, remap

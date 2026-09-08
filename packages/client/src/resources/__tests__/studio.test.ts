@@ -7,6 +7,15 @@ function fixture(body: unknown = { data: {} }) {
   return { client, fetch, request: () => fetch.mock.calls[0] as [string, RequestInit] }
 }
 describe("Studio production transport", () => {
+  it("appends once with an exact revision, insertion anchor and explicit film choice", async () => {
+    const body = { data: { production: { id: "film", version: 9 }, importedShotIds: ["new-scene"], importedKeyframeIds: ["new-frame"] } }
+    const f = fixture(body), input = { expectedVersion: 8, bundle: { version: 1 }, afterShotId: "scene", applyFilm: false }
+    await expect(f.client.studio.appendBundle("film/id", input)).resolves.toEqual(body)
+    expect(f.request()[0]).toBe("https://api.test/v1/studio/productions/film%2Fid/import-bundle")
+    expect(JSON.parse(f.request()[1].body as string)).toEqual(input)
+    expect(f.fetch).toHaveBeenCalledTimes(1)
+  })
+
   it("imports a bundle through the compatible route and preserves its source hint", async () => {
     const body = { data: { production: { id: "created", version: 2 } } }, f = fixture(body)
     const bundle = { version: 1, nodes: [], edges: [], settings: {}, nodaroStudio: { sourceWorkflowId: "source" } }
