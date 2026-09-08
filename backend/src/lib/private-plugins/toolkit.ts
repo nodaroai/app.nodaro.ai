@@ -65,7 +65,7 @@ import { config } from "../config.js"
 import { redis } from "../queue.js"
 import { checkIsAdmin } from "../admin-check.js"
 import { videoQueue } from "../queue.js"
-import { creditGuard, reserveCreditsForJob } from "../../middleware/credit-guard.js"
+import { creditGuard, reserveCreditsForJob, reserveCreditsForJobOnce } from "../../middleware/credit-guard.js"
 import { safeUrlSchema, YOUTUBE_HOSTS, hostnameMatchesAllowlist } from "../url-validator.js"
 import { safeFetch } from "../safe-fetch.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../request-helpers.js"
@@ -1213,6 +1213,21 @@ export function buildToolkit(): PluginToolkit {
       publishLegacyRecastRescore,
       publishRecastRescore,
       markJobCompleted: pluginMarkJobCompleted,
+      checkpointReservedJob: async (input) => {
+        if (!hasCredits()) throw new Error("Job settlement is unavailable on this edition")
+        const { checkpointJobSettlement } = await import("../../ee/billing/managed-job-settlement.js")
+        return checkpointJobSettlement(input)
+      },
+      settleCheckpointedJob: async (usageLogId) => {
+        if (!hasCredits()) throw new Error("Job settlement is unavailable on this edition")
+        const { CreditsService } = await import("../../ee/billing/credits.js")
+        return CreditsService.trySettleManagedCredits(usageLogId)
+      },
+      settleReservedJob: async (input) => {
+        if (!hasCredits()) throw new Error("Job settlement is unavailable on this edition")
+        const { settleReservedJob } = await import("../../ee/billing/job-reservation-settlement.js")
+        return settleReservedJob(input)
+      },
       setJobProgress,
       withProgressRamp,
       commitJobCredits,
@@ -1238,6 +1253,7 @@ export function buildToolkit(): PluginToolkit {
       videoQueue,
       creditGuard,
       reserveCreditsForJob,
+      reserveCreditsForJobOnce,
       applyCreditMarkup: async (modelIdentifier, baseCredits) => {
         if (!Number.isFinite(baseCredits) || baseCredits < 0) {
           throw new Error("Dynamic credit quote must be a finite non-negative number")

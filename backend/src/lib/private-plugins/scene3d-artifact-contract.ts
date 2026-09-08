@@ -47,7 +47,18 @@ export interface PluginSceneAuthoringSource {
   sourceArtifactId: string
   sourceSha256: string
 }
+export interface PluginSceneDeliveryPublish extends PluginSceneArtifactScope {
+  source: { kind: "retained-revision" | "job-output"; jobId?: string }
+  mode: "authored" | "render-only"
+  plan: unknown
+  artifacts: Array<{
+    artifactId: string; kind: "poster" | "validation-report"; sha256: string; byteLength: number
+    reuseFromRevisionId?: string
+  }>
+}
 export interface PluginSceneArtifactToolkit {
+  /** Quote/admission source resolution uses current canonical scene permissions. */
+  resolveSource?(input: import("./scene3d-source-contract.js").PluginSceneSourceRequest): Promise<import("./scene3d-source-contract.js").PluginSceneSource>
   grant(input: PluginSceneArtifactUpload): Promise<PluginSceneArtifactGrant>
   receive(input: PluginSceneArtifactScope & { artifactId: string }): Promise<PluginSceneArtifactReceipt>
   /** Store bounded JSON at an owned immutable key; repeated identical writes adopt the receipt. */
@@ -58,4 +69,8 @@ export interface PluginSceneArtifactToolkit {
   readAuthoringSource?(input: PluginSceneAuthoringSourceRequest, options?: { signal?: AbortSignal }): Promise<PluginSceneAuthoringSource>
   /** Workflow scope comes from the owned parent job, never from a producer manifest. */
   publish(input: PluginSceneArtifactPublish): Promise<{ revisionId: string; status: "created" | "unchanged"; artifactIds: string[] }>
+  /** Retain export evidence without cloning or modifying the source revision. */
+  publishDelivery?(input: PluginSceneDeliveryPublish): Promise<{
+    deliveryId: string; revisionId: string; status: "created" | "unchanged"; artifactIds: string[]
+  }>
 }

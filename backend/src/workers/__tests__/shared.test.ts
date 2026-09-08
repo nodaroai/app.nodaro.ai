@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => {
   // getAppSettings(). 25% is a representative Cloud admin markup (the code
   // default is 0 — markup is a runtime dial set in the admin webapp).
   const mockMarkupPercent = { value: 25 }
+  const mockManagedSettlement = vi.fn().mockResolvedValue(false)
   const mockCommitCredits = vi.fn().mockResolvedValue(undefined)
   const mockRefundCredits = vi.fn().mockResolvedValue(undefined)
   const mockUploadToR2 = vi.fn().mockResolvedValue("https://r2.example.com/images/test.png")
@@ -49,6 +50,7 @@ const mocks = vi.hoisted(() => {
   return {
     mockHasCredits,
     mockMarkupPercent,
+    mockManagedSettlement,
     mockCommitCredits,
     mockRefundCredits,
     mockUploadToR2,
@@ -91,6 +93,7 @@ vi.mock("@/lib/job-policy-gate.js", () => ({
 
 vi.mock("@/ee/services/credits.js", () => ({
   CreditsService: {
+    trySettleManagedCredits: mocks.mockManagedSettlement,
     commitCredits: mocks.mockCommitCredits,
     refundCredits: mocks.mockRefundCredits,
   },
@@ -1059,5 +1062,27 @@ describe("refundLoopTrimAddon", () => {
     const { refundLoopTrimAddon } = await import("../shared.js")
     await refundLoopTrimAddon("job-1", "log-1", 0)
     expect(mocks.mockCommitCredits).not.toHaveBeenCalled()
+  })
+})
+
+
+describe("managed worker settlement", () => {
+  it("does not overwrite a managed actual amount with the reserved tier or live markup", async () => {
+    mocks.mockManagedSettlement.mockResolvedValueOnce(true)
+    await commitJobCredits("managed-usage", "job-1", 1000, 1000, true)
+    expect(mocks.mockCommitCredits).not.toHaveBeenCalled()
+    expect(mocks.mockUpdate).not.toHaveBeenCalled()
+  })
+  it("honours managed failure policy before the generic post-processing exception", async () => {
+    mocks.mockManagedSettlement.mockResolvedValueOnce(true)
+    await refundJobCredits("managed-usage", "job-1", { postProcessing: true })
+    expect(mocks.mockManagedSettlement).toHaveBeenCalledExactlyOnceWith("managed-usage")
+    expect(mocks.mockRefundCredits).not.toHaveBeenCalled()
+  })
+  it("leaves an uncertain managed decision for recovery without falling through", async () => {
+    mocks.mockManagedSettlement.mockRejectedValueOnce(new Error("managed settlement unavailable"))
+    await commitJobCredits("managed-usage", "job-1")
+    expect(mocks.mockCommitCredits).not.toHaveBeenCalled()
+    expect(mocks.mockUpdate).not.toHaveBeenCalled()
   })
 })

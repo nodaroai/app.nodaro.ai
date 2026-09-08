@@ -40,6 +40,15 @@ export function startReconcileCron(): void {
     } catch (err) {
       console.error("[cron] reconcile failed:", err)
     }
+    // Independently recover terminal jobs whose worker died before settlement.
+    // Dynamic loading preserves the core/enterprise boundary.
+    try {
+      const { recoverManagedJobSettlements } = await import("../../ee/billing/managed-job-recovery.js")
+      const result = await recoverManagedJobSettlements()
+      if (result.scanned || result.errors) console.info("[cron] managed settlement recovery:", result)
+    } catch (err) {
+      console.error("[cron] managed settlement recovery failed:", err)
+    }
   })
 
   console.log("[cron] Reconcile cron started (every 5 minutes, all editions)")

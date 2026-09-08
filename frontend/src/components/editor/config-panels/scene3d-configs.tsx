@@ -30,14 +30,17 @@ import { LlmModelSelect } from "./llm-model-select"
 import { ReasoningEffortSelect } from "./reasoning-effort-select"
 import { MappableField } from "./mappable-field"
 import { AspectRatioSelector } from "./aspect-ratio-selector"
-import { COMPOSITION_RATIOS } from "./model-options"
+import { COMPOSITION_RATIOS, PRO3D_ASPECT_RATIOS } from "./model-options"
 import { adoptLocalRevision, findRevision, restoreContextPatch } from "@/lib/scene3d/revisions"
+import { scene3DEditInput } from "@/lib/scene3d/scene-input"
 import { planRevisionId } from "@/lib/scene3d/plan-view"
 import { SCENE3D_REFERENCE_ROLES, DEFAULT_REFERENCE_ROLE } from "@/lib/scene3d/references"
+import { PRO3D_RENDER_DEFAULT_REPAIR_PASSES, PRO3D_RENDER_LIMITS, PRO3D_RENDER_MAX_REPAIR_PASSES, PRO3D_RENDER_QUALITY_PROFILES, SCENE3D_BASIC_ENGINE, SCENE3D_BASIC_SCHEMA_VERSION, scene3DPlanSchemaVersion, resolveScene3DAuthoringEngine } from "@nodaro/shared"
+import { useScene3DAdvancedEngines, useScene3DProCapabilities } from "@/lib/scene3d-pro-availability"
 import { useT } from "@/lib/i18n"
 import { isVideoUrl } from "@/lib/media-type"
 import type { ConfigProps, SourceNodeInfo } from "./types"
-import type { Generate3DSceneData, Edit3DSceneData, Scene3DRevisionEntry } from "@/types/nodes"
+import type { Generate3DSceneData, Edit3DSceneData, Pro3DRenderData, Scene3DRevisionEntry } from "@/types/nodes"
 
 /** three.js is ~600KB — only pull it when a scene actually exists to show. */
 const LazyScene3DPreview = lazy(() =>
@@ -47,7 +50,13 @@ const LazyScene3DPreview = lazy(() =>
 /** The single LLM feature both 3D-scene nodes bill and route through. */
 const SCENE3D_LLM_FEATURE = "3d-scene" as const
 
-type Scene3DNodeData = Generate3DSceneData | Edit3DSceneData
+/** Every node whose data carries a scene revision — the shape SceneBlock and
+ *  ReferenceRoles work on. */
+type Scene3DNodeData = Generate3DSceneData | Edit3DSceneData | Pro3DRenderData
+
+/** The subset that also lets the caller pick a model. 3D Render Pro is
+ *  deliberately absent: its planner is fixed and server-owned. */
+type Scene3DLlmNodeData = Generate3DSceneData | Edit3DSceneData
 
 /**
  * The scene block shared by both panels: preview, selection/lock state,
@@ -182,7 +191,74 @@ function ReferenceRoles({
   )
 }
 
-function LlmControls({ data, onUpdate }: { data: Scene3DNodeData; onUpdate: (d: Record<string, unknown>) => void }) {
+/**
+ * Which authoring engine this node runs on.
+ *
+ * Rendered ONLY when the install actually reports an advanced engine: on every
+ * deployment without one (every self-host, and the community edition by
+ * construction) there is exactly one lane, and a one-option menu is a control
+ * that can only confuse. `blender-local` reaches this list only when the
+ * SERVER offered it — the deployment flag and the engine's own declaration are
+ * both upstream of `scene3DAdvancedEngines()`, so the browser never has to
+ * guess whether local pairing exists here.
+ *
+ * Basic is DISABLED once the node holds a v2 scene, because it is not a choice
+ * the platform can honour: the Basic route parses v1 and a downgrade would
+ * either 400 or author from a scene it cannot represent. The run-time refusal
+ * in `resolveScene3DAuthoringEngine` says the same thing; this just says it
+ * before the user presses Run.
+ */
+function AuthoringControls({
+  data,
+  onUpdate,
+  plan,
+}: {
+  data: Scene3DLlmNodeData
+  onUpdate: (d: Record<string, unknown>) => void
+  plan?: Record<string, unknown>
+}) {
+  const t = useT()
+  const engines = useScene3DAdvancedEngines()
+  const choice = resolveScene3DAuthoringEngine({ requested: data.engine, plan, availableEngines: engines })
+  const selected = data.engine ?? (choice.ok ? choice.engine ?? SCENE3D_BASIC_ENGINE : "blender-cloud")
+  const showSelector = Boolean(engines?.length) || selected !== SCENE3D_BASIC_ENGINE
+  const planVersion = scene3DPlanSchemaVersion(plan)
+  const basicLocked = planVersion !== null && planVersion !== SCENE3D_BASIC_SCHEMA_VERSION
+  const labels: Record<string, string> = {
+    "blender-cloud": t("scene3dcfg.engineBlenderCloud"),
+    "blender-local": t("scene3dcfg.engineBlenderLocal"),
+  }
+  return (
+    <>
+    {showSelector && <div>
+      <Label htmlFor="scene3d-engine" className="mb-1.5 block text-xs">{t("scene3dcfg.engine")}</Label>
+      <Select
+        value={selected}
+        onValueChange={(v) => onUpdate({ engine: v })}
+      >
+        <SelectTrigger id="scene3d-engine" className="h-8 text-xs"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value={SCENE3D_BASIC_ENGINE} disabled={basicLocked}>
+            {t("scene3dcfg.engineBasic")}
+          </SelectItem>
+          {selected !== SCENE3D_BASIC_ENGINE && !engines?.includes(selected) && (
+            <SelectItem value={selected} disabled>{labels[selected] ?? selected}</SelectItem>
+          )}
+          {(engines ?? []).map((engine) => (
+            <SelectItem key={engine} value={engine}>{labels[engine] ?? engine}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <p className="mt-1 text-[10px] text-muted-foreground">
+        {!choice.ok ? choice.message : basicLocked ? t("scene3dcfg.engineBasicLocked") : t("scene3dcfg.engineHint")}
+      </p>
+    </div>}
+    {choice.ok && choice.lane === "basic" && <LlmControls data={data} onUpdate={onUpdate} />}
+    </>
+  )
+}
+
+function LlmControls({ data, onUpdate }: { data: Scene3DLlmNodeData; onUpdate: (d: Record<string, unknown>) => void }) {
   return (
     <>
       <LlmModelSelect
@@ -217,7 +293,7 @@ export function Generate3DSceneConfig({
 
   return (
     <div className="flex flex-col gap-3">
-      <LlmControls data={data} onUpdate={onUpdate} />
+      <AuthoringControls data={data} onUpdate={onUpdate} />
 
       <MappableField field="scenePrompt" label={t("cfgext.scene3dScene")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
         <span className="inline-flex items-center gap-0.5">
@@ -297,6 +373,213 @@ export function Generate3DSceneConfig({
   )
 }
 
+/**
+ * 3D Render Pro's panel.
+ *
+ * Deliberately the Generate panel MINUS the model controls: the planner is
+ * fixed and server-owned, so there is nothing here for the user to pick that
+ * the platform is not accountable for. Everything else — the prompt field with
+ * its mappings and affixes, the reference roles, the scene block, the timing
+ * and aspect settings — is the same, because it is the same kind of scene.
+ */
+export function Pro3DRenderConfig({
+  data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode, nodes, edges, nodeId,
+}: ConfigProps<Pro3DRenderData> & { nodeId?: string }) {
+  const t = useT()
+  const promptSnippets = useSnippetPool("text", "prompt")
+  const promptFieldMode = usePromptFieldMode(nodeId ?? "", "scenePrompt")
+  const finalPrompt = useFinalPromptSegments({
+    userPrompt: data.scenePrompt,
+    promptField: "scenePrompt",
+    consumerNodeId: nodeId,
+    nodes,
+    edges: edges ?? [],
+    snippets: promptSnippets,
+  })
+
+  // WHERE the scene comes from — the same discriminated choice the wire makes,
+  // surfaced as an explicit control. Inferring it from "is the prompt box
+  // empty" would make the difference between authoring a scene and exporting
+  // one an accident of typing.
+  const sourceMode = data.sourceMode ?? "prompt"
+  const isSceneSource = sourceMode === "scene"
+  // Controls are offered from what the INSTALL says it can serve, never from
+  // the contract's full vocabulary.
+  const pro = useScene3DProCapabilities()
+  const qualityProfiles = pro?.qualityProfiles ?? [...PRO3D_RENDER_QUALITY_PROFILES]
+  const proAspectOptions = PRO3D_ASPECT_RATIOS.filter(
+    (option) => !pro || pro.aspectRatios.includes(option.value as (typeof pro.aspectRatios)[number]),
+  )
+  const repairCeiling = pro?.maxRepairPasses ?? PRO3D_RENDER_MAX_REPAIR_PASSES
+  const repairPassOptions = Array.from(
+    { length: Math.max(0, Math.min(repairCeiling, PRO3D_RENDER_MAX_REPAIR_PASSES)) + 1 },
+    (_, i) => i,
+  )
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label className="mb-1.5 block text-xs">{t("pro3dcfg.source")}</Label>
+        <Select value={sourceMode} onValueChange={(v) => onUpdate({ sourceMode: v as "prompt" | "scene" })}>
+          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="prompt">{t("pro3dcfg.sourcePrompt")}</SelectItem>
+            <SelectItem value="scene">{t("pro3dcfg.sourceScene")}</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="mt-1 text-[10px] text-muted-foreground">
+          {isSceneSource ? t("pro3dcfg.sourceSceneHint") : t("pro3dcfg.sourcePromptHint")}
+        </p>
+      </div>
+
+      {isSceneSource && (
+        <MappableField field="editPrompt" label={t("pro3dcfg.editPrompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <TagTextarea
+            placeholder={t("pro3dcfg.editPromptPh")}
+            value={data.editPrompt ?? ""}
+            onChange={(v) => onUpdate({ editPrompt: v })}
+            rows={2}
+            className="text-sm"
+            nodeRefs={nodeRefs}
+            displayMode={variableDisplayMode}
+            refMap={refMap}
+          />
+        </MappableField>
+      )}
+
+      {!isSceneSource && (
+      <MappableField field="scenePrompt" label={t("cfgext.scene3dScene")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
+        <span className="inline-flex items-center gap-0.5">
+          <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
+          <SnippetMenuButton pool={promptSnippets} value={data.scenePrompt || ""} onInsert={(v) => onUpdate({ scenePrompt: v })} target="prompt" media="text" />
+        </span>
+      }>
+        {promptFieldMode.mode === "final" ? (
+          <PromptFieldFinalView
+            segments={finalPrompt.promptSegments}
+            plainText={finalPrompt.promptText}
+            placeholder={t("imgcfg.promptPreviewEmpty")}
+            minHeightRem={3 * 1.5}
+          />
+        ) : (
+          <TagTextarea
+            placeholder={t("cfgext.scene3dPhScene")}
+            value={data.scenePrompt ?? ""}
+            onChange={(v) => onUpdate({ scenePrompt: v })}
+            rows={3}
+            className="text-sm"
+            nodeRefs={nodeRefs}
+            displayMode={variableDisplayMode}
+            refMap={refMap}
+            snippets={promptSnippets}
+          />
+        )}
+      </MappableField>
+      )}
+
+      {!isSceneSource && <ReferenceRoles data={data} onUpdate={onUpdate} sources={sources} />}
+
+      <SceneBlock data={data} onUpdate={onUpdate} promptField="scenePrompt" nodeId={nodeId} />
+
+      <div>
+        <Label htmlFor="pro3d-repairs" className="mb-1.5 block text-xs">{t("pro3dcfg.budget")}</Label>
+        <Select
+          value={String(data.maxRepairPasses ?? PRO3D_RENDER_DEFAULT_REPAIR_PASSES)}
+          onValueChange={(v) => onUpdate({ maxRepairPasses: parseInt(v, 10) })}
+        >
+          <SelectTrigger id="pro3d-repairs" className="h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {repairPassOptions.map((n) => (
+              <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {/* Said out loud because each pass is paid work — a budget the user
+            cannot see is a budget they cannot choose. */}
+        <p className="mt-1 text-[10px] text-muted-foreground">{t("pro3dcfg.budgetHint")}</p>
+      </div>
+
+      <Accordion type="single" collapsible>
+        <AccordionItem value="settings">
+          <AccordionTrigger className="text-xs py-2">{t("settings.title")}</AccordionTrigger>
+          <AccordionContent>
+            <div className="flex flex-col gap-3 pt-1">
+              {/* Only what this deployment says it can serve. Offering a
+                  profile the engine rejects is a run that fails after the
+                  user chose it. */}
+              {qualityProfiles.length > 1 && (
+                <div>
+                  <Label htmlFor="pro3d-quality" className="mb-1.5 block text-xs">{t("pro3dcfg.quality")}</Label>
+                  <Select value={data.quality ?? qualityProfiles[0]} onValueChange={(v) => onUpdate({ quality: v })}>
+                    <SelectTrigger id="pro3d-quality" className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {qualityProfiles.map((q) => (<SelectItem key={q} value={q}>{q}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* A scene source already HAS timing. Overriding it is an
+                  explicit re-time request, and the fields stay off the wire
+                  until the user asks — the platform rejects a conflict rather
+                  than silently retiming someone's scene. */}
+              {isSceneSource && (
+                <label className="flex items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    className="h-3.5 w-3.5"
+                    checked={data.overrideSourceTiming === true}
+                    onChange={(e) => onUpdate({ overrideSourceTiming: e.target.checked })}
+                  />
+                  {t("pro3dcfg.retime")}
+                </label>
+              )}
+
+              {(!isSceneSource || data.overrideSourceTiming === true) && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label htmlFor="pro3d-fps" className="mb-1.5 block text-xs">{t("field.fps")}</Label>
+                      <Select value={String(data.fps)} onValueChange={(v) => onUpdate({ fps: parseInt(v, 10) })}>
+                        <SelectTrigger id="pro3d-fps" className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="24">24</SelectItem>
+                          <SelectItem value="30">30</SelectItem>
+                          <SelectItem value="60">60</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="pro3d-duration" className="mb-1.5 block text-xs">{t("scriptcfg.durationS")}</Label>
+                      <Input
+                        id="pro3d-duration"
+                        type="number"
+                        min={PRO3D_RENDER_LIMITS.minDurationSeconds}
+                        max={PRO3D_RENDER_LIMITS.maxDurationSeconds}
+                        value={data.durationSeconds ?? ""}
+                        onChange={(e) => onUpdate({ durationSeconds: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="mb-1.5 block text-xs">{t("field.aspectRatio")}</Label>
+                    <AspectRatioSelector
+                      options={proAspectOptions}
+                      value={data.aspectRatio}
+                      onValueChange={(v) => onUpdate({ aspectRatio: v })}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+    </div>
+  )
+}
+
 export function Edit3DSceneConfig({
   data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode, nodes, edges, nodeId,
 }: ConfigProps<Edit3DSceneData> & { nodeId?: string }) {
@@ -316,7 +599,7 @@ export function Edit3DSceneConfig({
 
   return (
     <div className="flex flex-col gap-3">
-      <LlmControls data={data} onUpdate={onUpdate} />
+      <AuthoringControls data={data} onUpdate={onUpdate} plan={scene3DEditInput(nodeId, data.scenePlan, nodes, edges ?? [])} />
 
       <MappableField field="editPrompt" label={t("cfgext.scene3dEditInstruction")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
         <span className="inline-flex items-center gap-0.5">

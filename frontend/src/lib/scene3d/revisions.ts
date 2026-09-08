@@ -20,6 +20,7 @@
  *    ACTIVE, never about keeping the result at all.
  */
 import type { Scene3DRevisionContext, Scene3DRevisionEntry } from "@/types/nodes"
+import { isScene3DAuthoringEngine } from "@nodaro/shared"
 import { planRevisionId } from "./plan-view"
 
 /**
@@ -35,6 +36,9 @@ export type PushRevisionOptions = {
   changeSummary?: string
   /** What was asked for to produce this revision — restored with it. */
   context?: Scene3DRevisionContext
+  /** The job that produced it. Carried so a later run can name the revision
+   *  AND the run that authorizes it (3D Render Pro's `scene` source). */
+  jobId?: string
   now?: () => string
 }
 
@@ -49,7 +53,7 @@ export function pushRevision(
   source: Scene3DRevisionEntry["source"],
   options: PushRevisionOptions = {},
 ): Scene3DRevisionEntry[] {
-  const { changeSummary, context, now = () => new Date().toISOString() } = options
+  const { changeSummary, context, jobId, now = () => new Date().toISOString() } = options
   const revisionId = planRevisionId(plan)
   if (!revisionId) return [...(history ?? [])]
   const existing = history ?? []
@@ -66,6 +70,7 @@ export function pushRevision(
     changeSummary,
     createdAt: now(),
   }
+  if (jobId) entry.jobId = jobId
   if (context && Object.keys(context).length > 0) entry.context = context
   const next = [...deduped, entry]
   return next.length > MAX_SCENE_REVISIONS ? next.slice(next.length - MAX_SCENE_REVISIONS) : next
@@ -121,6 +126,8 @@ export type SceneCompletionInput = {
   /** The inputs this job ran with — stored with the revision so a restore
    *  brings the prompt/model/references back with the scene. */
   context?: Scene3DRevisionContext
+  /** The job that produced `incoming`, recorded on the revision it becomes. */
+  jobId?: string
   now?: () => string
 }
 
@@ -156,7 +163,7 @@ export type SceneCompletionResult = {
  *    `undefined`, so adopt, which is the ordinary first generation.
  */
 export function resolveSceneCompletion(input: SceneCompletionInput): SceneCompletionResult {
-  const { current, baseRevisionId, incoming, changeSummary, history, source, context, now } = input
+  const { current, baseRevisionId, incoming, changeSummary, history, source, context, jobId, now } = input
   const currentRevision = planRevisionId(current)
   const incomingRevision = planRevisionId(incoming)
 
@@ -169,7 +176,7 @@ export function resolveSceneCompletion(input: SceneCompletionInput): SceneComple
     return {
       outcome: "park",
       patch: {
-        sceneHistory: pushRevision(history, incoming, source, { changeSummary, context, now }),
+        sceneHistory: pushRevision(history, incoming, source, { changeSummary, context, jobId, now }),
         scenePendingPlan: incoming,
         sceneJobBaseRevisionId: undefined,
       },
@@ -180,7 +187,7 @@ export function resolveSceneCompletion(input: SceneCompletionInput): SceneComple
     outcome: "adopt",
     patch: {
       scenePlan: incoming,
-      sceneHistory: pushRevision(history, incoming, source, { changeSummary, context, now }),
+      sceneHistory: pushRevision(history, incoming, source, { changeSummary, context, jobId, now }),
       scenePendingPlan: undefined,
       changeSummary,
       expectedRevisionId: incomingRevision,
@@ -259,6 +266,7 @@ export function scene3DRunContext(
   baseRevisionId: string | undefined,
 ): Scene3DRevisionContext {
   const context: Scene3DRevisionContext = {}
+  if (isScene3DAuthoringEngine(data.engine)) context.engine = data.engine
   if (typeof prompt === "string" && prompt.length > 0) context.prompt = prompt
   if (typeof data.llmModel === "string") context.llmModel = data.llmModel
   if (data.reasoningEffort !== undefined) {
@@ -303,6 +311,7 @@ export function restoreContextPatch(
 ): Record<string, unknown> {
   if (!context) return {}
   const patch: Record<string, unknown> = {}
+  if (context.engine !== undefined) patch.engine = context.engine
   if (context.prompt !== undefined) patch[promptField] = context.prompt
   if (context.llmModel !== undefined) patch.llmModel = context.llmModel
   if (context.reasoningEffort !== undefined) patch.reasoningEffort = context.reasoningEffort

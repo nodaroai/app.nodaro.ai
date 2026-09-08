@@ -96,6 +96,11 @@ export function isScene3DNodeType(nodeType: string | undefined): boolean {
  * job started — something a "has any plan" test cannot see.
  * (`reconcile-completed-jobs.test.ts` fails if a plan-holding scene node stops
  * being reconciled.)
+ *
+ * Excluding `scenePlan` is not enough on its own: 3D Render Pro settles a scene
+ * AND an MP4, so its own PREVIOUS video (`generatedVideoUrl` /
+ * `generatedResults`) trips every other clause here and would skip the node for
+ * the same reason. See `blocksRecovery`.
  */
 function nodeHasResult(data: Record<string, unknown>): boolean {
   if (data.executionStatus === "completed") return true
@@ -103,6 +108,28 @@ function nodeHasResult(data: Record<string, unknown>): boolean {
   if (data.generatedJson) return true // video-analysis / video-audit: the scene breakdown IS the result
   const gr = data.generatedResults as readonly GeneratedResult[] | undefined
   return Array.isArray(gr) && gr.length > 0
+}
+
+/**
+ * Whether what the node already holds should stop recovery.
+ *
+ * Ordinary media nodes: yes — a node with a result is a node the user may have
+ * curated, and re-writing it is the clobber this guard exists to prevent.
+ *
+ * Scene3D nodes: NO, and the exemption is per-TYPE rather than a weakening of
+ * `nodeHasResult` (which every other lane still uses verbatim). Their recovery
+ * is guarded by REVISION, not by emptiness: `buildScene3DRecoveryPatch` drops a
+ * revision already in `sceneHistory` and routes the rest through
+ * `resolveSceneCompletion`, which parks rather than overwrites when the node
+ * has moved on. That is strictly stronger than "has any result", and it is the
+ * only guard that can recover the case this whole module exists for on a node
+ * that has run BEFORE: run again → reload mid-run → the job settles in the
+ * background. Blocking on the previous MP4 there loses the paid revision as
+ * well as the new video — billed, in My Library, nothing on canvas.
+ */
+function blocksRecovery(nodeType: string | undefined, data: Record<string, unknown>): boolean {
+  if (isScene3DNodeType(nodeType)) return false
+  return nodeHasResult(data)
 }
 
 /**
@@ -136,6 +163,10 @@ export function buildScene3DRecoveryPatch(
   data: Record<string, unknown>,
   output: Record<string, unknown> | null | undefined,
   source: "generate" | "edit" = "generate",
+  jobId?: string,
+  /** ISO stamp for the media half's `GeneratedResult`. Injected so recovery is
+   *  deterministic in tests, exactly like the media lane's `nowIso`. */
+  timestamp?: string,
 ): Record<string, unknown> | null {
   const incoming = output?.scenePlan as Record<string, unknown> | undefined
   if (!incoming) return null
@@ -153,8 +184,51 @@ export function buildScene3DRecoveryPatch(
     changeSummary: typeof output?.changeSummary === "string" ? output.changeSummary : undefined,
     history,
     source,
+    // The run that produced it, recorded on the revision so a later
+    // `{kind:'scene'}` source can name both.
+    jobId,
   })
-  return { ...result.patch }
+  // 3D Render Pro settles ONE job with two halves. Recovering only the scene
+  // would leave a paid run showing its composition and no video after a reload
+  // whose live poll died — the same "billed, result in My Library, nothing on
+  // canvas" shape the analysis branch below exists to fix.
+  //
+  // Adopt-only, deliberately: when the arriving revision is PARKED (the user
+  // edited the scene after this run started) its video belongs to the older
+  // revision, and overwriting the live media would be the same mistake the
+  // plan guard is here to prevent. The live path applies the same rule.
+  const videoUrl = typeof output?.videoUrl === "string" ? output.videoUrl : undefined
+  if (!videoUrl || result.outcome === "park") return { ...result.patch }
+
+  // The media half is written the way the LIVE run writes it, not as a bare
+  // URL: a `generatedResults` entry with real provenance (`timestamp`,
+  // `jobId`) plus the index that selects it. Writing only `generatedVideoUrl`
+  // left the node with no result row after a reload — no thumbnail strip, no
+  // delete, no library correlation — i.e. behaving differently depending on
+  // whether the poll survived, which is the drift this module exists to end.
+  //
+  // APPENDED, never replacing: earlier renders on this node are finished work
+  // (each was billed and each is in My Library), so a recovery adds the run
+  // that settled while the tab was closed and points the node at it.
+  const previous = Array.isArray(data.generatedResults)
+    ? (data.generatedResults as GeneratedResult[])
+    : []
+  // Same job already recorded (a live poll wrote it, or an earlier pass did):
+  // select it instead of appending a second row for one render. The revision
+  // guard above catches the ordinary repeat; this covers a node whose media
+  // arrived without its revision.
+  const alreadyAt = jobId ? previous.findIndex((r) => r.jobId === jobId) : -1
+  const recovered: GeneratedResult = {
+    url: videoUrl,
+    timestamp: timestamp ?? new Date().toISOString(),
+    jobId: jobId ?? "",
+  }
+  return {
+    ...result.patch,
+    generatedVideoUrl: videoUrl,
+    generatedResults: alreadyAt >= 0 ? previous : [...previous, recovered],
+    activeResultIndex: alreadyAt >= 0 ? alreadyAt : previous.length,
+  }
 }
 
 export function buildCompletedResultPatch(
@@ -171,7 +245,7 @@ export function buildCompletedResultPatch(
   // here so every recovery caller inherits the revision guard. `nodeData` is
   // what that guard reads — a caller that cannot supply it gets the
   // fresh-node answer (adopt), which is the right default for an empty node.
-  if (isScene3DNodeType(nodeType)) return buildScene3DRecoveryPatch(nodeData, output, nodeType === "edit-3d-scene" ? "edit" : "generate")
+  if (isScene3DNodeType(nodeType)) return buildScene3DRecoveryPatch(nodeData, output, nodeType === "edit-3d-scene" ? "edit" : "generate", jobId, timestamp)
   // The analysis emitters are the nodes whose result is a JSON payload
   // (`output_data.json` → `data.generatedJson`), not a media URL — without this
   // branch a completed analysis fell through every recovery layer and the node
@@ -247,7 +321,7 @@ export async function computeCompletedJobPatches(
     const node = nodeById.get(nodeId)
     if (!node) continue // deleted / sub-workflow node
     const data = (node.data ?? {}) as Record<string, unknown>
-    if (nodeHasResult(data)) continue // respect existing result / user edits
+    if (blocksRecovery(node.type, data)) continue // respect existing result / user edits
 
     let job: Awaited<ReturnType<typeof fetchOutput>>
     try {
@@ -263,7 +337,7 @@ export async function computeCompletedJobPatches(
     // while the job lookup is in flight. Deciding against the stale snapshot
     // would overwrite exactly the edit that was made during recovery.
     const live = readLiveData?.(nodeId) ?? data
-    if (readLiveData && nodeHasResult(live)) continue
+    if (readLiveData && blocksRecovery(node.type, live)) continue
 
     const patch = buildCompletedResultPatch(node.type, job.output_data ?? null, jobId, nowIso, live)
     if (patch) out.push({ nodeId, updates: patch })

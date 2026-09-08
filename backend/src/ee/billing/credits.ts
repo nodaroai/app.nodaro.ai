@@ -1,3 +1,4 @@
+import { trySettleManagedJob } from "./managed-job-settlement.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
 // Track A. `allowanceEnforcementActive()` is the step-8 flip (an active payer
@@ -2315,7 +2316,7 @@ export class CreditsService {
     modelIdentifier: string,
     providerCostUsd: number,
     displayCostUsd: number,
-    options?: { watermarkOverride?: boolean; isAppRun?: boolean; creditOverride?: number; skipAutoRecharge?: boolean; webFreeMode?: boolean; communityInstance?: boolean; billingContext?: BillingContext },
+    options?: { watermarkOverride?: boolean; isAppRun?: boolean; creditOverride?: number; skipAutoRecharge?: boolean; webFreeMode?: boolean; communityInstance?: boolean; billingContext?: BillingContext; oncePerJob?: boolean },
   ): Promise<ReserveResult> {
     // Self-hosted: skip reservation
     if (creditsDisabled()) {
@@ -2398,6 +2399,7 @@ export class CreditsService {
     // workspace budget with no reserve-side authorization. The ENTITLEMENTS
     // stay personal-derived too (`personalWatermark`) — no override without
     // payment.
+    if (options?.oncePerJob && pricing.creditCost <= 0) throw new Error("Job reservations require positive configured credits")
     if (pricing.creditCost === 0) {
       const { data: usageLog } = await supabase
         .from("usage_logs")
@@ -2450,7 +2452,7 @@ export class CreditsService {
     // its workspace branch — membership, suspension, member cap and budget
     // headroom under FOR UPDATE. The key is spread conditionally so the
     // personal call's wire shape stays byte-identical to pre-P14.
-    const { data: usageLogId, error: reserveError } = await supabase.rpc("reserve_credits", {
+    const { data: reserveData, error: reserveError } = await supabase.rpc(options?.oncePerJob ? "reserve_job_credits" : "reserve_credits", {
       p_user_id: debitUserId,
       p_credits: pricing.creditCost,
       p_job_id: jobId,
@@ -2460,6 +2462,7 @@ export class CreditsService {
       p_is_app_run: isAppRun ?? false,
       p_daily_limit: dailyLimit,
       p_web_free_mode: webFree,
+      ...(options?.oncePerJob ? { p_watermark: watermark } : {}),
       ...(ws ? { p_workspace_id: ws.workspaceId } : {}),
       // Track A / D3 — TWO switches, spread conditionally so the personal
       // call's wire shape stays byte-identical (both parameters are trailing
@@ -2491,6 +2494,20 @@ export class CreditsService {
       if (refusalPrefix) throw new ReserveRpcError(refusalPrefix, reserveError.message)
       throw new Error(`Credit reservation failed: ${reserveError.message}`)
     }
+
+    if (options?.oncePerJob) {
+      const result = reserveData as { usageLogId?: unknown; creditsReserved?: unknown; watermark?: unknown; replayed?: unknown } | null
+      if (!result || typeof result.usageLogId !== "string" || result.creditsReserved !== pricing.creditCost
+        || typeof result.watermark !== "boolean" || typeof result.replayed !== "boolean") {
+        throw new Error("Job reservation response could not be verified")
+      }
+      // The SQL boundary already persisted the job pointer and debit ledger.
+      // Returning here prevents the legacy post-RPC writes from duplicating it.
+      if (dep) await invalidateRequesterBalance(userId)
+      if (!result.replayed && !options.skipAutoRecharge && !ws && !dep) void attemptAutoRecharge(userId)
+      return { usageLogId: result.usageLogId, creditsReserved: pricing.creditCost, watermark: result.watermark }
+    }
+    const usageLogId = reserveData
 
     if (!usageLogId) {
       console.error("[credits] reserve_credits returned null usage log ID")
@@ -2590,19 +2607,17 @@ export class CreditsService {
     return { usageLogId: usageLogId as string, creditsReserved: pricing.creditCost, watermark }
   }
 
+  /** Detect opt-in settlement before callers reprice or overwrite actual costs. */
+  static async trySettleManagedCredits(usageLogId: string): Promise<boolean> {
+    if (creditsDisabled() || usageLogId === "self-hosted-skip") return false
+    const requester = await settlementRequester(usageLogId)
+    try { return await trySettleManagedJob(usageLogId) }
+    finally { await invalidateRequesterBalance(requester) }
+  }
+
   /**
-   * Commit reserved credits after job success
-   * Updates usage_log status to 'committed'
-   *
-   * Track A wrapper (D12 rider). Settlement moves the requester's ALLOWANCE —
-   * `reserved -> spent`, and a commit for less than was reserved hands the
-   * surplus back — but the only argument here is a usage-log id, so the
-   * requester has to be read off the row. The read and the invalidation are
-   * both inside `deploymentPayerActive()`, which is false on every deployment
-   * with no `billing.payerAccount`: mainline settles through the identical
-   * code path below, with no extra statement. The settlement itself is in
-   * `settleCommit`, unchanged, and runs whether or not the read succeeded —
-   * a cache invalidation may never be able to stop money from settling.
+   * Settle managed jobs from their saved decision; legacy rows retain the
+   * existing commit RPC. Deployment-payer allowance invalidation wraps both.
    */
   static async commitCredits(
     usageLogId: string,
@@ -2611,6 +2626,7 @@ export class CreditsService {
     if (creditsDisabled() || usageLogId === "self-hosted-skip") return
     const requester = await settlementRequester(usageLogId)
     try {
+      if (await trySettleManagedJob(usageLogId)) return
       await CreditsService.settleCommit(usageLogId, actualCredits)
     } finally {
       await invalidateRequesterBalance(requester)
@@ -2696,6 +2712,7 @@ export class CreditsService {
     if (creditsDisabled() || usageLogId === "self-hosted-skip") return
     const requester = await settlementRequester(usageLogId)
     try {
+      if (await trySettleManagedJob(usageLogId)) return
       await CreditsService.settleRefund(usageLogId)
     } finally {
       await invalidateRequesterBalance(requester)

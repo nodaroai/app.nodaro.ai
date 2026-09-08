@@ -4,6 +4,14 @@ Basic remains the default. Optional Advanced engines are advertised by
 `GET /v1/3d-scene/capabilities`; an unavailable explicit engine is rejected
 before starting a Basic edit or reserving its credits.
 
+For a connected retained v2 scene, an unset engine selects its available Advanced
+engine. An explicit Basic selection is refused. The config panel and headless
+workflow use the same choice and preserve the connected revision, locks and edit
+instruction. An invalid connected revision fails instead of selecting an older
+saved result. Manual retained-scene operations use
+`POST /v1/3d-scene/revisions/:revisionId/edits`; the Basic operations below apply
+to v1 scenes.
+
 Create a new revision of an existing editable 3D scene. Connect a [Generate 3D Scene](generate-3d-scene.md) or another Edit 3D Scene composition to its Scene input. Connect its output to [Render Video](render-video.md) to export MP4.
 
 Use an instruction such as “Move the pillar back one meter and keep the suitcase path unchanged,” or supply deterministic operations through the API. Preserve selected objects with `lockedObjectIds`. Optional image/video references provide additional layout, motion or appearance guidance.

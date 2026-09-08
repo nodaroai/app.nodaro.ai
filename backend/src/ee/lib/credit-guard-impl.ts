@@ -336,6 +336,7 @@ export async function reserveCreditsForJobImpl(
   reply: FastifyReply,
   jobId: string,
   modelIdentifier: string,
+  options?: { oncePerJob?: boolean },
 ): Promise<ReserveResult | undefined> {
   const userId = req.userId
   if (!userId) return undefined
@@ -362,12 +363,13 @@ export async function reserveCreditsForJobImpl(
         // INSIDE reserveCredits, as an invariant — not a flag here.)
         skipAutoRecharge: Boolean(req.appAuthorization),
         creditOverride: req.creditReservation?.creditOverride,
+        ...(options?.oncePerJob ? { oncePerJob: true } : {}),
         webFreeMode: req.webFreeMode,
         communityInstance: req.appAuthorization?.appKind === "community_instance",
       },
     )
 
-    await supabase
+    if (!options?.oncePerJob) await supabase
       .from("jobs")
       .update({
         usage_log_id: reservation.usageLogId,
@@ -388,13 +390,15 @@ export async function reserveCreditsForJobImpl(
     // The reserve RPC may have committed before its HTTP response was lost.
     // Reconcile by job id before deleting the orphan row so an ambiguous
     // transport failure cannot strand a reserved usage log (and its debit).
-    await refundReservedCreditsForJob(jobId).catch((refundError) => {
-      console.warn(
-        `[credit-guard] ${routeName} ambiguous reservation refund failed job=${jobId}: ${(refundError as Error).message}`,
-      )
-    })
-    // Clean up the stale job row before responding (same as the legacy 500 path).
-    await supabase.from("jobs").delete().eq("id", jobId)
+    if (!options?.oncePerJob) {
+      await refundReservedCreditsForJob(jobId).catch((refundError) => {
+        console.warn(
+          `[credit-guard] ${routeName} ambiguous reservation refund failed job=${jobId}: ${(refundError as Error).message}`,
+        )
+      })
+      // Legacy callers discard an unconfirmed job; resumable callers retain it.
+      await supabase.from("jobs").delete().eq("id", jobId)
+    }
     // Hard-fail policy: missing-price misconfig → 503 (handled below)
     if (handlePriceNotConfigured(err, reply, routeName)) return undefined
     const detail = err instanceof Error ? err.message : String(err)

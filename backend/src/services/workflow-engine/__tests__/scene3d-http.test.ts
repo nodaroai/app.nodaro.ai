@@ -18,6 +18,7 @@ vi.mock("../../../ee/billing/credits.js", () => ({ CreditsService: {} }))
 vi.mock("../../../workers/shared.js", () => ({ refundJobCredits: vi.fn() }))
 import { executeNode } from "../node-executor.js"
 import { buildScene3DHttpBody } from "../scene3d-http.js"
+import { planV2 } from "../../../../../packages/shared/src/__tests__/scene3d-v2-fixtures.js"
 
 const plan = {
   planType: "3d-scene", schemaVersion: 1, revisionId: "11111111-2222-4333-8444-555555555555",
@@ -36,6 +37,38 @@ beforeEach(() => {
 })
 
 describe("Scene3D workflow authoring through its HTTP route", () => {
+  it("routes a Pro v2 composition to Advanced while preserving its exact revision and locks", () => {
+    const baked = planV2()
+    const source: SimpleNode = { id: "source", type: "pro-3d-render", data: { scenePlan: baked } }
+    const edit: SimpleNode = { id: "edit", type: "edit-3d-scene", data: {
+      editPrompt: "Move the camera", scenePlan: plan, lockedObjectIds: ["e2"], selectedObjectIds: ["e1"],
+    } }
+    const body = buildScene3DHttpBody(edit, {}, context(), { nodes: [source, edit], edges: [
+      { id: "edge", source: source.id, target: edit.id, sourceHandle: "composition", targetHandle: "scene" },
+    ] })
+    expect(body).toMatchObject({
+      engine: "blender-cloud", acceptedSceneSchemaVersions: [1, 2], scenePlan: baked,
+      expectedRevisionId: baked.revisionId, prompt: "Move the camera", lockedObjectIds: ["e2"], selectedObjectIds: ["e1"],
+    })
+  })
+
+  it("does not fall back to an old v1 revision when the connected scene is invalid", () => {
+    const source: SimpleNode = { id: "source", type: "pro-3d-render", data: { scenePlan: { planType: "3d-scene", schemaVersion: 3 } } }
+    const edit: SimpleNode = { id: "edit", type: "edit-3d-scene", data: { editPrompt: "Move", scenePlan: plan } }
+    expect(() => buildScene3DHttpBody(edit, {}, context(), { nodes: [source, edit], edges: [
+      { id: "edge", source: source.id, target: edit.id, targetHandle: "scene" },
+    ] })).toThrow(/unsupported version/)
+  })
+
+  it("keeps an explicit Advanced choice on generate transport", () => {
+    const node: SimpleNode = { id: "scene", type: "generate-3d-scene", data: { scenePrompt: "A camera orbit", engine: "blender-cloud" } }
+    expect(buildScene3DHttpBody(node, {}, context(), {})).toMatchObject({ engine: "blender-cloud", acceptedSceneSchemaVersions: [1, 2] })
+  })
+
+  it("refuses an explicit Basic edit of a retained v2 revision", () => {
+    const node: SimpleNode = { id: "scene", type: "edit-3d-scene", data: { editPrompt: "Move", engine: "basic", scenePlan: planV2() } }
+    expect(() => buildScene3DHttpBody(node, {}, context(), {})).toThrow(/cannot be edited on the Basic engine/)
+  })
   it("sends video conditioning to the route, preserves privacy/payer and reports analysis spend", async () => {
     const node: SimpleNode = { id: "scene-node", type: "generate-3d-scene", data: { scenePrompt: "Match the camera", references: [video] } }
     const ctx = { ...context(), uploadDescendantIds: new Set([node.id]), onJobCreated: vi.fn() }

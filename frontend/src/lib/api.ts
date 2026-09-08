@@ -5,7 +5,7 @@ import { nodaroClient } from "@/lib/nodaro-client"
 import type { SubWorkflowRouteSnapshot, SocialConnection, CharacterVoice, JobErrorHint } from "@/types/nodes"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
-import type { ReduceMeta, ImageCriticMode, WorkflowExport, WorkflowImportReport, ReferenceSheet, TtsProvider, SheetType, SheetSkin, SheetFlavour, EntityKind, CharacterAttachColumn, ObjectAttachColumn, CreatureAttachColumn, LocationAttachColumn, CommunityCard, CommunitySort } from "@nodaro/shared"
+import type { Pro3DRenderQuote, Pro3DRenderSource, ReduceMeta, ImageCriticMode, WorkflowExport, WorkflowImportReport, ReferenceSheet, TtsProvider, SheetType, SheetSkin, SheetFlavour, EntityKind, CharacterAttachColumn, ObjectAttachColumn, CreatureAttachColumn, LocationAttachColumn, CommunityCard, CommunitySort } from "@nodaro/shared"
 import type { WardrobeValue, PersonValue } from "@nodaro/prompts"
 export type { CommunityCard } from "@nodaro/shared"
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
@@ -5324,6 +5324,11 @@ export async function generate3DScene(params: {
   fps?: number
   aspectRatio?: string
   references?: readonly Scene3DReferenceInput[]
+  /** Advanced lane selection — omitted or `"basic"` keeps the v1 LLM lane.
+   *  Built by `resolveScene3DAuthoringEngine`, never hand-assembled. */
+  engine?: "blender-cloud" | "blender-local"
+  /** Scene schema versions this caller can read back (advanced lane only). */
+  acceptedSceneSchemaVersions?: number[]
   llmModel?: string
   reasoningEffort?: string
   advancedMode?: boolean
@@ -5350,6 +5355,11 @@ export async function edit3DScene(params: {
   scenePlan: Record<string, unknown>
   expectedRevisionId: string
   replaceReferences?: boolean
+  /** Advanced lane selection — omitted or `"basic"` keeps the v1 LLM lane.
+   *  Built by `resolveScene3DAuthoringEngine`, never hand-assembled. */
+  engine?: "blender-cloud" | "blender-local"
+  /** Scene schema versions this caller can read back (advanced lane only). */
+  acceptedSceneSchemaVersions?: number[]
   prompt?: string
   operations?: readonly Record<string, unknown>[]
   references?: readonly Scene3DReferenceInput[]
@@ -5367,6 +5377,68 @@ export async function edit3DScene(params: {
     body: params,
     workflowId: true,
     label: "3D scene edit failed",
+  })
+}
+
+/**
+ * The body both 3D Render Pro endpoints take.
+ *
+ * `source` is the strict union from the wire contract; the canvas builds it
+ * with the SHARED builder so an in-browser run and a headless one mean the
+ * same thing. Timing fields are omitted (not `undefined`) for a scene source
+ * the user did not ask to re-time.
+ */
+export interface Pro3DRenderRequest {
+  source: Pro3DRenderSource
+  engine?: "blender-cloud" | "blender-local"
+  durationSeconds?: number
+  fps?: number
+  aspectRatio?: string
+  quality?: string
+  style?: string
+  maxRepairPasses?: number
+  acceptedSceneSchemaVersions?: readonly number[]
+  userId?: string
+  nodeId?: string
+}
+
+/**
+ * `POST /v1/pro-3d-render/quote` — price a run WITHOUT starting it.
+ *
+ * Same body the run takes, minus the `quoteId`. Answers a ceiling to show the
+ * user and the hash admission re-checks. It reserves nothing and spends
+ * nothing, which is what makes it safe to call as the panel's controls change.
+ */
+export async function quotePro3DRender(
+  params: Pro3DRenderRequest,
+): Promise<Pro3DRenderQuote> {
+  return apiJson("/v1/pro-3d-render/quote", {
+    body: params as unknown as Record<string, unknown>,
+    workflowId: true,
+    label: "3D Render Pro quote failed",
+  })
+}
+
+/**
+ * `POST /v1/pro-3d-render` — ONE durable operation.
+ *
+ * Answers with a job id only; the completed job's `output_data` carries BOTH
+ * `scenePlan` (the exact composition) and `videoUrl` (the exported MP4), plus
+ * the revision, poster, validation and renderer metadata.
+ *
+ * Requires the `quoteId` from `quotePro3DRender` — no run starts at a price
+ * nobody showed — and an idempotency key, because a retried submit of the most
+ * expensive operation on the platform must not become a second paid run.
+ */
+export async function proRender3D(
+  params: Pro3DRenderRequest & { quoteId: string },
+  idempotencyKey: string,
+): Promise<{ jobId: string }> {
+  return apiJson("/v1/pro-3d-render", {
+    body: params as unknown as Record<string, unknown>,
+    workflowId: true,
+    idempotencyKey,
+    label: "3D Render Pro failed",
   })
 }
 

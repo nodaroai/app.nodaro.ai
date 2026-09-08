@@ -126,6 +126,7 @@ import {
 import { hasCredits } from "@/lib/edition"
 import { CLOUD_ONLY_NODE_TYPES } from "@/lib/cloud-only-nodes"
 import { isNodeUnavailable } from "@/lib/surface-availability"
+import { ENGINE_GATED_NODE_TYPES, isScene3DProAvailable } from "@/lib/scene3d-pro-availability"
 import type { NodeOption } from "@/lib/node-compatibility"
 import type { SceneNodeType } from "@/types/nodes"
 
@@ -1193,6 +1194,14 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     group: "video-titles-graphics",
   },
   {
+    type: "pro-3d-render",
+    label: "3D Render Pro",
+    icon: <Boxes className="h-4 w-4" />,
+    category: "Processing",
+    group: "video-titles-graphics",
+    keywords: ["3d", "blender", "previz", "scene", "render", "pro"],
+  },
+  {
     type: "motion-graphics",
     label: "Motion Graphics",
     icon: <Shapes className="h-4 w-4" />,
@@ -1551,6 +1560,12 @@ export function getNodeOptions(): ReadonlyArray<NodeOption> {
   // write/run). Reads the fetched EFFECTIVE set (profile factory + admin
   // override) with the static profile deny as the pre-fetch fallback.
   return NODE_OPTIONS.filter(
-    (o) => (!CLOUD_ONLY_NODE_TYPES.has(o.type) || hasCredits()) && !isNodeUnavailable(o.type),
+    (o) =>
+      (!CLOUD_ONLY_NODE_TYPES.has(o.type) || hasCredits()) &&
+      !isNodeUnavailable(o.type) &&
+      // Engine readiness (3D Render Pro): the node is offerable only while the
+      // deployment has an engine that implements it. Defaults to hidden, so an
+      // install without one never advertises a node that can only 503.
+      (!ENGINE_GATED_NODE_TYPES.has(o.type) || isScene3DProAvailable()),
   );
 }

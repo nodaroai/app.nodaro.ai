@@ -1,4 +1,4 @@
-import { Transform, type Readable } from "node:stream"
+import { pipeline, Transform, type Readable } from "node:stream"
 import { loadScene3DRevisionArtifacts } from "./db.js"
 import { isSyntheticEtag } from "./receipt.js"
 import type { Scene3DObjectStore } from "./object-store.js"
@@ -99,6 +99,11 @@ function capped(limit: number): Transform {
       }
       done(null, chunk)
     },
+    flush(done) {
+      done(seen === limit ? undefined : new Scene3DArtifactError(
+        "SCENE_ASSET_INVALID", "the stored artifact is shorter than its recorded length",
+      ))
+    },
   })
 }
 
@@ -152,6 +157,11 @@ export async function openScene3DArtifactStream(
     )
   }
 
+  const body = capped(expectedLength)
+  // Pipeline closes the storage source on cancellation and forwards its errors.
+  // Its callback handles early errors while the route rechecks authorization;
+  // the error also remains on body.errored for the eventual consumer.
+  pipeline(read.body, body, () => {})
   return {
     status: wanted ? 206 : 200,
     contentType: SCENE3D_ARTIFACT_CONTENT_TYPES[artifact.kind],
@@ -160,7 +170,7 @@ export async function openScene3DArtifactStream(
       ? { contentRange: `bytes ${wanted.start}-${wanted.endInclusive}/${artifact.byteLength}` }
       : {}),
     totalLength: artifact.byteLength,
-    body: read.body.pipe(capped(expectedLength)),
+    body,
   }
 }
 

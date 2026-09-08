@@ -3968,6 +3968,7 @@ export type Scene3DNodeReference = Scene3DReference
 export type Scene3DRevisionContext = {
   /** The RAW prompt field (`scenePrompt` / `editPrompt`), before affixes. */
   prompt?: string
+  engine?: "basic" | "blender-cloud" | "blender-local"
   llmModel?: string
   reasoningEffort?: LlmReasoningEffort
   advancedMode?: boolean
@@ -3990,6 +3991,16 @@ export type Scene3DRevisionContext = {
  */
 export type Scene3DRevisionEntry = {
   revisionId: string
+  /**
+   * The job that produced this revision.
+   *
+   * Recorded because a revision id on its own is not an authorization: 3D
+   * Render Pro's `{kind:'scene'}` source names both, and the platform
+   * correlates them. Optional: revisions saved before this existed have none,
+   * and a source built from one is refused with a sentence the user can act on
+   * rather than the canvas inventing a correlation.
+   */
+  jobId?: string
   scenePlan: Record<string, unknown>
   /** Where this revision came from — an LLM generate, an LLM edit, a deterministic
    *  canvas edit, or a plan adopted from the connected upstream scene at run start. */
@@ -4035,6 +4046,18 @@ export type Generate3DSceneData = PromptAffixFields & Scene3DCommonFields & {
   [key: string]: unknown
   label: string
   scenePrompt: string
+  /**
+   * WHICH authoring engine runs this node.
+   *
+   * Absent or `"basic"` is the v1 LLM lane the platform has always had.
+   * `"blender-cloud"` / `"blender-local"` hand the request to the installed
+   * advanced engine, which authors schema-v2 scenes. An advanced value this
+   * install cannot serve is REFUSED before the run rather than quietly
+   * becoming Basic — the two lanes are different pipelines at different
+   * prices. Resolved for both execution surfaces by
+   * `resolveScene3DAuthoringEngine` (`@nodaro/shared`).
+   */
+  engine?: "basic" | "blender-cloud" | "blender-local"
   aspectRatio: "16:9" | "9:16" | "1:1" | "4:5"
   fps: number
   durationSeconds: number
@@ -4050,6 +4073,18 @@ export type Edit3DSceneData = PromptAffixFields & Scene3DCommonFields & {
   [key: string]: unknown
   label: string
   editPrompt: string
+  /**
+   * WHICH authoring engine runs this node.
+   *
+   * Absent or `"basic"` is the v1 LLM lane the platform has always had.
+   * `"blender-cloud"` / `"blender-local"` hand the request to the installed
+   * advanced engine, which authors schema-v2 scenes. An advanced value this
+   * install cannot serve is REFUSED before the run rather than quietly
+   * becoming Basic — the two lanes are different pipelines at different
+   * prices. Resolved for both execution surfaces by
+   * `resolveScene3DAuthoringEngine` (`@nodaro/shared`).
+   */
+  engine?: "basic" | "blender-cloud" | "blender-local"
   replaceReferences?: boolean
   /**
    * The revision the next edit is based on. Sent verbatim to
@@ -4063,6 +4098,59 @@ export type Edit3DSceneData = PromptAffixFields & Scene3DCommonFields & {
   currentJobProgress?: number
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
+}
+
+/**
+ * 3D Render Pro — one node, one durable operation, two results.
+ *
+ * It reuses `Scene3DCommonFields` on purpose: the composition it produces is
+ * the SAME kind of revision the Basic nodes produce, so the revision stack,
+ * the stale-completion guard and the scene panel all work on it unchanged.
+ * On top of that it carries the ordinary video-result fields, because the run
+ * also exports an MP4 — which is why `generatedVideoUrl` and `scenePlan` are
+ * both here rather than in two nodes the user has to wire together.
+ *
+ * No `llmModel` / `reasoningEffort`: the planner is fixed and server-owned.
+ */
+export type Pro3DRenderData = PromptAffixFields & Scene3DCommonFields & {
+  [key: string]: unknown
+  label: string
+  /**
+   * WHERE the scene comes from. `"prompt"` authors a new one; `"scene"` uses
+   * the revision wired into the `scene` input (or the one this node already
+   * holds) and, with no `editPrompt`, exports it WITHOUT paying to author.
+   *
+   * A mode rather than "whatever fields happen to be filled in", because the
+   * two are different pipelines at different prices and the difference must be
+   * something the user chose, not something inferred from a leftover string.
+   */
+  sourceMode?: "prompt" | "scene"
+  scenePrompt: string
+  /** Only meaningful in `scene` mode. Blank = render-only, and stays absent on the wire. */
+  editPrompt?: string
+  aspectRatio: "16:9" | "9:16" | "1:1" | "4:5" | "21:9"
+  fps: number
+  durationSeconds: number
+  /**
+   * Send this node's timing with a `scene` source — an explicit re-time.
+   * Default false: the contract forbids silently overriding a source's own
+   * duration/fps/aspect, so the fields are withheld unless the user asks.
+   */
+  overrideSourceTiming?: boolean
+  engine?: "blender-cloud" | "blender-local"
+  quality?: "standard"
+  style?: "clay"
+  /** Correction budget, 0-2. Each pass is paid work, so it is displayed. */
+  maxRepairPasses?: number
+  /** The last quoted ceiling, shown before the user commits. Never a charge. */
+  lastQuoteMaxCredits?: number
+  currentJobId?: string
+  currentJobProgress?: number
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedVideoUrl?: string
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
 }
 
 export type MotionGraphicsData = PromptAffixFields & {
@@ -5862,6 +5950,7 @@ export type SceneNodeData =
   | ThreeDTitleData
   | Generate3DSceneData
   | Edit3DSceneData
+  | Pro3DRenderData
   | MotionGraphicsData
   | CompositeData
   | RenderVideoData
@@ -6052,6 +6141,7 @@ export type SceneNodeType =
   | "3d-title"
   | "generate-3d-scene"
   | "edit-3d-scene"
+  | "pro-3d-render"
   | "motion-graphics"
   | "composite"
   | "render-video"
@@ -7865,6 +7955,43 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       fieldMappings: {},
       executionStatus: "idle",
     } as Edit3DSceneData,
+  },
+  {
+    type: "pro-3d-render",
+    label: "3D Render Pro",
+    category: "ai",
+    // 0 means UNKNOWN here, not free. This aggregates several paid stages and
+    // its price is deployment configuration, so the node reads the live
+    // configured cost and shows no badge until one resolves — a constant baked
+    // in here would be printed on every canvas and be wrong on every install.
+    creditCost: 0,
+    // `scene` carries an existing revision to export or revise; `references`
+    // carries the images/video a new scene is authored from.
+    inputs: ["scene", "references"],
+    // BOTH halves of one operation: the composition it authored and the MP4 it
+    // exported. `composition` feeds a render-only re-run; `video` feeds any
+    // downstream video consumer.
+    outputs: ["composition", "video"],
+    // Published apps and the fullscreen result view enumerate media outputs
+    // from here. The MP4 is what an app viewer sees; the composition is an
+    // editor-side artifact, not something an app can display.
+    exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],
+    defaultData: {
+      label: "3D Render Pro",
+      sourceMode: "prompt",
+      scenePrompt: "",
+      aspectRatio: "16:9",
+      fps: 24,
+      // The spec's defaults for this node: clay, 24 fps, 16:9, 10 seconds and
+      // at most two repair passes.
+      durationSeconds: 10,
+      engine: "blender-cloud",
+      quality: "standard",
+      style: "clay",
+      maxRepairPasses: 2,
+      fieldMappings: {},
+      executionStatus: "idle",
+    } as Pro3DRenderData,
   },
   {
     type: "motion-graphics",

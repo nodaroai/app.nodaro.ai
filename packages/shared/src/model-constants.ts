@@ -1121,6 +1121,12 @@ export const ASPECT_RATIO_DIMENSIONS: Record<string, { width: number; height: nu
   "9:16": { width: 1080, height: 1920 },
   "1:1": { width: 1080, height: 1080 },
   "4:5": { width: 1080, height: 1350 },
+  // Ultra-wide. 1680x720 rather than a 1920-wide pair because the Scene3D v2
+  // admission bounds require even integers on both axes and 1920/(21/9) is
+  // odd; 1680x720 is the pair the scene contract names as supported. Additive:
+  // every consumer here is a keyed lookup with a fallback, and a node only
+  // reaches this entry if its own aspect enum offers 21:9 (today, Pro 3D).
+  "21:9": { width: 1680, height: 720 },
 }
 
 /** Motion transfer providers */
@@ -2637,6 +2643,10 @@ export const COMPOSER_PLAN_MAP: Readonly<Record<string, { planType: string; plan
   // render-video routes either one to the `3d-scene` renderer unchanged.
   "generate-3d-scene": { planType: "3d-scene", planField: "scenePlan" },
   "edit-3d-scene": { planType: "3d-scene", planField: "scenePlan" },
+  // 3D Render Pro authors the SAME `scenePlan` revision (v2) alongside its
+  // MP4, so the render-only re-run reads it through this map exactly as it
+  // reads a Basic revision — no second plan lane, no second render path.
+  "pro-3d-render": { planType: "3d-scene", planField: "scenePlan" },
 }
 
 /** Every composer plan-field name, derived from COMPOSER_PLAN_MAP (single source

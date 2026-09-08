@@ -331,3 +331,147 @@ describe("runScene3DJob — terminal states and concurrent runs", () => {
     expect(mockNodes[0].data.scenePendingPlan).toEqual(incoming)
   })
 })
+
+// ---------------------------------------------------------------------------
+// extraCompletionPatch — the second half of a 3D Render Pro settlement
+// ---------------------------------------------------------------------------
+
+/**
+ * 3D Render Pro settles a scene AND an MP4 through this same runner. The video
+ * half rides `extraCompletionPatch`, and it is bound by the SAME rule as the
+ * plan: adopt writes it, park does not. A parked revision's video belongs to
+ * the older scene — putting it on the live node would leave the card showing a
+ * video that does not match its composition, and would feed that stale MP4
+ * downstream from the `video` handle.
+ */
+describe("runScene3DJob — extraCompletionPatch", () => {
+  const LIVE_MP4 = "https://r2.example/renders/live.mp4"
+  const NEW_MP4 = "https://r2.example/renders/new.mp4"
+
+  it("applies the extra patch on ADOPT, with the settling job id and the LIVE node", async () => {
+    seed({ scenePlan: makePlan(), generatedResults: [{ url: LIVE_MP4, timestamp: "t0", jobId: "j0" }] })
+    const incoming = makePlan({ revisionId: REV_B, parentRevisionId: REV_A })
+    const seen: Array<{ output: Record<string, unknown>; jobId: string; liveNode: Record<string, unknown> }> = []
+    mockGetJobStatusLean.mockResolvedValue({
+      id: "j1",
+      status: "completed",
+      output_data: { scenePlan: incoming, videoUrl: NEW_MP4 },
+    })
+
+    await drain(
+      runScene3DJob({
+        nodeId: "n1",
+        source: "generate",
+        label: "3D Render Pro",
+        ctx,
+        start: async () => ({ jobId: "j1" }),
+        extraCompletionPatch: (output, completion) => {
+          seen.push({ output, jobId: completion.jobId, liveNode: completion.liveNode })
+          return { generatedVideoUrl: output.videoUrl }
+        },
+      }),
+    )
+
+    expect(seen).toHaveLength(1)
+    // The job's own id is NOT in output_data — the runner is the only thing
+    // that has it, which is why it is handed over explicitly.
+    expect(seen[0].jobId).toBe("j1")
+    expect(seen[0].output.videoUrl).toBe(NEW_MP4)
+    expect(mockNodes[0].data.scenePlan).toEqual(incoming)
+    expect(mockNodes[0].data.generatedVideoUrl).toBe(NEW_MP4)
+  })
+
+  it("hands the callback the node as of COMPLETION, not the snapshot taken at run start", async () => {
+    seed({ scenePlan: makePlan(), generatedResults: [{ url: LIVE_MP4, timestamp: "t0", jobId: "j0" }] })
+    const incoming = makePlan({ revisionId: REV_B, parentRevisionId: REV_A })
+    let ticks = 0
+    mockGetJobStatusLean.mockImplementation(async () => {
+      ticks += 1
+      if (ticks === 1) {
+        // Another run on this node settles while this one is still polling.
+        mockUpdateNodeData("n1", {
+          generatedResults: [
+            { url: LIVE_MP4, timestamp: "t0", jobId: "j0" },
+            { url: "https://r2.example/renders/other.mp4", timestamp: "t1", jobId: "j-other" },
+          ],
+        })
+        return { id: "j1", status: "processing", progress: 10 }
+      }
+      return { id: "j1", status: "completed", output_data: { scenePlan: incoming, videoUrl: NEW_MP4 } }
+    })
+
+    await drain(
+      runScene3DJob({
+        nodeId: "n1",
+        source: "generate",
+        label: "3D Render Pro",
+        ctx,
+        start: async () => ({ jobId: "j1" }),
+        extraCompletionPatch: (output, completion) => {
+          const previous = (completion.liveNode.generatedResults ?? []) as Array<{ url: string }>
+          return {
+            generatedVideoUrl: output.videoUrl,
+            generatedResults: [...previous, { url: output.videoUrl, timestamp: "t2", jobId: completion.jobId }],
+            activeResultIndex: previous.length,
+          }
+        },
+      }),
+    )
+
+    const results = mockNodes[0].data.generatedResults as Array<{ url: string; jobId: string }>
+    // The concurrent result survived — a run-start snapshot would have dropped it.
+    expect(results.map((r) => r.url)).toEqual([
+      LIVE_MP4,
+      "https://r2.example/renders/other.mp4",
+      NEW_MP4,
+    ])
+    expect(results[2].jobId).toBe("j1")
+    expect(mockNodes[0].data.activeResultIndex).toBe(2)
+  })
+
+  it("does NOT apply it on PARK — the live MP4 and its result history survive", async () => {
+    seed({
+      scenePlan: makePlan(),
+      generatedVideoUrl: LIVE_MP4,
+      generatedResults: [{ url: LIVE_MP4, timestamp: "t0", jobId: "j0" }],
+      activeResultIndex: 0,
+    })
+    const manual = makePlan({ revisionId: "33333333-3333-4333-8333-333333333333" })
+    const incoming = makePlan({ revisionId: REV_B })
+    let calls = 0
+    let ticks = 0
+    mockGetJobStatusLean.mockImplementation(async () => {
+      ticks += 1
+      if (ticks === 1) {
+        mockUpdateNodeData("n1", { scenePlan: manual })
+        return { id: "j1", status: "processing", progress: 10 }
+      }
+      return { id: "j1", status: "completed", output_data: { scenePlan: incoming, videoUrl: NEW_MP4 } }
+    })
+
+    await drain(
+      runScene3DJob({
+        nodeId: "n1",
+        source: "generate",
+        label: "3D Render Pro",
+        ctx,
+        start: async () => ({ jobId: "j1" }),
+        extraCompletionPatch: (output) => {
+          calls += 1
+          return { generatedVideoUrl: output.videoUrl, generatedResults: [], activeResultIndex: 0 }
+        },
+      }),
+    )
+
+    expect(calls).toBe(0)
+    expect(mockNodes[0].data.generatedVideoUrl).toBe(LIVE_MP4)
+    expect(mockNodes[0].data.generatedResults).toEqual([{ url: LIVE_MP4, timestamp: "t0", jobId: "j0" }])
+    expect(mockNodes[0].data.activeResultIndex).toBe(0)
+    expect(mockNodes[0].data.scenePlan).toEqual(manual)
+    // Nothing is discarded: the paid revision is still filed.
+    expect(mockNodes[0].data.scenePendingPlan).toEqual(incoming)
+    const history = mockNodes[0].data.sceneHistory as Array<{ revisionId: string; jobId?: string }>
+    expect(history.map((h) => h.revisionId)).toContain(REV_B)
+    expect(history.find((h) => h.revisionId === REV_B)?.jobId).toBe("j1")
+  })
+})
