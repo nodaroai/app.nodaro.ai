@@ -7,6 +7,16 @@ function fixture(body: unknown = { data: {} }) {
   return { client, fetch, request: () => fetch.mock.calls[0] as [string, RequestInit] }
 }
 describe("Studio production transport", () => {
+  it("imports a bundle through the compatible route and preserves its source hint", async () => {
+    const body = { data: { production: { id: "created", version: 2 } } }, f = fixture(body)
+    const bundle = { version: 1, nodes: [], edges: [], settings: {}, nodaroStudio: { sourceWorkflowId: "source" } }
+    await expect(f.client.studio.importBundle({ bundle, projectId: "project" })).resolves.toEqual(body)
+    expect(f.request()[0]).toBe("https://api.test/v1/studio/productions/import-bundle")
+    expect(f.request()[1].method).toBe("POST")
+    expect(JSON.parse(f.request()[1].body as string)).toEqual({ bundle, projectId: "project" })
+    expect(f.fetch).toHaveBeenCalledTimes(1)
+  })
+
   it("copies through the server with source revision and destination project", async () => {
     const f = fixture()
     await f.client.studio.clone("film/id", { name: "My copy", projectId: "project", expectedVersion: 8 })

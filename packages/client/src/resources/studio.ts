@@ -13,6 +13,8 @@ export interface StudioProductionCapabilities {
     saveEditorState?: boolean
     revisionedSharing?: boolean
     cloneLinkedProductions?: boolean
+    importPlannedBundles?: boolean
+    importLinkedBundles?: boolean
     editKeyframes: boolean
     generateKeyframes: boolean
     acceptKeyframes: boolean
@@ -154,6 +156,12 @@ export class StudioResource {
 
   create(input: { name?: string; plan?: StudioDocumentJson }): Promise<{ data: StudioProductionReply }> {
     return this.client.request("POST", root, { body: input })
+  }
+
+  /** Import a portable document through the compatible server writer.
+   * Retained frame media requires an authorized source; acceptance never transfers. */
+  importBundle(input: { bundle: StudioDocumentJson; projectId?: string }): Promise<{ data: StudioProductionReply }> {
+    return this.client.request("POST", `${root}/import-bundle`, { body: input })
   }
 
   /** Copy a saved production. Linked copies retain verified inputs, remap

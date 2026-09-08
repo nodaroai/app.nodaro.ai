@@ -921,6 +921,7 @@ plugin returns the usual 404. These methods preserve the API response envelope.
 | `validatePlan(plan)` | Validate a plan without creating it |
 | `create({ name?, plan? })` | Create a production |
 | `clone(id, { name?, projectId?, expectedVersion? })` | Copy a saved production; optional destination project must belong to the caller |
+| `importBundle({ bundle, projectId? })` | Import a portable production through the compatible writer, remapping its frame and sequence IDs |
 | `edit(id, { ops, baseVersion?, strict?, clientRequestId? })` | Apply semantic operations with revision conditions |
 | `saveEditorState(id, { expectedVersion, graph, clientRequestId? })` | Save ordinary editor fields against the loaded revision; preserve protected frame and job state |
 | `setShared(id, { shared, expectedVersion? })` | Change link sharing through the visibility-authorized route |
@@ -958,6 +959,18 @@ before generating dependent media; copying submits no generation jobs and uses
 destination storage quota for retained inputs. Full
 linked copies currently require ownership of the source. Shared media views do
 not expose an editable frame plan and cannot use this operation.
+
+`importBundle` posts to `/v1/studio/productions/import-bundle` and creates a new,
+private production with remapped scene, frame and sequence IDs. Check
+`capabilities.operations.importPlannedBundles` for recipes or ungenerated plans,
+and `importLinkedBundles` for retained frame media. A linked bundle carries
+`nodaroStudio.sourceWorkflowId` as a lookup hint; the server checks ownership and
+verifies every retained image proof before copying bytes. Missing source access
+or forged provenance refuses the import before creating its destination. Recipe
+bundles need no source production. Neither path transfers acceptance or active
+jobs, and neither generates media. Other existing media remains linked by URL.
+Optional `projectId` must belong to the caller. The SDK returns the production
+response envelope, including the new ID, rather than a raw workflow graph.
 
 Frame generation has no dry-run option. `generateShot` accepts `dryRun` for a
 quote. Both use an explicit `clientRequestId` for safe caller retries. A generated
