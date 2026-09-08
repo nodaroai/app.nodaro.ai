@@ -11,3 +11,5 @@ Add compatible production bundle import with capability discovery and server-ver
 Add revision-checked bundle append with complete frame dependencies, explicit insertion and film-look choices, and capability discovery.
 
 Expose manual result-rejection capability for the semantic editor without submitting generation jobs.
+
+Expose sequence-plan editing capability for atomic endpoint/order edits and single-segment detachment with continuous-group splitting.

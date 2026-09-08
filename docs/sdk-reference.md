@@ -931,6 +931,8 @@ plugin returns the usual 404. These methods preserve the API response envelope.
 | `reconcile(id)` | Record completed jobs without accepting candidates |
 | `acceptKeyframe(id, review, concurrency?)` | Explicitly accept a reviewed candidate |
 | `edit(id, { ops: [{ op: "reject_keyframe_result", keyframeId, expectedRevision, resultKey, expectedAcceptedResultKey, reason? }], baseVersion, strict: true })` | Record Needs revision without generating; requires `operations.rejectKeyframes` support |
+| `edit(id, { ops: [{ op: "update_sequence_plan", sequenceId, expectedRevision, name, segments }], baseVersion, strict: true })` | Edit ordered `{ shotId, startKeyframeId, endKeyframeId }` segments while preserving existing scene IDs; requires `operations.editSequencePlans` |
+| `edit(id, { ops: [{ op: "detach_sequence_segment", sequenceId, shotId, mode, splitSequence: true, expectedSequenceRevision }], baseVersion, strict: true })` | Make one segment independent and split remaining continuous groups; `mode` is `clear` or `keep-accepted`; requires `operations.editSequencePlans` |
 
 The acceptance review supplies `keyframeId`, `expectedRevision`, `resultKey`,
 `expectedAcceptedResultKey` (or `null`), and `requirementChecks`. Each check names
