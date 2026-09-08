@@ -27,6 +27,7 @@ const NODE_LABELS_HE: Record<string, string> = {
   "3D Title": "כותרת תלת־ממד",
   "Generate 3D Scene": "יצירת סצנת תלת־ממד",
   "Edit 3D Scene": "עריכת סצנת תלת־ממד",
+  "3D Render Pro": "רינדור תלת־ממד Pro",
   "Motion Graphics": "גרפיקת תנועה",
   "Composite": "שילוב שכבות",
   "Render Video": "רינדור וידאו",

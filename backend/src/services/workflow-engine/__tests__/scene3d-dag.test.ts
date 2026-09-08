@@ -216,9 +216,9 @@ describe("edit-3d-scene", () => {
     expect(() => build("edit-3d-scene", { editPrompt: "x" })).toThrow(/no scene to edit/)
   })
 
-  it("ignores an upstream value that is not a valid plan", () => {
+  it("refuses an invalid scene with an actionable version error", () => {
     expect(() => build("edit-3d-scene", { scenePlan: { planType: "3d-scene", objects: [] }, editPrompt: "x" })).toThrow(
-      /no scene to edit/,
+      /invalid or uses an unsupported version/,
     )
   })
 

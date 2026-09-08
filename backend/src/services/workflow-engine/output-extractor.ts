@@ -573,6 +573,16 @@ export function getPrimaryOutput(
     return output.lottieUrl
   }
 
+  // 3D Render Pro emits BOTH halves of one operation: the `video` source handle
+  // carries the exported MP4, every other handle (default `composition`) the
+  // scene revision. Must precede the PLAN_NODE_TYPES check below, which would
+  // otherwise answer "plan-ready" on the video handle too and hand a downstream
+  // video consumer a marker instead of a URL. Mirrors the frontend
+  // execution-graph.ts branch of the same name.
+  if (sourceType === "pro-3d-render" && sourceHandle === "video") {
+    return output.videoUrl
+  }
+
   // Plan nodes return a marker
   if (PLAN_NODE_TYPES.has(sourceType)) {
     return output.plan ? "plan-ready" : undefined
@@ -1333,6 +1343,37 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
       feedback: data.feedback as string | undefined,
       details: data.details as NodeOutput["details"],
     }
+  }
+
+  // 3D Render Pro settles ONE operation with TWO halves — the exported MP4 and
+  // the scene revision it was rendered from — and BOTH must survive a resume.
+  // It is a COMPOSER_PLAN_MAP member, so without this branch the mapping below
+  // answers with the plan only: a downstream consumer wired from the `video`
+  // handle of a node that ran EARLIER (skip resume, "Run from here", or a
+  // `references` edge resolved by payload-builder's scene3DGraphReferences)
+  // would resolve to no URL and be silently dropped. Must therefore precede
+  // the COMPOSER_PLAN_MAP branch. `getPrimaryOutput` routes the two halves by
+  // sourceHandle; this mirrors the frontend execution-graph.ts branch of the
+  // same name.
+  //
+  // Deliberately NOT a VIDEO_RESULT_TYPES entry: that branch returns
+  // `{ videoUrl }` and stops, which would strand the `composition` handle —
+  // the same one-handle-only failure in the other direction.
+  if (type === "pro-3d-render") {
+    const out: NodeOutput = {}
+    // Active result first, exactly like every other video producer: picking a
+    // result in the node writes BOTH activeResultIndex and generatedVideoUrl,
+    // so the two agree, and the active one is what the canvas shows.
+    const videoUrl =
+      getActiveResultUrl(data) ??
+      (data.generatedVideoUrl as string | undefined)
+    // The node's ACTIVE revision — the same field its `composition` output
+    // paints from, so the scene a resume hands downstream is the exact one on
+    // screen, not an archived history entry.
+    const plan = data.scenePlan as Record<string, unknown> | undefined
+    if (videoUrl) out.videoUrl = videoUrl
+    if (plan) out.plan = plan
+    return out.videoUrl || out.plan ? out : undefined
   }
 
   // Plan nodes — use COMPOSER_PLAN_MAP to find the correct data field

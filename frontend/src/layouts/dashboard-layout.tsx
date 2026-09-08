@@ -10,6 +10,7 @@ import { useLoadUserSettings } from "@/hooks/use-load-user-settings"
 import { useAuth } from "@/hooks/use-auth"
 import { useEmbedSessionHandoff, isEmbedded } from "@/hooks/use-embed-session-handoff"
 import { loadSurfaceAvailability } from "@/lib/surface-availability"
+import { loadScene3DProAvailability } from "@/lib/scene3d-pro-availability"
 import { getAuthHeaders } from "@/lib/api"
 
 export default function DashboardLayout() {
@@ -49,6 +50,13 @@ export default function DashboardLayout() {
   // their pre-fetch fallback; the backend refuses denied types regardless).
   useEffect(() => {
     if (!authLoading && user) void loadSurfaceAvailability(getAuthHeaders)
+  }, [authLoading, user])
+
+  // Engine readiness for 3D Render Pro — the picker hides the node until the
+  // install answers "yes". Same authenticated, once-per-session shape as the
+  // availability fetch above.
+  useEffect(() => {
+    if (!authLoading && user) void loadScene3DProAvailability(getAuthHeaders)
   }, [authLoading, user])
 
   // After OAuth login, check for a pending plan selection and redirect to pricing

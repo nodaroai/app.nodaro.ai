@@ -771,6 +771,21 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       ? "plan-ready"
       : undefined;
   }
+  // 3D Render Pro emits BOTH halves of one operation: the `video` handle
+  // carries the exported MP4, every other handle (default `composition`) the
+  // scene revision it was rendered from. Mirrors the backend
+  // output-extractor.ts branch of the same name — answering "plan-ready" on
+  // the video handle would hand a downstream video consumer a marker.
+  if (type === "pro-3d-render") {
+    if (sourceHandle === "video") {
+      const results = (data.generatedResults as GeneratedResult[] | undefined) ?? [];
+      const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;
+      return (results[activeIndex]?.url ?? (data.generatedVideoUrl as string | undefined))?.trim() || undefined;
+    }
+    return (data.scenePlan as Record<string, unknown> | undefined)
+      ? "plan-ready"
+      : undefined;
+  }
   if (type === "motion-graphics") {
     // The `lottie` source handle (lottie engine only) emits the authored Lottie
     // JSON's R2 URL for placement by a Lottie Overlay node — NOT the plan marker.

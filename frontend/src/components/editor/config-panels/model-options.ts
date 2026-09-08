@@ -332,6 +332,18 @@ export const COMPOSITION_RATIOS = [
 ] as const
 
 /**
+ * 3D Render Pro's ratios — COMPOSITION_RATIOS plus ultra-wide.
+ *
+ * Its own list rather than a widened shared one: 21:9 is a Pro capability (the
+ * scene contract's supported 1680x720), and adding it to the set every
+ * composer node renders would offer it on nodes whose routes refuse it.
+ */
+export const PRO3D_ASPECT_RATIOS = [
+  ...COMPOSITION_RATIOS,
+  { value: "21:9", label: "21:9 (Ultra-wide)" },
+] as const
+
+/**
  * Aspect ratios offered by the Image Collage node — a richer set than
  * COMPOSITION_RATIOS (square + four landscape + four portrait). The values are
  * arbitrary "W:H"; the backend parses them generically (no enum), so adding one

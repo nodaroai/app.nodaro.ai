@@ -186,6 +186,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   // Types whose title-cased fallback would miss the Hebrew node-label table.
   "3d-title": "3D Title",
   "generate-3d-scene": "Generate 3D Scene",
+  "pro-3d-render": "3D Render Pro",
   "edit-3d-scene": "Edit 3D Scene",
   "video-composer": "Compose Video",
   "group": "Group",

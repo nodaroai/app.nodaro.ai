@@ -1,6 +1,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { sendInternalError } from "../lib/http-errors.js"
+import { authorizeScene3DDelivery, authorizeScene3DDeliveryArtifact, scene3DDeliveryArtifactReadable } from "../services/scene3d-artifacts/delivery-authorize.js"
+import { loadScene3DDeliveryArtifacts } from "../services/scene3d-artifacts/delivery-db.js"
 import {
   Scene3DArtifactError,
   authorizeScene3DArtifact,
@@ -19,7 +21,7 @@ import {
 /**
  * Reading a Scene3D revision and its bytes.
  *
- * Three GETs and nothing else. There is no write route here: publication is a
+ * There is no write route here: publication is a
  * service function the trusted engine calls, so no caller can hand this API a
  * `.blend` or a GLB as an "import".
  *
@@ -35,6 +37,8 @@ import {
 
 const revisionParams = z.object({ revisionId: z.string().min(1).max(64) })
 const assetParams = revisionParams.extend({ assetId: z.string().min(1).max(64) })
+const deliveryParams = z.object({ jobId: z.string().min(1).max(64) })
+const deliveryAssetParams = deliveryParams.extend({ assetId: z.string().min(1).max(64) })
 
 export interface Scene3DArtifactRoutesOptions {
   /** Injected by the composition root; `null` disables the binary lanes. */
@@ -115,6 +119,7 @@ async function serveArtifact(
   store: Scene3DObjectStore,
   artifact: Scene3DPinnedArtifact,
   filename?: string,
+  authorizeAfterRead?: () => Promise<boolean>,
 ) {
   const range = parseScene3DRange(req.headers.range, artifact.byteLength)
   if (range.kind === "unsatisfiable") {
@@ -130,6 +135,23 @@ async function serveArtifact(
   } catch (error) {
     if (isScene3DArtifactError(error)) return sendArtifactError(req, reply, error)
     throw error
+  }
+
+  if (authorizeAfterRead) {
+    try {
+      if (!await authorizeAfterRead()) {
+        stream.body.destroy()
+        return notFound(reply)
+      }
+    } catch (error) {
+      stream.body.destroy()
+      throw error
+    }
+  }
+  if (stream.body.errored) {
+    return sendArtifactError(req, reply, new Scene3DArtifactError(
+      "SCENE_ASSET_INVALID", "The stored scene asset could not be read",
+    ))
   }
 
   // Sent through the reply, not written to the raw socket: the response still
@@ -240,6 +262,50 @@ export async function scene3DArtifactRoutes(
     } catch (error) {
       if (isScene3DArtifactError(error)) return sendArtifactError(req, reply, error)
       return sendInternalError(reply, req, error, "Failed to read the scene source")
+    }
+  })
+
+  app.get("/v1/3d-scene/deliveries/:jobId", async (req, reply) => {
+    if (!req.userId) return unauthorized(reply)
+    const params = deliveryParams.safeParse(req.params)
+    if (!params.success) return notFound(reply)
+    try {
+      const auth = await authorizeScene3DDelivery(req.userId, params.data.jobId)
+      if (!auth.ok) return notFound(reply)
+      const assets = (await loadScene3DDeliveryArtifacts(auth.delivery.jobId))
+        .filter(scene3DDeliveryArtifactReadable)
+        .map((asset) => ({ assetId: asset.artifactId, kind: asset.kind, usage: asset.usage,
+          byteLength: asset.byteLength, sha256: asset.sha256, viaRevisionId: asset.viaRevisionId }))
+      const currentAuth = await authorizeScene3DDelivery(req.userId, params.data.jobId)
+      if (!currentAuth.ok) return notFound(reply)
+      const delivery = currentAuth.delivery
+      return reply.header("Cache-Control", "no-store, private").send({
+        deliveryId: delivery.jobId, sceneRevisionId: delivery.sourceRevisionId,
+        sourcePlanSha256: delivery.sourcePlanSha256, sourceContentHash: delivery.sourceContentHash,
+        sourceJobId: delivery.sourceJobId, workflowId: delivery.workflowId,
+        mode: delivery.mode, createdAt: delivery.createdAt, access: currentAuth.access, assets,
+      })
+    } catch (error) {
+      if (isScene3DArtifactError(error)) return sendArtifactError(req, reply, error)
+      return sendInternalError(reply, req, error, "Failed to read the scene delivery")
+    }
+  })
+
+  app.get("/v1/3d-scene/deliveries/:jobId/assets/:assetId", async (req, reply) => {
+    if (!req.userId) return unauthorized(reply)
+    const params = deliveryAssetParams.safeParse(req.params)
+    if (!params.success) return notFound(reply)
+    try {
+      const actorId = req.userId
+      const { jobId, assetId } = params.data
+      const auth = await authorizeScene3DDeliveryArtifact(actorId, jobId, assetId)
+      if (!auth.ok) return notFound(reply)
+      if (!store) return storageUnconfigured(reply)
+      return await serveArtifact(req, reply, store, auth.artifact, undefined,
+        async () => (await authorizeScene3DDeliveryArtifact(actorId, jobId, assetId)).ok)
+    } catch (error) {
+      if (isScene3DArtifactError(error)) return sendArtifactError(req, reply, error)
+      return sendInternalError(reply, req, error, "Failed to read the scene delivery asset")
     }
   })
 }

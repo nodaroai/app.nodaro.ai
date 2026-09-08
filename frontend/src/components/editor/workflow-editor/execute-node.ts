@@ -50,6 +50,8 @@ import {
   generateLottieOverlay,
   generate3DTitle,
   generate3DScene,
+  proRender3D,
+  quotePro3DRender,
   edit3DScene,
   generateMotionGraphics,
   mergeVideoAudioApi,
@@ -96,9 +98,10 @@ import {
 import { applyWebScrapeFailure, applyWebScrapeResult, webScrapeRunStartPatch } from "@/components/nodes/web-scrape-run-state";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
 import {
-  readPromptAffixes, resolveSlideshowTransition, ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, supportsExtendRender, isMinimaxH3Provider, isVeoProvider, isGeminiOmniProvider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS, resolveVideoProviderForMode, resolveVideoModeForInputs, VIDEO_REF_LIMITS_BY_PROVIDER, resolveEffectiveSourceType, sourceRefKey, hasFeature, countRefModalityEdges, type ReferenceModality, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionSlug, characterMentionableAssetArrays, selectLoraRoutingForMentions, expandExtraRefsToConnectedReferences, resolveSeparator, evaluateJsonPath, stringifyPathResults, spreadJsonArrayIfSingleton, zipMergeLists, evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, tryParseJson, evaluateCondition, evaluateConditionGroup, resolveConditionValue, sortListItems, runSelector, resolveSelectorRefs, buildConditionVariables, VARIABLES_HANDLE_ID, clampSmartCutWindow, resolveGvpAnchorWire, resolveTopazUpscale, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, unresolvedRefTokens, classifyRefToken, canonicalVarName, parseNodeRef, NODE_REF_PATTERN } from "@nodaro/shared"
+  readPromptAffixes, resolveSlideshowTransition, ASPECT_RATIO_DIMENSIONS, buildPro3DRenderSource, pro3DRenderTimingOverrides, resolveScene3DAuthoringEngine, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, supportsExtendRender, isMinimaxH3Provider, isVeoProvider, isGeminiOmniProvider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS, resolveVideoProviderForMode, resolveVideoModeForInputs, VIDEO_REF_LIMITS_BY_PROVIDER, resolveEffectiveSourceType, sourceRefKey, hasFeature, countRefModalityEdges, type ReferenceModality, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionSlug, characterMentionableAssetArrays, selectLoraRoutingForMentions, expandExtraRefsToConnectedReferences, resolveSeparator, evaluateJsonPath, stringifyPathResults, spreadJsonArrayIfSingleton, zipMergeLists, evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, tryParseJson, evaluateCondition, evaluateConditionGroup, resolveConditionValue, sortListItems, runSelector, resolveSelectorRefs, buildConditionVariables, VARIABLES_HANDLE_ID, clampSmartCutWindow, resolveGvpAnchorWire, resolveTopazUpscale, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, unresolvedRefTokens, classifyRefToken, canonicalVarName, parseNodeRef, NODE_REF_PATTERN } from "@nodaro/shared"
 import { applyPromptAffixes, composeNegative, computeNodePrompt, computeLlmChatFields, pickerFanoutTargets, buildImagePrompt, assembleImageInput, composeVideoPromptText, readDirectionFields, readStructuredFields, readSubjectFields, collectIdentityLockClause, characterLockToRefLock, assembleSunoInput, type AssembleSunoResult, NODE_PROMPT_CANDIDATE_FIELDS } from "@nodaro/prompts"
 import type { CharacterDef, ConnectedReference, ReferenceSource, ExtraRefCharacterContext } from "@nodaro/shared"
+import { scene3DAdvancedEngines } from "@/lib/scene3d-pro-availability"
 import { ANALYZABLE_PICKER_HINT } from "@/lib/picker-labels";
 import { getGenerateTextTemplate } from "@/lib/generate-text-templates";
 import { buildScenePrompt } from "@/lib/prompt-builder";
@@ -156,6 +159,7 @@ import type {
   LottieOverlayData,
   ThreeDTitleData,
   Generate3DSceneData,
+  Pro3DRenderData,
   Edit3DSceneData,
   MotionGraphicsData,
   CompositeData,
@@ -241,6 +245,9 @@ import { runScene3DJob } from "./scene3d-execution";
 import { resolveScene3DReferences, checkScene3DReferenceLimit } from "@/lib/scene3d/references";
 import { planRevisionId } from "@/lib/scene3d/plan-view";
 import { descendsFrom, pushRevision, scene3DRunContext } from "@/lib/scene3d/revisions";
+import { newPro3DIdempotencyKey, resolvePro3DSceneRef } from "@/lib/scene3d/pro-source";
+import { proMediaCompletionPatch } from "@/lib/scene3d/pro-media-result";
+import { scene3DEditInput } from "@/lib/scene3d/scene-input";
 import { addCaptionsPreflight } from "./add-captions-preflight";
 import { resolveNodeInputs, extractNodeOutputAsList, resolveSourceThroughConnectedList, resolveSeedPromptHint, stampElementInjections, type FrontendResolvedInputs } from "./node-input-resolver";
 import { collectPreviewItems } from "./preview-items";
@@ -7358,6 +7365,18 @@ function executeNodeCore(
       toast.error(`Node "${g3d.label}": ${g3dLimit.message}`);
       return Promise.reject(new Error(g3dLimit.message));
     }
+    // WHICH lane, from the SHARED resolver — the same call the orchestrator's
+    // `payload-builder` makes, so the canvas and a scheduled run of this node
+    // reach the same engine. An advanced engine this install does not serve is
+    // refused HERE rather than silently becoming a paid Basic run.
+    const g3dEngine = resolveScene3DAuthoringEngine({
+      requested: g3d.engine,
+      availableEngines: scene3DAdvancedEngines(),
+    });
+    if (!g3dEngine.ok) {
+      toast.error(`Node "${g3d.label}": ${g3dEngine.message}`);
+      return Promise.reject(new Error(g3dEngine.message));
+    }
     // History retains the resolved inputs; live wires stay graph-owned.
     return runScene3DJob({
       nodeId: node.id,
@@ -7366,18 +7385,103 @@ function executeNodeCore(
       ctx,
       // The RAW prompt, not the affixed one: restoring must put back what the
       // user typed, and the affixes are re-applied from the node on the next run.
-      context: scene3DRunContext(g3d, g3d.scenePrompt, g3dRefs, planRevisionId(g3d.scenePlan as Record<string, unknown> | undefined)),
+      context: scene3DRunContext({ ...g3d, engine: g3dEngine.engine ?? "basic" }, g3d.scenePrompt, g3dRefs, planRevisionId(g3d.scenePlan as Record<string, unknown> | undefined)),
       start: () => generate3DScene({
+        ...g3dEngine.fields,
         prompt: g3dPrompt,
         durationSeconds: g3d.durationSeconds,
         fps: g3d.fps,
         aspectRatio: g3d.aspectRatio,
         references: g3dRefs.length > 0 ? g3dRefs : undefined,
-        llmModel: g3d.llmModel,
-        reasoningEffort: g3d.reasoningEffort,
+        ...(g3dEngine.lane === "basic" ? { llmModel: g3d.llmModel, reasoningEffort: g3d.reasoningEffort } : {}),
         userId: ctx.userId,
         nodeId: node.id,
       }),
+    });
+  }
+
+  // 3D Render Pro — ONE run, two results. It reuses the scene job runner (and
+  // with it the stale-completion guard and the revision stack, because the
+  // composition it produces is the same kind of revision), and adds the video
+  // half through `extraCompletionPatch` so the node also behaves like every
+  // other video producer downstream.
+  if (node.type === "pro-3d-render") {
+    const pro = node.data as Pro3DRenderData;
+    const proPrompt = applyPromptAffixes(inputs.prompt || pro.scenePrompt, readPromptAffixes(pro), refMap);
+    const proRefs = resolveScene3DReferences({
+      nodeId: node.id,
+      references: pro.references,
+      edges,
+      outputOf: (sourceId) => {
+        const sourceNode = nodes.find((n) => n.id === sourceId);
+        if (!sourceNode) return undefined;
+        const output = extractNodeOutput(sourceNode);
+        return output === "plan-ready" ? undefined : output;
+      },
+      roles: pro.referenceRoles,
+      objectIds: pro.referenceObjectIds,
+      isVideoUrl: (url) => VIDEO_URL_RE.test(url),
+    });
+    // The scene wired into `scene` wins over the revision this node holds —
+    // the same precedence Edit 3D Scene uses, and the same the orchestrator's
+    // `resolvePro3DRenderSceneRef` uses, so both engines export the same thing.
+    const proScene = resolvePro3DSceneRef(node.id, pro, nodes, edges);
+    const proSource = buildPro3DRenderSource({
+      sourceMode: pro.sourceMode,
+      prompt: proPrompt ?? undefined,
+      references: proRefs,
+      revisionId: proScene?.revisionId,
+      sourceJobId: proScene?.sourceJobId,
+      editPrompt: pro.editPrompt,
+    });
+    if (!proSource.ok) {
+      toast.error(`Node "${pro.label}": ${proSource.message}`);
+      return Promise.reject(new Error(proSource.message));
+    }
+    if (proSource.source.kind === "prompt") {
+      const proLimit = checkScene3DReferenceLimit(proRefs);
+      if (!proLimit.ok) {
+        toast.error(`Node "${pro.label}": ${proLimit.message}`);
+        return Promise.reject(new Error(proLimit.message));
+      }
+    }
+    const proRequest = {
+      source: proSource.source,
+      engine: pro.engine ?? "blender-cloud",
+      ...(pro.quality ? { quality: pro.quality } : {}),
+      ...(pro.style ? { style: pro.style } : {}),
+      ...(typeof pro.maxRepairPasses === "number" ? { maxRepairPasses: pro.maxRepairPasses } : {}),
+      // Withheld for a scene source the user did not ask to re-time: the
+      // contract forbids silently overriding a source's own timing, so the
+      // fields must be ABSENT rather than sent with the node's defaults.
+      ...pro3DRenderTimingOverrides({
+        source: proSource.source,
+        overrideSourceTiming: pro.overrideSourceTiming === true,
+        durationSeconds: pro.durationSeconds,
+        fps: pro.fps,
+        aspectRatio: pro.aspectRatio,
+      }),
+      userId: ctx.userId,
+      nodeId: node.id,
+    };
+    return runScene3DJob({
+      nodeId: node.id,
+      source: "generate",
+      label: "3D Render Pro",
+      ctx,
+      context: scene3DRunContext({ ...pro, engine: proRequest.engine }, pro.scenePrompt, proRefs, planRevisionId(pro.scenePlan as Record<string, unknown> | undefined)),
+      // The video half of the same settled job. Written only when the node
+      // still points at this run — a superseded result is archived as a
+      // revision and must not replace the live node's media either.
+      extraCompletionPatch: proMediaCompletionPatch,
+      // Quote, then submit the SAME body. Two requests, still ONE paid job:
+      // quoting reserves nothing, and the ceiling it returns is stored on the
+      // node so the user can see what a run may cost before it starts.
+      start: async () => {
+        const quote = await quotePro3DRender(proRequest);
+        useWorkflowStore.getState().updateNodeData(node.id, { lastQuoteMaxCredits: quote.maxCredits });
+        return proRender3D({ ...proRequest, quoteId: quote.quoteId }, newPro3DIdempotencyKey());
+      },
     });
   }
 
@@ -7385,20 +7489,7 @@ function executeNodeCore(
     const e3d = node.data as Edit3DSceneData;
     // The scene under edit is the one wired into `scene`, falling back to the
     // revision already held on the node (a node re-run after a manual edit).
-    let e3dPlan = e3d.scenePlan as Record<string, unknown> | undefined;
-    for (const edge of edges) {
-      if (edge.target !== node.id || edge.targetHandle !== "scene") continue;
-      const sourceNode = nodes.find((n) => n.id === edge.source);
-      if (!sourceNode) continue;
-      const composerInfo = COMPOSER_PLAN_MAP[sourceNode.type ?? ""];
-      const upstream = composerInfo
-        ? ((sourceNode.data as Record<string, unknown>)[composerInfo.planField] as Record<string, unknown> | undefined)
-        : undefined;
-      if (upstream) {
-        e3dPlan = upstream;
-        break;
-      }
-    }
+    const e3dPlan = scene3DEditInput(node.id, e3d.scenePlan as Record<string, unknown> | undefined, nodes, edges);
     if (!e3dPlan) {
       toast.error(`Node "${e3d.label}": no scene connected`);
       return Promise.reject(new Error("No scene to edit"));
@@ -7407,6 +7498,19 @@ function executeNodeCore(
     if (!e3dRevision) {
       toast.error(`Node "${e3d.label}": the connected scene has no revision id`);
       return Promise.reject(new Error("Scene has no revision id"));
+    }
+    // The PLAN decides as much as the node does. A v2 scene — everything the
+    // advanced engine authors, including a 3D Render Pro composition wired
+    // into this input — is refused on the Basic lane rather than posted into a
+    // v1 parser that answers with a wall of Zod issues.
+    const e3dEngine = resolveScene3DAuthoringEngine({
+      requested: e3d.engine,
+      plan: e3dPlan,
+      availableEngines: scene3DAdvancedEngines(),
+    });
+    if (!e3dEngine.ok) {
+      toast.error(`Node "${e3d.label}": ${e3dEngine.message}`);
+      return Promise.reject(new Error(e3dEngine.message));
     }
     const e3dPrompt = applyPromptAffixes(inputs.prompt || e3d.editPrompt, readPromptAffixes(e3d), refMap);
     if (!e3dPrompt?.trim()) {
@@ -7466,8 +7570,9 @@ function executeNodeCore(
       source: "edit",
       label: "Scene edit",
       ctx,
-      context: scene3DRunContext(e3d, e3d.editPrompt, e3dRefs, e3dRevision),
+      context: scene3DRunContext({ ...e3d, engine: e3dEngine.engine ?? "basic" }, e3d.editPrompt, e3dRefs, e3dRevision),
       start: () => edit3DScene({
+        ...e3dEngine.fields,
         scenePlan: e3dPlan,
         expectedRevisionId: e3dRevision,
         replaceReferences: e3d.replaceReferences,
@@ -7475,8 +7580,7 @@ function executeNodeCore(
         references: e3dRefs.length > 0 ? e3dRefs : undefined,
         lockedObjectIds: e3d.lockedObjectIds?.length ? e3d.lockedObjectIds : undefined,
         selectedObjectIds: e3d.selectedObjectIds?.length ? e3d.selectedObjectIds : undefined,
-        llmModel: e3d.llmModel,
-        reasoningEffort: e3d.reasoningEffort,
+        ...(e3dEngine.lane === "basic" ? { llmModel: e3d.llmModel, reasoningEffort: e3d.reasoningEffort } : {}),
         userId: ctx.userId,
         nodeId: node.id,
       }),
