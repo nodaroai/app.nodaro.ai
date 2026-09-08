@@ -26,7 +26,9 @@ export async function editRetainedScene3D(
   actorId: string,
   input: RetainedScene3DEditInput,
   store: Scene3DObjectStore | null,
+  options: { assertActive?(): Promise<void> } = {},
 ): Promise<{ scenePlan: Scene3DPlanV2; changeSummary: string }> {
+  await options.assertActive?.()
   const access = await authorizeScene3DRevision(actorId, input.revisionId, "source")
   if (!access.ok) throw new Scene3DRetainedEditError(access.reason === "forbidden" ? 403 : 404,
     access.reason === "forbidden" ? "forbidden" : "not_found", "Scene revision is unavailable for editing")
@@ -52,6 +54,7 @@ export async function editRetainedScene3D(
   // revision through a permission decision from an earlier request phase.
   const current = await authorizeScene3DRevision(actorId, input.revisionId, "source")
   if (!current.ok) throw new Scene3DRetainedEditError(403, "forbidden", "Scene editing access was revoked")
+  await options.assertActive?.()
   await publishScene3DRevision({
     revisionId: edited.plan.revisionId, userId: access.revision.userId,
     workflowId: access.revision.workflowId, parentRevisionId: input.revisionId,

@@ -33,6 +33,23 @@ beforeEach(() => {
   store.get.mockImplementation(async () => ({ body: Readable.from([bytes]), contentLength: bytes.length, etag: "etag" }))
 })
 describe("owned scene artifact toolkit", () => {
+  it("guards deterministic edits with the real actor/job and destination permission checks", async () => {
+    const edit = {
+      jobId: "00000000-0000-4000-8000-000000000001", userId: "00000000-0000-4000-8000-000000000002",
+      revisionId: "00000000-0000-4000-8000-000000000003", newRevisionId: "00000000-0000-4000-8000-000000000004",
+      expectedContentHash: "1".repeat(64),
+      operations: [{ op: "set-override", override: { kind: "entity-visibility", entityId: "box", visible: false } }],
+    }
+    const toolkit = createScene3DArtifactToolkit()!
+    mock.job.mockResolvedValueOnce({ data: { status: "cancelled" } })
+    await expect(toolkit.applyEdits!(edit)).rejects.toMatchObject({ code: "SCENE_JOB_INVALID" })
+    expect(mock.eq).toHaveBeenCalledWith("id", edit.jobId)
+    expect(mock.eq).toHaveBeenCalledWith("user_id", edit.userId)
+    mock.access.mockResolvedValueOnce("view")
+    await expect(toolkit.applyEdits!(edit)).rejects.toMatchObject({ code: "SCENE_JOB_INVALID" })
+    expect(mock.publish).not.toHaveBeenCalled()
+    expect(store.get).not.toHaveBeenCalled()
+  })
   it("is absent without private storage and reserves before granting", async () => {
     mock.config.mockReturnValueOnce(null)
     expect(createScene3DArtifactToolkit()).toBeUndefined()
