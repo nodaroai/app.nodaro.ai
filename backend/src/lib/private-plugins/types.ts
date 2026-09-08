@@ -1420,9 +1420,10 @@ export interface PluginLlmRequest {
 
 /**
  * Multimodal content block — a structural subset of `lib/llm-client.ts`'s
- * `LlmContentBlock` union (text | image | image_base64 | video | audio),
- * narrowed to the parts the video-analysis window turn uses (video + text;
- * image kept for forward-compat). A real app `LlmContentBlock[]` satisfies this.
+ * `LlmContentBlock` union (text | image | image_base64 | video | video_base64 |
+ * audio), narrowed to the parts the video-analysis window turn uses (video +
+ * text; image kept for forward-compat). A real app `LlmContentBlock[]`
+ * satisfies this.
  */
 export type PluginLlmContentBlock =
   | { type: "text"; text: string }
@@ -1442,6 +1443,36 @@ export type PluginLlmContentBlock =
        * the KIE builder throws rather than silently sampling at 1 fps — which
        * the multimodal path already pins by default.
        */
+      fps?: number
+    }
+  | {
+      /**
+       * Inline video BYTES — the exact clip, in the request itself.
+       *
+       * For a plugin that must analyse a SPECIFIC, IMMUTABLE payload it already
+       * holds: it neither publishes the user's media to reach the model nor
+       * leans on a mutable/signed URL as the request's durable identity (the
+       * object behind such a URL can change, expire or 403 between build and
+       * read, and the analysis would silently describe something else).
+       *
+       * ADDITIVE (no CONTRACT_VERSION bump): this WIDENS what the host accepts,
+       * so every existing plugin is unaffected, and a plugin that sends the
+       * block to an older host simply has no such member on its own mirror.
+       *
+       * Constraints, all enforced host-side before anything is sent or metered
+       * (`lib/gemini/media.ts`): `mediaType` exactly `video/mp4`, canonical
+       * base64 (no `data:` prefix, no whitespace, no URL-safe alphabet), real
+       * MP4 `ftyp` magic, and 6 MiB of RAW bytes. Larger clips stay on the
+       * URL-bearing `video` block, which streams to Google's Files API.
+       *
+       * Direct-lane only, and the host REJECTS the whole request otherwise —
+       * `completeStructuredMultimodal` already defaults `requireLane: "direct"`,
+       * but a caller reaching the metered adapter directly must pass it.
+       */
+      type: "video_base64"
+      mediaType: "video/mp4"
+      data: string
+      /** Frame sampling rate — same semantics and cost as the `video` block's. */
       fps?: number
     }
 

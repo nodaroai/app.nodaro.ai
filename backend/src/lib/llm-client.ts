@@ -83,6 +83,46 @@ export type LlmContentBlock =
        */
       fps?: number
     }
+  | {
+      /**
+       * Inline video BYTES — the exact clip, carried in the request itself.
+       *
+       * WHY BYTES AND NOT A URL: every other media block in this union is a
+       * URL, because both lanes that carry media dereference one (KIE server
+       * side, `gemini/media.ts` on our side). That is fine when the URL *is*
+       * the asset's identity. It is wrong when a caller must analyse a
+       * SPECIFIC, IMMUTABLE set of bytes it already holds: publishing the
+       * user's media to reach the model is a privacy cost with no upside, and
+       * a mutable or signed URL is not durable request identity — the object
+       * behind it can change, expire, or 403 between the request being built
+       * and the model reading it, and the analysis would silently describe
+       * something else. Handing the bytes over closes both.
+       *
+       * DIRECT GOOGLE LANE ONLY, and the ONLY lane-pinned block in this union:
+       * `llmComplete`/`llmStream` reject the whole request unless it carries
+       * `requireLane: "direct"` (see {@link assertInlineVideoLane}). Nothing
+       * else can carry it — KIE's chat-completions proxy smuggles media as an
+       * `image_url` it dereferences itself (no bytes channel at all), and the
+       * Claude `messages` / GPT `responses` lanes take no video input in any
+       * form. Requiring the pin is what makes that TOTAL: an unpinned call on
+       * a Gemini model would still be eligible for a KIE leg (primary or
+       * fallback), so "it happened to route direct today" is not a guarantee.
+       *
+       * Bounded and validated before the request leaves the process —
+       * `gemini/media.ts` enforces exact media type, canonical base64, MP4
+       * `ftyp` magic and a 6 MiB RAW ceiling (see `INLINE_MAX_BYTES`; base64
+       * inflates that 4/3 on the wire, staying well inside Google's ~20 MB
+       * request limit). Anything larger belongs on the URL-bearing `video`
+       * block, which streams to the Files API instead.
+       */
+      type: "video_base64"
+      /** Exact, not a family: only `video/mp4` is accepted (validated). */
+      mediaType: "video/mp4"
+      /** Canonical base64 of the raw MP4 bytes — no data: prefix, no newlines. */
+      data: string
+      /** Frame sampling rate, identical semantics to the `video` block's `fps`. */
+      fps?: number
+    }
   | { type: "audio"; url: string; mimeType?: string }
 
 export interface LlmMessage {
@@ -180,6 +220,7 @@ export interface LlmResponse {
 
 export async function llmComplete(req: LlmRequest): Promise<LlmResponse> {
   const model = resolveModel(req)
+  assertInlineVideoLane(req)
 
   // A pinned lane wins over every registry preference below, and never falls back.
   if (req.requireLane) {
@@ -294,6 +335,37 @@ async function noLlmProviderError(model: LlmModelDef): Promise<LlmProviderUnavai
 }
 
 /**
+ * Inline video bytes are servable by ONE lane, so the request must say so.
+ *
+ * Runs before any lane is chosen — and therefore before any provider request,
+ * any token is spent and any usage is metered — so an unservable call costs
+ * nothing and fails with an operator-actionable sentence instead of being
+ * mangled into whatever the chosen lane happens to accept.
+ *
+ * Why a PIN and not "route it direct for them": on a Gemini model an unpinned
+ * call is still eligible for a KIE leg (primary for the KIE-first models,
+ * fallback for the direct-first ones), and neither leg can carry bytes. The
+ * failure that produces is the bad kind — a fallback that answers HTTP 200
+ * about media it never received. Requiring `requireLane: "direct"` removes
+ * every other leg from the call, which is the only way this is total.
+ *
+ * `assertLanePinnable` then rejects the wrong MODEL FAMILY on the same pin: a
+ * Claude or GPT model has no `directGeminiModel`, so pinning it direct throws
+ * there rather than reaching a builder that would have to drop the block.
+ */
+function assertInlineVideoLane(req: LlmRequest): void {
+  if (req.requireLane === "direct") return
+  for (const message of req.messages) {
+    if (typeof message.content === "string") continue
+    if (!message.content.some((b) => b.type === "video_base64")) continue
+    throw new Error(
+      `llm-client: a video_base64 block requires requireLane: "direct" (the direct Google lane is the only one that ` +
+        `carries inline video bytes; this call is ${req.requireLane ? `pinned to "${req.requireLane}"` : "unpinned"})`,
+    )
+  }
+}
+
+/**
  * Fail a lane pin loudly at the call site rather than quietly serving it from
  * the other lane. Both failure modes are configuration errors, and both are
  * things an operator can fix from the message alone — which is the whole
@@ -378,6 +450,7 @@ export async function llmStream(
   signal?: AbortSignal,
 ): Promise<LlmResponse> {
   const model = resolveModel(req)
+  assertInlineVideoLane(req)
 
   // A pinned lane wins over every registry preference below, and never falls back.
   if (req.requireLane) {
@@ -636,6 +709,13 @@ function deriveParams(model: LlmModelDef, req: LlmRequest): {
 // Shared message builders
 // ---------------------------------------------------------------------------
 
+/** One sentence for every lane that cannot carry a `video_base64` block — which
+ *  is every lane except the direct Google one. Named per lane so a stack-free
+ *  error still says which wire refused it. */
+const INLINE_VIDEO_LANE_ERROR = (lane: string) =>
+  `llm-client: the ${lane} lane cannot carry inline video bytes (video_base64) — ` +
+  `pin requireLane: "direct" on a model that declares a directGeminiModel`
+
 function buildChatCompletionsMessages(req: LlmRequest): Array<Record<string, unknown>> {
   const msgs: Array<Record<string, unknown>> = []
   if (req.system) {
@@ -676,6 +756,15 @@ function buildChatCompletionsMessages(req: LlmRequest): Array<Record<string, unk
           }
           return { type: "image_url", image_url: { url: b.url } }
         }
+        // Inline bytes have no channel here AT ALL: this lane's only media
+        // affordance is a URL that KIE dereferences server-side. The router
+        // gate (`assertInlineVideoLane`) already refuses such a request before
+        // a lane is picked, so reaching this line means a NEW call site built
+        // a KIE body directly — throw rather than let the block be dropped or
+        // stringified into a text part.
+        if (b.type === "video_base64") {
+          throw new Error(INLINE_VIDEO_LANE_ERROR("KIE chat-completions"))
+        }
         const _exhaustive: never = b
         return _exhaustive
       })
@@ -696,6 +785,9 @@ function buildMessagesBody(model: LlmModelDef, req: LlmRequest): Record<string, 
       if (b.type === "image") return { type: "image", source: { type: "url", url: b.url } }
       if (b.type === "video" || b.type === "audio") {
         throw new Error(`Claude messages API does not support ${b.type} input — pick a Gemini model for video/audio refs.`)
+      }
+      if (b.type === "video_base64") {
+        throw new Error(INLINE_VIDEO_LANE_ERROR("Claude messages"))
       }
       const _exhaustive: never = b
       return _exhaustive
@@ -743,6 +835,9 @@ function buildResponsesInput(req: LlmRequest): Array<Record<string, unknown>> {
         if (b.type === "video" || b.type === "audio") {
           throw new Error(`GPT responses API does not support ${b.type} input — pick a Gemini model for video/audio refs.`)
         }
+        if (b.type === "video_base64") {
+          throw new Error(INLINE_VIDEO_LANE_ERROR("GPT responses"))
+        }
         const _exhaustive: never = b
         return _exhaustive
       })
@@ -763,6 +858,9 @@ export function llmBlockToAnthropic(b: LlmContentBlock): Anthropic.Messages.Cont
     return { type: "image", source: { type: "base64", media_type: b.mediaType as "image/png" | "image/jpeg" | "image/webp" | "image/gif", data: b.data } }
   }
   if (b.type === "image") return { type: "image", source: { type: "url", url: b.url } }
+  if (b.type === "video_base64") {
+    throw new Error(INLINE_VIDEO_LANE_ERROR("Anthropic"))
+  }
   if (b.type === "video" || b.type === "audio") {
     throw new Error(`Anthropic does not support ${b.type} input — pick a Gemini model for video/audio refs.`)
   }
