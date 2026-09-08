@@ -28,8 +28,9 @@
  */
 export function touchesStudioPublishFlag(settings: unknown): boolean {
   if (typeof settings !== "object" || settings === null) return false
-  // Two audience levers live in this JSON: `studio.shared` opens the
-  // no-auth public read, and `presentationSettings.shareReadOnly` decides
+  // Three audience levers live in this JSON: `studio.shared` opens the
+  // no-auth public read, `studio.allowEditableCopy` authorizes editable copies,
+  // and `presentationSettings.shareReadOnly` decides
   // whether a share-link holder may RUN (flipping it off widens who can spend
   // the owner's credits through the link). A write that mentions either is
   // touching who can reach the work.
@@ -37,29 +38,30 @@ export function touchesStudioPublishFlag(settings: unknown): boolean {
 }
 
 /**
- * The two audience bits this JSON carries, read defensively and NORMALIZED to
+ * The audience bits this JSON carries, read defensively and NORMALIZED to
  * their effective boolean state.
  *
- * Both are consumed as `=== true` downstream — the public read requires
+ * These are consumed as `=== true` downstream — the public read requires
  * `studio.shared === true`, the presentation run gate is `shareReadOnly &&
  * …`. So `false`, `undefined` and a missing key are one state, and only a
  * transition into or out of `true` is a real audience change. Comparing raw
  * values instead would flag erasing an already-`false` flag as a change and
  * refuse an ordinary save.
  */
-export function readAudienceBits(settings: unknown): { shared: boolean; shareReadOnly: boolean } {
+export function readAudienceBits(settings: unknown): { shared: boolean; shareReadOnly: boolean; allowEditableCopy: boolean } {
   const s = settings as
-    | { studio?: { shared?: unknown }; presentationSettings?: { shareReadOnly?: unknown } }
+    | { studio?: { shared?: unknown; allowEditableCopy?: unknown }; presentationSettings?: { shareReadOnly?: unknown } }
     | null
     | undefined
   return {
     shared: s?.studio?.shared === true,
+    allowEditableCopy: s?.studio?.allowEditableCopy === true,
     shareReadOnly: s?.presentationSettings?.shareReadOnly === true,
   }
 }
 
 /**
- * Whether a full-body settings write would CHANGE either audience lever.
+ * Whether a full-body settings write would CHANGE any audience lever.
  *
  * No early-out on "the write does not mention them": the full-body path
  * REPLACES the whole settings object, so a write that omits the keys erases
@@ -72,5 +74,5 @@ export function readAudienceBits(settings: unknown): { shared: boolean; shareRea
 export function changesStudioPublishFlag(next: unknown, stored: unknown): boolean {
   const a = readAudienceBits(next)
   const b = readAudienceBits(stored)
-  return a.shared !== b.shared || a.shareReadOnly !== b.shareReadOnly
+  return a.shared !== b.shared || a.shareReadOnly !== b.shareReadOnly || a.allowEditableCopy !== b.allowEditableCopy
 }

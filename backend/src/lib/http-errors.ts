@@ -1,5 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { jobBlockOf, jobBlockedBody } from "./job-policy.js"
+import { RetainedImageInUseError, RetainedVideoInUseError } from "./retained-image-errors.js"
+import { UploadBlockedError, uploadBlockedBody } from "./upload-policy.js"
 
 /** The single generic string every unmarked `internal_error` 500 collapses to. */
 const GENERIC_INTERNAL_MESSAGE = "Internal server error"
@@ -202,6 +204,13 @@ export function sendInternalError(
   err: unknown,
   clientMessage = GENERIC_INTERNAL_MESSAGE,
 ): FastifyReply {
+  // This exact server-defined database refusal is a conflict, not a 500.
+  // Never forward arbitrary database messages through this exception.
+  if (err && typeof err === "object" && "code" in err && err.code === "PT409"
+    && "message" in err && err.message === "production_capability_required") {
+    return reply.status(409).send({ error: { code: "production_capability_required",
+      message: "Use a compatible Studio editor or production API to edit this linked production." } })
+  }
   // A job-policy BLOCK is a CLIENT outcome, not a server error: 422 with the
   // policy's own user-safe reason, the same shape and status the upload lanes
   // use. It is caught HERE rather than at the ~103 insert call sites so every
@@ -211,6 +220,10 @@ export function sendInternalError(
   // error must not be reported as a server failure or logged at error level.
   // (The 500-sanitizer net only rewrites `internal_error` 500 bodies, so this
   // 422 passes through it untouched.)
+  if (err instanceof RetainedImageInUseError || err instanceof RetainedVideoInUseError) {
+    return reply.status(err.statusCode).send({ error: { code: err.code, message: err.message } })
+  }
+  if (err instanceof UploadBlockedError) return reply.status(400).send(uploadBlockedBody(err.decision))
   const blocked = jobBlockOf(err)
   if (blocked) {
     req.log.info({ policyId: blocked.policyId }, "job blocked by policy")

@@ -221,6 +221,13 @@ beforeEach(() => {
 })
 
 describe("executeNode: reduce", () => {
+  it("refuses a dependency node before resolving inputs or starting its executor", async () => {
+    const node = { id: "linked", type: "generate-image", position: { x: 0, y: 0 }, data: { keyframeId: "A", prompt: "Frame" } }
+    await expect(executeNode(node as any, makeCtx())).rejects.toMatchObject({ code: "sequence_execution_required" })
+    expect(mockResolveNodeInputs).not.toHaveBeenCalled()
+    expect(mockExecuteReduce).not.toHaveBeenCalled()
+  })
+
   it("calls executeReduce with strategyId + resolved inputs[] and persists result on success", async () => {
     mockResolveNodeInputs.mockReturnValue({ inputs: ["a", "b"] })
     mockExecuteReduce.mockResolvedValue({

@@ -22,11 +22,11 @@ import { isUuid } from "./_id-guard.js"
  */
 
 /**
- * The family's seventeen tool names, in registration order.
+ * The family's tool names, in registration order.
  *
  * ONE list: a test pins the registered surface to it, the operating-guide
  * drift check reads it, and the docs rows are written against it. A
- * hand-typed seventeenth name in a second place is exactly the drift this
+ * hand-typed name in a second place is exactly the drift this
  * removes.
  */
 export const STUDIO_PRODUCTION_TOOL_NAMES = [
@@ -42,6 +42,7 @@ export const STUDIO_PRODUCTION_TOOL_NAMES = [
   "clone_studio_production",
   "describe_studio_production",
   "generate_studio_still",
+  "generate_studio_keyframe",
   "generate_studio_clip",
   "new_studio_shot_from_frame",
   "voice_studio_shot",

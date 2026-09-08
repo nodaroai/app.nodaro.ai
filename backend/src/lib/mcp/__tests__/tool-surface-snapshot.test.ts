@@ -49,7 +49,9 @@ const FIXTURE = JSON.parse(readFileSync(resolve(here, "fixtures/tool-surface.jso
 // the sentence the read tool's description gained, saying that reading also
 // lands finished work — the same raise-by-exactly-the-cost rule, applied to a
 // sentence.
-export const TOOL_WIRE_BUDGET = { perToolBytes: 8_192, totalBytes: 333_730 }
+// The planned-keyframe tool adds 2,042 B to tools/list (measured by this suite),
+// preserving the existing 85 B headroom. Per-tool limits remain unchanged.
+export const TOOL_WIRE_BUDGET = { perToolBytes: 8_192, totalBytes: 335_772 }
 
 type ToolDef = { name: string; description?: string }
 async function list(scopes: Scope[]): Promise<ToolDef[]> {

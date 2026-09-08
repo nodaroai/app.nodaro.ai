@@ -1,3 +1,4 @@
+import { assertCanvasExecutionAllowed } from "@nodaro/shared"
 /**
  * Node executor — dispatches node execution based on type category.
  *
@@ -330,6 +331,7 @@ export async function executeNode(
   // single (non-fan-out) executions.
   iterationIndex?: number,
 ): Promise<ExecuteNodeResult> {
+  assertCanvasExecutionAllowed([node])
   // Source nodes — should already have output set
   if (isSourceNode(node.type)) {
     throw new Error(`Source node ${node.type} should not be executed`)

@@ -552,6 +552,9 @@ export interface PluginAudioFxOptions {
 }
 
 export interface PluginMediaToolkit {
+  /** Authorize the source first. Public-only bounded video download and local
+   * still extraction; no jobs, storage credentials or automatic media spend. */
+  readPublicVideoFrame?(input: { videoUrl: string; timeSec: number }): Promise<Buffer>
   /** Mirrors `extractAudio` (`providers/video/extract-audio.ts`). */
   extractAudio(options: { readonly videoUrl: string }): Promise<{ readonly audioPath: string }>
   /** Mirrors `mixAudio` (`providers/video/mix-audio.ts`). */
@@ -580,7 +583,93 @@ export interface PluginMediaToolkit {
 // tk.storage — backend/src/lib/storage.ts, lib/post-processing-error.ts
 // ============================================================================
 
+export interface PluginRetainedJobImage {
+  jobId: string
+  submissionContext: Record<string, unknown>
+  image: { assetId: string; contentHash: string; url: string; width: number; height: number }
+}
+
+export interface PluginRetainedImageCopy {
+  id: string
+  source: { workflowId: string; jobId?: string; copyId?: string }
+  sourceContext: Record<string, unknown>
+  origin: { workflowId: string; jobId: string; submissionContext: Record<string, unknown> }
+  context: Record<string, unknown>
+  image: { assetId: string; contentHash: string; url: string; width: number; height: number }
+}
+
+export interface PluginRetainedJobVideo {
+  jobId: string
+  submissionContext: Record<string, unknown>
+  video: { assetId: string; contentHash: string; url: string; width: number; height: number; durationMs: number; byteLength: number }
+}
+
+export interface PluginRetainedVideoCopy {
+  id: string
+  source: { workflowId: string; jobId?: string; copyId?: string }
+  sourceContext: Record<string, unknown>
+  origin: { workflowId: string; jobId: string; submissionContext: Record<string, unknown> }
+  context: Record<string, unknown>
+  video: { assetId: string; contentHash: string; url: string; width: number; height: number; durationMs: number; byteLength: number }
+}
+
 export interface PluginStorageToolkit {
+  /** Authorize reading the workflow first; verifies destination bytes even if
+   * the original job and source workflows were deleted. */
+  readRetainedImageCopies?(workflowId: string, copyIds: readonly string[]): Promise<PluginRetainedImageCopy[]>
+  /** Authorize both workflows and validate mapped context first. A copy gets
+   * its own proof ID, never a synthetic job or inherited acceptance. */
+  recordRetainedImageCopy?(args: {
+    id: string; userId: string; workflowId: string; imageId: string;
+    source: { workflowId: string; jobId: string; copyId?: never } | { workflowId: string; copyId: string; jobId?: never };
+    context: Record<string, unknown>
+  }): Promise<PluginRetainedImageCopy | null>
+  /** Authorize source read and destination edit access first. Copies verified
+   * bytes into destination retention; does not transfer job/review authority. */
+  copyRetainedImage?(args: { userId: string; sourceWorkflowId: string; workflowId: string; assetId: string }): Promise<{
+    assetId: string; contentHash: string; url: string; width: number; height: number
+  } | null>
+  /** Authorize editing first; capture an owned completed job with server provenance. */
+  retainJobImage?(args: { userId: string; workflowId: string; jobId: string }): Promise<PluginRetainedJobImage | null>
+  /** Authorize workflow access first; retained results survive source-job deletion. */
+  readRetainedJobImages?(workflowId: string, jobIds: readonly string[]): Promise<PluginRetainedJobImage[]>
+  /** Snapshot bytes after the caller authorizes the source and workflow. */
+  retainImage?(args: { userId: string; workflowId: string; body: Buffer }): Promise<{
+    assetId: string; contentHash: string; url: string; width: number; height: number
+  }>
+  /** Read only after workflow access authorization; cross-workflow ids return null. */
+  readRetainedImage?(workflowId: string, assetId: string): Promise<{
+    assetId: string; contentHash: string; url: string; width: number; height: number
+  } | null>
+  canRetainImages?: boolean
+  /** Authorize reading the workflow first; verifies destination bytes even if
+   * the original job and source workflows were deleted. */
+  readRetainedVideoCopies?(workflowId: string, copyIds: readonly string[]): Promise<PluginRetainedVideoCopy[]>
+  /** Authorize both workflows and validate mapped context first. A copy gets
+   * its own proof ID, never a synthetic job or inherited acceptance. */
+  recordRetainedVideoCopy?(args: {
+    id: string; userId: string; workflowId: string; videoId: string;
+    source: { workflowId: string; jobId: string; copyId?: never } | { workflowId: string; copyId: string; jobId?: never };
+    context: Record<string, unknown>
+  }): Promise<PluginRetainedVideoCopy | null>
+  /** Authorize source read and destination edit access first. Copies verified
+   * bytes into destination retention; does not transfer job/review authority. */
+  copyRetainedVideo?(args: { userId: string; sourceWorkflowId: string; workflowId: string; assetId: string }): Promise<{
+    assetId: string; contentHash: string; url: string; width: number; height: number; durationMs: number; byteLength: number
+  } | null>
+  /** Authorize editing first; capture an owned completed job with server provenance. */
+  retainJobVideo?(args: { userId: string; workflowId: string; jobId: string }): Promise<PluginRetainedJobVideo | null>
+  /** Authorize workflow access first; retained results survive source-job deletion. */
+  readRetainedJobVideos?(workflowId: string, jobIds: readonly string[]): Promise<PluginRetainedJobVideo[]>
+  /** Snapshot bytes after the caller authorizes the source and workflow. */
+  retainVideo?(args: { userId: string; workflowId: string; body: Buffer }): Promise<{
+    assetId: string; contentHash: string; url: string; width: number; height: number; durationMs: number; byteLength: number
+  }>
+  /** Read only after workflow access authorization; cross-workflow ids return null. */
+  readRetainedVideo?(workflowId: string, assetId: string): Promise<{
+    assetId: string; contentHash: string; url: string; width: number; height: number; durationMs: number; byteLength: number
+  } | null>
+  canRetainVideos?: boolean
   /** Mirrors `uploadBufferToR2` (`lib/storage.ts`). */
   uploadBufferToR2(
     buffer: Buffer,
@@ -735,6 +824,8 @@ export interface PluginJobSettlementResult {
 }
 
 export interface PluginJobsToolkit {
+  /** Owner-scoped access to immutable server submission records. */
+  readJobSubmissionsOwnedBy?(userId: string, jobIds: ReadonlyArray<string>): Promise<Array<{ id: string; submission_context: Record<string, unknown> }>>
   /**
    * The status of jobs THIS user owns, by id, redacted.
    *
@@ -1177,6 +1268,8 @@ export interface EditVideoProPricing {
 }
 
 export interface PluginHttpToolkit {
+  /** This host stores internalRequest.jobSubmission on the initial job insert. */
+  supportsJobSubmissionContext?: true
   /** Applies the same configured service/global markup used by creditGuard to
    *  a dynamic pre-markup total, without checking balance or reserving it. */
   applyCreditMarkup(modelIdentifier: string, baseCredits: number): Promise<number>
@@ -1224,6 +1317,9 @@ export interface PluginHttpToolkit {
    * rather than importing undici's `SafeFetchInit`/`Response` types.
    */
   safeFetch(url: string, init?: PluginSafeFetchInit): Promise<PluginFetchResponse>
+  /** Public HTTP bytes, SSRF checked, 30s timeout and streaming cap (1–25 MiB).
+   * Caller must separately authorize the source. No storage credentials. */
+  safeFetchBytes?(url: string, maxBytes: number): Promise<Buffer>
   /** Mirrors `insertWithIdempotencyKey` (`lib/idempotent-insert.ts:33`).
    *  P14: the optional context stamps the payer pair (workspace_id/org_id)
    *  onto the row — which also trips the DB privacy clamp for workspace
@@ -1366,6 +1462,8 @@ export interface PluginHttpToolkit {
 }
 
 export interface PluginInternalRequestOptions {
+  /** Trusted metadata stored atomically on matching job inserts, outside public JSON. */
+  jobSubmission?: { readonly jobType: string; readonly metadata: Readonly<Record<string, unknown>> }
   method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE"
   url: string
   /** The caller — impersonated through the internal secret, exactly as MCP does. */
@@ -1834,6 +1932,18 @@ export type PluginLoadedWorkflow =
  * decides that question before asking it. One rule, one place.
  */
 export interface PluginWorkflowsToolkit {
+  /** Host guards editable-copy permission on every generic audience write. */
+  supportsEditableCopySharing?: boolean
+  /** Copy-only access: shared + owner opt-in may admit a viewer without
+   * granting ordinary workflow access. The returned row is one saved snapshot. */
+  loadStudioEditableCopySource?: PluginWorkflowsToolkit["loadWorkflowFor"]
+  /** Server-only compatible document transport. The caller MUST authorize the
+   * target and validate with its codec. An empty update result means a lost CAS.
+   * Additive-optional; older hosts must refuse dependency edits. */
+  writeCompatible?(input:
+    | { kind: "create"; row: Record<string, unknown> }
+    | { kind: "update"; workflowId: string; expectedVersion: number; patch: Record<string, unknown> }
+  ): Promise<{ data: Record<string, unknown> | null; error: unknown }>
   /**
    * Mirrors `WORKFLOW_ACCESS_COLS` — the columns a row must carry to be
    * judgeable. A projection one column short is REFUSED (loudly) rather than
@@ -2265,6 +2375,13 @@ export interface PluginBillingService {
 }
 
 export interface PluginServices {
+  /** Public read projection for extension documents. Called only after the
+   * host's share-by-link authorization. Null means unsupported; never return
+   * raw authoring state as a fallback. Pure: no jobs, storage or writes. */
+  publicWorkflow?: {
+    project(input: { id: string; name: string; nodes: unknown[]; edges: unknown[]; settings: Record<string, unknown> }):
+      { nodes: unknown[]; edges: unknown[]; settings: Record<string, unknown> } | null
+  }
   orgs?: PluginOrgsService
   /**
    * Payer/entitlement resolution (E2/P14). Optional-by-absence like every

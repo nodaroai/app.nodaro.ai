@@ -1,0 +1,607 @@
+import { describe, expect, it, vi } from "vitest"
+
+import {
+  createClient,
+  NodaroError,
+  StaticTokenAuth,
+  InsufficientCreditsError,
+  isStudioGenerateEstimate,
+  StudioOpError,
+  WorkflowConflictError,
+} from "../../index.js"
+import type { WorkflowConflictCode } from "../../index.js"
+
+function mockOk<T>(body: T) {
+  return Promise.resolve({ ok: true, status: 200, json: async () => body } as unknown as Response)
+}
+
+function mockErr(status: number, error: Record<string, unknown>) {
+  return Promise.resolve({
+    ok: false,
+    status,
+    json: async () => ({ error }),
+  } as unknown as Response)
+}
+
+function make(fetchMock: ReturnType<typeof vi.fn>) {
+  return createClient({
+    baseUrl: "https://api.example.com",
+    auth: new StaticTokenAuth("t"),
+    fetch: fetchMock as unknown as typeof fetch,
+  })
+}
+
+/**
+ * The minimum a route answers with — enough to assert it comes back unwrapped.
+ *
+ * A plain literal, not a `satisfies` of a view type: the resource returns the
+ * production as open JSON (the field-level types ship with the studio app), so
+ * there is nothing here for the SDK to pin it against.
+ */
+const view = {
+  id: "11111111-1111-4111-8111-111111111111",
+  name: "The Lighthouse",
+  version: 7,
+  updatedAt: "2026-09-06T10:00:00.000Z",
+  thumbnailUrl: null,
+  shared: false,
+  archived: false,
+  folders: [],
+  cuts: [],
+  trash: { count: 0 },
+  pending: { stills: 0, clips: 0, music: false, draft: null },
+  shots: [],
+}
+
+function call(fetchMock: ReturnType<typeof vi.fn>, index = 0) {
+  const [url, init] = fetchMock.mock.calls[index] as [string, { method: string; body?: string }]
+  return {
+    url,
+    method: init.method,
+    body: init.body === undefined ? undefined : (JSON.parse(init.body) as unknown),
+  }
+}
+
+describe("client.studio.productions — reads", () => {
+  it("skill() unwraps the rendered authoring + operating guides", async () => {
+    const payload = {
+      skill: "# Studio production",
+      catalog: "# Catalog",
+      schema: { type: "object" },
+      operating: "# Operating",
+      generatedFrom: { prompts: "1.2.3", shared: "4.5.6", codec: "0.3.0" },
+    }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: payload }))
+    const client = make(fetchMock)
+
+    await expect(client.studio.productions.skill()).resolves.toEqual(payload)
+    expect(call(fetchMock)).toMatchObject({
+      url: "https://api.example.com/v1/studio/productions/skill",
+      method: "GET",
+    })
+  })
+
+  it("validatePlan() posts the plan and is free of side effects", async () => {
+    const payload = { valid: true, errors: [], warnings: [] }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: payload }))
+    const client = make(fetchMock)
+
+    await expect(client.studio.productions.validatePlan({ version: 2 })).resolves.toEqual(payload)
+    expect(call(fetchMock)).toEqual({
+      url: "https://api.example.com/v1/studio/productions/validate",
+      method: "POST",
+      body: { plan: { version: 2 } },
+    })
+  })
+
+  it("list() sends the page window and the archived opt-in", async () => {
+    const payload = { data: [], nextCursor: "c2" }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: payload }))
+    const client = make(fetchMock)
+
+    await expect(
+      client.studio.productions.list({ limit: 10, cursor: "c1", includeArchived: true }),
+    ).resolves.toEqual(payload)
+    expect(call(fetchMock).url).toBe(
+      "https://api.example.com/v1/studio/productions?limit=10&cursor=c1&includeArchived=true",
+    )
+  })
+
+  it("list() with no options sends no query at all", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: { data: [] } }))
+    const client = make(fetchMock)
+
+    await client.studio.productions.list()
+    expect(call(fetchMock).url).toBe("https://api.example.com/v1/studio/productions")
+  })
+
+  it("get() sends the route's own query spellings and returns the view itself", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: { production: view } }))
+    const client = make(fetchMock)
+
+    await expect(
+      client.studio.productions.get(view.id, { detail: "full", shotId: "shot-2" }),
+    ).resolves.toEqual(view)
+    expect(call(fetchMock).url).toBe(
+      `https://api.example.com/v1/studio/productions/${view.id}?detail=full&shot_id=shot-2`,
+    )
+  })
+
+  it("exportPlan() asks for the ordered steps, upscale included", async () => {
+    const payload = {
+      canExport: true,
+      steps: [
+        {
+          id: "combine",
+          node: "combine-videos",
+          params: { videoUrls: ["a.mp4", { fromStep: "voice-shot-2" }], transition: "cut", audioMode: "keep" },
+          label: "Join 2 shots",
+          creditModel: "combine-videos",
+          credits: 4,
+        },
+      ],
+      resultStepId: "combine",
+      estimate: 4,
+      unpriced: [],
+    }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: payload }))
+    const client = make(fetchMock)
+
+    await expect(client.studio.productions.exportPlan(view.id, { upscale: true })).resolves.toEqual(
+      payload,
+    )
+    expect(call(fetchMock)).toMatchObject({
+      url: `https://api.example.com/v1/studio/productions/${view.id}/export-plan?upscale=true`,
+      method: "GET",
+    })
+  })
+})
+
+describe("client.studio.productions — the write protocol", () => {
+  it("ops() returns the canonical view, the new version, the rebase flag and the receipts", async () => {
+    // The SDK forwards `ops` untouched and knows none of the vocabulary, so the
+    // batch below is a stand-in rather than a real operation: what is asserted
+    // is that whatever went in came back out on the wire, byte for byte.
+    const payload = {
+      production: view,
+      version: 8,
+      rebased: true,
+      receipts: [{ op: "example_op", summary: "Renamed shot 2 to “The arrival”" }],
+      warnings: [],
+    }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: payload }))
+    const client = make(fetchMock)
+
+    await expect(
+      client.studio.productions.ops(view.id, {
+        ops: [{ op: "example_op", id: "shot-2", name: "The arrival" }],
+        baseVersion: 7,
+        strict: false,
+        clientRequestId: "req-1",
+      }),
+    ).resolves.toEqual(payload)
+
+    expect(call(fetchMock)).toEqual({
+      url: `https://api.example.com/v1/studio/productions/${view.id}/ops`,
+      method: "POST",
+      body: {
+        ops: [{ op: "example_op", id: "shot-2", name: "The arrival" }],
+        baseVersion: 7,
+        strict: false,
+        clientRequestId: "req-1",
+      },
+    })
+  })
+
+  it("reconcile() lands what finished and reports what is still running", async () => {
+    const payload = {
+      landed: ["job-1"],
+      pending: ["job-2"],
+      failed: [],
+      warnings: [],
+      production: view,
+      version: 8,
+    }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: payload }))
+    const client = make(fetchMock)
+
+    await expect(client.studio.productions.reconcile(view.id)).resolves.toEqual(payload)
+    expect(call(fetchMock)).toMatchObject({
+      url: `https://api.example.com/v1/studio/productions/${view.id}/reconcile`,
+      method: "POST",
+    })
+  })
+
+  it("create() carries the name and the plan, and returns the landing report", async () => {
+    const payload = { production: view, warnings: [], summary: { shotsAdded: 3, castEnrolled: 1, castBound: 1 } }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: payload }))
+    const client = make(fetchMock)
+
+    await expect(
+      client.studio.productions.create({ name: "The Lighthouse", plan: { version: 2 } }),
+    ).resolves.toEqual(payload)
+    expect(call(fetchMock)).toEqual({
+      url: "https://api.example.com/v1/studio/productions",
+      method: "POST",
+      body: { name: "The Lighthouse", plan: { version: 2 } },
+    })
+  })
+
+  it("create() with nothing to say still posts an object", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: { production: view } }))
+    const client = make(fetchMock)
+
+    await client.studio.productions.create()
+    expect(call(fetchMock).body).toEqual({})
+  })
+
+  it("importPlan() appends a plan's scenes to a production that exists", async () => {
+    const payload = { production: view, warnings: [] }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: payload }))
+    const client = make(fetchMock)
+
+    await expect(
+      client.studio.productions.importPlan(view.id, { version: 2 }),
+    ).resolves.toEqual(payload)
+    expect(call(fetchMock)).toEqual({
+      url: `https://api.example.com/v1/studio/productions/${view.id}/import`,
+      method: "POST",
+      body: { plan: { version: 2 }, mode: "append" },
+    })
+  })
+
+  it("describe() starts the run and hands back its job id", async () => {
+    const payload = { jobId: "job-9", production: view }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: payload }))
+    const client = make(fetchMock)
+
+    await expect(
+      client.studio.productions.describe(view.id, {
+        brief: "A keeper, a storm",
+        llmModel: "gpt-5-mini",
+        mode: "append",
+      }),
+    ).resolves.toEqual(payload)
+    expect(call(fetchMock)).toEqual({
+      url: `https://api.example.com/v1/studio/productions/${view.id}/describe`,
+      method: "POST",
+      body: { brief: "A keeper, a storm", llmModel: "gpt-5-mini", mode: "append" },
+    })
+  })
+})
+
+describe("client.studio.productions — generation and media", () => {
+  it("generateStill() names the kind and the shot in ONE generate call", async () => {
+    const payload = { jobIds: ["job-1", "job-2"], production: view }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: payload }))
+    const client = make(fetchMock)
+
+    await expect(
+      client.studio.productions.generateStill(view.id, "shot-2", {
+        count: 2,
+        clientRequestId: "req-70000",
+      }),
+    ).resolves.toEqual(payload)
+    expect(call(fetchMock)).toEqual({
+      url: `https://api.example.com/v1/studio/productions/${view.id}/generate`,
+      method: "POST",
+      body: { kind: "still", shotId: "shot-2", count: 2, clientRequestId: "req-70000" },
+    })
+  })
+
+  it("generateStill({ dryRun }) comes back as the quote, and says so", async () => {
+    const payload = { dryRun: true, provider: "flux", count: 2, credits: 12 }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: payload }))
+    const client = make(fetchMock)
+
+    const quote = await client.studio.productions.generateStill(view.id, "shot-2", {
+      dryRun: true,
+    })
+    // The overload narrows it, and the guard says the same thing at runtime.
+    expect(quote.credits).toBe(12)
+    expect(isStudioGenerateEstimate(quote)).toBe(true)
+    expect(call(fetchMock).body).toEqual({ kind: "still", shotId: "shot-2", dryRun: true })
+  })
+
+  it("a retry with the same token comes back deduped, having submitted nothing", async () => {
+    const payload = { jobIds: ["job-1"], deduped: true }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: payload }))
+    const client = make(fetchMock)
+
+    const again = await client.studio.productions.generateStill(view.id, "shot-2", {
+      clientRequestId: "req-70000",
+    })
+    expect(again).toEqual(payload)
+    expect(isStudioGenerateEstimate(again)).toBe(false)
+  })
+
+  it("generateClip() reports the lane the server chose from the inputs", async () => {
+    const payload = { jobIds: ["job-3"], lane: "generate-video", production: view }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: payload }))
+    const client = make(fetchMock)
+
+    await expect(
+      client.studio.productions.generateClip(view.id, "shot-2", { mode: "references" }),
+    ).resolves.toEqual(payload)
+    expect(call(fetchMock)).toEqual({
+      url: `https://api.example.com/v1/studio/productions/${view.id}/generate`,
+      method: "POST",
+      body: { kind: "clip", shotId: "shot-2", mode: "references" },
+    })
+  })
+
+  it("frame() extracts a frame and returns the production it changed", async () => {
+    const payload = { production: view, url: "https://cdn.example.com/frame.png" }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: payload }))
+    const client = make(fetchMock)
+
+    await expect(
+      client.studio.productions.frame(view.id, {
+        shotId: "shot-2",
+        mode: "last",
+        target: "new-shot",
+      }),
+    ).resolves.toEqual(payload)
+    expect(call(fetchMock)).toEqual({
+      url: `https://api.example.com/v1/studio/productions/${view.id}/frame`,
+      method: "POST",
+      body: { shotId: "shot-2", mode: "last", target: "new-shot" },
+    })
+  })
+
+  it("voice() renders the scene's line and returns the production", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: { production: view } }))
+    const client = make(fetchMock)
+
+    await expect(
+      client.studio.productions.voice(view.id, { shotId: "shot-2", text: "Light the lamp." }),
+    ).resolves.toEqual({ production: view })
+    expect(call(fetchMock)).toEqual({
+      url: `https://api.example.com/v1/studio/productions/${view.id}/voice`,
+      method: "POST",
+      body: { shotId: "shot-2", text: "Light the lamp." },
+    })
+  })
+
+  it("revoice() runs on the active clip and lands through its own marker", async () => {
+    const payload = { jobId: "job-4", production: view }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: payload }))
+    const client = make(fetchMock)
+
+    await expect(
+      client.studio.productions.revoice(view.id, {
+        shotId: "shot-2",
+        plan: { voiceId: "v1" },
+      }),
+    ).resolves.toEqual(payload)
+    expect(call(fetchMock)).toEqual({
+      url: `https://api.example.com/v1/studio/productions/${view.id}/revoice`,
+      method: "POST",
+      body: { shotId: "shot-2", plan: { voiceId: "v1" } },
+    })
+  })
+
+  it("music() scores the film and returns the job", async () => {
+    const payload = { jobId: "job-5", production: view }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: payload }))
+    const client = make(fetchMock)
+
+    await expect(
+      client.studio.productions.music(view.id, { prompt: "A sparse analogue score" }),
+    ).resolves.toEqual(payload)
+    expect(call(fetchMock)).toEqual({
+      url: `https://api.example.com/v1/studio/productions/${view.id}/music`,
+      method: "POST",
+      body: { prompt: "A sparse analogue score" },
+    })
+  })
+})
+
+describe("client.studio.productions — audience and copies", () => {
+  it("share() opens the link read and unshare() closes it — two routes, one each way", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(mockOk({ data: { production: { ...view, shared: true } } }))
+      .mockReturnValueOnce(mockOk({ data: { production: view } }))
+    const client = make(fetchMock)
+
+    await expect(client.studio.productions.share(view.id)).resolves.toMatchObject({ shared: true })
+    await expect(client.studio.productions.unshare(view.id)).resolves.toMatchObject({ shared: false })
+
+    expect(call(fetchMock, 0)).toEqual({
+      url: `https://api.example.com/v1/studio/productions/${view.id}/share`,
+      method: "POST",
+      body: { shared: true },
+    })
+    expect(call(fetchMock, 1)).toMatchObject({
+      url: `https://api.example.com/v1/studio/productions/${view.id}/unshare`,
+      method: "POST",
+    })
+  })
+
+  it("clone() copies a production the caller can read", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: { production: view } }))
+    const client = make(fetchMock)
+
+    await expect(client.studio.productions.clone(view.id, { name: "A copy" })).resolves.toEqual(view)
+    expect(call(fetchMock)).toEqual({
+      url: `https://api.example.com/v1/studio/productions/${view.id}/clone`,
+      method: "POST",
+      body: { name: "A copy" },
+    })
+  })
+
+  it("ids are escaped, never interpolated raw", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: { production: view } }))
+    const client = make(fetchMock)
+
+    await client.studio.productions.frame("a b", {
+      shotId: "s/1",
+      mode: "first",
+      target: "still",
+    })
+    // The shot rides in the BODY, so only the production id is in the path.
+    expect(call(fetchMock).url).toBe(
+      "https://api.example.com/v1/studio/productions/a%20b/frame",
+    )
+  })
+})
+
+describe("studio error mapping", () => {
+  it("both new exports are reachable from the package root", () => {
+    // `StudioOpError` by the value import at the top of this file; the code
+    // union by a type-level use `tsc` walks on every build. Both are permanent
+    // public exports, so a re-export dropped in a refactor fails here rather
+    // than in a consumer's tree.
+    const codes: WorkflowConflictCode[] = ["workflow_conflict", "production_busy"]
+    expect(codes).toHaveLength(2)
+    expect(new StudioOpError("refused", "op_invalid", 400, 0)).toBeInstanceOf(NodaroError)
+  })
+
+  it("409 production_busy is a WorkflowConflictError that keeps its own code", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockErr(409, {
+        code: "production_busy",
+        message: "This production changed while the batch was being applied.",
+        currentVersion: 9,
+      }),
+    )
+    const client = make(fetchMock)
+
+    const err = await client.studio.productions
+      .ops(view.id, { ops: [] })
+      .catch((e: unknown) => e)
+
+    expect(err).toBeInstanceOf(WorkflowConflictError)
+    const conflict = err as WorkflowConflictError
+    expect(conflict.code).toBe("production_busy")
+    expect(conflict.status).toBe(409)
+    expect(conflict.currentVersion).toBe(9)
+  })
+
+  it("409 workflow_conflict still maps as it always did", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockErr(409, {
+        code: "workflow_conflict",
+        message: "Workflow was updated by another writer",
+        currentUpdatedAt: "2026-09-06T10:00:00.000Z",
+        currentVersion: 9,
+        currentRecord: { id: view.id },
+      }),
+    )
+    const client = make(fetchMock)
+
+    const err = (await client.studio.productions
+      .ops(view.id, { ops: [], strict: true })
+      .catch((e: unknown) => e)) as WorkflowConflictError
+
+    expect(err).toBeInstanceOf(WorkflowConflictError)
+    expect(err.code).toBe("workflow_conflict")
+    expect(err.currentRecord).toEqual({ id: view.id })
+  })
+
+  it("an op error names the operation that was wrong, and nothing was written", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockErr(400, { code: "op_invalid", message: "Unknown shot", opIndex: 2 }),
+    )
+    const client = make(fetchMock)
+
+    const err = (await client.studio.productions
+      .ops(view.id, { ops: [] })
+      .catch((e: unknown) => e)) as StudioOpError
+
+    expect(err).toBeInstanceOf(StudioOpError)
+    expect(err).toBeInstanceOf(NodaroError)
+    expect(err.code).toBe("op_invalid")
+    expect(err.opIndex).toBe(2)
+  })
+
+  it("the op index is read from the SHAPE, so a second op code maps too", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockErr(400, { code: "op_target_missing", message: "No such shot", opIndex: 0 }),
+    )
+    const client = make(fetchMock)
+
+    const err = (await client.studio.productions
+      .ops(view.id, { ops: [] })
+      .catch((e: unknown) => e)) as StudioOpError
+
+    expect(err).toBeInstanceOf(StudioOpError)
+    expect(err.code).toBe("op_target_missing")
+    expect(err.opIndex).toBe(0)
+  })
+
+  it("a code this SDK has never heard of maps too, because the SHAPE decides", async () => {
+    // The point of the by-shape rule: the server can add a refusal reason
+    // tomorrow and it reaches the caller as StudioOpError with no SDK release.
+    // Nothing in this package knows this code exists.
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockErr(422, {
+        code: "op_reason_invented_after_this_release",
+        message: "That is not allowed here",
+        opIndex: 4,
+      }),
+    )
+    const client = make(fetchMock)
+
+    const err = (await client.studio.productions
+      .ops(view.id, { ops: [] })
+      .catch((e: unknown) => e)) as StudioOpError
+
+    expect(err).toBeInstanceOf(StudioOpError)
+    expect(err.code).toBe("op_reason_invented_after_this_release")
+    expect(err.status).toBe(422)
+    expect(err.opIndex).toBe(4)
+  })
+
+  it("a 5xx carrying an opIndex is NOT an op error — the shape rule is 4xx only", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockErr(500, { code: "internal_error", message: "Boom", opIndex: 1 }),
+    )
+    const client = make(fetchMock)
+
+    const err = (await client.studio.productions
+      .ops(view.id, { ops: [] })
+      .catch((e: unknown) => e)) as NodaroError
+
+    expect(err).toBeInstanceOf(NodaroError)
+    expect(err).not.toBeInstanceOf(StudioOpError)
+  })
+
+  it("402 from the inner generation route reaches the caller typed", async () => {
+    // The generation route forwards the inner refusal VERBATIM, which is what
+    // keeps the SDK's mapping-by-code working through a second hop.
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockErr(402, {
+        code: "insufficient_credits",
+        message: "Not enough credits",
+        required: 40,
+        available: 12,
+      }),
+    )
+    const client = make(fetchMock)
+
+    const err = (await client.studio.productions
+      .generateStill(view.id, "shot-2")
+      .catch((e: unknown) => e)) as InsufficientCreditsError
+
+    expect(err).toBeInstanceOf(InsufficientCreditsError)
+    expect(err.required).toBe(40)
+    expect(err.available).toBe(12)
+  })
+
+  it("an ordinary 400 stays an ordinary NodaroError", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockErr(400, { code: "validation_error", message: "Invalid plan" }),
+    )
+    const client = make(fetchMock)
+
+    const err = (await client.studio.productions
+      .validatePlan({})
+      .catch((e: unknown) => e)) as NodaroError
+
+    expect(err).toBeInstanceOf(NodaroError)
+    expect(err).not.toBeInstanceOf(StudioOpError)
+    expect(err.code).toBe("validation_error")
+  })
+})

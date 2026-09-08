@@ -71,6 +71,7 @@ vi.mock("@/providers/video/combine-videos.js", () => ({
 }))
 
 vi.mock("@/lib/storage.js", () => ({
+  isStorageConfigured: vi.fn().mockReturnValue(true),
   uploadBufferToR2: vi.fn(),
   uploadFileToR2: mockUploadFileToR2,
   uploadToR2: vi.fn(),

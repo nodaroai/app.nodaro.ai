@@ -369,6 +369,18 @@ jobs:
         run: node backend/scripts/run-migrations.mjs
       - name: Install psql
         run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      - name: Verify retained image reservation concurrency
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+        run: node backend/scripts/verify-retained-images-concurrency.mjs
+      - name: Verify compatible workflow write concurrency
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+        run: node backend/scripts/verify-compatible-writes-concurrency.mjs
+      - name: Verify retained image copy proof concurrency
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+        run: node backend/scripts/verify-retained-image-copies-concurrency.mjs
       - name: Run every behavioral proof
         env:
           PGPASSWORD: postgres

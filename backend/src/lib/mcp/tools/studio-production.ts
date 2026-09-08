@@ -39,7 +39,7 @@ import { registerStudioProductionRunTools } from "./studio-production-run.js"
  *   generate_* → get_studio_production → plan_studio_export → share / clone
  *
  * This module carries the free, read and document-write halves;
- * `studio-production-run.ts` carries the seven that spend credits. A test pins
+ * `studio-production-run.ts` carries those that spend credits. A test pins
  * the registered names of both to `STUDIO_PRODUCTION_TOOL_NAMES`, the family's
  * one list.
  *

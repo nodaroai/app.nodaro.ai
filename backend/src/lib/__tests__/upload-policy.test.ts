@@ -97,8 +97,8 @@ describe("upload-policy totality — every byte-carrying lane polices", () => {
   const HERE = dirname(fileURLToPath(import.meta.url))
   const SRC = resolve(HERE, "..", "..")
 
-  it("the three ingestion route files call applyUploadPolicies", () => {
-    for (const f of ["routes/upload.ts", "routes/upload-proxy.ts", "routes/upload-handoff.ts"]) {
+  it("HTTP ingestion and retained capture call applyUploadPolicies", () => {
+    for (const f of ["routes/upload.ts", "routes/upload-proxy.ts", "routes/upload-handoff.ts", "lib/retained-images.ts", "lib/retained-videos.ts"]) {
       const src = readFileSync(resolve(SRC, f), "utf8")
       expect(src.includes("applyUploadPolicies("), `${f} never asks the upload policy`).toBe(true)
     }

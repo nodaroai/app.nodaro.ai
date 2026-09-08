@@ -166,6 +166,21 @@ describe("run_workflow — workspace branch", () => {
 // ── update_workflow_json (the C1 audience gate) ──────────────────────────────
 
 describe("update_workflow_json — workspace audience gate", () => {
+  it.each(["enable", "disable", "omit"])("blocks an ordinary MCP write attempting to %s editable-copy permission", async (change) => {
+    accessFromRow.mockResolvedValue("edit")
+    canChangeVis.mockResolvedValue(false)
+    const database = chain({ data: { id: WORKFLOW_ID, user_id: "creator-other", workspace_id: WS_ID,
+      visibility: "workspace", settings: { studio: { shared: true, allowEditableCopy: change !== "enable" } } }, error: null })
+    fromMock.mockReturnValue(database)
+    const server = buildServer()
+    registerWorkflows({ server, session: wsSession(["workflows:write"]), fastify: Fastify() })
+    const result = await callTool(server, "update_workflow_json", { workflow_id: WORKFLOW_ID,
+      settings: { studio: { shared: true, ...(change === "omit" ? {} : { allowEditableCopy: change === "enable" }) } } })
+    expect(result.isError).toBe(true)
+    expect(result.content[0]?.text).toContain("is owned by Studio")
+    expect(database.update).not.toHaveBeenCalled()
+  })
+
   it("refuses a non-creator editor who tries to flip an audience bit", async () => {
     // Edit access — enough to change the canvas — but NOT visibility authority.
     accessFromRow.mockResolvedValue("edit")

@@ -27,6 +27,12 @@ const JOB_ID = "job-img-required-1"
 const ctx = (n: SimpleNode) => ({ nodes: [n], edges: [], nodeStates: {} })
 
 describe("generate-video i2v-only provider guard", () => {
+  it("refuses a linked segment even when ordinary upstream images are available", () => {
+    const n = gv("wan-3", { sequenceBinding: { startKeyframeId: "A", endKeyframeId: "B" } })
+    expect(() => buildPayload(n, JOB_ID, { startFrameUrl: "https://media.test/latest.png" }, undefined, ctx(n)))
+      .toThrow(expect.objectContaining({ code: "sequence_execution_required" }))
+  })
+
   it("throws a clear image-required error for kling-3-omni with no image wired", () => {
     const n = gv("kling-3-omni")
     expect(() => buildPayload(n, JOB_ID, {}, undefined, ctx(n)))

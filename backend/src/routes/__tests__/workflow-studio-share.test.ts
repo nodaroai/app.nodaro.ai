@@ -139,6 +139,20 @@ beforeEach(async () => {
 afterEach(async () => { await app.close() })
 
 describe("the public-publish flag is an audience decision, not an edit", () => {
+  it.each(["enable", "disable", "omit"])("refuses an editor attempting to %s editable-copy permission", async (change) => {
+    asEditor()
+    const stored = { ...ROW, settings: { studio: { shared: true, allowEditableCopy: change !== "enable" } } }
+    const maybeSingle = vi.fn().mockResolvedValue({ data: stored, error: null })
+    const eq = vi.fn().mockReturnValue({ maybeSingle })
+    const select = vi.fn().mockReturnValue({ eq })
+    const update = updateChain()
+    vi.mocked(supabase.from).mockReturnValue({ select, update } as never)
+    const res = await app.inject({ method: "PATCH", url: `/v1/workflows/${WF}`, headers: { "x-user-id": EDITOR },
+      payload: { settings: { studio: { shared: true, ...(change === "omit" ? {} : { allowEditableCopy: change === "enable" }) } } } })
+    expect(res.statusCode).toBe(403)
+    expect(update).not.toHaveBeenCalled()
+  })
+
   it("refuses an editor turning it ON through a full-body save", async () => {
     // The attack this exists for: one PATCH, and the creator's whole graph is
     // readable by anyone with the id, with no auth and no signal in the

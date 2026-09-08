@@ -238,7 +238,7 @@ describe("registration", () => {
     // disagree, one of them is wrong and nothing says which.
     const names = (await listTools(serverWith(ALL).server)).map((t) => t.name).sort()
     expect(names).toEqual([...STUDIO_PRODUCTION_TOOL_NAMES].sort())
-    expect(names).toHaveLength(17)
+    expect(names).toHaveLength(18)
   })
 
   it("only the skill is ungated — reading the format is the one thing that costs nothing", async () => {
@@ -279,7 +279,7 @@ describe("registration", () => {
     expect(write).not.toContain("get_studio_production")
   })
 
-  it("the seven that spend need BOTH workflows:write and workflows:execute", async () => {
+  it("spending tools need BOTH workflows:write and workflows:execute", async () => {
     // Their routes authorize on `workflows:write` and they spend, which is
     // `workflows:execute`. Either grant alone would show a tool that the route
     // then refuses with a 403 — the family's rule is that a visible tool is one
@@ -287,6 +287,7 @@ describe("registration", () => {
     const SPENDING = [
       "describe_studio_production",
       "generate_studio_still",
+      "generate_studio_keyframe",
       "generate_studio_clip",
       "new_studio_shot_from_frame",
       "voice_studio_shot",
@@ -309,6 +310,7 @@ describe("registration", () => {
       (tools.find((t) => t.name === name) as { _meta?: { nodaro?: { confirm?: unknown } } })?._meta
         ?.nodaro?.confirm
     expect(confirm("generate_studio_still")).toBe("$")
+    expect(confirm("generate_studio_keyframe")).toBe("$")
     expect(confirm("score_studio_production")).toBe("$")
     expect(confirm("share_studio_production")).toBe("P")
     // A document edit is neither: it spends nothing, and its operations are
@@ -653,6 +655,40 @@ describe("the tools that spend", () => {
     expect(seen.body).not.toHaveProperty("dryRun")
   })
 
+  it("carries an explicitly reviewed retake without rebuilding its inputs", async () => {
+    const { server, seen } = serverWith(ALL)
+    await callTool(server, "generate_studio_clip", {
+      production_id: PRODUCTION, shot_id: "AB", retake_result_key: "job:original",
+      expected_input_hash: "a".repeat(64), client_request_id: "retake-click",
+    })
+    expect(seen.calls).toHaveLength(1)
+    expect(seen.body).toEqual({ mcp_client: "Claude", userId: "u1", kind: "clip", shotId: "AB", retakeResultKey: "job:original",
+      expectedInputHash: "a".repeat(64), clientRequestId: "retake-click" })
+  })
+
+  it("generates one planned frame with its reviewed revision and retry token", async () => {
+    const { server, seen } = serverWith(ALL)
+    await callTool(server, "generate_studio_keyframe", {
+      production_id: PRODUCTION, keyframe_id: "frame-A", expected_revision: 2,
+      overrides: { resolution: "2K" }, client_request_id: "frame-attempt-1",
+    })
+    expect(seen.calls).toHaveLength(1)
+    expect(seen.url).toBe(`/v1/studio/productions/${PRODUCTION}/generate`)
+    expect(seen.body).toMatchObject({ kind: "keyframe", keyframeId: "frame-A", expectedRevision: 2,
+      overrides: { resolution: "2K" }, clientRequestId: "frame-attempt-1" })
+    expect(seen.body).not.toHaveProperty("dryRun")
+    expect(seen.body).not.toHaveProperty("count")
+  })
+
+  it.each([{ expected_revision: 0 }, { expected_revision: 1, dry_run: true }, {}])("refuses an unreviewed revision or unsupported quote before dispatch: %j", async (extra) => {
+    const { server, seen } = serverWith(ALL)
+    const result = await callTool(server, "generate_studio_keyframe", {
+      production_id: PRODUCTION, keyframe_id: "frame-A", ...extra,
+    })
+    expect(result.isError).toBe(true)
+    expect(seen.calls).toHaveLength(0)
+  })
+
   it("a frame grab names what to do with the frame", async () => {
     const { server, seen } = serverWith(ALL)
     await callTool(server, "new_studio_shot_from_frame", {
@@ -716,6 +752,7 @@ describe("the tools that spend", () => {
     const { server, seen } = serverWith(ALL)
     for (const [name, args] of [
       ["generate_studio_still", { shot_id: "s1" }],
+      ["generate_studio_keyframe", { keyframe_id: "frame-A", expected_revision: 1 }],
       ["generate_studio_clip", { shot_id: "s1" }],
       ["new_studio_shot_from_frame", { shot_id: "s1" }],
       ["voice_studio_shot", { shot_id: "s1", text: "hi there" }],

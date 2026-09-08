@@ -325,3 +325,18 @@ try {
 | `clone(id, { name? })` | `POST …/:id/clone` |
 
 See also: [API Integration](../api-integration.md), [SDK Reference](../sdk-reference.md).
+
+## Retake one linked clip
+
+Check `GET /v1/studio/productions/capabilities` for
+`operations.retakeLinkedClips`. To price a native linked take, post to
+`/:id/generate` with `kind: "clip"`, `shotId`, `retakeResultKey` and
+`dryRun: true`. Submit the same take with the quote's `inputHash` in
+`expectedInputHash` and a fresh `clientRequestId`. Do not include `mode`,
+`overrides`, or `count`.
+
+The server verifies the original job request and retained endpoint images.
+Current frame acceptance and scene plans do not replace these inputs. A changed
+quote returns `409 sequence_quote_changed` before submission. Missing original
+metadata or retained images refuses the retake; this can include older or copied
+takes. Each accepted submission adds one take and keeps existing history.

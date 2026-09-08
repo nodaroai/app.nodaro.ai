@@ -102,6 +102,18 @@ export async function loadWorkflowFor(
   cols: string,
   failureMessage: string,
 ): Promise<LoadedWorkflow> {
+  return loadWorkflowSnapshot(req, reply, userId, workflowId, min, cols, failureMessage, false)
+}
+
+/** Public sharing permits copying only through this dedicated read. It never
+ * changes the access granted to ordinary reads, edits or job submissions. */
+export const loadStudioEditableCopySource: typeof loadWorkflowFor = (req, reply, userId, workflowId, min, cols, failureMessage) =>
+  loadWorkflowSnapshot(req, reply, userId, workflowId, min, cols, failureMessage, true)
+
+async function loadWorkflowSnapshot(
+  req: FastifyRequest, reply: FastifyReply, userId: string, workflowId: string,
+  min: Exclude<AccessLevel, "none">, cols: string, failureMessage: string, editableCopy: boolean,
+): Promise<LoadedWorkflow> {
   const { data, error } = await supabase
     // The read IS the access question: it fetches the row in order to decide
     // who may reach it, and filtering by the caller would answer first.
@@ -121,7 +133,10 @@ export async function loadWorkflowFor(
   }
 
   const row = data as unknown as Record<string, unknown>
-  const access = await workflowAccessFromRow(userId, toAccessRow(row))
+  let access = await workflowAccessFromRow(userId, toAccessRow(row))
+  const studio = (row.settings as { studio?: { shared?: unknown; allowEditableCopy?: unknown } } | null)?.studio
+  if (editableCopy && min === "view" && access === "none"
+    && studio?.shared === true && studio.allowEditableCopy === true) access = "view"
   if (access === "none") {
     reply.status(404).send({ error: { code: "not_found", message: "Workflow not found" } })
     return { ok: false }
