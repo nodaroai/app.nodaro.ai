@@ -1213,6 +1213,16 @@ export function buildToolkit(): PluginToolkit {
       publishLegacyRecastRescore,
       publishRecastRescore,
       markJobCompleted: pluginMarkJobCompleted,
+      checkpointReservedJob: async (input) => {
+        if (!hasCredits()) throw new Error("Job settlement is unavailable on this edition")
+        const { checkpointJobSettlement } = await import("../../ee/billing/managed-job-settlement.js")
+        return checkpointJobSettlement(input)
+      },
+      settleCheckpointedJob: async (usageLogId) => {
+        if (!hasCredits()) throw new Error("Job settlement is unavailable on this edition")
+        const { CreditsService } = await import("../../ee/billing/credits.js")
+        return CreditsService.trySettleManagedCredits(usageLogId)
+      },
       settleReservedJob: async (input) => {
         if (!hasCredits()) throw new Error("Job settlement is unavailable on this edition")
         const { settleReservedJob } = await import("../../ee/billing/job-reservation-settlement.js")
