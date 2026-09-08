@@ -2738,6 +2738,18 @@ responses use `Cache-Control: no-store`. Internal authoring recipes and repair
 checkpoints are not downloadable. A revision with pending source materialization
 does not advertise an outdated native source file.
 
+An export that retains delivery evidence exposes it separately from its source:
+
+- `GET /v1/3d-scene/deliveries/:jobId` returns the exact `sceneRevisionId`, source
+  digests, mode, and opaque poster/report descriptors.
+- `GET /v1/3d-scene/deliveries/:jobId/assets/:assetId` returns those bytes with
+  bearer authentication, range support, and `Cache-Control: no-store`.
+
+Delivery reads require current access to both the delivery workflow and the
+source workflow; personal sources remain owner-only. Deleting the source revision
+does not remove delivered evidence or waive its source permissions. Delivery
+metadata never includes internal recipes, storage keys, or native source files.
+
 `POST /v1/3d-scene/revisions/:revisionId/edits` saves deterministic v2 overlays
 without a generation job or LLM charge. It requires edit access to the retained
 scene and `workflows:write` for OAuth apps. Send `newRevisionId`, the base

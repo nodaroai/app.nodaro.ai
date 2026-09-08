@@ -322,6 +322,32 @@ describe("read: the object is compared with the row before a header is written",
     expect((await drain(stream.body)).length).toBe(10)
   })
 
+  it("closes the storage source when authorization cancels the response", async () => {
+    const source = new Readable({ read() {} })
+    const store = fakeStore({ [key]: { body } })
+    store.get = async () => ({ body: source, contentLength: 64, etag: "live-tag" })
+    const stream = await openScene3DArtifactStream(store, pinned, { kind: "none" })
+    stream.body.destroy()
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(source.destroyed).toBe(true)
+  })
+
+  it("preserves an early storage error until the consumer attaches", async () => {
+    const source = new Readable({ read() {} })
+    const store = fakeStore({ [key]: { body } })
+    store.get = async () => ({ body: source, contentLength: 64, etag: "live-tag" })
+    const stream = await openScene3DArtifactStream(store, pinned, { kind: "none" })
+    source.destroy(new Error("storage disconnected"))
+    await new Promise((resolve) => setImmediate(resolve))
+    await expect(drain(stream.body)).rejects.toThrow(/storage disconnected/)
+  })
+
+  it.each([32, 96])("rejects %i actual bytes when storage reports 64", async (size) => {
+    const store = fakeStore({ [key]: { body: Buffer.alloc(size), reportedLength: 64 } })
+    const stream = await openScene3DArtifactStream(store, pinned, { kind: "none" })
+    await expect(drain(stream.body)).rejects.toThrow(/recorded length/)
+  })
+
   it("refuses to serve an object that was replaced after publication", async () => {
     const store = fakeStore({ [key]: { body, etag: "somebody-elses-tag" } })
     await expect(
