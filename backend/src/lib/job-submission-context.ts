@@ -6,6 +6,13 @@ export interface ServerJobSubmission {
   readonly metadata: Readonly<Record<string, unknown>>
 }
 
+export class JobSubmissionIdentityError extends Error {
+  constructor() {
+    super("Job submission identity does not match the authenticated request")
+    this.name = "JobSubmissionIdentityError"
+  }
+}
+
 interface SubmissionScope {
   readonly userId: string
   readonly method: string
@@ -54,6 +61,6 @@ export function jobSubmissionColumns(req: FastifyRequest, row: Record<string, un
   const input = row.input_data as Record<string, unknown> | undefined
   const type = row.job_type ?? input?.type
   if (type !== scope.submission.jobType) return {}
-  if (row.user_id !== scope.userId || req.userId !== scope.userId) throw new Error("Job submission identity does not match the authenticated request")
+  if (row.user_id !== scope.userId || req.userId !== scope.userId) throw new JobSubmissionIdentityError()
   return { submission_context: structuredClone(scope.submission.metadata) }
 }

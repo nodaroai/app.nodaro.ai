@@ -1040,7 +1040,7 @@ async function readJobsOwnedBy(
 
 /** Trusted submission records are available only through an owner-scoped read. */
 async function readJobSubmissionsOwnedBy(userId: string, jobIds: ReadonlyArray<string>) {
-  const ids = [...new Set(jobIds)]
+  const ids = [...new Set(jobIds)].filter((id) => id.length > 0)
   if (!ids.length) return []
   const { data, error } = await supabase.from("jobs").select("id, submission_context").eq("user_id", userId).in("id", ids)
   if (error) throw new Error("Failed to read job submission records")

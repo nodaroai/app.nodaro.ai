@@ -142,7 +142,12 @@ describe("immutable server submission context", () => {
   })
 
   it("refuses a matching job with another identity before insertion", async () => {
-    await expect(withJobSubmissionContext(scope, () => insertJob(request, { ...row, user_id: "other" }))).rejects.toThrow("identity")
+    await expect(withJobSubmissionContext(scope, () => insertJob(request, { ...row, user_id: "other" })))
+      .resolves.toMatchObject({ data: null, error: { message: expect.stringContaining("identity") } })
+    await expect(withJobSubmissionContext(scope, () => insertJobs(request, [row, { ...row, user_id: "other" }])))
+      .resolves.toMatchObject({ data: null, error: { message: expect.stringContaining("identity") } })
+    await expect(withJobSubmissionContext(scope, () => insertJobIdempotent(request, { ...row, user_id: "other" }, "key")))
+      .rejects.toThrow("identity")
     expect(insertMock).not.toHaveBeenCalled()
   })
 })

@@ -10,6 +10,8 @@ later changes to an editable workflow.
 job type and authenticated user. Nested internal calls require their own explicit
 context. Public request bodies and headers cannot supply it. Existing job insert
 helpers remove caller-provided values for the reserved column.
+An identity mismatch fails before insertion; non-throwing job helpers return it
+through their existing `error` field.
 
 The database rejects client inserts carrying submission context and prevents
 changing the field after insertion. The column is excluded from browser and

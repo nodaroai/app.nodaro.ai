@@ -392,7 +392,7 @@ describe("tk.jobs.readJobSubmissionsOwnedBy", () => {
   it("deduplicates requested ids and scopes the private projection to the owner", async () => {
     state.result.data = [{ id: "one", submission_context: { attemptId: "trusted" } },
       { id: "two", submission_context: null }, { id: "three", submission_context: [] }]
-    expect(await tk.jobs.readJobSubmissionsOwnedBy!(CALLER, ["one", "two", "one"])).toEqual([
+    expect(await tk.jobs.readJobSubmissionsOwnedBy!(CALLER, ["one", "two", "one", ""])).toEqual([
       { id: "one", submission_context: { attemptId: "trusted" } },
     ])
     expect(lastQuery()).toEqual({ table: "jobs", ops: [
@@ -401,6 +401,7 @@ describe("tk.jobs.readJobSubmissionsOwnedBy", () => {
   })
   it("does not query an empty request and fails closed on a database error", async () => {
     expect(await tk.jobs.readJobSubmissionsOwnedBy!(CALLER, [])).toEqual([])
+    expect(await tk.jobs.readJobSubmissionsOwnedBy!(CALLER, [""])).toEqual([])
     expect(state.queries).toHaveLength(0)
     state.result.error = { message: "private database detail" }
     await expect(tk.jobs.readJobSubmissionsOwnedBy!(CALLER, ["one"])).rejects.toThrow("Failed to read job submission records")
