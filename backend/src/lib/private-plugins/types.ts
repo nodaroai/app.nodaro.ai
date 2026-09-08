@@ -590,6 +590,11 @@ export interface PluginRetainedJobImage {
 }
 
 export interface PluginStorageToolkit {
+  /** Authorize source read and destination edit access first. Copies verified
+   * bytes into destination retention; does not transfer job/review authority. */
+  copyRetainedImage?(args: { userId: string; sourceWorkflowId: string; workflowId: string; assetId: string }): Promise<{
+    assetId: string; contentHash: string; url: string; width: number; height: number
+  } | null>
   /** Authorize editing first; capture an owned completed job with server provenance. */
   retainJobImage?(args: { userId: string; workflowId: string; jobId: string }): Promise<PluginRetainedJobImage | null>
   /** Authorize workflow access first; retained results survive source-job deletion. */

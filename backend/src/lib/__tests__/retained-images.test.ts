@@ -28,7 +28,7 @@ vi.mock("../supabase.js", () => ({ supabase: {
     return chain
   },
 } }))
-import { collectRetainedImages, readRetainedImage, retainImage } from "../retained-images.js"
+import { collectRetainedImages, copyRetainedImage, readRetainedImage, retainImage } from "../retained-images.js"
 import { clearUploadPolicies, registerUploadPolicy } from "../upload-policy.js"
 
 const ID = "00000000-0000-4000-8000-000000000001"
@@ -53,6 +53,68 @@ beforeEach(async () => {
 })
 
 describe("retained canonical image bytes", () => {
+  it("copies verified source bytes into a separate workflow lifetime and quota reservation", async () => {
+    state.row = { ...state.row, state: "ready" }
+    state.objects.set(KEY, body)
+    const targetId = "00000000-0000-4000-8000-000000000002", targetKey = `retained-images/${targetId}`
+    const target = { ...state.row, id: targetId, workflow_id: "copy", user_id: "copier", state: "creating" }
+    state.rpc.mockImplementation(async (name: string) => ({ data: name === "reserve_retained_image" ? target : true, error: null }))
+    const copied = await copyRetainedImage({ userId: "copier", sourceWorkflowId: "film", workflowId: "copy", assetId: ID })
+    expect(copied).toEqual({ assetId: targetId, contentHash: state.row.sha256, width: 3, height: 2,
+      url: `https://media.test/${targetKey}` })
+    expect(state.queries).toContainEqual(["workflow_id", "film"])
+    expect(state.queries).toContainEqual(["id", ID])
+    expect(state.queries).toContainEqual(["state", "ready"])
+    expect(state.rpc).toHaveBeenCalledWith("reserve_retained_image", expect.objectContaining({
+      p_user_id: "copier", p_workflow_id: "copy", p_sha256: state.row.sha256, p_quota_mode: "enforce",
+    }))
+    expect(state.objects.get(targetKey)).toEqual(body)
+    // Simulate source cleanup: reading the new snapshot uses only its own row
+    // and bytes, with no reference back to the source workflow or object.
+    state.objects.delete(KEY)
+    state.row = { ...target, state: "ready" }
+    expect(await readRetainedImage("copy", targetId)).toEqual(copied)
+  })
+
+  it("reuses a verified source inside the same workflow without reserving or writing bytes", async () => {
+    state.row = { ...state.row, state: "ready" }
+    state.objects.set(KEY, body)
+    expect(await copyRetainedImage({ userId: "collaborator", sourceWorkflowId: "film", workflowId: "film", assetId: ID }))
+      .toMatchObject({ assetId: ID, contentHash: state.row.sha256 })
+    expect(state.rpc).not.toHaveBeenCalled()
+    expect(state.send).not.toHaveBeenCalled()
+  })
+
+  it("does not create a destination reservation for changed or missing source bytes", async () => {
+    state.row = { ...state.row, state: "ready" }
+    for (const bytes of [undefined, Buffer.from("changed")]) {
+      if (bytes) state.objects.set(KEY, bytes)
+      await expect(copyRetainedImage({ userId: "copier", sourceWorkflowId: "film", workflowId: "copy", assetId: ID }))
+        .rejects.toThrow(/unavailable or changed/)
+    }
+    expect(state.rpc).not.toHaveBeenCalled()
+    expect(state.send).not.toHaveBeenCalled()
+  })
+
+  it("refuses unrecognized source IDs without using them as object keys", async () => {
+    expect(await copyRetainedImage({ userId: "copier", sourceWorkflowId: "film", workflowId: "copy", assetId: "../secret" })).toBeNull()
+    expect(state.queries).toEqual([])
+    expect(state.read).not.toHaveBeenCalled()
+    expect(state.rpc).not.toHaveBeenCalled()
+  })
+
+  it("applies destination upload policy before reserving a copied image", async () => {
+    state.row = { ...state.row, state: "ready" }
+    state.objects.set(KEY, body)
+    const check = vi.fn(() => ({ allow: false, reason: "Image not allowed here" }))
+    registerUploadPolicy({ id: "copy-policy", check })
+    await expect(copyRetainedImage({ userId: "copier", sourceWorkflowId: "film", workflowId: "copy", assetId: ID }))
+      .rejects.toThrow("Image not allowed here")
+    expect(check).toHaveBeenCalledWith(expect.objectContaining({ userId: "copier", buffer: body, lane: "retained-image" }))
+    expect(state.rpc).not.toHaveBeenCalled()
+    expect(state.send).not.toHaveBeenCalled()
+  })
+
   it("checks final bytes before reserving quota or writing an object", async () => {
     const check = vi.fn(() => ({ allow: false, reason: "Image not allowed" }))
     registerUploadPolicy({ id: "private-policy", check })

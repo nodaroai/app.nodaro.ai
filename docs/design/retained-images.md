@@ -56,6 +56,17 @@ submission records within an authorized workflow. These records survive source
 job deletion and are removed with the destination workflow. Workflow JSON alone
 cannot attest which job produced a particular retained image.
 
+`storage.copyRetainedImage` is a byte-copy primitive for authorized integrations.
+The caller must authorize reading the source workflow and editing the destination.
+It reads a ready, workflow-scoped retained image, verifies its bytes and captures
+those exact bytes under the destination's retention and quota rules. A copy in
+another workflow receives its own storage lifetime; it does not depend on the
+source workflow continuing to exist. Reuse inside the same workflow returns the
+verified existing image. Missing sources return null and changed bytes fail
+before any destination reservation. Copying bytes transfers no job provenance,
+review decision or execution authority; editable production cloning must handle
+those records separately.
+
 Snapshot metadata and cleanup tasks are server-only. Ordinary single and batch
 object deletion refuse the reserved storage namespace. Only the cleanup worker
 can physically remove an object, using a durable tombstone after the upload

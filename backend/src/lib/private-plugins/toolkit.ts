@@ -1,4 +1,4 @@
-import { retainImage, readRetainedImage } from "../retained-images.js"
+import { retainImage, readRetainedImage, copyRetainedImage } from "../retained-images.js"
 import { retainJobImage, readRetainedJobImages } from "../retained-job-images.js"
 import { readPublicVideoFrame } from "../public-video-frame.js"
 import { isStorageConfigured } from "../storage.js"
@@ -1187,7 +1187,7 @@ export function buildToolkit(): PluginToolkit {
       uploadVideoMaybeWatermark,
     },
     storage: {
-      retainImage, readRetainedImage, canRetainImages: isStorageConfigured(),
+      retainImage, readRetainedImage, copyRetainedImage, canRetainImages: isStorageConfigured(),
       retainJobImage, readRetainedJobImages,
       uploadBufferToR2,
       uploadFileToR2,

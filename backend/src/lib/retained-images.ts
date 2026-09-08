@@ -71,25 +71,50 @@ export async function retainImage(args: { userId: string; workflowId: string; bo
   return view(row)
 }
 
-async function verifyBytes(row: RetainedImageRow): Promise<void> {
+async function verifyBytes(row: RetainedImageRow): Promise<Buffer> {
   const stored = await readR2Object(retainedImageKey(row.id), { maxBytes: MAX_BYTES })
   if (!stored || stored.body.length !== Number(row.byte_length) || digest(stored.body) !== row.sha256) {
     throw new Error("Retained image bytes are unavailable or changed")
   }
+  return stored.body
 }
 
 /** A caller authorized to the workflow can read its snapshots, including those
  * captured by a collaborator. A pin from another workflow never resolves. */
 export async function readRetainedImage(workflowId: string, assetId: string): Promise<RetainedImage | null> {
+  const row = await retainedRow(workflowId, assetId)
+  if (!row) return null
+  await verifyBytes(row)
+  return view(row)
+}
+
+async function retainedRow(workflowId: string, assetId: string): Promise<RetainedImageRow | null> {
   try { retainedImageKey(assetId) } catch { return null }
   const { data, error } = await supabase.from("retained_images")
     .select("id,user_id,workflow_id,sha256,byte_length,width,height,content_type,state,upload_until")
     .eq("id", assetId).eq("workflow_id", workflowId).eq("state", "ready").maybeSingle()
   if (error) throw new Error("Failed to read retained image")
   if (!data) return null
-  const row = data as unknown as RetainedImageRow
-  await verifyBytes(row)
-  return view(row)
+  return data as unknown as RetainedImageRow
+}
+
+/** Authorize source read and destination edit access before calling. Copies
+ * verified bytes into the destination's independent retention/quota lifetime.
+ * A byte copy does not transfer job provenance, review or execution authority. */
+export async function copyRetainedImage(args: {
+  userId: string; sourceWorkflowId: string; workflowId: string; assetId: string
+}): Promise<RetainedImage | null> {
+  const row = await retainedRow(args.sourceWorkflowId, args.assetId)
+  if (!row) return null
+  // The object key comes solely from the workflow-scoped row. No client URL
+  // or storage key is accepted, and the copied bytes are the verified bytes.
+  const body = await verifyBytes(row)
+  if (args.sourceWorkflowId === args.workflowId) return view(row)
+  const image = await retainImage({ userId: args.userId, workflowId: args.workflowId, body })
+  if (image.contentHash !== row.sha256 || image.width !== row.width || image.height !== row.height) {
+    throw new Error("The copied image does not match its retained source")
+  }
+  return image
 }
 
 /** Only durable tombstones reach the exceptional physical-delete lane. */
