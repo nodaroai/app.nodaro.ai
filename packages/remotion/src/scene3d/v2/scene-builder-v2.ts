@@ -70,6 +70,8 @@ export interface Scene3DV2FrameSample {
 export interface Scene3DV2SceneHandle extends Scene3DRenderHandle {
   readonly entities: Map<string, THREE.Object3D>
   applyFrame(frame: number): Scene3DV2FrameSample
+  /** Position at the current applied frame, including animation and overrides. */
+  getAnchorWorldPosition(entityId: string, anchorName: string): [number, number, number]
 }
 
 interface EntityNode {
@@ -160,12 +162,14 @@ export function buildScene3DV2Scene(loaded: Scene3DLoadedScene): Scene3DV2SceneH
   const raycastTargets: THREE.Object3D[] = []
   const ownedGeometries: THREE.BufferGeometry[] = []
   const ownedMaterials: THREE.Material[] = []
+  const anchors = new Map<string, Map<string, { object: THREE.Object3D; position: THREE.Vector3 }>>()
 
   // Pass 1 — a wrapper per entity, plus its geometry or asset subtree.
   for (const entity of ordered) {
     const wrapper = new THREE.Group()
     wrapper.name = entity.name || entity.id
     wrapper.userData.objectId = entity.id
+    let anchorBase: THREE.Object3D = wrapper
     const node: EntityNode = {
       entity,
       wrapper,
@@ -236,6 +240,7 @@ export function buildScene3DV2Scene(loaded: Scene3DLoadedScene): Scene3DV2SceneH
       )
       rootObject.removeFromParent()
       wrapper.add(rootObject)
+      anchorBase = rootObject
       if (exportedParent) exportedParent.add(wrapper)
 
       applyClayMaterials(rootObject, entity, overlays, node, ownedMaterials)
@@ -261,6 +266,22 @@ export function buildScene3DV2Scene(loaded: Scene3DLoadedScene): Scene3DV2SceneH
       }
     }
     // `group` adds no geometry — it is organizational identity only.
+
+    const entityAnchors = new Map<string, { object: THREE.Object3D; position: THREE.Vector3 }>()
+    for (const anchor of entity.anchors ?? []) {
+      let object = anchorBase
+      if (anchor.nodeName !== undefined) {
+        const matches: THREE.Object3D[] = []
+        traverseOwned(anchorBase, entity.id, (candidate) => {
+          if (candidate.userData?.name === anchor.nodeName) matches.push(candidate)
+        })
+        check(matches.length === 1, "SCENE_ASSET_BINDING",
+          `anchor "${anchor.name}" must bind exactly one owned node "${anchor.nodeName}"`, entity.id)
+        object = matches[0]
+      }
+      entityAnchors.set(anchor.name, { object, position: new THREE.Vector3(...anchor.position) })
+    }
+    anchors.set(entity.id, entityAnchors)
 
     nodes.set(entity.id, node)
     entities.set(entity.id, wrapper)
@@ -374,6 +395,13 @@ export function buildScene3DV2Scene(loaded: Scene3DLoadedScene): Scene3DV2SceneH
     }
   }
 
+  const getAnchorWorldPosition = (entityId: string, anchorName: string): [number, number, number] => {
+    const anchor = anchors.get(entityId)?.get(anchorName)
+    check(!!anchor, "SCENE_ASSET_BINDING", `unknown anchor "${anchorName}"`, entityId)
+    anchor.object.updateWorldMatrix(true, false)
+    return anchor.position.clone().applyMatrix4(anchor.object.matrixWorld).toArray()
+  }
+
   const dispose = (): void => {
     for (const node of nodes.values()) node.clip?.dispose()
     for (const geometry of ownedGeometries) geometry.dispose()
@@ -390,6 +418,7 @@ export function buildScene3DV2Scene(loaded: Scene3DLoadedScene): Scene3DV2SceneH
     ownedMaterials.length = 0
     nodes.clear()
     entities.clear()
+    anchors.clear()
     meshes.clear()
     raycastTargets.length = 0
     scene.clear()
@@ -397,7 +426,7 @@ export function buildScene3DV2Scene(loaded: Scene3DLoadedScene): Scene3DV2SceneH
 
   applyFrame(0)
 
-  return { scene, camera, entities, meshes, raycastTargets, applyFrame, setSelected, dispose }
+  return { scene, camera, entities, meshes, raycastTargets, applyFrame, getAnchorWorldPosition, setSelected, dispose }
 }
 
 /**

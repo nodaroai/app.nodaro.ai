@@ -364,6 +364,30 @@ describe("scene3d v2 — entities", () => {
     expectRejects(plan, 'declares anchor "roof" twice')
   })
 
+  it("round-trips an explicit node-local anchor on an asset", () => {
+    const plan = planV2()
+    const anchor = { name: "door.tip", nodeName: "car/door.hinge", position: [1, 0, 0] as [number, number, number] }
+    plan.objects[1].anchors = [anchor]
+    expect(scene3DPlanV2Schema.parse(JSON.parse(JSON.stringify(plan))).objects[1].anchors).toEqual([anchor])
+  })
+
+  it("rejects a bound anchor on a primitive", () => {
+    const plan = planV2()
+    plan.objects[2].anchors = [{ name: "top", nodeName: "mesh", position: [0, 1, 0] }]
+    expectRejects(plan, "can bind anchor nodes only with an asset visual")
+  })
+
+  it("bounds raw anchor node names without imposing the root-ID charset", () => {
+    const plan = planV2()
+    plan.objects[1].anchors = [{ name: "tip", nodeName: `${"a".repeat(64)}/${"b".repeat(64)}`,
+      position: [0, 0, 0] }]
+    expect(scene3DPlanV2Schema.safeParse(plan).success).toBe(true)
+    for (const nodeName of ["", "bad\nname", "x".repeat(SCENE3D_V2_LIMITS.maxNodeNameLength + 1)]) {
+      plan.objects[1].anchors = [{ name: "tip", nodeName, position: [0, 0, 0] }]
+      expect(scene3DPlanV2Schema.safeParse(plan).success).toBe(false)
+    }
+  })
+
   it("bounds an animation binding to the timeline", () => {
     const past = planV2()
     past.objects[1].visual = {

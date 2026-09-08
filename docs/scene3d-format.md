@@ -38,6 +38,18 @@ manual edits, so rebuilding does not depend on the original import revision.
 They are excluded from playback assets and public download lanes; the
 authoring engine can read them only with current edit access to the revision.
 
+An entity anchor has a stable `name` and a `position` in entity-local space.
+For an asset visual, an optional `nodeName` binds the anchor to a raw GLB node
+name inside that entity's own root. Its position and optional rotation then
+use that node's local coordinates and follow the node's animation, ancestors
+and manual entity transforms. For example, `{ "name": "door.tip", "nodeName":
+"car/door.hinge", "position": [1, 0, 0] }` attaches a point one local meter along
+the hinge's X axis. Missing nodes and bindings into a nested child entity are
+rejected before playback. Primitive and group anchors remain entity-local.
+The shared Three.js handle's `getAnchorWorldPosition(entityId, anchorName)`
+returns the point at the most recently applied frame and fails for unknown
+anchors. Authoring support for creating these bindings depends on the engine.
+
 GLB node transforms are authoritative for exported geometry. Semantic entities
 address named roots and material roles for selection and editing. Every editable
 material role must name a material within that entity's geometry. Clay shading
