@@ -1,3 +1,4 @@
+import { remotionConcurrencyFor } from "./render-concurrency.js"
 import { Worker, type ConnectionOptions } from "bullmq"
 import { resolveEffectiveTier, SCENE3D_PLAN_TYPE } from "@nodaro/shared"
 import IORedis from "ioredis"
@@ -1016,7 +1017,7 @@ export function createRenderWorker() {
                 })
                 console.log(`[render-worker] selectComposition(${compositionId}) done: ${composition.width}x${composition.height} ${composition.fps}fps ${composition.durationInFrames}fr`)
 
-                const remotionConcurrency = config.REMOTION_CONCURRENCY ?? undefined
+                const remotionConcurrency = remotionConcurrencyFor(compositionId, config.REMOTION_CONCURRENCY)
 
                 // Warn about expensive motion effects that multiply render time
                 const planEffects = (inputProps.plan as Record<string, unknown> | undefined)?.effects as Array<{ type: string; samples?: number; layers?: number }> | undefined
