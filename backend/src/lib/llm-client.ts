@@ -154,6 +154,11 @@ export interface LlmRequest {
    * outputs (e.g. the Lottie motion-graphics worker) pass a higher value.
    */
   timeoutMs?: number
+  /** Allow a collapsed SSE adapter to restart a failed stream; defaults to true.
+   * Structured calls with maxRetries: 0 disable this as well as output repairs.
+   * Serving-lane fallback and vendor SDK retry settings are separate policies.
+   */
+  retryStreamOnError?: boolean
   /**
    * Request schema-constrained output. The router enforces it natively where
    * the model supports it (Anthropic forced tool / Gemini `response_format`);
@@ -592,7 +597,9 @@ export async function llmCompleteStructured<T>(
   for (let attempt = 0; attempt <= retries; attempt++) {
     let resp: LlmResponse
     try {
-      resp = await llmComplete({ ...req, messages, jsonSchema: { name: schemaName, schema: jsonSchema } })
+      resp = await llmComplete({ ...req, messages,
+        retryStreamOnError: retries === 0 ? false : req.retryStreamOnError,
+        jsonSchema: { name: schemaName, schema: jsonSchema } })
     } catch (error) {
       throw new StructuredLlmError(error instanceof Error ? error.message : "Structured completion failed", {
         inputTokens: inTokens, outputTokens: outTokens,
@@ -1228,6 +1235,7 @@ async function callKieMessagesCollapsed(model: LlmModelDef, req: LlmRequest): Pr
   try {
     return await once()
   } catch (err) {
+    if (req.retryStreamOnError === false) throw err
     // KIE's Claude stream fails transiently roughly 1 call in 5 (measured
     // 2026-08-06: 3/4, 5/6, 6/6 across samples), almost always as a single
     // `event: error` frame that a retry clears. This is the LAST lane — it only
@@ -1394,6 +1402,7 @@ async function callKieResponsesCollapsed(model: LlmModelDef, req: LlmRequest): P
   try {
     res = await once()
   } catch (err) {
+    if (req.retryStreamOnError === false || signal.aborted) throw err
     // 1 of the 6 streaming probes produced no `response.completed` (a silent
     // failure / error frame) after 35 s, which a retry clears — both shapes now
     // arrive here as a throw (the error frame from parseSseStream, the silent
