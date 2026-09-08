@@ -1,0 +1,41 @@
+# TEMPORARY — re-blesses the ffmpeg characterization goldens inside the same
+# node:22-slim + production-pinned ffmpeg environment the CI check uses, and
+# uploads the result as an artifact. Lives only on the PR branch for one push;
+# removed before merge. Mirrors the `characterize` job in ci.yml step for step.
+name: characterize-bless-temp
+on:
+  push:
+    branches: [fix/combine-videos-fps-and-trims]
+permissions:
+  contents: read
+jobs:
+  bless:
+    runs-on: ubuntu-latest
+    container: node:22-slim
+    env:
+      YOUTUBE_DL_SKIP_DOWNLOAD: true
+      YOUTUBE_DL_SKIP_PYTHON_CHECK: 1
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Install the production-pinned ffmpeg + fonts
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends \
+            curl ca-certificates xz-utils fontconfig fonts-dejavu-core fonts-liberation
+          bash tools/install-pinned-ffmpeg.sh --from-dockerfile Dockerfile --arch amd64
+      - name: Pin npm version
+        run: corepack enable npm && corepack prepare npm@11.12.1 --activate
+      - name: Install dependencies
+        run: npm ci
+      - name: Build workspace packages
+        run: npm run build:packages
+      - name: Bless (decoded-output goldens)
+        working-directory: backend
+        run: npm run characterize:bless
+      - uses: actions/upload-artifact@v5
+        with:
+          name: golden-n8.1.2
+          path: backend/src/providers/video/__characterization__/golden/ffmpeg-n8.1.2.json
+          if-no-files-found: error
