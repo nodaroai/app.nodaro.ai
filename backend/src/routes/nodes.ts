@@ -2,8 +2,10 @@ import type { FastifyInstance } from "fastify"
 import { hasCredits } from "../lib/config.js"
 import { CLOUD_ONLY_NODE_TYPES, NODARO_EXCLUSIVE_NODE_TYPES } from "../lib/cloud-only-nodes.js"
 import { isNodeDenied } from "../lib/surface-deny.js"
+import { scene3DProAvailable } from "../services/scene3d/scene3d-engine.js"
 import { isNodaroConnected } from "../lib/nodaro-connect.js"
 import { z } from "zod"
+import { PRO3D_RENDER_NODE_TYPE } from "@nodaro/shared"
 import { getEnrichedRegistry, findNode } from "../lib/node-registry.js"
 
 
@@ -54,6 +56,11 @@ export async function nodesRoutes(app: FastifyInstance) {
       // Deployment surface deny (B1) applies on every edition the gate is open
       // for (business+), so it runs before the cloud/credits branch.
       if (isNodeDenied(n.type)) return false
+      // Readiness, not edition: 3D Render Pro exists only while an installed
+      // engine actually implements the operation. Discovery asks the same
+      // predicate the route does, so an agent is never told about a node whose
+      // only possible answer today is 503.
+      if (n.type === PRO3D_RENDER_NODE_TYPE && !scene3DProAvailable()) return false
       if (hasCredits()) return true
       if (CLOUD_ONLY_NODE_TYPES.has(n.type)) return false
       if (NODARO_EXCLUSIVE_NODE_TYPES.has(n.type)) return connected
@@ -71,6 +78,13 @@ export async function nodesRoutes(app: FastifyInstance) {
     }
     // Deployment surface deny (B1): a denied node is not describable either.
     if (isNodeDenied(parsed.data.type)) {
+      return reply.status(404).send({
+        error: { code: "not_found", message: `Node type not found: ${parsed.data.type}` },
+      })
+    }
+    // Same reason as the list route: an engine-gated node that isn't ready is
+    // not describable either.
+    if (parsed.data.type === PRO3D_RENDER_NODE_TYPE && !scene3DProAvailable()) {
       return reply.status(404).send({
         error: { code: "not_found", message: `Node type not found: ${parsed.data.type}` },
       })

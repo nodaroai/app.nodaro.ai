@@ -1,7 +1,7 @@
 import type { WorkflowNode, WorkflowEdge, GenerateVideoProNodeData, EditVideoProNodeData } from "@/types/nodes";
 import { StorageExceededError, SubscriptionRequiredError } from "@/lib/api";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
-import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution } from "@nodaro/shared"
+import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, PRO3D_RENDER_CREDIT_ID } from "@nodaro/shared"
 // getCachedCredits reads the live React-Query model-cost cache (an `ee/`
 // concern — credits are enterprise-only). Allowlisted in
 // tools/check-ee-imports.mjs (same coupling as ./run-handlers.ts).
@@ -444,6 +444,12 @@ export function estimateNodeCredits(
   if (nodeType === "component" && node.data) {
     return (node.data.estimatedCredits as number) ?? 0
   }
+  // 3D Render Pro aggregates several paid stages and has no flat price, so the
+  // estimate is the LIVE configured cost or nothing. A constant here would be
+  // printed on every canvas and be wrong on every install.
+  if (nodeType === "pro-3d-render") {
+    return getCachedCredits(PRO3D_RENDER_CREDIT_ID) ?? 0
+  }
   if (nodeType === "generate-video-pro" && node.data) {
     return estimateGenerateVideoProCredits(node.data as GenerateVideoProNodeData)
   }
@@ -568,6 +574,7 @@ export const EXECUTABLE_TYPES = new Set([
   "3d-title",
   "generate-3d-scene",
   "edit-3d-scene",
+  "pro-3d-render",
   "motion-graphics",
   "composite",
   "render-video",

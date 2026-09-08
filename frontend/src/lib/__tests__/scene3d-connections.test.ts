@@ -30,7 +30,7 @@ describe("3D scene wiring — generate → edit → render-video", () => {
   })
 
   it("lets both 3D nodes feed render-video", () => {
-    for (const sourceType of ["generate-3d-scene", "edit-3d-scene"]) {
+    for (const sourceType of ["generate-3d-scene", "edit-3d-scene", "pro-3d-render"]) {
       expect(
         isValidWorkflowConnection(
           { source: "s", target: "rv", sourceHandle: "composition", targetHandle: "in" },
@@ -96,7 +96,7 @@ describe("3D scene `references` input", () => {
 })
 
 describe("3D scene node registration", () => {
-  it.each(["generate-3d-scene", "edit-3d-scene"])("%s is a composer emitting a 3d-scene plan", (type) => {
+  it.each(["generate-3d-scene", "edit-3d-scene", "pro-3d-render"])("%s is a composer emitting a 3d-scene plan", (type) => {
     expect(COMPOSER_PLAN_MAP[type]).toEqual({ planType: "3d-scene", planField: "scenePlan" })
     expect(NODE_DEF_MAP.get(type)?.outputs).toContain("composition")
     expect(HANDLE_OUTPUT_TYPES[type]?.composition).toBe("control")

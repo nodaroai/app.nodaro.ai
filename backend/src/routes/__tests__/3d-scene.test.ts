@@ -185,7 +185,21 @@ describe("optional advanced engine admission", () => {
 
   it("reports Basic capabilities when no advanced engine is installed", async () => {
     expect((await app.inject({ method: "GET", url: "/v1/3d-scene/capabilities" })).json())
-      .toEqual({ basic: { available: true, sceneSchemaVersions: [1] }, advanced: null })
+      .toEqual({
+        basic: { available: true, sceneSchemaVersions: [1] },
+        advanced: null,
+        // Readiness for the one-operation Pro node, reported separately: with
+        // no engine installed there is nothing that could serve it, and the
+        // advertised controls fall back to the contract's conservative set.
+        pro: {
+          available: false,
+          engines: ["blender-cloud"],
+          qualityProfiles: ["standard"],
+          styles: ["clay"],
+          aspectRatios: ["16:9", "9:16", "1:1", "4:5", "21:9"],
+          maxRepairPasses: 2,
+        },
+      })
   })
 })
 

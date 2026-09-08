@@ -18,6 +18,7 @@ import { SYNC_HTTP_ROUTES } from "../node-executor.js"
 const NODE_TYPE_TO_ROUTE_FILE: Record<string, string> = {
   "generate-3d-scene": "backend/src/routes/3d-scene.ts",
   "edit-3d-scene": "backend/src/routes/3d-scene.ts",
+  "pro-3d-render": "backend/src/routes/pro-3d-render.ts",
   "ai-writer": "backend/src/routes/ai-writer.ts",
   "llm-chat": "backend/src/routes/llm-chat.ts",
   "video-composer": "backend/src/routes/scene-graph-ai.ts",

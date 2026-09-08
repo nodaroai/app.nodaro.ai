@@ -403,7 +403,7 @@ describe("resizeVideo", () => {
   })
 
   it("falls back to 1920x1080 for unknown aspect ratio", async () => {
-    await resizeVideo({ videoUrl: "u", targetAspect: "21:9", method: "stretch" })
+    await resizeVideo({ videoUrl: "u", targetAspect: "37:13", method: "stretch" })
     const args = ffargs()
     const vfIdx = args.indexOf("-vf")
     expect(args[vfIdx + 1]).toContain("1920:1080")

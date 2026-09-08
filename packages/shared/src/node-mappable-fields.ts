@@ -46,6 +46,7 @@ export const NODE_MAPPABLE_FIELDS: Readonly<Record<string, readonly string[]>> =
   "3d-title":            ["titlePrompt"],
   "generate-3d-scene":   ["scenePrompt"],
   "edit-3d-scene":       ["editPrompt"],
+  "pro-3d-render":       ["scenePrompt"],
   "motion-graphics":     ["motionPrompt"],
   "generate-script":     ["styleGuide"],
   "speech-to-video":     ["prompt", "negativePrompt"],

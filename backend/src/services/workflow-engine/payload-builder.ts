@@ -9,7 +9,7 @@ import { normalizeCollageLabels } from "../../providers/image/collage-badges.js"
 
 // Shared logic from packages/shared — single source of truth
 import { resolveVideoRequestNorm } from "../../lib/video-request-norm.js"
-import { resolveSlideshowTransition, collectAncestorRefs as sharedCollectAncestorRefs, applyDefaultVideoSelection, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionableAssetArrays, buildCreditModelIdentifier, resolveImageGenCreditIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, resolveVideoModeForInputs, videoProviderRequiresImage, isVeoProvider, buildLipSyncCreditId, isPerSecondLipSyncProvider, resolveAiAvatarCreditId, resolveSwitchXCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, buildVideoAuditCreditId, resolveVideoAnalysisModel, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName, validateAiAvatarPayload, validateCinematicAvatarPayload, resolveNodeRefs, resolveEffectiveSourceType, PARAMETER_NODE_TYPES, characterMentionSlug, expandExtraRefsToConnectedReferences, PLATFORM_SPECS, isSeedance2Provider, isMinimaxH3Provider, isWan3Provider, isGeminiOmniProvider, PRICING_DEFAULT_RESOLUTION, supportsExtendRender, MODEL_CATALOG, hasFeature, referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality, COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS, buildLlmCreditIdentifier, motionGraphicsFeature, FLUX_LORA_CHARACTER_MODEL_ID, extractCharacterLoraFields, clampSmartCutWindow, resolveGvpAnchorWire, normalizeModelInput, readPromptAffixes, findImageMentionTokens, knownImageSlugsFromRefs, findEntityMentionTokens, knownEntitySlugsFromRefs, uiAspectRatioFill, uiResolutionFill, resolveTopazUpscale, unresolvedRefTokens, classifyRefToken, parseNodeRef, NODE_REF_PATTERN, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, newScene3DRevisionId, scene3DPlanSchema, type Scene3DPlan } from "@nodaro/shared"
+import { resolveSlideshowTransition, collectAncestorRefs as sharedCollectAncestorRefs, applyDefaultVideoSelection, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionableAssetArrays, buildCreditModelIdentifier, resolveImageGenCreditIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, resolveVideoModeForInputs, videoProviderRequiresImage, isVeoProvider, buildLipSyncCreditId, isPerSecondLipSyncProvider, resolveAiAvatarCreditId, resolveSwitchXCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, buildVideoAuditCreditId, resolveVideoAnalysisModel, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName, validateAiAvatarPayload, validateCinematicAvatarPayload, resolveNodeRefs, resolveEffectiveSourceType, PARAMETER_NODE_TYPES, characterMentionSlug, expandExtraRefsToConnectedReferences, PLATFORM_SPECS, isSeedance2Provider, isMinimaxH3Provider, isWan3Provider, isGeminiOmniProvider, PRICING_DEFAULT_RESOLUTION, supportsExtendRender, MODEL_CATALOG, hasFeature, referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality, COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS, buildLlmCreditIdentifier, motionGraphicsFeature, FLUX_LORA_CHARACTER_MODEL_ID, extractCharacterLoraFields, clampSmartCutWindow, resolveGvpAnchorWire, normalizeModelInput, readPromptAffixes, findImageMentionTokens, knownImageSlugsFromRefs, findEntityMentionTokens, knownEntitySlugsFromRefs, uiAspectRatioFill, uiResolutionFill, resolveTopazUpscale, unresolvedRefTokens, classifyRefToken, parseNodeRef, NODE_REF_PATTERN, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, newScene3DRevisionId, resolveScene3DAuthoringEngine, scene3DPlanSchema, PRO3D_RENDER_CREDIT_ID, PRO3D_RENDER_DEFAULT_ENGINE, buildPro3DRenderSource, pro3DRenderTimingOverrides, type Scene3DPlan } from "@nodaro/shared"
 import { composeNegative, resolveTemplate, applyTemplate, computeNodePrompt, assembleImageInput, readDirectionFields, readStructuredFields, readSubjectFields, buildImagePrompt, buildScenePrompt, collectIdentityLockClause as sharedCollectIdentityLockClause, getParameterPromptHint, characterLockToRefLock, buildCharacterPrompt, buildObjectPrompt, buildCreaturePrompt, buildLocationPrompt, buildFaceTemplateInputs, appendMusicMeta, composeSoundHintFromConnections, truncateForField, appendField, assembleSunoInput, type SoundConsumerType, type SoundComposition, resolveVideoReferenceCore, applyPromptAffixes, composeVideoPromptText, isMinorAge, containsMinorAgeHint, type DirectionFields, type StructuredPromptFields, type SubjectFields, NODE_PROMPT_CANDIDATE_FIELDS } from "@nodaro/prompts"
 import type { CharacterDef, ConnectedReference, SceneData, ExtraRefInput, ExtraRefCharacterContext } from "@nodaro/shared"
 import type { CharacterMeta } from "@nodaro/prompts"
@@ -19,6 +19,8 @@ import { selectLoraRoutingForMentions } from "../../lib/character-lora.js"
 import { config } from "../../lib/config.js"
 import { isNodeDenied, deniedNodeRejectionMessage, isModelDenied, deniedModelRejectionMessage } from "../../lib/surface-deny.js"
 import { scene3DFrameFromNode, scene3DNodePreflightError, scene3DReferencesFromNode } from "../../lib/scene3d-node.js"
+import { scene3DAnyPlanSchema, scene3DPlanSchemaVersion, type Scene3DPlanV2 } from "@nodaro/shared"
+import { scene3DReferenceListError } from "../scene3d/index.js"
 import { mergeScene3DReferences } from "../scene3d/scene3d-references.js"
 import { imageRequiredMessage } from "../../lib/video-image-required.js"
 import { isVoiceGenderAllowed, premadeVoiceGender } from "../../lib/voice-policy.js"
@@ -6107,13 +6109,20 @@ export function buildPayload(
       if (!scenePrompt.trim()) {
         throw new Error("Generate 3D Scene has no brief — describe the scene, or wire a prompt in.")
       }
+      const sceneEngine = resolveScene3DAuthoringEngine({ requested: data.engine as string | undefined })
+      if (!sceneEngine.ok) throw new Error(`Generate 3D Scene: ${sceneEngine.message}`)
       const sceneReferences = scene3DReferencesFromNode(data, resolvedInputs, scene3DGraphReferences(node, data, resolvedInputs, buildCtx))
       // The route's own pre-flight, from the same helpers. Thrown BEFORE this
       // function returns a payload, which is before the orchestrator reserves —
       // so an unreadable image reference or a list the contract refuses costs
       // nothing here, exactly as it costs nothing at the route.
-      const scenePreflight = scene3DNodePreflightError(sceneReferences, sceneLlmModel, false)
+      const scenePreflight = scene3DNodePreflightError(sceneReferences, sceneLlmModel, sceneEngine.lane === "advanced")
       if (scenePreflight) throw new Error(`Generate 3D Scene: ${scenePreflight}`)
+      // WHICH lane, decided by the shared resolver so a headless run of this
+      // node cannot pick a different engine than the canvas would. Availability
+      // is deliberately not passed: the orchestrator does not read
+      // capabilities, and the route answers `SCENE_CAPABILITY_UNAVAILABLE`
+      // honestly for an engine this install does not have.
       return {
         jobName: "generate-3d-scene",
         queueName: "video-generation",
@@ -6121,6 +6130,7 @@ export function buildPayload(
         payload: {
           kind: "generate",
           jobId,
+          ...sceneEngine.fields,
           prompt: scenePrompt,
           llmModel: sceneLlmModel,
           reasoningEffort: sceneEffort,
@@ -6153,6 +6163,11 @@ export function buildPayload(
       }
       const editLlmModel = data.llmModel as string | undefined
       const editEffort = data.reasoningEffort as string | undefined
+      const editEngine = resolveScene3DAuthoringEngine({
+        requested: data.engine as string | undefined,
+        plan: upstreamPlan,
+      })
+      if (!editEngine.ok) throw new Error(`Edit 3D Scene: ${editEngine.message}`)
       const editReferences = scene3DReferencesFromNode(data, resolvedInputs, scene3DGraphReferences(node, data, resolvedInputs, buildCtx))
       // Checked against the MERGED list, the same way the route does: what the
       // edit produces is the plan's references with the node's merged in, so
@@ -6160,9 +6175,14 @@ export function buildPayload(
       const editPreflight = scene3DNodePreflightError(
         mergeScene3DReferences(upstreamPlan.references, editReferences, data.replaceReferences === true),
         editLlmModel,
-        Boolean(editOperations),
+        Boolean(editOperations) || editEngine.lane === "advanced",
       )
       if (editPreflight) throw new Error(`Edit 3D Scene: ${editPreflight}`)
+      // The PLAN decides as much as the node does: a v2 scene (everything the
+      // advanced engine authors, including a wired 3D Render Pro composition)
+      // can only be edited by an advanced engine, and this is where that is
+      // enforced for every headless surface at once. Refusing here costs
+      // nothing — it is before the orchestrator reserves.
       return {
         jobName: "edit-3d-scene",
         queueName: "video-generation",
@@ -6174,6 +6194,7 @@ export function buildPayload(
         payload: {
           kind: "edit",
           jobId,
+          ...editEngine.fields,
           plan: upstreamPlan,
           expectedRevisionId: upstreamPlan.revisionId,
           revisionId: newScene3DRevisionId(),
@@ -6184,6 +6205,67 @@ export function buildPayload(
           ...(editOperations ? { operations: editOperations } : { instruction: editInstruction }),
           llmModel: editLlmModel,
           reasoningEffort: editEffort,
+          usageLogId,
+        },
+      }
+    }
+
+    // --- 3D Render Pro: scene + video in one durable operation ---
+    //
+    // Same graph resolution as the Basic generate node — prompt, affixes and
+    // wired references all come from the same helpers — and the same handover:
+    // `buildScene3DHttpBody` turns this into the public route body, and the
+    // route plus the private engine own validation, admission and billing.
+    case "pro-3d-render": {
+      // The brief, resolved and affix-applied exactly as the Basic generate
+      // node resolves its own — a Pro node in a graph reads its prompt the
+      // same way, or a wired {Label} would mean two different things on the
+      // two execution engines.
+      const proPrompt =
+        applyPromptAffixes(
+          resolvedInputs.prompt || resolveRefs(data.scenePrompt as string | undefined, refMap),
+          readPromptAffixes(data),
+          refMap,
+        ) ?? ""
+      const proReferences = scene3DReferencesFromNode(data, resolvedInputs, scene3DGraphReferences(node, data, resolvedInputs, buildCtx))
+      // The upstream scene wins over the node's own held revision, the same
+      // precedence `edit-3d-scene` uses — a wired scene is the one the user is
+      // looking at.
+      const proUpstream = resolvePro3DRenderSceneRef(node, data, buildCtx)
+      const proSource = buildPro3DRenderSource({
+        sourceMode: data.sourceMode as string | undefined,
+        prompt: proPrompt,
+        references: proReferences,
+        revisionId: proUpstream?.revisionId,
+        sourceJobId: proUpstream?.sourceJobId,
+        editPrompt: data.editPrompt as string | undefined,
+      })
+      if (!proSource.ok) throw new Error(`3D Render Pro: ${proSource.message}`)
+      // Only the LIST rules, and only on the authoring path: the planner is
+      // fixed and server-owned, so there is no caller-chosen model whose
+      // modality could make an image reference unreadable.
+      if (proSource.source.kind === "prompt") {
+        const proReferenceError = scene3DReferenceListError(proReferences)
+        if (proReferenceError) throw new Error(`3D Render Pro: ${proReferenceError}`)
+      }
+      return {
+        jobName: "pro-3d-render",
+        queueName: "video-generation",
+        modelIdentifier: PRO3D_RENDER_CREDIT_ID,
+        payload: {
+          jobId,
+          source: proSource.source,
+          engine: (data.engine as string | undefined) ?? PRO3D_RENDER_DEFAULT_ENGINE,
+          quality: data.quality,
+          style: data.style,
+          maxRepairPasses: data.maxRepairPasses,
+          ...pro3DRenderTimingOverrides({
+            source: proSource.source,
+            overrideSourceTiming: data.overrideSourceTiming === true,
+            durationSeconds: typeof data.durationSeconds === "number" ? data.durationSeconds : undefined,
+            fps: typeof data.fps === "number" ? data.fps : undefined,
+            aspectRatio: typeof data.aspectRatio === "string" ? data.aspectRatio : undefined,
+          }),
           usageLogId,
         },
       }
@@ -6294,15 +6376,64 @@ function scene3DGraphReferences(
   return references
 }
 
+/**
+ * The revision a Pro `scene` source names, and the run that produced it.
+ *
+ * Two facts, resolved together on purpose. `revisionId` alone is not an
+ * authorization: the engine correlates it against the job that minted it, so a
+ * caller cannot name an id it merely saw. Precedence mirrors
+ * `resolveScene3DPlan` — a scene produced by THIS run wins over a saved
+ * upstream one, which wins over the node's own held revision — because a
+ * workflow whose generate node just re-ran must export the fresh revision, not
+ * last run's.
+ *
+ * Basic scenes use the producing job to locate their output. Retained v2
+ * scenes use revision authority: a later render job in history did not author
+ * that unchanged revision, and must not be sent as its generation job.
+ */
+function resolvePro3DRenderSceneRef(
+  node: SimpleNode,
+  data: Record<string, unknown>,
+  buildCtx?: PayloadBuildContext,
+): { revisionId?: string; sourceJobId?: string } | undefined {
+  const revisionOf = (plan: unknown): string | undefined => {
+    const id = (plan as { revisionId?: unknown } | null | undefined)?.revisionId
+    return typeof id === "string" && id.length > 0 ? id : undefined
+  }
+  const jobIdInHistory = (nodeData: Record<string, unknown> | undefined, revisionId: string): string | undefined => {
+    const history = Array.isArray(nodeData?.sceneHistory) ? (nodeData.sceneHistory as Array<Record<string, unknown>>) : []
+    const entry = history.find((e) => e?.revisionId === revisionId)
+    return typeof entry?.jobId === "string" && entry.jobId.length > 0 ? entry.jobId : undefined
+  }
+
+  if (buildCtx?.edges && buildCtx?.nodes) {
+    for (const edge of buildCtx.edges.filter((e) => e.target === node.id && (!e.targetHandle || e.targetHandle === "scene"))) {
+      const srcNode = buildCtx.nodes.find((n) => n.id === edge.source)
+      if (!srcNode || !COMPOSER_PLAN_MAP[srcNode.type]) continue
+      const state = buildCtx.nodeStates?.[srcNode.id]
+      const fromRun = revisionOf(state?.output?.plan)
+      if (fromRun) return { revisionId: fromRun, sourceJobId: scene3DPlanSchemaVersion(state?.output?.plan) === 2
+        ? undefined : state?.jobId ?? jobIdInHistory(srcNode.data, fromRun) }
+      const savedPlan = srcNode.data[COMPOSER_PLAN_MAP[srcNode.type].planField]
+      const saved = revisionOf(savedPlan)
+      if (saved) return { revisionId: saved, sourceJobId: scene3DPlanSchemaVersion(savedPlan) === 2
+        ? undefined : jobIdInHistory(srcNode.data, saved) }
+    }
+  }
+  const own = revisionOf(data.scenePlan)
+  return own ? { revisionId: own, sourceJobId: scene3DPlanSchemaVersion(data.scenePlan) === 2
+    ? undefined : jobIdInHistory(data, own) } : undefined
+}
+
 function resolveScene3DPlan(
   node: SimpleNode,
   data: Record<string, unknown>,
   buildCtx?: PayloadBuildContext,
-): Scene3DPlan | undefined {
+): Scene3DPlan | Scene3DPlanV2 | undefined {
   const thisRun: unknown[] = []
   const upstreamSaved: unknown[] = []
   if (buildCtx?.edges && buildCtx?.nodes) {
-    for (const edge of buildCtx.edges.filter((e) => e.target === node.id)) {
+    for (const edge of buildCtx.edges.filter((e) => e.target === node.id && (!e.targetHandle || e.targetHandle === "scene"))) {
       const srcNode = buildCtx.nodes.find((n) => n.id === edge.source)
       if (!srcNode) continue
       const mapping = COMPOSER_PLAN_MAP[srcNode.type]
@@ -6320,8 +6451,9 @@ function resolveScene3DPlan(
   // upstream one.
   const candidates: unknown[] = [...thisRun, ...upstreamSaved, ...(data.scenePlan ? [data.scenePlan] : [])]
   for (const candidate of candidates) {
-    const parsed = scene3DPlanSchema.safeParse(candidate)
-    if (parsed.success) return parsed.data as Scene3DPlan
+    const parsed = scene3DAnyPlanSchema.safeParse(candidate)
+    if (parsed.success) return parsed.data as Scene3DPlan | Scene3DPlanV2
+    throw new Error("The connected 3D scene is invalid or uses an unsupported version. Update or regenerate that scene before editing it.")
   }
   return undefined
 }

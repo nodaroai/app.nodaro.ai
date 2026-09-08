@@ -1101,6 +1101,29 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
       { key: "selectedObjectIds", type: "array" }, { key: "llmModel", type: "string" },
     ] },
   },
+  {
+    type: "pro-3d-render", label: "3D Render Pro", category: "composition",
+    description: "ONE durable operation producing both a 3D scene composition and its rendered MP4. `source` is exactly one of: {kind:'prompt'} to author a new scene from a brief plus optional references; {kind:'scene', revisionId, sourceJobId} to use an existing revision — with no editPrompt this is a render-only export that costs no authoring, with one it revises the scene first; or {kind:'local-export'} where a paired desktop Blender is available. Quote it first at POST /v1/pro-3d-render/quote and submit the returned quoteId.",
+    // NO number, and no STATIC_CREDIT_COSTS entry to enrich from either: this
+    // aggregates several paid stages and its price is deployment
+    // configuration. Discovery therefore reports no cost rather than a wrong
+    // one, and an install with no configured price refuses the run outright.
+    outputType: "video",
+    capabilities: ["supports-reference-image", "supports-reference-video", "editable-3d-scene", "scene3d-embed-v1"],
+    inputSchema: { fields: [
+      { key: "source", type: "object", required: true },
+      { key: "quoteId", type: "string", required: true },
+      { key: "engine", type: "string", options: ["blender-cloud", "blender-local"] },
+      { key: "quality", type: "string", options: ["standard"] },
+      { key: "style", type: "string", options: ["clay"] },
+      { key: "maxRepairPasses", type: "number" },
+      // Omit these for a scene source unless deliberately re-timing it: the
+      // platform rejects a conflicting override rather than applying it.
+      { key: "durationSeconds", type: "number" }, { key: "fps", type: "number" },
+      { key: "aspectRatio", type: "string", options: ["16:9", "9:16", "1:1", "4:5", "21:9"] },
+      { key: "acceptedSceneSchemaVersions", type: "array" },
+    ] },
+  },
   { type: "3d-title", label: "3D Title", category: "composition", description: "AI-generated 3D animated text.", outputType: "video", creditCost: 15 },
   // composition siblings of after-effects / motion-graphics / 3d-title (rendered video output).
   { type: "video-composer", label: "Video Composer", category: "composition", description: "AI-powered scene-graph video composition from natural language prompts.", outputType: "video", creditCost: "1-4" },

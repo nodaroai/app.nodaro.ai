@@ -437,6 +437,7 @@ AI-powered video composition and rendering. Create professional video production
 | [3D Title](./composition/3d-title.md) | AI animated 3D text scenes | Create cinematic 3D title cards with particles and lighting |
 | [Generate 3D Scene](./composition/generate-3d-scene.md) | Create editable animated clay scenes | Preview blocking and camera motion from prompts and references |
 | [Edit 3D Scene](./composition/edit-3d-scene.md) | Revise a scene through instructions or deterministic operations | Adjust objects, camera and timing before MP4 export |
+| [3D Render Pro](./composition/pro-3d-render.md) | Author a 3D scene and export it in one operation | Get a finished 3D shot plus its editable composition from one run |
 | [Motion Graphics](./composition/motion-graphics.md) | AI 2D motion graphics generation | Create lower thirds, title cards, kinetic typography |
 | [Composite](./composition/composite.md) | Multi-layer video compositing | Picture-in-picture, split screen, overlay with blend modes |
 | [Render Video](./composition/render-video.md) | Finalize composition to video file | Render any composition plan to final video output |

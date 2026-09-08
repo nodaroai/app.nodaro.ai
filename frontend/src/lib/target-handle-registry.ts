@@ -387,6 +387,10 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
     { handleId: "scene",      label: SCENE3D_HANDLE_LABELS.scene,      accepts: (s) => isValidScene3DConnection("scene", s) },
     { handleId: "references", label: SCENE3D_HANDLE_LABELS.references, accepts: (s) => isValidScene3DConnection("references", s) },
   ],
+  "pro-3d-render": [
+    { handleId: "scene",      label: SCENE3D_HANDLE_LABELS.scene,      accepts: (s) => isValidScene3DConnection("scene", s) },
+    { handleId: "references", label: SCENE3D_HANDLE_LABELS.references, accepts: (s) => isValidScene3DConnection("references", s) },
+  ],
 
   // ─── Audio & Speech (Batch 1 of audio/text typed-handles migration) ───
   // Each predicate's accepts is built inline from the per-handle predicate

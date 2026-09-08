@@ -1,4 +1,4 @@
-import type { GenerateScene3DParams, EditScene3DParams, RenderScene3DParams, Scene3DJobOutput } from "./scene3d-types.js"
+import type { GenerateScene3DParams, EditScene3DParams, RenderScene3DParams, Scene3DJobOutput, Pro3DRenderRunParams, Pro3DRenderJobOutput } from "./scene3d-types.js"
 import type { NodaroClient } from "../client.js"
 import type { JobStatusResult } from "./jobs.js"
 import { JobAbortedError, JobFailedError, JobHeldError, JobTimeoutError } from "../errors.js"
@@ -252,6 +252,19 @@ export interface RunAndWaitOptions {
   readonly pollMs?: number
   /** Wall-clock cap before giving up, in ms. Default ~15 min (900_000). */
   readonly maxMs?: number
+  /**
+   * `Idempotency-Key` for the submit half. Reuse the same value when retrying a
+   * call that timed out, so the run is not started or charged twice. Omitted →
+   * no key, which is the historical behaviour for every node that does not
+   * require one.
+   */
+  readonly idempotencyKey?: string
+}
+
+/** Per-call transport controls for {@link NodesResource.run}. */
+export interface RunNodeOptions {
+  /** `Idempotency-Key` header. See {@link RunAndWaitOptions.idempotencyKey}. */
+  readonly idempotencyKey?: string
 }
 
 /** One settled result from {@link NodesResource.runMany}. */
@@ -330,17 +343,27 @@ export class NodesResource {
   run(type: "generate-3d-scene", params: GenerateScene3DParams): Promise<RunNodeResult>
   run(type: "edit-3d-scene", params: EditScene3DParams): Promise<RunNodeResult>
   run(type: "render-video", params: RenderScene3DParams): Promise<RunNodeResult>
+  run(type: "pro-3d-render", params: Pro3DRenderRunParams, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: "generate-image", params?: GenerateImageParams): Promise<RunNodeResult>
   run(type: "generate-video", params?: GenerateVideoParams): Promise<RunNodeResult>
   run(type: "text-to-video", params: TextToVideoParams): Promise<RunNodeResult>
   run(type: "assemble-narrated-video", params?: AssembleNarratedVideoParams): Promise<RunNodeResult>
-  run(type: string, params?: Record<string, unknown>): Promise<RunNodeResult>
-  run(type: string, params: Record<string, unknown> = {}): Promise<RunNodeResult> {
+  run(type: string, params?: Record<string, unknown>, options?: RunNodeOptions): Promise<RunNodeResult>
+  run(type: string, params: Record<string, unknown> = {}, options: RunNodeOptions = {}): Promise<RunNodeResult> {
+    // `pro-3d-render` needs no special case: its route IS `/v1/pro-3d-render`,
+    // which the default below already produces. Listed in the overloads only
+    // so callers get the typed params and the typed result.
     const route = type === "generate-3d-scene" ? "/v1/3d-scene/generate"
       : type === "edit-3d-scene" ? "/v1/3d-scene/edit"
       : type === "render-video" && typeof params.planType === "string" ? "/v1/render-video/plan"
       : `/v1/${encodeURIComponent(type)}`
-    return this.client.request("POST", route, { body: params })
+    return this.client.request("POST", route, {
+      body: params,
+      // Transport-level retry safety, opt-in per call. The platform reads the
+      // standard header, so a caller that reuses a key on a retry gets the
+      // same run back instead of a second charge.
+      ...(options.idempotencyKey ? { headers: { "Idempotency-Key": options.idempotencyKey } } : {}),
+    })
   }
 
   /**
@@ -373,18 +396,19 @@ export class NodesResource {
   runAndWait(type: "generate-3d-scene", params: GenerateScene3DParams, options?: RunAndWaitOptions): Promise<Scene3DJobOutput>
   runAndWait(type: "edit-3d-scene", params: EditScene3DParams, options?: RunAndWaitOptions): Promise<Scene3DJobOutput>
   runAndWait(type: "render-video", params: RenderScene3DParams, options?: RunAndWaitOptions): Promise<NodeJobOutput>
+  runAndWait(type: "pro-3d-render", params: Pro3DRenderRunParams, options?: RunAndWaitOptions): Promise<Pro3DRenderJobOutput>
   runAndWait(type: "generate-image", params?: GenerateImageParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "generate-video", params?: GenerateVideoParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "text-to-video", params: TextToVideoParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "assemble-narrated-video", params?: AssembleNarratedVideoParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
-  runAndWait<T extends string>(type: T, params?: Record<string, unknown>, opts?: RunAndWaitOptions): Promise<T extends "generate-3d-scene" | "edit-3d-scene" ? Scene3DJobOutput : NodeJobOutput>
+  runAndWait<T extends string>(type: T, params?: Record<string, unknown>, opts?: RunAndWaitOptions): Promise<T extends "pro-3d-render" ? Pro3DRenderJobOutput : T extends "generate-3d-scene" | "edit-3d-scene" ? Scene3DJobOutput : NodeJobOutput>
   async runAndWait(
     type: string,
     params: Record<string, unknown> = {},
     opts: RunAndWaitOptions = {},
   ): Promise<NodeJobOutput> {
     if (opts.signal?.aborted) throw new JobAbortedError()
-    const result = await this.run(type, params)
+    const result = await this.run(type, params, { idempotencyKey: opts.idempotencyKey })
     const jobId = extractJobId(result, type)
     return this.pollJob(jobId, type, opts)
   }

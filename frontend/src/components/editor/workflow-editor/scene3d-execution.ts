@@ -48,6 +48,38 @@ export type Scene3DJobParams = {
   /** The inputs this run was launched with, stored with the revision it
    *  produces so restoring it restores what was asked for. */
   context?: Scene3DRevisionContext;
+  /**
+   * Extra node-data written when the job completes, read from the job's
+   * `output_data`.
+   *
+   * 3D Render Pro settles with a scene AND a video, and the video half has no
+   * place in the revision stack — it is an ordinary media result. Rather than
+   * fork the poll (and with it the stale-completion guard, the archive path
+   * and the cancel handling, which is where the subtle bugs live), the one
+   * node that produces more than a revision says so here.
+   *
+   * Applied on the ADOPT path only, enforced HERE rather than left to each
+   * caller: a superseded result is archived into history and must not overwrite
+   * the live node's media, exactly as it must not overwrite its live plan.
+   *
+   * The second argument is the completion context the callback cannot obtain
+   * for itself: the job that actually settled (a job's `output_data` does not
+   * carry its own id) and the node's data as of COMPLETION time — never the
+   * snapshot captured at run start, which a second run finishing in between
+   * would have made stale.
+   */
+  extraCompletionPatch?: (
+    output: Record<string, unknown>,
+    completion: Scene3DCompletionContext,
+  ) => Record<string, unknown>;
+};
+
+/** What `extraCompletionPatch` is told about the settlement it is patching. */
+export type Scene3DCompletionContext = {
+  /** The job that settled — the id its result must be correlated with. */
+  jobId: string;
+  /** The node's data re-read after the status await, i.e. what it holds NOW. */
+  liveNode: Record<string, unknown>;
 };
 
 /**
@@ -57,7 +89,7 @@ export type Scene3DJobParams = {
  * marker every composer node's `composition` output carries), or `""` when the
  * node was abandoned mid-flight or the job was cancelled.
  */
-export function runScene3DJob({ nodeId, start, source, ctx, label, context }: Scene3DJobParams): Promise<string> {
+export function runScene3DJob({ nodeId, start, source, ctx, label, context, extraCompletionPatch }: Scene3DJobParams): Promise<string> {
   const { updateNodeData } = useWorkflowStore.getState();
 
   // The revision the job is being launched AGAINST, captured HERE — every
@@ -78,14 +110,14 @@ export function runScene3DJob({ nodeId, start, source, ctx, label, context }: Sc
    * File a result that arrived for a run this node no longer points at: keep
    * the revision (it was billed) and touch nothing else.
    */
-  const archive = (incoming: Record<string, unknown>, changeSummary?: string) => {
+  const archive = (incoming: Record<string, unknown>, changeSummary?: string, jobId?: string) => {
     if (!useWorkflowStore.getState().nodes.some((n) => n.id === nodeId)) return;
     const live = readLive();
     const patch = archiveSupersededResult(
       live.sceneHistory as Scene3DRevisionEntry[] | undefined,
       incoming,
       source,
-      { changeSummary, context },
+      { changeSummary, context, jobId },
     );
     if (patch) updateNodeData(nodeId, patch);
   };
@@ -134,7 +166,7 @@ export function runScene3DJob({ nodeId, start, source, ctx, label, context }: Sc
               // DO keep a scene it produced, in history only.
               if (shouldAbandonNode(nodeId, jobId)) {
                 ctx.untrackInterval(poll);
-                if (job.status === "completed" && incoming) archive(incoming, changeSummary);
+                if (job.status === "completed" && incoming) archive(incoming, changeSummary, jobId);
                 resolve("");
                 return;
               }
@@ -178,10 +210,22 @@ export function runScene3DJob({ nodeId, start, source, ctx, label, context }: Sc
                   history: liveData.sceneHistory as Scene3DRevisionEntry[] | undefined,
                   source,
                   context,
+                  // Recorded ON the revision: a later 3D Render Pro `scene`
+                  // source names both the revision and the run that made it.
+                  jobId,
                 });
 
                 updateNodeData(nodeId, {
                   ...result.patch,
+                  // ADOPT ONLY. On the park path the arriving plan is kept
+                  // aside and the live scene stays put — writing the other half
+                  // (3D Render Pro's MP4) would leave the node showing a video
+                  // that does not match its composition, and feed that stale
+                  // MP4 downstream from the `video` handle. The reload path
+                  // (`buildScene3DRecoveryPatch`) applies the same rule.
+                  ...(result.outcome === "adopt"
+                    ? (extraCompletionPatch?.(out, { jobId, liveNode: liveData }) ?? {})
+                    : {}),
                   executionStatus: "completed",
                   currentJobId: undefined,
                   currentJobProgress: undefined,

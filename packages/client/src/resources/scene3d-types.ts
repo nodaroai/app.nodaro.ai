@@ -1,4 +1,4 @@
-import type { Scene3DPlan, Scene3DPlanV2, Scene3DReference, Scene3DEditOperation, Scene3DV2EditOperation, Scene3DJobOutputAny as Scene3DWireJobOutput } from "@nodaro/shared"
+import type { Scene3DPlan, Scene3DPlanV2, Scene3DReference, Scene3DEditOperation, Scene3DV2EditOperation, Scene3DJobOutputAny as Scene3DWireJobOutput, Pro3DRenderCapabilities, Pro3DRenderEngine, Pro3DRenderJobOutput as Pro3DRenderWireOutput, Pro3DRenderQuality, Pro3DRenderQuote as Pro3DRenderWireQuote, Pro3DRenderSource, Pro3DRenderStyle } from "@nodaro/shared"
 
 /** Reuse newRevisionId for transport retries of the same immutable edit. */
 export interface RetainedScene3DEditParams {
@@ -19,6 +19,13 @@ export interface Scene3DCapabilities {
     sceneSchemaVersions: number[]
     maxRepairPasses: number
   }
+  /**
+   * What this deployment can serve for `pro-3d-render`, including which
+   * quality profiles, engines and aspect ratios a client may OFFER. Optional so
+   * a client of this version reads an older backend without throwing; absent
+   * means the node is unavailable.
+   */
+  pro?: Pro3DRenderCapabilities
 }
 
 interface Scene3DEngineParams {
@@ -61,6 +68,66 @@ export interface EditScene3DParams extends Record<string, unknown>, Scene3DEngin
   nodeId?: string
 }
 
+/**
+ * 3D Render Pro — ONE durable operation producing a composition and its MP4.
+ *
+ * `source` is a strict discriminated union, not a bag of optionals:
+ *  - `{kind:'prompt', prompt, references?}` authors a new scene;
+ *  - `{kind:'scene', revisionId, sourceJobId}` with NO `editPrompt` is the
+ *    render-only export — it spends no authoring or build credits, and OMIT
+ *    the field rather than sending `""`, which would buy an authoring pass;
+ *  - `{kind:'local-export', exportId, connectionId}` uses a paired desktop.
+ *
+ * There is no model or effort field: the planner is fixed and server-owned.
+ *
+ * `durationSeconds` / `fps` / `aspectRatio` on a `scene` source are an EXPLICIT
+ * re-time request. Omit them to keep the source's own timing; a conflicting
+ * override is rejected rather than silently applied.
+ */
+export interface Pro3DRenderParams extends Record<string, unknown> {
+  source: Pro3DRenderSource
+  /** Optional. An unknown or unavailable engine is rejected, never downgraded. */
+  engine?: Pro3DRenderEngine
+  /** Names a paired desktop for a local run. */
+  localConnectionId?: string
+  durationSeconds?: number
+  fps?: number
+  aspectRatio?: string
+  quality?: Pro3DRenderQuality
+  style?: Pro3DRenderStyle
+  /** Correction budget, 0-2. Each pass is paid work. */
+  maxRepairPasses?: number
+  /**
+   * Which scene-schema versions THIS client can render. A prompt or
+   * local-export source mints v2, so omitting 2 is refused for free; a scene
+   * source inherits its revision's version and is left to the server.
+   */
+  acceptedSceneSchemaVersions?: readonly number[]
+  workflowId?: string
+  nodeId?: string
+  /** Keep every artifact of this run out of publicly-readable storage. */
+  forcePrivate?: boolean
+}
+
+/** A run additionally carries the quote it was priced under. */
+export interface Pro3DRenderRunParams extends Pro3DRenderParams {
+  quoteId: string
+}
+
+/** The quote's answer. `maxCredits` is a ceiling; quoting spends nothing. */
+export type Pro3DRenderQuote = Readonly<Pro3DRenderWireQuote> & Readonly<Record<string, unknown>>
+
+/** Per-call transport controls for the paid run. */
+export interface Pro3DRenderRunOptions {
+  /**
+   * The `Idempotency-Key` the run is submitted under. Reuse the same value when
+   * retrying a call that timed out, so the run is not started twice; the SDK
+   * generates a fresh one per call when this is omitted, because two deliberate
+   * calls are two runs.
+   */
+  idempotencyKey?: string
+}
+
 /** Render the exact scene revision through the existing render-video node. */
 export interface RenderScene3DParams extends Record<string, unknown> {
   planType: "3d-scene"
@@ -71,3 +138,6 @@ export interface RenderScene3DParams extends Record<string, unknown> {
 
 /** Preserve the shared wire contract while allowing additive job metadata. */
 export type Scene3DJobOutput = Readonly<Scene3DWireJobOutput> & Readonly<Record<string, unknown>>
+
+/** The settled 3D Render Pro result, plus any additive job metadata. */
+export type Pro3DRenderJobOutput = Readonly<Pro3DRenderWireOutput> & Readonly<Record<string, unknown>>
