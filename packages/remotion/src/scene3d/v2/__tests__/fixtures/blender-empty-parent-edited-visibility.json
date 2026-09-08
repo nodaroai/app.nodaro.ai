@@ -1,0 +1,96 @@
+{
+ "blender": "5.2.0",
+ "depsgraphProbe": {
+  "instances": 7,
+  "instancesWithEyeHidden": 6,
+  "instancesWithRenderHidden": 7,
+  "measured": true,
+  "subject": "arm/body"
+ },
+ "objects": [
+  {
+   "entityId": "arm",
+   "hiddenInViewLayer": false,
+   "hideRender": true,
+   "hideViewport": false,
+   "isMesh": false,
+   "name": "arm",
+   "ownHidden": false,
+   "parent": "rig",
+   "subpartId": null,
+   "type": "EMPTY"
+  },
+  {
+   "entityId": "arm",
+   "hiddenInViewLayer": false,
+   "hideRender": true,
+   "hideViewport": false,
+   "isMesh": true,
+   "name": "arm/body",
+   "ownHidden": false,
+   "parent": "arm",
+   "subpartId": "body",
+   "type": "MESH"
+  },
+  {
+   "entityId": null,
+   "hiddenInViewLayer": false,
+   "hideRender": false,
+   "hideViewport": false,
+   "isMesh": false,
+   "name": "camera",
+   "ownHidden": false,
+   "parent": null,
+   "subpartId": null,
+   "type": "CAMERA"
+  },
+  {
+   "entityId": null,
+   "hiddenInViewLayer": false,
+   "hideRender": false,
+   "hideViewport": false,
+   "isMesh": false,
+   "name": "key",
+   "ownHidden": false,
+   "parent": null,
+   "subpartId": null,
+   "type": "LIGHT"
+  },
+  {
+   "entityId": "rig",
+   "hiddenInViewLayer": false,
+   "hideRender": true,
+   "hideViewport": false,
+   "isMesh": false,
+   "name": "rig",
+   "ownHidden": true,
+   "parent": null,
+   "subpartId": null,
+   "type": "EMPTY"
+  },
+  {
+   "entityId": "tip",
+   "hiddenInViewLayer": false,
+   "hideRender": true,
+   "hideViewport": false,
+   "isMesh": false,
+   "name": "tip",
+   "ownHidden": false,
+   "parent": "arm",
+   "subpartId": null,
+   "type": "EMPTY"
+  },
+  {
+   "entityId": "tip",
+   "hiddenInViewLayer": false,
+   "hideRender": true,
+   "hideViewport": false,
+   "isMesh": true,
+   "name": "tip/body",
+   "ownHidden": false,
+   "parent": "tip",
+   "subpartId": "body",
+   "type": "MESH"
+  }
+ ]
+}

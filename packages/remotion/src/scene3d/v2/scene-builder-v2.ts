@@ -7,6 +7,18 @@
  *   entity wrapper  ← base transform + entity overrides      (we own it)
  *     └── GLB entity-root node ← baked static/animated transform (the exporter owns it)
  *           └── the rest of the exported subtree
+ *             └── a CHILD entity's wrapper, then its own exported root
+ *
+ * A child entity's exported root is nested inside its parent's in the file, and
+ * its transform is relative to it. So its wrapper is inserted exactly where that
+ * node already sits — under the parent's BAKED node, not under the parent's
+ * wrapper. Mounting it under the wrapper instead would silently drop the
+ * parent's baked (and animated) placement from the child's chain.
+ *
+ * A `world`-space override is resolved against that wrapper's TRUE parent world
+ * at the frame being drawn — the exported node it hangs under, with every
+ * ancestor's baked and animated placement in it — so `world` names the scene's
+ * axes and `local` the slot the wrapper occupies. See `overlays.ts`.
  *
  * Each channel has exactly ONE owner. Two consequences the contract spells out:
  *
@@ -26,7 +38,7 @@
  * re-derivation.
  */
 import * as THREE from "three"
-import { SCENE3D_PRIMITIVE_MATERIAL_ROLE } from "@nodaro/shared"
+import { SCENE3D_GLB_EXTRAS_ENTITY_ID, SCENE3D_PRIMITIVE_MATERIAL_ROLE } from "@nodaro/shared"
 import { buildScene3DGeometry } from "../scene-builder"
 import type { Scene3DObject } from "../types"
 import type { Scene3DRenderHandle } from "../handle"
@@ -197,17 +209,34 @@ export function buildScene3DV2Scene(loaded: Scene3DLoadedScene): Scene3DV2SceneH
         "entity root disappeared between inspection and build",
         entity.id,
       )
-      const rootObject = findByRootNodeName(asset.scene, visual.rootNodeId)
+      // A nested root travelled into its parent's wrapper with the parent's
+      // subtree — `ordered` guarantees the parent was mounted first.
+      const nestedIn = inspected.parentEntityId
+      const searchRoot = nestedIn === null
+        ? asset.scene
+        : (nodes.get(nestedIn)?.wrapper ?? asset.scene)
+      const rootObject = findByRootNodeName(searchRoot, visual.rootNodeId)
       check(
         !!rootObject,
         "SCENE_ASSET_BINDING",
         `no loaded node has the exported name "${visual.rootNodeId}"`,
         entity.id,
       )
-      // Detach from the GLB scene and mount under our wrapper. Its own local
-      // transform is PRESERVED — it is the authoritative placement.
+      // Insert the wrapper exactly where the exported node already sits: under
+      // the parent's baked node for a nested root, and under the scene
+      // otherwise. Its own local transform is PRESERVED — it is the
+      // authoritative placement, and for a nested root it is relative to the
+      // parent's baked transform, which stays above it.
+      const exportedParent = nestedIn === null ? null : rootObject.parent
+      check(
+        nestedIn === null || !!exportedParent,
+        "SCENE_ASSET_BINDING",
+        `entity root "${visual.rootNodeId}" is nested in "${String(nestedIn)}" but was loaded detached`,
+        entity.id,
+      )
       rootObject.removeFromParent()
       wrapper.add(rootObject)
+      if (exportedParent) exportedParent.add(wrapper)
 
       applyClayMaterials(rootObject, entity, overlays, node, ownedMaterials)
 
@@ -220,10 +249,15 @@ export function buildScene3DV2Scene(loaded: Scene3DLoadedScene): Scene3DV2SceneH
         // resulting `object.name`. Reading it back off the scene is exact by
         // construction; re-implementing the sanitize + dedupe would drift.
         const mountedNames = new Set<string>()
-        rootObject.traverse((object) => {
+        traverseOwned(rootObject, entity.id, (object) => {
           if (object.name) mountedNames.add(object.name)
         })
-        node.clip = bindScene3DClip(wrapper, clip, mountedNames, entity.id)
+        // Bound against the EXPORTED root, not the wrapper: `findNode` returns
+        // the binding root itself when the track's node name matches its name,
+        // so an entity whose display name happens to equal a node name would
+        // otherwise drive the wrapper — which pass 2 then overwrites, silently
+        // freezing the animation.
+        node.clip = bindScene3DClip(rootObject, clip, mountedNames, entity.id)
       }
     }
     // `group` adds no geometry — it is organizational identity only.
@@ -236,9 +270,12 @@ export function buildScene3DV2Scene(loaded: Scene3DLoadedScene): Scene3DV2SceneH
     }
   }
 
-  // Pass 2 — parent the wrappers. `ordered` guarantees the parent exists.
+  // Pass 2 — parent the wrappers the file did not already place. `ordered`
+  // guarantees the parent exists; a nested asset root is mounted in pass 1,
+  // inside its parent's exported subtree, and must not be moved out of it.
   for (const entity of ordered) {
     const node = nodes.get(entity.id) as EntityNode
+    if (node.wrapper.parent) continue
     const parent = entity.parentId ? entities.get(entity.parentId) : undefined
     if (parent && parent !== node.wrapper) parent.add(node.wrapper)
     else scene.add(node.wrapper)
@@ -266,23 +303,29 @@ export function buildScene3DV2Scene(loaded: Scene3DLoadedScene): Scene3DV2SceneH
       node.clip.apply(local / plan.fps)
     }
 
-    // 2. Entity overrides, parents first so a world-space override can divide
-    //    out an already-correct parent world matrix exactly once.
+    // 2. Entity overrides, parents first — so that when a child divides its
+    //    parent's world out, that world is already this frame's.
+    //
+    //    The frame is the wrapper's REAL parent: for a nested entity that is the
+    //    parent's exported node, animation included, and `updateWorldMatrix`
+    //    re-derives the chain above it from step 1's baked locals and the
+    //    wrappers this loop has already written. A `world` edit therefore names
+    //    a place in the SCENE — under a rotated ancestor its axes are still the
+    //    scene's — and pays for it with a wrapper value that moves with an
+    //    animated ancestor, which `overlays.py` re-derives at rebuild.
     for (const entity of ordered) {
       const node = nodes.get(entity.id) as EntityNode
-      const parentWrapper = node.wrapper.parent
-      const parentWorld = parentWrapper && parentWrapper !== scene ? parentWrapper.matrixWorld : null
+      const wrapperParent = node.wrapper.parent
+      if (wrapperParent) wrapperParent.updateWorldMatrix(true, false)
       applyEntityTransformOverride(
         node.wrapper,
         node.base,
         overlays.entityTransforms.get(entity.id),
-        parentWorld,
+        wrapperParent ? wrapperParent.matrixWorld : null,
       )
       const visible = overlays.entityVisibility.get(entity.id)
       node.wrapper.visible = visible ?? entity.visible ?? true
       node.wrapper.updateMatrix()
-      if (parentWorld) node.wrapper.matrixWorld.multiplyMatrices(parentWorld, node.wrapper.matrix)
-      else node.wrapper.matrixWorld.copy(node.wrapper.matrix)
     }
 
     // 3. Camera: the sample IS index f. No interpolation, so a hard cut stays hard.
@@ -392,6 +435,34 @@ function clayMaterial(color: string, doubleSided: boolean): THREE.MeshStandardMa
 }
 
 /**
+ * Walk the entity's OWN mounted subtree, stopping at a nested entity root.
+ *
+ * A child entity's exported nodes sit inside its parent's subtree and carry
+ * their own `nodaroEntityId`. Without this boundary the parent would recolour
+ * the child, claim its meshes for hit-testing and bind its animation tracks a
+ * second time — with a different animation window than the child's own.
+ */
+function traverseOwned(
+  root: THREE.Object3D,
+  entityId: string,
+  visit: (object: THREE.Object3D) => void,
+): void {
+  const stack: THREE.Object3D[] = [root]
+  while (stack.length > 0) {
+    const object = stack.pop() as THREE.Object3D
+    visit(object)
+    // Pushed in reverse so the stack pops them in document order: `traverse`
+    // does the same, and `raycastTargets` / `meshes` are ordered surfaces.
+    for (let i = object.children.length - 1; i >= 0; i--) {
+      const child = object.children[i]
+      const owner = child.userData?.[SCENE3D_GLB_EXTRAS_ENTITY_ID] as string | undefined
+      if (owner !== undefined && owner !== entityId) continue
+      stack.push(child)
+    }
+  }
+}
+
+/**
  * Replace every material in the entity's subtree with clay, resolving colour
  * per material ROLE so recolouring a car's body paint leaves its tyres alone.
  *
@@ -414,7 +485,7 @@ function applyClayMaterials(
     bindingByRole.set(binding.role, { color: binding.color, roughness: binding.roughness })
   }
 
-  root.traverse((object) => {
+  traverseOwned(root, entity.id, (object) => {
     const mesh = object as THREE.Mesh
     if (!mesh.isMesh) return
     const source = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material

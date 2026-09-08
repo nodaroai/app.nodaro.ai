@@ -14,6 +14,23 @@
  *     slot would apply the ancestors again on `updateMatrixWorld`. The world
  *     branch converts through `inverse(parentWorld)` exactly once. That is why
  *     the contract makes `space` a REQUIRED, declared field.
+ *
+ *     `parentWorld` is the TRUE world matrix of the wrapper's parent at this
+ *     frame — every ancestor's baked, possibly animated, placement included.
+ *     That is what makes `world` mean the SCENE's axes: the declared channels
+ *     replace the wrapper's world position/rotation/scale, so a rotated or
+ *     scaled ancestor changes where the entity ends up but never what the
+ *     numbers mean. `local` is the other half of the same statement — the
+ *     wrapper's own slot, which is the parent entity's frame with its baked
+ *     placement already in it.
+ *
+ *     Under an animated ancestor the wrapper value is therefore a DIFFERENT
+ *     matrix on every frame, and deliberately so: `world` names a point in the
+ *     scene, not a displacement that rides along. What it is not is unbakeable
+ *     — the authoring source stores the declared world channels and the
+ *     compiler re-derives the same per-frame matrix from its own ancestor
+ *     chain (`overlays.py`), which is why the entity stays PARENTED in the
+ *     rebuild instead of being flattened to a scene-level one.
  *  2. **The baked bytes are never edited.** An override composes onto the
  *     entity WRAPPER; the mounted GLB subtree keeps whatever the exporter baked
  *     into it, so two revisions can share the same immutable asset and differ
@@ -133,6 +150,7 @@ const _position = new THREE.Vector3()
 const _quaternion = new THREE.Quaternion()
 const _scale = new THREE.Vector3()
 const _euler = new THREE.Euler()
+const _recomposed = new THREE.Matrix4()
 
 /**
  * Write the entity's base transform, composed with its override, into `node`.
@@ -141,8 +159,9 @@ const _euler = new THREE.Euler()
  * only the channels it names — an edit that moved an object must not also reset
  * its rotation.
  *
- * `parentWorld` is the world matrix of `node`'s parent, already up to date. The
- * world-space branch is the only consumer, and it uses it exactly once.
+ * `parentWorld` is the world matrix of `node`'s parent, already up to date —
+ * the REAL one, ancestors' baked transforms included. The world-space branch is
+ * the only consumer, and it uses it exactly once.
  */
 export function applyEntityTransformOverride(
   node: THREE.Object3D,
@@ -177,8 +196,8 @@ export function applyEntityTransformOverride(
     return
   }
 
-  // World space. Start from where the entity WOULD be, replace the named
-  // channels there, then divide the parent out exactly once so
+  // World space. Start from where the entity WOULD be IN THE SCENE, replace the
+  // named channels there, then divide the parent out exactly once so
   // `updateMatrixWorld` puts it back — never twice.
   _base.compose(base.position, base.quaternion, base.scale)
   if (parentWorld) _base.premultiply(parentWorld)
@@ -197,6 +216,27 @@ export function applyEntityTransformOverride(
     _target.premultiply(_parentInverse)
   }
   _target.decompose(node.position, node.quaternion, node.scale)
+  // An ancestor carrying NON-UNIFORM scale under a rotation can make
+  // `inverse(parentWorld) · target` a matrix no position/rotation/scale triple
+  // describes. `decompose` answers anyway, dropping the shear — a scene subtly
+  // unlike the edit, drawn without complaint, and one the authoring source
+  // could not store either. Refuse it here, where the values are still exact.
+  _recomposed.compose(node.position, node.quaternion, node.scale)
+  check(
+    closeEnough(_recomposed, _target),
+    "SCENE_OVERRIDE_INVALID",
+    "this world-space edit shears the entity — its parent's non-uniform scale and rotation " +
+      "leave no position/rotation/scale that draws it, and approximating one would move it",
+    override.entityId,
+  )
+}
+
+/** Same 1e-6 relative tolerance the authoring source's decomposability gate uses. */
+function closeEnough(a: THREE.Matrix4, b: THREE.Matrix4): boolean {
+  for (let i = 0; i < 16; i++) {
+    if (Math.abs(a.elements[i] - b.elements[i]) > 1e-6 * Math.max(1, Math.abs(b.elements[i]))) return false
+  }
+  return true
 }
 
 const _aimFrom = new THREE.Vector3()

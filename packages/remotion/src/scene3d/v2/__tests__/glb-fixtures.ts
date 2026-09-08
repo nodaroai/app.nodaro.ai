@@ -22,6 +22,8 @@ export interface GlbNodeSpec {
   materialName?: string
   /** Bake a translation track for this node into the named clip. */
   animateTranslation?: { clip: string; times: number[]; values: Array<[number, number, number]> }
+  /** Bake a rotation track (xyzw quaternions) for this node into the named clip. */
+  animateRotation?: { clip: string; times: number[]; values: Array<[number, number, number, number]> }
 }
 
 export interface MakeGlbOptions {
@@ -118,8 +120,10 @@ export function makeGlb(options: MakeGlbOptions): ArrayBuffer {
     { channels: Array<Record<string, unknown>>; samplers: Array<Record<string, unknown>> }
   >()
   for (const entry of flat) {
-    const track = entry.spec.animateTranslation
-    if (!track) continue
+    const tracks: Array<{ path: "translation" | "rotation"; type: "VEC3" | "VEC4"; spec: { clip: string; times: number[]; values: number[][] } }> = []
+    if (entry.spec.animateTranslation) tracks.push({ path: "translation", type: "VEC3", spec: entry.spec.animateTranslation })
+    if (entry.spec.animateRotation) tracks.push({ path: "rotation", type: "VEC4", spec: entry.spec.animateRotation })
+    for (const { path, type, spec: track } of tracks) {
     const clip = animationsByClip.get(track.clip) ?? { channels: [], samplers: [] }
     animationsByClip.set(track.clip, clip)
 
@@ -149,12 +153,13 @@ export function makeGlb(options: MakeGlbOptions): ArrayBuffer {
       byteOffset: 0,
       componentType: 5126,
       count: track.values.length,
-      type: "VEC3",
+      type,
     })
 
     const samplerIndex = clip.samplers.length
     clip.samplers.push({ input: inputAccessor, output: outputAccessor, interpolation: "LINEAR" })
-    clip.channels.push({ sampler: samplerIndex, target: { node: entry.index, path: "translation" } })
+    clip.channels.push({ sampler: samplerIndex, target: { node: entry.index, path } })
+    }
   }
 
   // ── json chunk ──────────────────────────────────────────────────────────

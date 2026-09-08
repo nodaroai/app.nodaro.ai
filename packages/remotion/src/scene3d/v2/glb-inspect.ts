@@ -27,10 +27,18 @@
  * is NOT a unique key; the ROOT is identified by node name (`visual.rootNodeId`)
  * and the extras id CONFIRMS ownership.
  *
- * The trust boundary that remains: a node whose id differs from the root that
- * contains it is a foreign root smuggled into an authorized subtree, and two
- * DISJOINT regions carrying the same id would let unowned geometry and
- * materials into an entity. Both are rejected.
+ * A node whose NEAREST tagged ancestor carries a DIFFERENT id is a nested
+ * entity root, not a smuggled one: the exporter parents a child entity's root
+ * to its parent entity's root, and that containment IS the child's transform
+ * frame — the parent's baked, possibly animated, transform is inherited through
+ * it. Such a node is a root of its own, `parentEntityId` records what contains
+ * it, and its subtree stops belonging to the enclosing entity, so neither the
+ * geometry nor the materials of a child leak into its parent's authorized set.
+ * The loader then requires the PLAN to declare the same parent, which is what
+ * keeps "nested" from meaning "anything may sit anywhere".
+ *
+ * The trust boundary that remains: two DISJOINT regions carrying the same id
+ * would let unowned geometry and materials into an entity. That is rejected.
  */
 import * as THREE from "three"
 import { check, fail } from "./errors"
@@ -142,6 +150,11 @@ export interface GlbEntityRoot {
   readonly triangleCount: number
   /** Does the entity root carry a non-identity static local transform? */
   readonly hasStaticLocalTransform: boolean
+  /**
+   * The entity whose root CONTAINS this one, or `null` for a scene-level root.
+   * The plan must declare exactly this parent — see `bindEntitiesToAssets`.
+   */
+  readonly parentEntityId: string | null
 }
 
 export interface GlbInspection {
@@ -577,10 +590,12 @@ export function inspectGlb(
   //
   // The id is an OWNERSHIP marker, not a unique key: a real export tags the
   // root and every mesh it owns with the same id, and the glTF exporter's own
-  // `.001` regrouping nodes inherit it. A node is therefore a ROOT iff it
-  // carries an id and no ANCESTOR carries the same one — checking only the
-  // parent would split `box → hinge(untagged) → door(box)` into two roots and
-  // then reject the file as reuse.
+  // `.001` regrouping nodes inherit it. A node is therefore a ROOT iff its
+  // NEAREST TAGGED ancestor carries a different id (a nested root) or there is
+  // none (a scene-level root). Reading the nearest TAGGED ancestor rather than
+  // the immediate parent is what keeps `box → hinge(untagged) → door(box)` one
+  // entity; reading it rather than "any ancestor with this id" is what makes a
+  // child entity parented into `box` its own root instead of box's geometry.
   const entityIdOf = (index: number): string | undefined => {
     const raw = nodes[index].extras?.[SCENE3D_GLB_EXTRAS_ENTITY_ID]
     if (raw === undefined) return undefined
@@ -597,18 +612,21 @@ export function inspectGlb(
   const rootNameByEntityId = new Map<string, string>()
   const materials = json.materials ?? []
 
+  /** The id of the nearest TAGGED ancestor, or undefined at the top. */
+  const enclosingEntityOf = (index: number): string | undefined => {
+    for (let cursor = parentOf[index]; cursor !== -1; cursor = parentOf[cursor]) {
+      const id = entityIdOf(cursor)
+      if (id !== undefined) return id
+    }
+    return undefined
+  }
+
   for (let i = 0; i < nodes.length; i++) {
     const entityId = entityIdOf(i)
     if (entityId === undefined) continue
 
-    let ancestorOwns = false
-    for (let cursor = parentOf[i]; cursor !== -1; cursor = parentOf[cursor]) {
-      if (entityIdOf(cursor) === entityId) {
-        ancestorOwns = true
-        break
-      }
-    }
-    if (ancestorOwns) continue // an owned mesh / regrouping node, not a root
+    const enclosing = enclosingEntityOf(i)
+    if (enclosing === entityId) continue // an owned mesh / regrouping node, not a root
 
     check(
       visited[i] === 1,
@@ -635,15 +653,6 @@ export function inspectGlb(
     const walk: number[] = [i]
     while (walk.length > 0) {
       const index = walk.pop() as number
-      // A descendant tagged with a DIFFERENT id is a foreign root smuggled
-      // into an authorized subtree. Same id (or none) is the normal case.
-      const descendantId = entityIdOf(index)
-      check(
-        descendantId === undefined || descendantId === entityId,
-        "SCENE_ASSET_BINDING",
-        `node "${nodeNames[index]}" inside entity root "${entityId}" claims a different entity ("${String(descendantId)}"); entity roots must not be nested`,
-        subject,
-      )
       subtree.push(index)
       subtreeNames.push(nodeNames[index])
       const node = nodes[index]
@@ -655,7 +664,13 @@ export function inspectGlb(
           if (name) materialNames.add(name)
         }
       }
-      for (const child of node.children ?? []) walk.push(child)
+      // A child tagged with a DIFFERENT id is a nested entity root: it owns
+      // itself, so this entity's geometry, materials and node names stop here.
+      for (const child of node.children ?? []) {
+        const childId = entityIdOf(child)
+        if (childId !== undefined && childId !== entityId) continue
+        walk.push(child)
+      }
     }
 
     entityRootsByNodeName.set(nodeNames[i], {
@@ -668,6 +683,7 @@ export function inspectGlb(
       meshNodeCount: subMeshNodes,
       triangleCount: subTriangles,
       hasStaticLocalTransform: hasStaticTransform(nodes[i]),
+      parentEntityId: enclosing ?? null,
     })
   }
 
