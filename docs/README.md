@@ -25,6 +25,7 @@ REST-first; the included visual editor is one of many possible clients.
 - **Embed a published Nodaro MiniApp in an external UI** (Lovable / v0 / Bolt) → [Embed App Guide](./embed-app-guide.md)
 - **Embed the 3D scene previsualization viewport in my own app** (stateless iframe, postMessage, no auth) → [Scene3D Preview Embed](./scene3d-embed.md)
 - **Script Character Studio (REST / SDK / CLI / MCP)** → [Character Platform](./character-platform.md)
+- **Read and write a studio production from a script or an agent** (the shots, the plan, the generations — the same production that opens in the studio editor; Cloud) → [Studio Productions API](./api/studio-productions.md) → [over MCP](./mcp/studio-productions.md)
 - **Browse & clone the shared community library** (admin-curated characters / locations / objects; Business + Cloud) → [Community Library](./community-library.md)
 - **Build a workflow by describing it** (in-app chat that edits your canvas; Cloud) → [Workflow Copilot](./features/workflow-copilot.md)
 - **Free credits on a new account** (what the signup grant is, and when activation asks for a card; Cloud) → [Free credits](./features/free-credits.md)
