@@ -769,13 +769,20 @@ export async function normalizeVideoForCombine(
   outputPath: string,
   targetWidth: number,
   targetHeight: number,
+  // The ONE frame rate every clip in a set is conformed to — the frame-index
+  // trims and the smart-cut matcher need it uniform. combine-videos tallies it
+  // from the sources (pickTargetFps) so two 30 fps clips stay 30 fps; the
+  // fixed 24 this used to be resampled them, dropping one frame in five
+  // (job 597dcf72, 2026-09-08). 24 stays the default for callers that never
+  // pass one, so their output is byte-for-byte what it was.
+  targetFps: number = 24,
 ): Promise<string> {
   // Output dimensions must be even for yuv420p.
   const w = targetWidth - (targetWidth % 2)
   const h = targetHeight - (targetHeight % 2)
   await runFfmpeg([
     "-y", "-i", inputPath,
-    "-vf", `fps=24,scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1`,
+    "-vf", `fps=${targetFps},scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1`,
     "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "fast", "-crf", COMBINE_DELIVERY_CRF,
     "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2",
     "-movflags", "+faststart",
