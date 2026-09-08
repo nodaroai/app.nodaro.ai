@@ -528,6 +528,13 @@ fields while preserving protected frame and job state. The revision is checked
 inside the compare-and-swap loop; a stale draft returns HTTP 409 even without
 an outer `strict` flag. Retain the local draft when handling that conflict.
 
+When `operations.revisionedSharing` is available, use
+`POST /v1/studio/productions/:id/share` with `{ shared, expectedVersion }` to
+change link sharing at the reviewed workflow revision. The route separately
+checks permission to change visibility. If another edit wins before the write,
+it returns HTTP 409 `workflow_conflict` without rebasing the sharing decision.
+Use `shared: false` on the same route for revision-checked unsharing.
+
 For a linked segment, `POST /v1/studio/productions/:id/generate` with
 `kind: "clip"`, `shotId` and `dryRun: true` verifies both accepted endpoints and
 returns an estimate for the normalized clip settings. Its `inputHash` covers

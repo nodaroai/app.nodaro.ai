@@ -7,6 +7,24 @@ function fixture(body: unknown = { data: {} }) {
   return { client, fetch, request: () => fetch.mock.calls[0] as [string, RequestInit] }
 }
 describe("Studio production transport", () => {
+  it.each([true, false])("sends sharing=%s through the audience route with the reviewed revision", async (shared) => {
+    const f = fixture()
+    await f.client.studio.setShared("film/id", { shared, expectedVersion: 8 })
+    expect(f.request()[0]).toBe("https://api.test/v1/studio/productions/film%2Fid/share")
+    expect(f.request()[1].method).toBe("POST")
+    expect(JSON.parse(f.request()[1].body as string)).toEqual({ shared, expectedVersion: 8 })
+    expect(f.fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it("does not retry sharing over a revision conflict", async () => {
+    const f = fixture()
+    f.fetch.mockImplementationOnce(() => Promise.resolve({ ok: false, status: 409,
+      json: async () => ({ error: { code: "workflow_conflict", message: "Reload before sharing" } }) } as Response))
+    await expect(f.client.studio.setShared("film", { shared: true, expectedVersion: 8 }))
+      .rejects.toMatchObject({ code: "workflow_conflict" })
+    expect(f.fetch).toHaveBeenCalledTimes(1)
+  })
+
   it("saves an editor draft with an explicit revision and strict conflict handling", async () => {
     const f = fixture(), graph = { nodes: [], edges: [], settings: { studio: { version: 3, shots: [] } } }
     await f.client.studio.saveEditorState("film/id", { expectedVersion: 8, graph, clientRequestId: "draft-1" })

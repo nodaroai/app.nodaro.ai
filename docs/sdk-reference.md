@@ -887,6 +887,7 @@ plugin returns the usual 404. These methods preserve the API response envelope.
 | `create({ name?, plan? })` | Create a production |
 | `edit(id, { ops, baseVersion?, strict?, clientRequestId? })` | Apply semantic operations with revision conditions |
 | `saveEditorState(id, { expectedVersion, graph, clientRequestId? })` | Save ordinary editor fields against the loaded revision; preserve protected frame and job state |
+| `setShared(id, { shared, expectedVersion? })` | Change link sharing through the visibility-authorized route |
 | `generateKeyframe(id, { keyframeId, expectedRevision, clientRequestId?, overrides? })` | Generate a planned frame without accepting it |
 | `generateShot(id, input)` | Submit or quote a still/clip request |
 | `reconcile(id)` | Record completed jobs without accepting candidates |
@@ -906,6 +907,11 @@ HTTP 409; keep the local draft and reload before resolving the conflict. The
 snapshot cannot change frame plans, acceptance, endpoint bindings, linked-job
 history, protected recycle-bin entries or sharing. Use their dedicated semantic
 actions instead.
+
+Check `capabilities.operations.revisionedSharing` and pass `expectedVersion` to
+`setShared` to bind sharing or unsharing to the reviewed revision. A concurrent
+edit returns HTTP 409 `workflow_conflict`; the SDK does not retry against the
+new revision. Only callers allowed to change visibility can use this route.
 
 Frame generation has no dry-run option. `generateShot` accepts `dryRun` for a
 quote. Both use an explicit `clientRequestId` for safe caller retries. A generated
