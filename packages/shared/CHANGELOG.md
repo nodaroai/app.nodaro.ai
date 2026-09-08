@@ -1,5 +1,12 @@
 # @nodaro/shared
 
+## 3.5.0
+
+### Minor Changes
+
+- 6cf8565: Allow Scene3D v2 anchors to bind to an owned GLB node using node-local coordinates. The shared reader validates ownership and resolves animated world positions while preserving existing entity-local anchors.
+- 0fc9fee: Image Overlay layer kinds: the shared wire contract for text (bundled fonts, weight, size as % of the base, outline, background box), QR and shape layers (eleven flat shapes with one geometry shared by the editor and the server), plus image finishing effects (circle mask, feather, stroke, glow), and platform presets with safe areas and per-device zones (the YouTube banner's TV / desktop / all-devices viewports).
+
 ## 3.4.0
 
 ### Minor Changes
