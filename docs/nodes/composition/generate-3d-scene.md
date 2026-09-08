@@ -74,6 +74,8 @@ The total is **scene authoring + optional video analysis + optional MP4 export**
 
 ## Using the exported motion guide
 
+Scene3D v2 revisions record their clay lighting preset. `clay-studio-v2` adds ground and object shadows with the same lighting in interactive previews and MP4 exports. `clay-studio-v1` retains its original appearance; Basic scenes are unchanged. The scene's authoring engine selects the preset when it creates a revision, so an older saved revision is not silently upgraded.
+
 Use the rendered MP4 as a video reference on a model that accepts video references. Also connect the original appearance images to that final generation node; the clay render supplies blocking and camera motion, while those images supply the desired appearance. To compare guided and unguided results, keep the prompt, appearance images, model and generation settings identical; add only the clay video and the instruction identifying it as the motion/layout guide.
 
 Both nodes support [prompt pre/post text](../../prompt-pre-post-text.md). The canvas applies those affixes when it submits the instruction.

@@ -251,7 +251,7 @@ export const SCENE3D_PRIMITIVE_MATERIAL_ROLE = "identity"
 
 /** The standardized clay look, pinned by id. Browser preview, critic stills and
  *  the final export must implement a given preset identically. */
-export const SCENE3D_CLAY_LIGHTING_PRESETS = ["clay-studio-v1"] as const
+export const SCENE3D_CLAY_LIGHTING_PRESETS = ["clay-studio-v1", "clay-studio-v2"] as const
 export type Scene3DClayLightingPreset = (typeof SCENE3D_CLAY_LIGHTING_PRESETS)[number]
 
 // ---------------------------------------------------------------------------

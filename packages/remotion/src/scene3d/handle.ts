@@ -23,6 +23,8 @@ export function raycastVisibleSceneObjects(raycaster: THREE.Raycaster, targets: 
 export interface Scene3DRenderHandle {
   readonly scene: THREE.Scene
   readonly camera: THREE.PerspectiveCamera
+  /** Enabled by a lighting preset, with identical settings in preview and export. */
+  readonly shadowMapEnabled?: boolean
   /** One representative mesh per selectable id (kept for v1 callers). */
   readonly meshes: Map<string, THREE.Mesh>
   /**

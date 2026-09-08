@@ -20,6 +20,7 @@ const state = vi.hoisted(() => ({
 vi.mock("three", async (original) => ({
   ...(await original<typeof import("three")>()),
   WebGLRenderer: class {
+    shadowMap = { enabled: false, type: 0 }
     domElement: HTMLCanvasElement
     outputColorSpace = ""
     constructor({ canvas }: { canvas: HTMLCanvasElement }) {
@@ -32,7 +33,7 @@ vi.mock("three", async (original) => ({
       this.domElement.height = height
     }
     render() {
-      state.draw()
+      state.draw(this.shadowMap.enabled)
     }
     dispose() {
       state.dispose()
@@ -278,6 +279,15 @@ describe("v2 readiness gating", () => {
 })
 
 describe("v1 plans still take the synchronous path", () => {
+  it("turns off shadow mapping when a shadowed v2 scene is replaced by Basic", async () => {
+    const { plan, resolver } = makeLoadableScene({ glb: CAR, objects: [CAR_ENTITY] })
+    const shadowed = { ...plan, lighting: { ...plan.lighting, preset: "clay-studio-v2" as const } }
+    const { rerender } = render(<Scene3DCanvas plan={shadowed} frame={0} assetResolver={resolver} />)
+    await until(() => expect(state.draw).toHaveBeenLastCalledWith(true))
+    rerender(<Scene3DCanvas plan={makePlan()} frame={0} />)
+    expect(state.draw).toHaveBeenLastCalledWith(false)
+  })
+
   it("draws immediately with no resolver and no awaiting", () => {
     const onFirstDraw = vi.fn()
     render(<Scene3DCanvas plan={makePlan()} frame={0} onFirstDraw={onFirstDraw} />)

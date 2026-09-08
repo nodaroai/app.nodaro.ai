@@ -255,6 +255,8 @@ export function Scene3DCanvas({
       }
       handle.setSelected(selectedObjectIds ?? [])
       handle.applyFrame(frame)
+      renderer.shadowMap.enabled = handle.shadowMapEnabled ?? false
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap
       renderer.render(handle.scene, handle.camera)
     } catch (err) {
       fail(`Failed to draw the 3D scene: ${describeError(err)}`)
