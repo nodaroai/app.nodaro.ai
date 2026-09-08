@@ -1,5 +1,17 @@
 # @nodaro/sdk
 
+## 2.5.0
+
+### Minor Changes
+
+- 0fc9fee: Add `media.imageOverlay()` — place up to 4 image layers (logo, badge, cut-out) on a base image, pixel-exactly, via `POST /v1/image-overlay`.
+
+### Patch Changes
+
+- Updated dependencies [6cf8565]
+- Updated dependencies [0fc9fee]
+  - @nodaro/shared@3.5.0
+
 ## 2.4.0
 
 ### Minor Changes

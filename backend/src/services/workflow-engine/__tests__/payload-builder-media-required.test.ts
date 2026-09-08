@@ -17,7 +17,7 @@ import type { SimpleNode, ResolvedInputs } from "../types.js"
 /** Measured on frontend/src/components/editor/workflow-editor/execute-node.ts
  *  @ origin/dev d7815542 with the window+regex in the last test below. Bump it
  *  ONLY together with a new table row or a justified PARITY_EXEMPT entry. */
-const FRONTEND_MEDIA_REFUSAL_COUNT = 79
+const FRONTEND_MEDIA_REFUSAL_COUNT = 81 // +2 image-overlay: base image (table row) + overlay layers (the case throws its own)
 
 const JOB = "job-media-required"
 const ctx = (n: SimpleNode) => ({ nodes: [n], edges: [], nodeStates: {} })
@@ -207,6 +207,7 @@ describe("required media inputs", () => {
       "face-swap",               // :5718 no face image / :5722 no video connected
       "generate-mask",           // :5739 no image connected
       "image-collage",           // :5907 need at least 2 image inputs
+      "image-overlay",           // no base image connected + no overlay image connected
       "combine-videos",          // :6002 need at least 2 video inputs
       "assemble-narrated-video", // :6034 need at least 1 video input
       "merge-video-audio",       // :6078 no video input / :6084 no audio input

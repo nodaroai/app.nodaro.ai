@@ -23,6 +23,8 @@ import { applyPromptAffixes } from "@nodaro/prompts"
 import { getUserMcpPreferences } from "../user-preferences.js"
 import { normalizeImageInput } from "../normalize.js"
 import { resolvePreset } from "../../presets/resolve-preset.js"
+import { OVERLAY_MAX_LAYERS } from "../../../providers/image/overlay-contract.js"
+import { OVERLAY_LAYER_KINDS, overlayTextStyleSchema, overlayQrStyleSchema, overlayShapeStyleSchema, overlayImageEffectsSchema, OVERLAY_PLATFORM_IDS, OVERLAY_MAX_VARIANTS } from "@nodaro/shared"
 
 // Used only as `description` hints in the schema below — the actual model
 // validation runs through `normalizeImageInput` which silently maps unknown
@@ -868,6 +870,132 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         label: "image collage",
         widgetKind: "image",
         widgetData: { prompt: `Collage of ${imageUrls.length} images`, model: "image-collage" },
+      })
+    },
+  )
+
+  // ── image_overlay ──
+  server.registerTool(
+    "image_overlay",
+    {
+      title: "Image Overlay",
+      description:
+        `Place 1–${OVERLAY_MAX_LAYERS} image layers (logo, badge, cut-out) on a base image, pixel-exactly — local, deterministic, no AI. ` +
+        "Layer placement is in PERCENT of the base image: anchor (9 positions), x/y offset (negative on a right/bottom anchor = inward), width (height follows the layer's aspect unless height is set), " +
+        "plus opacity, rotation, blend, shadow, rounded corners. Watermark example: anchor bottom-right, x -4, y -6, width 12. SVG logos rasterise crisp. Returns a job_id with the composited image.",
+      inputSchema: {
+        image_url: z.string().url().optional().describe("Base image URL."),
+        image_asset_id: z.string().optional().describe("Base image as a Nodaro image job id."),
+        layers: z
+          .array(
+            z.object({
+              kind: z.enum(OVERLAY_LAYER_KINDS).optional().describe("image (default, needs url/asset_id) | text | qr | shape."),
+              url: z.string().url().optional(),
+              asset_id: z.string().optional(),
+              text: overlayTextStyleSchema.optional().describe("For kind text: real typography from a bundled font (fontId inter|montserrat|space-grotesk|playfair-display|oswald|bebas-neue|anton|pacifico|rubik|heebo; rubik/heebo set Hebrew). fontSize is % of the base height."),
+              qr: overlayQrStyleSchema.optional().describe("For kind qr: the payload (text) — or fromInput: true to take it from the top-level qr_text; width% sizes the square."),
+              shape: overlayShapeStyleSchema.optional().describe("For kind shape: rect | rounded | pill | circle | ribbon | triangle | diamond | hexagon | star | burst | arrow at width% × height%."),
+              effects: overlayImageEffectsSchema.optional().describe("Image layers only: circle mask, feather, stroke, glow."),
+              anchor: z.enum(["top-left", "top", "top-right", "left", "center", "right", "bottom-left", "bottom", "bottom-right"]).optional(),
+              x: z.number().min(-100).max(100).optional(),
+              y: z.number().min(-100).max(100).optional(),
+              width: z.number().min(1).max(100).optional(),
+              height: z.number().min(1).max(100).optional(),
+              opacity: z.number().min(0).max(1).optional(),
+              rotation: z.number().min(-180).max(180).optional(),
+              blend: z.enum(["over", "multiply", "screen"]).optional(),
+              fit: z.enum(["contain", "cover", "stretch"]).optional(),
+              shadow: z
+                .object({
+                  blur: z.number().min(0).max(200),
+                  offset_x: z.number().min(-200).max(200),
+                  offset_y: z.number().min(-200).max(200),
+                  color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+                  opacity: z.number().min(0).max(1),
+                })
+                .optional(),
+              rounded_corners: z.number().int().min(0).max(500).optional(),
+              z_index: z.number().int().min(0).max(100).optional(),
+            }),
+          )
+          .min(1)
+          .max(OVERLAY_MAX_LAYERS)
+          .describe("1–12 layers, each { url } or { asset_id } plus placement (defaults: center, 25% wide, opaque). Array order = stacking order unless z_index is set."),
+        canvas: z
+          .object({
+            width: z.number().int().min(16).max(8192),
+            height: z.number().int().min(16).max(8192),
+            background_color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+          })
+          .optional()
+          .describe("Optional output canvas (base placed into it with base_fit). Omit to keep the base's pixel size."),
+        base_fit: z.enum(["contain", "cover"]).optional(),
+        output_format: z.enum(["png", "jpg", "webp"]).optional().describe("Default png (keeps transparency)."),
+        variants: z.array(z.enum(OVERLAY_PLATFORM_IDS)).max(OVERLAY_MAX_VARIANTS).optional().describe("Also render the composite into these platform sizes (e.g. youtube-thumbnail, instagram-story, linkedin-company); each is priced on top of the base (see the node docs). Returned in the job's output variants[]."),
+        qr_text: z.string().max(2000).optional().describe("Fills every QR layer whose qr.fromInput is true (the node's QR link handle)."),
+        mask_mode: z.enum(["none", "layers", "around", "outside"]).optional().describe("The mask the job also emits as output maskUrl (white = may change). Default around — a ring for an AI finish."),
+        mask_spread: z.number().int().min(1).max(400).optional().describe("Ring width in px for mask_mode around (default 48)."),
+      },
+      outputSchema: JOB_OUTPUT_SCHEMA,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v4/job-image",
+        ui: { resourceUri: "ui://nodaro/widget/v4/job-image", visibility: ["model", "app"] },
+      },
+    },
+    async (args) => {
+      const imageUrl =
+        args.image_url ??
+        (args.image_asset_id
+          ? await resolveAssetId({ assetId: args.image_asset_id, userId: session.userId, expectedKind: "image" })
+          : null)
+      if (!imageUrl) {
+        return { content: [{ type: "text" as const, text: "Provide the base image as image_url or image_asset_id." }], isError: true }
+      }
+      const layers: Record<string, unknown>[] = []
+      for (const l of args.layers) {
+        const kind = l.kind ?? "image"
+        const url =
+          kind !== "image"
+            ? undefined
+            : (l.url ??
+              (l.asset_id ? await resolveAssetId({ assetId: l.asset_id, userId: session.userId, expectedKind: "image" }) : null))
+        if (kind === "image" && !url) {
+          return { content: [{ type: "text" as const, text: "Each image layer must have either a url or an asset_id." }], isError: true }
+        }
+        const { url: _u, asset_id: _a, shadow, rounded_corners, z_index, ...placement } = l
+        layers.push({
+          ...Object.fromEntries(Object.entries(placement).filter(([, v]) => v !== undefined)),
+          kind,
+          ...(url ? { imageUrl: url } : {}),
+          ...(shadow
+            ? { shadow: { blur: shadow.blur, offsetX: shadow.offset_x, offsetY: shadow.offset_y, color: shadow.color, opacity: shadow.opacity } }
+            : {}),
+          ...(rounded_corners !== undefined ? { roundedCorners: rounded_corners } : {}),
+          ...(z_index !== undefined ? { zIndex: z_index } : {}),
+        })
+      }
+      const payload: Record<string, unknown> = {
+        imageUrl,
+        layers,
+        ...(args.canvas
+          ? { canvas: { width: args.canvas.width, height: args.canvas.height, ...(args.canvas.background_color ? { backgroundColor: args.canvas.background_color } : {}) } }
+          : {}),
+        ...(args.base_fit ? { baseFit: args.base_fit } : {}),
+        ...(args.output_format ? { outputFormat: args.output_format } : {}),
+        ...(args.variants?.length ? { variants: args.variants } : {}),
+        ...(args.qr_text ? { qrText: args.qr_text } : {}),
+        ...(args.mask_mode ? { maskMode: args.mask_mode } : {}),
+        ...(args.mask_spread !== undefined ? { maskSpread: args.mask_spread } : {}),
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      return dispatchJob(fastify, session, {
+        url: "/v1/image-overlay",
+        payload,
+        label: "image overlay",
+        widgetKind: "image",
+        widgetData: { prompt: `Overlay of ${layers.length} layer(s)`, model: "image-overlay" },
       })
     },
   )

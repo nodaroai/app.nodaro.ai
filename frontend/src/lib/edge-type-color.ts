@@ -17,7 +17,7 @@ import { HANDLE_COLORS, type HandleColorType } from "./handle-colors"
 import { HANDLE_OUTPUT_TYPES } from "./handle-output-types"
 import { getPickerOutputMeta, PICKER_FAMILY_TYPES } from "./picker-handles"
 import { TEXT_PRODUCER_TYPES, IMAGE_PRODUCER_TYPES } from "./generate-image-handles"
-import { VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES } from "@nodaro/shared"
+import { VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, overlayVariantIdFromHandle } from "@nodaro/shared"
 
 /**
  * Resolve the canonical `HandleColorType` of a source handle's output — the
@@ -34,6 +34,8 @@ export function getEdgeType(
   if (picker) return PICKER_FAMILY_TYPES[picker.family]
   const byHandle = sourceHandle ? HANDLE_OUTPUT_TYPES[sourceNodeType]?.[sourceHandle] : undefined
   if (byHandle) return byHandle
+  // Dynamic per-platform pips of image-overlay (variant:<platformId>) — all images.
+  if (sourceNodeType === "image-overlay" && overlayVariantIdFromHandle(sourceHandle)) return "image"
   if (TEXT_PRODUCER_TYPES.has(sourceNodeType)) return "text"
   if (IMAGE_PRODUCER_TYPES.has(sourceNodeType)) return "image"
   if (VIDEO_PRODUCER_TYPES.has(sourceNodeType)) return "video"

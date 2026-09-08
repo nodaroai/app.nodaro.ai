@@ -1,4 +1,5 @@
 import { ANALYZABLE_PICKER_TYPES } from "@nodaro/prompts"
+import { OVERLAY_HANDLE_IDS } from "@/types/nodes"
 import { GENERATE_IMAGE_INPUT_HANDLES, IDENTITY_TYPES, isValidGenerateImageConnection } from "./generate-image-handles"
 import { GENERATE_VIDEO_INPUT_HANDLES, isValidGenerateVideoConnection } from "./generate-video-handles"
 import { GENERATE_VIDEO_PRO_INPUT_HANDLES, isValidGenerateVideoProConnection } from "./generate-video-pro-handles"
@@ -28,6 +29,7 @@ import {
   isValidGenerateMaskConnection,
   isValidPaintMaskConnection,
   isValidImageCollageConnection,
+  isValidImageOverlayConnection,
   isValidUpscaleImageConnection,
   isValidRemoveBackgroundConnection,
   isValidFaceSwapConnection,
@@ -600,6 +602,11 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   ],
   "image-collage": [
     { handleId: "in", label: IMAGE_PRODUCER_HANDLE_LABELS["image-collage"].in, accepts: (s) => isValidImageCollageConnection("in", s) },
+  ],
+  "image-overlay": [
+    { handleId: "image", label: IMAGE_PRODUCER_HANDLE_LABELS["image-overlay"].image, accepts: (s) => isValidImageOverlayConnection("image", s) },
+    ...OVERLAY_HANDLE_IDS.map((h) => ({ handleId: h, label: IMAGE_PRODUCER_HANDLE_LABELS["image-overlay"][h], accepts: (s: string) => isValidImageOverlayConnection(h, s) })),
+    { handleId: "qrText", label: IMAGE_PRODUCER_HANDLE_LABELS["image-overlay"].qrText, accepts: (s) => isValidImageOverlayConnection("qrText", s) },
   ],
   "upscale-image": [
     { handleId: "image", label: IMAGE_PRODUCER_HANDLE_LABELS["upscale-image"].image, accepts: (s) => isValidUpscaleImageConnection("image", s) },

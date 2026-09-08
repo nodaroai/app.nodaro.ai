@@ -18,6 +18,7 @@
  */
 import { VIDEO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared"
 import { TEXT_PRODUCER_TYPES, IMAGE_PRODUCER_TYPES, IDENTITY_TYPES } from "./generate-image-handles"
+import { OVERLAY_HANDLE_IDS } from "@/types/nodes"
 
 const ACCEPTS_IMAGE_OR_DYN = (s: string): boolean =>
   IMAGE_PRODUCER_TYPES.has(s) || DYNAMIC_PRODUCER_TYPES.has(s)
@@ -142,6 +143,21 @@ export function isValidImageCollageConnection(
   }
 }
 
+// ─── image-overlay ─────────────────────────────────────────────────────
+// Base image on `image`; up to twelve layers on `overlay`..`overlay12` — every
+// handle takes one image producer (or a dynamic source). Output: image.
+export function isValidImageOverlayConnection(
+  targetHandleId: string,
+  sourceType: string,
+): boolean {
+  if (targetHandleId === "image" || (OVERLAY_HANDLE_IDS as readonly string[]).includes(targetHandleId)) {
+    return ACCEPTS_IMAGE_OR_DYN(sourceType)
+  }
+  // The QR link handle takes text (a Text node, a List column, any text output).
+  if (targetHandleId === "qrText") return ACCEPTS_TEXT_OR_DYN(sourceType)
+  return false
+}
+
 // ─── upscale-image ─────────────────────────────────────────────────────
 // Single image input. Source: image (renamed from `out`).
 export function isValidUpscaleImageConnection(
@@ -225,6 +241,8 @@ export const IMAGE_PRODUCER_HANDLE_LABELS: Record<string, Record<string, string>
   "generate-mask":     { image: "Image" },
   "paint-mask":        { image: "Image", mask: "Mask seed" },
   "image-collage":     { in: "Image" },
+  // qrText: the QR link handle (text) — rendered only while a QR layer reads its link from the workflow.
+  "image-overlay":     { image: "Base", ...Object.fromEntries(OVERLAY_HANDLE_IDS.map((h, i) => [h, `Layer ${i + 1}`])), qrText: "QR link" },
   "upscale-image":     { image: "Image" },
   "remove-background": { image: "Image" },
   "face-swap":         { face: "Face", video: "Video" },

@@ -155,6 +155,12 @@ function checkEntities(plan: Scene3DPlanV2, byId: Map<string, Scene3DEntityV2>, 
 
     const anchorNames = new Set<string>()
     ;(entity.anchors ?? []).forEach((anchor, anchorIndex) => {
+      if (anchor.nodeName !== undefined && entity.visual.kind !== "asset") {
+        issues.push({
+          path: at("anchors", anchorIndex, "nodeName"),
+          message: `entity "${entity.id}" can bind anchor nodes only with an asset visual`,
+        })
+      }
       if (anchorNames.has(anchor.name)) {
         issues.push({
           path: at("anchors", anchorIndex, "name"),

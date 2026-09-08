@@ -13,6 +13,7 @@ import type {
 import { extractSourceNodeOutput, extractSourceNodeOutputAsList, extractSavedNodeOutput, extractAllGeneratedResults, extractVideoDurationFromNode, getPrimaryOutput, ANALYSIS_PRODUCER_TYPES } from "./output-extractor.js"
 import { extractGeneratedJsonAsList, splitGeneratedItems, resolveNodeRefs, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, SOCIAL_POST_NODE_TYPES, PARAMETER_NODE_TYPES, getParameterValue, FAN_OUT_EACH_TYPES, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, extractReferencedLabels, canonicalVarName, REFERENCE_HANDLE_MAP, parseGroupHandle, SUNO_TRACK_SOURCE_TYPES } from "@nodaro/shared"
 import { isSourceNode } from "./execution-graph.js"
+import { overlayHandleIndex } from "../../providers/image/overlay-contract.js"
 import { buildNodeRefMap } from "./payload-builder.js"
 import { IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./inline-executor.js"
 
@@ -1213,6 +1214,33 @@ function routeOutput(
     return
   }
 
+  // --- Image Overlay: routed by HANDLE, never by source type or accumulation.
+  // "image" is the base; "overlay".."overlay12" are the layers, index-aligned
+  // with data.layers[] (overlay → 0, overlay2 → 1, …). A wire on an unknown /
+  // missing handle falls back to the base slot only when it is still empty,
+  // so an API-authored edge without a targetHandle still produces a run.
+  if (targetType === "image-overlay") {
+    const handle = edge.targetHandle ?? ""
+    // The QR link handle carries TEXT (a Text node, a List column, any text
+    // output) — it never lands in an image slot.
+    if (handle === "qrText") {
+      inputs.overlayQrText = output
+      return
+    }
+    const idx = overlayHandleIndex(handle)
+    if (idx >= 0) {
+      const next = [...(inputs.overlayImageUrls ?? [])]
+      next[idx] = output
+      inputs.overlayImageUrls = next
+      return
+    }
+    if (handle === "image" || !inputs.imageUrl) {
+      inputs.imageUrl = output
+      return
+    }
+    return
+  }
+
   if (targetType === "image-collage") {
     inputs.imageUrls = [...(inputs.imageUrls ?? []), output]
     // Lockstep sibling of imageUrls — the payload builder aligns the node's
@@ -1717,6 +1745,18 @@ function routeOutput(
       inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
     } else if (targetType === "text-to-audio") {
       inputs.prompt = (src.data.prompt as string) ?? ""
+    } else {
+      inputs.imageUrl = output
+    }
+    return
+  }
+
+  // --- Compositors (image-overlay, image-collage) → image output (like generate-image).
+  // `output` already carries the handle's file: the composite, its mask, or a
+  // platform render (variant:<platformId>) — see getPrimaryOutput.
+  if (srcType === "image-overlay" || srcType === "image-collage") {
+    if (targetType === "generate-image" || targetType === "reference-board" || targetType === "video-to-video" || targetType === "switchx") {
+      inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
     } else {
       inputs.imageUrl = output
     }

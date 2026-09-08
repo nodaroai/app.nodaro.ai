@@ -3840,6 +3840,76 @@ long to fit its image is ellipsized. Badges never change the layout, the
 output size, or the credit cost. Poll
 `jobs.get(jobId)` for the finished image.
 
+#### `imageOverlay(input)`
+
+```ts
+imageOverlay(input: {
+  imageUrl: string
+  layers: Array<{
+    imageUrl: string
+    anchor?: "top-left" | "top" | "top-right" | "left" | "center" | "right" | "bottom-left" | "bottom" | "bottom-right"
+    x?: number
+    y?: number
+    width?: number
+    height?: number
+    opacity?: number
+    rotation?: number
+    blend?: "over" | "multiply" | "screen"
+    fit?: "contain" | "cover" | "stretch"
+    shadow?: { blur: number; offsetX: number; offsetY: number; color: string; opacity: number }
+    roundedCorners?: number
+    zIndex?: number
+    kind?: "image" | "text" | "qr" | "shape"
+    text?: OverlayTextStyle
+    qr?: OverlayQrStyle
+    shape?: OverlayShapeStyle
+    effects?: OverlayImageEffects
+  }>
+  canvas?: { width: number; height: number; backgroundColor?: string }
+  baseFit?: "contain" | "cover"
+  outputFormat?: "png" | "jpg" | "webp"
+  variants?: string[]
+  maskMode?: "none" | "layers" | "around" | "outside"
+  maskSpread?: number
+  qrText?: string
+}): Promise<{ jobId: string }>
+```
+
+Place 1–12 layers on a base image, pixel-exactly (`POST /v1/image-overlay`) —
+a local, deterministic composite, no AI model. A layer is a picture
+(`kind: "image"`, default — `imageUrl`), real text (`kind: "text"` with a
+`text` object: content, `fontId`, `fontWeight`, `fontSize` as % of the base
+height, colour, align, outline, background box), a QR code (`kind: "qr"`,
+`qr: { text }`) or a flat shape (`kind: "shape"`, `shape: { shape, color }`). Every layer position and size is a **percentage of the base
+image**, so the same call works on a 1K preview and a 4K render: `anchor`
+(nine positions, default `"center"`), `x`/`y` (offset from the anchor in %
+of the base width/height — on a right/bottom anchor a negative value moves
+the layer inward), `width` (% of the base width, default 25; the height
+follows the layer's aspect ratio unless `height` is set, in which case
+`fit` decides how the source fills the box). `opacity` is 0..1,
+`rotation` is in degrees around the layer's centre, `blend` is `"over"`
+(default), `"multiply"` or `"screen"`; `shadow` adds a blurred silhouette
+under the layer and `roundedCorners` a px radius. SVG layers are rasterised
+crisp at the target size. The output keeps the base image's pixel size
+unless `canvas` is set (the base is then placed into it with `baseFit`).
+`outputFormat` is `"png"` (default, keeps transparency), `"jpg"` or
+`"webp"`. Watermark example: `{ anchor: "bottom-right", x: -4, y: -6,
+width: 12, opacity: 0.95 }`. Poll `jobs.get(jobId)` for the finished image;
+its `output.imageUrl` is the composite (`output.width` / `output.height` its
+pixel size), `output.maskUrl` the mask and `output.variants[]` the extra
+platform renders (`{ id, label, width, height, url }` — any of the 12 platform
+ids in `variants`, all at once if you like; 2 credits per platform on top of
+the 10-credit base). A QR layer may set
+`qr.fromInput: true` and take its payload from the top-level `qrText` (in a
+workflow that is the node's QR link handle — a List column yields one code per
+row); a run with the flag set and no `qrText` is refused with a 400 naming it.
+
+A raw sibling route without an SDK method yet: `POST
+/v1/image-overlay/suggest-placement` `{ imageUrl, layerAspect?, intent?,
+safeArea? }` asks a vision model where one layer should go and answers
+`{ jobId, placement: { anchor, x, y, width, reason } }` in the same percent
+units — billed as one Describe Image call, applied by you.
+
 #### `videoMetadata(input)`
 
 ```ts

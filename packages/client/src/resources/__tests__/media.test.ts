@@ -95,6 +95,22 @@ describe("media resource", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/trim-audio")
   })
 
+  it("imageOverlay() POSTs /v1/image-overlay with the base + percent-placed layers and returns { jobId }", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j5" }))
+    const c = make(fetchMock)
+    const body = {
+      imageUrl: "https://x/base.png",
+      layers: [{ imageUrl: "https://x/logo.svg", anchor: "bottom-right" as const, x: -4, y: -6, width: 12, opacity: 0.95 }],
+      outputFormat: "png" as const,
+    }
+    const out = await c.media.imageOverlay(body)
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/image-overlay")
+    const init = fetchMock.mock.calls[0][1] as { method: string; body: string }
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body)).toEqual(body)
+    expect(out.jobId).toBe("j5")
+  })
+
   it("imageCollage() POSTs /v1/image-collage with per-image size hints and returns { jobId }", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j4" }))
     const c = make(fetchMock)

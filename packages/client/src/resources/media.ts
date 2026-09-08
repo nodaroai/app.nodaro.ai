@@ -136,6 +136,57 @@ export class MediaResource {
   }
 
   /**
+   * Place 1–12 layers — pictures, real text, QR codes, shapes — on a base image,
+   * pixel-exactly (`POST /v1/image-overlay`) — local, deterministic, no AI.
+   * Every layer position/size is a PERCENT of the base image: `anchor` (nine
+   * positions, default `"center"`), `x`/`y` (offset from the anchor in % of
+   * the base width/height; negative on a right/bottom anchor moves inward),
+   * `width` (% of the base width, default 25 — height follows the layer's
+   * aspect unless `height` is set). Plus `opacity` (0..1), `rotation`
+   * (degrees), `blend` (`"over"` | `"multiply"` | `"screen"`), `fit`,
+   * `shadow` and `roundedCorners`. The output keeps the base's pixel size
+   * unless `canvas` is set. Flat credit cost. Poll `jobs.get(jobId)` for the
+   * finished image.
+   */
+  imageOverlay(input: {
+    imageUrl: string
+    layers: Array<{
+      imageUrl: string
+      anchor?: "top-left" | "top" | "top-right" | "left" | "center" | "right" | "bottom-left" | "bottom" | "bottom-right"
+      x?: number
+      y?: number
+      width?: number
+      height?: number
+      opacity?: number
+      rotation?: number
+      blend?: "over" | "multiply" | "screen"
+      fit?: "contain" | "cover" | "stretch"
+      shadow?: { blur: number; offsetX: number; offsetY: number; color: string; opacity: number }
+      roundedCorners?: number
+      zIndex?: number
+      /** "image" (default, needs imageUrl) | "text" | "qr" | "shape" — see @nodaro/shared image-overlay-layers. */
+      kind?: "image" | "text" | "qr" | "shape"
+      text?: Record<string, unknown>
+      qr?: Record<string, unknown>
+      shape?: Record<string, unknown>
+      effects?: Record<string, unknown>
+    }>
+    canvas?: { width: number; height: number; backgroundColor?: string }
+    baseFit?: "contain" | "cover"
+    outputFormat?: "png" | "jpg" | "webp"
+    /** Extra platform renders (see OVERLAY_PLATFORMS in @nodaro/shared); returned as output `variants[]`. */
+    variants?: string[]
+    /** The mask the job also emits as output `maskUrl` (white = may change). Default "around". */
+    maskMode?: "none" | "layers" | "around" | "outside"
+    maskSpread?: number
+    /** Fills every QR layer whose `qr.fromInput` is true — the node's QR link handle. */
+    qrText?: string
+  }): Promise<{ jobId: string }> {
+    // The finished job's output: { imageUrl, width, height, maskUrl?, variants?: [{ id, label, width, height, url }] }.
+    return this.client.request<{ jobId: string }>("POST", "/v1/image-overlay", { body: input })
+  }
+
+  /**
    * Trim a video to a range (`POST /v1/trim-video`). Give the range in whichever
    * unit fits: `startTime`/`endTime` seconds, `trim*Frames`, `trim*Seconds`, or
    * `keepFirst`/`keepLastSeconds`. Poll `jobs.get(jobId)`.

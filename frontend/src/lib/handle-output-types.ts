@@ -69,6 +69,7 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   "generate-video-pro": { video: "video" },
   // generative-pipeline is terminal (no output handle) — see its node-def test.
   "image-collage": { image: "image" },
+  "image-overlay": { image: "image", mask: "mask" },
   "image-critic": { approved: "approve", rejected: "negative" },
   "image-to-image": { image: "image" },
   "image-to-text": { text: "text" },

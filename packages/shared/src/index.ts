@@ -1004,6 +1004,9 @@ export * from "./audio-fx-presets.js"
 
 // --- Remotion renderer: supported font names (shared with backend Zod validation) ---
 export * from "./supported-fonts.js"
+export * from "./image-overlay-layers.js"
+export * from "./image-overlay-shapes.js"
+export * from "./image-overlay-platforms.js"
 // --- Shot-sequence visual elements (text/shape/image; shared with backend Zod validation) ---
 export type { ShotElement, ShotTextElement, ShotShapeElement, ShotImageElement } from "./shot-element.js"
 // --- Entity image-handle parity (entity `image` source handle → plain image) ---

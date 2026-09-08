@@ -107,6 +107,7 @@ import { DescribeToPickerNode } from "./describe-to-picker-node";
 import { LLMChatNode } from "./llm-chat-node";
 import { CombineVideosNode } from "./combine-videos-node";
 import { ImageCollageNode } from "./image-collage-node";
+import { ImageOverlayNode } from "./image-overlay-node";
 import { AssembleNarratedVideoNode } from "./assemble-narrated-video-node";
 import { MergeVideoAudioNode } from "./merge-video-audio-node";
 import { AddCaptionsNode } from "./add-captions-node";
@@ -310,6 +311,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   // Processing
   "combine-videos": CombineVideosNode,
   "image-collage": ImageCollageNode,
+  "image-overlay": ImageOverlayNode,
   "assemble-narrated-video": AssembleNarratedVideoNode,
   "merge-video-audio": MergeVideoAudioNode,
   "add-captions": AddCaptionsNode,

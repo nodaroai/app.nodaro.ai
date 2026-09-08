@@ -1,5 +1,5 @@
 import type { SceneNodeType } from "@/types/nodes"
-import { NODE_DEF_MAP } from "@/types/nodes"
+import { NODE_DEF_MAP, OVERLAY_HANDLE_IDS } from "@/types/nodes"
 import type { XYPosition } from "@xyflow/react"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "./parameter-picker-types"
 import { IDENTITY_TYPES, IMAGE_PRODUCER_TYPES, TEXT_PRODUCER_TYPES } from "./generate-image-handles"
@@ -174,6 +174,9 @@ export const TYPED_HANDLE_IDS: ReadonlySet<string> = new Set([
   // `mask` is edit/modify/i2i; `cinematography` is edit/modify/i2i;
   // `face` is face-swap. The `video` id above also covers face-swap.
   "image", "mask", "cinematography", "face",
+  // Image Overlay layer handles (the base rides the `image` id above) and its
+  // QR link text handle (shown only while a QR layer reads its link from the workflow).
+  ...OVERLAY_HANDLE_IDS, "qrText",
   // Identity-node handles (Phase 23). `in` already covered above; `type`
   // is object-node-specific (accepts identity-type pickers); `assets` is the
   // character node's element/asset-injection input (text producers + pickers).

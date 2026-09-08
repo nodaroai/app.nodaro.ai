@@ -123,6 +123,7 @@ export const SCENE3D_V2_LIMITS = {
   maxIdLength: SCENE3D_LIMITS.maxIdLength,
   maxAssetIdLength: 128,
   maxNodeIdLength: 128,
+  maxNodeNameLength: 256,
   maxNameLength: SCENE3D_LIMITS.maxNameLength,
   maxLabelLength: SCENE3D_LIMITS.maxNameLength,
   maxMaterialNameLength: 120,
@@ -257,13 +258,17 @@ export type Scene3DClayLightingPreset = (typeof SCENE3D_CLAY_LIGHTING_PRESETS)[n
 // Types
 // ---------------------------------------------------------------------------
 
-/** A stable contact/selection location in entity-local space. Names are free
+/** A stable contact/selection location in entity-local space, or in the local
+ *  space of an explicitly bound GLB node. Names are free
  *  structural labels (`face`, `seat`, `wheel.frontLeft`, `roof`, `lookAt`) —
  *  human anatomy is never required. */
 export interface Scene3DAnchor {
   name: string
   position: Vec3
-  /** Euler XYZ radians. Absent = identity orientation. */
+  /** Owned raw GLB node name. When present, position/rotation use that node's
+   *  local coordinates and follow its animation. Only asset visuals bind nodes. */
+  nodeName?: string
+  /** Euler XYZ radians in the same space as position. Absent = identity. */
   rotation?: Vec3
 }
 
@@ -447,6 +452,10 @@ export const scene3DNodeIdSchema = z
   .max(SCENE3D_V2_LIMITS.maxNodeIdLength)
   .regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]*$/, "node id must be an exporter-generated stable id")
 
+/** Subparts retain raw GLB names, including separators that a root ID forbids. */
+export const scene3DNodeNameSchema = z.string().min(1).max(SCENE3D_V2_LIMITS.maxNodeNameLength)
+  .regex(/^[^\u0000-\u001f\u007f]+$/, "node name must not contain control characters")
+
 export const scene3DSha256Schema = z
   .string()
   .regex(/^[0-9a-f]{64}$/, "sha256 must be 64 lowercase hex characters")
@@ -492,6 +501,7 @@ export const scene3DAnchorSchema = z
   .object({
     name: scene3DAnchorNameSchema,
     position: vec3Schema,
+    nodeName: scene3DNodeNameSchema.optional(),
     rotation: rotationVec3Schema.optional(),
   })
   .strict()

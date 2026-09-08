@@ -1,4 +1,4 @@
-import { estimateLoopVideoCredits, estimateTrimVideoCredits, estimateCombineVideosCredits, assembleNarratedVideoCredits, type LoopVideoEstimatorInput, type TrimVideoEstimatorInput, type CombineVideosEstimatorInput } from "@nodaro/shared"
+import { estimateLoopVideoCredits, estimateTrimVideoCredits, estimateCombineVideosCredits, assembleNarratedVideoCredits, type LoopVideoEstimatorInput, type TrimVideoEstimatorInput, type CombineVideosEstimatorInput, imageOverlayCredits, overlayVariantIdFromHandle } from "@nodaro/shared"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import {
   getUpstreamDuration,
@@ -37,6 +37,16 @@ export function useEstimatedCredits(node: WorkflowNode): number {
           (e) => e.target === node.id && e.targetHandle === "video",
         ).length
         return assembleNarratedVideoCredits(Math.max(1, wiredCount))
+      }
+      case "image-overlay": {
+        // Base + 2 per extra platform render — ticked ones plus any platform a
+        // wire leaves through (mirrors payload-builder's union).
+        const ticked = Array.isArray(data.variants) ? (data.variants as unknown[]) : []
+        const wired = s.edges
+          .filter((e) => e.source === node.id)
+          .map((e) => overlayVariantIdFromHandle(e.sourceHandle))
+          .filter((id): id is string => !!id)
+        return imageOverlayCredits([...ticked, ...wired])
       }
       default:
         return 0

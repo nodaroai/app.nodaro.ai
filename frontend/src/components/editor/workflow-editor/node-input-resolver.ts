@@ -15,7 +15,7 @@ import type {
   GeneratedResult,
   LoopNodeData,
 } from "@/types/nodes";
-import { loopColInputHandle } from "@/types/nodes";
+import { loopColInputHandle, OVERLAY_HANDLE_IDS } from "@/types/nodes";
 import { extractNodeOutput, IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE, computeGroupBuckets, computeCollectBuckets } from "./execution-graph";
 import { FAN_IN_NODE_TYPES } from "./types";
 import { TEXT_PRODUCER_TYPES, IDENTITY_TYPES } from "@/lib/generate-image-handles";
@@ -611,6 +611,12 @@ export interface FrontendResolvedInputs {
    *  (imageSizeBySource) into the wire's index-aligned imageSizes array.
    *  Mirrors videoUrlsWithSourceIds / backend ResolvedInputs. */
   imageUrlsWithSourceIds?: Array<{ nodeId: string; url: string }>;
+  /** Image Overlay: overlay image URLs keyed by HANDLE index — overlay → [0],
+   *  overlay2 → [1], … overlay12 → [11]. Sparse when a middle handle is unwired.
+   *  Mirrors backend ResolvedInputs.overlayImageUrls. */
+  overlayImageUrls?: (string | undefined)[];
+  /** Text wired into an image-overlay node's "qrText" handle. Mirrors backend ResolvedInputs.overlayQrText. */
+  overlayQrText?: string;
   audioUrl?: string;
   audioUrl2?: string;
   audioUrls?: string[];
@@ -1362,6 +1368,28 @@ export function resolveNodeInputs(
     // is an image producer (connection-validation gate), so `output` is an
     // image URL here regardless of source type. MUST precede reference-sheet /
     // source-type routing so the accumulation wins.
+    // Image Overlay routes by HANDLE, never by source type: "image" is the
+    // base, "overlay".."overlay12" are the layers (index-aligned with
+    // data.layers[]). An edge without a known handle fills the base slot only
+    // while it is empty. Mirrors backend input-resolver.ts.
+    if (node.type === "image-overlay") {
+      const handle = srcEdge?.targetHandle ?? "";
+      // The QR link handle carries text — never an image slot.
+      if (handle === "qrText") {
+        inputs.overlayQrText = output;
+        continue;
+      }
+      const idx = (OVERLAY_HANDLE_IDS as readonly string[]).indexOf(handle);
+      if (idx >= 0) {
+        const next = [...(inputs.overlayImageUrls ?? [])];
+        next[idx] = output;
+        inputs.overlayImageUrls = next;
+      } else if (handle === "image" || !inputs.imageUrl) {
+        inputs.imageUrl = output;
+      }
+      continue;
+    }
+
     if (node.type === "image-collage") {
       inputs.imageUrls = [...(inputs.imageUrls ?? []), output];
       inputs.imageUrlsWithSourceIds = [
@@ -2062,6 +2090,24 @@ export function resolveNodeInputs(
           ...(inputs.referenceImageUrls ?? []),
           output,
         ];
+      } else if (node.type === "manual-edit") {
+        appendManualEditAsset(inputs, src.id, output, "image");
+      } else {
+        inputs.imageUrl = output;
+      }
+    } else if (src.type === "image-overlay" || src.type === "image-collage") {
+      // Compositors route like generate-image. `output` already carries the
+      // handle's file — composite, mask, or a platform render
+      // (variant:<platformId>) — via extractNodeOutput. Mirrors the backend.
+      if (
+        node.type === "generate-image" ||
+        node.type === "reference-board" ||
+        (node.type as string) === "edit-image" ||
+        (node.type as string) === "image-to-image" ||
+        node.type === "modify-image" ||
+        node.type === "video-to-video"
+      ) {
+        inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output];
       } else if (node.type === "manual-edit") {
         appendManualEditAsset(inputs, src.id, output, "image");
       } else {

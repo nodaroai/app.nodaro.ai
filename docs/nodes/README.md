@@ -38,7 +38,7 @@ the foot of the list.
 |---|---|
 | **Add Your Own** | Upload Image |
 | **Create** | Generate Image |
-| **Edit & Retouch** | Modify Image · Upscale Image · Remove Background · Generate Mask · Paint Mask · Image Collage · Extract Frame |
+| **Edit & Retouch** | Modify Image · Upscale Image · Remove Background · Generate Mask · Paint Mask · Image Collage · Image Overlay · Extract Frame |
 | **References** | Reference Sheet · Reference Board |
 | **Understand** | Describe Image · Describe to Picker · Image Critic |
 
@@ -384,6 +384,7 @@ FFmpeg-based video manipulation.
 | [Trim Video](./processing-video/trim-video.md) | Cut video to start/end times | Extract specific sections from longer video |
 | [Extract Frame](./processing-video/extract-frame.md) | Pull a single still frame as a PNG | Capture last frame for i2v chaining, thumbnails, or reference stills |
 | [Image Collage](./processing-video/image-collage.md) | Composite N images into one 2K/4K image | Tile a batch of images into a smart (justified) or grid collage — mood boards, contact sheets, social grids |
+| [Image Overlay](./processing-video/image-overlay.md) | Place up to 12 image layers on a base image, pixel-exactly, with a draggable live preview | Logos, watermarks, badges, cut-outs and stickers placed by anchor + % offsets — banners, thumbnails, covers, before/after cards |
 | [Video Upscale](./processing-video/video-upscale.md) | Upscale resolution (Topaz, VEO) | Enhance video quality to 1080p, 4K, or 8K |
 | [Add Captions](./processing-video/add-captions.md) | Generate and overlay captions on video | Add subtitles, word-highlight, or karaoke-style captions |
 | [Adjust Speed](./processing-video/speed-ramp.md) | Change playback speed (0.25x-4x) | Create slow motion or time-lapse effects |

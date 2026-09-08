@@ -55,6 +55,9 @@ import { textToSpeechRoutes } from "./routes/text-to-speech.js"
 import { generateScriptRoutes } from "./routes/generate-script.js"
 import { combineVideosRoutes } from "./routes/combine-videos.js"
 import { imageCollageRoutes } from "./routes/image-collage.js"
+import { imageOverlayRoutes } from "./routes/image-overlay.js"
+import { fontRoutes } from "./routes/fonts.js"
+import { imageOverlayPlacementRoutes } from "./routes/image-overlay-placement.js"
 import { assembleNarratedVideoRoutes } from "./routes/assemble-narrated-video.js"
 import { referenceSheetRoutes } from "./routes/reference-sheet.js"
 import { referenceBoardRoutes } from "./routes/reference-board.js"
@@ -478,6 +481,9 @@ export async function buildApp() {
   await app.register(generateScriptRoutes)
   await app.register(combineVideosRoutes)
   await app.register(imageCollageRoutes)
+  await app.register(imageOverlayRoutes)
+  await app.register(fontRoutes)
+  await app.register(imageOverlayPlacementRoutes)
   await app.register(assembleNarratedVideoRoutes)
   await app.register(referenceSheetRoutes)
   await app.register(referenceBoardRoutes)

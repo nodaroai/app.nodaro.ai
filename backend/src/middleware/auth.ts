@@ -179,6 +179,8 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean }[] = [
   // stays authed (it reads req.userId).
   { method: "GET", path: "/v1/billing/surface" },
   { path: "/v1/image-proxy" },
+  // Bundled overlay fonts for the canvas preview — static, immutable, no user data.
+  { method: "GET", path: "/v1/fonts", prefix: true },
   { path: "/v1/credits/model-cost" },
   { path: "/v1/credits/model-costs" },
   { path: "/v1/download-video/progress", prefix: true },

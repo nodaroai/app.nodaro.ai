@@ -16,6 +16,9 @@ export interface NodeOutput {
   /** generate-mask second output — the generated mask PNG. Routed to the "mask"
    *  source handle by getPrimaryOutput (the "image" handle returns imageUrl). */
   maskUrl?: string
+  /** image-overlay's extra platform renders — one per "export also for"
+   *  platform, routed to the `variant:<platformId>` source handles. */
+  variants?: ReadonlyArray<{ id: string; label?: string; url: string; width?: number; height?: number }>
   videoUrl?: string
   audioUrl?: string
   /** Multi-variant URLs from a single job. Primary at index 0. Singular
@@ -274,6 +277,12 @@ export interface ResolvedInputs {
    *  the wire's index-aligned imageSizes array. Mirrors
    *  videoUrlsWithSourceIds; pushed in lockstep with imageUrls. */
   imageUrlsWithSourceIds?: Array<{ nodeId: string; url: string }>
+  /** Image Overlay: overlay image URLs keyed by HANDLE index — overlay → [0],
+   *  overlay2 → [1], … overlay12 → [11]. Sparse when a middle handle is unwired;
+   *  the payload builder skips the holes and aligns data.layers[i] by index. */
+  overlayImageUrls?: (string | undefined)[]
+  /** Text wired into an image-overlay node's "qrText" handle (fills its fromInput QR layers). */
+  overlayQrText?: string
 
   audioUrl?: string
   audioUrl2?: string

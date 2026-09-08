@@ -1,8 +1,10 @@
 import { toast } from "sonner";
-import { assertCanvasExecutionAllowed, scene3DInputAssetsForEngine } from "@nodaro/shared";
+import { DEFAULT_OVERLAY_LAYER, OVERLAY_MAX_LAYERS } from "@/types/nodes";
+import { assertCanvasExecutionAllowed, scene3DInputAssetsForEngine, overlayVariantIdFromHandle } from "@nodaro/shared";
 import { findUpstreamSunoIds } from "@/lib/suno-ids";
 import { llmAdvancedParams } from "@/lib/llm-advanced-params"
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
+import { overlayCompositionKey } from "@/lib/image-overlay-platform";
 import {
   generateMusicApi,
   textToAudioApi,
@@ -57,6 +59,7 @@ import {
   generateMotionGraphics,
   mergeVideoAudioApi,
   imageCollageApi,
+  imageOverlayApi,
   assembleNarratedVideo,
   trimAudioApi,
   splitMediaApi,
@@ -168,6 +171,7 @@ import type {
   CombineVideosData,
   AssembleNarratedVideoData,
   ImageCollageData,
+  ImageOverlayData,
   MergeVideoAudioData,
   TrimAudioData,
   SplitMediaData,
@@ -6163,6 +6167,77 @@ function executeNodeCore(
           reject(err);
         });
     });
+  }
+
+  if (node.type === "image-overlay") {
+    const overlayData = node.data as ImageOverlayData;
+    const baseUrl = inputs.imageUrl;
+    if (!baseUrl) {
+      toast.error(`Node "${overlayData.label}": no base image connected (image handle)`);
+      return Promise.reject(new Error("Image Overlay needs a base image"));
+    }
+    // Wire URLs are keyed by HANDLE index (overlay → 0 … overlay12 → 11) and the
+    // settings live on data.layers[i]; a connected handle with no settings
+    // runs with the default layer, a settings entry with no wire is skipped.
+    // Mirrors backend payload-builder.ts case "image-overlay".
+    const dataLayers = Array.isArray(overlayData.layers) ? overlayData.layers : [];
+    const wired = inputs.overlayImageUrls ?? [];
+    // Mirrors backend payload-builder.ts: a wired picture per handle, or a
+    // generated layer (text / qr / shape) carried whole from data.layers[i].
+    const slots = Math.min(OVERLAY_MAX_LAYERS, Math.max(wired.length, dataLayers.length));
+    const layers = Array.from({ length: slots }, (_, i) => i).flatMap((i) => {
+      const cfg = dataLayers[i];
+      if (cfg && cfg.kind && cfg.kind !== "image") return [{ ...DEFAULT_OVERLAY_LAYER, ...cfg }];
+      const url = wired[i];
+      return url ? [{ ...DEFAULT_OVERLAY_LAYER, ...(cfg ?? {}), kind: "image" as const, imageUrl: url }] : [];
+    });
+    if (layers.length === 0) {
+      toast.error(`Node "${overlayData.label}": no overlay image connected (overlay handles)`);
+      return Promise.reject(new Error("Image Overlay needs at least one overlay image"));
+    }
+    // Mirrors backend payload-builder.ts: a QR layer that reads its link from
+    // the QR link handle needs something wired there.
+    const qrText = (inputs.overlayQrText ?? "").trim();
+    if (layers.some((l) => l.kind === "qr" && l.qr?.fromInput) && !qrText) {
+      toast.error(`Node "${overlayData.label}": a QR layer reads its link from the QR link handle, but nothing is connected there`);
+      return Promise.reject(new Error("Image Overlay: QR link handle not connected"));
+    }
+    const wiredVariantIds = useWorkflowStore
+      .getState()
+      .edges.filter((e) => e.source === node.id)
+      .map((e) => overlayVariantIdFromHandle(e.sourceHandle))
+      .filter((id): id is string => !!id);
+    const overlayVariantIds = Array.from(new Set([...(Array.isArray(overlayData.variants) ? overlayData.variants : []), ...wiredVariantIds]));
+    setUserPromptTemplate(undefined);
+    return runProcessingNode(
+      node.id,
+      () =>
+        imageOverlayApi({
+          imageUrl: baseUrl,
+          layers,
+          qrText: qrText || undefined,
+          canvas: overlayData.canvas,
+          baseFit: overlayData.baseFit,
+          outputFormat: overlayData.outputFormat,
+          variants: overlayVariantIds,
+          maskMode: overlayData.maskMode,
+          maskSpread: overlayData.maskSpread,
+          userId: ctx.userId,
+        }),
+      "generatedImageUrl",
+      "Image Overlay",
+      ctx,
+      // The extra platform renders ride on the node so the result view can offer them.
+      (od) => ({
+        overlayVariants: Array.isArray(od.variants) ? od.variants : [],
+        generatedMaskUrl: typeof od.maskUrl === "string" ? od.maskUrl : undefined,
+        // The output size and the composition that produced it ride on the
+        // result so a later change (platform, a moved layer, new text) can tell
+        // this result is stale (overlayResultMatches) — also after a reload.
+        ...(typeof od.width === "number" && typeof od.height === "number" ? { width: od.width, height: od.height } : {}),
+        overlayComposition: overlayCompositionKey(overlayData),
+      }),
+    );
   }
 
   if (node.type === "image-collage") {

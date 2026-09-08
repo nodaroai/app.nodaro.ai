@@ -335,6 +335,15 @@ function bindEntitiesToAssets(
       }
     }
 
+    for (const anchor of entity.anchors ?? []) {
+      check(
+        anchor.nodeName === undefined || root.subtreeNodeNames.includes(anchor.nodeName),
+        "SCENE_ASSET_BINDING",
+        `anchor "${anchor.name}" names node "${anchor.nodeName}", which is not in this entity's asset root`,
+        entity.id,
+      )
+    }
+
     for (const binding of entity.materialBindings ?? []) {
       check(
         root.materialNames.includes(binding.materialName),

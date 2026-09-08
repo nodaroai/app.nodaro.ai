@@ -1,4 +1,4 @@
-import { assertCanvasExecutionAllowed } from "@nodaro/shared"
+import { assertCanvasExecutionAllowed, OVERLAY_MAX_VARIANTS, overlayVariantIdFromHandle } from "@nodaro/shared"
 import type { Scene3DReference } from "@nodaro/shared"
 import { scene3DInputAssetsForEngine, type Scene3DInputAsset } from "@nodaro/shared"
 /**
@@ -31,6 +31,7 @@ import { ltxCameraMotionFromUpstream } from "../../lib/ltx-camera-motion.js"
 import { buildSeedanceExtendCreditIdentifier } from "../../lib/seedance-extend-model.js"
 import { extractSavedNodeOutput, extractSourceNodeOutput, getPrimaryOutput } from "./output-extractor.js"
 import { IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES, isSourceNode } from "./execution-graph.js"
+import { OVERLAY_MAX_LAYERS } from "../../providers/image/overlay-contract.js"
 
 // ---------------------------------------------------------------------------
 // Character definitions + prompt template types (from workflow settings)
@@ -124,6 +125,7 @@ export const REQUIRED_MEDIA_INPUTS: Readonly<Record<string, RequiredMediaInput |
   "remove-background": { anyOf: ["imageUrl"], kind: "image", noun: "an image" },
   "generate-mask": { anyOf: ["imageUrl", "generatedImageUrl"], kind: "image", noun: "an image" },
   "image-collage": { anyOf: ["imageUrls", "imageUrlsWithSourceIds"], kind: "image", noun: "at least one image" },
+  "image-overlay": { anyOf: ["imageUrl"], kind: "image", noun: "a base image" },
   "slideshow": { anyOf: ["imageUrls"], kind: "image", noun: "at least one image" },
   // BOTH halves — the still AND the audio that sets the output length.
   "still-to-video": [
@@ -5386,6 +5388,69 @@ export function buildPayload(
         // single-node route uses the creditGuard computeCredits hook instead).
         `image-collage:${resolution}`,
       )
+    }
+
+    case "image-overlay": {
+      // Base image ← the "image" handle; overlay images ← the "overlay",
+      // "overlay2".."overlay12" handles (input-resolver keys them by handle id
+      // into overlayImageUrls[i]). Layer SETTINGS live on data.layers[i] —
+      // index-aligned with the handles — and a connected handle whose
+      // data.layers[i] is missing runs with the provider defaults. A layer
+      // reaches this node ONLY through a wire (mirrors execute-node.ts —
+      // an imageUrl written into data.layers[i] is ignored on both sides),
+      // and the count is capped BEFORE the credit reservation.
+      const dataLayers = Array.isArray(data.layers) ? (data.layers as Record<string, unknown>[]) : []
+      const wiredUrls = (resolvedInputs.overlayImageUrls ?? []).slice(0, OVERLAY_MAX_LAYERS)
+      const layers: Record<string, unknown>[] = []
+      // A slot is either a wired picture (kind "image", URL from its handle) or
+      // a generated layer (text / qr / shape) carried whole in data.layers[i].
+      const slots = Math.min(OVERLAY_MAX_LAYERS, Math.max(wiredUrls.length, dataLayers.length))
+      for (let i = 0; i < slots; i++) {
+        const { imageUrl: _ignored, ...cfg } = dataLayers[i] ?? {}
+        const kind = typeof cfg.kind === "string" ? cfg.kind : "image"
+        if (kind !== "image") {
+          layers.push({ ...cfg, kind })
+          continue
+        }
+        const imageUrl = wiredUrls[i]
+        if (!imageUrl) continue
+        layers.push({ ...cfg, kind: "image", imageUrl })
+      }
+      if (layers.length === 0) {
+        throw new Error("Image Overlay needs at least one layer (connect an image to a layer handle, or add a text / shape layer)")
+      }
+      // A QR layer that reads its link from the QR link handle needs something
+      // wired there — refuse BEFORE the reservation, with the fix in the message.
+      const tickedVariantIds = Array.isArray(data.variants) ? (data.variants as unknown[]).filter((v): v is string => typeof v === "string") : []
+      const wiredVariantIds = (buildCtx?.edges ?? [])
+        .filter((e) => e.source === node.id)
+        .map((e) => overlayVariantIdFromHandle(e.sourceHandle))
+        .filter((id): id is string => !!id)
+      const overlayVariantIds = Array.from(new Set([...tickedVariantIds, ...wiredVariantIds]))
+      const qrText = typeof resolvedInputs.overlayQrText === "string" ? resolvedInputs.overlayQrText.trim() : ""
+      const needsQrText = layers.some((l) => l.kind === "qr" && !!(l.qr as { fromInput?: boolean } | undefined)?.fromInput)
+      if (needsQrText && !qrText) {
+        throw new Error("Image Overlay: a QR layer reads its link from the QR link handle, but nothing is connected there")
+      }
+      return ffmpegResult("image-overlay", {
+        jobId,
+        imageUrl: resolvedInputs.imageUrl,
+        layers,
+        ...(qrText ? { qrText } : {}),
+        ...(data.canvas && typeof data.canvas === "object" ? { canvas: data.canvas } : {}),
+        ...(data.baseFit === "contain" || data.baseFit === "cover" ? { baseFit: data.baseFit } : {}),
+        ...(data.outputFormat === "png" || data.outputFormat === "jpg" || data.outputFormat === "webp"
+          ? { outputFormat: data.outputFormat }
+          : {}),
+        ...(data.maskMode === "none" || data.maskMode === "layers" || data.maskMode === "around" || data.maskMode === "outside" ? { maskMode: data.maskMode } : {}),
+        ...(typeof data.maskSpread === "number" ? { maskSpread: data.maskSpread } : {}),
+        // Extra platform renders: the ticked list PLUS every platform a wire
+        // actually leaves through (an edge written by MCP / import / template
+        // never passed the panel's tick handler). Unknown ids are dropped here
+        // (the provider drops them too).
+        ...(overlayVariantIds.length ? { variants: overlayVariantIds.slice(0, OVERLAY_MAX_VARIANTS) } : {}),
+        usageLogId,
+      })
     }
 
     case "merge-video-audio": {
