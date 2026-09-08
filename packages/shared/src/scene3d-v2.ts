@@ -314,6 +314,8 @@ export interface Scene3DEntityV2 {
   position?: Vec3
   rotation?: Vec3
   scale?: Vec3
+  /** Baked visibility before manual overlays. Absent means visible. */
+  visible?: boolean
   /** The selection/identity chip colour. Opaque hex, sRGB. */
   identityColor?: string
   anchors?: Scene3DAnchor[]
@@ -541,6 +543,7 @@ export const scene3DEntityV2Schema = z
     position: vec3Schema.optional(),
     rotation: rotationVec3Schema.optional(),
     scale: scaleVec3Schema.optional(),
+    visible: z.boolean().optional(),
     identityColor: scene3DColorSchema.optional(),
     anchors: z.array(scene3DAnchorSchema).max(SCENE3D_V2_LIMITS.maxAnchorsPerEntity).optional(),
     capabilities: z.array(scene3DEntityCapabilitySchema).max(SCENE3D_ENTITY_CAPABILITIES.length).optional(),

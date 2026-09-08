@@ -10,6 +10,16 @@
  */
 import type * as THREE from "three"
 
+/** Three raycasting ignores visibility, including hidden ancestors. Match drawing. */
+export function raycastVisibleSceneObjects(raycaster: THREE.Raycaster, targets: THREE.Object3D[]) {
+  return raycaster.intersectObjects(targets, true).filter(({ object }) => {
+    for (let node: THREE.Object3D | null = object; node; node = node.parent) {
+      if (!node.visible) return false
+    }
+    return true
+  })
+}
+
 export interface Scene3DRenderHandle {
   readonly scene: THREE.Scene
   readonly camera: THREE.PerspectiveCamera

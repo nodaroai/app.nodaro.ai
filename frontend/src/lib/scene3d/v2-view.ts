@@ -223,7 +223,7 @@ export function entityViews(
         entity.identityColor ??
         materials[0]?.color ??
         NEUTRAL_COLOR,
-      visible: visibility ?? true,
+      visible: visibility ?? entity.visible ?? true,
       transform,
       placementFromAsset: entity.visual.kind === "asset",
       transformOverridden: override !== undefined,

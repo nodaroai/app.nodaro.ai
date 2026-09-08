@@ -279,7 +279,7 @@ export function buildScene3DV2Scene(loaded: Scene3DLoadedScene): Scene3DV2SceneH
         parentWorld,
       )
       const visible = overlays.entityVisibility.get(entity.id)
-      node.wrapper.visible = visible ?? true
+      node.wrapper.visible = visible ?? entity.visible ?? true
       node.wrapper.updateMatrix()
       if (parentWorld) node.wrapper.matrixWorld.multiplyMatrices(parentWorld, node.wrapper.matrix)
       else node.wrapper.matrixWorld.copy(node.wrapper.matrix)

@@ -21,6 +21,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
 import * as THREE from "three"
 import type { Scene3DRenderHandle } from "./handle"
+import { raycastVisibleSceneObjects } from "./handle"
 import { buildScene3DScene } from "./scene-builder"
 import type { Scene3DPlan } from "@nodaro/shared"
 import type { Scene3DAssetResolver } from "./v2/asset-resolver"
@@ -289,7 +290,7 @@ export function Scene3DCanvas({
       // `true` (recursive) so a hit on any exported sub-mesh of a v2 entity
       // still resolves; `userData.objectId` maps it back to the SEMANTIC
       // entity rather than to the Blender mesh that happened to be in front.
-      const hits = raycaster.intersectObjects(handle.raycastTargets, true)
+      const hits = raycastVisibleSceneObjects(raycaster, handle.raycastTargets)
       const objectId = hits.length > 0 ? (hits[0].object.userData.objectId as string) : null
       onSelectObject(objectId ?? null)
     },
