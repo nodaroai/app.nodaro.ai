@@ -50,6 +50,7 @@ vi.mock("@/lib/supabase.js", () => ({
 }))
 
 vi.mock("@/ee/billing/credits.js", () => ({
+  PriceNotConfiguredError: class extends Error {},
   CreditsService: {
     checkCreditsWithProfile: mockCheckCreditsWithProfile,
     checkStorageLimitWithProfile: mockCheckStorageLimitWithProfile,
@@ -70,7 +71,7 @@ vi.mock("@/lib/app-settings.js", () => ({
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { creditGuard, reserveCreditsForJob } from "../credit-guard.js"
+import { creditGuard, reserveCreditsForJob, reserveCreditsForJobOnce } from "../credit-guard.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -278,5 +279,39 @@ describe("creditGuard with computeCredits", () => {
       0,
       expect.objectContaining({ creditOverride: 7 }),
     )
+  })
+})
+
+
+describe("resumable reservation adapter", () => {
+  beforeEach(() => { vi.clearAllMocks(); mockReserveCredits.mockReset(); mockHasCreditsRef.value = true })
+  function context() {
+    const req = { userId: "u1", url: "/v1/test-route", creditReservation: {
+      usageLogId: "", creditsReserved: 0, watermark: false, creditOverride: 7,
+    } } as unknown as Parameters<typeof reserveCreditsForJobOnce>[0]
+    const reply = { status: vi.fn().mockReturnThis(), send: vi.fn() } as unknown as Parameters<typeof reserveCreditsForJobOnce>[1]
+    return { req, reply }
+  }
+  it("uses the atomic option and skips the nontransactional job update", async () => {
+    const { req, reply } = context()
+    mockReserveCredits.mockResolvedValue({ usageLogId: "log-once", creditsReserved: 7, watermark: false })
+    await expect(reserveCreditsForJobOnce(req, reply, "job-once", "test-render")).resolves.toMatchObject({ usageLogId: "log-once" })
+    expect(mockReserveCredits).toHaveBeenCalledWith("u1", "job-once", "test-render", 0, 0, expect.objectContaining({ oncePerJob: true, creditOverride: 7 }))
+    expect(mockFrom).not.toHaveBeenCalled()
+    expect(req.creditReservation?.usageLogId).toBe("log-once")
+  })
+  it("keeps the job and possible hold intact after a lost reservation response", async () => {
+    const { req, reply } = context()
+    mockReserveCredits.mockRejectedValue(new Error("interrupted response"))
+    await reserveCreditsForJobOnce(req, reply, "job-once", "test-render")
+    expect(mockFrom).not.toHaveBeenCalled()
+    expect(reply.status).toHaveBeenCalledWith(500)
+    expect(reply.send).toHaveBeenCalledWith({ error: { code: "credit_reservation_failed", message: "Failed to reserve credits" } })
+  })
+  it("does not pretend an unconfigured host reserved credits", async () => {
+    mockHasCreditsRef.value = false
+    const { req, reply } = context(); await reserveCreditsForJobOnce(req, reply, "job-once", "test-render")
+    expect(reply.status).toHaveBeenCalledWith(503)
+    expect(mockReserveCredits).not.toHaveBeenCalled()
   })
 })

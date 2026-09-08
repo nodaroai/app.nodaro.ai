@@ -461,3 +461,27 @@ describe("the direct-RPC reserve lanes", () => {
     })
   })
 })
+
+
+describe("opt-in atomic job reservations", () => {
+  it.each([false, true])("adopts an atomic receipt without another ledger write (replayed=%s)", async (replayed) => {
+    mockRpc.mockResolvedValueOnce({ data: { usageLogId: "log-once", creditsReserved: 12, watermark: true, replayed }, error: null })
+    const result = await CreditsService.reserveCredits(REQUESTER, "job-once", "flux", 0, 0,
+      { oncePerJob: true, creditOverride: 12, watermarkOverride: true })
+    expect(mockRpc).toHaveBeenCalledWith("reserve_job_credits", expect.objectContaining({ p_job_id: "job-once", p_credits: 12, p_watermark: true }))
+    expect(result).toEqual({ usageLogId: "log-once", creditsReserved: 12, watermark: true })
+    expect(insertCalls).toHaveLength(0)
+    expect(mockAutoRecharge).toHaveBeenCalledTimes(replayed ? 0 : 1)
+  })
+  it("does not fall back to a second debit after an unconfirmed atomic RPC", async () => {
+    mockRpc.mockResolvedValueOnce({ data: null, error: { message: "connection interrupted" } })
+    await expect(CreditsService.reserveCredits(REQUESTER, "job-once", "flux", 0, 0, { oncePerJob: true, creditOverride: 12 })).rejects.toThrow()
+    expect(mockRpc).toHaveBeenCalledTimes(1)
+    expect(insertCalls).toHaveLength(0)
+  })
+  it("refuses a malformed atomic receipt without duplicating the ledger", async () => {
+    mockRpc.mockResolvedValueOnce({ data: { usageLogId: "log-once", creditsReserved: 11, watermark: true, replayed: true }, error: null })
+    await expect(CreditsService.reserveCredits(REQUESTER, "job-once", "flux", 0, 0, { oncePerJob: true, creditOverride: 12 })).rejects.toThrow(/could not be verified/)
+    expect(insertCalls).toHaveLength(0)
+  })
+})

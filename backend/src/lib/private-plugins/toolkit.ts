@@ -65,7 +65,7 @@ import { config } from "../config.js"
 import { redis } from "../queue.js"
 import { checkIsAdmin } from "../admin-check.js"
 import { videoQueue } from "../queue.js"
-import { creditGuard, reserveCreditsForJob } from "../../middleware/credit-guard.js"
+import { creditGuard, reserveCreditsForJob, reserveCreditsForJobOnce } from "../../middleware/credit-guard.js"
 import { safeUrlSchema, YOUTUBE_HOSTS, hostnameMatchesAllowlist } from "../url-validator.js"
 import { safeFetch } from "../safe-fetch.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../request-helpers.js"
@@ -1238,6 +1238,7 @@ export function buildToolkit(): PluginToolkit {
       videoQueue,
       creditGuard,
       reserveCreditsForJob,
+      reserveCreditsForJobOnce,
       applyCreditMarkup: async (modelIdentifier, baseCredits) => {
         if (!Number.isFinite(baseCredits) || baseCredits < 0) {
           throw new Error("Dynamic credit quote must be a finite non-negative number")

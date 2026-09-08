@@ -1164,6 +1164,11 @@ export interface PluginHttpToolkit {
     jobId: string,
     modelIdentifier: string,
   ): Promise<PluginCreditReservation | undefined>
+
+  /** Optional atomic job reservation with exact replay and transactional ledger. */
+  reserveCreditsForJobOnce?(
+    req: FastifyRequest, reply: FastifyReply, jobId: string, modelIdentifier: string,
+  ): Promise<PluginCreditReservation | undefined>;
   /** Mirrors `safeUrlSchema` (`lib/url-validator.ts`). */
   safeUrlSchema: ZodType<string>
   /** Mirrors `extractWorkflowId` (`lib/request-helpers.ts`). */
