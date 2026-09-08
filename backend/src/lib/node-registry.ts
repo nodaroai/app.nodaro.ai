@@ -976,7 +976,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     capabilities: ["dual-output-handles", "vlm-based"],
   },
 
-  { type: "combine-videos", label: "Combine Videos", category: "processing", description: "Concatenate multiple videos with transitions, audio handling, boundary trims, and smart cut.", outputType: "video", inputSchema: { fields: [
+  { type: "combine-videos", label: "Combine Videos", category: "processing", description: "Concatenate multiple videos with transitions, audio handling, boundary trims, and smart cut. Clips are conformed to their most common source frame rate (a tie goes to the higher); where smart cut finds a match it replaces the fixed boundary trims at that boundary.", outputType: "video", inputSchema: { fields: [
     { key: "videoUrls", type: "video-url-array", required: true },
     { key: "transition", type: "text" },
     { key: "transitionDuration", type: "number" },

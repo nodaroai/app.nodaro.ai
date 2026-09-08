@@ -1012,7 +1012,7 @@ describe("stripAudio", () => {
 // ===========================================================================
 
 describe("normalizeVideoForCombine", () => {
-  it("forces fps=24 + scale/pad to the target resolution + h264/yuv420p + AAC", async () => {
+  it("defaults to fps=24 when the caller passes no rate + scale/pad to the target resolution + h264/yuv420p + AAC", async () => {
     execFileOnce("")
 
     await normalizeVideoForCombine("/tmp/in.mp4", "/tmp/out.mp4", 1280, 720)
@@ -1026,6 +1026,19 @@ describe("normalizeVideoForCombine", () => {
     expect(args).toContain("libx264")
     expect(args).toContain("yuv420p")
     expect(args).toContain("aac")
+  })
+
+  it("conforms to the frame rate the caller tallied from the sources (combine-videos' pickTargetFps)", async () => {
+    // Regression (job 597dcf72, 2026-09-08): two 30 fps clips came back at
+    // 24 fps because this filter hardcoded fps=24 — one frame in five gone.
+    execFileOnce("")
+
+    await normalizeVideoForCombine("/tmp/in.mp4", "/tmp/out.mp4", 1280, 720, 30)
+
+    const args = execArgs()
+    const vfIdx = args.indexOf("-vf")
+    expect(args[vfIdx + 1]).toContain("fps=30,")
+    expect(args[vfIdx + 1]).not.toContain("fps=24")
   })
 
   it("encodes at the delivery CRF (18) — this is the encode the user receives on the cut path (job 08f99f85: the old CRF 23 halved the delivered bitrate)", async () => {

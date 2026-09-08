@@ -1,20 +1,16 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { scene3DV2EditOperationsSchema } from "@nodaro/shared"
 import { requireAppScope } from "../lib/scope-prehandler.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { rateLimiter } from "../middleware/rate-limit.js"
 import { editRetainedScene3D, Scene3DRetainedEditError } from "../services/scene3d/scene3d-retained-edit.js"
+import { retainedScene3DEditBodySchema } from "../services/scene3d/scene3d-retained-edit-schema.js"
 import { isScene3DArtifactError } from "../services/scene3d-artifacts/types.js"
 import type { Scene3DObjectStore } from "../services/scene3d-artifacts/object-store.js"
 
 const paramsSchema = z.object({ revisionId: z.uuid() })
-const bodySchema = z.object({
-  newRevisionId: z.uuid(), expectedContentHash: z.string().regex(/^[0-9a-f]{64}$/),
-  operations: scene3DV2EditOperationsSchema,
-  lockedObjectIds: z.array(z.string().min(1).max(64)).max(100).optional(),
-}).strict()
+const bodySchema = retainedScene3DEditBodySchema
 
 /** Arithmetic edits have no generation charge; persisted bytes retain their original pins. */
 export async function scene3DRevisionEditRoutes(app: FastifyInstance, options: { store?: Scene3DObjectStore | null } = {}) {
