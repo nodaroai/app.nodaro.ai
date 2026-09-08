@@ -912,6 +912,13 @@ quote. Both use an explicit `clientRequestId` for safe caller retries. A generat
 portrait is optional for description-only cast references. See
 [dependent-frame behavior](design/dependent-frame-execution.md).
 
+Linked-clip quotes include `inputHash`, accepted `endpointPins`, normalized
+duration/resolution/aspect ratio/audio settings, and the `creditIdentifier` used
+for the estimate. Pass the reviewed `inputHash` as `expectedInputHash` when
+generating the clip. Changed settings or accepted endpoint pins return HTTP 409
+`sequence_quote_changed` before submission; request and review a fresh quote.
+Credits remain an estimate; the generation route reserves the current price.
+
 ### `client.recast`
 
 Recast runs + the authored-script import lane ("movie as JSON"). **Cloud

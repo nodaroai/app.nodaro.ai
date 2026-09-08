@@ -528,6 +528,13 @@ fields while preserving protected frame and job state. The revision is checked
 inside the compare-and-swap loop; a stale draft returns HTTP 409 even without
 an outer `strict` flag. Retain the local draft when handling that conflict.
 
+For a linked segment, `POST /v1/studio/productions/:id/generate` with
+`kind: "clip"`, `shotId` and `dryRun: true` verifies both accepted endpoints and
+returns an estimate for the normalized clip settings. Its `inputHash` covers
+those settings and endpoint pins. Send it back as `expectedInputHash` on the
+explicit generation request; a mismatch returns `sequence_quote_changed` (409)
+before submitting a job. Quoting itself creates no job and accepts no frame.
+
 ## 6. Webhooks (push into Nodaro)
 
 A complementary path: instead of your server calling Nodaro to start a

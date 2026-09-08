@@ -90,6 +90,8 @@ export interface StudioShotGenerationInput {
   count?: number
   mode?: "start" | "references"
   dryRun?: boolean
+  /** Linked clips only: require the exact inputs returned by a reviewed quote. */
+  expectedInputHash?: string
   overrides?: StudioDocumentJson
 }
 
@@ -99,7 +101,17 @@ export type StudioGenerationReply = {
   deduped?: true
   lane?: string
   [field: string]: unknown
-} | { dryRun: true; provider: string; count: number; credits: number | null; lane?: string }
+} | {
+  dryRun: true; provider: string; count: number; credits: number | null; lane?: string
+  /** Linked-clip quotes include normalized settings and accepted endpoint pins. */
+  inputHash?: string
+  endpointPins?: StudioDocumentJson
+  creditIdentifier?: string
+  duration?: number
+  resolution?: string
+  aspectRatio?: string
+  sound?: boolean
+}
 
 const root = "/v1/studio/productions"
 const path = (id: string) => `${root}/${encodeURIComponent(id)}`

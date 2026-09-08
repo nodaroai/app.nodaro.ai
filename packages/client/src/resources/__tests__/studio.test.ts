@@ -39,6 +39,16 @@ describe("Studio production transport", () => {
     expect(f.fetch).toHaveBeenCalledTimes(1)
   })
 
+  it("carries a reviewed linked-clip input hash without retrying a changed quote", async () => {
+    const f = fixture()
+    f.fetch.mockImplementationOnce(() => Promise.resolve({ ok: false, status: 409,
+      json: async () => ({ error: { code: "sequence_quote_changed", message: "Review the changed inputs" } }) } as Response))
+    const input = { kind: "clip" as const, shotId: "AB", expectedInputHash: "a".repeat(64), clientRequestId: "clip-click" }
+    await expect(f.client.studio.generateShot("film", input)).rejects.toMatchObject({ code: "sequence_quote_changed" })
+    expect(JSON.parse(f.request()[1].body as string)).toEqual(input)
+    expect(f.fetch).toHaveBeenCalledTimes(1)
+  })
+
   it("reads a selected shot with encoded IDs and the caller's workspace", async () => {
     const f = fixture({ data: { production: { id: "film", keyframes: [{ id: "A", acceptedResultKey: null }] } } })
     const response = await f.client.withWorkspace("workspace").studio.get("film/a", { detail: "full", shotId: "shot a" })
