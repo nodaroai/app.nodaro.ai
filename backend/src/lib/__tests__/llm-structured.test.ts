@@ -44,6 +44,27 @@ describe("llmCompleteStructured", () => {
   })
   afterEach(() => vi.unstubAllGlobals())
 
+  it.each(["transport", "error-frame", "silent-close"])(
+    "does not restart Astra's underlying stream after %s when retries are disabled", async (failure) => {
+      const { llmCompleteStructured, StructuredLlmError } = await import("../llm-client.js")
+      fetchMock.mockImplementation(() => {
+        if (failure === "transport") return Promise.reject(new Error("socket closed"))
+        return Promise.resolve(streamResponse(failure === "error-frame"
+          ? ['event: error\ndata: {"error":{"message":"upstream failed"}}\n\n']
+          : ['data: {"type":"response.created","response":{"id":"response-1"}}\n\n', 'data: [DONE]\n\n']))
+      })
+      const result = llmCompleteStructured(
+        { modelId: "gpt-6-astra", system: "", messages: [{ role: "user", content: "scene" }] },
+        schema, { maxRetries: 0 },
+      )
+      await expect(result).rejects.toBeInstanceOf(StructuredLlmError)
+      await expect(result).rejects.toMatchObject({ usage: {
+        inputTokens: 0, outputTokens: 0, complete: false,
+      } })
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    },
+  )
+
   it("returns validated output on the first valid response (Gemini path)", async () => {
     const { llmCompleteStructured } = await import("../llm-client.js")
     fetchMock.mockResolvedValue(geminiContent(JSON.stringify({ prompt: "a sunset", mood: "calm" })))
@@ -224,6 +245,7 @@ describe("llmCompleteStructured", () => {
         ),
       ).rejects.toThrow()
       expect(anthropicCreate).not.toHaveBeenCalled()
+      expect(fetchMock).toHaveBeenCalledTimes(1)
     })
   })
 
