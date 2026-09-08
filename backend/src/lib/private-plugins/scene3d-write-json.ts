@@ -1,7 +1,26 @@
 import { createHash } from "node:crypto"
 import type { PluginSceneArtifactToolkit, PluginSceneArtifactUpload } from "./scene3d-artifact-contract.js"
+import { Scene3DArtifactError } from "../../services/scene3d-artifacts/types.js"
 
 const JSON_KINDS = new Set(["source-json", "build-manifest", "validation-report", "camera-track-json"])
+
+/** Adopt bytes already rendered under this immutable child/frame identity. */
+export async function receiveScene3DPngIfPresent(
+  toolkit: Pick<PluginSceneArtifactToolkit, "receive">,
+  input: Omit<PluginSceneArtifactUpload, "kind">,
+) {
+  try {
+    const receipt = await toolkit.receive(input)
+    if (receipt.artifactId !== input.artifactId || receipt.kind !== "poster" ||
+        !/^[a-f0-9]{64}$/.test(receipt.sha256) || receipt.byteLength < 33 || receipt.byteLength > 8 * 1024 * 1024) {
+      throw new Scene3DArtifactError("SCENE_ASSET_INVALID", "Stored scene frame has an invalid receipt")
+    }
+    return receipt
+  } catch (error) {
+    if (error instanceof Scene3DArtifactError && error.code === "SCENE_ASSET_MISSING") return null
+    throw error
+  }
+}
 
 /** Exact-key conditional upload, followed by a host readback rather than trusting the PUT. */
 export async function writeScene3DJson(
@@ -61,8 +80,14 @@ async function writeScene3DBytes(
   if (!response.ok && response.status !== 412) throw new Error("Scene artifact upload failed")
   options?.signal?.throwIfAborted()
   const receipt = await toolkit.receive(scope)
-  if (receipt.sha256 !== sha256 || receipt.byteLength !== bytes.length ||
-      receipt.kind !== input.kind || receipt.objectKey !== grant.key || receipt.artifactId !== input.artifactId) {
+  if (receipt.kind !== input.kind || receipt.objectKey !== grant.key || receipt.artifactId !== input.artifactId ||
+      !/^[a-f0-9]{64}$/.test(receipt.sha256) || !Number.isSafeInteger(receipt.byteLength) || receipt.byteLength <= 0) {
+    throw new Error("Scene artifact differs from the immutable upload")
+  }
+  // Chromium may encode the same requested frame differently after a restart. The existing
+  // owned frame wins; JSON authoring records still require byte-for-byte equality on replay.
+  const existingFrame = response.status === 412 && input.kind === "poster" && receipt.byteLength >= 33 && receipt.byteLength <= 8 * 1024 * 1024
+  if (!existingFrame && (receipt.sha256 !== sha256 || receipt.byteLength !== bytes.length)) {
     throw new Error("Scene artifact differs from the immutable upload")
   }
   options?.signal?.throwIfAborted()

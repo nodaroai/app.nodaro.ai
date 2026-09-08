@@ -38,11 +38,16 @@ const RUNNABLE: ReadonlySet<string> = new Set(IN_FLIGHT_JOB_STATUSES.filter((sta
 export const isRunnableSceneRenderStatus = (status: string): boolean => RUNNABLE.has(status)
 const QUEUED = new Set(["active", "waiting", "delayed", "prioritized", "waiting-children"])
 
+/** An affirmative liveness refusal, distinct from a failed database/queue read. */
+export class SceneRenderParentInactiveError extends Error {
+  constructor(message: string) { super(message); this.name = "SceneRenderParentInactiveError" }
+}
+
 export async function requireSceneRenderParent(ports: SceneRenderPorts, scope: PluginSceneRenderScope, active: boolean): Promise<SceneRenderParent> {
   const parent = await ports.parent(scope)
-  if (!parent || parent.userId !== scope.userId) throw new Error("Scene render parent is unavailable")
-  if (active && (!RUNNABLE.has(parent.status) || parent.stopRequested || !parent.reservationActive)) {
-    throw new Error("Scene render parent is no longer active or reserved")
+  if (!parent || parent.userId !== scope.userId) throw new SceneRenderParentInactiveError("Scene render parent is unavailable")
+  if (active && ((parent.status !== "pending" && parent.status !== "processing") || parent.stopRequested || !parent.reservationActive)) {
+    throw new SceneRenderParentInactiveError("Scene render parent is no longer active or reserved")
   }
   return parent
 }
@@ -70,6 +75,7 @@ async function status(ports: SceneRenderPorts, child: SceneRenderChild): Promise
   if (child.status === "completed") state = "completed"
   else if (child.status === "cancelled") state = "cancelled"
   else if (child.status === "failed") state = "failed"
+  else if (drained && (child.status === "processing" || queue !== null)) state = "failed"
   else if (child.status === "processing" || queue?.state === "active") state = "running"
   else if (child.status === "pending" || child.status === "queued") state = "pending"
   else throw new Error("Scene render child has an unsupported lifecycle state")
@@ -111,9 +117,11 @@ export function createSceneRenderingToolkit(ports: SceneRenderPorts): PluginScen
         options?.signal?.throwIfAborted()
         await requireSceneRenderParent(ports, input, true)
       } catch (error) {
-        // Includes cancellation between DB insertion and queue insertion. The caller still
-        // drains via status; setting a database flag alone cannot claim Chromium stopped.
-        await ports.cancel(child)
+        // A read failure during adoption is not a cancellation request. Leave durable work
+        // available for a later replay; the worker independently enforces parent liveness.
+        if (error instanceof SceneRenderParentInactiveError || (!adopted && options?.signal?.aborted)) {
+          await ports.cancel(child)
+        }
         throw error
       }
       return { childJobId, adopted }

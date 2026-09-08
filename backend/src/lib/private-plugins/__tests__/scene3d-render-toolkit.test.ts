@@ -45,7 +45,7 @@ describe("durable scene render children", () => {
     expect(f.ports.enqueue).toHaveBeenCalledOnce()
     expect(sceneRenderChildId({ ...f.input, userId: "30000000-0000-4000-8000-000000000000" })).not.toBe(sceneRenderChildId(f.input))
   })
-  it.each([{ status: "cancelled" }, { reservationActive: false }, { stopRequested: true }, { userId: "foreign" }])
+  it.each([{ status: "cancelled" }, { status: "queued" }, { reservationActive: false }, { stopRequested: true }, { userId: "foreign" }])
     ("refuses an unavailable parent before creating or enqueueing work: %j", async (patch) => {
       const f = fixture(); f.parent(patch)
       await expect(f.tk.submit(f.input)).rejects.toThrow()
@@ -69,6 +69,22 @@ describe("durable scene render children", () => {
     expect(await f.tk.cancel(f.input)).toMatchObject({ state: "cancelled", drained: false, progress: 42 })
     f.queue({ state: "completed", progress: 42 })
     expect(await f.tk.status(f.input)).toMatchObject({ state: "cancelled", drained: true })
+  })
+  it("does not cancel an adopted active render after a transient queue read failure", async () => {
+    const f = fixture(); await f.tk.submit(f.input)
+    f.setChild({ status: "processing" }); f.queue({ state: "active", progress: 10 })
+    vi.mocked(f.ports.queue).mockRejectedValueOnce(new Error("ECONNRESET"))
+    await expect(f.tk.submit(f.input)).rejects.toThrow("ECONNRESET")
+    expect(f.ports.cancel).not.toHaveBeenCalled()
+    expect(await f.tk.submit(f.input)).toMatchObject({ adopted: true })
+    expect(f.ports.enqueue).toHaveBeenCalledOnce()
+  })
+  it("reports a stalled-out queue as failed instead of polling a drained running job forever", async () => {
+    const f = fixture(); await f.tk.submit(f.input)
+    f.setChild({ status: "processing" }); f.queue({ state: "failed", progress: 10 })
+    expect(await f.tk.status(f.input)).toMatchObject({ state: "failed", drained: true })
+    f.queue(null)
+    expect(await f.tk.status(f.input)).toMatchObject({ state: "failed", drained: true })
   })
   it("does not enqueue a processing row with a missing worker receipt", async () => {
     const f = fixture(); await f.tk.submit(f.input)

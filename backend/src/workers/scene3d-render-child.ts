@@ -1,4 +1,5 @@
 import type { Job } from "bullmq"
+import { randomUUID } from "node:crypto"
 import { readFile } from "node:fs/promises"
 import { join } from "node:path"
 import { openBrowser, selectComposition, renderMedia, renderStill, makeCancelSignal } from "@remotion/renderer"
@@ -7,15 +8,17 @@ import { config } from "../lib/config.js"
 import { createWorkDir, cleanupWorkDir } from "../providers/video/ffmpeg-utils.js"
 import { uploadFileToR2 } from "../lib/storage.js"
 import { applyVideoWatermark } from "../utils/watermark.js"
-import { markJobCompletedDetailed } from "./shared.js"
+import { markJobCompletedDetailed, isFinalJobAttempt } from "./shared.js"
 import { markJobFailed } from "../lib/job-failure.js"
 import { JobCancelledError } from "../lib/job-cancellation.js"
 import { DrainAbortError, isWorkerDraining } from "../lib/worker-drain.js"
 import { createSceneRenderPorts } from "../lib/private-plugins/scene3d-render-store.js"
-import { requireSceneRenderParent, isRunnableSceneRenderStatus } from "../lib/private-plugins/scene3d-render-toolkit.js"
+import { requireSceneRenderParent, isRunnableSceneRenderStatus, SceneRenderParentInactiveError } from "../lib/private-plugins/scene3d-render-toolkit.js"
+import { Scene3DArtifactError } from "../services/scene3d-artifacts/types.js"
+import { sceneRenderCancellationCheck } from "./scene3d-cancellation-check.js"
 import { sceneRenderChildId } from "../lib/private-plugins/scene3d-render-identity.js"
 import { createScene3DArtifactToolkit } from "../lib/private-plugins/scene3d-artifact-toolkit.js"
-import { writeScene3DPng } from "../lib/private-plugins/scene3d-write-json.js"
+import { writeScene3DPng, receiveScene3DPngIfPresent } from "../lib/private-plugins/scene3d-write-json.js"
 import type { PluginSceneRenderResult } from "../lib/private-plugins/scene3d-render-contract.js"
 import { prepareSceneChildAssets } from "./scene3d-child-assets.js"
 import { withRenderCancellation } from "./render-cancellation.js"
@@ -40,12 +43,7 @@ export async function processSceneRenderChild(job: Job, bundle: () => Promise<st
     if (!data?.length) return
     const result = await withRenderCancellation({ jobId: child.id, timeoutMs: 25 * 60 * 1000,
       isDraining: isWorkerDraining,
-      isCancelled: async () => {
-        const current = await ports.read(child.id)
-        if (!current || !isRunnableSceneRenderStatus(current.status)) return true
-        await requireSceneRenderParent(ports, input, true)
-        return false
-      },
+      isCancelled: sceneRenderCancellationCheck(ports, child),
       cancel: async () => { controller.abort(); cancellation.cancel(); await browser?.close({ silent: true }) },
     }, async (): Promise<PluginSceneRenderResult> => {
       assets = await prepareSceneChildAssets(child, workDir, controller.signal)
@@ -63,13 +61,19 @@ export async function processSceneRenderChild(job: Job, bundle: () => Promise<st
         const frames: Extract<PluginSceneRenderResult, { kind: "stills" }>["frames"] = []
         for (const frame of input.output.frames) {
           controller.signal.throwIfAborted()
+          const artifactId = sceneRenderChildId({ ...input, key: `${child.id}-${frame}` })
+          const scope = { jobId: input.parentJobId, userId: input.userId, revisionId: input.plan.revisionId, artifactId }
+          const existing = await receiveScene3DPngIfPresent(artifacts, scope)
+          if (existing) {
+            frames.push({ frame, artifactId, sha256: existing.sha256, byteLength: existing.byteLength })
+            await job.updateProgress(Math.round(90 * frames.length / input.output.frames.length))
+            continue
+          }
           const output = join(workDir, `frame-${frame}.png`)
           await renderStill({ serveUrl, composition, inputProps, frame, imageFormat: "png", output,
             puppeteerInstance: browser, chromiumOptions, browserExecutable, timeoutInMilliseconds: 120000, logLevel: "warn" })
           controller.signal.throwIfAborted()
-          const artifactId = sceneRenderChildId({ ...input, key: `${child.id}-${frame}` })
-          const receipt = await writeScene3DPng(artifacts, { jobId: input.parentJobId, userId: input.userId,
-            revisionId: input.plan.revisionId, artifactId, kind: "poster", bytes: await readFile(output) }, { signal: controller.signal })
+          const receipt = await writeScene3DPng(artifacts, { ...scope, kind: "poster", bytes: await readFile(output) }, { signal: controller.signal })
           frames.push({ frame, artifactId, sha256: receipt.sha256, byteLength: receipt.byteLength })
           await job.updateProgress(Math.round(90 * frames.length / input.output.frames.length))
         }
@@ -88,7 +92,8 @@ export async function processSceneRenderChild(job: Job, bundle: () => Promise<st
       }
       controller.signal.throwIfAborted()
       await requireSceneRenderParent(ports, input, true)
-      const videoUrl = await uploadFileToR2(output, child.id, "video", input.userId, { signal: controller.signal })
+      // The opaque delivery key must not be derivable from public parent/owner identities.
+      const videoUrl = await uploadFileToR2(output, randomUUID(), "video", input.userId, { signal: controller.signal })
       return { kind: "video", videoUrl, sceneRevisionId: input.plan.revisionId, elapsedMs: Date.now() - started }
     })
     await requireSceneRenderParent(ports, input, true)
@@ -99,11 +104,15 @@ export async function processSceneRenderChild(job: Job, bundle: () => Promise<st
       if (current && isRunnableSceneRenderStatus(current.status)) throw new Error("Scene render completion was not retained")
     }
   } catch (error) {
-    if (error instanceof DrainAbortError && job.attemptsMade + 1 < (job.opts.attempts ?? 1)) throw error
-    if (error instanceof JobCancelledError) {
+    if (error instanceof JobCancelledError || error instanceof SceneRenderParentInactiveError ||
+        (error instanceof Scene3DArtifactError && error.code === "SCENE_JOB_INVALID")) {
       await ports.cancel(child)
       return
     }
+    const message = error instanceof Error ? error.message : String(error)
+    const terminal = !(error instanceof DrainAbortError) &&
+      (error instanceof Scene3DArtifactError && error.code !== "SCENE_STORAGE_FAILED" || /composition.*not found|plan validation|zod|invalid plan|timed out|webgl/i.test(message))
+    if (!terminal && !isFinalJobAttempt(job)) throw error
     await markJobFailed(child.id, { error_message: "Scene render failed" })
     throw error
   } finally {
