@@ -161,9 +161,11 @@ shot only when it is **landed**. Nothing here blocks a request for minutes:
    a writer to pick up;
 4. show the user what arrived.
 
-A deployment that does not serve the landing sweep, or a caller who may not
-write, falls through to the plain read; any other failure of that step is
-reported rather than hidden. Landing one named job is also part of the
+Three things make that landing step fall through to the plain read instead of
+failing it: a deployment that does not serve the landing sweep, a caller who
+may not write, and a production busy under another writer at that instant
+(the sweep gives way; what finished lands on the next read). Any other
+failure of that step is reported rather than hidden. Landing one named job is also part of the
 operation vocabulary the operating guide serves, applied with
 `edit_studio_production`, for when you want that instead of a sweep. Over REST
 the two halves are separate — `POST /v1/studio/productions/:id/reconcile` and
