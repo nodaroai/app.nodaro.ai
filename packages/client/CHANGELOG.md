@@ -1,5 +1,16 @@
 # @nodaro/sdk
 
+## 2.4.0
+
+### Minor Changes
+
+- a4b5102: Add immutable 3D input selectors for advanced scene generation and Pro prompt sources. Select existing GLBs by revision and artifact ID while the server resolves permissions and byte receipts. Basic generation refuses imported geometry instead of silently ignoring it.
+
+### Patch Changes
+
+- Updated dependencies [a4b5102]
+  - @nodaro/shared@3.4.0
+
 ## 2.3.0
 
 ### Minor Changes
