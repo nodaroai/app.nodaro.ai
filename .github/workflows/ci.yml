@@ -373,6 +373,10 @@ jobs:
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
         run: node backend/scripts/verify-retained-images-concurrency.mjs
+      - name: Verify compatible workflow write concurrency
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+        run: node backend/scripts/verify-compatible-writes-concurrency.mjs
       - name: Run every behavioral proof
         env:
           PGPASSWORD: postgres

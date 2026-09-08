@@ -509,6 +509,11 @@ linked node return HTTP 400 with `sequence_execution_required`. Queued workflows
 also check this requirement before executing their graph. See
 [the execution boundary](design/dependent-frame-execution.md).
 
+Generic saves of a dependency-aware production's graph or settings return
+HTTP 409 `production_capability_required`, including delta updates and updates
+that omit its dependency fields. Use compatible Studio production operations
+to preserve reviewed inputs and apply revision checks.
+
 ## 6. Webhooks (push into Nodaro)
 
 A complementary path: instead of your server calling Nodaro to start a

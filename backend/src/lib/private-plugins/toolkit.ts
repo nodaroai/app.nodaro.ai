@@ -96,6 +96,7 @@ import type { LlmReasoningEffort } from "@nodaro/shared"
 import { ENTITY_TABLE, WORKSPACE_HEADER_LOWER } from "@nodaro/shared"
 import type { EntityNodeKind } from "@nodaro/shared"
 import { WORKFLOW_ACCESS_COLS, loadWorkflowFor } from "../workflow-route-access.js"
+import { writeCompatible } from "../compatible-workflow-writes.js"
 import { canChangeWorkflowVisibility } from "../workflow-access.js"
 import { changesStudioPublishFlag } from "../studio-audience.js"
 import { requireScope, type Scope } from "../scopes.js"
@@ -1441,6 +1442,7 @@ export function buildToolkit(): PluginToolkit {
     },
     db: supabase,
     workflows: {
+      writeCompatible,
       accessCols: WORKFLOW_ACCESS_COLS,
       loadWorkflowFor,
       canChangeVisibility: canChangeWorkflowVisibility,

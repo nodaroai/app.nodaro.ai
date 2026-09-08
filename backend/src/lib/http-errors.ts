@@ -204,6 +204,13 @@ export function sendInternalError(
   err: unknown,
   clientMessage = GENERIC_INTERNAL_MESSAGE,
 ): FastifyReply {
+  // This exact server-defined database refusal is a conflict, not a 500.
+  // Never forward arbitrary database messages through this exception.
+  if (err && typeof err === "object" && "code" in err && err.code === "PT409"
+    && "message" in err && err.message === "production_capability_required") {
+    return reply.status(409).send({ error: { code: "production_capability_required",
+      message: "Use a compatible Studio editor or production API to edit this linked production." } })
+  }
   // A job-policy BLOCK is a CLIENT outcome, not a server error: 422 with the
   // policy's own user-safe reason, the same shape and status the upload lanes
   // use. It is caught HERE rather than at the ~103 insert call sites so every

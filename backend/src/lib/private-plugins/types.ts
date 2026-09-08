@@ -1758,6 +1758,13 @@ export type PluginLoadedWorkflow =
  * decides that question before asking it. One rule, one place.
  */
 export interface PluginWorkflowsToolkit {
+  /** Server-only compatible document transport. The caller MUST authorize the
+   * target and validate with its codec. An empty update result means a lost CAS.
+   * Additive-optional; older hosts must refuse dependency edits. */
+  writeCompatible?(input:
+    | { kind: "create"; row: Record<string, unknown> }
+    | { kind: "update"; workflowId: string; expectedVersion: number; patch: Record<string, unknown> }
+  ): Promise<{ data: Record<string, unknown> | null; error: unknown }>
   /**
    * Mirrors `WORKFLOW_ACCESS_COLS` — the columns a row must carry to be
    * judgeable. A projection one column short is REFUSED (loudly) rather than

@@ -52,6 +52,18 @@ function makeReq() {
 }
 
 describe("sendInternalError", () => {
+  it("maps only the exact database capability refusal to a safe conflict", () => {
+    const reply = makeReply(), { req, error } = makeReq()
+    sendInternalError(reply as unknown as FastifyReply, req, { code: "PT409", message: "production_capability_required", details: "private" })
+    expect(reply.statusCode).toBe(409)
+    expect(reply.body).toEqual({ error: { code: "production_capability_required",
+      message: "Use a compatible Studio editor or production API to edit this linked production." } })
+    expect(error).not.toHaveBeenCalled()
+    const unrelated = makeReply()
+    sendInternalError(unrelated as unknown as FastifyReply, req, { code: "PT409", message: "private schema detail" })
+    expect(unrelated.statusCode).toBe(500)
+    expect(JSON.stringify(unrelated.body)).not.toContain("private schema detail")
+  })
   it("returns an actionable retention conflict without logging a server failure", () => {
     const reply = makeReply(), { req, error } = makeReq()
     sendInternalError(reply as unknown as FastifyReply, req, new RetainedImageInUseError())
