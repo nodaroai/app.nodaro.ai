@@ -62,6 +62,8 @@ interface Scene3DEngineParams {
 
 /** Structured authoring inputs; reference roles are interpreted by the platform. */
 export interface GenerateScene3DParams extends Record<string, unknown>, Scene3DEngineParams {
+  /** Existing GLBs selected by immutable revision/artifact IDs. Requires an import-capable advanced engine. */
+  inputAssets?: readonly import("@nodaro/shared").Scene3DInputAsset[]
   prompt: string
   durationSeconds?: number
   fps?: number

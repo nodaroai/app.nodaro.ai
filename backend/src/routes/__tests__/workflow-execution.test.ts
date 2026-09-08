@@ -204,6 +204,22 @@ function makeRecorder(result: { data: unknown; error: unknown }) {
 // ==========================================================================
 
 describe("POST /v1/workflows/:id/run", () => {
+  it("refuses linked nodes before creating or queueing an execution", async () => {
+    const mockFrom = vi.mocked(supabase.from)
+    mockFrom.mockImplementation((table) => {
+      if (table !== "workflows") throw new Error("No execution or billing work may begin")
+      return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ error: null, data: {
+        id: TEST_WORKFLOW_ID, user_id: TEST_USER_ID, workspace_id: null, visibility: "private",
+        nodes: [{ id: "linked", type: "generate-video", data: { sequenceBinding: { startKeyframeId: "A", endKeyframeId: "B" } } }],
+      } }) }) }) } as never
+    })
+    const response = await authedPost(`/v1/workflows/${TEST_WORKFLOW_ID}/run`)
+    expect(response.statusCode).toBe(400)
+    expect(response.json().error).toMatchObject({ code: "sequence_execution_required", nodeIds: ["linked"] })
+    expect(mockOrchestrationQueueAdd).not.toHaveBeenCalled()
+    expect(mockResolveBillingContext).not.toHaveBeenCalled()
+  })
+
   it("returns 401 when no auth", async () => {
     const res = await app.inject({
       method: "POST",

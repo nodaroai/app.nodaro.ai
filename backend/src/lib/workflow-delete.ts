@@ -3,6 +3,7 @@ import { deleteFromR2, r2KeyFromOurUrl } from "./storage.js"
 import { isRelayedJob, relayOwnedKeys } from "./asset-delete.js"
 import { isOwnedObjectKey } from "./job-policy-outputs.js"
 import { relayPossible } from "./relay-possible.js"
+import { RetainedImageInUseError } from "./retained-image-errors.js"
 
 interface WorkflowDeleteLogger {
   warn(fields: Record<string, unknown>, message: string): void
@@ -82,6 +83,9 @@ async function deleteWithPrivateMedia(args: {
     relayPossible() && relayScopedJobId ? await isRelayedJob(relayScopedJobId) : false
 
   const { data, error } = await supabase.rpc(args.rpcName, args.rpcArgs)
+  if (error?.message === "This production has active jobs using retained images") {
+    throw new RetainedImageInUseError("Wait for the active jobs to finish or cancel them before deleting this production")
+  }
   if (error) throw new Error(`Failed to delete ${args.resourceLabel}: ${error.message}`)
 
   const result = parseDeleteResult(data)

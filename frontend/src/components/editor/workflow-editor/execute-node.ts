@@ -1,4 +1,5 @@
 import { toast } from "sonner";
+import { assertCanvasExecutionAllowed, scene3DInputAssetsForEngine } from "@nodaro/shared";
 import { findUpstreamSunoIds } from "@/lib/suno-ids";
 import { llmAdvancedParams } from "@/lib/llm-advanced-params"
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
@@ -1068,6 +1069,7 @@ function executeNodeCore(
   runId?: string,
   authoredOverride?: Record<string, unknown>,
 ): Promise<string> {
+  assertCanvasExecutionAllowed([node]);
   const { nodes, edges } = useWorkflowStore.getState();
   const inputs = resolveNodeInputs(node, nodes, edges, listIterationIndex);
 
@@ -7377,6 +7379,7 @@ function executeNodeCore(
       toast.error(`Node "${g3d.label}": ${g3dEngine.message}`);
       return Promise.reject(new Error(g3dEngine.message));
     }
+    const g3dAssets = scene3DInputAssetsForEngine(g3d.inputAssets, g3dEngine.engine);
     // History retains the resolved inputs; live wires stay graph-owned.
     return runScene3DJob({
       nodeId: node.id,
@@ -7389,6 +7392,7 @@ function executeNodeCore(
       start: () => generate3DScene({
         ...g3dEngine.fields,
         prompt: g3dPrompt,
+        ...(g3dAssets.length ? { inputAssets: g3dAssets } : {}),
         durationSeconds: g3d.durationSeconds,
         fps: g3d.fps,
         aspectRatio: g3d.aspectRatio,
@@ -7427,6 +7431,7 @@ function executeNodeCore(
     // `resolvePro3DRenderSceneRef` uses, so both engines export the same thing.
     const proScene = resolvePro3DSceneRef(node.id, pro, nodes, edges);
     const proSource = buildPro3DRenderSource({
+      inputAssets: pro.inputAssets,
       sourceMode: pro.sourceMode,
       prompt: proPrompt ?? undefined,
       references: proRefs,

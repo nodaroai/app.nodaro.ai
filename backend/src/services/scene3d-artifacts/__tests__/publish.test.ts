@@ -246,6 +246,24 @@ beforeEach(() => {
 })
 
 describe("a complete publication", () => {
+  it("pins private inputs with the recipe without adding them to playback assets", async () => {
+    const { plan, artifacts, objects } = await fixture()
+    const inputId = "00000000-0000-4000-8000-0000000000b1", sourceId = "00000000-0000-4000-8000-0000000000b2"
+    const inputBytes = glbBytes(), sourceBytes = Buffer.from('{"source":"retained"}')
+    const input = { artifactId: inputId, kind: "input-glb" as const, sha256: sha(inputBytes), byteLength: inputBytes.length }
+    const source = { artifactId: sourceId, kind: "source-json" as const, sha256: sha(sourceBytes), byteLength: sourceBytes.length }
+    const store = fakeStore({ ...objects,
+      [scene3DArtifactObjectKey(OWNER, REV, inputId, "input-glb")]: inputBytes,
+      [scene3DArtifactObjectKey(OWNER, REV, sourceId, "source-json")]: sourceBytes })
+    await expect(publishScene3DRevision({ revisionId: REV, userId: OWNER, plan, artifacts: [...artifacts, input] }, { store }))
+      .rejects.toMatchObject({ code: "SCENE_ASSET_INVALID" })
+    expect(supabase.rpc).not.toHaveBeenCalled()
+    const result = await publishScene3DRevision({ revisionId: REV, userId: OWNER, plan, artifacts: [...artifacts, source, input] }, { store })
+    expect(result.artifactIds).toContain(inputId)
+    const payload = supabase.rpc.mock.calls[0]![1]!.payload as { artifacts: Array<{ artifact_id: string; usage: string }> }
+    expect(payload.artifacts.find(row => row.artifact_id === inputId)?.usage).toBe("checkpoint")
+    expect(plan.assets.some(asset => asset.assetId === inputId)).toBe(false)
+  })
   it("verifies every byte, then writes the manifest, artifacts and pins in one call", async () => {
     const { plan, artifacts, objects } = await fixture()
     const store = fakeStore(objects)

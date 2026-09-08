@@ -53,6 +53,7 @@ vi.mock("@/lib/workflow-delete.js", () => ({
 // ---------------------------------------------------------------------------
 
 import { workflowRoutes } from "../workflows.js"
+import * as pluginLoader from "@/lib/private-plugins/load.js"
 import { supabase } from "../../lib/supabase.js"
 import { deleteWorkflowWithPrivateMedia } from "../../lib/workflow-delete.js"
 
@@ -500,6 +501,35 @@ describe("GET /v1/public/workflows/:id", () => {
   it("returns 400 for an invalid UUID (no auth needed)", async () => {
     const res = await app.inject({ method: "GET", url: "/v1/public/workflows/not-a-uuid" })
     expect(res.statusCode).toBe(400)
+  })
+
+  it("does not disclose a shared extension when its public projector is unavailable", async () => {
+    mockPublicRead({ ...DB_WORKFLOW_FULL, nodes: [{ id: "secret-node", data: { keyframeId: "A", prompt: "private" } }],
+      settings: { studio: { shared: true, keyframes: [{ private: "review" }] } } })
+    const res = await app.inject({ method: "GET", url: `/v1/public/workflows/${TEST_WORKFLOW_ID}` })
+    expect(res.statusCode).toBe(404)
+    expect(res.body).not.toContain("private")
+    expect(res.body).not.toContain("secret-node")
+  })
+
+  it("returns the registered public projection after checking sharing, without mixing in raw fields", async () => {
+    const safe = { nodes: [{ id: "visible" }], edges: [], settings: { studio: { publicView: { kind: "studio-selected-media" } } } }
+    const project = vi.fn().mockReturnValue(safe)
+    const service = vi.spyOn(pluginLoader, "getPluginServices").mockReturnValue({ publicWorkflow: { project } })
+    try {
+      const row = { ...DB_WORKFLOW_FULL, nodes: [{ id: "secret-node" }], settings: { studio: { shared: true, keyframes: [] } } }
+      mockPublicRead(row)
+      const res = await app.inject({ method: "GET", url: `/v1/public/workflows/${TEST_WORKFLOW_ID}` })
+      expect(res.statusCode).toBe(200)
+      expect(res.json().data).toMatchObject(safe)
+      expect(res.body).not.toContain("secret-node")
+      expect(project).toHaveBeenCalledTimes(1)
+      project.mockClear()
+      mockPublicRead({ ...row, settings: { studio: { shared: false, keyframes: [] } } })
+      const hidden = await app.inject({ method: "GET", url: `/v1/public/workflows/${TEST_WORKFLOW_ID}` })
+      expect(hidden.statusCode).toBe(404)
+      expect(project).not.toHaveBeenCalled()
+    } finally { service.mockRestore() }
   })
 
   it("404s an UNshared workflow even though it exists (opt-in gating)", async () => {

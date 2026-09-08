@@ -43,7 +43,22 @@ export function createScene3DArtifactToolkit(): PluginSceneArtifactToolkit | und
   const grant = createScene3DUploadGranter(cfg, config.R2_BUCKET_NAME,
     async (scope) => { await authorizeScene3DJob(scope) },
     async (input) => { await reserveScene3DUploadIntent(store, { ...input, ttlSeconds: input.ttlSeconds }) })
+  let inputGranter: PluginSceneArtifactToolkit["grantInput"]
+  let inputResolver: PluginSceneArtifactToolkit["resolveInput"]
   const toolkit: PluginSceneArtifactToolkit = {
+    resolveInput: async (input, options) => {
+      inputResolver ??= (await import("./scene3d-input-resolver.js"))
+        .createScene3DInputResolver(cfg, config.R2_BUCKET_NAME)
+      return inputResolver(input, options)
+    },
+    retainInput: async (input, options) =>
+      (await import("./scene3d-retain-input.js"))
+        .retainScene3DInput(toolkit, input, { ...options, authorizeJob: authorizeScene3DJob }),
+    grantInput: async (input, options) => {
+      inputGranter ??= (await import("./scene3d-input-grants.js"))
+        .createScene3DInputGranter(cfg, config.R2_BUCKET_NAME, authorizeScene3DJob)
+      return inputGranter(input, options)
+    },
     applyEdits: async (input, options) =>
       (await import("./scene3d-job-edit.js"))
         .applyScene3DJobEdits({ store, authorizeJob: authorizeScene3DJob }, input, options),
@@ -76,7 +91,7 @@ export function createScene3DArtifactToolkit(): PluginSceneArtifactToolkit | und
       options?.signal?.throwIfAborted()
       const intent = await ownedIntent(store, input)
       if (!intent.receipt) throw new Scene3DArtifactError("SCENE_ASSET_INVALID", "Scene artifact has not been received")
-      const limit = intent.kind === "glb" ? 64 * 1024 * 1024 : 8 * 1024 * 1024
+      const limit = intent.kind === "glb" || intent.kind === "input-glb" ? 64 * 1024 * 1024 : 8 * 1024 * 1024
       if (intent.kind === "blend-source" || intent.receipt.byteLength > limit) {
         throw new Scene3DArtifactError("SCENE_ASSET_INVALID", "Scene artifact exceeds the buffered read limit")
       }

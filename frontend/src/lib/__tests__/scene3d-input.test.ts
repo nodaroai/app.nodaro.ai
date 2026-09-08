@@ -4,6 +4,18 @@ import { scene3DEditInput } from "../scene3d/scene-input"
 import { restoreContextPatch, scene3DRunContext } from "../scene3d/revisions"
 
 describe("scene input shared by edit controls and canvas execution", () => {
+  it("restores immutable input selectors without sharing mutable history state", () => {
+    const inputAssets = [{ id: "vehicle", revisionId: "00000000-0000-4000-8000-000000000010",
+      assetId: "00000000-0000-4000-8000-000000000011" }]
+    const context = scene3DRunContext({ engine: "blender-cloud", inputAssets }, "Drive", [], undefined)
+    const restored = restoreContextPatch(context, "scenePrompt")
+    expect(restored.inputAssets).toEqual(inputAssets)
+    inputAssets[0].id = "changed"
+    expect(context.inputAssets?.[0].id).toBe("vehicle")
+    expect(restoreContextPatch(scene3DRunContext({ inputAssets: [] }, "Empty", [], undefined), "scenePrompt"))
+      .toMatchObject({ inputAssets: [] })
+    expect(restoreContextPatch({}, "scenePrompt")).not.toHaveProperty("inputAssets")
+  })
   const old = { planType: "3d-scene", schemaVersion: 1, revisionId: "old" }
   const baked = Object.freeze({ planType: "3d-scene", schemaVersion: 2, revisionId: "new", provenance: { engine: "blender-cloud" } })
   const nodes = [{ id: "pro", type: "pro-3d-render", data: { scenePlan: baked } }]

@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import { RetainedImageInUseError, RetainedVideoInUseError } from "../retained-image-errors.js"
+import { UploadBlockedError } from "../upload-policy.js"
 import Fastify from "fastify"
 import type { FastifyReply, FastifyRequest } from "fastify"
 
@@ -50,6 +52,32 @@ function makeReq() {
 }
 
 describe("sendInternalError", () => {
+  it("maps only the exact database capability refusal to a safe conflict", () => {
+    const reply = makeReply(), { req, error } = makeReq()
+    sendInternalError(reply as unknown as FastifyReply, req, { code: "PT409", message: "production_capability_required", details: "private" })
+    expect(reply.statusCode).toBe(409)
+    expect(reply.body).toEqual({ error: { code: "production_capability_required",
+      message: "Use a compatible Studio editor or production API to edit this linked production." } })
+    expect(error).not.toHaveBeenCalled()
+    const unrelated = makeReply()
+    sendInternalError(unrelated as unknown as FastifyReply, req, { code: "PT409", message: "private schema detail" })
+    expect(unrelated.statusCode).toBe(500)
+    expect(JSON.stringify(unrelated.body)).not.toContain("private schema detail")
+  })
+  it("returns an actionable retention conflict without logging a server failure", () => {
+    const reply = makeReply(), { req, error } = makeReq()
+    sendInternalError(reply as unknown as FastifyReply, req, new RetainedImageInUseError())
+    expect(reply.statusCode).toBe(409)
+    expect(reply.body).toEqual({ error: { code: "retained_image_in_use", message: "Retained image bytes cannot be deleted through the gallery" } })
+    expect(error).not.toHaveBeenCalled()
+  })
+  it("maps a service upload denial without exposing its policy identity", () => {
+    const reply = makeReply(), { req, error } = makeReq()
+    sendInternalError(reply as unknown as FastifyReply, req, new UploadBlockedError({ allow: false, reason: "Image not allowed", policyId: "private-policy" }))
+    expect(reply.statusCode).toBe(400)
+    expect(reply.body).toEqual({ error: { code: "upload_blocked", message: "Image not allowed" } })
+    expect(error).not.toHaveBeenCalled()
+  })
   it("responds 500 with the stable internal_error code and a generic default message", () => {
     const reply = makeReply()
     const { req } = makeReq()
@@ -547,4 +575,12 @@ describe("image-proxy 400s are not validation-reject reports (W0)", () => {
     expect(insertAppReport).toHaveBeenCalledTimes(1)
     await app.close()
   })
+})
+
+it("returns the retained video deletion refusal without turning it into a 500", () => {
+  const reply = makeReply()
+  const req = { log: { error: vi.fn() } } as unknown as FastifyRequest
+  sendInternalError(reply as unknown as FastifyReply, req, new RetainedVideoInUseError())
+  expect(reply.statusCode).toBe(409)
+  expect(reply.body).toMatchObject({ error: { code: "retained_video_in_use" } })
 })

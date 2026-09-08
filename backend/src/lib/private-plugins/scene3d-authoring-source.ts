@@ -184,7 +184,9 @@ export async function readScene3DAuthoringSource(
   await deps.authorizeJob(scope)
   const access = await authorizeSourceRevision(input.userId, input.revisionId)
   const plan = await parsePublishedPlan(access.revision.plan, input)
-  const artifact = selectPinnedSource(await loadScene3DRevisionArtifacts(input.revisionId))
+  const pins = await loadScene3DRevisionArtifacts(input.revisionId)
+  const artifact = selectPinnedSource(pins)
+  const inputArtifacts = pinnedInputs(deps.store, pins)
   assertStoredHere(deps.store, artifact)
   const source = await readVerifiedBytes(deps.store, artifact, options)
   // Recheck after the transfer: a job cancelled or a collaborator removed while
@@ -192,7 +194,27 @@ export async function readScene3DAuthoringSource(
   options?.signal?.throwIfAborted()
   await deps.authorizeJob(scope)
   await authorizeSourceRevision(input.userId, input.revisionId)
+  const currentInputs = pinnedInputs(deps.store, await loadScene3DRevisionArtifacts(input.revisionId))
+  if (JSON.stringify(currentInputs) !== JSON.stringify(inputArtifacts)) {
+    throw new Scene3DArtifactError("SCENE_ASSET_INVALID", "Retained scene inputs changed during the source read")
+  }
   options?.signal?.throwIfAborted()
   assertStoredHere(deps.store, artifact)
-  return { plan, source, sourceArtifactId: artifact.artifactId, sourceSha256: artifact.sha256 }
+  return { plan, source, sourceArtifactId: artifact.artifactId, sourceSha256: artifact.sha256, inputArtifacts }
+}
+
+/** Private dependency pins travel only to the trusted authoring engine. */
+function pinnedInputs(store: Scene3DObjectStore, pins: readonly Scene3DPinnedArtifact[]) {
+  const inputs = pins.filter(pin => pin.kind === "input-glb")
+  if (inputs.length > 8 || inputs.reduce((sum, pin) => sum + pin.byteLength, 0) > 128 * 1024 * 1024) {
+    throw new Scene3DArtifactError("SCENE_ASSET_INVALID", "Retained scene inputs exceed their limits")
+  }
+  return inputs.map(pin => {
+    if (pin.usage !== "checkpoint" || pin.bucket !== store.bucket || !isScene3DId(pin.artifactId) ||
+        !SHA256_RE.test(pin.sha256) || !Number.isSafeInteger(pin.byteLength) || pin.byteLength < 12 || pin.byteLength > 64 * 1024 * 1024 ||
+        (pin.expiresAt !== null && !(Date.parse(pin.expiresAt) > Date.now()))) {
+      throw new Scene3DArtifactError("SCENE_ASSET_INVALID", "Retained scene input has an invalid receipt")
+    }
+    return { assetId: pin.artifactId, kind: "glb" as const, sha256: pin.sha256, byteLength: pin.byteLength }
+  }).sort((a, b) => a.assetId.localeCompare(b.assetId))
 }

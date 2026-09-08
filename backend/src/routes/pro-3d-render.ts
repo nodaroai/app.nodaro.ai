@@ -49,6 +49,7 @@
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
+import { scene3DInputAssetsSchema } from "@nodaro/shared"
 import {
   PRO3D_RENDER_ASPECT_RATIOS,
   PRO3D_RENDER_ENGINES,
@@ -110,6 +111,7 @@ export const pro3DRenderSourceBody = z.discriminatedUnion("kind", [
       kind: z.literal("prompt"),
       prompt: z.string().trim().min(1).max(PRO3D_RENDER_LIMITS.promptMax),
       references: z.array(referenceBody).max(PRO3D_RENDER_LIMITS.maxReferences).optional(),
+      inputAssets: scene3DInputAssetsSchema.optional(),
     })
     .strict(),
   z

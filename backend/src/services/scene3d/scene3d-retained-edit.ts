@@ -45,7 +45,7 @@ export async function editRetainedScene3D(
   const used = new Set(edited.plan.assets.map((asset) => asset.assetId))
   // The rebuild recipe remains private and pinned. A previous .blend is not a
   // native export of these edits, so the new revision does not advertise it.
-  const artifacts = retained.filter((artifact) => used.has(artifact.artifactId) || artifact.kind === "source-json")
+  const artifacts = retained.filter((artifact) => used.has(artifact.artifactId) || artifact.kind === "source-json" || artifact.kind === "input-glb")
     .map((artifact) => ({ artifactId: artifact.artifactId, kind: artifact.kind,
       sha256: artifact.sha256, byteLength: artifact.byteLength, expiresAt: artifact.expiresAt,
       reuseFromRevisionId: input.revisionId,

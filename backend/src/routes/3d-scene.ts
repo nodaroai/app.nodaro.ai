@@ -134,6 +134,8 @@ const llmFields = {
  * body when a caller falls back to Basic deliberately.
  */
 const engineFields = {
+  // Advanced dispatch runs before this Basic schema. Never silently ignore imported geometry.
+  inputAssets: z.array(z.never()).max(0).optional(),
   engine: z.literal(SCENE3D_BASIC_ENGINE).optional(),
   acceptedSceneSchemaVersions: z
     .array(z.number().int().min(1).max(64))

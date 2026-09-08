@@ -57,6 +57,18 @@ const headersOf = (fetchMock: ReturnType<typeof setup>["fetchMock"], i: number) 
   (fetchMock.mock.calls[i][1] as RequestInit).headers as Record<string, string>
 
 describe("3D Render Pro transport", () => {
+  it("preserves selected GLBs and image references in preview and Pro requests", async () => {
+    const { client, fetchMock } = setup()
+    const inputAssets = [{ id: "vehicle", revisionId: "00000000-0000-4000-8000-000000000010",
+      assetId: "00000000-0000-4000-8000-000000000011" }]
+    await client.scene3d.generate({ prompt: "Drive", engine: "blender-cloud", inputAssets, references })
+    expect(bodyOf(fetchMock, 0)).toMatchObject({ engine: "blender-cloud", inputAssets, references })
+    const source = { kind: "prompt" as const, prompt: "Drive", inputAssets, references }
+    await client.scene3d.quotePro({ source })
+    await client.scene3d.runPro({ source, quoteId: "quote-1" })
+    expect(bodyOf(fetchMock, 1).source).toEqual(source)
+    expect(bodyOf(fetchMock, 2).source).toEqual(source)
+  })
   it("quotes without starting anything", async () => {
     const { client, fetchMock } = setup()
     const quote = await client.scene3d.quotePro({

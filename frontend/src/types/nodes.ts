@@ -3966,6 +3966,7 @@ export type Scene3DNodeReference = Scene3DReference
  * is persisted inside the workflow row.
  */
 export type Scene3DRevisionContext = {
+  inputAssets?: import("@nodaro/shared").Scene3DInputAsset[]
   /** The RAW prompt field (`scenePrompt` / `editPrompt`), before affixes. */
   prompt?: string
   engine?: "basic" | "blender-cloud" | "blender-local"
@@ -4043,6 +4044,7 @@ type Scene3DCommonFields = {
 }
 
 export type Generate3DSceneData = PromptAffixFields & Scene3DCommonFields & {
+  inputAssets?: import("@nodaro/shared").Scene3DInputAsset[]
   [key: string]: unknown
   label: string
   scenePrompt: string
@@ -4113,6 +4115,7 @@ export type Edit3DSceneData = PromptAffixFields & Scene3DCommonFields & {
  * No `llmModel` / `reasoningEffort`: the planner is fixed and server-owned.
  */
 export type Pro3DRenderData = PromptAffixFields & Scene3DCommonFields & {
+  inputAssets?: import("@nodaro/shared").Scene3DInputAsset[]
   [key: string]: unknown
   label: string
   /**

@@ -20,7 +20,7 @@
  *    ACTIVE, never about keeping the result at all.
  */
 import type { Scene3DRevisionContext, Scene3DRevisionEntry } from "@/types/nodes"
-import { isScene3DAuthoringEngine } from "@nodaro/shared"
+import { isScene3DAuthoringEngine, scene3DInputAssetsSchema } from "@nodaro/shared"
 import { planRevisionId } from "./plan-view"
 
 /**
@@ -266,6 +266,7 @@ export function scene3DRunContext(
   baseRevisionId: string | undefined,
 ): Scene3DRevisionContext {
   const context: Scene3DRevisionContext = {}
+  if (data.inputAssets !== undefined) context.inputAssets = scene3DInputAssetsSchema.parse(data.inputAssets)
   if (isScene3DAuthoringEngine(data.engine)) context.engine = data.engine
   if (typeof prompt === "string" && prompt.length > 0) context.prompt = prompt
   if (typeof data.llmModel === "string") context.llmModel = data.llmModel
@@ -311,6 +312,7 @@ export function restoreContextPatch(
 ): Record<string, unknown> {
   if (!context) return {}
   const patch: Record<string, unknown> = {}
+  if (context.inputAssets !== undefined) patch.inputAssets = scene3DInputAssetsSchema.parse(context.inputAssets)
   if (context.engine !== undefined) patch.engine = context.engine
   if (context.prompt !== undefined) patch[promptField] = context.prompt
   if (context.llmModel !== undefined) patch.llmModel = context.llmModel

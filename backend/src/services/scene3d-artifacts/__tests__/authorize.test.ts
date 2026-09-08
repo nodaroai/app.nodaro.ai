@@ -36,6 +36,7 @@ import {
   SCENE3D_ARTIFACT_USAGES,
 } from "../types.js"
 import { authorizeScene3DArtifact, authorizeScene3DRevision, scene3DIsReadable } from "../authorize.js"
+import { authorizeScene3DInputArtifact } from "../../../lib/private-plugins/scene3d-input-authority.js"
 
 const OWNER = "00000000-0000-4000-8000-000000000001"
 const OTHER = "00000000-0000-4000-8000-0000000000ff"
@@ -46,6 +47,7 @@ const OTHER_REV = "00000000-0000-4000-8000-000000000032"
 const GLB = "00000000-0000-4000-8000-000000000040"
 const BLEND = "00000000-0000-4000-8000-000000000041"
 const RECIPE = "00000000-0000-4000-8000-000000000042"
+const INPUT = "00000000-0000-4000-8000-000000000043"
 
 function artifact(id: string, kind: string) {
   return {
@@ -79,14 +81,33 @@ beforeEach(() => {
   vi.clearAllMocks()
   fake.current = createFakeSupabase({
     scene3d_revisions: [revision(REV, WF), revision(PERSONAL_REV, null)],
-    scene3d_artifacts: [artifact(GLB, "glb"), artifact(BLEND, "blend-source"), artifact(RECIPE, "source-json")],
+    scene3d_artifacts: [artifact(GLB, "glb"), artifact(BLEND, "blend-source"), artifact(RECIPE, "source-json"), artifact(INPUT, "input-glb")],
     scene3d_revision_artifacts: [
       { revision_id: REV, artifact_id: GLB, user_id: OWNER, usage: "playback" },
       { revision_id: REV, artifact_id: BLEND, user_id: OWNER, usage: "source" },
       { revision_id: REV, artifact_id: RECIPE, user_id: OWNER, usage: "checkpoint" },
+      { revision_id: REV, artifact_id: INPUT, user_id: OWNER, usage: "checkpoint" },
       { revision_id: PERSONAL_REV, artifact_id: GLB, user_id: OWNER, usage: "playback" },
       { revision_id: OTHER_REV, artifact_id: BLEND, user_id: OWNER, usage: "source" },
     ],
+  })
+})
+
+describe("private retained inputs", () => {
+  it("allows the private engine only with edit access to the exact retained revision", async () => {
+    vi.mocked(workflowAccess).mockResolvedValue("edit")
+    expect(await authorizeScene3DInputArtifact(OTHER, REV, INPUT)).toMatchObject({ ok: true, artifact: { artifactId: INPUT } })
+    expect(await authorizeScene3DInputArtifact(OTHER, OTHER_REV, INPUT)).toMatchObject({ ok: false })
+    for (const lane of ["playback", "source"] as const) {
+      expect(await authorizeScene3DArtifact(OTHER, REV, INPUT, lane)).toMatchObject({ ok: false })
+    }
+  })
+  it("does not grant retained construction bytes to a viewer or revoked original owner", async () => {
+    vi.mocked(workflowAccess).mockResolvedValue("view")
+    expect(await authorizeScene3DInputArtifact(OTHER, REV, INPUT)).toMatchObject({ ok: false, reason: "forbidden" })
+    expect(await authorizeScene3DInputArtifact(OTHER, REV, GLB)).toMatchObject({ ok: true })
+    vi.mocked(workflowAccess).mockResolvedValue("none")
+    expect(await authorizeScene3DInputArtifact(OWNER, REV, INPUT)).toMatchObject({ ok: false })
   })
 })
 

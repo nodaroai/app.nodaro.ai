@@ -1,3 +1,4 @@
+import { assertCanvasExecutionAllowed } from "@nodaro/shared"
 /**
  * Sub-workflow handler — executes a referenced workflow recursively.
  * Ported from frontend sub-workflow-executor.ts.
@@ -164,6 +165,8 @@ export async function executeSubWorkflow(
       (e) => reachable.has(e.source) && reachable.has(e.target),
     )
   }
+
+  assertCanvasExecutionAllowed(subNodes)
 
   // The nested graph never passes the orchestrator's chokepoint — it is
   // loaded and executed in-process here — so the catalog wall is asked again,

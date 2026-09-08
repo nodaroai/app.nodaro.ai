@@ -8,6 +8,7 @@
 
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { assertCanvasExecutionAllowed, SequenceExecutionRequiredError } from "@nodaro/shared"
 import { supabase } from "../lib/supabase.js"
 import { resolveWebSurfaceFlag } from "../middleware/credit-guard.js"
 import { tryRemoveFromQueue } from "../lib/queue.js"
@@ -297,6 +298,16 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
             : "You do not have permission to run this workflow",
         },
       })
+    }
+
+    try {
+      const candidates = (workflow.nodes ?? []) as Array<{ id: string; data?: unknown }>
+      assertCanvasExecutionAllowed(nodeIds ? candidates.filter((node) => nodeIds.includes(node.id)) : candidates)
+    } catch (error) {
+      if (error instanceof SequenceExecutionRequiredError) return reply.status(400).send({
+        error: { code: error.code, message: error.message, nodeIds: error.nodeIds },
+      })
+      throw error
     }
 
     // Per-node input overrides (MCP run_workflow `inputs`, editor re-runs, SDK).

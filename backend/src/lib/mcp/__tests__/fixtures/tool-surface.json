@@ -60,6 +60,7 @@
   "generate_script",
   "generate_speech",
   "generate_studio_clip",
+  "generate_studio_keyframe",
   "generate_studio_still",
   "generate_video",
   "get_app_inputs",

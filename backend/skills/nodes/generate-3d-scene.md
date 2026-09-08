@@ -1,7 +1,7 @@
 ---
 node_type: generate-3d-scene
-generated_at: 2026-09-08T02:32:05.270Z
-generated_from: 90fdec2b4
+generated_at: 2026-09-08T10:02:17.514Z
+generated_from: 30e183608
 ---
 
 # Generate 3D Scene
@@ -33,6 +33,7 @@ generated_from: 90fdec2b4
 - `references?: Scene3DNodeReference[]`
 - `referenceRoles?: Record<string, string>`
 - `referenceObjectIds?: Record<string, string>`
+- `inputAssets?: import("@nodaro/shared").Scene3DInputAsset[]`
 - `engine?: "basic" | "blender-cloud" | "blender-local"`
 - `llmModel?: string`
 - `reasoningEffort?: LlmReasoningEffort`
@@ -67,6 +68,11 @@ Use to block a shot before generating a final video: describe subjects, layout, 
 - `duration_seconds`
 - `fps`
 - `aspect_ratio`
+- `input_assets`
+- `engine`
+- `accepted_scene_schema_versions`
+- `local_connection_id`
+- `max_repair_passes`
 - `references`
 - `llm_model`
 - `reasoning_effort`

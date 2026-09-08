@@ -1,7 +1,7 @@
 ---
 node_type: edit-3d-scene
-generated_at: 2026-09-08T02:32:05.279Z
-generated_from: 90fdec2b4
+generated_at: 2026-09-08T10:02:17.528Z
+generated_from: 30e183608
 ---
 
 # Edit 3D Scene
@@ -61,10 +61,15 @@ Use to revise an existing scenePlan with a prompt or deterministic operations. P
 **Input parameters:**
 - `scene_plan`
 - `expected_revision_id`
+- `replace_references`
 - `prompt`
 - `operations`
 - `locked_object_ids`
 - `selected_object_ids`
+- `engine`
+- `accepted_scene_schema_versions`
+- `local_connection_id`
+- `max_repair_passes`
 - `references`
 - `llm_model`
 - `reasoning_effort`

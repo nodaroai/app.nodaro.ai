@@ -10,6 +10,8 @@ import {
   PRO3D_RENDER_QUALITY_PROFILES,
   PRO3D_RENDER_STYLES,
   SCENE3D_LIMITS,
+  SCENE3D_AUTHORING_ENGINES,
+  scene3DInputAssetsSchema,
   scene3DReferenceSchema,
 } from "@nodaro/shared"
 import { safeUrlSchema } from "../../url-validator.js"
@@ -25,6 +27,11 @@ const referenceSchema = scene3DReferenceSchema.extend({
 })
 
 export const SCENE3D_MCP_AUTHORING_FIELDS = {
+  engine: z.enum(SCENE3D_AUTHORING_ENGINES).optional()
+    .describe("Basic by default. An unavailable advanced engine is refused without a fallback."),
+  accepted_scene_schema_versions: z.array(z.number().int()).min(1).max(8).optional(),
+  local_connection_id: z.string().min(1).max(200).optional(),
+  max_repair_passes: z.number().int().min(0).max(2).optional(),
   references: z.array(referenceSchema).max(SCENE3D_LIMITS.maxReferences).optional()
     .describe("Up to 8 references, at most 1 video. Images guide appearance/layout; video guides layout/motion. V1 uses whole clips; trim a segment first. Reconstruction is approximate."),
   llm_model: z.string().optional(),
@@ -48,6 +55,8 @@ export function registerScene3DVerbs({ server, session, fastify }: RegisterOpts)
       duration_seconds: z.number().min(1).max(SCENE3D_LIMITS.maxDurationSeconds).optional(),
       fps: z.number().int().min(SCENE3D_LIMITS.minFps).max(SCENE3D_LIMITS.maxFps).optional(),
       aspect_ratio: z.string().optional(),
+      input_assets: scene3DInputAssetsSchema.optional()
+        .describe("Selected GLBs: {id, revisionId, assetId, label?}. Requires an import-capable advanced engine. No URLs or byte receipts."),
       ...SCENE3D_MCP_AUTHORING_FIELDS,
     },
     outputSchema: JOB_OUTPUT_SCHEMA,
@@ -58,6 +67,11 @@ export function registerScene3DVerbs({ server, session, fastify }: RegisterOpts)
     payload: {
       prompt: args.prompt, durationSeconds: args.duration_seconds,
       fps: args.fps, aspectRatio: args.aspect_ratio, references: args.references,
+      ...(args.input_assets === undefined ? {} : { inputAssets: args.input_assets }),
+      ...(args.engine === undefined ? {} : { engine: args.engine }),
+      ...(args.accepted_scene_schema_versions === undefined ? {} : { acceptedSceneSchemaVersions: args.accepted_scene_schema_versions }),
+      ...(args.local_connection_id === undefined ? {} : { localConnectionId: args.local_connection_id }),
+      ...(args.max_repair_passes === undefined ? {} : { maxRepairPasses: args.max_repair_passes }),
       llmModel: args.llm_model, reasoningEffort: args.reasoning_effort,
       userId: session.userId, mcp_client: session.clientName,
     },
@@ -74,6 +88,7 @@ export function registerScene3DVerbs({ server, session, fastify }: RegisterOpts)
     inputSchema: {
       scene_plan: z.record(z.string(), z.unknown()).describe("The complete scenePlan returned by a scene job."),
       expected_revision_id: z.string().uuid(),
+      replace_references: z.boolean().optional(),
       prompt: z.string().min(1).max(8000).optional(),
       operations: z.array(z.record(z.string(), z.unknown())).min(1).max(SCENE3D_LIMITS.maxOperations).optional()
         .describe("set-object, add-object, remove-object, set-camera, set-lighting, or set-background operations."),
@@ -88,6 +103,11 @@ export function registerScene3DVerbs({ server, session, fastify }: RegisterOpts)
     url: "/v1/3d-scene/edit",
     payload: {
       scenePlan: args.scene_plan, expectedRevisionId: args.expected_revision_id,
+      ...(args.replace_references === undefined ? {} : { replaceReferences: args.replace_references }),
+      ...(args.engine === undefined ? {} : { engine: args.engine }),
+      ...(args.accepted_scene_schema_versions === undefined ? {} : { acceptedSceneSchemaVersions: args.accepted_scene_schema_versions }),
+      ...(args.local_connection_id === undefined ? {} : { localConnectionId: args.local_connection_id }),
+      ...(args.max_repair_passes === undefined ? {} : { maxRepairPasses: args.max_repair_passes }),
       prompt: args.prompt, operations: args.operations,
       lockedObjectIds: args.locked_object_ids, selectedObjectIds: args.selected_object_ids,
       references: args.references, llmModel: args.llm_model, reasoningEffort: args.reasoning_effort,
@@ -111,15 +131,16 @@ export function registerScene3DVerbs({ server, session, fastify }: RegisterOpts)
         "render-only export that costs no authoring, WITH edit_prompt it revises the scene first. " +
         "source.kind='local-export' uses a completed export from a paired desktop Blender, where that is available. " +
         "The tool quotes and submits with the same parameters and returns a job_id. " +
-        "Use generate_3d_scene for the cheaper, lower-fidelity clay previz instead.",
+        "Use generate_3d_scene for an editable preview without the MP4 export.",
       inputSchema: {
         source: z.discriminatedUnion("kind", [
           z.object({
             kind: z.literal("prompt"),
             prompt: z.string().min(1).max(PRO3D_RENDER_LIMITS.promptMax),
+            input_assets: scene3DInputAssetsSchema.optional(),
             references: z.array(referenceSchema).max(PRO3D_RENDER_LIMITS.maxReferences).optional()
               .describe("Up to 8 references, at most 1 video. Images guide appearance/layout; video guides layout/motion."),
-          }),
+          }).strict(),
           z.object({
             kind: z.literal("scene"),
             revision_id: z.string().min(1).max(PRO3D_RENDER_LIMITS.maxIdLength),
@@ -127,12 +148,12 @@ export function registerScene3DVerbs({ server, session, fastify }: RegisterOpts)
               .describe("Required for Basic scenes retained only in job history. Optional for retained revisions, which use current scene permissions."),
             edit_prompt: z.string().min(1).max(PRO3D_RENDER_LIMITS.editPromptMax).optional()
               .describe("OMIT for a render-only export. Supplying it revises the scene and costs authoring."),
-          }),
+          }).strict(),
           z.object({
             kind: z.literal("local-export"),
             export_id: z.string().min(1).max(PRO3D_RENDER_LIMITS.maxIdLength),
             connection_id: z.string().min(1).max(PRO3D_RENDER_LIMITS.maxIdLength),
-          }),
+          }).strict(),
         ]).describe("Exactly one of prompt / scene / local-export."),
         engine: z.enum(PRO3D_RENDER_ENGINES).optional(),
         duration_seconds: z.number().min(PRO3D_RENDER_LIMITS.minDurationSeconds).max(PRO3D_RENDER_LIMITS.maxDurationSeconds).optional()
@@ -154,7 +175,8 @@ export function registerScene3DVerbs({ server, session, fastify }: RegisterOpts)
       // here would buy the caller an authoring pass they did not ask for.
       const source =
         args.source.kind === "prompt"
-          ? { kind: "prompt" as const, prompt: args.source.prompt, ...(args.source.references ? { references: args.source.references } : {}) }
+          ? { kind: "prompt" as const, prompt: args.source.prompt, ...(args.source.references ? { references: args.source.references } : {}),
+              ...(args.source.input_assets === undefined ? {} : { inputAssets: args.source.input_assets }) }
           : args.source.kind === "scene"
             ? {
                 kind: "scene" as const,

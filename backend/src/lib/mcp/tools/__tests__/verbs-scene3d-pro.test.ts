@@ -91,6 +91,17 @@ describe("pro_3d_render registration follows engine readiness", () => {
 })
 
 describe("pro_3d_render uses the public route", () => {
+  it("preserves selected GLBs in both quote and submission", async () => {
+    setPluginEngines({ scene3d: capableEngine })
+    const { handlers, inject } = harness()
+    const inputAssets = [{ id: "vehicle", revisionId: "00000000-0000-4000-8000-000000000010",
+      assetId: "00000000-0000-4000-8000-000000000011" }]
+    await handlers.pro_3d_render({ source: { kind: "prompt", prompt: "Drive", input_assets: inputAssets } })
+    const calls = inject.mock.calls.map(c => c[0] as unknown as { payload: Record<string, unknown> })
+    expect(calls).toHaveLength(2)
+    expect(calls[0].payload.source).toEqual({ kind: "prompt", prompt: "Drive", inputAssets })
+    expect(calls[1].payload.source).toEqual(calls[0].payload.source)
+  })
   it("quotes and submits the SAME body, with the source unchanged", async () => {
     setPluginEngines({ scene3d: capableEngine })
     const { handlers, inject } = harness()

@@ -37,6 +37,8 @@ export type UploadLane =
   | "upload-json"
   | "upload-proxy"
   | "upload-handoff"
+  | "retained-image"
+  | "retained-video"
 
 export interface UploadCheckInput {
   readonly kind: UploadKind
@@ -64,6 +66,14 @@ export interface UploadPolicy {
 export interface UploadDecision extends UploadVerdict {
   /** The denying policy's id (deny only) — for logs, never the client. */
   readonly policyId?: string
+}
+
+/** Service callers use the same public refusal as HTTP upload routes. */
+export class UploadBlockedError extends Error {
+  constructor(readonly decision: UploadDecision) {
+    super(decision.reason || "This upload is not allowed on this deployment")
+    this.name = "UploadBlockedError"
+  }
 }
 
 const policies: UploadPolicy[] = []

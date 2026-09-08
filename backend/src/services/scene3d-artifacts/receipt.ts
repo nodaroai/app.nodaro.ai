@@ -82,7 +82,7 @@ export function assertScene3DArtifactMagic(
   head: Buffer,
   byteLength: number,
 ): void {
-  if (kind === "glb") {
+  if (kind === "glb" || kind === "input-glb") {
     if (head.length < 12 || head.readUInt32LE(0) !== 0x46546c67) {
       fail("artifact is not a binary glTF (GLB) file")
     }

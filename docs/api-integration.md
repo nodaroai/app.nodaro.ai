@@ -503,6 +503,65 @@ Recommended cutoff: use sync for workflows you expect to finish in under
 a minute (text generation, light image work). For multi-step workflows
 that include video rendering or upscaling, use async.
 
+Linked-frame canvas nodes require the Studio production generation API. The
+canvas workflow-run endpoint and direct media requests that identify a saved
+linked node return HTTP 400 with `sequence_execution_required`. Queued workflows
+also check this requirement before executing their graph. See
+[the execution boundary](design/dependent-frame-execution.md).
+
+Generic saves of a dependency-aware production's graph or settings return
+HTTP 409 `production_capability_required`, including delta updates and updates
+that omit its dependency fields. Use compatible Studio production operations
+to preserve reviewed inputs and apply revision checks.
+
+The Cloud Studio plugin exposes `GET /v1/studio/productions/capabilities` for
+per-operation support and `GET /v1/studio/productions/:id?detail=full` for planned
+frames, candidate history, recorded acceptance, linked endpoints and pending
+jobs. These reads do not generate media, reconcile jobs or accept candidates.
+Character descriptions work without a generated portrait; image conditioning
+is an explicit choice. See [the Studio SDK methods](sdk-reference.md#clientstudio)
+for generation, reconciliation and separate review actions.
+
+When `operations.saveEditorState` is available, `POST /v1/studio/productions/:id/ops` accepts `save_editor_state` with an
+`expectedVersion` and a serialized editor `graph`. This saves ordinary editor
+fields while preserving protected frame and job state. The revision is checked
+inside the compare-and-swap loop; a stale draft returns HTTP 409 even without
+an outer `strict` flag. Retain the local draft when handling that conflict.
+
+When `operations.revisionedSharing` is available, use
+`POST /v1/studio/productions/:id/share` with `{ shared, expectedVersion }` to
+change link sharing at the reviewed workflow revision. The route separately
+checks permission to change visibility. If another edit wins before the write,
+it returns HTTP 409 `workflow_conflict` without rebasing the sharing decision.
+Use `shared: false` on the same route for revision-checked unsharing.
+
+With `operations.editableSharedCopies`, the sharing body also accepts
+`allowEditableCopy`. Enabling it requires `shared: true` and `expectedVersion`,
+and the same owner/admin visibility authority. Authenticated link viewers may
+then call `POST /v1/studio/productions/:id/clone` to copy the saved live plan,
+prompts, cast descriptions, retained inputs and take history. The bin and private
+review notes are excluded. Destination media uses the viewer's storage quota;
+frames need fresh acceptance and no generation jobs are started. Unsharing clears
+copy permission. Revocation blocks subsequent requests; already admitted copies
+remain independent. Public snapshots advertise `publicView.editableCopyAllowed`
+without exposing the editable source. The clone route rechecks permission.
+
+Public link reads of dependency-aware productions require the matching plugin's
+public projection. They return a marked `settings.studio.publicView` media
+snapshot: selected clips, accepted frames, selected previews and planned-frame
+labels. Private inputs, reviews, pending jobs, trash and unselected history are
+omitted. The snapshot is for read-only display; it is not an editable plan or a
+lossless clone source. Without compatible projection support, the public read
+returns the same 404 as an unavailable link. Ordinary public workflows retain
+their existing response shape.
+
+For a linked segment, `POST /v1/studio/productions/:id/generate` with
+`kind: "clip"`, `shotId` and `dryRun: true` verifies both accepted endpoints and
+returns an estimate for the normalized clip settings. Its `inputHash` covers
+those settings and endpoint pins. Send it back as `expectedInputHash` on the
+explicit generation request; a mismatch returns `sequence_quote_changed` (409)
+before submitting a job. Quoting itself creates no job and accepts no frame.
+
 ## 6. Webhooks (push into Nodaro)
 
 A complementary path: instead of your server calling Nodaro to start a
@@ -593,6 +652,7 @@ All errors share the same shape:
 | 404 | `not_found` | — | Workflow, execution, or token not found. |
 | 404 | `workspace_not_found` | — | (Cloud edition, organizations) The workspace named by workspace-paid work does not exist (or was deleted mid-flight). Rollout-gated. |
 | 409 | `workspace_archived` | — | (Cloud edition, organizations) Workspace-paid work into an archived workspace. Unarchive it or move the work. Rollout-gated. |
+| 409 | `retained_image_in_use` | — | A delete would remove protected image bytes, or a production has active jobs using retained images. Finish or cancel active jobs before deleting the production. |
 | 422 | `job_blocked` | — | A job policy registered by this deployment refused the generation before it ran. `message` is user-facing text written by the deployment's policy (or by the platform, when the policy supplies none) — show it as-is. No job was created and nothing was charged. The platform does not retry a refused request; whether the same request would be judged differently is the deployment's policy's business. Only occurs on deployments that register a job policy — see [deployment.md](./deployment.md#surface-profile-nodaro_surface_profile). Two bookkeeping inserts are the honest exception: the Suno voice-persona ownership rows and the connected-cloud LLM mirror row treat a block as best-effort — the operation proceeds and its row is simply not recorded — so a policy blocking one of those neither stops the call nor reaches you as a 422. |
 | 422 | `upload_blocked` | — | An upload policy registered by this deployment refused the upload before it was stored (every byte-carrying ingestion lane: `POST /v1/upload*`, the proxy PUT and the handoff POST). `message` is the deployment's own reason — show it as-is. Nothing was written. Only occurs on deployments that register an upload policy. |
 | 429 | `rate_limited` | — | You've exceeded the per-minute bucket. Back off. |
@@ -2775,6 +2835,15 @@ before anything is reserved. See
 [3D Render Pro](nodes/composition/pro-3d-render.md).
 
 ### Scene versions and binary assets
+
+New-scene requests may select retained GLBs with `inputAssets` on
+`POST /v1/3d-scene/generate`, or `source.inputAssets` for a Pro prompt source.
+Each selector is `{id, revisionId, assetId, label?}`; the list is limited to
+eight unique logical and artifact IDs. Image/video `references` remains a
+separate field. The server authorizes the exact revision pin and resolves
+immutable byte metadata before quoting or reserving credits. Caller receipts
+and URLs are rejected. Imports require an advanced engine with import support;
+Basic and unavailable import lanes refuse without starting a generation.
 
 `Scene3DPlan` is a discriminated union: schema version 1 stores primitives and
 keyframes; version 2 stores semantic entities, immutable GLB assets, baked camera

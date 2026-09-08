@@ -1,3 +1,11 @@
+import { retainVideo, readRetainedVideo, copyRetainedVideo } from "../retained-videos.js"
+import { retainJobVideo, readRetainedJobVideos } from "../retained-job-videos.js"
+import { readRetainedVideoCopies, recordRetainedVideoCopy } from "../retained-video-copies.js"
+import { retainImage, readRetainedImage, copyRetainedImage } from "../retained-images.js"
+import { retainJobImage, readRetainedJobImages } from "../retained-job-images.js"
+import { recordRetainedImageCopy, readRetainedImageCopies } from "../retained-image-copies.js"
+import { readPublicVideoFrame } from "../public-video-frame.js"
+import { isStorageConfigured } from "../storage.js"
 import { createSceneRenderingToolkit } from "./scene3d-render-toolkit.js"
 import { completeStructuredMetered } from "./llm-metered.js"
 import { directVoiceChanger } from "../../providers/elevenlabs/voice-changer.js"
@@ -68,6 +76,7 @@ import { videoQueue } from "../queue.js"
 import { creditGuard, reserveCreditsForJob, reserveCreditsForJobOnce } from "../../middleware/credit-guard.js"
 import { safeUrlSchema, YOUTUBE_HOSTS, hostnameMatchesAllowlist } from "../url-validator.js"
 import { safeFetch } from "../safe-fetch.js"
+import { safeFetchBytes } from "../safe-fetch-bytes.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../request-helpers.js"
 import { extractMcpClient } from "../extract-mcp-client.js"
 import { buildJobInputData } from "../job-input-data.js"
@@ -90,13 +99,15 @@ import type { FastifyInstance } from "fastify"
 import type { LlmReasoningEffort } from "@nodaro/shared"
 import { ENTITY_TABLE, WORKSPACE_HEADER_LOWER } from "@nodaro/shared"
 import type { EntityNodeKind } from "@nodaro/shared"
-import { WORKFLOW_ACCESS_COLS, loadWorkflowFor } from "../workflow-route-access.js"
+import { WORKFLOW_ACCESS_COLS, loadWorkflowFor, loadStudioEditableCopySource } from "../workflow-route-access.js"
+import { writeCompatible } from "../compatible-workflow-writes.js"
 import { canChangeWorkflowVisibility } from "../workflow-access.js"
 import { changesStudioPublishFlag } from "../studio-audience.js"
 import { requireScope, type Scope } from "../scopes.js"
 import { entityOwnerFilter } from "../mcp/tools/_entity-scope.js"
 import { waitForJob } from "../mcp/tools/_wait-for-job.js"
 import { redactPrivateJobData } from "../public-job-data.js"
+import { withJobSubmissionContext } from "../job-submission-context.js"
 import type { ProviderOptions, ReconcileOpts } from "../../providers/provider.interface.js"
 import { randomUUID } from "node:crypto"
 import { dirname, join } from "node:path"
@@ -1038,6 +1049,17 @@ async function readJobsOwnedBy(
   }))
 }
 
+/** Trusted submission records are available only through an owner-scoped read. */
+async function readJobSubmissionsOwnedBy(userId: string, jobIds: ReadonlyArray<string>) {
+  const ids = [...new Set(jobIds)].filter((id) => id.length > 0)
+  if (!ids.length) return []
+  const { data, error } = await supabase.from("jobs").select("id, submission_context").eq("user_id", userId).in("id", ids)
+  if (error) throw new Error("Failed to read job submission records")
+  return (data ?? []).flatMap((row) => row.submission_context && typeof row.submission_context === "object" && !Array.isArray(row.submission_context)
+    ? [{ id: row.id as string, submission_context: row.submission_context as Record<string, unknown> }] : [])
+}
+
+
 /**
  * `tk.http.internalRequest` — a plugin route reaching another `/v1` route.
  *
@@ -1049,8 +1071,9 @@ async function readJobsOwnedBy(
  * string still picks the identity. Callers that forward a request body strip
  * or pin that field first.
  */
+
 function internalRequest(app: FastifyInstance, opts: PluginInternalRequestOptions) {
-  return app.inject({
+  return withJobSubmissionContext(opts, () => app.inject({
     method: opts.method,
     url: opts.url,
     headers: {
@@ -1060,7 +1083,7 @@ function internalRequest(app: FastifyInstance, opts: PluginInternalRequestOption
       ...(opts.workspaceId ? { [WORKSPACE_HEADER_LOWER]: opts.workspaceId } : {}),
     },
     ...(opts.payload !== undefined ? { payload: opts.payload } : {}),
-  })
+  }))
 }
 
 export function buildToolkit(): PluginToolkit {
@@ -1159,6 +1182,7 @@ export function buildToolkit(): PluginToolkit {
       remuxToMp4,
     },
     media: {
+      readPublicVideoFrame,
       extractAudio,
       mixAudio,
       mergeVideoAudio,
@@ -1167,6 +1191,11 @@ export function buildToolkit(): PluginToolkit {
       uploadVideoMaybeWatermark,
     },
     storage: {
+      retainImage, readRetainedImage, copyRetainedImage, canRetainImages: isStorageConfigured(),
+      retainJobImage, readRetainedJobImages,
+      retainVideo, readRetainedVideo, copyRetainedVideo, canRetainVideos: isStorageConfigured(),
+      retainJobVideo, readRetainedJobVideos, readRetainedVideoCopies, recordRetainedVideoCopy,
+      recordRetainedImageCopy, readRetainedImageCopies,
       uploadBufferToR2,
       uploadFileToR2,
       runPostProcessing,
@@ -1203,6 +1232,7 @@ export function buildToolkit(): PluginToolkit {
     },
     jobs: {
       readJobsOwnedBy,
+      readJobSubmissionsOwnedBy,
       waitForJob,
       storeRecastAudioBase,
       readRecastAudioBase,
@@ -1250,6 +1280,7 @@ export function buildToolkit(): PluginToolkit {
     http: {
       supabase,
       internalRequest,
+      supportsJobSubmissionContext: true,
       videoQueue,
       creditGuard,
       reserveCreditsForJob,
@@ -1271,6 +1302,7 @@ export function buildToolkit(): PluginToolkit {
       buildJobInputData,
       formatZodError,
       safeFetch,
+      safeFetchBytes,
       // Mirrors `insertWithIdempotencyKey` (`lib/idempotent-insert.ts:33`),
       // narrowed to the "jobs" table + the one column the contract needs.
       insertJobWithIdempotencyKey: async (data, idempotencyKey, billingContext) => {
@@ -1433,9 +1465,12 @@ export function buildToolkit(): PluginToolkit {
     },
     db: supabase,
     workflows: {
+      writeCompatible,
       accessCols: WORKFLOW_ACCESS_COLS,
       loadWorkflowFor,
       canChangeVisibility: canChangeWorkflowVisibility,
+      supportsEditableCopySharing: true,
+      loadStudioEditableCopySource,
       changesStudioPublishFlag,
     },
     entities: { listOwned: listOwnedEntities },

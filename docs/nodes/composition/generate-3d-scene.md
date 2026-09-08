@@ -20,6 +20,7 @@ The output is a **composition plan**, not an MP4. Connect it to [Edit 3D Scene](
 |---|---|
 | Prompt | Describe objects, their motion, camera placement/movement and timing. |
 | References | Up to 8 total, including at most 1 video. Images guide appearance/layout; video guides motion/layout. |
+| Input assets | Optional `inputAssets`: up to 8 GLBs selected as `{id, revisionId, assetId, label?}`. Requires an advanced engine with import support. |
 | Duration | 1–60 seconds; default 4. |
 | FPS | 15–60; default 24. |
 | Aspect ratio | `16:9` (default), `9:16`, `1:1`, or `4:5`. |
@@ -34,6 +35,15 @@ The scene stores object IDs, transforms, dimensions, camera position/target/lens
 Coordinates use meters with Y pointing up. Euler rotations are radians. Timeline frames start at zero. Each rendered MP4 uses a specific scene revision.
 
 ## API and SDK
+
+For existing GLBs, send `inputAssets` alongside your prompt and image/video
+references. `id` is a unique name within the input list; `revisionId` and
+`assetId` identify an authorized retained scene artifact. The server resolves
+its digest and byte length. URLs, caller-supplied receipts, and duplicate IDs
+are refused. Basic does not accept imported geometry. Import support is
+optional and is rejected before pricing when unavailable; selecting Advanced
+alone does not guarantee import support. Existing-scene edits retain their
+construction inputs; new asset selections belong to new-scene requests.
 
 `POST /v1/3d-scene/generate` returns `{ jobId }`. Poll the job; its completed `output_data.scenePlan` contains the editable scene.
 

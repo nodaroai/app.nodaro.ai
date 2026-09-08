@@ -36,7 +36,7 @@ the pipeline and the price.
 
 | Source | Shape | What happens |
 |---|---|---|
-| New scene | `{ kind: "prompt", prompt, references? }` | Authors a scene from your brief, then renders it. |
+| New scene | `{ kind: "prompt", prompt, references?, inputAssets? }` | Authors a scene from your brief, then renders it. |
 | Existing scene | `{ kind: "scene", revisionId, sourceJobId }` | **Render-only.** Exports that exact revision. No authoring or build charge. |
 | Existing scene, revised | `{ kind: "scene", revisionId, sourceJobId, editPrompt }` | Revises the scene first, then renders it. |
 | Desktop export | `{ kind: "local-export", exportId, connectionId }` | Uses a completed export from a paired desktop Blender, where that is available. |
@@ -49,6 +49,13 @@ different request and is treated as one.
 optional for retained revisions, including manual edits. The platform checks
 current scene permissions for retained revisions and job ownership for Basic
 job-history sources; knowing either identifier does not grant access.
+
+`inputAssets` selects existing GLBs by `{id, revisionId, assetId, label?}`;
+it is separate from image/video `references` and uses the same limits as
+[Generate 3D Scene](generate-3d-scene.md). It requires engine import support.
+The quote and run must carry identical selectors. The server rechecks current
+permissions and immutable byte receipts before admitting the quoted run.
+Existing-scene and desktop-export sources do not accept new input selectors.
 
 On the canvas, pick the source in the node's panel and wire the scene into the
 node's **Scene** input.

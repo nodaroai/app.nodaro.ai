@@ -1,5 +1,41 @@
 # @nodaro/sdk
 
+## 2.4.0
+
+### Minor Changes
+
+- a4b5102: Add immutable 3D input selectors for advanced scene generation and Pro prompt sources. Select existing GLBs by revision and artifact ID while the server resolves permissions and byte receipts. Basic generation refuses imported geometry instead of silently ignoring it.
+
+### Patch Changes
+
+- Updated dependencies [a4b5102]
+  - @nodaro/shared@3.4.0
+
+## 2.3.0
+
+### Minor Changes
+
+- b52d08e: Add Studio production discovery, reads, semantic editing and separate manual frame generation/review methods. These are public API transport contracts; creative planning and validation remain server-side.
+
+  Add revision-checked editor saves that preserve protected frame and job state and expose availability through production capabilities.
+
+  Add compatible production bundle import with capability discovery and server-verified retained frame copying.
+
+  Add revision-checked bundle append with complete frame dependencies, explicit insertion and film-look choices, and capability discovery.
+
+  Expose manual result-rejection capability for the semantic editor without submitting generation jobs.
+
+  Expose sequence-plan editing capability for atomic endpoint/order edits and single-segment detachment with continuous-group splitting.
+
+  Expose exact linked-take retake requests and capability discovery, retaining explicit quote review and submission tokens.
+
+  Add owner-controlled editable-copy permission on revisioned sharing and capability discovery for authenticated shared-plan copies.
+
+### Patch Changes
+
+- Updated dependencies [aace203]
+  - @nodaro/shared@3.3.0
+
 ## 2.2.0
 
 ### Minor Changes

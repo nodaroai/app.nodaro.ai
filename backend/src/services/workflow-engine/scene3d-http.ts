@@ -81,6 +81,7 @@ export function buildScene3DHttpBody(
   }
   if (node.type === "generate-3d-scene") {
     return { ...common, ...lane, prompt: payload.prompt, fps: payload.fps,
+      ...(payload.inputAssets === undefined ? {} : { inputAssets: payload.inputAssets }),
       durationSeconds: Number(payload.durationInFrames) / Number(payload.fps),
       aspectRatio: node.data.aspectRatio ?? "16:9" }
   }

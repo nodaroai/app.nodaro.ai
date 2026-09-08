@@ -126,7 +126,7 @@ function assertPlanAssetsMatch(
   const declared = new Set(plan.assets.map((ref) => ref.assetId))
   for (const entry of artifacts) {
     // `source-json` is the private recipe: never in a manifest, never readable.
-    if (entry.kind === "source-json") continue
+    if (entry.kind === "source-json" || entry.kind === "input-glb") continue
     if (!declared.has(entry.artifactId)) {
       asset(`artifact ${entry.artifactId} is published but the manifest does not declare it`)
     }
@@ -196,8 +196,14 @@ export async function publishScene3DRevision(
       invalid("the manifest's provenance.contentHash does not match its content")
     }
     assertPlanAssetsMatch(plan, input.artifacts)
+    const inputs = input.artifacts.filter(entry => entry.kind === "input-glb")
+    if (inputs.length > 8 || inputs.some(entry => entry.byteLength > 64 * 1024 * 1024) ||
+        inputs.reduce((sum, entry) => sum + entry.byteLength, 0) > 128 * 1024 * 1024 ||
+        (inputs.length > 0 && input.artifacts.filter(entry => entry.kind === "source-json").length !== 1)) {
+      asset("retained scene inputs require one authoring source and bounded input bytes")
+    }
   } else {
-    const stray = input.artifacts.find((entry) => V2_ONLY_KINDS.includes(entry.kind))
+    const stray = input.artifacts.find((entry) => V2_ONLY_KINDS.includes(entry.kind) || entry.kind === "input-glb")
     if (stray) {
       asset(`a v1 scene cannot publish a ${stray.kind} artifact: it has no way to reference it`)
     }

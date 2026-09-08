@@ -1,5 +1,5 @@
 /** Opaque owned artifacts. No authoring recipe or service protocol crosses this boundary. */
-export type PluginSceneArtifactKind = "glb" | "camera-track-json" | "poster" | "validation-report" | "blend-source" | "source-json" | "build-manifest"
+export type PluginSceneArtifactKind = "glb" | "camera-track-json" | "poster" | "validation-report" | "blend-source" | "source-json" | "build-manifest" | "input-glb"
 export interface PluginSceneArtifactScope { jobId: string; userId: string; revisionId: string }
 export interface PluginSceneArtifactUpload extends PluginSceneArtifactScope {
   artifactId: string
@@ -46,6 +46,8 @@ export interface PluginSceneAuthoringSource {
   source: Uint8Array
   sourceArtifactId: string
   sourceSha256: string
+  /** Verified private input pins of this revision, not additional playback assets. */
+  inputArtifacts?: Array<{ assetId: string; kind: "glb"; sha256: string; byteLength: number }>
 }
 export interface PluginSceneJobEditRequest {
   jobId: string
@@ -66,6 +68,22 @@ export interface PluginSceneDeliveryPublish extends PluginSceneArtifactScope {
   }>
 }
 export interface PluginSceneArtifactToolkit {
+  /** Resolve an authorized pinned input before quoting; immutable metadata only, no fetch grant. */
+  resolveInput?(input: { userId: string; revisionId: string; assetId: string },
+    options?: { signal?: AbortSignal }): Promise<{
+      assetId: string; sourceRevisionId: string; kind: "glb"; sha256: string; byteLength: number
+    }>
+  /** Copy an authorized input into this active job's owned immutable retention reservation. */
+  retainInput?(input: PluginSceneArtifactScope & { artifactId: string; sourceRevisionId: string;
+    asset: { assetId: string; kind: "glb"; sha256: string; byteLength: number } },
+    options?: { signal?: AbortSignal }): Promise<PluginSceneArtifactReceipt>
+  /** Authorize an immutable input artifact for an active owned job, then sign a bounded GET. */
+  grantInput?(input: { jobId: string; userId: string; sourceRevisionId: string;
+    asset: { assetId: string; kind: "glb"; sha256: string; byteLength: number }; expiresInSeconds: number },
+    options?: { signal?: AbortSignal }): Promise<{
+      assetId: string; kind: "glb"; sha256: string; byteLength: number;
+      fetch: { method: "GET"; url: string; headers?: Record<string, string> }
+    }>
   /** Persist deterministic v2 edits for an active owned job, without generation. */
   applyEdits?(input: PluginSceneJobEditRequest, options?: { signal?: AbortSignal }): Promise<{ scenePlan: unknown; changeSummary: string }>
   /** Quote/admission source resolution uses current canonical scene permissions. */

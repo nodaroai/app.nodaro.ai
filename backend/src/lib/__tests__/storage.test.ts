@@ -1,5 +1,5 @@
+import { Readable } from "node:stream"
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import type { Readable } from "node:stream"
 
 const mocks = vi.hoisted(() => {
   // MUTABLE on purpose: the shared-bucket passthrough (spec §9.2) is read as
@@ -62,6 +62,7 @@ vi.mock("@aws-sdk/client-s3", () => {
   }
   return {
     S3Client: MockS3Client,
+    GetObjectCommand: class { constructor(params: unknown) { Object.assign(this, params) } },
     PutObjectCommand: MockPutObjectCommand,
     DeleteObjectCommand: MockDeleteObjectCommand,
     DeleteObjectsCommand: MockDeleteObjectsCommand,
@@ -260,6 +261,10 @@ describe("uploadBufferToR2", () => {
 // ---------- deleteFromR2 ----------
 
 describe("deleteFromR2", () => {
+  it.each(["retained-images", "retained-videos"])("refuses a %s snapshot before sending a physical delete", async (prefix) => {
+    await expect(deleteFromR2(`${prefix}/00000000-0000-4000-8000-000000000001`)).rejects.toThrow("cannot be deleted")
+    expect(mocks.deleteCalls).toHaveLength(0)
+  })
   it("calls send with DeleteObjectCommand params", async () => {
     await deleteFromR2("images/old.png")
 
@@ -291,6 +296,11 @@ describe("r2KeyFromOurUrl", () => {
 // ---------- batchDeleteFromR2 ----------
 
 describe("batchDeleteFromR2", () => {
+  it("refuses the entire batch when it contains retained bytes", async () => {
+    await expect(batchDeleteFromR2(["images/ordinary.png", "retained-images/00000000-0000-4000-8000-000000000001"]))
+      .rejects.toThrow("cannot be deleted")
+    expect(mocks.deleteObjectsCalls).toHaveLength(0)
+  })
   it("returns zeroes for empty array without calling send", async () => {
     const result = await batchDeleteFromR2([])
 
@@ -741,4 +751,13 @@ describe("uploadToR2 — shared-bucket passthrough (R2_SHARED_WITH_RELAY_TARGET)
     expect(url).toBe("https://r2.test.com/images/near-job-4.png")
     expect(trackMock).toHaveBeenCalledWith("user-4", 400)
   })
+})
+
+it.each([undefined, 1])("bounds actual object bytes when ContentLength is %s", async (ContentLength) => {
+  const { readR2Object } = await import("../storage.js")
+  const body = Readable.from([Buffer.alloc(3), Buffer.alloc(3), Buffer.alloc(3)])
+  mocks.mockSend.mockResolvedValue({ Body: body, ContentLength, ContentType: "video/mp4" })
+  const result = await readR2Object("retained-videos/test", { maxBytes: 5 })
+  expect(result?.body.length).toBe(0)
+  expect(body.destroyed).toBe(true)
 })

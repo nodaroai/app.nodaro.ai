@@ -1083,6 +1083,9 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     outputType: "data", capabilities: ["supports-reference-image", "supports-reference-video", "editable-3d-scene", "scene3d-embed-v1"],
     inputSchema: { fields: [
       { key: "prompt", type: "string", required: true },
+      { key: "engine", type: "string", options: ["basic", "blender-cloud", "blender-local"] },
+      { key: "inputAssets", type: "array" },
+      { key: "acceptedSceneSchemaVersions", type: "array" },
       { key: "durationSeconds", type: "number" }, { key: "fps", type: "number" },
       { key: "aspectRatio", type: "string" }, { key: "references", type: "array" },
       { key: "llmModel", type: "string" }, { key: "reasoningEffort", type: "string" },

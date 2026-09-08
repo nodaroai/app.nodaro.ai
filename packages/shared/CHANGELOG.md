@@ -1,5 +1,17 @@
 # @nodaro/shared
 
+## 3.4.0
+
+### Minor Changes
+
+- a4b5102: Add immutable 3D input selectors for advanced scene generation and Pro prompt sources. Select existing GLBs by revision and artifact ID while the server resolves permissions and byte receipts. Basic generation refuses imported geometry instead of silently ignoring it.
+
+## 3.3.0
+
+### Minor Changes
+
+- aace203: Expose the dependency capability and structured execution refusal for workflow nodes that require reviewed Studio inputs.
+
 ## 3.2.0
 
 ### Minor Changes

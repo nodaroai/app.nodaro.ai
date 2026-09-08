@@ -906,6 +906,129 @@ const { jobId: childId, fromSegment } = await client.videoPro.continueRun(jobId,
 
 ---
 
+### `client.studio`
+
+Studio production routes are supplied by the Cloud plugin. Use `capabilities()`
+to check per-operation support before exposing planned-frame controls. A missing
+plugin returns the usual 404. These methods preserve the API response envelope.
+
+| Method | Purpose |
+| --- | --- |
+| `capabilities()` | Read plan versions and manual operation support |
+| `skill()` | Read the production authoring format |
+| `list({ limit?, cursor?, includeArchived? })` | List productions; rows are in `response.data.data` |
+| `get(id, { detail?, shotId? })` | Read a production and capabilities without reconciling jobs |
+| `validatePlan(plan)` | Validate a plan without creating it |
+| `create({ name?, plan? })` | Create a production |
+| `clone(id, { name?, projectId?, expectedVersion? })` | Copy a saved production; optional destination project must belong to the caller |
+| `importBundle({ bundle, projectId? })` | Import a portable production through the compatible writer, remapping its frame and sequence IDs |
+| `appendBundle(id, { bundle, expectedVersion, afterShotId?, applyFilm? })` | Append a complete bundle slice to an editable production with fresh IDs and an exact revision check |
+| `edit(id, { ops, baseVersion?, strict?, clientRequestId? })` | Apply semantic operations with revision conditions |
+| `saveEditorState(id, { expectedVersion, graph, clientRequestId? })` | Save ordinary editor fields against the loaded revision; preserve protected frame and job state |
+| `setShared(id, { shared, allowEditableCopy?, expectedVersion? })` | Change link sharing through the visibility-authorized route |
+| `generateKeyframe(id, { keyframeId, expectedRevision, clientRequestId?, overrides? })` | Generate a planned frame without accepting it |
+| `generateShot(id, input)` | Submit or quote a still/clip request |
+| `reconcile(id)` | Record completed jobs without accepting candidates |
+| `acceptKeyframe(id, review, concurrency?)` | Explicitly accept a reviewed candidate |
+| `edit(id, { ops: [{ op: "reject_keyframe_result", keyframeId, expectedRevision, resultKey, expectedAcceptedResultKey, reason? }], baseVersion, strict: true })` | Record Needs revision without generating; requires `operations.rejectKeyframes` support |
+| `edit(id, { ops: [{ op: "update_sequence_plan", sequenceId, expectedRevision, name, segments }], baseVersion, strict: true })` | Edit ordered `{ shotId, startKeyframeId, endKeyframeId }` segments while preserving existing scene IDs; requires `operations.editSequencePlans` |
+| `edit(id, { ops: [{ op: "detach_sequence_segment", sequenceId, shotId, mode, splitSequence: true, expectedSequenceRevision }], baseVersion, strict: true })` | Make one segment independent and split remaining continuous groups; `mode` is `clear` or `keep-accepted`; requires `operations.editSequencePlans` |
+
+The acceptance review supplies `keyframeId`, `expectedRevision`, `resultKey`,
+`expectedAcceptedResultKey` (or `null`), and `requirementChecks`. Each check names
+its `requirementId` and an outcome of `pass` or `waived`; waivers require a
+`waivedReason`. Optional concurrency conditions are `baseVersion`, `strict` and
+`clientRequestId`. Conflicts are returned through the normal SDK error path;
+the SDK never selects a different result or retries acceptance against a newer
+revision automatically.
+
+Check `capabilities.operations.saveEditorState` before using the editor-save
+method. It always sends a strict revision condition. A conflicting save returns
+HTTP 409; keep the local draft and reload before resolving the conflict. The
+snapshot cannot change frame plans, acceptance, endpoint bindings, linked-job
+history, protected recycle-bin entries or sharing. Use their dedicated semantic
+actions instead.
+
+`reconcile(id)` also checks submitted jobs belonging to scenes in the recycle
+bin. A completed clip stays in that scene's stored graph with its original
+endpoint pins; it does not recreate the scene on the timeline. Restore it with
+`restore_trashed` to recover the result. Clients should reconcile once when
+reopening an editable dependency production even if no pending marker is
+visible, because the submission response may have been lost. Reconciliation
+never starts generation or accepts a candidate.
+
+Use `edit` with a strict `baseVersion` for `remove_shot`, `restore_trashed` and
+`purge_trashed`. Detach a bound sequence segment before removing its scene.
+When emptying a scoped bin, send `purge_trashed` for the displayed entry IDs;
+`clear_trash` empties every bin, including planned frames. Entries carrying
+frame dependencies are exempt from automatic pruning of ordinary bin entries.
+
+Check `capabilities.operations.revisionedSharing` and pass `expectedVersion` to
+`setShared` to bind sharing or unsharing to the reviewed revision. A concurrent
+edit returns HTTP 409 `workflow_conflict`; the SDK does not retry against the
+new revision. Only callers allowed to change visibility can use this route.
+
+Check `capabilities.operations.cloneLinkedProductions` before copying a linked
+production. Pass its loaded `expectedVersion`; a changed source returns HTTP 409.
+The server copies retained frame inputs and historical parent/endpoint pins,
+remaps frame/scene/sequence IDs, and clears active jobs and frame acceptance.
+The new production starts private and visible. Review and accept its frames
+before generating dependent media; copying submits no generation jobs and uses
+destination storage quota for retained inputs.
+
+When `capabilities.operations.editableSharedCopies` is true, an owner or workspace
+admin may call `setShared(id, { shared: true, allowEditableCopy: true, expectedVersion })`.
+This permits authenticated link viewers to call `clone` for the saved live plan,
+prompts, cast descriptions, retained reference inputs and take history. The bin
+and private review notes are excluded. Copies start private, with fresh frame
+acceptance. Turning copying off or unsharing blocks subsequent copy requests;
+already admitted copies remain independent. The public media projection carries
+only `publicView.editableCopyAllowed`, never the editable plan itself.
+
+`appendBundle` posts to `/v1/studio/productions/:id/import-bundle` and requires
+`workflows:write` plus edit access to the destination. It returns the production
+and `importedShotIds`/`importedKeyframeIds`. It preserves existing scenes, frames,
+jobs, sharing and unrelated settings, and merges imported cast roles. The imported
+frame closure needs fresh acceptance. Omit `afterShotId` to append at the end;
+an unknown anchor or stale `expectedVersion` fails. `applyFilm: true` explicitly
+adopts the incoming film look; existing music, cuts and film brief stay in place.
+Check `appendPlannedBundles` or `appendLinkedBundles` in capabilities first.
+Linked media has the same owned-source and verified-copy requirements as a new
+production import. Neither method starts generation or retries a revision conflict.
+
+`importBundle` posts to `/v1/studio/productions/import-bundle` and creates a new,
+private production with remapped scene, frame and sequence IDs. Check
+`capabilities.operations.importPlannedBundles` for recipes or ungenerated plans,
+and `importLinkedBundles` for retained frame media. A linked bundle carries
+`nodaroStudio.sourceWorkflowId` as a lookup hint; the server checks ownership and
+verifies every retained image proof before copying bytes. Missing source access
+or forged provenance refuses the import before creating its destination. Recipe
+bundles need no source production. Neither path transfers acceptance or active
+jobs, and neither generates media. Other existing media remains linked by URL.
+Optional `projectId` must belong to the caller. The SDK returns the production
+response envelope, including the new ID, rather than a raw workflow graph.
+
+Frame generation has no dry-run option. `generateShot` accepts `dryRun` for a
+quote. Both use an explicit `clientRequestId` for safe caller retries. A generated
+portrait is optional for description-only cast references. See
+[dependent-frame behavior](design/dependent-frame-execution.md).
+
+Linked-clip quotes include `inputHash`, accepted `endpointPins`, normalized
+duration/resolution/aspect ratio/audio settings, and the `creditIdentifier` used
+for the estimate. Pass the reviewed `inputHash` as `expectedInputHash` when
+generating the clip. Changed settings or accepted endpoint pins return HTTP 409
+`sequence_quote_changed` before submission; request and review a fresh quote.
+Credits remain an estimate; the generation route reserves the current price.
+
+When `capabilities.operations.retakeLinkedClips` is true, pass
+`retakeResultKey` with `kind: "clip"` and `shotId` to quote a native linked take
+using `dryRun: true`. Submit the same take with the reviewed `expectedInputHash`
+and a fresh `clientRequestId`. Omit `mode`, `overrides`, and `count`: retakes use
+the original stored request and retained endpoint images, even after plans or
+acceptance change. Existing takes stay in history. A take without a verifiable
+original request or retained images is refused; older and copied takes may be
+unavailable for this operation. A retake does not reproduce identical video bytes.
+
 ### `client.recast`
 
 Recast runs + the authored-script import lane ("movie as JSON"). **Cloud
@@ -4674,6 +4797,14 @@ Use `await client.scene3d.capabilities()` to discover optional Advanced engines;
 are rejected before a Basic generation or its credit checks.
 
 `nodes.run` and `nodes.runAndWait` accept typed `GenerateScene3DParams`, `EditScene3DParams` and `RenderScene3DParams`. Generation/edit completion returns `Scene3DJobOutput` with `scenePlan` and an optional `changeSummary`.
+
+`GenerateScene3DParams.inputAssets` and a Pro prompt source's `inputAssets`
+accept up to eight `Scene3DInputAsset` selectors:
+`{id, revisionId, assetId, label?}`. They select authorized existing GLBs while
+`references` continues to carry appearance images and motion videos. This
+requires an advanced engine with import support; Basic and unsupported imports
+are refused before charging. The server supplies byte receipts. Do not send
+asset URLs or hashes. Reuse identical selectors when submitting a Pro quote.
 
 ```typescript
 const created = await client.nodes.runAndWait("generate-3d-scene", {

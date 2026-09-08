@@ -1183,6 +1183,19 @@ describe("run handlers reset accumulation at execution start", () => {
 // ---------------------------------------------------------------------------
 
 describe("run confirmation gate", () => {
+  it("refuses linked nodes before confirmation, saves or optimistic run state, including skipConfirm", async () => {
+    mockNodes = [{ ...makeNode("linked"), data: { keyframeId: "A" } }]
+    const confirmRun = vi.fn().mockResolvedValue(true)
+    const save = vi.fn()
+    await handleRun(makeCtx({ confirmRun }), "p1", "wf-1", save, vi.fn(), undefined, undefined, { skipConfirm: true })
+    await handleRunSingleNode("linked", makeCtx({ confirmRun }), "p1", save, vi.fn(), { current: new Set() }, { skipConfirm: true })
+    expect(mockToastError).toHaveBeenCalledWith(expect.stringContaining("Studio"))
+    expect(confirmRun).not.toHaveBeenCalled()
+    expect(save).not.toHaveBeenCalled()
+    expect(mockMarkNodesStatus).not.toHaveBeenCalled()
+    expect(mockExecuteNode).not.toHaveBeenCalled()
+  })
+
   it("handleRun (Execute-All) always calls confirmRun; abort on false does nothing", async () => {
     mockNodes = [makeNode("a"), makeNode("b")]
     mockCollapseExpandedClones.mockReturnValue({ nodes: mockNodes, edges: [] })

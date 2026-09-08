@@ -19,6 +19,25 @@ requires the exact referenced bytes and refuses missing, oversized or changed
 assets before drawing. Playback loads geometry and camera data; native source
 files are a separate download capability.
 
+When an optional authoring engine consumes an existing GLB, the host checks
+access to its exact source revision and verifies the immutable asset receipt
+before issuing a short-lived download grant. The destination job must still be
+active and authorized. Grants use private storage and reject changed objects;
+they are transport credentials and are never part of the scene plan. Engine
+support for imported inputs remains a separate capability.
+
+The host also resolves an input selector before a job exists, for quote and
+admission validation. Only the source revision and artifact IDs are accepted;
+the host supplies the digest and byte length after checking permissions and
+private storage. It checks access again after storage IO. This metadata lookup
+creates no job or download grant, and callers cannot supply a URL or receipt.
+
+Authored revisions can retain private copies of their construction inputs.
+Those copies belong to the saved revision's owner and remain pinned through
+manual edits, so rebuilding does not depend on the original import revision.
+They are excluded from playback assets and public download lanes; the
+authoring engine can read them only with current edit access to the revision.
+
 GLB node transforms are authoritative for exported geometry. Semantic entities
 address named roots and material roles for selection and editing. Every editable
 material role must name a material within that entity's geometry. Clay shading

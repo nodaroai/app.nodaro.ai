@@ -37,6 +37,19 @@ beforeEach(() => {
 })
 
 describe("Scene3D workflow authoring through its HTTP route", () => {
+  it("preserves selected inputs through both authoring transports and refuses Basic imports", () => {
+    const inputAssets = [{ id: "vehicle", revisionId: "00000000-0000-4000-8000-000000000010",
+      assetId: "00000000-0000-4000-8000-000000000011" }]
+    const node: SimpleNode = { id: "scene", type: "generate-3d-scene", data: {
+      scenePrompt: "Drive past the pillar", engine: "blender-cloud", inputAssets } }
+    expect(buildScene3DHttpBody(node, {}, context(), {})).toMatchObject({ inputAssets, engine: "blender-cloud" })
+    expect(buildScene3DHttpBody({ ...node, type: "pro-3d-render" }, {}, context(), {}))
+      .toMatchObject({ source: { kind: "prompt", inputAssets } })
+    expect(() => buildScene3DHttpBody({ ...node, data: { ...node.data, engine: "basic" } }, {}, context(), {}))
+      .toThrow("Imported 3D assets require an advanced scene engine")
+    expect(mocks.queue).not.toHaveBeenCalled()
+    expect(mocks.fetch).not.toHaveBeenCalled()
+  })
   it("routes a Pro v2 composition to Advanced while preserving its exact revision and locks", () => {
     const baked = planV2()
     const source: SimpleNode = { id: "source", type: "pro-3d-render", data: { scenePlan: baked } }

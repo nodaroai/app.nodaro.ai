@@ -32,6 +32,7 @@ import { supabase } from "./supabase.js"
 import { insertWithIdempotencyKey, type IdempotentInsertResult } from "./idempotent-insert.js"
 import { jobSourceColumns } from "./job-source.js"
 import { extractMcpClient } from "./extract-mcp-client.js"
+import { JobSubmissionIdentityError, jobSubmissionColumns, withoutJobSubmissionContext } from "./job-submission-context.js"
 import type { BillingContext } from "./billing-context.js"
 import {
   ALL_POLICIES_ALLOWED_ID,
@@ -83,8 +84,9 @@ export function withJobProvenance(
   return {
     ...jobSourceColumns(req),
     ...(mcpClient ? { mcp_client: mcpClient } : {}),
-    ...row,
+    ...withoutJobSubmissionContext(row),
     ...billingPairColumns(req.billingContext),
+    ...jobSubmissionColumns(req, row),
   }
 }
 
@@ -229,7 +231,12 @@ export async function insertJob<T = { id: string }>(
   row: Record<string, unknown>,
   opts: { selectColumns?: string } = {},
 ): Promise<InsertJobResult<T>> {
-  const stamped = withJobProvenance(req, row)
+  let stamped: Record<string, unknown>
+  try { stamped = withJobProvenance(req, row) }
+  catch (error) {
+    if (error instanceof JobSubmissionIdentityError) return { data: null, error }
+    throw error
+  }
   const gate = await gateJobInsert([stamped])
   if (gate && "block" in gate) return blockedResult<T>(gate.block)
   const { data, error } = await supabase
@@ -265,7 +272,7 @@ export async function insertInternalJob<T = { id: string }>(
   const stamped = {
     source: "internal",
     source_detail: sourceDetail,
-    ...row,
+    ...withoutJobSubmissionContext(row),
     ...billingPairColumns(opts.billingContext),
   }
   const gate = await gateJobInsert([stamped])
@@ -288,7 +295,12 @@ export async function insertJobs<T = { id: string }>(
   rows: ReadonlyArray<Record<string, unknown>>,
   opts: { selectColumns?: string } = {},
 ): Promise<InsertJobResult<T[]>> {
-  const stamped = rows.map((r) => withJobProvenance(req, r))
+  let stamped: Record<string, unknown>[]
+  try { stamped = rows.map((r) => withJobProvenance(req, r)) }
+  catch (error) {
+    if (error instanceof JobSubmissionIdentityError) return { data: null, error }
+    throw error
+  }
   const gate = await gateJobInsert(stamped)
   if (gate && "block" in gate) return blockedResult<T[]>(gate.block)
   const { data, error } = await supabase

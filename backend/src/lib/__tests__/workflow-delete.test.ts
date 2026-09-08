@@ -41,6 +41,12 @@ const WORKFLOW_ID = "00000000-0000-4000-8000-000000000020"
 const USER_ID = "00000000-0000-4000-8000-000000000001"
 
 describe("deleteWorkflowWithPrivateMedia", () => {
+  it("reports active retained image use as a conflict before any physical cleanup", async () => {
+    rpc.mockResolvedValue({ data: null, error: { message: "This production has active jobs using retained images" } })
+    await expect(deleteWorkflowWithPrivateMedia({ workflowId: WORKFLOW_ID, userId: USER_ID }))
+      .rejects.toMatchObject({ statusCode: 409, code: "retained_image_in_use" })
+    expect(deleteFromR2).not.toHaveBeenCalled()
+  })
   beforeEach(() => {
     vi.clearAllMocks()
     relayGate.on = false

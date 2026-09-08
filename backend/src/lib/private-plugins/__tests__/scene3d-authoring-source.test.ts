@@ -76,7 +76,8 @@ function toolkit() {
 describe("private authoring source read", () => {
   it("serves an authorized collaborator the reused pinned recipe and nothing private", async () => {
     const result = await toolkit().readAuthoringSource!(request)
-    expect(Object.keys(result).sort()).toEqual(["plan", "source", "sourceArtifactId", "sourceSha256"])
+    expect(Object.keys(result).sort()).toEqual(["inputArtifacts", "plan", "source", "sourceArtifactId", "sourceSha256"])
+    expect(result.inputArtifacts).toEqual([])
     expect(Buffer.from(result.source)).toEqual(recipe)
     expect(result).toMatchObject({ sourceArtifactId: SOURCE_ARTIFACT, sourceSha256: sha256 })
     expect((result.plan as { revisionId: string }).revisionId).toBe(REVISION_ID)
@@ -86,6 +87,16 @@ describe("private authoring source read", () => {
     for (const secret of [sourcePin.objectKey, sourcePin.bucket, sourcePin.etag, "scene3d/", "http"]) {
       expect(serialized).not.toContain(secret)
     }
+  })
+
+  it("returns only opaque private input receipts and rechecks their pins", async () => {
+    const inputPin = { ...glbPin, kind: "input-glb", usage: "checkpoint" }
+    mock.pins.mockResolvedValue([sourcePin, inputPin])
+    const result = await toolkit().readAuthoringSource!(request)
+    expect(result.inputArtifacts).toEqual([{ assetId: inputPin.artifactId, kind: "glb", sha256, byteLength: recipe.length }])
+    expect(store.get).toHaveBeenCalledTimes(1)
+    mock.pins.mockResolvedValueOnce([sourcePin, inputPin]).mockResolvedValueOnce([sourcePin])
+    await expect(toolkit().readAuthoringSource!(request)).rejects.toMatchObject({ code: "SCENE_ASSET_INVALID" })
   })
 
   it("does no IO for malformed input, an inactive job, a stale hash or a corrupt plan", async () => {
