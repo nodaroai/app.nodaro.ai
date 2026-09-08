@@ -9,6 +9,29 @@ export interface RetainedScene3DEditParams {
 }
 export interface RetainedScene3DEditResult { scenePlan: Scene3DPlanV2; changeSummary: string }
 
+export interface Scene3DDeliveryAsset {
+  assetId: string
+  kind: "poster" | "validation-report"
+  usage: "poster" | "validation"
+  byteLength: number
+  sha256: string
+  viaRevisionId: string | null
+}
+
+/** Export evidence is retained separately from the immutable scene it rendered. */
+export interface Scene3DDelivery {
+  deliveryId: string
+  sceneRevisionId: string
+  sourcePlanSha256: string
+  sourceContentHash: string | null
+  sourceJobId: string | null
+  workflowId: string | null
+  mode: "authored" | "render-only"
+  createdAt: string
+  access: "view" | "edit" | "own"
+  assets: Scene3DDeliveryAsset[]
+}
+
 export type Scene3DAuthoringEngine = "basic" | "blender-cloud" | "blender-local"
 
 export interface Scene3DCapabilities {

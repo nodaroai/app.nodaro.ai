@@ -3,6 +3,7 @@ import type { NodaroClient } from "../client.js"
 import type { RunNodeResult, RunAndWaitOptions, NodeJobOutput } from "./nodes.js"
 import type { EditScene3DParams, GenerateScene3DParams, RenderScene3DParams, Scene3DCapabilities, Scene3DJobOutput } from "./scene3d-types.js"
 import type { RetainedScene3DEditParams, RetainedScene3DEditResult } from "./scene3d-types.js"
+import type { Scene3DDelivery, Scene3DDeliveryAsset } from "./scene3d-types.js"
 
 /** Scene authoring and render-only export through the same platform nodes. */
 export class Scene3DResource {
@@ -10,6 +11,24 @@ export class Scene3DResource {
 
   capabilities(): Promise<Scene3DCapabilities> {
     return this.client.request("GET", "/v1/3d-scene/capabilities")
+  }
+
+  /** Current access to both the delivery and its source is required on every read. */
+  getDelivery(jobId: string): Promise<Scene3DDelivery> {
+    return this.client.request("GET", `/v1/3d-scene/deliveries/${encodeURIComponent(jobId)}`)
+  }
+
+  deliveryAssetBytes(jobId: string, asset: Scene3DDeliveryAsset, options?: { signal?: AbortSignal }): Promise<ArrayBuffer> {
+    if ((asset.kind !== "poster" && asset.kind !== "validation-report")
+      || asset.usage !== (asset.kind === "poster" ? "poster" : "validation")) {
+      throw new Error("This asset is not available through the delivery endpoint")
+    }
+    if (!Number.isSafeInteger(asset.byteLength) || asset.byteLength < 1 || asset.byteLength > SCENE3D_V2_LIMITS.maxRendererAssetBytes) {
+      throw new Error("Invalid scene delivery asset byte length")
+    }
+    return this.client.requestBytes("GET", `/v1/3d-scene/deliveries/${encodeURIComponent(jobId)}/assets/${encodeURIComponent(asset.assetId)}`, {
+      signal: options?.signal, maxBytes: asset.byteLength,
+    })
   }
 
   /** Persist deterministic overlays without an LLM or a generation charge. */

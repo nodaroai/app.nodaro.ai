@@ -150,7 +150,7 @@ BEGIN
     END IF;
   ELSE
     SELECT * INTO v_source_job FROM public.jobs WHERE id = v_source_job_id FOR SHARE;
-    IF NOT FOUND OR v_source_job.user_id IS DISTINCT FROM v_user_id
+    IF NOT FOUND OR v_mode <> 'render-only' OR v_source_job.user_id IS DISTINCT FROM v_user_id
        OR v_source_owner IS DISTINCT FROM v_user_id OR v_source_job.status <> 'completed'
        OR v_source_job.workflow_id IS DISTINCT FROM v_source_workflow
        OR coalesce(v_source_job.output_data #>> '{scenePlan,schemaVersion}', '') <> '1'

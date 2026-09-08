@@ -15,6 +15,8 @@ import { vi } from "vitest"
 export type Row = Record<string, unknown>
 
 export interface FakeTables {
+  scene3d_deliveries?: Row[]
+  scene3d_delivery_artifacts?: Row[]
   scene3d_revisions?: Row[]
   scene3d_revision_artifacts?: Row[]
   scene3d_artifacts?: Row[]
@@ -33,6 +35,8 @@ export interface FakeSupabase {
 
 export function createFakeSupabase(seed: FakeTables = {}): FakeSupabase {
   const tables = {
+    scene3d_deliveries: seed.scene3d_deliveries ?? [],
+    scene3d_delivery_artifacts: seed.scene3d_delivery_artifacts ?? [],
     scene3d_revisions: seed.scene3d_revisions ?? [],
     scene3d_revision_artifacts: seed.scene3d_revision_artifacts ?? [],
     scene3d_artifacts: seed.scene3d_artifacts ?? [],

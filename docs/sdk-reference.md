@@ -4696,6 +4696,13 @@ SDK versions with the generic `nodes.run(type, params)` overload can use the sam
 
 ### Scene asset reads
 
+`client.scene3d.getDelivery(jobId)` reads retained export metadata, including its
+exact source revision and poster/report descriptors. For each descriptor, call
+`client.scene3d.deliveryAssetBytes(jobId, asset, { signal })` to read bounded
+bytes through fresh authentication. Access requires both delivery and source
+permissions, including after the source revision has been deleted. These methods
+read already published delivery evidence; they do not start a render.
+
 `client.scene3d.assetBytes(revisionId, asset, { signal })` fetches a GLB, camera
 track, poster or validation report through the authenticated API. Pass the exact
 asset descriptor from that retained revision; the SDK caps decoded response bytes

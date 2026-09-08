@@ -171,6 +171,10 @@ DO $$ BEGIN
  RAISE EXCEPTION 'ASSERT FAIL: foreign Basic source job exported';
 EXCEPTION WHEN SQLSTATE '55016' THEN RAISE NOTICE 'ok Basic source jobs require ownership'; END $$;
 DO $$ BEGIN
+ PERFORM public.scene3d_publish_delivery(pg_temp.basic_delivery_payload() || '{"mode":"authored"}');
+ RAISE EXCEPTION 'ASSERT FAIL: Basic export claimed authorship of an existing source';
+EXCEPTION WHEN SQLSTATE '55016' THEN RAISE NOTICE 'ok Basic source exports cannot claim authorship'; END $$;
+DO $$ BEGIN
  PERFORM public.scene3d_publish_delivery(jsonb_set(pg_temp.basic_delivery_payload(), '{source_plan,title}', '"changed"'));
  RAISE EXCEPTION 'ASSERT FAIL: modified Basic source plan exported';
 EXCEPTION WHEN SQLSTATE '55016' THEN RAISE NOTICE 'ok Basic source must match retained job output exactly'; END $$;
