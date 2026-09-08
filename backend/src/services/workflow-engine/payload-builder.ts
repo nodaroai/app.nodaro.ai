@@ -1,3 +1,4 @@
+import { assertCanvasExecutionAllowed } from "@nodaro/shared"
 import type { Scene3DReference } from "@nodaro/shared"
 /**
  * Build BullMQ job payloads for each node type from node data + resolved inputs.
@@ -2148,6 +2149,7 @@ export function buildPayload(
   usageLogId?: string,
   buildCtx?: PayloadBuildContext,
 ): PayloadResult {
+  assertCanvasExecutionAllowed([node])
   const data = node.data
   const type = node.type
 

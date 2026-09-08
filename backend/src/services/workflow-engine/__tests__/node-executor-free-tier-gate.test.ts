@@ -151,7 +151,8 @@ vi.mock("@nodaro/prompts", () => ({
   getParameterPromptHint: vi.fn(() => ""), pickerFanoutTargets: vi.fn(() => []), resolveVideoReferenceCore: vi.fn(() => ({})),
   truncateForField: vi.fn((s: string) => s),
 }))
-vi.mock("@nodaro/shared", () => ({
+vi.mock("@nodaro/shared", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@nodaro/shared")>(),
   mergeExposedSettings: vi.fn().mockReturnValue({ settings: {}, exposedSettingValues: {} }),
   applyHandleInputOverride: vi.fn().mockImplementation((_e, node) => node),
   isHandleInputWired: vi.fn().mockReturnValue(false),
@@ -194,6 +195,15 @@ function makeCtx(): OrchestratorContext {
 // ---------------------------------------------------------------------------
 
 describe("node-executor free-tier blocked-models gate (Part B, Task 7)", () => {
+  it("rejects a dependency node before jobs, credit checks or reservation", async () => {
+    const node = makeNode()
+    await expect(executeNode({ ...node, data: { ...node.data, keyframeId: "A" } }, {}, [], [], {}, makeCtx()))
+      .rejects.toMatchObject({ code: "sequence_execution_required" })
+    expect(supabase.from).not.toHaveBeenCalled()
+    expect(mockCheckCredits).not.toHaveBeenCalled()
+    expect(mockReserveCredits).not.toHaveBeenCalled()
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     mockBuiltVideo.provider = "gemini-omni-video"

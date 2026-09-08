@@ -1,5 +1,6 @@
 import type { MutableRefObject } from "react";
 import { toast } from "sonner";
+import { assertCanvasExecutionAllowed, SequenceExecutionRequiredError } from "@nodaro/shared";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { getJobStatusLean, getUserCredits, getWorkflowExecution, runWorkflow, streamWorkflowExecution, WorkflowAlreadyRunningError, withDedupRaceRetry , NodaroConnectionRequiredError } from "@/lib/api";
 import { generateIdempotencyKey } from "@/lib/idempotency-key";
@@ -283,6 +284,11 @@ async function confirmRunOrAbort(
   alwaysConfirm: boolean,
   skip?: boolean,
 ): Promise<boolean> {
+  try { assertCanvasExecutionAllowed(executable); }
+  catch (error) {
+    if (error instanceof SequenceExecutionRequiredError) { toast.error(error.message); return false; }
+    throw error;
+  }
   if (skip || !ctx.confirmRun || executable.length === 0) return true;
   const estimatedCredits = hasCredits() ? estimateRunCredits(executable, allNodes, edges, getCachedCredits) : null;
   if (!alwaysConfirm && (estimatedCredits === null || estimatedCredits <= RUN_CONFIRM_CREDITS)) return true;

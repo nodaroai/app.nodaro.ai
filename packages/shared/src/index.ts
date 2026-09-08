@@ -1070,3 +1070,4 @@ export {
 } from "./studio-transient.js"
 
 export * from "./scene3d-v2-edit.js"
+export { STUDIO_DEPENDENT_FRAMES_CAPABILITY, SequenceExecutionRequiredError, requiresSequenceExecution, assertCanvasExecutionAllowed } from "./sequence-execution"

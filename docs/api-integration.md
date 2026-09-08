@@ -503,6 +503,12 @@ Recommended cutoff: use sync for workflows you expect to finish in under
 a minute (text generation, light image work). For multi-step workflows
 that include video rendering or upscaling, use async.
 
+Linked-frame canvas nodes require the Studio production generation API. The
+canvas workflow-run endpoint and direct media requests that identify a saved
+linked node return HTTP 400 with `sequence_execution_required`. Queued workflows
+also check this requirement before executing their graph. See
+[the execution boundary](design/dependent-frame-execution.md).
+
 ## 6. Webhooks (push into Nodaro)
 
 A complementary path: instead of your server calling Nodaro to start a

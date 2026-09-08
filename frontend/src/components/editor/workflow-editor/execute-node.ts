@@ -1,4 +1,5 @@
 import { toast } from "sonner";
+import { assertCanvasExecutionAllowed } from "@nodaro/shared";
 import { findUpstreamSunoIds } from "@/lib/suno-ids";
 import { llmAdvancedParams } from "@/lib/llm-advanced-params"
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
@@ -1061,6 +1062,7 @@ function executeNodeCore(
   runId?: string,
   authoredOverride?: Record<string, unknown>,
 ): Promise<string> {
+  assertCanvasExecutionAllowed([node]);
   const { nodes, edges } = useWorkflowStore.getState();
   const inputs = resolveNodeInputs(node, nodes, edges, listIterationIndex);
 

@@ -1,3 +1,4 @@
+import { assertCanvasExecutionAllowed } from "@nodaro/shared"
 /**
  * Orchestrator worker — processes workflow executions.
  * Loads workflow graph, topological sort, executes nodes level-by-level.
@@ -554,6 +555,7 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     // image-to-image → modify, old collect → reduce, loop → list) BEFORE the
     // engine reads node.type. See normalize-node-types.ts.
     const rawNodes = (workflowData.nodes as (SimpleNode & { hidden?: boolean })[]) ?? []
+    assertCanvasExecutionAllowed(nodeSubset ? rawNodes.filter((node) => nodeSubset.has(node.id)) : rawNodes)
     const allNodes = normalizeLegacyNodeTypes(rawNodes)
 
     // Filter out hidden nodes (from loop expansion) and expanded clones that were persisted
