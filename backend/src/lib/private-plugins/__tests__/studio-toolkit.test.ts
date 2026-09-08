@@ -130,6 +130,34 @@ beforeEach(() => {
 })
 
 describe("tk.workflows — the by-id door", () => {
+  it.each([true, false, undefined, "true"])("admits a public copy only with explicit permission: %s", async (allowEditableCopy) => {
+    state.result = { data: { id: WF, user_id: CALLER, workspace_id: null, visibility: "private",
+      settings: { studio: { shared: true, allowEditableCopy } } }, error: null }
+    mockWorkflowAccessFromRow.mockResolvedValue("none")
+    const { reply, sent } = replyStub()
+    const loaded = await tk.workflows!.loadStudioEditableCopySource!({} as never, reply as never,
+      STRANGER, WF, "view", `${WORKFLOW_ACCESS_COLS},settings`, "Failed to load production")
+    expect(loaded.ok).toBe(allowEditableCopy === true)
+    if (loaded.ok) expect(loaded.access).toBe("view")
+    else expect(sent.status).toBe(404)
+    const normal = replyStub()
+    expect((await tk.workflows!.loadWorkflowFor({} as never, normal.reply as never, STRANGER, WF,
+      "view", `${WORKFLOW_ACCESS_COLS},settings`, "Failed to load production")).ok).toBe(false)
+    expect(normal.sent.status).toBe(404)
+  })
+
+  it("never grants edit access or copies a private production through the copy door", async () => {
+    mockWorkflowAccessFromRow.mockResolvedValue("none")
+    for (const [shared, min] of [[false, "view"], [true, "edit"]] as const) {
+      state.result = { data: { id: WF, user_id: CALLER, workspace_id: null, visibility: "private",
+        settings: { studio: { shared, allowEditableCopy: true } } }, error: null }
+      const { reply, sent } = replyStub()
+      const loaded = await tk.workflows!.loadStudioEditableCopySource!({} as never, reply as never,
+        STRANGER, WF, min, `${WORKFLOW_ACCESS_COLS},settings`, "Failed to load production")
+      expect(loaded.ok).toBe(false); expect(sent.status).toBe(404)
+    }
+  })
+
   it("exposes the app's own access projection", () => {
     // A plugin that selected fewer columns would hand `toAccessRow` a row it
     // refuses to judge; the columns are the app's to decide, not the plugin's.

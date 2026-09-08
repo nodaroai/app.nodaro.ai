@@ -535,6 +535,17 @@ checks permission to change visibility. If another edit wins before the write,
 it returns HTTP 409 `workflow_conflict` without rebasing the sharing decision.
 Use `shared: false` on the same route for revision-checked unsharing.
 
+With `operations.editableSharedCopies`, the sharing body also accepts
+`allowEditableCopy`. Enabling it requires `shared: true` and `expectedVersion`,
+and the same owner/admin visibility authority. Authenticated link viewers may
+then call `POST /v1/studio/productions/:id/clone` to copy the saved live plan,
+prompts, cast descriptions, retained inputs and take history. The bin and private
+review notes are excluded. Destination media uses the viewer's storage quota;
+frames need fresh acceptance and no generation jobs are started. Unsharing clears
+copy permission. Revocation blocks subsequent requests; already admitted copies
+remain independent. Public snapshots advertise `publicView.editableCopyAllowed`
+without exposing the editable source. The clone route rechecks permission.
+
 Public link reads of dependency-aware productions require the matching plugin's
 public projection. They return a marked `settings.studio.publicView` media
 snapshot: selected clips, accepted frames, selected previews and planned-frame

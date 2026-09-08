@@ -925,7 +925,7 @@ plugin returns the usual 404. These methods preserve the API response envelope.
 | `appendBundle(id, { bundle, expectedVersion, afterShotId?, applyFilm? })` | Append a complete bundle slice to an editable production with fresh IDs and an exact revision check |
 | `edit(id, { ops, baseVersion?, strict?, clientRequestId? })` | Apply semantic operations with revision conditions |
 | `saveEditorState(id, { expectedVersion, graph, clientRequestId? })` | Save ordinary editor fields against the loaded revision; preserve protected frame and job state |
-| `setShared(id, { shared, expectedVersion? })` | Change link sharing through the visibility-authorized route |
+| `setShared(id, { shared, allowEditableCopy?, expectedVersion? })` | Change link sharing through the visibility-authorized route |
 | `generateKeyframe(id, { keyframeId, expectedRevision, clientRequestId?, overrides? })` | Generate a planned frame without accepting it |
 | `generateShot(id, input)` | Submit or quote a still/clip request |
 | `reconcile(id)` | Record completed jobs without accepting candidates |
@@ -974,9 +974,16 @@ The server copies retained frame inputs and historical parent/endpoint pins,
 remaps frame/scene/sequence IDs, and clears active jobs and frame acceptance.
 The new production starts private and visible. Review and accept its frames
 before generating dependent media; copying submits no generation jobs and uses
-destination storage quota for retained inputs. Full
-linked copies currently require ownership of the source. Shared media views do
-not expose an editable frame plan and cannot use this operation.
+destination storage quota for retained inputs.
+
+When `capabilities.operations.editableSharedCopies` is true, an owner or workspace
+admin may call `setShared(id, { shared: true, allowEditableCopy: true, expectedVersion })`.
+This permits authenticated link viewers to call `clone` for the saved live plan,
+prompts, cast descriptions, retained reference inputs and take history. The bin
+and private review notes are excluded. Copies start private, with fresh frame
+acceptance. Turning copying off or unsharing blocks subsequent copy requests;
+already admitted copies remain independent. The public media projection carries
+only `publicView.editableCopyAllowed`, never the editable plan itself.
 
 `appendBundle` posts to `/v1/studio/productions/:id/import-bundle` and requires
 `workflows:write` plus edit access to the destination. It returns the production

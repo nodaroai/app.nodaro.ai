@@ -7,6 +7,14 @@ function fixture(body: unknown = { data: {} }) {
   return { client, fetch, request: () => fetch.mock.calls[0] as [string, RequestInit] }
 }
 describe("Studio production transport", () => {
+  it("sends copy permission through the revisioned audience route", async () => {
+    const f = fixture()
+    const input = { shared: true, allowEditableCopy: true, expectedVersion: 8 }
+    await f.client.studio.setShared("film", input)
+    expect(f.request()[0]).toBe("https://api.test/v1/studio/productions/film/share")
+    expect(JSON.parse(f.request()[1].body as string)).toEqual(input)
+    expect(f.fetch).toHaveBeenCalledTimes(1)
+  })
   it("appends once with an exact revision, insertion anchor and explicit film choice", async () => {
     const body = { data: { production: { id: "film", version: 9 }, importedShotIds: ["new-scene"], importedKeyframeIds: ["new-frame"] } }
     const f = fixture(body), input = { expectedVersion: 8, bundle: { version: 1 }, afterShotId: "scene", applyFilm: false }

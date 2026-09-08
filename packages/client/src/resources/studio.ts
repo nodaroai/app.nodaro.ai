@@ -11,6 +11,7 @@ export interface StudioProductionCapabilities {
   operations: {
     readKeyframes: boolean
     saveEditorState?: boolean
+    editableSharedCopies?: boolean
     revisionedSharing?: boolean
     cloneLinkedProductions?: boolean
     importPlannedBundles?: boolean
@@ -191,7 +192,7 @@ export class StudioResource {
 
   /** Audience-authorized sharing; an expected revision prevents publication
    * of concurrent edits the caller has not reviewed. */
-  setShared(id: string, input: { shared: boolean; expectedVersion?: number }): Promise<{ data: StudioProductionReply }> {
+  setShared(id: string, input: { shared: boolean; allowEditableCopy?: boolean; expectedVersion?: number }): Promise<{ data: StudioProductionReply }> {
     return this.client.request("POST", `${path(id)}/share`, { body: input })
   }
 

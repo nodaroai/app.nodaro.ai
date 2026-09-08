@@ -1901,6 +1901,11 @@ export type PluginLoadedWorkflow =
  * decides that question before asking it. One rule, one place.
  */
 export interface PluginWorkflowsToolkit {
+  /** Host guards editable-copy permission on every generic audience write. */
+  supportsEditableCopySharing?: boolean
+  /** Copy-only access: shared + owner opt-in may admit a viewer without
+   * granting ordinary workflow access. The returned row is one saved snapshot. */
+  loadStudioEditableCopySource?: PluginWorkflowsToolkit["loadWorkflowFor"]
   /** Server-only compatible document transport. The caller MUST authorize the
    * target and validate with its codec. An empty update result means a lost CAS.
    * Additive-optional; older hosts must refuse dependency edits. */

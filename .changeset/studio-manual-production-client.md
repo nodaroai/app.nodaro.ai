@@ -15,3 +15,5 @@ Expose manual result-rejection capability for the semantic editor without submit
 Expose sequence-plan editing capability for atomic endpoint/order edits and single-segment detachment with continuous-group splitting.
 
 Expose exact linked-take retake requests and capability discovery, retaining explicit quote review and submission tokens.
+
+Add owner-controlled editable-copy permission on revisioned sharing and capability discovery for authenticated shared-plan copies.
