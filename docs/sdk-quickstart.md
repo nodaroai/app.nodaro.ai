@@ -637,3 +637,28 @@ The named helpers `client.scene3d.generateAndWait`, `editAndWait`, and
 which optional authoring engines are available on the connected instance.
 
 See [editable 3D scenes](sdk-reference.md#editable-3d-scenes) for prompt → editable scene → MP4 using `nodes.runAndWait`.
+
+
+### Review a planned Studio frame
+
+After creating a production from a validated plan, read its frame IDs and current
+revisions. Generate a candidate only when the user requests it:
+
+```ts
+const { data: capabilities } = await client.studio.capabilities()
+const { data: { production } } = await client.studio.get(productionId, { detail: "full" })
+const frame = production.keyframes?.[0]
+if (frame && capabilities.operations.generateKeyframes) {
+  const { data: generation } = await client.studio.generateKeyframe(productionId, {
+    keyframeId: frame.id,
+    expectedRevision: frame.revision,
+    clientRequestId: crypto.randomUUID(), // retain this value when retrying the same request
+  })
+  // Observe generation.jobIds using client.jobs; reconcile completed results.
+}
+```
+
+After the jobs finish, call `client.studio.reconcile(productionId)` and display
+the candidates for review. `acceptKeyframe` is a separate explicit action with
+the reviewed frame revision, previous accepted key and requirement checks.
+Generation alone does not accept a candidate or generate a character portrait.

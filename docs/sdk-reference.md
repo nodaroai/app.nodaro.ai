@@ -871,6 +871,39 @@ const { jobId: childId, fromSegment } = await client.videoPro.continueRun(jobId,
 
 ---
 
+### `client.studio`
+
+Studio production routes are supplied by the Cloud plugin. Use `capabilities()`
+to check per-operation support before exposing planned-frame controls. A missing
+plugin returns the usual 404. These methods preserve the API response envelope.
+
+| Method | Purpose |
+| --- | --- |
+| `capabilities()` | Read plan versions and manual operation support |
+| `skill()` | Read the production authoring format |
+| `list({ limit?, cursor?, includeArchived? })` | List productions; rows are in `response.data.data` |
+| `get(id, { detail?, shotId? })` | Read a production and capabilities without reconciling jobs |
+| `validatePlan(plan)` | Validate a plan without creating it |
+| `create({ name?, plan? })` | Create a production |
+| `edit(id, { ops, baseVersion?, strict?, clientRequestId? })` | Apply semantic operations with revision conditions |
+| `generateKeyframe(id, { keyframeId, expectedRevision, clientRequestId?, overrides? })` | Generate a planned frame without accepting it |
+| `generateShot(id, input)` | Submit or quote a still/clip request |
+| `reconcile(id)` | Record completed jobs without accepting candidates |
+| `acceptKeyframe(id, review, concurrency?)` | Explicitly accept a reviewed candidate |
+
+The acceptance review supplies `keyframeId`, `expectedRevision`, `resultKey`,
+`expectedAcceptedResultKey` (or `null`), and `requirementChecks`. Each check names
+its `requirementId` and an outcome of `pass` or `waived`; waivers require a
+`waivedReason`. Optional concurrency conditions are `baseVersion`, `strict` and
+`clientRequestId`. Conflicts are returned through the normal SDK error path;
+the SDK never selects a different result or retries acceptance against a newer
+revision automatically.
+
+Frame generation has no dry-run option. `generateShot` accepts `dryRun` for a
+quote. Both use an explicit `clientRequestId` for safe caller retries. A generated
+portrait is optional for description-only cast references. See
+[dependent-frame behavior](design/dependent-frame-execution.md).
+
 ### `client.recast`
 
 Recast runs + the authored-script import lane ("movie as JSON"). **Cloud

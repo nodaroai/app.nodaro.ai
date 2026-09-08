@@ -32,3 +32,32 @@ validate the document before calling them.
 These boundaries do not by themselves enable the full dependent-frame feature.
 Compatible editor controls, cloning/import handling and deployment capability
 checks must also be available.
+
+## Reading and reviewing frames
+
+`GET /v1/studio/productions/capabilities` reports supported plan versions and
+per-operation support for reading, editing, generating and accepting keyframes,
+and generating linked clips. Source-video frame references have a separate flag.
+The response depends on the installed host's compatible writer, immutable job
+metadata and retained-image support. It performs no capture or generation.
+Automatic acceptance and unattended generation are not supported.
+
+`GET /v1/studio/productions/:id` includes the same capabilities beside its
+`production` object. Dependency productions expose `requiredCapabilities`,
+`keyframes`, `sequences`, and each linked shot's `sequenceBinding`. Each frame has
+separate preview and accepted result keys/URLs, its current plan revision, result
+count and pending markers. The final frame remains visible even when it has no
+outgoing clip. `pending.keyframes` counts in-flight frame jobs. Shots also expose
+pending still/clip jobs before their first result exists.
+
+A full owner read includes authored plans, recorded review decisions, image
+history and provenance. A summary omits image history. Other readers' frame
+projections omit plans, private source references, review details, owner
+identities and pending frame jobs. Recorded acceptance is historical state;
+generation still verifies current revisions and retained inputs before use.
+
+The SDK exposes these routes through `client.studio`. Generation and review are
+separate calls: `generateKeyframe` submits the planned frame, `reconcile` records
+finished jobs, and `acceptKeyframe` applies an explicit review. Description-only
+cast references do not require a generated portrait. Adding a portrait later
+does not change an existing description reference into image conditioning.

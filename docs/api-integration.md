@@ -514,6 +514,14 @@ HTTP 409 `production_capability_required`, including delta updates and updates
 that omit its dependency fields. Use compatible Studio production operations
 to preserve reviewed inputs and apply revision checks.
 
+The Cloud Studio plugin exposes `GET /v1/studio/productions/capabilities` for
+per-operation support and `GET /v1/studio/productions/:id?detail=full` for planned
+frames, candidate history, recorded acceptance, linked endpoints and pending
+jobs. These reads do not generate media, reconcile jobs or accept candidates.
+Character descriptions work without a generated portrait; image conditioning
+is an explicit choice. See [the Studio SDK methods](sdk-reference.md#clientstudio)
+for generation, reconciliation and separate review actions.
+
 ## 6. Webhooks (push into Nodaro)
 
 A complementary path: instead of your server calling Nodaro to start a
