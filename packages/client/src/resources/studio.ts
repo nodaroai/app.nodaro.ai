@@ -10,6 +10,7 @@ export interface StudioProductionCapabilities {
     readKeyframes: boolean
     saveEditorState?: boolean
     revisionedSharing?: boolean
+    cloneLinkedProductions?: boolean
     editKeyframes: boolean
     generateKeyframes: boolean
     acceptKeyframes: boolean
@@ -147,6 +148,12 @@ export class StudioResource {
 
   create(input: { name?: string; plan?: StudioDocumentJson }): Promise<{ data: StudioProductionReply }> {
     return this.client.request("POST", root, { body: input })
+  }
+
+  /** Copy a saved production. Linked copies retain verified inputs, remap
+   * dependencies and require fresh frame acceptance; they start no media jobs. */
+  clone(id: string, input: { name?: string; projectId?: string; expectedVersion?: number } = {}): Promise<{ data: StudioProductionReply }> {
+    return this.client.request("POST", `${path(id)}/clone`, { body: input })
   }
 
   edit(id: string, input: StudioEditInput): Promise<{ data: StudioProductionReply & { version: number; rebased: boolean; receipts: StudioDocumentJson[] } }> {

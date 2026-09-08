@@ -885,6 +885,7 @@ plugin returns the usual 404. These methods preserve the API response envelope.
 | `get(id, { detail?, shotId? })` | Read a production and capabilities without reconciling jobs |
 | `validatePlan(plan)` | Validate a plan without creating it |
 | `create({ name?, plan? })` | Create a production |
+| `clone(id, { name?, projectId?, expectedVersion? })` | Copy a saved production; optional destination project must belong to the caller |
 | `edit(id, { ops, baseVersion?, strict?, clientRequestId? })` | Apply semantic operations with revision conditions |
 | `saveEditorState(id, { expectedVersion, graph, clientRequestId? })` | Save ordinary editor fields against the loaded revision; preserve protected frame and job state |
 | `setShared(id, { shared, expectedVersion? })` | Change link sharing through the visibility-authorized route |
@@ -912,6 +913,16 @@ Check `capabilities.operations.revisionedSharing` and pass `expectedVersion` to
 `setShared` to bind sharing or unsharing to the reviewed revision. A concurrent
 edit returns HTTP 409 `workflow_conflict`; the SDK does not retry against the
 new revision. Only callers allowed to change visibility can use this route.
+
+Check `capabilities.operations.cloneLinkedProductions` before copying a linked
+production. Pass its loaded `expectedVersion`; a changed source returns HTTP 409.
+The server copies retained frame inputs and historical parent/endpoint pins,
+remaps frame/scene/sequence IDs, and clears active jobs and frame acceptance.
+The new production starts private and visible. Review and accept its frames
+before generating dependent media; copying submits no generation jobs and uses
+destination storage quota for retained inputs. Full
+linked copies currently require ownership of the source. Shared media views do
+not expose an editable frame plan and cannot use this operation.
 
 Frame generation has no dry-run option. `generateShot` accepts `dryRun` for a
 quote. Both use an explicit `clientRequestId` for safe caller retries. A generated

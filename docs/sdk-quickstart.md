@@ -662,3 +662,20 @@ After the jobs finish, call `client.studio.reconcile(productionId)` and display
 the candidates for review. `acceptKeyframe` is a separate explicit action with
 the reviewed frame revision, previous accepted key and requirement checks.
 Generation alone does not accept a candidate or generate a character portrait.
+
+To duplicate your saved linked production, use the server copy operation after
+checking its capability:
+
+```ts
+if (capabilities.operations.cloneLinkedProductions) {
+  const { data: { production: copy } } = await client.studio.clone(production.id, {
+    name: `${production.name} copy`,
+    expectedVersion: production.version,
+  })
+  // Open copy.id and review its frames before accepting them.
+}
+```
+
+The copy starts private, retains its frame inputs using destination storage
+quota, and carries no active jobs or frame acceptance. A stale source revision
+returns a conflict. Shared media views cannot be copied as editable linked plans.

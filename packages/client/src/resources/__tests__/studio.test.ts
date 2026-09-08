@@ -7,6 +7,15 @@ function fixture(body: unknown = { data: {} }) {
   return { client, fetch, request: () => fetch.mock.calls[0] as [string, RequestInit] }
 }
 describe("Studio production transport", () => {
+  it("copies through the server with source revision and destination project", async () => {
+    const f = fixture()
+    await f.client.studio.clone("film/id", { name: "My copy", projectId: "project", expectedVersion: 8 })
+    expect(f.request()[0]).toBe("https://api.test/v1/studio/productions/film%2Fid/clone")
+    expect(f.request()[1].method).toBe("POST")
+    expect(JSON.parse(f.request()[1].body as string)).toEqual({ name: "My copy", projectId: "project", expectedVersion: 8 })
+    expect(f.fetch).toHaveBeenCalledTimes(1)
+  })
+
   it.each([true, false])("sends sharing=%s through the audience route with the reviewed revision", async (shared) => {
     const f = fixture()
     await f.client.studio.setShared("film/id", { shared, expectedVersion: 8 })
