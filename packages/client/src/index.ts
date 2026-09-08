@@ -22,8 +22,10 @@ export {
   JobTimeoutError,
   JobAbortedError,
   JobHeldError,
+  StudioOpError,
   throwFromResponse,
 } from "./errors.js"
+export type { WorkflowConflictCode } from "./errors.js"
 
 // Re-export selected types from @nodaro/shared for convenience
 export type { GenericNode, GenericEdge, WorkflowExport, WorkflowExportCharacter, WorkflowExportObject, WorkflowExportLocation, // The editor's structured-reference shape, used by GenerateImageParams /
@@ -101,6 +103,44 @@ export {
   type RecastRescoreResponse,
   type ResolveRecastGateInput,
 } from "./resources/recast.js"
+export {
+  StudioResource,
+  StudioProductionsResource,
+  isStudioGenerateEstimate,
+  type StudioGenerateResult,
+  type StudioJobStartedResponse,
+  type StudioGenerateOptions,
+  type ListStudioProductionsOptions,
+  type GetProductionOptions,
+  type StudioExportPlanOptions,
+  type StudioProduction,
+  type StudioProductionDetail,
+  type StudioPlanIssue,
+  type StudioSkillResponse,
+  type StudioValidatePlanResponse,
+  type StudioListProductionsResponse,
+  type StudioImportSummary,
+  type StudioProductionResponse,
+  type StudioCreateProductionRequest,
+  type StudioClientRequestId,
+  type StudioOpsRequest,
+  type StudioOpsReceipt,
+  type StudioOpsResponse,
+  type StudioReconcileResponse,
+  type StudioDescribeRequest,
+  type StudioGenerateRequest,
+  type StudioVideoLane,
+  type StudioGenerateEstimate,
+  type StudioGenerateResponse,
+  type StudioFrameRequest,
+  type StudioVoiceRequest,
+  type StudioRevoiceRequest,
+  type StudioMusicRequest,
+  type StudioMediaResponse,
+  type StudioExportPlanResponse,
+  type StudioExportStep,
+  type StudioCloneRequest,
+} from "./resources/studio.js"
 export type {
   PickerOption,
   PickerDimension,

@@ -29,6 +29,7 @@ import { CatalogsResource } from "./resources/catalogs.js"
 import { ModelsResource } from "./resources/models.js"
 import { ShotsResource } from "./resources/shots.js"
 import { RecastResource } from "./resources/recast.js"
+import { StudioResource } from "./resources/studio.js"
 import { CommunityResource } from "./resources/community.js"
 import { TemplatesResource } from "./resources/templates.js"
 import { TutorialsResource } from "./resources/tutorials.js"
@@ -183,6 +184,7 @@ export class NodaroClient {
   readonly models: ModelsResource
   readonly shots: ShotsResource
   readonly recast: RecastResource
+  readonly studio: StudioResource
   readonly community: CommunityResource
   readonly templates: TemplatesResource
   readonly tutorials: TutorialsResource
@@ -231,6 +233,7 @@ export class NodaroClient {
     this.models = new ModelsResource(this)
     this.shots = new ShotsResource(this)
     this.recast = new RecastResource(this)
+    this.studio = new StudioResource(this)
     this.community = new CommunityResource(this)
     this.templates = new TemplatesResource(this)
     this.tutorials = new TutorialsResource(this)
