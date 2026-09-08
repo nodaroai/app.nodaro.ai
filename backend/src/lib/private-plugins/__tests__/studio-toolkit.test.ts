@@ -87,6 +87,8 @@ import { canChangeWorkflowVisibility } from "../../workflow-access.js"
 import { changesStudioPublishFlag } from "../../studio-audience.js"
 import { requireScope } from "../../scopes.js"
 import { waitForJob } from "../../mcp/tools/_wait-for-job.js"
+import Fastify from "fastify"
+import { jobSubmissionColumns } from "../../job-submission-context.js"
 
 const CALLER = "00000000-0000-4000-8000-000000000001"
 const STRANGER = "00000000-0000-4000-8000-000000000002"
@@ -306,6 +308,32 @@ describe("tk.jobs.waitForJob", () => {
 })
 
 describe("tk.http.internalRequest", () => {
+  it("carries submission metadata through real Fastify injection without exposing it on the wire", async () => {
+    const app = Fastify()
+    app.post("/v1/generate-image", async (req) => {
+      req.userId = req.headers["x-internal-user-id"] as string
+      return {
+        columns: jobSubmissionColumns(req, { user_id: req.userId, job_type: "generate-image" }),
+        body: req.body,
+      }
+    })
+    try {
+      expect(tk.http.supportsJobSubmissionContext).toBe(true)
+      const replies = await Promise.all(["first", "second"].map((attemptId) => tk.http.internalRequest!(app, {
+        method: "POST", url: "/v1/generate-image", userId: CALLER,
+        payload: { prompt: attemptId },
+        jobSubmission: { jobType: "generate-image", metadata: { attemptId } },
+      })))
+      expect(replies.map((reply) => JSON.parse(reply.body))).toEqual(["first", "second"].map((attemptId) => ({
+        columns: { submission_context: { attemptId } }, body: { prompt: attemptId },
+      })))
+      const publicReply = await app.inject({ method: "POST", url: "/v1/generate-image",
+        headers: { "x-internal-user-id": CALLER, "x-job-submission-context": "forged" },
+        payload: { submission_context: { attemptId: "forged" } },
+      })
+      expect(publicReply.json().columns).toEqual({})
+    } finally { await app.close() }
+  })
   it("carries the caller's identity the way the MCP layer sends it", async () => {
     const inject = vi.fn().mockResolvedValue({ statusCode: 200, body: "{}" })
 
@@ -357,5 +385,24 @@ describe("tk.http.internalRequest", () => {
     })
     const sent = inject.mock.calls[0][0] as { headers: Record<string, string> }
     expect(sent.headers["x-internal-user-id"]).toBe(CALLER)
+  })
+})
+
+describe("tk.jobs.readJobSubmissionsOwnedBy", () => {
+  it("deduplicates requested ids and scopes the private projection to the owner", async () => {
+    state.result.data = [{ id: "one", submission_context: { attemptId: "trusted" } },
+      { id: "two", submission_context: null }, { id: "three", submission_context: [] }]
+    expect(await tk.jobs.readJobSubmissionsOwnedBy!(CALLER, ["one", "two", "one"])).toEqual([
+      { id: "one", submission_context: { attemptId: "trusted" } },
+    ])
+    expect(lastQuery()).toEqual({ table: "jobs", ops: [
+      ["select", "id, submission_context"], ["eq", "user_id", CALLER], ["in", "id", ["one", "two"]],
+    ] })
+  })
+  it("does not query an empty request and fails closed on a database error", async () => {
+    expect(await tk.jobs.readJobSubmissionsOwnedBy!(CALLER, [])).toEqual([])
+    expect(state.queries).toHaveLength(0)
+    state.result.error = { message: "private database detail" }
+    await expect(tk.jobs.readJobSubmissionsOwnedBy!(CALLER, ["one"])).rejects.toThrow("Failed to read job submission records")
   })
 })

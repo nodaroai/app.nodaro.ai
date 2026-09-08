@@ -33,6 +33,7 @@ vi.mock("../job-policy-audit.js", () => audit)
 vi.mock("../app-reports.js", () => ({ insertAppReport: vi.fn(async () => true) }))
 
 import { insertJob, insertJobs, insertInternalJob, insertJobIdempotent } from "../insert-job.js"
+import { withJobSubmissionContext } from "../job-submission-context.js"
 import {
   registerJobPolicy,
   clearJobPolicies,
@@ -83,6 +84,66 @@ describe("insert helpers with NO policy registered", () => {
     await insertJobIdempotent(req, { ...row, user_id: "u1" }, "key-1")
     expect(idempotentMock).toHaveBeenCalledTimes(1)
     expect(audit.recordJobPolicyDecision).not.toHaveBeenCalled()
+  })
+})
+
+describe("immutable server submission context", () => {
+  const request = { ...req, userId: "u1" } as FastifyRequest
+  const scope = { method: "POST", url: request.url, userId: "u1", jobSubmission: { jobType: "generate-image", metadata: { attemptId: "attempt-1", pins: ["asset-1"] } } }
+
+  it("stores captured provenance in the same INSERT as the job", async () => {
+    await withJobSubmissionContext(scope, async () => {
+      await insertJob(request, { ...row, submission_context: { attemptId: "forged" } })
+    })
+    expect(insertMock).toHaveBeenCalledTimes(1)
+    expect(insertMock.mock.calls[0]![0]).toMatchObject({ submission_context: scope.jobSubmission.metadata, input_data: row.input_data })
+  })
+
+  it("strips caller-supplied context from every insert helper without a trusted scope", async () => {
+    const forged = { ...row, submission_context: { forged: true } }
+    await insertJob(request, forged)
+    await insertJobs(request, [forged])
+    await insertInternalJob("test", forged)
+    await insertJobIdempotent(request, forged, "retry")
+    expect(insertMock.mock.calls[0]![0]).not.toHaveProperty("submission_context")
+    expect((insertMock.mock.calls[1]![0] as unknown[])[0]).not.toHaveProperty("submission_context")
+    expect(insertMock.mock.calls[2]![0]).not.toHaveProperty("submission_context")
+    expect(idempotentMock.mock.calls[0]![1]).not.toHaveProperty("submission_context")
+    expect(forged.submission_context).toEqual({ forged: true })
+  })
+
+  it("isolates concurrent requests and stores a deep copy", async () => {
+    await Promise.all(["one", "two"].map((attemptId) => withJobSubmissionContext({ ...scope, jobSubmission: { jobType: "generate-image", metadata: { attemptId } } }, async () => {
+      await Promise.resolve()
+      await insertJob(request, { ...row, input_data: { attemptId } })
+    })))
+    for (const [value] of insertMock.mock.calls) {
+      const inserted = value as { input_data: { attemptId: string }; submission_context: { attemptId: string } }
+      expect(inserted.submission_context.attemptId).toBe(inserted.input_data.attemptId)
+    }
+    await withJobSubmissionContext(scope, async () => {
+      await insertJob(request, row)
+      const stored = insertMock.mock.calls.at(-1)![0] as { submission_context: { pins: string[] } }
+      stored.submission_context.pins.push("changed")
+      await insertJob(request, row)
+      expect(insertMock.mock.calls.at(-1)![0]).toHaveProperty("submission_context.pins", ["asset-1"])
+    })
+  })
+
+  it("does not inherit metadata into an unannotated nested request or another job type", async () => {
+    await withJobSubmissionContext(scope, async () => {
+      await withJobSubmissionContext({ method: "POST", url: request.url, userId: "u1" }, () => insertJob(request, row))
+      await insertJob(request, { ...row, job_type: "llm" })
+      await insertJob(request, row)
+    })
+    expect(insertMock.mock.calls[0]![0]).not.toHaveProperty("submission_context")
+    expect(insertMock.mock.calls[1]![0]).not.toHaveProperty("submission_context")
+    expect(insertMock.mock.calls[2]![0]).toHaveProperty("submission_context.attemptId", "attempt-1")
+  })
+
+  it("refuses a matching job with another identity before insertion", async () => {
+    await expect(withJobSubmissionContext(scope, () => insertJob(request, { ...row, user_id: "other" }))).rejects.toThrow("identity")
+    expect(insertMock).not.toHaveBeenCalled()
   })
 })
 

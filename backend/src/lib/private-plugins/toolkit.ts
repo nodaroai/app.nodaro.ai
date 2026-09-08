@@ -96,6 +96,7 @@ import { requireScope, type Scope } from "../scopes.js"
 import { entityOwnerFilter } from "../mcp/tools/_entity-scope.js"
 import { waitForJob } from "../mcp/tools/_wait-for-job.js"
 import { redactPrivateJobData } from "../public-job-data.js"
+import { withJobSubmissionContext } from "../job-submission-context.js"
 import type { ProviderOptions, ReconcileOpts } from "../../providers/provider.interface.js"
 import { randomUUID } from "node:crypto"
 import { dirname, join } from "node:path"
@@ -1037,6 +1038,17 @@ async function readJobsOwnedBy(
   }))
 }
 
+/** Trusted submission records are available only through an owner-scoped read. */
+async function readJobSubmissionsOwnedBy(userId: string, jobIds: ReadonlyArray<string>) {
+  const ids = [...new Set(jobIds)]
+  if (!ids.length) return []
+  const { data, error } = await supabase.from("jobs").select("id, submission_context").eq("user_id", userId).in("id", ids)
+  if (error) throw new Error("Failed to read job submission records")
+  return (data ?? []).flatMap((row) => row.submission_context && typeof row.submission_context === "object" && !Array.isArray(row.submission_context)
+    ? [{ id: row.id as string, submission_context: row.submission_context as Record<string, unknown> }] : [])
+}
+
+
 /**
  * `tk.http.internalRequest` — a plugin route reaching another `/v1` route.
  *
@@ -1048,8 +1060,9 @@ async function readJobsOwnedBy(
  * string still picks the identity. Callers that forward a request body strip
  * or pin that field first.
  */
+
 function internalRequest(app: FastifyInstance, opts: PluginInternalRequestOptions) {
-  return app.inject({
+  return withJobSubmissionContext(opts, () => app.inject({
     method: opts.method,
     url: opts.url,
     headers: {
@@ -1059,7 +1072,7 @@ function internalRequest(app: FastifyInstance, opts: PluginInternalRequestOption
       ...(opts.workspaceId ? { [WORKSPACE_HEADER_LOWER]: opts.workspaceId } : {}),
     },
     ...(opts.payload !== undefined ? { payload: opts.payload } : {}),
-  })
+  }))
 }
 
 export function buildToolkit(): PluginToolkit {
@@ -1192,6 +1205,7 @@ export function buildToolkit(): PluginToolkit {
     },
     jobs: {
       readJobsOwnedBy,
+      readJobSubmissionsOwnedBy,
       waitForJob,
       storeRecastAudioBase,
       readRecastAudioBase,
@@ -1224,6 +1238,7 @@ export function buildToolkit(): PluginToolkit {
     http: {
       supabase,
       internalRequest,
+      supportsJobSubmissionContext: true,
       videoQueue,
       creditGuard,
       reserveCreditsForJob,

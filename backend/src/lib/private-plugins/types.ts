@@ -707,6 +707,8 @@ export interface PluginWaitForJobResult {
 }
 
 export interface PluginJobsToolkit {
+  /** Owner-scoped access to immutable server submission records. */
+  readJobSubmissionsOwnedBy?(userId: string, jobIds: ReadonlyArray<string>): Promise<Array<{ id: string; submission_context: Record<string, unknown> }>>
   /**
    * The status of jobs THIS user owns, by id, redacted.
    *
@@ -1108,6 +1110,8 @@ export interface EditVideoProPricing {
 }
 
 export interface PluginHttpToolkit {
+  /** This host stores internalRequest.jobSubmission on the initial job insert. */
+  supportsJobSubmissionContext?: true
   /** Applies the same configured service/global markup used by creditGuard to
    *  a dynamic pre-markup total, without checking balance or reserving it. */
   applyCreditMarkup(modelIdentifier: string, baseCredits: number): Promise<number>
@@ -1292,6 +1296,8 @@ export interface PluginHttpToolkit {
 }
 
 export interface PluginInternalRequestOptions {
+  /** Trusted metadata stored atomically on matching job inserts, outside public JSON. */
+  jobSubmission?: { readonly jobType: string; readonly metadata: Readonly<Record<string, unknown>> }
   method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE"
   url: string
   /** The caller — impersonated through the internal secret, exactly as MCP does. */

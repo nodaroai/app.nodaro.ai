@@ -32,6 +32,7 @@ import { supabase } from "./supabase.js"
 import { insertWithIdempotencyKey, type IdempotentInsertResult } from "./idempotent-insert.js"
 import { jobSourceColumns } from "./job-source.js"
 import { extractMcpClient } from "./extract-mcp-client.js"
+import { jobSubmissionColumns, withoutJobSubmissionContext } from "./job-submission-context.js"
 import type { BillingContext } from "./billing-context.js"
 import {
   ALL_POLICIES_ALLOWED_ID,
@@ -83,8 +84,9 @@ export function withJobProvenance(
   return {
     ...jobSourceColumns(req),
     ...(mcpClient ? { mcp_client: mcpClient } : {}),
-    ...row,
+    ...withoutJobSubmissionContext(row),
     ...billingPairColumns(req.billingContext),
+    ...jobSubmissionColumns(req, row),
   }
 }
 
@@ -265,7 +267,7 @@ export async function insertInternalJob<T = { id: string }>(
   const stamped = {
     source: "internal",
     source_detail: sourceDetail,
-    ...row,
+    ...withoutJobSubmissionContext(row),
     ...billingPairColumns(opts.billingContext),
   }
   const gate = await gateJobInsert([stamped])

@@ -121,3 +121,15 @@ describe("the held payload is on neither key list", () => {
     expect([...PUBLIC_JOB_KEYS, ...ADMIN_ONLY_JOB_KEYS].filter((k) => k.startsWith("held_"))).toEqual([])
   })
 })
+
+describe("server submission context stays private", () => {
+  for (const isAdmin of [false, true]) {
+    it(`omits immutable provenance from the ${isAdmin ? "admin" : "public"} job response`, () => {
+      const out = sanitizeJobForPublic({ ...(baseJob as Record<string, unknown>),
+        submission_context: { privatePrompt: "server submission secret" },
+      } as never, isAdmin)
+      expect(out).not.toHaveProperty("submission_context")
+      expect(JSON.stringify(out)).not.toContain("server submission secret")
+    })
+  }
+})
