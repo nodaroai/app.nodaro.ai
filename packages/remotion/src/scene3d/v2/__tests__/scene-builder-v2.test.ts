@@ -9,6 +9,7 @@ import {
   makeCameraTrack,
   makeLoadableScene,
   primitiveEntity,
+  override,
 } from "./v2-fixtures"
 
 const signal = () => new AbortController().signal
@@ -69,6 +70,38 @@ function worldXOf(handle: { scene: THREE.Scene }, nodeName: string): number {
 }
 
 describe("v2 scene assembly", () => {
+  it.each([undefined, true, false])("preserves baked visibility %s while hidden animation keeps sampling", async (visible) => {
+    const { handle } = await buildScene({ glb: makeGlb(DRIVING_CAR), objects: [carEntity({ visible })] })
+    for (const frame of [24, 0, 36, 24]) {
+      handle.applyFrame(frame)
+      expect(handle.entities.get("car")!.visible).toBe(visible ?? true)
+      expect(worldXOf(handle, "Body")).toBeCloseTo(frame / 12, 5)
+    }
+    handle.dispose()
+  })
+
+  it.each([true, false])("lets a manual visibility overlay %s override the baked value", async (visible) => {
+    const { handle } = await buildScene({ glb: makeGlb(DRIVING_CAR),
+      objects: [carEntity({ visible: !visible })],
+      overrides: [override({ kind: "entity-visibility", entityId: "car", visible })],
+    })
+    handle.applyFrame(24)
+    expect(handle.entities.get("car")!.visible).toBe(visible)
+    expect(worldXOf(handle, "Body")).toBeCloseTo(2, 5)
+    handle.dispose()
+  })
+
+  it("hides descendants of a baked-hidden group even when a child has a show override", async () => {
+    const { handle } = await buildScene({ objects: [
+      groupEntity({ id: "rig", visible: false }), primitiveEntity({ id: "prop", parentId: "rig" }),
+    ], overrides: [override({ kind: "entity-visibility", entityId: "prop", visible: true })] })
+    handle.applyFrame(0)
+    const drawn: string[] = []
+    handle.scene.traverseVisible(o => { if (o.userData.objectId) drawn.push(o.userData.objectId) })
+    expect(drawn).not.toContain("prop")
+    expect(handle.entities.get("prop")!.visible).toBe(true)
+    handle.dispose()
+  })
   it("mounts the GLB entity root under its own wrapper", async () => {
     const { handle } = await buildScene({ glb: makeGlb(DRIVING_CAR), objects: [carEntity()] })
     const wrapper = handle.entities.get("car")

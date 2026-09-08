@@ -29,6 +29,14 @@ the reader preserves those values, including roll and exact shot cuts. Animation
 is sampled from the requested frame so backward scrubbing and independent frame
 rendering produce the same pose.
 
+An entity's optional `visible` boolean records its baked visibility; omission
+means `true`. Hidden geometry stays loaded and its animation keeps sampling, so
+a visibility overlay can show it immediately. An overlay takes precedence over
+the base value; removing that overlay restores the baked value. A hidden parent
+also hides its descendants. Hidden objects do not intercept clicks in the preview;
+use the entity list to select and show them. Base visibility is part of the
+revision content digest.
+
 V2 supports deterministic transform, material-color, visibility and shot-camera
 offsets as immutable overlays. An edit creates a new revision with a parent
 revision and a new content digest. It leaves the base geometry and camera bytes

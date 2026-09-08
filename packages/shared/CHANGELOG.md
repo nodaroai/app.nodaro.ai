@@ -1,5 +1,11 @@
 # @nodaro/shared
 
+## 3.2.0
+
+### Minor Changes
+
+- ea23572: Add optional baked entity visibility to the Scene3D v2 wire contract. Omitted visibility preserves the existing visible default; manual visibility overlays take precedence.
+
 ## 3.1.0
 
 ### Minor Changes

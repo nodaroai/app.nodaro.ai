@@ -11,7 +11,7 @@ vi.mock("../../lib/private-plugins/scene3d-render-store.js", () => ({ createScen
 vi.mock("../../lib/supabase.js", () => ({ supabase: { from: () => {
   const q = { update: () => q, eq: () => q, in: () => q, select: mocks.claim }; return q
 } } }))
-vi.mock("../../lib/config.js", () => ({ config: { REMOTION_CONCURRENCY: 1 } }))
+vi.mock("../../lib/config.js", () => ({ config: { REMOTION_CONCURRENCY: undefined } }))
 vi.mock("../../providers/video/ffmpeg-utils.js", () => ({ createWorkDir: async () => "/tmp/render-test", cleanupWorkDir: mocks.cleanup }))
 vi.mock("../../lib/storage.js", () => ({ uploadFileToR2: mocks.upload }))
 vi.mock("../../utils/watermark.js", () => ({ applyVideoWatermark: mocks.watermark }))
@@ -51,7 +51,7 @@ describe("scene render worker lifecycle", () => {
     await processSceneRenderChild(job, async () => "bundle", { gl: "angle" })
     expect(mocks.select).toHaveBeenCalledWith(expect.objectContaining({ id: "3d-scene", serveUrl: "bundle", inputProps: {
       plan: child.input.plan, assetUrls: { geometry: "http://127.0.0.1/owned" } } }))
-    expect(mocks.media).toHaveBeenCalledWith(expect.objectContaining({ codec: "h264", muted: true }))
+    expect(mocks.media).toHaveBeenCalledWith(expect.objectContaining({ codec: "h264", muted: true, concurrency: 2 }))
     expect(mocks.watermark).toHaveBeenCalledWith(expect.any(String), expect.any(String), { signal: expect.any(AbortSignal) })
     expect(mocks.upload.mock.invocationCallOrder[0]).toBeLessThan(mocks.complete.mock.invocationCallOrder[0]!)
     expect(mocks.complete).toHaveBeenCalledWith(child.id, expect.objectContaining({ is_public: false,

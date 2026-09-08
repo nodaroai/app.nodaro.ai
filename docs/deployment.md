@@ -167,7 +167,7 @@ here for each one anyway.
 | `VIDEO_WORKER_CONCURRENCY` | `50` | BullMQ concurrency of the media worker (I/O-bound) |
 | `ORCHESTRATOR_CONCURRENCY` | `20` | BullMQ concurrency of the orchestrator (I/O-bound) |
 | `RENDER_WORKER_CONCURRENCY` | `2` (max 10) | Remotion renders in parallel — each is a headless Chrome |
-| `REMOTION_CONCURRENCY` | Remotion default (50 % of cores) | Browser tabs per render |
+| `REMOTION_CONCURRENCY` | `2` for 3D scenes; Remotion default (50 % of cores) for other compositions | Browser tabs per render. An explicit value overrides both paths. Keep this low when running multiple 3D jobs: each WebGL tab uses additional threads and counts toward the container process limit. |
 | `FFMPEG_CONCURRENCY` | `4` (max 32) | Concurrent ffmpeg processes across every ffmpeg node |
 | `MCP_PUBLIC_URL` | `""` = the Nodaro Cloud host | Public base of the MCP host when it differs from `PUBLIC_URL`; self-hosters serving MCP on their main host set it equal to `PUBLIC_URL` |
 | `MCP_DYNAMIC_REGISTRATION` · `MCP_DCR_ALLOWLIST` | `allowlist` · 14 known clients (Claude, Claude Code, Cursor, Cline, Continue, Goose, ChatGPT, OpenAI, Lovable, Gemini, Gemini CLI, Codex, MCP Inspector, mcp-inspector) | RFC 7591 dynamic client registration for MCP clients (`allowlist` · `open` · `off`), and the `client_name` allowlist consulted in `allowlist` mode — see §10 |

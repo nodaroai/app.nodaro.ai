@@ -44,6 +44,18 @@ describe("shots", () => {
 })
 
 describe("entityViews", () => {
+  it("shows baked-hidden state and lets a manual show override supersede it", () => {
+    const original = plan()
+    const hidden = plan({ objects: original.objects.map(entity => ({ ...entity, visible: false })) })
+    expect(entityViews(hidden).every(view => !view.visible && !view.visibilityOverridden)).toBe(true)
+    const shown = plan({ objects: hidden.objects, overrides: [{
+      id: "show-car", kind: "entity-visibility", entityId: "car", visible: true,
+      sourceRevisionId: REV_V2, sourceContentHash: FAKE_DIGEST, operationVersion: 1,
+    }] })
+    expect(entityViews(shown).find(view => view.id === "car")).toMatchObject({ visible: true, visibilityOverridden: true })
+    expect(entityViews(plan()).every(view => view.visible)).toBe(true)
+  })
+
   it("reads identity, roles and material bindings off the manifest", () => {
     const [hero, car] = entityViews(plan())
     expect(hero.kind).toBe("primitive")
