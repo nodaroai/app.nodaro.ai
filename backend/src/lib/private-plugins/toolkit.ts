@@ -1,5 +1,6 @@
 import { retainImage, readRetainedImage } from "../retained-images.js"
 import { retainJobImage, readRetainedJobImages } from "../retained-job-images.js"
+import { readPublicVideoFrame } from "../public-video-frame.js"
 import { isStorageConfigured } from "../storage.js"
 import { createSceneRenderingToolkit } from "./scene3d-render-toolkit.js"
 import { completeStructuredMetered } from "./llm-metered.js"
@@ -1176,6 +1177,7 @@ export function buildToolkit(): PluginToolkit {
       remuxToMp4,
     },
     media: {
+      readPublicVideoFrame,
       extractAudio,
       mixAudio,
       mergeVideoAudio,

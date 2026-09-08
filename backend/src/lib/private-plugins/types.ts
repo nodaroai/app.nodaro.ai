@@ -552,6 +552,9 @@ export interface PluginAudioFxOptions {
 }
 
 export interface PluginMediaToolkit {
+  /** Authorize the source first. Public-only bounded video download and local
+   * still extraction; no jobs, storage credentials or automatic media spend. */
+  readPublicVideoFrame?(input: { videoUrl: string; timeSec: number }): Promise<Buffer>
   /** Mirrors `extractAudio` (`providers/video/extract-audio.ts`). */
   extractAudio(options: { readonly videoUrl: string }): Promise<{ readonly audioPath: string }>
   /** Mirrors `mixAudio` (`providers/video/mix-audio.ts`). */

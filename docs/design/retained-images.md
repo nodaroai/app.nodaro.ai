@@ -35,6 +35,14 @@ maxBytes)` helper applies SSRF checks, a 30-second deadline and a streaming byte
 limit capped at 25 MiB. The limit also applies when Content-Length is missing or
 incorrect; the helper supplies no storage credentials.
 
+For an authorized video source, `media.readPublicVideoFrame({ videoUrl, timeSec })`
+downloads over public HTTP to a temporary file with a 500 MiB streaming limit
+and a 120-second deadline. It extracts one frame from MP4/MOV, WebM/Matroska or
+AVI with a 60-second processing limit. Playlists are refused; FFmpeg receives
+only a local file. Temporary files are removed on success and failure. The
+returned image is limited to 25 MiB and must pass `storage.retainImage` before
+being used as a retained reference. Extraction creates no generation job.
+
 For generated results, `storage.retainJobImage` additionally checks that the job
 belongs to the caller and destination workflow, has completed, and carries
 server-written submission metadata. It supports the single primary result of
