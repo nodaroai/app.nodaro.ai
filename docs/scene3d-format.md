@@ -19,6 +19,13 @@ requires the exact referenced bytes and refuses missing, oversized or changed
 assets before drawing. Playback loads geometry and camera data; native source
 files are a separate download capability.
 
+When an optional authoring engine consumes an existing GLB, the host checks
+access to its exact source revision and verifies the immutable asset receipt
+before issuing a short-lived download grant. The destination job must still be
+active and authorized. Grants use private storage and reject changed objects;
+they are transport credentials and are never part of the scene plan. Engine
+support for imported inputs remains a separate capability.
+
 GLB node transforms are authoritative for exported geometry. Semantic entities
 address named roots and material roles for selection and editing. Every editable
 material role must name a material within that entity's geometry. Clay shading

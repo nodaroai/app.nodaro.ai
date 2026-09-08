@@ -43,7 +43,13 @@ export function createScene3DArtifactToolkit(): PluginSceneArtifactToolkit | und
   const grant = createScene3DUploadGranter(cfg, config.R2_BUCKET_NAME,
     async (scope) => { await authorizeScene3DJob(scope) },
     async (input) => { await reserveScene3DUploadIntent(store, { ...input, ttlSeconds: input.ttlSeconds }) })
+  let inputGranter: PluginSceneArtifactToolkit["grantInput"]
   const toolkit: PluginSceneArtifactToolkit = {
+    grantInput: async (input, options) => {
+      inputGranter ??= (await import("./scene3d-input-grants.js"))
+        .createScene3DInputGranter(cfg, config.R2_BUCKET_NAME, authorizeScene3DJob)
+      return inputGranter(input, options)
+    },
     applyEdits: async (input, options) =>
       (await import("./scene3d-job-edit.js"))
         .applyScene3DJobEdits({ store, authorizeJob: authorizeScene3DJob }, input, options),

@@ -117,8 +117,8 @@ describe("upload-policy totality — every byte-carrying lane polices", () => {
   it("public ingestion cannot mint presigned PUTs; private build output has one scoped quarantine lane", () => {
     // If someone imports @aws-sdk/s3-request-presigner, bytes could go
     // browser→R2 directly and bypass every policed lane — that lane must then
-    // either be dropped again or grow its own policing point. (The package
-    // itself sits unused in package.json; the import is what opens the lane.)
+    // either be dropped again or grow its own policing point. The two private
+    // scene adapters below are the only authorized signing entrypoints.
     const offenders: string[] = []
     const walk = (dir: string): void => {
       for (const e of readdirSync(dir, { withFileTypes: true })) {
@@ -131,7 +131,17 @@ describe("upload-policy totality — every byte-carrying lane polices", () => {
           // no readable revision until receipt verification, and their signed
           // conditional PUT cannot replace an existing artifact. This is not
           // the browser/MCP ingestion lane protected by the checks above.
-          if (file !== resolve(SRC, "lib/private-plugins/scene3d-upload-grants.ts")) offenders.push(file)
+          if (file === resolve(SRC, "lib/private-plugins/scene3d-upload-grants.ts")) continue
+          // Existing, revision-authorized inputs receive conditional GETs only;
+          // this opens no upload lane. Its real presigner is exercised by the
+          // input-grants tests, including revoked access and changed receipts.
+          if (file === resolve(SRC, "lib/private-plugins/scene3d-input-grants.ts")) {
+            const source = readFileSync(file, "utf8")
+            expect(source).toContain("new GetObjectCommand(")
+            expect(source).not.toMatch(/(?:PutObject|UploadPart|CreateMultipartUpload|CopyObject)Command/)
+            continue
+          }
+          offenders.push(file)
         }
       }
     }

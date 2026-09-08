@@ -66,6 +66,13 @@ export interface PluginSceneDeliveryPublish extends PluginSceneArtifactScope {
   }>
 }
 export interface PluginSceneArtifactToolkit {
+  /** Authorize an immutable input artifact for an active owned job, then sign a bounded GET. */
+  grantInput?(input: { jobId: string; userId: string; sourceRevisionId: string;
+    asset: { assetId: string; kind: "glb"; sha256: string; byteLength: number }; expiresInSeconds: number },
+    options?: { signal?: AbortSignal }): Promise<{
+      assetId: string; kind: "glb"; sha256: string; byteLength: number;
+      fetch: { method: "GET"; url: string; headers?: Record<string, string> }
+    }>
   /** Persist deterministic v2 edits for an active owned job, without generation. */
   applyEdits?(input: PluginSceneJobEditRequest, options?: { signal?: AbortSignal }): Promise<{ scenePlan: unknown; changeSummary: string }>
   /** Quote/admission source resolution uses current canonical scene permissions. */
