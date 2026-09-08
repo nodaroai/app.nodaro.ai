@@ -44,6 +44,9 @@ export function createScene3DArtifactToolkit(): PluginSceneArtifactToolkit | und
     async (scope) => { await authorizeScene3DJob(scope) },
     async (input) => { await reserveScene3DUploadIntent(store, { ...input, ttlSeconds: input.ttlSeconds }) })
   const toolkit: PluginSceneArtifactToolkit = {
+    applyEdits: async (input, options) =>
+      (await import("./scene3d-job-edit.js"))
+        .applyScene3DJobEdits({ store, authorizeJob: authorizeScene3DJob }, input, options),
     resolveSource: async (input) =>
       (await import("../../services/scene3d-artifacts/resolve-source.js")).resolveScene3DSource(input),
     publishDelivery: async (input) =>

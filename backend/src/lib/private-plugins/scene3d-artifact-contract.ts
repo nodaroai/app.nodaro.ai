@@ -47,6 +47,15 @@ export interface PluginSceneAuthoringSource {
   sourceArtifactId: string
   sourceSha256: string
 }
+export interface PluginSceneJobEditRequest {
+  jobId: string
+  userId: string
+  revisionId: string
+  newRevisionId: string
+  expectedContentHash: string
+  operations: readonly unknown[]
+  lockedObjectIds?: readonly string[]
+}
 export interface PluginSceneDeliveryPublish extends PluginSceneArtifactScope {
   source: { kind: "retained-revision" | "job-output"; jobId?: string }
   mode: "authored" | "render-only"
@@ -57,6 +66,8 @@ export interface PluginSceneDeliveryPublish extends PluginSceneArtifactScope {
   }>
 }
 export interface PluginSceneArtifactToolkit {
+  /** Persist deterministic v2 edits for an active owned job, without generation. */
+  applyEdits?(input: PluginSceneJobEditRequest, options?: { signal?: AbortSignal }): Promise<{ scenePlan: unknown; changeSummary: string }>
   /** Quote/admission source resolution uses current canonical scene permissions. */
   resolveSource?(input: import("./scene3d-source-contract.js").PluginSceneSourceRequest): Promise<import("./scene3d-source-contract.js").PluginSceneSource>
   grant(input: PluginSceneArtifactUpload): Promise<PluginSceneArtifactGrant>
