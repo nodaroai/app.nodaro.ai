@@ -1,6 +1,8 @@
 import sharp from "sharp"
 import { runFfmpeg, BROWSER_SAFE_VIDEO_ARGS } from "../providers/video/ffmpeg-utils.js"
 
+import { runFfmpegCancellable } from "../providers/video/ffmpeg-cancellable.js"
+
 const WATERMARK_TEXT = "Nodaro.ai"
 
 /**
@@ -36,13 +38,16 @@ export async function applyImageWatermark(buffer: Buffer): Promise<Buffer> {
 export async function applyVideoWatermark(
   inputPath: string,
   outputPath: string,
+  options?: { signal?: AbortSignal },
 ): Promise<void> {
-  await runFfmpeg([
+  const args = [
     "-y",
     "-i", inputPath,
     "-vf", `drawtext=text='${WATERMARK_TEXT}':fontsize=24:fontcolor=white@0.5:x=w-tw-20:y=h-th-20`,
     ...BROWSER_SAFE_VIDEO_ARGS,
     "-c:a", "aac", "-b:a", "128k",
     outputPath,
-  ])
+  ]
+  if (options?.signal) await runFfmpegCancellable(args, options.signal)
+  else await runFfmpeg(args)
 }

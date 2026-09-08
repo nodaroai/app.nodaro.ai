@@ -177,6 +177,15 @@ describe("receipt: the bytes have to be the bytes", () => {
     ).rejects.toMatchObject({ code: "SCENE_ASSET_MISSING" })
   })
 
+  it("does not treat a storage outage as permission to recreate a missing artifact", async () => {
+    const store = fakeStore({})
+    store.get = vi.fn().mockRejectedValue(Object.assign(new Error("ServiceUnavailable"), { $metadata: { httpStatusCode: 503 } }))
+    const claim = { kind: "glb" as const, sha256: "a".repeat(64), byteLength: 64 }
+    await expect(verifyScene3DArtifactBytes(store, key, claim)).rejects.toMatchObject({ code: "SCENE_STORAGE_FAILED" })
+    store.get = vi.fn().mockRejectedValue(Object.assign(new Error("missing"), { $metadata: { httpStatusCode: 404 } }))
+    await expect(verifyScene3DArtifactBytes(store, key, claim)).rejects.toMatchObject({ code: "SCENE_ASSET_MISSING" })
+  })
+
   it("checks the file is the KIND it claims to be", async () => {
     const notGlb = Buffer.alloc(64, 0x41)
     const store = fakeStore({ [key]: { body: notGlb } })
