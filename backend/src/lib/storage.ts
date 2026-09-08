@@ -8,6 +8,7 @@ import { stat } from "node:fs/promises"
 import { Readable, Transform } from "node:stream"
 import { config } from "./config.js"
 import { safeFetch } from "./safe-fetch.js"
+import { assertOrdinaryMediaKey } from "./retained-image-keys.js"
 import {
   updateStorageUsage,
   reserveStorageIfWithinLimit,
@@ -891,6 +892,7 @@ export async function copyR2ObjectToPrefix(
 }
 
 export async function deleteFromR2(key: string): Promise<void> {
+  assertOrdinaryMediaKey(key)
   await s3.send(
     new DeleteObjectCommand({
       Bucket: config.R2_BUCKET_NAME,
@@ -905,6 +907,8 @@ export async function deleteFromR2(key: string): Promise<void> {
  */
 export async function batchDeleteFromR2(keys: string[]): Promise<{ deleted: number; errors: number }> {
   if (keys.length === 0) return { deleted: 0, errors: 0 }
+  // Validate the entire batch before deleting any object.
+  keys.forEach(assertOrdinaryMediaKey)
 
   const BATCH_SIZE = 1000
   let deleted = 0

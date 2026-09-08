@@ -1,3 +1,5 @@
+import { retainImage, readRetainedImage } from "../retained-images.js"
+import { isStorageConfigured } from "../storage.js"
 import { completeStructuredMetered } from "./llm-metered.js"
 import { directVoiceChanger } from "../../providers/elevenlabs/voice-changer.js"
 import { createScene3DArtifactToolkit } from "./scene3d-artifact-toolkit.js"
@@ -1169,6 +1171,7 @@ export function buildToolkit(): PluginToolkit {
       uploadVideoMaybeWatermark,
     },
     storage: {
+      retainImage, readRetainedImage, canRetainImages: isStorageConfigured(),
       uploadBufferToR2,
       uploadFileToR2,
       runPostProcessing,

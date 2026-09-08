@@ -260,6 +260,10 @@ describe("uploadBufferToR2", () => {
 // ---------- deleteFromR2 ----------
 
 describe("deleteFromR2", () => {
+  it("refuses a retained snapshot before sending a physical delete", async () => {
+    await expect(deleteFromR2("retained-images/00000000-0000-4000-8000-000000000001")).rejects.toThrow("cannot be deleted")
+    expect(mocks.deleteCalls).toHaveLength(0)
+  })
   it("calls send with DeleteObjectCommand params", async () => {
     await deleteFromR2("images/old.png")
 
@@ -291,6 +295,11 @@ describe("r2KeyFromOurUrl", () => {
 // ---------- batchDeleteFromR2 ----------
 
 describe("batchDeleteFromR2", () => {
+  it("refuses the entire batch when it contains retained bytes", async () => {
+    await expect(batchDeleteFromR2(["images/ordinary.png", "retained-images/00000000-0000-4000-8000-000000000001"]))
+      .rejects.toThrow("cannot be deleted")
+    expect(mocks.deleteObjectsCalls).toHaveLength(0)
+  })
   it("returns zeroes for empty array without calling send", async () => {
     const result = await batchDeleteFromR2([])
 

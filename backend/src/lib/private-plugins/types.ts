@@ -581,6 +581,15 @@ export interface PluginMediaToolkit {
 // ============================================================================
 
 export interface PluginStorageToolkit {
+  /** Snapshot bytes after the caller authorizes the source and workflow. */
+  retainImage?(args: { userId: string; workflowId: string; body: Buffer }): Promise<{
+    assetId: string; contentHash: string; url: string; width: number; height: number
+  }>
+  /** Read only after workflow access authorization; cross-workflow ids return null. */
+  readRetainedImage?(workflowId: string, assetId: string): Promise<{
+    assetId: string; contentHash: string; url: string; width: number; height: number
+  } | null>
+  canRetainImages?: boolean
   /** Mirrors `uploadBufferToR2` (`lib/storage.ts`). */
   uploadBufferToR2(
     buffer: Buffer,

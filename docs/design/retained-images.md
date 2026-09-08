@@ -1,0 +1,34 @@
+# Retained image snapshots
+
+Server integrations can retain an image after authorizing its source and the
+destination workflow. The toolkit receives image bytes, stores a separate copy,
+and returns an asset ID, SHA-256 hash, URL and dimensions. Reads verify both the
+workflow binding and the stored bytes. Gallery assets and their editable metadata
+do not determine whether a snapshot is valid.
+
+Snapshots remain available for the lifetime of their production. Deleting a
+source image or removing a result from a gallery does not delete the retained
+copy. Deleting the production is refused while it has active jobs using retained
+images. After production deletion, durable cleanup removes the copies and releases
+their storage usage. Cleanup retries failures and cannot refund the same bytes
+twice.
+Copies also survive a capturing collaborator's account deletion while the
+destination production still exists.
+Attempts to delete protected bytes or a production with active image use return
+HTTP 409 with `retained_image_in_use` through the normal API error handler.
+
+Copies count against storage under the deployment's existing quota rules. The
+same owner, production and content hash reuse one copy. Supported stored formats
+are PNG, JPEG and WebP, up to 25 MiB per image. Animated images are refused. EXIF
+orientation and HEIC input are normalized before hashing; hashes describe the
+actual stored bytes supplied to generation.
+
+The optional toolkit members are `storage.retainImage`,
+`storage.readRetainedImage`, and `storage.canRetainImages`. Integrations must check
+availability before submitting jobs that require this guarantee. These methods
+do not authorize a caller, fetch arbitrary URLs, or start media generation.
+
+Snapshot metadata and cleanup tasks are server-only. Ordinary single and batch
+object deletion refuse the reserved storage namespace. Only the cleanup worker
+can physically remove an object, using a durable tombstone after the upload
+window and grace period have ended.
