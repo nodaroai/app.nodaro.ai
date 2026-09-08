@@ -1,4 +1,9 @@
+import { createSceneRenderingToolkit } from "./scene3d-render-toolkit.js"
+import { completeStructuredMetered } from "./llm-metered.js"
 import { directVoiceChanger } from "../../providers/elevenlabs/voice-changer.js"
+import { createScene3DArtifactToolkit } from "./scene3d-artifact-toolkit.js"
+import { createScene3DPlaybackToolkit } from "./scene3d-playback-toolkit.js"
+import { createDurableScene3DStageJournal } from "./scene3d-stage-storage.js"
 import { ReplicateAudioSeparationProvider } from "../../providers/replicate/audio-separation.js"
 import { extractAudio } from "../../providers/video/extract-audio.js"
 import {
@@ -1059,7 +1064,21 @@ function internalRequest(app: FastifyInstance, opts: PluginInternalRequestOption
 }
 
 export function buildToolkit(): PluginToolkit {
+  const sceneArtifacts = createScene3DArtifactToolkit()
+  // Queue and asset authorization modules join the graph only when this lane runs.
+  // Loading them during plugin boot creates an access-check/plugin-loader cycle.
+  let sceneRenderer: Promise<NonNullable<PluginToolkit["sceneRendering"]>> | undefined
+  const renderScenes = () => sceneRenderer ??= import("./scene3d-render-store.js")
+    .then(({ createSceneRenderPorts }) => createSceneRenderingToolkit(createSceneRenderPorts()))
   return {
+    sceneArtifacts,
+    sceneRendering: {
+      submit: async (...args) => (await renderScenes()).submit(...args),
+      status: async (...args) => (await renderScenes()).status(...args),
+      cancel: async (...args) => (await renderScenes()).cancel(...args),
+    },
+    scenePlayback: sceneArtifacts ? createScene3DPlaybackToolkit(sceneArtifacts) : undefined,
+    stages: createDurableScene3DStageJournal(),
     providers: {
       directVoiceChanger,
       // Exposed as a plain function per the contract; the real capability is
@@ -1285,6 +1304,7 @@ export function buildToolkit(): PluginToolkit {
       youtubeHosts: YOUTUBE_HOSTS,
     },
     llm: {
+      completeStructuredMetered,
       // Adapts PluginLlmRequest {model, system?, prompt, maxTokens?} to
       // lib/llm-client.ts's LlmRequest and unwraps StructuredLlmOutput<T> to
       // the contract's bare Promise<T>.
@@ -1375,7 +1395,11 @@ export function buildToolkit(): PluginToolkit {
       },
       getSnapshot: getPipelineSnapshot,
     },
-    features: { organizations: hasOrganizations() },
+    features: {
+      organizations: hasOrganizations(),
+      scene3dAdvanced: hasCredits() && config.SCENE3D_ADVANCED_ENABLED,
+      scene3dLocal: hasCredits() && config.SCENE3D_ADVANCED_ENABLED && config.SCENE3D_LOCAL_ENABLED,
+    },
     deployment: { publicUrl: appBaseUrl() },
     redis: {
       url: config.REDIS_URL,

@@ -1,3 +1,4 @@
+import { readBinaryResponse } from "./binary-response.js"
 import { throwFromResponse } from "./errors.js"
 import type { Auth } from "./auth.js"
 import { WorkflowsResource } from "./resources/workflows.js"
@@ -6,6 +7,7 @@ import { JobsResource } from "./resources/jobs.js"
 import { VideoProResource } from "./resources/video-pro.js"
 import { ExecutionsResource } from "./resources/executions.js"
 import { NodesResource } from "./resources/nodes.js"
+import { Scene3DResource } from "./resources/scene3d.js"
 import { DeveloperAppsResource } from "./resources/developer-apps.js"
 import { OAuthResource } from "./resources/oauth.js"
 import { AppsResource } from "./resources/apps.js"
@@ -29,6 +31,7 @@ import { CatalogsResource } from "./resources/catalogs.js"
 import { ModelsResource } from "./resources/models.js"
 import { ShotsResource } from "./resources/shots.js"
 import { RecastResource } from "./resources/recast.js"
+import { StudioResource } from "./resources/studio.js"
 import { CommunityResource } from "./resources/community.js"
 import { TemplatesResource } from "./resources/templates.js"
 import { TutorialsResource } from "./resources/tutorials.js"
@@ -160,6 +163,7 @@ export class NodaroClient {
   readonly videoPro: VideoProResource
   readonly executions: ExecutionsResource
   readonly nodes: NodesResource
+  readonly scene3d: Scene3DResource
   readonly developerApps: DeveloperAppsResource
   readonly oauth: OAuthResource
   readonly apps: AppsResource
@@ -183,6 +187,7 @@ export class NodaroClient {
   readonly models: ModelsResource
   readonly shots: ShotsResource
   readonly recast: RecastResource
+  readonly studio: StudioResource
   readonly community: CommunityResource
   readonly templates: TemplatesResource
   readonly tutorials: TutorialsResource
@@ -208,6 +213,7 @@ export class NodaroClient {
     this.videoPro = new VideoProResource(this)
     this.executions = new ExecutionsResource(this)
     this.nodes = new NodesResource(this)
+    this.scene3d = new Scene3DResource(this)
     this.developerApps = new DeveloperAppsResource(this)
     this.oauth = new OAuthResource(this)
     this.apps = new AppsResource(this)
@@ -231,6 +237,7 @@ export class NodaroClient {
     this.models = new ModelsResource(this)
     this.shots = new ShotsResource(this)
     this.recast = new RecastResource(this)
+    this.studio = new StudioResource(this)
     this.community = new CommunityResource(this)
     this.templates = new TemplatesResource(this)
     this.tutorials = new TutorialsResource(this)
@@ -294,11 +301,12 @@ export class NodaroClient {
 
     const ac = new AbortController()
     const timeoutId = setTimeout(() => ac.abort(), this.timeoutMs)
-    if (options.signal) {
-      options.signal.addEventListener("abort", () => ac.abort(), { once: true })
-    }
+    const abort = () => ac.abort(options.signal?.reason)
+    options.signal?.addEventListener("abort", abort, { once: true })
+    if (options.signal?.aborted) abort()
 
     try {
+      ac.signal.throwIfAborted()
       const res = await this.fetch(url, {
         method,
         headers,
@@ -324,7 +332,14 @@ export class NodaroClient {
       return await read(res)
     } finally {
       clearTimeout(timeoutId)
+      options.signal?.removeEventListener("abort", abort)
     }
+  }
+
+  /** Authenticated, bounded binary reads through the normal timeout/error transport. */
+  async requestBytes(method: string, path: string, options: RequestOptions & { maxBytes: number }): Promise<ArrayBuffer> {
+    if (!Number.isSafeInteger(options.maxBytes) || options.maxBytes < 1) throw new Error("maxBytes must be a positive integer")
+    return this.send(method, path, options, (response) => readBinaryResponse(response, options.maxBytes))
   }
 
   async request<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {

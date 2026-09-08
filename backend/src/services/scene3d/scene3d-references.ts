@@ -31,7 +31,7 @@ import {
   getLlmModalityCaps,
   scene3DPlanSchema,
   stripDerivedAnalysisFields,
-  type Scene3DPlan,
+  type Scene3DPlanV1,
   type Scene3DReference,
   type VideoAnalysisResult,
 } from "@nodaro/shared"
@@ -180,7 +180,7 @@ export function mergeScene3DReferences(
  * afterwards, which is where a reference pointing at an object that the same
  * edit just removed (or has yet to add) is decided.
  */
-export function withScene3DReferences(plan: Scene3DPlan, references: readonly Scene3DReference[]): Scene3DPlan {
+export function withScene3DReferences(plan: Scene3DPlanV1, references: readonly Scene3DReference[]): Scene3DPlanV1 {
   const next = { ...plan }
   if (references.length === 0) delete next.references
   else next.references = [...references]
@@ -190,7 +190,7 @@ export function withScene3DReferences(plan: Scene3DPlan, references: readonly Sc
 /** The plan as `applyScene3DEditOperations` should see it: references removed,
  *  so an operation list is judged on geometry alone and a reference bound to an
  *  object the SAME list adds is not rejected before that operation runs. */
-export function withoutScene3DReferences(plan: Scene3DPlan): Scene3DPlan {
+export function withoutScene3DReferences(plan: Scene3DPlanV1): Scene3DPlanV1 {
   const next = { ...plan }
   delete next.references
   return next
@@ -198,7 +198,7 @@ export function withoutScene3DReferences(plan: Scene3DPlan): Scene3DPlan {
 
 /** Re-validate a plan after its references were stamped on. Returns the
  *  contract's own sentence, so a refusal reads the same wherever it surfaces. */
-export function scene3DReferenceBindingError(plan: Scene3DPlan): string | undefined {
+export function scene3DReferenceBindingError(plan: Scene3DPlanV1): string | undefined {
   const validated = scene3DPlanSchema.safeParse(plan)
   if (validated.success) return undefined
   const issue = validated.error.issues[0]

@@ -1,5 +1,5 @@
 /**
- * Builds the three.js object graph for a Scene3DPlan and drives it from the
+ * Builds the three.js object graph for a Scene3DPlanV1 and drives it from the
  * frame sampler.
  *
  * Split out of the canvas component on purpose: everything here is testable in
@@ -8,15 +8,18 @@
  * instantiates a `WebGLRenderer`.
  */
 import * as THREE from "three"
-import type { Scene3DObject, Scene3DPlan, Vec3 } from "./types"
+import type { Scene3DObject, Scene3DPlanV1, Vec3 } from "./types"
+import type { Scene3DRenderHandle } from "./handle"
 import { sampleScene3DFrame, type Scene3DFrameSample } from "./sampler"
 
-export interface Scene3DSceneHandle {
+export interface Scene3DSceneHandle extends Scene3DRenderHandle {
   scene: THREE.Scene
   camera: THREE.PerspectiveCamera
   /** Every plan object, including `group` nodes (which carry no mesh). */
   objects: Map<string, THREE.Object3D>
   meshes: Map<string, THREE.Mesh>
+  /** v1 has one mesh per object, so this is just `meshes.values()`. */
+  raycastTargets: THREE.Object3D[]
   ambientLight: THREE.AmbientLight
   keyLight: THREE.DirectionalLight
   /** Apply the sampled state of `frame`. Returns the sample that was applied. */
@@ -101,7 +104,7 @@ function materialFor(object: Scene3DObject): THREE.MeshStandardMaterial {
  * Build scene, camera and lights for a plan. The returned handle owns every
  * GPU-backed resource it created — call `dispose()` on unmount.
  */
-export function buildScene3DScene(plan: Scene3DPlan): Scene3DSceneHandle {
+export function buildScene3DScene(plan: Scene3DPlanV1): Scene3DSceneHandle {
   const scene = new THREE.Scene()
   scene.background = new THREE.Color(plan.backgroundColor || "#000000")
 
@@ -207,5 +210,16 @@ export function buildScene3DScene(plan: Scene3DPlan): Scene3DSceneHandle {
 
   applyFrame(0)
 
-  return { scene, camera, objects, meshes, ambientLight, keyLight, applyFrame, setSelected, dispose }
+  return {
+    scene,
+    camera,
+    objects,
+    meshes,
+    raycastTargets: [...meshes.values()],
+    ambientLight,
+    keyLight,
+    applyFrame,
+    setSelected,
+    dispose,
+  }
 }

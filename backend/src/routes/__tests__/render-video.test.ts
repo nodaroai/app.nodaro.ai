@@ -80,6 +80,13 @@ vi.mock("@/lib/plan-schemas.js", async () => {
   }
 })
 
+vi.mock("@/workers/scene3d-render-assets.js", () => ({
+  authorizeScene3DRenderPlan: vi.fn(),
+  Scene3DRenderPlanError: class extends Error {
+    constructor(message: string, readonly statusCode: 404 | 409) { super(message) }
+  },
+}))
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -90,6 +97,8 @@ import { renderVideoRoutes } from "../render-video.js"
 import { supabase } from "../../lib/supabase.js"
 import { renderQueue } from "../../lib/render-queue.js"
 import { validatePlanByType } from "../../lib/plan-schemas.js"
+import { authorizeScene3DRenderPlan, Scene3DRenderPlanError } from "../../workers/scene3d-render-assets.js"
+import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
 
 // ---------------------------------------------------------------------------
 // Test app setup
@@ -412,6 +421,33 @@ describe("POST /v1/render-video/plan", () => {
     expect(res.statusCode).toBe(500)
     expect(markJobFailed).toHaveBeenCalledWith("job-queue-failure", { error_message: "Failed to enqueue video render" })
     expect(refundReservedCreditsForJob).toHaveBeenCalledWith("job-queue-failure")
+  })
+
+  it.each(["/v1/render-video/plan", "/v1/render-video"])("authorizes a retained v2 scene before queuing through %s", async (url) => {
+    mockJobInsert("job-v2")
+    vi.mocked(validatePlanByType).mockImplementation(((_type: string, plan: unknown) => plan) as never)
+    const plan = { schemaVersion: 2, revisionId: "retained-scene" }
+    vi.mocked(authorizeScene3DRenderPlan).mockResolvedValueOnce(plan as never)
+    const res = await app.inject({ method: "POST", url,
+      payload: { planType: "3d-scene", plan, userId: TEST_USER_ID } })
+    expect(res.statusCode).toBe(200)
+    expect(authorizeScene3DRenderPlan).toHaveBeenCalledWith(TEST_USER_ID, plan)
+    expect(renderQueue.add).toHaveBeenCalledWith("render-video", expect.objectContaining({ plan }))
+    expect(vi.mocked(authorizeScene3DRenderPlan).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(reserveCreditsForJob).mock.invocationCallOrder[0],
+    )
+  })
+
+  it.each([404, 409] as const)("refuses unavailable or modified v2 revisions before job creation and charging (%s)", async (status) => {
+    const { mockInsert } = mockJobInsert("must-not-exist")
+    vi.mocked(validatePlanByType).mockImplementation(((_type: string, plan: unknown) => plan) as never)
+    vi.mocked(authorizeScene3DRenderPlan).mockRejectedValueOnce(new Scene3DRenderPlanError("Scene unavailable", status))
+    const res = await app.inject({ method: "POST", url: "/v1/render-video/plan",
+      payload: { planType: "3d-scene", plan: { schemaVersion: 2 }, userId: TEST_USER_ID } })
+    expect(res.statusCode).toBe(status)
+    expect(mockInsert).not.toHaveBeenCalled()
+    expect(reserveCreditsForJob).not.toHaveBeenCalled()
+    expect(renderQueue.add).not.toHaveBeenCalled()
   })
 
   it.each(["/v1/render-video/plan", "/v1/render-video"])("rejects an invalid scene before a job through %s", async (url) => {

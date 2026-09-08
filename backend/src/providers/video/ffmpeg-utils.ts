@@ -45,9 +45,16 @@ export async function downloadFile(url: string, dest: string): Promise<void> {
 // ffmpeg needs its own much lower cap.
 let ffmpegActive = 0
 const ffmpegQueue: Array<() => void> = []
-function acquireFfmpegSlot(): Promise<() => void> {
-  return new Promise((resolve) => {
+function acquireFfmpegSlot(signal?: AbortSignal): Promise<() => void> {
+  return new Promise((resolve, reject) => {
+    const abort = () => {
+      const index = ffmpegQueue.indexOf(grant)
+      if (index >= 0) ffmpegQueue.splice(index, 1)
+      reject(signal?.reason ?? new Error("FFmpeg wait cancelled"))
+    }
     const grant = () => {
+      signal?.removeEventListener("abort", abort)
+      if (signal?.aborted) { abort(); ffmpegQueue.shift()?.(); return }
       ffmpegActive++
       let released = false
       resolve(() => {
@@ -57,6 +64,8 @@ function acquireFfmpegSlot(): Promise<() => void> {
         ffmpegQueue.shift()?.()
       })
     }
+    if (signal?.aborted) { abort(); return }
+    signal?.addEventListener("abort", abort, { once: true })
     if (ffmpegActive < config.FFMPEG_CONCURRENCY) grant()
     else ffmpegQueue.push(grant)
   })
@@ -72,8 +81,8 @@ function acquireFfmpegSlot(): Promise<() => void> {
  * dozens of heavy raster jobs at once. `acquireFfmpegSlot` stays private; this
  * is the only sanctioned way for a non-`runFfmpeg` caller to borrow a slot.
  */
-export async function withFfmpegSlot<T>(fn: () => Promise<T>): Promise<T> {
-  const release = await acquireFfmpegSlot()
+export async function withFfmpegSlot<T>(fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+  const release = await acquireFfmpegSlot(signal)
   try {
     return await fn()
   } finally {

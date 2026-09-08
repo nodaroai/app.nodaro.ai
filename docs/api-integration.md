@@ -2703,8 +2703,47 @@ Per-node request fields beyond the flagship pair are documented in the
 
 ## 3D scenes
 
+`GET /v1/3d-scene/capabilities` reports Basic support and an optional `advanced`
+capability. When Advanced is unavailable, `advanced` is `null`. An explicitly
+selected unavailable engine returns `503 SCENE_CAPABILITY_UNAVAILABLE` before
+Basic credit checks; it never silently substitutes Basic authoring. Existing
+requests without an `engine` field, or with `engine: "basic"`, retain Basic
+behavior. Advanced engines own their admission and quote requirements.
+
 Editable clay scenes use `POST /v1/3d-scene/generate` and `POST /v1/3d-scene/edit`, returning job IDs. Render via `POST /v1/render-video/plan` with `planType: "3d-scene"`. See [Generate 3D Scene](nodes/composition/generate-3d-scene.md) and [Edit 3D Scene](nodes/composition/edit-3d-scene.md) for inputs and revision behavior.
 
 The node-slug aliases `POST /v1/generate-3d-scene` and `POST /v1/edit-3d-scene` use the same validation, authorization and credit handling. `POST /v1/render-video` also accepts a `planType` and `plan`, dispatching to the same composition renderer; requests without `planType` retain the template format. These paths support generic SDK node execution.
 
 The generate node advertises `scene3d-embed-v1` in `GET /v1/nodes` when this deployment includes the [interactive 3D preview embed](scene3d-embed.md). Clients can check this capability before offering the embedded editor.
+
+### Scene versions and binary assets
+
+`Scene3DPlan` is a discriminated union: schema version 1 stores primitives and
+keyframes; version 2 stores semantic entities, immutable GLB assets, baked camera
+samples and contiguous shots. Read `schemaVersion` before accessing version-specific
+fields. Basic authoring continues to produce version 1. Clients requesting an
+optional engine declare `acceptedSceneSchemaVersions` and check capabilities.
+
+Version 2 manifests contain asset IDs, byte lengths and SHA-256 digests. They do
+not contain storage keys or public download URLs. A retained revision provides:
+
+- `GET /v1/3d-scene/revisions/:revisionId` — its scene manifest and asset descriptors.
+- `GET /v1/3d-scene/revisions/:revisionId/assets/:assetId` — authorized playback assets.
+- `GET /v1/3d-scene/revisions/:revisionId/source` — the editable native source, when retained.
+
+Binary requests use normal bearer authentication. Playback requires permission
+to view the revision's workflow; native source requires edit permission. Personal
+revisions are owner-only. A deleted or inaccessible revision returns 404, and
+responses use `Cache-Control: no-store`. Internal authoring recipes and repair
+checkpoints are not downloadable. A revision with pending source materialization
+does not advertise an outdated native source file.
+
+`POST /v1/3d-scene/revisions/:revisionId/edits` saves deterministic v2 overlays
+without a generation job or LLM charge. It requires edit access to the retained
+scene and `workflows:write` for OAuth apps. Send `newRevisionId`, the base
+`expectedContentHash`, `operations`, and optional `lockedObjectIds`. Reuse the
+same new revision ID and body when retrying a transport failure. The response is
+`{ scenePlan, changeSummary }`; a stale digest or conflicting revision ID returns
+409. The request accepts operations, not uploaded geometry or a replacement
+manifest. Saving creates an immutable revision; the caller separately selects
+it in its workflow, checking that the active revision has not changed meanwhile.

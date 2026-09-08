@@ -1,13 +1,18 @@
 "use client"
 
 import { useCallback, useMemo, useState } from "react"
-import { Play, Pause, Lock, Unlock, History, Boxes, RotateCcw, Check, X, AlertTriangle } from "lucide-react"
+import { Play, Pause, Lock, Unlock, Boxes, AlertTriangle } from "lucide-react"
 import { sampleScene3DFrame } from "@remotion-pkg/scene3d/sampler"
 import type { Scene3DObject } from "@nodaro/shared"
+// Type-only, and from the SUBPATH — importing the `scene3d` index here would
+// pull three.js into every chunk that renders this panel, including the embed.
+import type { Scene3DAssetResolver } from "@remotion-pkg/scene3d/v2/asset-resolver"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Scene3DViewport } from "./scene3d-viewport"
 import { Scene3DVectorRow, Scene3DNumberField } from "./scene3d-number-field"
+import { Scene3DPendingRevisionNotice, Scene3DRevisionHistory } from "./scene3d-revision-history"
+import { Scene3DV2Preview, type Scene3DV2EditRequest } from "./scene3d-v2-preview"
 import { useScene3DPlayback } from "./use-scene3d-playback"
 import {
   planObjects,
@@ -18,7 +23,7 @@ import {
   planRevisionId,
   type Vec3,
 } from "@/lib/scene3d/plan-view"
-import { validateScene3DPlan } from "@/lib/scene3d/validate-plan"
+import { validateScene3DAnyPlan, validateScene3DPlan } from "@/lib/scene3d/validate-plan"
 import {
   buildObjectColorOperation,
   buildBackgroundOperation,
@@ -40,14 +45,6 @@ import {
 import { applyLocalSceneEdits } from "@/lib/scene3d/apply-local-edit"
 import type { Scene3DRevisionEntry } from "@/types/nodes"
 import { useT, type TFunction } from "@/lib/i18n"
-
-/** Localized label for a revision with no summary of its own. */
-const SOURCE_LABEL_KEYS: Record<Scene3DRevisionEntry["source"], Parameters<TFunction>[0]> = {
-  generate: "cfgext.scene3dSourceGenerate",
-  edit: "cfgext.scene3dSourceEdit",
-  manual: "cfgext.scene3dSourceManual",
-  upstream: "cfgext.scene3dSourceUpstream",
-}
 
 const OBJECT_CHANNELS: ReadonlyArray<{ channel: ObjectVectorChannel; labelKey: Parameters<TFunction>[0]; step: number }> = [
   { channel: "position", labelKey: "cfgext.scene3dPosition", step: 0.1 },
@@ -82,10 +79,62 @@ export interface Scene3DPreviewProps {
   readOnly?: boolean
   onSelectionChange: (objectIds: string[]) => void
   onLockChange: (objectIds: string[]) => void
-  /** A NEW immutable revision produced by a deterministic edit. */
+  /** A NEW immutable revision produced by a deterministic edit. v1 ONLY: a v2
+   *  scene's edits are operations, not plans (see `onEditOperations`). */
   onPlanChange: (plan: Record<string, unknown>, changeSummary: string) => void
   onRestore: (revisionId: string) => void
   onResolvePending: (adopt: boolean) => void
+  /**
+   * Authorized bytes for a v2 scene's assets. Ignored for v1, REQUIRED for v2 —
+   * the manifest carries ids and digests, never a transport URL.
+   *
+   * Deliberately a prop and not something this component builds: the same panel
+   * renders inside `/embed/scene3d`, which has no session and must not have one
+   * in its module graph. The editor passes
+   * `scene3d-preview-authenticated.tsx`'s SDK-backed resolver; the embed passes
+   * one that asks its parent frame over `postMessage`.
+   */
+  assetResolver?: Scene3DAssetResolver
+  /**
+   * Where a v2 edit goes. Absent ⇒ v2 editing is disabled with a visible
+   * reason. The panel never applies a v2 operation itself — see
+   * `scene3d-v2-preview.tsx`.
+   */
+  onEditOperations?: (edit: Scene3DV2EditRequest) => void
+}
+
+/**
+ * Version dispatch. The scene decides which panel renders, and neither panel
+ * has to ask what it is holding.
+ *
+ * The validator is the same memoized one the viewport uses, so this costs one
+ * parse per revision for the whole panel — and an unparseable plan falls
+ * through to the v1 panel, which is the one that knows how to show a scene it
+ * cannot read (list what is there, explain the issue, keep the data).
+ */
+export function Scene3DPreview(props: Scene3DPreviewProps) {
+  const validation = useMemo(() => validateScene3DAnyPlan(props.scenePlan), [props.scenePlan])
+  if (validation.ok && validation.version === 2) {
+    return (
+      <Scene3DV2Preview
+        plan={validation.plan}
+        scenePlan={props.scenePlan}
+        selectedObjectIds={props.selectedObjectIds}
+        lockedObjectIds={props.lockedObjectIds}
+        history={props.history}
+        pendingPlan={props.pendingPlan}
+        isGenerating={props.isGenerating}
+        readOnly={props.readOnly}
+        assetResolver={props.assetResolver}
+        onSelectionChange={props.onSelectionChange}
+        onLockChange={props.onLockChange}
+        onEditOperations={props.onEditOperations}
+        onRestore={props.onRestore}
+        onResolvePending={props.onResolvePending}
+      />
+    )
+  }
+  return <Scene3DV1Preview {...props} />
 }
 
 /**
@@ -106,7 +155,7 @@ export interface Scene3DPreviewProps {
  * cannot disagree) makes every commit change what is on screen, and the badge
  * next to each row says whether it will write the base or a keyframe.
  */
-export function Scene3DPreview({
+function Scene3DV1Preview({
   scenePlan,
   selectedObjectIds,
   lockedObjectIds,
@@ -261,25 +310,7 @@ export function Scene3DPreview({
         </div>
       )}
 
-      {pendingPlan && (
-        <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-2 flex flex-col gap-1.5">
-          <p className="text-[11px] text-amber-500">
-            {t("cfgext.scene3dPendingRevision")}
-          </p>
-          {/* A read-only viewer is TOLD a newer revision arrived — resolving it
-              is the owner's decision, made where the state lives. */}
-          {!readOnly && (
-            <div className="flex gap-1.5">
-              <Button type="button" size="sm" className="h-6 text-[11px]" onClick={() => resolvePending(true)}>
-                <Check className="w-3 h-3 mr-1" /> {t("cfgext.scene3dUsePending")}
-              </Button>
-              <Button type="button" size="sm" variant="ghost" className="h-6 text-[11px]" onClick={() => resolvePending(false)}>
-                <X className="w-3 h-3 mr-1" /> {t("cfgext.scene3dKeepMine")}
-              </Button>
-            </div>
-          )}
-        </div>
-      )}
+      {pendingPlan && <Scene3DPendingRevisionNotice readOnly={readOnly} onResolve={resolvePending} />}
 
       {error && (
         <p className="text-[11px] text-red-500" role="alert">{error}</p>
@@ -482,46 +513,13 @@ export function Scene3DPreview({
       </div>
 
       {/* Revision history */}
-      {history && history.length > 1 && (
-        <>
-          <Separator />
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-              <History className="w-3 h-3" />
-              <span>{t("cfgext.scene3dRevisionCount", { count: history.length })}</span>
-            </div>
-            <div className="max-h-32 overflow-y-auto flex flex-col gap-0.5">
-              {[...history].reverse().map((entry) => (
-                <div key={entry.revisionId} className="flex items-center gap-1.5 text-[11px] px-1.5 py-0.5">
-                  <span className="font-mono text-[10px] text-muted-foreground shrink-0">
-                    {entry.revisionId.slice(0, 6)}
-                  </span>
-                  <span className="truncate flex-1 text-muted-foreground">
-                    {entry.changeSummary ?? t(SOURCE_LABEL_KEYS[entry.source])}
-                  </span>
-                  {entry.revisionId === revisionId ? (
-                    <span className="text-[9px] text-[#ff0073] shrink-0">{t("cfgext.scene3dActiveRevision")}</span>
-                  ) : (
-                    // The history stays READABLE read-only — only the restore
-                    // control, which would rewrite the parent's state, is gone.
-                    !readOnly && (
-                      <button
-                        type="button"
-                        aria-label={`Restore revision ${entry.revisionId.slice(0, 6)}`}
-                        title={entry.context?.prompt}
-                        className="text-muted-foreground/60 hover:text-foreground shrink-0"
-                        onClick={() => restore(entry.revisionId)}
-                      >
-                        <RotateCcw className="w-3 h-3" />
-                      </button>
-                    )
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        </>
-      )}
+      <Scene3DRevisionHistory
+        history={history ?? []}
+        activeRevisionId={revisionId}
+        readOnly={readOnly}
+        onRestore={restore}
+      />
+
 
       {isGenerating && (
         <p className="text-[10px] text-muted-foreground">{t("cfgext.scene3dLiveWhileRunning")}</p>

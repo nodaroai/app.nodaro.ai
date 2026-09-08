@@ -464,6 +464,18 @@ export interface StructuredLlmOutput<T> {
   inputTokens: number
   outputTokens: number
   providerCost?: number
+  /** Every attempt reported both token usage and cost. */
+  usageComplete?: boolean
+}
+
+/** Known usage remains available when a later attempt fails or is malformed. */
+export class StructuredLlmError extends Error {
+  constructor(message: string, readonly usage: {
+    inputTokens: number; outputTokens: number; providerCost?: number; complete: boolean
+  }, options?: ErrorOptions) {
+    super(message, options)
+    this.name = "StructuredLlmError"
+  }
 }
 
 /**
@@ -503,8 +515,18 @@ export async function llmCompleteStructured<T>(
   let outTokens = 0
   let cost = 0
   let costSeen = false
+  let usageComplete = true
   for (let attempt = 0; attempt <= retries; attempt++) {
-    const resp = await llmComplete({ ...req, messages, jsonSchema: { name: schemaName, schema: jsonSchema } })
+    let resp: LlmResponse
+    try {
+      resp = await llmComplete({ ...req, messages, jsonSchema: { name: schemaName, schema: jsonSchema } })
+    } catch (error) {
+      throw new StructuredLlmError(error instanceof Error ? error.message : "Structured completion failed", {
+        inputTokens: inTokens, outputTokens: outTokens,
+        providerCost: costSeen ? cost : undefined, complete: false,
+      }, { cause: error })
+    }
+    usageComplete = usageComplete && resp.usage !== undefined && resp.providerCost !== undefined
     inTokens += resp.usage?.inputTokens ?? 0
     outTokens += resp.usage?.outputTokens ?? 0
     if (resp.providerCost != null) { cost += resp.providerCost; costSeen = true }
@@ -525,12 +547,16 @@ export async function llmCompleteStructured<T>(
         inputTokens: inTokens,
         outputTokens: outTokens,
         providerCost: costSeen ? cost : undefined,
+        usageComplete,
       }
     }
     lastError = result.error.issues.slice(0, 8).map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`).join("; ")
     messages = withCorrection(messages, resp.text, lastError)
   }
-  throw new Error(`llm-structured: validation failed after ${retries + 1} attempt(s): ${lastError}`)
+  throw new StructuredLlmError(`llm-structured: validation failed after ${retries + 1} attempt(s): ${lastError}`, {
+    inputTokens: inTokens, outputTokens: outTokens,
+    providerCost: costSeen ? cost : undefined, complete: usageComplete,
+  })
 }
 
 /**

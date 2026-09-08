@@ -1,5 +1,9 @@
 # Generate 3D Scene
 
+Basic remains the default authoring engine. Clients can discover optional
+Advanced support through `GET /v1/3d-scene/capabilities`. An unavailable engine
+is refused before generation; selecting it does not fall back to Basic.
+
 Create an editable animated clay scene from a prompt, with optional image and video references. Use the preview to inspect framing, camera motion and object blocking before rendering a video.
 
 The output is a **composition plan**, not an MP4. Connect it to [Edit 3D Scene](edit-3d-scene.md) for changes or [Render Video](render-video.md) for export.

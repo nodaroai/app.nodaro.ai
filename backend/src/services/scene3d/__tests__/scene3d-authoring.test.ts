@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => ({ llmCompleteStructured: vi.fn(), prefetchAsBase
 vi.mock("@/lib/llm-client.js", () => ({ llmCompleteStructured: mocks.llmCompleteStructured }))
 vi.mock("@/lib/anthropic-image.js", () => ({ prefetchAsBase64: mocks.prefetchAsBase64 }))
 
-import { SCENE3D_PLAN_TYPE, SCENE3D_SCHEMA_VERSION, type Scene3DPlan } from "@nodaro/shared"
+import { SCENE3D_PLAN_TYPE, SCENE3D_SCHEMA_VERSION, type Scene3DPlanV1 } from "@nodaro/shared"
 import {
   applyDeterministicScene3DEdit,
   applyScene3DEditWithReferences,
@@ -50,7 +50,7 @@ const DRAFT_PLAN = {
   lighting: { ambientIntensity: 0.4, keyIntensity: 1.2, keyPosition: [4, 6, 4] },
 }
 
-const PLAN: Scene3DPlan = {
+const PLAN: Scene3DPlanV1 = {
   planType: SCENE3D_PLAN_TYPE,
   schemaVersion: SCENE3D_SCHEMA_VERSION,
   revisionId: REV,
@@ -259,7 +259,7 @@ describe("editScenePlan", () => {
   })
 
   it("refuses an edit that would orphan a child, then accepts the corrected pair", async () => {
-    const parented: Scene3DPlan = {
+    const parented: Scene3DPlanV1 = {
       ...PLAN,
       objects: [PLAN.objects[0], { ...PLAN.objects[1], parentId: "ground" }],
     }
@@ -285,7 +285,7 @@ describe("editScenePlan — references", () => {
 
   it("shows the model the plan's OWN references, so an earlier edit's reference still conditions this one", async () => {
     answers({ operations: [{ op: "set-background", color: "#000000" }], changeSummary: "Darkened it." })
-    const withRef: Scene3DPlan = {
+    const withRef: Scene3DPlanV1 = {
       ...PLAN,
       references: [{ id: "hero-ref", url: IMG, kind: "image", role: "appearance", objectId: "hero" }],
     }
@@ -297,7 +297,7 @@ describe("editScenePlan — references", () => {
 
   it("replaces the reference set in both model conditioning and the new revision", async () => {
     answers({ operations: [{ op: "set-background", color: "#000000" }], changeSummary: "Darkened it." })
-    const previous: Scene3DPlan = { ...PLAN, references: [{ id: "removed", url: IMG, kind: "image", role: "appearance" }] }
+    const previous: Scene3DPlanV1 = { ...PLAN, references: [{ id: "removed", url: IMG, kind: "image", role: "appearance" }] }
     const result = await editScenePlan({ ...editArgs, plan: previous, references: [], replaceReferences: true })
     expect(userTextAt(0)).not.toContain("removed")
     expect(userTextAt(0)).not.toContain(IMG)
@@ -335,7 +335,7 @@ describe("applyScene3DEditWithReferences", () => {
   })
 
   it("can remove a referenced object when its reference is explicitly cleared", () => {
-    const previous: Scene3DPlan = { ...PLAN, references: [{ id: "removed", url: IMG, kind: "image", role: "appearance", objectId: "hero" }] }
+    const previous: Scene3DPlanV1 = { ...PLAN, references: [{ id: "removed", url: IMG, kind: "image", role: "appearance", objectId: "hero" }] }
     const result = applyScene3DEditWithReferences({ plan: previous, operations: [{ op: "remove-object", objectId: "hero" }], references: [], replaceReferences: true })
     expect(result.ok).toBe(true)
     if (!result.ok) throw Error(result.message)
@@ -344,7 +344,7 @@ describe("applyScene3DEditWithReferences", () => {
   })
 
   it("keeps prior references and replaces the one sharing an id", () => {
-    const withRefs: Scene3DPlan = {
+    const withRefs: Scene3DPlanV1 = {
       ...PLAN,
       references: [
         { id: "keep", url: IMG, kind: "image", role: "layout" },

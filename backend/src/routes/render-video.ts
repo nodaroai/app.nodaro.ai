@@ -302,6 +302,18 @@ export async function renderVideoRoutes(app: FastifyInstance) {
       })
     }
 
+    if (planType === "3d-scene" && plan.schemaVersion === 2) {
+      const { authorizeScene3DRenderPlan, Scene3DRenderPlanError } = await import("../workers/scene3d-render-assets.js")
+      try {
+        await authorizeScene3DRenderPlan(userId, plan)
+      } catch (error) {
+        if (error instanceof Scene3DRenderPlanError) {
+          return reply.status(error.statusCode).send({ error: { code: "SCENE_REVISION_UNAVAILABLE", message: error.message } })
+        }
+        return sendInternalError(reply, req, error, "Failed to authorize scene render")
+      }
+    }
+
     const { data: job, error } = await insertJob(req, {
         workflow_id: extractWorkflowId(req.body),
         node_id: extractNodeId(req.body),

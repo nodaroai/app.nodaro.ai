@@ -23,7 +23,7 @@ import {
   type LlmReasoningEffort,
   type Scene3DEditOperation,
   type Scene3DEditResult,
-  type Scene3DPlan,
+  type Scene3DPlanV1,
   type Scene3DReference,
   type VideoAnalysisResult,
 } from "@nodaro/shared"
@@ -62,7 +62,7 @@ export interface Scene3DAuthoringUsage {
 }
 
 export interface Scene3DAuthoringResult extends Scene3DAuthoringUsage {
-  plan: Scene3DPlan
+  plan: Scene3DPlanV1
   changeSummary?: string
   /** How many extra attempts the semantic layer cost. 0 on a clean first pass. */
   revisions: number
@@ -89,7 +89,7 @@ export interface GenerateScenePlanInput extends CommonInput {
 
 export interface EditScenePlanInput extends CommonInput {
   replaceReferences?: boolean
-  plan: Scene3DPlan
+  plan: Scene3DPlanV1
   instruction: string
   lockedObjectIds: string[]
   selectedObjectIds: string[]
@@ -103,7 +103,7 @@ function routeParams() {
 
 /** The scene as the model sees it on an edit: everything except our identity
  *  bookkeeping, which it must not echo back. */
-function planForModel(plan: Scene3DPlan): string {
+function planForModel(plan: Scene3DPlanV1): string {
   const { revisionId: _revisionId, parentRevisionId: _parentRevisionId, ...rest } = plan
   return JSON.stringify(rest)
 }
@@ -190,7 +190,7 @@ export async function generateScenePlan(input: GenerateScenePlanInput): Promise<
     })
     const validated = scene3DPlanSchema.safeParse(candidate)
     if (validated.success) {
-      return { ...usage, plan: validated.data as Scene3DPlan, revisions: attempt }
+      return { ...usage, plan: validated.data as Scene3DPlanV1, revisions: attempt }
     }
     lastRefusal = firstIssues(validated.error)
     messages = withRefusal(messages, completion.output, lastRefusal)
@@ -312,7 +312,7 @@ export async function editScenePlan(input: EditScenePlanInput): Promise<Scene3DA
  * attach was never on the revision it produced.
  */
 export function applyScene3DEditWithReferences(args: {
-  plan: Scene3DPlan
+  plan: Scene3DPlanV1
   operations: readonly Scene3DEditOperation[] | unknown
   /** The request's references. Merged into the plan's by id. */
   references?: readonly Scene3DReference[]
@@ -348,7 +348,7 @@ export function applyScene3DEditWithReferences(args: {
  * handling.
  */
 export function applyDeterministicScene3DEdit(args: {
-  plan: Scene3DPlan
+  plan: Scene3DPlanV1
   operations: readonly Scene3DEditOperation[]
   references?: readonly Scene3DReference[]
   replaceReferences?: boolean

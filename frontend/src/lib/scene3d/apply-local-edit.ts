@@ -16,7 +16,7 @@
  * `{ ok: false, message }`.
  */
 import { applyScene3DEditOperations } from "@nodaro/shared"
-import type { Scene3DPlan } from "@nodaro/shared"
+import type { Scene3DPlanV1 } from "@nodaro/shared"
 import type { Scene3DEditOperationLike } from "./edit-operations"
 
 export type LocalEditResult =
@@ -32,7 +32,7 @@ export function applyLocalSceneEdits(
   // `Scene3DEditOperationLike` IS the shared operation union, so the list needs
   // no cast; only the plan does (the canvas stores it untyped on purpose, and
   // the applier validates it before touching anything).
-  const result = applyScene3DEditOperations(plan as unknown as Scene3DPlan, operations, options ?? {})
+  const result = applyScene3DEditOperations(plan as unknown as Scene3DPlanV1, operations, options ?? {})
   if (!result.ok) return { ok: false, error: result.message }
   return {
     ok: true,

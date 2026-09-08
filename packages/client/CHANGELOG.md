@@ -1,5 +1,17 @@
 # @nodaro/sdk
 
+## 2.0.0
+
+### Major Changes
+
+- 32493ee: Add named Scene3D generation, editing, render-only export, and capability discovery helpers. Preserve the existing node transport and expose explicit optional authoring-engine parameters.
+
+### Patch Changes
+
+- Updated dependencies [32493ee]
+  - @nodaro/shared@3.0.0
+  - @nodaro/prompts@1.17.2
+
 ## 1.30.1
 
 ### Patch Changes

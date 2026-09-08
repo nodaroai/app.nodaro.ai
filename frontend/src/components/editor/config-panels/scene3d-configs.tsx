@@ -1,6 +1,8 @@
 "use client"
 
 import { Suspense, useMemo } from "react"
+import { toast } from "sonner"
+import { saveScene3DEdit } from "@/lib/save-scene3d-edit"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -39,7 +41,7 @@ import type { Generate3DSceneData, Edit3DSceneData, Scene3DRevisionEntry } from 
 
 /** three.js is ~600KB — only pull it when a scene actually exists to show. */
 const LazyScene3DPreview = lazy(() =>
-  import("@/components/editor/scene3d/scene3d-preview").then((m) => ({ default: m.Scene3DPreview })),
+  import("@/components/editor/scene3d/scene3d-preview-authenticated").then((m) => ({ default: m.Scene3DPreviewAuthenticated })),
 )
 
 /** The single LLM feature both 3D-scene nodes bill and route through. */
@@ -58,7 +60,9 @@ function SceneBlock({
   data,
   onUpdate,
   promptField,
+  nodeId,
 }: {
+  nodeId?: string
   data: Scene3DNodeData
   onUpdate: (d: Record<string, unknown>) => void
   /** Which prompt field this node authors with — restoring a revision puts its
@@ -80,6 +84,7 @@ function SceneBlock({
           history={data.sceneHistory}
           pendingPlan={data.scenePendingPlan as Record<string, unknown> | undefined}
           isGenerating={data.executionStatus === "running"}
+          onEditOperations={nodeId ? (edit) => { void saveScene3DEdit(nodeId, edit).catch(() => toast.error(t("editor.saveFailed"))) } : undefined}
           onSelectionChange={(objectIds) => onUpdate({ selectedObjectIds: objectIds })}
           onLockChange={(objectIds) => onUpdate({ lockedObjectIds: objectIds })}
           onPlanChange={(plan, changeSummary) =>
@@ -244,7 +249,7 @@ export function Generate3DSceneConfig({
 
       <ReferenceRoles data={data} onUpdate={onUpdate} sources={sources} />
 
-      <SceneBlock data={data} onUpdate={onUpdate} promptField="scenePrompt" />
+      <SceneBlock data={data} onUpdate={onUpdate} promptField="scenePrompt" nodeId={nodeId} />
 
       <Accordion type="single" collapsible>
         <AccordionItem value="settings">
@@ -353,7 +358,7 @@ export function Edit3DSceneConfig({
         <p className="text-[11px] text-muted-foreground">{t("cfgext.scene3dConnectScene")}</p>
       )}
 
-      <SceneBlock data={data} onUpdate={onUpdate} promptField="editPrompt" />
+      <SceneBlock data={data} onUpdate={onUpdate} promptField="editPrompt" nodeId={nodeId} />
 
       {history && history.length > 0 && (
         <p className="text-[10px] text-muted-foreground">{t("cfgext.scene3dFreeEdits")}</p>

@@ -1,3 +1,5 @@
+import type { PluginSceneArtifactToolkit } from "./scene3d-artifact-contract.js"
+export type * from "./scene3d-artifact-contract.js"
 /**
  * Plugin contract v1 — the interface boundary between this app repo's
  * private-plugin loader (`backend/src/lib/private-plugins/`, Stage 1 Tasks
@@ -38,6 +40,8 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import type { ZodError, ZodType } from "zod"
 import type { AudioFxPreset, PresetSettings, SurroundDirection } from "@nodaro/shared"
+import type { PluginScene3DEngine, PluginStageToolkit } from "./scene3d-contract.js"
+export type * from "./scene3d-contract.js"
 
 // ============================================================================
 // Job / handler shapes
@@ -1349,6 +1353,7 @@ export interface PluginLlmRequest {
 export type PluginLlmContentBlock =
   | { type: "text"; text: string }
   | { type: "image"; url: string }
+  | { type: "image_base64"; mediaType: string; data: string }
   | {
       type: "video"
       url: string
@@ -1418,7 +1423,24 @@ export interface PluginLlmMultimodalRequest {
   minPromptTokens?: number
 }
 
+export interface PluginLlmMeteredUsage {
+  inputTokens: number
+  outputTokens: number
+  providerCost?: number
+  /** False means some provider usage is unknown; never treat it as zero cost. */
+  complete: boolean
+}
+export type PluginLlmMeteredResult<T> =
+  | { ok: true; output: T; usage: PluginLlmMeteredUsage }
+  | { ok: false; message: string; usage: PluginLlmMeteredUsage }
+
 export interface PluginLlmToolkit {
+  /** Preserves usage on failures and uses the selected model's normal lane. */
+  completeStructuredMetered?<T>(
+    req: PluginLlmMultimodalRequest,
+    schema: unknown,
+    opts?: { schemaName?: string; maxRetries?: number },
+  ): Promise<PluginLlmMeteredResult<T>>
   /** Mirrors `llmCompleteStructured` (`lib/llm-client.ts:133`). */
   completeStructured<T>(
     req: PluginLlmRequest,
@@ -1518,6 +1540,11 @@ export interface PluginPipelinesToolkit {
 // ============================================================================
 
 export interface PluginToolkit {
+  /** Optional durable, fenced stage journal. Absent on older hosts. */
+  stages?: PluginStageToolkit
+  sceneArtifacts?: PluginSceneArtifactToolkit
+  sceneRendering?: import("./scene3d-render-contract.js").PluginSceneRenderingToolkit
+  scenePlayback?: import("./scene3d-playback-contract.js").PluginScenePlaybackToolkit
   providers: PluginProvidersToolkit
   ffmpeg: PluginFfmpegToolkit
   media: PluginMediaToolkit
@@ -1606,6 +1633,8 @@ export interface PluginBillingToolkit {
 /** One member per gated feature. `organizations` = `hasOrganizations()`. */
 export interface PluginFeatures {
   organizations: boolean
+  scene3dAdvanced?: boolean
+  scene3dLocal?: boolean
 }
 
 export interface PluginDeploymentToolkit {
@@ -2154,6 +2183,7 @@ export interface PluginServices {
  * `prompts()`) are separate top-level `NodaroPrivatePlugin` members instead.
  */
 export interface PluginEngines {
+  scene3d?: PluginScene3DEngine
   surround?: PluginSurroundEngine
   smartCut?: PluginSmartCutEngine
 }

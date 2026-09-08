@@ -36,6 +36,7 @@ Sign in with your Nodaro account, consent, and the tools appear inline.
 
 - [Film Director](./film-director.md) — Claude Skill that drives a 10-stage director workflow (script → characters → storyboard → animation → audio → final cut) and assembles an editable Nodaro workflow on your canvas in real-time
 - [Recast authoring](./recast-authoring.md) — write a movie as JSON: author a screenplay-shaped script, validate free, import as a real recast project, render with prices surfaced first
+- [Studio productions](./studio-productions.md) — direct a film shot by shot in a production that opens in the studio editor: validate a plan free, edit by semantic operations, generate with the price surfaced first
 - [Video Director](./video-director.md) — one-shot narrated motion-graphics video authoring (`create_explainer`, `create_launch_video`), built on the [Shot Sequence](./shot-sequence.md) pipeline
 - [Content Recipes](./recipes.md) — the `get_recipe` catalog of curated multi-tool playbooks (e.g. `video-explainer`), plus the authoring format for adding new ones
 
