@@ -23,6 +23,7 @@ export interface StudioProductionCapabilities {
     rejectKeyframes?: boolean
     editSequencePlans?: boolean
     generateLinkedClips: boolean
+    retakeLinkedClips?: boolean
   }
   sourceFrameReferences: boolean
   automaticAcceptance: false
@@ -102,6 +103,8 @@ export interface StudioShotGenerationInput {
   dryRun?: boolean
   /** Linked clips only: require the exact inputs returned by a reviewed quote. */
   expectedInputHash?: string
+  /** Retake a native linked take using its original request and retained endpoints. */
+  retakeResultKey?: string
   overrides?: StudioDocumentJson
 }
 

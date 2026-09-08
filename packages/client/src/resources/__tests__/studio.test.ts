@@ -89,7 +89,7 @@ describe("Studio production transport", () => {
     const f = fixture()
     f.fetch.mockImplementationOnce(() => Promise.resolve({ ok: false, status: 409,
       json: async () => ({ error: { code: "sequence_quote_changed", message: "Review the changed inputs" } }) } as Response))
-    const input = { kind: "clip" as const, shotId: "AB", expectedInputHash: "a".repeat(64), clientRequestId: "clip-click" }
+    const input = { kind: "clip" as const, shotId: "AB", expectedInputHash: "a".repeat(64), clientRequestId: "clip-click", retakeResultKey: "job:original" }
     await expect(f.client.studio.generateShot("film", input)).rejects.toMatchObject({ code: "sequence_quote_changed" })
     expect(JSON.parse(f.request()[1].body as string)).toEqual(input)
     expect(f.fetch).toHaveBeenCalledTimes(1)

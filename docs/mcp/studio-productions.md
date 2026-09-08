@@ -192,3 +192,14 @@ that reads the tool and a person who reads the page are reading one document.
 The same lane over raw REST is [`/v1/studio/productions`](../api/studio-productions.md);
 over the SDK it is `client.studio.productions.*` — see
 [SDK Reference](../sdk-reference.md#clientstudio).
+
+### Retake a linked take
+
+On a server advertising `operations.retakeLinkedClips`, call
+`generate_studio_clip` with `production_id`, `shot_id`, `retake_result_key`, and
+`dry_run: true`. Review the returned price and `inputHash`. Submit the same take
+with `expected_input_hash` and a fresh `client_request_id`; omit `dry_run`,
+`mode`, and `overrides`. The server uses the take's original settings and retained
+endpoint images, independently of later plan changes. Missing or unverifiable
+original inputs refuse the request. Existing takes remain in history. This
+requires an explicit generation request and spends credits only on submission.

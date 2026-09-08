@@ -1013,6 +1013,15 @@ generating the clip. Changed settings or accepted endpoint pins return HTTP 409
 `sequence_quote_changed` before submission; request and review a fresh quote.
 Credits remain an estimate; the generation route reserves the current price.
 
+When `capabilities.operations.retakeLinkedClips` is true, pass
+`retakeResultKey` with `kind: "clip"` and `shotId` to quote a native linked take
+using `dryRun: true`. Submit the same take with the reviewed `expectedInputHash`
+and a fresh `clientRequestId`. Omit `mode`, `overrides`, and `count`: retakes use
+the original stored request and retained endpoint images, even after plans or
+acceptance change. Existing takes stay in history. A take without a verifiable
+original request or retained images is refused; older and copied takes may be
+unavailable for this operation. A retake does not reproduce identical video bytes.
+
 ### `client.recast`
 
 Recast runs + the authored-script import lane ("movie as JSON"). **Cloud

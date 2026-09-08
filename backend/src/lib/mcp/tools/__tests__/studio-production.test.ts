@@ -655,6 +655,17 @@ describe("the tools that spend", () => {
     expect(seen.body).not.toHaveProperty("dryRun")
   })
 
+  it("carries an explicitly reviewed retake without rebuilding its inputs", async () => {
+    const { server, seen } = serverWith(ALL)
+    await callTool(server, "generate_studio_clip", {
+      production_id: PRODUCTION, shot_id: "AB", retake_result_key: "job:original",
+      expected_input_hash: "a".repeat(64), client_request_id: "retake-click",
+    })
+    expect(seen.calls).toHaveLength(1)
+    expect(seen.body).toEqual({ mcp_client: "Claude", userId: "u1", kind: "clip", shotId: "AB", retakeResultKey: "job:original",
+      expectedInputHash: "a".repeat(64), clientRequestId: "retake-click" })
+  })
+
   it("generates one planned frame with its reviewed revision and retry token", async () => {
     const { server, seen } = serverWith(ALL)
     await callTool(server, "generate_studio_keyframe", {

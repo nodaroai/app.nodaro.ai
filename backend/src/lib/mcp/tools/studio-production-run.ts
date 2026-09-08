@@ -207,6 +207,8 @@ export function registerStudioProductionRunTools({
           .enum(["start", "references"])
           .optional()
           .describe("Force the directing lane. Omit to let the inputs decide."),
+        expected_input_hash: z.string().regex(/^[a-f0-9]{64}$/).optional().describe("The reviewed linked-clip quote hash; required for a retake submission."),
+        retake_result_key: z.string().min(1).optional().describe("Original linked take to retake exactly. Omit mode and overrides; quote first with dry_run, then submit with expected_input_hash and client_request_id."),
         overrides,
         dry_run: dryRun,
         client_request_id: clientRequestIdSchema.optional(),
@@ -218,6 +220,8 @@ export function registerStudioProductionRunTools({
       post(args.production_id, "generate", {
         kind: "clip",
         shotId: args.shot_id,
+        ...(args.expected_input_hash ? { expectedInputHash: args.expected_input_hash } : {}),
+        ...(args.retake_result_key ? { retakeResultKey: args.retake_result_key } : {}),
         ...(args.mode ? { mode: args.mode } : {}),
         ...(args.overrides ? { overrides: args.overrides } : {}),
         ...(args.dry_run ? { dryRun: true } : {}),
