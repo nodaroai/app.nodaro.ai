@@ -47,7 +47,7 @@ vi.mock("@/lib/config.js", async () => {
 })
 // CreditsService is dynamic-imported by both refund functions
 vi.mock("../../ee/services/credits.js", () => ({
-  CreditsService: {
+  CreditsService: { trySettleManagedCredits: vi.fn(async () => false),
     refundCredits: refundCreditsSpy,
     commitCredits: commitCreditsSpy,
   },

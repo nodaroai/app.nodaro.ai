@@ -715,6 +715,16 @@ export interface PluginJobSettlement {
   receiptHash: string
   providerCostUsd?: number
 }
+export interface PluginJobSettlementCheckpoint {
+  jobId: string
+  userId: string
+  usageLogId: string
+  sequence: number
+  actualCredits: number
+  ready: boolean
+  receiptHash: string
+  providerCostUsd?: number
+}
 export interface PluginJobSettlementResult {
   jobId: string
   usageLogId: string
@@ -858,6 +868,8 @@ export interface PluginJobsToolkit {
   ): Promise<T>
   /** Atomic final settlement of an opt-in reservation; never reprices the admitted ceiling. */
   settleReservedJob?(input: PluginJobSettlement): Promise<PluginJobSettlementResult>
+  checkpointReservedJob?(input: PluginJobSettlementCheckpoint): Promise<void>
+  settleCheckpointedJob?(usageLogId: string): Promise<boolean>
   /** Mirrors `commitJobCredits` (`workers/shared.ts`). */
   commitJobCredits(
     usageLogId: string | null | undefined,

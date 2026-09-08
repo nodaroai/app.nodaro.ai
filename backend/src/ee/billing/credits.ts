@@ -1,3 +1,4 @@
+import { trySettleManagedJob } from "./managed-job-settlement.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
 // Track A. `allowanceEnforcementActive()` is the step-8 flip (an active payer
@@ -2606,19 +2607,17 @@ export class CreditsService {
     return { usageLogId: usageLogId as string, creditsReserved: pricing.creditCost, watermark }
   }
 
+  /** Detect opt-in settlement before callers reprice or overwrite actual costs. */
+  static async trySettleManagedCredits(usageLogId: string): Promise<boolean> {
+    if (creditsDisabled() || usageLogId === "self-hosted-skip") return false
+    const requester = await settlementRequester(usageLogId)
+    try { return await trySettleManagedJob(usageLogId) }
+    finally { await invalidateRequesterBalance(requester) }
+  }
+
   /**
-   * Commit reserved credits after job success
-   * Updates usage_log status to 'committed'
-   *
-   * Track A wrapper (D12 rider). Settlement moves the requester's ALLOWANCE —
-   * `reserved -> spent`, and a commit for less than was reserved hands the
-   * surplus back — but the only argument here is a usage-log id, so the
-   * requester has to be read off the row. The read and the invalidation are
-   * both inside `deploymentPayerActive()`, which is false on every deployment
-   * with no `billing.payerAccount`: mainline settles through the identical
-   * code path below, with no extra statement. The settlement itself is in
-   * `settleCommit`, unchanged, and runs whether or not the read succeeded —
-   * a cache invalidation may never be able to stop money from settling.
+   * Settle managed jobs from their saved decision; legacy rows retain the
+   * existing commit RPC. Deployment-payer allowance invalidation wraps both.
    */
   static async commitCredits(
     usageLogId: string,
@@ -2627,6 +2626,7 @@ export class CreditsService {
     if (creditsDisabled() || usageLogId === "self-hosted-skip") return
     const requester = await settlementRequester(usageLogId)
     try {
+      if (await trySettleManagedJob(usageLogId)) return
       await CreditsService.settleCommit(usageLogId, actualCredits)
     } finally {
       await invalidateRequesterBalance(requester)
@@ -2712,6 +2712,7 @@ export class CreditsService {
     if (creditsDisabled() || usageLogId === "self-hosted-skip") return
     const requester = await settlementRequester(usageLogId)
     try {
+      if (await trySettleManagedJob(usageLogId)) return
       await CreditsService.settleRefund(usageLogId)
     } finally {
       await invalidateRequesterBalance(requester)

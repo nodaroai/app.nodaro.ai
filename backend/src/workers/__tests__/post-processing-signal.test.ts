@@ -80,7 +80,7 @@ vi.mock("@/utils/thumbnail.js", () => ({
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: h.supabaseFrom, rpc: h.supabaseRpc } }))
 
 vi.mock("../../ee/services/credits.js", () => ({
-  CreditsService: { refundCredits: h.refundCreditsSpy, commitCredits: vi.fn() },
+  CreditsService: { trySettleManagedCredits: vi.fn(async () => false), refundCredits: h.refundCreditsSpy, commitCredits: vi.fn() },
 }))
 
 import {

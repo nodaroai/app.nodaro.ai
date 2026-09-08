@@ -317,14 +317,13 @@ describe("settlement drops the requester's cached balance", () => {
     expect(mockInvalidate).not.toHaveBeenCalled()
   })
 
-  it("MAINLINE control: commit and refund issue no extra read and invalidate nothing", async () => {
+  it("MAINLINE control: only managed-reservation ownership reads are added; no requester invalidation", async () => {
     mockPayerActive.mockReturnValue(false)
     await CreditsService.commitCredits("log-1", 5)
     await CreditsService.refundCredits("log-1")
-    // The RPC succeeds and both wrappers return before touching a table. A
-    // single `usage_logs` read here would be a new query on every settled job
-    // of every mainline deployment.
-    expect(mockFrom.mock.calls.filter((c) => c[0] === "usage_logs")).toEqual([])
+    // One ownership read per settlement selects the opt-in lifecycle.
+    // Unmanaged rows still use the original RPC, with no deployment-requester read.
+    expect(mockFrom.mock.calls.filter((c) => c[0] === "usage_logs")).toEqual([["usage_logs"], ["usage_logs"]])
     expect(mockInvalidate).not.toHaveBeenCalled()
   })
 })
@@ -483,5 +482,24 @@ describe("opt-in atomic job reservations", () => {
     mockRpc.mockResolvedValueOnce({ data: { usageLogId: "log-once", creditsReserved: 11, watermark: true, replayed: true }, error: null })
     await expect(CreditsService.reserveCredits(REQUESTER, "job-once", "flux", 0, 0, { oncePerJob: true, creditOverride: 12 })).rejects.toThrow(/could not be verified/)
     expect(insertCalls).toHaveLength(0)
+  })
+})
+
+
+describe("managed reservation lifecycle", () => {
+  it.each(["commit", "refund"] as const)("routes %s through the saved decision without legacy settlement", async (operation) => {
+    mockTable("usage_logs", { metadata: { reservation_mode: "job-once" } })
+    mockRpc.mockResolvedValue({ data: { managed: true, deferred: true }, error: null })
+    if (operation === "commit") await CreditsService.commitCredits("log-1", 9999)
+    else await CreditsService.refundCredits("log-1")
+    expect(mockRpc).toHaveBeenCalledExactlyOnceWith("settle_checkpointed_job_reservation", { p_usage_log_id: "log-1" })
+    expect(updateCalls).toEqual([])
+  })
+  it("does not use a manual fallback when managed settlement is uncertain", async () => {
+    mockTable("usage_logs", { metadata: { reservation_mode: "job-once" } })
+    mockRpc.mockResolvedValue({ data: null, error: { message: "connection lost" } })
+    await expect(CreditsService.refundCredits("log-1")).rejects.toThrow(/could not be confirmed/)
+    expect(mockRpc).toHaveBeenCalledTimes(1)
+    expect(updateCalls).toEqual([])
   })
 })

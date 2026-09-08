@@ -355,6 +355,7 @@ export async function commitJobCredits(
   const { computeActualCredits, checkAndLogAnomaly } = await import("../ee/billing/credit-anomaly.js")
 
   try {
+    if (await CreditsService.trySettleManagedCredits(usageLogId)) return
     if (metered && providerCostUsd && providerCostUsd > 0) {
       // usage_logs.action is the model identifier convention (checkAndLogAnomaly
       // below relies on the same). Fetched first so computeActualCredits can
@@ -494,6 +495,8 @@ export async function refundJobCredits(
   if (!hasCredits() || !usageLogId) return
 
   try {
+    const { CreditsService: ManagedCredits } = await import("../ee/services/credits.js")
+    if (await ManagedCredits.trySettleManagedCredits(usageLogId)) return
     if (isPostProcessingError(errorOrMessage)) {
       const msg = errorOrMessage instanceof Error ? errorOrMessage.message : String(errorOrMessage)
       console.log(`[worker] Post-processing failure after provider delivered — not refunding credits for job ${jobId}: ${msg}`)
