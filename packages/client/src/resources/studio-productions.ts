@@ -140,6 +140,22 @@ export interface StudioOpsRequest {
 }
 
 /**
+ * What else an operation touched — the work that now has to follow it.
+ *
+ * Reported by the operations whose effect reaches past the thing they name: a
+ * frame review re-opens every frame derived from it and every shot bound to
+ * those, a sequence fork mints a whole parallel set. Both lists are always
+ * present and either may be empty; ids, never counts, because the caller's job
+ * is to go and refresh THOSE.
+ */
+export interface StudioOpsImpact {
+  /** Planned frames the operation reaches, the named one first. */
+  keyframeIds: string[]
+  /** Shots bound to any of those frames. */
+  shotIds: string[]
+}
+
+/**
  * One line of what an operation did, in the words a change log would use.
  *
  * Past tense, the target named the way the user sees it, the side effect in a
@@ -152,6 +168,12 @@ export interface StudioOpsReceipt {
   summary: string
   /** Ids the operation MINTED — never ids the caller supplied. */
   ids?: string[]
+  /**
+   * The dependency scope, where the operation reports one — absent for the
+   * many that touch only what they name. The route projects a receipt ONCE for
+   * both answers, so this reads the same on an apply and on a preview.
+   */
+  impact?: StudioOpsImpact
 }
 
 /** What a batch produced. Adopt `production` whole; do not merge into it. */
@@ -173,18 +195,39 @@ export interface StudioOpsResponse {
 }
 
 /**
+ * An operation's confirmation class — the vocabulary's own four letters.
+ *
+ * `S` safe · `D` delete · `P` changes who can reach the work · `$` spends
+ * credits. The table that assigns them ships with the production codec and is
+ * pinned complete over the operation union there; this is the wire's spelling
+ * of its values, not a second table.
+ */
+export type StudioOpClass = "S" | "D" | "P" | "$"
+
+/**
  * One line of what an operation WOULD do, for a person deciding whether to let
- * it. Everything {@link StudioOpsReceipt} says, in the conditional, plus what
- * the decision turns on: how big the change is, which kind of change it is, and
- * whether it can be taken back.
+ * it. Everything {@link StudioOpsReceipt} says — the same summary, the same ids
+ * and the same {@link StudioOpsImpact}, read in the conditional — plus the two
+ * things the decision turns on and only a preview needs: which kind of change
+ * it is, and whether it can be taken back.
  */
 export interface StudioOpsDryRunReceipt extends StudioOpsReceipt {
-  /** How much would change, in the words a person counts in: `3 takes`. */
-  impact?: string
-  /** The kind of change, in the route's own vocabulary. */
-  class: string
-  /** True when the change could be undone afterwards — a bin, not a shredder. */
-  restorable?: boolean
+  /**
+   * The confirmation class, read out of the operation vocabulary's own table:
+   * `S` safe, `D` deletes, `P` changes who can reach the work, `$` spends
+   * credits. Narrow rather than open, because it is what a caller branches on
+   * — a rule like "never a `D` without asking" is only writable if the
+   * compiler knows the letters.
+   */
+  class: StudioOpClass
+  /**
+   * Present, and always `true`, when this operation put something in the bin
+   * that can be brought back. ABSENT is the honest answer for everything else,
+   * including a delete that destroys: there is no entry to name, so there is no
+   * promise to make. Read it as `restorable ?? false`, never as `!restorable`
+   * meaning "kept".
+   */
+  restorable?: true
 }
 
 /**
