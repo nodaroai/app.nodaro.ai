@@ -12,7 +12,10 @@ import {
   WorkflowConflictError,
 } from "../../index.js"
 import type {
+  StudioOpsDryRunReceipt,
   StudioOpsDryRunResponse,
+  StudioOpsImpact,
+  StudioOpsReceipt,
   StudioOpsRequest,
   StudioOpsResponse,
   WorkflowConflictCode,
@@ -615,10 +618,17 @@ describe("studio error mapping", () => {
 
 describe("client.studio.productions — previewing a batch", () => {
   /** What a deployment that serves the preview answers an empty batch with. */
-  const ping = { dryRun: true, version: 7, receipts: [], warnings: [] }
+  const ping: StudioOpsDryRunResponse = { dryRun: true, version: 7, receipts: [], warnings: [] }
 
-  /** What the SAME deployment answers the real batch with. */
-  const preview = {
+  /**
+   * What the SAME deployment answers the real batch with — TYPED, so the
+   * fixture cannot describe a wire the route does not write. It is the route's
+   * own bytes: `class` out of the codec's four-letter table (`D`, a delete),
+   * `restorable` present only because this one filed the take in the bin, and
+   * `impact` the dependency scope the semantic operations report — an object
+   * of two id lists, never a sentence.
+   */
+  const preview: StudioOpsDryRunResponse = {
     dryRun: true,
     version: 7,
     receipts: [
@@ -626,8 +636,8 @@ describe("client.studio.productions — previewing a batch", () => {
         op: "example_op",
         summary: "Would delete take 2 of Shot 1.",
         ids: ["take-2"],
-        impact: "1 take",
-        class: "destructive",
+        impact: { keyframeIds: ["frame-a", "frame-b"], shotIds: ["shot-1"] },
+        class: "D",
         restorable: true,
       },
     ],
@@ -650,8 +660,14 @@ describe("client.studio.productions — previewing a batch", () => {
 
     expect(answer).toEqual(preview)
     // The overload narrows the reply; the receipt's own vocabulary is typed.
-    expect(answer.receipts[0].class).toBe("destructive")
+    expect(answer.receipts[0].class).toBe("D")
     expect(answer.receipts[0].restorable).toBe(true)
+    // `impact` is the DEPENDENCY SCOPE, and it arrives whole — the route copies
+    // both lists out of the receipt the write would have reported.
+    expect(answer.receipts[0].impact).toEqual({
+      keyframeIds: ["frame-a", "frame-b"],
+      shotIds: ["shot-1"],
+    })
 
     expect(fetchMock).toHaveBeenCalledTimes(2)
     // The ping carries NOTHING of the caller's batch — not the base version and
@@ -752,6 +768,30 @@ describe("client.studio.productions — previewing a batch", () => {
       await client.studio.productions.ops(view.id, { ops: [], dryRun: flag })
     }
     expect(typeof spellings).toBe("function")
+  })
+
+  it("a receipt's `impact` is the dependency SCOPE, on the apply and the preview alike", () => {
+    // Type-level, walked by the same manual `npx tsc -p packages/client` as the
+    // block above. The route builds ONE receipt projection for both answers
+    // (`toWireReceipt`, studio-production plugin), so a preview receipt that
+    // spelled `impact` differently from an applied one would be describing a
+    // wire nothing writes. Indexing the two lists is what makes the assertion
+    // bite: against a scalar `impact` these lines do not compile at all.
+    expectTypeOf<StudioOpsReceipt["impact"]>().toEqualTypeOf<StudioOpsImpact | undefined>()
+    expectTypeOf<StudioOpsDryRunReceipt["impact"]>().toEqualTypeOf<StudioOpsImpact | undefined>()
+    expectTypeOf<NonNullable<StudioOpsReceipt["impact"]>["keyframeIds"]>().toEqualTypeOf<string[]>()
+    expectTypeOf<NonNullable<StudioOpsReceipt["impact"]>["shotIds"]>().toEqualTypeOf<string[]>()
+
+    // The preview's own two additions, at the precision the route writes them:
+    // the codec's four-letter class table, and a `restorable` that is present
+    // only where there is a bin entry to name — never `false`.
+    expectTypeOf<StudioOpsDryRunReceipt["class"]>().toEqualTypeOf<"S" | "D" | "P" | "$">()
+    expectTypeOf<StudioOpsDryRunReceipt["restorable"]>().toEqualTypeOf<true | undefined>()
+
+    expect(preview.receipts[0]?.impact).toEqual({
+      keyframeIds: ["frame-a", "frame-b"],
+      shotIds: ["shot-1"],
+    })
   })
 
   it("the refusal is reachable from the package root and reads as a NodaroError", () => {

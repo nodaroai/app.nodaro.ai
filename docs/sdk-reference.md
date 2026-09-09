@@ -1224,7 +1224,9 @@ version still applies to the newest document, and the response says
 `rebased: true` (`strict: true` refuses instead, with a `409`). A batch is
 atomic: one bad operation refuses the whole batch as a `StudioOpError` naming
 its index, and nothing is written. `receipts` is one past-tense line per
-operation. Adopt `production` wholesale and carry `version` forward as the next
+operation, each carrying `impact` — `{ keyframeIds, shotIds }` — where the
+operation's effect reaches past the thing it names, so the caller knows what
+else to refresh. Adopt `production` wholesale and carry `version` forward as the next
 `baseVersion`. The operation vocabulary is served, not shipped: read it from
 `skill()`'s `operating` part.
 
