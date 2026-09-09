@@ -16,6 +16,7 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.videoPro`](#clientvideopro)
   - [`client.recast`](#clientrecast)
   - [`client.studio`](#clientstudio)
+  - [`client.copilot`](#clientcopilot)
   - [`client.executions`](#clientexecutions)
   - [`client.nodes`](#clientnodes)
   - [`client.models`](#clientmodels)
@@ -359,6 +360,39 @@ try {
   }
 }
 ```
+
+### `class StudioPreviewUnavailable extends NodaroError`
+
+Not an HTTP error — thrown by `studio.productions.ops(id, { …, dryRun: true })`
+when the deployment cannot preview a batch. **Nothing was sent**: the SDK proves
+the flag on an empty batch first (see
+[the write protocol](#the-write-protocol)), and this is that probe coming back
+without the preview marker, so the caller's own batch never left the process.
+Tell the user you cannot preview here rather than applying the batch blind.
+
+- **Constructor:** `new StudioPreviewUnavailable(message?: string)`
+- `code = "studio_preview_unavailable"`, `status = 0`
+
+### `class StudioPreviewAppliedError extends NodaroError`
+
+The opposite, and the reason the second answer is checked too: a preview was
+asked for and the batch was **applied**. The probe and the batch are two
+requests, and a fleet mid-rollout can serve them from different deployments —
+the one that took the batch parsed the body in strip mode, dropped the flag and
+wrote. The SDK cannot recall a request that has already been answered; what it
+can do is refuse to hand the result back as a preview, which would otherwise
+show a person what ALREADY happened under the heading of what would.
+
+To recover: **adopt what is on `applied`** — its `production` and `version` are
+now the truth, exactly as a plain apply's caller adopts them. Do not re-send the
+batch, and do not present it for approval.
+
+- **Constructor:** `new StudioPreviewAppliedError(applied: StudioOpsResponse | undefined, message?: string)`
+- `code = "studio_preview_applied"`, `status = 0`
+- `applied: StudioOpsResponse | undefined` — the apply reply as the route sent
+  it. `undefined` when the answer carried no body to read: whether the batch was
+  applied is unknown from here, so re-read the production before deciding
+  anything.
 
 ### `class JobBlockedError extends NodaroError`
 
@@ -1177,6 +1211,7 @@ live — so they describe the platform you are actually talking to.
 ```ts
 create(input?): Promise<StudioProductionResponse>           // POST … — optionally lands a plan
 ops(id, input): Promise<StudioOpsResponse>                  // POST …/:id/ops — an atomic batch
+ops(id, input & { dryRun: true }): Promise<StudioOpsDryRunResponse>  // …the same batch, previewed
 reconcile(id): Promise<StudioReconcileResponse>             // POST …/:id/reconcile — land finished jobs
 importPlan(id, plan, opts?): Promise<StudioProductionResponse>
 describe(id, input): Promise<StudioJobStartedResponse>      // POST …/:id/describe — a Director run
@@ -1192,6 +1227,53 @@ its index, and nothing is written. `receipts` is one past-tense line per
 operation. Adopt `production` wholesale and carry `version` forward as the next
 `baseVersion`. The operation vocabulary is served, not shipped: read it from
 `skill()`'s `operating` part.
+
+**Previewing a batch.** `dryRun: true` asks what the batch WOULD do, so a person
+can approve an assistant's edits before they land. The reply is
+`StudioOpsDryRunResponse` — `{ dryRun: true, version, receipts, warnings }`, with
+no `production` and no `rebased`, because no document was produced. Each receipt
+is the apply's own receipt plus `class` (the operation's confirmation class, out
+of the vocabulary's table) and `restorable` (present only where the operation put
+something in the bin). The refusals the batch itself earns, the preview earns
+too: a bad operation is still a `StudioOpError` with its `opIndex`, `strict:
+true` still conflicts. Contention is the one it cannot reach — a preview never
+swaps, so it never gives up busy the way an apply under a rival writer does.
+
+```ts
+import { StudioPreviewAppliedError, StudioPreviewUnavailable } from "@nodaro/sdk"
+
+try {
+  const preview = await client.studio.productions.ops(id, { ops, baseVersion, dryRun: true })
+  for (const r of preview.receipts) console.log(r.class, r.summary, r.restorable ?? false)
+} catch (err) {
+  if (err instanceof StudioPreviewUnavailable) {
+    // Nothing was sent. Say so; do not fall back to applying the batch.
+  } else if (err instanceof StudioPreviewAppliedError) {
+    // The batch LANDED. Adopt `err.applied.production` / `.version` — do not
+    // re-send it, and do not present it for approval. When `applied` is
+    // undefined there was no body to read: re-read with `get(id)` first.
+  }
+}
+```
+
+Spell `dryRun: true` as a literal in the call's own object, because the literal
+is what selects the preview overload: passed through a variable it widens to
+`boolean`, and the call then types as an apply while the runtime still takes the
+preview path.
+
+**A preview is TWO requests, deliberately; an apply stays one.** The route parses
+its body in strip mode, so a deployment that predates the preview drops the flag
+and APPLIES the batch — a caller that learned by sending would already have
+written. So the SDK proves the flag on an EMPTY batch first — nothing of yours
+rides on it — and sends your batch only when that answer carries the marker.
+When it does not you get `StudioPreviewUnavailable`, and your batch never left;
+when the deployment refuses the probe outright, that error is passed through as
+it stands. And because a fleet mid-rollout can serve the second request from
+another deployment, the second answer is checked too: a batch that came back
+APPLIED throws `StudioPreviewAppliedError` carrying that write, rather than
+being dressed up as a preview. Both are `status = 0` — catch by type. The REST
+contract for the two-step is in the
+[Studio productions API](./api/studio-productions.md).
 
 #### Generation and media
 
@@ -1245,6 +1327,94 @@ Sharing is its own route rather than an operation: who may see the work is
 decided by the owner, never as a side effect of a batch that was editing
 something else. A clone starts private and visible — `shared` and `archived`
 never travel — and is copied through YOUR view of the source.
+
+---
+
+### `client.copilot`
+
+The assistant's conversation surface (`/v1/copilot/*`). A **thread** is the
+conversation, opened on a workflow; a **turn** is one message and everything the
+assistant does in answer to it. **Cloud edition only, and in-app only**: every
+route here refuses a caller who is not carrying a user's own session JWT with
+`403 in_app_only` — an OAuth app token or an API token must not drive someone's
+copilot. A deployment with the feature switched off answers `503
+feature_disabled` where a thread would be opened or a turn sent, rather than a
+`404`, so "not available here" and "no such thread" stay distinguishable.
+
+Unlike `client.studio.productions`, these methods return the API **envelope**
+as it arrives: `create`/`list`/`get` resolve to `{ data: … }`, and the payload is
+inside it. `stream` is the exception — it yields frames, not a response.
+
+```ts
+create(input): Promise<{ data: { thread: CopilotThread; workflow: CopilotThreadWorkflow } }>
+list({ workflowId }): Promise<{ data: { thread: CopilotThread | null } }>
+get(id, { after?, limit? }): Promise<{ data: { thread: CopilotThread; messages: CopilotMessage[] } }>
+archive(id): Promise<{ data: { archived: true } }>
+cancel(id): Promise<{ data: { cancelling: true; turnId: string } }>
+stream(id, opts): AsyncGenerator<CopilotStreamFrame>
+```
+
+`create` takes `workflowId` (an existing workflow) **or** `prompt` (the server
+creates one, seeded by it, with an optional `name`). Re-opening a workflow that
+already has an active thread answers THAT thread rather than a second one.
+`list` reads the active thread for a workflow, or `null`. `get` reads a thread
+with its messages — `after` returns only what followed that sequence number,
+which is how a panel catches up, and `limit` caps the page at the server's own
+ceiling. `archive` is archival, not deletion: the messages stay readable, and it
+is refused while a turn is running. `cancel` stops the running turn and answers
+which one it asked to stop; that turn's own stream ends with a `done` frame.
+
+A thread carries `runMode` (`"ask"` — propose and wait — or `"auto"`, which runs
+within `autoRunLimitCredits`), `modelTier`, `allowPublishing`, `userTurnCount`
+and, from `get`, a derived `status` / `activeTurnId`. `surface` names WHICH
+assistant the thread belongs to; it is optional on the type, and its absence
+means the deployment did not say. The SDK does not choose one — a thread opened
+through `create` is the deployment's own default.
+
+#### A turn is a stream of typed frames
+
+`stream(threadId, { message, baseVersion?, tier?, signal? })` POSTs the message
+and yields the turn's frames as they arrive (server-sent events), so a caller
+renders prose, tool activity and proposals live instead of waiting for a
+finished answer. It is the only method here that spends.
+
+```ts
+for await (const frame of client.copilot.stream(threadId, { message: "Tidy the graph" })) {
+  if (frame.type === "token") process.stdout.write(frame.data.text)
+  if (frame.type === "run_proposed") await askTheUser(frame.data)
+  if (frame.type === "done") break
+}
+```
+
+`CopilotStreamFrame` is a discriminated union on `type`. The SDK models
+`metadata` (the turn's ids, model, `runMode`, `autoRunLimitCredits` and the rest
+of what it is running under), `token` (a chunk of prose), `tool_call`
+(`started` → `finished` / `failed`), `workflow_updated`, `workflow_created`,
+`run_proposed` (what the turn wants to run, for a person to confirm),
+`memory_saved`, `usage` (tokens, and `creditsCharged`) and finally `done`
+(`"completed" | "capped" | "cancelled"`) or `error`. A frame's `data` is passed
+through untouched, so a field this package does not model still reaches you —
+and a frame KIND it does not model is skipped rather than thrown, so a newer
+server cannot break an older caller. Read the frames you know and ignore the
+rest.
+
+One kind is missing today rather than newer. `run_proposed` is the canvas
+surface's frame; a thread on the `studio` surface offers its card as
+`action_proposed`, which this version does not model — so `stream` skips it
+along with everything else it does not know, and a caller on that surface does
+not see the proposal come through.
+
+Two lifetime rules, both deliberate:
+
+- The client's `timeoutMs` is **not** applied to a turn — a turn legitimately
+  runs for minutes, and inheriting the request timeout would cut the assistant
+  off mid-answer. You own the lifetime: pass `signal`, or stop iterating (the
+  reader cancels the body, which ends the request).
+- Aborting **rejects** the iteration with the platform's raw `AbortError`, not a
+  `NodaroError`, whether it fires before the first frame or between two of them.
+  Wrap the loop in `try`/`catch` if a cancelled turn is an ordinary ending in
+  your UI. A non-2xx on the opening request still throws the ordinary typed
+  error, before any frame.
 
 ---
 
