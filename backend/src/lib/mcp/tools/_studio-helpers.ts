@@ -117,9 +117,57 @@ export function markdownResult(text: string) {
   return { content: [{ type: "text" as const, text }] }
 }
 
-/** A route's `{ data: … }` reply, rendered as a tool result. */
+/**
+ * The sentence a job id may never arrive without.
+ *
+ * A studio generation finishes in TWO places and only the first is obvious:
+ * the job completes — `get_job` says so, with a CDN url — and then the result
+ * has to be WRITTEN into the production, which by D5 happens on the next
+ * `get_studio_production` and nowhere else. Reconcile-on-read is the decided
+ * design; what was missing is that the client polling the obvious way never
+ * learns of the second half. A user hit exactly that on 2026-09-09: three
+ * stills completed, every call reported success, the film stayed empty.
+ *
+ * So the answer that hands back a job id carries the next step itself. The
+ * operating guide says it too, under a heading a client reaches only after it
+ * already believes the work is done.
+ */
+export const LANDING_HINT =
+  "Not in the production yet: a finished job is written into the document by " +
+  "your next `get_studio_production` call, which is the only step that lands " +
+  "results. `get_job` / `wait_for_job` report status and land nothing."
+
+/**
+ * Did this answer START something that still has to be landed?
+ *
+ * Read off the ANSWER rather than declared per tool: a route that hands back a
+ * job id has, by construction, left a marker for the landing sweep to find, and
+ * one that does not — a quote (`dryRun`), a frame grab or a voiceover the route
+ * waited for, an edit — has nothing pending. A tool added later gets the
+ * sentence for free, and one that stops starting work stops claiming it.
+ *
+ * Top-level only, deliberately: a production VIEW carries the pending markers'
+ * own job ids nested inside it, and a read is not a call that started anything.
+ */
+function startsWork(data: unknown): boolean {
+  if (!data || typeof data !== "object") return false
+  const body = data as { jobId?: unknown; jobIds?: unknown }
+  if (typeof body.jobId === "string") return true
+  return Array.isArray(body.jobIds) && body.jobIds.length > 0
+}
+
+/**
+ * A route's `{ data: … }` reply, rendered as a tool result — plus, when it
+ * started work, the one step that brings it into the document.
+ *
+ * `landing` is written FIRST because these answers embed the whole production
+ * at full detail: a key appended after that is thousands of lines below the
+ * job id it is about.
+ */
 export function viewResult(body: string) {
-  return textResult(unwrap(body))
+  const data = unwrap<unknown>(body)
+  if (!startsWork(data)) return textResult(data)
+  return textResult({ landing: LANDING_HINT, ...(data as Record<string, unknown>) })
 }
 
 /** The family's own `{ error: { code } }`, when the body carries one. */
