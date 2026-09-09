@@ -18,6 +18,8 @@ vi.mock("../tools/registry.js", async (importOriginal) => {
 })
 
 const { runAgentLoop } = await import("../agent-loop.js")
+type LoopResult = Awaited<ReturnType<typeof runAgentLoop>>
+type RunProposal = import("../tools/types.js").RunProposal
 
 /** A text block as the SDK types it (a `TextBlock` carries `citations`). */
 function textBlock(text: string): Anthropic.Messages.ContentBlock {
@@ -128,7 +130,10 @@ describe("runAgentLoop", () => {
     streamMock.mockReturnValue(
       scriptStream({ stop_reason: "tool_use", content: [{ type: "tool_use", id: "r1", name: "run_workflow", input: {} }] }),
     )
-    const result = await runAgentLoop(baseInput())
+    // The loop carries either surface's proposal now; this case is the canvas
+    // one, named here so the assertion below reads the shape it is about. The
+    // assertion itself is unchanged.
+    const result = (await runAgentLoop(baseInput())) as LoopResult & { proposal?: RunProposal }
     expect(result.stopReason).toBe("run_proposed")
     expect(result.proposal?.addedNodeTypes).toEqual(["generate-image"])
     // The pending tool_use was answered before stopping — the stored

@@ -71,14 +71,40 @@ against the newest document**:
   send the same batch again.
 - `receipts` is one past-tense line per operation — the thing to show a user who
   asks what you just did.
-- Deletes are recoverable: removals go to the production's bin and can be
-  restored. Only an explicit purge destroys anything.
+- Many deletes are recoverable: a removed shot, take or planned frame goes to
+  the production's bin and can be restored. Others are not — clearing a cast
+  member, a voice or the soundtrack, deleting a cut, removing a sequence,
+  purging one bin entry or emptying the bin. Do not tell a user a delete can be
+  undone unless the preview below marked that operation restorable.
 - Sharing is **not** an operation. It has its own tool, so a batch that was
   editing something else can never change who can see the work.
 
 The operation vocabulary itself is served, not printed here: read it from
 `get_studio_production_skill { part: "operating" }`, which is generated from
 what the deployment accepts.
+
+### Previewing a batch
+
+`edit_studio_production { dry_run: true }` answers what the batch WOULD do and
+writes nothing: the version it was taken at, one receipt per operation carrying
+that operation's class (`S` changes the document, `D` deletes, `P` changes who
+can reach the work, `$` spends) and, on a delete that put something in the bin,
+`restorable: true`. Show that to a person before you apply the batch; then send
+the same batch again without the flag.
+
+The preview is **proved, not assumed**, and the proof is the client's duty.
+`POST /v1/studio/productions/:id/ops` ignores keys it does not know, so a
+deployment whose studio service predates the flag would simply APPLY a batch
+sent with it — the write the preview existed to prevent. So a client asks for
+the capability first, with the one batch that has never written anything: the
+EMPTY one. `{ ops: [], dryRun: true }` comes back as `{ dryRun: true, version,
+receipts: [], warnings: [] }` where previews are served, and as the ordinary
+empty-batch reply where they are not; only the first earns the real batch. The
+MCP tool does this for you and refuses with `studio_preview_unavailable` when
+the answer lacks the literal, having sent nothing.
+
+Preview ids are preview-only. The apply mints its own, which is why an undo
+reads the bin ids off the APPLY's receipts and never the preview's.
 
 ## Tools and scopes
 
@@ -87,7 +113,7 @@ what the deployment accepts.
 | `get_studio_production_skill` | none | The four-part guide. Free. |
 | `validate_studio_plan` | `workflows:read` | Check a plan against the caller's library. Free, and it persists nothing — but it resolves every `cast` name against the caller's own entities, so it is gated exactly where its route is. |
 | `list_studio_productions` | `workflows:read` | The caller's productions, newest first. |
-| `get_studio_production` | `workflows:read` | One production — what has landed and what is pending. With `workflows:write` it also lands what has finished before it reads; read-only, it lands nothing. |
+| `get_studio_production` | `workflows:read` | One production — what has landed and what is pending. With `workflows:write` it also lands what has finished before it reads; read-only, it lands nothing. Pass `reconcile: false` to read without landing — for an in-app editor that lands its own. |
 | `plan_studio_export` | `workflows:read` | The ordered export steps and their prices. |
 | `create_studio_production` | `workflows:write` | A new production, optionally from a plan. |
 | `import_studio_production` | `workflows:write` | Append a plan's scenes to one that exists. |
@@ -121,17 +147,17 @@ put a confirmation prompt in front of, and it stays right as the family grows.
 
 | `_meta.nodaro.confirm` | Ask first because… | Tools |
 |------------------------|--------------------|-------|
-| `"$"` | It costs credits. | `describe_studio_production`, `generate_studio_still`, `generate_studio_clip`, `new_studio_shot_from_frame`, `voice_studio_shot`, `revoice_studio_clip`, `score_studio_production` |
+| `"$"` | It costs credits. | `describe_studio_production`, `generate_studio_still`, `generate_studio_keyframe`, `generate_studio_clip`, `new_studio_shot_from_frame`, `voice_studio_shot`, `revoice_studio_clip`, `score_studio_production` |
 | `"P"` | It changes who can see the work. | `share_studio_production` |
 
 A tool with neither mark reads, or changes only the caller's own document.
 `edit_studio_production` is in that group and carries no mark on purpose: what a
 batch does is decided by the operations inside it, and the tool layer does not
 classify them — a second copy of the vocabulary there would drift from the one
-the route validates against. So a client that wants to confirm before something
-is removed has to look at the batch it is about to send. What is at stake is
-small either way: removals go to the production's bin and can be restored, and
-the only irreversible act is an explicit purge.
+the route validates against. A client that wants to confirm before something is
+removed asks the tool for a **preview** instead, and shows what comes back:
+every operation is classed there, and each delete says whether it can be taken
+back.
 
 ## Spending discipline
 

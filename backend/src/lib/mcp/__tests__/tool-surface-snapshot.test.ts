@@ -57,7 +57,19 @@ const FIXTURE = JSON.parse(readFileSync(resolve(here, "fixtures/tool-surface.jso
 // RAISED 2026-09-08 by the image_overlay tool's wire size and nothing else —
 // see IMAGE_OVERLAY_TOOL_BYTES below; the 85 B of headroom is carried across.
 const IMAGE_OVERLAY_TOOL_BYTES = 7_788 // measured: 345_426 total − 337_638 base (layer kinds, eleven shapes, platform variants + pricing note, qr_text + mask controls)
-export const TOOL_WIRE_BUDGET = { perToolBytes: 8_192, totalBytes: 337_638 + IMAGE_OVERLAY_TOOL_BYTES }
+//
+// RAISED 2026-09-09 by the two arguments the in-app studio assistant needs and
+// nothing else: the preview flag on `edit_studio_production` and the landing
+// flag on `get_studio_production`. MEASURED by this suite — 345_785 total
+// − 345_426 base = 359 B, the two `describe` strings plus their schema
+// entries. Neither tool moves near the per-tool budget (the largest definition
+// in the list is `animate_image` at 8_122 B, and neither of these is in the top
+// five). The fixture does NOT move: it names tools, and no tool was added.
+const STUDIO_PREVIEW_ARGS_BYTES = 359
+export const TOOL_WIRE_BUDGET = {
+  perToolBytes: 8_192,
+  totalBytes: 337_638 + IMAGE_OVERLAY_TOOL_BYTES + STUDIO_PREVIEW_ARGS_BYTES,
+}
 
 type ToolDef = { name: string; description?: string }
 async function list(scopes: Scope[]): Promise<ToolDef[]> {

@@ -171,7 +171,16 @@ function VideoUpscaleNodeComponent({ id, data, selected }: NodeProps) {
             )}
 
             <div className="flex justify-center text-muted-foreground text-xs">
-              <span>Topaz {nodeData.upscaleFactor}x Upscale</span>
+              {/* Name the provider that will actually run — this read "Topaz" for every
+                  provider, so a node set to VEO looked like Topaz and its "connect a
+                  VEO node" refusal made no sense (2026-09-09). */}
+              <span>
+                {upscaleProvider === "veo-1080p"
+                  ? "VEO 1080p Upscale"
+                  : upscaleProvider === "veo-4k"
+                    ? "VEO 4K Upscale"
+                    : `Topaz ${nodeData.upscaleFactor}x Upscale`}
+              </span>
             </div>
           </div>
         )}

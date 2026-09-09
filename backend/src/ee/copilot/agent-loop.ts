@@ -18,7 +18,7 @@ import { estimateNextCallUsd, wouldExceedBudget, type TurnBudget } from "./budge
 import { newUntrustedNonce, wrapUntrusted } from "./untrusted.js"
 import { toolLabel } from "./tool-labels.js"
 import { dispatchTool, type DispatchDeps, type ToolDefinition } from "./tools/registry.js"
-import type { RunProposal } from "./tools/types.js"
+import type { ActionProposal, RunProposal } from "./tools/types.js"
 
 export type LoopStopReason =
   | "completed"
@@ -70,7 +70,7 @@ export interface LoopResult {
   usage: LoopUsage
   iterations: number
   toolCalls: number
-  proposal?: RunProposal
+  proposal?: RunProposal | ActionProposal
 }
 
 const EMPTY_USAGE: LoopUsage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 0 }
@@ -95,7 +95,7 @@ export async function runAgentLoop(input: LoopInput): Promise<LoopResult> {
   let assistantText = ""
   let iterations = 0
   let toolCalls = 0
-  let proposal: RunProposal | undefined
+  let proposal: RunProposal | ActionProposal | undefined
 
   const finish = (stopReason: LoopStopReason): LoopResult => ({
     stopReason,

@@ -6,10 +6,10 @@
  *
  *  - the column reaches the database AFTER this code does. A thread creation
  *    that has to name it must answer service-unavailable, not 500.
- *  - the studio editor's own message handler ships AFTER this code does. A
- *    message posted to a studio thread must be refused BEFORE a job row, a
- *    reservation or a turn row exists, so the window between the two changes
- *    cannot leave a half-run turn behind.
+ *  - the studio editor's own turn now RUNS here, on the same loop and the same
+ *    budget as the canvas one. What the route owes it is the surface: the turn
+ *    is told which one it is, and the stream's first frame says so — the one
+ *    place a client can learn it.
  *
  * And underneath both: a canvas thread — including one whose row predates the
  * column and carries no surface at all — still streams exactly as it does now.
@@ -51,7 +51,10 @@ const spies = vi.hoisted(() => ({
   insertJob: vi.fn(async () => ({ data: { id: "job1" }, error: null })),
   reserveCreditsForJob: vi.fn(async () => ({ usageLogId: "log1", creditsReserved: 150, watermark: false })),
   createTurn: vi.fn(async () => ({ id: "turn1" })),
-  runCopilotTurn: vi.fn(async () => ({
+  // Typed through its INPUT: the surface and the selection the route hands the
+  // turn are things this suite asserts, and a nullary spy records no arguments
+  // to assert about.
+  runCopilotTurn: vi.fn(async (_input: Record<string, unknown>): Promise<Record<string, unknown>> => ({
     status: "completed",
     assistantMessageId: "msg1",
     finalVersion: 4,
@@ -62,6 +65,8 @@ const spies = vi.hoisted(() => ({
   findActiveThread: vi.fn(async () => state.thread),
   /** The stream itself, so "no stream" can be asserted rather than inferred. */
   createSSEStream: vi.fn(),
+  /** Every event the turn put on the wire, in order. */
+  sendEvent: vi.fn(),
 }))
 
 vi.mock("@/lib/insert-job.js", () => ({ insertJob: spies.insertJob }))
@@ -99,7 +104,7 @@ vi.mock("@/lib/sse.js", () => ({
   createSSEStream: async (_req: unknown, reply: { hijack: () => void; raw: { end: () => void } }) => {
     spies.createSSEStream()
     reply.hijack()
-    return { sendEvent: vi.fn(), sendComment: vi.fn(), close: () => reply.raw.end(), isClosed: false }
+    return { sendEvent: spies.sendEvent, sendComment: vi.fn(), close: () => reply.raw.end(), isClosed: false }
   },
 }))
 vi.mock("../../copilot/turn-runner.js", async (importOriginal) => {
@@ -158,9 +163,17 @@ describe("the canvas routes ask for the canvas thread", () => {
   })
 })
 
-describe("a message on a studio thread, before that handler ships", () => {
-  it("is refused before a job, a reservation or a turn exists", async () => {
+function frame(type: string): Record<string, unknown> | undefined {
+  const call = spies.sendEvent.mock.calls.find((args) => (args[0] as { type?: string })?.type === type)
+  return call?.[0] as Record<string, unknown> | undefined
+}
+
+describe("a message on a studio thread", () => {
+  beforeEach(() => {
     state.thread = { ...legacyThread, surface: "studio" }
+  })
+
+  it("streams: the turn runs, on its own surface", async () => {
     const app = await buildApp()
     const res = await app.inject({
       method: "POST",
@@ -168,14 +181,50 @@ describe("a message on a studio thread, before that handler ships", () => {
       payload: { message: "hi" },
     })
 
-    expect(res.statusCode).toBe(503)
-    expect(res.json().error.code).toBe("surface_unavailable")
-    // Every one of these would leave something behind — a job row the
-    // reconcile cron re-scans, credits held against a turn that never ran.
-    expect(spies.insertJob).not.toHaveBeenCalled()
-    expect(spies.reserveCreditsForJob).not.toHaveBeenCalled()
-    expect(spies.createTurn).not.toHaveBeenCalled()
-    expect(spies.runCopilotTurn).not.toHaveBeenCalled()
+    expect(res.statusCode).toBe(200)
+    expect(spies.createSSEStream).toHaveBeenCalledTimes(1)
+    expect(spies.runCopilotTurn).toHaveBeenCalledTimes(1)
+    expect(spies.runCopilotTurn.mock.calls[0][0]).toMatchObject({ surface: "studio" })
+  })
+
+  it("names the surface in the stream's first frame — the only place a client learns it", async () => {
+    const app = await buildApp()
+    await app.inject({ method: "POST", url: "/v1/copilot/threads/th1/messages", payload: { message: "hi" } })
+    expect(frame("metadata")).toMatchObject({ data: { surface: "studio" } })
+  })
+
+  it("carries the person's selection through to the turn", async () => {
+    const app = await buildApp()
+    await app.inject({
+      method: "POST",
+      url: "/v1/copilot/threads/th1/messages",
+      payload: { message: "hi", focus: { shotId: "s2" } },
+    })
+    expect(spies.runCopilotTurn.mock.calls[0][0]).toMatchObject({ focus: { shotId: "s2" } })
+  })
+
+  it("puts the turn's one card on the wire before the turn's usage", async () => {
+    const proposal = { id: "p1", kind: "edit", tool: "edit_studio_production", args: {}, preview: null, restorable: true, safe: true, note: null }
+    spies.runCopilotTurn.mockResolvedValueOnce({
+      status: "completed",
+      assistantMessageId: "msg1",
+      finalVersion: null,
+      creditsCharged: 10,
+      usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 0 },
+      proposal,
+    })
+    const app = await buildApp()
+    await app.inject({ method: "POST", url: "/v1/copilot/threads/th1/messages", payload: { message: "hi" } })
+
+    const types = spies.sendEvent.mock.calls.map((args) => (args[0] as { type: string }).type)
+    expect(frame("action_proposed")).toMatchObject({ data: proposal })
+    expect(types.indexOf("action_proposed")).toBeLessThan(types.indexOf("usage"))
+  })
+
+  it("emits no card when the turn proposed nothing", async () => {
+    const app = await buildApp()
+    await app.inject({ method: "POST", url: "/v1/copilot/threads/th1/messages", payload: { message: "hi" } })
+    expect(frame("action_proposed")).toBeUndefined()
   })
 })
 
@@ -277,14 +326,7 @@ describe("the unattended run mode is the canvas assistant's alone", () => {
   })
 })
 
-describe("the window refusal sits after the thread's own facts", () => {
-  it("opens no stream for a studio thread", async () => {
-    state.thread = { ...legacyThread, surface: "studio" }
-    const app = await buildApp()
-    await app.inject({ method: "POST", url: "/v1/copilot/threads/th1/messages", payload: { message: "hi" } })
-    expect(spies.createSSEStream).not.toHaveBeenCalled()
-  })
-
+describe("a thread's own facts are answered before the surface matters", () => {
   it("answers the turn cap, which is true whatever is deployed", async () => {
     state.thread = { ...legacyThread, surface: "studio", user_turn_count: 200 }
     const app = await buildApp()
