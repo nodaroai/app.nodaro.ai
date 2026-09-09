@@ -19,13 +19,16 @@ import { refundReservedCreditsForJob } from "../../lib/credits-job-lifecycle.js"
 import { commitJobCredits } from "../../workers/shared.js"
 import { buildMcpServer } from "../../lib/mcp/server.js"
 import { createMcpInvoker } from "../../lib/mcp/invoke.js"
-import { COPILOT_SCOPES, COPILOT_TIERS, DEFAULT_COPILOT_TIER, HEARTBEAT_INTERVAL_MS, TURN_CAPS, type CopilotModelTier , type TierCaps} from "./constants.js"
+import { COPILOT_TIERS, DEFAULT_COPILOT_TIER, HEARTBEAT_INTERVAL_MS, TURN_CAPS, type CopilotModelTier , type CopilotSurface, type TierCaps} from "./constants.js"
 import { resolveTurnBudget } from "./budget.js"
 import { buildSystemPrompt } from "./system-prompt.js"
 import { buildContextPreamble } from "./context-snapshot.js"
+import { buildStudioPreamble } from "./studio-preamble.js"
+import { studioSkillTails } from "./studio-skill.js"
+import { copilotSurface } from "./surfaces.js"
 import { buildHistory, buildUserContent, extractImageRefIds, extractUserLinks } from "./history.js"
 import { runAgentLoop, type LoopResult } from "./agent-loop.js"
-import { buildToolDefinitions } from "./tools/registry.js"
+import { buildToolSurface } from "./tools/registry.js"
 import { registerTurnAbort, unregisterTurnAbort } from "./cancel-registry.js"
 import {
   appendMessage,
@@ -41,7 +44,7 @@ import {
   type CopilotTurn,
 } from "./store.js"
 import { resolveCopilotAssetRefs } from "./tools/asset-refs.js"
-import type { CopilotToolContext } from "./tools/types.js"
+import type { ActionProposal, CopilotToolContext } from "./tools/types.js"
 
 export interface TurnEmit {
   (event: { type: string; data: Record<string, unknown> }): void
@@ -60,6 +63,15 @@ export interface RunTurnInput {
   nodes: unknown
   edges: unknown
   message: string
+  /**
+   * Which surface this thread runs on — the canvas, or the studio editor. It
+   * comes from the THREAD ROW, read by the route; nothing here decides it. It
+   * resolves one bundle (scopes, request name, tools, pinned id, doctrine,
+   * dispatch) and everything else about the turn is shared.
+   */
+  surface?: CopilotSurface
+  /** What the person has selected in the editor, when the surface has a selection. */
+  focus?: { shotId?: string } | null
   /** The thread's model ladder rung — resolved by the route from the thread row. */
   tier: CopilotModelTier
   /** Effective caps for this turn (admin overrides merged over the defaults). */
@@ -84,6 +96,12 @@ export interface TurnOutcome {
   finalVersion: number | null
   creditsCharged: number | null
   usage: LoopResult["usage"]
+  /**
+   * The one card this turn ended on, when it ended on one. Carried out rather
+   * than emitted here: the route owns the wire, and a proposal is the last
+   * thing the person is shown before the turn's usage and its close.
+   */
+  proposal?: ActionProposal
   error?: { code: string; message: string }
 }
 
@@ -93,6 +111,21 @@ export const TURN_ERROR_TEXT: Readonly<Record<string, string>> = {
   model_refused: "The assistant declined to answer that.",
   turn_timeout: "This turn took too long and was stopped.",
   internal_error: "Something went wrong on our side. Try again.",
+  studio_not_available: "The studio service is not available on this deployment, so nothing can be read or changed.",
+}
+
+/**
+ * A verdict the turn reached before the model was called.
+ *
+ * Thrown rather than branched so the one exit path — settle, finish, bump —
+ * keeps running exactly as it does for a failure: nothing was spent, the
+ * reservation comes back, and the code reaches the person as itself instead of
+ * as a generic internal error.
+ */
+class TurnVerdict extends Error {
+  constructor(readonly code: keyof typeof TURN_ERROR_TEXT & string) {
+    super(code)
+  }
 }
 
 export async function runCopilotTurn(input: RunTurnInput): Promise<TurnOutcome> {
@@ -101,10 +134,18 @@ export async function runCopilotTurn(input: RunTurnInput): Promise<TurnOutcome> 
   input.signal.addEventListener("abort", forward, { once: true })
   registerTurnAbort(input.turn.id, controller)
 
+  // The surface bundle, resolved once: scopes, request name, tool surface,
+  // pinned id, doctrine, dispatch. Everything the two surfaces share — the
+  // loop, the budget, the memories, the cancel, the heartbeat, the credits —
+  // is shared by construction, because it is simply not in here.
+  const profile = copilotSurface(input.surface ?? "workflow")
   const server = await buildMcpServer({
     userId: input.userId,
-    scopes: [...COPILOT_SCOPES],
-    clientName: "copilot",
+    scopes: [...profile.scopes],
+    // Request provenance, never a job stamp: the copilot's own sub-requests
+    // start no jobs on the studio surface, and every job the rail starts is
+    // submitted by the editor as a manual press would be.
+    clientName: profile.clientName,
     fastify: input.fastify,
     projectScope: { projectId: input.projectId },
     firstParty: input.firstParty,
@@ -138,19 +179,34 @@ export async function runCopilotTurn(input: RunTurnInput): Promise<TurnOutcome> 
   }, HEARTBEAT_INTERVAL_MS)
 
   try {
-    const [budget, preamble, priorRows, tools] = await Promise.all([
+    const isStudio = profile.surface === "studio"
+    const [budget, context, priorRows, tools, tails] = await Promise.all([
       resolveTurnBudget(input.reservedCredits),
-      buildContextPreamble({
-        userId: input.userId,
-        workflowId: input.workflowId,
-        workflowName: input.workflowName,
-        version: input.version,
-        nodes: input.nodes,
-        edges: input.edges,
-      }),
+      isStudio
+        ? buildStudioPreamble({
+            invoker,
+            userId: input.userId,
+            productionId: input.workflowId,
+            focus: input.focus ?? null,
+          })
+        : buildContextPreamble({
+            userId: input.userId,
+            workflowId: input.workflowId,
+            workflowName: input.workflowName,
+            version: input.version,
+            nodes: input.nodes,
+            edges: input.edges,
+          }),
       listRecentMessages(input.thread.id, TURN_CAPS.historyMessageLimit),
-      buildToolDefinitions(invoker),
+      buildToolSurface(invoker, profile),
+      isStudio ? studioSkillTails(invoker, input.req.log) : Promise.resolve(undefined),
     ])
+
+    // A deployment that does not serve the production has no turn to run: the
+    // verdict is reached here, before a token is spent, and the reservation
+    // comes back untouched.
+    if (typeof context !== "string" && context.available === false) throw new TurnVerdict(context.code)
+    const preamble = typeof context === "string" ? context : context.text
 
     const ctx: CopilotToolContext = {
       userId: input.userId,
@@ -207,8 +263,8 @@ export async function runCopilotTurn(input: RunTurnInput): Promise<TurnOutcome> 
 
     result = await runAgentLoop({
       tier: { ...COPILOT_TIERS[input.tier ?? DEFAULT_COPILOT_TIER], caps: input.caps },
-      system: buildSystemPrompt(),
-      tools,
+      system: buildSystemPrompt(profile.surface, tails),
+      tools: tools.definitions,
       history: buildHistory(priorRows),
       userContent: userContent as Anthropic.Messages.ContentBlockParam[],
       budget,
@@ -216,7 +272,26 @@ export async function runCopilotTurn(input: RunTurnInput): Promise<TurnOutcome> 
       // `created` starts at zero per TURN, which is what bounds it: a fresh
       // object here means one conversation cannot accumulate creations across
       // messages by keeping the loop alive.
-      deps: { ctx: { ...ctx, emit: emitWithVersion }, invoker, addedNodeTypes, wiredAssets, created: { count: 0 } },
+      deps: {
+        ctx: { ...ctx, emit: emitWithVersion },
+        invoker,
+        addedNodeTypes,
+        wiredAssets,
+        created: { count: 0 },
+        surface: profile,
+        // Per-turn state, never a module: two concurrent turns share nothing.
+        // What list time learned about the tools rides here because the
+        // definitions no longer say it — the marks are dropped with `_meta`.
+        ...(isStudio
+          ? {
+              studio: {
+                tools: { confirmClasses: tools.confirmClasses, quotable: tools.quotable },
+                proposed: false,
+                previewUnavailable: false,
+              },
+            }
+          : {}),
+      },
       events: {
         onToken: (delta) => input.emit({ type: "token", data: { text: delta } }),
         onToolCall: (event) => input.emit({ type: "tool_call", data: { ...event } }),
@@ -236,17 +311,25 @@ export async function runCopilotTurn(input: RunTurnInput): Promise<TurnOutcome> 
       isCancelRequested: () => isCancelRequested(input.turn.id),
     })
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    failure = { code: "llm_error", message: TURN_ERROR_TEXT.llm_error! }
-    input.req.log.error({ err, turnId: input.turn.id }, "[copilot] turn failed")
-    void insertAppReport({
-      node: "workflow-copilot",
-      kind: "copilot-turn-failure",
-      severity: "error",
-      title: "Copilot turn failed",
-      payload: { turnId: input.turn.id, threadId: input.thread.id, error: message.slice(0, 500) },
-      userId: input.userId,
-    })
+    if (err instanceof TurnVerdict) {
+      // Not a fault, so not an incident: the deployment cannot serve this
+      // conversation's subject, and the person is told so in the words the
+      // wire carries. `result` stays null, which is what refunds the
+      // reservation below — nothing was spent, nothing is charged.
+      failure = { code: err.code, message: TURN_ERROR_TEXT[err.code]! }
+    } else {
+      const message = err instanceof Error ? err.message : String(err)
+      failure = { code: "llm_error", message: TURN_ERROR_TEXT.llm_error! }
+      input.req.log.error({ err, turnId: input.turn.id }, "[copilot] turn failed")
+      void insertAppReport({
+        node: "workflow-copilot",
+        kind: "copilot-turn-failure",
+        severity: "error",
+        title: "Copilot turn failed",
+        payload: { turnId: input.turn.id, threadId: input.thread.id, error: message.slice(0, 500) },
+        userId: input.userId,
+      })
+    }
   } finally {
     clearInterval(heartbeat)
     input.signal.removeEventListener("abort", forward)
@@ -296,12 +379,18 @@ export async function runCopilotTurn(input: RunTurnInput): Promise<TurnOutcome> 
   })
   await bumpThreadActivity(input.thread.id, 1)
 
+  // The two proposal shapes are told apart by the discriminant the studio's
+  // own carries: a run proposal deliberately has none, and only an action
+  // proposal reaches the wire as a card.
+  const proposal = result?.proposal && "kind" in result.proposal ? result.proposal : undefined
+
   return {
     status,
     assistantMessageId,
     finalVersion,
     creditsCharged,
     usage,
+    ...(proposal ? { proposal } : {}),
     ...(failure ? { error: failure } : {}),
   }
 }

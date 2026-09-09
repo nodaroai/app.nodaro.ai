@@ -36,7 +36,11 @@ vi.mock("@/lib/mcp/invoke.js", () => ({
 vi.mock("../budget.js", () => ({ resolveTurnBudget: async () => ({ limitUsd: 1, reservedCredits: 150 }) }))
 vi.mock("../context-snapshot.js", () => ({ buildContextPreamble: async () => "<workflow-context>ctx</workflow-context>" }))
 vi.mock("../system-prompt.js", () => ({ buildSystemPrompt: () => "system" }))
-vi.mock("../tools/registry.js", () => ({ buildToolDefinitions: async () => [] }))
+// The turn asks for the SURFACE's tools now: the definitions plus the two
+// things list time learns and the definitions no longer say.
+vi.mock("../tools/registry.js", () => ({
+  buildToolSurface: async () => ({ definitions: [], confirmClasses: new Map(), quotable: new Set() }),
+}))
 vi.mock("../store.js", () => ({
   appendMessage: vi.fn().mockResolvedValue({ id: "msg1" }),
   bumpThreadActivity: vi.fn(),

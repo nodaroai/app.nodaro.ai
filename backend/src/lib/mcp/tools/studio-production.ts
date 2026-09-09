@@ -57,6 +57,21 @@ export interface RegisterStudioProductionToolsOpts {
   fastify: FastifyInstance
 }
 
+/**
+ * Does this answer carry the mark of a preview?
+ *
+ * The literal is the whole proof: a service that previewed says so in the
+ * answer, and one that merely ignored the flag cannot. Read off the unwrapped
+ * body rather than the status, because both paths answer 200.
+ */
+function isPreview(body: string): boolean {
+  try {
+    return (unwrap<{ dryRun?: unknown }>(body) as { dryRun?: unknown })?.dryRun === true
+  } catch {
+    return false
+  }
+}
+
 export function registerStudioProductionTools(opts: RegisterStudioProductionToolsOpts): void {
   const { server, session, fastify } = opts
 
@@ -200,6 +215,13 @@ export function registerStudioProductionTools(opts: RegisterStudioProductionTool
             .optional()
             .describe("summary = counts + active urls (default); full = every result."),
           shot_id: z.string().optional().describe("Narrow to one shot."),
+          reconcile: z
+            .boolean()
+            .optional()
+            .describe(
+              "false: read without landing finished jobs \u2014 for an in-app " +
+                "editor that lands its own. Default true.",
+            ),
         },
         // NOT `readOnlyHint: true`, even though this is the read of the loop:
         // with write scope the call below lands finished work into the
@@ -233,7 +255,12 @@ export function registerStudioProductionTools(opts: RegisterStudioProductionTool
         // editor's own autosave will do it) each leave a read the GET can serve
         // perfectly well. Anything else IS reported: reading past it would hand
         // back a view that silently omits work which had in fact finished.
-        if (passesGate(session, writeGate)) {
+        // `reconcile: false` is the in-app editor's read: that editor is open
+        // and lands everything it started, so a second lander here would land
+        // the same finished work again under its own reading of it. Default
+        // true \u2014 every client that does not say otherwise gets today's
+        // behaviour.
+        if (args.reconcile !== false && passesGate(session, writeGate)) {
           const landed = await studioInject(fastify, session, {
             method: "POST",
             url: `/v1/studio/productions/${id}/reconcile`,
@@ -438,19 +465,68 @@ export function registerStudioProductionTools(opts: RegisterStudioProductionTool
               "Refuse with a conflict instead of rebasing when the production " +
                 "moved. Needs `expected_version`.",
             ),
+          dry_run: z
+            .boolean()
+            .optional()
+            .describe(
+              "PREVIEW the batch instead of applying it: what each operation " +
+                "would do, at which version, and nothing written. Use it to " +
+                "show a person the change before they accept it.",
+            ),
         },
         annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
       },
       async (args) => {
+        const url = `/v1/studio/productions/${encodeURIComponent(args.production_id)}/ops`
+        const batch = studioPayload(session, {
+          // Forwarded untouched — this layer never inspects an operation.
+          ops: args.ops,
+          ...(args.expected_version !== undefined ? { baseVersion: args.expected_version } : {}),
+          ...(args.strict !== undefined ? { strict: args.strict } : {}),
+        })
+
+        if (args.dry_run !== true) {
+          const res = await studioInject(fastify, session, { method: "POST", url, payload: batch })
+          if (res.statusCode >= 400) return studioError(res.statusCode, res.body)
+          return viewResult(res.body)
+        }
+
+        // A preview has to FAIL CLOSED, and asking for one is not proof of
+        // getting one: this body is a strip-mode body, so a service that
+        // predates the flag drops it and APPLIES the batch — the exact write
+        // the preview existed to prevent, discovered only from its answer.
+        //
+        // So the capability is proved first, with the one batch that has never
+        // written anything: the EMPTY one, which the route has always answered
+        // before it touches the document. A service that understands previews
+        // answers that ping with the literal below; one that does not answers
+        // its ordinary empty-batch reply, and the caller's real batch is never
+        // sent at all. It carries no version and no strict flag, so the ping
+        // itself cannot conflict.
+        const ping = await studioInject(fastify, session, {
+          method: "POST",
+          url,
+          payload: studioPayload(session, { ops: [], dryRun: true }),
+        })
+        if (ping.statusCode >= 400) return studioError(ping.statusCode, ping.body)
+        if (!isPreview(ping.body)) {
+          return studioError(
+            409,
+            JSON.stringify({
+              error: {
+                code: "studio_preview_unavailable",
+                message:
+                  "This deployment's studio service cannot preview a change yet, so nothing was sent. " +
+                  "Apply the batch without `dry_run`, or ask for the service to be updated.",
+              },
+            }),
+          )
+        }
+
         const res = await studioInject(fastify, session, {
           method: "POST",
-          url: `/v1/studio/productions/${encodeURIComponent(args.production_id)}/ops`,
-          payload: studioPayload(session, {
-            // Forwarded untouched — this layer never inspects an operation.
-            ops: args.ops,
-            ...(args.expected_version !== undefined ? { baseVersion: args.expected_version } : {}),
-            ...(args.strict !== undefined ? { strict: args.strict } : {}),
-          }),
+          url,
+          payload: { ...batch, dryRun: true },
         })
         if (res.statusCode >= 400) return studioError(res.statusCode, res.body)
         return viewResult(res.body)

@@ -7,6 +7,14 @@ import type { Scope } from "../../lib/scopes.js"
 export const COPILOT_FEATURE = "workflow-copilot" as const
 
 /**
+ * Which surface a thread runs on. Declared beside the row it types, and
+ * re-exported here so every later reader takes it with the rest of the
+ * per-turn bundle (`surfaces.ts`) rather than reaching into the store for a
+ * type.
+ */
+export type { CopilotSurface } from "./store.js"
+
+/**
  * The model ladder — the v1 plan's dormant design, activated. THREE tiers,
  * Claude-family only (the loop runs on the direct Anthropic SDK; KIE's proxy
  * mangles tool_use, and a cross-vendor loop would be a different loop), chosen
