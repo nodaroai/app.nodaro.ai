@@ -1,3 +1,5 @@
+import type { StudioOpsResponse } from "./resources/studio-productions.js"
+
 export class NodaroError extends Error {
   constructor(
     message: string,
@@ -174,6 +176,81 @@ export class JobAbortedError extends NodaroError {
   constructor(message = "Aborted", public readonly jobId?: string) {
     super(message, "job_aborted", 0)
     this.name = "JobAbortedError"
+  }
+}
+
+/**
+ * A batch preview was asked for and this deployment cannot give one, so
+ * NOTHING was sent: the batch is still unapplied and the production untouched.
+ *
+ * A preview is two requests because the route's body is parsed in strip mode —
+ * a deployment that predates the preview silently DROPS the flag and APPLIES
+ * the batch. So the SDK asks with an EMPTY batch first and sends the real one
+ * only when that answer carries the `dryRun` marker. This is what it throws
+ * when the answer does not: whatever the older deployment made of an empty
+ * batch, the caller's batch never left.
+ *
+ * The remedy is a deployment that serves the preview — there is nothing to
+ * retry here. To apply the batch instead, send it without the flag.
+ *
+ * A deployment that REFUSES the empty batch outright throws its own error
+ * instead of this one, which is the right way round: the route's message says
+ * more than "unavailable" does.
+ *
+ * Not an HTTP error: the request itself succeeded and answered the older shape.
+ * `status` is 0; catch by type/`code`.
+ */
+export class StudioPreviewUnavailable extends NodaroError {
+  constructor(
+    message = "This deployment does not preview operation batches; nothing was sent",
+  ) {
+    super(message, "studio_preview_unavailable", 0)
+    this.name = "StudioPreviewUnavailable"
+  }
+}
+
+/**
+ * A batch preview was asked for and the batch was APPLIED instead. The
+ * production is written; this is the opposite of {@link
+ * StudioPreviewUnavailable}, where nothing was sent.
+ *
+ * How it happens: the preview's proving ping and the batch are two requests,
+ * and a fleet mid-rollout can serve them from different deployments. The ping
+ * answers the marker, the batch reaches a deployment that predates the preview,
+ * parses in strip mode, drops the flag and writes. The SDK cannot recall that
+ * request — by the time the answer comes back the change has landed — so it
+ * refuses to call the result a preview, which is the only thing still in its
+ * gift. `receipts` and `warnings` are on both shapes, so an unchecked reply
+ * would have shown a person what ALREADY happened under the heading of what
+ * would.
+ *
+ * `applied` is what the route answered: the ordinary apply reply, whose
+ * `production` and `version` are now the truth. Adopt them the way a plain
+ * apply's caller does — do NOT re-send the batch, and do not present it for
+ * approval.
+ *
+ * Not an HTTP error: the request succeeded, at the wrong thing. `status` is 0.
+ */
+export class StudioPreviewAppliedError extends NodaroError {
+  constructor(
+    /**
+     * The apply reply the route sent back, as it sent it. An answer this
+     * package does not recognise arrives here unchanged rather than being
+     * dressed up: it is what the deployment said about a batch it took.
+     *
+     * `undefined` when the answer carried no body at all — a 204, an empty
+     * envelope. The refusal still fires, because a non-preview answer is never
+     * handed back as a preview, but there is nothing to report and the SDK will
+     * not invent it: whether the batch was applied is unknown from here, and
+     * the caller settles it by re-reading the production.
+     */
+    public readonly applied: StudioOpsResponse | undefined,
+    message = applied
+      ? "Asked for a preview and this deployment APPLIED the batch; the change is written — see `applied`"
+      : "Asked for a preview and this deployment answered with neither one nor a body to read; the batch may have been applied — re-read the production before deciding anything",
+  ) {
+    super(message, "studio_preview_applied", 0)
+    this.name = "StudioPreviewAppliedError"
   }
 }
 

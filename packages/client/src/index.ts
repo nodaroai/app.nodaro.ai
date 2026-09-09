@@ -23,6 +23,8 @@ export {
   JobAbortedError,
   JobHeldError,
   StudioOpError,
+  StudioPreviewAppliedError,
+  StudioPreviewUnavailable,
   throwFromResponse,
 } from "./errors.js"
 export type { WorkflowConflictCode } from "./errors.js"
@@ -126,6 +128,8 @@ export {
   type StudioOpsRequest,
   type StudioOpsReceipt,
   type StudioOpsResponse,
+  type StudioOpsDryRunReceipt,
+  type StudioOpsDryRunResponse,
   type StudioReconcileResponse,
   type StudioDescribeRequest,
   type StudioGenerateRequest,
@@ -511,3 +515,25 @@ export type { RetainedScene3DEditParams, RetainedScene3DEditResult } from "./res
 
 export { type StudioDocumentJson, type StudioProductionCapabilities, type StudioKeyframeRecord, type StudioProductionRecord, type StudioProductionReply, type StudioEditInput, type StudioKeyframeGenerationInput, type StudioKeyframeAcceptanceInput, type StudioShotGenerationInput, type StudioGenerationReply } from "./resources/studio.js"
 export type { Scene3DDelivery, Scene3DDeliveryAsset } from "./resources/scene3d-types.js"
+
+export { CopilotResource } from "./resources/copilot.js"
+export type {
+  CopilotThread,
+  CopilotThreadWorkflow,
+  CopilotSurface,
+  CopilotRunMode,
+  CopilotModelTier,
+  CopilotMessage,
+  CopilotMessagePart,
+  CreateCopilotThreadInput,
+  CopilotStreamOptions,
+  CopilotStreamFrame,
+  CopilotMetadataFrameData,
+  CopilotToolCallFrameData,
+  CopilotWorkflowUpdateFrameData,
+  CopilotWorkflowCreatedFrameData,
+  CopilotRunProposalFrameData,
+  CopilotRunProposalNode,
+  CopilotWiredAsset,
+  CopilotMemorySavedFrameData,
+} from "./resources/copilot.js"
