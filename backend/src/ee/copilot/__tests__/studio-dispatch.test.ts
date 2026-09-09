@@ -544,4 +544,32 @@ describe("the rest of the surface", () => {
     expect(outcome?.isError).toBe(true)
     expect(h.calls).toEqual([])
   })
+
+  /**
+   * The ordinary dispatch path keeps a belt of its own: a name that is on this
+   * surface's allowlist but is not free is refused there before the invoker is
+   * touched. That belt cannot fire today, and this is why — every such name is
+   * taken by this branch first. Which is a property, not a coincidence, and a
+   * property nobody checks is one that stops being true quietly: the day a tool
+   * is added to the family without a case here, the belt goes from unreachable
+   * to load-bearing, and that is the day this test says so.
+   */
+  it("takes every tool that is not free, so the ordinary path only ever sees free ones", async () => {
+    const profile = copilotSurface("studio")
+    const notFree = [...profile.mcpAllowlist].filter((name) => !profile.freeTools.has(name))
+    expect(notFree.length).toBeGreaterThan(0)
+
+    for (const name of notFree) {
+      const h = harness()
+      const outcome = await dispatchStudioTool(h.deps, name, {})
+      expect(outcome, `${name} would fall through to the ordinary path`).not.toBeNull()
+    }
+
+    // …and the free ones are left to it, which is what makes the line above a
+    // division of labour rather than this branch simply swallowing everything.
+    for (const name of profile.freeTools) {
+      const h = harness()
+      expect(await dispatchStudioTool(h.deps, name, {}), `${name} was intercepted`).toBeNull()
+    }
+  })
 })
