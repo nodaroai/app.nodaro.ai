@@ -220,4 +220,16 @@ describe("media.downloadVideoProgress", () => {
     }
     await expect(iterate()).rejects.toThrow("Download not found or expired")
   })
+  it("names THIS stream when the response carries no body", async () => {
+    // The shared reader is told what to call the stream; the caller of a
+    // progress endpoint should read about a progress stream, not a generic one.
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(Promise.resolve({ ok: true, status: 200, body: null } as unknown as Response))
+    const c = make(fetchMock)
+    const iterate = async () => {
+      for await (const ev of c.media.downloadVideoProgress("dl-3")) void ev
+    }
+    await expect(iterate()).rejects.toThrow("progress stream has no response body")
+  })
 })
