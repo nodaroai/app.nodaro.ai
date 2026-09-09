@@ -1,5 +1,5 @@
 import type { NodaroClient } from "../client.js"
-import { NodaroError, throwFromResponse } from "../errors.js"
+import { readSseStream } from "../sse.js"
 
 /**
  * Media ingestion + trimming — the source-preparation steps a Voice Changer Pro
@@ -50,48 +50,10 @@ export class MediaResource {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       signal: opts.signal,
     })
-    if (!res.ok) {
-      let errBody: Record<string, unknown> = {}
-      try {
-        errBody = (await res.json()) as Record<string, unknown>
-      } catch {
-        // Empty/non-JSON body — fall through with empty errBody
-      }
-      throwFromResponse(res.status, errBody)
-    }
-    if (!res.body) {
-      throw new NodaroError("progress stream has no response body", "empty_stream", res.status)
-    }
-
-    // Minimal SSE parse: the route emits only `data: <json>\n\n` frames (no
-    // event/id fields), so split on blank lines and JSON-parse the data lines.
-    const reader = res.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ""
-    try {
-      for (;;) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        let sep: number
-        while ((sep = buffer.indexOf("\n\n")) >= 0) {
-          const frame = buffer.slice(0, sep)
-          buffer = buffer.slice(sep + 2)
-          for (const line of frame.split("\n")) {
-            if (!line.startsWith("data:")) continue
-            try {
-              yield JSON.parse(line.slice(5).trim()) as DownloadVideoProgress
-            } catch {
-              // Skip malformed frames — the next tick re-reports full state.
-            }
-          }
-        }
-      }
-    } finally {
-      // Ends the HTTP request when the consumer breaks out of the loop early.
-      reader.releaseLock()
-      await res.body.cancel().catch(() => {})
-    }
+    // The shared reader owns the non-OK throw, the empty-body guard, the frame
+    // parse and the cancel-on-early-exit — this route emits the same
+    // `data: <json>` frames every other stream here does.
+    yield* readSseStream<DownloadVideoProgress>(res, { label: "progress stream" })
   }
 
   /**
