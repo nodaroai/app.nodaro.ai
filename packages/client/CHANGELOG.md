@@ -1,5 +1,16 @@
 # @nodaro/sdk
 
+## 2.7.0
+
+### Minor Changes
+
+- ef73308: Add `media.suggestOverlayPlacement()` — ask a vision model where one overlay layer should sit on a base image (`POST /v1/image-overlay/suggest-placement`). Answers synchronously with `anchor` / `x` / `y` / `width` in `media.imageOverlay()`'s own percent units plus a one-sentence reason, so the box drops straight onto a layer. The `OverlayPlacement` type is exported too.
+
+### Patch Changes
+
+- Updated dependencies [ef73308]
+  - @nodaro/shared@3.7.0
+
 ## 2.6.0
 
 ### Minor Changes
