@@ -39,6 +39,10 @@ import {
   threadAtTurnCap,
   updateThreadSettings,
   threadAllowsPublishing,
+  threadSurface,
+  DEFAULT_THREAD_SURFACE,
+  THREAD_SURFACES,
+  ThreadSurfaceNotPromotedError,
   type CopilotThread,
 } from "../copilot/store.js"
 import { refundReservedCreditsForJob } from "../../lib/credits-job-lifecycle.js"
@@ -46,11 +50,22 @@ import { deleteMemory, listMemories } from "../copilot/memories.js"
 import { toDisplayMessages } from "../copilot/display.js"
 import { runtimeSurfaceProfile } from "../../lib/surface-profile.js"
 
+/**
+ * STRIP mode, deliberately — `z.object` and never `.strict()`.
+ *
+ * A deployment that predates `surface` answers this same request by dropping
+ * the key and handing back a thread with no `surface` in it, which is exactly
+ * how an operator tells the two versions apart mid-rollout. Made strict, the
+ * older build would 400 instead and the caller could not tell a refused
+ * surface from a refused request.
+ */
 const createThreadBody = z
   .object({
     workflowId: z.string().uuid().optional(),
     prompt: z.string().min(1).max(THREAD_CAPS.messageMaxChars).optional(),
     name: z.string().min(1).max(200).optional(),
+    /** Which assistant is asking. Absent is the canvas — see `threadSurface`. */
+    surface: z.enum(THREAD_SURFACES).optional(),
   })
   .refine((b) => Boolean(b.workflowId) || Boolean(b.prompt), {
     message: "Provide workflowId (existing workflow) or prompt (new workflow)",
@@ -246,7 +261,12 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
           seededWorkflow = true
         }
 
-        const existing = await findActiveThread(userId, workflow.id)
+        // One workflow can now carry a live thread per assistant, so the
+        // lookup names the one this caller is asking for — unnamed, it would
+        // hand back whichever thread happened to be created first and the
+        // second assistant would talk into the first one's conversation.
+        const surface = parsed.data.surface ?? DEFAULT_THREAD_SURFACE
+        const existing = await findActiveThread(userId, workflow.id, surface)
         // `seededWorkflow` is what lets the sweep tell a workflow this
         // handshake CREATED from one the user opened the copilot on (#904).
         const thread =
@@ -255,6 +275,7 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
             createdWorkflow: seededWorkflow,
             // The admin's default tier, baked in at birth (see createThread).
             modelTier: await resolveDefaultTier(),
+            surface,
           }))
         return reply.status(existing ? 200 : 201).send({
           data: {
@@ -263,6 +284,15 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
           },
         })
       } catch (err) {
+        // This code knows about a surface the database it is pointed at does
+        // not have yet. Service-unavailable is the honest answer — the thread
+        // cannot be stored as what it is, and storing it as anything else
+        // would file it under the wrong assistant.
+        if (err instanceof ThreadSurfaceNotPromotedError) {
+          return reply.status(503).send({
+            error: { code: "surface_not_promoted", message: "This assistant is not available on this deployment yet." },
+          })
+        }
         return sendInternalError(reply, req, err, "Failed to start a copilot conversation")
       }
     },
@@ -273,12 +303,28 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
   // -------------------------------------------------------------------------
   app.get("/v1/copilot/threads", async (req, reply) => {
     if (!requireJwt(req, reply)) return
-    const workflowId = (req.query as { workflowId?: string }).workflowId
+    const query = req.query as { workflowId?: string; surface?: string }
+    const workflowId = query.workflowId
     if (!workflowId) {
       return reply.status(400).send({ error: { code: "validation_error", message: "workflowId is required" } })
     }
-    const thread = await findActiveThread(req.userId!, workflowId)
-    return reply.send({ data: { thread: thread ? publicThread(thread) : null } })
+    // Refused rather than defaulted: a word we do not know is a caller asking
+    // for an assistant this build does not have, and answering it with the
+    // canvas thread would quietly hand it the wrong conversation.
+    const requested = query.surface ?? DEFAULT_THREAD_SURFACE
+    const surface = THREAD_SURFACES.find((known) => known === requested)
+    if (!surface) {
+      return reply.status(400).send({ error: { code: "validation_error", message: "Unknown surface" } })
+    }
+    // This lookup THROWS on a store error now, rather than reporting a failed
+    // read as "no conversation here", which is how a duplicate thread got
+    // created in the first place.
+    try {
+      const found = await findActiveThread(req.userId!, workflowId, surface)
+      return reply.send({ data: { thread: found ? publicThread(found) : null } })
+    } catch (err) {
+      return sendInternalError(reply, req, err, "Failed to load your copilot conversation")
+    }
   })
 
   // -------------------------------------------------------------------------
@@ -316,6 +362,21 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
       return reply.status(400).send({ error: { code: "validation_error", message: "Invalid body" } })
     }
     const { id } = req.params as { id: string }
+    // The ONE home of this refusal. The unattended mode lets a thread run the
+    // graph on its own, which only the canvas has the surface to show and to
+    // stop — so a thread belonging to another assistant may not enter it. Only
+    // this request shape needs the row, so only it pays for the read; nothing
+    // is needed where a thread is CREATED, because the column has defaulted to
+    // the asking mode since the table was made.
+    if (parsed.data.runMode === "auto") {
+      const thread = await getThreadForUser(id, req.userId!)
+      if (!thread) return reply.status(404).send({ error: { code: "not_found", message: "Thread not found" } })
+      if (threadSurface(thread) !== DEFAULT_THREAD_SURFACE) {
+        return reply.status(409).send({
+          error: { code: "run_mode_locked", message: "This assistant always asks before it runs anything." },
+        })
+      }
+    }
     const updated = await updateThreadSettings(id, req.userId!, {
       ...(parsed.data.runMode ? { run_mode: parsed.data.runMode } : {}),
       ...(parsed.data.autoRunLimitCredits !== undefined ? { auto_run_limit_credits: parsed.data.autoRunLimitCredits } : {}),
@@ -418,6 +479,20 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
       }
       if (threadAtTurnCap(thread)) {
         return reply.status(409).send({ error: { code: "thread_cap_reached", message: "This conversation reached its length limit. Start a new one." } })
+      }
+      // A conversation belonging to another assistant, whose own message
+      // handler is not deployed here yet. It sits after the answers that are
+      // true whatever is deployed — a closed conversation is closed, a full
+      // one is full — and before everything that COSTS something: the workflow
+      // read, the stale-turn heal, the job row, the reservation and the turn
+      // row. So the window between this change and that one cannot leave a
+      // half-run turn or held credits behind. Read through the helper: a row
+      // older than the column carries no surface at all, and every one of
+      // those is the canvas.
+      if (threadSurface(thread) !== DEFAULT_THREAD_SURFACE) {
+        return reply.status(503).send({
+          error: { code: "surface_unavailable", message: "This assistant is not available on this deployment yet." },
+        })
       }
 
       const workflow = await loadOwnedWorkflow(thread.workflow_id, userId)
@@ -656,6 +731,11 @@ function publicThread(thread: CopilotThread): Record<string, unknown> {
     // Column-tolerant: standard until migration 344 reaches the shared DB.
     modelTier: resolveCopilotTier((thread as { model_tier?: unknown }).model_tier),
     allowPublishing: threadAllowsPublishing(thread),
+    // Through the helper, never raw: a row older than the column carries no
+    // surface, and every one of those is the canvas. Always emitted, so its
+    // ABSENCE tells an operator this answer came from a build that has never
+    // heard of a second assistant.
+    surface: threadSurface(thread),
     autoRunLimitCredits: thread.auto_run_limit_credits,
     userTurnCount: thread.user_turn_count,
     lastMessageAt: thread.last_message_at,

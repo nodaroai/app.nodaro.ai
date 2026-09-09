@@ -12,10 +12,55 @@ import { THREAD_CAPS, TURN_HEARTBEAT_STALE_MS } from "./constants.js"
 export type TurnStatus = "running" | "completed" | "failed" | "cancelled" | "capped"
 export type RunMode = "ask" | "auto"
 
+/**
+ * Which assistant a thread belongs to.
+ *
+ * The canvas assistant and the studio editor's assistant talk about the SAME
+ * workflow, so a live thread is unique per (user, workflow, SURFACE) — see
+ * migration 404. Declared here, beside the row type it types.
+ */
+export const THREAD_SURFACES = ["workflow", "studio"] as const
+export type CopilotSurface = (typeof THREAD_SURFACES)[number]
+
+/**
+ * The canvas assistant's surface, and the column's own DEFAULT.
+ *
+ * Also what an ABSENT value means: a row written before migration 404 carries
+ * no surface at all, and every one of those is a canvas thread.
+ */
+export const DEFAULT_THREAD_SURFACE: CopilotSurface = "workflow"
+
+/**
+ * The surface column is not on this database yet.
+ *
+ * Named and distinct because the route layer has to turn it into an honest
+ * "not promoted yet" answer: this code knows about a second assistant, the
+ * database it is pointed at does not, and service-unavailable is the only true
+ * reply. The soft alternatives are both wrong — retrying without the column
+ * would file the second assistant's thread as a canvas one, and reading
+ * threads unfiltered to work around it is the duplicate this whole change
+ * exists to prevent.
+ */
+export class ThreadSurfaceNotPromotedError extends Error {
+  constructor(public readonly surface: CopilotSurface) {
+    super(`Copilot thread surface "${surface}" is not available on this database yet`)
+    this.name = "ThreadSurfaceNotPromotedError"
+  }
+}
+
 export interface CopilotThread {
   id: string
   user_id: string
   workflow_id: string
+  /**
+   * Which assistant this thread belongs to.
+   *
+   * OPTIONAL for the same reason `allow_publishing` is: a row written before
+   * the column existed simply does not carry it, and neither does any row read
+   * before migration 404 reaches the shared database. Read it through
+   * `threadSurface`, never directly — absent means the canvas.
+   */
+  surface?: CopilotSurface
   run_mode: RunMode
   /**
    * The user let this thread author social-publishing nodes.
@@ -45,6 +90,18 @@ export interface CopilotThread {
  */
 export function threadAllowsPublishing(thread: Pick<CopilotThread, "allow_publishing">): boolean {
   return thread.allow_publishing === true
+}
+
+/**
+ * The surface of a thread row, as the row can actually arrive.
+ *
+ * A named function for the same reason as the one above: the DEFAULT is the
+ * whole point. Absent (a row older than the column, or a read taken before the
+ * migration was promoted) and unrecognised both mean the canvas — the only
+ * kind of thread that existed when those rows were written.
+ */
+export function threadSurface(thread: { surface?: unknown }): CopilotSurface {
+  return THREAD_SURFACES.find((known) => known === thread.surface) ?? DEFAULT_THREAD_SURFACE
 }
 
 export interface CopilotTurn {
@@ -89,8 +146,32 @@ export interface CopilotMessageRow {
 // the whole copilot down. A missing column is simply absent from the row.
 // Nothing on this table is secret, so there is nothing to narrow away from.
 const THREAD_COLUMNS = "*"
-/** PostgREST's code for "that column is not on this table (yet)". */
-const UNDEFINED_COLUMN = "42703"
+/**
+ * The two ways a database says "that column is not on this table (yet)".
+ *
+ * They are not interchangeable, and the one that matters below is the SECOND:
+ *   - 42703:    undefined column in a filter (raw Postgres)
+ *   - PGRST204: unknown column in a write payload (PostgREST schema cache)
+ * Everything here that has to notice a missing column notices it on an INSERT
+ * that NAMES one, and a hosted database answers that from its schema cache
+ * with PGRST204. Recognising 42703 alone left every refusal below unreachable
+ * exactly where it exists to fire. Both are accepted, as elsewhere in the repo.
+ */
+const UNDEFINED_COLUMN_CODES = new Set(["42703", "PGRST204"])
+
+function isUndefinedColumn(error: unknown): boolean {
+  return UNDEFINED_COLUMN_CODES.has((error as { code?: string } | null)?.code ?? "")
+}
+
+/**
+ * How many live threads one workflow can hand back.
+ *
+ * The unique index admits one per surface, so a handful covers every live
+ * thread a workflow can have with room for a surface added later. It is a PAGE
+ * and not an unbounded read: a lookup must never turn into a scan of a user's
+ * history, however many rows a future bug leaves behind.
+ */
+const ACTIVE_THREAD_PAGE = 10
 const TURN_COLUMNS =
   "id, thread_id, user_id, status, heartbeat_at, model_id, job_id, base_version, final_version, iterations, tool_calls, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, cost_usd, credits_charged, cancel_requested_at, error, started_at, finished_at"
 
@@ -108,15 +189,34 @@ export async function getThreadForUser(threadId: string, userId: string): Promis
   return (data as CopilotThread | null) ?? null
 }
 
-export async function findActiveThread(userId: string, workflowId: string): Promise<CopilotThread | null> {
-  const { data } = await supabase
+/**
+ * The user's live thread for this workflow ON THIS SURFACE.
+ *
+ * Read surface-BLIND and picked in code, for two reasons that pull the same
+ * way. A `surface = …` filter is an undefined column on a database that has
+ * not taken migration 404 yet, which would take the canvas assistant down for
+ * the whole pre-promotion window. And a single-row read over a workflow that
+ * now holds two live threads ERRORS — an error that, discarded, reads as "no
+ * thread at all", so the caller mints a duplicate and the unique index refuses
+ * the insert. So: a page of rows, the surface picked here, and a store error
+ * thrown rather than swallowed.
+ */
+export async function findActiveThread(
+  userId: string,
+  workflowId: string,
+  surface: CopilotSurface,
+): Promise<CopilotThread | null> {
+  const { data, error } = await supabase
     .from("copilot_threads")
     .select(THREAD_COLUMNS)
     .eq("user_id", userId)
     .eq("workflow_id", workflowId)
     .is("archived_at", null)
-    .maybeSingle()
-  return (data as CopilotThread | null) ?? null
+    .order("created_at", { ascending: false })
+    .limit(ACTIVE_THREAD_PAGE)
+  if (error) throw new Error(`findActiveThread: ${error.message}`)
+  const rows = (data as CopilotThread[] | null) ?? []
+  return rows.find((row) => threadSurface(row) === surface) ?? null
 }
 
 export async function countActiveThreads(userId: string): Promise<number> {
@@ -136,14 +236,14 @@ export async function countActiveThreads(userId: string): Promise<number> {
  * Tolerant of the column not being there yet: reads on this table use a star
  * select for that reason, but an INSERT names its columns, and staging shares
  * the production database — so between the dev merge and the promotion, a
- * column-naming insert would 42703 and take copilot thread creation down
- * entirely. One retry without the flag, and the worst case is a workflow the
- * sweep declines to touch.
+ * column-naming insert would be refused outright and take copilot thread
+ * creation down entirely. One retry without the flag, and the worst case is a
+ * workflow the sweep declines to touch.
  */
 export async function createThread(
   userId: string,
   workflowId: string,
-  opts: { createdWorkflow?: boolean; modelTier?: string } = {},
+  opts: { createdWorkflow?: boolean; modelTier?: string; surface?: CopilotSurface } = {},
 ): Promise<CopilotThread> {
   // `model_tier` (migration 344) is on production, so it is named directly —
   // unlike `created_workflow` (349), which the retry below strips when a
@@ -153,16 +253,35 @@ export async function createThread(
   // the caller and never re-defaulted).
   const base: Record<string, unknown> = { user_id: userId, workflow_id: workflowId }
   if (opts.modelTier) base.model_tier = opts.modelTier
+  // `surface` (migration 404) is named only when it is NOT the column's own
+  // default. A canvas thread therefore inserts exactly what it always did, so
+  // a database that has not taken 404 yet still creates one — while a thread
+  // of any other surface MUST name it, because a row that silently defaulted
+  // to the canvas would be the duplicate the wider index forbids.
+  const surface = opts.surface ?? DEFAULT_THREAD_SURFACE
+  if (surface !== DEFAULT_THREAD_SURFACE) base.surface = surface
   const insert = async (row: Record<string, unknown>) =>
     supabase.from("copilot_threads").insert(row).select(THREAD_COLUMNS).single()
 
   let { data, error } = opts.createdWorkflow
     ? await insert({ ...base, created_workflow: true })
     : await insert({ ...base })
-  if (error && (error as { code?: string }).code === UNDEFINED_COLUMN) {
+  // The retry 349 added, unchanged in what it does: it drops `created_workflow`
+  // and nothing else, so a database without THAT column still gets a thread.
+  // `surface` deliberately survives it — see above.
+  if (opts.createdWorkflow && error && isUndefinedColumn(error)) {
     ;({ data, error } = await insert(base))
   }
-  if (error) throw new Error(`createThread: ${error.message}`)
+  if (error) {
+    // `model_tier` is long since on production and `created_workflow` was just
+    // stripped, so a column still unknown here is the one this insert named
+    // itself. Honest and typed: the route turns it into a 503, never a 500 and
+    // never a thread filed under the wrong assistant.
+    if (isUndefinedColumn(error) && base.surface !== undefined) {
+      throw new ThreadSurfaceNotPromotedError(surface)
+    }
+    throw new Error(`createThread: ${error.message}`)
+  }
   return data as CopilotThread
 }
 
