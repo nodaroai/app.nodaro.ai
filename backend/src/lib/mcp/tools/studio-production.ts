@@ -205,9 +205,12 @@ export function registerStudioProductionTools(opts: RegisterStudioProductionTool
           "context that made it. Pass `shot_id` to read ONE shot rather than " +
           "pulling a whole film to look at one frame. Address a result by its " +
           "`key` (the job id, or the url when no job made it) — never by " +
-          "position: the user may be editing while you read. With " +
-          "`workflows:write`, reading also lands whatever has finished since " +
-          "the last read, so a generation you started shows up here.",
+          "position: the user may be editing while you read. THIS READ IS ALSO " +
+          "THE WRITE: with `workflows:write` it first lands whatever has " +
+          "finished since the last read, and it is the only step that does — " +
+          "`get_job` / `wait_for_job` report a job's status and land nothing, " +
+          "so a job that says `completed` is not in the film until you read it " +
+          "here.",
         inputSchema: {
           production_id: z.string().uuid().describe("The production's id."),
           detail: z

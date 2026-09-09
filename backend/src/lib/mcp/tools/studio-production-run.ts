@@ -29,10 +29,14 @@ import type { RegisterStudioProductionToolsOpts } from "./studio-production.js"
  *  - **Credits are never pre-checked here.** The routes submit to the same
  *    priced single-node routes the studio app uses, which reserve atomically
  *    and answer typed refusals; `dry_run` is the quote asked for explicitly.
- *  - **They start work, they do not wait for it.** A run comes back as job ids
- *    on the production; poll `get_studio_production` (which shows what is in
- *    flight) or `get_job`. The frame and voice lanes are the exception — they
- *    are seconds long and the route waits.
+ *  - **They start work, they do not wait for it — and only a READ lands it.**
+ *    A run comes back as job ids and a marker; the landing sweep runs inside
+ *    `get_studio_production` (D5, reconcile-on-read) and nowhere else, so
+ *    `get_job` / `wait_for_job` can report `completed` on a job whose media is
+ *    still not in the film. Every answer that carries a job id therefore
+ *    carries `LANDING_HINT` saying so, and every description below says it too.
+ *    The frame and voice lanes are the exception — they are seconds long, the
+ *    route waits, and their answers carry no job id and no hint.
  *  - **Every one takes `client_request_id`**, because a dropped connection on a
  *    spending call must not be able to charge twice.
  */
@@ -88,11 +92,11 @@ export function registerStudioProductionRunTools({
       description:
         "Hand a BRIEF to the Director and let it write the production — scenes, " +
         "shots, cast and looks — into an existing production. Costs an LLM run, " +
-        "not a render. It returns a job id and a marker on the production: the " +
-        "draft lands by itself when the run finishes, so poll " +
-        "`get_studio_production` rather than waiting. Use it when the user has a " +
-        "story rather than a plan; author the plan yourself and " +
-        "`create_studio_production` when you already know the shots.",
+        "not a render. It returns a job id and a marker on the production; the " +
+        "draft is written into the document by your next `get_studio_production` " +
+        "and by nothing else (`get_job` / `wait_for_job` land nothing). Use it " +
+        "when the user has a story rather than a plan; author the plan yourself " +
+        "and `create_studio_production` when you already know the shots.",
       inputSchema: {
         production_id: productionId,
         brief: z
@@ -130,10 +134,10 @@ export function registerStudioProductionRunTools({
         "Frame a shot: generate `count` candidate images from what the shot " +
         "already says (its prompt, references, cast bindings and direction), " +
         "plus any `overrides` for this call. Spends credits per candidate — " +
-        "`dry_run: true` prices it first. Returns job ids; the images land on " +
-        "the shot's result history by themselves, so poll " +
-        "`get_studio_production`. Generating again ADDS takes, it never " +
-        "replaces one.",
+        "`dry_run: true` prices it first. Returns job ids; a finished image " +
+        "reaches the shot's result history only on your next " +
+        "`get_studio_production` (`get_job` / `wait_for_job` report status and " +
+        "land nothing). Generating again ADDS takes, it never replaces one.",
       inputSchema: {
         production_id: productionId,
         shot_id: shotId,
@@ -163,8 +167,10 @@ export function registerStudioProductionRunTools({
       description:
         "Generate one candidate at expected_revision; requires dependent-frame support " +
         "and an accepted parent for derived frames. Spends image credits; no quote. " +
-        "Description-only cast needs no portrait. Returns a job ID; completion neither " +
-        "accepts nor starts another frame. Review, then accept with edit_studio_production.",
+        "Description-only cast needs no portrait. Returns a job ID; the candidate " +
+        "reaches the frame only on your next `get_studio_production` (`get_job` / " +
+        "`wait_for_job` land nothing), and landing it neither accepts it nor starts " +
+        "another frame. Review, then accept with edit_studio_production.",
       inputSchema: {
         production_id: productionId,
         keyframe_id: z.string().min(1).describe("The planned keyframe id."),
@@ -193,8 +199,9 @@ export function registerStudioProductionRunTools({
       description:
         "Animate a shot using its saved inputs. Omit mode for automatic lane selection; " +
         "start uses its start frame, references uses reference media. Spends credits; " +
-        "dry_run quotes without submitting. Returns a job ID and pending marker; poll " +
-        "get_studio_production to land results. Still and clip jobs may run concurrently.",
+        "dry_run quotes without submitting. Returns a job ID and a pending marker; the " +
+        "finished clip reaches the shot only on your next `get_studio_production` " +
+        "(`get_job` / `wait_for_job` land nothing). Still and clip jobs may run concurrently.",
       inputSchema: {
         production_id: productionId,
         shot_id: shotId,
@@ -311,8 +318,9 @@ export function registerStudioProductionRunTools({
         "Replace the voices inside a shot's current video — the dialogue is " +
         "re-performed and mixed back over the same picture. Takes a `plan` " +
         "naming which speaker gets which voice (see the operating skill for its " +
-        "shape). Spends credits and returns a job id; poll " +
-        "`get_studio_production`.",
+        "shape). Spends credits and returns a job id; the new mix reaches the " +
+        "shot only on your next `get_studio_production` (`get_job` / " +
+        "`wait_for_job` land nothing).",
       inputSchema: {
         production_id: productionId,
         shot_id: shotId,
@@ -338,8 +346,8 @@ export function registerStudioProductionRunTools({
       description:
         "Write the film a soundtrack from a `prompt` describing the music. One " +
         "track for the whole production, not per shot. Spends credits and " +
-        "returns a job id; the track lands on the production by itself, so poll " +
-        "`get_studio_production`.",
+        "returns a job id; the track reaches the production only on your next " +
+        "`get_studio_production` (`get_job` / `wait_for_job` land nothing).",
       inputSchema: {
         production_id: productionId,
         prompt: z.string().min(1).max(2000).describe("The music: mood, instruments, genre."),

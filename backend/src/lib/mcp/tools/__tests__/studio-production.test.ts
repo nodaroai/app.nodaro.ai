@@ -121,18 +121,31 @@ function stubRoutes(): { fastify: FastifyInstance; seen: Captured } {
       body: req.body as Record<string, unknown>,
     })
   }
-  /** Register a studio route that records the request and answers `data`. */
+  /**
+   * Register a studio route that records the request and answers `data` — or,
+   * when `data` is a function, whatever it makes of the body. The one route
+   * that needs the second form is `generate`, whose real answer is a QUOTE
+   * when the body said `dryRun` and a job id otherwise: a fixture that always
+   * hands back a job id could not tell the two apart.
+   */
   const route = (
     method: "get" | "post",
     url: string,
-    data: unknown,
+    data: unknown | ((body: Record<string, unknown>) => unknown),
   ): void => {
     fastify[method](url, async (req, reply) => {
       capture(req)
       if (h.routeFailure) {
         return reply.status(h.routeFailure.status).send(h.routeFailure.body)
       }
-      return { data }
+      return {
+        data:
+          typeof data === "function"
+            ? (data as (body: Record<string, unknown>) => unknown)(
+                (req.body ?? {}) as Record<string, unknown>,
+              )
+            : data,
+      }
     })
   }
 
@@ -161,7 +174,11 @@ function stubRoutes(): { fastify: FastifyInstance; seen: Captured } {
   route("post", "/v1/studio/productions/:id/share", view)
   route("post", "/v1/studio/productions/:id/clone", view)
   route("post", "/v1/studio/productions/:id/describe", { ...view, jobId: JOB })
-  route("post", "/v1/studio/productions/:id/generate", { ...view, jobIds: [JOB] })
+  route("post", "/v1/studio/productions/:id/generate", (body: Record<string, unknown>) =>
+    body.dryRun
+      ? { dryRun: true, provider: "cheap-model", count: 1, credits: 12 }
+      : { ...view, jobIds: [JOB] },
+  )
   route("post", "/v1/studio/productions/:id/frame", view)
   route("post", "/v1/studio/productions/:id/voice", { ...view, jobId: JOB })
   route("post", "/v1/studio/productions/:id/revoice", { ...view, jobId: JOB })
@@ -1026,5 +1043,95 @@ describe("the open-editor warning", () => {
 
   it("create_studio_production does not — a production that does not exist yet is open nowhere", async () => {
     expect(await description("create_studio_production")).not.toMatch(/reload/i)
+  })
+})
+
+describe("the landing contract", () => {
+  /**
+   * A generation over MCP finishes in TWO places, and only the first is
+   * obvious: the job completes (and `get_job` says so, with a CDN url), and
+   * then the result has to be written into the production — which, by D5,
+   * happens on the next `get_studio_production` and nowhere else.
+   *
+   * A user drove the studio over MCP on 2026-09-09, polled `wait_for_job`
+   * until three stills reported `completed` with urls, and saw an empty film:
+   * every step they took reported success and none of them landed anything.
+   * The guide says so under a heading nobody reads before they need it, so
+   * this suite pins the two places a client that never opens the guide DOES
+   * read — the answer it just got, and the description of the tool it is
+   * about to call.
+   */
+  const description = async (name: string): Promise<string> => {
+    const tools = await listTools(serverWith(ALL).server)
+    return tools.find((t) => t.name === name)?.description ?? ""
+  }
+
+  /** The tools that answer with a job id and leave a marker behind. */
+  const MARKER_TOOLS: Array<[string, Record<string, unknown>]> = [
+    ["describe_studio_production", { brief: "A chase in Rome.", llm_model: "claude-fable-5" }],
+    ["generate_studio_still", { shot_id: "s1" }],
+    ["generate_studio_keyframe", { keyframe_id: "frame-A", expected_revision: 1 }],
+    ["generate_studio_clip", { shot_id: "s1" }],
+    ["revoice_studio_clip", { shot_id: "s1", plan: {} }],
+    ["score_studio_production", { prompt: "strings" }],
+  ]
+
+  it.each(MARKER_TOOLS)(
+    "%s answers with the step that lands what it started",
+    async (name, args) => {
+      const { server } = serverWith(ALL)
+      const res = await callTool(server, name, { production_id: PRODUCTION, ...args })
+      const landing = (res.structuredContent as { landing?: unknown }).landing
+      expect(landing, `${name} handed back a job id and no way to land it`).toEqual(
+        expect.stringContaining("get_studio_production"),
+      )
+      // And it says the thing the user actually got wrong: that the job tools
+      // report status and write nothing.
+      expect(landing).toEqual(expect.stringContaining("get_job"))
+      expect(landing).toEqual(expect.stringContaining("wait_for_job"))
+      // The answer's own text carries it too — a client reading the rendered
+      // result rather than `structuredContent` is the common one.
+      expect(res.content[0].text).toContain("get_studio_production")
+    },
+  )
+
+  it("says nothing when the call only PRICED the run — a quote starts nothing", async () => {
+    const { server } = serverWith(ALL)
+    const res = await callTool(server, "generate_studio_still", {
+      production_id: PRODUCTION,
+      shot_id: "s1",
+      dry_run: true,
+    })
+    expect(res.structuredContent).toMatchObject({ dryRun: true })
+    expect(res.structuredContent).not.toHaveProperty("landing")
+  })
+
+  it("says nothing when the route already applied the result — nothing is pending", async () => {
+    // `new_studio_shot_from_frame` waits inside the call and answers with the
+    // production itself. There is no job to land, so a line telling the caller
+    // to go and land one would be a step that does nothing.
+    const { server } = serverWith(ALL)
+    const res = await callTool(server, "new_studio_shot_from_frame", {
+      production_id: PRODUCTION,
+      shot_id: "s1",
+    })
+    expect(res.structuredContent).not.toHaveProperty("landing")
+  })
+
+  it.each(MARKER_TOOLS.map(([name]) => name))(
+    "%s's own description names the read that lands it",
+    async (name) => {
+      const text = await description(name)
+      expect(text).toContain("get_studio_production")
+      // "lands by itself" was the phrasing that made three finished images
+      // look like a studio bug. Nothing lands by itself over MCP.
+      expect(text).not.toMatch(/by (itself|themselves)/i)
+    },
+  )
+
+  it("the read says out loud that reading is what WRITES", async () => {
+    const text = await description("get_studio_production")
+    expect(text).toMatch(/get_job/)
+    expect(text).toMatch(/wait_for_job/)
   })
 })
