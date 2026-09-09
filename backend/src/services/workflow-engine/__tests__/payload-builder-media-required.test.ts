@@ -156,6 +156,45 @@ describe("required media inputs", () => {
     }
   })
 
+  describe("video-upscale: the VEO providers need a VEO task, not a URL", () => {
+    // 2026-09-09: an uploaded clip wired into a node set to "VEO 1080p" passed the
+    // media table (videoUrl present), got a job row + reservation, then died at the
+    // route's Zod ("VEO upscale requires kieTaskId"). The refusal has to name the
+    // way out — switch to Topaz — because the node card used to say "Topaz" for
+    // every provider, so the user had no idea VEO was selected.
+    const v = "https://cdn.example/uploaded.mp4"
+    for (const provider of ["veo-1080p", "veo-4k"]) {
+      it(`refuses ${provider} with only a video URL, before any job row exists`, () => {
+        const n = node("video-upscale", { provider })
+        try {
+          buildPayload(n, JOB, { videoUrl: v }, undefined, ctx(n))
+          throw new Error("expected a throw")
+        } catch (err) {
+          expect((err as { code?: string }).code).toBe("video_required")
+          expect((err as Error).message).toMatch(/My Node/)
+          expect((err as Error).message).toMatch(/Topaz/)
+        }
+      })
+    }
+
+    it("accepts a VEO provider when the upstream VEO task id is resolved", () => {
+      const n = node("video-upscale", { provider: "veo-1080p" })
+      const built = buildPayload(n, JOB, { kieTaskId: "kie-task-1" } as unknown as ResolvedInputs, undefined, ctx(n))
+      expect(built.payload).toMatchObject({ provider: "veo-1080p", kieTaskId: "kie-task-1" })
+    })
+
+    it("accepts a VEO provider when the task id is stamped on the node data", () => {
+      const n = node("video-upscale", { provider: "veo-4k", kieTaskId: "kie-task-2" })
+      expect(() => buildPayload(n, JOB, { videoUrl: v }, undefined, ctx(n))).not.toThrow()
+    })
+
+    it("Topaz keeps taking a plain video URL", () => {
+      const n = node("video-upscale", { provider: "topaz", upscaleFactor: "2" })
+      const built = buildPayload(n, JOB, { videoUrl: v }, undefined, ctx(n))
+      expect(built.payload).toMatchObject({ provider: "topaz", videoUrl: v })
+    })
+  })
+
   it("face-swap stays single-entry — its face half reads only data.faceImageUrl", () => {
     // Wiring an image into the orange handle sets resolvedInputs.imageUrl, which
     // the case never reads. An AND entry on it would refuse that graph while the

@@ -22,9 +22,13 @@ The Video Upscale node enhances video resolution using AI upscaling. Choose betw
 
 Select target resolution: 1080p or 4K.
 
+**VEO upscale only works on a video that a VEO node generated earlier in the same workflow.** It re-renders that generation at the higher resolution rather than processing a file, so an uploaded video, or a clip from any other model, cannot feed it. Wire the VEO node's video output straight into this node. For every other video, choose the Topaz provider.
+
+The node card names the selected provider ("VEO 1080p Upscale", "Topaz 2x Upscale"), and a run with a VEO provider and no VEO source is refused before any credits are reserved, with a message that says to connect the VEO node or switch to Topaz.
+
 ## Inputs & Outputs
 
-**Inputs:** Video (required)
+**Inputs:** Video (required). With a VEO provider it must come from a VEO generation node in this workflow.
 **Outputs:** Upscaled video
 ## Best Practices
 
