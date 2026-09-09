@@ -82,7 +82,7 @@ position.
 | `GET` | `/v1/studio/productions` | `?limit&cursor&includeArchived` | `{ data[], nextCursor? }` |
 | `POST` | `/v1/studio/productions` | `{ name?, plan? }` | `{ production, warnings?, summary? }` |
 | `GET` | `/v1/studio/productions/:id` | `?detail&shot_id` | `{ production }` |
-| `POST` | `/v1/studio/productions/:id/ops` | `{ ops[], baseVersion?, strict?, clientRequestId? }` | `{ production, version, rebased, receipts[], warnings[] }` |
+| `POST` | `/v1/studio/productions/:id/ops` | `{ ops[], baseVersion?, strict?, dryRun?, clientRequestId? }` | `{ production, version, rebased, receipts[], warnings[] }` or the preview |
 | `POST` | `/v1/studio/productions/:id/reconcile` | — | `{ landed[], pending[], failed[], warnings[], production, version }` |
 | `POST` | `/v1/studio/productions/:id/import` | `{ plan, mode: "append" }` | `{ production, warnings, summary }` |
 | `POST` | `/v1/studio/productions/:id/describe` | `{ brief, llmModel, mode?, label?, clientRequestId? }` | `{ jobId, production }` |
@@ -149,6 +149,89 @@ naming the target the way a person would — which is what you show someone who
 wants to know what an agent just did. `warnings` is a flat list of things worth
 saying that are not failures: an operation that changed nothing, a rename that
 rewrote four prompts.
+
+## Previewing a batch
+
+`dryRun: true` asks what a batch WOULD do. The route runs the write's own
+attempt — the same operations, against the stored document, in the same
+context, with the same refusals in the same order — and stops before the swap.
+The preview is not a description of the write; it IS the write, up to the swap,
+which is why the two cannot say different things. It is what you put in front
+of a person before an assistant's edits land.
+
+```json
+{
+  "dryRun": true,
+  "version": 7,
+  "receipts": [
+    {
+      "op": "remove_shot",
+      "summary": "Deleted Shot 3 (in the bin).",
+      "ids": ["6f1c9b2e-…"],
+      "class": "D",
+      "restorable": true
+    }
+  ],
+  "warnings": []
+}
+```
+
+There is no `production` and no `rebased`: no document was produced, and nothing
+was rebased onto anything. `version` is the version the preview was computed
+AGAINST — still the production's current one — so it is the `baseVersion` for the
+batch you send next.
+
+A previewed receipt is the apply's own receipt plus the two things the person
+deciding needs:
+
+| Field | Meaning |
+| --- | --- |
+| `op`, `summary`, `ids`, `impact` | The receipt the apply reports, built by the same projection — so `summary` reads in the same past tense there and here, and `impact` carries the dependency scope (`{ keyframeIds, shotIds }`) where the operation reports one. |
+| `class` | The operation's confirmation class, read from the vocabulary's own table: `S` safe, `D` deletes, `P` changes who can reach the work, `$` spends. |
+| `restorable` | Present, and `true`, only where the operation put something in the bin that can be restored. Absent everywhere else — including a delete that destroys, because there would be no entry to fetch back. |
+
+The refusals the batch itself earns, the preview earns too: `strict: true` still
+answers `409`, a bad operation is still `op_invalid` / `op_target_missing` with
+its `opIndex`, and a body that names an audience key is still refused. The one
+refusal a preview cannot reach is contention: the apply retries the swap and
+gives up busy where a writer keeps beating it, and a preview never swaps. What
+the preview never does is write — no document is stored, no version is bumped, no
+timestamp moves. That is narrower than "touches nothing", deliberately: the
+batch is resolved through the write's own context, so a batch that reads
+planned-frame inputs retains those inputs exactly as the write it previews
+would, one moment earlier.
+
+**Prove the flag before you send the batch.** This route parses its body in
+strip mode, so a deployment that predates the preview DROPS `dryRun` and applies
+the batch — which means a caller that learns by sending has already written the
+thing it meant to ask about, and no answer read afterwards undoes that.
+
+So ask with an empty batch first. An empty batch changes nothing on every
+deployment ever built, which is what makes it safe to send blind:
+
+```http
+POST /v1/studio/productions/:id/ops
+{ "ops": [], "dryRun": true }
+```
+
+Key on the MARKER, not on the shape:
+
+- `dryRun: true` in the answer — with the current `version` and no receipts —
+  is your "yes". Only then send the real batch.
+- Anything else is your "no", whether it is the ordinary apply shape (the
+  production, its `version`, `rebased: false`) or a refusal the deployment
+  makes in its own words. Tell the user you cannot preview here, and do not
+  send the batch.
+
+Read the marker on the real batch's answer too. The ping proved the deployment
+that answered the ping, and a fleet mid-rollout can serve the next request from
+a different one. An answer that carries a `production` instead of the marker is
+a batch that was APPLIED: adopt its `production` and `version` the way an
+ordinary apply's caller does, and do not send it again.
+
+Send the ping as its own bare body — no operations, no `clientRequestId`,
+nothing of the batch it is asking about. Its only job is to make the deployment
+say whether it previews.
 
 ## Generating, and landing the results
 
@@ -308,7 +391,7 @@ try {
 | `list({ limit?, cursor?, includeArchived? })` | `GET …` |
 | `create({ name?, plan? })` | `POST …` |
 | `get(id, { detail?, shotId? })` | `GET …/:id` |
-| `ops(id, { ops, baseVersion?, strict?, clientRequestId? })` | `POST …/:id/ops` |
+| `ops(id, { ops, baseVersion?, strict?, dryRun?, clientRequestId? })` | `POST …/:id/ops` |
 | `reconcile(id)` | `POST …/:id/reconcile` |
 | `importPlan(id, plan, { mode? })` | `POST …/:id/import` |
 | `describe(id, { brief, llmModel, mode?, label?, clientRequestId? })` | `POST …/:id/describe` |
