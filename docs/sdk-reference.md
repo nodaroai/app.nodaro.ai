@@ -4074,11 +4074,44 @@ the 10-credit base). A QR layer may set
 workflow that is the node's QR link handle — a List column yields one code per
 row); a run with the flag set and no `qrText` is refused with a 400 naming it.
 
-A raw sibling route without an SDK method yet: `POST
-/v1/image-overlay/suggest-placement` `{ imageUrl, layerAspect?, intent?,
-safeArea? }` asks a vision model where one layer should go and answers
-`{ jobId, placement: { anchor, x, y, width, reason } }` in the same percent
-units — billed as one Describe Image call, applied by you.
+#### `suggestOverlayPlacement(input)`
+
+```ts
+suggestOverlayPlacement(input: {
+  imageUrl: string
+  layerAspect?: number
+  intent?: string
+  safeArea?: { x: number; y: number; w: number; h: number }
+  llmModel?: string
+}): Promise<{ jobId: string; placement: OverlayPlacement }>
+```
+
+Ask a vision model WHERE one overlay layer should sit on a base image (`POST
+/v1/image-overlay/suggest-placement`) — it reads the picture and keeps the
+element off the faces, the subject and the busiest texture. The answer comes
+back in `imageOverlay`'s own percent units — `anchor`, `x`/`y`, `width`
+— so it drops straight onto a layer, plus a one-sentence `reason` you can show
+a user. Nothing is composited: you apply the placement.
+
+`layerAspect` is the element's width / height (1 = square, the default) so the
+proposed box stays in proportion; `intent` says what the element is ("a logo",
+"a price badge"); `safeArea` is the always-visible region as fractions of the
+canvas (a platform preset's safe area), which the placement is kept inside.
+Unlike the other media calls this one answers **synchronously** — there is
+nothing to poll, and `jobId` is the billing record (one Describe Image call).
+
+```ts
+const { placement } = await nodaro.media.suggestOverlayPlacement({
+  imageUrl: base,
+  intent: "a logo",
+  layerAspect: 2.5,
+})
+const { reason, ...box } = placement // anchor + x + y + width, ready to use
+await nodaro.media.imageOverlay({
+  imageUrl: base,
+  layers: [{ imageUrl: logo, ...box }],
+})
+```
 
 #### `videoMetadata(input)`
 

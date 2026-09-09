@@ -66,9 +66,16 @@ const IMAGE_OVERLAY_TOOL_BYTES = 7_788 // measured: 345_426 total − 337_638 ba
 // in the list is `animate_image` at 8_122 B, and neither of these is in the top
 // five). The fixture does NOT move: it names tools, and no tool was added.
 const STUDIO_PREVIEW_ARGS_BYTES = 359
+//
+// RAISED 2026-09-09 by `suggest_overlay_placement` and nothing else — the
+// vision-model half of the overlay node, which had a route but no tool. MEASURED
+// by this suite: 347_305 total − 345_785 = 1_520 B, well under the per-tool
+// budget (the definition is one paragraph plus five arguments; the placement
+// vocabulary it answers in is already documented on `image_overlay`).
+const SUGGEST_PLACEMENT_TOOL_BYTES = 1_520
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192,
-  totalBytes: 337_638 + IMAGE_OVERLAY_TOOL_BYTES + STUDIO_PREVIEW_ARGS_BYTES,
+  totalBytes: 337_638 + IMAGE_OVERLAY_TOOL_BYTES + STUDIO_PREVIEW_ARGS_BYTES + SUGGEST_PLACEMENT_TOOL_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

@@ -266,7 +266,7 @@ nodaro voice clones list [--json]
 nodaro voice clones create --name <name> --audio <url>|--file <path> [--json]   # clone from an uploaded URL or a local audio file
 nodaro voice clones delete <id> [--json]
 
-# Media — ingestion + compositing: social-video import, trim, still-to-video, slideshow, image collage, save-to-storage, metadata probe
+# Media — ingestion + compositing: social-video import, trim, still-to-video, slideshow, image collage, image overlay, save-to-storage, metadata probe
 nodaro media download <url> [--max-height <px>] [--section <a-b>] [--watch] [--json]
                                                          # YouTube / TikTok / Instagram / X / Facebook → your storage. --section fetches only
                                                          # that time range (seconds). --watch streams live progress (no job to poll later).
@@ -285,6 +285,16 @@ nodaro media collage <imageUrls...> [--sizes <0-3,...>] [--numbered] [--label <t
                                                          # --numbered stamps 1-based sequence numbers at each image's corner (storyboard mode);
                                                          # --badge-position picks the corner for numbers and labels: top-left (default) or top-right.
                                                          # --label sets a per-image caption shown after the number; repeat once per image, in order ("" skips one, aligned with the image args).
+nodaro media overlay <imageUrl> [layerUrls...] [--layers-file <path>] [--anchor <anchor>] [--x <%>] [--y <%>] [--width <%>] [--opacity <0-1>] [--platform <id>...] [--qr-text <text>] [--mask-mode none|layers|around|outside] [--mask-spread <px>] [--canvas <WxH>] [--base-fit contain|cover] [--background-color <hex>] [--output-format png|jpg|webp] [--watch] [--poll-interval <ms>] [--json]
+                                                         # place up to 12 layers on a base image, pixel-exactly (local sharp, no AI). Positional URLs are
+                                                         # image layers and share --anchor/--x/--y/--width/--opacity (the watermark case); --layers-file
+                                                         # takes the full JSON array — per-layer options and the text / QR / shape kinds.
+                                                         # Placement is in PERCENT of the base image, so one call fits a 1K preview and a 4K render.
+                                                         # --platform (repeatable) also renders the composite at that platform's size (2 credits each
+                                                         # on top of the 10-credit base); the job's output carries them as variants[].
+nodaro media overlay-placement <imageUrl> [--intent <text>] [--aspect <ratio>] [--safe-area <x,y,w,h>] [--json]
+                                                         # asks a vision model WHERE one layer should go and answers in the same percent units —
+                                                         # anchor, x, y, width + a one-line reason. Synchronous (no job to poll); one image-to-text call.
 nodaro media save <url> [--filename <name>] [--type image|video|audio] [--watch] [--poll-interval <ms>] [--json]
 
 # Audio — the primitives Voice Changer Pro composes, standalone

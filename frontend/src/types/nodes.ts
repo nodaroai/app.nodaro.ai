@@ -1,7 +1,7 @@
 import type { Node, Edge } from "@xyflow/react"
-import { MODIFY_IMAGE_PROVIDERS } from "@nodaro/shared"
+import { MODIFY_IMAGE_PROVIDERS, OVERLAY_ANCHORS } from "@nodaro/shared"
 import { MUSIC_GENRE_DEFAULT_DATA, MUSIC_MOOD_DEFAULT_DATA, INSTRUMENTATION_DEFAULT_DATA, VOICE_CHARACTER_DEFAULT_DATA, VOICE_DELIVERY_DEFAULT_DATA } from "@nodaro/prompts"
-import type { ImageI2IProvider, ImageGenProvider, ImageEditProvider, ModifyImageProvider, UpscaleImageProvider, ImageToVideoProvider, TextToVideoProvider, VideoToVideoProvider, VideoGenProvider, VideoUpscaleProvider, ExtendVideoProvider, FaceSwapProvider, TtsProvider, TextToAudioProvider, MusicProvider, TranscribeProvider, LipSyncProvider, ScriptProvider, QaCheckProvider, SunoModel, VoiceDesignModel, VoiceChangerModel, CaptionStyle, ImageCriticMode, ReduceStrategyId, ReduceMeta, SelectorConfig, ScraperActorId, CharacterAspectRatio, AudioFxPreset, LocationReferencePhotoKind as SharedLocationReferencePhotoKind, PipelineFormat, PipelineMode, PipelinePinnableImageModel, PipelinePinnableScriptLlm, PipelinePinnableVideoModel, VideoCriticFrameMode, SceneNodeData as SharedSceneNodeData, PipelineState, ReferenceSheet, SheetType, SheetSkin, SheetFlavour, EntityKind, VideoAnalysisResult, ExposableField, ExposableOutput, ComponentMetadata, IdentityMeta, LlmReasoningEffort, Scene3DReference, OverlayLayerKind, OverlayTextStyle, OverlayQrStyle, OverlayShapeStyle, OverlayImageEffects } from "@nodaro/shared"
+import type { ImageI2IProvider, ImageGenProvider, ImageEditProvider, ModifyImageProvider, UpscaleImageProvider, ImageToVideoProvider, TextToVideoProvider, VideoToVideoProvider, VideoGenProvider, VideoUpscaleProvider, ExtendVideoProvider, FaceSwapProvider, TtsProvider, TextToAudioProvider, MusicProvider, TranscribeProvider, LipSyncProvider, ScriptProvider, QaCheckProvider, SunoModel, VoiceDesignModel, VoiceChangerModel, CaptionStyle, ImageCriticMode, ReduceStrategyId, ReduceMeta, SelectorConfig, ScraperActorId, CharacterAspectRatio, AudioFxPreset, LocationReferencePhotoKind as SharedLocationReferencePhotoKind, PipelineFormat, PipelineMode, PipelinePinnableImageModel, PipelinePinnableScriptLlm, PipelinePinnableVideoModel, VideoCriticFrameMode, SceneNodeData as SharedSceneNodeData, PipelineState, ReferenceSheet, SheetType, SheetSkin, SheetFlavour, EntityKind, VideoAnalysisResult, ExposableField, ExposableOutput, ComponentMetadata, IdentityMeta, LlmReasoningEffort, Scene3DReference, OverlayLayerKind, OverlayTextStyle, OverlayQrStyle, OverlayShapeStyle, OverlayImageEffects, OverlayAnchor } from "@nodaro/shared"
 import type { WardrobeValue, TransitionPosition, TransitionDuration, TransitionIntensity, CharacterFxPosition, CharacterFxDuration, CharacterFxIntensity, PersonValue, PickerApplyMode, PickerGaps, DirectionFields, StructuredPromptFields } from "@nodaro/prompts"
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 import { IMAGE_STYLE_PRESETS, GVP_PROVIDERS, getAspectRatiosForVideoModel, getVideoResolutionOptions } from "@/components/editor/config-panels/model-options"
@@ -3506,16 +3506,10 @@ export type ImageCollageData = {
  *  height) so the same node works on a 1K preview and a 4K render — the
  *  base's pixel size is decided upstream. Mirrored by the route's Zod
  *  (backend/src/routes/image-overlay.ts). */
-export type OverlayAnchor =
-  | "top-left" | "top" | "top-right"
-  | "left" | "center" | "right"
-  | "bottom-left" | "bottom" | "bottom-right"
-
-export const OVERLAY_ANCHORS: ReadonlyArray<OverlayAnchor> = [
-  "top-left", "top", "top-right",
-  "left", "center", "right",
-  "bottom-left", "bottom", "bottom-right",
-]
+// One vocabulary, defined in @nodaro/shared and re-exported here so canvas
+// code keeps importing it from "@/types/nodes" like the other node types.
+export { OVERLAY_ANCHORS }
+export type { OverlayAnchor }
 
 export type OverlayLayerConfig = {
   /** What the layer is. Absent = "image" (a wired picture). Generated kinds

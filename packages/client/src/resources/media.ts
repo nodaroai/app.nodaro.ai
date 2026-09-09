@@ -1,5 +1,6 @@
 import type { NodaroClient } from "../client.js"
 import { readSseStream } from "../sse.js"
+import type { OverlayAnchor } from "@nodaro/shared"
 
 /**
  * Media ingestion + trimming — the source-preparation steps a Voice Changer Pro
@@ -8,6 +9,23 @@ import { readSseStream } from "../sse.js"
  * range, and probe a video's metadata. Each generation-style op returns a job id
  * to poll (`jobs.get(jobId)`); `videoMetadata` is a direct read.
  */
+/**
+ * Where one overlay layer should go, in {@link MediaResource.imageOverlay}'s
+ * percent units — the answer from {@link MediaResource.suggestOverlayPlacement}.
+ */
+export interface OverlayPlacement {
+  /** The point on the base image the layer attaches to. */
+  anchor: OverlayAnchor
+  /** Offset from the anchor in % of the base width (negative on a right anchor = inward). */
+  x: number
+  /** Offset from the anchor in % of the base height (negative on a bottom anchor = inward). */
+  y: number
+  /** The layer's width in % of the base width. */
+  width: number
+  /** One sentence, plain language, on why this spot. */
+  reason: string
+}
+
 export class MediaResource {
   constructor(private client: NodaroClient) {}
 
@@ -114,7 +132,7 @@ export class MediaResource {
     imageUrl: string
     layers: Array<{
       imageUrl: string
-      anchor?: "top-left" | "top" | "top-right" | "left" | "center" | "right" | "bottom-left" | "bottom" | "bottom-right"
+      anchor?: OverlayAnchor
       x?: number
       y?: number
       width?: number
@@ -146,6 +164,38 @@ export class MediaResource {
   }): Promise<{ jobId: string }> {
     // The finished job's output: { imageUrl, width, height, maskUrl?, variants?: [{ id, label, width, height, url }] }.
     return this.client.request<{ jobId: string }>("POST", "/v1/image-overlay", { body: input })
+  }
+
+  /**
+   * Ask a vision model WHERE one overlay layer should sit on a base image
+   * (`POST /v1/image-overlay/suggest-placement`) — it reads the picture and
+   * keeps the element off the faces, the subject and the busiest texture.
+   * The answer comes back in {@link MediaResource.imageOverlay}'s own percent
+   * units — `anchor`, `x`/`y` offsets, `width` — so it drops straight onto a
+   * layer (`const { reason, ...box } = placement`), plus a one-sentence
+   * `reason` you can show a user. Nothing is composited here: apply the
+   * placement yourself.
+   *
+   * `layerAspect` is the element's width / height (1 = square, the default) so
+   * the proposed box stays in proportion; `intent` says what the element is
+   * ("a logo", "a price badge"); `safeArea` is the always-visible region as
+   * fractions of the canvas (a platform preset's safe area), which the
+   * placement is kept inside. Unlike the other media calls this one answers
+   * synchronously — there is nothing to poll; `jobId` is the billing record
+   * (one image-to-text call).
+   */
+  suggestOverlayPlacement(input: {
+    imageUrl: string
+    layerAspect?: number
+    intent?: string
+    safeArea?: { x: number; y: number; w: number; h: number }
+    llmModel?: string
+  }): Promise<{ jobId: string; placement: OverlayPlacement }> {
+    return this.client.request<{ jobId: string; placement: OverlayPlacement }>(
+      "POST",
+      "/v1/image-overlay/suggest-placement",
+      { body: input },
+    )
   }
 
   /**

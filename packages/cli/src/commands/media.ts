@@ -1,7 +1,9 @@
 import { Command } from "commander"
+import { readFileSync } from "node:fs"
 import { buildClient, handleError } from "../client.js"
 import { emit, success, dim, detail, info, warn, type OutputOpts } from "../output.js"
 import { collectVariadic, reportQueuedJob } from "../util.js"
+import { OVERLAY_ANCHORS, OVERLAY_PLATFORM_IDS, type OverlayAnchor, type OverlayPlatformId } from "@nodaro/shared"
 import type { DownloadVideoProgress } from "@nodaro/sdk"
 
 interface GlobalOpts extends OutputOpts {
@@ -25,9 +27,30 @@ function parseSection(raw: string): { sectionStartSec: number; sectionEndSec: nu
   return { sectionStartSec: start, sectionEndSec: end }
 }
 
+/** Parse `--canvas WxH` (px) into the route's canvas object. */
+function parseCanvas(raw: string): { width: number; height: number } {
+  const m = raw.match(/^([0-9]{2,4})x([0-9]{2,4})$/i)
+  if (!m) {
+    warn(`--canvas must be "<width>x<height>" in px, e.g. 1920x1080 (got "${raw}")`)
+    process.exit(1)
+  }
+  return { width: parseInt(m[1], 10), height: parseInt(m[2], 10) }
+}
+
+/** Parse `--safe-area x,y,w,h` (fractions 0..1) into the route's safeArea. */
+function parseSafeArea(raw: string): { x: number; y: number; w: number; h: number } {
+  const parts = raw.split(",").map((n) => parseFloat(n.trim()))
+  if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n) || n < 0 || n > 1)) {
+    warn(`--safe-area must be "x,y,w,h" as fractions 0..1, e.g. 0.05,0.05,0.9,0.9 (got "${raw}")`)
+    process.exit(1)
+  }
+  const [x, y, w, h] = parts
+  return { x, y, w, h }
+}
+
 export function mediaCommand(): Command {
   const cmd = new Command("media").description(
-    "media ingestion + compositing — pull a social video into storage, trim video/audio, still-to-video, slideshow, collage images, save a URL to storage, probe metadata",
+    "media ingestion + compositing — pull a social video into storage, trim video/audio, still-to-video, slideshow, collage images, overlay layers on an image, save a URL to storage, probe metadata",
   )
 
   cmd
@@ -425,6 +448,186 @@ after the number ("3 · Close-up"); pass "" to skip a label for one image.`)
             ...(opts.backgroundColor ? { backgroundColor: opts.backgroundColor } : {}),
           })
           await reportQueuedJob(result, () => client.jobs.get(result.jobId), { ...opts, note: "image collage" })
+        } catch (err) {
+          handleError(err)
+        }
+      },
+    )
+
+  cmd
+    .command("overlay <imageUrl> [layerUrls...]")
+    .description("place layers on a base image, pixel-exactly (local compositor, no AI) — positional URLs are image layers; --layers-file for text/QR/shape layers")
+    .option("--layers-file <path>", "JSON file with the full layers array (every kind and per-layer option; mutually exclusive with positional layer URLs)")
+    .option("--anchor <anchor>", `the point each positional layer attaches to: ${OVERLAY_ANCHORS.join(" | ")} (default center)`)
+    .option("--x <percent>", "offset from the anchor in % of the base width (negative on a right anchor moves inward)", parseFloat)
+    .option("--y <percent>", "offset from the anchor in % of the base height (negative on a bottom anchor moves inward)", parseFloat)
+    .option("--width <percent>", "layer width in % of the base width (default 25; height follows the layer's aspect)", parseFloat)
+    .option("--opacity <0-1>", "layer opacity (default 1)", parseFloat)
+    .option("--platform <id>", `also render the composite at a platform's size; repeat for more (${OVERLAY_PLATFORM_IDS.length} available, e.g. youtube-thumbnail)`, collectVariadic)
+    .option("--qr-text <text>", "fills every QR layer that reads its link from the workflow (qr.fromInput)")
+    .option("--mask-mode <mode>", "mask the job also emits (white = may change): none | layers | around (default — the ring an AI finish repaints) | outside")
+    .option("--mask-spread <px>", "ring width in px for --mask-mode around (default 48)", (v) => parseInt(v, 10))
+    .option("--canvas <WxH>", "output canvas in px (the base is placed into it); omit to keep the base's pixel size")
+    .option("--base-fit <fit>", "how the base fills --canvas: contain or cover")
+    .option("--background-color <hex>", "canvas background behind the base, #RRGGBB (with --canvas)")
+    .option("--output-format <fmt>", "png (default, keeps transparency), jpg or webp")
+    .option("--watch", "poll until the job completes")
+    .option("--poll-interval <ms>", "watch poll interval in ms", (v) => parseInt(v, 10), 2000)
+    .option("--profile <name>")
+    .option("--json")
+    .addHelpText("after", `
+Examples:
+  $ nodaro media overlay https://x/base.png https://x/logo.svg --anchor bottom-right --x -4 --y -6 --width 12 --watch
+  $ nodaro media overlay https://x/base.png https://x/logo.png --platform youtube-thumbnail --platform x-header --watch
+  $ cat > layers.json <<'JSON'
+  [{"kind":"text","text":{"content":"50% OFF","fontId":"anton","fontSize":9,"color":"#ffffff"},"anchor":"top-left","x":5,"y":5},
+   {"kind":"qr","qr":{"text":"https://nodaro.ai"},"anchor":"bottom-right","x":-4,"y":-4,"width":14}]
+  JSON
+  $ nodaro media overlay https://x/base.png --layers-file layers.json --watch
+
+Placement is in PERCENT of the base image, so the same call works on a 1K
+preview and a 4K render. --anchor/--x/--y/--width/--opacity apply to EVERY
+positional layer (the watermark case); per-layer control — and the text, QR and
+shape kinds — goes through --layers-file.
+
+Not sure where a layer should sit? \`nodaro media overlay-placement\` asks a
+vision model and answers in these same units.`)
+    .action(
+      async (
+        imageUrl: string,
+        layerUrls: string[],
+        opts: {
+          layersFile?: string
+          anchor?: string
+          x?: number
+          y?: number
+          width?: number
+          opacity?: number
+          platform?: string[]
+          qrText?: string
+          maskMode?: string
+          maskSpread?: number
+          canvas?: string
+          baseFit?: string
+          backgroundColor?: string
+          outputFormat?: string
+        } & WatchOpts,
+      ) => {
+        try {
+          if (opts.layersFile && layerUrls.length > 0) {
+            warn("Pass layers EITHER as positional URLs OR with --layers-file, not both")
+            process.exit(1)
+          }
+          if (!opts.layersFile && layerUrls.length === 0) {
+            warn("Give at least one layer: a positional image URL, or --layers-file with the layers array")
+            process.exit(1)
+          }
+          if (opts.anchor && !(OVERLAY_ANCHORS as readonly string[]).includes(opts.anchor)) {
+            warn(`--anchor must be one of ${OVERLAY_ANCHORS.join(", ")} (got "${opts.anchor}")`)
+            process.exit(1)
+          }
+          if (opts.maskMode && !["none", "layers", "around", "outside"].includes(opts.maskMode)) {
+            warn(`--mask-mode must be none, layers, around or outside (got "${opts.maskMode}")`)
+            process.exit(1)
+          }
+          if (opts.baseFit && !["contain", "cover"].includes(opts.baseFit)) {
+            warn(`--base-fit must be contain or cover (got "${opts.baseFit}")`)
+            process.exit(1)
+          }
+          if (opts.outputFormat && !["png", "jpg", "webp"].includes(opts.outputFormat)) {
+            warn(`--output-format must be png, jpg or webp (got "${opts.outputFormat}")`)
+            process.exit(1)
+          }
+          const unknownPlatforms = (opts.platform ?? []).filter(
+            (p) => !(OVERLAY_PLATFORM_IDS as readonly string[]).includes(p),
+          )
+          if (unknownPlatforms.length > 0) {
+            warn(`Unknown --platform: ${unknownPlatforms.join(", ")}. Available: ${OVERLAY_PLATFORM_IDS.join(", ")}`)
+            process.exit(1)
+          }
+
+          // Positional URLs are image layers sharing the flag placement; a
+          // layers file carries whatever the route accepts, verbatim.
+          let layers: Array<Record<string, unknown>>
+          if (opts.layersFile) {
+            const parsed = JSON.parse(readFileSync(opts.layersFile, "utf8")) as unknown
+            if (!Array.isArray(parsed) || parsed.length === 0) {
+              warn(`--layers-file must contain a non-empty JSON array of layers (${opts.layersFile})`)
+              process.exit(1)
+            }
+            layers = parsed as Array<Record<string, unknown>>
+          } else {
+            const placement = {
+              ...(opts.anchor ? { anchor: opts.anchor as OverlayAnchor } : {}),
+              ...(opts.x !== undefined ? { x: opts.x } : {}),
+              ...(opts.y !== undefined ? { y: opts.y } : {}),
+              ...(opts.width !== undefined ? { width: opts.width } : {}),
+              ...(opts.opacity !== undefined ? { opacity: opts.opacity } : {}),
+            }
+            layers = layerUrls.map((url) => ({ imageUrl: url, ...placement }))
+          }
+
+          const canvas = opts.canvas ? parseCanvas(opts.canvas) : undefined
+          const client = buildClient(opts.profile)
+          const result = await client.media.imageOverlay({
+            imageUrl,
+            layers: layers as Parameters<typeof client.media.imageOverlay>[0]["layers"],
+            ...(canvas
+              ? { canvas: { ...canvas, ...(opts.backgroundColor ? { backgroundColor: opts.backgroundColor } : {}) } }
+              : {}),
+            ...(opts.baseFit ? { baseFit: opts.baseFit as "contain" | "cover" } : {}),
+            ...(opts.outputFormat ? { outputFormat: opts.outputFormat as "png" | "jpg" | "webp" } : {}),
+            ...(opts.platform?.length ? { variants: opts.platform as OverlayPlatformId[] } : {}),
+            ...(opts.qrText ? { qrText: opts.qrText } : {}),
+            ...(opts.maskMode ? { maskMode: opts.maskMode as "none" | "layers" | "around" | "outside" } : {}),
+            ...(opts.maskSpread !== undefined ? { maskSpread: opts.maskSpread } : {}),
+          })
+          await reportQueuedJob(result, () => client.jobs.get(result.jobId), { ...opts, note: "image overlay" })
+        } catch (err) {
+          handleError(err)
+        }
+      },
+    )
+
+  cmd
+    .command("overlay-placement <imageUrl>")
+    .description("ask a vision model WHERE one overlay layer should sit — answers in `media overlay`'s own percent units")
+    .option("--intent <text>", 'what the layer is, in words — "a logo", "a price badge" (default a logo)')
+    .option("--aspect <ratio>", "the layer's width / height (1 = square, the default)", parseFloat)
+    .option("--safe-area <x,y,w,h>", "always-visible region as fractions 0..1; the placement is kept inside it")
+    .option("--profile <name>")
+    .option("--json")
+    .addHelpText("after", `
+Example:
+  $ nodaro media overlay-placement https://x/base.png --intent "a logo" --aspect 2.5
+
+Answers synchronously (no job to poll) with anchor, x, y and width — feed them
+straight to \`nodaro media overlay --anchor … --x … --y … --width …\`. Billed as
+one image-to-text call.`)
+    .action(
+      async (
+        imageUrl: string,
+        opts: { intent?: string; aspect?: number; safeArea?: string } & GlobalOpts,
+      ) => {
+        try {
+          const safeArea = opts.safeArea ? parseSafeArea(opts.safeArea) : undefined
+          const client = buildClient(opts.profile)
+          const { placement } = await client.media.suggestOverlayPlacement({
+            imageUrl,
+            ...(opts.intent ? { intent: opts.intent } : {}),
+            ...(opts.aspect !== undefined ? { layerAspect: opts.aspect } : {}),
+            ...(safeArea ? { safeArea } : {}),
+          })
+          if (opts.json) {
+            emit(placement, opts)
+            return
+          }
+          success(`anchor ${placement.anchor}, x ${placement.x}%, y ${placement.y}%, width ${placement.width}%`)
+          dim(placement.reason)
+          info(
+            `apply: nodaro media overlay ${imageUrl} <layerUrl> --anchor ${placement.anchor} ` +
+              `--x ${placement.x} --y ${placement.y} --width ${placement.width} --watch`,
+          )
         } catch (err) {
           handleError(err)
         }

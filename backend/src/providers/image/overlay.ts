@@ -29,6 +29,8 @@ import { settledWithLimit } from "../../lib/settled-with-limit.js"
 import { probeImageSize } from "./collage.js"
 import { OVERLAY_MAX_LAYERS, OVERLAY_HANDLE_IDS, OVERLAY_MAX_LAYER_EDGE, OVERLAY_PIXEL_LIMIT } from "./overlay-contract.js"
 import {
+  OVERLAY_ANCHORS,
+  type OverlayAnchor,
   OVERLAY_LAYER_KINDS,
   overlayTextStyleSchema,
   overlayQrStyleSchema,
@@ -67,12 +69,10 @@ const RENDER_TIMEOUT_MS = 180_000
 
 const img = (input: Buffer, opts: sharp.SharpOptions = {}): sharp.Sharp => sharp(input, { limitInputPixels: PIXEL_LIMIT, ...opts })
 
-export const OVERLAY_ANCHORS = [
-  "top-left", "top", "top-right",
-  "left", "center", "right",
-  "bottom-left", "bottom", "bottom-right",
-] as const
-export type OverlayAnchor = (typeof OVERLAY_ANCHORS)[number]
+// The anchors live in @nodaro/shared (one vocabulary for route Zod, canvas,
+// SDK and CLI); re-exported here so the compositor's importers are unchanged.
+export { OVERLAY_ANCHORS }
+export type { OverlayAnchor }
 
 export const OVERLAY_BLENDS = ["over", "multiply", "screen"] as const
 export type OverlayBlend = (typeof OVERLAY_BLENDS)[number]
