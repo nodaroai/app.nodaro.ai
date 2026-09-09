@@ -76,14 +76,17 @@ const SUGGEST_PLACEMENT_TOOL_BYTES = 1_520
 //
 // RAISED 2026-09-09 by the LANDING CONTRACT and nothing else. A studio
 // generation lands into the document on the next `get_studio_production` (D5,
-// reconcile-on-read) and nowhere else; six descriptions said the media "lands
-// by itself", which reads as "no further step", and a user polling
-// `wait_for_job` to `completed` therefore saw an empty film. The six now name
-// the read that lands them and say that `get_job` / `wait_for_job` land
-// nothing, and the read says out loud that it is also the write. MEASURED by
-// this suite: 347_887 total − 347_305 = 582 B for seven descriptions. No tool
-// was added, so the fixture does not move, and none of the seven is near the
-// per-tool budget (the largest in the list is `animate_image` at 8_122 B).
+// reconcile-on-read) and nowhere else, and the six tools that leave a marker
+// each said that badly: three ("describe", "still", "score") said the media
+// "lands by itself", which reads as "no further step"; "keyframe" said nothing
+// about landing at all; "clip" and "revoice" named the read but not that the
+// job tools are not it. A user polling `wait_for_job` to `completed` therefore
+// saw an empty film. All six now name the read and say that `get_job` /
+// `wait_for_job` land nothing, and the read itself says out loud that it is
+// also the write. MEASURED by this suite: 347_887 total − 347_305 = 582 B for
+// seven descriptions. No tool was added, so the fixture does not move, and
+// none of the seven is near the per-tool budget (the largest in the list is
+// `animate_image` at 8_122 B).
 const LANDING_CONTRACT_BYTES = 582
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192,
