@@ -1,5 +1,11 @@
 # @nodaro/shared
 
+## 3.7.0
+
+### Minor Changes
+
+- ef73308: Export `OVERLAY_ANCHORS` / `OverlayAnchor` — the nine points an Image Overlay layer attaches to. One definition for the route's validation, the compositor, the canvas, the SDK and the CLI (it used to be spelled out separately in each).
+
 ## 3.6.0
 
 ### Minor Changes
